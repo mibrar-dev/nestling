@@ -1,0 +1,1 @@
+CONTINUE: your previous run was stopped by the orchestrator's 30-minute job limit (not your fault). Your work so far is committed on this branch. Check git log/status and continue the foundation task from where you stopped; finish all 8 items and the verification.
