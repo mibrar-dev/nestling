@@ -4,3 +4,8 @@ Working dir = this screen's own git worktree (branch screen/{ID}). App in app/. 
 MUST FOLLOW: docs/screens/RULES.md (what you may edit), docs/ARCHITECTURE.md, docs/DESIGN_SPEC.md (§5 {ID}), docs/design/SPACING_SPEC.md, the design system in app/lib/core/design_system/ (never re-implement components; never hard-code colours/sizes — tokens only), docs/screens/{ID}/1_plan.md (once it exists).
 NEVER: run `flutter clean`; run interactive `flutter run` (use tools/screens/shot.sh); attach/upload images in your reply (READ PNGs with your file reader only); weaken analysis_options or skip tests.
 End your stage file with exactly one line: `VERDICT: PASS` or `VERDICT: FAIL`.
+ORCHESTRATOR RULES (override the design PNGs where they conflict):
+- PIP: wherever a screen shows Pip, render the child's OWN Pip with `PipAvatar` (app/lib/core/design_system/motion/pip_avatar.dart) using that child's pip_style / pip_skin / pip_accessory / pip_stage from the database (Maya = Mochi·sunny·stage 3, Leo = Bolt·sky·stage 2). Never use the v1 pip_stage_*.svg illustrations in product screens. Onboarding/marketing screens with no child yet (P01–P07) use PipAvatar(style: mochi, skin: sunny) at the stage the design shows. Keep the design's size and position for the Pip slot.
+- STATUS BAR: `NestStatusBar` now only reserves height; the OS draws the real status bar. Ignore status-bar differences in UI checks.
+- DATA OVER MOCKS: numbers come from the seeded database. Where two designs disagree (e.g. P08 says Maya "4 of 6", K03 "3 of 6"), the database value is correct — do not hard-code design numbers.
+- If docs/screens/{ID}/ORCHESTRATOR_NOTES.md exists, every item in it is mandatory.
