@@ -1,0 +1,14 @@
+ROLE: Flutter engineer + on-device QA (sub-agent). Working dir = the nestling-pip-v2 worktree (branch feat/pip-v2); app in app/. Simulator: iPhone 16e UDID 604697A9-11DA-462F-9837-396E9CA2493A (390×844). ffmpeg at /opt/homebrew/bin.
+CONTEXT: three finished Rive mascots app/assets/animations/rive/pip_{mochi,bolt,storybook}.riv, driven by the shared widget app/lib/core/design_system/motion/pip_avatar.dart (PipAvatar: style, stage, mood, skin, accessory, inNest, controller). Contract: docs/pip-v2/PIP_V2_CONTRACT.md.
+BUILD a "Pip lab" dev screen in the design_system_gallery feature (presentation/views/pip_lab_view.dart + widgets; route /pip-lab in design_system_gallery_routes.dart; an app-bar entry "Pip" next to "Motion" in the gallery view — minimal additive edit). Full-width, 20 px padding, design-system components only, light/dark aware:
+- Large PipAvatar (≈ 220 px) on a NestPetStage-like card; a toggle "In nest".
+- Controls: style (Mochi | Bolt | Storybook) NestSegmented; stage 1–4 NestSegmented; mood chips idle/happy/eating/sleepy/surprised/proud; buttons Evolve, Tap; skin swatches sunny/berry/sky/mint; accessory chips none/bow/cap/scarf/glasses.
+- "Play all moods" button: cycles the current style through every mood (await each mood's duration from the contract/notes) then evolve.
+- A "Picker preview" row: 3 small PipAvatars (one per style, 64 px) as the kid will see when choosing their Pip.
+Support a debug-only `--dart-define=PIP_LAB_AUTOPLAY=<style>` that opens /pip-lab and runs Play-all for that style on launch (for scripted recording).
+VERIFY ON DEVICE (mandatory):
+1. Never run plain `flutter run` (it is interactive). Use `cd app && flutter run -d <UDID> --debug --no-resident --dart-define=PIP_LAB_AUTOPLAY=mochi < /dev/null`, then record with `xcrun simctl io <UDID> recordVideo --codec=h264 --force ../design/videos/pip_lab_mochi.mp4 &` and stop with kill -INT after ~20 s. Repeat for bolt and storybook. Also record one light-mode and one dark-mode clip of the customisation (skins × accessories) → design/videos/pip_lab_custom_{light,dark}.mp4. Keep each clip ≤ 25 s (disk is limited).
+2. For each style clip, extract frames (ffmpeg fps=2) and build design/videos/PIP_LAB_<style>.png contact sheets; READ them: Pip must animate visibly through every mood, no clipping, no placeholder/fallback SVG unless reduced motion, correct style.
+3. If Rive fails to load on device (blank, fallback SVG, exceptions in `xcrun simctl spawn <UDID> log stream` or flutter logs), debug pip_avatar.dart (artboard names, view-model binding, autoBind, asset paths in pubspec) and fix.
+4. Widget tests for PipLabView (light + dark, Rive disabled). In app/: dart format ., flutter analyze (No issues found!), flutter test (all pass).
+Do NOT attach/upload images in replies. Final reply: video paths + one-line verdict per style + any bugs fixed.

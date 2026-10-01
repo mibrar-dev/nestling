@@ -26,7 +26,9 @@ const bool kUseRive = false;
 
 Widget _host(Widget child, {Size size = const Size(240, 240)}) => MaterialApp(
   home: Scaffold(
-    body: Center(child: SizedBox.fromSize(size: size, child: child)),
+    body: Center(
+      child: SizedBox.fromSize(size: size, child: child),
+    ),
   ),
 );
 
@@ -62,11 +64,12 @@ void main() {
     });
 
     test('PipStyle resolves one .riv per body style', () {
-      expect(PipStyle.mochi.riveAsset,
-          'assets/animations/rive/pip_mochi.riv');
+      expect(PipStyle.mochi.riveAsset, 'assets/animations/rive/pip_mochi.riv');
       expect(PipStyle.bolt.riveAsset, 'assets/animations/rive/pip_bolt.riv');
-      expect(PipStyle.storybook.riveAsset,
-          'assets/animations/rive/pip_storybook.riv');
+      expect(
+        PipStyle.storybook.riveAsset,
+        'assets/animations/rive/pip_storybook.riv',
+      );
     });
 
     test('artboard names match the Rive file', () {
@@ -80,8 +83,10 @@ void main() {
 
     test('Mochi fallbacks are the approved idle poses', () {
       for (var stage = 1; stage <= 4; stage++) {
-        expect(PipAvatar.fallbackAsset(PipStyle.mochi, stage),
-            'assets/illustrations/pip_v2/mochi/s${stage}_idle_1.svg');
+        expect(
+          PipAvatar.fallbackAsset(PipStyle.mochi, stage),
+          'assets/illustrations/pip_v2/mochi/s${stage}_idle_1.svg',
+        );
       }
     });
   });
@@ -89,8 +94,9 @@ void main() {
   group('PipAvatar', () {
     for (final style in PipStyle.values) {
       for (var stage = 1; stage <= 4; stage++) {
-        testWidgets('builds for ${style.name} stage $stage without throwing',
-            (tester) async {
+        testWidgets('builds for ${style.name} stage $stage without throwing', (
+          tester,
+        ) async {
           await tester.pumpWidget(
             _host(
               PipAvatar(
@@ -125,8 +131,7 @@ void main() {
           expect(
             find.byWidgetPredicate(
               (w) =>
-                  w is SvgPicture ||
-                  w.runtimeType.toString().contains('Rive'),
+                  w is SvgPicture || w.runtimeType.toString().contains('Rive'),
             ),
             findsWidgets,
             reason: '${style.name} stage $stage drew nothing',
@@ -135,8 +140,9 @@ void main() {
       }
     });
 
-    testWidgets('renders every mood, skin and accessory without throwing',
-        (tester) async {
+    testWidgets('renders every mood, skin and accessory without throwing', (
+      tester,
+    ) async {
       for (final mood in PipMood.values) {
         for (final skin in PipSkin.values) {
           for (final accessory in PipAccessory.values) {
@@ -228,7 +234,9 @@ void main() {
       expect(captured, isNull);
     });
 
-    testWidgets('external controller attaches without throwing', (tester) async {
+    testWidgets('external controller attaches without throwing', (
+      tester,
+    ) async {
       final controller = PipAvatarController.detached();
       await tester.pumpWidget(
         _host(

@@ -701,6 +701,7 @@ def body_anims(em, P_, egg, aids=None, ax=None):
     r.append(f'{P}<LinearAnimation name="idle" duration="180" fps="60" '
              f'loopValue="loop" id="{_ax(A["idle"])}">')
     r += ko("beak_top_n", 18, [(1, None), (1, 180)], "hold")
+    r += ko("nightcap", 18, [(0, None), (0, 180)], "hold")  # reset: cap only in sleepy
     if egg:
         r += ko("root", 15, [(0, None), (0.05, 45), (-0.05, 135), (0, 180)])
         r += ko("root", 14, [(RY, None), (RY - 2, 90), (RY, 180)])
@@ -722,6 +723,7 @@ def body_anims(em, P_, egg, aids=None, ax=None):
     r.append(f'{P}<LinearAnimation name="happy" duration="72" fps="60" '
              f'loopValue="oneShot" id="{_ax(A["happy"])}">')
     r += ko("beak_top_n", 18, [(1, None), (1, 72)], "hold")
+    r += ko("nightcap", 18, [(0, None), (0, 72)], "hold")  # reset: cap only in sleepy
     r += ko("root", 16, [(1, None), (1.18, 9), (0.93, 24), (0.95, 36),
                          (1.15, 52), (1, 64), (1, 72)])
     r += ko("root", 17, [(1, None), (0.85, 9), (1.08, 24), (1.05, 36),
@@ -757,6 +759,7 @@ def body_anims(em, P_, egg, aids=None, ax=None):
     r.append(f'{P}<LinearAnimation name="eating" duration="108" fps="60" '
              f'loopValue="oneShot" id="{_ax(A["eating"])}">')
     r += ko("beak_top_n", 18, [(1, None), (1, 108)], "hold")
+    r += ko("nightcap", 18, [(0, None), (0, 108)], "hold")  # reset: cap only in sleepy
     dip = 3 if egg else 8
     tilt = 0.12 if egg else 0.35
     r += ko("head", 14, [(0, None), (dip, 20), (0, 30), (dip, 50), (0, 60),
@@ -809,6 +812,7 @@ def body_anims(em, P_, egg, aids=None, ax=None):
     r.append(f'{P}<LinearAnimation name="surprised" duration="48" fps="60" '
              f'loopValue="oneShot" id="{_ax(A["surprised"])}">')
     r += ko("beak_top_n", 18, [(0, None), (0, 48)], "hold")
+    r += ko("nightcap", 18, [(0, None), (0, 48)], "hold")  # reset: cap only in sleepy
     r += ko("root", 14, [(RY, None), (RY - 10, 8), (RY - 10, 26), (RY, 38),
                          (RY, 48)])
     r += ko("root", 16, [(1, None), (1.08, 8), (1.08, 26), (0.94, 40),
@@ -837,6 +841,7 @@ def body_anims(em, P_, egg, aids=None, ax=None):
     r.append(f'{P}<LinearAnimation name="proud" duration="72" fps="60" '
              f'loopValue="oneShot" id="{_ax(A["proud"])}">')
     r += ko("beak_top_n", 18, [(1, None), (1, 72)], "hold")
+    r += ko("nightcap", 18, [(0, None), (0, 72)], "hold")  # reset: cap only in sleepy
     r += ko("body", 16, [(1, None), (1.1, 15), (1.1, 55), (1, 70), (1, 72)])
     r += ko("body", 17, [(1, None), (1.04, 15), (1.04, 55), (1, 70), (1, 72)])
     r += ko("head", 15, [(0, None), (-0.2, 15), (-0.2, 55), (0, 70),
@@ -861,6 +866,7 @@ def body_anims(em, P_, egg, aids=None, ax=None):
     r.append(f'{P}<LinearAnimation name="evolve" duration="90" fps="60" '
              f'loopValue="oneShot" id="{_ax(A["evolve"])}">')
     r += ko("beak_top_n", 18, [(1, None), (1, 90)], "hold")
+    r += ko("nightcap", 18, [(0, None), (0, 90)], "hold")  # reset: cap only in sleepy
     r += ko("root", 16, [(1, None), (1.12, 16), (0.92, 36), (1.03, 52),
                          (1, 66), (1, 90)])
     r += ko("root", 17, [(1, None), (0.85, 16), (1.12, 36), (0.97, 52),

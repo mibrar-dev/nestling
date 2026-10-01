@@ -105,22 +105,17 @@ const String kPipAvatarPropBlink = 'blink';
 /// fingerprint (0x52 0x49 0x56 0x45). Resolved once per asset per run.
 final Map<String, Future<bool>> _pipAvatarAvailable = {};
 
-Future<bool> _rivAvailable(String asset) => _pipAvatarAvailable.putIfAbsent(
-  asset,
-  () async {
-    try {
-      final data = await rootBundle.load(asset);
-      if (data.lengthInBytes < 4) return false;
-      final b = data.buffer.asUint8List(data.offsetInBytes, 4);
-      return b[0] == 0x52 &&
-          b[1] == 0x49 &&
-          b[2] == 0x56 &&
-          b[3] == 0x45;
-    } on Exception {
-      return false;
-    }
-  },
-);
+Future<bool> _rivAvailable(String asset) =>
+    _pipAvatarAvailable.putIfAbsent(asset, () async {
+      try {
+        final data = await rootBundle.load(asset);
+        if (data.lengthInBytes < 4) return false;
+        final b = data.buffer.asUint8List(data.offsetInBytes, 4);
+        return b[0] == 0x52 && b[1] == 0x49 && b[2] == 0x56 && b[3] == 0x45;
+      } on Exception {
+        return false;
+      }
+    });
 
 /// Whether the native Rive decoder is actually linked into this process.
 ///

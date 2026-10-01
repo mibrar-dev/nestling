@@ -47,10 +47,15 @@ class ParentShell extends StatelessWidget {
 GoRouter buildAppRouter(AppModeController appMode) {
   // Debug-only motion-QA entry: `--dart-define=MOTION_AUTOPLAY=<name>`
   // boots straight into the motion lab so `simctl recordVideo` captures a
-  // single animation without manual navigation.
+  // single animation without manual navigation. `--dart-define=
+  // PIP_LAB_AUTOPLAY=<style>` (mochi | bolt | storybook) boots into the Pip
+  // lab, which runs Play-all for that style on launch.
   const autoplay = String.fromEnvironment('MOTION_AUTOPLAY');
+  const pipAutoplay = String.fromEnvironment('PIP_LAB_AUTOPLAY');
   return GoRouter(
-    initialLocation: autoplay.isNotEmpty
+    initialLocation: pipAutoplay.isNotEmpty
+        ? DesignSystemGalleryRoutePaths.pipLab
+        : autoplay.isNotEmpty
         ? DesignSystemGalleryRoutePaths.motionLab
         : DesignSystemGalleryRoutePaths.gallery,
     refreshListenable: appMode,
