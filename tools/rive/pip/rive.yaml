@@ -1,0 +1,7 @@
+name: pip
+main: PipFledgling
+build:
+  directory: build
+logs:
+  file: build/rive.log
+  problems: build/problems.log

@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nestling — Design System v1</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="components.css">
+<style>
+  body{background:var(--paper);padding:32px 20px 80px;}
+  .wrap{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:28px;}
+  .ds-head{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+  .ds-head img{width:72px;height:72px;border-radius:20px;}
+  .sec{background:var(--surface);border-radius:var(--r-l);box-shadow:var(--sh-1);padding:24px;}
+  .sec>h2{font-family:var(--font-display);font-weight:900;font-size:22px;line-height:28px;margin-bottom:4px;}
+  .sec>p.sub{color:var(--ink-2);font-size:15px;margin-bottom:16px;}
+  .swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;}
+  .sw{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--surface);}
+  .sw .c{height:64px;}
+  .sw .t{padding:10px 12px;font-size:13px;line-height:18px;}
+  .sw .t b{display:block;font-size:14px;}
+  .sw .t code{font-size:12px;color:var(--ink-2);}
+  .type-row{border-top:1px solid var(--line);padding:12px 0;display:flex;gap:16px;align-items:baseline;flex-wrap:wrap;}
+  .type-row small{color:var(--ink-3);font-size:13px;min-width:220px;}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
+  .space-demo{display:flex;gap:8px;align-items:flex-end;}
+  .space-demo span{background:var(--leaf-tint);border:1px solid var(--leaf);display:block;}
+  .radius-demo{display:flex;gap:12px;flex-wrap:wrap;}
+  .radius-demo div{width:96px;height:64px;background:var(--surface-2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;}
+  .shadow-demo{display:flex;gap:12px;flex-wrap:wrap;}
+  .shadow-demo div{width:150px;height:80px;background:var(--surface);border:1px solid var(--line);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;}
+  .demo-frame{width:390px;max-width:100%;border:1px solid var(--line);border-radius:24px;overflow:hidden;background:var(--paper);}
+  .demo-frames{display:flex;gap:16px;flex-wrap:wrap;}
+  pre.snip{background:#1E1B3A;color:#F3EEE5;border-radius:16px;padding:16px;overflow:auto;font-size:12px;line-height:18px;white-space:pre-wrap;word-break:break-word;}
+  .asset-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;}
+  .asset-grid figure{border:1px solid var(--line);border-radius:16px;padding:12px;text-align:center;background:var(--surface);margin:0;}
+  .asset-grid img{width:120px;height:120px;margin:0 auto;}
+  .asset-grid figcaption{font-size:12px;color:var(--ink-2);margin-top:8px;word-break:break-all;}
+  .kid-demo{background:linear-gradient(180deg,var(--kid-sky-top),var(--kid-sky-bottom));border-radius:16px;padding:16px;}
+  code.inline{background:var(--surface-2);padding:2px 6px;border-radius:6px;font-size:13px;}
+  table.ctable{width:100%;border-collapse:collapse;font-size:13px;line-height:20px;}
+  table.ctable th,table.ctable td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
+  table.ctable th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-2);}
+  table.ctable td.num,table.ctable th.num{text-align:right;font-variant-numeric:tabular-nums;}
+  .dot{display:inline-block;width:14px;height:14px;border-radius:50%;border:1px solid var(--line);vertical-align:-2px;margin-right:6px;}
+</style>
+</head>
+<body>
+<button id="theme-toggle" class="chip" type="button" style="position:fixed;top:16px;right:16px;z-index:50;box-shadow:var(--sh-2)">Dark mode</button>
+<div class="wrap">
+  <header class="ds-head">
+    <img src="assets/app-icon.svg" alt="Nestling app icon">
+    <div><h1 class="h1">Nestling — Design System v1</h1><p class="body-s t-ink-2">UK family chores app · Parent (Inter) + Kid (Nunito) · 390×844 device · Tokens + components + assets + snippets · Light + dark</p></div>
+  </header>
+
+  <section class="sec"><h2>1 · Colour (light)</h2><p class="sub">Swatch · name · hex · contrast vs white / vs paper. Body text needs ≥ 4.5:1.</p><div class="swatches">
+    <div class="sw"><div class="c" style="background:#1E1B3A"></div><div class="t"><b>ink</b><code>#1E1B3A · 16.50 / 15.45</code></div></div>
+    <div class="sw"><div class="c" style="background:#4A4668"></div><div class="t"><b>ink-2</b><code>#4A4668 · 8.87 / 8.31</code></div></div>
+    <div class="sw"><div class="c" style="background:#6E6A8A"></div><div class="t"><b>ink-3</b><code>#6E6A8A · 5.13 / 4.81</code></div></div>
+    <div class="sw"><div class="c" style="background:#FBF7F0;border-bottom:1px solid var(--line)"></div><div class="t"><b>paper</b><code>#FBF7F0 · 1.07 / 1.00</code></div></div>
+    <div class="sw"><div class="c" style="background:#FFFFFF;border-bottom:1px solid var(--line)"></div><div class="t"><b>surface</b><code>#FFFFFF · 1.00 / 1.07</code></div></div>
+    <div class="sw"><div class="c" style="background:#F3EEE5"></div><div class="t"><b>surface-2</b><code>#F3EEE5 · 1.16 / 1.08</code></div></div>
+    <div class="sw"><div class="c" style="background:#E7E0D4"></div><div class="t"><b>line</b><code>#E7E0D4 · 1.31 / 1.23</code></div></div>
+    <div class="sw"><div class="c" style="background:#17804F"></div><div class="t"><b>leaf</b><code>#17804F · 4.96 / 4.64</code></div></div>
+    <div class="sw"><div class="c" style="background:#0B5C38"></div><div class="t"><b>leaf-ink</b><code>#0B5C38 · 8.07 / 7.56</code></div></div>
+    <div class="sw"><div class="c" style="background:#E3F5EC"></div><div class="t"><b>leaf-tint</b><code>#E3F5EC · 1.13 / 1.06</code></div></div>
+    <div class="sw"><div class="c" style="background:#F4B400"></div><div class="t"><b>coin</b><code>#F4B400 · 1.85 / 1.73 — decorative only; text use coin-ink</code></div></div>
+    <div class="sw"><div class="c" style="background:#6B4E00"></div><div class="t"><b>coin-ink</b><code>#6B4E00 · 7.74 / 7.24</code></div></div>
+    <div class="sw"><div class="c" style="background:#FFF4D1"></div><div class="t"><b>coin-tint</b><code>#FFF4D1 · 1.10 / 1.03</code></div></div>
+    <div class="sw"><div class="c" style="background:#2563D6"></div><div class="t"><b>sky</b><code>#2563D6 · 5.48 / 5.13</code></div></div>
+    <div class="sw"><div class="c" style="background:#E6EFFE"></div><div class="t"><b>sky-tint</b><code>#E6EFFE · 1.16 / 1.08</code></div></div>
+    <div class="sw"><div class="c" style="background:#7C6CF2"></div><div class="t"><b>lilac</b><code>#7C6CF2 · 3.97 / 3.72</code></div></div>
+    <div class="sw"><div class="c" style="background:#6A58E8"></div><div class="t"><b>lilac-strong</b><code>#6A58E8 · 5.03 / 4.71 — kid lilac button</code></div></div>
+    <div class="sw"><div class="c" style="background:#EEEBFF"></div><div class="t"><b>lilac-tint</b><code>#EEEBFF · 1.17 / 1.09</code></div></div>
+    <div class="sw"><div class="c" style="background:#FF8A5B"></div><div class="t"><b>peach</b><code>#FF8A5B · 2.32 / 2.18</code></div></div>
+    <div class="sw"><div class="c" style="background:#FFEDE4"></div><div class="t"><b>peach-tint</b><code>#FFEDE4 · 1.14 / 1.06</code></div></div>
+    <div class="sw"><div class="c" style="background:#C97800"></div><div class="t"><b>warning</b><code>#C97800 · 3.40 / 3.19</code></div></div>
+    <div class="sw"><div class="c" style="background:#C93A3A"></div><div class="t"><b>danger</b><code>#C93A3A · 5.06 / 4.74 — parent only, never kid</code></div></div>
+    <div class="sw"><div class="c" style="background:linear-gradient(180deg,#CFE6FF,#F2FAFF)"></div><div class="t"><b>kid-sky</b><code>#CFE6FF → #F2FAFF</code></div></div>
+    <div class="sw"><div class="c" style="background:#BFE8B0"></div><div class="t"><b>kid-meadow</b><code>#BFE8B0</code></div></div>
+  </div></section>
+
+  <section class="sec"><h2>1b · Colour (dark) + contrast table</h2><p class="sub">Same token names — <code class="inline">:root[data-theme="dark"]</code> or system <code class="inline">prefers-color-scheme</code>. Warm plum-night, never pure black. Every text pair ≥ 4.5:1 (buttons 20px/900 ≥ 3:1 — all pass 4.5 anyway except none).</p>
+  <div class="swatches">
+    <div class="sw"><div class="c" style="background:#15131F"></div><div class="t"><b>paper</b><code>#15131F</code></div></div>
+    <div class="sw"><div class="c" style="background:#1F1C2E"></div><div class="t"><b>surface</b><code>#1F1C2E</code></div></div>
+    <div class="sw"><div class="c" style="background:#2A2640"></div><div class="t"><b>surface-2</b><code>#2A2640</code></div></div>
+    <div class="sw"><div class="c" style="background:#F3F0FA"></div><div class="t"><b>ink</b><code>#F3F0FA</code></div></div>
+    <div class="sw"><div class="c" style="background:#3CC98A"></div><div class="t"><b>leaf</b><code>#3CC98A</code></div></div>
+    <div class="sw"><div class="c" style="background:#7FA9FF"></div><div class="t"><b>sky</b><code>#7FA9FF</code></div></div>
+    <div class="sw"><div class="c" style="background:#A89BFF"></div><div class="t"><b>lilac</b><code>#A89BFF</code></div></div>
+    <div class="sw"><div class="c" style="background:#FF9E78"></div><div class="t"><b>peach</b><code>#FF9E78</code></div></div>
+  </div>
+  <table class="ctable" style="margin-top:16px">
+    <thead><tr><th>Text</th><th>On</th><th class="num">Light</th><th class="num">Dark</th></tr></thead>
+    <tbody>
+      <tr><td><span class="dot" style="background:#1E1B3A"></span>ink</td><td>paper</td><td class="num">15.45</td><td class="num">16.30</td></tr>
+      <tr><td>ink</td><td>surface</td><td class="num">16.50</td><td class="num">14.76</td></tr>
+      <tr><td>ink-2</td><td>paper / surface</td><td class="num">8.31 / 8.87</td><td class="num">10.84 / 9.82</td></tr>
+      <tr><td>ink-3</td><td>paper / surface</td><td class="num">4.81 / 5.13</td><td class="num">6.83 / 6.19</td></tr>
+      <tr><td>leaf</td><td>paper / surface</td><td class="num">4.64 / 4.96</td><td class="num">8.66 / 7.84</td></tr>
+      <tr><td>sky</td><td>paper / surface</td><td class="num">5.13 / 5.48</td><td class="num">7.88 / 7.14</td></tr>
+      <tr><td>on-leaf</td><td>leaf (buttons, badge, FAB)</td><td class="num">4.96</td><td class="num">8.43</td></tr>
+      <tr><td>on-accent</td><td>sky (kid button)</td><td class="num">5.48</td><td class="num">7.94</td></tr>
+      <tr><td>on-accent</td><td>lilac-strong (kid button)</td><td class="num">5.03</td><td class="num">7.74</td></tr>
+      <tr><td>on-warm</td><td>peach (kid button)</td><td class="num">7.10</td><td class="num">8.18</td></tr>
+      <tr><td>on-warm</td><td>coin (kid button)</td><td class="num">8.94</td><td class="num">8.94</td></tr>
+      <tr><td>leaf-ink</td><td>leaf-tint (chips)</td><td class="num">7.12</td><td class="num">8.47</td></tr>
+      <tr><td>coin-ink</td><td>coin-tint (coin pill)</td><td class="num">7.04</td><td class="num">9.59</td></tr>
+      <tr><td>danger</td><td>paper / surface</td><td class="num">4.74 / 5.06</td><td class="num">7.26 / 6.58</td></tr>
+      <tr><td>paper</td><td>ink (toast)</td><td class="num">15.45</td><td class="num">16.30</td></tr>
+      <tr><td>a-lilac</td><td>lilac-tint (avatars)</td><td class="num">7.86</td><td class="num">8.72</td></tr>
+      <tr><td>a-peach</td><td>peach-tint (avatars)</td><td class="num">4.69</td><td class="num">8.31</td></tr>
+      <tr><td>a-sky</td><td>sky-tint (avatars)</td><td class="num">6.71</td><td class="num">8.28</td></tr>
+    </tbody>
+  </table></section>
+
+  <section class="sec"><h2>2 · Type scale</h2><p class="sub">Parent UI = Inter · Display + kid = Nunito 700/800/900.</p>
+    <div class="type-row"><small>display 34/40 Nunito 900</small><span class="display">Chores that feel like a game</span></div>
+    <div class="type-row"><small>h1 28/34 Nunito 900</small><span class="h1">Good morning, Sarah</span></div>
+    <div class="type-row"><small>h2 22/28 Nunito 800</small><span class="h2">Today's quests</span></div>
+    <div class="type-row"><small>h3 18/24 Nunito 800</small><span class="h3">Pip is a Fledgling</span></div>
+    <div class="type-row"><small>body 16/24 Inter 400</small><span class="body">Nestling turns family jobs into quests your children want to finish.</span></div>
+    <div class="type-row"><small>body-s 15/22 Inter</small><span class="body-s">Sat 4 Oct · £2.50 · Made in the UK</span></div>
+    <div class="type-row"><small>caption 13/18 Inter</small><span class="caption">No ads, ever · Cancel anytime in Settings</span></div>
+    <div class="type-row"><small>kid-body 18/26 Nunito 700</small><span class="kid-body">Let's do some quests!</span></div>
+    <div class="type-row"><small>kid-title 28/34 Nunito 900</small><span class="kid-title">Who's playing?</span></div>
+    <div class="type-row"><small>kid-hero 40/44 Nunito 900</small><span class="kid-hero">Brilliant, Maya!</span></div>
+    <div class="type-row"><small>money tabular-nums</small><span class="money num">£12.50 · £4.20 · £24.99</span></div>
+  </section>
+
+  <section class="sec"><h2>3 · Space · Radii · Shadows</h2><p class="sub">4pt grid · side padding 20px · device 390×844, status 47, home 34, tab 84.</p>
+    <div class="space-demo"><span style="width:4px;height:24px"></span><span style="width:8px;height:24px"></span><span style="width:12px;height:24px"></span><span style="width:16px;height:24px"></span><span style="width:20px;height:24px"></span><span style="width:24px;height:24px"></span><span style="width:32px;height:24px"></span><span style="width:40px;height:24px"></span></div>
+    <p class="caption">s1 4 · s2 8 · s3 12 · s4 16 · s5 20 · s6 24 · s8 32 · s10 40</p>
+    <div class="radius-demo"><div style="border-radius:10px">r-s 10</div><div style="border-radius:16px">r-m 16</div><div style="border-radius:24px">r-l 24</div><div style="border-radius:32px">r-xl 32</div><div style="border-radius:999px">pill 999</div></div>
+    <div class="shadow-demo" style="margin-top:12px"><div style="box-shadow:var(--sh-1)">sh-1</div><div style="box-shadow:var(--sh-2)">sh-2</div><div style="box-shadow:var(--sh-kid);border:2px solid var(--ink)">sh-kid</div></div>
+  </section>
+
+  <section class="sec"><h2>4 · Components — parent</h2><p class="sub">Exact class names screen agents must use.</p>
+    <div class="row"><button class="btn btn-primary" style="max-width:280px">Get started</button><button class="btn btn-secondary" style="max-width:280px">I already have an account</button></div>
+    <div class="row" style="margin-top:12px"><button class="btn btn-ghost" style="width:auto">Cancel</button><button class="btn btn-danger-ghost" style="width:auto">Remove Maya</button><span class="badge-count">3</span><span class="coin-pill"><img src="assets/coin.svg" alt="">120</span><span class="money">£4.20</span></div>
+    <div class="card" style="margin-top:12px"><b>Card + inset</b><div class="card inset" style="margin-top:8px">Inset card · surface-2 · no shadow</div></div>
+    <div class="list" style="margin-top:12px"><div class="list-row"><span class="icon-tile tint-leaf">✓</span><div class="list-main"><div class="list-title truncate">Put the bins out — a very long title truncates with ellipsis</div><div class="list-sub">Suggested 15 coins · Age 8+</div></div><div class="list-trail">+ Add ›</div></div><div class="list-row"><span class="icon-tile tint-coin">£</span><div class="list-main"><div class="list-title">Pocket money</div><div class="list-sub">£3.00/week</div></div><div class="list-trail">›</div></div></div>
+    <div class="row" style="margin-top:12px"><span class="chip">Kitchen</span><span class="chip selected">Sat</span><span class="chip">Outdoors</span></div>
+    <div class="segmented" style="margin-top:12px;max-width:420px"><button aria-selected="true">Once</button><button>Daily</button><button aria-selected="false">Weekly</button></div>
+    <div class="row" style="margin-top:12px"><input class="toggle" type="checkbox" checked aria-label="Approvals waiting"> <input class="toggle" type="checkbox" aria-label="Off example"><span class="stepper"><button aria-label="Decrease">−</button><span class="step-val num">£3.00</span><button aria-label="Increase">+</button></span></div>
+    <div class="row" style="margin-top:12px"><span class="avatar a-lilac s32">M</span><span class="avatar a-peach s44">L</span><span class="avatar a-sky s64">S</span><span class="avatar a-leaf s96">J</span></div>
+    <div style="margin-top:12px"><div class="progress"><span style="width:62%"></span></div><div class="caption" style="margin:6px 0 10px">62% · £15.50 of £24.99</div><div class="field" style="max-width:420px"><label for="ds-email">Email</label><input id="ds-email" value="sarah@example.co.uk"><span class="helper">Children never need an email.</span></div></div>
+    <div class="quest-card" style="margin-top:12px"><span class="icon-tile tint-sky">🧺</span><div class="quest-main"><div class="quest-title truncate">Hoover the stairs</div><div class="quest-meta"><span class="assignees"><span class="avatar a-lilac s32">M</span></span><span>Weekly · Before tea</span></div></div><span class="coin-pill"><img src="assets/coin.svg" alt="">20</span></div>
+    <div class="demo-frames" style="margin-top:12px">
+      <div class="demo-frame"><div class="status-bar"><span class="status-time">9:41</span><span class="status-icons">● ▮ ▮</span></div><div class="nav-bar compact"><button class="nav-back" aria-label="Back">‹</button><div class="nav-title">Reward shop</div><span class="nav-action">＋</span></div><div class="scroll"><div class="card">Scroll region · padding 0 20px + bottom 32</div></div><nav class="tab-bar"><a class="tab active" href="#"><span>●</span><span>Today</span></a><a class="tab" href="#"><span>●</span><span>Quests</span></a><a class="tab" href="#"><span>●</span><span>Money</span></a><a class="tab" href="#"><span>●</span><span>Family</span></a></nav><div class="home-indicator"><span class="home-pill"></span></div></div>
+      <div class="demo-frame" style="position:relative;min-height:420px"><div class="scrim" style="position:absolute"></div><div class="modal" style="position:absolute"><h3 class="h3">Grown-ups only</h3><p class="body-s">Type the answer: seven times six</p><div class="keypad"><button>1</button><button>2</button><button>3</button><button>4</button><button>5</button><button>6</button><button>7</button><button>8</button><button>9</button><span class="keypad-blank"></span><button>0</button><button aria-label="Delete">⌫</button></div></div></div>
+    </div>
+    <div class="empty-state"><div class="art"><img src="assets/pip-stage-1.svg" alt="Pip egg"></div><div class="h3">Your nest is quiet</div><p class="body-s t-ink-2">Add your first quest and Pip will start to hatch.</p><button class="btn btn-primary" style="max-width:240px">Add a quest</button></div>
+  </section>
+
+  <section class="sec"><h2>5 · Components — kid</h2><p class="sub">Nunito · chunky 64px buttons · 56px targets · no £ except jar · no red.</p>
+    <div class="kid-demo"><div class="row"><button class="btn-kid leaf" style="max-width:220px">I did it!</button><button class="btn-kid coin" style="max-width:220px">Shop</button></div>
+    <div class="row" style="margin-top:12px"><button class="btn-kid lilac" style="max-width:160px">Pip</button><button class="btn-kid peach" style="max-width:160px">Play</button><button class="btn-kid sky" style="max-width:160px">Bath</button></div>
+    <div class="quest-card kid" style="margin-top:12px;max-width:420px"><span class="kid-icon">🧸</span><div class="quest-main"><div class="quest-title">Tidy your bedroom</div><div class="quest-meta"><span class="coin-pill"><img src="assets/coin.svg" alt="">15</span></div></div><button class="quest-check done" aria-label="Mark done">✓</button></div>
+    <div style="margin-top:12px;max-width:420px"><div class="speech">Let's do some quests!</div><div class="pet-stage"><img src="assets/pip-stage-3.svg" alt="Pip fledgling"><span class="pet-shadow"></span></div><div class="progress kid" style="margin-top:8px"><span style="width:70%"></span></div><div class="pin-dots" style="margin-top:8px"><span class="filled"></span><span class="filled"></span><span></span><span></span></div></div></div>
+  </section>
+
+  <section class="sec"><h2>6 · Assets</h2><p class="sub">Consistent Pip: same eyes + beak, ink 6px outline in 240-space, flat, round. viewBox 0 0 240 240 (icon 1024).</p><div class="asset-grid">
+    <figure><img src="assets/pip-stage-1.svg" alt="Pip stage 1"><figcaption>pip-stage-1.svg · Egg</figcaption></figure>
+    <figure><img src="assets/pip-stage-2.svg" alt="Pip stage 2"><figcaption>pip-stage-2.svg · Hatchling</figcaption></figure>
+    <figure><img src="assets/pip-stage-3.svg" alt="Pip stage 3"><figcaption>pip-stage-3.svg · Fledgling</figcaption></figure>
+    <figure><img src="assets/pip-stage-4.svg" alt="Pip stage 4"><figcaption>pip-stage-4.svg · Songbird</figcaption></figure>
+    <figure><img src="assets/coin.svg" alt="Coin"><figcaption>coin.svg · Gold + leaf</figcaption></figure>
+    <figure><img src="assets/nest.svg" alt="Nest"><figcaption>nest.svg · Twig nest</figcaption></figure>
+    <figure><img src="assets/app-icon.svg" alt="App icon"><figcaption>app-icon.svg · 1024 leaf + Pip</figcaption></figure>
+  </div></section>
+
+  <section class="sec"><h2>7 · Snippet library</h2><p class="sub">Screen agents: paste verbatim. Tab bar = parent only. Keypad keys are 72px. Dark mode is automatic: same token names, <code class="inline">:root[data-theme="dark"]</code> or system <code class="inline">prefers-color-scheme</code> — never hard-code hex in screens.</p>
+    <h3 class="h3">Status bar</h3><pre class="snip">&lt;div class="status-bar"&gt;&lt;span class="status-time"&gt;9:41&lt;/span&gt;&lt;span class="status-icons"&gt;…signal/wifi/battery SVGs…&lt;/span&gt;&lt;/div&gt;</pre>
+    <h3 class="h3" style="margin-top:12px">Home indicator (always last child of .screen)</h3><pre class="snip">&lt;div class="home-indicator" aria-hidden="true"&gt;&lt;span class="home-pill"&gt;&lt;/span&gt;&lt;/div&gt;</pre>
+    <h3 class="h3" style="margin-top:12px">Tab bar (Today · Quests · Money · Family)</h3><pre class="snip">&lt;nav class="tab-bar" aria-label="Primary"&gt;
+  &lt;a class="tab active" href="#" aria-current="page"&gt;[icon 24]&lt;span&gt;Today&lt;/span&gt;&lt;/a&gt;
+  &lt;a class="tab" href="#"&gt;[icon 24]&lt;span&gt;Quests&lt;/span&gt;&lt;/a&gt;
+  &lt;a class="tab" href="#"&gt;[icon 24]&lt;span&gt;Money&lt;/span&gt;&lt;/a&gt;
+  &lt;a class="tab" href="#"&gt;[icon 24]&lt;span&gt;Family&lt;/span&gt;&lt;/a&gt;
+&lt;/nav&gt;</pre>
+    <h3 class="h3" style="margin-top:12px">Keypad</h3><pre class="snip">&lt;div class="keypad" role="group" aria-label="Number pad"&gt;
+  &lt;button type="button"&gt;1&lt;/button&gt;&lt;button type="button"&gt;2&lt;/button&gt;&lt;button type="button"&gt;3&lt;/button&gt;
+  &lt;button type="button"&gt;4&lt;/button&gt;&lt;button type="button"&gt;5&lt;/button&gt;&lt;button type="button"&gt;6&lt;/button&gt;
+  &lt;button type="button"&gt;7&lt;/button&gt;&lt;button type="button"&gt;8&lt;/button&gt;&lt;button type="button"&gt;9&lt;/button&gt;
+  &lt;span class="keypad-blank"&gt;&lt;/span&gt;&lt;button type="button"&gt;0&lt;/button&gt;&lt;button type="button" aria-label="Delete"&gt;⌫&lt;/button&gt;
+&lt;/div&gt;</pre>
+    <h3 class="h3" style="margin-top:12px">Screen shell</h3><pre class="snip">&lt;body&gt;&lt;div class="screen parent"&gt;
+  &lt;div class="status-bar"&gt;…&lt;/div&gt;
+  &lt;div class="scroll"&gt;…content, padding-bottom = CTA + 16px…&lt;/div&gt;
+  &lt;div class="bottom-cta"&gt;…optional…&lt;/div&gt;
+  &lt;nav class="tab-bar"&gt;…&lt;/nav&gt;
+  &lt;div class="home-indicator"&gt;…&lt;/div&gt;
+&lt;/div&gt;&lt;/body&gt;</pre>
+  </section>
+</div>
+<script>
+(function(){
+  var btn=document.getElementById('theme-toggle');
+  function effective(){return document.documentElement.dataset.theme||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');}
+  function paint(){btn.textContent=effective()==='dark'?'Light mode':'Dark mode';}
+  btn.addEventListener('click',function(){var n=effective()==='dark'?'light':'dark';document.documentElement.dataset.theme=n;try{if(typeof applyThemeToScreens==='function')applyThemeToScreens(n);}catch(e){}paint();});
+  paint();
+})();
+</script>
+</body>
+</html>

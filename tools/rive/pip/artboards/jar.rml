@@ -1,0 +1,211 @@
+<Rive version="1" kind="fragment">
+    <Artboard name="Jar" x="1280" y="0" width="200" height="236" defaultStateMachineId="0:300" viewModelId="0:500" viewModelInstanceId="0:501" styleId="5:999" id="5:998">
+        <LayoutComponentStyle name="Artboard Style" id="5:999"/>
+
+        <Shape x="134" y="50" name="plus" id="0:6">
+          <PointsPath isClosed="false">
+            <StraightVertex x="0" y="-6"/>
+            <StraightVertex x="0" y="6"/>
+          </PointsPath>
+          <PointsPath isClosed="false">
+            <StraightVertex x="-6" y="0"/>
+            <StraightVertex x="6" y="0"/>
+          </PointsPath>
+          <Stroke name="S" thickness="4" cap="round"><SolidColor colorValue="FF7C6CF2" name="C"/></Stroke>
+        </Shape>
+
+        <Shape x="50" y="80" name="gloss" id="0:7">
+          <PointsPath isClosed="false">
+            <StraightVertex x="0" y="-24"/>
+            <StraightVertex x="-4" y="-8"/>
+            <StraightVertex x="-2" y="24"/>
+          </PointsPath>
+          <Stroke name="S" thickness="7" cap="round"><SolidColor colorValue="E6FFFFFF" name="C"/></Stroke>
+        </Shape>
+
+        <Shape x="100.0" y="124.0" name="glass_outline" id="0:5">
+          <Rectangle width="128" height="168" cornerRadiusTL="24" linkCornerRadius="true" name="P"/>
+          <Stroke name="S" thickness="4"><SolidColor colorValue="FF1E1B3A" name="C"/></Stroke>
+        </Shape>
+
+        <Node name="contents" x="0" y="0" id="0:8">
+          <Shape x="66" y="128" name="coin_1" id="0:30">
+            <Ellipse width="30" height="30" name="P"/>
+            <Fill name="F"><SolidColor colorValue="FFF4B400" name="C"/></Fill>
+            <Stroke name="S" thickness="3"><SolidColor colorValue="FF1E1B3A" name="C"/></Stroke>
+            <ClippingShape sourceId="0:3" name="Clip"/>
+          </Shape>
+          <Shape x="102" y="118" name="coin_2" id="0:31">
+            <Ellipse width="26" height="26" name="P"/>
+            <Fill name="F"><SolidColor colorValue="FFF4B400" name="C"/></Fill>
+            <Stroke name="S" thickness="3"><SolidColor colorValue="FF1E1B3A" name="C"/></Stroke>
+            <ClippingShape sourceId="0:3" name="Clip"/>
+          </Shape>
+          <Shape x="134" y="132" name="coin_3" id="0:32">
+            <Ellipse width="30" height="30" name="P"/>
+            <Fill name="F"><SolidColor colorValue="FFF4B400" name="C"/></Fill>
+            <Stroke name="S" thickness="3"><SolidColor colorValue="FF1E1B3A" name="C"/></Stroke>
+            <ClippingShape sourceId="0:3" name="Clip"/>
+          </Shape>
+          <Shape x="82" y="154" name="coin_4" id="0:33">
+            <Ellipse width="32" height="32" name="P"/>
+            <Fill name="F"><SolidColor colorValue="FFF4B400" name="C"/></Fill>
+            <Stroke name="S" thickness="3"><SolidColor colorValue="FF1E1B3A" name="C"/></Stroke>
+            <ClippingShape sourceId="0:3" name="Clip"/>
+          </Shape>
+          <Shape x="120" y="158" name="coin_5" id="0:34">
+            <Ellipse width="28" height="28" name="P"/>
+            <Fill name="F"><SolidColor colorValue="FFF4B400" name="C"/></Fill>
+            <Stroke name="S" thickness="3"><SolidColor colorValue="FF1E1B3A" name="C"/></Stroke>
+            <ClippingShape sourceId="0:3" name="Clip"/>
+          </Shape>
+          <Shape x="100" y="182" name="coin_6" id="0:35">
+            <Ellipse width="30" height="30" name="P"/>
+            <Fill name="F"><SolidColor colorValue="FFF4B400" name="C"/></Fill>
+            <Stroke name="S" thickness="3"><SolidColor colorValue="FF1E1B3A" name="C"/></Stroke>
+            <ClippingShape sourceId="0:3" name="Clip"/>
+          </Shape>
+          <Shape x="58" y="178" name="coin_7" id="0:36">
+            <Ellipse width="26" height="26" name="P"/>
+            <Fill name="F"><SolidColor colorValue="FFF4B400" name="C"/></Fill>
+            <Stroke name="S" thickness="3"><SolidColor colorValue="FF1E1B3A" name="C"/></Stroke>
+            <ClippingShape sourceId="0:3" name="Clip"/>
+          </Shape>
+          <Shape x="144" y="180" name="coin_8" id="0:37">
+            <Ellipse width="24" height="24" name="P"/>
+            <Fill name="F"><SolidColor colorValue="FFF4B400" name="C"/></Fill>
+            <Stroke name="S" thickness="3"><SolidColor colorValue="FF1E1B3A" name="C"/></Stroke>
+            <ClippingShape sourceId="0:3" name="Clip"/>
+          </Shape>
+          <Shape x="36" y="208" name="gold" id="0:4">
+            <Rectangle width="128" height="0" cornerRadiusBL="24" cornerRadiusBR="24" linkCornerRadius="false" originX="0" originY="1" name="P">
+              <DataBindContext sourcePathIds="0:500-0:502" propertyKey="21" converterId="0:600"/>
+            </Rectangle>
+            <Fill name="F"><SolidColor colorValue="FFE09700" name="C"/></Fill>
+            <ClippingShape sourceId="0:3" name="Clip"/>
+          </Shape>
+        </Node>
+
+        <Shape x="100" y="104" name="splash" id="0:20">
+          <Ellipse width="10" height="4" name="P"/>
+          <Fill name="F"><SolidColor colorValue="66F4B400" name="C"/></Fill>
+        </Shape>
+
+        <Shape x="100.0" y="124.0" name="window_mask" id="0:3">
+          <Rectangle width="128" height="168" cornerRadiusTL="24" linkCornerRadius="true" name="P"/>
+        </Shape>
+
+        <Shape x="100" y="120" name="glass" id="0:2">
+          <Rectangle width="144" height="192" cornerRadiusTL="30" linkCornerRadius="true" name="P"/>
+          <Fill name="F"><SolidColor colorValue="FFF2FAFF" name="C"/></Fill>
+        </Shape>
+        <Shape x="100" y="15" name="lid" id="0:1">
+          <Rectangle width="100" height="22" cornerRadiusTL="10" linkCornerRadius="true" name="P"/>
+          <Fill name="F"><SolidColor colorValue="FF7C6CF2" name="C"/></Fill>
+          <Stroke name="S" thickness="4"><SolidColor colorValue="FF1E1B3A" name="C"/></Stroke>
+        </Shape>
+
+        <StateMachine name="Jar" id="0:300">
+          <StateMachineLayer name="Body" id="0:301">
+            <AnyState x="560" y="-120"/>
+            <ExitState x="760" y="-120"/>
+            <EntryState x="40" y="-120">
+              <StateTransition stateToId="0:302" duration="0"/>
+            </EntryState>
+            <AnimationState x="160" y="-120" animationId="0:400" id="0:302">
+              <StateTransition stateToId="0:303" duration="80">
+                <TransitionViewModelCondition opValue="equal">
+                  <TransitionPropertyViewModelComparator>
+                    <BindablePropertyTrigger>
+                      <DataBindContext sourcePathIds="0:500-0:503" propertyKey="686"/>
+                    </BindablePropertyTrigger>
+                  </TransitionPropertyViewModelComparator>
+                  <TransitionValueTriggerComparator value="1"/>
+                </TransitionViewModelCondition>
+              </StateTransition>
+            </AnimationState>
+            <AnimationState x="360" y="60" animationId="0:401" id="0:303">
+              <StateTransition stateToId="0:302" duration="0" enableExitTime="true" exitTimeIsPercetange="true" exitTime="100"/>
+            </AnimationState>
+          </StateMachineLayer>
+        </StateMachine>
+
+        <LinearAnimation name="hold" duration="1" fps="60" loopValue="loop" id="0:400"/>
+
+        <LinearAnimation name="drop" duration="96" fps="60" loopValue="oneShot" id="0:401">
+          <KeyedObject objectId="0:8">
+            <KeyedProperty propertyKey="17">
+              <KeyFrameDouble value="1" interpolationType="hold"/>
+              <KeyFrameDouble value="1" interpolationType="cubic" frame="62"/>
+              <KeyFrameDouble value="1" interpolationType="linear" frame="96"/>
+            </KeyedProperty>
+          </KeyedObject>
+          <KeyedObject objectId="0:20">
+            <KeyedProperty propertyKey="16">
+              <KeyFrameDouble value="0" interpolationType="hold"/>
+              <KeyFrameDouble value="1" interpolationType="cubic" frame="66"/>
+              <KeyFrameDouble value="0" interpolationType="cubic" frame="90"/>
+            </KeyedProperty>
+          </KeyedObject>
+          <KeyedObject objectId="0:20">
+            <KeyedProperty propertyKey="17">
+              <KeyFrameDouble value="1" interpolationType="hold"/>
+              <KeyFrameDouble value="3.4" interpolationType="cubic" frame="66"/>
+              <KeyFrameDouble value="1" interpolationType="cubic" frame="90"/>
+            </KeyedProperty>
+          </KeyedObject>
+          <KeyedObject objectId="0:30">
+            <KeyedProperty propertyKey="14">
+              <KeyFrameDouble value="-22" interpolationType="cubic"/>
+              <KeyFrameDouble value="128" interpolationType="cubic" frame="32"/>
+              <KeyFrameDouble value="128" interpolationType="linear" frame="96"/>
+            </KeyedProperty>
+          </KeyedObject>
+          <KeyedObject objectId="0:30">
+            <KeyedProperty propertyKey="16">
+              <KeyFrameDouble value="0" interpolationType="hold"/>
+              <KeyFrameDouble value="1" interpolationType="cubic" frame="32"/>
+              <KeyFrameDouble value="1" interpolationType="linear" frame="96"/>
+            </KeyedProperty>
+          </KeyedObject>
+          <KeyedObject objectId="0:31">
+            <KeyedProperty propertyKey="14">
+              <KeyFrameDouble value="-32" interpolationType="cubic" frame="9"/>
+              <KeyFrameDouble value="118" interpolationType="cubic" frame="41"/>
+              <KeyFrameDouble value="118" interpolationType="linear" frame="96"/>
+            </KeyedProperty>
+          </KeyedObject>
+          <KeyedObject objectId="0:31">
+            <KeyedProperty propertyKey="16">
+              <KeyFrameDouble value="0" interpolationType="hold" frame="9"/>
+              <KeyFrameDouble value="1" interpolationType="cubic" frame="41"/>
+              <KeyFrameDouble value="1" interpolationType="linear" frame="96"/>
+            </KeyedProperty>
+          </KeyedObject>
+          <KeyedObject objectId="0:32">
+            <KeyedProperty propertyKey="14">
+              <KeyFrameDouble value="-18" interpolationType="cubic" frame="18"/>
+              <KeyFrameDouble value="132" interpolationType="cubic" frame="50"/>
+              <KeyFrameDouble value="132" interpolationType="linear" frame="96"/>
+            </KeyedProperty>
+          </KeyedObject>
+          <KeyedObject objectId="0:32">
+            <KeyedProperty propertyKey="16">
+              <KeyFrameDouble value="0" interpolationType="hold" frame="18"/>
+              <KeyFrameDouble value="1" interpolationType="cubic" frame="50"/>
+              <KeyFrameDouble value="1" interpolationType="linear" frame="96"/>
+            </KeyedProperty>
+          </KeyedObject>
+        </LinearAnimation>
+    </Artboard>
+
+    <DataConverterRangeMapper minInput="0" maxInput="1" minOutput="0" maxOutput="168" clampLower="true" clampUpper="true" name="ToHeight" id="0:600"/>
+    <ViewModel name="Jar" defaultInstanceId="0:501" id="0:500">
+        <ViewModelPropertyNumber name="fill" id="0:502"/>
+        <ViewModelPropertyTrigger name="drop" id="0:503"/>
+        <ViewModelInstance exports="true" name="Default" id="0:501">
+            <ViewModelInstanceNumber propertyValue="0.55" viewModelPropertyId="0:502"/>
+            <ViewModelInstanceTrigger viewModelPropertyId="0:503"/>
+        </ViewModelInstance>
+    </ViewModel>
+</Rive>

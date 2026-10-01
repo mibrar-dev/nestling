@@ -1,0 +1,15 @@
+ROLE: Flutter asset engineer. New sub-agent. Project nestling-uk-family-chores-mobile-ui-e9c1; open-design MCP only (list_files, get_file, search_files, write_file).
+GOAL: Extract EVERY visual asset used across the 30 screens (`screens/*.html`) + `assets/` into a clean, de-duplicated, Flutter-ready pack under `flutter/` in the project. The orchestrator will then run SVGO optimisation, rasterise PNG/WebP @1x/2x/3x and QA sizes — so your job is correct extraction, naming and code.
+
+STEPS
+1. Read all 30 screens. Collect every inline <svg> and every referenced file.
+2. Classify & de-duplicate (same path data = same asset, even if size/colour differ):
+   - UI icons (24×24 line icons: tab bar, nav, list rows, quest icons, status bar glyphs excluded) → `flutter/assets/icons/ic_<name>.svg`. Normalise: viewBox="0 0 24 24", width/height removed, stroke="currentColor" (or fill="currentColor" for solid glyphs), stroke-width 2, round caps/joins. snake_case semantic names (ic_home, ic_quests, ic_money, ic_family, ic_lock, ic_back, ic_close, ic_plus, ic_check, ic_bed, ic_dishwasher, ic_bin, ic_book, ic_paw, …).
+   - Illustrations (Pip stages, nest, coin, jar, shield, confetti/sparkles, meadow hill, badges/medals, reward icons with colour, Google/Apple sign-in logos EXCLUDED — note them as "use official SDK button assets") → `flutter/assets/illustrations/<name>.svg` keeping their colours.
+   - Brand → `flutter/assets/brand/app_icon.svg` (1024) and `app_icon_foreground.svg` (Pip head only, transparent bg, centred in the inner 66% safe zone for Android adaptive icons) and `app_icon_background.svg` (solid #17804F).
+3. `flutter/manifest.json`: array of {name, path, kind: icon|illustration|brand, viewBox, usedIn:[screen ids], colourable: bool, notes}.
+4. `flutter/lib/gen/nestling_assets.dart`: `abstract final class NestlingIcons { static const String home = 'assets/icons/ic_home.svg'; … }` and `NestlingIllustrations` (SVG paths) and `NestlingImages` (raster paths: 'assets/images/pip_stage_1.webp' etc. for pip_stage_1..4, nest, coin, jar — the orchestrator will generate these files with 2.0x/3.0x variants).
+5. `flutter/lib/theme/nestling_tokens.dart`: all colour tokens from tokens.css as `Color(0xFF…)` in `NestlingColorsLight` / `NestlingColorsDark` (read the dark block if present), plus spacing, radii, and TextStyles (Inter / Nunito via google_fonts naming), and a `ThemeExtension<NestlingTokens>` with copyWith/lerp.
+6. `flutter/pubspec_snippet.yaml`: flutter_svg + google_fonts deps, `assets:` entries for each folder (icons/, illustrations/, brand/, images/), plus a flutter_launcher_icons config block (image_path assets/brand/app_icon.png, adaptive_icon_background "#17804F", adaptive_icon_foreground assets/brand/app_icon_foreground.png, remove_alpha_ios true).
+7. `flutter/README.md`: how to drop into a Flutter app, usage examples (SvgPicture.asset(NestlingIcons.home, colorFilter: ColorFilter.mode(color, BlendMode.srcIn), width: 24)), and why SVG for icons vs WebP for illustrations.
+Reply: counts (icons N, illustrations N, brand N) + list of names.

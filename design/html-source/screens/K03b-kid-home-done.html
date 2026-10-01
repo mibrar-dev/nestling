@@ -1,0 +1,113 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=390, initial-scale=1">
+<title>Kid mode — All done · Nestling</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../components.css">
+<style>
+  html, body { width: 390px; height: 844px; margin: 0; overflow: hidden; }
+  .meadow { position: absolute; left: 0; bottom: 0; width: 390px; height: 136px; z-index: 0; pointer-events: none; }
+  .meadow .hill-back { fill: var(--kid-meadow); }
+  .meadow .hill-front { fill: color-mix(in srgb, var(--kid-meadow) 80%, var(--surface)); }
+  .meadow, .sparks, .confetti, .burst { position: absolute; z-index: 0; pointer-events: none; }
+  .screen.kid > .scroll, .screen.kid > .kid-bar, .screen.kid > .k3-dock, .screen.kid > .home-indicator { position: relative; z-index: 1; }
+  .lock-btn.lg, .nav-back.lg { width: 56px; height: 56px; min-width: 56px; min-height: 56px; border-radius: 18px; }
+  .kid-bar { background: var(--surface); border-top: 3px solid var(--ink); padding: 12px 20px 10px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
+  .kcap { font-family: var(--font-display); font-weight: 700; font-size: 15px; line-height: 20px; color: var(--ink-2); }
+  .kchip { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px; background: var(--leaf-tint); color: var(--leaf-ink); font-family: var(--font-display); font-weight: 800; font-size: 15px; line-height: 1; white-space: nowrap; }
+  .grow { flex: 1; min-height: 0; }
+
+  .k3-top { display: flex; align-items: center; gap: 10px; padding: 4px 20px 10px; flex-shrink: 0; }
+  .k3-hi { flex: 1; min-width: 0; }
+  .k3-name { font-family: var(--font-display); font-weight: 900; font-size: 22px; line-height: 26px; }
+  .k3-sub { font-family: var(--font-display); font-weight: 700; font-size: 15px; line-height: 20px; color: var(--leaf-ink); }
+  .k3-bubble { display: flex; justify-content: center; }
+  .k3-stage { position: relative; display: flex; flex-direction: column; align-items: center; }
+  .k3-pet { position: relative; width: 260px; height: 226px; margin: 14px auto 0; }
+  .k3-pet .nest { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); width: 260px; height: 226px; }
+  .k3-pet .pip { position: absolute; left: 50%; bottom: 92px; transform: translateX(-50%) rotate(-7deg); width: 150px; height: 150px; }
+  .confetti { position: absolute; left: 50%; top: 4px; transform: translateX(-50%); width: 320px; height: 250px; pointer-events: none; }
+  .k3-stage .speech { position: relative; z-index: 2; }
+  .k3-sec { display: flex; align-items: center; gap: 10px; }
+  .k3-sec h2 { flex: 1; min-width: 0; }
+  .k3-quests { display: flex; flex-direction: column; gap: 12px; }
+</style>
+</head>
+<body>
+<div class="screen kid">
+<svg class="meadow" viewBox="0 0 390 136" preserveAspectRatio="none" aria-hidden="true"><path class="hill-back" d="M0 56C58 28 122 32 186 22 252 12 314 28 390 10v126H0Z"/><path class="hill-front" d="M0 92c74-22 138-10 214-22 60-10 112 4 176-14v80H0Z"/></svg>
+<div class="status-bar"><span class="status-time">9:41</span><span class="status-icons"><svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor" aria-hidden="true"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4.5" width="3" height="7.5" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1" opacity=".35"/></svg><svg width="16" height="12" viewBox="0 0 16 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M1.5 4.5a10 10 0 0 1 13 0"/><path d="M4 7.2a5.6 5.6 0 0 1 8 0"/><circle cx="8" cy="10" r="1.2" fill="currentColor" stroke="none"/></svg><svg width="25" height="12" viewBox="0 0 25 12" fill="none" aria-hidden="true"><rect x=".5" y=".5" width="20" height="11" rx="3.5" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="15" height="8" rx="2" fill="currentColor"/><path d="M23 4v4a2.2 2.2 0 0 0 0-4z" fill="currentColor" opacity=".4"/></svg></span></div>
+  <div class="k3-top">
+    <span class="avatar a-lilac s64">M</span>
+    <div class="k3-hi">
+      <div class="k3-name">Hi Maya!</div>
+      <div class="k3-sub">All done!</div>
+    </div>
+    <span class="coin-pill"><img src="../assets/coin.svg" alt="">120</span>
+    <button class="lock-btn lg" type="button" aria-label="Grown-ups"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></button>
+  </div>
+  <div class="scroll">
+    <div class="k3-bubble"><span class="speech">You did everything today! Pip is so proud.</span></div>
+    <div class="k3-stage">
+      <svg class="confetti" viewBox="0 0 320 250" aria-hidden="true">
+  <g stroke="#1E1B3A" stroke-width="3" stroke-linejoin="round">
+    <rect x="18" y="26" width="11" height="17" rx="4" fill="#7C6CF2" transform="rotate(-20 23 34)"/>
+    <rect x="286" y="18" width="11" height="17" rx="4" fill="#F4B400" transform="rotate(24 291 26)"/>
+    <rect x="10" y="104" width="11" height="17" rx="4" fill="#FF8A5B" transform="rotate(12 15 112)"/>
+    <rect x="296" y="112" width="11" height="17" rx="4" fill="#1F9D63" transform="rotate(-16 301 120)"/>
+    <rect x="34" y="212" width="11" height="17" rx="4" fill="#3D7FF0" transform="rotate(18 39 220)"/>
+    <rect x="272" y="206" width="11" height="17" rx="4" fill="#7C6CF2" transform="rotate(-22 277 214)"/>
+    <circle cx="66" cy="16" r="7" fill="#F4B400"/>
+    <circle cx="252" cy="8" r="6" fill="#1F9D63"/>
+    <circle cx="156" cy="6" r="6" fill="#FF8A5B"/>
+    <path d="M104 22 109 36 123 41 109 46 104 60 99 46 85 41 99 36Z" fill="#7C6CF2"/>
+    <path d="M228 190 232 201 243 205 232 209 228 220 224 209 213 205 224 201Z" fill="#1F9D63"/>
+    <path d="M20 172 24 182 34 186 24 190 20 200 16 190 6 186 16 182Z" fill="#F4B400"/>
+    <path d="M300 66 304 76 314 80 304 84 300 94 296 84 286 80 296 76Z" fill="#FF8A5B"/>
+    <circle cx="120" cy="236" r="6" fill="#1F9D63"/>
+    <circle cx="196" cy="242" r="5" fill="#3D7FF0"/>
+  </g>
+</svg>
+      <div class="k3-pet">
+        <img class="nest" src="../assets/nest.svg" alt="">
+        <img class="pip" src="../assets/pip-stage-3.svg" alt="Pip the Fledgling celebrating">
+      </div>
+    </div>
+    <div class="k3-sec">
+      <h2 class="kid-title">Today's quests</h2>
+      <span class="kchip">6 of 6 done</span>
+    </div>
+    <div class="progress kid" role="img" aria-label="All of today's quests done"><span style="width:100%"></span></div>
+    <div class="k3-quests">
+      <div class="quest-card kid">
+        <span class="kid-icon" style="background:var(--sky-tint);color:var(--ink)"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 10h18"/><circle cx="8" cy="14.5" r="1.3"/><path d="M12 14h5M12 16.8h3"/></svg></span>
+        <div class="quest-main">
+          <div class="quest-title">Empty the dishwasher</div>
+          <div class="quest-meta"><span class="kchip">Mum said yes!</span></div>
+        </div>
+        <span class="quest-check done" aria-label="Approved by Mum"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg></span>
+      </div>
+      <div class="quest-card kid">
+        <span class="kid-icon" style="background:var(--lilac-tint);color:var(--ink)"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 6v14"/><path d="M3 4.6A2.6 2.6 0 0 1 5.6 2H11v18H5.6A2.6 2.6 0 0 1 3 17.4Z"/><path d="M21 4.6A2.6 2.6 0 0 0 18.4 2H13v18h5.4a2.6 2.6 0 0 0 2.6-2.6Z"/></svg></span>
+        <div class="quest-main">
+          <div class="quest-title">Reading &ndash; 20 minutes</div>
+          <div class="quest-meta"><span class="coin-pill"><img src="../assets/coin.svg" alt="">+10</span></div>
+        </div>
+        <span class="quest-check done" aria-label="Done"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg></span>
+      </div>
+      <div class="quest-card kid">
+        <span class="kid-icon" style="background:var(--peach-tint);color:var(--ink)"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 18v-7"/><path d="M2 14h20v4"/><path d="M22 18v-4a3 3 0 0 0-3-3h-9v3"/><path d="M6 11V8h4v3"/></svg></span>
+        <div class="quest-main">
+          <div class="quest-title">Tidy your bedroom</div>
+          <div class="quest-meta"><span class="coin-pill"><img src="../assets/coin.svg" alt="">+15</span></div>
+        </div>
+        <span class="quest-check done" aria-label="Done"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg></span>
+      </div>
+    </div>
+  </div>
+  <div class="kid-bar">
+    <button class="btn-kid lilac" type="button"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg><span>Visit Pip</span></button>
+  </div>
+  <div class="home-indicator" aria-hidden="true"><span class="home-pill"></span></div>
+</div>
+</body>
+</html>

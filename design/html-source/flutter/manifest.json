@@ -1,0 +1,1431 @@
+{
+  "schema": "nestling-assets/1",
+  "generatedFrom": "screens/*.html (30) + assets/*.svg (7) + tokens.css",
+  "counts": {
+    "icon": 63,
+    "illustration": 22,
+    "brand": 3,
+    "excluded": 5,
+    "total": 93
+  },
+  "globalNotes": [
+    "Icons: viewBox 0 0 24 24, no width/height, stroke=currentColor stroke-width=2 linecap/linejoin=round (solid glyphs use fill=currentColor). Tint with SvgPicture colorFilter or Icon(color:).",
+    "All icons are 2px Lucide-style line icons. Set Size at the call site; do not bake width/height into the file.",
+    "LAUNCHER ICON: app_icon.svg is a full-bleed square - no rounded corners, no outer stroke, opaque. iOS and Android apply their own masks, so never bake an rx or a transparency into it. Only app_icon_foreground.svg is transparent, because the adaptive-icon foreground must be.",
+    "app_icon.svg puts the Pip head at 62% of the canvas; app_icon_foreground.svg uses 66% because that is Android's guaranteed-visible safe area. The 4% delta is intentional - do not unify them.",
+    "KNOWN AUTHORING MISMATCHES (screens, not assets): P10's quest rows are icon-shifted by one - the table shape sits in the 'Put the bins out' row, the bin shape in 'Empty the dishwasher', the paw in 'Hoover the stairs' and the book in 'Help with the washing'. K08's 'Park cafe trip' card uses a lamp. Icons are named by SHAPE, not by the row they were authored into - re-map dartName to the right quest when you build P10/K08.",
+    "Two distinct 'bin' glyphs exist: ic_bin (wheelie bin, quest 'Put the bins out') and ic_basket (lidded basket, P02/P04). Kept separate on purpose.",
+    "Two distinct 'shop' glyph sets exist between P14 and K08 (ic_film/ic_film_strip, ic_clock/ic_moon, ic_chef_hat/ic_baking_bag, ic_cafe/ic_lamp). Kept separate because the shops are visually different screens; collapse to one set if you standardise the reward set.",
+    "tokens.css has NO dark block. NestlingColorsDark in lib/theme/nestling_tokens.dart is derived, not authored - see its doc comment. It needs design sign-off before shipping dark mode.",
+    "RASTERS: every one of the 22 illustrations plus the 3 brand files has a raster target. rasterBox is the largest on-screen usage, so 1x is meaningful; emit 2x and 3x next to it. Every illustration also stays as an SVG, so nothing is lost if a raster is dropped."
+  ],
+  "assets": [
+    {
+      "name": "ic_back",
+      "dartName": "back",
+      "path": "flutter/assets/icons/ic_back.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P03",
+        "P04",
+        "P05",
+        "P06",
+        "P11",
+        "P14",
+        "K02",
+        "K04",
+        "K06",
+        "K08",
+        "K09",
+        "K10",
+        "K11"
+      ],
+      "colourable": true,
+      "notes": "Nav back chevron. 2 authored variants merged (P03.. `M15 5 8 12l7 7`; P11/P14 `m15 5-7 7 7 7` — identical geometry)."
+    },
+    {
+      "name": "ic_close",
+      "dartName": "close",
+      "path": "flutter/assets/icons/ic_close.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P07"
+      ],
+      "colourable": true,
+      "notes": "Paywall dismiss X."
+    },
+    {
+      "name": "ic_plus",
+      "dartName": "plus",
+      "path": "flutter/assets/icons/ic_plus.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P02",
+        "P05",
+        "P08",
+        "P16"
+      ],
+      "colourable": true,
+      "notes": "Add / New. 2 authored variants merged (P16 omitted stroke-linejoin)."
+    },
+    {
+      "name": "ic_edit",
+      "dartName": "edit",
+      "path": "flutter/assets/icons/ic_edit.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P05",
+        "P14"
+      ],
+      "colourable": true,
+      "notes": "Pencil. 2 authored variants merged: P05 `M4 20h4L19.2 8.8…` and P14 `M17 3a2.8 2.8 0 1 1 4 4…`."
+    },
+    {
+      "name": "ic_eye",
+      "dartName": "eye",
+      "path": "flutter/assets/icons/ic_eye.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P03"
+      ],
+      "colourable": true,
+      "notes": "Show password. P03 has no eye-off variant — build it as a sibling if the toggle needs one."
+    },
+    {
+      "name": "ic_lock",
+      "dartName": "lock",
+      "path": "flutter/assets/icons/ic_lock.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P17",
+        "P15",
+        "P16",
+        "K01",
+        "K02",
+        "K03",
+        "K03b",
+        "K04",
+        "K05",
+        "K06",
+        "K08",
+        "K09",
+        "K10",
+        "K11"
+      ],
+      "colourable": true,
+      "notes": "Lock / 'Grown-ups only'. 3 authored variants merged: P17 (rect y10.5 h10), P15+P16 (rect y10 h10), kid screens (rect y10 h11)."
+    },
+    {
+      "name": "ic_backspace",
+      "dartName": "backspace",
+      "path": "flutter/assets/icons/ic_backspace.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P17"
+      ],
+      "colourable": true,
+      "notes": "Keypad delete key."
+    },
+    {
+      "name": "ic_search",
+      "dartName": "search",
+      "path": "flutter/assets/icons/ic_search.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P10"
+      ],
+      "colourable": true,
+      "notes": "Quest library search field."
+    },
+    {
+      "name": "ic_arrow_right",
+      "dartName": "arrowRight",
+      "path": "flutter/assets/icons/ic_arrow_right.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "K07"
+      ],
+      "colourable": true,
+      "notes": "Evolution 'Meet Songbird Pip'."
+    },
+    {
+      "name": "ic_home",
+      "dartName": "home",
+      "path": "flutter/assets/icons/ic_home.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P08",
+        "P08b",
+        "P10",
+        "P12",
+        "P15",
+        "P16"
+      ],
+      "colourable": true,
+      "notes": "Tab bar 1/4 — Today."
+    },
+    {
+      "name": "ic_quests",
+      "dartName": "quests",
+      "path": "flutter/assets/icons/ic_quests.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P08",
+        "P08b",
+        "P10",
+        "P12",
+        "P15",
+        "P16"
+      ],
+      "colourable": true,
+      "notes": "Tab bar 2/4 — Quests. 2 authored variants merged (P15 reused the same circle+tick)."
+    },
+    {
+      "name": "ic_money",
+      "dartName": "money",
+      "path": "flutter/assets/icons/ic_money.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P02",
+        "P08",
+        "P08b",
+        "P10",
+        "P12",
+        "P15",
+        "P16"
+      ],
+      "colourable": true,
+      "notes": "Tab bar 3/4 — Money (pocket-money card)."
+    },
+    {
+      "name": "ic_family",
+      "dartName": "family",
+      "path": "flutter/assets/icons/ic_family.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P07",
+        "P08",
+        "P08b",
+        "P10",
+        "P12",
+        "P15",
+        "P16"
+      ],
+      "colourable": true,
+      "notes": "Tab bar 4/4 — Family."
+    },
+    {
+      "name": "ic_check",
+      "dartName": "check",
+      "path": "flutter/assets/icons/ic_check.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P07",
+        "P12",
+        "P13",
+        "K03",
+        "K03b",
+        "K04",
+        "K10",
+        "K11"
+      ],
+      "colourable": true,
+      "notes": "Tick. 3 authored stroke weights merged (P07 2.6, P12/P13 2, kid 3) and normalised to 2. Re-tint/weight at the call site if a chunkier kid tick is wanted."
+    },
+    {
+      "name": "ic_circle",
+      "dartName": "circle",
+      "path": "flutter/assets/icons/ic_circle.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "K11"
+      ],
+      "colourable": true,
+      "notes": "Happy-day ring, K11 only. RENAMED in QA round 1 from ic_dot - it was always an empty stroked circle (r=7), never a filled dot, so the name was wrong. The filled variant is ic_check; a genuinely filled dot would be fill=currentColor, which no screen authored."
+    },
+    {
+      "name": "ic_bed",
+      "dartName": "bed",
+      "path": "flutter/assets/icons/ic_bed.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P08",
+        "P09",
+        "P10"
+      ],
+      "colourable": true,
+      "notes": "Quest: make your bed. 2 authored variants merged — P08 drew a headboard leg, P09/P10 omitted it; the fuller P08 geometry wins."
+    },
+    {
+      "name": "ic_bed_sit",
+      "dartName": "bedSit",
+      "path": "flutter/assets/icons/ic_bed_sit.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "K03",
+        "K03b",
+        "K04"
+      ],
+      "colourable": true,
+      "notes": "Quest: tidy your bedroom (person sitting up in bed)."
+    },
+    {
+      "name": "ic_table",
+      "dartName": "table",
+      "path": "flutter/assets/icons/ic_table.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P10"
+      ],
+      "colourable": true,
+      "notes": "Table geometry — authored for the 'Lay the table' row slot in P10. See manifest-level mismatches note."
+    },
+    {
+      "name": "ic_dishwasher",
+      "dartName": "dishwasher",
+      "path": "flutter/assets/icons/ic_dishwasher.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P08",
+        "P09",
+        "P10",
+        "K03",
+        "K03b"
+      ],
+      "colourable": true,
+      "notes": "Quest: empty the dishwasher. Single geometry reused for P08/P09/P10/K03/K03b."
+    },
+    {
+      "name": "ic_hoover",
+      "dartName": "hoover",
+      "path": "flutter/assets/icons/ic_hoover.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P09",
+        "P10"
+      ],
+      "colourable": true,
+      "notes": "Quest: hoover the stairs. 2 authored variants merged (P10 omitted the wheels)."
+    },
+    {
+      "name": "ic_bin",
+      "dartName": "bin",
+      "path": "flutter/assets/icons/ic_bin.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P08",
+        "P09",
+        "P10"
+      ],
+      "colourable": true,
+      "notes": "Quest: put the bins out (wheelie bin). 3 authored variants merged; P09 also added a lid line `M10 12h4` which the canonical P08 geometry keeps."
+    },
+    {
+      "name": "ic_basket",
+      "dartName": "basket",
+      "path": "flutter/assets/icons/ic_basket.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P02",
+        "P04"
+      ],
+      "colourable": true,
+      "notes": "Lidded basket. 2 authored variants merged (P04 omitted the inner slats). Distinct from ic_bin."
+    },
+    {
+      "name": "ic_book",
+      "dartName": "book",
+      "path": "flutter/assets/icons/ic_book.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P08",
+        "P09",
+        "P10",
+        "K03",
+        "K03b"
+      ],
+      "colourable": true,
+      "notes": "Quest: read for 20 minutes. 3 authored variants merged."
+    },
+    {
+      "name": "ic_book_open",
+      "dartName": "bookOpen",
+      "path": "flutter/assets/icons/ic_book_open.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P02"
+      ],
+      "colourable": true,
+      "notes": "P02 value-tour card 2 (Pip grows as they help)."
+    },
+    {
+      "name": "ic_paw",
+      "dartName": "paw",
+      "path": "flutter/assets/icons/ic_paw.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P09",
+        "P10"
+      ],
+      "colourable": true,
+      "notes": "Quest: feed the pet. 2 authored variants merged (P10 has 2 toe pads, P09 has 4)."
+    },
+    {
+      "name": "ic_sprout",
+      "dartName": "sprout",
+      "path": "flutter/assets/icons/ic_sprout.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P10"
+      ],
+      "colourable": true,
+      "notes": "Leaf sprig — quest library row slot 8."
+    },
+    {
+      "name": "ic_school_bag",
+      "dartName": "schoolBag",
+      "path": "flutter/assets/icons/ic_school_bag.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P10"
+      ],
+      "colourable": true,
+      "notes": "Notebook / pack shape — quest library row slot 7."
+    },
+    {
+      "name": "ic_washing_machine",
+      "dartName": "washingMachine",
+      "path": "flutter/assets/icons/ic_washing_machine.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P10"
+      ],
+      "colourable": true,
+      "notes": "Circle + door line — quest library row slot 9."
+    },
+    {
+      "name": "ic_quest_card",
+      "dartName": "questCard",
+      "path": "flutter/assets/icons/ic_quest_card.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "K03",
+        "K03b"
+      ],
+      "colourable": true,
+      "notes": "Kid quest-card glyph (a card with a star and lines)."
+    },
+    {
+      "name": "ic_sleep",
+      "dartName": "sleep",
+      "path": "flutter/assets/icons/ic_sleep.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P02"
+      ],
+      "colourable": true,
+      "notes": "Bed with a sleeping head — P02 value-tour card 3."
+    },
+    {
+      "name": "ic_no_ads",
+      "dartName": "noAds",
+      "path": "flutter/assets/icons/ic_no_ads.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P04"
+      ],
+      "colourable": true,
+      "notes": "Privacy list row: no ads or tracking."
+    },
+    {
+      "name": "ic_person",
+      "dartName": "person",
+      "path": "flutter/assets/icons/ic_person.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P04"
+      ],
+      "colourable": true,
+      "notes": "Privacy list row: nickname only."
+    },
+    {
+      "name": "ic_pin_uk",
+      "dartName": "pinUk",
+      "path": "flutter/assets/icons/ic_pin_uk.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P04"
+      ],
+      "colourable": true,
+      "notes": "Privacy list row: data stored in the UK."
+    },
+    {
+      "name": "ic_shield_check",
+      "dartName": "shieldCheck",
+      "path": "flutter/assets/icons/ic_shield_check.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P03"
+      ],
+      "colourable": true,
+      "notes": "Terms/privacy note glyph."
+    },
+    {
+      "name": "ic_target",
+      "dartName": "target",
+      "path": "flutter/assets/icons/ic_target.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P02"
+      ],
+      "colourable": true,
+      "notes": "P02 value-tour card 1 (set quests in seconds)."
+    },
+    {
+      "name": "ic_pound_coin",
+      "dartName": "poundCoin",
+      "path": "flutter/assets/icons/ic_pound_coin.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "K09"
+      ],
+      "colourable": true,
+      "notes": "K09 'Pocket money' history row."
+    },
+    {
+      "name": "ic_ribbon",
+      "dartName": "ribbon",
+      "path": "flutter/assets/icons/ic_ribbon.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "K09"
+      ],
+      "colourable": true,
+      "notes": "K09 'Put the bins out' history row."
+    },
+    {
+      "name": "ic_gift",
+      "dartName": "gift",
+      "path": "flutter/assets/icons/ic_gift.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P09",
+        "P12",
+        "K09"
+      ],
+      "colourable": true,
+      "notes": "Birthday money. 2 authored variants merged (P12 drew a lidded box + bow, K09 a ribboned box)."
+    },
+    {
+      "name": "ic_saved",
+      "dartName": "saved",
+      "path": "flutter/assets/icons/ic_saved.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "K10"
+      ],
+      "colourable": true,
+      "notes": "K10 'went into your Lego fund' row (coin + up arrow)."
+    },
+    {
+      "name": "ic_screen_time",
+      "dartName": "screenTime",
+      "path": "flutter/assets/icons/ic_screen_time.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P14",
+        "K08"
+      ],
+      "colourable": true,
+      "notes": "Reward: 30 min extra screen time."
+    },
+    {
+      "name": "ic_film",
+      "dartName": "film",
+      "path": "flutter/assets/icons/ic_film.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P14"
+      ],
+      "colourable": true,
+      "notes": "Reward: pick Friday film (P14)."
+    },
+    {
+      "name": "ic_film_strip",
+      "dartName": "filmStrip",
+      "path": "flutter/assets/icons/ic_film_strip.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "K08"
+      ],
+      "colourable": true,
+      "notes": "Reward: pick Friday film (K08). Deliberately kept separate from ic_film — the two screens drew different glyphs."
+    },
+    {
+      "name": "ic_clock",
+      "dartName": "clock",
+      "path": "flutter/assets/icons/ic_clock.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P14"
+      ],
+      "colourable": true,
+      "notes": "Reward: stay up 15 min later (P14)."
+    },
+    {
+      "name": "ic_moon",
+      "dartName": "moon",
+      "path": "flutter/assets/icons/ic_moon.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "K08"
+      ],
+      "colourable": true,
+      "notes": "Reward: stay up 15 min later (K08)."
+    },
+    {
+      "name": "ic_chef_hat",
+      "dartName": "chefHat",
+      "path": "flutter/assets/icons/ic_chef_hat.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P14"
+      ],
+      "colourable": true,
+      "notes": "Reward: baking together (P14)."
+    },
+    {
+      "name": "ic_baking_bag",
+      "dartName": "bakingBag",
+      "path": "flutter/assets/icons/ic_baking_bag.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "K08"
+      ],
+      "colourable": true,
+      "notes": "Reward: baking together (K08) — bag with handle."
+    },
+    {
+      "name": "ic_cafe",
+      "dartName": "cafe",
+      "path": "flutter/assets/icons/ic_cafe.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P14"
+      ],
+      "colourable": true,
+      "notes": "Reward: trip to the park cafe — awning."
+    },
+    {
+      "name": "ic_lamp",
+      "dartName": "lamp",
+      "path": "flutter/assets/icons/ic_lamp.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "K08"
+      ],
+      "colourable": true,
+      "notes": "Lamp/base shape, authored into the K08 'Park cafe trip' card slot."
+    },
+    {
+      "name": "ic_pizza",
+      "dartName": "pizza",
+      "path": "flutter/assets/icons/ic_pizza.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "K08"
+      ],
+      "colourable": true,
+      "notes": "Reward: choose dinner."
+    },
+    {
+      "name": "ic_bag",
+      "dartName": "bag",
+      "path": "flutter/assets/icons/ic_bag.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P12",
+        "K03"
+      ],
+      "colourable": true,
+      "notes": "Shopping bag. 2 authored variants merged (P12 history row, K03 dock 'Shop')."
+    },
+    {
+      "name": "ic_phone",
+      "dartName": "phone",
+      "path": "flutter/assets/icons/ic_phone.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P08"
+      ],
+      "colourable": true,
+      "notes": "P08 'Hand to Maya or Leo'."
+    },
+    {
+      "name": "ic_coin_sparkle",
+      "dartName": "coinSparkle",
+      "path": "flutter/assets/icons/ic_coin_sparkle.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P08"
+      ],
+      "colourable": true,
+      "notes": "Coin with rays, authored into the P08 'Feed Biscuit the cat' tile (tint-coin)."
+    },
+    {
+      "name": "ic_heart",
+      "dartName": "heart",
+      "path": "flutter/assets/icons/ic_heart.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "K03"
+      ],
+      "colourable": true,
+      "notes": "Kid happiness heart, filled. Solid glyph — fill=currentColor + stroke=currentColor w2."
+    },
+    {
+      "name": "ic_heart_outline",
+      "dartName": "heartOutline",
+      "path": "flutter/assets/icons/ic_heart_outline.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "K03"
+      ],
+      "colourable": true,
+      "notes": "Kid happiness heart, empty (1 of 5)."
+    },
+    {
+      "name": "ic_pip_face",
+      "dartName": "pipFace",
+      "path": "flutter/assets/icons/ic_pip_face.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "K03"
+      ],
+      "colourable": true,
+      "notes": "Pip face — K03 bottom dock 'Pip' button."
+    },
+    {
+      "name": "ic_jar",
+      "dartName": "jar",
+      "path": "flutter/assets/icons/ic_jar.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "K03"
+      ],
+      "colourable": true,
+      "notes": "K03 bottom dock 'My jar' button."
+    },
+    {
+      "name": "ic_feed_bowl",
+      "dartName": "feedBowl",
+      "path": "flutter/assets/icons/ic_feed_bowl.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "K06"
+      ],
+      "colourable": true,
+      "notes": "K06 care action: Feed (5)."
+    },
+    {
+      "name": "ic_ball",
+      "dartName": "ball",
+      "path": "flutter/assets/icons/ic_ball.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "K06"
+      ],
+      "colourable": true,
+      "notes": "K06 care action: Play (free). REDRAWN in QA round 1 - the original two-arc segmented circle read as a clock/segmented dial, so it was redrawn as a football (circle + pentagon) that is unambiguous at 24px. K06 only."
+    },
+    {
+      "name": "ic_bubbles",
+      "dartName": "bubbles",
+      "path": "flutter/assets/icons/ic_bubbles.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "K06"
+      ],
+      "colourable": true,
+      "notes": "K06 care action: Bath."
+    },
+    {
+      "name": "ic_scarf",
+      "dartName": "scarf",
+      "path": "flutter/assets/icons/ic_scarf.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "K06"
+      ],
+      "colourable": true,
+      "notes": "K06 wardrobe: scarf (owned)."
+    },
+    {
+      "name": "ic_sun_hat",
+      "dartName": "sunHat",
+      "path": "flutter/assets/icons/ic_sun_hat.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "K06"
+      ],
+      "colourable": true,
+      "notes": "K06 wardrobe: sun hat (owned)."
+    },
+    {
+      "name": "ic_wellies",
+      "dartName": "wellies",
+      "path": "flutter/assets/icons/ic_wellies.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "K06"
+      ],
+      "colourable": true,
+      "notes": "K06 wardrobe: wellies (locked)."
+    },
+    {
+      "name": "ic_crown",
+      "dartName": "crown",
+      "path": "flutter/assets/icons/ic_crown.svg",
+      "kind": "icon",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "K06"
+      ],
+      "colourable": true,
+      "notes": "K06 wardrobe: crown (locked)."
+    },
+    {
+      "name": "pip_stage_1",
+      "dartName": "pipStage1",
+      "path": "flutter/assets/illustrations/pip_stage_1.svg",
+      "kind": "illustration",
+      "viewBox": "0 0 240 240",
+      "usedIn": [
+        "P02",
+        "P08b"
+      ],
+      "colourable": false,
+      "notes": "Pip stage 1 — egg with lilac speckles and peeking eyes. Copied from assets/pip-stage-1.svg; rgba() ground shadow rewritten to #1E1B3A + fill-opacity for Flutter.",
+      "source": "assets/pip-stage-1.svg",
+      "raster": "flutter/assets/images/pip_stage_1.webp",
+      "rasterBox": {
+        "w": 160,
+        "h": 160
+      },
+      "rasterNote": "1x = 160x160 (P08b empty-state illustration slot); emit 2x and 3x alongside."
+    },
+    {
+      "name": "pip_stage_2",
+      "dartName": "pipStage2",
+      "path": "flutter/assets/illustrations/pip_stage_2.svg",
+      "kind": "illustration",
+      "viewBox": "0 0 240 240",
+      "usedIn": [
+        "P01",
+        "P02",
+        "P08",
+        "K01"
+      ],
+      "colourable": false,
+      "notes": "Pip stage 2 — hatchling with half eggshell. From assets/pip-stage-2.svg.",
+      "source": "assets/pip-stage-2.svg",
+      "raster": "flutter/assets/images/pip_stage_2.webp",
+      "rasterBox": {
+        "w": 160,
+        "h": 160
+      },
+      "rasterNote": "1x = 160x160 (P01 hero scene / K01 profile tile); emit 2x and 3x alongside."
+    },
+    {
+      "name": "pip_stage_3",
+      "dartName": "pipStage3",
+      "path": "flutter/assets/illustrations/pip_stage_3.svg",
+      "kind": "illustration",
+      "viewBox": "0 0 240 240",
+      "usedIn": [
+        "P02",
+        "P08",
+        "P15",
+        "P17",
+        "K01",
+        "K03",
+        "K03b",
+        "K04",
+        "K05",
+        "K06",
+        "K07"
+      ],
+      "colourable": false,
+      "notes": "Pip stage 3 — fledgling with leaf-green wing tips. The most-used Pip asset (11 screens). From assets/pip-stage-3.svg.",
+      "source": "assets/pip-stage-3.svg",
+      "raster": "flutter/assets/images/pip_stage_3.webp",
+      "rasterBox": {
+        "w": 280,
+        "h": 280
+      },
+      "rasterNote": "1x = 280x280 (K06 big Pip; K03/K04/K05 use it smaller); emit 2x and 3x alongside."
+    },
+    {
+      "name": "pip_stage_4",
+      "dartName": "pipStage4",
+      "path": "flutter/assets/illustrations/pip_stage_4.svg",
+      "kind": "illustration",
+      "viewBox": "0 0 240 240",
+      "usedIn": [
+        "P07",
+        "K06",
+        "K07"
+      ],
+      "colourable": false,
+      "notes": "Pip stage 4 — songbird with peach scarf and lilac tail. From assets/pip-stage-4.svg.",
+      "source": "assets/pip-stage-4.svg",
+      "raster": "flutter/assets/images/pip_stage_4.webp",
+      "rasterBox": {
+        "w": 240,
+        "h": 240
+      },
+      "rasterNote": "1x = 240x240 (K07 evolution reveal / P07 paywall hero); emit 2x and 3x alongside."
+    },
+    {
+      "name": "nest",
+      "dartName": "nest",
+      "path": "flutter/assets/illustrations/nest.svg",
+      "kind": "illustration",
+      "viewBox": "0 0 240 240",
+      "usedIn": [
+        "P01",
+        "P07",
+        "K03",
+        "K03b",
+        "K06"
+      ],
+      "colourable": false,
+      "notes": "Twig nest used as the ground plane under Pip. From assets/nest.svg.",
+      "source": "assets/nest.svg",
+      "raster": "flutter/assets/images/nest.webp",
+      "rasterBox": {
+        "w": 240,
+        "h": 240
+      },
+      "rasterNote": "1x = 240x240 (K03 pet stage ground plane); emit 2x and 3x alongside."
+    },
+    {
+      "name": "coin",
+      "dartName": "coin",
+      "path": "flutter/assets/illustrations/coin.svg",
+      "kind": "illustration",
+      "viewBox": "0 0 240 240",
+      "usedIn": [
+        "P01",
+        "P02",
+        "P06",
+        "P07",
+        "P08",
+        "P12",
+        "P14",
+        "P15",
+        "P17",
+        "K03",
+        "K03b",
+        "K04",
+        "K05",
+        "K06",
+        "K08",
+        "K09"
+      ],
+      "colourable": false,
+      "notes": "Gold coin with an embossed leaf. Used inside every coin-pill. From assets/coin.svg.",
+      "source": "assets/coin.svg",
+      "raster": "flutter/assets/images/coin.webp",
+      "rasterBox": {
+        "w": 64,
+        "h": 64
+      },
+      "rasterNote": "1x = 64x64 (P01 floating coins; coin-pills render it at 16-20px); emit 2x and 3x alongside."
+    },
+    {
+      "name": "privacy_shield",
+      "dartName": "privacyShield",
+      "path": "flutter/assets/illustrations/privacy_shield.svg",
+      "kind": "illustration",
+      "viewBox": "0 0 132 132",
+      "usedIn": [
+        "P04"
+      ],
+      "colourable": false,
+      "notes": "P04 hero — shield with a leaf/heart. Extracted from the inline SVG; CSS vars resolved to hex (sky-tint, surface, ink, leaf).",
+      "raster": "flutter/assets/images/privacy_shield.webp",
+      "rasterBox": {
+        "w": 84,
+        "h": 84
+      },
+      "rasterNote": "1x = 84x84 (P04 hero); emit 2x and 3x alongside."
+    },
+    {
+      "name": "meadow_hill",
+      "dartName": "meadowHill",
+      "path": "flutter/assets/illustrations/meadow_hill.svg",
+      "kind": "illustration",
+      "viewBox": "0 0 390 136",
+      "usedIn": [
+        "K01",
+        "K02",
+        "K03",
+        "K03b",
+        "K04",
+        "K05",
+        "K06",
+        "K08",
+        "K09",
+        "K10",
+        "K11"
+      ],
+      "colourable": false,
+      "notes": "Kid-mode bottom meadow. 2 soft green bands. In the screens it carried preserveAspectRatio=\"none\" so the hills stretch to the device width — in Flutter prefer a vertical gradient or a BoxDecoration image fit: BoxFit.cover rather than SvgPicture, so the curves are not distorted.",
+      "raster": "flutter/assets/images/meadow_hill.webp",
+      "rasterBox": {
+        "w": 390,
+        "h": 390
+      },
+      "rasterNote": "1x = 390x390 (Kid-mode background across 11 screens); emit 2x and 3x alongside."
+    },
+    {
+      "name": "confetti",
+      "dartName": "confetti",
+      "path": "flutter/assets/illustrations/confetti.svg",
+      "kind": "illustration",
+      "viewBox": "0 0 320 250",
+      "usedIn": [
+        "K03b"
+      ],
+      "colourable": false,
+      "notes": "K03b celebration confetti + sparkles. Static in the designs; animate in Flutter if desired.",
+      "raster": "flutter/assets/images/confetti.webp",
+      "rasterBox": {
+        "w": 320,
+        "h": 250
+      },
+      "rasterNote": "1x = 320x250 (K03b celebration, full stage width); emit 2x and 3x alongside."
+    },
+    {
+      "name": "coins_burst",
+      "dartName": "coinsBurst",
+      "path": "flutter/assets/illustrations/coins_burst.svg",
+      "kind": "illustration",
+      "viewBox": "0 0 320 200",
+      "usedIn": [
+        "K05"
+      ],
+      "colourable": false,
+      "notes": "K05 coin burst.",
+      "raster": "flutter/assets/images/coins_burst.webp",
+      "rasterBox": {
+        "w": 320,
+        "h": 320
+      },
+      "rasterNote": "1x = 320x320 (K05 celebration, full stage width); emit 2x and 3x alongside."
+    },
+    {
+      "name": "sparkles",
+      "dartName": "sparkles",
+      "path": "flutter/assets/illustrations/sparkles.svg",
+      "kind": "illustration",
+      "viewBox": "0 0 350 220",
+      "usedIn": [
+        "K07"
+      ],
+      "colourable": false,
+      "notes": "K07 evolution sparkles (lilac/leaf/gold/peach).",
+      "raster": "flutter/assets/images/sparkles.webp",
+      "rasterBox": {
+        "w": 350,
+        "h": 350
+      },
+      "rasterNote": "1x = 350x350 (K07 evolution, full-bleed background); emit 2x and 3x alongside."
+    },
+    {
+      "name": "jar_coins",
+      "dartName": "jarCoins",
+      "path": "flutter/assets/illustrations/jar_coins.svg",
+      "kind": "illustration",
+      "viewBox": "0 0 200 236",
+      "usedIn": [
+        "K09"
+      ],
+      "colourable": false,
+      "notes": "K09 money jar 62% full. clipPath id renamed to nestling-jar-in so it cannot collide with another SVG on the same route.",
+      "raster": "flutter/assets/images/jar_coins.webp",
+      "rasterBox": {
+        "w": 168,
+        "h": 168
+      },
+      "rasterNote": "1x = 168x168 (K09 jar (drawn 128x168)); emit 2x and 3x alongside."
+    },
+    {
+      "name": "jar_coins_rain",
+      "dartName": "jarCoinsRain",
+      "path": "flutter/assets/illustrations/jar_coins_rain.svg",
+      "kind": "illustration",
+      "viewBox": "0 0 200 300",
+      "usedIn": [
+        "K10"
+      ],
+      "colourable": false,
+      "notes": "K10 payout-day jar with coins raining in. Reuses the jar body, translated +64, with its own clipPath id nestling-jar-rain-in.",
+      "raster": "flutter/assets/images/jar_coins_rain.webp",
+      "rasterBox": {
+        "w": 168,
+        "h": 168
+      },
+      "rasterNote": "1x = 168x168 (K10 payout jar (drawn 168 tall)); emit 2x and 3x alongside."
+    },
+    {
+      "name": "badge_first_quest",
+      "dartName": "badgeFirstQuest",
+      "path": "flutter/assets/illustrations/badge_first_quest.svg",
+      "kind": "illustration",
+      "viewBox": "0 0 64 64",
+      "usedIn": [
+        "K11"
+      ],
+      "colourable": false,
+      "notes": "K11 earned badge: First quest (gold ribbon, coin-tint disc, star).",
+      "raster": "flutter/assets/images/badge_first_quest.webp",
+      "rasterBox": {
+        "w": 104,
+        "h": 104
+      },
+      "rasterNote": "1x = 104x104 (K11 badge grid tile (min 104px)); emit 2x and 3x alongside."
+    },
+    {
+      "name": "badge_bed_maker",
+      "dartName": "badgeBedMaker",
+      "path": "flutter/assets/illustrations/badge_bed_maker.svg",
+      "kind": "illustration",
+      "viewBox": "0 0 64 64",
+      "usedIn": [
+        "K11"
+      ],
+      "colourable": false,
+      "notes": "K11 earned badge: Bed maker x7 (lilac ribbon).",
+      "raster": "flutter/assets/images/badge_bed_maker.webp",
+      "rasterBox": {
+        "w": 104,
+        "h": 104
+      },
+      "rasterNote": "1x = 104x104 (K11 badge grid tile (min 104px)); emit 2x and 3x alongside."
+    },
+    {
+      "name": "badge_kind_helper",
+      "dartName": "badgeKindHelper",
+      "path": "flutter/assets/illustrations/badge_kind_helper.svg",
+      "kind": "illustration",
+      "viewBox": "0 0 64 64",
+      "usedIn": [
+        "K11"
+      ],
+      "colourable": false,
+      "notes": "K11 earned badge: Kind helper (peach ribbon, heart).",
+      "raster": "flutter/assets/images/badge_kind_helper.webp",
+      "rasterBox": {
+        "w": 104,
+        "h": 104
+      },
+      "rasterNote": "1x = 104x104 (K11 badge grid tile (min 104px)); emit 2x and 3x alongside."
+    },
+    {
+      "name": "badge_bookworm",
+      "dartName": "badgeBookworm",
+      "path": "flutter/assets/illustrations/badge_bookworm.svg",
+      "kind": "illustration",
+      "viewBox": "0 0 64 64",
+      "usedIn": [
+        "K11"
+      ],
+      "colourable": false,
+      "notes": "K11 earned badge: Bookworm (sky ribbon, open book).",
+      "raster": "flutter/assets/images/badge_bookworm.webp",
+      "rasterBox": {
+        "w": 104,
+        "h": 104
+      },
+      "rasterNote": "1x = 104x104 (K11 badge grid tile (min 104px)); emit 2x and 3x alongside."
+    },
+    {
+      "name": "badge_bins_out",
+      "dartName": "badgeBinsOut",
+      "path": "flutter/assets/illustrations/badge_bins_out.svg",
+      "kind": "illustration",
+      "viewBox": "0 0 64 64",
+      "usedIn": [
+        "K11"
+      ],
+      "colourable": false,
+      "notes": "K11 not-yet badge: Bins out. Grey ribbon at 40% + dashed 6E6A8A ring and glyph — deliberately non-negative, no 'locked' language.",
+      "raster": "flutter/assets/images/badge_bins_out.webp",
+      "rasterBox": {
+        "w": 104,
+        "h": 104
+      },
+      "rasterNote": "1x = 104x104 (K11 badge grid tile (min 104px)); emit 2x and 3x alongside."
+    },
+    {
+      "name": "badge_biscuit_sitter",
+      "dartName": "badgeBiscuitSitter",
+      "path": "flutter/assets/illustrations/badge_biscuit_sitter.svg",
+      "kind": "illustration",
+      "viewBox": "0 0 64 64",
+      "usedIn": [
+        "K11"
+      ],
+      "colourable": false,
+      "notes": "K11 not-yet badge: Biscuit sitter (paw).",
+      "raster": "flutter/assets/images/badge_biscuit_sitter.webp",
+      "rasterBox": {
+        "w": 104,
+        "h": 104
+      },
+      "rasterNote": "1x = 104x104 (K11 badge grid tile (min 104px)); emit 2x and 3x alongside."
+    },
+    {
+      "name": "badge_tidy_hero",
+      "dartName": "badgeTidyHero",
+      "path": "flutter/assets/illustrations/badge_tidy_hero.svg",
+      "kind": "illustration",
+      "viewBox": "0 0 64 64",
+      "usedIn": [
+        "K11"
+      ],
+      "colourable": false,
+      "notes": "K11 not-yet badge: Tidy hero (basket).",
+      "raster": "flutter/assets/images/badge_tidy_hero.webp",
+      "rasterBox": {
+        "w": 104,
+        "h": 104
+      },
+      "rasterNote": "1x = 104x104 (K11 badge grid tile (min 104px)); emit 2x and 3x alongside."
+    },
+    {
+      "name": "badge_early_bird",
+      "dartName": "badgeEarlyBird",
+      "path": "flutter/assets/illustrations/badge_early_bird.svg",
+      "kind": "illustration",
+      "viewBox": "0 0 64 64",
+      "usedIn": [
+        "K11"
+      ],
+      "colourable": false,
+      "notes": "K11 not-yet badge: Early bird (sun).",
+      "raster": "flutter/assets/images/badge_early_bird.webp",
+      "rasterBox": {
+        "w": 104,
+        "h": 104
+      },
+      "rasterNote": "1x = 104x104 (K11 badge grid tile (min 104px)); emit 2x and 3x alongside."
+    },
+    {
+      "name": "badge_plant_waterer",
+      "dartName": "badgePlantWaterer",
+      "path": "flutter/assets/illustrations/badge_plant_waterer.svg",
+      "kind": "illustration",
+      "viewBox": "0 0 64 64",
+      "usedIn": [
+        "K11"
+      ],
+      "colourable": false,
+      "notes": "K11 not-yet badge: Plant waterer (watering can).",
+      "raster": "flutter/assets/images/badge_plant_waterer.webp",
+      "rasterBox": {
+        "w": 104,
+        "h": 104
+      },
+      "rasterNote": "1x = 104x104 (K11 badge grid tile (min 104px)); emit 2x and 3x alongside."
+    },
+    {
+      "name": "app_icon",
+      "dartName": "appIcon",
+      "path": "flutter/assets/brand/app_icon.svg",
+      "kind": "brand",
+      "viewBox": "0 0 1024 1024",
+      "usedIn": [
+        "launcher",
+        "index",
+        "design-system"
+      ],
+      "colourable": false,
+      "notes": "Full 1024 launcher icon: FULL-BLEED square, no rx, no outer stroke, opaque #17804F edge to edge. iOS and Android apply their own masks, so rounded corners must not be baked in - they produced a double-rounded, outlined icon. Pip head occupies 62% of the canvas (635px) and is centred at (512,512) via translate(512 512) scale(0.83) translate(-510.5 -478); source art bbox is x[149,872] y[96,860]. Background was re-pointed from #1F9D63 (the old --success) to #17804F (--leaf) to match adaptive_icon_background. Rasterise to flutter/assets/brand/app_icon.png at 1024x1024 for flutter_launcher_icons.",
+      "raster": "flutter/assets/brand/app_icon.png",
+      "rasterBox": {
+        "w": 1024,
+        "h": 1024
+      }
+    },
+    {
+      "name": "app_icon_foreground",
+      "dartName": "appIconForeground",
+      "path": "flutter/assets/brand/app_icon_foreground.svg",
+      "kind": "brand",
+      "viewBox": "0 0 1024 1024",
+      "usedIn": [
+        "launcher"
+      ],
+      "colourable": false,
+      "notes": "Pip head only, transparent background, sized for the Android adaptive-icon safe zone: the inner 66% of 1024 (676px), via translate(512 512) scale(0.88) translate(-510 -478). Source art bbox x[149,872] y[96,860] scaled 0.88. Deliberately 66% rather than the 62% used in app_icon.svg - 66% is the Android guaranteed-visible area and is a platform constraint, not a style choice, so the composite icon and the adaptive foreground differ by 4%. Rasterise to app_icon_foreground.png (1024, keep alpha).",
+      "raster": "flutter/assets/brand/app_icon_foreground.png",
+      "rasterBox": {
+        "w": 1024,
+        "h": 1024
+      }
+    },
+    {
+      "name": "app_icon_background",
+      "dartName": "appIconBackground",
+      "path": "flutter/assets/brand/app_icon_background.svg",
+      "kind": "brand",
+      "viewBox": "0 0 1024 1024",
+      "usedIn": [
+        "launcher"
+      ],
+      "colourable": false,
+      "notes": "Solid #17804F full-bleed 1024 square, no rounding, opaque - iOS/Android apply their own mask. This is the same rect that fills app_icon.svg, so the two cannot drift. Must stay in sync with --leaf and NestlingColorsLight.leaf.",
+      "raster": "flutter/assets/brand/app_icon_background.png",
+      "rasterBox": {
+        "w": 1024,
+        "h": 1024
+      }
+    },
+    {
+      "name": "ic_apple_logo",
+      "dartName": null,
+      "path": null,
+      "kind": "excluded",
+      "viewBox": "0 0 24 24",
+      "usedIn": [
+        "P03"
+      ],
+      "colourable": false,
+      "notes": "EXCLUDED — Apple 'Continue with Apple' mark. Use the official Sign in with Apple SDK button (sign_in_with_apple / flutter_sign_in_with_apple). Do not ship this vector; Apple brand guidelines require the official asset and the HIG button."
+    },
+    {
+      "name": "ic_google_logo",
+      "dartName": null,
+      "path": null,
+      "kind": "excluded",
+      "viewBox": "0 0 48 48",
+      "usedIn": [
+        "P03"
+      ],
+      "colourable": false,
+      "notes": "EXCLUDED — Google 'G' mark. Use the official Google Sign-In SDK button (google_sign_in). Do not ship this vector."
+    },
+    {
+      "name": "ic_status_signal",
+      "dartName": null,
+      "path": null,
+      "kind": "excluded",
+      "viewBox": "0 0 18 12",
+      "usedIn": [
+        "*all 30*"
+      ],
+      "colourable": true,
+      "notes": "EXCLUDED by instruction — iOS/Android draw the real status bar. Keep the design value for Figma parity only."
+    },
+    {
+      "name": "ic_status_wifi",
+      "dartName": null,
+      "path": null,
+      "kind": "excluded",
+      "viewBox": "0 0 16 12",
+      "usedIn": [
+        "*all 30*"
+      ],
+      "colourable": true,
+      "notes": "EXCLUDED by instruction — OS status bar."
+    },
+    {
+      "name": "ic_status_battery",
+      "dartName": null,
+      "path": null,
+      "kind": "excluded",
+      "viewBox": "0 0 25 12",
+      "usedIn": [
+        "*all 30*"
+      ],
+      "colourable": true,
+      "notes": "EXCLUDED by instruction — OS status bar."
+    }
+  ],
+  "qaRounds": [
+    {
+      "round": 1,
+      "applied": [
+        "app_icon.svg -> full-bleed square (rx, outer stroke and rounding removed); Pip head re-centred at 62% of the canvas.",
+        "ic_ball redrawn as a football (circle + pentagon); it was a two-arc segmented circle that read as a clock.",
+        "ic_dot renamed to ic_circle; it was always an empty stroked circle, not a dot.",
+        "NestlingImages extended to all 22 illustrations + 3 brand rasters, plus a precache list (Pip stages, nest, coin)."
+      ]
+    }
+  ]
+}

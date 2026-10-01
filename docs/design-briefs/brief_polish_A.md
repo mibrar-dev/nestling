@@ -1,0 +1,4 @@
+POLISH — Group A, 1 item (open-design MCP write_file, verify with get_file):
+P01 Welcome: there is a large empty band (~90px) between the nest illustration and the headline "Chores that feel like a game.". Rebalance vertically: illustration block ~46% of the screen, headline starts ~24px below the illustration circle; move the three floating coins so none touches the frame edge (≥16px margin) and they sit on the circle's rim like orbiting coins. Keep everything else. The bottom CTA block stays fixed. Result must look intentionally composed, no dead space.
+Also: make sure every hard-coded colour in your 8 screens (hex/rgb/white) outside SVG artwork is replaced with a design-system token (a dark theme is coming; hard-coded colours will break it). SVG UI icons must use stroke="currentColor"/fill="currentColor".
+Reply: changelog.

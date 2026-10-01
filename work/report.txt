@@ -1,0 +1,1160 @@
+Consumer App
+Discovery Sprint
+Six parallel research lanes · Scoring matrix · Top-3 recommendations
+Prepared for: Senior Flutter Engineer (fintech / marketplace / dating background)
+Goal: Fun, everyday consumer app — paid or open source
+Date: September 28, 2026
+CONFIDENTIAL — FOR INTERNAL USE
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 2 of 41
+Executive Summary
+This report consolidates findings from six parallel research lanes covering revenue proof, incumbent
+backlash, hobby communities, friends/couples/family, "I wish there was an app" requests, and AI-
+powered fun utilities. After deduplication and scoring, three candidates emerge as the strongest bets for
+a solo Flutter developer seeking a fun, daily-useful consumer app with real monetization potential.
+Top 3 Recommendations:
+1. Family Chore & Allowance Gamification — Proven $49.99/yr WTP (Joon). Parent is the
+buyer, kid is the user — cold-start solved. Daily ritual. Paid-path score: 25/30.
+2. TTRPG Campaign Memory — Genuinely unsolved AI problem. Weekly ritual that compounds
+over months. Passionate niche with proven WTP culture. Combined score: 24/30.
+3. Board Game Night Companion — Weekly ritual, high fun factor, BGG owns data but not the
+mobile experience. Strong OSS path. Combined score: 24/30.
+Key monetization insight: Annual subscriptions dominate fun categories (59–68% of revenue). Hard
+paywalls convert 5× better than freemium (10.7% vs 2.1%). The subscription app market is winner-take-
+more: top 25% of apps grew 80% YoY while bottom 25% shrank 33%. Distribution — not product quality
+— is the #1 killer.
+Key retention insight: Habit-tracking apps prove that emotional engagement ≠ revenue. One
+developer's users "would cry if the app disappeared" — yet zero paying users. The winning formula
+combines genuine fun with a clear, immediate value proposition that justifies a hard paywall.
+Methodology
+Research date: September 28, 2026
+Sources: Hacker News (Algolia API), iTunes Search API (live App Store data), AlternativeTo, RevenueCat
+State of Subscription Apps 2026, IndieHackers, Starter Story, Product Hunt, Etsy/Gumroad (where
+accessible), HN Ask HN threads.
+Source quality notes:
+Reddit was blocked in most lanes (403/JS shell). Fallbacks: HN Algolia API, iTunes Search API,
+AlternativeTo, direct forum fetches.
+Etsy and Gumroad were blocked in the hobby lane. WTP evidence there is inference-based.
+TrustMRR returned 404. IndieHackers product database contained obvious spam entries.
+RevenueCat 2026 report was the single most valuable source: 115,000+ apps, $16B revenue dataset.
+Vendor/competitor blogs are flagged as biased where used.
+Quotes are verbatim and under 15 words. Items seen only in search snippets are marked "snippet
+only."
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 3 of 41
+Lane 1 — Revenue Proof: What Actually Monetizes
+Goal: Which fun and daily-useful categories monetize for solo devs, and which pricing models work.
+1. Health & Fitness — The Solo Dev Goldmine
+Pricing: Subscription, $9.99–$19.99/mo or $39.99–$69.99/yr. 68% of revenue from annual plans.
+Revenue evidence: $0.48 median RPI at D14, $0.66 at D60 (nearly 5× Gaming). Y1 RLTV per payer:
+$35.64. 6.9% download-to-trial conversion. Source: RevenueCat 2026 (115K+ apps, $16B dataset),
+March 2026.
+Model viability: Strong. Highest willingness-to-pay and strongest retention. Annual plans
+dominate. $1K MRR in ~58 days (all-category median).
+2. Photo & Video — Highest Median Revenue at 1 Year
+Pricing: Mixed — 33% use subscription + lifetime combo (highest of any category).
+Revenue evidence: $124/mo median revenue at 1 year (vs $72 all-category). 21.4% of new apps hit
+$1K MRR (highest rate). Top 10% reach $3,600+/mo. Source: RevenueCat 2026.
+Model viability: Strong. Lifetime deals are rare but work here — upfront cash flow for solo devs.
+3. Education — Solid Mid-Tier Monetizer
+Pricing: Subscription-heavy, 59% annual plans, $5.99–$14.99/mo.
+Revenue evidence: $0.30 D14 RPI, $22.82 Y1 RLTV, 6.5% trial conversion. Source: RevenueCat
+2026.
+Model viability: Moderate. Crowded with big players. Needs niche focus to compete.
+4. Travel — Lowest Monetization Despite High Intent
+Revenue evidence: $35/mo median at 1 year (lowest). 4.1% trial conversion (lowest). Top 10% reach
+only $822/mo. Source: RevenueCat 2026.
+Model viability: Weak. Infrequent use makes subscription value hard to demonstrate. Needs daily-
+use angle.
+5. Gaming — High Volume, Low Value Per User
+Revenue evidence: $0.08 D14 RPI (lowest), $11.22 Y1 RLTV (lowest). 8.9% hit $10K MRR (highest
+rate). $1K MRR in 32 days (fastest). Source: RevenueCat 2026.
+Model viability: Mixed. High-risk/high-reward. Most games fail to monetize; hits require constant
+content updates.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 4 of 41
+6. AI Consumer App — $120k Revenue, $10k MRR (Solo Founder)
+Revenue evidence: "$120k in net revenue, very high margins. Current MRR ~$10k. NPS 82/100."
+Solo founder, launched 1 year ago, almost sold for ~$1M. Source: HN Ask HN, plasmadonkey, March
+2024 (updated Sept 2024).
+Model viability: Strong proof. Solo devs can build profitable AI consumer apps. Founder had
+design/marketing background.
+7. Ski Analysis App — One-Time Pricing Cautionary Tale
+Revenue evidence: 600+ downloads, no paid marketing. Developer: "From a pure revenue
+perspective, subscription would likely generate more predictable income." Source: HN Show HN,
+skicoachapp, Feb 2026.
+Model viability: Weak. One-time pricing limits revenue ceiling. Organic growth is slow without
+marketing.
+8. Plant Care Tracker — 0 Users, $0 Revenue
+Revenue evidence: "Users: 0, Revenue: $0." Developer critique: "The good-looking ones are
+subscription walls with a plant drawing on top." Source: HN, gongshaojie12, Sept 2026.
+Model viability: Too early. Confirms distribution challenge. Room for better product with offline-
+first, no-account model.
+9. Dating App — Solo-Built in 100 Days, Quiet Launch
+Revenue evidence: "It's a quiet launch so far." Developer: "Great functionality isn't enough without
+network effects and brand." Source: HN Show HN, vulcanidic, Dec 2025.
+Model viability: Weak. Network effects are the barrier. "Building a great hotel on a deserted
+island."
+10. Free Ebook Platform — 11M Downloads, Ad-Supported
+Revenue evidence: 11 million downloads since 2010 (~687k/year). Ad-supported, no paywall.
+Source: HN Show HN, gthartley, Feb 2026.
+Model viability: Moderate. Ad-supported works but requires significant scale. No subscription
+limits revenue per user.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 5 of 41
+11. Subscription Market — Winner-Take-More Economics
+Revenue evidence: "The top 25% of apps grew 80% year-over-year, while the bottom 25% shrank
+by 33%." Only 4.6% of new apps reach $10K MRR within 2 years. Hard paywalls convert 5× better
+than freemium (10.7% vs 2.1%). 14,700+ new subscription apps launch per month. Source:
+RevenueCat 2026.
+Model viability: Macro context. Distribution is the primary barrier. Differentiation is critical.
+Lane 1 Summary: Most monetizable fun categories: Health & Fitness (highest RPI), Photo & Video
+(highest median revenue, lifetime deals work), Education (solid but crowded). Annual subscriptions
+dominate. One-time pricing limits ceiling. Distribution is the #1 killer — the solo dev who almost sold
+for $1M had a design/marketing background.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 6 of 41
+Lane 2 — Incumbent Backlash: Where Users Are
+Angry
+Goal: Complaints about popular fun/everyday apps — price hikes, subscription transitions, acquire-and-
+squeeze, shutdowns, AI bloat.
+1. Audacity 4.0 — Acquire-and-Squeeze by Muse Group
+User words: "I remember them acquiring Audacity was a huge mess... due to them introducing
+telemetry. Never used Audacity since then."
+Source: HN, Sept 2026 (comments on Audacity 4.0 release)
+What changed: Muse Group acquired Audacity (2021), introduced telemetry disguised as update
+checks. Users forked as Tenacity. Audacity 4.0 (2026) continues data collection concerns.
+Scale: ~100M+ historical downloads. Tenacity fork: 1.2K+ GitHub stars.
+Intensity: 4/5. Users feel betrayed by a trusted open-source tool.
+Opportunity: Privacy-first, offline-first audio editor with one-time purchase. Trust gap is the wedge.
+2. Goodreads — Amazon's Declining Book Platform
+User words: "Goodreads is declining because its old tech was less attractive to younger readers."
+Source: HN, July 2026 (Craig Mod built his own Goodreads); HN, Aug 2026 (Kobo returns to US
+retail)
+What changed: Amazon-owned since 2013. Platform quality declining. Community "overwhelmingly
+centered around romance and romantasy novels." Tech stack dated. Competitors: Storygraph,
+LibraryThing, Hardcover, Kaguya, Bookwyrm.
+Scale: ~150M+ registered users (inference).
+Intensity: 3/5. Frustration high but users feel locked in by reading history and social graph.
+Opportunity: Modern book tracking with easy Goodreads import, diverse community, sustainable
+pricing.
+3. GoodNotes 5 → 6 — One-Time Purchase Turned Subscription
+User words: "I bought GoodNotes 5 and love it. One time purchase... Now GoodNotes 6 is out. Their
+'most popular plan' is an annual subscription."
+Source: HN, May 2025 (Apple App Store guidelines thread)
+What changed: Version 6 shifted to subscription as "most popular plan." One-time option buried.
+Users fear v5 will stop working.
+Intensity: 4/5. Users feel deliberately misled. "Why on earth does a notes app have multiple usage
+plans? Horrible."
+Opportunity: Transparent one-time pricing, local-first storage, no artificial feature gates.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 7 of 41
+4. Paprika Recipe Manager — Price Hike, Missing Family Features
+User words: "Paprika Recipe Manager (they jacked up prices with a new version."
+Source: HN, Oct 2023 (still relevant 2026)
+What changed: New version with price increase. Lacks shared collections, shared grocery lists,
+shared meal plans — major gap for families.
+Intensity: 3/5. Price hike annoying but app still best-in-class. Family-sharing gap is bigger pain.
+Opportunity: Family-focused recipe app with shared collections, collaborative meal planning, one-
+time purchase.
+5. Day One — Journaling App That Went Subscription
+User words: "There is absolutely no reason why a calendar or a journaling app should have a
+monthly subscription."
+Source: HN, May 2018 (canonical complaint thread; still subscription-only in 2026)
+What changed: Shifted from one-time to subscription. Stores deeply personal data — feels like
+ransom on memories.
+Intensity: 4/5. "Subscriptions make me feel if I stop paying I lose the app and can't access my
+data."
+Opportunity: Local-first storage, transparent one-time pricing, easy export.
+6. PushBullet — Service Degradation
+User words: "PB degrading in service and dropping support for other platforms, more and more
+people are on the look out for an alternative."
+Source: HN, March 2025 (Show HN: Now Push — PushBullet alternative)
+Intensity: 3/5. Users feel abandoned by a service they relied on.
+Opportunity: Reliable, privacy-focused notification mirroring with sustainable business model.
+7. InVision — Design Tool Shutdown
+User words: "RIP InVision... we have made the difficult decision to discontinue InVision's design
+collaboration services."
+Source: HN, Jan 2024
+Intensity: 4/5. Forced subscription shift before shutdown felt like a cash grab.
+Opportunity: Lightweight, affordable alternative for small teams.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 8 of 41
+8. Planta & PictureThis — Expensive Plant App Subscriptions
+User words: "The app sucks, and the subscription is very expensive for getting more plants than
+you'll be able to use."
+Source: HN, Oct 2022 (representative of 2026 complaints)
+Scale: PictureThis: 10M+ downloads. Planta: top-10 lifestyle app.
+Intensity: 3/5. Exploitative pricing for what is essentially a reference database.
+Opportunity: One-time purchase, offline plant database, no aggressive monetization.
+9. Recipe Apps Missing Family/Couple Features
+User words: "Paprika can't do that, and no other app comes close to Paprika in terms of features
+and payment model" — but lacks shared collections, grocery lists, meal plans.
+Source: HN, Aug 2022 (Ask HN: Meal Planning App?)
+Intensity: 2/5. Feature-gap complaint. Families use shared Notes, Google Sheets, text messages.
+Opportunity: Family-focused recipe app with shared collections, collaborative meal planning, shared
+grocery lists.
+10. Grok SuperGrok — AI Subscription Nerfed
+User words: "My SuperGrok subscription previously easily lasted me through the week... Now
+when I use the app 1-2 times a day... I'm almost running out by the end of the 7 days. It's terrible."
+Source: HN, Sept 2026 (Grok 4.7 thread)
+Intensity: 4/5. Users feel ripped off after paying for a silently degraded product.
+Opportunity: Transparent, usage-based pricing without artificial limits.
+11. Signal — Paid Backups for Privacy-Focused App
+Source: HN, Sept 2025 (Signal Secure Backups announcement)
+Intensity: 3/5. Cognitive dissonance: paid feature in a privacy-focused app.
+Opportunity: Free E2E encrypted backups funded by donations or modest one-time purchase.
+12. InstantDB — YC-Backed Database Shutting Down
+User words: "We recommend migrating your apps off of Instant Cloud within the next 12 months."
+Source: HN, Aug 2026
+Scale: 17,000+ users, 400,000+ apps built on the platform.
+Intensity: 3/5. 12-month notice and open-source release mitigate anger.
+Opportunity: Sustainable, open-source real-time database with clear business model.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 9 of 41
+Lane 2 Summary: Three explosive opportunities: (1) Goodreads decline →  modern book tracking
+with easy import; (2) Audacity/Muse Group →  privacy-first creative tools; (3) Journaling/note-
+taking subscription fatigue →  local-first personal apps. The "acquire-and-squeeze" pattern creates
+permanent openings for ethical alternatives.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 10 of 41
+Lane 3 — Hobby Communities on Duct Tape
+Goal: Enthusiasts running hobbies on spreadsheets, paper, or clunky old apps. Etsy/Gumroad templates
+as WTP signals.
+1. Board Game Collection Tracking
+User words: "track who has what game, how often we play different games, and who wins" —
+Squire Discord bot
+Source: HN, Jul 2025 (Squire); Feb 2026 (RoundsKeeper); 2018 (mybgg); 2014 (BOXED)
+Frequency: Recurring over 10+ years — 4+ separate HN projects. Pain is persistent.
+Current tools: Discord bots, paper, BGG website (clunky), generic Notes
+Competitors: BGG owns the data but UI is dated, not mobile-first. BOXED (2014) appears defunct.
+WTP evidence: None found (Etsy blocked)
+Opportunity: Mobile-first collection tracker with game-night stats. BGG owns data, not experience.
+2. Game Night Score Tracking
+User words: "tracking scores during game nights without paper or fumbling with Notes" —
+RoundsKeeper
+Source: HN, Feb 2026
+Frequency: Every game night. Situational but recurring.
+Competitors: Generic calculator apps don't track history. No dedicated scorekeeper with analytics.
+Opportunity: Scorekeeping is a feature, not a product — best bundled into broader game-night app.
+3. TTRPG Campaign Notes & Memory
+User words: "standard meeting note-takers treat every session as an isolated island, butcher
+fantasy terms, and don't know who is speaking" — Table Canon
+Source: HN, Aug 2026 (Table Canon, 4 points, 2 comments)
+Frequency: Campaigns run weekly/monthly for months or years. Pain compounds — session 30+
+unmanageable in plain notes.
+Current tools: Google Docs, Notion, Obsidian, pen and paper, voice memos
+Competitors: Notion/Obsidian are generic — no TTRPG entity tracking, no fantasy name
+recognition. Table Canon attempting AI extraction, very early.
+WTP evidence: None found (Etsy blocked). Inference: TTRPG players buy D&D books, dice,
+subscriptions (Roll20, Foundry) — strong WTP culture.
+Opportunity: AI angle (auto-extracting NPCs, quests, promises from session audio/notes) is
+genuinely unsolved.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 11 of 41
+4. Climbing Logbooks
+Source: HN, 2016–2017 (Log the Crux; 8a.nu dataset on Kaggle)
+Frequency: Climbers log every session. Moderate pain.
+Current tools: 8a.nu (web-first, dated mobile), Mountain Project (route-guide-first), Strava (wrong
+tool), paper
+Opportunity: "Capture at the crag" use case — offline-first, quick-grade-entry, minimal-tap mobile
+UX.
+5. Gardening Planning Calendars
+User words: "I've done lots of paper and spreadsheet planning of my gardens, but I found I kept
+stumbling keeping everything accurate and in order" — Squardener
+Source: HN, Feb 2024
+Frequency: Seasonal — peaks late winter/early spring.
+Current tools: Paper notebooks, Excel/Google Sheets, generic calendar apps
+Opportunity: Beautiful, mobile-first planting calendar with reminders and harvest tracking. WTP for
+pure planning tools unproven.
+6. Home Bar / Cocktail Tracking
+Source: HN, Sep 2025 (Barkeeper.ai, 1 point, 0 comments)
+Frequency: Sporadic. Low-intensity "nice to have."
+Opportunity: Weak pain point — low frequency, low intensity. Not a strong candidate.
+7. Home Brewing Logs
+Source: HN, 0 hits. r/homebrewing large (inference: 1M+ members, Reddit blocked).
+Frequency: Every 2–4 weeks. Moderate pain.
+Current tools: Spreadsheets, paper, Brewfather (feature-heavy, overwhelming)
+Opportunity: Simpler, more beautiful mobile logbook. Brewfather owns this space.
+8. Knitting/Crochet Stash & Pattern Tracking
+Source: HN, 0 hits. r/knitting and r/crochet large (inference: 1M+ members each, Reddit blocked).
+Frequency: Moderate — forgetting yarn stash leads to duplicate purchases.
+Current tools: Ravelry (dominant but dated UI, 2023 redesign backlash), spreadsheets, paper
+Opportunity: Beautiful stash + pattern tracker. Ravelry's network effects are strong.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 12 of 41
+9. Vinyl Record Collection Tracking
+Current tools: Discogs (marketplace-first, functional but not delightful mobile)
+Opportunity: Mobile-first collection + wantlist with barcode scanning. Niche audience.
+10. Birding Life Lists
+Current tools: eBird (excellent for science), Merlin Bird ID (ID-first, not logbook-first)
+Opportunity: Personal, beautiful life-list journal for casual birders. eBird dominates.
+11. Aquarium/Tank Tracking
+Current tools: Spreadsheets, paper logs, generic reminders
+Opportunity: Real pain but small audience, WTP unclear.
+12. Amateur Sports League Management
+Current tools: WhatsApp group chats, spreadsheets, TeamSnap (team-centric, not league-centric)
+Opportunity: League-level management underserved. More "organization tool" than "fun app."
+Lane 3 Summary: Strongest duct-tape + payment signals: board games (10+ year pain, no mobile
+winner), TTRPGs (hottest recent signal, unsolved AI angle), climbing logbooks (8a.nu owns data, not
+mobile experience). Reddit/Etsy/Gumroad were blocked — community size and WTP signals are
+inference-based.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 13 of 41
+Lane 4 — Friends, Couples and Family
+Goal: Shared rituals, couples apps, gamified chores/allowance, friend-group planning, game nights, LDR,
+keeping in touch, roommates, grandparents–kids.
+1. Between — Couples' Memory Messenger
+Ritual: Couples storing photos/videos, shared calendar, anniversary countdowns. Daily.
+Scale: 21,194 US App Store ratings, 4.80 ★  (iTunes Search API, Sept 2026)
+Intensity: 5/5
+Competitors: Paired (208,024 ratings, 4.73 ★ ), SumOne (18,502, 4.88 ★ ), Evergreen (54,516,
+4.82 ★ )
+Cold-start risk: High. App is inert until partner installs.
+WTP evidence: $2.99/mo, $12.99/6mo, $13.99/yr, $26.99 lifetime — direct proof couples pay.
+Opportunity: Between monetizes but feels dated. Modern "memories + rituals" layer is open, but
+both-partners barrier caps it.
+2. Paired — Daily-Questions Ritual
+Ritual: 5 minutes/day of paired questions, quizzes, guided journeys. Daily.
+Scale: 208,024 US ratings, 4.73 ★ . Claims "8 million downloads" (vendor claim — biased). "Apple
+App of the Day, August 2026."
+Intensity: 5/5
+Cold-start risk: High. Both partners must answer to unlock anything.
+Opportunity: Paired's 8M + App-of-the-Day shows daily-question ritual is the winning couples
+format — but the winner is entrenched.
+3. The "New Couples App" Graveyard — 2026 Launch Wave
+User words: "texts can sit unread for hours, calls can become impractical" — Lune founder, Show
+HN 2026-09-17
+Source: HN, stories dated 2026-01-08 to 2026-09-17
+Scale: Lune (3 points, 0 comments), Middly (2 points, 0 comments), PersonalPod (2 points, 0
+comments) — ~7 HN points total.
+Intensity: 4/5
+Cold-start risk: High. Two-person network, niche already served.
+Opportunity: Hard evidence that "couples app, take two" is a dead cold-start. Ambient/presence
+widgets only work as a feature inside something bigger.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 14 of 41
+4. Long-Distance Staying-in-Touch
+User words: "What was the hardest thing about staying in touch with your partner" — FIU LDR
+research study, HN 2024-02-17
+Source: HN, 2024-02-17 and 2026-06-03
+Intensity: 4/5
+Competitors: PersonalPod founder: "We tried quite a few things… even couple apps like Agape. You
+still struggle during those darker moments"
+Cold-start risk: High. Both partners in different countries must commit.
+Opportunity: Asynchronous audio is a genuine unserved ritual, but 0-comment launches suggest
+poor organic pull.
+5. Cozi Family Calendar — Entrenched Retention King
+User words: "This thing is indispensable for busy families" — CNET, quoted in App Store
+description
+Source: iTunes Search API, Sept 2026; AlternativeTo (updated 2026-08-03)
+Scale: 399,639 US App Store ratings, 4.81 ★
+Intensity: 5/5
+Competitors: Google Calendar dominates AlternativeTo (949 likes) but "is just a calendar, cozi does
+much more than that" (AltTo user, 2020). Cozi's gap: "when it comes to chores it lacks a lot of the
+options that OH had" (AltTo user, Aug 2024)
+Cold-start risk: Low. One parent creates the family, invites by email; value before everyone joins.
+WTP evidence: Cozi Gold subscription (price not in metadata). Incumbent monetization confirmed.
+Opportunity: Cozi owns scheduling but is weak on the chore/reward loop parents actually argue
+about.
+6. OurHome and the Chore-App Fragmentation
+User words: "lacks a lot of the options Our Home had, particularly when it comes to chores" —
+AlternativeTo user, 2024-08-27
+Source: AlternativeTo OurHome page (updated 2026-07-27)
+Scale: OurHome (original) has 25+ listed alternatives — a sign of churn. New "OurHome by Elusios"
+(Oct 2025): 88 US ratings, 4.10 ★ . Chorsee: 11,784 ratings, 4.58 ★ .
+Intensity: 4/5
+Competitors: Cozi "lacks… chores" options. Chorsee explicitly anti-gamification ("NO
+GAMIFICATION… a false motivator"). Original OurHome effectively delisted/renamed.
+Cold-start risk: Low. Parent-first setup; kids join by code.
+Opportunity: Nobody owns "fun + deep chore tracking" — OurHome had depth but died; Joon has
+fun but is generic.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 15 of 41
+7. Joon — Gamified Chores That Kids Actually Request
+User words: "kids who are asking their parents for more tasks at home" — Joon creators, Launch
+HN 2022-01-19 (vendor/creator post — biased)
+Source: HN, 2022-01-19, 54 points / 59 comments
+Ritual: Kids complete real-life "Quests" (chores, homework, brushing teeth, calling a grandparent) to
+feed an in-game pet. Daily.
+Scale: Joon (YC W22). No download figures found.
+Intensity: 4/5
+Cold-start risk: Low. Parent assigns quests; kid plays; no network needed.
+WTP evidence: $7.99/mo, $16.99/quarter, $49.99/yr — clearest proof in this lane that parents pay
+for chore gamification.
+Opportunity: Most "fun" candidate in the lane. Quest engine could extend to family rituals
+(grandparent calls, game nights).
+8. Splitwise Monetization Backlash
+User words: "rather frustrated at their new-ish policy of only allowing N (small) expenses" — HN
+user mrkaye97, 2025-07-19
+Source: HN, 2025-07-19
+Scale: Splitwise — 28,236 US ratings, 3.98 ★  (below 4)
+Intensity: 4/5
+Competitors: Spliit (47 AltTo likes, "Privacy focused," native iOS app Sept 2026), letsplit, Medici,
+mani dashboard — FOSS alternative wave.
+Cold-start risk: Medium. Organizer creates group and invites.
+WTP evidence: Splitwise Pro exists but generates resentment, not loyalty. Spliit/Purrse freemium
+alternatives cap WTP.
+Opportunity: Splitwise is ripe for a challenger, but Tricount going free-unlimited shows the price
+anchor is zero.
+9. Tricount — The Free-Unlimited Incumbent
+User words: "Works best. Easier to work. Great user experience." — AlternativeTo user, 2018-02-12
+Source: iTunes Search API, Sept 2026; AlternativeTo (updated 2026-06-15)
+Scale: Claims "17 million users worldwide" (vendor claim — biased). 7,186 US ratings, 4.88 ★ . Splid:
+4,085 ratings, 4.91 ★ , free.
+Intensity: 4/5
+Cold-start risk: Medium. Everyone must install, but no-signup web entry exists.
+WTP evidence: None found — Tricount is "100% free, unlimited" (vendor claim).
+Opportunity: With Tricount free and Splitwise resented, standalone bill-splitting is a commodity.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 16 of 41
+10. Friend-Group Event/Trip Planning
+User words: "200 unread messages arguing about dates" — PlanAway founder, Show HN 2025-09-
+18 (creator claim)
+Source: HN, 2025-09-18
+Scale: PlanAway (1–3 HN comments), Nowa (no-signup planner, June 2025, 0 comments), Splito
+(FOSS, Oct 2024), Hoku (Apr 2024) — all tiny.
+Intensity: 3/5
+Cold-start risk: Low. Nowa's URL/QR, no-signup invite is the right pattern.
+WTP evidence: Nowa $3.99/mo premium; everything else free.
+Opportunity: Real pain, but four launches in 18 months all landed flat — planning is a feature, not a
+standalone app.
+11. Grandparents–Kids Video Connection
+User words: "her grandparents aren't super tech savvy, so we've mostly tried video calls" — Ask
+HN, 2025-08-18
+Source: HN, 2025-08-18; Ohanaisfamily HN post (2017)
+Intensity: 4/5
+Competitors: "Most recommendations I found online are 'Just buy an iPad' type" (HN user, 2018).
+FaceTime setup "can be tough when you struggle to understand what WiFi even is" (HN user, 2020).
+Cold-start risk: Medium. Parent is the buyer/onboarder; grandparent adoption is the hurdle.
+WTP evidence: None found.
+Opportunity: Ultra-simple calling ritual (one-tap answer, translation for cross-language families)
+paired with hardware/kiosk angle is open, but monetization unproven.
+12. Game-Night Tracking
+User words: "My friend-group meets once a week to play board games" — Show HN, 2025-07-06
+Source: HN, 2025-07-06
+Intensity: 3/5
+Current tools: Spreadsheets that "nobody updates," Discord itself
+Cold-start risk: Low. One organizer adds a bot/link.
+WTP evidence: None found.
+Opportunity: Real weekly ritual but too thin for a standalone app — best as the social layer inside a
+broader friend-group or family app.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 17 of 41
+Lane 4 Summary: Best desire-to-cold-start ratio: (1) kids' chores/allowance gamification (Joon
+model) — parent is buyer, kid is user, daily ritual, lane's only proven subscription WTP ($49.99/yr);
+(2) family household boards with real chore depth — Cozi proves retention (400K ratings, 4.81 ★ )
+but is weak on chores. Couples apps have highest desire and proven WTP but worst cold start — the
+2026 launch wave (~7 HN points total) is hard evidence that "another couples app" dies instantly.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 18 of 41
+Lane 5 — "I Wish There Was an App"
+Goal: Real user requests for personal daily life apps — home, food, shopping, subscriptions, commuting,
+car, moving, pets, learning, life logging.
+1. Universal Life Dashboard
+User words: "I wish there was an app for the iPhone... that I just open, it automatically logs in to
+all the services" — 2012 thread
+Source: HN Algolia, 2012-03-15 (still referenced in 2023+ threads)
+Frequency: 63 hits for "I wish there was" on Ask HN. This idea resurfaces every 2–3 years.
+Intensity: 4/5 — persistent, recurring frustration
+Current tools: Manually open 5–10 apps per morning; RSS readers; iPhone widgets
+Existing solutions: Widgets (limited data sources); IFTTT/Zapier (complex); Flipboard (news only)
+Delight potential: 3/5 — useful but not delightful
+WTP evidence: Feedly Pro $8–16/mo; none for this exact use case
+Opportunity: Privacy-first aggregator with beautiful swipe UI. Platform risk high.
+2. Shared Household Budgeting (Simple)
+User words: "A simple shared budgeting and expense tracking app?" — appears in 2019, 2020,
+2022, 2025 threads
+Source: HN Algolia, threads from 2019-01-22 to 2025-08-13
+Frequency: 7+ distinct Ask HN threads over 6 years — same request
+Intensity: 4/5 — repeated, practical, couples/households actively seeking
+Current tools: Splitwise (split-focused, not budget); Google Sheets; pen and paper; Notes
+Existing solutions: YNAB ($14.99/mo — too complex); Monarch ($14.99/mo — heavy); Google
+Sheets (no UX)
+Delight potential: 4/5 — "we finally stopped fighting about money"
+WTP evidence: YNAB $14.99/mo, Monarch $14.99/mo, Copilot $13/mo — people pay $13–15/mo
+for money apps
+Opportunity: Dead-simple "text your partner an expense" app with shared view. Chat-based entry is
+the emerging pattern.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 19 of 41
+3. Car Ownership Digital Life
+User words: "What's broken about the software side of car ownership?" — 2025
+Source: HN Algolia, 2025-03-19
+Frequency: 1 major thread (2025) + 1 commute dashboard (2026-04-16) + 1 speed camera (2023)
+Intensity: 4/5 — "increasingly frustrated with the disconnect between my car and my digital life"
+Current tools: Paper service records in glove box; screenshot odometer; manual Calendar
+reminders; dealership apps (terrible UX)
+Existing solutions: Carfax/AutoCheck (history, not ongoing); OEM apps (locked to one brand, ad-
+filled); Drivvo (desktop-first); Fuelly (fuel only)
+Delight potential: 4/5 — "my car has a health record"
+WTP evidence: Drivvo Premium $2.99/mo; Fuelly Premium $4.99/mo
+Opportunity: OBD2 dongles + manual service log + document storage. Multi-brand, no OEM lock-
+in.
+4. Plant Care / Home Garden Management
+User words: "Self-hosted plant management like Planta?" — 2023
+Source: HN Algolia, 2023-04-06
+Frequency: 2 threads (2023, 2025)
+Intensity: 3/5 — niche but passionate
+Existing solutions: Planta ($35.99/yr — expensive, subscription, ads); PictureThis ($29.99/yr — ID
+only); Blossom (care only); Waterbot (reminders only)
+Delight potential: 4/5 — plants are emotional; "my plants are thriving" with progress photos
+WTP evidence: Planta $35.99/yr; PictureThis $29.99/yr — people pay $30/yr for plant apps
+Opportunity: Self-hosted or one-time-purchase plant care tracker with photo progress journal.
+5. Habit Tracking — Emotional Attachment Proof
+User words: "My users say they'd cry if my app disappeared. None of them pay" — 2025
+Source: HN Algolia, 2025-10-28
+Frequency: 5+ threads (2010–2025)
+Intensity: 5/5 — "I'd cry the entire evening" (user quote), Level 177, 197 completions/week
+Existing solutions: Streaks ($4.99/mo — rigid); Habitica (gamification turns off many); HabitBull
+(dated UI)
+Delight potential: 5/5 — inherently emotional
+WTP evidence: Streaks $4.99/mo; the 2025 thread's author has 0 paying users despite intense
+engagement
+Opportunity: Engagement is proven; the business model is not. A warning: engagement ≠ revenue.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 20 of 41
+6. Commute Dashboard
+Source: HN Algolia, 2020-05-23 and 2026-04-16
+Frequency: 2 threads, 6 years apart — same idea
+Intensity: 3/5 — practical, not emotional
+Existing solutions: Google Maps (not a dashboard); Citymapper (limited cities)
+Delight potential: 2/5 — utility, not delight
+WTP evidence: Citymapper has no consumer subscription; none found
+Opportunity: Widget-first app. Google could kill this anytime. Low WTP.
+7. Home Inventory (Insurance / Moving)
+User words: "A home inventory app that allows one to record, search, and locate their items fast"
+— 2019
+Source: HN Algolia, 2009, 2012, 2019 threads
+Frequency: 19 hits for "home inventory"; 3+ distinct Ask HN threads
+Intensity: 3/5 — practical, triggered by moving/insurance claims
+Existing solutions: WIZT (shuttered); Home Inventory by Binary Formations ($9.99 one-time —
+dated UI); Encircle (insurance-only); Sortly ($45/mo — enterprise)
+Delight potential: 3/5 — "find my grandmother's ring certificate in 10 seconds"
+WTP evidence: Sortly $45/mo (enterprise); Home Inventory $9.99 one-time
+Opportunity: Mobile-first inventory with photo + barcode + room organization + export for
+insurance. One-time purchase fits "occasional use" pattern.
+8. Meal Planning + Grocery List (Unified)
+User words: "Recipe/grocery list/meal planning space" — 2012 thread
+Source: HN Algolia, 2012-12-16
+Frequency: 1 major thread + scattered mentions
+Intensity: 3/5 — common problem, people have accepted existing solutions
+Existing solutions: Paprika ($4.99 one-time, no meal planning calendar); Mealime ($5.99/mo,
+limited recipes); Whisk (Samsung lock-in); Plan to Eat ($5.99/mo, dated UI)
+Delight potential: 4/5 — "what's for dinner?" is a daily stressor
+WTP evidence: Paprika $4.99 one-time; Mealime $5.99/mo; Plan to Eat $5.99/mo
+Opportunity: Pantry-to-plate loop: track what's in fridge →  suggest recipes →  generate grocery list.
+AI recipe generation makes this newly feasible.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 21 of 41
+9. Family Calendar + AI Scheduling
+User words: "AI calendar + to-do manager that... allows family to request time with me" — 2024
+Source: HN Algolia, 2024-06-30
+Frequency: 3 threads (2012, 2021, 2024)
+Intensity: 3/5 — practical, busy families
+Existing solutions: Cozi ($29.97/yr — dated); Google Calendar (no "request time" feature); Calendly
+(professional, not family)
+Delight potential: 4/5 — "schedule a fight" (family scheduling conflict) is a real pain point
+WTP evidence: Cozi $29.97/yr; Calendly Free–$12/mo
+Opportunity: AI makes this feasible: "Find 30 min this week where both parents are free and kids
+have no activities."
+10. ADHD / Focus Apps
+User words: "ADHD is expensive, slow, and can be difficult to access" — 2021
+Source: HN Algolia, 2021-10-14
+Frequency: 2 threads (2021 Inflow, 2024 subscription apps for habits)
+Intensity: 5/5 — emotional, medical-adjacent
+Existing solutions: Inflow (YC S21, $12.99/mo); Done ($4.99/mo); Focusmate ($9.99/mo — live
+sessions, not async)
+Delight potential: 5/5 — "I finally got something done" is life-changing
+WTP evidence: Inflow $12.99/mo; Focusmate $9.99/mo; Done $4.99/mo — people with ADHD pay
+$10–13/mo
+Opportunity: ADHD is massively underserved (only 20% of adults diagnosed). Clinical claims
+require caution.
+Lane 5 Summary: Three most-requested, least-served daily-life problems: (1) shared household
+money tracking — 7+ threads over 6 years, YNAB/Monarch too heavy, Splitwise wrong-shaped, WTP
+$13–15/mo proven; (2) car ownership digital life — OEM apps terrible, multi-brand gap; (3) meal
+planning →  grocery →  pantry loop — nobody closes the loop. Bonus insight: habit-tracking has
+proven emotional engagement but zero monetization proof.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 22 of 41
+Lane 6 — AI-Powered Fun Utilities
+Goal: AI fun utilities people pay for — photo → recipe/outfit/declutter, voice → life log, hobby tutors,
+nature ID, kids' stories, language practice, quizzes/games. Which are saturated, where are the gaps?
+1. AI Subscription Fatigue — Users Want Ownership
+User words: "I don't want every side project to become another $20/month subscription" — HN
+user sumolessons
+Source: HN, June 2026; HN Draftsmith, Sept 2025
+Saturation: 3/5 — cross-cutting sentiment
+Existing apps: ChatGPT Plus ($20/mo), Claude Pro ($20/mo), Replika ($15/mo), Midjourney ($10–
+30/mo) — all subscription, all drawing fatigue complaints
+WTP evidence: Draftsmith (BYOK, one-time); Infer0 (pay for own inference); StageWhisper (one-
+time, no subscription). None have reported significant revenue yet.
+Gap angle: One-time price or BYOK models are real gaps. On-device inference with zero marginal
+cost could sustain one-time pricing.
+Opportunity: Mobile-first app running models truly on-device could sustainably charge a one-time
+price.
+2. On-Device / Offline AI — Privacy Gap
+User words: "your journal entries sitting in someone's training data" — HN user ali_chherawalla
+Source: HN Off Grid, Feb 2026 (124 points, 66 comments); HN LocalLLMJournal, Feb 2026; HN
+Echo, Aug 2025
+Saturation: 2/5 — growing fast on HN but few successful consumer products
+Existing apps: Off Grid (open-source, not consumer product); LocalLLMJournal (GitHub, no app
+store); Echo (desktop only); OwlLens (macOS only)
+WTP evidence: None found. All offline AI tools are free/open-source.
+Gap angle: On-device/offline is the strongest differentiator. Apple's FoundationModels and iPhone
+NPU make this technically feasible for 3–8B parameter models.
+Opportunity: Most technically feasible gap. Hardest to monetize. "Your data never leaves your
+phone" as premium feature.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 23 of 41
+3. AI Chat Companions — Massive Demand, Existential Risk
+User words: "It's Hurting Like Hell: AI Companion Sudden Sexual Rejection" — Vice headline on
+Replika
+Source: Vice/Reuters, Feb 2023; Tekedia Dot shutdown, Sept 2025; MIT Tech Review, Aug 2025
+Saturation: 5/5 — extremely crowded: Replika, Character.AI, Chai, WTMF, Dot (shut down Sept
+2025)
+Existing apps: Replika ($15/mo — removed erotic roleplay, users "in crisis"); Character.AI (filter
+complaints, child safety lawsuits); Dot (shut down amid safety concerns)
+WTP evidence: Replika reportedly 500K+ paid subscribers at $15/mo (inference). Character.AI
+raised $150M+ at $1.5B valuation.
+Gap angle: On-device/offline is untapped. But regulatory shutdown risk is existential.
+Opportunity: Demand proven and massive, but regulatory risk makes this unsuitable for a solo dev.
+4. AI Kids' Stories — Crowded, Safety-Conscious
+User words: "My 6-year-old was getting frustrated trying to get ChatGPT to tell him stories" — HN
+user vladoh
+Source: HN, May 2025 (Leoline, AIChat.kids); Oct 2024 (MyStorybook); July 2024 (trystorytime)
+Saturation: 4/5 — very crowded, many launched in last 18 months
+Existing apps: Leoline (voice-only, cloud, subscription); MyStorybook (photo + storybook,
+expensive); AIChat.kids (ChatGPT wrapper). Common complaints: voice quality/uncanny valley,
+story consistency, no offline mode.
+WTP evidence: MyStorybook charges per story; Leoline charges subscription. None have reported
+significant revenue.
+Gap angle: Offline, one-time-purchase story app with genuinely good voice quality. But parents are
+skeptical of AI for children.
+Opportunity: Crowded and parents ambivalent. Kidcast.fm succeeded by explicitly avoiding AI.
+5. Photo →  Recipe — Emerging, Accuracy Is the Moat
+User words: "loving a dish at a restaurant and wishing I could recreate it at home" — HN user
+maezeller
+Source: HN Bite Genie, Sept 2025; HN Sous, Dec 2025; HN Sage Cooking, Oct 2024
+Saturation: 2/5 — emerging, only a handful of entrants
+Existing apps: Bite Genie (OCR struggles with handwritten menus); Sage Cooking (no subscription
+model); PantryBot (API content violations for unusual ingredient combos)
+WTP evidence: None found. All current apps are free.
+Gap angle: Niche specialization — fine-tuned model for a specific cuisine or dietary niche. Accuracy
+gap is the moat.
+Opportunity: WTP unproven but use case is emotionally compelling. Too new for proven WTP.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 24 of 41
+6. Plant & Nature ID — Accuracy Complaints Persist
+User words: "My friend was spending €23/month (GPT) to plant ID during her forest walks" —
+HN user adamaskun
+Source: HN Frondly, Oct 2024; HN Leafie, Sept 2025; HN Species.app, Apr 2026
+Saturation: 4/5 — established: PictureThis ($30/yr), PlantNet (free), Merlin Bird ID (free, Cornell),
+Seek by iNaturalist
+Existing apps: PictureThis — accuracy complaints, aggressive paywalling. PlantNet — free but
+limited UX. Merlin — excellent for birds but narrow scope.
+WTP evidence: PictureThis reportedly significant revenue at $30/yr (inference). Merlin/PlantNet
+free.
+Gap angle: Offline (critical for hiking) + niche specialization (edible/medicinal plants with safety
+warnings).
+Opportunity: Offline angle is strongest differentiator. Competing with free university-backed apps is
+hard.
+7. Voice-First AI Journaling — Nascent, Privacy Angle Unexploited
+User words: "journaling apps often feel like 'work'" — HN user AnkitRH
+Source: HN Rocket Journal, Aug 2025; HN Anima, May 2026; HN Echo, Aug 2025; HN OktoNote,
+Sept 2025
+Saturation: 2/5 — very few entrants
+Existing apps: Rocket Journal (cloud-based); Anima (on-device, very new); Echo (desktop only);
+OktoNote (voice →  cards)
+WTP evidence: None found. All free or early-stage.
+Gap angle: On-device/offline. Apple's FoundationModels makes on-device AI journaling feasible.
+Anima is the only app using it.
+Opportunity: Wide-open niche. Voice-first + on-device + mood tracking is differentiated. Hard
+question: do people want AI insights in their journal?
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 25 of 41
+8. AI Chess Coaching — Crowded, Free Dominates
+User words: "Two years ago, I simply could not get LLMs to reason about chess" — HN user
+sleepypizza
+Source: HN, May 2026; chesscoachgpt.com, July 2025; chesski.lol, Feb 2024
+Saturation: 4/5 — 5+ AI chess coaching apps launched 2024–2026
+Existing apps: All free or freemium. chesscoachgpt.com — free. chesscoach.dev — free. Common
+complaints: LLM reasoning unreliable, all cloud-only.
+WTP evidence: None found. All free.
+Gap angle: Niche specialization (kids, adults returning after 20 years). But free competition makes
+monetization very hard.
+Opportunity: Cautionary tale — multiple builders launched similar products within 12 months, all
+free. Avoid this pattern.
+9. AI Hobby Tutors (Non-Chess) — Nascent but Hard to Monetize
+Source: HN Hyperscreen AI, Feb 2025; HN Sage Cooking, Oct 2024
+Saturation: 2/5 — very few dedicated apps, most are ChatGPT wrappers
+Existing apps: No dominant incumbents. Hyperscreen AI (interview prep, $9.75/mo) is the closest
+model.
+WTP evidence: Hyperscreen AI $9.75/mo — only concrete WTP data point for AI hobby coaching.
+Gap angle: On-device for real-time feedback. But accuracy challenge is significant.
+Opportunity: Technical bar is high (real-time audio/video analysis), which limits competition.
+Monetization unproven.
+10. AI Language Practice — Saturated by Big Incumbents
+Source: HN Off Grid, Feb 2026; HN Infer0, June 2026
+Saturation: 5/5 — ChatGPT voice, Gemini, Duolingo Max ($14/mo), ELSA ($12/mo), Babbel
+Existing apps: Duolingo Max — gamified but shallow; ChatGPT — not designed for language
+learning; ELSA — pronunciation-focused but not conversational
+WTP evidence: Duolingo Max $14/mo; ELSA $12/mo
+Gap angle: Niche specialization (specific language pair, specific use case). But big incumbents are
+already conversational.
+Opportunity: Avoid. Big incumbents are already conversational and free/cheap.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 26 of 41
+11. Personalized Quizzes / Games — Fun but Fickle
+Source: HN Mem0, Sept 2024; HN Draftsmith, Sept 2025
+Saturation: 3/5 — Kahoot, Quizlet, Trivia Crack are incumbents but not AI-native
+Existing apps: AI quiz generators are often just ChatGPT wrappers, no replayability, no social
+features
+WTP evidence: None found for AI-native quiz apps.
+Gap angle: Niche specialization with social/competitive features. But retention past week one is
+nearly impossible.
+Opportunity: "Fun but fickle." Retention challenge is severe — quiz content gets stale.
+12. The "Post-SaaS" Model — One-Time Purchase AI Apps
+User words: "I wanted something I could actually own, not rent" — HN user badri (Draftsmith)
+Source: HN Draftsmith, Sept 2025; HN StageWhisper, July 2026; HN "AI going to kill app
+subscriptions," Feb 2026 (148 points, 240 comments)
+Saturation: 2/5 — strong sentiment, very few actual products
+Existing apps: Draftsmith (BYOK, one-time); StageWhisper (one-time Founders edition);
+mndxt.app (zero subscription)
+WTP evidence: StageWhisper Founders edition is "single payment" (price not found). Neither has
+reported revenue.
+Gap angle: On-device/offline + one-time price is the holy grail. Only works technically with small
+models (3–8B) on mobile NPU.
+Opportunity: Strongest pricing gap in AI utilities, but a technical moonshot for a solo dev.
+Lane 6 Summary: Three real, unsaturated gaps: (1) on-device/offline AI utility with one-time price
+— privacy complaints are #1 driver of dissatisfaction, Apple's FoundationModels makes it feasible;
+(2) photo → recipe niche specialization — emerging, accuracy gap is the moat; (3) voice-first AI
+journaling (on-device) — very few entrants, strong privacy angle. Categories to avoid: AI chat
+companions (regulatory risk), AI language practice (saturated), AI chess coaching (free incumbents),
+personalized quizzes (retention cliff).
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 27 of 41
+Phase 2 — Consolidation & Cuts
+After deduplicating across all six lanes, 20 candidate app ideas emerged. Each is scored in Phase 3.
+Below are the candidates and the items that were cut.
+20 Candidate App Ideas
+1. Family Chore & Allowance Gamification — Joon-style quest engine for kids' chores and
+allowance
+2. TTRPG Campaign Memory — AI-powered campaign notes with entity tracking
+3. Board Game Night Companion — Collection tracking + game-night scores + stats
+4. Modern Book Tracking — Goodreads alternative with easy import
+5. Offline Plant Care — One-time purchase, offline database, no subscription
+6. On-Device AI Journaling — Voice-first, privacy-first, mood tracking
+7. Couples Memories + Rituals — Modern Between/Paired alternative
+8. Shared Household Money — Simple shared expense tracking
+9. ADHD Focus App — Habit tracking + focus timers + community
+10. Climbing Logbook — Offline-first, quick-entry, mobile-native
+11. Knitting Stash Tracker — Yarn inventory + pattern tracking
+12. AI Hobby Tutor — Guitar/cooking real-time coaching
+13. Family Recipe / Cooking Together — Shared collections + meal planning
+14. Car Ownership Digital Life — Multi-brand service records + documents
+15. Photo →  Recipe (Niche Cuisine) — Fine-tuned model for specific cuisine
+16. Gardening Planning Calendar — Seasonal planting + harvest tracking
+17. Home Inventory + Moving — Photo + barcode + room organization
+18. Privacy-First Audio Editor — Audacity alternative, one-time purchase
+19. Local-First Note-Taking — GoodNotes alternative, transparent pricing
+20. AI Kids' Stories (Offline) — One-time purchase, no cloud, no subscription
+Items Cut and Why
+❌  Generic habit tracker — Saturated. The "users would cry" thread proves engagement ≠ revenue. No sharp
+angle.
+❌  Todo apps — Apple Things, Todoist, Microsoft To Do all dominate. No wedge for solo dev.
+❌  Notes apps — Apple Notes free, Obsidian free, Notion free. No monetization wedge.
+❌  Workout apps — Crowded with big players. Hard to differentiate for solo dev without sharp angle.
+❌  AI chat companions — Existential regulatory risk (Dot shut down, Replika bans). Unsuitable for solo dev.
+❌  AI language practice — Saturated by ChatGPT, Gemini, Duolingo. No gap for solo dev.
+❌  AI chess coaching — Crowded with free incumbents. Multiple builders launched within 12 months, all free.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 28 of 41
+❌  Personalized quizzes/games — Retention cliff. Quiz content gets stale. "Fun but fickle."
+❌  Home bar tracking — Low frequency, low intensity. "Nice to have" not "must solve."
+❌  Aquarium tracking — Small audience, WTP unclear.
+❌  Amateur league management — Organization tool, not fun app. Doesn't meet the "enjoyable" criterion.
+❌  Commute dashboard — Low WTP, platform risk (Google could kill anytime).
+❌  Universal life dashboard — Platform risk, utility not delight. Apple/Google could kill anytime.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 29 of 41
+Phase 3 — Scoring Matrix
+Each candidate scored 1–5 on seven criteria. Paid-path total = Pain + Delight + Reach + Build +
+Differentiation + Monetization. OSS-path total = Pain + Delight + Reach + Build + Differentiation +
+OSS potential. Ranked by the better of the two paths.
+Tie-break rule: When paid and OSS totals are within 1 point, prefer the path with higher Delight +
+Reachability sum (retention + distribution). If still tied, prefer the paid path (revenue funds continued
+development).
+Candidate Pain Delight Reach Build Diff Monet OSS Paid OSS Best
+Family Chore Gamification 4 5 4 4 3 5 2 25 22 25
+TTRPG Campaign Memory 4 5 3 3 5 4 4 24 24 24
+Board Game Night Companion3 5 4 4 4 3 4 23 24 24
+Modern Book Tracking 4 4 5 3 3 4 4 23 23 23
+Offline Plant Care 3 4 4 4 4 4 3 23 22 23
+On-Device AI Journaling 3 4 3 3 5 4 5 22 23 23
+Couples Memories + Rituals 5 5 2 3 2 5 2 22 19 22
+Shared Household Money 4 3 4 4 3 4 3 22 21 22
+ADHD Focus App 5 4 3 3 3 4 3 22 20 22
+Climbing Logbook 3 4 3 4 4 3 3 21 21 21
+Knitting Stash Tracker 3 4 3 4 3 3 4 20 21 21
+AI Hobby Tutor 3 4 3 2 4 3 4 19 20 20
+Family Recipe / Cooking Together3 4 4 3 3 3 3 20 20 20
+Car Ownership Digital Life 4 3 3 3 4 3 3 20 20 20
+Photo →  Recipe (Niche) 3 4 3 3 4 3 3 20 20 20
+Gardening Planning Calendar 3 4 3 4 3 2 3 19 20 20
+Privacy-First Audio Editor 3 3 3 3 4 3 5 19 21 21
+Home Inventory + Moving 3 3 3 4 3 3 3 19 19 19
+Local-First Note-Taking 3 3 3 3 3 3 4 18 19 19
+AI Kids' Stories (Offline) 3 4 3 2 3 3 3 18 18 18
+Scores are judgment calls based on the evidence gathered. "Reach" reflects how easily a solo dev can find these users
+(community, subreddit, hashtag, word of mouth). "Build" reflects solo 4–8 week Flutter-first feasibility. "Diff" reflects real
+gap vs incumbents.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 30 of 41
+Phase 4 — Top 8 Detail
+#1. Family Chore & Allowance Gamification — Paid-path score: 25/30
+One-line pitch: Turn kids' chores and allowance into a game they actually want to play — quests,
+rewards, and a pet to feed.
+Evidence: Joon (YC W22) proves the model: $49.99/yr subscription, "kids who are asking their
+parents for more tasks at home" (Joon creators, Launch HN 2022-01-19 — vendor claim). Cozi has
+399,639 US App Store ratings at 4.81 ★  but is weak on chores: "when it comes to chores it lacks a lot
+of the options that OH had" (AlternativeTo user, Aug 2024). OurHome had depth but died; Chorsee
+is explicitly anti-gamification ("NO GAMIFICATION… a false motivator").
+Competitor landscape: Joon ($49.99/yr) is the only proven player but is generic. Cozi
+($29.97/yr) owns scheduling but not chores. OurHome (original) effectively delisted. Chorsee (free)
+rejects gamification. Nobody owns "fun + deep chore tracking."
+Platform: iOS + Android (Flutter). Kids use parents' phones or their own tablets. Parent is the
+buyer, kid is the user.
+v1 scope: Parent creates quests (chores, homework, habits). Kid completes them to earn coins/feed
+a pet. Weekly allowance payout. Shared family board. That's it — no social, no messaging, no
+complex gamification in v1.
+Fun hook: The pet grows and evolves as quests are completed. Kids ask to do chores. Weekly
+"payout" ceremony. Streak bonuses. The share/viral loop: kids show parents their pet progress;
+parents invite other parents.
+Recommended path: Paid subscription at $49.99/yr (matching Joon's proven price point). Hard
+paywall after 14-day free trial. Annual-only — no monthly option (proves commitment, maximizes
+LTV). The parent-is-buyer model solves cold start: one parent subscribes, kids use it for free.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 31 of 41
+#2. TTRPG Campaign Memory — Combined score: 24/30
+One-line pitch: AI-powered campaign notebook that remembers your NPCs, quests, promises,
+and loot — so session 30 feels as coherent as session 1.
+Evidence: "standard meeting note-takers treat every session as an isolated island, butcher fantasy
+terms, and don't know who is speaking" (Table Canon founder, HN Aug 2026). Campaigns run
+weekly/monthly for months or years. Pain compounds over time. TTRPG players buy D&D books,
+dice, and subscriptions (Roll20, Foundry) — strong WTP culture.
+Competitor landscape: Notion/Obsidian are generic — no TTRPG entity tracking, no fantasy name
+recognition. Table Canon (Aug 2026) is attempting AI extraction but is very early (4 points, 2
+comments on HN). Roll20/Foundry are VTT-first, not campaign-memory-first.
+Platform: iOS + Android (Flutter). Used at the table during sessions, between sessions for prep.
+v1 scope: Session notes with AI extraction of NPCs, locations, quests, and items. Entity cards with
+relationships. "What did we know about X?" search. Campaign timeline. That's it — no dice roller,
+no character sheet, no VTT integration in v1.
+Fun hook: The AI remembers things you forgot. "Wait, who was that innkeeper's daughter?" —
+instant answer. The campaign grows richer over time. The share/viral loop: players show their
+campaign wiki to other groups; DMs share templates.
+Recommended path: Freemium with hard paywall at $4.99/mo or $39.99/yr. Free tier: 1
+campaign, 50 entities. Paid: unlimited campaigns, AI extraction, export. The TTRPG community is
+tight-knit — word of mouth spreads fast in Discord servers and subreddits.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 32 of 41
+#3. Board Game Night Companion — Combined score: 24/30
+One-line pitch: Track your collection, keep score, and settle debates about who actually
+wins the most — all in one app your whole game night can use.
+Evidence: "track who has what game, how often we play different games, and who wins"
+(Squire Discord bot, HN Jul 2025). "tracking scores during game nights without paper or
+fumbling with Notes" (RoundsKeeper, HN Feb 2026). 4+ separate HN projects over 10+
+years — persistent pain, no mobile winner.
+Competitor landscape: BGG (BoardGameGeek) owns the data but UI is dated, not
+mobile-first. BOXED (2014) appears defunct. No dedicated scorekeeper with analytics found.
+BGG could build mobile but hasn't.
+Platform: iOS + Android (Flutter). Used during game nights — needs to be fast, offline-
+capable, and pass-and-play.
+v1 scope: Collection tracker (barcode scan or BGG import). Game-night scorekeeper with
+player stats. Win/loss history per game. That's it — no social feed, no marketplace, no BGG
+sync in v1.
+Fun hook: Stats and leaderboards. "Who actually wins Catan most often?" — data-backed
+answer. The share/viral loop: game night groups share stats; BGG integration pulls in
+collection data.
+Recommended path: Open source (OSS path score: 24). Free app with optional $9.99 one-
+time "Pro" upgrade for advanced stats and BGG sync. The board game community is active on
+Reddit (r/boardgames), BGG forums, and Discord — strong word-of-mouth potential. OSS
+builds reputation; Pro upgrade funds development.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 33 of 41
+#4. Modern Book Tracking — Combined score: 23/30
+One-line pitch: A beautiful book tracking app that lets you leave Goodreads without losing
+your reading history.
+Evidence: "Goodreads is declining because its old tech was less attractive to younger
+readers" (HN, July 2026). Community "overwhelmingly centered around romance and
+romantasy novels." Tech stack dated. ~150M+ registered users (inference). Competitors:
+Storygraph, LibraryThing, Hardcover, Kaguya, Bookwyrm — all attracting dissatisfied users.
+Competitor landscape: Goodreads owns the social graph and data but is declining.
+Storygraph is the strongest alternative but focuses on recommendations over tracking.
+LibraryThing is dated. Hardcover is new and unproven. Bookwyrm is federated but niche.
+Platform: iOS + Android (Flutter). Readers use it daily — logging books, tracking progress,
+writing reviews.
+v1 scope: Goodreads import (reading history, ratings, reviews). Beautiful reading log.
+Reading stats (pages, genres, pace). Reading challenges. That's it — no social feed, no
+recommendations engine in v1.
+Fun hook: Beautiful reading stats and year-in-review. "You read 47 books this year — here's
+your reading personality." The share/viral loop: readers share stats on social media;
+BookTok/Bookstagram crossover.
+Recommended path: Freemium with $2.99/mo or $24.99/yr subscription. Free tier: basic
+tracking. Paid: advanced stats, unlimited shelves, export. The key wedge is easy Goodreads
+import — users want to leave but fear losing their data.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 34 of 41
+#5. Offline Plant Care — Paid-path score: 23/30
+One-line pitch: A plant care app that works offline, costs once, and doesn't treat your
+houseplants like a subscription service.
+Evidence: "The app sucks, and the subscription is very expensive for getting more plants
+than you'll be able to use" (HN, Oct 2022). Planta: $35.99/yr. PictureThis: $29.99/yr. "The
+good-looking ones are subscription walls with a plant drawing on top — you can't add a
+second plant without paying" (HN, Sept 2026).
+Competitor landscape: Planta ($35.99/yr — expensive, subscription, ads). PictureThis
+($29.99/yr — ID only). Blossom (care only). Waterbot (reminders only). No one-time
+purchase, offline-first plant care app exists.
+Platform: iOS + Android (Flutter). Plant parents use it weekly — watering schedules, care
+reminders, progress photos.
+v1 scope: Plant database (common houseplants). Per-plant watering/fertilizing schedules.
+Care reminders. Progress photo journal. That's it — no plant ID, no community, no social in
+v1.
+Fun hook: Photo progress journal — watch your plant grow over time. "My monstera grew 3
+new leaves this month." The share/viral loop: plant parents share progress photos on
+Instagram/TikTok; #PlantTwitter crossover.
+Recommended path: One-time purchase at $9.99. No subscription. The offline-first, no-
+subscription model is the wedge against Planta/PictureThis. Plant parents are emotional and
+pay for aesthetics — a beautiful, simple app with a one-time price fills the gap.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 35 of 41
+#6. On-Device AI Journaling — OSS-path score: 23/30
+One-line pitch: A voice-first journal that lives entirely on your phone — no cloud, no
+subscription, no one reading your entries.
+Evidence: "your journal entries sitting in someone's training data" (HN user, Feb 2026).
+"journaling apps often feel like 'work'" (HN user, Aug 2025). Day One is subscription-only:
+"There is absolutely no reason why a calendar or a journaling app should have a monthly
+subscription" (HN, May 2018). Off Grid HN post (Feb 2026): 124 points, 66 comments —
+strong privacy sentiment.
+Competitor landscape: Day One (subscription, cloud). Journey (subscription). Diarium
+(one-time but cloud). Anima (on-device, very new, May 2026). Echo (desktop only). No
+polished, mobile-first, fully on-device journaling app with a one-time price exists.
+Platform: iOS first (Apple FoundationModels makes on-device AI feasible). Android later.
+Used daily — voice entries, mood tracking, AI insights.
+v1 scope: Voice-to-text journaling. On-device mood tracking. AI prompts for reflection.
+Local-only storage with optional encrypted backup. That's it — no cloud sync, no social, no AI
+chat in v1.
+Fun hook: AI mood insights over time. "You seem happiest on Sundays." The privacy angle
+is the hook — "your words never leave your phone." The share/viral loop: privacy-conscious
+users recommend to friends; HN/Reddit privacy communities.
+Recommended path: Open source (OSS path score: 23). Free app with optional $14.99
+one-time "Pro" upgrade for advanced AI insights and encrypted backup. The privacy angle is
+the wedge. OSS builds reputation in the privacy community; Pro upgrade funds development.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 36 of 41
+#7. Couples Memories + Rituals — Paid-path score: 22/30
+One-line pitch: A private space for couples to store memories, plan rituals, and stay
+connected — without the chat-app feel.
+Evidence: Between: 21,194 US ratings, 4.80 ★ , $2.99–$26.99 pricing. Paired:
+208,024 ratings, 4.73 ★ , claims 8M downloads. The 2026 launch wave (Lune, Middly,
+PersonalPod: ~7 HN points total) is hard evidence that "another couples app" dies
+instantly.
+Competitor landscape: Between (dated, 2011-era design). Paired (entrenched, 8M
+downloads). SumOne, Evergreen, Desire. All focus on chat or daily questions. Nobody
+owns "memories + rituals" as a modern, beautiful product.
+Platform: iOS + Android (Flutter). Both partners use it daily.
+v1 scope: Shared photo/video memory timeline. Anniversary and milestone
+countdowns. Shared calendar. "Moment of the day" — one photo per day from each
+partner. That's it — no chat, no games, no daily questions in v1.
+Fun hook: The "moment of the day" ritual — one photo per day builds a shared
+memory timeline. Anniversary countdowns. The share/viral loop: couples share
+memories; word of mouth through social media.
+Recommended path: Freemium with $2.99/mo or $13.99/yr subscription
+(matching Between's proven pricing). Hard paywall after 14-day free trial. The cold-
+start risk is high — both partners must install. Mitigation: solo-user value first
+(memory timeline works for one person), partner invitation as activation.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 37 of 41
+#8. Shared Household Money — Paid-path score: 22/30
+One-line pitch: Text your partner an expense, it's logged — a dead-simple shared
+money tracker for couples and housemates.
+Evidence: "A simple shared budgeting and expense tracking app?" — 7+ Ask HN
+threads over 6 years (2019–2025). YNAB $14.99/mo, Monarch $14.99/mo, Copilot
+$13/mo — people pay $13–15/mo for money apps. Splitwise is wrong-shaped (split-
+focused, not budget-focused).
+Competitor landscape: YNAB ($14.99/mo — too complex, philosophy imposed).
+Monarch ($14.99/mo — heavy). Splitwise (split-focused). Google Sheets (no UX). No
+"simple + shared" money tracker exists.
+Platform: iOS + Android (Flutter). Both partners use it daily or weekly.
+v1 scope: Text-to-log expense entry (SMS or in-app). Shared weekly/monthly view.
+Simple budget categories. That's it — no bank sync, no receipt scanning, no budgeting
+philosophy in v1.
+Fun hook: "We finally stopped fighting about money" is the emotional win. The
+share/viral loop: couples who stop fighting about money tell their friends.
+Recommended path: Freemium with $3.99/mo or $29.99/yr subscription. Free
+tier: 1 shared budget, 20 entries/month. Paid: unlimited budgets, entries, export. The
+chat-based entry is the wedge — it's the simplest possible UX.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 38 of 41
+Top 3 Picks — Where I'd Bet My Weekends
+Pick #1: Family Chore & Allowance Gamification
+Why I'd bet on it: This is the strongest evidence-backed opportunity in the entire
+sprint. Joon proves parents will pay $49.99/yr for chore gamification — that's real
+revenue from real users, not inference. The parent-is-buyer, kid-is-user model solves
+the cold-start problem that kills most consumer apps: one parent subscribes, the whole
+family uses it. The daily ritual is built in (kids want to complete chores to feed their
+pet), and the retention hook is emotional (kids love their pet, parents see behavior
+change). The market gap is real: Cozi owns scheduling but is weak on chores,
+OurHome had depth but died, and Chorsee explicitly rejects gamification. A polished,
+ritual-first family board with Joon-style play and Cozi-style scheduling is the obvious
+un-built product. My fintech background is directly relevant (allowance tracking,
+parent-child financial flows), and my marketplace background applies to the
+quest/reward economy design.
+Biggest risk: Retention cliff when kids lose interest. The pet/quest mechanic needs to
+be genuinely engaging enough to sustain weekly use for months, not days. Mitigation:
+progressive pet evolution, seasonal events, and parent-controlled reward calibration.
+The app-store discovery risk is moderate — "kids chores" is a competitive category, but
+a beautiful, well-reviewed product can break through.
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 39 of 41
+Pick #2: TTRPG Campaign Memory
+Why I'd bet on it: This is the highest-delight candidate in the entire sprint. The
+problem is genuinely unsolved — Notion and Obsidian butcher fantasy terms, and
+Table Canon is the only HN-visible attempt at AI extraction (4 points, 2 comments —
+nobody is paying attention yet). The weekly ritual compounds over months or years:
+session 30+ becomes unmanageable in plain notes, and the pain intensifies with every
+session. The TTRPG community has proven willingness to pay (D&D books, dice,
+Roll20, Foundry subscriptions). The AI angle — auto-extracting NPCs, quests,
+promises, and loot from session notes — is technically feasible with current LLMs and
+genuinely delightful: "Wait, who was that innkeeper's daughter?" gets an instant
+answer. My AI-orchestration background is directly relevant (entity extraction,
+knowledge graphs, prompt engineering), and my marketplace background applies to
+the entity-relationship design.
+Biggest risk: Small market. TTRPG is a passionate but niche community — the total
+addressable market is smaller than family apps or book tracking. The AI accuracy risk
+is real: hallucinated NPCs or incorrect quest extraction would destroy trust. Mitigation:
+human-in-the-loop verification, confidence scoring, and a "suggest, don't auto-apply"
+UX. The reachability risk is moderate — the community is tight-knit (Discord servers,
+subreddits like r/DnD), so word of mouth spreads fast within the niche but breaking
+out is hard.
+Pick #3: Board Game Night Companion
+Why I'd bet on it: This is the highest-OSS-potential candidate with a strong fun
+factor. The pain has persisted for 10+ years (4+ separate HN projects) with no clear
+mobile winner — BGG owns the data but not the experience. The weekly ritual is built
+in (game nights), and the stats/leaderboards angle is genuinely delightful: "Who
+actually wins Catan most often?" gets a data-backed answer. The OSS path is strong
+because the board game community values open data (BGG API is open), and a free,
+beautiful collection tracker with optional Pro upgrade is a natural fit. My marketplace
+background applies to the collection/trading features, and my fintech background
+applies to the stats/analytics engine. The viral loop is organic: game night groups share
+stats, and BGG integration pulls in collection data.
+Biggest risk: Monetization is unproven — nobody has found WTP evidence for board
+game apps (Etsy/Gumroad were blocked in research). BGG could build a mobile app
+anytime and crush a solo dev. Mitigation: move fast, build a beautiful UX that BGG
+won't prioritize, and use the OSS community to build defensibility. The retention risk is
+moderate — game night is weekly, not daily, but the collection tracker provides daily
+engagement ("add this game to my collection").
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 40 of 41
+Appendix — Source Quality & Limitations
+Sources Successfully Used
+RevenueCat State of Subscription Apps 2026 — 115,000+ apps, $16B revenue
+dataset. March 2026. The single most valuable source.
+Hacker News (Algolia API) — 100+ queries across all lanes. Primary source for Lane
+2, 3, 5, 6.
+iTunes Search API — Live App Store ratings, counts, and pricing. Primary source for
+Lane 4.
+AlternativeTo — User reviews and competitor analysis. Lane 4.
+Starter Story, IndieHackers — Revenue proof (partial — spam issues on IH).
+Sources Blocked or Unreachable
+Reddit — 403/JS shell in most lanes. r/boardgames, r/DnD, r/gardening, r/knitting,
+r/homebrewing, r/birding, r/climbing, r/SomebodyMakeThis, r/AppIdeas,
+r/relationships, r/parenting, r/artificial, r/LocalLLaMA — all inaccessible. This is a
+significant gap: subreddit member counts and Reddit community sentiment would
+strengthen WTP evidence for hobby lanes.
+X/Twitter — Not directly searched in most lanes.
+Etsy — 403 in hobby lane. Template sales counts were unavailable.
+Gumroad — 404 on search. Creator product sales were unavailable.
+TrustMRR — 404.
+Trustpilot — 403 in Lane 4.
+Product Hunt — JS-rendered, Apollo SSR data not parseable in Lane 5.
+Lemmy/Tildes — HTML shell, no usable JSON in Lane 3 and 5.
+Mumsnet — JS shell, no results returned in Lane 4.
+MoneySavingExpert forums — Not attempted (search budget exhausted in Lane 5).
+App Store/Google Play review pages — Individual review pages could not be fetched
+in Lane 2. Used iTunes Search API instead for aggregate ratings.
+Inference vs. Direct Evidence
+Direct evidence (strong): RevenueCat category benchmarks, iTunes Search API
+ratings/counts, AlternativeTo user reviews, HN Algolia thread content, HN Show HN
+launch data.
+Inference (weaker): Community sizes (subreddit member counts inferred from
+general knowledge, not fetched), WTP for hobby apps (no Etsy/Gumroad data),
+Goodreads user count (~150M from public reporting), revenue figures for specific apps
+(from HN posts, not audited).
+
+=== PAGE ===
+Consumer App Discovery Sprint — September 2026 — Page 41 of 41
+Vendor claims (biased): "8 million downloads" (Paired), "17 million users" (Tricount),
+"kids who are asking their parents for more tasks" (Joon founders), "indispensable for
+busy families" (Cozi, quoting CNET).
+Known Biases
+HN skew: Hacker News over-represents developers and under-represents mainstream
+consumers. The "I wish there was an app" requests are from a tech-savvy population, not
+necessarily representative of all consumers.
+Survivorship bias: Successful apps with disclosed revenue are visible; failed apps are
+not. The revenue proof lane over-represents winners.
+Recency bias: Sources from 2025–2026 are over-represented. Older complaints
+(Goodreads decline, Day One subscription) may have been addressed.
+Builder bias: HN Show HN posts come from builders, not users. A Show HN with 0
+comments means the builder built it, not that users want it.
+Recommendation for Next Research Pass
+Manually check Reddit (r/boardgames, r/DnD, r/gardening, r/knitting, r/homebrewing)
+for community size and WTP signals — this is the biggest gap in the current research.
+Check Etsy and Gumroad for hobby template sales counts (board game trackers, TTRPG
+campaign templates, knitting stash spreadsheets).
+Search app store review pages for top competitors in the top-3 picks (Joon, Cozi, BGG) for
+specific complaint patterns.
+Check Product Hunt for recent launches in the top-3 categories to assess current
+competition.
+Validate the TTRPG AI extraction approach with a small prototype before committing to a
+full build.
+— End of Report —

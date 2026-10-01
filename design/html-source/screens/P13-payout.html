@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=390, initial-scale=1"><title>Saturday payout — Nestling</title><link rel="stylesheet" href="../tokens.css"><link rel="stylesheet" href="../components.css"><style>
+.pay{position:absolute;left:0;right:0;bottom:0;z-index:30;background:var(--paper);border-radius:var(--r-xl) var(--r-xl) 0 0;padding:8px 20px calc(var(--home-h) + 16px);max-height:88%}
+.pay::before{content:"";width:40px;height:5px;border-radius:999px;background:var(--line);margin:4px auto 12px;display:block}
+.pay h2{font-family:var(--font-display);font-weight:900;font-size:24px;line-height:30px;text-align:center}
+.pay .sub{text-align:center;font-size:14px;color:var(--ink-2);line-height:20px;margin-top:4px}
+.child{display:flex;align-items:center;gap:12px;background:var(--surface);border-radius:var(--r-m);box-shadow:var(--sh-1);padding:14px;min-width:0}
+.child .who{flex:1;min-width:0}.child .nm{font-weight:700;font-size:16px;line-height:22px}.child .am{font-weight:800;font-size:18px}
+.check{width:48px;height:48px;min-width:48px;border-radius:14px;border:2px solid var(--leaf);background:var(--leaf);color:var(--surface);display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+.check.off{background:var(--surface);border-color:var(--line);color:transparent}
+.saverow{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--surface);border-radius:var(--r-m);box-shadow:var(--sh-1);padding:14px}
+.saverow .t{font-weight:600;font-size:15px;line-height:22px}
+.cap{text-align:center}
+.pay .btn-primary{min-height:52px}
+.bg-fake{padding:0 20px}
+.bg-fake .ptitle{font-family:var(--font-display);font-weight:900;font-size:28px;line-height:34px;padding-top:8px;color:var(--ink)}
+</style></head><body><div class="screen parent">
+<div class="status-bar"><span class="status-time">9:41</span><span class="status-icons"><svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor" aria-hidden="true"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4.5" width="3" height="7.5" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1" opacity=".35"/></svg><svg width="16" height="12" viewBox="0 0 16 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M1.5 4.5a10 10 0 0 1 13 0"/><path d="M4 7.2a5.6 5.6 0 0 1 8 0"/><circle cx="8" cy="10" r="1.2" fill="currentColor" stroke="none"/></svg><svg width="25" height="12" viewBox="0 0 25 12" fill="none" aria-hidden="true"><rect x=".5" y=".5" width="20" height="11" rx="3.5" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="15" height="8" rx="2" fill="currentColor"/><path d="M23 4v4a2.2 2.2 0 0 0 0-4z" fill="currentColor" opacity=".4"/></svg></span></div>
+<div class="bg-fake"><div class="ptitle">Pocket money</div><div class="card" style="margin-top:12px"><div class="caption">Maya is owed £4.20 · Leo is owed £2.10</div></div></div>
+<div style="flex:1"></div>
+<div class="scrim" aria-hidden="true"></div>
+<div class="pay" role="dialog" aria-modal="true" aria-label="Saturday payout">
+<h2>Saturday payout</h2><div class="sub">Tick once you've handed over the cash</div>
+<div style="height:14px"></div>
+<div class="child"><span class="avatar s44 a-lilac">M</span><div class="who"><div class="nm truncate">Maya</div><div class="caption">Weekly + quests · <span class="money">£4.20</span></div></div><button class="check" type="button" aria-label="Maya paid in cash" aria-pressed="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg></button></div>
+<div style="height:10px"></div>
+<div class="child"><span class="avatar s44 a-peach">L</span><div class="who"><div class="nm truncate">Leo</div><div class="caption">Weekly + quests · <span class="money">£2.10</span></div></div><button class="check off" type="button" aria-label="Leo paid in cash" aria-pressed="false"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg></button></div>
+<div style="height:10px"></div>
+<div class="saverow"><div class="t">Move £1.00 of Maya's to her Lego fund</div><input class="toggle" type="checkbox" checked aria-label="Move one pound of Maya's money to savings"></div>
+<div style="height:14px"></div>
+<button class="btn btn-primary" type="button">Mark as paid &amp; start the celebration</button>
+<div style="height:8px"></div>
+<div class="caption cap">Your children will see a payout celebration next time they open Nestling.</div>
+</div>
+<div class="home-indicator" aria-hidden="true" style="z-index:30;background:var(--paper)"><span class="home-pill"></span></div>
+</div></body></html>

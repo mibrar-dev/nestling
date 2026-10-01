@@ -1,0 +1,83 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=390, initial-scale=1">
+<title>Kid mode — Brilliant! · Nestling</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../components.css">
+<style>
+  html, body { width: 390px; height: 844px; margin: 0; overflow: hidden; }
+  .meadow { position: absolute; left: 0; bottom: 0; width: 390px; height: 136px; z-index: 0; pointer-events: none; }
+  .meadow .hill-back { fill: var(--kid-meadow); }
+  .meadow .hill-front { fill: color-mix(in srgb, var(--kid-meadow) 80%, var(--surface)); }
+  .meadow, .sparks, .confetti, .burst { position: absolute; z-index: 0; pointer-events: none; }
+  .screen.kid > .scroll, .screen.kid > .kid-bar, .screen.kid > .k3-dock, .screen.kid > .home-indicator { position: relative; z-index: 1; }
+  .lock-btn.lg, .nav-back.lg { width: 56px; height: 56px; min-width: 56px; min-height: 56px; border-radius: 18px; }
+  .kid-bar { background: var(--surface); border-top: 3px solid var(--ink); padding: 12px 20px 10px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
+  .kcap { font-family: var(--font-display); font-weight: 700; font-size: 15px; line-height: 20px; color: var(--ink-2); }
+  .kchip { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px; background: var(--leaf-tint); color: var(--leaf-ink); font-family: var(--font-display); font-weight: 800; font-size: 15px; line-height: 1; white-space: nowrap; }
+  .grow { flex: 1; min-height: 0; }
+
+  .k5-top { display: flex; justify-content: flex-end; align-items: center; padding: 0 20px 2px; flex-shrink: 0; }
+  .k5-stage { position: relative; display: flex; flex-direction: column; align-items: center; }
+  .burst { position: absolute; left: 50%; top: 0; transform: translateX(-50%); width: 320px; height: 200px; pointer-events: none; }
+  .k5-pip { position: relative; z-index: 1; width: 218px; height: 218px; margin: 14px 0 2px; transform: rotate(-8deg); }
+  .k5-cheer { display: flex; justify-content: center; }
+  .k5-mid { text-align: center; }
+  .k5-hero { text-align: center; margin-top: 4px; }
+  .k5-sub { text-align: center; }
+  .k5-card { background: var(--lilac-tint); border: 3px solid var(--ink); border-radius: var(--r-l); box-shadow: var(--sh-kid); padding: 14px 16px; }
+  .k5-card-top { display: flex; align-items: center; gap: 8px; }
+  .k5-card-top img { width: 32px; height: 32px; flex-shrink: 0; }
+  .k5-card-top strong { font-family: var(--font-display); font-weight: 900; font-size: 18px; line-height: 24px; min-width: 0; }
+  .k5-count { display: flex; justify-content: space-between; margin-top: 10px; margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<div class="screen kid">
+<svg class="meadow" viewBox="0 0 390 136" preserveAspectRatio="none" aria-hidden="true"><path class="hill-back" d="M0 56C58 28 122 32 186 22 252 12 314 28 390 10v126H0Z"/><path class="hill-front" d="M0 92c74-22 138-10 214-22 60-10 112 4 176-14v80H0Z"/></svg>
+<div class="status-bar"><span class="status-time">9:41</span><span class="status-icons"><svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor" aria-hidden="true"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4.5" width="3" height="7.5" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1" opacity=".35"/></svg><svg width="16" height="12" viewBox="0 0 16 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M1.5 4.5a10 10 0 0 1 13 0"/><path d="M4 7.2a5.6 5.6 0 0 1 8 0"/><circle cx="8" cy="10" r="1.2" fill="currentColor" stroke="none"/></svg><svg width="25" height="12" viewBox="0 0 25 12" fill="none" aria-hidden="true"><rect x=".5" y=".5" width="20" height="11" rx="3.5" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="15" height="8" rx="2" fill="currentColor"/><path d="M23 4v4a2.2 2.2 0 0 0 0-4z" fill="currentColor" opacity=".4"/></svg></span></div>
+  <div class="k5-top"><button class="lock-btn lg" type="button" aria-label="Grown-ups"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></button></div>
+  <div class="scroll">
+    <div class="k5-stage">
+      <svg class="burst" viewBox="0 0 320 200" aria-hidden="true">
+  <g stroke="#1E1B3A" stroke-width="3">
+    <circle cx="30" cy="42" r="17" fill="#F4B400"/>
+    <circle cx="292" cy="36" r="14" fill="#F4B400"/>
+    <circle cx="16" cy="112" r="12" fill="#F4B400"/>
+    <circle cx="304" cy="120" r="16" fill="#F4B400"/>
+    <circle cx="56" cy="180" r="12" fill="#F4B400"/>
+    <circle cx="268" cy="182" r="14" fill="#F4B400"/>
+    <circle cx="160" cy="12" r="10" fill="#F4B400"/>
+    <circle cx="112" cy="26" r="8" fill="#F4B400"/>
+    <circle cx="212" cy="20" r="8" fill="#F4B400"/>
+  </g>
+  <g stroke="#1E1B3A" stroke-width="3" stroke-linejoin="round">
+    <path d="M78 14 82 24 92 28 82 32 78 42 74 32 64 28 74 24Z" fill="#7C6CF2"/>
+    <path d="M244 156 248 166 258 170 248 174 244 184 240 174 230 170 240 166Z" fill="#1F9D63"/>
+    <path d="M14 70 18 78 26 82 18 86 14 94 10 86 2 82 10 78Z" fill="#FF8A5B"/>
+  </g>
+</svg>
+      <img class="k5-pip" src="../assets/pip-stage-3.svg" alt="Pip jumping for joy">
+    </div>
+    <h1 class="kid-hero k5-hero">Brilliant, Maya!</h1>
+    <div class="k5-mid"><span class="coin-pill big"><img src="../assets/coin.svg" alt="">+15 coins</span></div>
+    <p class="kid-body k5-sub">Mum will give it a thumbs-up soon.</p>
+    <div class="k5-cheer"><span class="speech">Pip is doing a happy dance!</span></div>
+    <div class="k5-card">
+      <div class="k5-card-top">
+        <img src="../assets/pip-stage-3.svg" alt="">
+        <strong>Pip needs 75 more coins to grow</strong>
+      </div>
+      <div class="k5-count">
+        <span class="kcap">175 of 250 coins</span>
+        <span class="kcap">Next: Songbird</span>
+      </div>
+      <div class="progress kid" role="img" aria-label="Pip is 70% of the way to Songbird"><span style="width:70%"></span></div>
+    </div>
+  </div>
+  <div class="kid-bar">
+    <button class="btn-kid leaf" type="button">Yay! Back home</button>
+  </div>
+  <div class="home-indicator" aria-hidden="true"><span class="home-pill"></span></div>
+</div>
+</body>
+</html>

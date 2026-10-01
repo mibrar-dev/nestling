@@ -1,0 +1,141 @@
+<title>Kid mode — My badges · Nestling</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../components.css">
+<style>
+  html, body { width: 390px; height: 844px; margin: 0; overflow: hidden; }
+  .meadow { position: absolute; left: 0; bottom: 0; width: 390px; height: 136px; z-index: 0; pointer-events: none; }
+  .meadow .hill-back { fill: var(--kid-meadow); }
+  .meadow .hill-front { fill: color-mix(in srgb, var(--kid-meadow) 80%, var(--surface)); }
+  .meadow, .sparks, .confetti, .burst { position: absolute; z-index: 0; pointer-events: none; }
+  .screen.kid > .scroll, .screen.kid > .kid-bar, .screen.kid > .k3-dock, .screen.kid > .home-indicator { position: relative; z-index: 1; }
+  .lock-btn.lg, .nav-back.lg { width: 56px; height: 56px; min-width: 56px; min-height: 56px; border-radius: 18px; }
+  .kid-bar { background: var(--surface); border-top: 3px solid var(--ink); padding: 12px 20px 10px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
+  .kcap { font-family: var(--font-display); font-weight: 700; font-size: 15px; line-height: 20px; color: var(--ink-2); }
+  .krow-top { display: flex; align-items: center; gap: 10px; padding: 0 20px 4px; flex-shrink: 0; }
+  .krow-top .lock-btn { margin-left: auto; }
+
+  .k11-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .k11-b { background: var(--surface); border: 3px solid var(--ink); border-radius: var(--r-l); box-shadow: var(--sh-kid); padding: 10px 4px; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; font-family: var(--font-display); }
+  .k11-b.todo { background: var(--surface); border-style: dashed; border-color: var(--ink-2); box-shadow: none; }
+  .k11-medal { width: 60px; height: 60px; }
+  .k11-n { font-weight: 800; font-size: 15px; line-height: 19px; text-align: center; min-height: 38px; display: flex; align-items: center; justify-content: center; }
+  .k11-s { font-weight: 800; font-size: 14px; line-height: 18px; }
+  .k11-b .k11-s { color: var(--leaf-ink); }
+  .k11-b.todo .k11-s { color: var(--ink-2); }
+  .k11-week { background: var(--surface); border: 3px solid var(--ink); border-radius: var(--r-l); box-shadow: var(--sh-kid); padding: 14px 12px; }
+  .k11-days { display: flex; gap: 4px; }
+  .k11-day { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .k11-dot { width: 38px; height: 38px; border-radius: 999px; border: 3px solid var(--ink); background: var(--surface); color: var(--ink-2); display: flex; align-items: center; justify-content: center; }
+  .k11-day.on .k11-dot { background: var(--leaf); color: var(--on-leaf); }
+  .k11-day span { font-weight: 800; font-size: 14px; line-height: 18px; }
+  .k11-why { text-align: center; margin-top: 12px; }
+</style>
+</head>
+<body>
+<div class="screen kid">
+<svg class="meadow" viewBox="0 0 390 136" preserveAspectRatio="none" aria-hidden="true"><path class="hill-back" d="M0 56C58 28 122 32 186 22 252 12 314 28 390 10v126H0Z"/><path class="hill-front" d="M0 92c74-22 138-10 214-22 60-10 112 4 176-14v80H0Z"/></svg>
+<div class="status-bar"><span class="status-time">9:41</span><span class="status-icons"><svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor" aria-hidden="true"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4.5" width="3" height="7.5" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1" opacity=".35"/></svg><svg width="16" height="12" viewBox="0 0 16 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M1.5 4.5a10 10 0 0 1 13 0"/><path d="M4 7.2a5.6 5.6 0 0 1 8 0"/><circle cx="8" cy="10" r="1.2" fill="currentColor" stroke="none"/></svg><svg width="25" height="12" viewBox="0 0 25 12" fill="none" aria-hidden="true"><rect x=".5" y=".5" width="20" height="11" rx="3.5" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="15" height="8" rx="2" fill="currentColor"/><path d="M23 4v4a2.2 2.2 0 0 0 0-4z" fill="currentColor" opacity=".4"/></svg></span></div>
+  <div class="krow-top"><button class="nav-back lg" type="button" aria-label="Back"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5 8 12l7 7"/></svg></button><button class="lock-btn lg" type="button" aria-label="Grown-ups"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></button></div>
+  <div class="scroll">
+    <h1 class="kid-title">My badges</h1>
+    <p class="kcap">Four shiny ones already. Pip is very impressed.</p>
+    <div class="k11-grid">
+      <button class="k11-b" type="button">
+  <svg class="k11-medal" viewBox="0 0 64 64" aria-hidden="true">
+  <path d="M22 5h20l-5 21H27Z" fill="#F4B400" stroke="#1E1B3A" stroke-width="3" stroke-linejoin="round" />
+  <circle cx="32" cy="39" r="20" fill="#FFF4D1" stroke="#1E1B3A" stroke-width="3" />
+  <g fill="none" stroke="#1E1B3A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m32 27 3.6 7.4 8.1 1.2-5.9 5.7 1.4 8.1L32 45.7 24.8 49.4l1.4-8.1-5.9-5.7 8.1-1.2Z"/></g>
+</svg>
+  <span class="k11-n">First quest</span>
+  <span class="k11-s">Got it!</span>
+</button>
+      <button class="k11-b" type="button">
+  <svg class="k11-medal" viewBox="0 0 64 64" aria-hidden="true">
+  <path d="M22 5h20l-5 21H27Z" fill="#7C6CF2" stroke="#1E1B3A" stroke-width="3" stroke-linejoin="round" />
+  <circle cx="32" cy="39" r="20" fill="#EEEBFF" stroke="#1E1B3A" stroke-width="3" />
+  <g fill="none" stroke="#1E1B3A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 30v18M20 40h24v8M44 48v-6a4 4 0 0 0-4-4h-8v4"/><path d="M25 36h6"/></g>
+</svg>
+  <span class="k11-n">Bed maker &times;7</span>
+  <span class="k11-s">Got it!</span>
+</button>
+      <button class="k11-b" type="button">
+  <svg class="k11-medal" viewBox="0 0 64 64" aria-hidden="true">
+  <path d="M22 5h20l-5 21H27Z" fill="#FF8A5B" stroke="#1E1B3A" stroke-width="3" stroke-linejoin="round" />
+  <circle cx="32" cy="39" r="20" fill="#FFEDE4" stroke="#1E1B3A" stroke-width="3" />
+  <g fill="none" stroke="#1E1B3A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M32 48 22 38.4a7.2 7.2 0 0 1 10.2-10.2L32 28l-.2-.2a7.2 7.2 0 0 1 10.2 10.2Z"/></g>
+</svg>
+  <span class="k11-n">Kind helper</span>
+  <span class="k11-s">Got it!</span>
+</button>
+      <button class="k11-b" type="button">
+  <svg class="k11-medal" viewBox="0 0 64 64" aria-hidden="true">
+  <path d="M22 5h20l-5 21H27Z" fill="#3D7FF0" stroke="#1E1B3A" stroke-width="3" stroke-linejoin="round" />
+  <circle cx="32" cy="39" r="20" fill="#E6EFFE" stroke="#1E1B3A" stroke-width="3" />
+  <g fill="none" stroke="#1E1B3A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M32 34v14M20 27.6A3.6 3.6 0 0 1 23.6 24H31v24h-7.4A3.6 3.6 0 0 0 20 51.6Z"/><path d="M44 27.6A3.6 3.6 0 0 0 40.4 24H33v24h7.4a3.6 3.6 0 0 1 3.6 3.6Z"/></g>
+</svg>
+  <span class="k11-n">Bookworm</span>
+  <span class="k11-s">Got it!</span>
+</button>
+      <button class="k11-b todo" type="button">
+  <svg class="k11-medal" viewBox="0 0 64 64" aria-hidden="true">
+  <path d="M22 5h20l-5 21H27Z" fill="#6E6A8A" stroke="#1E1B3A" stroke-width="3" stroke-linejoin="round" opacity=".4"/>
+  <circle cx="32" cy="39" r="20" fill="#F3EEE5" stroke="#1E1B3A" stroke-width="3" stroke="#6E6A8A" stroke-dasharray="5 4"/>
+  <g fill="none" stroke="#6E6A8A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 28h22M26 28v-4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v4"/><path d="M23 28v22a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3V28"/><path d="M29 35v11M35 35v11"/></g>
+</svg>
+  <span class="k11-n">Bins out</span>
+  <span class="k11-s">Keep going!</span>
+</button>
+      <button class="k11-b todo" type="button">
+  <svg class="k11-medal" viewBox="0 0 64 64" aria-hidden="true">
+  <path d="M22 5h20l-5 21H27Z" fill="#6E6A8A" stroke="#1E1B3A" stroke-width="3" stroke-linejoin="round" opacity=".4"/>
+  <circle cx="32" cy="39" r="20" fill="#F3EEE5" stroke="#1E1B3A" stroke-width="3" stroke="#6E6A8A" stroke-dasharray="5 4"/>
+  <g fill="none" stroke="#6E6A8A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="42" r="6"/><circle cx="24" cy="33" r="3.4"/><circle cx="31" cy="29" r="3.4"/><circle cx="39" cy="33" r="3.4"/></g>
+</svg>
+  <span class="k11-n">Biscuit sitter</span>
+  <span class="k11-s">Keep going!</span>
+</button>
+      <button class="k11-b todo" type="button">
+  <svg class="k11-medal" viewBox="0 0 64 64" aria-hidden="true">
+  <path d="M22 5h20l-5 21H27Z" fill="#6E6A8A" stroke="#1E1B3A" stroke-width="3" stroke-linejoin="round" opacity=".4"/>
+  <circle cx="32" cy="39" r="20" fill="#F3EEE5" stroke="#1E1B3A" stroke-width="3" stroke="#6E6A8A" stroke-dasharray="5 4"/>
+  <g fill="none" stroke="#6E6A8A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M41 33H23l1.6 8.5A2.4 2.4 0 0 0 27 43.4h10a2.4 2.4 0 0 0 2.4-1.9Z"/><path d="M27 33v-3a5 5 0 0 1 10 0v3"/></g>
+</svg>
+  <span class="k11-n">Tidy hero</span>
+  <span class="k11-s">Keep going!</span>
+</button>
+      <button class="k11-b todo" type="button">
+  <svg class="k11-medal" viewBox="0 0 64 64" aria-hidden="true">
+  <path d="M22 5h20l-5 21H27Z" fill="#6E6A8A" stroke="#1E1B3A" stroke-width="3" stroke-linejoin="round" opacity=".4"/>
+  <circle cx="32" cy="39" r="20" fill="#F3EEE5" stroke="#1E1B3A" stroke-width="3" stroke="#6E6A8A" stroke-dasharray="5 4"/>
+  <g fill="none" stroke="#6E6A8A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="38" r="7"/><path d="M32 24v5M32 47v5M20 38h-4M48 38h-4M23.4 29.4l-2.8-2.8M43.4 49.4l-2.8-2.8M40.6 29.4l2.8-2.8M20.6 49.4l2.8-2.8"/></g>
+</svg>
+  <span class="k11-n">Early bird</span>
+  <span class="k11-s">Keep going!</span>
+</button>
+      <button class="k11-b todo" type="button">
+  <svg class="k11-medal" viewBox="0 0 64 64" aria-hidden="true">
+  <path d="M22 5h20l-5 21H27Z" fill="#6E6A8A" stroke="#1E1B3A" stroke-width="3" stroke-linejoin="round" opacity=".4"/>
+  <circle cx="32" cy="39" r="20" fill="#F3EEE5" stroke="#1E1B3A" stroke-width="3" stroke="#6E6A8A" stroke-dasharray="5 4"/>
+  <g fill="none" stroke="#6E6A8A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M25 30h14l3 20a3 3 0 0 1-3 3.4H25a3 3 0 0 1-3-3.4Z"/><path d="M29 30V24a4 4 0 0 1 8 0v6M25 40h14"/></g>
+</svg>
+  <span class="k11-n">Plant waterer</span>
+  <span class="k11-s">Keep going!</span>
+</button>
+    </div>
+    <div class="k11-week">
+      <div class="k11-days">
+        <div class="k11-day on"><span class="k11-dot"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg></span><span>M</span></div>
+        <div class="k11-day on"><span class="k11-dot"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg></span><span>T</span></div>
+        <div class="k11-day on"><span class="k11-dot"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg></span><span>W</span></div>
+        <div class="k11-day on"><span class="k11-dot"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg></span><span>T</span></div>
+        <div class="k11-day"><span class="k11-dot"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/></svg></span><span>F</span></div>
+        <div class="k11-day"><span class="k11-dot"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/></svg></span><span>S</span></div>
+        <div class="k11-day"><span class="k11-dot"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/></svg></span><span>S</span></div>
+      </div>
+      <p class="kcap k11-why">4 happy days this week &mdash; Pip hasn&rsquo;t stopped singing.</p>
+    </div>
+  </div>
+  <div class="home-indicator" aria-hidden="true"><span class="home-pill"></span></div>
+</div>
+</body>
+</html>

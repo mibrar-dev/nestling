@@ -1,0 +1,31 @@
+<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><link rel="stylesheet" href="../../tokens.css"><style>
+*{margin:0;box-sizing:border-box}html,body{width:1320px;height:2868px;margin:0;overflow:hidden}
+body{font-family:var(--font-display),system-ui,sans-serif;background:#EEEBFF;color:var(--ink)}
+.canvas{width:1320px;height:2868px;position:relative;display:flex;flex-direction:column;align-items:center;padding:120px 60px 0;overflow:hidden;background:linear-gradient(180deg,#F2FAFF 0%,#EEEBFF 50%,#E2D8FF 100%)}
+.kicker{font-weight:900;font-size:32px;letter-spacing:.14em;color:#6A58E8}
+h1{font-weight:900;font-size:110px;line-height:1.05;text-align:center;letter-spacing:-.02em;margin-top:18px;max-width:880px;text-wrap:balance}
+.sub{font-weight:700;font-size:40px;color:#4A4668;margin-top:14px}
+.duo{position:relative;margin-top:60px;width:1200px;height:2000px}
+.phone{background:#0D0C14;border-radius:72px;padding:14px;position:absolute;box-shadow:0 50px 110px rgba(90,70,200,.35)}
+.phone.back{left:40px;top:40px;transform:rotate(-7deg)}
+.phone.front{right:40px;top:120px;transform:rotate(5deg);box-shadow:0 60px 130px rgba(30,27,58,.45)}
+.pscreen{border-radius:56px;overflow:hidden;background:#fff;position:relative}
+.pscreen.b{width:560px;height:1212px}.pscreen.f{width:800px;height:1731px}
+.pscreen iframe{border:0;display:block;width:390px;height:844px;transform-origin:top left}
+.pscreen.b iframe{transform:scale(1.4359)}.pscreen.f iframe{transform:scale(2.05128)}
+.cam{position:absolute;top:26px;left:50%;transform:translateX(-50%);width:96px;height:26px;background:#0D0C14;border-radius:999px;z-index:6}
+.tag{position:absolute;z-index:8;background:var(--ink);color:#fff;font-weight:900;font-size:30px;padding:14px 28px;border-radius:999px;box-shadow:0 16px 40px rgba(0,0,0,.25)}
+.conf{position:absolute;z-index:8;background:#fff;border-radius:26px;padding:20px 28px;font-weight:900;font-size:32px;box-shadow:0 20px 60px rgba(90,70,200,.25);display:flex;gap:12px;align-items:center;white-space:nowrap}
+.conf img{width:56px;height:56px}
+</style></head><body><div class="canvas">
+<div class="kicker">SATURDAY RITUAL</div>
+<h1>Payout day, made fun</h1>
+<div class="sub">Celebrate together, keep saving</div>
+<div class="duo">
+<div class="phone back"><div class="cam"></div><div class="pscreen b"><iframe src="../../screens/P13-payout.html" width="390" height="844" scrolling="no"></iframe></div></div>
+<div class="phone front"><div class="cam"></div><div class="pscreen f"><iframe src="../../screens/K10-payout-day.html" width="390" height="844" scrolling="no"></iframe></div></div>
+<div class="tag" style="left:20px;top:0;transform:rotate(-4deg)">Parent view</div>
+<div class="tag" style="right:30px;top:70px;background:#17804F;transform:rotate(3deg)">Child view</div>
+<div class="conf" style="left:50%;transform:translateX(-50%) rotate(-2deg);bottom:10px"><img src="../../assets/coin.svg" alt="">Thanks Mum! · £1 to Lego fund</div>
+</div>
+</div></body></html>

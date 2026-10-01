@@ -1,0 +1,15 @@
+{
+  "name": "nestling-lottie-tools",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "description": "Dev-only generator + headless previewer for Nestling's Lottie one-shots. Nothing here ships with the app.",
+  "scripts": {
+    "build": "node build.js",
+    "preview": "node preview.js"
+  },
+  "dependencies": {
+    "lottie-web": "^5.12.2",
+    "puppeteer-core": "^23.11.1"
+  }
+}

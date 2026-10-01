@@ -1,0 +1,8 @@
+STORE QA round 1 — the set is cohesive and on-brand; fix these via write_file, verify with get_file. (I rendered all 17 files at exact size.)
+ALL iOS slides [major] Phones are too small (~40% of canvas height) leaving large empty bottoms on 02, 04, 05, 06, 08. Scale devices so the primary phone is 62–70% of canvas height (≈1800–2000px tall on 1320×2868); allow bleed off the bottom edge on at least 2 slides; keep headline zone ~top 22%.
+ALL [major] Headline orphans: "Set a quest in / seconds", "Pip grows as they / help", "Approve with one / tap". Add `text-wrap: balance` to every headline and tune max-width so lines are even (2 lines max).
+ALL [minor] Remove pager dots and "02 / 08" counters and footers — the stores show their own position UI; keep the small eyebrow labels ("FOR YOUR FAMILY · 02" → drop the number, keep "FOR YOUR FAMILY").
+iOS 04 [bug] Stray "£ Sat ✓" chip floats alone in the empty lower area — remove it or anchor it to the phone edge as a callout.
+Play 06 [bug] The "Film night · 80" chip covers the "Reward shop" title inside the phone — move it off the screen area (overlapping the frame edge only).
+Play feature-graphic [major] Broken composition: Pip floats far above the nest (not perched), its crest is cut at the top edge, and the "Nestling" wordmark is cut at the bottom. Redo: left half = nest with Pip stage 4 sitting IN it (Pip's feet at nest rim), whole group vertically centred with ≥40px top/bottom margin; right half = app icon + "Nestling" wordmark above the headline "Chores that feel like a game." (2 lines, balanced) + subline "Family quests & pocket money". Nothing may touch the canvas edges.
+Reply: changelog per file.

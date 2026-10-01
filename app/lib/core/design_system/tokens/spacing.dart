@@ -1,0 +1,62 @@
+/// 4pt spacing scale (`--s1..--s10`) plus screen side padding.
+///
+/// Mirror of `tokens.css`: `--s1:4 --s2:8 --s3:12 --s4:16 --s5:20 --s6:24
+/// --s8:32 --s10:40`, `--pad-side:20`. All values are logical px.
+abstract final class NestSpacing {
+  const new _();
+
+  static const double s1 = 4;
+  static const double s2 = 8;
+  static const double s3 = 12;
+  static const double s4 = 16;
+  static const double s5 = 20;
+  static const double s6 = 24;
+  static const double s8 = 32;
+  static const double s10 = 40;
+
+  /// Screen side padding, parent and kid alike (`--pad-side`).
+  static const double padSide = 20;
+
+  /// Sub-scale gaps used verbatim by screens/components (no magic numbers).
+  /// Covers every gap/padding below the 4pt grid used in the 6 reference
+  /// screens: meta `margin-top:2`, pager dot half-gap `3`, P08 coin-inline
+  /// paddings `5`/`9`, care-grid `gap:10`, P08 kid-card art margins `6`,
+  /// hero/button paddings `14`.
+  static const double gap2 = 2;
+  static const double gap3 = 3;
+  static const double gap5 = 5;
+  static const double gap6 = 6;
+  static const double gap7 = 7;
+  static const double gap9 = 9;
+  static const double gap10 = 10;
+  static const double gap14 = 14;
+}
+
+/// Device metrics the designs were built at (iPhone 15/16, 390x844).
+///
+/// Use for design QA only — never hard-code layout widths from these except
+/// the chrome heights, which are fixed by the spec.
+abstract final class NestDevice {
+  const new _();
+
+  static const double width = 390;
+  static const double height = 844;
+
+  /// `--status-h`: status bar height.
+  static const double statusH = 47;
+
+  /// `--home-h`: home indicator reserve.
+  static const double homeH = 34;
+
+  /// `--tab-h`: tab bar height including the home reserve.
+  static const double tabH = 84;
+
+  /// Parent-mode minimum tap target edge.
+  static const double tapParent = 44;
+
+  /// Kid-mode minimum tap target edge.
+  static const double tapKid = 56;
+
+  /// Parent quest-check ring visual (28px; 44px hit area via padding).
+  static const double checkRing = 28;
+}

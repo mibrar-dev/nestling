@@ -1,0 +1,442 @@
+{
+  "svgBytesBefore": 38777,
+  "svgBytesAfter": 35284,
+  "totalPackBytes": 74061,
+  "files": [
+    {
+      "rel": "assets/brand/app_icon.svg",
+      "before": 1325,
+      "after": 1104
+    },
+    {
+      "rel": "assets/brand/app_icon_background.svg",
+      "before": 227,
+      "after": 156
+    },
+    {
+      "rel": "assets/brand/app_icon_foreground.svg",
+      "before": 1308,
+      "after": 1069
+    },
+    {
+      "rel": "assets/icons/ic_arrow_right.svg",
+      "before": 209,
+      "after": 197
+    },
+    {
+      "rel": "assets/icons/ic_back.svg",
+      "before": 190,
+      "after": 189
+    },
+    {
+      "rel": "assets/icons/ic_backspace.svg",
+      "before": 264,
+      "after": 246
+    },
+    {
+      "rel": "assets/icons/ic_bag.svg",
+      "before": 268,
+      "after": 264
+    },
+    {
+      "rel": "assets/icons/ic_ball.svg",
+      "before": 248,
+      "after": 240
+    },
+    {
+      "rel": "assets/icons/ic_basket.svg",
+      "before": 249,
+      "after": 231
+    },
+    {
+      "rel": "assets/icons/ic_bed.svg",
+      "before": 276,
+      "after": 264
+    },
+    {
+      "rel": "assets/icons/ic_bed_sit.svg",
+      "before": 269,
+      "after": 244
+    },
+    {
+      "rel": "assets/icons/ic_bin.svg",
+      "before": 234,
+      "after": 233
+    },
+    {
+      "rel": "assets/icons/ic_book.svg",
+      "before": 241,
+      "after": 241
+    },
+    {
+      "rel": "assets/icons/ic_book_open.svg",
+      "before": 291,
+      "after": 269
+    },
+    {
+      "rel": "assets/icons/ic_bubbles.svg",
+      "before": 265,
+      "after": 265
+    },
+    {
+      "rel": "assets/icons/ic_cafe.svg",
+      "before": 236,
+      "after": 222
+    },
+    {
+      "rel": "assets/icons/ic_check.svg",
+      "before": 198,
+      "after": 197
+    },
+    {
+      "rel": "assets/icons/ic_chef_hat.svg",
+      "before": 305,
+      "after": 302
+    },
+    {
+      "rel": "assets/icons/ic_circle.svg",
+      "before": 195,
+      "after": 195
+    },
+    {
+      "rel": "assets/icons/ic_clock.svg",
+      "before": 218,
+      "after": 218
+    },
+    {
+      "rel": "assets/icons/ic_close.svg",
+      "before": 196,
+      "after": 196
+    },
+    {
+      "rel": "assets/icons/ic_coin_sparkle.svg",
+      "before": 268,
+      "after": 266
+    },
+    {
+      "rel": "assets/icons/ic_crown.svg",
+      "before": 234,
+      "after": 222
+    },
+    {
+      "rel": "assets/icons/ic_dishwasher.svg",
+      "before": 255,
+      "after": 239
+    },
+    {
+      "rel": "assets/icons/ic_edit.svg",
+      "before": 227,
+      "after": 222
+    },
+    {
+      "rel": "assets/icons/ic_eye.svg",
+      "before": 274,
+      "after": 273
+    },
+    {
+      "rel": "assets/icons/ic_family.svg",
+      "before": 296,
+      "after": 284
+    },
+    {
+      "rel": "assets/icons/ic_feed_bowl.svg",
+      "before": 250,
+      "after": 223
+    },
+    {
+      "rel": "assets/icons/ic_film.svg",
+      "before": 241,
+      "after": 239
+    },
+    {
+      "rel": "assets/icons/ic_film_strip.svg",
+      "before": 284,
+      "after": 280
+    },
+    {
+      "rel": "assets/icons/ic_gift.svg",
+      "before": 319,
+      "after": 306
+    },
+    {
+      "rel": "assets/icons/ic_heart.svg",
+      "before": 256,
+      "after": 252
+    },
+    {
+      "rel": "assets/icons/ic_heart_outline.svg",
+      "before": 248,
+      "after": 244
+    },
+    {
+      "rel": "assets/icons/ic_home.svg",
+      "before": 222,
+      "after": 222
+    },
+    {
+      "rel": "assets/icons/ic_hoover.svg",
+      "before": 289,
+      "after": 275
+    },
+    {
+      "rel": "assets/icons/ic_jar.svg",
+      "before": 301,
+      "after": 277
+    },
+    {
+      "rel": "assets/icons/ic_lamp.svg",
+      "before": 293,
+      "after": 279
+    },
+    {
+      "rel": "assets/icons/ic_lock.svg",
+      "before": 249,
+      "after": 249
+    },
+    {
+      "rel": "assets/icons/ic_money.svg",
+      "before": 240,
+      "after": 240
+    },
+    {
+      "rel": "assets/icons/ic_moon.svg",
+      "before": 220,
+      "after": 219
+    },
+    {
+      "rel": "assets/icons/ic_no_ads.svg",
+      "before": 227,
+      "after": 223
+    },
+    {
+      "rel": "assets/icons/ic_paw.svg",
+      "before": 331,
+      "after": 331
+    },
+    {
+      "rel": "assets/icons/ic_person.svg",
+      "before": 236,
+      "after": 236
+    },
+    {
+      "rel": "assets/icons/ic_phone.svg",
+      "before": 237,
+      "after": 237
+    },
+    {
+      "rel": "assets/icons/ic_pin_uk.svg",
+      "before": 258,
+      "after": 257
+    },
+    {
+      "rel": "assets/icons/ic_pip_face.svg",
+      "before": 382,
+      "after": 315
+    },
+    {
+      "rel": "assets/icons/ic_pizza.svg",
+      "before": 334,
+      "after": 334
+    },
+    {
+      "rel": "assets/icons/ic_plus.svg",
+      "before": 192,
+      "after": 192
+    },
+    {
+      "rel": "assets/icons/ic_pound_coin.svg",
+      "before": 235,
+      "after": 231
+    },
+    {
+      "rel": "assets/icons/ic_quest_card.svg",
+      "before": 299,
+      "after": 298
+    },
+    {
+      "rel": "assets/icons/ic_quests.svg",
+      "before": 232,
+      "after": 230
+    },
+    {
+      "rel": "assets/icons/ic_ribbon.svg",
+      "before": 226,
+      "after": 214
+    },
+    {
+      "rel": "assets/icons/ic_saved.svg",
+      "before": 248,
+      "after": 245
+    },
+    {
+      "rel": "assets/icons/ic_scarf.svg",
+      "before": 242,
+      "after": 217
+    },
+    {
+      "rel": "assets/icons/ic_school_bag.svg",
+      "before": 245,
+      "after": 245
+    },
+    {
+      "rel": "assets/icons/ic_screen_time.svg",
+      "before": 240,
+      "after": 239
+    },
+    {
+      "rel": "assets/icons/ic_search.svg",
+      "before": 221,
+      "after": 221
+    },
+    {
+      "rel": "assets/icons/ic_shield_check.svg",
+      "before": 270,
+      "after": 265
+    },
+    {
+      "rel": "assets/icons/ic_sleep.svg",
+      "before": 276,
+      "after": 252
+    },
+    {
+      "rel": "assets/icons/ic_sprout.svg",
+      "before": 234,
+      "after": 230
+    },
+    {
+      "rel": "assets/icons/ic_sun_hat.svg",
+      "before": 231,
+      "after": 218
+    },
+    {
+      "rel": "assets/icons/ic_table.svg",
+      "before": 211,
+      "after": 209
+    },
+    {
+      "rel": "assets/icons/ic_target.svg",
+      "before": 230,
+      "after": 230
+    },
+    {
+      "rel": "assets/icons/ic_washing_machine.svg",
+      "before": 214,
+      "after": 214
+    },
+    {
+      "rel": "assets/icons/ic_wellies.svg",
+      "before": 267,
+      "after": 251
+    },
+    {
+      "rel": "assets/illustrations/badge_bed_maker.svg",
+      "before": 469,
+      "after": 408
+    },
+    {
+      "rel": "assets/illustrations/badge_bins_out.svg",
+      "before": 605,
+      "after": 503
+    },
+    {
+      "rel": "assets/illustrations/badge_biscuit_sitter.svg",
+      "before": 588,
+      "after": 518
+    },
+    {
+      "rel": "assets/illustrations/badge_bookworm.svg",
+      "before": 549,
+      "after": 490
+    },
+    {
+      "rel": "assets/illustrations/badge_early_bird.svg",
+      "before": 609,
+      "after": 532
+    },
+    {
+      "rel": "assets/illustrations/badge_first_quest.svg",
+      "before": 482,
+      "after": 436
+    },
+    {
+      "rel": "assets/illustrations/badge_kind_helper.svg",
+      "before": 477,
+      "after": 428
+    },
+    {
+      "rel": "assets/illustrations/badge_plant_waterer.svg",
+      "before": 566,
+      "after": 496
+    },
+    {
+      "rel": "assets/illustrations/badge_tidy_hero.svg",
+      "before": 573,
+      "after": 484
+    },
+    {
+      "rel": "assets/illustrations/coin.svg",
+      "before": 1034,
+      "after": 996
+    },
+    {
+      "rel": "assets/illustrations/coins_burst.svg",
+      "before": 896,
+      "after": 687
+    },
+    {
+      "rel": "assets/illustrations/confetti.svg",
+      "before": 1334,
+      "after": 1235
+    },
+    {
+      "rel": "assets/illustrations/jar_coins.svg",
+      "before": 1363,
+      "after": 1142
+    },
+    {
+      "rel": "assets/illustrations/jar_coins_rain.svg",
+      "before": 2020,
+      "after": 1661
+    },
+    {
+      "rel": "assets/illustrations/meadow_hill.svg",
+      "before": 277,
+      "after": 223
+    },
+    {
+      "rel": "assets/illustrations/nest.svg",
+      "before": 831,
+      "after": 718
+    },
+    {
+      "rel": "assets/illustrations/pip_stage_1.svg",
+      "before": 1081,
+      "after": 1025
+    },
+    {
+      "rel": "assets/illustrations/pip_stage_2.svg",
+      "before": 1373,
+      "after": 1271
+    },
+    {
+      "rel": "assets/illustrations/pip_stage_3.svg",
+      "before": 1501,
+      "after": 1302
+    },
+    {
+      "rel": "assets/illustrations/pip_stage_4.svg",
+      "before": 2410,
+      "after": 2192
+    },
+    {
+      "rel": "assets/illustrations/privacy_shield.svg",
+      "before": 542,
+      "after": 450
+    },
+    {
+      "rel": "assets/illustrations/sparkles.svg",
+      "before": 701,
+      "after": 600
+    }
+  ]
+}

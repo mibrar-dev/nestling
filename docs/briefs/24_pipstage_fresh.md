@@ -1,0 +1,10 @@
+ROLE: Rive + Flutter engineer (fresh session). Working dir = Nestling repo root. Read first: docs/animation/RIVE_GUIDE.md (contract + CLI traps), tools/rive/ (Rive CLI 1.2.0 at tools/rive/bin/rive; RML project tools/rive/pip/, generator tools/rive/gen_pip.py, helper tools/rive/shot_pipstage.sh), app/lib/core/design_system/motion/pip_rive.dart (PipRive, PipJar, PipInNest), app/lib/core/design_system/components/nest_pet_stage.dart.
+GOAL: Pip must stand IN the nest on the kid home (target: design/screens/light/K03-kid-home.png — READ it).
+CURRENT STATE (READ design/qa/sim/fix9/light_25_screens-k03.png): the nest BACK half renders on top of Pip's head like a hat and the FRONT rim floats below Pip's feet. A previous agent started an artboard "PipStage" (nest back → Pip → nest front rim) but: its per-stage screenshots are all identical (stage switching broken), and the two nest halves don't share one position.
+DO (small steps, verify each):
+1. In the generator/RML: ONE nest geometry (same x, y, scale) used twice — back layer clipped to the top half, front-rim layer clipped to the bottom ~45%; draw order: ground shadow → nest back → Pip → nest front. Pip's feet at ~58% of the nest's height; artboard 350×260, nest ≈ 200 wide, Pip ≈ 130 tall. Stage 1–4 selection must actually switch the visible Pip (verify the 4 screenshots DIFFER).
+2. Build: `tools/rive/bin/rive tools/rive/pip --once` (or the existing script), then `rive --verify` and `rive inspect` → 0 problems; screenshot PipStage for stages 1–4 to design/animations/rive/v3/ and READ them.
+3. Flutter: NestPetStage uses PipInNest (Rive) and the SVG fallback uses the same geometry (Stack: nest top-half clip, pip svg, nest bottom-half clip).
+4. Device check: `bash tools/sim_shots.sh pip1` → READ design/qa/sim/pip1/light_25_screens-k03.png and dark_25_screens-k03.png; iterate (pip2, pip3) until Pip stands in the nest.
+5. In app/: `flutter analyze` (No issues found!), `flutter test` (all pass). Do NOT run flutter clean.
+Keep your replies short; the final reply = harness label + PNGs checked + pip.riv size.

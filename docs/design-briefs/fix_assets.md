@@ -1,0 +1,5 @@
+ASSET QA round 1 — excellent pack (63 icons, 22 illustrations, all currentColor, no flutter_svg-unsafe features). Fixes via write_file:
+1. [major] flutter/assets/brand/app_icon.svg must be a FULL-BLEED square (no rounded corners, no outer stroke, no transparency) — iOS and Android apply their own masks; baked-in rounded corners produce a double-rounded, outlined icon. Keep Pip head centred at ~62% of the canvas, background #17804F edge to edge.
+2. [minor] Check icon names match their drawings: ic_ball currently draws a segmented circle/clock-like glyph — rename to what it depicts (or redraw as a ball); ic_dot is an empty circle → rename ic_circle; update manifest.json and nestling_assets.dart accordingly.
+3. [add] In nestling_assets.dart add `NestlingImages` constants for every raster the orchestrator generates (assets/images/<name>.webp for: pip_stage_1..4, nest, coin, jar_coins, jar_coins_rain, coins_burst, confetti, sparkles, meadow_hill, privacy_shield, badge_* ×9) and a `static const List<String> precache = [...]` of the Pip stages + nest + coin for precacheImage at startup.
+Reply: changelog.

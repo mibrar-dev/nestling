@@ -1,0 +1,59 @@
+# Nestling — drop-in pubspec.yaml fragment
+#
+# Merge the three top-level blocks below into your app's pubspec.yaml.
+# The assets/ paths are relative to the Flutter project root, so copy the whole
+# flutter/assets/ tree there first (see flutter/README.md).
+#
+# flutter_svg  — renders the 63 UI icons and 22 illustrations in this pack.
+# google_fonts — Inter (parent mode) + Nunito (display & kid mode) per tokens.css.
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # SVG rendering for assets/icons/** and assets/illustrations/**
+  flutter_svg: ^2.0.10+1
+
+  # Inter (400/500/600/700) + Nunito (700/800/900)
+  google_fonts: ^6.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # dart run flutter_launcher_icons  — generates the launcher icons from
+  # assets/brand/app_icon.png + assets/brand/app_icon_foreground.png
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+
+  # 63 icons   -> assets/icons/ic_*.svg        (all 24x24, currentColor)
+  # 22 illus   -> assets/illustrations/*.svg  (fixed colours, not colourable)
+  #  3 brand   -> assets/brand/*.svg           (1024 launcher artwork)
+  #  8 rasters -> assets/images/*.webp         (PENDING orchestrator raster pass)
+  assets:
+    - assets/icons/
+    - assets/illustrations/
+    - assets/brand/
+    - assets/images/
+
+# Adaptive icon: solid #17804F background + the Pip-head foreground, which is
+# already scaled into the inner 66% safe zone (see flutter/manifest.json).
+# The two .png files below are produced by the orchestrator's raster pass from
+# app_icon.svg / app_icon_foreground.svg at 1024x1024.
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/brand/app_icon.png"
+  adaptive_icon_background: "#17804F"
+  adaptive_icon_foreground: "assets/brand/app_icon_foreground.png"
+  remove_alpha_ios: true
+  min_sdk_android: 21
+  background_color_ios: "#17804F"
+  image_path_ios: "assets/brand/app_icon.png"
+  # Optional per-density overrides — omit to let the plugin scale app_icon.png.
+  # android:
+  #   launchers:
+  #     background_color: "#17804F"
+  #     image: "assets/brand/app_icon_foreground.png"

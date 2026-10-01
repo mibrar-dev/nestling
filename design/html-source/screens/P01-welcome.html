@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390, initial-scale=1">
+<title>Welcome &middot; Nestling</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../components.css">
+<style>
+html, body { width: 390px; height: 844px; margin: 0; overflow: hidden; }
+
+/* Illustration block = 388px = 46% of the 844px screen.
+   The 320px circle sits 44px from the top, so exactly 24px of block remains
+   between the circle's lower edge and the headline - no dead band. */
+.scene { position: relative; width: 350px; height: 388px; }
+.scene-circle { position: absolute; left: 15px; top: 44px; width: 320px; height: 320px; border-radius: 50%; background: var(--leaf-tint); }
+.scene-nest { position: absolute; left: 43px; top: 104px; width: 264px; height: 264px; }
+.scene-pip { position: absolute; left: 91px; top: 120px; width: 168px; height: 168px; z-index: 2; }
+
+/* Three coins on the circle's rim (r=160, centre 195,251). Smallest frame
+   clearance is 21px, so nothing touches an edge. */
+.float-coin { position: absolute; border-radius: 50%; box-shadow: var(--sh-1); }
+.c1 { left: 16px; top: 104px; width: 40px; height: 40px; transform: rotate(-14deg); }
+.c2 { left: 308px; top: 132px; width: 34px; height: 34px; transform: rotate(16deg); }
+.c3 { left: 7px; top: 241px; width: 36px; height: 36px; transform: rotate(22deg); }
+
+.scroll > .p01-text { margin-top: 0; }
+.p01-text h1 { display: block; }
+.p01-text p { margin-top: 12px; }
+</style>
+</head>
+<body>
+<div class="screen parent">
+  <div class="status-bar"><span class="status-time">9:41</span><span class="status-icons"><svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor" aria-hidden="true"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4.5" width="3" height="7.5" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1" opacity=".35"/></svg><svg width="16" height="12" viewBox="0 0 16 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M1.5 4.5a10 10 0 0 1 13 0"/><path d="M4 7.2a5.6 5.6 0 0 1 8 0"/><circle cx="8" cy="10" r="1.2" fill="currentColor" stroke="none"/></svg><svg width="25" height="12" viewBox="0 0 25 12" fill="none" aria-hidden="true"><rect x=".5" y=".5" width="20" height="11" rx="3.5" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="15" height="8" rx="2" fill="currentColor"/><path d="M23 4v4a2.2 2.2 0 0 0 0-4z" fill="currentColor" opacity=".4"/></svg></span></div>
+  <div class="scroll">
+    <div class="scene">
+      <span class="scene-circle" aria-hidden="true"></span>
+      <img class="scene-nest" src="../assets/nest.svg" alt="">
+      <img class="scene-pip" src="../assets/pip-stage-2.svg" alt="Pip the hatchling bird sitting in a twig nest">
+      <img class="float-coin c1" src="../assets/coin.svg" alt="">
+      <img class="float-coin c2" src="../assets/coin.svg" alt="">
+      <img class="float-coin c3" src="../assets/coin.svg" alt="">
+    </div>
+    <div class="p01-text">
+      <h1 class="display">Chores that feel like a game.</h1>
+      <p class="body t-ink-2">Nestling turns family jobs into quests your children actually want to finish &mdash; and keeps pocket money fair and tidy.</p>
+    </div>
+  </div>
+  <div class="bottom-cta">
+    <button class="btn btn-primary" type="button">Get started</button>
+    <button class="btn btn-ghost" type="button">I already have an account</button>
+    <p class="caption">Made in the UK &middot; No ads, ever</p>
+  </div>
+  <div class="home-indicator" aria-hidden="true"><span class="home-pill"></span></div>
+</div>
+</body>
+</html>

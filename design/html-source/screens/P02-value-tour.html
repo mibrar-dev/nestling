@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390, initial-scale=1">
+<title>Why families choose Nestling &middot; Nestling</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../components.css">
+<style>
+html, body { width: 390px; height: 844px; margin: 0; overflow: hidden; }
+.nav-bar .fill { flex: 1; min-width: 0; }
+.nav-gap { width: 44px; flex-shrink: 0; }
+.fill-67 { width: 67%; }
+.fill-70 { width: 70%; }
+
+/* horizontal pager: wrapper is exactly 390px wide, cards are 310px and bleed to the frame edge */
+.pager { position: relative; width: 390px; height: 400px; overflow: hidden; flex-shrink: 0; }
+.pg-card { position: absolute; top: 0; width: 310px; height: 400px; background: var(--surface); border-radius: var(--r-l); box-shadow: var(--sh-1); padding: 16px; display: flex; flex-direction: column; }
+.pg-card.c1 { left: 20px; z-index: 1; }
+.pg-card.c2 { left: 342px; z-index: 1; }
+.pg-card.c3 { left: 664px; z-index: 1; }
+.pg-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pg-head h3 { min-width: 0; }
+.pg-rows { margin-top: 14px; display: flex; flex-direction: column; gap: 12px; }
+.pg-rows .icon-tile { width: 36px; height: 36px; border-radius: 12px; }
+.pg-rows .icon-tile svg { width: 22px; height: 22px; }
+.pg-rows .coin-pill { font-size: 14px; padding: 7px 10px; }
+.pg-rows .coin-pill img { width: 18px; height: 18px; }
+.pg-rows .pv-row { gap: 8px; }
+.pv-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pv-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pv-name { font-size: 15px; font-weight: 600; line-height: 20px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv-sub { font-size: 13px; line-height: 18px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv-foot { margin-top: 14px; }
+.pv-cap { font-size: 13px; line-height: 18px; color: var(--ink-2); margin-top: 6px; }
+.pv-add { margin-top: auto; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; border-radius: var(--r-m); border: 1.5px dashed var(--line); color: var(--ink-2); font-size: 15px; font-weight: 600; }
+.pg-pet { margin-top: 10px; display: flex; align-items: center; justify-content: center; }
+.pg-pet img { width: 158px; height: 158px; }
+.pg-stages { margin-top: 10px; display: flex; align-items: center; justify-content: space-between; }
+.pg-stage { width: 52px; height: 52px; border-radius: 50%; background: var(--lilac-tint); display: flex; align-items: center; justify-content: center; }
+.pg-stage img { width: 40px; height: 40px; }
+.pg-stage.on { background: var(--leaf-tint); }
+.pg-chips { margin-top: 12px; display: flex; gap: 8px; }
+.pg-amount { margin-top: 14px; }
+.pg-amount p { margin-top: 2px; }
+.pg-lines { margin-top: 16px; display: flex; flex-direction: column; }
+.pg-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; font-size: 15px; color: var(--ink-2); }
+.pg-line.total { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 6px; color: var(--ink); font-weight: 700; }
+
+.scroll > .pg-dots { margin-top: 22px; }
+.scroll > .pg-title { margin-top: 30px; }
+.scroll > .pg-body { margin-top: 12px; }
+.pg-dots { display: flex; align-items: center; justify-content: center; gap: 6px; height: 18px; }
+.pg-dots .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.pg-dots .dot.on { width: 22px; border-radius: var(--r-pill); background: var(--leaf); }
+</style>
+</head>
+<body>
+<div class="screen parent">
+  <div class="status-bar"><span class="status-time">9:41</span><span class="status-icons"><svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor" aria-hidden="true"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4.5" width="3" height="7.5" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1" opacity=".35"/></svg><svg width="16" height="12" viewBox="0 0 16 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M1.5 4.5a10 10 0 0 1 13 0"/><path d="M4 7.2a5.6 5.6 0 0 1 8 0"/><circle cx="8" cy="10" r="1.2" fill="currentColor" stroke="none"/></svg><svg width="25" height="12" viewBox="0 0 25 12" fill="none" aria-hidden="true"><rect x=".5" y=".5" width="20" height="11" rx="3.5" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="15" height="8" rx="2" fill="currentColor"/><path d="M23 4v4a2.2 2.2 0 0 0 0-4z" fill="currentColor" opacity=".4"/></svg></span></div>
+  <nav class="nav-bar compact" aria-label="Tour">
+    <span class="nav-gap" aria-hidden="true"></span>
+    <span class="fill" aria-hidden="true"></span>
+    <button class="nav-action" type="button">Skip</button>
+  </nav>
+  <div class="pager" role="group" aria-label="Tour preview, step 1 of 3">
+  <div class="pg-card c1">
+    <div class="pg-head"><p class="h3">Today&rsquo;s quests</p><span class="chip">Sat 4 Oct</span></div>
+    <div class="pg-rows">
+      <div class="pv-row">
+        <span class="icon-tile tint-sky" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.5"/></svg></span>
+        <span class="pv-main"><span class="pv-name">Empty the dishwasher</span><span class="pv-sub">Maya &middot; weekly</span></span>
+        <span class="coin-pill"><img src="../assets/coin.svg" alt="">15</span>
+      </div>
+      <div class="pv-row">
+        <span class="icon-tile tint-coin" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9.5 7V5h5v2M6.5 7l1 13h9l1-13"/><path d="M10.5 11v5.5M13.5 11v5.5"/></svg></span>
+        <span class="pv-main"><span class="pv-name">Put the bins out</span><span class="pv-sub">Leo &middot; once</span></span>
+        <span class="coin-pill"><img src="../assets/coin.svg" alt="">15</span>
+      </div>
+      <div class="pv-row">
+        <span class="icon-tile tint-lilac" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 6.5S10 4.5 6.5 4.5H4v13h2.5c3.5 0 5.5 2 5.5 2s2-2 5.5-2H20v-13h-2.5C14 4.5 12 6.5 12 6.5z"/><path d="M12 6.5v13"/></svg></span>
+        <span class="pv-main"><span class="pv-name">Reading &ndash; 20 minutes</span><span class="pv-sub">Maya &middot; daily</span></span>
+        <span class="coin-pill"><img src="../assets/coin.svg" alt="">10</span>
+      </div>
+      <div class="pv-row">
+        <span class="icon-tile tint-peach" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18v-7h13a4 4 0 0 1 4 4v3"/><path d="M3 11V7"/><path d="M3 18h18"/><circle cx="7.5" cy="11" r="1.6"/></svg></span>
+        <span class="pv-main"><span class="pv-name">Tidy your bedroom</span><span class="pv-sub">Maya &middot; weekly</span></span>
+        <span class="coin-pill"><img src="../assets/coin.svg" alt="">15</span>
+      </div>
+    </div>
+    <div class="pv-foot">
+      <div class="progress"><span class="fill-67"></span></div>
+      <p class="pv-cap">4 of 6 quests done today</p>
+    </div>
+    <div class="pv-add"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>New quest</span></div>
+  </div>
+  <div class="pg-card c2">
+    <div class="pg-head"><p class="h3">Pip&rsquo;s nest</p><span class="chip selected">Fledgling</span></div>
+    <div class="pg-pet"><img src="../assets/pip-stage-3.svg" alt="Pip the fledgling bird"></div>
+    <p class="h2 pv-grow">Fledgling</p>
+    <div class="progress"><span class="fill-70"></span></div>
+    <p class="pv-cap">175 of 250 coins &middot; Pip evolves at 250</p>
+    <div class="pg-stages" aria-hidden="true">
+      <span class="pg-stage"><img src="../assets/pip-stage-1.svg" alt=""></span>
+      <span class="pg-stage"><img src="../assets/pip-stage-2.svg" alt=""></span>
+      <span class="pg-stage on"><img src="../assets/pip-stage-3.svg" alt=""></span>
+    </div>
+    <div class="pv-add"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Next stage: Songbird</span></div>
+  </div>
+  <div class="pg-card c3">
+    <div class="pg-head"><p class="h3">Maya&rsquo;s jar</p><span class="chip">Sat 4 Oct</span></div>
+    <div class="pg-amount">
+      <p class="h1 money">&pound;4.20</p>
+      <p class="body-s t-ink-2">coming on Saturday</p>
+    </div>
+    <div class="pg-lines">
+      <div class="pg-line"><span>Weekly base</span><span class="money">&pound;3.00</span></div>
+      <div class="pg-line"><span>Quests (120 coins)</span><span class="money">+&pound;1.20</span></div>
+      <div class="pg-line total"><span>Total</span><span class="money">&pound;4.20</span></div>
+    </div>
+    <div class="pv-add"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18M7 15h4"/></svg><span>No bank card needed</span></div>
+  </div>
+  </div>
+  <div class="scroll">
+    <div class="pg-dots" role="img" aria-label="Step 1 of 3">
+      <span class="dot on" aria-hidden="true"></span><span class="dot" aria-hidden="true"></span><span class="dot" aria-hidden="true"></span>
+    </div>
+    <h1 class="h1 balance pg-title">Set quests in seconds</h1>
+    <p class="body t-ink-2">Pick from 40+ ready-made jobs like &ldquo;Put the bins out&rdquo; &mdash; or make your own.</p>
+  </div>
+  <div class="bottom-cta">
+    <button class="btn btn-primary" type="button">Next</button>
+  </div>
+  <div class="home-indicator" aria-hidden="true"><span class="home-pill"></span></div>
+</div>
+</body>
+</html>

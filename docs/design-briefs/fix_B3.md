@@ -1,0 +1,4 @@
+QA ROUND 3 — Group B (2 items; everything else passes). Fix via open-design MCP write_file, verify with get_file.
+P08 [major, still open] The "+ New quest" FAB still sits on top of the second quest card at rest (it hides the "To do" chip). A FAB over a short list is the wrong pattern here. Remove the FAB from P08 and instead add a 44×44 circular "+" icon button (aria-label "New quest", --leaf bg, white icon) in the header row to the left of the "S" avatar. Keep the "Hand to Maya or Leo" button at the end of the list. Remove the now-unused .scroll FAB padding.
+P09 [minor] The day row wraps: "S" (Sunday) sits alone on a second row. The row is full width (350px): 7 × 44px + 6 × 6px gaps = 344px — it fits on ONE row. Use display:flex; gap:6px; flex-wrap:nowrap; buttons 44×44; justify-content:space-between.
+Reply: 2-line changelog.

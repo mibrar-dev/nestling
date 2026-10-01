@@ -1,0 +1,4 @@
+LOTTIE QA round 2 (orchestrator reviewed design/animations/LOTTIE_PREVIEW.png). check_tick and coin_burst: approved. Fix:
+1. badge_unlock.json: the ribbon is detached — it sits at the top edge while the medal disc hangs ~40px below with a gap. The ribbon must connect to the disc (ribbon bottom overlaps disc top by 4px) and the WHOLE medal (ribbon+disc) swings as one group around a pivot at the ribbon top (damped pendulum ±18° → 0). Medal should fill ~60% of the 260 frame (currently ~20%). Shine sweep must be visible across the disc.
+2. confetti.json: pieces are specks (≈3–5 px in a 390×844 frame). Make pieces 10–18 px (rects 8×14, circles Ø10, squiggles 18 long, stroke 3), 28–32 pieces, spread across the full width, falling from above the top edge to below the bottom, with flutter (rotation + x sine). Keep < 40 KB (reduce keyframes: 3–4 per piece with easing).
+Re-render previews + LOTTIE_PREVIEW.png, LOOK, iterate. Reply: changelog + sizes.

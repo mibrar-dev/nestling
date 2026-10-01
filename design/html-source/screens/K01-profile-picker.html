@@ -1,0 +1,66 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=390, initial-scale=1">
+<title>Kid mode — Who's playing? · Nestling</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../components.css">
+<style>
+  html, body { width: 390px; height: 844px; margin: 0; overflow: hidden; }
+  .meadow { position: absolute; left: 0; bottom: 0; width: 390px; height: 136px; z-index: 0; pointer-events: none; }
+  .meadow .hill-back { fill: var(--kid-meadow); }
+  .meadow .hill-front { fill: color-mix(in srgb, var(--kid-meadow) 80%, var(--surface)); }
+  .meadow, .sparks, .confetti, .burst { position: absolute; z-index: 0; pointer-events: none; }
+  .screen.kid > .scroll, .screen.kid > .kid-bar, .screen.kid > .k3-dock, .screen.kid > .home-indicator { position: relative; z-index: 1; }
+  .lock-btn.lg, .nav-back.lg { width: 56px; height: 56px; min-width: 56px; min-height: 56px; border-radius: 18px; }
+  .kid-bar { background: var(--surface); border-top: 3px solid var(--ink); padding: 12px 20px 10px; flex-shrink: 0; display: flex; gap: 10px; }
+  .kcap { font-family: var(--font-display); font-weight: 700; font-size: 15px; line-height: 20px; color: var(--ink-2); }
+  .kchip { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px; background: var(--leaf-tint); color: var(--leaf-ink); font-family: var(--font-display); font-weight: 800; font-size: 15px; line-height: 1; white-space: nowrap; }
+  .grow { flex: 1; min-height: 0; }
+
+  .k1-top { display: flex; justify-content: flex-end; align-items: center; padding: 0 20px 4px; flex-shrink: 0; }
+  .k1-wrap { display: flex; flex-direction: column; min-height: 100%; }
+  .k1-wrap > * { margin-top: 16px; }
+  .k1-title { text-align: center; }
+  .k1-sub { text-align: center; color: var(--ink-2); }
+  .k1-mid { flex: 1; display: flex; align-items: center; }
+  .k1-tiles { display: flex; gap: 16px; width: 100%; }
+  .k1-tile { flex: 1; min-width: 0; min-height: 336px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 20px 10px; background: var(--surface); border: 3px solid var(--ink); border-radius: var(--r-xl); box-shadow: var(--sh-kid); cursor: pointer; font-family: var(--font-display); }
+  .k1-name { font-size: 28px; line-height: 32px; font-weight: 900; }
+  .k1-age { font-size: 15px; line-height: 20px; font-weight: 700; color: var(--ink-2); }
+  .k1-pet { width: 132px; height: 132px; border-radius: 999px; background: var(--lilac-tint); display: flex; align-items: center; justify-content: center; margin-top: 10px; }
+  .k1-pet img { width: 112px; height: 112px; }
+  .k1-pet.p2 { background: var(--peach-tint); }
+  .k1-cap { text-align: center; }
+</style>
+</head>
+<body>
+<div class="screen kid">
+<svg class="meadow" viewBox="0 0 390 136" preserveAspectRatio="none" aria-hidden="true"><path class="hill-back" d="M0 56C58 28 122 32 186 22 252 12 314 28 390 10v126H0Z"/><path class="hill-front" d="M0 92c74-22 138-10 214-22 60-10 112 4 176-14v80H0Z"/></svg>
+<div class="status-bar"><span class="status-time">9:41</span><span class="status-icons"><svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor" aria-hidden="true"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4.5" width="3" height="7.5" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1" opacity=".35"/></svg><svg width="16" height="12" viewBox="0 0 16 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M1.5 4.5a10 10 0 0 1 13 0"/><path d="M4 7.2a5.6 5.6 0 0 1 8 0"/><circle cx="8" cy="10" r="1.2" fill="currentColor" stroke="none"/></svg><svg width="25" height="12" viewBox="0 0 25 12" fill="none" aria-hidden="true"><rect x=".5" y=".5" width="20" height="11" rx="3.5" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="15" height="8" rx="2" fill="currentColor"/><path d="M23 4v4a2.2 2.2 0 0 0 0-4z" fill="currentColor" opacity=".4"/></svg></span></div>
+  <div class="k1-top"><button class="lock-btn lg" type="button" aria-label="Grown-ups"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></button></div>
+  <div class="scroll">
+    <div class="k1-wrap">
+      <h1 class="kid-title k1-title">Who's playing?</h1>
+      <p class="kid-body k1-sub">Tap your face to start</p>
+      <div class="k1-mid">
+        <div class="k1-tiles">
+        <button class="k1-tile" type="button">
+          <span class="avatar a-lilac s96">M</span>
+          <span class="k1-name">Maya</span>
+          <span class="k1-age">Age 7&ndash;9</span>
+          <span class="k1-pet"><img src="../assets/pip-stage-3.svg" alt="Pip the Fledgling"></span>
+        </button>
+        <button class="k1-tile" type="button">
+          <span class="avatar a-peach s96">L</span>
+          <span class="k1-name">Leo</span>
+          <span class="k1-age">Age 4&ndash;6</span>
+          <span class="k1-pet p2"><img src="../assets/pip-stage-2.svg" alt="Pip the Hatchling"></span>
+        </button>
+        </div>
+      </div>
+      <p class="kcap k1-cap">Grown-ups: tap the lock to get back to your dashboard.</p>
+    </div>
+  </div>
+  <div class="home-indicator" aria-hidden="true"><span class="home-pill"></span></div>
+</div>
+</body>
+</html>

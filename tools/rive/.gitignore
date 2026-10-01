@@ -1,0 +1,6 @@
+# Rive CLI local install + build output.
+# The binary and its version cache are machine-specific; the .riv that ships
+# lives in app/assets/animations/rive/.
+.rive/
+bin/
+pip/build/

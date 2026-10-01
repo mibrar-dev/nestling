@@ -1,0 +1,7 @@
+RESUME — your previous run stopped mid-edit (tools/rive/gen_pip.py nest_shape change, no final reply). Finish the "PipStage / PipInNest" task from your last brief (docs/briefs/21_rive_pipstage.md — re-read it).
+CURRENT DEVICE STATE (orchestrator, harness fix9: design/qa/sim/fix9/light_25_screens-k03.png, dark_25_screens-k03.png — READ them): the nest BACK half is drawn ON TOP of Pip's head (like a hat) and the nest FRONT rim floats ~40 px below Pip's feet. So: (a) the back-half nest is positioned at the wrong y (it must sit behind Pip's lower body, same centre as the front rim), and (b) the front rim is offset. Both halves must share ONE nest position/scale; only the clip differs (top half vs bottom half of the same nest). Pip's feet sit at ~58% of the nest height.
+1. Fix the geometry in gen_pip.py / RML, rebuild pip.riv, `rive --verify`, `rive inspect` (0 problems), and `--screenshot` the PipStage artboard for stages 1–4 → design/animations/rive/v3/ ; READ them.
+2. Make sure NestPetStage uses PipInNest and the SVG fallback uses the same geometry (ONE nest position; clip halves).
+3. VERIFY ON DEVICE: `bash tools/sim_shots.sh pip1` → READ design/qa/sim/pip1/light_25_screens-k03.png + dark_25_screens-k03.png + light_23_kid.png; compare with design/screens/light/K03-kid-home.png (Pip standing IN the nest, rim over its feet). Iterate pip2, pip3… until correct.
+4. flutter analyze clean; flutter test pass. No flutter clean.
+Reply: final harness label, PNGs checked, pip.riv size.

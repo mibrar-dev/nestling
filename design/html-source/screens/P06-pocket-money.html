@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390, initial-scale=1">
+<title>Pocket money setup &middot; Nestling</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../components.css">
+<style>
+html, body { width: 390px; height: 844px; margin: 0; overflow: hidden; }
+
+html, body { width: 390px; height: 844px; margin: 0; overflow: hidden; }
+.scroll > .opt-list { margin-top: 16px; }
+.scroll > .set-card { margin-top: 16px; }
+.opt-list { display: flex; flex-direction: column; gap: 8px; }
+.opt-card { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 8px 13px; text-align: left; background: var(--surface); border: 2px solid var(--line); border-radius: var(--r-m); box-shadow: var(--sh-1); cursor: pointer; font-family: var(--font-ui); }
+.opt-card.on { border-color: var(--leaf); background: var(--leaf-tint); }
+.opt-card .radio { flex-shrink: 0; width: 22px; height: 22px; min-width: 22px; border-radius: 50%; border: 2px solid var(--ink-3); background: var(--surface); }
+.opt-card.on .radio { border-color: var(--leaf); background: var(--leaf); box-shadow: inset 0 0 0 4px var(--leaf-tint); }
+.opt-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.opt-title { font-size: 16px; font-weight: 700; line-height: 22px; color: var(--ink); }
+.opt-sub { font-size: 15px; line-height: 20px; color: var(--ink-2); }
+.set-card { padding: 16px 16px 12px; }
+.set-card .lbl { font-size: 13px; font-weight: 600; line-height: 18px; color: var(--ink-2); }
+.day-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 6px; }
+.chip.day { padding: 0; justify-content: center; font-size: 13px; }
+.set-div { height: 1px; background: var(--line); margin: 8px -16px; }
+.amount-row { display: flex; align-items: center; gap: 12px; min-height: 44px; min-width: 0; }
+.set-card .lbl + .amount-row { margin-top: 2px; }
+.bottom-cta { padding-top: 14px; padding-bottom: 14px; }
+.amount-name { flex: 1; min-width: 0; font-size: 16px; font-weight: 600; line-height: 22px; color: var(--ink); }
+</style>
+</head>
+<body>
+<div class="screen parent"><div class="status-bar"><span class="status-time">9:41</span><span class="status-icons"><svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor" aria-hidden="true"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4.5" width="3" height="7.5" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1" opacity=".35"/></svg><svg width="16" height="12" viewBox="0 0 16 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M1.5 4.5a10 10 0 0 1 13 0"/><path d="M4 7.2a5.6 5.6 0 0 1 8 0"/><circle cx="8" cy="10" r="1.2" fill="currentColor" stroke="none"/></svg><svg width="25" height="12" viewBox="0 0 25 12" fill="none" aria-hidden="true"><rect x=".5" y=".5" width="20" height="11" rx="3.5" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="15" height="8" rx="2" fill="currentColor"/><path d="M23 4v4a2.2 2.2 0 0 0 0-4z" fill="currentColor" opacity=".4"/></svg></span></div>
+  <nav class="nav-bar compact" aria-label="Pocket money setup">
+    <button class="nav-back" type="button" aria-label="Back"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5 8 12l7 7"/></svg></button>
+  </nav>
+  <div class="scroll">
+    <h1 class="h1">How does pocket money work in your house?</h1>
+    <div class="opt-list" role="radiogroup" aria-label="Pocket money style">
+      <button class="opt-card" type="button" role="radio" aria-checked="false">
+            <span class="radio" aria-hidden="true"></span>
+            <span class="opt-text">
+              <span class="opt-title">Weekly amount</span>
+              <span class="opt-sub">A set amount every week</span>
+            </span>
+          </button>
+      <button class="opt-card" type="button" role="radio" aria-checked="false">
+            <span class="radio" aria-hidden="true"></span>
+            <span class="opt-text">
+              <span class="opt-title">Earn per quest</span>
+              <span class="opt-sub">Coins turn into pence at payout</span>
+            </span>
+          </button>
+      <button class="opt-card on" type="button" role="radio" aria-checked="true">
+            <span class="radio" aria-hidden="true"></span>
+            <span class="opt-text">
+              <span class="opt-title">Both</span>
+              <span class="opt-sub">Weekly base + bonus for extra quests</span>
+            </span>
+          </button>
+    </div>
+    <div class="card set-card">
+      <p class="lbl">Payout day</p>
+      <div class="day-row" role="group" aria-label="Payout day"><span class="chip day">Mon</span><span class="chip day">Tue</span><span class="chip day">Wed</span><span class="chip day">Thu</span><span class="chip day">Fri</span><span class="chip day selected">Sat</span><span class="chip day">Sun</span></div>
+      <div class="set-div"></div>
+      <p class="lbl">Weekly base</p>
+      <div class="amount-row">
+            <span class="avatar s32 a-lilac" aria-hidden="true">M</span>
+            <span class="amount-name">Maya</span>
+            <span class="stepper">
+              <button type="button" aria-label="Less weekly pocket money for Maya">&minus;</button>
+              <span class="step-val money">£3.00</span>
+              <button type="button" aria-label="More weekly pocket money for Maya">+</button>
+            </span>
+          </div>
+      <div class="amount-row">
+            <span class="avatar s32 a-peach" aria-hidden="true">L</span>
+            <span class="amount-name">Leo</span>
+            <span class="stepper">
+              <button type="button" aria-label="Less weekly pocket money for Leo">&minus;</button>
+              <span class="step-val money">£1.50</span>
+              <button type="button" aria-label="More weekly pocket money for Leo">+</button>
+            </span>
+          </div>
+      <div class="set-div"></div>
+      <div class="amount-row">
+        <span class="icon-tile tint-coin" aria-hidden="true"><img src="../assets/coin.svg" alt="" width="24" height="24"></span>
+        <span class="amount-name">Coin value</span>
+        <span class="body-s t-ink-2">10 coins = 10p</span>
+      </div>
+    </div>
+  </div>
+  <div class="bottom-cta">
+    <p class="caption">Nestling never holds or moves money. You pay your way; we keep score.</p>
+    <button class="btn btn-primary" type="button">Continue</button>
+  </div>
+<div class="home-indicator" aria-hidden="true"><span class="home-pill"></span></div>
+</div>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<meta name="viewport" content="width=390, initial-scale=1">
+<title>Kid mode — Pip grew into a Songbird! · Nestling</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../components.css">
+<style>
+  html, body { width: 390px; height: 844px; margin: 0; overflow: hidden; }
+  .meadow { position: absolute; left: 0; bottom: 0; width: 390px; height: 136px; z-index: 0; pointer-events: none; }
+  .meadow .hill-back { fill: var(--kid-meadow); }
+  .meadow .hill-front { fill: color-mix(in srgb, var(--kid-meadow) 80%, var(--surface)); }
+  .meadow, .sparks, .confetti, .burst { position: absolute; z-index: 0; pointer-events: none; }
+  .screen.kid > .scroll, .screen.kid > .kid-bar, .screen.kid > .k3-dock, .screen.kid > .home-indicator { position: relative; z-index: 1; }
+  .lock-btn.lg, .nav-back.lg { width: 56px; height: 56px; min-width: 56px; min-height: 56px; border-radius: 18px; }
+  .kid-bar { background: var(--surface); border-top: 3px solid var(--ink); padding: 12px 20px 10px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
+  .kcap { font-family: var(--font-display); font-weight: 700; font-size: 15px; line-height: 20px; color: var(--ink-2); }
+
+  .screen.kid { background-color: var(--surface); background-image: var(--kid-stars), radial-gradient(118% 62% at 50% 36%, var(--lilac-tint) 0%, var(--surface) 58%, var(--lilac-tint) 100%); }
+  .k7-top { display: flex; justify-content: flex-end; align-items: center; padding: 0 20px 2px; flex-shrink: 0; }
+  .k7-stage { position: relative; width: 100%; height: 250px; }
+  .sparks { position: absolute; left: 50%; top: 92px; transform: translateX(-50%); width: 350px; height: 250px; pointer-events: none; }
+  .k7-old { position: absolute; left: 2px; bottom: 4px; width: 68px; height: 68px; opacity: .24; filter: grayscale(1); }
+  .k7-arrow { position: absolute; left: 76px; bottom: 24px; display: flex; align-items: center; color: var(--lilac-strong); }
+  .k7-new { position: absolute; right: 6px; bottom: 0; width: 240px; height: 240px; }
+  .k7-mid { text-align: center; }
+  .k7-hero { text-align: center; overflow-wrap: anywhere; }
+  .k7-sub { text-align: center; }
+  .k7-cheer { display: flex; justify-content: center; }
+  .k7-stats { display: flex; gap: 10px; }
+  .k7-stats > div { flex: 1; min-width: 0; background: var(--surface); border: 3px solid var(--ink); border-radius: var(--r-m); box-shadow: var(--sh-kid); padding: 12px 6px; text-align: center; }
+  .k7-stats b { display: block; font-family: var(--font-display); font-weight: 900; font-size: 30px; line-height: 34px; }
+  .k7-stats span { display: block; font-family: var(--font-display); font-weight: 700; font-size: 14px; line-height: 18px; color: var(--ink-2); margin-top: 2px; }
+</style>
+</head>
+<body>
+<div class="screen kid">
+  <svg class="sparks" viewBox="0 0 350 220" aria-hidden="true">
+  <g stroke="#1E1B3A" stroke-width="3" stroke-linejoin="round">
+    <path d="M32 30 37 44 51 49 37 54 32 68 27 54 13 49 27 44Z" fill="#7C6CF2"/>
+    <path d="M312 24 317 38 331 43 317 48 312 62 307 48 293 43 307 38Z" fill="#1F9D63"/>
+    <path d="M18 148 23 162 37 167 23 172 18 186 13 172 -1 167 13 162Z" fill="#F4B400"/>
+    <path d="M334 150 339 164 353 169 339 174 334 188 329 174 315 169 329 164Z" fill="#FF8A5B"/>
+    <circle cx="86" cy="10" r="7" fill="#F4B400"/>
+    <circle cx="268" cy="8" r="6" fill="#3D7FF0"/>
+    <circle cx="70" cy="206" r="7" fill="#1F9D63"/>
+    <circle cx="286" cy="210" r="6" fill="#7C6CF2"/>
+  </g>
+</svg>
+  <div class="status-bar"><span class="status-time">9:41</span><span class="status-icons"><svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor" aria-hidden="true"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4.5" width="3" height="7.5" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1" opacity=".35"/></svg><svg width="16" height="12" viewBox="0 0 16 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M1.5 4.5a10 10 0 0 1 13 0"/><path d="M4 7.2a5.6 5.6 0 0 1 8 0"/><circle cx="8" cy="10" r="1.2" fill="currentColor" stroke="none"/></svg><svg width="25" height="12" viewBox="0 0 25 12" fill="none" aria-hidden="true"><rect x=".5" y=".5" width="20" height="11" rx="3.5" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="15" height="8" rx="2" fill="currentColor"/><path d="M23 4v4a2.2 2.2 0 0 0 0-4z" fill="currentColor" opacity=".4"/></svg></span></div>
+  <div class="k7-top"><button class="lock-btn lg" type="button" aria-label="Grown-ups"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></button></div>
+  <div class="scroll">
+    <div class="k7-stage">
+      <img class="k7-old" src="../assets/pip-stage-3.svg" alt="">
+      <span class="k7-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15"/><path d="m13 6 6 6-6 6"/></svg></span>
+      <img class="k7-new" src="../assets/pip-stage-4.svg" alt="Songbird Pip, all grown up">
+    </div>
+    <h1 class="kid-title k7-hero">Pip grew into a Songbird!</h1>
+    <p class="kid-body k7-sub">Because you helped 25 times</p>
+    <div class="k7-cheer"><span class="speech">Hear that? That is Pip's new song!</span></div>
+    <div class="k7-stats">
+      <div><b>25</b><span>quests done</span></div>
+      <div><b>250</b><span>coins grown</span></div>
+      <div><b>4</b><span>of 4 stages</span></div>
+    </div>
+    <p class="kcap" style="text-align:center">Pip still loves a chin scratch.</p>
+  </div>
+  <div class="kid-bar">
+    <button class="btn-kid lilac" type="button">Meet Songbird Pip</button>
+  </div>
+  <div class="home-indicator" aria-hidden="true"><span class="home-pill"></span></div>
+</div>
+</body>
+</html>
