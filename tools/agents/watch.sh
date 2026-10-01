@@ -1,6 +1,6 @@
 #!/bin/bash
 # watch.sh — emits new events + STALL warnings (log idle > 15 min while running). bash 3.2 safe.
-ST="$(cd "$(dirname "$0")/../.." && pwd)/docs/pip-v2/status"; EV="$ST/events.log"; touch "$EV"
+ST="$(cd "$(dirname "$0")/../.." && pwd)/docs/screens/_status"; EV="$ST/events.log"; touch "$EV"
 seen=$(wc -l < "$EV" | tr -d ' ')
 while true; do
   n=$(wc -l < "$EV" | tr -d ' '); if [ "$n" -gt "$seen" ]; then sed -n "$((seen+1)),${n}p" "$EV"; seen=$n; fi

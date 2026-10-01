@@ -3,10 +3,10 @@
 # Runs one opencode sub-agent with retries; writes status + events for monitoring.
 NAME="$1"; MODEL="$2"; BRIEF="$3"; SID="${4:--}"; TITLE="${5:-$NAME}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-ST="$ROOT/docs/pip-v2/status"; mkdir -p "$ST"
+ST="${STATUS_DIR:-$ROOT/docs/screens/_status}"; mkdir -p "$ST"
 LOG="$ST/$NAME.log"; EV="$ST/events.log"
 ev() { echo "$(date +%H:%M:%S) $1 $NAME ${2:-}" >> "$EV"; echo "$1" > "$ST/$NAME.status"; }
-cd "$ROOT"
+cd "${WORKDIR:-$ROOT}"
 ev START "model=$MODEL"
 for i in 1 2 3 4 5; do
   if [ "$SID" != "-" ]; then
