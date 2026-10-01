@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="Pip v2 A fledgling front">
+<g id="shadow"><ellipse cx="120" cy="212" rx="62" ry="11" fill="#1E1B3A" opacity="0.12"/></g>
+<g id="tail" stroke="#1E1B3A" stroke-width="6.5" stroke-linejoin="round"><path d="M108 186 L112 202 L120 194 L128 202 L132 186 Z" fill="#F4B400"/></g>
+<g id="body"><ellipse cx="120" cy="132" rx="63" ry="60" fill="#FFD93D" stroke="#1E1B3A" stroke-width="6.5"/></g><g id="belly"><ellipse cx="120" cy="157" rx="39" ry="33" fill="#FFF6D6"/></g>
+<g id="feet" stroke="#1E1B3A" stroke-width="6.5"><g id="foot-L"><ellipse cx="99" cy="195" rx="13" ry="8.5" fill="#FF8A5B"/></g><g id="foot-R"><ellipse cx="141" cy="195" rx="13" ry="8.5" fill="#FF8A5B"/></g></g>
+<g id="wings" stroke="#1E1B3A" stroke-width="6.5"><g id="wing-L"><ellipse cx="60" cy="143" rx="15" ry="23" fill="#F4B400"/></g><g id="wing-R"><ellipse cx="180" cy="143" rx="15" ry="23" fill="#F4B400"/></g></g>
+<g id="head-tuft" stroke="#1E1B3A" stroke-width="6.5" stroke-linejoin="round"><circle cx="102" cy="68" r="11" fill="#FFD93D"/><circle cx="120" cy="60" r="12.5" fill="#FFD93D"/><circle cx="138" cy="68" r="11" fill="#FFD93D"/></g>
+<g id="highlight"><ellipse cx="97" cy="103" rx="18" ry="10" fill="#FFFFFF" opacity="0.6" transform="rotate(-18 97 103)"/></g>
+<g id="eyes"><g id="eye-L"><circle cx="96" cy="129" r="16" fill="#FFFFFF" stroke="#1E1B3A" stroke-width="6.5"/><g id="pupil-L"><circle cx="98" cy="131" r="7.5" fill="#1E1B3A"/><g id="glint-L"><circle cx="95" cy="127" r="2.6" fill="#FFFFFF"/></g></g></g><g id="eye-R"><circle cx="144" cy="129" r="16" fill="#FFFFFF" stroke="#1E1B3A" stroke-width="6.5"/><g id="pupil-R"><circle cx="146" cy="131" r="7.5" fill="#1E1B3A"/><g id="glint-R"><circle cx="143" cy="127" r="2.6" fill="#FFFFFF"/></g></g></g></g>
+<g id="beak"><g id="beak-top"><path d="M106 150 Q120 145 134 150 Q130 161 120 163 Q110 161 106 150 Z" fill="#FF8A5B" stroke="#1E1B3A" stroke-width="6.5" stroke-linejoin="round"/></g></g>
+<g id="blush"><ellipse cx="75" cy="152" rx="10" ry="6.5" fill="#FF8A5B" opacity="0.55"/><ellipse cx="165" cy="152" rx="10" ry="6.5" fill="#FF8A5B" opacity="0.55"/></g>
+</svg>
