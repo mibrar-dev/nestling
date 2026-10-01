@@ -104,9 +104,12 @@ GoRouter buildAppRouter(
         '/payout',
         '/paywall',
       ];
-      final isParentOnly = parentOnly.any(
-        (prefix) => location == prefix || location.startsWith('$prefix/'),
-      );
+      // Onboarding is the parent's setup flow: never reachable from kid mode.
+      final isParentOnly =
+          _onboardingLocations.contains(location) ||
+          parentOnly.any(
+            (prefix) => location == prefix || location.startsWith('$prefix/'),
+          );
       if (appMode.isKid && isParentOnly) {
         return ParentalGateRoutePaths.gate;
       }
