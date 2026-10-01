@@ -711,12 +711,15 @@ def emit_rig(art, A, V, ctx, props, ind, P=None):
             shapes(prims, f"fx_{fname}", (RX, RY), ind + 4)
         rows.append(f'{" " * (ind + 2)}</Node>')
     # procedural evolve glow ring at the body centre (kept small: max
-    # radius 40*1.5=60 < 45% of the 240 artboard; faded out by fx_evolve)
+    # radius 40*1.5=60 < 45% of the 240 artboard; faded out by fx_evolve).
+    # The node sits AT the body centre so scale pivots concentrically:
+    # a node at the root would shrink the rings toward the feet.
     nid = ids.n()
     R["fx"]["glow"] = nid
-    R["rest"][nid] = (0, 0)
-    rows += _node_open("fx_glow", nid, 0, 0, ind + 2, opacity=0, ctx=ctx)
     bcx, bcy = A["body"]
+    R["rest"][nid] = (bcx - RX, bcy - RY)
+    rows += _node_open("fx_glow", nid, bcx - RX, bcy - RY, ind + 2,
+                       opacity=0, ctx=ctx)
     ring = _full_style(fill="none", stroke="#FFFFFF", sw=6)
     glow_prims = [
         _mk_prim("ellipse", {"cx": S.num(bcx), "cy": S.num(bcy),
@@ -725,7 +728,7 @@ def emit_rig(art, A, V, ctx, props, ind, P=None):
                              "rx": "40", "ry": "40"},
                  _full_style(fill="none", stroke="#FFF1B8", sw=3.5)),
     ]
-    shapes(glow_prims, "fx_glow", (RX, RY), ind + 4)
+    shapes(glow_prims, "fx_glow", (bcx, bcy), ind + 4)
     rows.append(f'{" " * (ind + 2)}</Node>')
 
     # ---- accessories (bound visibility, default none)
@@ -776,10 +779,11 @@ def emit_rig(art, A, V, ctx, props, ind, P=None):
         for var in order:
             if var == "open":
                 prims = art.eye[side]["open"]
-            elif var == "surprised" and art.eye[side].get("surprised"):
-                # approved surprised eyes verbatim (symmetric by art)
-                prims = art.eye[side]["surprised"]
             else:
+                # surprised included: the review spec is the normal eye
+                # scaled 1.3x symmetric (same centre, same outline weight),
+                # not the raised peak variant, so entry cross-fades can
+                # never double-image into a ring.
                 prims = V[side][var]
             # RML draws the FIRST sibling on top: emit topmost-first
             # (reverse of SVG paint order) so pupils/highlights sit above
@@ -1305,7 +1309,10 @@ def state_machine(ctx, aids, enum_ids, P_MOOD, P_EVOLVE, P_TAP, P_BLINK):
     for mood, st in (("happy", ST_HAPPY), ("eating", ST_EAT),
                      ("sleepy", ST_SLEEPY), ("surprised", ST_SURP),
                      ("proud", ST_PROUD)):
-        r += _enum_cond(st, ctx.VM, P_MOOD, "equal", E[mood], 120, P + "  ")
+        # surprised snaps in fast (50 ms): a slow cross-fade double-images
+        # the offset eye variants into a grey ring mid-blend.
+        dur = 50 if mood == "surprised" else 120
+        r += _enum_cond(st, ctx.VM, P_MOOD, "equal", E[mood], dur, P + "  ")
     r += _trigger_cond(ST_EVO, ctx.VM, P_EVOLVE, 100, P + "  ")
     r += _trigger_cond(ST_HAPPY, ctx.VM, P_TAP, 120, P + "  ")
     r.append(f'{P}    </AnimationState>')
@@ -1371,7 +1378,8 @@ def state_machine(ctx, aids, enum_ids, P_MOOD, P_EVOLVE, P_TAP, P_BLINK):
     for mood, st in (("happy", FX_HAPPY), ("eating", FX_EAT),
                      ("sleepy", FX_SLEEPY), ("surprised", FX_SURP),
                      ("proud", FX_PROUD)):
-        r += _enum_cond(st, ctx.VM, P_MOOD, "equal", E[mood], 120, P + "  ")
+        dur = 50 if mood == "surprised" else 120
+        r += _enum_cond(st, ctx.VM, P_MOOD, "equal", E[mood], dur, P + "  ")
     r += _trigger_cond(FX_EVO, ctx.VM, P_EVOLVE, 100, P + "  ")
     r += _trigger_cond(FX_HAPPY, ctx.VM, P_TAP, 120, P + "  ")
     r.append(f'{P}    </AnimationState>')

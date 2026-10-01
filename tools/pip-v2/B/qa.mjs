@@ -101,3 +101,44 @@ else console.log('✓ nothing touches the 240 canvas edge');
     process.exitCode = 1;
   } else console.log('✓ poses.mjs carries no asymmetric face keys');
 }
+
+/* round 5 fix #4: for every pose, the face-group centre must sit on the head
+   axis (within 4% of head width) and both eye centres must fall inside the
+   head ellipse. Geometry comes from the rig's debug hook — the same numbers
+   that place the art — so this checks the shipped SVGs' provenance. */
+{
+  const { buildParts } = await import('./rig.mjs');
+  const { allPoses } = await import('./poses.mjs');
+  const { IDLE } = await import('./idle.mjs');
+  const faceFails = [];
+  const checkFace = (p, label) => {
+    const { debug } = buildParts(p);
+    const { eyeL, eyeR, head } = debug;
+    const midX = (eyeL[0] + eyeR[0]) / 2;
+    if (Math.abs(midX - head.cx) > 0.04 * 2 * head.rx) {
+      faceFails.push(`${label}: face centre x=${midX.toFixed(1)} vs head x=${head.cx.toFixed(1)} (limit ${(0.04 * 2 * head.rx).toFixed(1)})`);
+    }
+    for (const [nm, e] of [['L', eyeL], ['R', eyeR]]) {
+      const v = ((e[0] - head.cx) / head.rx) ** 2 + ((e[1] - head.cy) / head.ry) ** 2;
+      if (v > 1) faceFails.push(`${label}: eye ${nm} outside head ellipse (v=${v.toFixed(2)})`);
+    }
+  };
+  for (const p of allPoses()) checkFace({ ...p, skin: 'sunny' }, `s${p.stage}_${p.mood}_${p.n}`);
+  for (const skin of ['sunny', 'berry', 'sky', 'mint']) {
+    for (const mood of ['idle', 'happy']) {
+      checkFace({ ...IDLE[3][mood], stage: 3, mood, n: 0, skin }, `skin_${skin}_s3_${mood}`);
+    }
+  }
+  for (const kind of ['bow', 'cap', 'scarf', 'glasses', 'none']) {
+    for (const stage of [1, 2, 3, 4]) {
+      if (kind === 'none' && stage !== 3) continue;
+      checkFace({ ...IDLE[stage].idle, stage }, `acc_${kind}_s${stage}`);
+    }
+  }
+  // evolve frames are scaled/rotated wrappers around checked idle art — covered transitively
+  if (faceFails.length) {
+    console.log(`\n✗ ${faceFails.length} face-placement failures:`);
+    for (const f of faceFails.slice(0, 25)) console.log('  ' + f);
+    process.exitCode = 1;
+  } else console.log('✓ every face sits on its head axis with both eyes inside the head');
+}

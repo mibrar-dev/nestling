@@ -290,26 +290,26 @@
           </Shape>
         </Node>
 
-        <Node x="0" y="0" opacity="0" name="fx_ring" id="1:234">
-          <Shape x="120" y="116" name="fx_ring" id="1:25">
+        <Node x="120" y="116" opacity="0" name="fx_ring" id="1:234">
+          <Shape x="0" y="0" name="fx_ring" id="1:25">
             <Ellipse width="144" height="144" name="P"/>
           <Stroke name="S" thickness="5" cap="round" join="round">
             <SolidColor colorValue="FFF4B400" name="C"/>
           </Stroke>
           </Shape>
-          <Shape x="120" y="125" name="fx_ring_ev_0" id="1:26">
+          <Shape x="0" y="9" name="fx_ring_ev_0" id="1:26">
             <Ellipse width="196" height="196" name="P"/>
           <Stroke name="S" thickness="4" cap="butt" join="miter">
             <SolidColor colorValue="407C6CF2" name="C"/>
           </Stroke>
           </Shape>
-          <Shape x="120" y="125" name="fx_ring_ev_1" id="1:27">
+          <Shape x="0" y="9" name="fx_ring_ev_1" id="1:27">
             <Ellipse width="172" height="172" name="P"/>
           <Stroke name="S" thickness="5" cap="butt" join="miter">
             <SolidColor colorValue="7DF4B400" name="C"/>
           </Stroke>
           </Shape>
-          <Shape x="188" y="150" name="fx_ring_ev_2" id="1:28">
+          <Shape x="68" y="34" name="fx_ring_ev_2" id="1:28">
           <PointsPath isClosed="true">
             <StraightVertex x="0" y="-9"/>
             <StraightVertex x="1.98" y="-1.98"/>
@@ -327,7 +327,7 @@
             <SolidColor colorValue="FF1E1B3A" name="C"/>
           </Stroke>
           </Shape>
-          <Shape x="52" y="150" name="fx_ring_ev_3" id="1:29">
+          <Shape x="-68" y="34" name="fx_ring_ev_3" id="1:29">
           <PointsPath isClosed="true">
             <StraightVertex x="0" y="-9"/>
             <StraightVertex x="1.98" y="-1.98"/>
@@ -345,7 +345,7 @@
             <SolidColor colorValue="FF1E1B3A" name="C"/>
           </Stroke>
           </Shape>
-          <Shape x="120" y="28" name="fx_ring_ev_4" id="1:30">
+          <Shape x="0" y="-88" name="fx_ring_ev_4" id="1:30">
           <PointsPath isClosed="true">
             <StraightVertex x="0" y="-10"/>
             <StraightVertex x="2.2" y="-2.2"/>
@@ -363,7 +363,7 @@
             <SolidColor colorValue="FF1E1B3A" name="C"/>
           </Stroke>
           </Shape>
-          <Shape x="200" y="60" name="fx_ring_ev_5" id="1:31">
+          <Shape x="80" y="-56" name="fx_ring_ev_5" id="1:31">
           <PointsPath isClosed="true">
             <StraightVertex x="0" y="-12"/>
             <StraightVertex x="2.64" y="-2.64"/>
@@ -381,7 +381,7 @@
             <SolidColor colorValue="FF1E1B3A" name="C"/>
           </Stroke>
           </Shape>
-          <Shape x="40" y="60" name="fx_ring_ev_6" id="1:32">
+          <Shape x="-80" y="-56" name="fx_ring_ev_6" id="1:32">
           <PointsPath isClosed="true">
             <StraightVertex x="0" y="-12"/>
             <StraightVertex x="2.64" y="-2.64"/>
@@ -621,20 +621,20 @@
                 </Shape>
               </Node>
               <Node x="-18" y="0" opacity="0" name="eye_l_surprised" id="1:216">
-                <Shape x="-2" y="-2" name="eye_l_surprised_0" id="1:53">
-                  <Ellipse width="4" height="4" name="P"/>
+                <Shape x="-1" y="-2" name="eye_l_surprised_0" id="1:53">
+                  <Ellipse width="3" height="3" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FFFFFFFF" name="C"/>
                 </Fill>
                 </Shape>
-                <Shape x="0" y="1" name="eye_l_surprised_1" id="1:54">
-                  <Ellipse width="10" height="10" name="P"/>
+                <Shape x="2" y="2" name="eye_l_surprised_1" id="1:54">
+                  <Ellipse width="9" height="9" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FF1E1B3A" name="C"/>
                 </Fill>
                 </Shape>
                 <Shape x="0" y="0" name="eye_l_surprised_2" id="1:55">
-                  <Ellipse width="26" height="26" name="P"/>
+                  <Ellipse width="20" height="20" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FFFFFFFF" name="C"/>
                 </Fill>
@@ -735,20 +735,20 @@
                 </Shape>
               </Node>
               <Node x="18" y="0" opacity="0" name="eye_r_surprised" id="1:222">
-                <Shape x="-2" y="-2" name="eye_r_surprised_0" id="1:65">
-                  <Ellipse width="4" height="4" name="P"/>
+                <Shape x="-1" y="-2" name="eye_r_surprised_0" id="1:65">
+                  <Ellipse width="3" height="3" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FFFFFFFF" name="C"/>
                 </Fill>
                 </Shape>
-                <Shape x="0" y="1" name="eye_r_surprised_1" id="1:66">
-                  <Ellipse width="10" height="10" name="P"/>
+                <Shape x="2" y="2" name="eye_r_surprised_1" id="1:66">
+                  <Ellipse width="9" height="9" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FF1E1B3A" name="C"/>
                 </Fill>
                 </Shape>
                 <Shape x="0" y="0" name="eye_r_surprised_2" id="1:67">
-                  <Ellipse width="26" height="26" name="P"/>
+                  <Ellipse width="20" height="20" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FFFFFFFF" name="C"/>
                 </Fill>
@@ -2170,33 +2170,33 @@
           <KeyedObject objectId="1:216">
             <KeyedProperty propertyKey="16">
               <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.2" interpolationType="cubic" frame="8"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.05" interpolationType="cubic" frame="20"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.05" interpolationType="linear" frame="48"/>
+              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="8"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
+              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="20"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
+              <KeyFrameDouble value="1.3" interpolationType="linear" frame="48"/>
             </KeyedProperty>
           </KeyedObject>
           <KeyedObject objectId="1:216">
             <KeyedProperty propertyKey="17">
               <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.2" interpolationType="cubic" frame="8"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.05" interpolationType="cubic" frame="20"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.05" interpolationType="linear" frame="48"/>
+              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="8"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
+              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="20"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
+              <KeyFrameDouble value="1.3" interpolationType="linear" frame="48"/>
             </KeyedProperty>
           </KeyedObject>
           <KeyedObject objectId="1:222">
             <KeyedProperty propertyKey="16">
               <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.2" interpolationType="cubic" frame="8"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.05" interpolationType="cubic" frame="20"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.05" interpolationType="linear" frame="48"/>
+              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="8"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
+              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="20"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
+              <KeyFrameDouble value="1.3" interpolationType="linear" frame="48"/>
             </KeyedProperty>
           </KeyedObject>
           <KeyedObject objectId="1:222">
             <KeyedProperty propertyKey="17">
               <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.2" interpolationType="cubic" frame="8"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.05" interpolationType="cubic" frame="20"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.05" interpolationType="linear" frame="48"/>
+              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="8"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
+              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="20"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
+              <KeyFrameDouble value="1.3" interpolationType="linear" frame="48"/>
             </KeyedProperty>
           </KeyedObject>
         </LinearAnimation>

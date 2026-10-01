@@ -15,10 +15,10 @@ contract light #FBF7F0 — same metric as ANIM_A).
   per artboard
 - Full `rive inspect --json` (4.2 MB) → 0 occurrences of "unresolved":
   0 unresolved bindings
-- Binary: `app/assets/animations/rive/pip_storybook.riv`, 105,436 bytes
+- Binary: `app/assets/animations/rive/pip_storybook.riv`, 105,401 bytes
   (bit-identical copy of `tools/rive/storybook/build/storybook.riv`,
-  md5 `baeac190bdb622bbcae4672b77608ca9`, rebuilt 2026-10-01 ~06:30 UTC
-  after the eye/ring fixes below)
+  md5 `c686377787aa4abe91f7ee22e9e6c646`, rebuilt 2026-10-01 ~06:50 UTC
+  after the final-polish fixes below)
 
 ## Motion % (higher = more obvious; idle is ambient by design)
 
@@ -28,9 +28,9 @@ contract light #FBF7F0 — same metric as ANIM_A).
 | happy | 14.0% | 14.3% | 16.3% | 19.1% |
 | eating | 2.4% | 3.5% | 4.6% | 6.2% |
 | sleepy | 3.2% | 3.8% | 5.4% | 6.0% |
-| surprised | 10.8% | 10.6% | 13.3% | 15.3% |
+| surprised | 11.1% | 10.9% | 13.4% | 15.6% |
 | proud | 4.0% | 4.1% | 5.0% | 5.9% |
-| evolve | 11.3% | 13.9% | 15.1% | 17.7% |
+| evolve | 11.1% | 13.5% | 14.5% | 17.2% |
 
 Read off MOTION_BOARD: happy = squash → big jump, wings up ×2 flaps, ^^
 eyes, sparkle burst; surprised = jump-back, popped wide eyes, "o" beak,
@@ -57,6 +57,8 @@ Sleepy reads through nightcap + rising Zzz + closed eyes + slump.
   moods × fledgling/songbird, columns = frames) — look at this first
 - `design/animations/rive/storybook/pip_storybook_s3_{idle,happy,eat,sleepy,surprised,proud,evolve}.mp4`
   (7 mp4s, stage 3, 30 fps via /opt/homebrew/bin/ffmpeg)
+- `design/animations/rive/storybook/SHOWREEL.mp4` (88,648 bytes, 6.00 s,
+  240×240 30 fps — all 7 moods concatenated, 0.857 s each)
 - `design/animations/rive/storybook/SKIN_ACC.png` (4 skins × 5
   accessories on stage-3 idle — all 20 cells render correctly isolated)
 
@@ -118,6 +120,30 @@ every eye white covered its pupil/highlight.
    27% of the 240 artboard, centred ≈(120,123) on the torso) and faded
    to opacity 0 by frame 90 — the 90% strip frame shows only a faint
    ghost; peak frames show both rings fully inside the artboard.
+
+## Final polish (2026-10-01, rebuilt + re-rendered + SHOWREEL)
+
+1. Surprised 15% grey ring: it was the idle→surprised transition blend
+   (120 ms ≈ 7 frames) double-imaging the offset open/surprised whites
+   mid-blend. Fixed two ways: surprised is back to the normal eye scaled
+   1.3× symmetric (white sclera, big dark pupil, one highlight, same ink
+   outline weight and centre — no raised peak variant, so blends cannot
+   double-image), and Body + FX entry transitions into surprised are now
+   50 ms. The 15% strip frame is clean: no ring, both eyes identical.
+2. Evolve first-ring off-centre: the fx_glow node sat at the pip_root
+   (feet), so scaling shrank the rings toward the feet (15% frame) and
+   grew them past the head. The node now sits AT the body centre with
+   shapes relative to it, so rings grow concentrically on the torso from
+   frame 0. The 15% strip frame shows a small torso-centred ring; peak
+   rings stay fully inside the artboard and fade to a ghost by 90%.
+3. `design/animations/rive/storybook/SHOWREEL.mp4`: 6.00 s, 240×240,
+   30 fps, h264 — fledgling idle→happy→eating→sleepy→surprised→proud→
+   evolve (0.857 s each, concatenated with ffmpeg from the per-mood
+   mp4s).
+
+Gates: `rive --verify` 0 errors, `rive inspect` problems [] / 0
+unresolved, `flutter analyze` clean, `flutter test` 241/241 pass.
+No Flutter edits (Storybook owns no widget code).
 
 ## 3 honest weaknesses
 

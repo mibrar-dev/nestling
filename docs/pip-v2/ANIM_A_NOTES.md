@@ -8,8 +8,11 @@ consecutive strip frames (0/15/30/45/60/75/90 % of each animation).
 
 - `rive tools/rive/mochi --verify` → 0 errors, 0 warnings
 - `rive inspect tools/rive/mochi --summary` → `problems: []`
-- `rive tools/rive/mochi --once` → `build/pip_mochi.riv`, 161,520 bytes,
-  `RIVE` magic, format major 7 (same runtime as v1 `pip.riv`)
+- `rive tools/rive/mochi --once` → `build/pip_mochi.riv`, 161,540 bytes
+  (`RIVE` magic, format major 7), md5
+  `2abdf1e74d8a24a89ed35c6916673420` (supersedes `0394fc70…`, `e5e43439…`)
+
+## Motion % (higher = more obvious; idle is ambient by design)
 
 ## Motion % (higher = more obvious; idle is ambient by design)
 
@@ -19,9 +22,26 @@ consecutive strip frames (0/15/30/45/60/75/90 % of each animation).
 | happy | 12.0% | 14.3% | 18.0% | 16.1% |
 | eating | 7.4% | 5.0% | 8.4% | 9.6% |
 | sleepy | 6.3% | 4.3% | 7.9% | 8.6% |
-| surprised | 10.0% | 9.0% | 11.5% | 10.8% |
+| surprised | 9.6% | 8.6% | 11.3% | 10.4% |
 | proud | 9.3% | 5.8% | 7.7% | 7.5% |
-| evolve | 22.8% | 24.2% | 18.1% | 17.6% |
+| evolve | 24.2% | 26.5% | 18.7% | 17.2% |
+
+## Final polish round (orchestrator-verified strips)
+
+1. Surprised eyes still read as rings at board scale (variant's tiny pupil:
+   pupil/white ratio 0.26 vs idle 0.47). Per order, the surprised variant
+   nodes now reuse the normal open-eye geometry, held at 1.3× symmetric
+   through the one-shot: big white sclera, big dark pupil, one highlight,
+   uniform outline. (Deliberate deviation from the approved surprised art,
+   directed — the r=19 variant survives only in the design poses.)
+2. Evolve ring's first frame sat top-left: the ring node was at the artboard
+   origin, so node scale moved the shape. The `fx_ring` node now sits on the
+   body centre with shapes relative to it — every ring frame is concentric
+   from frame 0. (Other scaled FX nodes were left at origin: their drift
+   reads as burst motion, and the ring was the only centred circle.)
+3. `design/animations/rive/mochi/SHOWREEL.mp4` (109 KB, 6.8 s): fledgling
+   idle→happy→eating→sleepy→surprised→proud→evolve, per-mood mp4s
+   concatenated with ffmpeg and retimed 2× (13.5 s → ~6 s).
 
 ## Orchestrator fix pass (board re-rendered + re-checked)
 

@@ -186,14 +186,14 @@
             </Stroke>
             </Shape>
           </Node>
-          <Node x="0" y="0" opacity="0" name="fx_glow" id="11:209">
-            <Shape x="0" y="-98.5" name="fx_glow" id="11:25">
+          <Node x="0" y="-98.5" opacity="0" name="fx_glow" id="11:209">
+            <Shape x="0" y="0" name="fx_glow" id="11:25">
               <Ellipse width="60" height="60" name="P"/>
             <Stroke name="S" thickness="6" cap="round" join="round">
               <SolidColor colorValue="FFFFFFFF" name="C"/>
             </Stroke>
             </Shape>
-            <Shape x="0" y="-98.5" name="fx_glow" id="11:26">
+            <Shape x="0" y="0" name="fx_glow" id="11:26">
               <Ellipse width="80" height="80" name="P"/>
             <Stroke name="S" thickness="3.5" cap="round" join="round">
               <SolidColor colorValue="FFFFF1B8" name="C"/>
@@ -397,24 +397,24 @@
               <SolidColor colorValue="FF1E1B3A" name="C"/>
             </Stroke>
             </Shape>
-            <Shape x="16.5" y="-11.4" opacity="0" name="eye_r_surprised" id="11:56">
-              <Ellipse width="3" height="3" name="P"/>
+            <Shape x="17.14" y="-1.2" opacity="0" name="eye_r_surprised" id="11:56">
+              <Ellipse width="5.12" height="5.12" name="P"/>
             <Fill name="F">
               <SolidColor colorValue="FFFFFFFF" name="C"/>
             </Fill>
             </Shape>
-            <Shape x="18" y="-9.4" opacity="0" name="eye_r_surprised" id="11:57">
-              <Ellipse width="8" height="8" name="P"/>
+            <Shape x="19.5" y="1.5" opacity="0" name="eye_r_surprised" id="11:57">
+              <Ellipse width="13.5" height="13.5" name="P"/>
             <Fill name="F">
               <SolidColor colorValue="FF1E1B3A" name="C"/>
             </Fill>
             </Shape>
-            <Shape x="18" y="-10.4" opacity="0" name="eye_r_surprised" id="11:58">
-              <Ellipse width="26" height="26" name="P"/>
+            <Shape x="18" y="0" opacity="0" name="eye_r_surprised" id="11:58">
+              <Ellipse width="26" height="27" name="P"/>
             <Fill name="F">
               <SolidColor colorValue="FFFFFFFF" name="C"/>
             </Fill>
-            <Stroke name="S" thickness="4.5" cap="butt" join="miter">
+            <Stroke name="S" thickness="4.5" cap="round" join="round">
               <SolidColor colorValue="FF1E1B3A" name="C"/>
             </Stroke>
             </Shape>
@@ -460,24 +460,24 @@
               <SolidColor colorValue="FF1E1B3A" name="C"/>
             </Stroke>
             </Shape>
-            <Shape x="-19.5" y="-11.4" opacity="0" name="eye_l_surprised" id="11:69">
-              <Ellipse width="3" height="3" name="P"/>
+            <Shape x="-18.86" y="-1.2" opacity="0" name="eye_l_surprised" id="11:69">
+              <Ellipse width="5.12" height="5.12" name="P"/>
             <Fill name="F">
               <SolidColor colorValue="FFFFFFFF" name="C"/>
             </Fill>
             </Shape>
-            <Shape x="-18" y="-9.4" opacity="0" name="eye_l_surprised" id="11:70">
-              <Ellipse width="8" height="8" name="P"/>
+            <Shape x="-16.5" y="1.5" opacity="0" name="eye_l_surprised" id="11:70">
+              <Ellipse width="13.5" height="13.5" name="P"/>
             <Fill name="F">
               <SolidColor colorValue="FF1E1B3A" name="C"/>
             </Fill>
             </Shape>
-            <Shape x="-18" y="-10.4" opacity="0" name="eye_l_surprised" id="11:71">
-              <Ellipse width="26" height="26" name="P"/>
+            <Shape x="-18" y="0" opacity="0" name="eye_l_surprised" id="11:71">
+              <Ellipse width="26" height="27" name="P"/>
             <Fill name="F">
               <SolidColor colorValue="FFFFFFFF" name="C"/>
             </Fill>
-            <Stroke name="S" thickness="4.5" cap="butt" join="miter">
+            <Stroke name="S" thickness="4.5" cap="round" join="round">
               <SolidColor colorValue="FF1E1B3A" name="C"/>
             </Stroke>
             </Shape>
@@ -595,7 +595,7 @@
                 <TransitionValueEnumComparator value="11:563"/>
               </TransitionViewModelCondition>
             </StateTransition>
-            <StateTransition stateToId="11:314" duration="120">
+            <StateTransition stateToId="11:314" duration="50">
               <TransitionViewModelCondition opValue="equal">
                 <TransitionPropertyViewModelComparator>
                   <BindablePropertyEnum>
@@ -745,7 +745,7 @@
                 <TransitionValueEnumComparator value="11:563"/>
               </TransitionViewModelCondition>
             </StateTransition>
-            <StateTransition stateToId="11:334" duration="120">
+            <StateTransition stateToId="11:334" duration="50">
               <TransitionViewModelCondition opValue="equal">
                 <TransitionPropertyViewModelComparator>
                   <BindablePropertyEnum>

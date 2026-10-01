@@ -485,7 +485,7 @@ def build_rig(n, em, egg):
     evprims, _ = collect_groups(os.path.join(
         EVOLVE_DIR, f"evolve_s{min(n,3)}_to_s{min(n+1,4)}_{1 if n < 3 else 2}.svg"))
     evfx = _by_group(evprims, "fx")
-    em.node_open("fx_ring", 0, 0, 8, opacity=0)
+    em.node_open("fx_ring", bodyC[0], bodyC[1], 8, opacity=0)
     ring_el = {"tag": "ellipse", "el": None, "style": {
         "fill": "none", "stroke": "#F4B400", "stroke-width": "5",
         "stroke-linecap": "round", "stroke-linejoin": "round",
@@ -495,8 +495,8 @@ def build_rig(n, em, egg):
     ring_el["el"] = _ET.fromstring(
         f'<ellipse xmlns="http://www.w3.org/2000/svg" cx="{bodyC[0]}" '
         f'cy="{bodyC[1]}" rx="72" ry="72"/>')
-    em.shapes_for([ring_el], (0, 0), 10, "fx_ring")
-    em.shapes_for(evfx, (0, 0), 10, "fx_ring_ev")
+    em.shapes_for([ring_el], bodyC, 10, "fx_ring")
+    em.shapes_for(evfx, bodyC, 10, "fx_ring_ev")
     em.node_close(8)
     L.append("")
 
@@ -529,7 +529,10 @@ def build_rig(n, em, egg):
     # eyes: 12 variant nodes
     for side in ("l", "r"):
         for v in EYE_VARS:
-            vp = grp(f"eye_{side}", v)
+            # Orchestrator call: the surprised variant reads as rings at
+            # board scale, so surprised reuses the normal open-eye geometry
+            # (scaled 1.3x symmetric by the eyesSurprised timeline).
+            vp = grp(f"eye_{side}", "open" if v == "surprised" else v)
             node = f"eye_{side}_{v}"
             op = 1 if v == "open" else 0
             if vp:
@@ -886,9 +889,9 @@ def eyes_anims(em, aids=None, ax=None):
             r += eye(f"eye_{side}_{v}", [(0, None), (0, 48)])
     for side in ("l", "r"):
         r += keyed(N(f"eye_{side}_surprised"), 16,
-                   [(1, None), (1.2, 8), (1.05, 20), (1.05, 48)], P + "  ")
+                   [(1, None), (1.3, 8), (1.3, 20), (1.3, 48)], P + "  ")
         r += keyed(N(f"eye_{side}_surprised"), 17,
-                   [(1, None), (1.2, 8), (1.05, 20), (1.05, 48)], P + "  ")
+                   [(1, None), (1.3, 8), (1.3, 20), (1.3, 48)], P + "  ")
     r.append(f"{P}</LinearAnimation>")
     r.append("")
     # proud: left open, right wink (72f mirrors Body)

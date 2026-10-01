@@ -9,7 +9,7 @@ export const INK = '#1E1B3A';
 export const SW = 8;
 export const BEAK = '#FF8A5B';
 
-import { buildFace } from './face.mjs';
+import { buildFace, FACE_R } from './face.mjs';
 
 export const SKINS = {
   sunny: { body: '#FFD93D', belly: '#FFF1B8', wing: '#E9AE00', tail: '#C08700', accent: '#C98A3C', shell: '#FFF7E4' },
@@ -253,6 +253,14 @@ function nightcap(bx, crownY, s, tilt) {
     + `<circle ${C(41, -16)} r="8.5" fill="#FFFFFF" stroke="${INK}" stroke-width="${SW}"/></g>`;
 }
 
+/* ---------- tiny 2D math for the debug hook ---------- */
+const rad = (a) => (a * Math.PI) / 180;
+const rotPt = (x, y, a, ox, oy) => {
+  const c = Math.cos(rad(a)), s2 = Math.sin(rad(a));
+  const dx = x - ox, dy = y - oy;
+  return [ox + dx * c - dy * s2, oy + dx * s2 + dy * c];
+};
+
 /* ---------- the builder ---------- */
 export function buildParts(p) {
   const S = STAGES[p.stage], K = SKINS[p.skin || 'sunny'], F = S.face, B = S.body;
@@ -261,7 +269,6 @@ export function buildParts(p) {
   const bx = B.cx + dx, by = B.cy + dy;
   const fy = S.head ? S.head.cy : by;            // where the face is anchored
   const brx = B.rx * sx, bry = B.ry * sy;
-  const pivotYf = S.head ? S.neck.top + 10 : by - bry * 0.44;
   const bodyX = tg({ rot: brot, sx, sy, ox: B.cx, oy: bottomY });
   const tag = `stage${p.stage}`;
 
@@ -382,8 +389,23 @@ export function buildParts(p) {
   }
 
   /* head */
-  const pivotX = bx, pivotY = pivotYf;
+  const eyeY0 = fy + F.eyeDY;
   const headLift = p.stage === 1 ? -Math.max(0, p.crackOpen ?? 0) * 0.5 : 0;
+  // the shared tilt pivots at the FACE CENTRE, not the neck: the eye midpoint
+  // then cannot leave the head axis by construction, while crest/cap/beak —
+  // far from the pivot — still swing visibly (round 5 diagnosis fix).
+  const htx0 = (p.headDx ?? 0), hty0 = (p.headDy ?? 0) + headLift;
+  const pivotX = bx + htx0, pivotY = eyeY0 + hty0;
+  // shared head tilt (round 5): ONE angle for crest + face + cap + nightcap
+  // about the neck pivot. The egg never tilts. Clamped to +-12.
+  const tiltRaw = p.stage === 1 ? 0 : (p.headRot ?? 0);
+  const tilt = Math.max(-12, Math.min(12, tiltRaw));
+  const tiltT = tg({ rot: tilt, ox: pivotX, oy: pivotY });
+  const tiltWrap = (inner) => (tilt ? `<g${tiltT}>${inner}</g>` : inner);
+  // the head assembly rides the body's squash + lean (stage 2+): the SAME
+  // transform the body outline uses, so skull and face stay registered
+  // through squash-and-stretch. The egg has no bodyUSTOM — never wrapped.
+  const headWrap = (inner) => (p.stage === 1 ? inner : `<g${bodyX}>${tiltWrap(inner)}</g>`);
 
   // the tuft sits BEHIND the body so its closed base never shows as a seam
   const tuftO = { x: bx, y: S.head ? S.head.cy - S.head.r + 11 : by - bry + 10 };
@@ -392,30 +414,34 @@ export function buildParts(p) {
   // safety: the crest compresses instead of clipping when the body flies high
   const tTop = tuftO.y - 48 * tSyRaw;
   const tSy = tTop < 15 ? Math.max(0.4, (tuftO.y - 15) / (48 * Math.max(tSyRaw, 0.01))) : tSyRaw;
-  const tuft = S.has.tuft
-    ? `<g id="head_tuft"${tg({ rot: p.tuftLean ?? 0, sx: tSx, sy: tSy, ox: tuftO.x, oy: tuftO.y })}>`
+  const tuftInner = S.has.tuft
+    ? `<g id="head_tuft"${tg({ sx: tSx, sy: tSy, ox: tuftO.x, oy: tuftO.y })}>`
     + `<path d="${crestPath(0.25 + (p.tuftLean ?? 0) / 12)}"${tg({ tx: tuftO.x, ty: tuftO.y })} fill="${K.body}" stroke="${INK}" stroke-width="${SW}" stroke-linejoin="round"/></g>`
     : '<g id="head_tuft" opacity="0"/>';
+  const tuft = headWrap(tuftInner);
 
   /* Face: built ONLY by the face generator (face.mjs) — symmetric by
-     construction. Emotion = eye shape + beak state + whole-head tilt. */
-  const eyeY = fy + F.eyeDY;
-  const head = buildFace({
+     construction. Emotion = eye shape + beak state + whole-head tilt.
+     The generator draws the face STRAIGHT (tilt 0); the shared head tilt
+     below rotates crest + face + cap + nightcap TOGETHER about the neck
+     pivot, so the face can never slide inside its head (round 5 fix). */
+  const eyeY = eyeY0;
+  const head = headWrap(buildFace({
     stage: p.stage, cx: bx, eyeY,
-    tx: (p.headDx ?? 0), ty: (p.headDy ?? 0) + headLift, tilt: (p.headRot ?? 0),
+    tx: htx0, ty: hty0, tilt: 0,
     ox: pivotX, oy: pivotY,
     eyeL: p.eyeL, eyeR: p.eyeR, eye: p.eye,
     scale: p.eyeScale, gaze: p.gaze, brow: p.brow,
     beak: p.beak, beakDy: p.beakDy, seed: p.seed, cheekPuff: p.cheekPuff,
-  }).markup;
+  }).markup);
 
 
   /* accessories (always emitted, filled in by the accessory generator) */
   const night = p.nightcap
-    ? nightcap(bx,
+    ? headWrap(nightcap(bx,
       (p.stage === 4 ? S.head.cy - S.head.r + 2 : p.stage === 2 ? by - bry + 10 : by - bry + 1) + (p.headDy ?? 0),
       p.stage === 4 ? 1.1 : p.stage === 2 ? 0.9 : 1.05,
-      -8 + (p.headRot ?? 0) * 0.5)
+      -8))
     : '';
   const acc = `<g id="accessory_head">${night}</g><g id="accessory_neck"/><g id="accessory_face"/>`;
 
@@ -424,14 +450,42 @@ export function buildParts(p) {
     ? [shadow, tail, wingL, body, belly, hl, shellBot, feet]
     : [shadow, tail, wingL, wingR, body, belly, hl, shellBot, feet];
   // shell_top is always emitted so the artboard structure is identical across stages
-  if (p.stage === 2) parts = [...back, shellTop, tuft, head];
+  if (p.stage === 2) parts = [...back, headWrap(shellTop), tuft, head];
   else if (p.stage === 1) {
     // the egg: crown shell behind the face, base shell in front → the chick peeks through the crack
     const eggBack = [shadow, shellTop, tail, wingL, wingR, body, belly, hl, feet];
     parts = [...eggBack, tuft, head, shellBot];
   } else parts = [...back, tuft, head, shellTop];
 
-  return { parts: [...parts, acc, fxGroup(p.fx)], S, K, F, B, bx, by, brx, bry, bodyX, tuft };
+  /* debug hook for qa.mjs (round 5 fix #4): eye centres in world coords +
+     the head ellipse they must sit inside. Single source of truth — the same
+     numbers that place the art. */
+  const edx = 0.52 * FACE_R[p.stage];
+  const htx = htx0, hty = hty0;
+  const brotEff = p.stage === 1 ? 0 : brot;
+  const sqEff = p.stage === 1 ? 1 : sx, syEff = p.stage === 1 ? 1 : sy;
+  const eyeW = (side) => {
+    const j = rotPt(bx + (side === 'l' ? -edx : edx) + htx, eyeY + hty,
+      tilt, pivotX, pivotY);
+    const kx = B.cx + (j[0] - B.cx) * sqEff, ky = bottomY + (j[1] - bottomY) * syEff;
+    return rotPt(kx, ky, brotEff, B.cx, bottomY);
+  };
+  // head ellipse in world coords (body transform applied where one exists)
+  const bc = [B.cx, B.cy], bo = [B.cx, bottomY];
+  const bsc = [B.cx + (bc[0] - bo[0]) * sx, bo[1] + (bc[1] - bo[1]) * sy];
+  const bcc = rotPt(bsc[0], bsc[1], brot, bo[0], bo[1]);
+  let headEl;
+  if (p.stage === 1) headEl = { cx: bx, cy: 214 - bry, rx: brx, ry: bry };
+  else if (p.stage === 4) {
+    const sc = rotPt(B.cx, S.head.cy, 0, 0, 0);
+    const so = [B.cx, bottomY];
+    const ss = [B.cx + (sc[0] - so[0]) * sx, so[1] + (sc[1] - so[1]) * sy];
+    const sw = rotPt(ss[0], ss[1], brot, so[0], so[1]);
+    headEl = { cx: sw[0], cy: sw[1], rx: S.head.r * sx, ry: S.head.r * sy };
+  } else headEl = { cx: bcc[0], cy: bcc[1], rx: brx, ry: bry };
+  const debug = { eyeL: eyeW('l'), eyeR: eyeW('r'), head: headEl, tilt };
+
+  return { parts: [...parts, acc, fxGroup(p.fx)], S, K, F, B, bx, by, brx, bry, bodyX, tuft, debug };
 }
 
 /* ---------- extra shapes used by accessories / evolve ---------- */
