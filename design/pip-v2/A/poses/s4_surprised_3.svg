@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="Mochi s4 surprised 3 sunny">
+<g id="shadow"><ellipse cx="120" cy="212" rx="66" ry="11" fill="#1E1B3A" opacity="0.12"/></g>
+<g id="tail" stroke="#1E1B3A" stroke-width="6" stroke-linejoin="round"><ellipse cx="84" cy="194" rx="12" ry="25" fill="#E8A800" transform="rotate(-20 84 194)"/><ellipse cx="120" cy="194" rx="12" ry="25" fill="#E8A800" transform="rotate(0 120 194)"/><ellipse cx="156" cy="194" rx="12" ry="25" fill="#E8A800" transform="rotate(20 156 194)"/></g>
+<g id="wing_l"><ellipse cx="62" cy="154" rx="14" ry="20" fill="#E8A800" stroke="#1E1B3A" stroke-width="6" transform="rotate(-6 62 154)"/></g>
+<g id="wing_r"><ellipse cx="178" cy="154" rx="14" ry="20" fill="#E8A800" stroke="#1E1B3A" stroke-width="6" transform="rotate(6 178 154)"/></g>
+<g id="body"><ellipse cx="120" cy="126" rx="64" ry="64" fill="#FFD93D" stroke="#1E1B3A" stroke-width="6"/></g>
+<g id="belly"><ellipse cx="120" cy="152" rx="41.0" ry="36.0" fill="#FFF1B8"/></g>
+<g id="highlight"><ellipse cx="97" cy="97" rx="18" ry="10" fill="#FFFFFF" opacity="0.55" transform="rotate(-18 97 97)"/></g>
+<g id="cheek_l"><ellipse cx="75" cy="154" rx="10" ry="6.5" fill="#FF8A5B" opacity="0.55"/></g><g id="cheek_r"><ellipse cx="165" cy="154" rx="10" ry="6.5" fill="#FF8A5B" opacity="0.55"/></g>
+<g id="head_tuft" stroke="#1E1B3A" stroke-width="6" stroke-linejoin="round"><circle cx="102" cy="70" r="11" fill="#FFD93D"/><circle cx="120" cy="62" r="12.5" fill="#FFD93D"/><circle cx="138" cy="70" r="11" fill="#FFD93D"/></g>
+<g id="eye_l"><g id="open"><circle cx="96" cy="131" r="16" fill="#FFFFFF" stroke="#1E1B3A" stroke-width="6"/><circle cx="98" cy="133" r="7.5" fill="#1E1B3A"/><circle cx="95" cy="129" r="2.6" fill="#FFFFFF"/></g><g id="closed" style="display:none"><path d="M80 131 Q96 145.4 112 131" fill="none" stroke="#1E1B3A" stroke-width="6" stroke-linecap="round"/></g><g id="happy" style="display:none"><path d="M80 136 Q96 113 112 136" fill="none" stroke="#1E1B3A" stroke-width="6" stroke-linecap="round"/></g><g id="sleepy" style="display:none"><path d="M80 129 Q96 139.8 112 129" fill="none" stroke="#1E1B3A" stroke-width="6" stroke-linecap="round"/><path d="M110 131 l6 4" stroke="#1E1B3A" stroke-width="3.5" stroke-linecap="round"/></g><g id="surprised" style="display:none"><circle cx="96" cy="131" r="19" fill="#FFFFFF" stroke="#1E1B3A" stroke-width="6"/><circle cx="96" cy="132" r="5" fill="#1E1B3A"/><circle cx="94" cy="129" r="2" fill="#FFFFFF"/></g><g id="wink" style="display:none"><path d="M80 131 Q96 137 112 131" fill="none" stroke="#1E1B3A" stroke-width="6" stroke-linecap="round"/></g></g>
+<g id="eye_r"><g id="open"><circle cx="144" cy="131" r="16" fill="#FFFFFF" stroke="#1E1B3A" stroke-width="6"/><circle cx="146" cy="133" r="7.5" fill="#1E1B3A"/><circle cx="143" cy="129" r="2.6" fill="#FFFFFF"/></g><g id="closed" style="display:none"><path d="M128 131 Q144 145.4 160 131" fill="none" stroke="#1E1B3A" stroke-width="6" stroke-linecap="round"/></g><g id="happy" style="display:none"><path d="M128 136 Q144 113 160 136" fill="none" stroke="#1E1B3A" stroke-width="6" stroke-linecap="round"/></g><g id="sleepy" style="display:none"><path d="M128 129 Q144 139.8 160 129" fill="none" stroke="#1E1B3A" stroke-width="6" stroke-linecap="round"/><path d="M158 131 l6 4" stroke="#1E1B3A" stroke-width="3.5" stroke-linecap="round"/></g><g id="surprised" style="display:none"><circle cx="144" cy="131" r="19" fill="#FFFFFF" stroke="#1E1B3A" stroke-width="6"/><circle cx="144" cy="132" r="5" fill="#1E1B3A"/><circle cx="142" cy="129" r="2" fill="#FFFFFF"/></g><g id="wink" style="display:none"><path d="M128 131 Q144 137 160 131" fill="none" stroke="#1E1B3A" stroke-width="6" stroke-linecap="round"/></g></g>
+<g id="brow_l"></g><g id="brow_r"></g>
+<g id="beak_top"><path d="M106 152 Q120 147 134 152 Q130 163 120 165 Q110 163 106 152 Z" fill="#FF8A5B" stroke="#1E1B3A" stroke-width="6" stroke-linejoin="round"/></g><g id="beak_bottom" style="display:none"><ellipse cx="120" cy="160" rx="10" ry="7"/></g>
+<g id="feet" stroke="#1E1B3A" stroke-width="6"><ellipse cx="99" cy="200" rx="13" ry="8.5" fill="#FF8A5B"/><ellipse cx="141" cy="200" rx="13" ry="8.5" fill="#FF8A5B"/></g>
+<g id="shell_top"></g>
+<g id="shell_bottom"></g>
+<g id="accessory_head"></g>
+<g id="accessory_neck"></g>
+<g id="accessory_face"></g>
+<g id="fx"><path d="M204 60 L205.32 64.68 L210 66 L205.32 67.32 L204 72 L202.68 67.32 L198 66 L202.68 64.68 Z" fill="#7C6CF2"/></g>
+</svg>

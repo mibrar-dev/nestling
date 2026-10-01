@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="Mochi s1 surprised 2 sunny">
+<g id="shadow"><ellipse cx="120" cy="212" rx="58" ry="11" fill="#1E1B3A" opacity="0.12"/></g>
+<g id="tail"></g>
+<g id="wing_l"></g><g id="wing_r"></g>
+<g id="body"><path d="M120 22 C78.0 22 60.0 87.36 64.0 128.64 C68.0 168.0 90 194.0 120 194.0 C150 194.0 172.0 168.0 176.0 128.64 C180.0 87.36 162.0 22 120 22 Z" fill="#FFF8E8" stroke="#1E1B3A" stroke-width="6"/></g>
+<g id="belly"><circle cx="90" cy="78" r="7" fill="#7C6CF2"/><circle cx="142" cy="64" r="5.5" fill="#7C6CF2"/><circle cx="158" cy="102" r="6" fill="#7C6CF2"/><circle cx="78" cy="120" r="5" fill="#7C6CF2"/></g>
+<g id="highlight"><ellipse cx="150" cy="60" rx="17" ry="9" fill="#FFFFFF" opacity="0.55" transform="rotate(-18 150 60)"/></g>
+<g id="cheek_l"></g><g id="cheek_r"></g>
+<g id="head_tuft"></g>
+<g id="eye_l"><g id="open" style="display:none"><circle cx="102" cy="155" r="10" fill="#FFFFFF" stroke="#1E1B3A" stroke-width="6"/><circle cx="104" cy="157" r="4.5" fill="#1E1B3A"/><circle cx="101" cy="153" r="1.5" fill="#FFFFFF"/></g><g id="closed" style="display:none"><path d="M92 155 Q102 164.0 112 155" fill="none" stroke="#1E1B3A" stroke-width="6" stroke-linecap="round"/></g><g id="happy" style="display:none"><path d="M92 160 Q102 143 112 160" fill="none" stroke="#1E1B3A" stroke-width="6" stroke-linecap="round"/></g><g id="sleepy" style="display:none"><path d="M92 153 Q102 160.5 112 153" fill="none" stroke="#1E1B3A" stroke-width="6" stroke-linecap="round"/><path d="M110 155 l6 4" stroke="#1E1B3A" stroke-width="3.5" stroke-linecap="round"/></g><g id="surprised"><circle cx="102" cy="155" r="13" fill="#FFFFFF" stroke="#1E1B3A" stroke-width="6"/><circle cx="102" cy="156" r="5" fill="#1E1B3A"/><circle cx="100" cy="153" r="2" fill="#FFFFFF"/></g><g id="wink" style="display:none"><path d="M92 155 Q102 161 112 155" fill="none" stroke="#1E1B3A" stroke-width="6" stroke-linecap="round"/></g></g><g id="eye_r"><g id="open" style="display:none"><circle cx="138" cy="155" r="10" fill="#FFFFFF" stroke="#1E1B3A" stroke-width="6"/><circle cx="140" cy="157" r="4.5" fill="#1E1B3A"/><circle cx="137" cy="153" r="1.5" fill="#FFFFFF"/></g><g id="closed" style="display:none"><path d="M128 155 Q138 164.0 148 155" fill="none" stroke="#1E1B3A" stroke-width="6" stroke-linecap="round"/></g><g id="happy" style="display:none"><path d="M128 160 Q138 143 148 160" fill="none" stroke="#1E1B3A" stroke-width="6" stroke-linecap="round"/></g><g id="sleepy" style="display:none"><path d="M128 153 Q138 160.5 148 153" fill="none" stroke="#1E1B3A" stroke-width="6" stroke-linecap="round"/><path d="M146 155 l6 4" stroke="#1E1B3A" stroke-width="3.5" stroke-linecap="round"/></g><g id="surprised"><circle cx="138" cy="155" r="13" fill="#FFFFFF" stroke="#1E1B3A" stroke-width="6"/><circle cx="138" cy="156" r="5" fill="#1E1B3A"/><circle cx="136" cy="153" r="2" fill="#FFFFFF"/></g><g id="wink" style="display:none"><path d="M128 155 Q138 161 148 155" fill="none" stroke="#1E1B3A" stroke-width="6" stroke-linecap="round"/></g></g>
+<g id="brow_l"></g><g id="brow_r"></g>
+<g id="beak_top"></g><g id="beak_bottom"></g>
+<g id="feet"></g>
+<g id="shell_top"><path d="M62 138 L86 120 L100 144 L116 124 L134 148 L152 128 L178 144 L178 116 L62 116 Z" fill="#FFF8E8" opacity="0"/><path d="M62 138 L86 120 L100 144 L116 124 L134 148 L152 128 L178 144" fill="none" stroke="#1E1B3A" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></g>
+<g id="shell_bottom"><path d="M120 22 C78.0 22 60.0 87.36 64.0 128.64 C68.0 168.0 90 194.0 120 194.0 C150 194.0 172.0 168.0 176.0 128.64 C180.0 87.36 162.0 22 120 22 Z" fill="none" stroke="none"/></g>
+<g id="accessory_head"></g>
+<g id="accessory_neck"></g>
+<g id="accessory_face"></g>
+<g id="fx"><rect x="199" y="52" width="10" height="34" rx="5" fill="#7C6CF2" stroke="#1E1B3A" stroke-width="4"/><circle cx="204" cy="98" r="6" fill="#7C6CF2" stroke="#1E1B3A" stroke-width="4"/><path d="M38 62 L39.76 68.24 L46 70 L39.76 71.76 L38 78 L36.24 71.76 L30 70 L36.24 68.24 Z" fill="#7C6CF2"/></g>
+</svg>
