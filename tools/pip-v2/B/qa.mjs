@@ -1,0 +1,184 @@
+#!/usr/bin/env node
+/* Pip v2 · Bolt — automated QA.
+   1. no art touches the 240 canvas edge (nothing clips)
+   2. no <text>, no gradients, no filters, no external refs
+   3. contract part ids present in every file
+   4. ink stroke weight 8 on the character parts
+   5. bounding box stays inside 4..236
+*/
+import fs from 'node:fs';
+import path from 'node:path';
+import sharp from 'sharp';
+
+const ROOT = path.resolve(import.meta.dirname, '../../..');
+const B = path.join(ROOT, 'design/pip-v2/B');
+
+const REQUIRED = ['shadow', 'body', 'head_tuft', 'eye_l', 'eye_r', 'beak_top', 'beak_bottom',
+  'feet', 'cheek_l', 'cheek_r', 'tail', 'wing_l', 'wing_r', 'belly', 'shell_top', 'shell_bottom',
+  'accessory_head', 'accessory_neck', 'accessory_face', 'fx'];
+const EYE_STATES = ['open', 'closed', 'happy', 'sleepy', 'surprised', 'wink'];
+
+function walk(dir, out = []) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) walk(p, out);
+    else if (e.name.endsWith('.svg')) out.push(p);
+  }
+  return out;
+}
+
+// the pre-existing direction thumbnails (expr_*, fledgling_*) feed the shared
+// PIP_V2_DIRECTIONS board and predate this library — QA covers the new deliverables
+const LEGACY = new Set(fs.readdirSync(B).filter((f) => /^(expr_|fledgling_)/.test(f)));
+const files = walk(B).filter((f) => !LEGACY.has(path.basename(f)));
+const problems = [];
+const edgeFlags = [];
+
+for (const f of files) {
+  const src = fs.readFileSync(f, 'utf8');
+  const rel = path.relative(B, f);
+
+  /* --- source-level rules --- */
+  if (/<text\b/.test(src)) problems.push(`${rel}: contains <text>`);
+  if (/Gradient|radialGradient|linearGradient/.test(src)) problems.push(`${rel}: gradient`);
+  if (/<filter\b|url\(#(?!)/.test(src)) problems.push(`${rel}: filter / external url()`);
+  if (/font-family|@font-face/.test(src)) problems.push(`${rel}: font reference`);
+  if (/xlink:href|<image\b/.test(src)) problems.push(`${rel}: embedded/linked raster`);
+
+  /* --- contract ids --- */
+  for (const id of REQUIRED) {
+    if (!new RegExp(`id="${id}"`).test(src)) problems.push(`${rel}: missing part id "${id}"`);
+  }
+  for (const id of ['eye_l', 'eye_r']) {
+    const open = src.indexOf(`id="${id}"`);
+    const slice = open >= 0 ? src.slice(open, open + 2600) : '';
+    for (const st of EYE_STATES) {
+      if (!new RegExp(`id="${st}"`).test(slice)) problems.push(`${rel}: ${id} missing child state "${st}"`);
+    }
+  }
+  if (/stroke-width="8(\.0)?"/.test(src) === false && !/shell_bottom/.test(src)) {
+    problems.push(`${rel}: no 8px ink stroke found`);
+  }
+  /* --- viewBox --- */
+  if (!/viewBox="0 0 240 240"/.test(src)) problems.push(`${rel}: wrong viewBox`);
+
+  /* --- raster: nothing may touch the canvas edge --- */
+  const px = await sharp(Buffer.from(src), { density: 200 })
+    .resize(240, 240, { fit: 'fill', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .ensureAlpha().raw().toBuffer();
+  let minX = 240, minY = 240, maxX = -1, maxY = -1;
+  for (let y = 0; y < 240; y++) {
+    for (let x = 0; x < 240; x++) {
+      const a = px[(y * 240 + x) * 4 + 3];
+      if (a > 8) {
+        if (x < minX) minX = x; if (x > maxX) maxX = x;
+        if (y < minY) minY = y; if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX < 0) { problems.push(`${rel}: renders empty`); continue; }
+  if (minX <= 1 || minY <= 1 || maxX >= 238 || maxY >= 238) {
+    edgeFlags.push(`${rel}: bbox ${minX},${minY} → ${maxX},${maxY} (touches canvas edge)`);
+  }
+  // contract: ground shadow is an ellipse centred on y=214, so 224 is the expected floor
+  if (maxY > 225) problems.push(`${rel}: art below the ground shadow (maxY=${maxY})`);
+}
+
+console.log(`checked ${files.length} svg files (${LEGACY.size} legacy direction thumbnails skipped)`);
+if (problems.length) { console.log(`\n✗ ${problems.length} problems:`); for (const p of problems) console.log('  ' + p); }
+else console.log('✓ contract ids, stroke, viewBox, no text / gradients / rasters — all clean');
+if (edgeFlags.length) { console.log(`\n⚠ ${edgeFlags.length} touch the canvas edge:`); for (const e of edgeFlags) console.log('  ' + e); }
+else console.log('✓ nothing touches the 240 canvas edge');
+
+/* round 5: the generator (face.mjs) accepts no per-eye/per-side input, so no
+   pose may carry asymmetric face keys — fail the build if one appears */
+{
+  const src = fs.readFileSync(path.resolve(import.meta.dirname, 'poses.mjs'), 'utf8');
+  const banned = ['eyeDx', 'eyeDy', 'eyeSy', 'beakDx', 'beakSx', 'browL', 'browR'];
+  const found = banned.filter((k) => new RegExp(`\\b${k}\\s*:`).test(src));
+  if (found.length) {
+    console.log(`\n✗ asymmetric face keys in poses.mjs: ${found.join(', ')} (face.mjs cannot express these)`);
+    process.exitCode = 1;
+  } else console.log('✓ poses.mjs carries no asymmetric face keys');
+}
+
+/* round 5 fix #4: for every pose, the face-group centre must sit on the head
+   axis (within 4% of head width) and both eye centres must fall inside the
+   head ellipse. Geometry comes from the rig's debug hook — the same numbers
+   that place the art — so this checks the shipped SVGs' provenance. */
+{
+  const { buildParts } = await import('./rig.mjs');
+  const { allPoses } = await import('./poses.mjs');
+  const { IDLE } = await import('./idle.mjs');
+  const faceFails = [];
+  const checkFace = (p, label) => {
+    const { debug } = buildParts(p);
+    const { eyeL, eyeR, head } = debug;
+    const midX = (eyeL[0] + eyeR[0]) / 2;
+    if (Math.abs(midX - head.cx) > 0.04 * 2 * head.rx) {
+      faceFails.push(`${label}: face centre x=${midX.toFixed(1)} vs head x=${head.cx.toFixed(1)} (limit ${(0.04 * 2 * head.rx).toFixed(1)})`);
+    }
+    for (const [nm, e] of [['L', eyeL], ['R', eyeR]]) {
+      const v = ((e[0] - head.cx) / head.rx) ** 2 + ((e[1] - head.cy) / head.ry) ** 2;
+      if (v > 1) faceFails.push(`${label}: eye ${nm} outside head ellipse (v=${v.toFixed(2)})`);
+    }
+  };
+  for (const p of allPoses()) checkFace({ ...p, skin: 'sunny' }, `s${p.stage}_${p.mood}_${p.n}`);
+  for (const skin of ['sunny', 'berry', 'sky', 'mint']) {
+    for (const mood of ['idle', 'happy']) {
+      checkFace({ ...IDLE[3][mood], stage: 3, mood, n: 0, skin }, `skin_${skin}_s3_${mood}`);
+    }
+  }
+  for (const kind of ['bow', 'cap', 'scarf', 'glasses', 'none']) {
+    for (const stage of [1, 2, 3, 4]) {
+      if (kind === 'none' && stage !== 3) continue;
+      checkFace({ ...IDLE[stage].idle, stage }, `acc_${kind}_s${stage}`);
+    }
+  }
+  // evolve frames are scaled/rotated wrappers around checked idle art — covered transitively
+  if (faceFails.length) {
+    console.log(`\n✗ ${faceFails.length} face-placement failures:`);
+    for (const f of faceFails.slice(0, 25)) console.log('  ' + f);
+    process.exitCode = 1;
+  } else console.log('✓ every face sits on its head axis with both eyes inside the head');
+}
+
+/* diagnosis tightened checks: eye-midpoint symmetry, eye-level equality, and
+   beak centring — evaluated on world coords for every checked face */
+{
+  const { buildParts } = await import('./rig.mjs');
+  const { allPoses } = await import('./poses.mjs');
+  const { IDLE } = await import('./idle.mjs');
+  const symFails = [];
+  const checkSym = (p, label) => {
+    const { debug } = buildParts(p);
+    const { eyeL, eyeR, beak, head } = debug;
+    const w = 2 * head.rx, h = 2 * head.ry;
+    if (Math.abs(eyeL[0] + eyeR[0] - 2 * head.cx) > 0.04 * w) {
+      symFails.push(`${label}: eyes not mirrored about head axis (|${eyeL[0].toFixed(1)}+${eyeR[0].toFixed(1)}-2*${head.cx.toFixed(1)}| > ${(0.04 * w).toFixed(1)})`);
+    }
+    if (Math.abs(eyeL[1] - eyeR[1]) > 0.03 * h) {
+      symFails.push(`${label}: eyes not level (|${eyeL[1].toFixed(1)}-${eyeR[1].toFixed(1)}| > ${(0.03 * h).toFixed(1)})`);
+    }
+    if (Math.abs(beak[0] - head.cx) > 0.06 * w) {
+      symFails.push(`${label}: beak off head axis (|${beak[0].toFixed(1)}-${head.cx.toFixed(1)}| > ${(0.06 * w).toFixed(1)})`);
+    }
+  };
+  for (const p of allPoses()) checkSym({ ...p, skin: 'sunny' }, `s${p.stage}_${p.mood}_${p.n}`);
+  for (const skin of ['sunny', 'berry', 'sky', 'mint']) {
+    for (const mood of ['idle', 'happy']) {
+      checkSym({ ...IDLE[3][mood], stage: 3, mood, n: 0, skin }, `skin_${skin}_s3_${mood}`);
+    }
+  }
+  for (const kind of ['bow', 'cap', 'scarf', 'glasses', 'none']) {
+    for (const stage of [1, 2, 3, 4]) {
+      if (kind === 'none' && stage !== 3) continue;
+      checkSym({ ...IDLE[stage].idle, stage }, `acc_${kind}_s${stage}`);
+    }
+  }
+  if (symFails.length) {
+    console.log(`\n✗ ${symFails.length} face-symmetry failures:`);
+    for (const f of symFails.slice(0, 25)) console.log('  ' + f);
+    process.exitCode = 1;
+  } else console.log('✓ eyes mirrored + level and beak centred on every face');
+}

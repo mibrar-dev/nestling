@@ -1,0 +1,5 @@
+ORCHESTRATOR REVIEW of design/animations/rive/storybook/MOTION_BOARD.png — happy/eating/sleepy read well. Fix, rebuild, re-render, and PROVE it (print md5 + timestamps of the new pip_storybook.riv and the re-rendered strips, and describe the peak frames you READ):
+1. [major] Eyes: in idle/rest the eyes render as big blank white circles with tiny off-centre pupils — vacant/creepy and NOT the approved art (design/pip-v2/C/poses/s3_idle_1.svg: smaller eyes with a large dark pupil and one highlight, centred). Match the approved SVG eye geometry for every stage and mood.
+2. [major] Surprised: one eye renders much bigger than the other — make both eyes enlarge symmetrically (same scale, same level).
+3. [major] Evolve: the rings are huge and run off the artboard. Centre on Pip's body and keep max radius ≤ 45% of artboard width; fade out by the end.
+4. Rebuild with the CLI, copy to app/assets/animations/rive/pip_storybook.riv, re-render all strips + MOTION_BOARD.png, verify/inspect 0 problems. Do NOT edit Flutter code.

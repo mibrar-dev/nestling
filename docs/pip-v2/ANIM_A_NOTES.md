@@ -1,0 +1,165 @@
+# ANIM_A_NOTES — Mochi (body style A) Rive build
+
+Owner complaint fixed: every mood is full-body acting measured frame-to-frame,
+not a face swap. Motion % = mean % of pixels visibly changed between
+consecutive strip frames (0/15/30/45/60/75/90 % of each animation).
+
+## Verify (must stay at zero)
+
+- `rive tools/rive/mochi --verify` → 0 errors, 0 warnings
+- `rive inspect tools/rive/mochi --summary` → `problems: []`
+- `rive tools/rive/mochi --once` → `build/pip_mochi.riv`, 162,596 bytes
+  (`RIVE` magic, format major 7), md5
+  `b8cc06193274f434ea1268a746455a9f` (supersedes `b9a68264…`, `c2c1a14c…`,
+  `d7243d2c…`, `2abdf1e7…`, `0394fc70…`, `e5e43439…`)
+
+## Motion % (higher = more obvious; idle is ambient by design)
+
+## Motion % (higher = more obvious; idle is ambient by design)
+
+| mood | s1 egg | s2 hatchling | s3 fledgling | s4 songbird |
+|---|---|---|---|---|
+| idle | 4.7% | 3.3% | 5.0% | 5.5% |
+| happy | 12.0% | 14.3% | 18.0% | 16.1% |
+| eating | 7.4% | 5.0% | 8.4% | 9.6% |
+| sleepy | 6.3% | 4.3% | 7.9% | 8.6% |
+| surprised | 9.6% | 8.6% | 11.3% | 10.4% |
+| proud | 9.3% | 5.8% | 7.7% | 7.5% |
+| evolve | 24.2% | 26.5% | 18.7% | 17.2% |
+
+## Final polish round (orchestrator-verified strips)
+
+1. Surprised eyes still read as rings at board scale (variant's tiny pupil:
+   pupil/white ratio 0.26 vs idle 0.47). Per order, the surprised variant
+   nodes now reuse the normal open-eye geometry, held at 1.3× symmetric
+   through the one-shot: big white sclera, big dark pupil, one highlight,
+   uniform outline. (Deliberate deviation from the approved surprised art,
+   directed — the r=19 variant survives only in the design poses.)
+2. Evolve ring's first frame sat top-left: the ring node was at the artboard
+   origin, so node scale moved the shape. The `fx_ring` node now sits on the
+   body centre with shapes relative to it — every ring frame is concentric
+   from frame 0. (Other scaled FX nodes were left at origin: their drift
+   reads as burst motion, and the ring was the only centred circle.)
+3. `design/animations/rive/mochi/SHOWREEL.mp4` (109 KB, 6.8 s): fledgling
+   idle→happy→eating→sleepy→surprised→proud→evolve, per-mood mp4s
+   concatenated with ffmpeg and retimed 2× (13.5 s → ~6 s).
+
+## Rim fix (thick dark eye rims at surprised peak)
+
+   Root cause: the 1.3× lived in a node scale, which scales stroke width too
+   (6 → 7.8 reads as glasses rims). The scale now lives in the geometry:
+   `shapes_for` takes an `xf` transform (scale-about-pivot, stroke untouched)
+   and the surprised variant nodes emit open-eye geometry pre-scaled 1.3×
+   about the open-eye pivot with stroke authored at 6. The timeline pop keys
+   were removed (nothing left to animate). Rebuild md5 `d7243d2c…`.
+
+## Shock-take rework (owner: scaled eyes always read as spectacles)
+
+   New definition, all stages: eyes keep idle size/position; BIG pupils
+   shifted slightly up (looking up in shock); two short brow arcs HIGH on
+   the outer half above each eye (`brow_prim` with side); round "o" beak
+   (approved art, and the idle closed `beak_top` now hides under it via a
+   new `beak_top_n` node keyed in all 7 Body timelines — approved surprised
+   has no closed beak); sprung tuft, jump-back, flared wings, "!" as before.
+   Quirk found: standalone brow nodes with correct ids/keys would not
+   render (shape proven fine in isolation), so the arcs live inside the
+   surprised eye nodes, which provably render. Brows ride the eye-variant
+   opacity keys, no separate keys needed.
+   Entries *into* surprised are hard-cut (duration 0) on all Eyes layers — a shock take snaps.
+   Rebuild md5 `b8cc0619…`.
+
+   (Superseded below — the 1.15× approach still bridged at board scale:)
+
+   At 1.3× the outlines nearly touched (2.6 px gap on s3). Surprised eyes are
+   now dedicated shock geometry (`surprised_prims` in the generator): 1.15×
+   sclera, pupil 55 % of sclera diameter, original glint plus a second tiny
+   mirrored highlight, stroke exactly 6, each eye shifted 6 px outward.
+   Generator asserts per stage that the white-to-white gap is ≥ 60 % of idle
+   (s1 16→25, s2 6→14.7, s3 16→23.2, s4 14→21.5). Rebuild md5 `c2c1a14c…`.
+
+## Orchestrator fix pass (board re-rendered + re-checked)
+
+1. Happy wings covered the face at peak (rotation overshot inward over the
+   eyes: ±2.2, then ±1.6). Peak cut to ±1.3 rad (proven-clear surprised-flare
+   geometry) plus a 12 px outward shift keyed on each wing node, so wings
+   rise to the sides and stay behind the head; ^^ eyes and open beak are
+   fully visible at peak on fledgling and songbird (verified pixel-level:
+   head node is emitted before the wing nodes, i.e. front-most).
+2. Surprised ~15 % showed grey double-ring eyes (open + surprised whites
+   overlapping mid-blend). Eyes-layer mood transitions shortened 120 → 80 ms
+   on all artboards (Body stays 150 ms); the swap completes before the 15 %
+   frame. Verified accessory_face stays hidden unless `accessory` is set
+   (Formula-isolated, see `skin_accessory_grid.png`).
+3. Evolve ring ran off the artboard (r86 × scale 1.5). Ring cut to r72,
+   peak scale 1.2 (max radius 86 px < 108 = 45 % of 240), centred on the
+   body centre, opacity out by f66 — last board frame is clean.
+   Rebuild md5 `0394fc701e792ecf816fc8fd7a0f6376` (supersedes `e5e43439…`).
+
+Proud was 2–5% on first pass (face-only); it now lifts, leans, splays a wing
+and pops a bigger sparkle. Egg adaptations per contract: happy = hop + wobble,
+eating = rock + nibble crumbs through the crack, sleepy = slow rock + Zzz,
+surprised = jolt, proud = rock + shine sweep.
+
+## Files
+
+- Source: `tools/rive/mochi/gen_mochi.py` (69 KB) → `stage1..4.rml`,
+  `pipstage.rml`, `shared.rml`, `rive.yaml` (main: Stage3)
+- Matrix scripts: `tools/rive/mochi/matrix.py` (196 renders),
+  `tools/rive/mochi/assemble.py` (strips + board + table)
+- Binary: `app/assets/animations/rive/pip_mochi.riv` (160,404 bytes)
+- Strips: `design/animations/rive/mochi/strip_s{1..4}_{mood}.png`
+  (7 frames each), raw frames in `frames/` (3.2 MB, review scaffolding)
+- `design/animations/rive/mochi/MOTION_BOARD.png` (1.3 MB; rows = moods ×
+  fledgling/songbird, columns = frames) — look at this first
+- `design/animations/rive/mochi/mp4/{idle,happy,eating,sleepy,surprised,proud,evolve}.mp4`
+  (Stage3, 30 fps, true duration)
+- `design/animations/rive/mochi/skin_accessory_grid.png` (4 skins ×
+  5 accessories, all isolated correctly)
+- Widget: `app/lib/core/design_system/motion/pip_avatar.dart`,
+  test `app/test/pip_avatar_test.dart` (27 tests)
+- Fallbacks: `app/assets/illustrations/pip_v2/mochi/s{1..4}_idle_1.svg`
+  (exact copies of the approved poses); bolt/storybook hold a marked
+  placeholder until their animators land
+
+## Contract mapping
+
+- Artboards `Stage1..Stage4` (240×240) + `PipStage` (350×260, one nest
+  geometry, back → Pip → front rim, same split/feet fractions as
+  `PipInNest`); state machine `Pip` on all five, default on all five.
+- View model `Pip`: `mood` 0–5, `stage` 1–4, `skin` 0–3, `accessory` 0–4 as
+  Numbers (same representation as v1 `mood`/`stage`, so transitions use the
+  proven `BindablePropertyNumber` path); `bodyColor`/`darkColor`/`bellyColor`
+  Colors; `evolve`/`tap`/`blink` Triggers.
+- Rig: Node chains root → body → head → tuft, body → wings/tail; eye/beak
+  swaps use the approved eye child groups verbatim; squash & stretch is
+  volume-preserving (1.18×0.85, 0.93×1.08, 1.10×0.94 …).
+- Layers: exactly Body/Eyes/FX on Stage1..4. PipStage = Stage selector +
+  one Body/Eyes/FX trio per rig (13 layers) so the four rigs move as one
+  and `stage` picks the visible one. Layer ownership is strict (Body owns
+  transforms + beak, Eyes owns the 12 eye-variant opacities, FX owns the 7
+  fx nodes) — no two layers key the same property.
+- Skins recolour body + dark (wings/tuft/tail) + belly via data binding;
+  beak/feet/ink untouched. Accessories toggle through Formula converters
+  `1 − min(1, (input−N)²)` (no `abs` exists in the formula function table).
+- Motion minimums all met or exceeded: idle 1→1.04 + ±4° tilt + tuft lag
+  (3 s loop); happy 0.85 squash → 22 px jump, wings ±126° ×2 flaps, ^^,
+  open beak, sparkle burst (1.2 s); eating seed drop + 3 pecks + 3 crumb
+  bursts + cheek puff (1.8 s); sleepy loop 0.94 slump, 4 s breath, nods,
+  nightcap (approved art), rising Zzz; surprised 10 px jump-back, wide eyes,
+  "o" beak (approved peak art), ±74° flare, elastic tuft + "!" (0.8 s);
+  proud 1.10 chest, −11° chin, akimbo wings, wink, chest sparkle (1.2 s);
+  evolve squash-pop + glow ring (1.5 s). Everything cubic/elastic; follow-
+  through on tuft and wings everywhere.
+- Flutter: `flutter analyze` clean, `flutter test` 241/241 pass (27 new).
+  v1 `pip_rive.dart` untouched.
+
+## 3 honest weaknesses
+
+1. PipStage duplicates all four rigs + all trios (8,622 objects, 160 KB —
+   6× v1). Runtime cost is one widget, but the file is heavy; a future pass
+   could drive PipStage through nested artboards instead.
+2. Sleepy on the egg reuses the nightcap-less rock; the egg has no cap art
+   in the approved set, so stages 1–2 sleep bare-headed while 3–4 wear caps.
+3. Blink is baked into the Eyes `open` loop (3 s) plus the `blink` trigger;
+   cadence is fixed, not randomised 2.5–4 s — true random needs a Luau
+   script, deliberately avoided for this pass.

@@ -5,15 +5,18 @@ import 'package:nestling/features/design_system_gallery/presentation/bloc/design
 import 'package:nestling/features/design_system_gallery/presentation/bloc/design_system_gallery_event.dart';
 import 'package:nestling/features/design_system_gallery/presentation/views/design_system_gallery_view.dart';
 import 'package:nestling/features/design_system_gallery/presentation/views/motion_lab_view.dart';
+import 'package:nestling/features/design_system_gallery/presentation/views/pip_lab_view.dart';
 
 abstract final class DesignSystemGalleryRouteNames {
   static const String gallery = 'design-system';
   static const String motionLab = 'design-system-motion-lab';
+  static const String pipLab = 'design-system-pip-lab';
 }
 
 abstract final class DesignSystemGalleryRoutePaths {
   static const String gallery = '/design-system';
   static const String motionLab = '/motion-lab';
+  static const String pipLab = '/pip-lab';
 }
 
 final GoRoute designSystemGalleryRoute = GoRoute(
@@ -37,7 +40,16 @@ final GoRoute designSystemGalleryMotionLabRoute = GoRoute(
   },
 );
 
+final GoRoute designSystemGalleryPipLabRoute = GoRoute(
+  path: DesignSystemGalleryRoutePaths.pipLab,
+  name: DesignSystemGalleryRouteNames.pipLab,
+  builder: (context, state) {
+    return const PipLabView();
+  },
+);
+
 final List<RouteBase> designSystemGalleryRoutes = <RouteBase>[
   designSystemGalleryRoute,
   designSystemGalleryMotionLabRoute,
+  designSystemGalleryPipLabRoute,
 ];

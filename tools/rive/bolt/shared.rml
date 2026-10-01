@@ -1,0 +1,186 @@
+<Rive version="1" kind="fragment">
+    <DataConverterFormula name="is_bow" id="0:600">
+        <FormulaTokenValue operationValue="1"/>
+        <FormulaTokenOperation operationType="1"/>
+        <FormulaTokenFunction functionType="0"/>
+        <FormulaTokenValue operationValue="1"/>
+        <FormulaTokenArgumentSeparator/>
+        <FormulaTokenParenthesisOpen/>
+        <FormulaTokenInput/>
+        <FormulaTokenOperation operationType="1"/>
+        <FormulaTokenValue operationValue="1"/>
+        <FormulaTokenParenthesisClose/>
+        <FormulaTokenOperation operationType="2"/>
+        <FormulaTokenParenthesisOpen/>
+        <FormulaTokenInput/>
+        <FormulaTokenOperation operationType="1"/>
+        <FormulaTokenValue operationValue="1"/>
+        <FormulaTokenParenthesisClose/>
+        <FormulaTokenParenthesisClose/>
+    </DataConverterFormula>
+
+    <DataConverterFormula name="is_cap" id="0:601">
+        <FormulaTokenValue operationValue="1"/>
+        <FormulaTokenOperation operationType="1"/>
+        <FormulaTokenFunction functionType="0"/>
+        <FormulaTokenValue operationValue="1"/>
+        <FormulaTokenArgumentSeparator/>
+        <FormulaTokenParenthesisOpen/>
+        <FormulaTokenInput/>
+        <FormulaTokenOperation operationType="1"/>
+        <FormulaTokenValue operationValue="2"/>
+        <FormulaTokenParenthesisClose/>
+        <FormulaTokenOperation operationType="2"/>
+        <FormulaTokenParenthesisOpen/>
+        <FormulaTokenInput/>
+        <FormulaTokenOperation operationType="1"/>
+        <FormulaTokenValue operationValue="2"/>
+        <FormulaTokenParenthesisClose/>
+        <FormulaTokenParenthesisClose/>
+    </DataConverterFormula>
+
+    <DataConverterFormula name="is_scarf" id="0:602">
+        <FormulaTokenValue operationValue="1"/>
+        <FormulaTokenOperation operationType="1"/>
+        <FormulaTokenFunction functionType="0"/>
+        <FormulaTokenValue operationValue="1"/>
+        <FormulaTokenArgumentSeparator/>
+        <FormulaTokenParenthesisOpen/>
+        <FormulaTokenInput/>
+        <FormulaTokenOperation operationType="1"/>
+        <FormulaTokenValue operationValue="3"/>
+        <FormulaTokenParenthesisClose/>
+        <FormulaTokenOperation operationType="2"/>
+        <FormulaTokenParenthesisOpen/>
+        <FormulaTokenInput/>
+        <FormulaTokenOperation operationType="1"/>
+        <FormulaTokenValue operationValue="3"/>
+        <FormulaTokenParenthesisClose/>
+        <FormulaTokenParenthesisClose/>
+    </DataConverterFormula>
+
+    <DataConverterFormula name="is_glasses" id="0:603">
+        <FormulaTokenValue operationValue="1"/>
+        <FormulaTokenOperation operationType="1"/>
+        <FormulaTokenFunction functionType="0"/>
+        <FormulaTokenValue operationValue="1"/>
+        <FormulaTokenArgumentSeparator/>
+        <FormulaTokenParenthesisOpen/>
+        <FormulaTokenInput/>
+        <FormulaTokenOperation operationType="1"/>
+        <FormulaTokenValue operationValue="4"/>
+        <FormulaTokenParenthesisClose/>
+        <FormulaTokenOperation operationType="2"/>
+        <FormulaTokenParenthesisOpen/>
+        <FormulaTokenInput/>
+        <FormulaTokenOperation operationType="1"/>
+        <FormulaTokenValue operationValue="4"/>
+        <FormulaTokenParenthesisClose/>
+        <FormulaTokenParenthesisClose/>
+    </DataConverterFormula>
+
+    <DataConverterFormula name="is_stage_1" id="0:604">
+        <FormulaTokenValue operationValue="1"/>
+        <FormulaTokenOperation operationType="1"/>
+        <FormulaTokenFunction functionType="0"/>
+        <FormulaTokenValue operationValue="1"/>
+        <FormulaTokenArgumentSeparator/>
+        <FormulaTokenParenthesisOpen/>
+        <FormulaTokenInput/>
+        <FormulaTokenOperation operationType="1"/>
+        <FormulaTokenValue operationValue="1"/>
+        <FormulaTokenParenthesisClose/>
+        <FormulaTokenOperation operationType="2"/>
+        <FormulaTokenParenthesisOpen/>
+        <FormulaTokenInput/>
+        <FormulaTokenOperation operationType="1"/>
+        <FormulaTokenValue operationValue="1"/>
+        <FormulaTokenParenthesisClose/>
+        <FormulaTokenParenthesisClose/>
+    </DataConverterFormula>
+
+    <DataConverterFormula name="is_stage_2" id="0:605">
+        <FormulaTokenValue operationValue="1"/>
+        <FormulaTokenOperation operationType="1"/>
+        <FormulaTokenFunction functionType="0"/>
+        <FormulaTokenValue operationValue="1"/>
+        <FormulaTokenArgumentSeparator/>
+        <FormulaTokenParenthesisOpen/>
+        <FormulaTokenInput/>
+        <FormulaTokenOperation operationType="1"/>
+        <FormulaTokenValue operationValue="2"/>
+        <FormulaTokenParenthesisClose/>
+        <FormulaTokenOperation operationType="2"/>
+        <FormulaTokenParenthesisOpen/>
+        <FormulaTokenInput/>
+        <FormulaTokenOperation operationType="1"/>
+        <FormulaTokenValue operationValue="2"/>
+        <FormulaTokenParenthesisClose/>
+        <FormulaTokenParenthesisClose/>
+    </DataConverterFormula>
+
+    <DataConverterFormula name="is_stage_3" id="0:606">
+        <FormulaTokenValue operationValue="1"/>
+        <FormulaTokenOperation operationType="1"/>
+        <FormulaTokenFunction functionType="0"/>
+        <FormulaTokenValue operationValue="1"/>
+        <FormulaTokenArgumentSeparator/>
+        <FormulaTokenParenthesisOpen/>
+        <FormulaTokenInput/>
+        <FormulaTokenOperation operationType="1"/>
+        <FormulaTokenValue operationValue="3"/>
+        <FormulaTokenParenthesisClose/>
+        <FormulaTokenOperation operationType="2"/>
+        <FormulaTokenParenthesisOpen/>
+        <FormulaTokenInput/>
+        <FormulaTokenOperation operationType="1"/>
+        <FormulaTokenValue operationValue="3"/>
+        <FormulaTokenParenthesisClose/>
+        <FormulaTokenParenthesisClose/>
+    </DataConverterFormula>
+
+    <DataConverterFormula name="is_stage_4" id="0:607">
+        <FormulaTokenValue operationValue="1"/>
+        <FormulaTokenOperation operationType="1"/>
+        <FormulaTokenFunction functionType="0"/>
+        <FormulaTokenValue operationValue="1"/>
+        <FormulaTokenArgumentSeparator/>
+        <FormulaTokenParenthesisOpen/>
+        <FormulaTokenInput/>
+        <FormulaTokenOperation operationType="1"/>
+        <FormulaTokenValue operationValue="4"/>
+        <FormulaTokenParenthesisClose/>
+        <FormulaTokenOperation operationType="2"/>
+        <FormulaTokenParenthesisOpen/>
+        <FormulaTokenInput/>
+        <FormulaTokenOperation operationType="1"/>
+        <FormulaTokenValue operationValue="4"/>
+        <FormulaTokenParenthesisClose/>
+        <FormulaTokenParenthesisClose/>
+    </DataConverterFormula>
+
+    <ViewModel name="Pip" defaultInstanceId="0:501" id="0:500">
+        <ViewModelPropertyNumber name="mood" id="0:502"/>
+        <ViewModelPropertyNumber name="stage" id="0:503"/>
+        <ViewModelPropertyNumber name="skin" id="0:504"/>
+        <ViewModelPropertyNumber name="accessory" id="0:505"/>
+        <ViewModelPropertyColor name="bodyColor" id="0:506"/>
+        <ViewModelPropertyColor name="darkColor" id="0:507"/>
+        <ViewModelPropertyColor name="bellyColor" id="0:508"/>
+        <ViewModelPropertyTrigger name="evolve" id="0:509"/>
+        <ViewModelPropertyTrigger name="tap" id="0:510"/>
+        <ViewModelPropertyTrigger name="blink" id="0:511"/>
+        <ViewModelInstance exports="true" name="Default" id="0:501">
+            <ViewModelInstanceNumber propertyValue="0" viewModelPropertyId="0:502"/>
+            <ViewModelInstanceNumber propertyValue="3" viewModelPropertyId="0:503"/>
+            <ViewModelInstanceNumber propertyValue="0" viewModelPropertyId="0:504"/>
+            <ViewModelInstanceNumber propertyValue="0" viewModelPropertyId="0:505"/>
+            <ViewModelInstanceColor propertyValue="FFFFD93D" viewModelPropertyId="0:506"/>
+            <ViewModelInstanceColor propertyValue="FFE8A800" viewModelPropertyId="0:507"/>
+            <ViewModelInstanceColor propertyValue="FFFFF1B8" viewModelPropertyId="0:508"/>
+            <ViewModelInstanceTrigger viewModelPropertyId="0:509"/>
+            <ViewModelInstanceTrigger viewModelPropertyId="0:510"/>
+            <ViewModelInstanceTrigger viewModelPropertyId="0:511"/>
+        </ViewModelInstance>
+    </ViewModel>
+</Rive>

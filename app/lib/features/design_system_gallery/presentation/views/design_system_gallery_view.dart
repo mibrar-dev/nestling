@@ -29,7 +29,7 @@ class DesignSystemGalleryView extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Design system'),
-        actions: const [_MotionLabButton(), _ThemeToggle()],
+        actions: const [_PipLabButton(), _MotionLabButton(), _ThemeToggle()],
       ),
       body: BlocBuilder<DesignSystemGalleryBloc, DesignSystemGalleryState>(
         builder: (context, state) {
@@ -46,6 +46,21 @@ class DesignSystemGalleryView extends StatelessWidget {
           }
         },
       ),
+    );
+  }
+}
+
+class _PipLabButton extends StatelessWidget {
+  const _PipLabButton();
+
+  @override
+  Widget build(BuildContext context) {
+    // Same pattern as [_MotionLabButton]: the path is spelled out rather
+    // than imported from the routes file, which imports this one. It is
+    // `/pip-lab` - DesignSystemGalleryRoutePaths.pipLab.
+    return TextButton(
+      onPressed: () => context.push('/pip-lab'),
+      child: const Text('Pip'),
     );
   }
 }

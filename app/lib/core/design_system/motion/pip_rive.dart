@@ -556,10 +556,7 @@ class _GroundShadow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _ShadowPainter(color),
-      size: Size(width, 16),
-    );
+    return CustomPaint(painter: _ShadowPainter(color), size: Size(width, 16));
   }
 }
 

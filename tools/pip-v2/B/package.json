@@ -1,0 +1,15 @@
+{
+  "name": "pip-v2-b-bolt",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Style B - Bolt. Pose/skin/accessory/evolve generator + board renderer.",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "boards": "node build_boards.mjs",
+    "all": "node build.mjs && node build_boards.mjs"
+  },
+  "dependencies": {
+    "sharp": "^0.34.4"
+  }
+}

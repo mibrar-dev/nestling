@@ -1,0 +1,7 @@
+name: pip_bolt
+main: Stage3
+build:
+  directory: build
+logs:
+  file: build/rive.log
+  problems: build/problems.log
