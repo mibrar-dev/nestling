@@ -10,13 +10,13 @@ POSES = os.path.join(C, "poses"); SKINS=os.path.join(C,"skins"); ACC=os.path.joi
 for d in (POSES,SKINS,ACC,EVO): os.makedirs(d,exist_ok=True)
 
 INK="#1E1B3A"; SW=5
-PEACH="#FF8A5B"; PURPLE="#7C6CF2"; GOLD="#F4B400"; SEEDC="#8A5A2B"; DARKMOUTH="#1E1B3A"
+PEACH="#FF8A5B"; PURPLE="#7C6CF2"; GOLD="#F4B400"; SEEDC="#8B5A2B"; DARKMOUTH="#1E1B3A"
 
 SKINMAP={
- "sunny": dict(body="#FFD93D",belly="#FFF1B8",wing="#F2A900",shade="#B97E00"),
- "berry": dict(body="#FF9EBB",belly="#FFE1EA",wing="#E56B8C",shade="#A83A5C"),
- "sky":   dict(body="#8EC9FF",belly="#E2F1FF",wing="#5A9AE6",shade="#2F5FA3"),
- "mint":  dict(body="#8EE3B5",belly="#DDF8E8",wing="#4FBF84",shade="#2A7A52"),
+ "sunny": dict(body="#FFD93D",belly="#FFF1B8",wing="#F2A900",shade="#B97E00",side="#F2B705"),
+ "berry": dict(body="#FF9EBB",belly="#FFE1EA",wing="#E56B8C",shade="#A83A5C",side="#EE6E96"),
+ "sky":   dict(body="#8EC9FF",belly="#E2F1FF",wing="#5A9AE6",shade="#2F5FA3",side="#64A3E8"),
+ "mint":  dict(body="#8EE3B5",belly="#DDF8E8",wing="#4FBF84",shade="#2A7A52",side="#54C184"),
 }
 
 def star4(cx,cy,r,fill,opacity=1.0,stroke=None,sw=3):
@@ -41,8 +41,9 @@ def excl(x,y,s,color=PURPLE):
     return bar+d
 
 def seed(x,y,s=1.0):
-    return (f'<g><ellipse cx="{x}" cy="{y}" rx="{9*s}" ry="{12*s}" fill="{SEEDC}" stroke="{INK}" stroke-width="4"/>'
-            f'<ellipse cx="{x-3*s}" cy="{y-4*s}" rx="{2.6*s}" ry="{4*s}" fill="#FFFFFF" opacity="0.55"/></g>')
+    # big unmistakable seed ~22px tall, warm brown with ink outline
+    return (f'<g><ellipse cx="{x}" cy="{y}" rx="{11*s}" ry="{14*s}" fill="{SEEDC}" stroke="{INK}" stroke-width="4.5"/>'
+            f'<ellipse cx="{x-3.5*s}" cy="{y-5*s}" rx="{3*s}" ry="{4.6*s}" fill="#FFFFFF" opacity="0.55"/></g>')
 
 def crumb(x,y,r,fill="#C98A3D"):
     return f'<circle cx="{x}" cy="{y}" r="{r}" fill="{fill}" stroke="{INK}" stroke-width="3"/>'
@@ -68,8 +69,9 @@ def eye_sub(mode,cx,cy,r,dx=0,dy=0):
     if mode=="happy":
         return (f'<path d="M{cx-r} {cy+5} Q{cx} {cy-r-2} {cx+r} {cy+5}" fill="none" stroke="{INK}" stroke-width="{SW}" stroke-linecap="round"/>')
     if mode=="sleepy":
-        return (f'<path d="M{cx-r} {cy-2} Q{cx} {cy+6} {cx+r} {cy-2}" fill="none" stroke="{INK}" stroke-width="{SW}" stroke-linecap="round"/>'
-                f'<path d="M{cx-r+3} {cy+7} l-5 4 M{cx+r-3} {cy+7} l5 4" stroke="{INK}" stroke-width="3" stroke-linecap="round"/>')
+        # heavy curved lids: thick shut curve + lid-fold arc above (reads asleep, not blinking)
+        return (f'<path d="M{cx-r} {cy} Q{cx} {cy+9} {cx+r} {cy}" fill="none" stroke="{INK}" stroke-width="6" stroke-linecap="round"/>'
+                f'<path d="M{cx-r+2} {cy-8} Q{cx} {cy-3} {cx+r-2} {cy-8}" fill="none" stroke="{INK}" stroke-width="3" stroke-linecap="round" opacity="0.55"/>')
     if mode=="wink":
         return (f'<path d="M{cx-r} {cy} Q{cx} {cy+10} {cx+r} {cy}" fill="none" stroke="{INK}" stroke-width="{SW}" stroke-linecap="round"/>')
     return ""
@@ -102,48 +104,100 @@ def beak_peck(cx,cy,w=26):
     top=(f'<path d="M{cx-w/2} {cy-4} Q{cx} {cy-8} {cx+w/2} {cy-4} L{cx+4} {cy+10} L{cx-8} {cy+8} Z" fill="{PEACH}" stroke="{INK}" stroke-width="{SW}" stroke-linejoin="round"/>')
     bot=(f'<path d="M{cx-8} {cy+8} L{cx+4} {cy+10} L{cx} {cy+18} Z" fill="{DARKMOUTH}" stroke="{INK}" stroke-width="3.5" stroke-linejoin="round"/>')
     return top,bot
+def beak_snore(cx,cy,w=20):
+    # small open snore mouth: neat shut top beak + dark parted gap below
+    top=(f'<path d="M{cx-w/2} {cy} Q{cx} {cy-4} {cx+w/2} {cy} Q{cx+w/2-3} {cy+7} {cx} {cy+8} Q{cx-w/2+3} {cy+7} {cx-w/2} {cy} Z" fill="{PEACH}" stroke="{INK}" stroke-width="4.5" stroke-linejoin="round"/>')
+    bot=(f'<ellipse cx="{cx}" cy="{cy+13}" rx="6" ry="5" fill="{DARKMOUTH}" stroke="{INK}" stroke-width="3.5"/>')
+    return top,bot
 
 # ---------- wings / tuft / tail ----------
-def wing(side,cx,cy,rx,ry,rot,wingfill,feather=True,op=1.0):
-    f=(f'<path d="M{cx} {cy-ry+6} L{cx} {cy+ry-6}" stroke="{INK}" stroke-width="3" stroke-linecap="round" opacity="0.55"/>' if feather else "")
-    return (f'<g id="wing_{"l" if side=="L" else "r"}" opacity="{op}"><ellipse cx="{cx}" cy="{cy}" rx="{rx}" ry="{ry}" '
-            f'fill="{wingfill}" stroke="{INK}" stroke-width="{SW}" transform="rotate({rot} {cx} {cy})"/>{f}</g>')
+def wing(side,cx,cy,rx,ry,rot,wingfill,feather=True,op=1.0,up=False):
+    # pointed storybook leaf-wing: free tip along axis, 2-3 fine feather lines.
+    # axis a points to the UP end for rot; tip goes up iff up else down (resting).
+    import math as _m
+    th=_m.radians(rot); ax,ay=_m.sin(th),-_m.cos(th)
+    if not up: ax,ay=-ax,-ay
+    tx,ty=cx+ax*ry,cy+ay*ry; bx,by=cx-ax*ry*0.8,cy-ay*ry*0.8
+    nx,ny=-ay,ax
+    d=(f"M{bx:.1f} {by:.1f} "
+       f"C{bx+ax*ry*0.4+nx*rx:.1f} {by+ay*ry*0.4+ny*rx:.1f} {tx-ax*ry*0.25+nx*rx*0.55:.1f} {ty-ay*ry*0.25+ny*rx*0.55:.1f} {tx:.1f} {ty:.1f} "
+       f"C{tx-ax*ry*0.25-nx*rx*0.55:.1f} {ty-ay*ry*0.25-ny*rx*0.55:.1f} {bx+ax*ry*0.4-nx*rx:.1f} {by+ay*ry*0.4-ny*rx:.1f} {bx:.1f} {by:.1f} Z")
+    fl=""
+    if feather:
+        nl = 3 if ry>=24 else 2
+        for i in range(nl):
+            off=(i-(nl-1)/2)*rx*0.55
+            x1=cx-ax*ry*0.55+nx*off; y1=cy-ay*ry*0.55+ny*off
+            x2=cx+ax*ry*0.62+nx*off; y2=cy+ay*ry*0.62+ny*off
+            fl+=f'<path d="M{x1:.1f} {y1:.1f} L{x2:.1f} {y2:.1f}" stroke="{INK}" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>'
+    return (f'<g id="wing_{"l" if side=="L" else "r"}" opacity="{op}"><path d="{d}" fill="{wingfill}" stroke="{INK}" stroke-width="{SW}" stroke-linejoin="round"/>{fl}</g>')
 
-def tuft(variant,bodyfill,dx=0):
-    # three wispy feathers; variants: normal, up, droop, sway_r, sway_l, flat, tall
+def tuft(variant,bodyfill,dx=0,dy=0):
+    # wispy 3-strand feather tuft (thin tapered slivers); variants incl. songbird crest.
+    # local space: base y~70, tips y~36; caller shifts by dy to sit on head crown.
     base=[
-      (106,70,100,46,112,38,118,50,116,68),
-      (120,68,120,42,132,34,138,48,132,68),
-      (132,70,142,52,152,50,150,62,142,72),
+      (108,70, 102,50, 110,40, 114,52, 116,68),
+      (120,68, 119,46, 128,36, 133,50, 131,68),
+      (131,70, 139,54, 149,52, 147,62, 141,72),
     ]
     if variant=="up":
-        base=[(106,70,96,40,110,30,118,46,116,68),(120,68,120,34,134,26,140,44,132,68),(134,70,146,46,158,44,154,60,144,72)]
+        base=[(108,70,100,46,110,32,116,48,117,68),(120,68,119,40,130,30,136,46,133,68),(132,70,141,48,153,46,151,58,143,72)]
     elif variant=="tall":
-        base=[(106,70,94,36,110,26,118,44,116,68),(120,68,120,30,134,22,140,40,132,68),(134,70,148,42,160,40,156,58,144,72)]
+        base=[(108,70,99,42,110,28,117,46,117,68),(120,68,119,36,131,26,138,42,134,68),(133,70,143,44,156,42,153,56,144,72)]
+    elif variant=="crest":
+        # songbird crest: 4 tall strands fanned apart so each wisp reads separately
+        base=[(102,74, 92,50, 100,38, 108,54, 112,74),
+              (116,74, 112,48, 122,36, 129,52, 129,74),
+              (130,74, 135,52, 146,44, 146,58, 141,74),
+              (141,75, 150,62, 160,60, 156,68, 148,75)]
     elif variant=="droop":
-        base=[(106,70,88,60,96,50,108,58,114,70),(120,68,112,52,126,46,132,58,130,70),(132,70,142,60,152,60,148,68,140,73)]
+        base=[(108,70,94,62,100,52,110,58,115,70),(120,68,114,56,126,50,131,60,130,70),(131,70,140,62,150,62,147,68,140,73)]
     elif variant=="flat":
-        base=[(106,70,96,58,108,52,116,60,116,68),(120,68,118,56,130,52,134,60,132,68),(132,70,140,60,150,60,146,66,142,72)]
+        base=[(108,70,100,60,110,54,116,62,117,68),(120,68,118,58,129,54,133,62,132,68),(131,70,139,62,148,62,145,67,141,72)]
     elif variant in ("sway_r","sway_l"):
         s=6 if variant=="sway_r" else -6
         base=[(b[0]+dx,b[1],b[2]+s,b[3],b[4]+s,b[5],b[6]+s,b[7],b[8]+dx,b[9]) for b in base]
     else:
         base=[(b[0]+dx,b[1],b[2]+dx,b[3],b[4]+dx,b[5],b[6]+dx,b[7],b[8]+dx,b[9]) for b in base]
+    base=[(x0,y0+dy,x1,y1+dy,x2,y2+dy,x3,y3+dy,x4,y4+dy) for (x0,y0,x1,y1,x2,y2,x3,y3,x4,y4) in base]
     ps=[]
     for (x0,y0,x1,y1,x2,y2,x3,y3,x4,y4) in base:
         ps.append(f'<path d="M{x0} {y0} Q{x1} {y1} {x2} {y2} Q{x3} {y3} {x4} {y4} Z" fill="{bodyfill}"/>')
     return (f'<g id="head_tuft" stroke="{INK}" stroke-width="{SW}" stroke-linecap="round" stroke-linejoin="round">{"".join(ps)}</g>')
 
+def pear_d(cx,cy,rx,ry,narrow=0.70):
+    # pear body: narrow crown, round bottom
+    tw=rx*narrow; bw=rx*1.02; top=cy-ry; bot=cy+ry
+    return (f"M{cx} {top} "
+      f"C{cx+tw} {top} {cx+bw} {cy-ry*0.30} {cx+bw*0.94} {cy+ry*0.42} "
+      f"C{cx+bw*0.88} {cy+ry*0.86} {cx+bw*0.45} {bot} {cx} {bot} "
+      f"C{cx-bw*0.45} {bot} {cx-bw*0.88} {cy+ry*0.86} {cx-bw*0.94} {cy+ry*0.42} "
+      f"C{cx-bw} {cy-ry*0.30} {cx-tw} {top} {cx} {top} Z")
+
+def side_shade_d(cx,cy,rx,ry,narrow=0.70):
+    # one flat warm shade crescent hugging the body's right side
+    tw=rx*narrow; bw=rx*1.02
+    return (f"M{cx+tw*0.72} {cy-ry*0.78} "
+      f"C{cx+bw*0.98} {cy-ry*0.32} {cx+bw*0.96} {cy+ry*0.34} {cx+bw*0.60} {cy+ry*0.78} "
+      f"C{cx+bw*0.76} {cy+ry*0.28} {cx+tw*0.88} {cy-ry*0.34} {cx+tw*0.72} {cy-ry*0.78} Z")
+
+def belly_scallops(bx,by,span=30):
+    # fine feather scallops along the belly's top edge (picture-book detail)
+    return (f'<path d="M{bx-span} {by} Q{bx-span/2} {by-7} {bx} {by} Q{bx+span/2} {by-7} {bx+span} {by}" fill="none" stroke="{INK}" stroke-width="2.5" stroke-linecap="round" opacity="0.45"/>')
+
 def tail_s3(cx=120,y=186,fill=GOLD,lift=0):
     return (f'<g id="tail" stroke="{INK}" stroke-width="{SW}" stroke-linejoin="round">'
             f'<path d="M108 {y+lift} L112 {202+lift} L120 {194+lift} L128 {202+lift} L132 {y+lift} Z" fill="{fill}"/></g>')
 
-def tail_s4(y=172,fill=GOLD,spread=0,lift=0):
-    s=spread
+def tail_s4(y=178,fill=GOLD,lift=0):
+    # songbird: 3 long tail feathers fanned WIDE behind the body, tips clear of feet
     return (f'<g id="tail" stroke="{INK}" stroke-width="{SW}" stroke-linejoin="round">'
-            f'<path d="M{92-s} {y} Q{84-s} {198+lift} {94-s} {208+lift} Q{104-s} {202+lift} {104-s} {174} Z" fill="{fill}"/>'
-            f'<path d="M112 {y+4+lift} Q110 {204+lift} 120 {210+lift} Q130 {204+lift} 128 {y+4+lift} Z" fill="{fill}"/>'
-            f'<path d="M{132+s} {174+lift} Q{138+s} {198+lift} {148+s} {202+lift} Q{152+s} {192+lift} {140+s} {y+lift} Z" fill="{fill}"/></g>')
+            f'<path d="M100 {y+lift} C86 {189+lift} 68 {196+lift} 54 {202+lift} C70 {203+lift} 90 {197+lift} 106 {184+lift} Z" fill="{fill}"/>'
+            f'<path d="M112 {y-2+lift} C111 {191+lift} 114 {203+lift} 120 {212+lift} C126 {203+lift} 129 {191+lift} 128 {y-2+lift} Z" fill="{fill}"/>'
+            f'<path d="M140 {y+lift} C154 {189+lift} 172 {196+lift} 186 {202+lift} C170 {203+lift} 150 {197+lift} 134 {184+lift} Z" fill="{fill}"/>'
+            f'<path d="M97 {186+lift} C86 {193+lift} 72 {199+lift} 60 {201+lift}" fill="none" stroke="{INK}" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>'
+            f'<path d="M120 {182+lift} L120 {206+lift}" stroke="{INK}" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>'
+            f'<path d="M143 {186+lift} C154 {193+lift} 168 {199+lift} 180 {201+lift}" fill="none" stroke="{INK}" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/></g>')
 
 def cheeks(cx_l,cy,cx_r,puff=0):
     rx=9+puff; ry=6+puff*0.6
@@ -186,6 +240,10 @@ def acc_shapes(kind,stage,skin):
             head=(f'<path d="M140 74 L162 62 L158 88 Z" fill="#FF6B8A" stroke="{INK}" stroke-width="4.5" stroke-linejoin="round"/>'
                   f'<path d="M140 74 L120 64 L124 88 Z" fill="#FF8FAB" stroke="{INK}" stroke-width="4.5" stroke-linejoin="round"/>'
                   f'<circle cx="140" cy="75" r="7.5" fill="#E5456B" stroke="{INK}" stroke-width="4.5"/>')
+        elif stage==4:
+            head=(f'<path d="M148 38 L174 22 L169 54 Z" fill="#FF6B8A" stroke="{INK}" stroke-width="4.5" stroke-linejoin="round"/>'
+                  f'<path d="M148 38 L124 24 L129 54 Z" fill="#FF8FAB" stroke="{INK}" stroke-width="4.5" stroke-linejoin="round"/>'
+                  f'<circle cx="148" cy="39" r="8" fill="#E5456B" stroke="{INK}" stroke-width="4.5"/>')
         else:
             head=(f'<path d="M148 60 L174 44 L169 76 Z" fill="#FF6B8A" stroke="{INK}" stroke-width="4.5" stroke-linejoin="round"/>'
                   f'<path d="M148 60 L124 46 L129 76 Z" fill="#FF8FAB" stroke="{INK}" stroke-width="4.5" stroke-linejoin="round"/>'
@@ -199,6 +257,10 @@ def acc_shapes(kind,stage,skin):
             head=(f'<path d="M84 92 Q120 62 156 92 L156 100 Q120 78 84 100 Z" fill="#5A9AE6" stroke="{INK}" stroke-width="4.5" stroke-linejoin="round"/>'
                   f'<ellipse cx="120" cy="78" rx="26" ry="12" fill="#5A9AE6" stroke="{INK}" stroke-width="4.5"/>'
                   f'<circle cx="120" cy="68" r="5.5" fill="#FFD93D" stroke="{INK}" stroke-width="4"/>')
+        elif stage==4:
+            head=(f'<path d="M82 62 Q122 28 162 62 L160 72 Q122 50 84 72 Z" fill="#5A9AE6" stroke="{INK}" stroke-width="4.5" stroke-linejoin="round"/>'
+                  f'<ellipse cx="122" cy="44" rx="28" ry="13" fill="#5A9AE6" stroke="{INK}" stroke-width="4.5"/>'
+                  f'<circle cx="122" cy="33" r="6" fill="#FFD93D" stroke="{INK}" stroke-width="4"/>')
         else:
             head=(f'<path d="M82 84 Q122 50 162 84 L160 94 Q122 66 84 94 Z" fill="#5A9AE6" stroke="{INK}" stroke-width="4.5" stroke-linejoin="round"/>'
                   f'<ellipse cx="122" cy="66" rx="28" ry="13" fill="#5A9AE6" stroke="{INK}" stroke-width="4.5"/>'
@@ -210,6 +272,10 @@ def acc_shapes(kind,stage,skin):
         elif stage==2:
             neck=(f'<path d="M82 148 Q120 162 158 148 L156 162 Q120 176 84 162 Z" fill="#4FBF84" stroke="{INK}" stroke-width="4.5" stroke-linejoin="round"/>'
                   f'<rect x="132" y="156" width="20" height="28" rx="9" fill="#3AA76D" stroke="{INK}" stroke-width="4.5"/>')
+        elif stage==4:
+            neck=(f'<path d="M68 174 Q120 194 172 174 L170 190 Q120 210 70 190 Z" fill="#4FBF84" stroke="{INK}" stroke-width="4.5" stroke-linejoin="round"/>'
+                  f'<rect x="134" y="184" width="24" height="28" rx="10" fill="#3AA76D" stroke="{INK}" stroke-width="4.5"/>'
+                  f'<path d="M136 190 L156 190" stroke="{INK}" stroke-width="3" stroke-linecap="round" opacity="0.4"/>')
         else:
             neck=(f'<path d="M68 168 Q120 188 172 168 L170 184 Q120 204 70 184 Z" fill="#4FBF84" stroke="{INK}" stroke-width="4.5" stroke-linejoin="round"/>'
                   f'<rect x="134" y="178" width="24" height="32" rx="10" fill="#3AA76D" stroke="{INK}" stroke-width="4.5"/>'
@@ -221,6 +287,10 @@ def acc_shapes(kind,stage,skin):
         elif stage==2:
             face=(f'<g stroke="{INK}" stroke-width="4"><circle cx="106" cy="120" r="17" fill="#FFFFFF" opacity="0.35"/><circle cx="134" cy="120" r="17" fill="#FFFFFF" opacity="0.35"/>'
                   f'<path d="M123 120 L121 120" stroke="{INK}" stroke-width="4"/><path d="M89 118 L80 114 M151 118 L160 114" stroke="{INK}" stroke-width="4" stroke-linecap="round"/></g>')
+        elif stage==4:
+            face=(f'<g stroke="{INK}" stroke-width="4.5"><circle cx="96" cy="128" r="20" fill="#FFFFFF" opacity="0.32"/><circle cx="144" cy="128" r="20" fill="#FFFFFF" opacity="0.32"/>'
+                  f'<path d="M116 128 Q120 126 124 128" fill="none" stroke="{INK}" stroke-width="4.5"/>'
+                  f'<path d="M76 126 L65 120 M164 126 L175 120" stroke="{INK}" stroke-width="4.5" stroke-linecap="round"/></g>')
         else:
             face=(f'<g stroke="{INK}" stroke-width="4.5"><circle cx="96" cy="130" r="21" fill="#FFFFFF" opacity="0.32"/><circle cx="144" cy="130" r="21" fill="#FFFFFF" opacity="0.32"/>'
                   f'<path d="M117 130 Q120 128 123 130" fill="none" stroke="{INK}" stroke-width="4.5"/>'
@@ -233,7 +303,7 @@ def svg_wrap(label,inner):
             f'{"".join(inner)}</svg>')
 
 def render_bird(stage,mood_idx,skin="sunny",acc="none",fx_extra="",label="pip C"):
-    S=SKINMAP[skin]; body=S["body"]; belly=S["belly"]; wingf=S["wing"]; shade=S["shade"]
+    S=SKINMAP[skin]; body=S["body"]; belly=S["belly"]; wingf=S["wing"]; shade=S["shade"]; sidec=S["side"]
     # stage geometry
     if stage==2:
         bcx,bcy,br=120,122,42
@@ -245,26 +315,26 @@ def render_bird(stage,mood_idx,skin="sunny",acc="none",fx_extra="",label="pip C"
         feet_svg=(f'<g id="feet" stroke="{INK}" stroke-width="{SW}"><ellipse cx="99" cy="186" rx="11" ry="7" fill="{PEACH}"/>'
                   f'<ellipse cx="141" cy="186" rx="11" ry="7" fill="{PEACH}"/></g>')
         shell_bot=(f'<g id="shell_bottom" stroke="{INK}" stroke-width="{SW}" stroke-linejoin="round">'
-                   f'<path d="M56 148 L72 160 L86 148 L102 162 L118 149 L134 163 L150 149 L164 162 L180 150 L184 148 L176 196 Q120 208 64 196 Z" fill="#FFF8E8"/>'
+                   f'<path d="M56 148 L66 161 L78 149 L90 163 L100 151 L112 166 L124 152 L136 164 L148 151 L160 163 L170 152 L180 161 L184 150 L176 196 Q120 208 64 196 Z" fill="#FFF8E8"/>'
                    f'<circle cx="92" cy="180" r="5" fill="{PURPLE}"/><circle cx="140" cy="184" r="4.5" fill="{PURPLE}"/></g>')
         shell_top=(f'<g id="shell_top" stroke="{INK}" stroke-width="4" stroke-linejoin="round">'
                    f'<path d="M104 82 L114 70 L124 80 L134 70" fill="#FFF8E8"/></g>')
         # placeholder positions overridden per mood below via params dict
-        P=dict(bcy=bcy,rx=br,ry=br,ey_l=(106,120),ey_r=(134,120),er=11,beak=(120,136),
+        P=dict(bcy=bcy,rx=br,ry=br,ey_l=(106,120),ey_r=(134,120),er=10,beak=(120,136),narrow=0.82,
                wingl=(82,128,10,16,0),wingr=(158,128,10,16,0),tuft="normal",belly=(120,138,24,20),
                feet_y=186,shadow_rx=58,eye_mode=("open","open"),beak_mode="closed",puff=0,
                hl=(102,106,12,7),brows="none",pdx=(2,2),pdy=(2,2))
     elif stage==3:
-        P=dict(bcy=133,rx=60,ry=61,ey_l=(96,130),ey_r=(144,130),er=15,beak=(120,150),
+        P=dict(bcy=133,rx=60,ry=61,ey_l=(96,130),ey_r=(144,130),er=12.5,beak=(120,150),narrow=0.70,
                wingl=(62,144,16,25,0),wingr=(178,144,16,25,0),tuft="normal",belly=(120,158,37,31),
                feet_y=196,shadow_rx=62,eye_mode=("open","open"),beak_mode="closed",puff=0,
                hl=(96,102,17,10),brows="none",pdx=(2,2),pdy=(2,2))
         body_ellipse=None; belly_svg=None; feet_svg=None; shell_bot='<g id="shell_bottom"></g>'; shell_top='<g id="shell_top"></g>'; tail=None
-    else: # stage 4
-        P=dict(bcy=124,rx=60,ry=65,ey_l=(96,130),ey_r=(144,130),er=15,beak=(120,150),
-               wingl=(60,134,17,28,0),wingr=(180,134,17,28,0),tuft="normal",belly=(120,150,39,36),
-               feet_y=198,shadow_rx=64,eye_mode=("open","open"),beak_mode="closed",puff=0,
-               hl=(96,94,18,10),brows="none",pdx=(2,2),pdy=(2,2))
+    else: # stage 4 SONGBIRD: taller (~12%), slimmer pear, long wings, fan tail, big crest
+        P=dict(bcy=120,rx=52,ry=73,ey_l=(96,128),ey_r=(144,128),er=12.5,beak=(120,148),narrow=0.64,
+               wingl=(58,140,16,36,-8),wingr=(182,140,16,36,8),tuft="crest",belly=(120,148,33,37),
+               feet_y=199,shadow_rx=64,eye_mode=("open","open"),beak_mode="closed",puff=0,
+               hl=(92,90,16,9),brows="none",pdx=(2,2),pdy=(2,2))
         body_ellipse=None; belly_svg=None; feet_svg=None; shell_bot='<g id="shell_bottom"></g>'; shell_top='<g id="shell_top"></g>'; tail=None
 
     # ---- mood pose adjustments (keyed by mood_idx string like "happy_2") ----
@@ -289,11 +359,11 @@ def render_bird(stage,mood_idx,skin="sunny",acc="none",fx_extra="",label="pip C"
         P["beak"]=(P["beak"][0],P["beak"][1]-20); P["eye_mode"]=("happy","happy"); P["beak_mode"]="open_happy"
         P["tuft"]="sway_r"; P["shadow_rx"]-=16
         if stage==2:
-            P["wingl"]=(52,84,10,18,-32); P["wingr"]=(188,84,10,18,32)
+            P["wingl"]=(52,84,10,18,-32,True); P["wingr"]=(188,84,10,18,32,True)
         elif stage==3:
-            P["wingl"]=(44,92,15,26,-32); P["wingr"]=(196,92,15,26,32)
+            P["wingl"]=(44,92,15,26,-32,True); P["wingr"]=(196,92,15,26,32,True)
         else:
-            P["wingl"]=(38,86,17,30,-35); P["wingr"]=(202,86,17,30,35)
+            P["wingl"]=(62,94,16,30,-35,True); P["wingr"]=(178,94,16,30,35,True)
         P["feet_y"]-=14
         fx=(star4(34,60,11,PURPLE)+star4(206,60,10,GOLD,stroke=True)+dot(52,100,4,PURPLE)+dot(190,104,4,PEACH)
             +star4(120,36,7,"#FFFFFF",stroke=True))
@@ -304,50 +374,68 @@ def render_bird(stage,mood_idx,skin="sunny",acc="none",fx_extra="",label="pip C"
         P["wingr"]=(P["wingr"][0]+6,P["wingr"][1]+4,P["wingr"][2],P["wingr"][3],14)
         fx=star4(40,70,8,PURPLE,opacity=0.7)+star4(200,72,7,GOLD,opacity=0.7,stroke=True)
     elif mood_idx=="eating_1":
+        # seed approaches: big seed close above the watching beak, motion dots trailing
         P["eye_mode"]=("open","open"); P["pdy"]=(-4,-4)
-        fx=seed(P["beak"][0],P["beak"][1]-70)+dot(P["beak"][0]-14,P["beak"][1]-48,3,PURPLE,0.8)+dot(P["beak"][0]+14,P["beak"][1]-52,3,GOLD,0.8)
+        fx=(seed(P["beak"][0],P["beak"][1]-52)+dot(P["beak"][0]-16,P["beak"][1]-84,3,PURPLE,0.8)
+            +dot(P["beak"][0]+12,P["beak"][1]-96,2.6,GOLD,0.8)+dot(P["beak"][0]+2,P["beak"][1]-110,2.2,PURPLE,0.6))
     elif mood_idx=="eating_2":
+        # CRUNCH: big seed held in the open beak, 5 crumbs flying, cheeks puffed
         P["bcy"]+=5; P["belly"]=(P["belly"][0],P["belly"][1]+5,P["belly"][2],P["belly"][3])
         P["ey_l"]=(P["ey_l"][0],P["ey_l"][1]+5); P["ey_r"]=(P["ey_r"][0],P["ey_r"][1]+5)
-        P["beak"]=(P["beak"][0],P["beak"][1]+5); P["eye_mode"]=("happy","happy"); P["beak_mode"]="peck"
+        P["beak"]=(P["beak"][0],P["beak"][1]+5); P["eye_mode"]=("happy","happy"); P["beak_mode"]="peck"; P["puff"]=5
         P["wingl"]=(P["wingl"][0]-6,P["wingl"][1],P["wingl"][2],P["wingl"][3],-14)
         P["wingr"]=(P["wingr"][0]+6,P["wingl"][1],P["wingr"][2],P["wingr"][3],14)
-        fx=(seed(P["beak"][0]+4,P["beak"][1]-13)+crumb(P["beak"][0]-24,P["beak"][1]-6,4)+crumb(P["beak"][0]+30,P["beak"][1]-10,3.4)
-            +crumb(P["beak"][0]+18,P["beak"][1]+22,3)+dot(P["beak"][0]-34,P["beak"][1]+10,2.6,GOLD))
+        fx=(seed(P["beak"][0]+2,P["beak"][1]-16)+crumb(P["beak"][0]-26,P["beak"][1]-8,4)+crumb(P["beak"][0]+32,P["beak"][1]-12,3.6)
+            +crumb(P["beak"][0]+20,P["beak"][1]+24,3.2)+crumb(P["beak"][0]-14,P["beak"][1]+28,2.8)+dot(P["beak"][0]+38,P["beak"][1]+6,2.6,GOLD))
     elif mood_idx=="eating_3":
-        P["eye_mode"]=("happy","happy"); P["puff"]=4; P["beak_mode"]="closed"
-        fx=heart(P["belly"][0]+44,P["belly"][1]-34,7)+crumb(P["beak"][0]+22,P["beak"][1]+8,3.4)+crumb(P["beak"][0]-30,P["beak"][1]+26,3)
+        P["eye_mode"]=("happy","happy"); P["puff"]=5; P["beak_mode"]="closed"
+        fx=heart(P["belly"][0]+44,P["belly"][1]-34,7)+crumb(P["beak"][0]+24,P["beak"][1]+8,3.4)+crumb(P["beak"][0]-30,P["beak"][1]+26,3)
     elif mood_idx=="sleepy_1":
+        # dozing off: heavy lids, 12° lean, slump, tiny snore mouth, first Zzz
         P["eye_mode"]=("sleepy","sleepy"); P["brows"]="sleepy"; P["tuft"]="droop"
+        P["beak_mode"]="snore"; P["tilt"]=12; P["ry"]=int(P["ry"]*0.94); P["bcy"]+=5
+        P["belly"]=(P["belly"][0],P["belly"][1]+5,P["belly"][2],P["belly"][3])
+        P["ey_l"]=(P["ey_l"][0],P["ey_l"][1]+5); P["ey_r"]=(P["ey_r"][0],P["ey_r"][1]+5)
+        P["beak"]=(P["beak"][0],P["beak"][1]+5)
         P["wingl"]=(P["wingl"][0],P["wingl"][1]+8,P["wingl"][2]-2,P["wingl"][3]-5,0)
         P["wingr"]=(P["wingr"][0],P["wingr"][1]+8,P["wingr"][2]-2,P["wingr"][3]-5,0)
+        fx=zzz(182,96,12)+zzz(198,116,9,op=0.7,w=4)
     elif mood_idx=="sleepy_2":
-        P["eye_mode"]=("closed","closed"); P["bcy"]+=4; P["belly"]=(P["belly"][0],P["belly"][1]+4,P["belly"][2],P["belly"][3])
-        P["ey_l"]=(P["ey_l"][0],P["ey_l"][1]+4); P["ey_r"]=(P["ey_r"][0],P["ey_r"][1]+4)
-        P["beak"]=(P["beak"][0],P["beak"][1]+4); P["tuft"]="droop"; P["brows"]="sleepy"
+        # asleep: shut heavy lids, lean + slump, snore mouth, nightcap + rising Zzz
+        P["eye_mode"]=("closed","closed"); P["beak_mode"]="snore"; P["tilt"]=12
+        P["ry"]=int(P["ry"]*0.94); P["bcy"]+=5; P["belly"]=(P["belly"][0],P["belly"][1]+5,P["belly"][2],P["belly"][3])
+        P["ey_l"]=(P["ey_l"][0],P["ey_l"][1]+5); P["ey_r"]=(P["ey_r"][0],P["ey_r"][1]+5)
+        P["beak"]=(P["beak"][0],P["beak"][1]+5); P["tuft"]="droop"; P["brows"]="sleepy"
         P["wingl"]=(P["wingl"][0],P["wingl"][1]+8,P["wingl"][2]-2,P["wingl"][3]-5,0)
         P["wingr"]=(P["wingr"][0],P["wingr"][1]+8,P["wingr"][2]-2,P["wingr"][3]-5,0)
-        # nightcap on stages 3-4 (and 2) — anchored to body so it sits on the head
-        capdy = P["bcy"]-(122 if stage==2 else (133 if stage==3 else 124))
-        capx,capy=(92,62+capdy) if stage==2 else (92,66+capdy)
-        capyc = capy+14  # band row
-        capdoty = 43+capdy
-        fx=(f'<g><path d="M{capx} {capy} Q120 {30+capdy} 158 {44+capdy} L148 {62+capdy} Q124 {52+capdy} 104 {70+capdy} Z" fill="{PURPLE}" stroke="{INK}" stroke-width="{SW}" stroke-linejoin="round"/>'
-            f'<circle cx="160" cy="{capdoty}" r="9" fill="#FFFFFF" stroke="{INK}" stroke-width="4"/>'
-            f'<rect x="90" y="{capyc}" width="56" height="14" rx="7" fill="#FFFFFF" stroke="{INK}" stroke-width="4"/></g>'
+        # nightcap anchored to slumped body; per-stage crown geometry
+        basebcy={2:122,3:133,4:120}[stage]
+        capdy = P["bcy"]-basebcy
+        band={2:62,3:66,4:46}[stage]+capdy; apex={2:26,3:30,4:12}[stage]+capdy
+        pomx={2:160,3:160,4:162}[stage]; pomy={2:43,3:43,4:24}[stage]+capdy
+        fx=(f'<g><path d="M92 {band} Q120 {apex} 158 {apex+14} L148 {band-4} Q124 {band-14} 104 {band+4} Z" fill="{PURPLE}" stroke="{INK}" stroke-width="{SW}" stroke-linejoin="round"/>'
+            f'<circle cx="{pomx}" cy="{pomy}" r="9" fill="#FFFFFF" stroke="{INK}" stroke-width="4"/>'
+            f'<rect x="90" y="{band+14}" width="56" height="14" rx="7" fill="#FFFFFF" stroke="{INK}" stroke-width="4"/></g>'
             +zzz(178,84,16)+zzz(196,110,12,op=0.8,w=4))
     elif mood_idx=="sleepy_3":
-        P["eye_mode"]=("closed","closed"); P["rx"]+=3; P["ry"]+=2; P["tuft"]="droop"; P["brows"]="sleepy"
-        capdy3 = P["bcy"]-(122 if stage==2 else (133 if stage==3 else 124))
-        capy3=(62+capdy3) if stage==2 else (66+capdy3)
-        fx=(f'<g><path d="M92 {capy3} Q120 {30+capdy3} 158 {44+capdy3} L148 {62+capdy3} Q124 {52+capdy3} 104 {70+capdy3} Z" fill="{PURPLE}" stroke="{INK}" stroke-width="{SW}" stroke-linejoin="round"/>'
-            f'<circle cx="160" cy="{43+capdy3}" r="9" fill="#FFFFFF" stroke="{INK}" stroke-width="4"/>'
-            f'<rect x="90" y="{capy3+14}" width="56" height="14" rx="7" fill="#FFFFFF" stroke="{INK}" stroke-width="4"/></g>'
+        # deep sleep: heavier slump, snore mouth, nightcap, big rising Zzz chain
+        P["eye_mode"]=("closed","closed"); P["beak_mode"]="snore"; P["tilt"]=12
+        P["ry"]=int(P["ry"]*0.94); P["bcy"]+=5; P["belly"]=(P["belly"][0],P["belly"][1]+5,P["belly"][2],P["belly"][3])
+        P["ey_l"]=(P["ey_l"][0],P["ey_l"][1]+5); P["ey_r"]=(P["ey_r"][0],P["ey_r"][1]+5)
+        P["beak"]=(P["beak"][0],P["beak"][1]+5)
+        P["rx"]+=3; P["tuft"]="droop"; P["brows"]="sleepy"
+        basebcy3={2:122,3:133,4:120}[stage]
+        capdy3 = P["bcy"]-basebcy3
+        band3={2:62,3:66,4:46}[stage]+capdy3; apex3={2:26,3:30,4:12}[stage]+capdy3
+        pomy3={2:43,3:43,4:24}[stage]+capdy3
+        fx=(f'<g><path d="M92 {band3} Q120 {apex3} 158 {apex3+14} L148 {band3-4} Q124 {band3-14} 104 {band3+4} Z" fill="{PURPLE}" stroke="{INK}" stroke-width="{SW}" stroke-linejoin="round"/>'
+            f'<circle cx="160" cy="{pomy3}" r="9" fill="#FFFFFF" stroke="{INK}" stroke-width="4"/>'
+            f'<rect x="90" y="{band3+14}" width="56" height="14" rx="7" fill="#FFFFFF" stroke="{INK}" stroke-width="4"/></g>'
             +zzz(176,70,20)+zzz(198,100,14,op=0.8,w=4)+zzz(168,108,10,op=0.6,w=3.5))
     elif mood_idx=="surprised_1":
         P["eye_mode"]=("surprised","surprised"); P["beak_mode"]="o_small"; P["brows"]="surprised"; P["tuft"]="up"
-        P["wingl"]=(P["wingl"][0]-10,P["wingl"][1]-4,P["wingl"][2],P["wingl"][3],-30)
-        P["wingr"]=(P["wingr"][0]+10,P["wingr"][1]-4,P["wingr"][2],P["wingr"][3],30)
+        P["wingl"]=(P["wingl"][0]-10,P["wingl"][1]-4,P["wingl"][2],P["wingl"][3],-30,True)
+        P["wingr"]=(P["wingr"][0]+10,P["wingr"][1]-4,P["wingr"][2],P["wingr"][3],30,True)
         fx=dot(32,100,3.5,PURPLE)+dot(208,100,3.5,PURPLE)
     elif mood_idx=="surprised_2":
         P["bcy"]-=12; P["belly"]=(P["belly"][0],P["belly"][1]-12,P["belly"][2],P["belly"][3])
@@ -355,11 +443,11 @@ def render_bird(stage,mood_idx,skin="sunny",acc="none",fx_extra="",label="pip C"
         P["beak"]=(P["beak"][0],P["beak"][1]-12); P["eye_mode"]=("surprised","surprised"); P["beak_mode"]="o"
         P["brows"]="surprised"; P["tuft"]="tall"; P["shadow_rx"]-=10
         if stage==2:
-            P["wingl"]=(48,120,10,18,-55); P["wingr"]=(192,120,10,18,55)
+            P["wingl"]=(48,120,10,18,-55,True); P["wingr"]=(192,120,10,18,55,True)
         elif stage==3:
-            P["wingl"]=(36,130,14,24,-55); P["wingr"]=(204,130,14,24,55)
+            P["wingl"]=(36,130,14,24,-55,True); P["wingr"]=(204,130,14,24,55,True)
         else:
-            P["wingl"]=(32,128,17,30,-55); P["wingr"]=(208,128,17,30,55)
+            P["wingl"]=(40,126,16,28,-50,True); P["wingr"]=(200,126,16,28,50,True)
         P["feet_y"]-=8
         fx=excl(196,52,26)+star4(40,64,7,PURPLE)+dot(52,96,3.5,GOLD)
     elif mood_idx=="surprised_3":
@@ -392,8 +480,10 @@ def render_bird(stage,mood_idx,skin="sunny",acc="none",fx_extra="",label="pip C"
     # ---- build parts ----
     bcy=P["bcy"]; rx=P["rx"]; ry=P["ry"]
     if stage==2:
-        body_ellipse=f'<ellipse cx="120" cy="{bcy}" rx="{rx}" ry="{ry}" fill="{body}" stroke="{INK}" stroke-width="{SW}"/>'
-        belly_svg=f'<ellipse cx="{P["belly"][0]}" cy="{P["belly"][1]}" rx="{P["belly"][2]}" ry="{P["belly"][3]}" fill="{belly}"/>'
+        body_ellipse=(f'<path d="{pear_d(120,bcy,rx,ry,P["narrow"])}" fill="{body}" stroke="{INK}" stroke-width="{SW}"/>'
+                      f'<g id="body_shade"><path d="{side_shade_d(120,bcy,rx,ry,P["narrow"])}" fill="{sidec}"/></g>')
+        belly_svg=(f'<ellipse cx="{P["belly"][0]}" cy="{P["belly"][1]}" rx="{P["belly"][2]}" ry="{P["belly"][3]}" fill="{belly}"/>'
+                   f'{belly_scallops(P["belly"][0],P["belly"][1]-P["belly"][3]+2,16)}')
         feet_svg=(f'<g id="feet" stroke="{INK}" stroke-width="{SW}"><ellipse cx="99" cy="{P["feet_y"]}" rx="11" ry="7" fill="{PEACH}"/>'
                   f'<ellipse cx="141" cy="{P["feet_y"]}" rx="11" ry="7" fill="{PEACH}"/></g>')
         tail_svg='<g id="tail"></g>'
@@ -403,25 +493,34 @@ def render_bird(stage,mood_idx,skin="sunny",acc="none",fx_extra="",label="pip C"
                   f'<circle cx="110" cy="{86+(bcy-122)}" r="7" fill="{body}"/><circle cx="122" cy="{82+(bcy-122)}" r="8" fill="{body}"/>'
                   f'<circle cx="133" cy="{88+(bcy-122)}" r="6.5" fill="{body}"/></g>')
     else:
-        body_ellipse=f'<ellipse cx="120" cy="{bcy}" rx="{rx}" ry="{ry}" fill="{body}" stroke="{INK}" stroke-width="{SW}"/>'
-        shade_d = ("M162 100 Q178 130 168 168 Q176 140 158 108 Z" if stage==3 else "M162 92 Q178 122 168 162 Q176 132 158 100 Z")
-        # shift shade with bcy delta
-        dy = bcy-(133 if stage==3 else 124)
-        body_ellipse+=f'<g id="body_shade"><path d="{shade_d}" fill="{shade}" opacity="0.22" transform="translate(0 {dy})"/></g>'
-        belly_svg=f'<ellipse cx="{P["belly"][0]}" cy="{P["belly"][1]}" rx="{P["belly"][2]}" ry="{P["belly"][3]}" fill="{belly}"/>'
-        feet_svg=(f'<g id="feet" stroke="{INK}" stroke-width="{SW}" stroke-linejoin="round">'
-                  f'<ellipse cx="99" cy="{P["feet_y"]}" rx="{12 if stage==3 else 13}" ry="{7.5 if stage==3 else 8}" fill="{PEACH}"/>'
-                  f'<ellipse cx="141" cy="{P["feet_y"]}" rx="{12 if stage==3 else 13}" ry="{7.5 if stage==3 else 8}" fill="{PEACH}"/></g>')
+        body_ellipse=(f'<path d="{pear_d(120,bcy,rx,ry,P["narrow"])}" fill="{body}" stroke="{INK}" stroke-width="{SW}"/>'
+                      f'<g id="body_shade"><path d="{side_shade_d(120,bcy,rx,ry,P["narrow"])}" fill="{sidec}"/></g>')
+        belly_svg=(f'<ellipse cx="{P["belly"][0]}" cy="{P["belly"][1]}" rx="{P["belly"][2]}" ry="{P["belly"][3]}" fill="{belly}"/>'
+                   f'{belly_scallops(P["belly"][0],P["belly"][1]-P["belly"][3]+2,22)}')
+        if stage==4:
+            # songbird throat feathers: small scallop row on the chest below the beak
+            belly_svg+=belly_scallops(120,P["beak"][1]+17,12)
+        if stage==3:
+            feet_svg=(f'<g id="feet" stroke="{INK}" stroke-width="{SW}" stroke-linejoin="round">'
+                      f'<ellipse cx="99" cy="{P["feet_y"]}" rx="12" ry="7.5" fill="{PEACH}"/>'
+                      f'<ellipse cx="141" cy="{P["feet_y"]}" rx="12" ry="7.5" fill="{PEACH}"/></g>')
+        else:
+            # songbird confident stance: wider feet
+            feet_svg=(f'<g id="feet" stroke="{INK}" stroke-width="{SW}" stroke-linejoin="round">'
+                      f'<ellipse cx="94" cy="{P["feet_y"]}" rx="14" ry="8" fill="{PEACH}"/>'
+                      f'<ellipse cx="146" cy="{P["feet_y"]}" rx="14" ry="8" fill="{PEACH}"/></g>')
         if stage==3: tail_svg=tail_s3(fill=wingf,lift=(bcy-133))
-        else: tail_svg=tail_s4(fill=wingf,lift=(bcy-124))
-        hl = highlight(P["hl"][0],P["hl"][1]+(bcy-(133 if stage==3 else 124)),P["hl"][2],P["hl"][3]) if mood_idx not in ("sleepy_2","sleepy_3") else highlight(P["hl"][0],P["hl"][1],P["hl"][2],P["hl"][3],op=0.4)
-        # tuft y shift with body? keep fixed head top approx bcy-ry
-        tuft_svg=tuft(P["tuft"],body)
+        else: tail_svg=tail_s4(y=178,fill=wingf,lift=(bcy-120))
+        hl = highlight(P["hl"][0],P["hl"][1]+(bcy-(133 if stage==3 else 120)),P["hl"][2],P["hl"][3]) if mood_idx not in ("sleepy_2","sleepy_3") else highlight(P["hl"][0],P["hl"][1],P["hl"][2],P["hl"][3],op=0.4)
+        # tuft rides the head crown; songbird maps its tuft to the big crest
+        tv = P["tuft"]
+        if stage==4: tv={"normal":"crest","up":"crest","tall":"crest","sway_r":"crest","sway_l":"crest"}.get(tv,tv)
+        tuft_svg=tuft(tv,body,dy=(bcy-ry)-72)
         shell_bot='<g id="shell_bottom"></g>'; shell_top='<g id="shell_top"></g>'
 
     wl=P["wingl"]; wr=P["wingr"]
-    wingl_svg=wing("L",wl[0],wl[1],wl[2],wl[3],wl[4],wingf)
-    wingr_svg=wing("R",wr[0],wr[1],wr[2],wr[3],wr[4],wingf)
+    wingl_svg=wing("L",wl[0],wl[1],wl[2],wl[3],wl[4],wingf,up=(wl[5] if len(wl)>5 else False))
+    wingr_svg=wing("R",wr[0],wr[1],wr[2],wr[3],wr[4],wingf,up=(wr[5] if len(wr)>5 else False))
     # eyes
     er=P["er"] if mood_idx!="surprised_2" else P["er"]
     ml,mr=P["eye_mode"]
@@ -432,6 +531,7 @@ def render_bird(stage,mood_idx,skin="sunny",acc="none",fx_extra="",label="pip C"
     elif P["beak_mode"]=="o": bt,bb=beak_o(bcx,bcyb,11)
     elif P["beak_mode"]=="o_small": bt,bb=beak_o(bcx,bcyb,8)
     elif P["beak_mode"]=="peck": bt,bb=beak_peck(bcx,bcyb)
+    elif P["beak_mode"]=="snore": bt,bb=beak_snore(bcx,bcyb)
     else: bt,bb=beak_closed(bcx,bcyb)
     beak_top_svg=f'<g id="beak_top">{bt}</g>'; beak_bot_svg=f'<g id="beak_bottom">{bb}</g>'
     chx = cheekx if stage==2 else ((76,153,164,153))
@@ -440,15 +540,14 @@ def render_bird(stage,mood_idx,skin="sunny",acc="none",fx_extra="",label="pip C"
     brow_svg=brows(P["brows"],P["ey_l"][0],P["ey_l"][1]-22,P["ey_r"][0])
     # accessories
     ah,an,af=acc_shapes(acc,stage,skin)
-    parts=[
-      shadow(rx=P["shadow_rx"]),
+    body_parts=[
       tail_svg,
       wingl_svg, wingr_svg,
       f'<g id="body">{body_ellipse}</g>',
       f'<g id="belly">{belly_svg}</g>',
       cheek_svg,
       tuft_svg if stage!=2 else tuft_svg,
-      f'<g id="eyes">{eyes_svg}</g>' if False else f'{eyes_svg}',
+      f'{eyes_svg}',
       brow_svg,
       beak_top_svg, beak_bot_svg,
       feet_svg,
@@ -457,6 +556,11 @@ def render_bird(stage,mood_idx,skin="sunny",acc="none",fx_extra="",label="pip C"
       hl,
       f'<g id="fx">{fx}</g>',
     ]
+    # sleepy lean: tilt everything above the shadow ~12° so "asleep" reads instantly
+    if P.get("tilt"):
+        parts=[shadow(rx=P["shadow_rx"]), f'<g transform="rotate({P["tilt"]} 120 150)">{"".join(body_parts)}</g>']
+    else:
+        parts=[shadow(rx=P["shadow_rx"])]+body_parts
     # fix: eyes wrapper — contract wants eye_l/eye_r top-level; we already emit them. wrap in nothing.
     return svg_wrap(label,parts)
 
@@ -480,7 +584,7 @@ def render_egg(mood_idx,skin="sunny",acc="none",label="pip C egg"):
     elif mood_idx=="eating_2":
         beak_peek=(f'<g id="beak_top"><path d="M110 146 L130 146 L120 160 Z" fill="{PEACH}" stroke="{INK}" stroke-width="4" stroke-linejoin="round"/></g>'
                    f'<g id="beak_bottom"></g>')
-        fx=seed(148,150,0.8)+crumb(96,150,3.6)+crumb(164,158,3)+crumb(120,170,2.8)
+        fx=seed(148,150)+crumb(96,150,3.6)+crumb(164,158,3)+crumb(120,170,2.8)
         eye_mode=("happy","happy")
     elif mood_idx=="eating_3":
         eye_mode=("happy","happy"); fx=heart(164,120,6)+crumb(142,148,3.2)

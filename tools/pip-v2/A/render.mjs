@@ -76,7 +76,7 @@ async function boardMoods() {
 async function boardSeq() {
   const rows = [
     ["happy", [1, 2, 3], ["squash", "JUMP +18", "land"]],
-    ["eating", [1, 2, 3], ["seed drops", "peck x3", "happy"]],
+    ["eating", [1, 2, 3], ["berry drops", "peck", "crunch"]],
     ["sleepy", [1, 2, 3], ["droop", "eyes shut", "deep Zzz"]],
     ["surprised", [1, 2, 3], ["lean", "FLARE + !", "settle"]],
     ["proud", [1, 2], ["chest out", "wink"]],
@@ -109,6 +109,44 @@ async function boardSeq() {
     });
   });
   const out = path.join(A, "BOARD_sequences.png");
+  await sharp(base).composite([...done, { input: labelOverlay(W, H, texts), left: 0, top: 0 }]).png().toFile(out);
+  console.log("wrote", out);
+}
+
+// ---------- BOARD_evolve (s1 -> s2 -> s3 -> s4) ----------
+async function boardEvolve() {
+  const rows = [
+    ["s1 -> s2", ["poses/s1_happy_2.svg", "evolve/evolve_s1_to_s2_1.svg", "evolve/evolve_s1_to_s2_2.svg"]],
+    ["s2 -> s3", ["poses/s2_happy_2.svg", "evolve/evolve_s2_to_s3_1.svg", "evolve/evolve_s2_to_s3_2.svg"]],
+    ["s3 -> s4", ["poses/s3_happy_2.svg", "evolve/evolve_s3_to_s4_1.svg", "evolve/evolve_s3_to_s4_2.svg"]],
+  ];
+  const caps = ["stage N peak", "glow charge", "stage N+1 reveal"];
+  const T = 230, GAP = 14, LW = 150, TOP = 122, ROWH = T + 36;
+  const W = LW + GAP + 3 * (T + GAP) + GAP;
+  const H = TOP + rows.length * (ROWH + GAP) + 44;
+  const base = await sharp({ create: { width: W, height: H, channels: 4, background: LIGHT } }).png().toBuffer();
+  const jobs = [];
+  rows.forEach(([label, files], r) => {
+    const top = TOP + r * (ROWH + GAP);
+    files.forEach((f, c) => {
+      const left = LW + GAP + c * (T + GAP);
+      jobs.push(tileWithInset(f, T, 200).then((buf) => ({ input: buf, left, top })));
+    });
+  });
+  const done = await Promise.all(jobs);
+  const texts = [
+    [24, 40, 34, "bold", INK, "start", "MOCHI A — evolve sequence"],
+    [24, 82, 20, "normal", "#4A4668", "start", "peak pose -> glow + spin/pop -> next stage appears"],
+    ...rows.map(([label], r) => [LW - 16, TOP + r * (ROWH + GAP) + T / 2, 24, "bold", INK, "end", label]),
+    ...caps.map((c, i) => [LW + GAP + i * (T + GAP) + T / 2, TOP - 14, 22, "bold", INK, "middle", c]),
+  ];
+  rows.forEach(([label, files], r) => {
+    const top = TOP + r * (ROWH + GAP);
+    caps.forEach((cap, c) => {
+      texts.push([LW + GAP + c * (T + GAP) + T / 2, top + T + 26, 18, "normal", "#4A4668", "middle", `${c + 1}. ${cap}`]);
+    });
+  });
+  const out = path.join(A, "BOARD_evolve.png");
   await sharp(base).composite([...done, { input: labelOverlay(W, H, texts), left: 0, top: 0 }]).png().toFile(out);
   console.log("wrote", out);
 }
@@ -148,3 +186,4 @@ async function boardCustom() {
 await boardMoods();
 await boardSeq();
 await boardCustom();
+await boardEvolve();

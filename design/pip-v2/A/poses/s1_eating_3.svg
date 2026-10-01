@@ -16,5 +16,5 @@
 <g id="accessory_head"></g>
 <g id="accessory_neck"></g>
 <g id="accessory_face"></g>
-<g id="fx"><path d="M186 96.3 C176.2 90 181.1 83 186 88.25 C190.9 83 195.8 90 186 96.3 Z" fill="#FF6B8A" stroke="#1E1B3A" stroke-width="3.5" stroke-linejoin="round"/><circle cx="150" cy="160" r="3" fill="#C98A3D" stroke="#1E1B3A" stroke-width="2.5"/></g>
+<g id="fx"><g><circle cx="154" cy="158" r="7" fill="#E5484D" stroke="#1E1B3A" stroke-width="5"/><circle cx="151.55" cy="155.55" r="2.0" fill="#FFFFFF" opacity="0.85"/><path d="M157.5 151.7 q7 -6 13 -3 q-5 7 -13 3 Z" fill="#3FA67E" stroke="#1E1B3A" stroke-width="3" stroke-linejoin="round"/></g><circle cx="84" cy="172" r="3.5" fill="#8B5A2B" stroke="#1E1B3A" stroke-width="2.5"/><circle cx="110" cy="182" r="3" fill="#8B5A2B" stroke="#1E1B3A" stroke-width="2.5"/><circle cx="140" cy="184" r="3" fill="#8B5A2B" stroke="#1E1B3A" stroke-width="2.5"/><circle cx="166" cy="172" r="2.8" fill="#8B5A2B" stroke="#1E1B3A" stroke-width="2.5"/><path d="M188 90.3 C178.2 84 183.1 77 188 82.25 C192.9 77 197.8 84 188 90.3 Z" fill="#FF6B8A" stroke="#1E1B3A" stroke-width="3.5" stroke-linejoin="round"/></g>
 </svg>
