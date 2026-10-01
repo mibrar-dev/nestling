@@ -49,6 +49,9 @@ ev LOOP_START "feature=$FEATURE route=$ROUTE sim=$SIM"
 FIXES=""
 for IT in $(seq 1 "$MAX"); do
   [ "$IT" -eq 1 ] && stage plan "$MUSE" 1_plan.md "$IT"
+  # pick up shared fixes landed on main (orchestrator) before each build
+  git -C "$WT" add -A >/dev/null 2>&1; git -C "$WT" commit -q -m "$ID: wip before sync" >/dev/null 2>&1
+  git -C "$WT" merge -q --no-edit main >/dev/null 2>&1 || { git -C "$WT" merge --abort >/dev/null 2>&1; ev SYNC_CONFLICT "main"; }
   stage build "$MUSE" 2_build.md "$IT" "$FIXES"
   stage test  "$DEEP"  3_test.md   "$IT"
   stage review "$BUNNY" 4_review.md "$IT"
