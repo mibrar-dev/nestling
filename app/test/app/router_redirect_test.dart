@@ -74,5 +74,16 @@ void main() {
       expect(currentPath(tester), '/kid-home');
       await disposeApp(tester);
     });
+    testWidgets('kid mode cannot open the onboarding flow', (tester) async {
+      await setUpTestScope();
+      GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+      final session = GetIt.instance<AppSession>();
+      await session.setAppMode('kid');
+      await session.refresh();
+
+      await pumpAppRoute(tester, '/welcome');
+      expect(currentPath(tester), '/parental-gate');
+      await disposeApp(tester);
+    });
   });
 }
