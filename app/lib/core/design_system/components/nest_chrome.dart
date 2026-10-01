@@ -18,12 +18,25 @@ class NestStatusBar extends StatelessWidget {
     this.semanticLabel,
   });
 
+  /// Draw the mock clock/signal/battery row. Off in the app (the OS draws
+  /// the real one); the design-system gallery turns it on.
+  static bool showMockGlyphs = false;
+
   final String time;
   final bool lightIcons;
   final String? semanticLabel;
 
   @override
   Widget build(BuildContext context) {
+    // In the running app iOS/Android draw the real status bar, so this
+    // only reserves its height. The mock clock + glyphs are for the design
+    // gallery and screenshot mockups ([showMockGlyphs]).
+    if (!showMockGlyphs) {
+      final inset = MediaQuery.viewPaddingOf(context).top;
+      return SizedBox(
+        height: inset > NestDevice.statusH ? inset : NestDevice.statusH,
+      );
+    }
     final tokens = context.nest;
     final color = lightIcons ? const Color(0xFFFFFFFF) : tokens.ink;
     final bar = SizedBox(
