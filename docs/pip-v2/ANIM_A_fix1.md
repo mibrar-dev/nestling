@@ -1,0 +1,5 @@
+ORCHESTRATOR REVIEW of design/animations/rive/mochi/MOTION_BOARD.png — big improvement over v1, motion is clearly readable. Fix 3 bugs, re-render the board + strips, LOOK, then reply:
+1. HAPPY (fledgling + songbird): at the peak the raised wings are drawn IN FRONT of the face and cover the eyes (reads as peekaboo/hiding, not joy). Wings must rise to the SIDES/above the head and stay BEHIND the head/eyes in draw order at every frame (or rotate outward so they never overlap the face). The ^^ eyes and open beak must be visible at the peak.
+2. SURPRISED frame ~15%: the eyes render as grey rings (like the glasses accessory or a mis-bound eye variant). Check eye_l/eye_r `surprised` child groups and accessory_face binding; no accessory must appear unless the accessory property is set.
+3. EVOLVE: the glow ring is off-centre and runs off the right edge of the artboard. Centre it on Pip's body centre and keep it fully inside the artboard (max radius ≤ 45% of artboard width); fade it out by the end.
+Keep: verify/inspect 0 problems, flutter analyze clean, flutter test all pass.

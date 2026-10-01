@@ -1,0 +1,7 @@
+ORCHESTRATOR VERIFICATION FAILED for your last reply. Evidence: app/assets/animations/rive/pip_mochi.riv and tools/rive/mochi/build/pip_mochi.riv are byte-identical (md5 e5e43439…) and dated 05:07; MOTION_BOARD.png and all strip_*.png are dated 05:01 — i.e. BEFORE your fix session. The board still shows: (1) happy — wings in front of the eyes at the peak; (2) surprised + evolve frame 2 — grey rings over the eyes ("glasses" look). So the fixes either were not made in the source, or were never rebuilt/re-rendered.
+DO, in order, and show proof:
+1. Make the 3 fixes in the GENERATOR SOURCE (tools/rive/mochi/…), not just in notes: wings behind head/eyes in draw order and rotated outward at the happy peak; surprised eyes = enlarged white sclera + big pupil, NO grey ring / accessory_face leakage (check the accessory default is 'none' and the face accessory visibility binding); evolve ring centred & inside the artboard.
+2. Rebuild: `tools/rive/bin/rive tools/rive/mochi --once`, then copy to app/assets/animations/rive/pip_mochi.riv. Print `md5 -q` of the new file (must differ from e5e434396370cd073c359bea6a724295) and `ls -la` timestamps.
+3. Re-render ALL strips + MOTION_BOARD.png from the new build; print their timestamps; READ strip_s3_happy.png, strip_s3_surprised.png, strip_s3_evolve.png and describe what you see at the peak frames.
+4. rive --verify / inspect 0 problems; flutter analyze clean; flutter test pass.
+Reply with the md5, timestamps and your peak-frame descriptions.

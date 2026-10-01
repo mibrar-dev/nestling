@@ -9,6 +9,8 @@ export const INK = '#1E1B3A';
 export const SW = 8;
 export const BEAK = '#FF8A5B';
 
+import { buildFace } from './face.mjs';
+
 export const SKINS = {
   sunny: { body: '#FFD93D', belly: '#FFF1B8', wing: '#E9AE00', tail: '#C08700', accent: '#C98A3C', shell: '#FFF7E4' },
   berry: { body: '#FF9EBB', belly: '#FFE1EA', wing: '#E0688F', tail: '#B84E74', accent: '#B0416A', shell: '#FFEFF4' },
@@ -63,7 +65,7 @@ export const STAGES = {
     key: 'fledgling', name: 'fledgling', label: 'stage 3 · fledgling',
     body: { cx: 120, cy: 136, rx: 50, ry: 56 },
     face: { eyeDX: 26, eyeDY: -14, eyeR: 16, pupilR: 8.6, beakDY: 18, beakW: 18.5, cheekDX: 40, cheekDY: 16, cheekR: 9 },
-    has: { body: 1, belly: 1, hl: 1, tail: 1, wings: 1, feet: 1, cup: 0, hat: 0, tuft: 1 },
+    has: { body: 1, belly: 1, hl: 1, tail: 0, wings: 1, feet: 1, cup: 0, hat: 0, tuft: 1 },
   },
   4: {
     key: 'songbird', name: 'songbird', label: 'stage 4 · songbird',
@@ -108,28 +110,23 @@ function songbirdPath(S) {
 /** three swept crest feathers, longest in the middle — never a crown (review B1).
     Separate blades with real gaps between them and clearly unequal lengths; the
     outlines stay open at the base so the fill melts into the head (no seam). */
-function crestPath(lean = 0.3) {
-  // wide, rounded-tip blades of clearly unequal length — a crest, not a crown
-  const blades = [
-    { x: -19, hw: 10.5, top: -24, sweep: -0.30 },
-    { x: 1, hw: 13.5, top: -45, sweep: 0 },
-    { x: 21, hw: 9.5, top: -30, sweep: 0.34 },
-  ];
-  return blades.map((b) => {
-    const tipX = b.x + b.sweep * 34 + lean * Math.abs(b.top) * 0.24;
-    const base = 11, h = base - b.top;
-    return `M ${L([b.x - b.hw, base])}`
-      + ` C ${pts([b.x - b.hw * 1.04, base - h * 0.34], [tipX - b.hw * 0.86, b.top + h * 0.33], [tipX - b.hw * 0.34, b.top + b.hw * 0.14])}`
-      + ` Q ${pts([tipX + b.hw * 0.2, b.top - b.hw * 0.34], [tipX + b.hw * 0.8, b.top + h * 0.2])}`
-      + ` C ${pts([tipX + b.hw * 0.96, b.top + h * 0.36], [b.x + b.hw * 1.02, base - h * 0.3], [b.x + b.hw, base])}`;
-  }).join(' ');
-}
-
-/** a 2 px light rim just inside the ink outline, so interior detail survives on
-    the dark background (review B4) */
-function rimPath(d, cx, cy, k = 0.968) {
-  return `<g transform="translate(${r2(cx)} ${r2(cy)}) scale(${r2(k)}) translate(${r2(-cx)} ${r2(-cy)})">`
-    + `<path d="${d}" fill="none" stroke="#FFF6CC" stroke-width="2.8" opacity="0.7"/></g>`;
+/** ONE bold swept-back crest: three lobes fused at the base, middle tallest and
+    curving back, like a cardinal / cockatiel crest (review round 3, B1).
+    A single closed silhouette — one readable shape at 48 px, never a crown.
+    The outline stays open at the base so the fill melts into the head (no seam).
+    `lean` shifts the tips sideways for acting (positive = flop right). */
+function crestPath(lean = 0.25) {
+  const lx = lean * 10;
+  return `M ${L([-19, 10])}`
+    + ` C ${pts([-25, -4], [-27, -12], [-24, -19])}`
+    + ` Q ${pts([-22, -26], [-15, -25])}`
+    + ` C ${pts([-13, -24], [-12, -22], [-12, -19])}`
+    + ` C ${pts([-11, -30], [-7, -42], [3 + lx, -46])}`
+    + ` Q ${pts([7 + lx, -48], [10 + lx, -44])}`
+    + ` C ${pts([12 + lx, -40], [11, -34], [9, -27])}`
+    + ` C ${pts([10, -31], [15, -33], [18, -31])}`
+    + ` Q ${pts([23, -28], [21, -21])}`
+    + ` C ${pts([20, -11], [19, -1], [18, 10])}`;
 }
 
 /** egg outline sampled clockwise, index 0 = bottom, mid = top */
@@ -156,15 +153,14 @@ function ringEdgesAt(pts, y) {
 }
 
 /** bold wing paddle, two feather scallops on the outer (-x) edge */
+/** one smooth wing paddle — a single bold shape, no feather scallops (round 3, B2).
+    Origin at the shoulder (top-inner corner); the tip hangs down-out. */
 function wingPath(w, h) {
   const a = w / 2, b = h / 2;
-  return `M ${L([a * 0.6, -b])}`
-    + ` L ${L([-a * 0.18, -b])}`
-    + ` C ${pts([-a * 0.98, -b], [-a * 1.2, -b * 0.44], [-a * 0.5, -b * 0.3])}`
-    + ` C ${pts([-a * 1.24, -b * 0.02], [-a * 1.24, b * 0.52], [-a * 0.46, b * 0.68])}`
-    + ` L ${L([-a * 0.12, b])}`
-    + ` L ${L([a * 0.6, b])}`
-    + ` C ${pts([a * 0.88, b * 0.36], [a * 0.88, -b * 0.36], [a * 0.6, -b])} Z`;
+  return `M ${L([a * 0.52, -b])}`
+    + ` C ${pts([-a * 0.3, -b], [-a * 1.18, -b * 0.52], [-a * 1.14, b * 0.08])}`
+    + ` C ${pts([-a * 1.1, b * 0.62], [-a * 0.4, b], [a * 0.14, b * 0.84])}`
+    + ` C ${pts([a * 0.56, b * 0.68], [a * 0.62, -b * 0.3], [a * 0.52, -b])} Z`;
 }
 
 /** tail feather blade, origin at its top centre */
@@ -243,22 +239,18 @@ function fxGroup(list) {
   return `<g id="fx">${body}</g>`;
 }
 
-/* ---------- eyes ---------- */
-function eyeChildren(R, pr, gaze, side) {
-  const px = (gaze?.dx ?? 0) * R * 0.14, py = (gaze?.dy ?? 0) * R * 0.14;
-  const round = (s, p, glint) => `<circle ${C(0, 0)} r="${r2(R * s)}" fill="#FFFFFF" stroke="${INK}" stroke-width="${SW}"/>`
-    + `<circle ${C(px, py)} r="${r2(p)}" fill="${INK}"/><circle ${C(px - R * 0.23, py - R * 0.25)} r="${r2(R * glint)}" fill="#FFFFFF"/>`;
-  const curve = (y0, yc, w) => `<path d="M ${L([-R * 0.82, y0], [0, yc], [R * 0.82, y0])}" fill="none"`
-    + ` stroke="${INK}" stroke-width="${r2(w)}" stroke-linecap="round"/>`;
-  const lash = (s) => `<path d="M ${L([s * R * 0.82, 0], [s * (R * 0.82 + 5), -R * 0.4])}" fill="none" stroke="${INK}" stroke-width="${SW}" stroke-linecap="round"/>`;
-  return {
-    open: round(1, pr, 0.17),
-    closed: curve(R * 0.12, -R * 0.36, SW),
-    happy: curve(R * 0.42, -R * 0.7, SW + 1),
-    sleepy: curve(-R * 0.08, R * 0.52, SW) + lash(1),
-    surprised: round(1.16, pr * 0.66, 0.21),
-    wink: curve(R * 0.14, -R * 0.3, SW) + lash(side === 'l' ? 1 : -1),
-  };
+/** sleepy nightcap — worn via accessory_head on sleepy frames (round 3, like the
+    other styles). Deep blue floppy cone, white brim, white pom: three flat
+    shapes, 8 px ink, nothing else. */
+function nightcap(bx, crownY, s, tilt) {
+  return `<g${tg({ tx: bx, ty: crownY, rot: tilt, sx: s, sy: s })}>`
+    + `<path d="M ${L([-30, -2])} C ${pts([-28, -26], [-8, -37], [10, -37])}`
+    + ` C ${pts([24, -37], [32, -30], [38, -19])}`
+    + ` L ${L([28, -11])} C ${pts([23, -18], [17, -22], [9, -22])}`
+    + ` C ${pts([-3, -22], [-15, -14], [-17, -2])} Z"`
+    + ` fill="#4E6BE8" stroke="${INK}" stroke-width="${SW}" stroke-linejoin="round"/>`
+    + `<rect x="-34" y="-8" width="68" height="14" rx="7" fill="#FFFFFF" stroke="${INK}" stroke-width="${SW}"/>`
+    + `<circle ${C(41, -16)} r="8.5" fill="#FFFFFF" stroke="${INK}" stroke-width="${SW}"/></g>`;
 }
 
 /* ---------- the builder ---------- */
@@ -296,11 +288,13 @@ export function buildParts(p) {
   const wh = (p.stage === 4 ? 70 : p.stage === 3 ? 52 : 35) * (p.wingScale ?? 1);
   const wing = (side) => {
     const sgn = side === 'l' ? -1 : 1, o = p['wing' + (side === 'l' ? 'L' : 'R')] || {};
-    const sxw = B.cx + sgn * (S.chest ? S.chest.rx : brx) * (o.ix ?? 0.9) + sgn * (o.dx ?? 0);
+    const sxw = B.cx + sgn * (S.chest ? S.chest.rx : brx) * (o.ix ?? 0.99) + sgn * (o.dx ?? 0);
     const syw = (S.chest ? S.chest.cy - S.chest.ry * 0.46 : by - bry * 0.14) + (o.dy ?? 0);
-    // mirror each wing so the feather scallops always face outward; rotations mirror too
+    // mirror each wing so the paddle faces outward; the wing pivots about the
+    // top of the paddle (the shoulder joint), so raises swing wide and high
     return `<path d="${wingPath(ww, wh)}"${tg({
       tx: sxw, ty: syw, rot: -sgn * (o.rot ?? S.wingRest ?? 0), sx: -sgn * (o.sx ?? 1), sy: o.sy ?? 1,
+      ox: 0, oy: -wh * 0.35,
     })}/>`;
   };
   const wingL = S.has.wings
@@ -315,17 +309,11 @@ export function buildParts(p) {
   const body = S.has.body
     ? `<g id="body"${bodyX}><path d="${bodyD}" fill="${K.body}" stroke="${INK}" stroke-width="${SW}"/></g>`
     : '<g id="body" opacity="0"/>';
-  const rim = S.has.body
-    ? `<g id="rim"${bodyX}>${rimPath(bodyD, B.cx, B.cy, 0.966)}</g>`
-    : '<g id="rim" opacity="0"/>';
   const belCx = B.cx, belCy = S.chest ? S.chest.cy : B.cy + B.ry * 0.3;
   const belRx = (S.chest ? S.chest.rx * 0.66 : B.rx * 0.68) * (p.bellySx ?? 1);
   const belRy = (S.chest ? S.chest.ry * 0.92 : B.ry * 0.52) * (p.bellySy ?? 1);
-  const bellyD = `M ${L([belCx - belRx, belCy])} A ${r2(belRx)} ${r2(belRy)} 0 1 0 ${r2(belCx + belRx)} ${r2(belCy)} A ${r2(belRx)} ${r2(belRy)} 0 1 0 ${r2(belCx - belRx)} ${r2(belCy)} Z`;
   const belly = S.has.belly
-    ? `<g id="belly"${bodyX}><ellipse ${C(belCx, belCy)} rx="${r2(belRx)}" ry="${r2(belRy)}" fill="${K.belly}"/>`
-    + `<g transform="translate(${r2(belCx)} ${r2(belCy)}) scale(0.955) translate(${r2(-belCx)} ${r2(-belCy)})">`
-    + `<path d="${bellyD}" fill="none" stroke="#FFF6CC" stroke-width="2.6" opacity="0.62"/></g></g>`
+    ? `<g id="belly"${bodyX}><ellipse ${C(belCx, belCy)} rx="${r2(belRx)}" ry="${r2(belRy)}" fill="${K.belly}"/></g>`
     : '<g id="belly" opacity="0"/>';
   const hcx = (S.head ? S.head.cx0 ?? B.cx : B.cx) - (S.head ? S.head.r : B.rx) * 0.42;
   const hcy = (S.head ? S.head.cy - S.head.r * 0.44 : B.cy - B.ry * 0.62);
@@ -355,7 +343,7 @@ export function buildParts(p) {
     const topPts = [], botPts = [];
     for (let i = iL; i >= iR - n; i--) topPts.push(ring[((i % n) + n) % n]); // left crack → crown → right crack
     for (let i = iR; i <= iL; i++) botPts.push(ring[i % n]);                  // right crack → base → left crack
-    const spots = [[-30, -36, 7], [20, -42, 5.5], [38, -16, 6], [-40, -8, 5], [6, -52, 4.5]]
+    const spots = [[-32, -30, 6.5], [24, -40, 5.5], [40, -10, 5.5]]
       .map(([a, b, s]) => `<circle ${C(bx + a * sx, ecy + b * sy)} r="${s}" fill="${K.wing}" stroke="none" opacity="0.45"/>`).join('');
     shellTop = `<g id="shell_top"${tg({ ty: -co })} fill="${K.shell}" stroke="${INK}" stroke-width="${SW}" stroke-linejoin="round">`
       + `<path d="M ${L(topPts)} L ${one(zp[zp.length - 1])} ${L(zp.slice(0, -1).reverse())} Z"/>${spots}`
@@ -369,10 +357,7 @@ export function buildParts(p) {
     shellTop = `<g id="shell_top"${tg({ rot: p.shellHatRot ?? 6, sx, sy, ox: bx, oy: by - bry })}`
       + ` fill="${K.shell}" stroke="${INK}" stroke-width="${SW}" stroke-linejoin="round">`
       + `<path d="M ${one(zp[0])} C ${pts([zp[0][0], by - bry - hdome * sy], [zp[zp.length - 1][0], by - bry - hdome * sy], zp[zp.length - 1])}`
-      + ` L ${L(zp.slice(0, -1).reverse())} Z"/>`
-      + `<path d="M ${L([bx - 13 * sx, by - bry - 13 * sy], [bx - 6 * sx, by - bry - 28 * sy], [bx + 9 * sx, by - bry - 29 * sy], [bx + 16 * sx, by - bry - 12 * sy])}" fill="none" stroke="${INK}" stroke-width="4" stroke-linecap="round" opacity="0.32"/>`
-      + `<circle ${C(bx + 24 * sx, by - bry - 14 * sy)} r="5" fill="${K.wing}" stroke="none" opacity="0.45"/>`
-      + `<ellipse ${C(bx - 17 * sx, by - bry - 27 * sy)} rx="11" ry="5.5" fill="#FFFFFF" stroke="none" opacity="0.7" transform="rotate(-28 ${r2(bx - 17 * sx)} ${r2(by - bry - 27 * sy)})"/></g>`;
+      + ` L ${L(zp.slice(0, -1).reverse())} Z"/></g>`;
     const cw = 58, ctop = by + bry * 0.58;
     const czig = [[-1, 0], [-0.72, -0.3], [-0.4, 0.14], [-0.06, -0.22], [0.3, 0.16], [0.62, -0.3], [0.84, 0.06], [1, 0.02]];
     const cp = czig.map(([u, v]) => [bx + u * cw, ctop + v * 21 * sy]);
@@ -380,9 +365,8 @@ export function buildParts(p) {
       + `<path d="M ${L(cp)}`
       + ` C ${pts([bx + cw * 0.98, by + bry + 16], [bx + cw * 0.54, 214], [bx, 214])}`
       + ` C ${pts([bx - cw * 0.54, 214], [bx - cw * 0.98, by + bry + 16], cp[0])} Z"/>`
-      + `<circle ${C(bx - 31, 198)} r="5.5" fill="${K.wing}" stroke="none" opacity="0.4"/>`
-      + `<circle ${C(bx + 35, 202)} r="4.5" fill="${K.wing}" stroke="none" opacity="0.4"/>`
-      + `<circle ${C(bx + 11, 208)} r="3.4" fill="${K.wing}" stroke="none" opacity="0.3"/></g>`;
+      + `<circle ${C(bx - 30, 199)} r="5" fill="${K.wing}" stroke="none" opacity="0.4"/>`
+      + `<circle ${C(bx + 33, 202)} r="4.5" fill="${K.wing}" stroke="none" opacity="0.4"/></g>`;
   }
 
   /* feet */
@@ -400,90 +384,47 @@ export function buildParts(p) {
   /* head */
   const pivotX = bx, pivotY = pivotYf;
   const headLift = p.stage === 1 ? -Math.max(0, p.crackOpen ?? 0) * 0.5 : 0;
-  const headT = tg({ tx: p.headDx ?? 0, ty: (p.headDy ?? 0) + headLift, rot: p.headRot ?? 0, ox: pivotX, oy: pivotY });
 
   // the tuft sits BEHIND the body so its closed base never shows as a seam
   const tuftO = { x: bx, y: S.head ? S.head.cy - S.head.r + 11 : by - bry + 10 };
   const tSx = (p.tuftSpread ?? 1) * (p.tuftScale ?? S.tuftScale ?? 1);
   const tSyRaw = (p.tuftLift ?? 1) * (p.tuftScale ?? S.tuftScale ?? 1);
   // safety: the crest compresses instead of clipping when the body flies high
-  const tTop = tuftO.y - 47 * tSyRaw;
-  const tSy = tTop < 15 ? Math.max(0.4, (tuftO.y - 15) / (47 * Math.max(tSyRaw, 0.01))) : tSyRaw;
+  const tTop = tuftO.y - 48 * tSyRaw;
+  const tSy = tTop < 15 ? Math.max(0.4, (tuftO.y - 15) / (48 * Math.max(tSyRaw, 0.01))) : tSyRaw;
   const tuft = S.has.tuft
     ? `<g id="head_tuft"${tg({ rot: p.tuftLean ?? 0, sx: tSx, sy: tSy, ox: tuftO.x, oy: tuftO.y })}>`
-    + `<path d="${crestPath(p.crestLean ?? 0)}"${tg({ tx: tuftO.x, ty: tuftO.y })} fill="${K.body}" stroke="${INK}" stroke-width="${SW}" stroke-linejoin="round"/></g>`
+    + `<path d="${crestPath(0.25 + (p.tuftLean ?? 0) / 12)}"${tg({ tx: tuftO.x, ty: tuftO.y })} fill="${K.body}" stroke="${INK}" stroke-width="${SW}" stroke-linejoin="round"/></g>`
     : '<g id="head_tuft" opacity="0"/>';
 
-  const puff = p.cheekPuff ?? 1;
-  const cheek = (side) => {
-    if (!F.cheekR) return '';
-    const sgn = side === 'l' ? -1 : 1;
-    return `<ellipse ${C(bx + sgn * F.cheekDX, fy + F.cheekDY)} rx="${r2(F.cheekR * puff)}" ry="${r2(F.cheekR * 0.64 * puff)}" fill="${BEAK}" opacity="0.92"/>`;
-  };
-  const cheeks = `<g id="cheek_l">${cheek('l')}</g><g id="cheek_r">${cheek('r')}</g>`;
+  /* Face: built ONLY by the face generator (face.mjs) — symmetric by
+     construction. Emotion = eye shape + beak state + whole-head tilt. */
+  const eyeY = fy + F.eyeDY;
+  const head = buildFace({
+    stage: p.stage, cx: bx, eyeY,
+    tx: (p.headDx ?? 0), ty: (p.headDy ?? 0) + headLift, tilt: (p.headRot ?? 0),
+    ox: pivotX, oy: pivotY,
+    eyeL: p.eyeL, eyeR: p.eyeR, eye: p.eye,
+    scale: p.eyeScale, gaze: p.gaze, brow: p.brow,
+    beak: p.beak, beakDy: p.beakDy, seed: p.seed, cheekPuff: p.cheekPuff,
+  }).markup;
 
-  const eyeY = fy + F.eyeDY + (p.eyeDy ?? 0);
-  const eyeR = F.eyeR * (p.eyeScale ?? 1), eyePr = F.pupilR * (p.eyeScale ?? 1);
-  const eyeDy = bx;
-  const kids = (side, cxp, active) => {
-    const v = eyeChildren(eyeR, eyePr, p.gaze, side);
-    return `<g id="eye_${side}" data-eye="${side}"${tg({ tx: cxp, ty: eyeY })}>`
-      + Object.entries(v).map(([k, s]) => `<g id="${k}" opacity="${k === active ? 1 : 0}">${s}</g>`).join('') + '</g>';
-  };
-  const eyes = kids('l', eyeDy - F.eyeDX, p.eyeL ?? 'open') + kids('r', eyeDy + F.eyeDX, p.eyeR ?? 'open');
-
-  const brow = (kind, side) => {
-    if (!kind) return '';
-    const sgn = side === 'l' ? -1 : 1;
-    const x0 = eyeDy + sgn * F.eyeDX - sgn * 12, x1 = eyeDy + sgn * F.eyeDX + sgn * 12;
-    const y = eyeY - eyeR - 10;
-    if (kind === 1) return `<path d="M ${L([x0, y + 5], [(x0 + x1) / 2, y - 5], [x1, y])}"/>`;
-    if (kind === 2) return `<path d="M ${L([x0, y], [(x0 + x1) / 2, y - 5], [x1, y + 5])}"/>`;
-    return `<path d="M ${L([x0, y + 4], [(x0 + x1) / 2, y - 2], [x1, y + 4])}"/>`;
-  };
-  const brows = `<g id="brow_l" fill="none" stroke="${INK}" stroke-width="6.5" stroke-linecap="round">${brow(p.browL, 'l')}</g>`
-    + `<g id="brow_r" fill="none" stroke="${INK}" stroke-width="6.5" stroke-linecap="round">${brow(p.browR, 'r')}</g>`;
-
-  const bkY = fy + F.beakDY + (p.beakDy ?? 0);
-  const kind = p.beak ?? 'closed';
-  const lift = kind === 'open' || kind === 'wide';
-  const botFill = kind === 'thin' ? BEAK : INK;
-  const botSw = 5;
-  const botStroke = kind === 'o' ? SW : 7;
-  const bw = F.beakW * (p.beakSx ?? 1);
-  const topD = {
-    o: `M ${L([-bw * 0.46, -10], [bw * 0.46, -10], [bw * 0.4, 2], [-bw * 0.4, 2], [-bw * 0.46, -10])}`,
-    wide: `M ${L([-bw * 1.14, -9], [bw * 1.14, -9], [bw * 0.7, 7], [-bw * 0.7, 7], [-bw * 1.14, -9])}`,
-    thin: `M ${L([-bw * 0.84, -5], [bw * 0.84, -5], [bw * 0.5, 7], [-bw * 0.5, 7], [-bw * 0.84, -5])}`,
-    snore: `M ${L([-bw * 0.8, -6], [bw * 0.8, -6], [bw * 0.44, 6], [-bw * 0.44, 6], [-bw * 0.8, -6])}`,
-    open: `M ${L([-bw, -7], [bw, -7], [bw * 0.62, 7], [-bw * 0.62, 7], [-bw, -7])}`,
-    closed: `M ${L([-bw, -6], [bw, -6], [bw * 0.52, 12], [-bw * 0.52, 12], [-bw, -6])}`,
-  }[kind] ?? '';
-  const botD = {
-    o: `M ${L([-bw * 0.44, 2])} Q ${pts([-bw * 0.62, 10], [-bw * 0.5, 18])} Q ${pts([-bw * 0.28, 27], [0, 28])}`
-      + ` Q ${pts([bw * 0.28, 27], [bw * 0.5, 18])} Q ${pts([bw * 0.62, 10], [bw * 0.44, 2])} Z`,
-    wide: `M ${L([-bw * 0.9, 6])} Q ${pts([-bw * 0.66, 24], [0, 31])} Q ${pts([bw * 0.66, 24], [bw * 0.9, 6])} Z`,
-    open: `M ${L([-bw * 0.72, 6])} Q ${pts([-bw * 0.54, 21], [0, 27])} Q ${pts([bw * 0.54, 21], [bw * 0.72, 6])} Z`,
-    thin: `M ${L([-bw * 0.46, 12], [bw * 0.46, 12], [0, 20], [-bw * 0.46, 12])}`,
-    snore: `M ${L([-bw * 0.46, 6])} Q ${pts([0, 22], [bw * 0.46, 6])} Z`,
-  }[kind];
-  const beakTop = `<g id="beak_top"${tg({ ty: lift ? -6 : 0, sy: lift ? 0.6 : 1, ox: bx, oy: bkY + 9 })}>`
-    + `<path d="${topD}"${tg({ tx: bx, ty: bkY })} fill="${BEAK}" stroke="${INK}" stroke-width="${SW}" stroke-linejoin="round"/></g>`;
-  const beakBot = botD
-    ? `<g id="beak_bottom"><path d="${botD}"${tg({ tx: bx, ty: bkY })} fill="${botFill}" stroke="${INK}" stroke-width="${botSw}" stroke-linejoin="round"/></g>`
-    : '<g id="beak_bottom" opacity="0"/>';
-
-  const head = `<g id="head"${headT}>${cheeks}${brows}${eyes}${beakTop}${beakBot}</g>`;
 
   /* accessories (always emitted, filled in by the accessory generator) */
-  const acc = `<g id="accessory_head"/><g id="accessory_neck"/><g id="accessory_face"/>`;
+  const night = p.nightcap
+    ? nightcap(bx,
+      (p.stage === 4 ? S.head.cy - S.head.r + 2 : p.stage === 2 ? by - bry + 10 : by - bry + 1) + (p.headDy ?? 0),
+      p.stage === 4 ? 1.1 : p.stage === 2 ? 0.9 : 1.05,
+      -8 + (p.headRot ?? 0) * 0.5)
+    : '';
+  const acc = `<g id="accessory_head">${night}</g><g id="accessory_neck"/><g id="accessory_face"/>`;
 
   let parts;
   const back = p.wingFront
     ? [shadow, tail, wingL, body, belly, hl, shellBot, feet]
     : [shadow, tail, wingL, wingR, body, belly, hl, shellBot, feet];
   // shell_top is always emitted so the artboard structure is identical across stages
-  if (p.stage === 2) parts = [...back, rim, shellTop, tuft, head];
+  if (p.stage === 2) parts = [...back, shellTop, tuft, head];
   else if (p.stage === 1) {
     // the egg: crown shell behind the face, base shell in front → the chick peeks through the crack
     const eggBack = [shadow, shellTop, tail, wingL, wingR, body, belly, hl, feet];

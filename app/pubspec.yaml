@@ -67,6 +67,9 @@ flutter:
     - assets/animations/rive/
     - assets/animations/lottie/
     - assets/illustrations/
+    - assets/illustrations/pip_v2/mochi/
+    - assets/illustrations/pip_v2/bolt/
+    - assets/illustrations/pip_v2/storybook/
     - assets/icons/
     - assets/brand/
     - assets/images/

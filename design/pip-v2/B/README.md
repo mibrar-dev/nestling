@@ -44,13 +44,34 @@ shell_top  shell_bottom  accessory_head  accessory_neck  accessory_face  fx
 * `head` is a parent group holding `cheek_l · cheek_r · brow_l · brow_r ·
   eye_l · eye_r · beak_top · beak_bottom`. It carries the head nod/tilt
   transform; rotate it for nods, keep it upright for bounce. `head_tuft`
-  (the crest) sits just before it, deliberately outside, because its open
-  bases melt into the head outline without a seam.
-* `rim` is a 2.8 px `#FFF6CC` inner light line just inside the ink outline on
-  body and belly. It is what keeps interior detail legible on `#15131F`.
+  is ONE fused swept-back crest (three lobes, middle tallest, curving back)
+  sitting just before `head`; its outline stays open at the base so the fill
+  melts into the head with no seam.
 * Never scale or offset the two eyes or the two beak halves independently —
   the face stays symmetric about the head's centre line and the whole `head`
-  group is what tilts.
+  group is what tilts. Wings pivot about the top of the paddle (the shoulder
+  joint), so raises swing wide and high.
+* All faces are emitted by the face generator (`tools/pip-v2/B/face.mjs`,
+  `buildFace()` + `faceSelfTest()`). Both eyes render from ONE shared markup
+  string at mirrored offsets; the beak is a single path centred on x = 0;
+  cheeks/brows are mirrored pairs; the whole face rotates once by the head
+  tilt. Eye size/spacing and beak size are fixed ratios of r (fitted to the
+  stage-3 idle face). The generator accepts NO per-eye/per-side input, so
+  asymmetric output is inexpressible — except the deliberate wink (left lid a
+  clean deep curve, right eye open). Run `node face.mjs` for the symmetry
+  self-test; `node qa.mjs` additionally fails the build if any pose carries
+  asymmetric face keys.
+* All lid shapes (`closed`, `happy`, `sleepy`, `wink`) are true quadratics
+  through a shared apex — both eyes use the identical path, so the pair can
+  never skew. The wink is a clean deep curve with no lash. Cheek puff is
+  clamped at 1.45 in the generator so puffed cheeks stay clear of eyes+beak.
+* The eating seed is drawn INSIDE the head (wedged in the open beak, tilting
+  with it) on the "seed enters" key frame; approach seeds and flying crumbs
+  stay in screen-space `fx`.
+* All ink is 8 px, including mouth cavities (sized to keep a visible fill).
+* Sleepy frames on stages 2-4 wear a nightcap (deep blue cone, white brim,
+  white pom) inside `accessory_head` — it is part of the sleepy key frames,
+  the same as the other two styles.
 * `beak_bottom` is `opacity="0"` when the beak is closed. An open beak is a
   peach `beak_top` over an ink mouth cavity (`beak_bottom`); the surprised
   "o" mouth is a small round cavity — that is the shape that sells the surprise.
@@ -60,6 +81,10 @@ shell_top  shell_bottom  accessory_head  accessory_neck  accessory_face  fx
   shell and the crack between them; on the hatchling they are the cap and cup.
   On stage 1 the face is layered *between* them, so the chick peeks through the
   crack. The egg shows **no crest** — the shell is unbroken above the crack.
+  Shells are single flat shapes: the cap has no interior lines, the egg keeps
+  three spots and one sheen, the cup keeps two spots.
+* Only the songbird (stage 4) has a tail — three long feathers in a wide fan.
+  The fledgling (stage 3) is a clean oval with two wing paddles and no tail.
 * `beak` states: `closed · thin · snore · open · wide · o`. `snore` is the small
   open sleeping mouth; `o` is the round surprise hole; `open`/`wide` are a peach
   upper beak over an ink mouth cavity.
@@ -99,6 +124,7 @@ cd tools/pip-v2/B
 npm i
 node build.mjs         # writes every SVG into design/pip-v2/B
 node qa.mjs            # contract ids, stroke, viewBox, canvas-edge clipping
+node face.mjs            # face-generator symmetry self-test (round 5)
 python3 proof48.py ../../../design/pip-v2/B/poses /tmp/p48.png 1,2,3,4
                        # 48 px legibility proof, nearest-upscaled
 node build_boards.mjs  # renders the four BOARD_*.png with sharp

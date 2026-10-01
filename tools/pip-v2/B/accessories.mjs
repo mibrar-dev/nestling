@@ -3,6 +3,7 @@
    Each fits all 4 stages. Groups: accessory_head, accessory_neck, accessory_face.
    ========================================================================== */
 import { INK, SW, xf, STAGES, buildParts } from './rig.mjs';
+import { FACE_R } from './face.mjs';
 
 const L = (...pairs) => (pairs.length === 1 && Array.isArray(pairs[0][0]) ? pairs[0] : pairs)
   .map((p) => `${Math.round(p[0] * 100) / 100} ${Math.round(p[1] * 100) / 100}`).join(' L ');
@@ -45,8 +46,9 @@ function scarf(bx, by, ry, s, col) {
 }
 
 /* ── GLASSES · round ink frames over the eyes + bridge + temples ── */
-function glasses(bx, by, f, s) {
-  const d = f.eyeDX, r = f.eyeR * 1.3;
+function glasses(bx, by, f, s, stage) {
+  // frames follow the generator's canonical eye geometry (face.mjs ratios)
+  const d = 0.52 * FACE_R[stage], r = 0.32 * FACE_R[stage] * 1.3;
   const C0 = (x, y) => `cx="${x}" cy="${y}"`;
   const ring = (sgn) => `<circle ${C0(sgn * d, 0)} r="${r}" fill="none" stroke="${INK}" stroke-width="6.5"/>`
     + `<path d="M ${pts([sgn * (d + r), -r * 0.42], [sgn * (d + r + 14), -r * 0.8])}" fill="none" stroke="${INK}" stroke-width="5" stroke-linecap="round"/>`;
@@ -68,7 +70,7 @@ export function accessory(kind, stage, skin, opts = {}) {
     case 'bow': head = bow(bx, by, ry, scale, col); break;
     case 'cap': head = cap(bx, by, ry, scale, col); break;
     case 'scarf': neck = scarf(bx, by, ry, scale * (stage === 1 ? 0.9 : 1), col); break;
-    case 'glasses': face = glasses(bx, by, S.face, scale * (stage === 1 ? 1.05 : 1)); break;
+    case 'glasses': face = glasses(bx, by, S.face, scale * (stage === 1 ? 1.05 : 1), stage); break;
     default: break;
   }
   const wrap = (inner) => {
@@ -86,7 +88,7 @@ export function svgWithAccessory(kind, stage, skin = 'sunny', idlePose) {
   const { parts } = buildParts(p);
   const acc = accessory(kind, stage, skin, { bodyDy: p.bodyDy, bodySx: p.bodySx, bodySy: p.bodySy });
   const out = parts.map((s) => s
-    .replace('<g id="accessory_head"/>', `<g id="accessory_head">${acc.accessory_head}</g>`)
+    .replace(/<g id="accessory_head"\/>|<g id="accessory_head">.*?<\/g>/, `<g id="accessory_head">${acc.accessory_head}</g>`)
     .replace('<g id="accessory_neck"/>', `<g id="accessory_neck">${acc.accessory_neck}</g>`)
     .replace('<g id="accessory_face"/>', `<g id="accessory_face">${acc.accessory_face}</g>`));
   const label = `Pip v2 B Bolt · ${STAGES[stage].key} · idle · accessory ${kind}`;

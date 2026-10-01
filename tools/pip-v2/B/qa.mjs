@@ -89,3 +89,15 @@ if (problems.length) { console.log(`\n✗ ${problems.length} problems:`); for (c
 else console.log('✓ contract ids, stroke, viewBox, no text / gradients / rasters — all clean');
 if (edgeFlags.length) { console.log(`\n⚠ ${edgeFlags.length} touch the canvas edge:`); for (const e of edgeFlags) console.log('  ' + e); }
 else console.log('✓ nothing touches the 240 canvas edge');
+
+/* round 5: the generator (face.mjs) accepts no per-eye/per-side input, so no
+   pose may carry asymmetric face keys — fail the build if one appears */
+{
+  const src = fs.readFileSync(path.resolve(import.meta.dirname, 'poses.mjs'), 'utf8');
+  const banned = ['eyeDx', 'eyeDy', 'eyeSy', 'beakDx', 'beakSx', 'browL', 'browR'];
+  const found = banned.filter((k) => new RegExp(`\\b${k}\\s*:`).test(src));
+  if (found.length) {
+    console.log(`\n✗ asymmetric face keys in poses.mjs: ${found.join(', ')} (face.mjs cannot express these)`);
+    process.exitCode = 1;
+  } else console.log('✓ poses.mjs carries no asymmetric face keys');
+}
