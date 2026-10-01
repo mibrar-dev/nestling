@@ -2,7 +2,7 @@
     <Artboard name="Stage1" x="0" y="0" width="240" height="240" defaultStateMachineId="1:300" viewModelId="0:500" viewModelInstanceId="0:501" styleId="1:999" id="1:998">
         <LayoutComponentStyle name="Artboard Style" id="1:999"/>
 
-        <Node x="0" y="0" opacity="0" name="fx_happy" id="1:228">
+        <Node x="0" y="0" opacity="0" name="fx_happy" id="1:229">
           <Shape x="180" y="78" name="fx_happy_0" id="1:1">
           <PointsPath isClosed="true">
             <CubicDetachedVertex x="0" y="-9" inRotation="1.73" inDistance="5.23" outRotation="1.41" outDistance="5.23"/>
@@ -33,7 +33,7 @@
           </Shape>
         </Node>
 
-        <Node x="0" y="0" opacity="0" name="fx_seed" id="1:229">
+        <Node x="0" y="0" opacity="0" name="fx_seed" id="1:230">
           <Shape x="117.36" y="117.16" name="fx_seed_0" id="1:3">
           <PointsPath isClosed="false">
             <StraightVertex x="-1.44" y="-2.76"/>
@@ -61,7 +61,7 @@
           </Shape>
         </Node>
 
-        <Node x="0" y="0" opacity="0" name="fx_crumbs" id="1:230">
+        <Node x="0" y="0" opacity="0" name="fx_crumbs" id="1:231">
           <Shape x="106.1" y="156.07" name="fx_crumbs_0" id="1:5">
           <PointsPath isClosed="true">
             <StraightVertex x="-2.9" y="-1.47"/>
@@ -120,7 +120,7 @@
           </Shape>
         </Node>
 
-        <Node x="0" y="0" opacity="0" name="fx_zzz" id="1:231">
+        <Node x="0" y="0" opacity="0" name="fx_zzz" id="1:232">
           <Shape x="196.21" y="58" name="fx_zzz_0" id="1:9">
           <PointsPath isClosed="false">
             <StraightVertex x="-8.61" y="-10.92"/>
@@ -145,7 +145,7 @@
           </Shape>
         </Node>
 
-        <Node x="0" y="0" opacity="0" name="fx_bang" id="1:232">
+        <Node x="0" y="0" opacity="0" name="fx_bang" id="1:233">
           <Shape x="192" y="77.44" name="fx_bang_0" id="1:11">
             <Ellipse width="9.26" height="9.26" name="P"/>
           <Fill name="F">
@@ -160,7 +160,7 @@
           </Shape>
         </Node>
 
-        <Node x="0" y="0" opacity="0" name="fx_proud" id="1:233">
+        <Node x="0" y="0" opacity="0" name="fx_proud" id="1:234">
           <Shape x="138" y="146" name="fx_proud_0" id="1:13">
             <Rectangle width="24" height="7" cornerRadiusTL="3.5" linkCornerRadius="true" name="P"/>
           <Fill name="F">
@@ -175,14 +175,14 @@
           </Shape>
         </Node>
 
-        <Node x="120" y="192.52" opacity="0" name="fx_ring" id="1:234">
+        <Node x="120" y="192.52" opacity="0" name="fx_ring" id="1:235">
           <Shape x="0" y="0" name="fx_ring" id="1:15">
             <Ellipse width="144" height="144" name="P"/>
           <Stroke name="S" thickness="5" cap="round" join="round">
             <SolidColor colorValue="FFF4B400" name="C"/>
           </Stroke>
           </Shape>
-          <Shape x="0" y="-62.52" name="fx_ring_ev_0" id="1:16">
+          <Shape x="0" y="-62.52" name="fx_ring_ev" id="1:16">
           <PointsPath isClosed="true">
             <CubicDetachedVertex x="0" y="-15" inRotation="1.77" inDistance="8.47" outRotation="1.37" outDistance="8.47"/>
             <CubicDetachedVertex x="15" y="0" inRotation="-2.94" inDistance="8.47" outRotation="2.94" outDistance="8.47"/>
@@ -196,28 +196,16 @@
             <SolidColor colorValue="FF1E1B3A" name="C"/>
           </Stroke>
           </Shape>
-          <Shape x="0" y="-62.52" name="fx_ring_ev_1" id="1:17">
-            <Ellipse width="156" height="156" name="P"/>
-          <Stroke name="S" thickness="5" cap="round" join="miter">
-            <SolidColor colorValue="7DFFFFFF" name="C"/>
-          </Stroke>
-          </Shape>
-          <Shape x="0" y="-62.52" name="fx_ring_ev_2" id="1:18">
-            <Ellipse width="85.42" height="85.42" name="P"/>
-          <Stroke name="S" thickness="9" cap="round" join="miter">
-            <SolidColor colorValue="7DFFFFFF" name="C"/>
-          </Stroke>
-          </Shape>
         </Node>
 
         <Node x="120" y="208" name="root" id="1:200">
-          <Shape x="-31" y="-84" rotation="-0.42" name="shell_top_0" id="1:19">
+          <Shape x="-31" y="-84" rotation="-0.42" name="shell_top_0" id="1:17">
             <Ellipse width="26" height="13" name="P"/>
           <Fill name="F">
             <SolidColor colorValue="5CFFFFFF" name="C"/>
           </Fill>
           </Shape>
-          <Shape x="40" y="-60" name="shell_top_1" id="1:20">
+          <Shape x="40" y="-60" name="shell_top_1" id="1:18">
             <Ellipse width="11" height="11" name="P"/>
           <Fill name="F">
             <SolidColor colorValue="34E9AE00" name="C">
@@ -225,7 +213,7 @@
             </SolidColor>
           </Fill>
           </Shape>
-          <Shape x="24" y="-90" name="shell_top_2" id="1:21">
+          <Shape x="24" y="-90" name="shell_top_2" id="1:19">
             <Ellipse width="11" height="11" name="P"/>
           <Fill name="F">
             <SolidColor colorValue="34E9AE00" name="C">
@@ -233,7 +221,7 @@
             </SolidColor>
           </Fill>
           </Shape>
-          <Shape x="-32" y="-80" name="shell_top_3" id="1:22">
+          <Shape x="-32" y="-80" name="shell_top_3" id="1:20">
             <Ellipse width="13" height="13" name="P"/>
           <Fill name="F">
             <SolidColor colorValue="34E9AE00" name="C">
@@ -241,7 +229,7 @@
             </SolidColor>
           </Fill>
           </Shape>
-          <Shape x="4.34" y="-42.07" name="shell_top_4" id="1:23">
+          <Shape x="4.34" y="-42.07" name="shell_top_4" id="1:21">
           <PointsPath isClosed="true">
             <StraightVertex x="-6.61" y="48.01"/>
             <StraightVertex x="-4.34" y="48.07"/>
@@ -418,7 +406,7 @@
             <SolidColor colorValue="FF1E1B3A" name="C"/>
           </Stroke>
           </Shape>
-          <Shape x="20.69" y="-12.14" name="shell_bottom" id="1:24">
+          <Shape x="20.69" y="-12.14" name="shell_bottom" id="1:22">
           <PointsPath isClosed="true">
             <StraightVertex x="28.04" y="-19.54"/>
             <StraightVertex x="26.95" y="-17.05"/>
@@ -465,9 +453,9 @@
           </Shape>
           <Node x="0" y="-15.48" name="body" id="1:201">
             <Node x="0" y="-52.52" name="head" id="1:202">
-            <Node x="0" y="0" opacity="0" name="acc_bow" id="1:224">
+            <Node x="0" y="0" opacity="0" name="acc_bow" id="1:225">
               <DataBindContext sourcePathIds="0:500-0:505" propertyKey="18" converterId="0:600"/>
-              <Shape x="8.44" y="-35.87" name="acc_bow_0" id="1:25">
+              <Shape x="8.44" y="-35.87" name="acc_bow_0" id="1:23">
                 <Ellipse width="9.36" height="9.36" name="P"/>
               <Fill name="F">
                 <SolidColor colorValue="FFFF8A5B" name="C"/>
@@ -476,7 +464,7 @@
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="6.49" y="-23.84" name="acc_bow_1" id="1:26">
+              <Shape x="6.49" y="-23.84" name="acc_bow_1" id="1:24">
               <PointsPath isClosed="true">
                 <CubicDetachedVertex x="3.33" y="-6.39" inRotation="0" inDistance="0" outRotation="1" outDistance="7.65"/>
                 <CubicDetachedVertex x="4.11" y="6.57" inRotation="-0.51" inDistance="4.07" outRotation="0" outDistance="0"/>
@@ -491,7 +479,7 @@
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="4.1" y="-24.38" name="acc_bow_2" id="1:27">
+              <Shape x="4.1" y="-24.38" name="acc_bow_2" id="1:25">
               <PointsPath isClosed="true">
                 <CubicDetachedVertex x="0.19" y="-7.44" inRotation="0" inDistance="0" outRotation="2.64" outDistance="8.15"/>
                 <CubicDetachedVertex x="-7.54" y="3.83" inRotation="-2.08" inDistance="4.07" outRotation="0" outDistance="0"/>
@@ -506,7 +494,7 @@
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="17.64" y="-33.98" name="acc_bow_3" id="1:28">
+              <Shape x="17.64" y="-33.98" name="acc_bow_3" id="1:26">
               <PointsPath isClosed="true">
                 <CubicDetachedVertex x="-9" y="-2.58" inRotation="1.06" inDistance="14.26" outRotation="-0.51" outDistance="14.26"/>
                 <CubicDetachedVertex x="9" y="2.58" inRotation="-0.91" inDistance="7.75" outRotation="1.47" outDistance="7.75"/>
@@ -518,7 +506,7 @@
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="-0.36" y="-39.14" name="acc_bow_4" id="1:29">
+              <Shape x="-0.36" y="-39.14" name="acc_bow_4" id="1:27">
               <PointsPath isClosed="true">
                 <CubicDetachedVertex x="9" y="2.58" inRotation="2.64" inDistance="14.26" outRotation="-2.08" outDistance="14.26"/>
                 <CubicDetachedVertex x="-9" y="-2.58" inRotation="-1.67" inDistance="7.75" outRotation="2.23" outDistance="7.75"/>
@@ -531,9 +519,9 @@
               </Stroke>
               </Shape>
             </Node>
-            <Node x="0" y="0" opacity="0" name="acc_cap" id="1:225">
+            <Node x="0" y="0" opacity="0" name="acc_cap" id="1:226">
               <DataBindContext sourcePathIds="0:500-0:505" propertyKey="18" converterId="0:601"/>
-              <Shape x="3.61" y="-46.87" name="acc_cap_0" id="1:30">
+              <Shape x="3.61" y="-46.87" name="acc_cap_0" id="1:28">
                 <Ellipse width="6.48" height="6.48" name="P"/>
               <Fill name="F">
                 <SolidColor colorValue="FFFF8A5B" name="C"/>
@@ -542,7 +530,7 @@
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="-0.04" y="-23.02" name="acc_cap_1" id="1:31">
+              <Shape x="-0.04" y="-23.02" name="acc_cap_1" id="1:29">
               <PointsPath isClosed="true">
                 <CubicDetachedVertex x="-25.87" y="-7.89" inRotation="3.02" inDistance="2.97" outRotation="0" outDistance="0"/>
                 <CubicDetachedVertex x="26.66" y="1.46" inRotation="0" inDistance="0" outRotation="0.37" outDistance="2.97"/>
@@ -556,7 +544,7 @@
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="4.83" y="-33.12" name="acc_cap_2" id="1:32">
+              <Shape x="4.83" y="-33.12" name="acc_cap_2" id="1:30">
               <PointsPath isClosed="true">
                 <CubicDetachedVertex x="-29.31" y="2.39" inRotation="0" inDistance="0" outRotation="-1.45" outDistance="15.84"/>
                 <CubicDetachedVertex x="-1.21" y="-13.75" inRotation="-2.96" inDistance="12.98" outRotation="0.18" outDistance="12.26"/>
@@ -571,9 +559,9 @@
               </Stroke>
               </Shape>
             </Node>
-            <Node x="0" y="0" opacity="0" name="acc_glasses" id="1:227">
+            <Node x="0" y="0" opacity="0" name="acc_glasses" id="1:228">
               <DataBindContext sourcePathIds="0:500-0:505" propertyKey="18" converterId="0:603"/>
-              <Shape x="0" y="-8.22" name="acc_glasses_0" id="1:33">
+              <Shape x="0" y="-8.22" name="acc_glasses_0" id="1:31">
               <PointsPath isClosed="false">
                 <StraightVertex x="-10.12" y="1.26"/>
                 <StraightVertex x="0" y="-2.53"/>
@@ -583,7 +571,7 @@
                 <SolidColor colorValue="29FFFFFF" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="0" y="-3.42" name="acc_glasses_1" id="1:34">
+              <Shape x="0" y="-3.42" name="acc_glasses_1" id="1:32">
               <PointsPath isClosed="false">
                 <StraightVertex x="-3.16" y="1.14"/>
                 <StraightVertex x="-4.56" y="-1.14"/>
@@ -594,7 +582,7 @@
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="33.77" y="-7.71" name="acc_glasses_2" id="1:35">
+              <Shape x="33.77" y="-7.71" name="acc_glasses_2" id="1:33">
               <PointsPath isClosed="false">
                 <StraightVertex x="-5.32" y="2.4"/>
                 <StraightVertex x="5.32" y="-2.4"/>
@@ -603,13 +591,13 @@
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="15.81" y="0" name="acc_glasses_3" id="1:36">
+              <Shape x="15.81" y="0" name="acc_glasses_3" id="1:34">
                 <Ellipse width="25.29" height="25.29" name="P"/>
               <Stroke name="S" thickness="6.5" cap="butt" join="miter">
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="-33.77" y="-7.71" name="acc_glasses_4" id="1:37">
+              <Shape x="-33.77" y="-7.71" name="acc_glasses_4" id="1:35">
               <PointsPath isClosed="false">
                 <StraightVertex x="5.32" y="2.4"/>
                 <StraightVertex x="-5.32" y="-2.4"/>
@@ -618,7 +606,7 @@
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="-15.81" y="0" name="acc_glasses_5" id="1:38">
+              <Shape x="-15.81" y="0" name="acc_glasses_5" id="1:36">
                 <Ellipse width="25.29" height="25.29" name="P"/>
               <Stroke name="S" thickness="6.5" cap="butt" join="miter">
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
@@ -627,20 +615,20 @@
             </Node>
               <Node x="0" y="-40" name="tuft" id="1:203">
               </Node>
-              <Node x="-20.8" y="0" opacity="1" name="eye_l_open" id="1:212">
-                <Shape x="-2.94" y="-3.2" name="eye_l_open_0" id="1:39">
+              <Node x="-20.8" y="0" opacity="1" name="eye_l_open" id="1:213">
+                <Shape x="-2.94" y="-3.2" name="eye_l_open_0" id="1:37">
                   <Ellipse width="4.36" height="4.36" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FFFFFFFF" name="C"/>
                 </Fill>
                 </Shape>
-                <Shape x="0" y="0" name="eye_l_open_1" id="1:40">
+                <Shape x="0" y="0" name="eye_l_open_1" id="1:38">
                   <Ellipse width="13.82" height="13.82" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FF1E1B3A" name="C"/>
                 </Fill>
                 </Shape>
-                <Shape x="0" y="0" name="eye_l_open_2" id="1:41">
+                <Shape x="0" y="0" name="eye_l_open_2" id="1:39">
                   <Ellipse width="25.6" height="25.6" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FFFFFFFF" name="C"/>
@@ -650,8 +638,8 @@
                 </Stroke>
                 </Shape>
               </Node>
-              <Node x="-20.8" y="-2.56" opacity="0" name="eye_l_closed" id="1:213">
-                <Shape x="0" y="4.1" name="eye_l_closed" id="1:42">
+              <Node x="-20.8" y="-2.56" opacity="0" name="eye_l_closed" id="1:214">
+                <Shape x="0" y="4.1" name="eye_l_closed" id="1:40">
                 <PointsPath isClosed="false">
                   <CubicDetachedVertex x="-10.5" y="0" inRotation="0" inDistance="0" outRotation="-0.86" outDistance="10.78"/>
                   <CubicDetachedVertex x="10.5" y="0" inRotation="-2.28" inDistance="10.78" outRotation="0" outDistance="0"/>
@@ -661,8 +649,8 @@
                 </Stroke>
                 </Shape>
               </Node>
-              <Node x="-20.8" y="-4.18" opacity="0" name="eye_l_happy" id="1:214">
-                <Shape x="0" y="9.56" name="eye_l_happy" id="1:43">
+              <Node x="-20.8" y="-4.18" opacity="0" name="eye_l_happy" id="1:215">
+                <Shape x="0" y="9.56" name="eye_l_happy" id="1:41">
                 <PointsPath isClosed="false">
                   <CubicDetachedVertex x="-10.5" y="0" inRotation="0" inDistance="0" outRotation="-1.22" outDistance="20.36"/>
                   <CubicDetachedVertex x="10.5" y="0" inRotation="-1.92" inDistance="20.36" outRotation="0" outDistance="0"/>
@@ -672,8 +660,8 @@
                 </Stroke>
                 </Shape>
               </Node>
-              <Node x="-20.8" y="4.1" opacity="0" name="eye_l_sleepy" id="1:215">
-                <Shape x="0" y="-5.12" name="eye_l_sleepy" id="1:44">
+              <Node x="-20.8" y="4.1" opacity="0" name="eye_l_sleepy" id="1:216">
+                <Shape x="0" y="-5.12" name="eye_l_sleepy" id="1:42">
                 <PointsPath isClosed="false">
                   <CubicDetachedVertex x="-10.5" y="0" inRotation="0" inDistance="0" outRotation="0.97" outDistance="12.4"/>
                   <CubicDetachedVertex x="10.5" y="0" inRotation="2.17" inDistance="12.4" outRotation="0" outDistance="0"/>
@@ -683,29 +671,29 @@
                 </Stroke>
                 </Shape>
               </Node>
-              <Node x="-20.8" y="-9.43" opacity="0" name="eye_l_surprised" id="1:216">
-                <Shape x="0" y="-17.57" name="eye_l_surprised_0" id="1:45">
+              <Node x="-22.4" y="-9.43" opacity="0" name="eye_l_surprised" id="1:217">
+                <Shape x="-7.4" y="-17.57" name="eye_l_surprised_0" id="1:43">
                 <PointsPath isClosed="false">
-                  <CubicDetachedVertex x="-9" y="0" inRotation="0" inDistance="0" outRotation="-0.66" outDistance="7.6"/>
-                  <CubicDetachedVertex x="9" y="0" inRotation="-2.48" inDistance="7.6" outRotation="0" outDistance="0"/>
+                  <CubicDetachedVertex x="-7" y="0" inRotation="0" inDistance="0" outRotation="-0.79" outDistance="6.6"/>
+                  <CubicDetachedVertex x="7" y="0" inRotation="-2.36" inDistance="6.6" outRotation="0" outDistance="0"/>
                 </PointsPath>
                 <Stroke name="S" thickness="8" cap="round" join="round">
                   <SolidColor colorValue="FF1E1B3A" name="C"/>
                 </Stroke>
                 </Shape>
-                <Shape x="-2.94" y="6.23" name="eye_l_surprised_1" id="1:46">
+                <Shape x="-1.34" y="6.23" name="eye_l_surprised_1" id="1:44">
                   <Ellipse width="4.36" height="4.36" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FFFFFFFF" name="C"/>
                 </Fill>
                 </Shape>
-                <Shape x="0" y="9.43" name="eye_l_surprised_2" id="1:47">
-                  <Ellipse width="4.84" height="4.84" name="P"/>
+                <Shape x="1.6" y="6.43" name="eye_l_surprised_2" id="1:45">
+                  <Ellipse width="13.82" height="13.82" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FF1E1B3A" name="C"/>
                 </Fill>
                 </Shape>
-                <Shape x="0" y="9.43" name="eye_l_surprised_3" id="1:48">
+                <Shape x="1.6" y="9.43" name="eye_l_surprised_3" id="1:46">
                   <Ellipse width="25.6" height="25.6" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FFFFFFFF" name="C"/>
@@ -715,8 +703,8 @@
                 </Stroke>
                 </Shape>
               </Node>
-              <Node x="-20.8" y="-4.18" opacity="0" name="eye_l_wink" id="1:217">
-                <Shape x="0" y="9.56" name="eye_l_wink" id="1:49">
+              <Node x="-20.8" y="-4.18" opacity="0" name="eye_l_wink" id="1:218">
+                <Shape x="0" y="9.56" name="eye_l_wink" id="1:47">
                 <PointsPath isClosed="false">
                   <CubicDetachedVertex x="-10.5" y="0" inRotation="0" inDistance="0" outRotation="-1.22" outDistance="20.36"/>
                   <CubicDetachedVertex x="10.5" y="0" inRotation="-1.92" inDistance="20.36" outRotation="0" outDistance="0"/>
@@ -726,20 +714,20 @@
                 </Stroke>
                 </Shape>
               </Node>
-              <Node x="20.8" y="0" opacity="1" name="eye_r_open" id="1:218">
-                <Shape x="-2.94" y="-3.2" name="eye_r_open_0" id="1:50">
+              <Node x="20.8" y="0" opacity="1" name="eye_r_open" id="1:219">
+                <Shape x="-2.94" y="-3.2" name="eye_r_open_0" id="1:48">
                   <Ellipse width="4.36" height="4.36" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FFFFFFFF" name="C"/>
                 </Fill>
                 </Shape>
-                <Shape x="0" y="0" name="eye_r_open_1" id="1:51">
+                <Shape x="0" y="0" name="eye_r_open_1" id="1:49">
                   <Ellipse width="13.82" height="13.82" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FF1E1B3A" name="C"/>
                 </Fill>
                 </Shape>
-                <Shape x="0" y="0" name="eye_r_open_2" id="1:52">
+                <Shape x="0" y="0" name="eye_r_open_2" id="1:50">
                   <Ellipse width="25.6" height="25.6" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FFFFFFFF" name="C"/>
@@ -749,8 +737,8 @@
                 </Stroke>
                 </Shape>
               </Node>
-              <Node x="20.8" y="-2.56" opacity="0" name="eye_r_closed" id="1:219">
-                <Shape x="0" y="4.1" name="eye_r_closed" id="1:53">
+              <Node x="20.8" y="-2.56" opacity="0" name="eye_r_closed" id="1:220">
+                <Shape x="0" y="4.1" name="eye_r_closed" id="1:51">
                 <PointsPath isClosed="false">
                   <CubicDetachedVertex x="-10.5" y="0" inRotation="0" inDistance="0" outRotation="-0.86" outDistance="10.78"/>
                   <CubicDetachedVertex x="10.5" y="0" inRotation="-2.28" inDistance="10.78" outRotation="0" outDistance="0"/>
@@ -760,8 +748,8 @@
                 </Stroke>
                 </Shape>
               </Node>
-              <Node x="20.8" y="-4.18" opacity="0" name="eye_r_happy" id="1:220">
-                <Shape x="0" y="9.56" name="eye_r_happy" id="1:54">
+              <Node x="20.8" y="-4.18" opacity="0" name="eye_r_happy" id="1:221">
+                <Shape x="0" y="9.56" name="eye_r_happy" id="1:52">
                 <PointsPath isClosed="false">
                   <CubicDetachedVertex x="-10.5" y="0" inRotation="0" inDistance="0" outRotation="-1.22" outDistance="20.36"/>
                   <CubicDetachedVertex x="10.5" y="0" inRotation="-1.92" inDistance="20.36" outRotation="0" outDistance="0"/>
@@ -771,8 +759,8 @@
                 </Stroke>
                 </Shape>
               </Node>
-              <Node x="20.8" y="4.1" opacity="0" name="eye_r_sleepy" id="1:221">
-                <Shape x="0" y="-5.12" name="eye_r_sleepy" id="1:55">
+              <Node x="20.8" y="4.1" opacity="0" name="eye_r_sleepy" id="1:222">
+                <Shape x="0" y="-5.12" name="eye_r_sleepy" id="1:53">
                 <PointsPath isClosed="false">
                   <CubicDetachedVertex x="-10.5" y="0" inRotation="0" inDistance="0" outRotation="0.97" outDistance="12.4"/>
                   <CubicDetachedVertex x="10.5" y="0" inRotation="2.17" inDistance="12.4" outRotation="0" outDistance="0"/>
@@ -782,29 +770,29 @@
                 </Stroke>
                 </Shape>
               </Node>
-              <Node x="20.8" y="-9.43" opacity="0" name="eye_r_surprised" id="1:222">
-                <Shape x="0" y="-17.57" name="eye_r_surprised_0" id="1:56">
+              <Node x="22.4" y="-9.43" opacity="0" name="eye_r_surprised" id="1:223">
+                <Shape x="7.4" y="-17.57" name="eye_r_surprised_0" id="1:54">
                 <PointsPath isClosed="false">
-                  <CubicDetachedVertex x="-9" y="0" inRotation="0" inDistance="0" outRotation="-0.66" outDistance="7.6"/>
-                  <CubicDetachedVertex x="9" y="0" inRotation="-2.48" inDistance="7.6" outRotation="0" outDistance="0"/>
+                  <CubicDetachedVertex x="7" y="0" inRotation="0" inDistance="0" outRotation="-2.36" outDistance="6.6"/>
+                  <CubicDetachedVertex x="-7" y="0" inRotation="-0.79" inDistance="6.6" outRotation="0" outDistance="0"/>
                 </PointsPath>
                 <Stroke name="S" thickness="8" cap="round" join="round">
                   <SolidColor colorValue="FF1E1B3A" name="C"/>
                 </Stroke>
                 </Shape>
-                <Shape x="-2.94" y="6.23" name="eye_r_surprised_1" id="1:57">
+                <Shape x="-4.54" y="6.23" name="eye_r_surprised_1" id="1:55">
                   <Ellipse width="4.36" height="4.36" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FFFFFFFF" name="C"/>
                 </Fill>
                 </Shape>
-                <Shape x="0" y="9.43" name="eye_r_surprised_2" id="1:58">
-                  <Ellipse width="4.84" height="4.84" name="P"/>
+                <Shape x="-1.6" y="6.43" name="eye_r_surprised_2" id="1:56">
+                  <Ellipse width="13.82" height="13.82" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FF1E1B3A" name="C"/>
                 </Fill>
                 </Shape>
-                <Shape x="0" y="9.43" name="eye_r_surprised_3" id="1:59">
+                <Shape x="-1.6" y="9.43" name="eye_r_surprised_3" id="1:57">
                   <Ellipse width="25.6" height="25.6" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FFFFFFFF" name="C"/>
@@ -814,8 +802,8 @@
                 </Stroke>
                 </Shape>
               </Node>
-              <Node x="20.8" y="-4.18" opacity="0" name="eye_r_wink" id="1:223">
-                <Shape x="0" y="9.56" name="eye_r_wink" id="1:60">
+              <Node x="20.8" y="-4.18" opacity="0" name="eye_r_wink" id="1:224">
+                <Shape x="0" y="9.56" name="eye_r_wink" id="1:58">
                 <PointsPath isClosed="false">
                   <CubicDetachedVertex x="-10.5" y="0" inRotation="0" inDistance="0" outRotation="-1.22" outDistance="20.36"/>
                   <CubicDetachedVertex x="10.5" y="0" inRotation="-1.92" inDistance="20.36" outRotation="0" outDistance="0"/>
@@ -825,22 +813,24 @@
                 </Stroke>
                 </Shape>
               </Node>
-              <Shape x="0" y="16" name="beak_top" id="1:61">
-              <PointsPath isClosed="true">
-                <StraightVertex x="-14.8" y="-9"/>
-                <StraightVertex x="14.8" y="-9"/>
-                <StraightVertex x="7.7" y="9"/>
-                <StraightVertex x="-7.7" y="9"/>
-              </PointsPath>
-              <Fill name="F">
-                <SolidColor colorValue="FFFF8A5B" name="C"/>
-              </Fill>
-              <Stroke name="S" thickness="8" cap="butt" join="round">
-                <SolidColor colorValue="FF1E1B3A" name="C"/>
-              </Stroke>
-              </Shape>
+              <Node x="0" y="0" opacity="1" name="beak_top_n" id="1:212">
+                <Shape x="0" y="16" name="beak_top" id="1:59">
+                <PointsPath isClosed="true">
+                  <StraightVertex x="-14.8" y="-9"/>
+                  <StraightVertex x="14.8" y="-9"/>
+                  <StraightVertex x="7.7" y="9"/>
+                  <StraightVertex x="-7.7" y="9"/>
+                </PointsPath>
+                <Fill name="F">
+                  <SolidColor colorValue="FFFF8A5B" name="C"/>
+                </Fill>
+                <Stroke name="S" thickness="8" cap="butt" join="round">
+                  <SolidColor colorValue="FF1E1B3A" name="C"/>
+                </Stroke>
+                </Shape>
+              </Node>
               <Node x="0" y="0" opacity="0" name="beak_bottom_n" id="1:209">
-                <Shape x="0" y="7.67" name="beak_bottom" id="1:62">
+                <Shape x="0" y="7.67" name="beak_bottom" id="1:60">
                 <PointsPath isClosed="true">
                   <StraightVertex x="-6.81" y="-2.67"/>
                   <StraightVertex x="6.81" y="-2.67"/>
@@ -854,8 +844,8 @@
                 </Stroke>
                 </Shape>
               </Node>
-              <Node x="0" y="0" opacity="0" name="beak_alt_n" id="1:210">
-                <Shape x="0" y="-0.17" name="beak_alt" id="1:63">
+              <Node x="0" y="11" opacity="0" name="beak_alt_n" id="1:210" scaleX="0.8" scaleY="0.8">
+                <Shape x="0" y="-0.17" name="beak_alt" id="1:61">
                 <PointsPath isClosed="true">
                   <CubicDetachedVertex x="-12.6" y="-6.33" inRotation="0" inDistance="0" outRotation="1.79" outDistance="6.49"/>
                   <CubicDetachedVertex x="0" y="12.67" inRotation="-2.57" inDistance="11.67" outRotation="-0.57" outDistance="11.67"/>
@@ -876,9 +866,9 @@
             </Node>
             <Node x="30" y="10" name="wing_r" id="1:205">
             </Node>
-            <Node x="0" y="0" opacity="0" name="acc_scarf" id="1:226">
+            <Node x="0" y="0" opacity="0" name="acc_scarf" id="1:227">
               <DataBindContext sourcePathIds="0:500-0:505" propertyKey="18" converterId="0:602"/>
-              <Shape x="-6.5" y="-3.16" name="acc_scarf_0" id="1:64">
+              <Shape x="-6.5" y="-3.16" name="acc_scarf_0" id="1:62">
               <PointsPath isClosed="false">
                 <StraightVertex x="-1.3" y="-2.6"/>
                 <StraightVertex x="1.3" y="2.6"/>
@@ -887,7 +877,7 @@
                 <SolidColor colorValue="341E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="0" y="-3.81" name="acc_scarf_1" id="1:65">
+              <Shape x="0" y="-3.81" name="acc_scarf_1" id="1:63">
               <PointsPath isClosed="false">
                 <StraightVertex x="-1.3" y="-3.25"/>
                 <StraightVertex x="1.3" y="3.25"/>
@@ -896,7 +886,7 @@
                 <SolidColor colorValue="341E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="6.5" y="-4.13" name="acc_scarf_2" id="1:66">
+              <Shape x="6.5" y="-4.13" name="acc_scarf_2" id="1:64">
               <PointsPath isClosed="false">
                 <StraightVertex x="-1.3" y="-2.92"/>
                 <StraightVertex x="1.3" y="2.93"/>
@@ -905,7 +895,7 @@
                 <SolidColor colorValue="341E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="-10.72" y="9.35" name="acc_scarf_3" id="1:67">
+              <Shape x="-10.72" y="9.35" name="acc_scarf_3" id="1:65">
               <PointsPath isClosed="true">
                 <StraightVertex x="-2.28" y="-6.66"/>
                 <StraightVertex x="4.88" y="-6.66"/>
@@ -919,7 +909,7 @@
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="7.96" y="10.82" name="acc_scarf_4" id="1:68">
+              <Shape x="7.96" y="10.82" name="acc_scarf_4" id="1:66">
               <PointsPath isClosed="true">
                 <StraightVertex x="-2.76" y="-8.12"/>
                 <StraightVertex x="5.04" y="-8.12"/>
@@ -933,7 +923,7 @@
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="0" y="-0.56" name="acc_scarf_5" id="1:69">
+              <Shape x="0" y="-0.56" name="acc_scarf_5" id="1:67">
               <PointsPath isClosed="true">
                 <CubicDetachedVertex x="-21.45" y="-4.55" inRotation="1.98" inDistance="4.95" outRotation="-0.59" outDistance="11.72"/>
                 <CubicDetachedVertex x="21.45" y="-4.55" inRotation="-2.55" inDistance="11.72" outRotation="1.17" outDistance="4.95"/>
@@ -957,7 +947,7 @@
           </Node>
         </Node>
 
-        <Shape x="120" y="214" name="shadow" id="1:70">
+        <Shape x="120" y="214" name="shadow" id="1:68">
           <Ellipse width="114" height="20" name="P"/>
         <Fill name="F">
           <SolidColor colorValue="041E1B3A" name="C"/>
@@ -1158,7 +1148,7 @@
                 <TransitionValueNumberComparator value="3"/>
               </TransitionViewModelCondition>
             </StateTransition>
-            <StateTransition stateToId="1:325" duration="80">
+            <StateTransition stateToId="1:325" duration="0">
               <TransitionViewModelCondition opValue="equal">
                 <TransitionPropertyViewModelComparator>
                   <BindablePropertyNumber>
@@ -1235,7 +1225,7 @@
                 <TransitionValueNumberComparator value="2"/>
               </TransitionViewModelCondition>
             </StateTransition>
-            <StateTransition stateToId="1:325" duration="80">
+            <StateTransition stateToId="1:325" duration="0">
               <TransitionViewModelCondition opValue="equal">
                 <TransitionPropertyViewModelComparator>
                   <BindablePropertyNumber>
@@ -1406,6 +1396,12 @@
         </StateMachine>
 
         <LinearAnimation name="idle" duration="180" fps="60" loopValue="loop" id="1:400">
+          <KeyedObject objectId="1:212">
+            <KeyedProperty propertyKey="18">
+              <KeyFrameDouble value="1" interpolationType="hold"/>
+              <KeyFrameDouble value="1" interpolationType="hold" frame="180"/>
+            </KeyedProperty>
+          </KeyedObject>
           <KeyedObject objectId="1:200">
             <KeyedProperty propertyKey="15">
               <KeyFrameDouble value="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
@@ -1437,7 +1433,7 @@
               <KeyFrameDouble value="0" interpolationType="linear" frame="180"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:70">
+          <KeyedObject objectId="1:68">
             <KeyedProperty propertyKey="16">
               <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
               <KeyFrameDouble value="0.97" interpolationType="cubic" frame="90"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
@@ -1447,6 +1443,12 @@
         </LinearAnimation>
 
         <LinearAnimation name="happy" duration="72" fps="60" loopValue="oneShot" id="1:401">
+          <KeyedObject objectId="1:212">
+            <KeyedProperty propertyKey="18">
+              <KeyFrameDouble value="1" interpolationType="hold"/>
+              <KeyFrameDouble value="1" interpolationType="hold" frame="72"/>
+            </KeyedProperty>
+          </KeyedObject>
           <KeyedObject objectId="1:200">
             <KeyedProperty propertyKey="16">
               <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
@@ -1526,7 +1528,7 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="72"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:70">
+          <KeyedObject objectId="1:68">
             <KeyedProperty propertyKey="16">
               <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
               <KeyFrameDouble value="1.12" interpolationType="cubic" frame="9"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
@@ -1538,6 +1540,12 @@
         </LinearAnimation>
 
         <LinearAnimation name="eating" duration="108" fps="60" loopValue="oneShot" id="1:402">
+          <KeyedObject objectId="1:212">
+            <KeyedProperty propertyKey="18">
+              <KeyFrameDouble value="1" interpolationType="hold"/>
+              <KeyFrameDouble value="1" interpolationType="hold" frame="108"/>
+            </KeyedProperty>
+          </KeyedObject>
           <KeyedObject objectId="1:202">
             <KeyedProperty propertyKey="14">
               <KeyFrameDouble value="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
@@ -1620,6 +1628,12 @@
         </LinearAnimation>
 
         <LinearAnimation name="sleepy" duration="240" fps="60" loopValue="loop" id="1:403">
+          <KeyedObject objectId="1:212">
+            <KeyedProperty propertyKey="18">
+              <KeyFrameDouble value="1" interpolationType="hold"/>
+              <KeyFrameDouble value="1" interpolationType="hold" frame="240"/>
+            </KeyedProperty>
+          </KeyedObject>
           <KeyedObject objectId="1:201">
             <KeyedProperty propertyKey="16">
               <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
@@ -1684,6 +1698,12 @@
         </LinearAnimation>
 
         <LinearAnimation name="surprised" duration="48" fps="60" loopValue="oneShot" id="1:404">
+          <KeyedObject objectId="1:212">
+            <KeyedProperty propertyKey="18">
+              <KeyFrameDouble value="0" interpolationType="hold"/>
+              <KeyFrameDouble value="0" interpolationType="hold" frame="48"/>
+            </KeyedProperty>
+          </KeyedObject>
           <KeyedObject objectId="1:200">
             <KeyedProperty propertyKey="14">
               <KeyFrameDouble value="208" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
@@ -1765,6 +1785,12 @@
         </LinearAnimation>
 
         <LinearAnimation name="proud" duration="72" fps="60" loopValue="oneShot" id="1:405">
+          <KeyedObject objectId="1:212">
+            <KeyedProperty propertyKey="18">
+              <KeyFrameDouble value="1" interpolationType="hold"/>
+              <KeyFrameDouble value="1" interpolationType="hold" frame="72"/>
+            </KeyedProperty>
+          </KeyedObject>
           <KeyedObject objectId="1:201">
             <KeyedProperty propertyKey="16">
               <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
@@ -1832,6 +1858,12 @@
         </LinearAnimation>
 
         <LinearAnimation name="evolve" duration="90" fps="60" loopValue="oneShot" id="1:406">
+          <KeyedObject objectId="1:212">
+            <KeyedProperty propertyKey="18">
+              <KeyFrameDouble value="1" interpolationType="hold"/>
+              <KeyFrameDouble value="1" interpolationType="hold" frame="90"/>
+            </KeyedProperty>
+          </KeyedObject>
           <KeyedObject objectId="1:200">
             <KeyedProperty propertyKey="16">
               <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
@@ -1872,7 +1904,7 @@
           </KeyedObject>
         </LinearAnimation>
         <LinearAnimation name="eyesOpen" duration="180" fps="60" loopValue="loop" id="1:410">
-          <KeyedObject objectId="1:212">
+          <KeyedObject objectId="1:213">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="1" interpolationType="hold"/>
               <KeyFrameDouble value="1" interpolationType="hold" frame="148"/>
@@ -1882,7 +1914,7 @@
               <KeyFrameDouble value="1" interpolationType="hold" frame="180"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:213">
+          <KeyedObject objectId="1:214">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="148"/>
@@ -1892,7 +1924,7 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="180"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:218">
+          <KeyedObject objectId="1:219">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="1" interpolationType="hold"/>
               <KeyFrameDouble value="1" interpolationType="hold" frame="148"/>
@@ -1902,7 +1934,7 @@
               <KeyFrameDouble value="1" interpolationType="hold" frame="180"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:219">
+          <KeyedObject objectId="1:220">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="148"/>
@@ -1915,7 +1947,7 @@
         </LinearAnimation>
 
         <LinearAnimation name="eyesBlink" duration="12" fps="60" loopValue="oneShot" id="1:411">
-          <KeyedObject objectId="1:212">
+          <KeyedObject objectId="1:213">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="1" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="2"/>
@@ -1924,7 +1956,7 @@
               <KeyFrameDouble value="1" interpolationType="hold" frame="12"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:213">
+          <KeyedObject objectId="1:214">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="1" interpolationType="hold" frame="2"/>
@@ -1933,7 +1965,7 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="12"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:218">
+          <KeyedObject objectId="1:219">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="1" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="2"/>
@@ -1942,7 +1974,7 @@
               <KeyFrameDouble value="1" interpolationType="hold" frame="12"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:219">
+          <KeyedObject objectId="1:220">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="1" interpolationType="hold" frame="2"/>
@@ -1954,30 +1986,6 @@
         </LinearAnimation>
 
         <LinearAnimation name="eyesHappy" duration="72" fps="60" loopValue="oneShot" id="1:412">
-          <KeyedObject objectId="1:212">
-            <KeyedProperty propertyKey="18">
-              <KeyFrameDouble value="0" interpolationType="hold"/>
-              <KeyFrameDouble value="0" interpolationType="hold" frame="72"/>
-            </KeyedProperty>
-          </KeyedObject>
-          <KeyedObject objectId="1:214">
-            <KeyedProperty propertyKey="18">
-              <KeyFrameDouble value="1" interpolationType="hold"/>
-              <KeyFrameDouble value="1" interpolationType="hold" frame="72"/>
-            </KeyedProperty>
-          </KeyedObject>
-          <KeyedObject objectId="1:218">
-            <KeyedProperty propertyKey="18">
-              <KeyFrameDouble value="0" interpolationType="hold"/>
-              <KeyFrameDouble value="0" interpolationType="hold" frame="72"/>
-            </KeyedProperty>
-          </KeyedObject>
-          <KeyedObject objectId="1:220">
-            <KeyedProperty propertyKey="18">
-              <KeyFrameDouble value="1" interpolationType="hold"/>
-              <KeyFrameDouble value="1" interpolationType="hold" frame="72"/>
-            </KeyedProperty>
-          </KeyedObject>
           <KeyedObject objectId="1:213">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
@@ -1985,6 +1993,24 @@
             </KeyedProperty>
           </KeyedObject>
           <KeyedObject objectId="1:215">
+            <KeyedProperty propertyKey="18">
+              <KeyFrameDouble value="1" interpolationType="hold"/>
+              <KeyFrameDouble value="1" interpolationType="hold" frame="72"/>
+            </KeyedProperty>
+          </KeyedObject>
+          <KeyedObject objectId="1:219">
+            <KeyedProperty propertyKey="18">
+              <KeyFrameDouble value="0" interpolationType="hold"/>
+              <KeyFrameDouble value="0" interpolationType="hold" frame="72"/>
+            </KeyedProperty>
+          </KeyedObject>
+          <KeyedObject objectId="1:221">
+            <KeyedProperty propertyKey="18">
+              <KeyFrameDouble value="1" interpolationType="hold"/>
+              <KeyFrameDouble value="1" interpolationType="hold" frame="72"/>
+            </KeyedProperty>
+          </KeyedObject>
+          <KeyedObject objectId="1:214">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="72"/>
@@ -2002,13 +2028,13 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="72"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:219">
+          <KeyedObject objectId="1:218">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="72"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:221">
+          <KeyedObject objectId="1:220">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="72"/>
@@ -2021,6 +2047,12 @@
             </KeyedProperty>
           </KeyedObject>
           <KeyedObject objectId="1:223">
+            <KeyedProperty propertyKey="18">
+              <KeyFrameDouble value="0" interpolationType="hold"/>
+              <KeyFrameDouble value="0" interpolationType="hold" frame="72"/>
+            </KeyedProperty>
+          </KeyedObject>
+          <KeyedObject objectId="1:224">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="72"/>
@@ -2029,7 +2061,7 @@
         </LinearAnimation>
 
         <LinearAnimation name="eyesEat" duration="108" fps="60" loopValue="oneShot" id="1:413">
-          <KeyedObject objectId="1:212">
+          <KeyedObject objectId="1:213">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="1" interpolationType="hold"/>
               <KeyFrameDouble value="1" interpolationType="hold" frame="30"/>
@@ -2038,28 +2070,28 @@
               <KeyFrameDouble value="1" interpolationType="hold" frame="40"/>
               <KeyFrameDouble value="1" interpolationType="hold" frame="64"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="66"/>
-              <KeyFrameDouble value="0" interpolationType="hold" frame="108"/>
-            </KeyedProperty>
-          </KeyedObject>
-          <KeyedObject objectId="1:213">
-            <KeyedProperty propertyKey="18">
-              <KeyFrameDouble value="0" interpolationType="hold"/>
-              <KeyFrameDouble value="0" interpolationType="hold" frame="30"/>
-              <KeyFrameDouble value="1" interpolationType="hold" frame="32"/>
-              <KeyFrameDouble value="1" interpolationType="hold" frame="38"/>
-              <KeyFrameDouble value="0" interpolationType="hold" frame="40"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="108"/>
             </KeyedProperty>
           </KeyedObject>
           <KeyedObject objectId="1:214">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
+              <KeyFrameDouble value="0" interpolationType="hold" frame="30"/>
+              <KeyFrameDouble value="1" interpolationType="hold" frame="32"/>
+              <KeyFrameDouble value="1" interpolationType="hold" frame="38"/>
+              <KeyFrameDouble value="0" interpolationType="hold" frame="40"/>
+              <KeyFrameDouble value="0" interpolationType="hold" frame="108"/>
+            </KeyedProperty>
+          </KeyedObject>
+          <KeyedObject objectId="1:215">
+            <KeyedProperty propertyKey="18">
+              <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="64"/>
               <KeyFrameDouble value="1" interpolationType="hold" frame="66"/>
               <KeyFrameDouble value="1" interpolationType="hold" frame="108"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:218">
+          <KeyedObject objectId="1:219">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="1" interpolationType="hold"/>
               <KeyFrameDouble value="1" interpolationType="hold" frame="30"/>
@@ -2071,7 +2103,7 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="108"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:219">
+          <KeyedObject objectId="1:220">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="30"/>
@@ -2081,18 +2113,12 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="108"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:220">
+          <KeyedObject objectId="1:221">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="64"/>
               <KeyFrameDouble value="1" interpolationType="hold" frame="66"/>
               <KeyFrameDouble value="1" interpolationType="hold" frame="108"/>
-            </KeyedProperty>
-          </KeyedObject>
-          <KeyedObject objectId="1:215">
-            <KeyedProperty propertyKey="18">
-              <KeyFrameDouble value="0" interpolationType="hold"/>
-              <KeyFrameDouble value="0" interpolationType="hold" frame="108"/>
             </KeyedProperty>
           </KeyedObject>
           <KeyedObject objectId="1:216">
@@ -2107,7 +2133,7 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="108"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:221">
+          <KeyedObject objectId="1:218">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="108"/>
@@ -2120,6 +2146,12 @@
             </KeyedProperty>
           </KeyedObject>
           <KeyedObject objectId="1:223">
+            <KeyedProperty propertyKey="18">
+              <KeyFrameDouble value="0" interpolationType="hold"/>
+              <KeyFrameDouble value="0" interpolationType="hold" frame="108"/>
+            </KeyedProperty>
+          </KeyedObject>
+          <KeyedObject objectId="1:224">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="108"/>
@@ -2128,16 +2160,10 @@
         </LinearAnimation>
 
         <LinearAnimation name="eyesSleepy" duration="120" fps="60" loopValue="loop" id="1:414">
-          <KeyedObject objectId="1:215">
+          <KeyedObject objectId="1:216">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="1" interpolationType="hold"/>
               <KeyFrameDouble value="1" interpolationType="hold" frame="120"/>
-            </KeyedProperty>
-          </KeyedObject>
-          <KeyedObject objectId="1:212">
-            <KeyedProperty propertyKey="18">
-              <KeyFrameDouble value="0" interpolationType="hold"/>
-              <KeyFrameDouble value="0" interpolationType="hold" frame="120"/>
             </KeyedProperty>
           </KeyedObject>
           <KeyedObject objectId="1:213">
@@ -2152,7 +2178,7 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="120"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:216">
+          <KeyedObject objectId="1:215">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="120"/>
@@ -2164,16 +2190,16 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="120"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:221">
-            <KeyedProperty propertyKey="18">
-              <KeyFrameDouble value="1" interpolationType="hold"/>
-              <KeyFrameDouble value="1" interpolationType="hold" frame="120"/>
-            </KeyedProperty>
-          </KeyedObject>
           <KeyedObject objectId="1:218">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="120"/>
+            </KeyedProperty>
+          </KeyedObject>
+          <KeyedObject objectId="1:222">
+            <KeyedProperty propertyKey="18">
+              <KeyFrameDouble value="1" interpolationType="hold"/>
+              <KeyFrameDouble value="1" interpolationType="hold" frame="120"/>
             </KeyedProperty>
           </KeyedObject>
           <KeyedObject objectId="1:219">
@@ -2188,13 +2214,19 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="120"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:222">
+          <KeyedObject objectId="1:221">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="120"/>
             </KeyedProperty>
           </KeyedObject>
           <KeyedObject objectId="1:223">
+            <KeyedProperty propertyKey="18">
+              <KeyFrameDouble value="0" interpolationType="hold"/>
+              <KeyFrameDouble value="0" interpolationType="hold" frame="120"/>
+            </KeyedProperty>
+          </KeyedObject>
+          <KeyedObject objectId="1:224">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="120"/>
@@ -2203,34 +2235,28 @@
         </LinearAnimation>
 
         <LinearAnimation name="eyesSurprised" duration="48" fps="60" loopValue="oneShot" id="1:415">
-          <KeyedObject objectId="1:212">
-            <KeyedProperty propertyKey="18">
-              <KeyFrameDouble value="0" interpolationType="hold"/>
-              <KeyFrameDouble value="0" interpolationType="hold" frame="48"/>
-            </KeyedProperty>
-          </KeyedObject>
-          <KeyedObject objectId="1:216">
-            <KeyedProperty propertyKey="18">
-              <KeyFrameDouble value="1" interpolationType="hold"/>
-              <KeyFrameDouble value="1" interpolationType="hold" frame="48"/>
-            </KeyedProperty>
-          </KeyedObject>
-          <KeyedObject objectId="1:218">
-            <KeyedProperty propertyKey="18">
-              <KeyFrameDouble value="0" interpolationType="hold"/>
-              <KeyFrameDouble value="0" interpolationType="hold" frame="48"/>
-            </KeyedProperty>
-          </KeyedObject>
-          <KeyedObject objectId="1:222">
-            <KeyedProperty propertyKey="18">
-              <KeyFrameDouble value="1" interpolationType="hold"/>
-              <KeyFrameDouble value="1" interpolationType="hold" frame="48"/>
-            </KeyedProperty>
-          </KeyedObject>
           <KeyedObject objectId="1:213">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="48"/>
+            </KeyedProperty>
+          </KeyedObject>
+          <KeyedObject objectId="1:217">
+            <KeyedProperty propertyKey="18">
+              <KeyFrameDouble value="1" interpolationType="hold"/>
+              <KeyFrameDouble value="1" interpolationType="hold" frame="48"/>
+            </KeyedProperty>
+          </KeyedObject>
+          <KeyedObject objectId="1:219">
+            <KeyedProperty propertyKey="18">
+              <KeyFrameDouble value="0" interpolationType="hold"/>
+              <KeyFrameDouble value="0" interpolationType="hold" frame="48"/>
+            </KeyedProperty>
+          </KeyedObject>
+          <KeyedObject objectId="1:223">
+            <KeyedProperty propertyKey="18">
+              <KeyFrameDouble value="1" interpolationType="hold"/>
+              <KeyFrameDouble value="1" interpolationType="hold" frame="48"/>
             </KeyedProperty>
           </KeyedObject>
           <KeyedObject objectId="1:214">
@@ -2245,13 +2271,13 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="48"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:217">
+          <KeyedObject objectId="1:216">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="48"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:219">
+          <KeyedObject objectId="1:218">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="48"/>
@@ -2269,7 +2295,13 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="48"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:223">
+          <KeyedObject objectId="1:222">
+            <KeyedProperty propertyKey="18">
+              <KeyFrameDouble value="0" interpolationType="hold"/>
+              <KeyFrameDouble value="0" interpolationType="hold" frame="48"/>
+            </KeyedProperty>
+          </KeyedObject>
+          <KeyedObject objectId="1:224">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="48"/>
@@ -2278,34 +2310,22 @@
         </LinearAnimation>
 
         <LinearAnimation name="eyesProud" duration="72" fps="60" loopValue="oneShot" id="1:416">
-          <KeyedObject objectId="1:212">
-            <KeyedProperty propertyKey="18">
-              <KeyFrameDouble value="1" interpolationType="hold"/>
-              <KeyFrameDouble value="1" interpolationType="hold" frame="72"/>
-            </KeyedProperty>
-          </KeyedObject>
-          <KeyedObject objectId="1:218">
-            <KeyedProperty propertyKey="18">
-              <KeyFrameDouble value="0" interpolationType="hold"/>
-              <KeyFrameDouble value="0" interpolationType="hold" frame="72"/>
-            </KeyedProperty>
-          </KeyedObject>
-          <KeyedObject objectId="1:223">
-            <KeyedProperty propertyKey="18">
-              <KeyFrameDouble value="1" interpolationType="hold"/>
-              <KeyFrameDouble value="1" interpolationType="hold" frame="72"/>
-            </KeyedProperty>
-          </KeyedObject>
           <KeyedObject objectId="1:213">
             <KeyedProperty propertyKey="18">
-              <KeyFrameDouble value="0" interpolationType="hold"/>
-              <KeyFrameDouble value="0" interpolationType="hold" frame="72"/>
+              <KeyFrameDouble value="1" interpolationType="hold"/>
+              <KeyFrameDouble value="1" interpolationType="hold" frame="72"/>
             </KeyedProperty>
           </KeyedObject>
           <KeyedObject objectId="1:219">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="72"/>
+            </KeyedProperty>
+          </KeyedObject>
+          <KeyedObject objectId="1:224">
+            <KeyedProperty propertyKey="18">
+              <KeyFrameDouble value="1" interpolationType="hold"/>
+              <KeyFrameDouble value="1" interpolationType="hold" frame="72"/>
             </KeyedProperty>
           </KeyedObject>
           <KeyedObject objectId="1:214">
@@ -2350,14 +2370,20 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="72"/>
             </KeyedProperty>
           </KeyedObject>
-        </LinearAnimation>
-        <LinearAnimation name="fxIdle" duration="4" fps="60" loopValue="loop" id="1:420">
-          <KeyedObject objectId="1:228">
+          <KeyedObject objectId="1:223">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
-              <KeyFrameDouble value="0" interpolationType="hold" frame="4"/>
+              <KeyFrameDouble value="0" interpolationType="hold" frame="72"/>
             </KeyedProperty>
           </KeyedObject>
+          <KeyedObject objectId="1:218">
+            <KeyedProperty propertyKey="18">
+              <KeyFrameDouble value="0" interpolationType="hold"/>
+              <KeyFrameDouble value="0" interpolationType="hold" frame="72"/>
+            </KeyedProperty>
+          </KeyedObject>
+        </LinearAnimation>
+        <LinearAnimation name="fxIdle" duration="4" fps="60" loopValue="loop" id="1:420">
           <KeyedObject objectId="1:229">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
@@ -2394,10 +2420,16 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="4"/>
             </KeyedProperty>
           </KeyedObject>
+          <KeyedObject objectId="1:235">
+            <KeyedProperty propertyKey="18">
+              <KeyFrameDouble value="0" interpolationType="hold"/>
+              <KeyFrameDouble value="0" interpolationType="hold" frame="4"/>
+            </KeyedProperty>
+          </KeyedObject>
         </LinearAnimation>
 
         <LinearAnimation name="fxHappy" duration="72" fps="60" loopValue="oneShot" id="1:421">
-          <KeyedObject objectId="1:228">
+          <KeyedObject objectId="1:229">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="13"/>
@@ -2407,7 +2439,7 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="72"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:228">
+          <KeyedObject objectId="1:229">
             <KeyedProperty propertyKey="16">
               <KeyFrameDouble value="0.5" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
               <KeyFrameDouble value="1.15" interpolationType="cubic" frame="20"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
@@ -2415,7 +2447,7 @@
               <KeyFrameDouble value="1" interpolationType="linear" frame="72"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:228">
+          <KeyedObject objectId="1:229">
             <KeyedProperty propertyKey="17">
               <KeyFrameDouble value="0.5" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
               <KeyFrameDouble value="1.15" interpolationType="cubic" frame="20"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
@@ -2426,7 +2458,7 @@
         </LinearAnimation>
 
         <LinearAnimation name="fxEat" duration="108" fps="60" loopValue="oneShot" id="1:422">
-          <KeyedObject objectId="1:229">
+          <KeyedObject objectId="1:230">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="1" interpolationType="hold"/>
               <KeyFrameDouble value="1" interpolationType="hold" frame="23"/>
@@ -2434,14 +2466,14 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="108"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:229">
+          <KeyedObject objectId="1:230">
             <KeyedProperty propertyKey="14">
               <KeyFrameDouble value="50" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
               <KeyFrameDouble value="132" interpolationType="cubic" frame="20"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
               <KeyFrameDouble value="132" interpolationType="linear" frame="108"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:230">
+          <KeyedObject objectId="1:231">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="24"/>
@@ -2459,7 +2491,7 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="108"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:230">
+          <KeyedObject objectId="1:231">
             <KeyedProperty propertyKey="16">
               <KeyFrameDouble value="0.6" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
               <KeyFrameDouble value="1" interpolationType="cubic" frame="45"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
@@ -2467,7 +2499,7 @@
               <KeyFrameDouble value="1.15" interpolationType="linear" frame="108"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:230">
+          <KeyedObject objectId="1:231">
             <KeyedProperty propertyKey="14">
               <KeyFrameDouble value="6" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
               <KeyFrameDouble value="10" interpolationType="cubic" frame="45"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
@@ -2478,7 +2510,7 @@
         </LinearAnimation>
 
         <LinearAnimation name="fxSleepy" duration="240" fps="60" loopValue="loop" id="1:423">
-          <KeyedObject objectId="1:231">
+          <KeyedObject objectId="1:232">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="8"/>
@@ -2496,7 +2528,7 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="240"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:231">
+          <KeyedObject objectId="1:232">
             <KeyedProperty propertyKey="14">
               <KeyFrameDouble value="110" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
               <KeyFrameDouble value="70" interpolationType="linear" frame="240"/>
@@ -2505,7 +2537,7 @@
         </LinearAnimation>
 
         <LinearAnimation name="fxSurprise" duration="48" fps="60" loopValue="oneShot" id="1:424">
-          <KeyedObject objectId="1:232">
+          <KeyedObject objectId="1:233">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="5"/>
@@ -2515,7 +2547,7 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="48"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:232">
+          <KeyedObject objectId="1:233">
             <KeyedProperty propertyKey="16">
               <KeyFrameDouble value="0.2" interpolationType="elastic"><ElasticInterpolator easingValue="1" amplitude="1.0" period="0.35"/></KeyFrameDouble>
               <KeyFrameDouble value="1.25" interpolationType="elastic" frame="12"><ElasticInterpolator easingValue="1" amplitude="1.0" period="0.35"/></KeyFrameDouble>
@@ -2523,7 +2555,7 @@
               <KeyFrameDouble value="1" interpolationType="linear" frame="48"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:232">
+          <KeyedObject objectId="1:233">
             <KeyedProperty propertyKey="17">
               <KeyFrameDouble value="0.2" interpolationType="elastic"><ElasticInterpolator easingValue="1" amplitude="1.0" period="0.35"/></KeyFrameDouble>
               <KeyFrameDouble value="1.25" interpolationType="elastic" frame="12"><ElasticInterpolator easingValue="1" amplitude="1.0" period="0.35"/></KeyFrameDouble>
@@ -2534,7 +2566,7 @@
         </LinearAnimation>
 
         <LinearAnimation name="fxProud" duration="72" fps="60" loopValue="oneShot" id="1:425">
-          <KeyedObject objectId="1:233">
+          <KeyedObject objectId="1:234">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="14"/>
@@ -2544,7 +2576,7 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="72"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:233">
+          <KeyedObject objectId="1:234">
             <KeyedProperty propertyKey="16">
               <KeyFrameDouble value="0.6" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
               <KeyFrameDouble value="1.35" interpolationType="cubic" frame="28"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
@@ -2552,7 +2584,7 @@
               <KeyFrameDouble value="1" interpolationType="linear" frame="72"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:233">
+          <KeyedObject objectId="1:234">
             <KeyedProperty propertyKey="17">
               <KeyFrameDouble value="0.6" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
               <KeyFrameDouble value="1.35" interpolationType="cubic" frame="28"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
@@ -2563,7 +2595,7 @@
         </LinearAnimation>
 
         <LinearAnimation name="fxEvolve" duration="90" fps="60" loopValue="oneShot" id="1:426">
-          <KeyedObject objectId="1:234">
+          <KeyedObject objectId="1:235">
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="9"/>
@@ -2573,7 +2605,7 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="90"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:234">
+          <KeyedObject objectId="1:235">
             <KeyedProperty propertyKey="16">
               <KeyFrameDouble value="0.4" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
               <KeyFrameDouble value="1.15" interpolationType="cubic" frame="36"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
@@ -2581,7 +2613,7 @@
               <KeyFrameDouble value="1.2" interpolationType="linear" frame="90"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:234">
+          <KeyedObject objectId="1:235">
             <KeyedProperty propertyKey="17">
               <KeyFrameDouble value="0.4" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
               <KeyFrameDouble value="1.15" interpolationType="cubic" frame="36"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>

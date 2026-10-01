@@ -12,10 +12,10 @@ as ANIM_A: summed RGB diff > 36 on every 2nd pixel).
   (Stage1..Stage4 + PipStage), exactly 1 StateMachine with 3 StateMachineLayers
   per stage artboard (Body/Eyes/FX), 21 LinearAnimations per stage
 - Full `rive inspect --json` → 0 occurrences of "unresolved": 0 unresolved bindings
-- Binary: `app/assets/animations/rive/pip_bolt.riv` (161,033 bytes, bit-identical
+- Binary: `app/assets/animations/rive/pip_bolt.riv` (161,539 bytes, bit-identical
   copy of `tools/rive/bolt/build/pip_bolt.riv`, md5
-  `dab5cdbf7069b8b1bb4893680fdf3dd1`, rebuilt 2026-10-01 ~13:23 UTC from the
-  latest approved poses (13:19 PROUD update) + orchestrator fix round below)
+  `3d980753a3d30a4a879bc75b9a6f57f5`, rebuilt 2026-10-01 ~14:03 UTC from the
+  latest approved poses + orchestrator fix rounds below)
 
 ## Motion % (higher = more obvious; idle is ambient by design)
 
@@ -25,9 +25,9 @@ as ANIM_A: summed RGB diff > 36 on every 2nd pixel).
 | happy | 7.3% | 14.5% | 17.4% | 17.5% |
 | eating | 2.9% | 4.9% | 9.6% | 9.4% |
 | sleepy | 2.5% | 3.5% | 5.8% | 6.5% |
-| surprised | 5.3% | 8.7% | 10.8% | 10.9% |
+| surprised | 5.3% | 9.0% | 10.7% | 11.0% |
 | proud | 3.9% | 5.8% | 7.3% | 7.2% |
-| evolve | 16.7% | 20.6% | 22.7% | 21.9% |
+| evolve | 9.8% | 15.0% | 17.7% | 16.5% |
 
 Read off MOTION_BOARD: idle = breathe + tilt + crest sway (ambient); happy =
 0.82 squash → 24 px jump, wings fully up flapping ×2 (behind the head, ^^ +
@@ -119,6 +119,38 @@ clean wink, chest sparkle; evolve = centred glow ring + pop (largest motion).
    93.6 px < 45% of 240) + sparkle; Pip stays fully visible and bright,
    last frame clean. Evolve motion % fell 26.3→22.7% (fewer pixels under
    the wash) and is still the highest by far.
+
+## Orchestrator fix round 2 — surprised "glasses" root cause (Mochi commit
+565547d applied to Bolt)
+
+Mochi proved the bridge came from (a) a stale duplicate eye helper
+overriding the fix, (b) the closed/"o" beak sitting between the eye rims,
+(c) wing flare reaching eye level — plus blend double-imaging. Applied to
+Bolt (verified each by rendering Stage2/3/4 advance-20 eye zooms):
+
+1. Duplicate-def check: `grep -n "^def " gen_bolt.py | sort -k2 | uniq -d
+   -f1` → empty (Bolt's shock geometry is inline in `build_rig`, no
+   helper to go stale); also grepped out stale 1.3/1.15 eye-scale remnants
+   — none remain. (One self-inflicted `IndentationError` from the patch
+   was caught before build: the first post-patch `--once` silently reused
+   stale RML, spotted via unchanged byte size, fixed, rebuilt.)
+2. Closed beak now rides its own `beak_top_n` node (new NODE_TABLE entry):
+   opacity 1 in every Body timeline except surprised (= 0 — the approved
+   surprised art has no closed beak), so nothing sits between the eyes;
+   the "o" (`beak_alt_n`) sits at (0, +11) × 0.8 — low, small, clear
+   yellow gap to both eye rims at every frame. Brows moved to the OUTER
+   halves only (Mochi-style, nothing drawn between the eyes). Eyes-layer
+   entry into surprised is now 0 ms (main machine + all four PipStage
+   trios) so no blend frame can double-image rings.
+3. Surprised wing flare cut ±1.3 → ±0.55 rad — flares stay below eye level
+   on all stages (verified full-frame S2/S3/S4).
+4. Evolve: dropped every ring smaller than the head (white r78/r43 both
+   crossed the face grey-on-black). Only the outer thin gold ring (r72,
+   peak ×1.2 ≈ 86 px) + sparkle remain; Pip bright throughout, last frame
+   clean. Evolve % 22.7→17.7, still top.
+Strip note: frame 0 shows idle (entry), frame 1 catches the 150 ms Body
+crossfade at the beak (same accepted Mochi behaviour); frames 2–6 hold pure
+shock with a visible eye gap throughout.
 
 ## Design handoff (proud rebuilt from latest)
 

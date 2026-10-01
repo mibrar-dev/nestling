@@ -75,6 +75,7 @@ def use_ns(b):
 NODE_TABLE = [
     "root", "body", "head", "tuft", "wing_l", "wing_r", "tail",
     "cheek_l", "cheek_r", "beak_bottom_n", "beak_alt_n", "nightcap",
+    "beak_top_n",
     "eye_l_open", "eye_l_closed", "eye_l_happy", "eye_l_sleepy",
     "eye_l_surprised", "eye_l_wink",
     "eye_r_open", "eye_r_closed", "eye_r_happy", "eye_r_sleepy",
@@ -571,12 +572,13 @@ def build_rig(n, em, egg):
     except OSError:
         evprims=[]
     evfx = _by_group(evprims, "fx")
-    # Drop the filled translucent disc (renders grey on dark) — keep thin
-    # bright rings + sparkle only, like Mochi/Storybook.
-    evfx = [pp for pp in evfx if not (
-        (pp["style"].get("fill", "none") or "").upper() == "#FFFFFF"
-        and (pp["style"].get("stroke", "none") or "none") in ("none", "")
-        and float(pp["style"].get("opacity", "1")) < 1.0)]
+    # Keep only the outer thin gold ring + sparkles: drop the filled disc
+    # AND any ring smaller than Pip's head (they cross the face as grey).
+    def _ev_keep(pp):
+        if pp["tag"] == "path":
+            return True  # sparkle
+        return False
+    evfx = [pp for pp in evfx if _ev_keep(pp)]
     em.node_open("fx_ring", bodyC[0], bodyC[1], 8, opacity=0)
     ring_el = {"tag": "ellipse", "el": None, "style": {
         "fill": "none", "stroke": "#F4B400", "stroke-width": "5",
@@ -636,15 +638,20 @@ def build_rig(n, em, egg):
                         # pupil -> tiny dot ~35% (local r; matrix is translate-only)
                         import xml.etree.ElementTree as _ET2
                         _el = _ET2.fromstring(_ET2.tostring(_pp["el"], encoding="unicode"))
-                        if "r" in _el.attrib:
-                            _el.attrib["r"] = str(float(_el.attrib["r"]) * 0.35)
+                        # Big pupils looking up (the tiny-dot version read as
+                        # goggles/glasses on Bolt's 8px rims - orchestrator).
+                        if "cy" in _el.attrib:
+                            _el.attrib["cy"] = str(float(_el.attrib["cy"]) - 3)
                         _q["el"] = _el
                     vp.append(_q)
                 # raised brow arc above this eye (ink, idle 8px weight, local coords)
                 import xml.etree.ElementTree as _ET3
-                # short + high: two separate arcs, never a bridge/frame
+                # outer half only (high and outward): nothing is ever
+                # drawn between the eyes, so no bridge/frame can form.
+                _sgn = -1.0 if side == "l" else 1.0
                 _brow_el = _ET3.fromstring(
-                    '<path xmlns="http://www.w3.org/2000/svg" d="M -9 -27 Q 0 -34 9 -27" />')
+                    '<path xmlns="http://www.w3.org/2000/svg" '
+                    f'd="M {_sgn*16} -27 Q {_sgn*9} -34 {_sgn*2} -27" />')
                 _brow_style = {"fill": "none", "stroke": "#1E1B3A", "stroke-width": "8",
                                "stroke-linecap": "round", "stroke-linejoin": "round",
                                "fill-opacity": "1", "stroke-opacity": "1", "opacity": "1"}
@@ -675,7 +682,11 @@ def build_rig(n, em, egg):
     # brows (usually empty)
     em.shapes_for(grp("brow_l") + grp("brow_r"), headC, 14, "brow")
     # beak (Bolt base idle has empty beak_bottom; harvest open mouth from happy peak)
-    em.shapes_for(grp("beak_top"), headC, 14, "beak_top")
+    # beak_top rides its own node: the closed beak hides under the "o"
+    # during surprised (approved surprised has no closed beak at all).
+    em.node_open("beak_top_n", 0, 0, 14, opacity=1)
+    em.shapes_for(grp("beak_top"), headC, 16, "beak_top")
+    em.node_close(14)
     try:
         _happy, _ = collect_groups(os.path.join(POSE_DIR, f"s{n}_happy_2.svg"))
         _openbb = [pp for pp in _by_group(_happy, "beak_bottom") if pp["tag"] in ("path","ellipse","circle")]
@@ -690,7 +701,8 @@ def build_rig(n, em, egg):
     em.node_close(14)
     # surprised "o" beak from the peak pose
     alt, _ = collect_groups(os.path.join(POSE_DIR, f"s{n}_surprised_2.svg"))
-    em.node_open("beak_alt_n", 0, 0, 14, opacity=0)
+    em.node_open("beak_alt_n", 0, 11, 14, opacity=0,
+                 extra=' scaleX="0.8" scaleY="0.8"')  # below the eyes, never bridging them
     em.shapes_for(_by_group(alt, "beak_bottom"), headC, 16, "beak_alt")
     em.node_close(14)
     # nightcap (sleepy-only, from approved sleepy pose)
@@ -786,6 +798,7 @@ def body_anims(em, P_, egg, aids=None, ax=None):
     # ---- idle Bolt: 180f loop. breathe 1->1.05, head tilt +/-5deg, crest sway
     r.append(f'{P}<LinearAnimation name="idle" duration="180" fps="60" '
              f'loopValue="loop" id="{_ax(A["idle"])}">')
+    r += ko("beak_top_n", 18, [(1, None), (1, 180)], "hold")
     if egg:
         r += ko("root", 15, [(0, None), (0.05, 45), (-0.05, 135), (0, 180)])
         r += ko("root", 14, [(RY, None), (RY - 2, 90), (RY, 180)])
@@ -806,6 +819,7 @@ def body_anims(em, P_, egg, aids=None, ax=None):
     # ---- happy Bolt: 72f. squash(0.82y @9) -> jump 24px + wings up x2 + crest whip
     r.append(f'{P}<LinearAnimation name="happy" duration="72" fps="60" '
              f'loopValue="oneShot" id="{_ax(A["happy"])}">')
+    r += ko("beak_top_n", 18, [(1, None), (1, 72)], "hold")
     r += ko("root", 16, [(1, None), (1.2, 9), (0.93, 24), (0.95, 36),
                          (1.15, 52), (1, 64), (1, 72)])
     r += ko("root", 17, [(1, None), (0.82, 9), (1.08, 24), (1.05, 36),
@@ -840,6 +854,7 @@ def body_anims(em, P_, egg, aids=None, ax=None):
     # ---- eating: 108f, 3 pecks
     r.append(f'{P}<LinearAnimation name="eating" duration="108" fps="60" '
              f'loopValue="oneShot" id="{_ax(A["eating"])}">')
+    r += ko("beak_top_n", 18, [(1, None), (1, 108)], "hold")
     dip = 3 if egg else 10
     tilt = 0.12 if egg else 0.38
     r += ko("head", 14, [(0, None), (dip, 20), (0, 30), (dip, 50), (0, 60),
@@ -868,6 +883,7 @@ def body_anims(em, P_, egg, aids=None, ax=None):
     # ---- sleepy: 240f loop. slump 0.94, deep breathe, head nods, Zzz in FX
     r.append(f'{P}<LinearAnimation name="sleepy" duration="240" fps="60" '
              f'loopValue="loop" id="{_ax(A["sleepy"])}">')
+    r += ko("beak_top_n", 18, [(1, None), (1, 240)], "hold")
     r += ko("body", 16, [(1, None), (1.06, 40), (1.0, 140), (1.06, 240)])
     r += ko("body", 17, [(1, None), (0.94, 40), (1.0, 140), (0.94, 240)])
     r += ko("root", 14, [(RY, None), (RY + 3, 40), (RY + 3, 240)])
@@ -890,6 +906,7 @@ def body_anims(em, P_, egg, aids=None, ax=None):
     # ---- surprised Bolt: 48f. jump-back 12px + up 8px, flare, crest spring, "!"
     r.append(f'{P}<LinearAnimation name="surprised" duration="48" fps="60" '
              f'loopValue="oneShot" id="{_ax(A["surprised"])}">')
+    r += ko("beak_top_n", 18, [(0, None), (0, 48)], "hold")
     r += ko("root", 14, [(RY, None), (RY - 8, 8), (RY - 8, 26), (RY, 38),
                          (RY, 48)])
     r += ko("root", 13, [(RX, None), (RX - 12, 10), (RX - 12, 26), (RX, 38),
@@ -902,9 +919,9 @@ def body_anims(em, P_, egg, aids=None, ax=None):
         r += ko("root", 15, [(0, None), (0.07, 8), (-0.07, 20), (0, 34),
                              (0, 48)])
     else:
-        r += ko("wing_l", 15, [(0, None), (1.3, 8), (1.3, 26), (0, 40),
+        r += ko("wing_l", 15, [(0, None), (0.55, 8), (0.55, 26), (0, 40),
                                (0, 48)])
-        r += ko("wing_r", 15, [(0, None), (-1.3, 8), (-1.3, 26), (0, 40),
+        r += ko("wing_r", 15, [(0, None), (-0.55, 8), (-0.55, 26), (0, 40),
                                (0, 48)])
     r += ko("head", 15, [(0, None), (-0.12, 8), (-0.12, 26), (0, 40),
                          (0, 48)])
@@ -919,6 +936,7 @@ def body_anims(em, P_, egg, aids=None, ax=None):
     # ---- proud Bolt: 72f. chest 1.08, chin up 8deg, wing on hip, wink, chest sparkle
     r.append(f'{P}<LinearAnimation name="proud" duration="72" fps="60" '
              f'loopValue="oneShot" id="{_ax(A["proud"])}">')
+    r += ko("beak_top_n", 18, [(1, None), (1, 72)], "hold")
     r += ko("body", 16, [(1, None), (1.08, 15), (1.08, 55), (1, 70), (1, 72)])
     r += ko("body", 17, [(1, None), (1.03, 15), (1.03, 55), (1, 70), (1, 72)])
     r += ko("head", 15, [(0, None), (-0.14, 15), (-0.14, 55), (0, 70),
@@ -942,6 +960,7 @@ def body_anims(em, P_, egg, aids=None, ax=None):
     # ---- evolve: 90f. squash-pop + glow ring in FX
     r.append(f'{P}<LinearAnimation name="evolve" duration="90" fps="60" '
              f'loopValue="oneShot" id="{_ax(A["evolve"])}">')
+    r += ko("beak_top_n", 18, [(1, None), (1, 90)], "hold")
     r += ko("root", 16, [(1, None), (1.12, 16), (0.92, 36), (1.03, 52),
                          (1, 66), (1, 90)])
     r += ko("root", 17, [(1, None), (0.85, 16), (1.12, 36), (0.97, 52),
@@ -1232,7 +1251,7 @@ def state_machine():
           f'id="{sid(ST_E["open"])}">']
     for m, v in (("happy", 1), ("eating", 2), ("sleepy", 3), ("surprised", 4),
                  ("proud", 5)):
-        r += _mood_cond(sid(ST_E[m]), v, 80, P + "  ")
+        r += _mood_cond(sid(ST_E[m]), v, 0 if m == "surprised" else 80, P + "  ")
     r += _trig_cond(sid(ST_E["blink"]), "0:511", 80, P + "  ")
     r.append(f'{P}    </AnimationState>')
     r += [f'{P}    <AnimationState x="360" y="-140" animationId="{sid(A_E["blink"])}" '
@@ -1249,7 +1268,7 @@ def state_machine():
           f'id="{sid(ST_E["sleepy"])}">']
     r += _mood_cond(sid(ST_E["open"]), 0, 200, P + "  ")
     for m, v in (("happy", 1), ("eating", 2), ("surprised", 4), ("proud", 5)):
-        r += _mood_cond(sid(ST_E[m]), v, 80, P + "  ")
+        r += _mood_cond(sid(ST_E[m]), v, 0 if m == "surprised" else 80, P + "  ")
     r.append(f'{P}    </AnimationState>')
     r.append(f"{P}  </StateMachineLayer>")
 
@@ -1580,12 +1599,12 @@ def build_pipstage():
             if m == "open":
                 for mm, v in (("happy", 1), ("eating", 2), ("sleepy", 3),
                               ("surprised", 4), ("proud", 5)):
-                    L += _mood_cond(sid(SB + 10 + EORD.index(mm)), v, 80, P + "  ")
+                    L += _mood_cond(sid(SB + 10 + EORD.index(mm)), v, 0 if mm == "surprised" else 80, P + "  ")
                 L += _trig_cond(sid(SB + 11), "0:511", 80, P + "  ")
             elif m == "sleepy":
                 for mm, v in (("open", 0), ("happy", 1), ("eating", 2),
                               ("surprised", 4), ("proud", 5)):
-                    L += _mood_cond(sid(SB + 10 + EORD.index(mm)), v, 80, P + "  ")
+                    L += _mood_cond(sid(SB + 10 + EORD.index(mm)), v, 0 if mm == "surprised" else 80, P + "  ")
             elif m == "blink":
                 L += _exit(sid(SB + 10), 80, P + "  ")
             else:
