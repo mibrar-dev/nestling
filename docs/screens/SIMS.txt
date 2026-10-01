@@ -1,0 +1,4 @@
+# simulators used by tools/screens/run_wave.sh (one screen loop each)
+604697A9-11DA-462F-9837-396E9CA2493A
+BC440E48-B3A3-43BC-971B-0EF5DB621874
+E7D5555E-378A-49DF-AAEE-16677AF4B9DB

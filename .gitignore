@@ -16,3 +16,4 @@ docs/briefs/out_*.log
 *.keystore
 google-services.json
 GoogleService-Info.plist
+docs/screens/_status/
