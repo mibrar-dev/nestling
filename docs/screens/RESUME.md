@@ -24,3 +24,6 @@
 5. Then the remaining 27 screens via run_wave.sh.
 
 Models (OpenCode Go): muse `opencode-go/muse-spark-1.3-contributor#xhigh`, bunny `opencode-go/space-bunny-free#max`, deepseek `opencode-go/deepseek-v4.1-flash#max`. Backend = LOCAL ONLY until the owner finishes docs/SETUP_CHECKLIST.md.
+
+## Orchestrator note
+Launch every agent / loop / wave job with Bash `run_in_background: true` AND `timeout: 7200000` (2 h max). The default background limit is 30 min and kills long agents (happened to the foundation run at 22:32). Waves longer than 2 h: run them in a detached process (`nohup … &`) and rely on the Monitor (tools/agents/watch.sh) for events.
