@@ -1,14 +1,52 @@
-import 'package:nestling/features/badges/data/badges_fake_data_source.dart';
+import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/stream_combine.dart';
 import 'package:nestling/features/badges/domain/badges_repository.dart';
-import 'package:nestling/features/badges/domain/entities/badge.dart';
+import 'package:nestling/features/badges/domain/entities/badge.dart' as domain;
 
+/// Drift-backed [BadgesRepository].
 class BadgesRepositoryImpl implements BadgesRepository {
-  const new({required this._dataSource});
+  new({required this._db});
 
-  final BadgesFakeDataSource _dataSource;
+  final AppDatabase _db;
 
   @override
-  Future<List<Badge>> getItems() {
-    return Future.value(_dataSource.getItems());
+  Future<List<domain.Badge>> getItems() => watchItems().first;
+
+  @override
+  Stream<List<domain.Badge>> watchItems() async* {
+    final state = await (_db.select(
+      _db.appState,
+    )..where((a) => a.id.equals(1))).getSingleOrNull();
+    yield* watchShelf(state?.activeChildId ?? 'maya');
+  }
+
+  @override
+  Stream<List<domain.Badge>> watchShelf(String childId) {
+    return combineLatest2(
+      _db.select(_db.badges).watch(),
+      _db.watchEarnedBadges(childId),
+    ).map((parts) {
+      final all = parts[0] as List<Badge>;
+      final earned = <String, EarnedBadge>{
+        for (final e in parts[1] as List<EarnedBadge>) e.badgeId: e,
+      };
+      return all.map((b) {
+        final hit = earned[b.id];
+        return domain.Badge(
+          id: b.id,
+          title: b.title,
+          detail: hit == null ? 'Keep going!' : 'Earned',
+          icon: b.icon,
+          description: b.description,
+          earned: hit != null,
+          earnedAt: hit?.earnedAt,
+        );
+      }).toList();
+    });
+  }
+
+  @override
+  Stream<int> watchHappyDays(String childId) {
+    return _db.watchChild(childId).map((row) => row?.happyDays ?? 0);
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:nestling/features/kid_jar/domain/entities/jar_entry.dart';
 import 'package:nestling/features/kid_jar/domain/kid_jar_repository.dart';
 import 'package:nestling/features/kid_jar/presentation/bloc/kid_jar_event.dart';
 import 'package:nestling/features/kid_jar/presentation/bloc/kid_jar_state.dart';
@@ -15,16 +16,14 @@ class KidJarBloc extends Bloc<KidJarEvent, KidJarState> {
     Emitter<KidJarState> emit,
   ) async {
     emit(state.copyWith(status: KidJarStatus.loading));
-    try {
-      final items = await _repository.getItems();
-      emit(state.copyWith(status: KidJarStatus.loaded, items: items));
-    } on Exception catch (e) {
-      emit(
-        state.copyWith(
-          status: KidJarStatus.failure,
-          errorMessage: e.toString(),
-        ),
-      );
-    }
+    await emit.forEach<List<JarEntry>>(
+      _repository.watchItems(),
+      onData: (items) =>
+          state.copyWith(status: KidJarStatus.loaded, items: items),
+      onError: (error, _) => state.copyWith(
+        status: KidJarStatus.failure,
+        errorMessage: error.toString(),
+      ),
+    );
   }
 }

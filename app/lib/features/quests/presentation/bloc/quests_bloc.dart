@@ -1,4 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:nestling/features/quests/domain/entities/quest.dart';
 import 'package:nestling/features/quests/domain/quests_repository.dart';
 import 'package:nestling/features/quests/presentation/bloc/quests_event.dart';
 import 'package:nestling/features/quests/presentation/bloc/quests_state.dart';
@@ -15,16 +16,14 @@ class QuestsBloc extends Bloc<QuestsEvent, QuestsState> {
     Emitter<QuestsState> emit,
   ) async {
     emit(state.copyWith(status: QuestsStatus.loading));
-    try {
-      final items = await _repository.getItems();
-      emit(state.copyWith(status: QuestsStatus.loaded, items: items));
-    } on Exception catch (e) {
-      emit(
-        state.copyWith(
-          status: QuestsStatus.failure,
-          errorMessage: e.toString(),
-        ),
-      );
-    }
+    await emit.forEach<List<Quest>>(
+      _repository.watchItems(),
+      onData: (items) =>
+          state.copyWith(status: QuestsStatus.loaded, items: items),
+      onError: (error, _) => state.copyWith(
+        status: QuestsStatus.failure,
+        errorMessage: error.toString(),
+      ),
+    );
   }
 }

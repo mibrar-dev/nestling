@@ -1,5 +1,7 @@
 import 'package:get_it/get_it.dart';
 import 'package:nestling/app/controllers.dart';
+import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/features/approvals/approvals_di.dart';
 import 'package:nestling/features/auth/auth_di.dart';
 import 'package:nestling/features/badges/badges_di.dart';
@@ -19,13 +21,24 @@ import 'package:nestling/features/rewards/rewards_di.dart';
 import 'package:nestling/features/settings/settings_di.dart';
 import 'package:nestling/features/today/today_di.dart';
 
-Future<void> configureDependencies() async {
+/// Wires every feature plus the shared local-data layer.
+///
+/// Pass [database] in tests to use an in-memory Drift database; otherwise a
+/// file-backed database is opened. Safe to call once per [GetIt] scope —
+/// tests call `GetIt.instance.reset()` first.
+Future<void> configureDependencies({AppDatabase? database}) async {
   final sl = GetIt.instance;
+  if (!sl.isRegistered<AppDatabase>()) {
+    sl.registerSingleton<AppDatabase>(database ?? await AppDatabase.open());
+  }
   if (!sl.isRegistered<AppModeController>()) {
     sl.registerLazySingleton<AppModeController>(AppModeController.new);
   }
   if (!sl.isRegistered<ThemeModeController>()) {
     sl.registerLazySingleton<ThemeModeController>(ThemeModeController.new);
+  }
+  if (!sl.isRegistered<AppSession>()) {
+    sl.registerSingleton<AppSession>(AppSession(sl<AppDatabase>()));
   }
   registerOnboarding(sl);
   registerAuth(sl);

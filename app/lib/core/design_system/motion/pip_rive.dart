@@ -24,6 +24,7 @@ import 'dart:ffi' as ffi;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:nestling/core/data/env_flags.dart';
 import 'package:nestling/core/design_system/assets/nestling_assets.dart'
     as nest_assets;
 import 'package:nestling/core/design_system/tokens/nest_tokens.dart';
@@ -337,7 +338,9 @@ class _PipRiveState extends State<PipRive> {
 
   @override
   Widget build(BuildContext context) {
-    final reduce = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final reduce =
+        (MediaQuery.maybeOf(context)?.disableAnimations ?? false) ||
+        kDisableAnimations;
     final child = GestureDetector(
       onTap: widget.onTap,
       behavior: HitTestBehavior.opaque,
@@ -655,7 +658,9 @@ class _PipInNestState extends State<PipInNest> {
 
   @override
   Widget build(BuildContext context) {
-    final reduce = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final reduce =
+        (MediaQuery.maybeOf(context)?.disableAnimations ?? false) ||
+        kDisableAnimations;
     // Short-circuit BEFORE creating the future: merely calling `_loaderOnce`
     // initialises the native runtime, which must not happen on this path.
     if (reduce || !widget.riveEnabled) {
@@ -802,7 +807,9 @@ class _PipJarState extends State<PipJar> {
 
   @override
   Widget build(BuildContext context) {
-    final reduce = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final reduce =
+        (MediaQuery.maybeOf(context)?.disableAnimations ?? false) ||
+        kDisableAnimations;
     final child = GestureDetector(
       onTap: widget.onTap,
       behavior: HitTestBehavior.opaque,

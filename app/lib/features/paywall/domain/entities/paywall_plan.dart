@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 
+// The single annual plan (P07): £29.99/year after a 14-day trial.
 class PaywallPlan extends Equatable {
   const new({required this.id, required this.title, required this.detail});
 

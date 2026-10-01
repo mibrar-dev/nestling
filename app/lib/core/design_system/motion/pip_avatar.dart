@@ -20,6 +20,7 @@ import 'dart:ffi' as ffi;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:nestling/core/data/env_flags.dart';
 import 'package:rive/rive.dart' as rive;
 
 /// Body style. The file stem selects the `.riv` and the fallback directory.
@@ -385,7 +386,9 @@ class _PipAvatarState extends State<PipAvatar> {
 
   @override
   Widget build(BuildContext context) {
-    final reduce = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final reduce =
+        (MediaQuery.maybeOf(context)?.disableAnimations ?? false) ||
+        kDisableAnimations;
     final child = GestureDetector(
       onTap: widget.onTap,
       behavior: HitTestBehavior.opaque,

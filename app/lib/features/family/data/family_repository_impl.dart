@@ -1,14 +1,170 @@
-import 'package:nestling/features/family/data/family_fake_data_source.dart';
+import 'package:drift/drift.dart';
+import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/seed.dart';
+import 'package:nestling/core/data/stream_combine.dart';
+import 'package:nestling/features/family/domain/entities/family_child.dart';
 import 'package:nestling/features/family/domain/entities/family_member.dart';
 import 'package:nestling/features/family/domain/family_repository.dart';
 
+/// Drift-backed [FamilyRepository].
 class FamilyRepositoryImpl implements FamilyRepository {
-  const new({required this._dataSource});
+  new({required this._db});
 
-  final FamilyFakeDataSource _dataSource;
+  final AppDatabase _db;
 
   @override
-  Future<List<FamilyMember>> getItems() {
-    return Future.value(_dataSource.getItems());
+  Future<List<FamilyMember>> getItems() => watchItems().first;
+
+  @override
+  Stream<List<FamilyMember>> watchItems() {
+    return (_db.select(_db.members)
+          ..where((m) => m.familyId.equals(Seed.familyId)))
+        .watch()
+        .map((rows) => rows.map(_toMember).toList());
+  }
+
+  @override
+  Stream<List<FamilyChild>> watchChildren() {
+    return combineLatest3(
+      _db.watchChildren(Seed.familyId),
+      _db.watchActiveQuests(Seed.familyId),
+      _db.watchAllCompletions(Seed.familyId),
+    ).map((parts) {
+      final kids = parts[0] as List<ChildrenData>;
+      final quests = parts[1] as List<Quest>;
+      final completions = parts[2] as List<QuestCompletion>;
+      return kids.map((k) => _toChild(k, quests, completions)).toList();
+    });
+  }
+
+  @override
+  Future<FamilyChild?> getChild(String childId) async {
+    final row = await (_db.select(
+      _db.children,
+    )..where((c) => c.id.equals(childId))).getSingleOrNull();
+    if (row == null) return null;
+    final quests = await (_db.select(
+      _db.quests,
+    )..where((q) => q.familyId.equals(Seed.familyId))).get();
+    final completions = await (_db.select(
+      _db.questCompletions,
+    )..where((c) => c.childId.equals(childId))).get();
+    return _toChild(row, quests, completions);
+  }
+
+  @override
+  Future<void> addChild({
+    required String nickname,
+    required String ageBand,
+    required String avatarColour,
+    int weeklyBasePence = 0,
+  }) {
+    final id = 'child-${DateTime.now().toUtc().millisecondsSinceEpoch}';
+    return _db
+        .into(_db.children)
+        .insert(
+          ChildrenCompanion.insert(
+            id: id,
+            familyId: Seed.familyId,
+            nickname: nickname,
+            ageBand: Value(ageBand),
+            avatarColour: Value(avatarColour),
+            weeklyBasePence: Value(weeklyBasePence),
+          ),
+        );
+  }
+
+  @override
+  Future<void> updateChild(FamilyChild child) {
+    return (_db.update(
+      _db.children,
+    )..where((c) => c.id.equals(child.id))).write(
+      ChildrenCompanion(
+        nickname: Value(child.nickname),
+        ageBand: Value(child.ageBand),
+        ageYears: Value(child.ageYears),
+        avatarColour: Value(child.avatarColour),
+        pipStyle: Value(child.pipStyle),
+        pipSkin: Value(child.pipSkin),
+        pipAccessory: Value(child.pipAccessory),
+        weeklyBasePence: Value(child.weeklyBasePence),
+      ),
+    );
+  }
+
+  @override
+  Future<void> removeChild(String childId) {
+    return (_db.delete(_db.children)..where((c) => c.id.equals(childId))).go();
+  }
+
+  @override
+  Future<void> inviteCoParent(String name) {
+    final id = 'coparent-${DateTime.now().toUtc().millisecondsSinceEpoch}';
+    return _db
+        .into(_db.members)
+        .insert(
+          MembersCompanion.insert(
+            id: id,
+            familyId: Seed.familyId,
+            name: name,
+            role: const Value('co-parent'),
+            inviteStatus: const Value('invited'),
+          ),
+        );
+  }
+
+  FamilyMember _toMember(Member row) {
+    final detail = row.role == 'owner'
+        ? 'You'
+        : row.inviteStatus == 'invited'
+        ? 'Co-parent · invited'
+        : 'Co-parent';
+    return FamilyMember(
+      id: row.id,
+      title: row.name,
+      detail: detail,
+      name: row.name,
+      role: row.role,
+      inviteStatus: row.inviteStatus,
+    );
+  }
+
+  FamilyChild _toChild(
+    ChildrenData row,
+    List<Quest> quests,
+    List<QuestCompletion> completions,
+  ) {
+    final mine = quests
+        .where((q) => q.active && q.assigneeChildId == row.id)
+        .toList();
+    final done = mine
+        .where(
+          (q) => completions.any(
+            (c) =>
+                c.questId == q.id &&
+                c.childId == row.id &&
+                (c.status == 'done_pending' || c.status == 'approved'),
+          ),
+        )
+        .length;
+    return FamilyChild(
+      id: row.id,
+      nickname: row.nickname,
+      ageBand: row.ageBand,
+      ageYears: row.ageYears,
+      avatarColour: row.avatarColour,
+      pinSet: row.pinHash != null,
+      pipStyle: row.pipStyle,
+      pipSkin: row.pipSkin,
+      pipAccessory: row.pipAccessory,
+      pipStage: row.pipStage,
+      pipTotalCoins: row.pipTotalCoins,
+      coins: row.coins,
+      happiness: row.happiness,
+      happyDays: row.happyDays,
+      weeklyBasePence: row.weeklyBasePence,
+      activeQuests: mine.length,
+      doneQuests: done,
+    );
   }
 }

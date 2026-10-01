@@ -1,4 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:nestling/features/paywall/domain/entities/paywall_plan.dart';
 import 'package:nestling/features/paywall/domain/paywall_repository.dart';
 import 'package:nestling/features/paywall/presentation/bloc/paywall_event.dart';
 import 'package:nestling/features/paywall/presentation/bloc/paywall_state.dart';
@@ -15,16 +16,14 @@ class PaywallBloc extends Bloc<PaywallEvent, PaywallState> {
     Emitter<PaywallState> emit,
   ) async {
     emit(state.copyWith(status: PaywallStatus.loading));
-    try {
-      final items = await _repository.getItems();
-      emit(state.copyWith(status: PaywallStatus.loaded, items: items));
-    } on Exception catch (e) {
-      emit(
-        state.copyWith(
-          status: PaywallStatus.failure,
-          errorMessage: e.toString(),
-        ),
-      );
-    }
+    await emit.forEach<List<PaywallPlan>>(
+      _repository.watchItems(),
+      onData: (items) =>
+          state.copyWith(status: PaywallStatus.loaded, items: items),
+      onError: (error, _) => state.copyWith(
+        status: PaywallStatus.failure,
+        errorMessage: error.toString(),
+      ),
+    );
   }
 }
