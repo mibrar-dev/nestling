@@ -720,21 +720,27 @@
                     </Stroke>
                     </Shape>
                   </Node>
-                  <Node x="-18" y="0" opacity="0" name="eye_l_surprised" id="31:216">
-                    <Shape x="-1" y="-2" name="eye_l_surprised_0" id="31:53">
+                  <Node x="-24" y="0" opacity="0" name="eye_l_surprised" id="31:216">
+                    <Shape x="5.75" y="6.9" name="eye_l_surprised_0" id="31:53">
                       <Ellipse width="3" height="3" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
                     </Fill>
                     </Shape>
-                    <Shape x="2" y="2" name="eye_l_surprised_1" id="31:54">
-                      <Ellipse width="9" height="9" name="P"/>
+                    <Shape x="-1.15" y="-2.3" name="eye_l_surprised_1" id="31:54">
+                      <Ellipse width="3.45" height="3.45" name="P"/>
+                    <Fill name="F">
+                      <SolidColor colorValue="FFFFFFFF" name="C"/>
+                    </Fill>
+                    </Shape>
+                    <Shape x="2.3" y="2.3" name="eye_l_surprised_2" id="31:55">
+                      <Ellipse width="12.65" height="12.65" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FF1E1B3A" name="C"/>
                     </Fill>
                     </Shape>
-                    <Shape x="0" y="0" name="eye_l_surprised_2" id="31:55">
-                      <Ellipse width="20" height="20" name="P"/>
+                    <Shape x="0" y="0" name="eye_l_surprised_3" id="31:56">
+                      <Ellipse width="23" height="23" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
                     </Fill>
@@ -744,7 +750,7 @@
                     </Shape>
                   </Node>
                   <Node x="-18" y="0" opacity="0" name="eye_l_wink" id="31:217">
-                    <Shape x="0" y="0" name="eye_l_wink" id="31:56">
+                    <Shape x="0" y="0" name="eye_l_wink" id="31:57">
                     <PointsPath isClosed="false">
                       <CubicDetachedVertex x="-10" y="0" inRotation="0" inDistance="0" outRotation="0.54" outDistance="7.77"/>
                       <CubicDetachedVertex x="10" y="0" inRotation="2.6" inDistance="7.77" outRotation="0" outDistance="0"/>
@@ -755,19 +761,19 @@
                     </Shape>
                   </Node>
                   <Node x="18" y="0" opacity="1" name="eye_r_open" id="31:218">
-                    <Shape x="-1" y="-2" name="eye_r_open_0" id="31:57">
+                    <Shape x="-1" y="-2" name="eye_r_open_0" id="31:58">
                       <Ellipse width="3" height="3" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
                     </Fill>
                     </Shape>
-                    <Shape x="2" y="2" name="eye_r_open_1" id="31:58">
+                    <Shape x="2" y="2" name="eye_r_open_1" id="31:59">
                       <Ellipse width="9" height="9" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FF1E1B3A" name="C"/>
                     </Fill>
                     </Shape>
-                    <Shape x="0" y="0" name="eye_r_open_2" id="31:59">
+                    <Shape x="0" y="0" name="eye_r_open_2" id="31:60">
                       <Ellipse width="20" height="20" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
@@ -778,7 +784,7 @@
                     </Shape>
                   </Node>
                   <Node x="18" y="0" opacity="0" name="eye_r_closed" id="31:219">
-                    <Shape x="0" y="0" name="eye_r_closed" id="31:60">
+                    <Shape x="0" y="0" name="eye_r_closed" id="31:61">
                     <PointsPath isClosed="false">
                       <CubicDetachedVertex x="-10" y="0" inRotation="0" inDistance="0" outRotation="0.73" outDistance="8.97"/>
                       <CubicDetachedVertex x="10" y="0" inRotation="2.41" inDistance="8.97" outRotation="0" outDistance="0"/>
@@ -789,7 +795,7 @@
                     </Shape>
                   </Node>
                   <Node x="18" y="5" opacity="0" name="eye_r_happy" id="31:220">
-                    <Shape x="0" y="0" name="eye_r_happy" id="31:61">
+                    <Shape x="0" y="0" name="eye_r_happy" id="31:62">
                     <PointsPath isClosed="false">
                       <CubicDetachedVertex x="-10" y="0" inRotation="0" inDistance="0" outRotation="-1.04" outDistance="13.15"/>
                       <CubicDetachedVertex x="10" y="0" inRotation="-2.1" inDistance="13.15" outRotation="0" outDistance="0"/>
@@ -800,7 +806,7 @@
                     </Shape>
                   </Node>
                   <Node x="18" y="1" opacity="0" name="eye_r_sleepy" id="31:221">
-                    <Shape x="-12.5" y="0.5" name="eye_r_sleepy_0" id="31:62">
+                    <Shape x="-12.5" y="0.5" name="eye_r_sleepy_0" id="31:63">
                     <PointsPath isClosed="true">
                       <StraightVertex x="3.5" y="-2.5"/>
                       <StraightVertex x="-3.5" y="2.5"/>
@@ -812,7 +818,7 @@
                       <SolidColor colorValue="FF1E1B3A" name="C"/>
                     </Stroke>
                     </Shape>
-                    <Shape x="12.5" y="0.5" name="eye_r_sleepy_1" id="31:63">
+                    <Shape x="12.5" y="0.5" name="eye_r_sleepy_1" id="31:64">
                     <PointsPath isClosed="true">
                       <StraightVertex x="-3.5" y="-2.5"/>
                       <StraightVertex x="3.5" y="2.5"/>
@@ -824,7 +830,7 @@
                       <SolidColor colorValue="FF1E1B3A" name="C"/>
                     </Stroke>
                     </Shape>
-                    <Shape x="0" y="-3" name="eye_r_sleepy_2" id="31:64">
+                    <Shape x="0" y="-3" name="eye_r_sleepy_2" id="31:65">
                     <PointsPath isClosed="false">
                       <CubicDetachedVertex x="-10" y="0" inRotation="0" inDistance="0" outRotation="0.64" outDistance="8.33"/>
                       <CubicDetachedVertex x="10" y="0" inRotation="2.5" inDistance="8.33" outRotation="0" outDistance="0"/>
@@ -834,21 +840,27 @@
                     </Stroke>
                     </Shape>
                   </Node>
-                  <Node x="18" y="0" opacity="0" name="eye_r_surprised" id="31:222">
-                    <Shape x="-1" y="-2" name="eye_r_surprised_0" id="31:65">
+                  <Node x="24" y="0" opacity="0" name="eye_r_surprised" id="31:222">
+                    <Shape x="5.75" y="6.9" name="eye_r_surprised_0" id="31:66">
                       <Ellipse width="3" height="3" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
                     </Fill>
                     </Shape>
-                    <Shape x="2" y="2" name="eye_r_surprised_1" id="31:66">
-                      <Ellipse width="9" height="9" name="P"/>
+                    <Shape x="-1.15" y="-2.3" name="eye_r_surprised_1" id="31:67">
+                      <Ellipse width="3.45" height="3.45" name="P"/>
+                    <Fill name="F">
+                      <SolidColor colorValue="FFFFFFFF" name="C"/>
+                    </Fill>
+                    </Shape>
+                    <Shape x="2.3" y="2.3" name="eye_r_surprised_2" id="31:68">
+                      <Ellipse width="12.65" height="12.65" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FF1E1B3A" name="C"/>
                     </Fill>
                     </Shape>
-                    <Shape x="0" y="0" name="eye_r_surprised_2" id="31:67">
-                      <Ellipse width="20" height="20" name="P"/>
+                    <Shape x="0" y="0" name="eye_r_surprised_3" id="31:69">
+                      <Ellipse width="23" height="23" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
                     </Fill>
@@ -858,7 +870,7 @@
                     </Shape>
                   </Node>
                   <Node x="18" y="0" opacity="0" name="eye_r_wink" id="31:223">
-                    <Shape x="0" y="0" name="eye_r_wink" id="31:68">
+                    <Shape x="0" y="0" name="eye_r_wink" id="31:70">
                     <PointsPath isClosed="false">
                       <CubicDetachedVertex x="-10" y="0" inRotation="0" inDistance="0" outRotation="0.54" outDistance="7.77"/>
                       <CubicDetachedVertex x="10" y="0" inRotation="2.6" inDistance="7.77" outRotation="0" outDistance="0"/>
@@ -881,7 +893,7 @@
                 </Node>
                 <Node x="0" y="0" opacity="0" name="acc_scarf" id="31:226">
                   <DataBindContext sourcePathIds="0:500-0:505" propertyKey="18" converterId="0:602"/>
-                  <Shape x="28" y="71" name="acc_scarf_0" id="31:69">
+                  <Shape x="28" y="71" name="acc_scarf_0" id="31:71">
                     <Rectangle width="20" height="30" cornerRadiusTL="9" linkCornerRadius="true" name="P"/>
                   <Fill name="F">
                     <SolidColor colorValue="FF3FA67E" name="C"/>
@@ -890,7 +902,7 @@
                     <SolidColor colorValue="FF1E1B3A" name="C"/>
                   </Stroke>
                   </Shape>
-                  <Shape x="0" y="52" name="acc_scarf_1" id="31:70">
+                  <Shape x="0" y="52" name="acc_scarf_1" id="31:72">
                   <PointsPath isClosed="true">
                     <CubicDetachedVertex x="-52" y="-8" inRotation="0" inDistance="0" outRotation="0.3" outDistance="36.27"/>
                     <CubicDetachedVertex x="52" y="-8" inRotation="2.84" inDistance="36.27" outRotation="0" outDistance="0"/>
@@ -909,37 +921,37 @@
                 </Node>
                 <Node x="0" y="0" name="cheek_r" id="31:208">
                 </Node>
-                <Shape x="-42" y="4" name="belly_0" id="31:71">
+                <Shape x="-42" y="4" name="belly_0" id="31:73">
                   <Ellipse width="10" height="10" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FF7C6CF2" name="C"/>
                 </Fill>
                 </Shape>
-                <Shape x="38" y="-14" name="belly_1" id="31:72">
+                <Shape x="38" y="-14" name="belly_1" id="31:74">
                   <Ellipse width="12" height="12" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FF7C6CF2" name="C"/>
                 </Fill>
                 </Shape>
-                <Shape x="22" y="-52" name="belly_2" id="31:73">
+                <Shape x="22" y="-52" name="belly_2" id="31:75">
                   <Ellipse width="11" height="11" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FF7C6CF2" name="C"/>
                 </Fill>
                 </Shape>
-                <Shape x="-30" y="-38" name="belly_3" id="31:74">
+                <Shape x="-30" y="-38" name="belly_3" id="31:76">
                   <Ellipse width="14" height="14" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FF7C6CF2" name="C"/>
                 </Fill>
                 </Shape>
-                <Shape x="30" y="-48" rotation="-0.31" name="highlight" id="31:75">
+                <Shape x="30" y="-48" rotation="-0.31" name="highlight" id="31:77">
                   <Ellipse width="34" height="18" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="4DFFFFFF" name="C"/>
                 </Fill>
                 </Shape>
-                <Shape x="0" y="10.32" name="body" id="31:76">
+                <Shape x="0" y="10.32" name="body" id="31:78">
                 <PointsPath isClosed="true">
                   <CubicDetachedVertex x="0" y="-96.32" inRotation="0" inDistance="42" outRotation="3.14" outDistance="42"/>
                   <CubicDetachedVertex x="-56" y="10.32" inRotation="-1.67" inDistance="41.47" outRotation="1.47" outDistance="39.56"/>
@@ -958,7 +970,7 @@
               </Node>
             </Node>
 
-            <Shape x="120" y="212" name="shadow" id="31:77">
+            <Shape x="120" y="212" name="shadow" id="31:79">
               <Ellipse width="116" height="22" name="P"/>
             <Fill name="F">
               <SolidColor colorValue="041E1B3A" name="C"/>
@@ -1716,21 +1728,27 @@
                     </Stroke>
                     </Shape>
                   </Node>
-                  <Node x="-14" y="0" opacity="0" name="eye_l_surprised" id="32:216">
-                    <Shape x="-1" y="-2" name="eye_l_surprised_0" id="32:64">
-                      <Ellipse width="3.4" height="3.4" name="P"/>
+                  <Node x="-20" y="0" opacity="0" name="eye_l_surprised" id="32:216">
+                    <Shape x="5.75" y="6.9" name="eye_l_surprised_0" id="32:64">
+                      <Ellipse width="3" height="3" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
                     </Fill>
                     </Shape>
-                    <Shape x="2" y="2" name="eye_l_surprised_1" id="32:65">
-                      <Ellipse width="10" height="10" name="P"/>
+                    <Shape x="-1.15" y="-2.3" name="eye_l_surprised_1" id="32:65">
+                      <Ellipse width="3.91" height="3.91" name="P"/>
+                    <Fill name="F">
+                      <SolidColor colorValue="FFFFFFFF" name="C"/>
+                    </Fill>
+                    </Shape>
+                    <Shape x="2.3" y="2.3" name="eye_l_surprised_2" id="32:66">
+                      <Ellipse width="13.92" height="13.92" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FF1E1B3A" name="C"/>
                     </Fill>
                     </Shape>
-                    <Shape x="0" y="0" name="eye_l_surprised_2" id="32:66">
-                      <Ellipse width="22" height="22" name="P"/>
+                    <Shape x="0" y="0" name="eye_l_surprised_3" id="32:67">
+                      <Ellipse width="25.3" height="25.3" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
                     </Fill>
@@ -1740,7 +1758,7 @@
                     </Shape>
                   </Node>
                   <Node x="-14" y="0" opacity="0" name="eye_l_wink" id="32:217">
-                    <Shape x="0" y="0" name="eye_l_wink" id="32:67">
+                    <Shape x="0" y="0" name="eye_l_wink" id="32:68">
                     <PointsPath isClosed="false">
                       <CubicDetachedVertex x="-11" y="0" inRotation="0" inDistance="0" outRotation="0.5" outDistance="8.35"/>
                       <CubicDetachedVertex x="11" y="0" inRotation="2.64" inDistance="8.35" outRotation="0" outDistance="0"/>
@@ -1751,19 +1769,19 @@
                     </Shape>
                   </Node>
                   <Node x="14" y="0" opacity="1" name="eye_r_open" id="32:218">
-                    <Shape x="-1" y="-2" name="eye_r_open_0" id="32:68">
+                    <Shape x="-1" y="-2" name="eye_r_open_0" id="32:69">
                       <Ellipse width="3.4" height="3.4" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
                     </Fill>
                     </Shape>
-                    <Shape x="2" y="2" name="eye_r_open_1" id="32:69">
+                    <Shape x="2" y="2" name="eye_r_open_1" id="32:70">
                       <Ellipse width="10" height="10" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FF1E1B3A" name="C"/>
                     </Fill>
                     </Shape>
-                    <Shape x="0" y="0" name="eye_r_open_2" id="32:70">
+                    <Shape x="0" y="0" name="eye_r_open_2" id="32:71">
                       <Ellipse width="22" height="22" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
@@ -1774,7 +1792,7 @@
                     </Shape>
                   </Node>
                   <Node x="14" y="0" opacity="0" name="eye_r_closed" id="32:219">
-                    <Shape x="0" y="0" name="eye_r_closed" id="32:71">
+                    <Shape x="0" y="0" name="eye_r_closed" id="32:72">
                     <PointsPath isClosed="false">
                       <CubicDetachedVertex x="-11" y="0" inRotation="0" inDistance="0" outRotation="0.73" outDistance="9.87"/>
                       <CubicDetachedVertex x="11" y="0" inRotation="2.41" inDistance="9.87" outRotation="0" outDistance="0"/>
@@ -1785,7 +1803,7 @@
                     </Shape>
                   </Node>
                   <Node x="14" y="5" opacity="0" name="eye_r_happy" id="32:220">
-                    <Shape x="0" y="0" name="eye_r_happy" id="32:72">
+                    <Shape x="0" y="0" name="eye_r_happy" id="32:73">
                     <PointsPath isClosed="false">
                       <CubicDetachedVertex x="-11" y="0" inRotation="0" inDistance="0" outRotation="-1.02" outDistance="14.06"/>
                       <CubicDetachedVertex x="11" y="0" inRotation="-2.12" inDistance="14.06" outRotation="0" outDistance="0"/>
@@ -1796,7 +1814,7 @@
                     </Shape>
                   </Node>
                   <Node x="14" y="1" opacity="0" name="eye_r_sleepy" id="32:221">
-                    <Shape x="-13.5" y="0.5" name="eye_r_sleepy_0" id="32:73">
+                    <Shape x="-13.5" y="0.5" name="eye_r_sleepy_0" id="32:74">
                     <PointsPath isClosed="true">
                       <StraightVertex x="3.5" y="-2.5"/>
                       <StraightVertex x="-3.5" y="2.5"/>
@@ -1808,7 +1826,7 @@
                       <SolidColor colorValue="FF1E1B3A" name="C"/>
                     </Stroke>
                     </Shape>
-                    <Shape x="13.5" y="0.5" name="eye_r_sleepy_1" id="32:74">
+                    <Shape x="13.5" y="0.5" name="eye_r_sleepy_1" id="32:75">
                     <PointsPath isClosed="true">
                       <StraightVertex x="-3.5" y="-2.5"/>
                       <StraightVertex x="3.5" y="2.5"/>
@@ -1820,7 +1838,7 @@
                       <SolidColor colorValue="FF1E1B3A" name="C"/>
                     </Stroke>
                     </Shape>
-                    <Shape x="0" y="-3" name="eye_r_sleepy_2" id="32:75">
+                    <Shape x="0" y="-3" name="eye_r_sleepy_2" id="32:76">
                     <PointsPath isClosed="false">
                       <CubicDetachedVertex x="-11" y="0" inRotation="0" inDistance="0" outRotation="0.63" outDistance="9.09"/>
                       <CubicDetachedVertex x="11" y="0" inRotation="2.51" inDistance="9.09" outRotation="0" outDistance="0"/>
@@ -1830,21 +1848,27 @@
                     </Stroke>
                     </Shape>
                   </Node>
-                  <Node x="14" y="0" opacity="0" name="eye_r_surprised" id="32:222">
-                    <Shape x="-1" y="-2" name="eye_r_surprised_0" id="32:76">
-                      <Ellipse width="3.4" height="3.4" name="P"/>
+                  <Node x="20" y="0" opacity="0" name="eye_r_surprised" id="32:222">
+                    <Shape x="5.75" y="6.9" name="eye_r_surprised_0" id="32:77">
+                      <Ellipse width="3" height="3" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
                     </Fill>
                     </Shape>
-                    <Shape x="2" y="2" name="eye_r_surprised_1" id="32:77">
-                      <Ellipse width="10" height="10" name="P"/>
+                    <Shape x="-1.15" y="-2.3" name="eye_r_surprised_1" id="32:78">
+                      <Ellipse width="3.91" height="3.91" name="P"/>
+                    <Fill name="F">
+                      <SolidColor colorValue="FFFFFFFF" name="C"/>
+                    </Fill>
+                    </Shape>
+                    <Shape x="2.3" y="2.3" name="eye_r_surprised_2" id="32:79">
+                      <Ellipse width="13.92" height="13.92" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FF1E1B3A" name="C"/>
                     </Fill>
                     </Shape>
-                    <Shape x="0" y="0" name="eye_r_surprised_2" id="32:78">
-                      <Ellipse width="22" height="22" name="P"/>
+                    <Shape x="0" y="0" name="eye_r_surprised_3" id="32:80">
+                      <Ellipse width="25.3" height="25.3" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
                     </Fill>
@@ -1854,7 +1878,7 @@
                     </Shape>
                   </Node>
                   <Node x="14" y="0" opacity="0" name="eye_r_wink" id="32:223">
-                    <Shape x="0" y="0" name="eye_r_wink" id="32:79">
+                    <Shape x="0" y="0" name="eye_r_wink" id="32:81">
                     <PointsPath isClosed="false">
                       <CubicDetachedVertex x="-11" y="0" inRotation="0" inDistance="0" outRotation="0.5" outDistance="8.35"/>
                       <CubicDetachedVertex x="11" y="0" inRotation="2.64" inDistance="8.35" outRotation="0" outDistance="0"/>
@@ -1864,7 +1888,7 @@
                     </Stroke>
                     </Shape>
                   </Node>
-                  <Shape x="0" y="25.33" name="beak_top" id="32:80">
+                  <Shape x="0" y="25.33" name="beak_top" id="32:82">
                   <PointsPath isClosed="true">
                     <CubicDetachedVertex x="-14" y="-4.33" inRotation="1.22" inDistance="7.8" outRotation="-0.34" outDistance="9.91"/>
                     <CubicDetachedVertex x="14" y="-4.33" inRotation="-2.8" inDistance="9.91" outRotation="1.92" outDistance="7.8"/>
@@ -1878,7 +1902,7 @@
                   </Stroke>
                   </Shape>
                   <Node x="0" y="0" opacity="0" name="beak_bottom_n" id="32:209">
-                    <Shape x="0" y="29" name="beak_bottom" id="32:81">
+                    <Shape x="0" y="29" name="beak_bottom" id="32:83">
                       <Ellipse width="20" height="14" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FF000000" name="C"/>
@@ -1886,13 +1910,13 @@
                     </Shape>
                   </Node>
                   <Node x="0" y="0" opacity="0" name="beak_alt_n" id="32:210">
-                    <Shape x="0" y="14" name="beak_alt_0" id="32:82">
+                    <Shape x="0" y="14" name="beak_alt_0" id="32:84">
                       <Ellipse width="10" height="10" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFF8A5B" name="C"/>
                     </Fill>
                     </Shape>
-                    <Shape x="0" y="11" name="beak_alt_1" id="32:83">
+                    <Shape x="0" y="11" name="beak_alt_1" id="32:85">
                       <Ellipse width="22" height="24" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FF1E1B3A" name="C"/>
@@ -1903,7 +1927,7 @@
                   </Node>
                 </Node>
                 <Node x="-28" y="6" name="wing_l" id="32:204">
-                  <Shape x="-10" y="0" rotation="-0.1" name="wing_l" id="32:84">
+                  <Shape x="-10" y="0" rotation="-0.1" name="wing_l" id="32:86">
                     <Ellipse width="20" height="32" name="P"/>
                   <Fill name="F">
                     <SolidColor colorValue="FFE8A800" name="C">
@@ -1916,7 +1940,7 @@
                   </Shape>
                 </Node>
                 <Node x="28" y="6" name="wing_r" id="32:205">
-                  <Shape x="10" y="0" rotation="0.1" name="wing_r" id="32:85">
+                  <Shape x="10" y="0" rotation="0.1" name="wing_r" id="32:87">
                     <Ellipse width="20" height="32" name="P"/>
                   <Fill name="F">
                     <SolidColor colorValue="FFE8A800" name="C">
@@ -1930,7 +1954,7 @@
                 </Node>
                 <Node x="0" y="0" opacity="0" name="acc_scarf" id="32:226">
                   <DataBindContext sourcePathIds="0:500-0:505" propertyKey="18" converterId="0:602"/>
-                  <Shape x="25" y="58" name="acc_scarf_0" id="32:86">
+                  <Shape x="25" y="58" name="acc_scarf_0" id="32:88">
                   <PointsPath isClosed="true">
                     <StraightVertex x="-7" y="0"/>
                     <StraightVertex x="7" y="0"/>
@@ -1942,7 +1966,7 @@
                     <SolidColor colorValue="FFFFFFFF" name="C"/>
                   </Stroke>
                   </Shape>
-                  <Shape x="25" y="57" name="acc_scarf_1" id="32:87">
+                  <Shape x="25" y="57" name="acc_scarf_1" id="32:89">
                     <Rectangle width="22" height="34" cornerRadiusTL="10" linkCornerRadius="true" name="P"/>
                   <Fill name="F">
                     <SolidColor colorValue="FF3FA67E" name="C"/>
@@ -1951,7 +1975,7 @@
                     <SolidColor colorValue="FF1E1B3A" name="C"/>
                   </Stroke>
                   </Shape>
-                  <Shape x="0" y="36" name="acc_scarf_2" id="32:88">
+                  <Shape x="0" y="36" name="acc_scarf_2" id="32:90">
                   <PointsPath isClosed="true">
                     <CubicDetachedVertex x="-42" y="-8" inRotation="0" inDistance="0" outRotation="0.4" outDistance="30.46"/>
                     <CubicDetachedVertex x="42" y="-8" inRotation="2.74" inDistance="30.46" outRotation="0" outDistance="0"/>
@@ -1967,7 +1991,7 @@
                   </Shape>
                 </Node>
                 <Node x="-35" y="21" name="cheek_l" id="32:207">
-                  <Shape x="0" y="0" name="cheek_l" id="32:89">
+                  <Shape x="0" y="0" name="cheek_l" id="32:91">
                     <Ellipse width="20" height="13" name="P"/>
                   <Fill name="F">
                     <SolidColor colorValue="4DFF8A5B" name="C"/>
@@ -1975,14 +1999,14 @@
                   </Shape>
                 </Node>
                 <Node x="35" y="21" name="cheek_r" id="32:208">
-                  <Shape x="0" y="0" name="cheek_r" id="32:90">
+                  <Shape x="0" y="0" name="cheek_r" id="32:92">
                     <Ellipse width="20" height="13" name="P"/>
                   <Fill name="F">
                     <SolidColor colorValue="4DFF8A5B" name="C"/>
                   </Fill>
                   </Shape>
                 </Node>
-                <Shape x="0" y="16" name="belly" id="32:91">
+                <Shape x="0" y="16" name="belly" id="32:93">
                   <Ellipse width="48" height="40" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FFFFF1B8" name="C">
@@ -1990,13 +2014,13 @@
                   </SolidColor>
                 </Fill>
                 </Shape>
-                <Shape x="-23" y="-29" rotation="-0.31" name="highlight" id="32:92">
+                <Shape x="-23" y="-29" rotation="-0.31" name="highlight" id="32:94">
                   <Ellipse width="36" height="20" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="4DFFFFFF" name="C"/>
                 </Fill>
                 </Shape>
-                <Shape x="0" y="0" name="body" id="32:93">
+                <Shape x="0" y="0" name="body" id="32:95">
                   <Ellipse width="84" height="84" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FFFFD93D" name="C">
@@ -2012,7 +2036,7 @@
               </Node>
             </Node>
 
-            <Shape x="120" y="212" name="shadow" id="32:94">
+            <Shape x="120" y="212" name="shadow" id="32:96">
               <Ellipse width="88" height="22" name="P"/>
             <Fill name="F">
               <SolidColor colorValue="041E1B3A" name="C"/>
@@ -2703,21 +2727,27 @@
                     </Stroke>
                     </Shape>
                   </Node>
-                  <Node x="-24" y="0" opacity="0" name="eye_l_surprised" id="33:216">
-                    <Shape x="-1" y="-2" name="eye_l_surprised_0" id="33:60">
-                      <Ellipse width="5.2" height="5.2" name="P"/>
+                  <Node x="-30" y="0" opacity="0" name="eye_l_surprised" id="33:216">
+                    <Shape x="5.75" y="6.9" name="eye_l_surprised_0" id="33:60">
+                      <Ellipse width="3" height="3" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
                     </Fill>
                     </Shape>
-                    <Shape x="2" y="2" name="eye_l_surprised_1" id="33:61">
-                      <Ellipse width="15" height="15" name="P"/>
+                    <Shape x="-1.15" y="-2.3" name="eye_l_surprised_1" id="33:61">
+                      <Ellipse width="5.98" height="5.98" name="P"/>
+                    <Fill name="F">
+                      <SolidColor colorValue="FFFFFFFF" name="C"/>
+                    </Fill>
+                    </Shape>
+                    <Shape x="2.3" y="2.3" name="eye_l_surprised_2" id="33:62">
+                      <Ellipse width="20.24" height="20.24" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FF1E1B3A" name="C"/>
                     </Fill>
                     </Shape>
-                    <Shape x="0" y="0" name="eye_l_surprised_2" id="33:62">
-                      <Ellipse width="32" height="32" name="P"/>
+                    <Shape x="0" y="0" name="eye_l_surprised_3" id="33:63">
+                      <Ellipse width="36.8" height="36.8" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
                     </Fill>
@@ -2727,7 +2757,7 @@
                     </Shape>
                   </Node>
                   <Node x="-24" y="0" opacity="0" name="eye_l_wink" id="33:217">
-                    <Shape x="0" y="0" name="eye_l_wink" id="33:63">
+                    <Shape x="0" y="0" name="eye_l_wink" id="33:64">
                     <PointsPath isClosed="false">
                       <CubicDetachedVertex x="-16" y="0" inRotation="0" inDistance="0" outRotation="0.36" outDistance="11.39"/>
                       <CubicDetachedVertex x="16" y="0" inRotation="2.78" inDistance="11.39" outRotation="0" outDistance="0"/>
@@ -2738,19 +2768,19 @@
                     </Shape>
                   </Node>
                   <Node x="24" y="0" opacity="1" name="eye_r_open" id="33:218">
-                    <Shape x="-1" y="-2" name="eye_r_open_0" id="33:64">
+                    <Shape x="-1" y="-2" name="eye_r_open_0" id="33:65">
                       <Ellipse width="5.2" height="5.2" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
                     </Fill>
                     </Shape>
-                    <Shape x="2" y="2" name="eye_r_open_1" id="33:65">
+                    <Shape x="2" y="2" name="eye_r_open_1" id="33:66">
                       <Ellipse width="15" height="15" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FF1E1B3A" name="C"/>
                     </Fill>
                     </Shape>
-                    <Shape x="0" y="0" name="eye_r_open_2" id="33:66">
+                    <Shape x="0" y="0" name="eye_r_open_2" id="33:67">
                       <Ellipse width="32" height="32" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
@@ -2761,7 +2791,7 @@
                     </Shape>
                   </Node>
                   <Node x="24" y="0" opacity="0" name="eye_r_closed" id="33:219">
-                    <Shape x="0" y="0" name="eye_r_closed" id="33:67">
+                    <Shape x="0" y="0" name="eye_r_closed" id="33:68">
                     <PointsPath isClosed="false">
                       <CubicDetachedVertex x="-16" y="0" inRotation="0" inDistance="0" outRotation="0.73" outDistance="14.35"/>
                       <CubicDetachedVertex x="16" y="0" inRotation="2.41" inDistance="14.35" outRotation="0" outDistance="0"/>
@@ -2772,7 +2802,7 @@
                     </Shape>
                   </Node>
                   <Node x="24" y="5" opacity="0" name="eye_r_happy" id="33:220">
-                    <Shape x="0" y="0" name="eye_r_happy" id="33:68">
+                    <Shape x="0" y="0" name="eye_r_happy" id="33:69">
                     <PointsPath isClosed="false">
                       <CubicDetachedVertex x="-16" y="0" inRotation="0" inDistance="0" outRotation="-0.96" outDistance="18.68"/>
                       <CubicDetachedVertex x="16" y="0" inRotation="-2.18" inDistance="18.68" outRotation="0" outDistance="0"/>
@@ -2783,7 +2813,7 @@
                     </Shape>
                   </Node>
                   <Node x="24" y="1" opacity="0" name="eye_r_sleepy" id="33:221">
-                    <Shape x="-18.5" y="0.5" name="eye_r_sleepy_0" id="33:69">
+                    <Shape x="-18.5" y="0.5" name="eye_r_sleepy_0" id="33:70">
                     <PointsPath isClosed="true">
                       <StraightVertex x="3.5" y="-2.5"/>
                       <StraightVertex x="-3.5" y="2.5"/>
@@ -2795,7 +2825,7 @@
                       <SolidColor colorValue="FF1E1B3A" name="C"/>
                     </Stroke>
                     </Shape>
-                    <Shape x="18.5" y="0.5" name="eye_r_sleepy_1" id="33:70">
+                    <Shape x="18.5" y="0.5" name="eye_r_sleepy_1" id="33:71">
                     <PointsPath isClosed="true">
                       <StraightVertex x="-3.5" y="-2.5"/>
                       <StraightVertex x="3.5" y="2.5"/>
@@ -2807,7 +2837,7 @@
                       <SolidColor colorValue="FF1E1B3A" name="C"/>
                     </Stroke>
                     </Shape>
-                    <Shape x="0" y="-3" name="eye_r_sleepy_2" id="33:71">
+                    <Shape x="0" y="-3" name="eye_r_sleepy_2" id="33:72">
                     <PointsPath isClosed="false">
                       <CubicDetachedVertex x="-16" y="0" inRotation="0" inDistance="0" outRotation="0.59" outDistance="12.87"/>
                       <CubicDetachedVertex x="16" y="0" inRotation="2.55" inDistance="12.87" outRotation="0" outDistance="0"/>
@@ -2817,21 +2847,27 @@
                     </Stroke>
                     </Shape>
                   </Node>
-                  <Node x="24" y="0" opacity="0" name="eye_r_surprised" id="33:222">
-                    <Shape x="-1" y="-2" name="eye_r_surprised_0" id="33:72">
-                      <Ellipse width="5.2" height="5.2" name="P"/>
+                  <Node x="30" y="0" opacity="0" name="eye_r_surprised" id="33:222">
+                    <Shape x="5.75" y="6.9" name="eye_r_surprised_0" id="33:73">
+                      <Ellipse width="3" height="3" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
                     </Fill>
                     </Shape>
-                    <Shape x="2" y="2" name="eye_r_surprised_1" id="33:73">
-                      <Ellipse width="15" height="15" name="P"/>
+                    <Shape x="-1.15" y="-2.3" name="eye_r_surprised_1" id="33:74">
+                      <Ellipse width="5.98" height="5.98" name="P"/>
+                    <Fill name="F">
+                      <SolidColor colorValue="FFFFFFFF" name="C"/>
+                    </Fill>
+                    </Shape>
+                    <Shape x="2.3" y="2.3" name="eye_r_surprised_2" id="33:75">
+                      <Ellipse width="20.24" height="20.24" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FF1E1B3A" name="C"/>
                     </Fill>
                     </Shape>
-                    <Shape x="0" y="0" name="eye_r_surprised_2" id="33:74">
-                      <Ellipse width="32" height="32" name="P"/>
+                    <Shape x="0" y="0" name="eye_r_surprised_3" id="33:76">
+                      <Ellipse width="36.8" height="36.8" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
                     </Fill>
@@ -2841,7 +2877,7 @@
                     </Shape>
                   </Node>
                   <Node x="24" y="0" opacity="0" name="eye_r_wink" id="33:223">
-                    <Shape x="0" y="0" name="eye_r_wink" id="33:75">
+                    <Shape x="0" y="0" name="eye_r_wink" id="33:77">
                     <PointsPath isClosed="false">
                       <CubicDetachedVertex x="-16" y="0" inRotation="0" inDistance="0" outRotation="0.36" outDistance="11.39"/>
                       <CubicDetachedVertex x="16" y="0" inRotation="2.78" inDistance="11.39" outRotation="0" outDistance="0"/>
@@ -2851,7 +2887,7 @@
                     </Stroke>
                     </Shape>
                   </Node>
-                  <Shape x="0" y="25.33" name="beak_top" id="33:76">
+                  <Shape x="0" y="25.33" name="beak_top" id="33:78">
                   <PointsPath isClosed="true">
                     <CubicDetachedVertex x="-14" y="-4.33" inRotation="1.22" inDistance="7.8" outRotation="-0.34" outDistance="9.91"/>
                     <CubicDetachedVertex x="14" y="-4.33" inRotation="-2.8" inDistance="9.91" outRotation="1.92" outDistance="7.8"/>
@@ -2865,7 +2901,7 @@
                   </Stroke>
                   </Shape>
                   <Node x="0" y="0" opacity="0" name="beak_bottom_n" id="33:209">
-                    <Shape x="0" y="29" name="beak_bottom" id="33:77">
+                    <Shape x="0" y="29" name="beak_bottom" id="33:79">
                       <Ellipse width="20" height="14" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FF000000" name="C"/>
@@ -2873,13 +2909,13 @@
                     </Shape>
                   </Node>
                   <Node x="0" y="0" opacity="0" name="beak_alt_n" id="33:210">
-                    <Shape x="0" y="14" name="beak_alt_0" id="33:78">
+                    <Shape x="0" y="14" name="beak_alt_0" id="33:80">
                       <Ellipse width="10" height="10" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFF8A5B" name="C"/>
                     </Fill>
                     </Shape>
-                    <Shape x="0" y="11" name="beak_alt_1" id="33:79">
+                    <Shape x="0" y="11" name="beak_alt_1" id="33:81">
                       <Ellipse width="22" height="24" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FF1E1B3A" name="C"/>
@@ -2887,7 +2923,7 @@
                     </Shape>
                   </Node>
                   <Node x="0" y="0" opacity="0" name="nightcap" id="33:211">
-                    <Shape x="62" y="-66" name="nightcap_0" id="33:80">
+                    <Shape x="62" y="-66" name="nightcap_0" id="33:82">
                       <Ellipse width="16" height="16" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
@@ -2896,7 +2932,7 @@
                       <SolidColor colorValue="FF1E1B3A" name="C"/>
                     </Stroke>
                     </Shape>
-                    <Shape x="21" y="-55.5" name="nightcap_1" id="33:81">
+                    <Shape x="21" y="-55.5" name="nightcap_1" id="33:83">
                       <Rectangle width="66" height="13" cornerRadiusTL="6.5" linkCornerRadius="true" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
@@ -2905,7 +2941,7 @@
                       <SolidColor colorValue="FF1E1B3A" name="C"/>
                     </Stroke>
                     </Shape>
-                    <Shape x="24.4" y="-64.8" name="nightcap_2" id="33:82">
+                    <Shape x="24.4" y="-64.8" name="nightcap_2" id="33:84">
                     <PointsPath isClosed="true">
                       <CubicDetachedVertex x="-34.4" y="12.8" inRotation="0" inDistance="0" outRotation="-1.03" outDistance="31.1"/>
                       <CubicDetachedVertex x="29.6" y="-19.2" inRotation="-2.94" inDistance="27.19" outRotation="0.38" outDistance="7.18"/>
@@ -2923,7 +2959,7 @@
                   </Node>
                 </Node>
                 <Node x="-45" y="11" name="wing_l" id="33:204">
-                  <Shape x="-15" y="0" rotation="-0.14" name="wing_l" id="33:83">
+                  <Shape x="-15" y="0" rotation="-0.14" name="wing_l" id="33:85">
                     <Ellipse width="30" height="46" name="P"/>
                   <Fill name="F">
                     <SolidColor colorValue="FFE8A800" name="C">
@@ -2936,7 +2972,7 @@
                   </Shape>
                 </Node>
                 <Node x="45" y="11" name="wing_r" id="33:205">
-                  <Shape x="15" y="0" rotation="0.14" name="wing_r" id="33:84">
+                  <Shape x="15" y="0" rotation="0.14" name="wing_r" id="33:86">
                     <Ellipse width="30" height="46" name="P"/>
                   <Fill name="F">
                     <SolidColor colorValue="FFE8A800" name="C">
@@ -2950,7 +2986,7 @@
                 </Node>
                 <Node x="0" y="0" opacity="0" name="acc_scarf" id="33:226">
                   <DataBindContext sourcePathIds="0:500-0:505" propertyKey="18" converterId="0:602"/>
-                  <Shape x="25" y="66" name="acc_scarf_0" id="33:85">
+                  <Shape x="25" y="66" name="acc_scarf_0" id="33:87">
                   <PointsPath isClosed="true">
                     <StraightVertex x="-7" y="0"/>
                     <StraightVertex x="7" y="0"/>
@@ -2962,7 +2998,7 @@
                     <SolidColor colorValue="FFFFFFFF" name="C"/>
                   </Stroke>
                   </Shape>
-                  <Shape x="25" y="65" name="acc_scarf_1" id="33:86">
+                  <Shape x="25" y="65" name="acc_scarf_1" id="33:88">
                     <Rectangle width="22" height="34" cornerRadiusTL="10" linkCornerRadius="true" name="P"/>
                   <Fill name="F">
                     <SolidColor colorValue="FF3FA67E" name="C"/>
@@ -2971,7 +3007,7 @@
                     <SolidColor colorValue="FF1E1B3A" name="C"/>
                   </Stroke>
                   </Shape>
-                  <Shape x="0" y="44" name="acc_scarf_2" id="33:87">
+                  <Shape x="0" y="44" name="acc_scarf_2" id="33:89">
                   <PointsPath isClosed="true">
                     <CubicDetachedVertex x="-63" y="-8" inRotation="0" inDistance="0" outRotation="0.28" outDistance="43.68"/>
                     <CubicDetachedVertex x="63" y="-8" inRotation="2.86" inDistance="43.68" outRotation="0" outDistance="0"/>
@@ -2987,7 +3023,7 @@
                   </Shape>
                 </Node>
                 <Node x="-45" y="20" name="cheek_l" id="33:207">
-                  <Shape x="0" y="0" name="cheek_l" id="33:88">
+                  <Shape x="0" y="0" name="cheek_l" id="33:90">
                     <Ellipse width="20" height="13" name="P"/>
                   <Fill name="F">
                     <SolidColor colorValue="4DFF8A5B" name="C"/>
@@ -2995,14 +3031,14 @@
                   </Shape>
                 </Node>
                 <Node x="45" y="20" name="cheek_r" id="33:208">
-                  <Shape x="0" y="0" name="cheek_r" id="33:89">
+                  <Shape x="0" y="0" name="cheek_r" id="33:91">
                     <Ellipse width="20" height="13" name="P"/>
                   <Fill name="F">
                     <SolidColor colorValue="4DFF8A5B" name="C"/>
                   </Fill>
                   </Shape>
                 </Node>
-                <Shape x="0" y="25" name="belly" id="33:90">
+                <Shape x="0" y="25" name="belly" id="33:92">
                   <Ellipse width="78" height="66" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FFFFF1B8" name="C">
@@ -3010,13 +3046,13 @@
                   </SolidColor>
                 </Fill>
                 </Shape>
-                <Shape x="-23" y="-29" rotation="-0.31" name="highlight" id="33:91">
+                <Shape x="-23" y="-29" rotation="-0.31" name="highlight" id="33:93">
                   <Ellipse width="36" height="20" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="4DFFFFFF" name="C"/>
                 </Fill>
                 </Shape>
-                <Shape x="0" y="0" name="body" id="33:92">
+                <Shape x="0" y="0" name="body" id="33:94">
                   <Ellipse width="126" height="120" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FFFFD93D" name="C">
@@ -3028,7 +3064,7 @@
                 </Stroke>
                 </Shape>
                 <Node x="0" y="58" name="tail" id="33:206">
-                  <Shape x="0" y="4" name="tail" id="33:93">
+                  <Shape x="0" y="4" name="tail" id="33:95">
                   <PointsPath isClosed="true">
                     <StraightVertex x="-12" y="-8"/>
                     <StraightVertex x="-8" y="8"/>
@@ -3047,7 +3083,7 @@
                   </Shape>
                 </Node>
               </Node>
-              <Shape x="21" y="-4.5" name="feet_0" id="33:94">
+              <Shape x="21" y="-4.5" name="feet_0" id="33:96">
                 <Ellipse width="26" height="17" name="P"/>
               <Fill name="F">
                 <SolidColor colorValue="FFFF8A5B" name="C"/>
@@ -3056,7 +3092,7 @@
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="-21" y="-4.5" name="feet_1" id="33:95">
+              <Shape x="-21" y="-4.5" name="feet_1" id="33:97">
                 <Ellipse width="26" height="17" name="P"/>
               <Fill name="F">
                 <SolidColor colorValue="FFFF8A5B" name="C"/>
@@ -3067,7 +3103,7 @@
               </Shape>
             </Node>
 
-            <Shape x="120" y="212" name="shadow" id="33:96">
+            <Shape x="120" y="212" name="shadow" id="33:98">
               <Ellipse width="124" height="22" name="P"/>
             <Fill name="F">
               <SolidColor colorValue="041E1B3A" name="C"/>
@@ -3769,21 +3805,27 @@
                     </Stroke>
                     </Shape>
                   </Node>
-                  <Node x="-22" y="0" opacity="0" name="eye_l_surprised" id="34:216">
-                    <Shape x="-1" y="-2" name="eye_l_surprised_0" id="34:61">
-                      <Ellipse width="4.8" height="4.8" name="P"/>
+                  <Node x="-28" y="0" opacity="0" name="eye_l_surprised" id="34:216">
+                    <Shape x="5.75" y="6.9" name="eye_l_surprised_0" id="34:61">
+                      <Ellipse width="3" height="3" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
                     </Fill>
                     </Shape>
-                    <Shape x="2" y="2" name="eye_l_surprised_1" id="34:62">
-                      <Ellipse width="14" height="14" name="P"/>
+                    <Shape x="-1.15" y="-2.3" name="eye_l_surprised_1" id="34:62">
+                      <Ellipse width="5.52" height="5.52" name="P"/>
+                    <Fill name="F">
+                      <SolidColor colorValue="FFFFFFFF" name="C"/>
+                    </Fill>
+                    </Shape>
+                    <Shape x="2.3" y="2.3" name="eye_l_surprised_2" id="34:63">
+                      <Ellipse width="18.97" height="18.97" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FF1E1B3A" name="C"/>
                     </Fill>
                     </Shape>
-                    <Shape x="0" y="0" name="eye_l_surprised_2" id="34:63">
-                      <Ellipse width="30" height="30" name="P"/>
+                    <Shape x="0" y="0" name="eye_l_surprised_3" id="34:64">
+                      <Ellipse width="34.5" height="34.5" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
                     </Fill>
@@ -3793,7 +3835,7 @@
                     </Shape>
                   </Node>
                   <Node x="-22" y="0" opacity="0" name="eye_l_wink" id="34:217">
-                    <Shape x="0" y="0" name="eye_l_wink" id="34:64">
+                    <Shape x="0" y="0" name="eye_l_wink" id="34:65">
                     <PointsPath isClosed="false">
                       <CubicDetachedVertex x="-15" y="0" inRotation="0" inDistance="0" outRotation="0.38" outDistance="10.77"/>
                       <CubicDetachedVertex x="15" y="0" inRotation="2.76" inDistance="10.77" outRotation="0" outDistance="0"/>
@@ -3804,19 +3846,19 @@
                     </Shape>
                   </Node>
                   <Node x="22" y="0" opacity="1" name="eye_r_open" id="34:218">
-                    <Shape x="-1" y="-2" name="eye_r_open_0" id="34:65">
+                    <Shape x="-1" y="-2" name="eye_r_open_0" id="34:66">
                       <Ellipse width="4.8" height="4.8" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
                     </Fill>
                     </Shape>
-                    <Shape x="2" y="2" name="eye_r_open_1" id="34:66">
+                    <Shape x="2" y="2" name="eye_r_open_1" id="34:67">
                       <Ellipse width="14" height="14" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FF1E1B3A" name="C"/>
                     </Fill>
                     </Shape>
-                    <Shape x="0" y="0" name="eye_r_open_2" id="34:67">
+                    <Shape x="0" y="0" name="eye_r_open_2" id="34:68">
                       <Ellipse width="30" height="30" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
@@ -3827,7 +3869,7 @@
                     </Shape>
                   </Node>
                   <Node x="22" y="0" opacity="0" name="eye_r_closed" id="34:219">
-                    <Shape x="0" y="0" name="eye_r_closed" id="34:68">
+                    <Shape x="0" y="0" name="eye_r_closed" id="34:69">
                     <PointsPath isClosed="false">
                       <CubicDetachedVertex x="-15" y="0" inRotation="0" inDistance="0" outRotation="0.73" outDistance="13.45"/>
                       <CubicDetachedVertex x="15" y="0" inRotation="2.41" inDistance="13.45" outRotation="0" outDistance="0"/>
@@ -3838,7 +3880,7 @@
                     </Shape>
                   </Node>
                   <Node x="22" y="5" opacity="0" name="eye_r_happy" id="34:220">
-                    <Shape x="0" y="0" name="eye_r_happy" id="34:69">
+                    <Shape x="0" y="0" name="eye_r_happy" id="34:70">
                     <PointsPath isClosed="false">
                       <CubicDetachedVertex x="-15" y="0" inRotation="0" inDistance="0" outRotation="-0.97" outDistance="17.75"/>
                       <CubicDetachedVertex x="15" y="0" inRotation="-2.17" inDistance="17.75" outRotation="0" outDistance="0"/>
@@ -3849,7 +3891,7 @@
                     </Shape>
                   </Node>
                   <Node x="22" y="1" opacity="0" name="eye_r_sleepy" id="34:221">
-                    <Shape x="-17.5" y="0.5" name="eye_r_sleepy_0" id="34:70">
+                    <Shape x="-17.5" y="0.5" name="eye_r_sleepy_0" id="34:71">
                     <PointsPath isClosed="true">
                       <StraightVertex x="3.5" y="-2.5"/>
                       <StraightVertex x="-3.5" y="2.5"/>
@@ -3861,7 +3903,7 @@
                       <SolidColor colorValue="FF1E1B3A" name="C"/>
                     </Stroke>
                     </Shape>
-                    <Shape x="17.5" y="0.5" name="eye_r_sleepy_1" id="34:71">
+                    <Shape x="17.5" y="0.5" name="eye_r_sleepy_1" id="34:72">
                     <PointsPath isClosed="true">
                       <StraightVertex x="-3.5" y="-2.5"/>
                       <StraightVertex x="3.5" y="2.5"/>
@@ -3873,7 +3915,7 @@
                       <SolidColor colorValue="FF1E1B3A" name="C"/>
                     </Stroke>
                     </Shape>
-                    <Shape x="0" y="-3" name="eye_r_sleepy_2" id="34:72">
+                    <Shape x="0" y="-3" name="eye_r_sleepy_2" id="34:73">
                     <PointsPath isClosed="false">
                       <CubicDetachedVertex x="-15" y="0" inRotation="0" inDistance="0" outRotation="0.6" outDistance="12.11"/>
                       <CubicDetachedVertex x="15" y="0" inRotation="2.54" inDistance="12.11" outRotation="0" outDistance="0"/>
@@ -3883,21 +3925,27 @@
                     </Stroke>
                     </Shape>
                   </Node>
-                  <Node x="22" y="0" opacity="0" name="eye_r_surprised" id="34:222">
-                    <Shape x="-1" y="-2" name="eye_r_surprised_0" id="34:73">
-                      <Ellipse width="4.8" height="4.8" name="P"/>
+                  <Node x="28" y="0" opacity="0" name="eye_r_surprised" id="34:222">
+                    <Shape x="5.75" y="6.9" name="eye_r_surprised_0" id="34:74">
+                      <Ellipse width="3" height="3" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
                     </Fill>
                     </Shape>
-                    <Shape x="2" y="2" name="eye_r_surprised_1" id="34:74">
-                      <Ellipse width="14" height="14" name="P"/>
+                    <Shape x="-1.15" y="-2.3" name="eye_r_surprised_1" id="34:75">
+                      <Ellipse width="5.52" height="5.52" name="P"/>
+                    <Fill name="F">
+                      <SolidColor colorValue="FFFFFFFF" name="C"/>
+                    </Fill>
+                    </Shape>
+                    <Shape x="2.3" y="2.3" name="eye_r_surprised_2" id="34:76">
+                      <Ellipse width="18.97" height="18.97" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FF1E1B3A" name="C"/>
                     </Fill>
                     </Shape>
-                    <Shape x="0" y="0" name="eye_r_surprised_2" id="34:75">
-                      <Ellipse width="30" height="30" name="P"/>
+                    <Shape x="0" y="0" name="eye_r_surprised_3" id="34:77">
+                      <Ellipse width="34.5" height="34.5" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
                     </Fill>
@@ -3907,7 +3955,7 @@
                     </Shape>
                   </Node>
                   <Node x="22" y="0" opacity="0" name="eye_r_wink" id="34:223">
-                    <Shape x="0" y="0" name="eye_r_wink" id="34:76">
+                    <Shape x="0" y="0" name="eye_r_wink" id="34:78">
                     <PointsPath isClosed="false">
                       <CubicDetachedVertex x="-15" y="0" inRotation="0" inDistance="0" outRotation="0.38" outDistance="10.77"/>
                       <CubicDetachedVertex x="15" y="0" inRotation="2.76" inDistance="10.77" outRotation="0" outDistance="0"/>
@@ -3917,7 +3965,7 @@
                     </Stroke>
                     </Shape>
                   </Node>
-                  <Shape x="0" y="25.33" name="beak_top" id="34:77">
+                  <Shape x="0" y="25.33" name="beak_top" id="34:79">
                   <PointsPath isClosed="true">
                     <CubicDetachedVertex x="-14" y="-4.33" inRotation="1.22" inDistance="7.8" outRotation="-0.34" outDistance="9.91"/>
                     <CubicDetachedVertex x="14" y="-4.33" inRotation="-2.8" inDistance="9.91" outRotation="1.92" outDistance="7.8"/>
@@ -3931,7 +3979,7 @@
                   </Stroke>
                   </Shape>
                   <Node x="0" y="0" opacity="0" name="beak_bottom_n" id="34:209">
-                    <Shape x="0" y="29" name="beak_bottom" id="34:78">
+                    <Shape x="0" y="29" name="beak_bottom" id="34:80">
                       <Ellipse width="20" height="14" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FF000000" name="C"/>
@@ -3939,13 +3987,13 @@
                     </Shape>
                   </Node>
                   <Node x="0" y="0" opacity="0" name="beak_alt_n" id="34:210">
-                    <Shape x="0" y="14" name="beak_alt_0" id="34:79">
+                    <Shape x="0" y="14" name="beak_alt_0" id="34:81">
                       <Ellipse width="10" height="10" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFF8A5B" name="C"/>
                     </Fill>
                     </Shape>
-                    <Shape x="0" y="11" name="beak_alt_1" id="34:80">
+                    <Shape x="0" y="11" name="beak_alt_1" id="34:82">
                       <Ellipse width="22" height="24" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FF1E1B3A" name="C"/>
@@ -3953,7 +4001,7 @@
                     </Shape>
                   </Node>
                   <Node x="0" y="0" opacity="0" name="nightcap" id="34:211">
-                    <Shape x="62" y="-43.25" name="nightcap_0" id="34:81">
+                    <Shape x="62" y="-43.25" name="nightcap_0" id="34:83">
                       <Ellipse width="16" height="16" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
@@ -3962,7 +4010,7 @@
                       <SolidColor colorValue="FF1E1B3A" name="C"/>
                     </Stroke>
                     </Shape>
-                    <Shape x="21" y="-32.75" name="nightcap_1" id="34:82">
+                    <Shape x="21" y="-32.75" name="nightcap_1" id="34:84">
                       <Rectangle width="66" height="13" cornerRadiusTL="6.5" linkCornerRadius="true" name="P"/>
                     <Fill name="F">
                       <SolidColor colorValue="FFFFFFFF" name="C"/>
@@ -3971,7 +4019,7 @@
                       <SolidColor colorValue="FF1E1B3A" name="C"/>
                     </Stroke>
                     </Shape>
-                    <Shape x="24.4" y="-42.05" name="nightcap_2" id="34:83">
+                    <Shape x="24.4" y="-42.05" name="nightcap_2" id="34:85">
                     <PointsPath isClosed="true">
                       <CubicDetachedVertex x="-34.4" y="12.8" inRotation="0" inDistance="0" outRotation="-1.03" outDistance="31.1"/>
                       <CubicDetachedVertex x="29.6" y="-19.2" inRotation="-2.94" inDistance="27.19" outRotation="0.38" outDistance="7.18"/>
@@ -3989,7 +4037,7 @@
                   </Node>
                 </Node>
                 <Node x="-46" y="35" name="wing_l" id="34:204">
-                  <Shape x="-11" y="0" name="wing_l" id="34:84">
+                  <Shape x="-11" y="0" name="wing_l" id="34:86">
                   <PointsPath isClosed="true">
                     <CubicDetachedVertex x="-11" y="-34" inRotation="1" inDistance="24.65" outRotation="1.52" outDistance="24.64"/>
                     <CubicDetachedVertex x="11" y="34" inRotation="-2.14" inDistance="24.65" outRotation="-1.62" outDistance="24.64"/>
@@ -4005,7 +4053,7 @@
                   </Shape>
                 </Node>
                 <Node x="46" y="35" name="wing_r" id="34:205">
-                  <Shape x="11" y="0" name="wing_r" id="34:85">
+                  <Shape x="11" y="0" name="wing_r" id="34:87">
                   <PointsPath isClosed="true">
                     <CubicDetachedVertex x="11" y="-34" inRotation="1.62" inDistance="24.64" outRotation="2.14" outDistance="24.65"/>
                     <CubicDetachedVertex x="-11" y="34" inRotation="-1.52" inDistance="24.64" outRotation="-1" outDistance="24.65"/>
@@ -4022,7 +4070,7 @@
                 </Node>
                 <Node x="0" y="0" opacity="0" name="acc_scarf" id="34:226">
                   <DataBindContext sourcePathIds="0:500-0:505" propertyKey="18" converterId="0:602"/>
-                  <Shape x="25" y="35" name="acc_scarf_0" id="34:86">
+                  <Shape x="25" y="35" name="acc_scarf_0" id="34:88">
                   <PointsPath isClosed="true">
                     <StraightVertex x="-7" y="0"/>
                     <StraightVertex x="7" y="0"/>
@@ -4034,7 +4082,7 @@
                     <SolidColor colorValue="FFFFFFFF" name="C"/>
                   </Stroke>
                   </Shape>
-                  <Shape x="25" y="34" name="acc_scarf_1" id="34:87">
+                  <Shape x="25" y="34" name="acc_scarf_1" id="34:89">
                     <Rectangle width="22" height="34" cornerRadiusTL="10" linkCornerRadius="true" name="P"/>
                   <Fill name="F">
                     <SolidColor colorValue="FF3FA67E" name="C"/>
@@ -4043,7 +4091,7 @@
                     <SolidColor colorValue="FF1E1B3A" name="C"/>
                   </Stroke>
                   </Shape>
-                  <Shape x="0" y="13" name="acc_scarf_2" id="34:88">
+                  <Shape x="0" y="13" name="acc_scarf_2" id="34:90">
                   <PointsPath isClosed="true">
                     <CubicDetachedVertex x="-58" y="-8" inRotation="0" inDistance="0" outRotation="0.3" outDistance="40.49"/>
                     <CubicDetachedVertex x="58" y="-8" inRotation="2.84" inDistance="40.49" outRotation="0" outDistance="0"/>
@@ -4059,7 +4107,7 @@
                   </Shape>
                 </Node>
                 <Node x="-43" y="8" name="cheek_l" id="34:207">
-                  <Shape x="0" y="0" name="cheek_l" id="34:89">
+                  <Shape x="0" y="0" name="cheek_l" id="34:91">
                     <Ellipse width="20" height="13" name="P"/>
                   <Fill name="F">
                     <SolidColor colorValue="4DFF8A5B" name="C"/>
@@ -4067,14 +4115,14 @@
                   </Shape>
                 </Node>
                 <Node x="43" y="8" name="cheek_r" id="34:208">
-                  <Shape x="0" y="0" name="cheek_r" id="34:90">
+                  <Shape x="0" y="0" name="cheek_r" id="34:92">
                     <Ellipse width="20" height="13" name="P"/>
                   <Fill name="F">
                     <SolidColor colorValue="4DFF8A5B" name="C"/>
                   </Fill>
                   </Shape>
                 </Node>
-                <Shape x="0" y="35" name="belly" id="34:91">
+                <Shape x="0" y="35" name="belly" id="34:93">
                   <Ellipse width="66" height="50" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FFFFF1B8" name="C">
@@ -4082,13 +4130,13 @@
                   </SolidColor>
                 </Fill>
                 </Shape>
-                <Shape x="-28" y="-41" rotation="-0.31" name="highlight" id="34:92">
+                <Shape x="-28" y="-41" rotation="-0.31" name="highlight" id="34:94">
                   <Ellipse width="32" height="18" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="4DFFFFFF" name="C"/>
                 </Fill>
                 </Shape>
-                <Shape x="0" y="-3.5" name="body" id="34:93">
+                <Shape x="0" y="-3.5" name="body" id="34:95">
                 <PointsPath isClosed="true">
                   <CubicDetachedVertex x="0" y="-65.5" inRotation="3.14" inDistance="42" outRotation="0" outDistance="42"/>
                   <CubicDetachedVertex x="38" y="-3.5" inRotation="-1.17" inDistance="28.23" outRotation="0.68" outDistance="34.83"/>
@@ -4105,7 +4153,7 @@
                 </Stroke>
                 </Shape>
                 <Node x="0" y="42" name="tail" id="34:206">
-                  <Shape x="24" y="23" rotation="0.35" name="tail_0" id="34:94">
+                  <Shape x="24" y="23" rotation="0.35" name="tail_0" id="34:96">
                     <Ellipse width="28" height="54" name="P"/>
                   <Fill name="F">
                     <SolidColor colorValue="FFE8A800" name="C">
@@ -4116,7 +4164,7 @@
                     <SolidColor colorValue="FF1E1B3A" name="C"/>
                   </Stroke>
                   </Shape>
-                  <Shape x="0" y="25" name="tail_1" id="34:95">
+                  <Shape x="0" y="25" name="tail_1" id="34:97">
                     <Ellipse width="28" height="54" name="P"/>
                   <Fill name="F">
                     <SolidColor colorValue="FFE8A800" name="C">
@@ -4127,7 +4175,7 @@
                     <SolidColor colorValue="FF1E1B3A" name="C"/>
                   </Stroke>
                   </Shape>
-                  <Shape x="-24" y="23" rotation="-0.35" name="tail_2" id="34:96">
+                  <Shape x="-24" y="23" rotation="-0.35" name="tail_2" id="34:98">
                     <Ellipse width="28" height="54" name="P"/>
                   <Fill name="F">
                     <SolidColor colorValue="FFE8A800" name="C">
@@ -4140,7 +4188,7 @@
                   </Shape>
                 </Node>
               </Node>
-              <Shape x="25" y="-4.5" name="feet_0" id="34:97">
+              <Shape x="25" y="-4.5" name="feet_0" id="34:99">
                 <Ellipse width="26" height="17" name="P"/>
               <Fill name="F">
                 <SolidColor colorValue="FFFF8A5B" name="C"/>
@@ -4149,7 +4197,7 @@
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="-25" y="-4.5" name="feet_1" id="34:98">
+              <Shape x="-25" y="-4.5" name="feet_1" id="34:100">
                 <Ellipse width="26" height="17" name="P"/>
               <Fill name="F">
                 <SolidColor colorValue="FFFF8A5B" name="C"/>
@@ -4160,7 +4208,7 @@
               </Shape>
             </Node>
 
-            <Shape x="120" y="212" name="shadow" id="34:99">
+            <Shape x="120" y="212" name="shadow" id="34:101">
               <Ellipse width="136" height="22" name="P"/>
             <Fill name="F">
               <SolidColor colorValue="041E1B3A" name="C"/>
@@ -6336,7 +6384,7 @@
               <KeyFrameDouble value="0" interpolationType="linear" frame="180"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="31:77">
+          <KeyedObject objectId="31:79">
             <KeyedProperty propertyKey="16">
               <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
               <KeyFrameDouble value="0.97" interpolationType="cubic" frame="90"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
@@ -6425,7 +6473,7 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="72"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="31:77">
+          <KeyedObject objectId="31:79">
             <KeyedProperty propertyKey="16">
               <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
               <KeyFrameDouble value="1.12" interpolationType="cubic" frame="9"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
@@ -7165,38 +7213,6 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="48"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="31:216">
-            <KeyedProperty propertyKey="16">
-              <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="8"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="20"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="linear" frame="48"/>
-            </KeyedProperty>
-          </KeyedObject>
-          <KeyedObject objectId="31:216">
-            <KeyedProperty propertyKey="17">
-              <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="8"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="20"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="linear" frame="48"/>
-            </KeyedProperty>
-          </KeyedObject>
-          <KeyedObject objectId="31:222">
-            <KeyedProperty propertyKey="16">
-              <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="8"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="20"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="linear" frame="48"/>
-            </KeyedProperty>
-          </KeyedObject>
-          <KeyedObject objectId="31:222">
-            <KeyedProperty propertyKey="17">
-              <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="8"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="20"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="linear" frame="48"/>
-            </KeyedProperty>
-          </KeyedObject>
         </LinearAnimation>
 
         <LinearAnimation name="eyesProud" duration="72" fps="60" loopValue="oneShot" id="6:416">
@@ -7572,7 +7588,7 @@
               <KeyFrameDouble value="0" interpolationType="linear" frame="180"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="32:94">
+          <KeyedObject objectId="32:96">
             <KeyedProperty propertyKey="16">
               <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
               <KeyFrameDouble value="0.97" interpolationType="cubic" frame="90"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
@@ -7695,7 +7711,7 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="72"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="32:94">
+          <KeyedObject objectId="32:96">
             <KeyedProperty propertyKey="16">
               <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
               <KeyFrameDouble value="1.12" interpolationType="cubic" frame="9"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
@@ -8477,38 +8493,6 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="48"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="32:216">
-            <KeyedProperty propertyKey="16">
-              <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="8"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="20"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="linear" frame="48"/>
-            </KeyedProperty>
-          </KeyedObject>
-          <KeyedObject objectId="32:216">
-            <KeyedProperty propertyKey="17">
-              <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="8"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="20"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="linear" frame="48"/>
-            </KeyedProperty>
-          </KeyedObject>
-          <KeyedObject objectId="32:222">
-            <KeyedProperty propertyKey="16">
-              <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="8"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="20"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="linear" frame="48"/>
-            </KeyedProperty>
-          </KeyedObject>
-          <KeyedObject objectId="32:222">
-            <KeyedProperty propertyKey="17">
-              <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="8"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="20"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="linear" frame="48"/>
-            </KeyedProperty>
-          </KeyedObject>
         </LinearAnimation>
 
         <LinearAnimation name="eyesProud" duration="72" fps="60" loopValue="oneShot" id="6:446">
@@ -8884,7 +8868,7 @@
               <KeyFrameDouble value="0" interpolationType="linear" frame="180"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="33:96">
+          <KeyedObject objectId="33:98">
             <KeyedProperty propertyKey="16">
               <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
               <KeyFrameDouble value="0.97" interpolationType="cubic" frame="90"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
@@ -9007,7 +8991,7 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="72"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="33:96">
+          <KeyedObject objectId="33:98">
             <KeyedProperty propertyKey="16">
               <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
               <KeyFrameDouble value="1.12" interpolationType="cubic" frame="9"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
@@ -9789,38 +9773,6 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="48"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="33:216">
-            <KeyedProperty propertyKey="16">
-              <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="8"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="20"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="linear" frame="48"/>
-            </KeyedProperty>
-          </KeyedObject>
-          <KeyedObject objectId="33:216">
-            <KeyedProperty propertyKey="17">
-              <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="8"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="20"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="linear" frame="48"/>
-            </KeyedProperty>
-          </KeyedObject>
-          <KeyedObject objectId="33:222">
-            <KeyedProperty propertyKey="16">
-              <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="8"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="20"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="linear" frame="48"/>
-            </KeyedProperty>
-          </KeyedObject>
-          <KeyedObject objectId="33:222">
-            <KeyedProperty propertyKey="17">
-              <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="8"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="20"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="linear" frame="48"/>
-            </KeyedProperty>
-          </KeyedObject>
         </LinearAnimation>
 
         <LinearAnimation name="eyesProud" duration="72" fps="60" loopValue="oneShot" id="6:476">
@@ -10196,7 +10148,7 @@
               <KeyFrameDouble value="0" interpolationType="linear" frame="180"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="34:99">
+          <KeyedObject objectId="34:101">
             <KeyedProperty propertyKey="16">
               <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
               <KeyFrameDouble value="0.97" interpolationType="cubic" frame="90"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
@@ -10319,7 +10271,7 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="72"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="34:99">
+          <KeyedObject objectId="34:101">
             <KeyedProperty propertyKey="16">
               <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
               <KeyFrameDouble value="1.12" interpolationType="cubic" frame="9"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
@@ -11099,38 +11051,6 @@
             <KeyedProperty propertyKey="18">
               <KeyFrameDouble value="0" interpolationType="hold"/>
               <KeyFrameDouble value="0" interpolationType="hold" frame="48"/>
-            </KeyedProperty>
-          </KeyedObject>
-          <KeyedObject objectId="34:216">
-            <KeyedProperty propertyKey="16">
-              <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="8"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="20"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="linear" frame="48"/>
-            </KeyedProperty>
-          </KeyedObject>
-          <KeyedObject objectId="34:216">
-            <KeyedProperty propertyKey="17">
-              <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="8"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="20"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="linear" frame="48"/>
-            </KeyedProperty>
-          </KeyedObject>
-          <KeyedObject objectId="34:222">
-            <KeyedProperty propertyKey="16">
-              <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="8"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="20"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="linear" frame="48"/>
-            </KeyedProperty>
-          </KeyedObject>
-          <KeyedObject objectId="34:222">
-            <KeyedProperty propertyKey="17">
-              <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="8"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="cubic" frame="20"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
-              <KeyFrameDouble value="1.3" interpolationType="linear" frame="48"/>
             </KeyedProperty>
           </KeyedObject>
         </LinearAnimation>

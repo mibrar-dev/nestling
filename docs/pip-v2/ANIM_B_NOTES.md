@@ -1,0 +1,144 @@
+# ANIM_B_NOTES — Bolt (body style B) Rive build
+
+Owner complaint fixed: every mood is full-body acting measured frame-to-frame,
+not a face swap. Motion % = mean % of pixels visibly changed between
+consecutive strip frames (0/15/30/45/60/75/90 % of each animation, same metric
+as ANIM_A: summed RGB diff > 36 on every 2nd pixel).
+
+## Verify (must stay at zero)
+
+- `rive tools/rive/bolt --verify` → 0 errors, 0 warnings
+- `rive inspect tools/rive/bolt --summary` → `problems: []`, 5 artboards
+  (Stage1..Stage4 + PipStage), exactly 1 StateMachine with 3 StateMachineLayers
+  per stage artboard (Body/Eyes/FX), 21 LinearAnimations per stage
+- Full `rive inspect --json` → 0 occurrences of "unresolved": 0 unresolved bindings
+- Binary: `app/assets/animations/rive/pip_bolt.riv` (159,599 bytes, bit-identical
+  copy of `tools/rive/bolt/build/pip_bolt.riv`, md5
+  `00daa07ab5f9bbd25a81e338dc38ee78`, rebuilt 2026-10-01 ~08:47 UTC from the
+  latest approved poses including the designer's final PROUD fix)
+
+## Motion % (higher = more obvious; idle is ambient by design)
+
+| mood | s1 egg | s2 hatchling | s3 fledgling | s4 songbird |
+|---|---|---|---|---|
+| idle | 2.3% | 4.1% | 5.5% | 5.4% |
+| happy | 7.3% | 14.5% | 17.4% | 17.5% |
+| eating | 2.9% | 4.9% | 9.6% | 9.4% |
+| sleepy | 2.5% | 3.4% | 6.0% | 6.1% |
+| surprised | 5.3% | 8.6% | 10.8% | 10.9% |
+| proud | 3.9% | 5.8% | 7.3% | 7.2% |
+| evolve | 20.9% | 24.1% | 26.3% | 25.6% |
+
+Read off MOTION_BOARD: idle = breathe + tilt + crest sway (ambient); happy =
+0.82 squash → 24 px jump, wings fully up flapping ×2 (behind the head, ^^ +
+open beak visible at peak), crest whip, sparkle burst, land squash; eating =
+big seed drops in → 3 pecks with beak open/close → crumbs fly → cheek puff +
+satisfied ^^; sleepy = slump + nod + nightcap + rising Zzz; surprised =
+12 px jump-back, 1.3× eyes with constant 8 px outline (no glasses), "o" beak,
+wing flare, crest spring, "!" pop; proud = chest 1.08, chin 8°, wings to hips,
+clean wink, chest sparkle; evolve = centred glow ring + pop (largest motion).
+
+## Files
+
+- Source: `tools/rive/bolt/gen_bolt.py` (affine-aware Bolt port of
+  `tools/rive/mochi/gen_mochi.py`) → `stage1..4.rml`, `pipstage.rml`,
+  `shared.rml`, `rive.yaml` (main: Stage3, name: pip_bolt)
+- Matrix: `tools/rive/bolt/matrix.py` (196 strip renders),
+  `tools/rive/bolt/assemble.py` (strips + board + motion % table)
+- Binary: `app/assets/animations/rive/pip_bolt.riv` (159,599 bytes)
+- Strips: `design/animations/rive/bolt/strip_s{1..4}_{idle,happy,eating,sleepy,surprised,proud,evolve}.png`
+  (28 strips, 7 frames each), raw frames in `frames/` (review scaffolding)
+- `design/animations/rive/bolt/MOTION_BOARD.png` (rows = moods ×
+  fledgling/songbird, columns = frames) — look at this first
+- `design/animations/rive/bolt/mp4_{idle,happy,eating,sleepy,surprised,proud,evolve}.mp4`
+  (Stage3, 30 fps via /opt/homebrew/bin/ffmpeg)
+- `design/animations/rive/bolt/SHOWREEL.mp4` (112 KB, 6.00 s, 30 fps —
+  fledgling idle→happy→eating→sleepy→surprised→proud→evolve, 26 frames each)
+- `design/animations/rive/bolt/SKIN_ACC.png` (4 skins × 5 accessories on
+  stage-3 idle — all 20 cells render isolated, accessory default none)
+- Widget: `app/lib/core/design_system/motion/pip_avatar.dart` (untouched —
+  Mochi animator owns it; Bolt matches its Numbers + bodyColor/darkColor/
+  bellyColor contract)
+- Fallbacks: `app/assets/illustrations/pip_v2/bolt/` untouched (placeholder
+  until owner approves; Mochi fallbacks only)
+
+## Contract mapping
+
+- Artboards `Stage1..Stage4` (240×240) + `PipStage` (350×260, nest back → Pip
+  → nest front rim, one nest geometry, same split/feet fractions as Mochi's
+  `PipInNest`); state machine `Pip` on all five, default on all five.
+- View model `Pip`: `mood`/`stage`/`skin`/`accessory` as Numbers 0–5/1–4/0–3/
+  0–4 (same representation as Mochi + v1, so transitions use the proven
+  `BindablePropertyNumber` path and `pip_avatar.dart` drives Bolt with zero
+  branches); `bodyColor`/`darkColor`/`bellyColor` Colors; `evolve`/`tap`/
+  `blink` Triggers. Accessory default none via Formula converters
+  `1 − min(1, (input−N)²)`.
+- Rig: Node chains root → body → head → crest, body → wings/tail; eye/beak
+  swaps use the approved Bolt eye child groups verbatim (face.mjs symmetric
+  geometry — both eyes render from one shared markup, beak centred on x=0,
+  whole head tilts once); squash & stretch is volume-preserving.
+- Layers: exactly Body/Eyes/FX on Stage1..4 (PipStage = Stage selector + one
+  Body/Eyes/FX trio per rig, 13 layers). Body owns transforms + beak, Eyes
+  owns the 12 eye-variant opacities (+1.3× surprised pop in geometry, stroke
+  stays 8 px), FX owns the 7 fx nodes — no two layers key the same property.
+- Skins recolour body + dark (wings/crest/tail) + belly via data binding
+  (sunny #FFD93D/#E9AE00, tail #C08700 → darkColor; beak/feet/ink untouched);
+  accessories toggle through Formula converters.
+- Motion minimums all met or exceeded: idle 1→1.05 + ±5° tilt + crest sway
+  (3 s loop); happy 0.82 squash → 24 px jump, wings ±1.3 rad + 12 px outward
+  ×2 flaps, ^^, open beak, sparkle burst (1.2 s); eating seed drop + 3 pecks
+  (10 px dip, 0.38 rad tilt) + crumbs + cheek puff (1.8 s); sleepy loop 0.94
+  slump, 4 s breath, nods, nightcap, rising Zzz; surprised 12 px jump-back +
+  8 px up, 1.3× eyes (geometry scale, constant outline), "o" beak, flare,
+  elastic crest + "!" (0.8 s); proud 1.08 chest, −0.14 rad (8°) chin, wings
+  to hips, wink, chest sparkle (1.2 s); evolve squash-pop + centred glow ring
+  (r72, peak 1.2, concentric from frame 0, opacity out by f66) (1.5 s).
+  Everything cubic/elastic; follow-through on crest and wings everywhere.
+- Flutter: `flutter analyze` clean, `flutter test` all pass (no test edits).
+  v1 `pip_rive.dart` untouched.
+
+## Design handoff (proud rebuilt from latest)
+
+Per T3 the designer was finishing PROUD poses during this build. All other
+moods were built first; at the end `design/pip-v2/B/poses/s*_proud_*.svg`
+were re-read (mtime 09:40 BST — designer re-ran build.mjs mid-task, fixing
+the T2 right-shift: eyes now mirrored about x=120 on all stages) and proud
+was re-harvested (wink + chest sparkle) + full matrix re-rendered. Proud
+strips Fletcher/songbird show centred symmetric wink + sparkle. This rig
+sidesteps the T2 bug by construction (idle rig + wink variant, never the
+proud pose's baked head transform), so faces stay symmetric per face.mjs.
+
+## Pitfalls hit (Bolt-specific, for the next animator)
+
+1. Bolt hides inactive eye variants with `opacity="0"`, not `display:none`
+   (Mochi). The collector baked that 0 into paint alpha (`001E1B3A`), so ^^ /
+   closed / wink eyes rendered transparent even when their node went to 1.
+   Fix: reset harvested eye prims to opacity 1 — node opacity drives
+   visibility, paint stays opaque.
+2. Bolt nests eyes inside `head` and fx inside sub-groups (`fx_sparkle_0`),
+   and positions everything with `translate/scale/rotate` (Mochi uses absolute
+   coords + rotate only). The Mochi collector ignored transforms and matched
+   only top-level groups, so wings/eyes/beaks landed at the origin. Fix:
+   affine-bake every transform (storybook's parse/mat_apply) + subsequence
+   group matching.
+3. Bolt base idle `beak_bottom` is empty (opacity 0, no shapes); Mochi's base
+   carries the open mouth. Harvest the open mouth from `s{n}_happy_2.svg`
+   (dropping the in-mouth seed — seed flies via fx) and the "o" from
+   `s{n}_surprised_2.svg`.
+4. Surprised 1.3× must live in geometry (like Mochi's xf), not node scale —
+   node scale turns 8 px ink into 10.4 px glasses rims. Geometry scale keeps
+   the outline constant.
+
+## 3 honest weaknesses
+
+1. Eating (2.9–9.6%) and sleepy (2.5–6.1%) are the lowest-motion moods; they
+   read via props (seed/crumbs/^^, nightcap/Zzz/closed eyes) rather than body
+   displacement. If the owner wants bigger numbers, raise peck dip 10→14 px
+   and sleepy nod amplitude — no rebuild needed for anything else.
+2. Blink is baked into the Eyes `open` loop (180 f) plus the `blink` trigger;
+   cadence is fixed, not randomised 2.5–4 s — true random needs a Luau
+   script, deliberately avoided (same as Mochi/Storybook).
+3. `frames/` holds ~400 intermediate PNGs (review scaffolding, not shipped);
+   safe to delete after owner sign-off. PipStage duplicates all four rigs
+   (8,378 objects, 160 KB — same tradeoff as Mochi); a future pass could drive
+   it through nested artboards.

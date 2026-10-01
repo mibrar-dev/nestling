@@ -310,17 +310,19 @@ class Emitter:
         self.shape_n += 1
         return sid(self.shape_n)
 
-    def shapes_for(self, prims, origin, ind, prefix, opacity_node=None):
+    def shapes_for(self, prims, origin, ind, prefix, opacity_node=None,
+                     xf=(1.0, 0.0, 0.0)):
         """One <Shape> per (primitive, contour). Returns shape ids.
 
         Emission is reversed into front-to-back order: Rive draws the
         FIRST sibling on top, while SVG paints first (= document order)
-        at the bottom."""
+        at the bottom. `xf` scales geometry about `origin` (stroke width
+        is untouched, so outlines keep their authored weight)."""
         pad = " " * ind
         ids = []
         k = 0
         for prim in reversed(prims):
-            parts = geometry(prim, origin, ind, prefix)
+            parts = geometry(prim, origin, ind, prefix, xf=xf)
             for (p, ang, geom) in parts:
                 nm = prefix if len(prims) == 1 and len(parts) == 1 \
                     else f"{prefix}_{k}"
@@ -406,6 +408,50 @@ def keyed_elastic(oid, pkey, frames, ind, amplitude=1.0, period=0.35):
     out.append(f"{ind}</KeyedObject>")
     return out
 
+
+
+def surprised_prims(vp, piv):
+    """Dedicated wide-eyed-shock geometry from the open eye (orchestrator).
+
+    Sclera 1.15x, pupil 55% of sclera diameter, original glint plus a second
+    tiny mirrored highlight, ink stroke untouched (exactly idle weight).
+    Positions stay absolute; the caller applies the 1.15x `xf` about `piv`.
+    """
+    import copy
+    import xml.etree.ElementTree as _E
+    whites = [q for q in vp
+              if q["tag"] in ("circle", "ellipse")
+              and q["style"].get("fill", "").upper() == "#FFFFFF"]
+    R = max(float(q["el"].attrib.get("r", q["el"].attrib.get("rx", 16)))
+            for q in whites)
+    pc, gc = None, None
+    res = []
+    for q in vp:
+        if q["tag"] == "circle" \
+                and q["style"].get("fill", "").upper() == "#1E1B3A":
+            el2 = copy.deepcopy(q["el"])
+            el2.attrib["r"] = str(0.55 * R)
+            pc = (float(q["el"].attrib["cx"]), float(q["el"].attrib["cy"]))
+            res.append({"tag": "circle", "el": el2, "style": dict(q["style"]),
+                        "opacity": q["opacity"], "groups": q["groups"]})
+        else:
+            if q["tag"] == "circle" \
+                    and q["style"].get("fill", "").upper() == "#FFFFFF" \
+                    and float(q["el"].attrib.get("r", 0)) < R:
+                gc = (float(q["el"].attrib["cx"]),
+                      float(q["el"].attrib["cy"]))
+            res.append(q)
+    if pc is not None and gc is not None:
+        hx, hy = 2 * pc[0] - gc[0], 2 * pc[1] - gc[1]
+        hel = _E.fromstring(
+            '<circle xmlns="http://www.w3.org/2000/svg" '
+            f'cx="{hx}" cy="{hy}" r="{1.5 / 1.15}"/>')
+        res.append({"tag": "circle", "el": hel, "style": {
+            "fill": "#FFFFFF", "stroke": "none", "stroke-width": "0",
+            "stroke-linecap": "butt", "stroke-linejoin": "miter",
+            "fill-opacity": "1", "stroke-opacity": "1", "opacity": "1"},
+            "opacity": 1.0, "groups": ("eye", "surprised")})
+    return res, R
 
 # ------------------------------------------------------- rig builder
 def _by_group(prims, *path):
@@ -527,11 +573,14 @@ def build_rig(n, em, egg):
     em.shapes_for(tuft_p, tuftC, 16, "head_tuft")
     em.node_close(14)
     # eyes: 12 variant nodes
+    gap_info = {}
     for side in ("l", "r"):
         for v in EYE_VARS:
             # Orchestrator call: the surprised variant reads as rings at
-            # board scale, so surprised reuses the normal open-eye geometry
-            # (scaled 1.3x symmetric by the eyesSurprised timeline).
+            # board scale, so surprised gets dedicated shock geometry built
+            # from the open eye (1.15x, 55% pupil, dual highlights) with the
+            # stroke at exactly idle weight (a node scale would thicken it
+            # into rims, so the scale lives in the geometry instead).
             vp = grp(f"eye_{side}", "open" if v == "surprised" else v)
             node = f"eye_{side}_{v}"
             op = 1 if v == "open" else 0
@@ -540,10 +589,24 @@ def build_rig(n, em, egg):
                 piv = ((vb[0] + vb[2]) / 2, (vb[1] + vb[3]) / 2)
             else:
                 piv = headC
-            em.node_open(node, piv[0] - headC[0], piv[1] - headC[1], 14,
-                         opacity=op)
-            em.shapes_for(vp, piv, 16, node)
+            dx, R = 0.0, None
+            if v == "surprised" and vp:
+                vp, R = surprised_prims(vp, piv)
+                dx = -6.0 if side == "l" else 6.0
+                gap_info[side] = (piv[0], R)
+            em.node_open(node, piv[0] + dx - headC[0], piv[1] - headC[1],
+                         14, opacity=op)
+            xf = (1.15, -0.15 * piv[0], -0.15 * piv[1]) \
+                if v == "surprised" else (1.0, 0.0, 0.0)
+            em.shapes_for(vp, piv, 16, node, xf=xf)
             em.node_close(14)
+    if gap_info:
+        (lx, lr), (rx, rr) = gap_info["l"], gap_info["r"]
+        idle_gap = (rx - rr) - (lx + lr)
+        new_gap = (rx + 6 - 1.15 * rr) - (lx - 6 + 1.15 * lr)
+        print(f"    stage eyes: idle sclera gap {idle_gap:.1f} -> "
+              f"surprised {new_gap:.1f} (need >= {0.6 * idle_gap:.1f})")
+        assert new_gap >= 0.6 * idle_gap, "surprised eyes touch!" 
     # brows (usually empty)
     em.shapes_for(grp("brow_l") + grp("brow_r"), headC, 14, "brow")
     # beak
@@ -887,11 +950,6 @@ def eyes_anims(em, aids=None, ax=None):
     for side in ("l", "r"):
         for v in ("closed", "happy", "sleepy", "wink"):
             r += eye(f"eye_{side}_{v}", [(0, None), (0, 48)])
-    for side in ("l", "r"):
-        r += keyed(N(f"eye_{side}_surprised"), 16,
-                   [(1, None), (1.3, 8), (1.3, 20), (1.3, 48)], P + "  ")
-        r += keyed(N(f"eye_{side}_surprised"), 17,
-                   [(1, None), (1.3, 8), (1.3, 20), (1.3, 48)], P + "  ")
     r.append(f"{P}</LinearAnimation>")
     r.append("")
     # proud: left open, right wink (72f mirrors Body)

@@ -8,9 +8,10 @@ consecutive strip frames (0/15/30/45/60/75/90 % of each animation).
 
 - `rive tools/rive/mochi --verify` → 0 errors, 0 warnings
 - `rive inspect tools/rive/mochi --summary` → `problems: []`
-- `rive tools/rive/mochi --once` → `build/pip_mochi.riv`, 161,540 bytes
+- `rive tools/rive/mochi --once` → `build/pip_mochi.riv`, 159,588 bytes
   (`RIVE` magic, format major 7), md5
-  `2abdf1e74d8a24a89ed35c6916673420` (supersedes `0394fc70…`, `e5e43439…`)
+  `d7243d2cabc28d95785cd92b202a7938` (supersedes `2abdf1e7…`, `0394fc70…`,
+  `e5e43439…`)
 
 ## Motion % (higher = more obvious; idle is ambient by design)
 
@@ -42,6 +43,24 @@ consecutive strip frames (0/15/30/45/60/75/90 % of each animation).
 3. `design/animations/rive/mochi/SHOWREEL.mp4` (109 KB, 6.8 s): fledgling
    idle→happy→eating→sleepy→surprised→proud→evolve, per-mood mp4s
    concatenated with ffmpeg and retimed 2× (13.5 s → ~6 s).
+
+## Rim fix (thick dark eye rims at surprised peak)
+
+   Root cause: the 1.3× lived in a node scale, which scales stroke width too
+   (6 → 7.8 reads as glasses rims). The scale now lives in the geometry:
+   `shapes_for` takes an `xf` transform (scale-about-pivot, stroke untouched)
+   and the surprised variant nodes emit open-eye geometry pre-scaled 1.3×
+   about the open-eye pivot with stroke authored at 6. The timeline pop keys
+   were removed (nothing left to animate). Rebuild md5 `d7243d2c…`.
+
+## Bridge fix (outlines meeting between the eyes at 1.3×)
+
+   At 1.3× the outlines nearly touched (2.6 px gap on s3). Surprised eyes are
+   now dedicated shock geometry (`surprised_prims` in the generator): 1.15×
+   sclera, pupil 55 % of sclera diameter, original glint plus a second tiny
+   mirrored highlight, stroke exactly 6, each eye shifted 6 px outward.
+   Generator asserts per stage that the white-to-white gap is ≥ 60 % of idle
+   (s1 16→25, s2 6→14.7, s3 16→23.2, s4 14→21.5). Rebuild md5 `c2c1a14c…`.
 
 ## Orchestrator fix pass (board re-rendered + re-checked)
 

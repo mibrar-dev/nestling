@@ -9,7 +9,7 @@ export const INK = '#1E1B3A';
 export const SW = 8;
 export const BEAK = '#FF8A5B';
 
-import { buildFace, FACE_R } from './face.mjs';
+import { buildFace, FACE_R, STAGE_FACE } from './face.mjs';
 
 export const SKINS = {
   sunny: { body: '#FFD93D', belly: '#FFF1B8', wing: '#E9AE00', tail: '#C08700', accent: '#C98A3C', shell: '#FFF7E4' },
@@ -397,9 +397,12 @@ export function buildParts(p) {
   const htx0 = (p.headDx ?? 0), hty0 = (p.headDy ?? 0) + headLift;
   const pivotX = bx + htx0, pivotY = eyeY0 + hty0;
   // shared head tilt (round 5): ONE angle for crest + face + cap + nightcap
-  // about the neck pivot. The egg never tilts. Clamped to +-12.
+  // about the face centre. The egg never tilts. Clamped to +-2: a rigid
+  // rotation tilts the eye line by separation*sin(tilt), so rotation stays
+  // where the eyes remain level; all larger acting moves into head position
+  // (headDx/headDy) and body pose.
   const tiltRaw = p.stage === 1 ? 0 : (p.headRot ?? 0);
-  const tilt = Math.max(-12, Math.min(12, tiltRaw));
+  const tilt = Math.max(-2, Math.min(2, tiltRaw));
   const tiltT = tg({ rot: tilt, ox: pivotX, oy: pivotY });
   const tiltWrap = (inner) => (tilt ? `<g${tiltT}>${inner}</g>` : inner);
   // the head assembly rides the body's squash + lean (stage 2+): the SAME
@@ -464,12 +467,13 @@ export function buildParts(p) {
   const htx = htx0, hty = hty0;
   const brotEff = p.stage === 1 ? 0 : brot;
   const sqEff = p.stage === 1 ? 1 : sx, syEff = p.stage === 1 ? 1 : sy;
-  const eyeW = (side) => {
-    const j = rotPt(bx + (side === 'l' ? -edx : edx) + htx, eyeY + hty,
-      tilt, pivotX, pivotY);
+  const toWorld = (lx, ly) => {
+    const j = rotPt(lx + htx, ly + hty, tilt, pivotX, pivotY);
     const kx = B.cx + (j[0] - B.cx) * sqEff, ky = bottomY + (j[1] - bottomY) * syEff;
     return rotPt(kx, ky, brotEff, B.cx, bottomY);
   };
+  const eyeW = (side) => toWorld(bx + (side === 'l' ? -edx : edx), eyeY);
+  const beakWpos = toWorld(bx, eyeY + STAGE_FACE[p.stage].beak + (p.beakDy ?? 0));
   // head ellipse in world coords (body transform applied where one exists)
   const bc = [B.cx, B.cy], bo = [B.cx, bottomY];
   const bsc = [B.cx + (bc[0] - bo[0]) * sx, bo[1] + (bc[1] - bo[1]) * sy];
@@ -483,7 +487,7 @@ export function buildParts(p) {
     const sw = rotPt(ss[0], ss[1], brot, so[0], so[1]);
     headEl = { cx: sw[0], cy: sw[1], rx: S.head.r * sx, ry: S.head.r * sy };
   } else headEl = { cx: bcc[0], cy: bcc[1], rx: brx, ry: bry };
-  const debug = { eyeL: eyeW('l'), eyeR: eyeW('r'), head: headEl, tilt };
+  const debug = { eyeL: eyeW('l'), eyeR: eyeW('r'), beak: beakWpos, head: headEl, tilt };
 
   return { parts: [...parts, acc, fxGroup(p.fx)], S, K, F, B, bx, by, brx, bry, bodyX, tuft, debug };
 }

@@ -142,3 +142,43 @@ else console.log('✓ nothing touches the 240 canvas edge');
     process.exitCode = 1;
   } else console.log('✓ every face sits on its head axis with both eyes inside the head');
 }
+
+/* diagnosis tightened checks: eye-midpoint symmetry, eye-level equality, and
+   beak centring — evaluated on world coords for every checked face */
+{
+  const { buildParts } = await import('./rig.mjs');
+  const { allPoses } = await import('./poses.mjs');
+  const { IDLE } = await import('./idle.mjs');
+  const symFails = [];
+  const checkSym = (p, label) => {
+    const { debug } = buildParts(p);
+    const { eyeL, eyeR, beak, head } = debug;
+    const w = 2 * head.rx, h = 2 * head.ry;
+    if (Math.abs(eyeL[0] + eyeR[0] - 2 * head.cx) > 0.04 * w) {
+      symFails.push(`${label}: eyes not mirrored about head axis (|${eyeL[0].toFixed(1)}+${eyeR[0].toFixed(1)}-2*${head.cx.toFixed(1)}| > ${(0.04 * w).toFixed(1)})`);
+    }
+    if (Math.abs(eyeL[1] - eyeR[1]) > 0.03 * h) {
+      symFails.push(`${label}: eyes not level (|${eyeL[1].toFixed(1)}-${eyeR[1].toFixed(1)}| > ${(0.03 * h).toFixed(1)})`);
+    }
+    if (Math.abs(beak[0] - head.cx) > 0.06 * w) {
+      symFails.push(`${label}: beak off head axis (|${beak[0].toFixed(1)}-${head.cx.toFixed(1)}| > ${(0.06 * w).toFixed(1)})`);
+    }
+  };
+  for (const p of allPoses()) checkSym({ ...p, skin: 'sunny' }, `s${p.stage}_${p.mood}_${p.n}`);
+  for (const skin of ['sunny', 'berry', 'sky', 'mint']) {
+    for (const mood of ['idle', 'happy']) {
+      checkSym({ ...IDLE[3][mood], stage: 3, mood, n: 0, skin }, `skin_${skin}_s3_${mood}`);
+    }
+  }
+  for (const kind of ['bow', 'cap', 'scarf', 'glasses', 'none']) {
+    for (const stage of [1, 2, 3, 4]) {
+      if (kind === 'none' && stage !== 3) continue;
+      checkSym({ ...IDLE[stage].idle, stage }, `acc_${kind}_s${stage}`);
+    }
+  }
+  if (symFails.length) {
+    console.log(`\n✗ ${symFails.length} face-symmetry failures:`);
+    for (const f of symFails.slice(0, 25)) console.log('  ' + f);
+    process.exitCode = 1;
+  } else console.log('✓ eyes mirrored + level and beak centred on every face');
+}

@@ -51,7 +51,7 @@ const BEAK_W = 0.37;   // beak half-width / r
 const BROW_HW = 0.24;  // brow half-width / r
 
 /* vertical layout per stage (unchanged from the approved faces) */
-const STAGE_FACE = {
+export const STAGE_FACE = {
   1: { beak: 13, cheek: null },
   2: { beak: 24, cheek: { dx: 33, dy: 28, r: 7.5 } },
   3: { beak: 32, cheek: { dx: 40, dy: 30, r: 9 } },
