@@ -17,7 +17,7 @@ void main() {
       await GetIt.instance<AppSession>().refresh();
 
       await pumpAppRoute(tester, '/today');
-      expect(find.text('P01 Welcome'), findsOneWidget);
+      expect(currentPath(tester), '/welcome');
       await disposeApp(tester);
     });
 
@@ -25,7 +25,7 @@ void main() {
       await setUpTestScope();
 
       await pumpAppRoute(tester, '/today');
-      expect(find.text('P08 Today'), findsOneWidget);
+      expect(currentPath(tester), '/today');
       await disposeApp(tester);
     });
 
@@ -36,7 +36,7 @@ void main() {
       await session.refresh();
 
       await pumpAppRoute(tester, '/today');
-      expect(find.text('P07 Paywall'), findsOneWidget);
+      expect(currentPath(tester), '/paywall');
       await disposeApp(tester);
     });
 
@@ -47,7 +47,7 @@ void main() {
       await session.refresh();
 
       await pumpAppRoute(tester, '/paywall');
-      expect(find.text('P07 Paywall'), findsOneWidget);
+      expect(currentPath(tester), '/paywall');
       await disposeApp(tester);
     });
 
@@ -59,7 +59,7 @@ void main() {
       await session.refresh();
 
       await pumpAppRoute(tester, '/today');
-      expect(find.text('P17 Parental gate'), findsOneWidget);
+      expect(currentPath(tester), '/parental-gate');
       await disposeApp(tester);
     });
 
@@ -71,7 +71,7 @@ void main() {
       await session.refresh();
 
       await pumpAppRoute(tester, '/kid-home');
-      expect(find.text('P17 Parental gate'), findsNothing);
+      expect(currentPath(tester), '/kid-home');
       await disposeApp(tester);
     });
   });

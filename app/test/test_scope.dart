@@ -11,6 +11,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:nestling/app/app.dart';
 import 'package:nestling/app/controllers.dart';
@@ -56,4 +57,11 @@ Future<void> disposeApp(WidgetTester tester) async {
   await tester.pumpWidget(Container());
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 100));
+}
+
+/// The router's current path. Screen-agnostic, so redirect tests keep
+/// passing when a placeholder view is replaced by the real screen.
+String currentPath(WidgetTester tester) {
+  final context = tester.element(find.byType(Navigator).first);
+  return GoRouter.of(context).routerDelegate.currentConfiguration.uri.path;
 }
