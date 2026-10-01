@@ -221,6 +221,7 @@ class PipRive extends StatefulWidget {
     this.onTap,
     this.size,
     this.riveEnabled = true,
+    this.onReady,
   });
 
   /// Growth stage. Chooses the artboard and the SVG fallback.
@@ -245,7 +246,21 @@ class PipRive extends StatefulWidget {
   /// though the widget renders correctly.
   final bool riveEnabled;
 
+  /// Called once with the imperative handle. Prefer this over [PipRive.of]
+  /// when the handle is needed next to the widget (a control row below it)
+  /// rather than below it: there is no descendant context there for [of] to
+  /// resolve. The handle object is stable for the life of the [State]; its
+  /// closures read the live view-model binding, and [PipRiveController.isBound]
+  /// reports when triggers will land.
+  final ValueChanged<PipRiveController>? onReady;
+
   /// Imperative handle, or `null` if there is no [PipRive] ancestor.
+  ///
+  /// The [context] must be *below* the [PipRive] — a descendant of its
+  /// element. A context from a sibling or from above (e.g. a `Builder`
+  /// wrapping both the widget and its control row) resolves to `null`,
+  /// silently: `findAncestorStateOfType` only walks up. When the handle is
+  /// needed next to the widget rather than below it, use [onReady] instead.
   static PipRiveController? of(BuildContext context) =>
       context.findAncestorStateOfType<_PipRiveState>()?.api;
 
@@ -261,13 +276,33 @@ class _PipRiveState extends State<PipRive> {
 
   rive.ViewModelInstance? _vmi;
 
+  @override
+  void initState() {
+    super.initState();
+    widget.onReady?.call(api);
+  }
+
   void _write(String property, double? value) {
     final vmi = _vmi;
     if (vmi == null) return;
     if (value == null) {
-      vmi.trigger(property)?.trigger();
+      final trigger = vmi.trigger(property);
+      assert(() {
+        if (trigger == null) {
+          debugPrint('PipRive: unknown trigger "$property".');
+        }
+        return true;
+      }(), 'missing trigger "$property"');
+      trigger?.trigger();
     } else {
-      vmi.number(property)?.value = value;
+      final number = vmi.number(property);
+      assert(() {
+        if (number == null) {
+          debugPrint('PipRive: unknown number "$property".');
+        }
+        return true;
+      }(), 'missing number "$property"');
+      if (number != null) number.value = value;
     }
   }
 
@@ -689,6 +724,7 @@ class PipJar extends StatefulWidget {
     this.onTap,
     this.size,
     this.riveEnabled = true,
+    this.onReady,
   });
 
   /// Coin level, 0..1.
@@ -703,7 +739,14 @@ class PipJar extends StatefulWidget {
   /// Set false to force the static SVG. See [PipRive.riveEnabled].
   final bool riveEnabled;
 
+  /// Called once with the imperative handle. See [PipRive.onReady]: prefer
+  /// this over [PipJar.of] for a control row next to the jar.
+  final ValueChanged<PipJarController>? onReady;
+
   /// Imperative handle, or `null` if there is no [PipJar] ancestor.
+  ///
+  /// The [context] must be *below* the [PipJar]. See [PipRive.of]: a context
+  /// from a sibling or from above resolves to `null`, silently.
   static PipJarController? of(BuildContext context) =>
       context.findAncestorStateOfType<_PipJarState>()?.api;
 
@@ -718,8 +761,23 @@ class _PipJarState extends State<PipJar> {
   );
   rive.ViewModelInstance? _vmi;
 
+  @override
+  void initState() {
+    super.initState();
+    widget.onReady?.call(api);
+  }
+
   void _write(String property, double? value) {
-    if (value == null) _vmi?.trigger(property)?.trigger();
+    final vmi = _vmi;
+    if (vmi == null || value != null) return;
+    final trigger = vmi.trigger(property);
+    assert(() {
+      if (trigger == null) {
+        debugPrint('PipJar: unknown trigger "$property".');
+      }
+      return true;
+    }(), 'missing trigger "$property"');
+    trigger?.trigger();
   }
 
   void _sync(rive.ViewModelInstance? vmi) {

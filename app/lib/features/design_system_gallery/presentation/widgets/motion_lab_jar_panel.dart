@@ -2,7 +2,8 @@
 //
 // The `Jar` artboard carries two view model properties: `fill` (0..1) and the
 // `drop` trigger. `fill` is declarative and slides live; `drop` is a 1.6 s
-// one-shot, so it is fired imperatively from a context below the [PipJar].
+// one-shot, fired imperatively through the handle [onController] hands the lab
+// (a sibling context cannot use `PipJar.of` — see `PipRive.of`).
 
 import 'package:flutter/material.dart';
 import 'package:nestling/core/design_system/design_system.dart';
@@ -14,6 +15,8 @@ class MotionLabJarPanel extends StatelessWidget {
     required this.motionEnabled,
     required this.riveEnabled,
     required this.onFillChanged,
+    required this.onController,
+    required this.onJarTap,
     required this.actions,
     super.key,
   });
@@ -29,47 +32,52 @@ class MotionLabJarPanel extends StatelessWidget {
 
   final ValueChanged<double> onFillChanged;
 
-  /// Built with a [BuildContext] below the [PipJar], so `PipJar.of(context)`
-  /// resolves. The lab supplies Drop from there.
-  final Widget Function(BuildContext jarContext) actions;
+  /// Receives the imperative handle once the [PipJar] binds it. The lab keeps
+  /// it to fire Drop from its button, the demo and the autoplay.
+  final ValueChanged<PipJarController> onController;
+
+  /// Tapping the jar itself. The lab drops coins through its kept handle.
+  final VoidCallback onJarTap;
+
+  /// The Drop row, supplied by the lab (it owns the kept handle).
+  final Widget actions;
 
   @override
   Widget build(BuildContext context) {
     return NestCard(
-      child: Builder(
-        builder: (jarContext) => Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: PipJar(
-                fill: fill,
-                size: 200,
-                riveEnabled: riveEnabled,
-                onTap: () => PipJar.of(jarContext)?.drop(),
-              ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: PipJar(
+              fill: fill,
+              size: 200,
+              riveEnabled: riveEnabled,
+              onReady: onController,
+              onTap: onJarTap,
             ),
-            const SizedBox(height: NestSpacing.s2),
-            Text(
-              'fill = ${fill.toStringAsFixed(2)}',
-              style: context.nestText.bodySmallStrong,
-              textAlign: TextAlign.center,
-            ),
-            Text(
-              'artboard Jar · machine Jar · svg jar_coins.svg',
-              style: context.nestText.caption,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: NestSpacing.s2),
-            _FillSlider(
-              value: fill,
-              enabled: motionEnabled,
-              onChanged: onFillChanged,
-            ),
-            const SizedBox(height: NestSpacing.s3),
-            actions(jarContext),
-          ],
-        ),
+          ),
+          const SizedBox(height: NestSpacing.s2),
+          Text(
+            'fill = ${fill.toStringAsFixed(2)}',
+            style: context.nestText.bodySmallStrong,
+            textAlign: TextAlign.center,
+          ),
+          Text(
+            'artboard Jar · machine Jar · svg jar_coins.svg',
+            style: context.nestText.caption,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: NestSpacing.s2),
+          _FillSlider(
+            value: fill,
+            enabled: motionEnabled,
+            onChanged: onFillChanged,
+          ),
+          const SizedBox(height: NestSpacing.s3),
+          actions,
+        ],
       ),
     );
   }

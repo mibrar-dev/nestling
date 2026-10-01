@@ -232,7 +232,9 @@ class _MotionLabViewState extends State<MotionLabView>
         onStageChanged: (value) =>
             setState(() => _stage = PipStage.values[value - 1]),
         onMoodChanged: (value) => setState(() => _mood = value),
-        triggers: _pipTriggers,
+        onController: (controller) => _pip = controller,
+        onPipTap: () => _pip?.poke(),
+        triggers: _pipTriggerRow(),
       ),
       const SizedBox(height: NestSpacing.s4),
       const NestSectionLabel(label: 'Rive · coin jar'),
@@ -243,7 +245,9 @@ class _MotionLabViewState extends State<MotionLabView>
         motionEnabled: !_reduceMotion,
         riveEnabled: widget.riveEnabled,
         onFillChanged: (value) => setState(() => _fill = value),
-        actions: _jarActions,
+        onController: (controller) => _jar = controller,
+        onJarTap: () => _jar?.drop(),
+        actions: _jarDropButton(),
       ),
     ];
   }
@@ -309,10 +313,10 @@ class _MotionLabViewState extends State<MotionLabView>
     );
   }
 
-  /// Evolve and Tap, built with a context below the [PipRive] so
-  /// `PipRive.of` resolves.
-  Widget _pipTriggers(BuildContext pip) {
-    _pip = PipRive.of(pip);
+  /// Evolve and Tap. The [PipRive] handle comes from the panel's `onReady`
+  /// callback (`_pip`), not from a context lookup: the buttons sit next to
+  /// the rig, not below it, so `PipRive.of` cannot resolve there.
+  Widget _pipTriggerRow() {
     return Row(
       children: [
         Expanded(
@@ -344,9 +348,9 @@ class _MotionLabViewState extends State<MotionLabView>
     );
   }
 
-  /// Drop, built with a context below the [PipJar] so `PipJar.of` resolves.
-  Widget _jarActions(BuildContext jar) {
-    _jar = PipJar.of(jar);
+  /// Drop. Same kept-handle story as [_pipTriggerRow]: `PipJar.of` cannot
+  /// resolve from a sibling context.
+  Widget _jarDropButton() {
     return NestButton(
       label: 'Drop coins',
       leading: const Icon(Icons.savings_outlined),
@@ -691,7 +695,15 @@ class _MotionLabViewState extends State<MotionLabView>
         await _reveal(_cardKeyFor(asset));
         await settle(600);
         if (!mounted) return;
-        _play(asset);
+        // Replay 3× with a static gap so a recording captures at least one
+        // full burst even if its start overlaps the scroll-settle.
+        for (var i = 0; i < 3; i++) {
+          _play(asset);
+          await Future<void>.delayed(
+            _lottieDuration(asset) + const Duration(milliseconds: 600),
+          );
+          if (!mounted) return;
+        }
       case 'play_all':
         await settle(2000);
         if (!mounted) return;
