@@ -1,4 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:nestling/features/today/domain/entities/today_item.dart';
 import 'package:nestling/features/today/domain/today_repository.dart';
 import 'package:nestling/features/today/presentation/bloc/today_event.dart';
 import 'package:nestling/features/today/presentation/bloc/today_state.dart';
@@ -15,13 +16,14 @@ class TodayBloc extends Bloc<TodayEvent, TodayState> {
     Emitter<TodayState> emit,
   ) async {
     emit(state.copyWith(status: TodayStatus.loading));
-    try {
-      final items = await _repository.getItems();
-      emit(state.copyWith(status: TodayStatus.loaded, items: items));
-    } on Exception catch (e) {
-      emit(
-        state.copyWith(status: TodayStatus.failure, errorMessage: e.toString()),
-      );
-    }
+    await emit.forEach<List<TodayItem>>(
+      _repository.watchItems(),
+      onData: (items) =>
+          state.copyWith(status: TodayStatus.loaded, items: items),
+      onError: (error, _) => state.copyWith(
+        status: TodayStatus.failure,
+        errorMessage: error.toString(),
+      ),
+    );
   }
 }

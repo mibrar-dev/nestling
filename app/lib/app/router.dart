@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nestling/app/controllers.dart';
+import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/approvals/approvals_routes.dart';
 import 'package:nestling/features/auth/auth_routes.dart';
@@ -44,7 +45,23 @@ class ParentShell extends StatelessWidget {
   }
 }
 
-GoRouter buildAppRouter(AppModeController appMode) {
+/// Locations that belong to the P01→P07 onboarding flow. Anything else
+/// redirects to `/welcome` until onboarding completes.
+const Set<String> _onboardingLocations = <String>{
+  '/welcome',
+  '/value-tour',
+  '/create-account',
+  '/privacy',
+  '/add-children',
+  '/pocket-money-setup',
+  '/paywall',
+};
+
+GoRouter buildAppRouter(
+  AppModeController appMode, {
+  AppSession? session,
+  String? initialLocation,
+}) {
   // Debug-only motion-QA entry: `--dart-define=MOTION_AUTOPLAY=<name>`
   // boots straight into the motion lab so `simctl recordVideo` captures a
   // single animation without manual navigation. `--dart-define=
@@ -53,14 +70,29 @@ GoRouter buildAppRouter(AppModeController appMode) {
   const autoplay = String.fromEnvironment('MOTION_AUTOPLAY');
   const pipAutoplay = String.fromEnvironment('PIP_LAB_AUTOPLAY');
   return GoRouter(
-    initialLocation: pipAutoplay.isNotEmpty
-        ? DesignSystemGalleryRoutePaths.pipLab
-        : autoplay.isNotEmpty
-        ? DesignSystemGalleryRoutePaths.motionLab
-        : DesignSystemGalleryRoutePaths.gallery,
-    refreshListenable: appMode,
+    initialLocation:
+        initialLocation ??
+        (pipAutoplay.isNotEmpty
+            ? DesignSystemGalleryRoutePaths.pipLab
+            : autoplay.isNotEmpty
+            ? DesignSystemGalleryRoutePaths.motionLab
+            : DesignSystemGalleryRoutePaths.gallery),
+    refreshListenable: session == null
+        ? appMode
+        : Listenable.merge([appMode, session]),
     redirect: (context, state) {
       final location = state.matchedLocation;
+      if (session != null) {
+        final onboarded = session.onboardingComplete;
+        if (!onboarded && !_onboardingLocations.contains(location)) {
+          return OnboardingRoutePaths.welcome;
+        }
+        if (onboarded &&
+            session.trialExpired &&
+            location != PaywallRoutePaths.paywall) {
+          return PaywallRoutePaths.paywall;
+        }
+      }
       const parentOnly = <String>[
         '/today',
         '/quests',

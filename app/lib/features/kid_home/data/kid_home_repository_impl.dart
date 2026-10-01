@@ -1,14 +1,173 @@
-import 'package:nestling/features/kid_home/data/kid_home_fake_data_source.dart';
+import 'package:drift/drift.dart';
+import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/pin_hash.dart' as pin_hash;
+import 'package:nestling/core/data/seed.dart';
+import 'package:nestling/core/data/stream_combine.dart';
+import 'package:nestling/features/kid_home/domain/entities/kid_child.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_quest.dart';
 import 'package:nestling/features/kid_home/domain/kid_home_repository.dart';
 
+/// Drift-backed [KidHomeRepository].
 class KidHomeRepositoryImpl implements KidHomeRepository {
-  const new({required this._dataSource});
+  new({required this._db});
 
-  final KidHomeFakeDataSource _dataSource;
+  final AppDatabase _db;
 
   @override
-  Future<List<KidQuest>> getItems() {
-    return Future.value(_dataSource.getItems());
+  Future<List<KidQuest>> getItems() => watchItems().first;
+
+  @override
+  Stream<List<KidQuest>> watchItems() {
+    return watchActiveChild().asyncExpand((kid) {
+      if (kid == null) return Stream.value(<KidQuest>[]);
+      return combineLatest2(
+        _db.watchActiveQuests(Seed.familyId),
+        _db.watchCompletionsForChild(kid.id),
+      ).map((parts) {
+        final quests = parts[0] as List<Quest>;
+        final completions = parts[1] as List<QuestCompletion>;
+        final mine = quests.where((q) => q.assigneeChildId == kid.id).toList()
+          ..sort((a, b) => a.title.compareTo(b.title));
+        return mine.map((q) {
+          final rows = completions.where((c) => c.questId == q.id).toList()
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          final status = rows.isEmpty ? 'to_do' : rows.first.status;
+          return KidQuest(
+            id: '${q.id}:${kid.id}',
+            title: q.title,
+            detail: _detail(status, q.coins),
+            questId: q.id,
+            icon: q.icon,
+            coins: q.coins,
+            status: status,
+          );
+        }).toList();
+      });
+    });
   }
+
+  @override
+  Stream<List<KidChild>> watchProfiles() {
+    return _db
+        .watchChildren(Seed.familyId)
+        .map((rows) => rows.map(_toChild).toList());
+  }
+
+  @override
+  Stream<KidChild?> watchActiveChild() {
+    return _db.watchAppState().asyncExpand((state) {
+      final id = state?.activeChildId;
+      if (id == null) return Stream.value(null);
+      return _db
+          .watchChild(id)
+          .map((row) => row == null ? null : _toChild(row));
+    });
+  }
+
+  @override
+  List<String> stepsFor(String questId) {
+    return _steps[questId] ?? _defaultSteps;
+  }
+
+  @override
+  Future<bool> verifyPin(String childId, String pin) async {
+    final row = await (_db.select(
+      _db.children,
+    )..where((c) => c.id.equals(childId))).getSingleOrNull();
+    final hash = row?.pinHash;
+    if (hash == null) return true;
+    return pin_hash.verifyPin(pin, hash);
+  }
+
+  @override
+  Future<void> completeQuest(String childId, String questId) async {
+    final quest = await (_db.select(
+      _db.quests,
+    )..where((q) => q.id.equals(questId))).getSingleOrNull();
+    if (quest == null) return;
+    final existing =
+        await (_db.select(_db.questCompletions)
+              ..where(
+                (c) => c.questId.equals(questId) & c.childId.equals(childId),
+              )
+              ..orderBy([
+                (c) => OrderingTerm(
+                  expression: c.createdAt,
+                  mode: OrderingMode.desc,
+                ),
+              ]))
+            .get();
+    final now = DateTime.now().toUtc();
+    if (existing.isNotEmpty &&
+        (existing.first.status == 'to_do' ||
+            existing.first.status == 'not_yet')) {
+      await (_db.update(
+        _db.questCompletions,
+      )..where((c) => c.id.equals(existing.first.id))).write(
+        QuestCompletionsCompanion(
+          status: const Value('done_pending'),
+          createdAt: Value(now),
+        ),
+      );
+      return;
+    }
+    await _db
+        .into(_db.questCompletions)
+        .insert(
+          QuestCompletionsCompanion.insert(
+            questId: questId,
+            childId: childId,
+            familyId: Seed.familyId,
+            status: const Value('done_pending'),
+            coins: Value(quest.coins),
+            createdAt: Value(now),
+          ),
+        );
+  }
+
+  KidChild _toChild(ChildrenData row) {
+    return KidChild(
+      id: row.id,
+      nickname: row.nickname,
+      avatarColour: row.avatarColour,
+      coins: row.coins,
+      pipStyle: row.pipStyle,
+      pipSkin: row.pipSkin,
+      pipAccessory: row.pipAccessory,
+      pipStage: row.pipStage,
+      happiness: row.happiness,
+      pinSet: row.pinHash != null,
+    );
+  }
+
+  static String _detail(String status, int coins) {
+    switch (status) {
+      case 'done_pending':
+        return "Waiting for Mum's thumbs-up · +$coins";
+      case 'approved':
+        return 'Done · +$coins';
+      default:
+        return 'To do · +$coins';
+    }
+  }
+
+  static const List<String> _defaultSteps = <String>[
+    'Have a go together first',
+    'Finish the whole job',
+    'Tidy up afterwards',
+  ];
+
+  static const Map<String, List<String>> _steps = <String, List<String>>{
+    'q-tidy': <String>[
+      'Clothes in the basket',
+      'Toys in the box',
+      'Books on the shelf',
+    ],
+    'q-bed': <String>['Pull up the duvet', 'Plump the pillow', 'Teddy on top'],
+    'q-dishwasher': <String>[
+      'Careful with sharp things',
+      'Plates on the shelf',
+      'Cups on the hooks',
+    ],
+  };
 }

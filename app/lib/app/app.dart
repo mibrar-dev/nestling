@@ -3,6 +3,7 @@ import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nestling/app/controllers.dart';
 import 'package:nestling/app/router.dart';
+import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:provider/provider.dart';
 
@@ -16,7 +17,10 @@ MediaQueryData _clampTextScaler(BuildContext context, MediaQueryData data) {
 }
 
 class NestlingApp extends StatefulWidget {
-  const new({super.key});
+  const new({super.key, this.initialRoute});
+
+  /// INITIAL_ROUTE override from launch flags; null keeps the router default.
+  final String? initialRoute;
 
   @override
   State<NestlingApp> createState() => _NestlingAppState();
@@ -28,7 +32,11 @@ class _NestlingAppState extends State<NestlingApp> {
   @override
   void initState() {
     super.initState();
-    _router = buildAppRouter(GetIt.instance<AppModeController>());
+    _router = buildAppRouter(
+      GetIt.instance<AppModeController>(),
+      session: GetIt.instance<AppSession>(),
+      initialLocation: widget.initialRoute,
+    );
   }
 
   @override

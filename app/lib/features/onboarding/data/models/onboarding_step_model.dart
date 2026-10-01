@@ -3,7 +3,7 @@ import 'package:nestling/features/onboarding/domain/entities/onboarding_step.dar
 class OnboardingStepModel extends OnboardingStep {
   const new({required super.id, required super.title, required super.detail});
 
-  factory fromJson(Map<String, dynamic> json) {
+  factory OnboardingStepModel.fromJson(Map<String, dynamic> json) {
     return OnboardingStepModel(
       id: json['id'] as String,
       title: json['title'] as String,

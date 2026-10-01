@@ -1,0 +1,493 @@
+// Nestling — seed data for local-only development and screenshots.
+//
+// Three variants, selected with `--dart-define=SEED=…`:
+// * `demo` — the exact spec family (DESIGN_SPEC §5). Every number visible in
+//   the designs (P08, P10–P12, P14, K03, K08, K09, K11) is asserted in tests.
+// * `empty` — onboarded parent, no children or quests (P08b).
+// * `fresh` — nothing at all: app_state only, onboarding incomplete.
+//
+// Date anchor: the designs say "Sat 4 Oct", but 4 Oct 2026 is a Sunday, so
+// the seed uses Sat 3 Oct 2026 (and Sat 26 Sep 2026 for "last Saturday") and
+// every weekday label renders correctly via `london_time.dart`.
+
+import 'package:drift/drift.dart';
+import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/pin_hash.dart';
+
+abstract final class Seed {
+  static const String familyId = 'fam1';
+
+  // Sat 3 Oct 2026 (BST = UTC+1).
+  static DateTime utc(int month, int day, int hour, [int minute = 0]) =>
+      DateTime.utc(2026, month, day, hour, minute);
+
+  static Future<void> demo(AppDatabase db) async {
+    await db.clearAll();
+    await _family(db);
+    await _members(db);
+    await _childrenDemo(db);
+    await _questsDemo(db);
+    await _completionsDemo(db);
+    await _ledgerDemo(db);
+    await _goalsDemo(db);
+    await _rewardsDemo(db);
+    await _badgesDemo(db);
+    await _wardrobeDemo(db);
+    await _settingsDemo(db);
+    await db
+        .into(db.appState)
+        .insert(
+          AppStateCompanion.insert(
+            id: const Value(1),
+            onboardingComplete: const Value(true),
+            subscriptionStatus: const Value('active'),
+            trialStart: Value(utc(9, 19, 8)),
+            activeChildId: const Value('maya'),
+            appMode: const Value('parent'),
+          ),
+        );
+  }
+
+  static Future<void> empty(AppDatabase db) async {
+    await db.clearAll();
+    await _family(db);
+    await db
+        .into(db.members)
+        .insert(
+          MembersCompanion.insert(
+            id: 'sarah',
+            familyId: familyId,
+            name: 'Sarah',
+          ),
+        );
+    await _settingsDemo(db);
+    await db
+        .into(db.appState)
+        .insert(
+          AppStateCompanion.insert(
+            id: const Value(1),
+            onboardingComplete: const Value(true),
+            subscriptionStatus: const Value('trial'),
+            trialStart: Value(DateTime.now().toUtc()),
+            appMode: const Value('parent'),
+          ),
+        );
+  }
+
+  static Future<void> fresh(AppDatabase db) async {
+    await db.clearAll();
+    await db
+        .into(db.appState)
+        .insert(
+          AppStateCompanion.insert(
+            id: const Value(1),
+            appMode: const Value('parent'),
+          ),
+        );
+  }
+
+  // -- shared -------------------------------------------------------------
+
+  static Future<void> _family(AppDatabase db) async {
+    await db
+        .into(db.families)
+        .insert(
+          FamiliesCompanion.insert(
+            id: familyId,
+            name: const Value('Nestling'),
+            payoutDay: const Value(6),
+            coinValuePencePerCoin: const Value(1),
+            pocketMoneyMode: const Value('both'),
+          ),
+        );
+  }
+
+  static Future<void> _members(AppDatabase db) async {
+    await db
+        .into(db.members)
+        .insert(
+          MembersCompanion.insert(
+            id: 'sarah',
+            familyId: familyId,
+            name: 'Sarah',
+          ),
+        );
+    await db
+        .into(db.members)
+        .insert(
+          MembersCompanion.insert(
+            id: 'james',
+            familyId: familyId,
+            name: 'James',
+            role: const Value('co-parent'),
+            inviteStatus: const Value('invited'),
+          ),
+        );
+  }
+
+  static Future<void> _childrenDemo(AppDatabase db) async {
+    await db
+        .into(db.children)
+        .insert(
+          ChildrenCompanion.insert(
+            id: 'maya',
+            familyId: familyId,
+            nickname: 'Maya',
+            ageBand: const Value('7-9'),
+            ageYears: const Value(9),
+            avatarColour: const Value('lilac'),
+            pinHash: Value(hashPin('1234')),
+            pipStyle: const Value('mochi'),
+            pipSkin: const Value('sunny'),
+            pipAccessory: const Value('none'),
+            pipStage: const Value(3),
+            pipTotalCoins: const Value(175),
+            coins: const Value(120),
+            happiness: const Value(4),
+            happyDays: const Value(4),
+            weeklyBasePence: const Value(300),
+          ),
+        );
+    await db
+        .into(db.children)
+        .insert(
+          ChildrenCompanion.insert(
+            id: 'leo',
+            familyId: familyId,
+            nickname: 'Leo',
+            ageBand: const Value('4-6'),
+            ageYears: const Value(6),
+            avatarColour: const Value('peach'),
+            pipStyle: const Value('bolt'),
+            pipSkin: const Value('sky'),
+            pipAccessory: const Value('none'),
+            pipStage: const Value(2),
+            pipTotalCoins: const Value(60),
+            coins: const Value(45),
+            happiness: const Value(4),
+            happyDays: const Value(3),
+            weeklyBasePence: const Value(150),
+          ),
+        );
+  }
+
+  static Future<void> _questsDemo(AppDatabase db) async {
+    Future<void> quest(
+      String id,
+      String title,
+      String icon,
+      int coins,
+      String? assignee, [
+      String repeat = 'weekly',
+    ]) {
+      return db
+          .into(db.quests)
+          .insert(
+            QuestsCompanion.insert(
+              id: id,
+              familyId: familyId,
+              title: title,
+              icon: Value(icon),
+              coins: Value(coins),
+              repeatRule: Value(repeat),
+              assigneeChildId: assignee == null
+                  ? const Value.absent()
+                  : Value(assignee),
+            ),
+          );
+    }
+
+    // Maya — 6 active ("4 of 6" on P08).
+    await quest(
+      'q-dishwasher',
+      'Empty the dishwasher',
+      'dishwasher',
+      15,
+      'maya',
+    );
+    await quest('q-reading', 'Reading – 20 minutes', 'book', 10, 'maya');
+    await quest('q-bins', 'Put the bins out', 'bins', 15, 'maya');
+    await quest('q-tidy', 'Tidy your bedroom', 'bed', 15, 'maya');
+    await quest('q-hoover', 'Hoover the stairs', 'hoover', 20, 'maya');
+    await quest('q-table', 'Lay the table', 'plate', 10, 'maya');
+    // Leo — 4 active ("2 of 4" on P08).
+    await quest('q-bed', 'Make your bed', 'bed', 5, 'leo');
+    await quest('q-biscuit', 'Feed Biscuit the cat', 'paw', 5, 'leo');
+    await quest('q-bag', 'Pack school bag', 'bag', 5, 'leo');
+    await quest('q-plants', 'Water the plants', 'leaf', 10, 'leo');
+    // Anyone — 2 active (P10 "Active (12)": 6 + 4 + 2).
+    await quest('q-washing', 'Help with the washing', 'shirt', 15, null);
+    await quest('q-living', 'Tidy the living room', 'sofa', 10, null);
+  }
+
+  static Future<void> _completionsDemo(AppDatabase db) async {
+    Future<void> completion(
+      String quest,
+      String child,
+      String status,
+      int coins,
+      DateTime created, [
+      DateTime? decided,
+    ]) {
+      return db
+          .into(db.questCompletions)
+          .insert(
+            QuestCompletionsCompanion.insert(
+              questId: quest,
+              childId: child,
+              familyId: familyId,
+              status: Value(status),
+              coins: Value(coins),
+              createdAt: Value(created),
+              decidedAt: decided == null
+                  ? const Value.absent()
+                  : Value(decided),
+            ),
+          );
+    }
+
+    // 3 awaiting approval (P11 "Waiting for you (3)").
+    await completion(
+      'q-dishwasher',
+      'maya',
+      'done_pending',
+      15,
+      utc(10, 3, 7, 12),
+    );
+    await completion('q-table', 'maya', 'done_pending', 10, utc(10, 3, 7, 5));
+    await completion('q-bed', 'leo', 'done_pending', 5, utc(10, 3, 6, 58));
+    // Approved this week (drive P08 progress + ledger).
+    await completion(
+      'q-bins',
+      'maya',
+      'approved',
+      15,
+      utc(10, 2, 16, 40),
+      utc(10, 2, 19, 2),
+    );
+    await completion(
+      'q-hoover',
+      'maya',
+      'approved',
+      20,
+      utc(10, 1, 16, 20),
+      utc(10, 1, 18, 45),
+    );
+    await completion(
+      'q-bag',
+      'leo',
+      'approved',
+      5,
+      utc(10, 2, 7, 30),
+      utc(10, 2, 8, 15),
+    );
+    // Still to do.
+    for (final q in <List<String>>[
+      ['q-reading', 'maya', '10'],
+      ['q-tidy', 'maya', '15'],
+      ['q-biscuit', 'leo', '5'],
+      ['q-plants', 'leo', '10'],
+      ['q-washing', 'maya', '15'],
+      ['q-living', 'leo', '10'],
+    ]) {
+      await completion(q[0], q[1], 'to_do', int.parse(q[2]), utc(10, 3, 6));
+    }
+  }
+
+  static Future<void> _ledgerDemo(AppDatabase db) async {
+    Future<void> entry(
+      String child,
+      String type,
+      int pence,
+      String note,
+      DateTime date,
+    ) {
+      return db
+          .into(db.ledgerEntries)
+          .insert(
+            LedgerEntriesCompanion.insert(
+              familyId: familyId,
+              childId: child,
+              type: type,
+              amountPence: pence,
+              note: Value(note),
+              date: Value(date),
+            ),
+          );
+    }
+
+    // Previous week, settled by the 26 Sep payout.
+    await entry(
+      'maya',
+      'weekly_base',
+      300,
+      'Weekly pocket money',
+      utc(9, 20, 8),
+    );
+    await entry('maya', 'quest_bonus', 12, 'Put the bins out', utc(9, 21, 17));
+    await entry('maya', 'quest_bonus', 68, 'Hoover the stairs', utc(9, 25, 17));
+    await entry('maya', 'payout', -380, 'Paid · Sat 26 Sep', utc(9, 26, 9));
+    await entry(
+      'leo',
+      'weekly_base',
+      150,
+      'Weekly pocket money',
+      utc(9, 20, 8),
+    );
+    await entry('leo', 'quest_bonus', 40, 'Pack school bag', utc(9, 24, 8));
+    await entry('leo', 'payout', -190, 'Paid · Sat 26 Sep', utc(9, 26, 9));
+    // This week: Maya is owed £4.20 = £3.00 base + £1.20 quests (P12).
+    await entry(
+      'maya',
+      'weekly_base',
+      300,
+      'Weekly pocket money',
+      utc(10, 3, 8),
+    );
+    await entry('maya', 'quest_bonus', 12, 'Put the bins out', utc(10, 2, 19));
+    await entry('maya', 'quest_bonus', 40, 'Hoover the stairs', utc(10, 1, 18));
+    await entry(
+      'maya',
+      'quest_bonus',
+      40,
+      'Help with the washing',
+      utc(9, 30, 17),
+    );
+    await entry('maya', 'quest_bonus', 28, 'Tidy your bedroom', utc(9, 29, 17));
+    await entry(
+      'maya',
+      'gift',
+      1000,
+      'Birthday money (added by Mum)',
+      utc(9, 28, 10),
+    );
+    await entry('maya', 'spend', -200, 'Comic', utc(9, 30, 15));
+    await entry(
+      'maya',
+      'savings_move',
+      1000,
+      'Birthday money → Lego fund',
+      utc(9, 28, 10, 30),
+    );
+    await entry('maya', 'savings_move', 550, 'Jar → Lego fund', utc(9, 30, 16));
+    // Leo is owed £2.10 = £1.50 base + £0.60 quests (P13).
+    await entry(
+      'leo',
+      'weekly_base',
+      150,
+      'Weekly pocket money',
+      utc(10, 3, 8),
+    );
+    await entry('leo', 'quest_bonus', 35, 'Pack school bag', utc(10, 2, 8));
+    await entry('leo', 'quest_bonus', 25, 'Make your bed', utc(9, 30, 8));
+  }
+
+  static Future<void> _goalsDemo(AppDatabase db) async {
+    await db
+        .into(db.savingsGoals)
+        .insert(
+          SavingsGoalsCompanion.insert(
+            id: 'goal-lego',
+            familyId: familyId,
+            childId: 'maya',
+            title: 'Lego Friends set',
+            targetPence: 2499,
+            savedPence: const Value(1550),
+          ),
+        );
+  }
+
+  static Future<void> _rewardsDemo(AppDatabase db) async {
+    Future<void> reward(String id, String title, String icon, int price) {
+      return db
+          .into(db.rewards)
+          .insert(
+            RewardsCompanion.insert(
+              id: id,
+              familyId: familyId,
+              title: title,
+              icon: Value(icon),
+              coinPrice: price,
+            ),
+          );
+    }
+
+    await reward('r-screen', '30 min extra screen time', 'tv', 50);
+    await reward('r-film', 'Pick Friday film', 'film', 80);
+    await reward('r-bedtime', 'Stay up 15 min later', 'moon', 60);
+    await reward('r-baking', 'Baking together', 'cake', 100);
+    await reward('r-cafe', 'Trip to the park café', 'coffee', 150);
+    await reward('r-dinner', 'Choose dinner', 'plate', 90);
+  }
+
+  static Future<void> _badgesDemo(AppDatabase db) async {
+    Future<void> badge(String id, {required String title}) {
+      return db
+          .into(db.badges)
+          .insert(BadgesCompanion.insert(id: id, title: title));
+    }
+
+    await badge('first-quest', title: 'First quest');
+    await badge('bed-maker-7', title: 'Bed maker ×7');
+    await badge('kind-helper', title: 'Kind helper');
+    await badge('bookworm', title: 'Bookworm');
+    await badge('tidy-champion', title: 'Tidy champion');
+    await badge('early-bird', title: 'Early bird');
+    await badge('super-saver', title: 'Super saver');
+    await badge('pet-friend', title: 'Pet friend');
+
+    Future<void> earned(String badge, String child, DateTime at) {
+      return db
+          .into(db.earnedBadges)
+          .insert(
+            EarnedBadgesCompanion.insert(
+              badgeId: badge,
+              childId: child,
+              familyId: familyId,
+              earnedAt: Value(at),
+            ),
+          );
+    }
+
+    await earned('first-quest', 'maya', utc(9, 21, 10));
+    await earned('bed-maker-7', 'maya', utc(9, 28, 10));
+    await earned('kind-helper', 'maya', utc(9, 29, 10));
+    await earned('bookworm', 'maya', utc(10, 1, 10));
+    await earned('first-quest', 'leo', utc(9, 24, 10));
+  }
+
+  static Future<void> _wardrobeDemo(AppDatabase db) async {
+    Future<void> item(
+      String child,
+      String item, {
+      required bool owned,
+      required int price,
+    }) {
+      return db
+          .into(db.pipWardrobe)
+          .insert(
+            PipWardrobeCompanion.insert(
+              childId: child,
+              item: item,
+              owned: Value(owned),
+              priceCoins: Value(price),
+            ),
+          );
+    }
+
+    await item('maya', 'scarf', owned: true, price: 0);
+    await item('maya', 'sunhat', owned: true, price: 0);
+    await item('maya', 'wellies', owned: false, price: 40);
+    await item('maya', 'crown', owned: false, price: 120);
+    await item('leo', 'sunhat', owned: true, price: 0);
+    await item('leo', 'scarf', owned: false, price: 30);
+    await item('leo', 'wellies', owned: false, price: 40);
+    await item('leo', 'crown', owned: false, price: 120);
+  }
+
+  static Future<void> _settingsDemo(AppDatabase db) async {
+    await db
+        .into(db.settings)
+        .insert(SettingsCompanion.insert(familyId: familyId));
+  }
+}

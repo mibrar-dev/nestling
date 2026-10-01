@@ -29,7 +29,9 @@ environment:
 # versions available, run `flutter pub outdated`.
 dependencies:
   bloc: ^9.2.1
+  crypto: ^3.0.7
   cupertino_icons: ^1.0.8
+  drift: ^2.35.1
   equatable: ^3.0.0
   flutter:
     sdk: flutter
@@ -39,11 +41,16 @@ dependencies:
   go_router: ^18.0.2
   google_fonts: ^9.0.0
   lottie: ^3.6.1
+  path: ^1.9.1
+  path_provider: ^2.1.6
   provider: ^6.1.5+1
   rive: ^0.14.11
+  sqlite3_flutter_libs: ^0.6.0+eol
 
 dev_dependencies:
   bloc_test: ^10.0.0
+  build_runner: ^2.16.1
+  drift_dev: ^2.35.1
   flutter_lints: ^6.0.0
   flutter_test:
     sdk: flutter

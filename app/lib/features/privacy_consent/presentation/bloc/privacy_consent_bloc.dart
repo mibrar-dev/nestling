@@ -1,4 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:nestling/features/privacy_consent/domain/entities/consent_option.dart';
 import 'package:nestling/features/privacy_consent/domain/privacy_consent_repository.dart';
 import 'package:nestling/features/privacy_consent/presentation/bloc/privacy_consent_event.dart';
 import 'package:nestling/features/privacy_consent/presentation/bloc/privacy_consent_state.dart';
@@ -16,16 +17,14 @@ class PrivacyConsentBloc
     Emitter<PrivacyConsentState> emit,
   ) async {
     emit(state.copyWith(status: PrivacyConsentStatus.loading));
-    try {
-      final items = await _repository.getItems();
-      emit(state.copyWith(status: PrivacyConsentStatus.loaded, items: items));
-    } on Exception catch (e) {
-      emit(
-        state.copyWith(
-          status: PrivacyConsentStatus.failure,
-          errorMessage: e.toString(),
-        ),
-      );
-    }
+    await emit.forEach<List<ConsentOption>>(
+      _repository.watchItems(),
+      onData: (items) =>
+          state.copyWith(status: PrivacyConsentStatus.loaded, items: items),
+      onError: (error, _) => state.copyWith(
+        status: PrivacyConsentStatus.failure,
+        errorMessage: error.toString(),
+      ),
+    );
   }
 }

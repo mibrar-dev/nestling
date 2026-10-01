@@ -5,6 +5,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:nestling/app/app.dart';
 import 'package:nestling/app/controllers.dart';
 import 'package:nestling/app/di.dart';
+import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/app_session.dart';
+import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 
 import 'test_harness.dart';
@@ -33,7 +36,13 @@ void main() {
   group('app shell', () {
     setUpAll(() async {
       GoogleFonts.config.allowRuntimeFetching = false;
-      await configureDependencies();
+      // In-memory database: the file database needs path_provider, which
+      // has no test implementation. Seed.demo marks onboarding complete so
+      // the router keeps its default initial location.
+      await GetIt.instance.reset();
+      await configureDependencies(database: AppDatabase.memory());
+      await Seed.demo(GetIt.instance<AppDatabase>());
+      await GetIt.instance<AppSession>().refresh();
     });
 
     testWidgets('clamps the text scaler to 1.0-1.3', (tester) async {
