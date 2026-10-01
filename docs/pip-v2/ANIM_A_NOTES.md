@@ -8,10 +8,10 @@ consecutive strip frames (0/15/30/45/60/75/90 % of each animation).
 
 - `rive tools/rive/mochi --verify` → 0 errors, 0 warnings
 - `rive inspect tools/rive/mochi --summary` → `problems: []`
-- `rive tools/rive/mochi --once` → `build/pip_mochi.riv`, 159,588 bytes
+- `rive tools/rive/mochi --once` → `build/pip_mochi.riv`, 162,596 bytes
   (`RIVE` magic, format major 7), md5
-  `d7243d2cabc28d95785cd92b202a7938` (supersedes `2abdf1e7…`, `0394fc70…`,
-  `e5e43439…`)
+  `b8cc06193274f434ea1268a746455a9f` (supersedes `b9a68264…`, `c2c1a14c…`,
+  `d7243d2c…`, `2abdf1e7…`, `0394fc70…`, `e5e43439…`)
 
 ## Motion % (higher = more obvious; idle is ambient by design)
 
@@ -53,7 +53,22 @@ consecutive strip frames (0/15/30/45/60/75/90 % of each animation).
    about the open-eye pivot with stroke authored at 6. The timeline pop keys
    were removed (nothing left to animate). Rebuild md5 `d7243d2c…`.
 
-## Bridge fix (outlines meeting between the eyes at 1.3×)
+## Shock-take rework (owner: scaled eyes always read as spectacles)
+
+   New definition, all stages: eyes keep idle size/position; BIG pupils
+   shifted slightly up (looking up in shock); two short brow arcs HIGH on
+   the outer half above each eye (`brow_prim` with side); round "o" beak
+   (approved art, and the idle closed `beak_top` now hides under it via a
+   new `beak_top_n` node keyed in all 7 Body timelines — approved surprised
+   has no closed beak); sprung tuft, jump-back, flared wings, "!" as before.
+   Quirk found: standalone brow nodes with correct ids/keys would not
+   render (shape proven fine in isolation), so the arcs live inside the
+   surprised eye nodes, which provably render. Brows ride the eye-variant
+   opacity keys, no separate keys needed.
+   Entries *into* surprised are hard-cut (duration 0) on all Eyes layers — a shock take snaps.
+   Rebuild md5 `b8cc0619…`.
+
+   (Superseded below — the 1.15× approach still bridged at board scale:)
 
    At 1.3× the outlines nearly touched (2.6 px gap on s3). Surprised eyes are
    now dedicated shock geometry (`surprised_prims` in the generator): 1.15×

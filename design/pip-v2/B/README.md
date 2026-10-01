@@ -68,6 +68,10 @@ shell_top  shell_bottom  accessory_head  accessory_neck  accessory_face  fx
 * The eating seed is drawn INSIDE the head (wedged in the open beak, tilting
   with it) on the "seed enters" key frame; approach seeds and flying crumbs
   stay in screen-space `fx`.
+* Surprised eyes are idle-sized/positioned with small dot pupils (0.35R) plus
+  two raised brow arcs — shock reads in pupils + brows + round `o` beak +
+  sprung crest, never in stretched eyes. On wink frames the crest sits centred
+  so no dark mass crowds the closed eye.
 * All ink is 8 px, including mouth cavities (sized to keep a visible fill).
 * Sleepy frames on stages 2-4 wear a nightcap (deep blue cone, white brim,
   white pom) inside `accessory_head` — it is part of the sleepy key frames,

@@ -12,10 +12,10 @@ as ANIM_A: summed RGB diff > 36 on every 2nd pixel).
   (Stage1..Stage4 + PipStage), exactly 1 StateMachine with 3 StateMachineLayers
   per stage artboard (Body/Eyes/FX), 21 LinearAnimations per stage
 - Full `rive inspect --json` → 0 occurrences of "unresolved": 0 unresolved bindings
-- Binary: `app/assets/animations/rive/pip_bolt.riv` (159,599 bytes, bit-identical
+- Binary: `app/assets/animations/rive/pip_bolt.riv` (161,033 bytes, bit-identical
   copy of `tools/rive/bolt/build/pip_bolt.riv`, md5
-  `00daa07ab5f9bbd25a81e338dc38ee78`, rebuilt 2026-10-01 ~08:47 UTC from the
-  latest approved poses including the designer's final PROUD fix)
+  `dab5cdbf7069b8b1bb4893680fdf3dd1`, rebuilt 2026-10-01 ~13:23 UTC from the
+  latest approved poses (13:19 PROUD update) + orchestrator fix round below)
 
 ## Motion % (higher = more obvious; idle is ambient by design)
 
@@ -24,10 +24,10 @@ as ANIM_A: summed RGB diff > 36 on every 2nd pixel).
 | idle | 2.3% | 4.1% | 5.5% | 5.4% |
 | happy | 7.3% | 14.5% | 17.4% | 17.5% |
 | eating | 2.9% | 4.9% | 9.6% | 9.4% |
-| sleepy | 2.5% | 3.4% | 6.0% | 6.1% |
-| surprised | 5.3% | 8.6% | 10.8% | 10.9% |
+| sleepy | 2.5% | 3.5% | 5.8% | 6.5% |
+| surprised | 5.3% | 8.7% | 10.8% | 10.9% |
 | proud | 3.9% | 5.8% | 7.3% | 7.2% |
-| evolve | 20.9% | 24.1% | 26.3% | 25.6% |
+| evolve | 16.7% | 20.6% | 22.7% | 21.9% |
 
 Read off MOTION_BOARD: idle = breathe + tilt + crest sway (ambient); happy =
 0.82 squash → 24 px jump, wings fully up flapping ×2 (behind the head, ^^ +
@@ -97,14 +97,37 @@ clean wink, chest sparkle; evolve = centred glow ring + pop (largest motion).
 - Flutter: `flutter analyze` clean, `flutter test` all pass (no test edits).
   v1 `pip_rive.dart` untouched.
 
+## Orchestrator fix round (2026-10-01 ~13:15 UTC, rebuilt + re-rendered)
+
+1. SURPRISED — change of approach (owner saw "glasses" in the 1.3× scaled
+   whites). New definition on every stage: whites stay idle-sized (r16,
+   same 8 px outline, no scaling anywhere — the old geometry-xf 1.3× and
+   any node scale are gone); pupils shrink to centred dots (~35% of idle
+   pupil, r3.0); two short raised brow arcs (18 px wide, ink 8 px, floating
+   clear of the eye tops and of each other — never a bridge/frame); round
+   dark "o" beak; crest spring, 12 px jump-back, wing flare and "!" kept.
+   Strip frame 0 still shows idle (80 ms Eyes-layer entry blend); frames
+   1–6 hold the shock read with zero rings.
+2. SLEEPY nightcap sat on the eyes like a blindfold (node+origin shifts
+   cancelled out, net zero). Fixed to shift the node only, computed per
+   stage so the brim bottom ends above the brow line; the cap sits on top
+   of the head behind/above the crest base and both closed sleepy curves
+   are fully visible under it.
+3. EVOLVE carried the approved file's filled white disc (38% opacity →
+   grey wash on dark). The generator now drops filled-translucent prims
+   and keeps thin bright rings only (coin r72 + white r78/r43, max
+   93.6 px < 45% of 240) + sparkle; Pip stays fully visible and bright,
+   last frame clean. Evolve motion % fell 26.3→22.7% (fewer pixels under
+   the wash) and is still the highest by far.
+
 ## Design handoff (proud rebuilt from latest)
 
 Per T3 the designer was finishing PROUD poses during this build. All other
 moods were built first; at the end `design/pip-v2/B/poses/s*_proud_*.svg`
-were re-read (mtime 09:40 BST — designer re-ran build.mjs mid-task, fixing
-the T2 right-shift: eyes now mirrored about x=120 on all stages) and proud
-was re-harvested (wink + chest sparkle) + full matrix re-rendered. Proud
-strips Fletcher/songbird show centred symmetric wink + sparkle. This rig
+were re-read twice (mtimes 09:40 BST, then 09:45/13:19 BST updates — eyes
+mirrored about x=120 on all stages: s3 94/146, s4 95.56/144.44) and proud
+was re-harvested (wink + chest sparkle) + strips re-rendered from the
+latest files. Proud strips show centred symmetric wink + sparkle. This rig
 sidesteps the T2 bug by construction (idle rig + wink variant, never the
 proud pose's baked head transform), so faces stay symmetric per face.mjs.
 

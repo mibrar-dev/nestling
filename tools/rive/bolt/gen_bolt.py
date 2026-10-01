@@ -571,6 +571,12 @@ def build_rig(n, em, egg):
     except OSError:
         evprims=[]
     evfx = _by_group(evprims, "fx")
+    # Drop the filled translucent disc (renders grey on dark) — keep thin
+    # bright rings + sparkle only, like Mochi/Storybook.
+    evfx = [pp for pp in evfx if not (
+        (pp["style"].get("fill", "none") or "").upper() == "#FFFFFF"
+        and (pp["style"].get("stroke", "none") or "none") in ("none", "")
+        and float(pp["style"].get("opacity", "1")) < 1.0)]
     em.node_open("fx_ring", bodyC[0], bodyC[1], 8, opacity=0)
     ring_el = {"tag": "ellipse", "el": None, "style": {
         "fill": "none", "stroke": "#F4B400", "stroke-width": "5",
@@ -613,12 +619,44 @@ def build_rig(n, em, egg):
     em.shapes_for(tuft_p, tuftC, 16, "head_tuft")
     em.node_close(14)
     # eyes: 12 variant nodes
+    # SURPRISED (owner: no rings/glasses): idle-sized white, tiny 35% pupils
+    # centred, + short raised brow arcs. No scaling anywhere.
+    import copy as _copy
     for side in ("l", "r"):
         for v in EYE_VARS:
-            # Orchestrator call: the surprised variant reads as rings at
-            # board scale, so surprised reuses the normal open-eye geometry
-            # (scaled 1.3x symmetric by the eyesSurprised timeline).
-            vp = grp(f"eye_{side}", "open" if v == "surprised" else v)
+            if v == "surprised":
+                _open = grp(f"eye_{side}", "open")
+                vp = []
+                for _pp in _open:
+                    _q = {"tag": _pp["tag"], "el": _pp["el"], "style": dict(_pp["style"]),
+                          "opacity": 1.0, "groups": _pp["groups"], "matrix": _pp["matrix"]}
+                    _q["style"]["opacity"] = "1"
+                    f = (_q["style"].get("fill", "") or "").upper()
+                    if _pp["tag"] in ("circle", "ellipse") and f == "#1E1B3A":
+                        # pupil -> tiny dot ~35% (local r; matrix is translate-only)
+                        import xml.etree.ElementTree as _ET2
+                        _el = _ET2.fromstring(_ET2.tostring(_pp["el"], encoding="unicode"))
+                        if "r" in _el.attrib:
+                            _el.attrib["r"] = str(float(_el.attrib["r"]) * 0.35)
+                        _q["el"] = _el
+                    vp.append(_q)
+                # raised brow arc above this eye (ink, idle 8px weight, local coords)
+                import xml.etree.ElementTree as _ET3
+                # short + high: two separate arcs, never a bridge/frame
+                _brow_el = _ET3.fromstring(
+                    '<path xmlns="http://www.w3.org/2000/svg" d="M -9 -27 Q 0 -34 9 -27" />')
+                _brow_style = {"fill": "none", "stroke": "#1E1B3A", "stroke-width": "8",
+                               "stroke-linecap": "round", "stroke-linejoin": "round",
+                               "fill-opacity": "1", "stroke-opacity": "1", "opacity": "1"}
+                _bm = None
+                for _pp in _open:
+                    if _pp["tag"] in ("circle", "ellipse"):
+                        _bm = _pp["matrix"]; break
+                vp.append({"tag": "path", "el": _brow_el, "style": _brow_style,
+                           "opacity": 1.0, "groups": ("head", f"eye_{side}", "surprised"),
+                           "matrix": _bm if _bm is not None else IDENT_M})
+            else:
+                vp = grp(f"eye_{side}", v)
             node = f"eye_{side}_{v}"
             op = 1 if v == "open" else 0
             if vp:
@@ -632,11 +670,7 @@ def build_rig(n, em, egg):
             # reset paint alpha to 1 — visibility is driven by node opacity keys.
             for _pp in vp:
                 _pp["style"]["opacity"]="1"; _pp["opacity"]=1.0
-            # A node scale would scale stroke width too (8 -> 10.4 reads as
-            # glasses rims), so the 1.3x lives in the geometry instead (stroke stays 8).
-            xf = (1.3, -0.3 * piv[0], -0.3 * piv[1]) if v == "surprised" \
-                else (1.0, 0.0, 0.0)
-            em.shapes_for(vp, piv, 16, node, xf=xf)
+            em.shapes_for(vp, piv, 16, node)
             em.node_close(14)
     # brows (usually empty)
     em.shapes_for(grp("brow_l") + grp("brow_r"), headC, 14, "brow")
@@ -665,7 +699,17 @@ def build_rig(n, em, egg):
         ncp = _by_group(sl, "accessory_head")
     except OSError:
         ncp = []
-    em.node_open("nightcap", 0, 0, 14, opacity=0)
+    # Nightcap rides above the brow line: shift so its bottom (brim) ends
+    # above the eye tops; closed sleepy curves stay fully visible.
+    _nc_dy = 0.0
+    if ncp:
+        try:
+            _nb = union_bbox(ncp)
+            _eye_top = headC[1] - 16.0
+            _nc_dy = min(0.0, (_eye_top - 8.0) - _nb[3])
+        except Exception:
+            _nc_dy = -32.0
+    em.node_open("nightcap", 0, _nc_dy, 14, opacity=0)
     em.shapes_for(ncp, headC, 16, "nightcap")
     em.node_close(14)
     em.node_close(12)  # head

@@ -197,18 +197,12 @@
           </Stroke>
           </Shape>
           <Shape x="0" y="-62.52" name="fx_ring_ev_1" id="1:17">
-            <Ellipse width="120.72" height="120.72" name="P"/>
-          <Fill name="F">
-            <SolidColor colorValue="26FFFFFF" name="C"/>
-          </Fill>
-          </Shape>
-          <Shape x="0" y="-62.52" name="fx_ring_ev_2" id="1:18">
             <Ellipse width="156" height="156" name="P"/>
           <Stroke name="S" thickness="5" cap="round" join="miter">
             <SolidColor colorValue="7DFFFFFF" name="C"/>
           </Stroke>
           </Shape>
-          <Shape x="0" y="-62.52" name="fx_ring_ev_3" id="1:19">
+          <Shape x="0" y="-62.52" name="fx_ring_ev_2" id="1:18">
             <Ellipse width="85.42" height="85.42" name="P"/>
           <Stroke name="S" thickness="9" cap="round" join="miter">
             <SolidColor colorValue="7DFFFFFF" name="C"/>
@@ -217,13 +211,13 @@
         </Node>
 
         <Node x="120" y="208" name="root" id="1:200">
-          <Shape x="-31" y="-84" rotation="-0.42" name="shell_top_0" id="1:20">
+          <Shape x="-31" y="-84" rotation="-0.42" name="shell_top_0" id="1:19">
             <Ellipse width="26" height="13" name="P"/>
           <Fill name="F">
             <SolidColor colorValue="5CFFFFFF" name="C"/>
           </Fill>
           </Shape>
-          <Shape x="40" y="-60" name="shell_top_1" id="1:21">
+          <Shape x="40" y="-60" name="shell_top_1" id="1:20">
             <Ellipse width="11" height="11" name="P"/>
           <Fill name="F">
             <SolidColor colorValue="34E9AE00" name="C">
@@ -231,7 +225,7 @@
             </SolidColor>
           </Fill>
           </Shape>
-          <Shape x="24" y="-90" name="shell_top_2" id="1:22">
+          <Shape x="24" y="-90" name="shell_top_2" id="1:21">
             <Ellipse width="11" height="11" name="P"/>
           <Fill name="F">
             <SolidColor colorValue="34E9AE00" name="C">
@@ -239,7 +233,7 @@
             </SolidColor>
           </Fill>
           </Shape>
-          <Shape x="-32" y="-80" name="shell_top_3" id="1:23">
+          <Shape x="-32" y="-80" name="shell_top_3" id="1:22">
             <Ellipse width="13" height="13" name="P"/>
           <Fill name="F">
             <SolidColor colorValue="34E9AE00" name="C">
@@ -247,7 +241,7 @@
             </SolidColor>
           </Fill>
           </Shape>
-          <Shape x="4.34" y="-42.07" name="shell_top_4" id="1:24">
+          <Shape x="4.34" y="-42.07" name="shell_top_4" id="1:23">
           <PointsPath isClosed="true">
             <StraightVertex x="-6.61" y="48.01"/>
             <StraightVertex x="-4.34" y="48.07"/>
@@ -424,7 +418,7 @@
             <SolidColor colorValue="FF1E1B3A" name="C"/>
           </Stroke>
           </Shape>
-          <Shape x="20.69" y="-12.14" name="shell_bottom" id="1:25">
+          <Shape x="20.69" y="-12.14" name="shell_bottom" id="1:24">
           <PointsPath isClosed="true">
             <StraightVertex x="28.04" y="-19.54"/>
             <StraightVertex x="26.95" y="-17.05"/>
@@ -473,7 +467,7 @@
             <Node x="0" y="-52.52" name="head" id="1:202">
             <Node x="0" y="0" opacity="0" name="acc_bow" id="1:224">
               <DataBindContext sourcePathIds="0:500-0:505" propertyKey="18" converterId="0:600"/>
-              <Shape x="8.44" y="-35.87" name="acc_bow_0" id="1:26">
+              <Shape x="8.44" y="-35.87" name="acc_bow_0" id="1:25">
                 <Ellipse width="9.36" height="9.36" name="P"/>
               <Fill name="F">
                 <SolidColor colorValue="FFFF8A5B" name="C"/>
@@ -482,7 +476,7 @@
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="6.49" y="-23.84" name="acc_bow_1" id="1:27">
+              <Shape x="6.49" y="-23.84" name="acc_bow_1" id="1:26">
               <PointsPath isClosed="true">
                 <CubicDetachedVertex x="3.33" y="-6.39" inRotation="0" inDistance="0" outRotation="1" outDistance="7.65"/>
                 <CubicDetachedVertex x="4.11" y="6.57" inRotation="-0.51" inDistance="4.07" outRotation="0" outDistance="0"/>
@@ -497,7 +491,7 @@
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="4.1" y="-24.38" name="acc_bow_2" id="1:28">
+              <Shape x="4.1" y="-24.38" name="acc_bow_2" id="1:27">
               <PointsPath isClosed="true">
                 <CubicDetachedVertex x="0.19" y="-7.44" inRotation="0" inDistance="0" outRotation="2.64" outDistance="8.15"/>
                 <CubicDetachedVertex x="-7.54" y="3.83" inRotation="-2.08" inDistance="4.07" outRotation="0" outDistance="0"/>
@@ -512,7 +506,7 @@
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="17.64" y="-33.98" name="acc_bow_3" id="1:29">
+              <Shape x="17.64" y="-33.98" name="acc_bow_3" id="1:28">
               <PointsPath isClosed="true">
                 <CubicDetachedVertex x="-9" y="-2.58" inRotation="1.06" inDistance="14.26" outRotation="-0.51" outDistance="14.26"/>
                 <CubicDetachedVertex x="9" y="2.58" inRotation="-0.91" inDistance="7.75" outRotation="1.47" outDistance="7.75"/>
@@ -524,7 +518,7 @@
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="-0.36" y="-39.14" name="acc_bow_4" id="1:30">
+              <Shape x="-0.36" y="-39.14" name="acc_bow_4" id="1:29">
               <PointsPath isClosed="true">
                 <CubicDetachedVertex x="9" y="2.58" inRotation="2.64" inDistance="14.26" outRotation="-2.08" outDistance="14.26"/>
                 <CubicDetachedVertex x="-9" y="-2.58" inRotation="-1.67" inDistance="7.75" outRotation="2.23" outDistance="7.75"/>
@@ -539,7 +533,7 @@
             </Node>
             <Node x="0" y="0" opacity="0" name="acc_cap" id="1:225">
               <DataBindContext sourcePathIds="0:500-0:505" propertyKey="18" converterId="0:601"/>
-              <Shape x="3.61" y="-46.87" name="acc_cap_0" id="1:31">
+              <Shape x="3.61" y="-46.87" name="acc_cap_0" id="1:30">
                 <Ellipse width="6.48" height="6.48" name="P"/>
               <Fill name="F">
                 <SolidColor colorValue="FFFF8A5B" name="C"/>
@@ -548,7 +542,7 @@
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="-0.04" y="-23.02" name="acc_cap_1" id="1:32">
+              <Shape x="-0.04" y="-23.02" name="acc_cap_1" id="1:31">
               <PointsPath isClosed="true">
                 <CubicDetachedVertex x="-25.87" y="-7.89" inRotation="3.02" inDistance="2.97" outRotation="0" outDistance="0"/>
                 <CubicDetachedVertex x="26.66" y="1.46" inRotation="0" inDistance="0" outRotation="0.37" outDistance="2.97"/>
@@ -562,7 +556,7 @@
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="4.83" y="-33.12" name="acc_cap_2" id="1:33">
+              <Shape x="4.83" y="-33.12" name="acc_cap_2" id="1:32">
               <PointsPath isClosed="true">
                 <CubicDetachedVertex x="-29.31" y="2.39" inRotation="0" inDistance="0" outRotation="-1.45" outDistance="15.84"/>
                 <CubicDetachedVertex x="-1.21" y="-13.75" inRotation="-2.96" inDistance="12.98" outRotation="0.18" outDistance="12.26"/>
@@ -579,7 +573,7 @@
             </Node>
             <Node x="0" y="0" opacity="0" name="acc_glasses" id="1:227">
               <DataBindContext sourcePathIds="0:500-0:505" propertyKey="18" converterId="0:603"/>
-              <Shape x="0" y="-8.22" name="acc_glasses_0" id="1:34">
+              <Shape x="0" y="-8.22" name="acc_glasses_0" id="1:33">
               <PointsPath isClosed="false">
                 <StraightVertex x="-10.12" y="1.26"/>
                 <StraightVertex x="0" y="-2.53"/>
@@ -589,7 +583,7 @@
                 <SolidColor colorValue="29FFFFFF" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="0" y="-3.42" name="acc_glasses_1" id="1:35">
+              <Shape x="0" y="-3.42" name="acc_glasses_1" id="1:34">
               <PointsPath isClosed="false">
                 <StraightVertex x="-3.16" y="1.14"/>
                 <StraightVertex x="-4.56" y="-1.14"/>
@@ -600,7 +594,7 @@
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="33.77" y="-7.71" name="acc_glasses_2" id="1:36">
+              <Shape x="33.77" y="-7.71" name="acc_glasses_2" id="1:35">
               <PointsPath isClosed="false">
                 <StraightVertex x="-5.32" y="2.4"/>
                 <StraightVertex x="5.32" y="-2.4"/>
@@ -609,13 +603,13 @@
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="15.81" y="0" name="acc_glasses_3" id="1:37">
+              <Shape x="15.81" y="0" name="acc_glasses_3" id="1:36">
                 <Ellipse width="25.29" height="25.29" name="P"/>
               <Stroke name="S" thickness="6.5" cap="butt" join="miter">
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="-33.77" y="-7.71" name="acc_glasses_4" id="1:38">
+              <Shape x="-33.77" y="-7.71" name="acc_glasses_4" id="1:37">
               <PointsPath isClosed="false">
                 <StraightVertex x="5.32" y="2.4"/>
                 <StraightVertex x="-5.32" y="-2.4"/>
@@ -624,7 +618,7 @@
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="-15.81" y="0" name="acc_glasses_5" id="1:39">
+              <Shape x="-15.81" y="0" name="acc_glasses_5" id="1:38">
                 <Ellipse width="25.29" height="25.29" name="P"/>
               <Stroke name="S" thickness="6.5" cap="butt" join="miter">
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
@@ -634,19 +628,19 @@
               <Node x="0" y="-40" name="tuft" id="1:203">
               </Node>
               <Node x="-20.8" y="0" opacity="1" name="eye_l_open" id="1:212">
-                <Shape x="-2.94" y="-3.2" name="eye_l_open_0" id="1:40">
+                <Shape x="-2.94" y="-3.2" name="eye_l_open_0" id="1:39">
                   <Ellipse width="4.36" height="4.36" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FFFFFFFF" name="C"/>
                 </Fill>
                 </Shape>
-                <Shape x="0" y="0" name="eye_l_open_1" id="1:41">
+                <Shape x="0" y="0" name="eye_l_open_1" id="1:40">
                   <Ellipse width="13.82" height="13.82" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FF1E1B3A" name="C"/>
                 </Fill>
                 </Shape>
-                <Shape x="0" y="0" name="eye_l_open_2" id="1:42">
+                <Shape x="0" y="0" name="eye_l_open_2" id="1:41">
                   <Ellipse width="25.6" height="25.6" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FFFFFFFF" name="C"/>
@@ -657,7 +651,7 @@
                 </Shape>
               </Node>
               <Node x="-20.8" y="-2.56" opacity="0" name="eye_l_closed" id="1:213">
-                <Shape x="0" y="4.1" name="eye_l_closed" id="1:43">
+                <Shape x="0" y="4.1" name="eye_l_closed" id="1:42">
                 <PointsPath isClosed="false">
                   <CubicDetachedVertex x="-10.5" y="0" inRotation="0" inDistance="0" outRotation="-0.86" outDistance="10.78"/>
                   <CubicDetachedVertex x="10.5" y="0" inRotation="-2.28" inDistance="10.78" outRotation="0" outDistance="0"/>
@@ -668,7 +662,7 @@
                 </Shape>
               </Node>
               <Node x="-20.8" y="-4.18" opacity="0" name="eye_l_happy" id="1:214">
-                <Shape x="0" y="9.56" name="eye_l_happy" id="1:44">
+                <Shape x="0" y="9.56" name="eye_l_happy" id="1:43">
                 <PointsPath isClosed="false">
                   <CubicDetachedVertex x="-10.5" y="0" inRotation="0" inDistance="0" outRotation="-1.22" outDistance="20.36"/>
                   <CubicDetachedVertex x="10.5" y="0" inRotation="-1.92" inDistance="20.36" outRotation="0" outDistance="0"/>
@@ -679,7 +673,7 @@
                 </Shape>
               </Node>
               <Node x="-20.8" y="4.1" opacity="0" name="eye_l_sleepy" id="1:215">
-                <Shape x="0" y="-5.12" name="eye_l_sleepy" id="1:45">
+                <Shape x="0" y="-5.12" name="eye_l_sleepy" id="1:44">
                 <PointsPath isClosed="false">
                   <CubicDetachedVertex x="-10.5" y="0" inRotation="0" inDistance="0" outRotation="0.97" outDistance="12.4"/>
                   <CubicDetachedVertex x="10.5" y="0" inRotation="2.17" inDistance="12.4" outRotation="0" outDistance="0"/>
@@ -689,21 +683,30 @@
                 </Stroke>
                 </Shape>
               </Node>
-              <Node x="-20.8" y="0" opacity="0" name="eye_l_surprised" id="1:216">
-                <Shape x="-3.82" y="-4.16" name="eye_l_surprised_0" id="1:46">
-                  <Ellipse width="5.67" height="5.67" name="P"/>
+              <Node x="-20.8" y="-9.43" opacity="0" name="eye_l_surprised" id="1:216">
+                <Shape x="0" y="-17.57" name="eye_l_surprised_0" id="1:45">
+                <PointsPath isClosed="false">
+                  <CubicDetachedVertex x="-9" y="0" inRotation="0" inDistance="0" outRotation="-0.66" outDistance="7.6"/>
+                  <CubicDetachedVertex x="9" y="0" inRotation="-2.48" inDistance="7.6" outRotation="0" outDistance="0"/>
+                </PointsPath>
+                <Stroke name="S" thickness="8" cap="round" join="round">
+                  <SolidColor colorValue="FF1E1B3A" name="C"/>
+                </Stroke>
+                </Shape>
+                <Shape x="-2.94" y="6.23" name="eye_l_surprised_1" id="1:46">
+                  <Ellipse width="4.36" height="4.36" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FFFFFFFF" name="C"/>
                 </Fill>
                 </Shape>
-                <Shape x="0" y="0" name="eye_l_surprised_1" id="1:47">
-                  <Ellipse width="17.97" height="17.97" name="P"/>
+                <Shape x="0" y="9.43" name="eye_l_surprised_2" id="1:47">
+                  <Ellipse width="4.84" height="4.84" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FF1E1B3A" name="C"/>
                 </Fill>
                 </Shape>
-                <Shape x="0" y="0" name="eye_l_surprised_2" id="1:48">
-                  <Ellipse width="33.28" height="33.28" name="P"/>
+                <Shape x="0" y="9.43" name="eye_l_surprised_3" id="1:48">
+                  <Ellipse width="25.6" height="25.6" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FFFFFFFF" name="C"/>
                 </Fill>
@@ -779,21 +782,30 @@
                 </Stroke>
                 </Shape>
               </Node>
-              <Node x="20.8" y="0" opacity="0" name="eye_r_surprised" id="1:222">
-                <Shape x="-3.82" y="-4.16" name="eye_r_surprised_0" id="1:56">
-                  <Ellipse width="5.67" height="5.67" name="P"/>
+              <Node x="20.8" y="-9.43" opacity="0" name="eye_r_surprised" id="1:222">
+                <Shape x="0" y="-17.57" name="eye_r_surprised_0" id="1:56">
+                <PointsPath isClosed="false">
+                  <CubicDetachedVertex x="-9" y="0" inRotation="0" inDistance="0" outRotation="-0.66" outDistance="7.6"/>
+                  <CubicDetachedVertex x="9" y="0" inRotation="-2.48" inDistance="7.6" outRotation="0" outDistance="0"/>
+                </PointsPath>
+                <Stroke name="S" thickness="8" cap="round" join="round">
+                  <SolidColor colorValue="FF1E1B3A" name="C"/>
+                </Stroke>
+                </Shape>
+                <Shape x="-2.94" y="6.23" name="eye_r_surprised_1" id="1:57">
+                  <Ellipse width="4.36" height="4.36" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FFFFFFFF" name="C"/>
                 </Fill>
                 </Shape>
-                <Shape x="0" y="0" name="eye_r_surprised_1" id="1:57">
-                  <Ellipse width="17.97" height="17.97" name="P"/>
+                <Shape x="0" y="9.43" name="eye_r_surprised_2" id="1:58">
+                  <Ellipse width="4.84" height="4.84" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FF1E1B3A" name="C"/>
                 </Fill>
                 </Shape>
-                <Shape x="0" y="0" name="eye_r_surprised_2" id="1:58">
-                  <Ellipse width="33.28" height="33.28" name="P"/>
+                <Shape x="0" y="9.43" name="eye_r_surprised_3" id="1:59">
+                  <Ellipse width="25.6" height="25.6" name="P"/>
                 <Fill name="F">
                   <SolidColor colorValue="FFFFFFFF" name="C"/>
                 </Fill>
@@ -803,7 +815,7 @@
                 </Shape>
               </Node>
               <Node x="20.8" y="-4.18" opacity="0" name="eye_r_wink" id="1:223">
-                <Shape x="0" y="9.56" name="eye_r_wink" id="1:59">
+                <Shape x="0" y="9.56" name="eye_r_wink" id="1:60">
                 <PointsPath isClosed="false">
                   <CubicDetachedVertex x="-10.5" y="0" inRotation="0" inDistance="0" outRotation="-1.22" outDistance="20.36"/>
                   <CubicDetachedVertex x="10.5" y="0" inRotation="-1.92" inDistance="20.36" outRotation="0" outDistance="0"/>
@@ -813,7 +825,7 @@
                 </Stroke>
                 </Shape>
               </Node>
-              <Shape x="0" y="16" name="beak_top" id="1:60">
+              <Shape x="0" y="16" name="beak_top" id="1:61">
               <PointsPath isClosed="true">
                 <StraightVertex x="-14.8" y="-9"/>
                 <StraightVertex x="14.8" y="-9"/>
@@ -828,7 +840,7 @@
               </Stroke>
               </Shape>
               <Node x="0" y="0" opacity="0" name="beak_bottom_n" id="1:209">
-                <Shape x="0" y="7.67" name="beak_bottom" id="1:61">
+                <Shape x="0" y="7.67" name="beak_bottom" id="1:62">
                 <PointsPath isClosed="true">
                   <StraightVertex x="-6.81" y="-2.67"/>
                   <StraightVertex x="6.81" y="-2.67"/>
@@ -843,7 +855,7 @@
                 </Shape>
               </Node>
               <Node x="0" y="0" opacity="0" name="beak_alt_n" id="1:210">
-                <Shape x="0" y="-0.17" name="beak_alt" id="1:62">
+                <Shape x="0" y="-0.17" name="beak_alt" id="1:63">
                 <PointsPath isClosed="true">
                   <CubicDetachedVertex x="-12.6" y="-6.33" inRotation="0" inDistance="0" outRotation="1.79" outDistance="6.49"/>
                   <CubicDetachedVertex x="0" y="12.67" inRotation="-2.57" inDistance="11.67" outRotation="-0.57" outDistance="11.67"/>
@@ -866,7 +878,7 @@
             </Node>
             <Node x="0" y="0" opacity="0" name="acc_scarf" id="1:226">
               <DataBindContext sourcePathIds="0:500-0:505" propertyKey="18" converterId="0:602"/>
-              <Shape x="-6.5" y="-3.16" name="acc_scarf_0" id="1:63">
+              <Shape x="-6.5" y="-3.16" name="acc_scarf_0" id="1:64">
               <PointsPath isClosed="false">
                 <StraightVertex x="-1.3" y="-2.6"/>
                 <StraightVertex x="1.3" y="2.6"/>
@@ -875,7 +887,7 @@
                 <SolidColor colorValue="341E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="0" y="-3.81" name="acc_scarf_1" id="1:64">
+              <Shape x="0" y="-3.81" name="acc_scarf_1" id="1:65">
               <PointsPath isClosed="false">
                 <StraightVertex x="-1.3" y="-3.25"/>
                 <StraightVertex x="1.3" y="3.25"/>
@@ -884,7 +896,7 @@
                 <SolidColor colorValue="341E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="6.5" y="-4.13" name="acc_scarf_2" id="1:65">
+              <Shape x="6.5" y="-4.13" name="acc_scarf_2" id="1:66">
               <PointsPath isClosed="false">
                 <StraightVertex x="-1.3" y="-2.92"/>
                 <StraightVertex x="1.3" y="2.93"/>
@@ -893,7 +905,7 @@
                 <SolidColor colorValue="341E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="-10.72" y="9.35" name="acc_scarf_3" id="1:66">
+              <Shape x="-10.72" y="9.35" name="acc_scarf_3" id="1:67">
               <PointsPath isClosed="true">
                 <StraightVertex x="-2.28" y="-6.66"/>
                 <StraightVertex x="4.88" y="-6.66"/>
@@ -907,7 +919,7 @@
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="7.96" y="10.82" name="acc_scarf_4" id="1:67">
+              <Shape x="7.96" y="10.82" name="acc_scarf_4" id="1:68">
               <PointsPath isClosed="true">
                 <StraightVertex x="-2.76" y="-8.12"/>
                 <StraightVertex x="5.04" y="-8.12"/>
@@ -921,7 +933,7 @@
                 <SolidColor colorValue="FF1E1B3A" name="C"/>
               </Stroke>
               </Shape>
-              <Shape x="0" y="-0.56" name="acc_scarf_5" id="1:68">
+              <Shape x="0" y="-0.56" name="acc_scarf_5" id="1:69">
               <PointsPath isClosed="true">
                 <CubicDetachedVertex x="-21.45" y="-4.55" inRotation="1.98" inDistance="4.95" outRotation="-0.59" outDistance="11.72"/>
                 <CubicDetachedVertex x="21.45" y="-4.55" inRotation="-2.55" inDistance="11.72" outRotation="1.17" outDistance="4.95"/>
@@ -945,7 +957,7 @@
           </Node>
         </Node>
 
-        <Shape x="120" y="214" name="shadow" id="1:69">
+        <Shape x="120" y="214" name="shadow" id="1:70">
           <Ellipse width="114" height="20" name="P"/>
         <Fill name="F">
           <SolidColor colorValue="041E1B3A" name="C"/>
@@ -1425,7 +1437,7 @@
               <KeyFrameDouble value="0" interpolationType="linear" frame="180"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:69">
+          <KeyedObject objectId="1:70">
             <KeyedProperty propertyKey="16">
               <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
               <KeyFrameDouble value="0.97" interpolationType="cubic" frame="90"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
@@ -1514,7 +1526,7 @@
               <KeyFrameDouble value="0" interpolationType="hold" frame="72"/>
             </KeyedProperty>
           </KeyedObject>
-          <KeyedObject objectId="1:69">
+          <KeyedObject objectId="1:70">
             <KeyedProperty propertyKey="16">
               <KeyFrameDouble value="1" interpolationType="cubic"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
               <KeyFrameDouble value="1.12" interpolationType="cubic" frame="9"><CubicEaseInterpolator x1="0.42" y1="0.0" x2="0.58" y2="1.0"/></KeyFrameDouble>
