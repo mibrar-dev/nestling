@@ -108,6 +108,10 @@ is set. Screenshots always launch with `DISABLE_ANIMATIONS=1`.
 
 1. `dart format .` clean, `flutter analyze` → No issues found (no ignores),
    `flutter test` → all pass (add/extend feature tests for new repo logic).
+   Widget tests that pump the app MUST end with `disposeApp(tester)` from
+   `app/test/test_scope.dart` — Drift schedules a deferred stream-close
+   timer on bloc disposal and teardown fails with "A Timer is still
+   pending" without the drain.
 2. `shot.sh` for the route in light + dark, `compare.py` against the design
    PNG; band table reviewed, spacing drift fixed or filed as SHARED_REQUEST.
 3. No files outside §1 touched; `SHARED_REQUEST.md` filed or absent.

@@ -28,7 +28,29 @@ if [ ! -d "$APP_DIR" ]; then
 fi
 mkdir -p "$(dirname "$OUT")"
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
+cleanup() {
+  # Stop the tool (SIGTERM, then SIGKILL — `flutter run` traps signals and
+  # does not always exit on the first one) and the app. Verified, not
+  # fire-and-forget: a lingering tool holds the observatory port and breaks
+  # the next shot.
+  if [ -n "${RUN_PID:-}" ]; then
+    kill "$RUN_PID" >/dev/null 2>&1 || true
+    sleep 2
+    if kill -0 "$RUN_PID" 2>/dev/null; then
+      kill -9 "$RUN_PID" >/dev/null 2>&1 || true
+    fi
+  fi
+  xcrun simctl terminate "$UDID" "$BUNDLE" >/dev/null 2>&1 || true
+  for _ in $(seq 1 5); do
+    if xcrun simctl spawn "$UDID" launchctl list 2>/dev/null | grep -q "$BUNDLE"; then
+      sleep 1
+    else
+      break
+    fi
+  done
+  rm -rf "$TMP"
+}
+trap cleanup EXIT
 
 # Boot the simulator if needed.
 STATE="$(xcrun simctl list devices | grep "$UDID" | sed 's/.*(\(.*\))[^)]*$/\1/' | tail -n 1)"
@@ -43,7 +65,6 @@ xcrun simctl terminate "$UDID" "$BUNDLE" >/dev/null 2>&1 || true
 
 LOG="$TMP/run.log"
 cd "$APP_DIR"
-# Cold builds take minutes; the tool runs detached and we poll below.
 flutter run -d "$UDID" --debug --no-resident \
   --dart-define=SEED="$SEED" \
   --dart-define=INITIAL_ROUTE="$ROUTE" \
@@ -53,18 +74,14 @@ flutter run -d "$UDID" --debug --no-resident \
   --dart-define=DISABLE_ANIMATIONS=1 \
   </dev/null >"$LOG" 2>&1 &
 RUN_PID=$!
-trap 'kill "$RUN_PID" >/dev/null 2>&1 || true; rm -rf "$TMP"' EXIT
 
 echo "shot: route=$ROUTE theme=$THEME seed=$SEED mode=$MODE child=$CHILD"
 
-# Phase 1: wait for the app process (build can take minutes cold).
+# Phase 1: wait for the app process (build can take minutes cold; and the
+# tool exits on its own after handing off to the simulator, so only the
+# app's appearance counts — never the tool's liveness).
 READY=0
 for _ in $(seq 1 300); do
-  if ! kill -0 "$RUN_PID" 2>/dev/null; then
-    echo "shot: flutter run exited early — log tail:" >&2
-    tail -n 30 "$LOG" >&2 || true
-    exit 1
-  fi
   if xcrun simctl spawn "$UDID" launchctl list 2>/dev/null | grep -q "$BUNDLE"; then
     READY=1
     break
@@ -80,7 +97,6 @@ fi
 # Phase 2: wait until the drawn frame is stable (max 25 s).
 PREV=""
 STABLE=0
-SHOT_OK=0
 for _ in $(seq 1 25); do
   sleep 1
   xcrun simctl io "$UDID" screenshot "$TMP/cur.png" >/dev/null 2>&1 || continue
@@ -102,8 +118,6 @@ else
   exit 1
 fi
 
-# Clean up: stop the tool and the app so the next shot starts fresh.
-kill "$RUN_PID" >/dev/null 2>&1 || true
-xcrun simctl terminate "$UDID" "$BUNDLE" >/dev/null 2>&1 || true
+# Clean up via the EXIT trap (verified kill + terminate), then disarm it.
+cleanup
 trap - EXIT
-rm -rf "$TMP"

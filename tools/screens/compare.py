@@ -16,7 +16,7 @@ from __future__ import annotations
 import pathlib
 import sys
 
-from PIL import Image, ImageChops, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageStat
 
 PANEL_W = 390
 PANEL_H = 844
@@ -86,7 +86,7 @@ def main(argv: list[str]) -> int:
     diff = ImageChops.difference(design, app)
     hot = heat(diff)
 
-    mean = sum(diff.convert("L").getdata()) / (PANEL_W * PANEL_H) / 255 * 100
+    mean = ImageStat.Stat(diff.convert('L')).mean[0] / 255 * 100
     bands = band_stats(diff)
 
     sheet_w = MARGIN * 2 + PANEL_W * 3 + GUTTER * 2

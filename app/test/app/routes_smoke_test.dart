@@ -4,9 +4,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:get_it/get_it.dart';
-import 'package:nestling/app/app.dart';
-import 'package:nestling/app/controllers.dart';
 
 import '../test_scope.dart';
 
@@ -49,13 +46,7 @@ Future<void> pumpRoute(
   String route,
   ThemeMode theme,
 ) async {
-  tester.view.physicalSize = const Size(390 * 3, 844 * 3);
-  tester.view.devicePixelRatio = 3;
-  addTearDown(tester.view.reset);
-  GetIt.instance<ThemeModeController>().selectMode(theme);
-  await tester.pumpWidget(NestlingApp(initialRoute: route));
-  await tester.pump();
-  await tester.pump(const Duration(milliseconds: 200));
+  await pumpAppRoute(tester, route, theme: theme);
 }
 
 void main() {
@@ -77,6 +68,7 @@ void main() {
             reason: '$route ($name) should not fail to load',
           );
         }
+        await disposeApp(tester);
       });
     }
   });
