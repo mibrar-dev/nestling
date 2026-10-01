@@ -75,7 +75,7 @@ def use_ns(b):
 NODE_TABLE = [
     "root", "body", "head", "tuft", "wing_l", "wing_r", "tail",
     "cheek_l", "cheek_r", "beak_bottom_n", "beak_alt_n", "nightcap",
-    "beak_top_n",
+    "beak_top_n", "shell_top_n",
     "eye_l_open", "eye_l_closed", "eye_l_happy", "eye_l_sleepy",
     "eye_l_surprised", "eye_l_wink",
     "eye_r_open", "eye_r_closed", "eye_r_happy", "eye_r_sleepy",
@@ -548,7 +548,8 @@ def build_rig(n, em, egg):
     else:
         tailC = (bodyC[0], bodyC[1] + 50)
     P.update(bodyC=bodyC, feetY=feetY, headC=headC, tuftC=tuftC,
-             shL=shL, shR=shR, tailC=tailC, root=(120.0, feetY))
+             shL=shL, shR=shR, tailC=tailC, root=(120.0, feetY),
+             shell_up=(-6.0 if n == 1 else (-14.0 if n == 2 else 0.0)))
     RX, RY = 120.0, feetY
 
     L = em.lines
@@ -561,6 +562,12 @@ def build_rig(n, em, egg):
                     ("fx_proud", f"s{n}_proud_2.svg")):
         fxprims, _ = collect_groups(os.path.join(POSE_DIR, src))
         fx_p = _by_group(fxprims, "fx")
+        if fx == "fx_bang":
+            # "!" reads on dark backgrounds: lilac fill, ink outlines only
+            # (same as Mochi/Storybook).
+            for _pp in fx_p:
+                if (_pp["style"].get("fill", "") or "").upper() == "#1E1B3A":
+                    _pp["style"]["fill"] = "#7C6CF2"
         em.node_open(fx, 0, 0, 8, opacity=0)
         em.shapes_for(fx_p, (0, 0), 10, fx)
         em.node_close(8)
@@ -597,7 +604,9 @@ def build_rig(n, em, egg):
     # ---- root: jump + squash & stretch (volume preserving)
     em.node_open("root", RX, RY, 8)
     # shell crack/cup rims read on top of the body (egg)
+    em.node_open("shell_top_n", 0, 0, 8, opacity=1)
     em.shapes_for(grp("shell_top"), (RX, RY), 10, "shell_top")
+    em.node_close(8)
     em.shapes_for(grp("shell_bottom"), (RX, RY), 10, "shell_bottom")
     # ---- body: breathing centre
     em.node_open("body", bodyC[0] - RX, bodyC[1] - RY, 10)
@@ -616,10 +625,6 @@ def build_rig(n, em, egg):
             f'propertyKey="18" converterId="0:{599 + ACCESSORIES[acc[4:]]}"/>')
         em.shapes_for(_by_group(ap, grpname), headC, 14, acc)
         em.lines.append("            </Node>")
-    # tuft
-    em.node_open("tuft", tuftC[0] - headC[0], tuftC[1] - headC[1], 14)
-    em.shapes_for(tuft_p, tuftC, 16, "head_tuft")
-    em.node_close(14)
     # eyes: 12 variant nodes
     # SURPRISED (owner: no rings/glasses): idle-sized white, tiny 35% pupils
     # centred, + short raised brow arcs. No scaling anywhere.
@@ -723,6 +728,12 @@ def build_rig(n, em, egg):
             _nc_dy = -32.0
     em.node_open("nightcap", 0, _nc_dy, 14, opacity=0)
     em.shapes_for(ncp, headC, 16, "nightcap")
+    em.node_close(14)
+    # crest last = behind head contents (SVG paints head over tuft).
+    # Stage 4's crest base overlaps the forehead; emitted early it covered
+    # the eyes and the brows landed on the crest.
+    em.node_open("tuft", tuftC[0] - headC[0], tuftC[1] - headC[1], 14)
+    em.shapes_for(tuft_p, tuftC, 16, "head_tuft")
     em.node_close(14)
     em.node_close(12)  # head
     # wings
@@ -911,6 +922,10 @@ def body_anims(em, P_, egg, aids=None, ax=None):
                          (RY, 48)])
     r += ko("root", 13, [(RX, None), (RX - 12, 10), (RX - 12, 26), (RX, 38),
                          (RX, 48)])
+    _sh_up = P_.get("shell_up", 0.0)
+    # shell cap lifts in shock (egg crack widens, hatchling clears the eyes)
+    r += ko("shell_top_n", 14, [(0, None), (_sh_up, 10), (_sh_up, 26),
+                                (0, 38), (0, 48)])
     r += ko("root", 16, [(1, None), (1.08, 8), (1.08, 26), (0.94, 40),
                          (1, 48)])
     r += ko("root", 17, [(1, None), (1.08, 8), (1.08, 26), (1.06, 40),

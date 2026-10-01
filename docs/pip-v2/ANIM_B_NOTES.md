@@ -12,9 +12,9 @@ as ANIM_A: summed RGB diff > 36 on every 2nd pixel).
   (Stage1..Stage4 + PipStage), exactly 1 StateMachine with 3 StateMachineLayers
   per stage artboard (Body/Eyes/FX), 21 LinearAnimations per stage
 - Full `rive inspect --json` → 0 occurrences of "unresolved": 0 unresolved bindings
-- Binary: `app/assets/animations/rive/pip_bolt.riv` (161,539 bytes, bit-identical
+- Binary: `app/assets/animations/rive/pip_bolt.riv` (162,232 bytes, bit-identical
   copy of `tools/rive/bolt/build/pip_bolt.riv`, md5
-  `3d980753a3d30a4a879bc75b9a6f57f5`, rebuilt 2026-10-01 ~14:03 UTC from the
+  `aa3341235401de3322ef0f4a8f333bf3`, rebuilt 2026-10-01 ~14:19 UTC from the
   latest approved poses + orchestrator fix rounds below)
 
 ## Motion % (higher = more obvious; idle is ambient by design)
@@ -25,7 +25,7 @@ as ANIM_A: summed RGB diff > 36 on every 2nd pixel).
 | happy | 7.3% | 14.5% | 17.4% | 17.5% |
 | eating | 2.9% | 4.9% | 9.6% | 9.4% |
 | sleepy | 2.5% | 3.5% | 5.8% | 6.5% |
-| surprised | 5.3% | 9.0% | 10.7% | 11.0% |
+| surprised | 6.5% | 9.6% | 11.1% | 11.1% |
 | proud | 3.9% | 5.8% | 7.3% | 7.2% |
 | evolve | 9.8% | 15.0% | 17.7% | 16.5% |
 
@@ -151,6 +151,25 @@ Bolt (verified each by rendering Stage2/3/4 advance-20 eye zooms):
 Strip note: frame 0 shows idle (entry), frame 1 catches the 150 ms Body
 crossfade at the beak (same accepted Mochi behaviour); frames 2–6 hold pure
 shock with a visible eye gap throughout.
+
+## Orchestrator fix round 3 — stage-4 draw order, lilac "!", shell cap
+
+1. Stage-4 surprised drew the crest IN FRONT of the forehead (tuft node was
+   the first child of head = topmost; stage 4's crest base overlaps the
+   forehead/eyes, unlike stage 3), so eyes were half covered and the brow
+   arcs landed on the crest. The tuft node moved to the LAST child of head
+   (still inherits head tilt; now behind eyes/brows/beak/nightcap, matching
+   the SVG paint order where head covers tuft). Verified S2/S3/S4
+   advance-20 full-frames: s4 crest rises behind the forehead, brows sit on
+   the head above fully visible eyes; s4 wings flare clear of belly/face.
+2. "!" fill ink → lilac #7C6CF2 at fx harvest (strokes untouched — these
+   glyphs have stroke none; same as Mochi/Storybook). Verified lilac on all
+   of S2/S3/S4 advance-20 (reads on dark backgrounds).
+3. Hatchling shell cap sat on the eye tops in shock (Body 1.08 scale lifts
+   the head toward the static cap). `shell_top` now rides `shell_top_n`
+   (new NODE_TABLE entry); surprised keys it up per stage (egg −6 = crack
+   widens per contract, hatchling −14 = clear gap under the rim, songbird/
+   fledgling 0 = no shell). S2 advance-20 shows both eyes fully clear.
 
 ## Design handoff (proud rebuilt from latest)
 
