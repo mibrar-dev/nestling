@@ -12,7 +12,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:nestling/app/app.dart';
 import 'package:nestling/app/controllers.dart';
 import 'package:nestling/app/di.dart';
@@ -21,7 +20,6 @@ import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/seed.dart';
 
 Future<AppDatabase> setUpTestScope({bool seedDemo = true}) async {
-  GoogleFonts.config.allowRuntimeFetching = false;
   await GetIt.instance.reset();
   final db = AppDatabase.memory();
   await configureDependencies(database: db);

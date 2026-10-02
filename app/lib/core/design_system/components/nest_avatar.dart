@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:nestling/core/design_system/tokens/nest_tokens.dart';
 
 enum NestAvatarColor { neutral, lilac, peach, sky, leaf, coin }
@@ -57,7 +56,8 @@ class NestAvatar extends StatelessWidget {
       alignment: Alignment.center,
       child: Text(
         initial,
-        style: GoogleFonts.nunito(
+        style: TextStyle(
+          fontFamily: 'Nunito',
           fontSize: size.fontSize,
           fontWeight: FontWeight.w900,
           color: fg,
