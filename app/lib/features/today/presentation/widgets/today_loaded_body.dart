@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -65,6 +67,8 @@ String todayIconFor(String icon) {
       return (bg: tokens.leafTint, fg: tokens.leafInk);
     case 'shirt':
       return (bg: tokens.skyTint, fg: tokens.sky);
+    // Only `q-living` (unassigned, so never a Today row) uses this icon —
+    // kept so the map stays total over the seed's icon keys.
     case 'sofa':
       return (bg: tokens.peachTint, fg: tokens.aPeach);
     default:
@@ -231,6 +235,40 @@ class TodayStatusChip extends StatelessWidget {
   }
 }
 
+/// Pushes [location] at most once per foregrounding: while the pushed page
+/// is on top, further taps are dropped (B12 — a rapid double-tap must not
+/// stack two pages). The flag clears when the pushed page pops; `go`
+/// destinations need no guard (`go` replaces instead of stacking).
+class _PushOnce extends StatefulWidget {
+  const _PushOnce({required this.location, required this.builder});
+
+  final String location;
+  final Widget Function(BuildContext context, VoidCallback push) builder;
+
+  @override
+  State<_PushOnce> createState() => _PushOnceState();
+}
+
+class _PushOnceState extends State<_PushOnce> {
+  bool _busy = false;
+
+  void _push() {
+    if (_busy) return;
+    _busy = true;
+    // No setState: nothing visual changes. Clearing needs none either —
+    // the flag is plain state, so a disposed widget cannot throw.
+    unawaited(_pushAndClear());
+  }
+
+  Future<void> _pushAndClear() async {
+    await context.push(widget.location);
+    _busy = false;
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(context, _push);
+}
+
 /// Shared loaded body for `/today` and `/today-empty` (P08 + P08b).
 class TodayLoadedBody extends StatelessWidget {
   const TodayLoadedBody({required this.state, super.key});
@@ -367,13 +405,16 @@ class _Greeting extends StatelessWidget {
             spacing: NestSpacing.s2,
             mainAxisSize: MainAxisSize.min,
             children: [
-              NestIconButton(
-                icon: NestIcons.plus,
-                semanticLabel: 'New quest',
-                backgroundColor: tokens.leaf,
-                foregroundColor: tokens.onLeaf,
-                borderColor: Colors.transparent,
-                onPressed: () => context.push(QuestsRoutePaths.editor),
+              _PushOnce(
+                location: QuestsRoutePaths.editor,
+                builder: (context, push) => NestIconButton(
+                  icon: NestIcons.plus,
+                  semanticLabel: 'New quest',
+                  backgroundColor: tokens.leaf,
+                  foregroundColor: tokens.onLeaf,
+                  borderColor: Colors.transparent,
+                  onPressed: push,
+                ),
               ),
               SizedBox.square(
                 dimension: NestDevice.tapParent,
@@ -451,13 +492,16 @@ class _ApprovalsBanner extends StatelessWidget {
                 ],
               ),
             ),
-            NestButton(
-              label: 'Review',
-              fullWidth: false,
-              minHeight: NestDevice.tapParent,
-              fontSize: 15,
-              horizontalPadding: 18,
-              onPressed: () => context.push(ApprovalsRoutePaths.approvals),
+            _PushOnce(
+              location: ApprovalsRoutePaths.approvals,
+              builder: (context, push) => NestButton(
+                label: 'Review',
+                fullWidth: false,
+                minHeight: NestDevice.tapParent,
+                fontSize: 15,
+                horizontalPadding: 18,
+                onPressed: push,
+              ),
             ),
           ],
         ),
@@ -651,39 +695,41 @@ class _QuestRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.nest;
     final tint = todayTintFor(item.iconKey, tokens);
-    return NestQuestCard(
-      title: item.title,
-      maxLines: 2,
-      onTap: () =>
-          context.push('${QuestsRoutePaths.editor}?questId=${item.questId}'),
-      semanticLabel:
-          '${item.title}, ${item.coins} coins, ${todayStatusLabel(item.status)}',
-      leading: ExcludeSemantics(
-        child: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: tint.bg,
-            borderRadius: NestRadii.allM,
+    return _PushOnce(
+      location: '${QuestsRoutePaths.editor}?questId=${item.questId}',
+      builder: (context, push) => NestQuestCard(
+        title: item.title,
+        maxLines: 2,
+        onTap: push,
+        semanticLabel:
+            '${item.title}, ${item.coins} coins, ${todayStatusLabel(item.status)}',
+        leading: ExcludeSemantics(
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: tint.bg,
+              borderRadius: NestRadii.allM,
+            ),
+            alignment: Alignment.center,
+            child: NestIcon(todayIconFor(item.iconKey), color: tint.fg),
           ),
-          alignment: Alignment.center,
-          child: NestIcon(todayIconFor(item.iconKey), color: tint.fg),
         ),
+        // Order matches the HTML (coin → repeat → status); the card's Wrap
+        // keeps all three on one line at 390px and moves the content-sized
+        // status chip onto a second line at narrow widths (never overflows).
+        metaChips: [
+          NestCoinPill(amount: '${item.coins}', size: NestCoinPillSize.xSmall),
+          Text(
+            todayRepeatText(item.repeatRule, payoutDay),
+            style: NestType.caption(color: tokens.ink2),
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.ellipsis,
+          ),
+          TodayStatusChip(status: item.status),
+        ],
       ),
-      // Order matches the HTML (coin → repeat → status); the card's Wrap
-      // keeps all three on one line at 390px and moves the content-sized
-      // status chip onto a second line at narrow widths (never overflows).
-      metaChips: [
-        NestCoinPill(amount: '${item.coins}', size: NestCoinPillSize.xSmall),
-        Text(
-          todayRepeatText(item.repeatRule, payoutDay),
-          style: NestType.caption(color: tokens.ink2),
-          maxLines: 1,
-          softWrap: false,
-          overflow: TextOverflow.ellipsis,
-        ),
-        TodayStatusChip(status: item.status),
-      ],
     );
   }
 }
@@ -736,9 +782,10 @@ class _EmptyCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           spacing: NestSpacing.s2,
           children: [
-            NestButton(
-              label: 'Add a quest',
-              onPressed: () => context.push(QuestsRoutePaths.editor),
+            _PushOnce(
+              location: QuestsRoutePaths.editor,
+              builder: (context, push) =>
+                  NestButton(label: 'Add a quest', onPressed: push),
             ),
             NestButton(
               label: 'Browse ideas',

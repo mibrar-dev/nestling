@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/london_time.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/data/stream_combine.dart';
 import 'package:nestling/features/today/domain/entities/child_day_summary.dart';
@@ -13,9 +14,18 @@ import 'package:nestling/features/today/domain/today_repository.dart';
 /// directly assigned quests appear here ("4 of 6" on P08); "Anyone" quests
 /// live in the quest library (P10).
 class TodayRepositoryImpl implements TodayRepository {
-  new({required this._db});
+  new({required this._db, DateTime Function()? clock})
+    : _clock = clock ?? _defaultClock;
 
   final AppDatabase _db;
+
+  /// "Now" for period checks. Defaults to the seed anchor when tests pin it
+  /// (so demo assertions stay date-independent) and to the wall clock
+  /// otherwise — pass an explicit clock in tests that need one.
+  final DateTime Function() _clock;
+
+  static DateTime _defaultClock() =>
+      Seed.anchorOverride ?? DateTime.now().toUtc();
 
   @override
   Future<List<TodayItem>> getItems() => watchItems().first;
@@ -116,23 +126,30 @@ class TodayRepositoryImpl implements TodayRepository {
   }
 
   /// Pure row builder, shared with tests.
+  ///
+  /// Statuses follow the periods ruling: a completion only counts inside its
+  /// quest's current period (daily → London day, weekly → London week,
+  /// once → forever); otherwise the quest is `to_do` again. [now] is
+  /// computed once per call from the injected clock unless passed.
   List<TodayItem> rows(
     List<Quest> quests,
     List<QuestCompletion> completions,
-    List<ChildrenData> kids,
-  ) {
+    List<ChildrenData> kids, {
+    DateTime? now,
+  }) {
+    final at = now ?? _clock();
     final out = <TodayItem>[];
     for (final kid in kids) {
       final mine = quests.where((q) => q.assigneeChildId == kid.id).toList()
         // Pending-first like the design, then alphabetical.
         ..sort((a, b) {
-          final ra = _rankOf(_statusOf(a.id, kid.id, completions));
-          final rb = _rankOf(_statusOf(b.id, kid.id, completions));
+          final ra = _rankOf(_statusOf(a, kid.id, completions, at));
+          final rb = _rankOf(_statusOf(b, kid.id, completions, at));
           if (ra != rb) return ra.compareTo(rb);
           return a.title.compareTo(b.title);
         });
       for (final quest in mine) {
-        final status = _statusOf(quest.id, kid.id, completions);
+        final status = _statusOf(quest, kid.id, completions, at);
         out.add(
           TodayItem(
             id: '${quest.id}:${kid.id}',
@@ -152,19 +169,26 @@ class TodayRepositoryImpl implements TodayRepository {
   }
 
   static String _statusOf(
-    String questId,
+    Quest quest,
     String childId,
     List<QuestCompletion> completions,
+    DateTime now,
   ) {
     QuestCompletion? latest;
     for (final c in completions) {
-      if (c.questId == questId && c.childId == childId) {
+      if (c.questId == quest.id && c.childId == childId) {
         if (latest == null || c.createdAt.isAfter(latest.createdAt)) {
           latest = c;
         }
       }
     }
-    return latest?.status ?? 'to_do';
+    if (latest == null) return 'to_do';
+    final current = countsForCurrentPeriod(
+      quest.repeatRule,
+      latest.createdAt,
+      now,
+    );
+    return current ? latest.status : 'to_do';
   }
 
   /// Design order: `done_pending` → `to_do` → `not_yet` → `approved`.

@@ -1,13 +1,16 @@
-// P08 · Today (home) — adversarial bug proofs (Stage 6, iteration 1 + 2).
+// P08 · Today (home) — adversarial bug proofs (Stage 6, iteration 1 + 2 + 3).
 //
 // Iteration 1 found 11 bugs (P08-B01…B10); iteration 2 fixed all of them and
-// un-skipped the proofs. This iteration adds:
-//   P08-B11 — period scoping is missing (mandatory orchestrator ruling)
-//   P08-B12 — a rapid double-tap pushes two editors
-// plus a Reduce Motion regression pin for the shared Pip still-art (M1 from
-// 4_review iteration 2; fixed on main mid-stage by `f6b02d8`, now green).
-// Every failing proof carries `skip` (or `skip: true`) with its bug id so the
-// suite stays green until the fix lands; run them all with
+// un-skipped the proofs. Iteration 2's findings (P08-B11 periods, P08-B12
+// double-tap push) were fixed in iteration 3 and run unskipped too.
+//
+// Iteration 3 adds:
+//   P08-B13 — the approvals banner count ignores the period ruling
+//   P08-B14 — the _PushOnce guard latches when the pushed page is replaced
+//             by `go` (its future never completes), killing the button
+// All proofs run unskipped in the normal suite; the two iteration-3 proofs
+// carry `skip` (or `skip: true`) with their bug id so the suite stays green.
+// Run them with
 // `flutter test --run-skipped test/features/today/p08_bugs_test.dart`.
 //
 // Full reports with severity, repro and suggested fixes:
@@ -420,7 +423,6 @@ void main() {
               'the ruling says the quest is to do again',
         );
       },
-      skip: 'P08-B11: rows() ignores countsForCurrentPeriod',
     );
 
     test(
@@ -455,7 +457,6 @@ void main() {
           reason: "last week's weekly completion is outside this London week",
         );
       },
-      skip: 'P08-B11: rows() ignores countsForCurrentPeriod',
     );
 
     testWidgets('[P08-B11] the kid card count excludes stale completions', (
@@ -487,7 +488,7 @@ void main() {
       expect(find.text('5 of 6 quests'), findsNothing);
 
       await disposeApp(tester);
-    }, skip: true);
+    });
 
     test('[P08-B11] a "once" completion from years ago still counts', () async {
       final db = await setUpTestScope();
@@ -551,7 +552,7 @@ void main() {
       expect(find.text("Today's quests", skipOffstage: false), findsOneWidget);
 
       await disposeApp(tester);
-    }, skip: true);
+    });
   });
 
   group('P08 Pip under Reduce Motion (regression pin, shared art)', () {
@@ -596,5 +597,125 @@ void main() {
 
       await disposeApp(tester);
     });
+  });
+
+  group('P08 approvals banner vs the periods ruling', () {
+    test(
+      '[P08-B13] a stale pending completion does not count in the banner total',
+      () async {
+        final db = await setUpTestScope();
+        // Derive the stale instant from the pinned story clock (repo default
+        // clock is `Seed.anchorOverride`) instead of duplicating a literal.
+        final pin = Seed.anchorOverride ?? DateTime.now().toUtc();
+        final stale = londonDayStartUtc(pin)
+            .subtract(const Duration(minutes: 30));
+        await (db.delete(
+          db.questCompletions,
+        )..where((c) => c.questId.equals('q-reading'))).go();
+        await db
+            .into(db.questCompletions)
+            .insert(
+              QuestCompletionsCompanion.insert(
+                questId: 'q-reading',
+                childId: 'maya',
+                familyId: Seed.familyId,
+                status: const Value('done_pending'),
+                coins: const Value(10),
+                createdAt: Value(stale),
+              ),
+            );
+
+        final impl = TodayRepositoryImpl(db: db);
+
+        // The row correctly resets to "to do" (period expired)…
+        expect(
+          (await impl.getItems())
+              .firstWhere((i) => i.questId == 'q-reading')
+              .status,
+          'to_do',
+        );
+        // …so the banner total must not keep counting it: the 3 seeded
+        // current-period pendings remain.
+        expect(
+          await impl.watchPendingCount().first,
+          3,
+          reason:
+              'counting the stale pending makes the banner say 4 above a '
+              'list with 3 "Needs a look" rows',
+        );
+      },
+      skip: 'P08-B13: watchPendingCount ignores countsForCurrentPeriod',
+    );
+
+    testWidgets('[P08-B13] the banner count matches the current-period rows', (
+      tester,
+    ) async {
+      final db = await setUpTestScope();
+      final pin = Seed.anchorOverride ?? DateTime.now().toUtc();
+      final stale = londonDayStartUtc(pin)
+          .subtract(const Duration(minutes: 30));
+      await (db.delete(
+        db.questCompletions,
+      )..where((c) => c.questId.equals('q-reading'))).go();
+      await db
+          .into(db.questCompletions)
+          .insert(
+            QuestCompletionsCompanion.insert(
+              questId: 'q-reading',
+              childId: 'maya',
+              familyId: Seed.familyId,
+              status: const Value('done_pending'),
+              coins: const Value(10),
+              createdAt: Value(stale),
+            ),
+          );
+
+      await pumpAppRoute(tester, '/today');
+
+      expect(find.text('3 quests waiting for your thumbs-up'), findsOneWidget);
+      expect(find.text('4 quests waiting for your thumbs-up'), findsNothing);
+
+      await disposeApp(tester);
+    }, skip: true);
+  });
+
+  group('P08 push guard robustness', () {
+    testWidgets('[P08-B14] a pushed page navigating with go() unlatches it', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/today');
+
+      await tester.tap(find.bySemanticsLabel('New quest'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        find.text('P09 Quest editor', skipOffstage: false),
+        findsOneWidget,
+      );
+
+      // The pushed page navigates home with `go` (P09/P11 may; §4 asks them
+      // to pop, but the guard must not depend on another screen's contract).
+      GoRouter.of(
+        tester.element(
+          find.text('P09 Quest editor', skipOffstage: false).first,
+        ),
+      ).go('/today');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 700));
+
+      // The guard must have released: New quest works again.
+      await tester.tap(find.bySemanticsLabel('New quest'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(
+        find.text('P09 Quest editor', skipOffstage: false),
+        findsOneWidget,
+        reason: 'the pushed page is gone, so the button must not stay latched',
+      );
+
+      await disposeApp(tester);
+    }, skip: true);
   });
 }

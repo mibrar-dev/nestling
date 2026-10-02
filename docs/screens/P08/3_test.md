@@ -1,119 +1,115 @@
-# P08 · Today (home) — test notes (Stage 3, iteration 2)
+# P08 · Today (home) — test notes (Stage 3, iteration 3)
 
 Screen: `P08` · route `/today` (+ `P08b` `/today-empty`) · feature `today` ·
 mode parent · seeds `Seed.demo()` / `Seed.empty()`.
 Scope of this stage: tests only — **no screen code was changed**.
 
-## 1. Iteration-1 findings — re-verified closed
+## 1. Focus of this iteration — the PERIODS ruling
 
-| Iter-1 finding | Status | Proof in this suite |
-|---|---|---|
-| **B1** banner `"1 quests"` | fixed (`todayPendingLabel`) | `P08 Today copy one pending approval reads "1 quest"`, helper test `pending label pluralises` (0/1/3) |
-| **B2** header `"Happy week: 1 days"` | fixed (`happyWeekLabel`) | `date line uses the singular "1 day"`, helper test `happyWeekLabel singular / plural` |
-| **B3** banner subtitle generic vs design names | fixed (`todayBannerSubtitle` from state) | `banner subtitle names the children`, helper test `banner subtitle names 0 / 1 / 2 / 3+ children`, plus the 3-/1-child widget tests |
-| **B4a** banner semantics double-announced | fixed (liveRegion without duplicate label) | `the banner announces its copy exactly once` (node label contains the pending line once) |
-| **B4b** core `NestCard`/`NestQuestCard` double-announce | carried — shared files, `SHARED_REQUEST.md` §2 (non-blocking) | not a P08-owned bug; still recorded |
-| 11 skipped stage-6 proofs | all unskipped and passing | `p08_bugs_test.dart` (no `skip:` anywhere in `app/test/features/today/`) |
+The repository now scopes a quest's latest completion with
+`countsForCurrentPeriod(repeatRule, completedAt, nowUtc)`
+(`daily` → current Europe/London day, `weekly` → current London week
+Mon 00:00–Sun 24:00, `once` → forever) through the new clock seam
+(`TodayRepositoryImpl({db, clock})`, default `Seed.anchorOverride ?? wall
+clock`), so stale completions read `to_do` again and the kid-card `done`
+counts follow (`today_repository_impl.dart:134-192`).
 
-## 2. Tests added this iteration — 15 new (feature suite 65 → 80)
+Verified independently, with **fixed UTC instants** (not values derived from
+the helper under test) so a UTC-day implementation would fail:
 
-`today_view_test.dart` (+11):
+| Case | Completion | Now | Expected | Why |
+|---|---|---|---|---|
+| daily, after London midnight | 2 Oct 23:30Z | 3 Oct 00:00Z | counts | 00:30 BST on 3 Oct — same London day although the UTC date is 2 Oct |
+| daily, before London midnight | 2 Oct 22:30Z | 3 Oct 00:00Z | `to_do` | 23:30 BST on 2 Oct — yesterday |
+| weekly, Monday 00:30 London | 27 Sep 23:30Z | 3 Oct | counts | the London week starts Mon 28 Sep 00:00 BST = 27 Sep 23:00Z |
+| weekly, Sunday night | 27 Sep 22:30Z | 3 Oct | `to_do` | previous London week |
+| daily, BST→GMT switch day | 24 Oct 23:30Z / 22:30Z | 25 Oct 12:00Z | counts / `to_do` | 25 Oct is GMT; the day start is 24 Oct 23:00Z |
+| summary `done` moves with the clock | seed `q-bag` daily approval 2 Oct | 3 Oct vs 2 Oct | Leo 1/4 vs 2/4 | the same data, two "now"s |
 
-- `P08 Today copy helpers` — `todayPendingLabel` 0/1/3; `todayBannerSubtitle`
-  for 0, 1, 2 and 3 children; every Pip token → enum (`mochi`/`bolt`/
-  `storybook`, all four skins, all five accessories) + safe fallbacks.
-- `P08 Today Pip artwork (orchestrator rule)` — each kid card renders
-  `PipAvatar` with the child's DB fields (Maya mochi·sunny·3, Leo
-  bolt·sky·2), at the design's 72 px slot; **no v1 `pip_stage_*.svg`** is
-  rendered and any Pip SVG that does load is `pip_v2`; P08b empty card is
-  `PipAvatar(mochi, stage 1)` at 140; a non-default child
-  (storybook·mint·scarf·stage 4) travels DB → card unchanged.
-- `P08 Today family-size copy` — 3 children: `"Maya, Leo and Sam did
-  brilliantly yesterday"` + `"Hand to Maya and 2 others"`; 1 child:
-  `"Maya did brilliantly yesterday"` + `"Hand to Maya"` + `"2 quests
-  waiting…"`.
-- `P08 Today a11y regressions` — the banner live-region announces its copy
-  exactly once.
-- `P08 Today navigation (push)` — system back from the quest editor returns
-  to `/today` (the `push` contract; mirrors the approvals proof).
-- `P08 Today stress` — 6 children, long quest titles, 320 px @ 1.3×:
-  no overflow, hand-off copy `"Hand to Maya and 5 others"`.
+The 4 proofs un-skipped by the iteration-3 build (P08-B11 ×3, P08-B12
+double-tap `_PushOnce` guard) pass unskipped; **no `skip:` remains anywhere
+in `app/test/features/today/`**.
 
-`today_repository_test.dart` (+2):
+## 2. Tests added this iteration — 10 new (feature suite 86 → 96)
 
-- `not_yet rows sit between to_do and approved` — full render order
-  pending → to_do → not_yet → approved, title within rank (newer completion
-  wins), on `Seed.demo`.
-- `watchPendingCount re-emits when a new approval arrives` — same
-  subscription sees 3 → 4 after an “Anyone”-quest approval (family-wide set,
-  identical filter to P11's `watchPendingApprovals` — verified in
-  `app_database.dart:315`).
+`today_repository_test.dart` (+6, group
+`TodayRepository periods (Europe/London ruling)`): the six boundary/summary
+cases above, each with an explicit `clock`.
 
-`today_bloc_test.dart` (+2):
+`today_view_test.dart` (+4):
 
-- `pendingCount is the family-wide count, not the visible rows` (no visible
-  items, count 3 → banner still shows).
-- `happyWeekLabel` singular/plural unit test.
+- `P08 Today alignment (owner rule)` — at 390 px: greeting text and section
+  title flush to the 20 px left gutter; avatar flush to 370; `+` exactly
+  8 + 44 px left of it; banner (live-region wrapper), kid cards (Maya left /
+  Leo right), `See all`, every quest row and the hand-off button all share
+  the same gutters.
+- `P08 Today bottom edge (owner rule)` ×2 (light + dark) — the tab bar's
+  own surface `Container` spans the full width and its bottom edge **is** the
+  physical screen bottom (`rect.bottom == 844`, height `NestDevice.tabH`), in
+  both themes: no coloured strip under the bar or around the home indicator.
+- `P08 Today period scoping in the view` — a stale daily approval
+  (2 Oct 22:30Z) renders its row as `To do`, not `Approved ✓`.
 
-The stage-2 build also adapted the existing tests to the new APIs
-(`detail` dropped, `watchPendingCount` stubs, seed `e94d063` daily/weekly,
-pending-first scroll order, friendly failure copy) — reviewed in the diff:
-no assertion was weakened, the two copy-bug proofs from iteration 1 were left
-intact and now pass.
+Also fixed a stale test *name* (`demo seed cards: … Leo 1/4 + 45`) and
+re-reviewed the build's test edits: no assertion was weakened; the shared
+`repositories_test.dart` expectation it could not touch is the only red (§6).
 
-## 3. Coverage vs the stage checklist
+## 3. Coverage vs the stage checklist (unchanged parts re-run green)
 
-- **bloc_test every event/state path:** single event (`TodayLoadRequested`)
-  → loading / loaded / failure / retry / re-emission / family-wide pending;
-  every `TodayState` field asserted at least once.
-- **Widget tests light + dark, 320/390/430, scale 1.0/1.3:** 12-case matrix
-  (no `RenderFlex overflowed`, content reachable, `disposeApp` on every
-  widget test) + dark content, dark failure.
-- **empty / loading / error:** all three; loading/error drive `TodayView`
-  with a mock `TodayRepository` (a healthy in-memory Drift DB cannot fail),
-  everything else uses the in-memory DB with `Seed.demo`/`Seed.empty`.
-- **every tap navigates to the right route:** Review→`/approvals`,
-  `+`→`/quest-editor` (no `questId`), row→`/quest-editor?questId=…`,
-  See all→`/quests`, avatar→`/settings`, kid card→
-  `/child-profile?childId=…`, Hand→`/who-is-playing`, `Add a quest`→
-  `/quest-editor`, `Browse ideas`→`/quests`; pushed pages also prove back
-  navigation (approvals + editor).
-- **semantics labels on icon buttons:** `New quest`, `"Sarah's profile"`,
-  `See all quests` + card/row/Pip/progress labels; kid-mode ≥56 px targets
-  do not apply (parent mode; `/today` and `/today-empty` are gated to P17 by
-  the shell — `[P08-B01]` proof).
+- **bloc_test every event/state path**: load → loading/loaded, error →
+  failure, retry, re-emission without events, family-wide pending count
+  (12 tests).
+- **Widget tests light + dark, widths 320/390/430, scale 1.0/1.3**: 12-case
+  matrix, no `RenderFlex overflowed`, plus the dark content and dark failure
+  tests and the 6-children/320 px/1.3× stress case.
+- **empty / loading / error**: `/today` + `/today-empty` with
+  `Seed.demo`/`Seed.empty`; loading/error drive `TodayView` over a mock
+  repository (a healthy in-memory DB cannot fail).
+- **every tap → right route**: Review, `+`, quest row (±`questId`), See all,
+  avatar, kid card (`childId`), Hand, `Add a quest`, `Browse ideas`; pushed
+  pages also prove system-back returns to Today.
+- **semantics labels on icon buttons** and the banner announcing exactly
+  once; tap targets ≥ 44 px parent (≥ 56 px kid is N/A — parent mode; the
+  route is gated to P17 in kid mode, P08-B01).
+- **Pip rule**: each card renders the child's own `PipAvatar` from the DB,
+  no v1 `pip_stage_*.svg`; P08b egg `mochi`/stage 1 at 140; non-default
+  style/skin/accessory travels unchanged; Reduce-Motion art pinned
+  (P08 M1 proof).
 
 ## 4. Results
 
 | Check | Result |
 |---|---|
-| `dart format --set-exit-if-changed .` | `344 files (0 changed)` |
+| `dart format --set-exit-if-changed .` | `350 files (0 changed)` |
 | `flutter analyze` | `No issues found!` |
-| `flutter test test/features/today` | **80 passed, 0 failed, 0 skipped** (12 bloc · 14 repo · 43 view · 11 bug proofs) |
-| `flutter test` (full app) | **+387, all passed**, nothing skipped |
+| `flutter test test/features/today` | **96 passed, 0 failed, 0 skipped** (12 bloc · 20 repo · 47 view · 17 bug proofs) |
+| `flutter test` (full app) | **+468 −1** — the single failure is the shared test in §5 below |
 
 ## 5. Bugs found this iteration
 
-**None.** The three copy bugs and the banner a11y defect from iteration 1 are
-fixed and regression-tested; the iteration-2 screen behaves per the design,
-`ORCHESTRATOR_NOTES.md` (all 4 items) and the stage checklist.
+**None in the screen.** The period ruling, the alignment rule and the
+bottom-edge rule are all implemented, tested and green.
 
-Carried shared items (not P08-owned, all in `SHARED_REQUEST.md`):
-§2 core card semantics duplication (a11y quality), §4 `push` coordination,
-§5 doc, §6 `DISABLE_ANIMATIONS` flag never parsing (affects `shot.sh` frame
-stability), §7 quest-meta `runSpacing`.
+One red remains in the full suite and it is **not a screen bug**:
 
-Notes / limits:
+- `app/test/core/data/repositories_test.dart:53` (`today Maya 4 of 6, Leo 2
+  of 4`) still expects `leo.done == 2`; the ruling makes `q-bag`'s daily
+  approval from the previous London day stale, so Leo is `1 of 4`.
+  The file is shared (`app/test/core/**`) and RULES §1 forbids the screen
+  agent from editing it; it is filed **blocking** as `SHARED_REQUEST.md` §8
+  with the one-line fix. The build stage flagged the same item (its verdict
+  is FAIL for this reason), so the loop will hand it to the orchestrator
+  before the next build.
 
-- The still-frame path (`MediaQuery.disableAnimations`) is owned by the shared
-  component test `app/test/pip_avatar_test.dart:187`; at the screen level it
-  cannot be distinguished under `flutter test` because the Rive runtime never
-  binds there (probe: 0 `RiveWidget`s with or without the flag), so no
-  screen-level still-frame assertion was added rather than a vacuous one.
-- P08b visual polish beyond DESIGN_SPEC §5 P08b (header `"· A fresh nest"`,
-  tip card, link styling, longer message, no header actions) is still P08b's
-  loop scope, recorded for that plan.
-- Stale `errorMessage` surviving a successful retry remains cosmetic only
-  (state hygiene, never rendered).
+Still awaiting an orchestrator ruling (`SHARED_REQUEST.md` §9, non-blocking):
+whether the approvals banner should also be period-scoped — it deliberately
+counts every family-wide `done_pending` completion so it matches P11. The
+current unscoped behaviour is pinned by the P08-B06 proof; no test was added
+either way so the ruling stays free to land.
+
+Notes / limits (unchanged from iteration 2): P08b visual polish beyond
+DESIGN_SPEC §5 belongs to the P08b loop; the Rive still-frame contract is
+owned by the shared `test/pip_avatar_test.dart` (the runtime never binds
+under `flutter test`); stale `errorMessage` after a retry is cosmetic only.
 
 VERDICT: PASS

@@ -97,6 +97,37 @@ Files: `app/lib/core/data/env_flags.dart` and/or `tools/screens/shot.sh`.
 Blocks: partially — P08 lands and tests green without it, but no Rive
 screen can produce a stable-frame screenshot until this lands.
 
+## 8. NEW (blocking) — shared seed-contract test pins pre-ruling Leo count
+
+`app/test/core/data/repositories_test.dart:42` (`today Maya 4 of 6, Leo 2
+of 4`) asserts `leo.done == 2` (bed pending + bag approved). The mandatory
+periods ruling (this stage's brief, `ORCHESTRATOR_NOTES.md`) makes bag's
+approval stale: `q-bag` repeats `daily` (seed `e94d063`) and its approval is
+from the previous London day, so Leo renders `1 of 4 quests`. Maya is still
+4 of 6 (bins/hoover are `weekly`, same London week).
+
+Need (shared — the screen agent may not edit it): update the expectation to
+`leo.done == 1` (or approve bag on the anchor day in the seed if the
+orchestrator wants the mock's "2 of 4" preserved — but a daily quest
+approved yesterday showing as done today would contradict the ruling, so
+changing the expectation is the honest fix).
+
+Files: `app/test/core/data/repositories_test.dart` (one line).
+Blocks: yes — `flutter test` is red until this lands. Proved by P08's own
+`today_repository_test.dart` (Leo `done == 1`, green).
+
+## 9. NEW (non-blocking, needs a ruling) — should the banner be period-scoped?
+
+`watchPendingCount()` deliberately counts every family-wide `done_pending`
+completion so the P08 banner agrees with P11 (`watchPendingApprovals`,
+unscoped). If a completion goes stale under the periods ruling, the quest
+row resets to "to do" but the banner still counts it — banner and rows can
+then disagree the other way. P08 keeps the unscoped count (banner ≡ Review
+list); flagging instead of guessing, per the fix list.
+
+Need: orchestrator decision (scope both, or keep both unscoped).
+Files: none yet. Blocks: no.
+
 ## 7. NEW (non-blocking, design system) — quest-meta `runSpacing` 4 px vs 6 px
 
 `core/design_system/components/nest_quest_card.dart:80` uses

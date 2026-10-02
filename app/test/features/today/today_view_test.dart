@@ -168,7 +168,7 @@ void main() {
       expect(find.text('Maya'), findsWidgets);
       expect(find.text('Leo'), findsWidgets);
       expect(find.text('4 of 6 quests'), findsOneWidget);
-      expect(find.text('2 of 4 quests'), findsOneWidget);
+      expect(find.text('1 of 4 quests'), findsOneWidget);
       expect(find.text('120'), findsWidgets);
       expect(find.text('45'), findsWidgets);
 
@@ -873,6 +873,20 @@ void main() {
         findsOneWidget,
       );
 
+      // The 2-up grid survives a third child: Sam's card keeps the 170 px
+      // column instead of squeezing three cards into one row. (Measured
+      // before scrolling past it to the hand-off button.)
+      await tester.scrollUntilVisible(
+        find.text('Sam'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump();
+      expect(
+        tester.getSize(find.byType(NestCard).at(2)).width,
+        closeTo(170, 5),
+      );
+
       await tester.scrollUntilVisible(
         find.textContaining('Hand to'),
         300,
@@ -987,6 +1001,172 @@ void main() {
 
       expect(find.text('Hand to Maya and 5 others'), findsOneWidget);
       expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+  });
+
+  group('P08 Today alignment (owner rule)', () {
+    testWidgets('content shares the 20 px gutters at 390 px', (tester) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/today');
+
+      const left = 20.0;
+      const right = 370.0;
+
+      // Greeting text is inset by the page gutter; the avatar is flush with
+      // the right gutter and the + button sits 8 px + 44 px to its left.
+      expect(tester.getTopLeft(find.text(_expectedGreeting())).dx, left);
+      final avatar = find
+          .ancestor(
+            of: find.bySemanticsLabel("Sarah's profile"),
+            matching: find.byType(InkWell),
+          )
+          .first;
+      expect(tester.getTopRight(avatar).dx, right);
+      expect(tester.getTopRight(find.byType(NestIconButton)).dx, right - 52);
+
+      // Banner (live-region wrapper = banner bounds) spans the column.
+      final banner = find.byWidgetPredicate(
+        (w) => w is Semantics && w.properties.liveRegion == true,
+      );
+      expect(tester.getTopLeft(banner).dx, left);
+      expect(tester.getTopRight(banner).dx, right);
+
+      // Kid cards: 2-up grid flush to both gutters.
+      final mayaCard = find
+          .ancestor(of: find.text('Maya'), matching: find.byType(NestCard))
+          .first;
+      final leoCard = find
+          .ancestor(of: find.text('Leo'), matching: find.byType(NestCard))
+          .first;
+      expect(tester.getTopLeft(mayaCard).dx, left);
+      expect(tester.getTopRight(leoCard).dx, right);
+
+      // Section header and its link.
+      expect(tester.getTopLeft(find.text("Today's quests")).dx, left);
+      final seeAll = find
+          .ancestor(of: find.text('See all'), matching: find.byType(InkWell))
+          .first;
+      expect(tester.getTopRight(seeAll).dx, right);
+
+      // Quest row and hand-off button.
+      final row = find
+          .ancestor(
+            of: find.text('Empty the dishwasher'),
+            matching: find.byType(NestQuestCard),
+          )
+          .first;
+      expect(tester.getTopLeft(row).dx, left);
+      expect(tester.getTopRight(row).dx, right);
+
+      await tester.scrollUntilVisible(
+        find.text('Hand to Maya or Leo'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump();
+      final hand = find
+          .ancestor(
+            of: find.text('Hand to Maya or Leo'),
+            matching: find.byType(NestButton),
+          )
+          .first;
+      expect(tester.getTopLeft(hand).dx, left);
+      expect(tester.getTopRight(hand).dx, right);
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+  });
+
+  group('P08 Today bottom edge (owner rule)', () {
+    for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      testWidgets('${theme.name}: the tab bar surface reaches the edge', (
+        tester,
+      ) async {
+        await setUpTestScope();
+        await pumpAppRoute(tester, '/today', theme: theme);
+
+        final screenBottom =
+            tester.view.physicalSize.height / tester.view.devicePixelRatio;
+        final screenRight =
+            tester.view.physicalSize.width / tester.view.devicePixelRatio;
+
+        final bar = find.byType(NestTabBar);
+        expect(bar, findsOneWidget);
+        final rect = tester.getRect(bar);
+        expect(
+          rect.bottom,
+          screenBottom,
+          reason: 'no strip below the bar down to the physical edge',
+        );
+        expect(rect.left, 0);
+        expect(rect.right, screenRight);
+        expect(rect.height, NestDevice.tabH);
+
+        final container = tester.widget<Container>(
+          find.descendant(of: bar, matching: find.byType(Container)).first,
+        );
+        final decoration = container.decoration! as BoxDecoration;
+        final expected = theme == ThemeMode.light
+            ? NestColors.light.surface
+            : NestColors.dark.surface;
+        expect(
+          decoration.color,
+          expected,
+          reason: 'the home-indicator area keeps the tab bar surface colour',
+        );
+
+        await disposeApp(tester);
+      });
+    }
+  });
+
+  group('P08 Today period scoping in the view', () {
+    testWidgets('a stale daily completion renders as To do', (tester) async {
+      final db = await setUpTestScope();
+      // Story day is pinned to Sat 3 Oct 2026; 2 Oct 22:30 UTC is
+      // 23:30 London — yesterday's London day, so the quest is to do again.
+      await (db.delete(
+        db.questCompletions,
+      )..where((c) => c.questId.equals('q-reading'))).go();
+      await db
+          .into(db.questCompletions)
+          .insert(
+            QuestCompletionsCompanion.insert(
+              questId: 'q-reading',
+              childId: 'maya',
+              familyId: Seed.familyId,
+              status: const Value('approved'),
+              coins: const Value(10),
+              createdAt: Value(DateTime.utc(2026, 10, 2, 22, 30)),
+            ),
+          );
+
+      await pumpAppRoute(tester, '/today');
+      await tester.scrollUntilVisible(
+        find.text('Reading – 20 minutes'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump();
+
+      final row = find
+          .ancestor(
+            of: find.text('Reading – 20 minutes'),
+            matching: find.byType(NestQuestCard),
+          )
+          .first;
+      expect(
+        find.descendant(of: row, matching: find.text('To do')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: row, matching: find.text('Approved ✓')),
+        findsNothing,
+        reason: "yesterday's approval is not today's status",
+      );
 
       await disposeApp(tester);
     });

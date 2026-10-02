@@ -22,7 +22,8 @@ final class TodayState extends Equatable {
   final List<TodayItem> items;
   final List<ChildDaySummary> summaries;
 
-  /// Items with `status == 'done_pending'` (P08 approvals banner, P11 badge).
+  /// Family-wide `done_pending` completions (the set P11 lists, including
+  /// "Anyone" quests) — not just the rows shown here.
   final int pendingCount;
   final String parentName;
 

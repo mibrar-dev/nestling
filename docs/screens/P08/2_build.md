@@ -1,98 +1,88 @@
-# P08 · Today (home) — build notes (Stage 2, iteration 2)
+# P08 · Today (home) — build notes (Stage 2, iteration 3)
 
-Built per `1_plan.md` + every item in `FIXES_1.md` + `ORCHESTRATOR_NOTES.md`
-(all 4 mandatory items). The 11 skipped proofs in `p08_bugs_test.dart` are
-unskipped and pass; the 4 suite reds from iteration 1 are green.
+Built per `1_plan.md` + every item in `FIXES_2.md` + the stage brief's
+PERIODS ruling. The 4 skipped proofs (P08-B11 ×3, P08-B12) are unskipped and
+pass; the 2 unskipped regression pins still pass.
 
 ## Files changed (all RULES §1-legal)
 
 Lib (`app/lib/features/today/**`):
 
-- `domain/entities/today_item.dart` — **dropped `detail`** (B13/C7: dead
-  second source of status copy; the view's `todayStatusLabel` is the one
-  mapper). Gained nothing; `repeatRule`/`iconKey` kept.
-- `domain/entities/child_day_summary.dart` — added `pipStyle`/`pipSkin`/
-  `pipAccessory` (defaults mochi/sunny/none) for `PipAvatar` (B02).
-- `domain/today_repository.dart` — added `watchPendingCount()` (B06).
-- `data/today_repository_impl.dart` — `rows()` sorts by **(statusRank,
-  title)** with done_pending 0 / to_do 1 / not_yet 2 / approved 3 (B11/B10);
-  `watchSummaries()` builds from **all** children (B04: zero-quest children
-  get `0 of 6`-style cards — `0 of 0 quests`) and carries pip fields;
-  `watchPendingCount()` counts family-wide `done_pending` (B06, same set P11
-  lists); dropped `_statusLabel`; `import package:drift/drift.dart` (house
-  pattern, needed for `&`).
-- `data/models/today_item_model.dart` — `detail` removed from ctor/json.
-- `presentation/bloc/today_bloc.dart` — `pendingCount` from
-  `watchPendingCount()` (B06); `happyWeekLabel()` plural helper (B5);
-  combined stream transformed by `_closeOnError` (first error forwarded,
-  then close) so a failed load releases its watchers and retry starts fresh
-  (B14/B08). Raw message stays in state for logs/tests.
+- `data/today_repository_impl.dart` — **P08-B11**: `_statusOf` now takes the
+  `Quest` + a single `now` and applies `countsForCurrentPeriod(repeatRule,
+  latest.createdAt, now)` (daily → London day, weekly → London week, once →
+  forever); stale completions read `to_do`, and `done`/progress derive from
+  the scoped statuses. `rows()` gained an optional `now` (one clock read per
+  call so sort and rows agree). New clock seam:
+  `TodayRepositoryImpl({required this._db, DateTime Function()? clock})`
+  defaulting to `Seed.anchorOverride ?? DateTime.now().toUtc()` — tests pin
+  the anchor (story "today"), production uses the wall clock, so demo
+  assertions ("4 of 6", banner 3) are date-independent. No DI change needed.
+- `presentation/bloc/today_state.dart` — m4: `pendingCount` doc now says
+  family-wide DB count, not "items with done_pending".
 - `presentation/widgets/today_loaded_body.dart` —
-  - `todayPendingLabel()` singular/plural (B4), used by visible text;
-    banner `Semantics` keeps `liveRegion` but drops the duplicating explicit
-    label (B10/C5).
-  - `todayBannerSubtitle()` from state nicknames: `Maya and Leo did
-    brilliantly yesterday` (B3, orchestrator note 2).
-  - Greeting `fontWeight w900 + letterSpacing -0.22` on the token style (B9).
-  - Quest gaps `i == 0 ? s2 : s4` (B2).
-  - `_KidsGrid` chunks pairs; lone card gets `Row[Expanded, Spacer]` so one
-    child keeps the 170 column (B6/B05/B09).
-  - `_KidCard` renders each child's own `PipAvatar(style/skin/accessory,
-    clamped stage, size 72)` in the design slot (orchestrator note 1, B02);
-    v1 `pipStageAsset` helper deleted; `pipStageName` kept for the semantics
-    label. `PipAvatar` handles the still frame itself (`DISABLE_ANIMATIONS`/
-    `MediaQuery.disableAnimations`).
-  - `_GroupLabel` → `NestSectionLabel` (B12, restores `header: true`).
-  - `push` for `/approvals` + `/quest-editor` (±`questId`, incl. P08b `Add a
-    quest`); `go` kept for shell destinations and `/who-is-playing` (B07);
-    coordination note filed as `SHARED_REQUEST.md` §4.
-  - Hand-off 3+ copy → `Hand to Maya and 2 others` (B20/C12).
-  - P08b art → `PipAvatar(mochi, stage 1, 140)` (B03; `skin` omitted — sunny
-    is the default and the lint forbids redundant args).
-  - `TodayFailureBody` renders a fixed kind string; raw error stays in state
-    (B15/C8).
-- `presentation/views/today_view.dart`, `today_empty_view.dart` — failure
-  branch is now `const TodayFailureBody()`.
+  - **P08-B12**: new `_PushOnce` StatefulWidget (per-push-site `_busy` flag,
+    cleared when the pushed page pops) wrapping Review, `+`, quest rows and
+    P08b `Add a quest`. `go` destinations need no guard. (A
+    `ModalRoute.isCurrent` check would not work: both taps run before the
+    Navigator rebuilds.)
+  - m10: `sofa` tint arm documented as unreachable-by-construction.
+- `today_view.dart` / `today_empty_view.dart` — untouched this iteration.
 
-Tests (`app/test/features/today/**`): unskipped all 11 proofs (B01 passes
-as-is — guard already on main; B07's path assertion now reads the pushed
-page's `GoRouterState.uri` because `currentConfiguration` keeps reporting
-the shell branch after a `push` — same method the navigation tests use, see
-2_build note); new repo tests (no-quest child summary, family-wide pending
-count); updated stale expectations (dishwasher `daily` per seed `e94d063`,
-status-order list, `_expectedDateLine` plural, friendly-copy assertions,
-`watchPendingCount` stubs on every mock, pending-controller rework of the
-re-emission test, scroll loops follow render order). `detail` references
-removed.
+Tests (`app/test/features/today/**`):
 
-## Fix-item ledger (FIXES_1 refs)
+- `p08_bugs_test.dart` — 4 skips removed; all 11 + 4 + 2 green.
+- `today_view_test.dart` — m5: the three-children test now also asserts
+  Sam's card is ≈170 px wide (measured after scrolling it into view;
+  `NestCard.at(2)` only exists once built).
+- Expectations updated for the ruling (Leo `done 1` / `1 of 4 quests` —
+  see below; scroll loops already follow render order).
 
-Review B1–B8 + UI 1–6 + bugs B01–B10 + carried C1–C15: **all fixed except**
-C9/B16 (balance substitution — accepted, note only), C10/B17 (liveRegion
-re-announce on unrelated emissions — kept `liveRegion`, minor, deferred),
-C11/B21 (P08b divergences — that loop's scope), C13 second half (shared
-`NestCard` semantics — `SHARED_REQUEST.md` §2 stays open), C14/B22 (doc —
-`SHARED_REQUEST.md` §5), B18 (shared runSpacing — new §7). B19 needed no
-filing (seed `e94d063` resolved it). **New shared bug found: §6**
-(`DISABLE_ANIMATIONS=1` never parses to `true`, so `shot.sh` frames never
-stabilise once Rive widgets are on screen — see below).
+## Fix-item ledger (FIXES_2 refs)
+
+- **P08-B11 (major)** — fixed as above. Consequence worth stating: Leo now
+  renders **1 of 4 quests** (was "2 of 4"): `q-bag` repeats `daily` and its
+  approval is from the previous London day, so per the ruling it is "to do"
+  again. The design mock's "2 of 4" predates the ruling; the brief's
+  ORCHESTRATOR RULES + PERIODS section explicitly override design PNGs, and
+  DATA OVER MOCKS says the DB is right — the expectation (not the code) was
+  updated, in P08's tests and filed for the shared contract test
+  (`SHARED_REQUEST.md` §8, blocking).
+- **P08-B12 (minor)** — fixed as above; proof also asserts one system-back
+  returns to `Today's quests`.
+- **m4** (pendingCount doc) — fixed. **m5** (grid width assertion) — added.
+  **m10** (sofa arm) — commented.
+- **m6** ("Happy week: 0 days" for a childless family) — left: P08b header
+  copy is that loop's scope. **m8** (liveRegion re-announce) — still
+  deferred. **m9** (`happyDays` write-only) — kept as the seam (the ledger
+  allows keep-or-drop). **m11** (watcher count) — unchanged, not
+  user-visible. **B16/C9** (balance wrap) — accepted platform limit, note
+  only. **B21/C11/m7** (P08b) — that loop's scope.
+- **M1** (Bolt placeholder under Reduce Motion) — resolved on main
+  (`f6b02d8`); the regression pin passes; no filing needed. **M2/M3** —
+  process items per the brief ("handled by the loop and the orchestrator"),
+  not reported as findings.
+- **B11.5** (should the banner be period-scoped?) — kept family-wide so the
+  banner ≡ the P11 list; filed as `SHARED_REQUEST.md` §9 for a ruling.
 
 ## Verification tails
 
-- `dart format .` → `Formatted 344 files (0 changed)`.
+- `dart format .` → `350 files (0 changed)`.
 - `flutter analyze` → `No issues found!` (whole app).
-- `flutter test test/features/today` → `All tests passed!` (+65: 52 + 11
-  proofs + 2 new repo tests).
-- `flutter test` (full) → `All tests passed!` (+372).
-- `shot.sh` light + dark + empty from final sources (all newer than the
-  sources; all three read back). Each run warns `frame never stabilised in
-  25 s` — caused by shared §6 (Rive idle loop runs because the flag parses
-  to false), not by this screen: captures are complete and correct.
-- `compare.py` vs design PNGs: light mean **5.22 %** (was 6.66),
-  dark **4.85 %**. Residual is data-driven, not spacing: live date
-  (`Fri 2 Oct` vs mock `Sat 4 Oct`), seed repeats (`· Daily` vs mock's mixed
-  labels — DB is correct per DATA OVER MOCKS), all 10 real rows vs the
-  mock's 5, banner balance-wrap. Dark: zero theme branches, all tokens flip
-  (banner, cards, pills, chips, progress). Status bar ignored per rules.
+- `flutter test test/features/today` → `All tests passed!` (+86).
+- `flutter test` (full) → `+458 −1`; the single failure is the **shared**
+  `test/core/data/repositories_test.dart` (`leo.done == 2`, pre-ruling
+  number) — screen agents may not touch shared files (RULES §1), filed as
+  `SHARED_REQUEST.md` §8 (blocking).
+- `shot.sh` light + dark + empty from final sources (all newer; all three
+  read back). Every run warns `frame never stabilised in 25 s` — shared §6
+  (`DISABLE_ANIMATIONS=1` parses to false, Rive idle loop runs); captures
+  are complete. Two dark captures in a row showed another screen entirely
+  (K03 kid-home, then springboard) — parallel-loop contention on the shared
+  simulator; a third run captured the correct screen.
+- `compare.py`: light mean **5.20 %**, dark **4.84 %**. Residual is
+  data-driven: live date (`Fri 2 Oct` vs mock `Sat 4 Oct`), ruling-driven
+  Leo count/repeat labels, all 10 real rows vs the mock's 5, banner
+  balance-wrap. Dark: zero theme branches, everything flips.
 
-VERDICT: PASS
+VERDICT: FAIL
