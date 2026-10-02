@@ -95,6 +95,8 @@ GoRouter buildAppRouter(
       }
       const parentOnly = <String>[
         '/today',
+        '/today-empty',
+        '/quest-editor',
         '/quests',
         '/money',
         '/child-profile',
