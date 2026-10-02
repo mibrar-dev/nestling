@@ -71,11 +71,7 @@ void main() {
     'P02-BUG-1b pager is 400x1.3 at text scale 1.3 (currently 468x1.3)',
     (tester) async {
       await setUpTestScope();
-      await _pumpTour(
-        tester,
-        surface: const Size(390, 844),
-        textScale: 1.3,
-      );
+      await _pumpTour(tester, surface: const Size(390, 844), textScale: 1.3);
 
       expect(
         tester.getSize(find.byType(PageView)).height,
@@ -179,11 +175,7 @@ void main() {
     'P02-BUG-3b 375x667 at text scale 1.3 has no RenderFlex overflow',
     (tester) async {
       await setUpTestScope();
-      await _pumpTour(
-        tester,
-        surface: const Size(375, 667),
-        textScale: 1.3,
-      );
+      await _pumpTour(tester, surface: const Size(375, 667), textScale: 1.3);
 
       expect(
         tester.takeException(),
@@ -219,10 +211,9 @@ void main() {
       };
       for (final title in titles) {
         final quest = quests[title]!;
-        final child =
-            await (db.select(db.children)
-                  ..where((c) => c.id.equals(quest.assigneeChildId!)))
-                .getSingle();
+        final child = await (db.select(
+          db.children,
+        )..where((c) => c.id.equals(quest.assigneeChildId!))).getSingle();
         final expected = '${child.nickname} · ${quest.repeatRule}';
         final row = tester.widget<NestListRow>(
           find.ancestor(
@@ -267,15 +258,33 @@ void main() {
       final match = regex.firstMatch(dateLabel)!;
 
       const months = <String, int>{
-        'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
-        'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12,
+        'Jan': 1,
+        'Feb': 2,
+        'Mar': 3,
+        'Apr': 4,
+        'May': 5,
+        'Jun': 6,
+        'Jul': 7,
+        'Aug': 8,
+        'Sep': 9,
+        'Oct': 10,
+        'Nov': 11,
+        'Dec': 12,
       };
       final date = DateTime.utc(
         Seed.anchorOverride!.year,
         months[match.group(3)!]!,
         int.parse(match.group(2)!),
       );
-      const weekdays = <String>['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      const weekdays = <String>[
+        'Mon',
+        'Tue',
+        'Wed',
+        'Thu',
+        'Fri',
+        'Sat',
+        'Sun',
+      ];
 
       expect(
         match.group(1),
