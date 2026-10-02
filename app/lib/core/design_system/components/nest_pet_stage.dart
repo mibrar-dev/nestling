@@ -13,7 +13,10 @@ import 'package:nestling/core/design_system/tokens/spacing.dart';
 /// file; the SVG fallback stacks them here with the same split and feet
 /// fractions, so the two paths can never drift apart.
 /// [pipSize] caps the Pip height; in narrow
-/// parents the whole stage scales down instead of overflowing. The ground
+/// parents the whole stage scales down instead of overflowing. Pass
+/// [nestWidth] (and optionally [fixedPipHeight]) to request the design's
+/// exact slot instead — e.g. K03's 260-wide nest with its ≈152-tall Pip —
+/// without forking the scene. The ground
 /// shadow is a soft blurred ellipse directly under the nest, never a pill.
 class NestPetStage extends StatelessWidget {
   const new({
@@ -23,6 +26,8 @@ class NestPetStage extends StatelessWidget {
     this.mood = PipMood.idle,
     this.riveEnabled = true,
     this.pipSize = 200,
+    this.nestWidth,
+    this.fixedPipHeight,
     this.speech,
     this.semanticLabel,
     this.pip,
@@ -45,6 +50,23 @@ class NestPetStage extends StatelessWidget {
   final bool riveEnabled;
 
   final double pipSize;
+
+  /// Explicit nest width (logical px). When set, the stage stops deriving
+  /// its size from the parent width: the nest renders exactly [nestWidth]
+  /// wide and Pip scales to the design ratio ([pipPerNestWidth]) unless
+  /// [fixedPipHeight] overrides it. Null (default) keeps the legacy
+  /// max-width-derived sizing capped by [pipSize].
+  final double? nestWidth;
+
+  /// Explicit Pip height (logical px). Implies explicit sizing like
+  /// [nestWidth]; the nest derives as `fixedPipHeight / split` unless
+  /// [nestWidth] is also set. Null (default) keeps legacy sizing.
+  final double? fixedPipHeight;
+
+  /// Pip height per unit of nest width in explicit-size mode: K03's design
+  /// slot is a ≈152-tall Pip on a 260-wide nest (`SPACING_SPEC` §7).
+  static const double pipPerNestWidth = 152 / 260;
+
   final String? speech;
   final String? semanticLabel;
 
@@ -65,11 +87,21 @@ class NestPetStage extends StatelessWidget {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final maxW = constraints.maxWidth;
-              var pipH = maxW.isFinite ? maxW * 0.62 * 0.55 : pipSize;
-              if (pipH > pipSize) {
-                pipH = pipSize;
+              final double pipH;
+              final double nestW;
+              if (nestWidth != null || fixedPipHeight != null) {
+                // Explicit-size mode (K03): the design's slot, not a cap.
+                final fixedH = fixedPipHeight;
+                nestW = nestWidth ?? fixedH! / PipNestFallback.split;
+                pipH = fixedH ?? nestW * pipPerNestWidth;
+              } else {
+                var derived = maxW.isFinite ? maxW * 0.62 * 0.55 : pipSize;
+                if (derived > pipSize) {
+                  derived = pipSize;
+                }
+                pipH = derived;
+                nestW = pipH / 0.55;
               }
-              final nestW = pipH / 0.55;
               final stageW = nestW / 0.62;
               final custom = pip;
               if (custom != null) {

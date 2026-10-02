@@ -7,6 +7,11 @@ import 'package:nestling/core/design_system/tokens/spacing.dart';
 import 'package:nestling/core/design_system/tokens/typography.dart';
 
 /// Parent-mode text field with label, focus ring, and password toggle.
+///
+/// Setting [NestTextField.errorText] paints the invalid state: a 2 px danger
+/// border on the field plus a gutter-aligned error row below it (never the
+/// indented Material slot) announced through a live region. The error
+/// replaces the helper, matching Material's error-wins behaviour.
 class NestTextField extends StatefulWidget {
   const new({
     super.key,
@@ -127,7 +132,9 @@ class _NestTextFieldState extends State<NestTextField> {
     );
     final errorBorder = OutlineInputBorder(
       borderRadius: NestRadii.allM,
-      borderSide: BorderSide(color: tokens.danger),
+      // Invalid inputs carry a heavier danger border (design-system error
+      // state: 2 px danger token on the field itself).
+      borderSide: BorderSide(color: tokens.danger, width: 2),
     );
 
     final field = Container(
@@ -195,13 +202,22 @@ class _NestTextFieldState extends State<NestTextField> {
         else
           field,
         // Gutter-aligned error row (P03 §5): same x as the label above,
-        // never the indented decoration slot.
+        // never the indented decoration slot. A live region (P03 §8, as
+        // Material's own error row was) so assistive tech announces the
+        // validation message the moment it appears; the inner text stays
+        // excluded so the message is announced exactly once.
         if (errorText != null) ...[
           const SizedBox(height: 6),
-          Text(
-            errorText,
-            style: NestType.caption(color: tokens.danger)
-                .copyWith(fontWeight: FontWeight.w600),
+          Semantics(
+            liveRegion: true,
+            label: errorText,
+            child: ExcludeSemantics(
+              child: Text(
+                errorText,
+                style: NestType.caption(color: tokens.danger)
+                    .copyWith(fontWeight: FontWeight.w600),
+              ),
+            ),
           ),
         ],
       ],

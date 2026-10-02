@@ -210,6 +210,10 @@ abstract final class Seed {
             happiness: const Value(4),
             happyDays: const Value(4),
             weeklyBasePence: const Value(300),
+            // Creation order is the roster order (CHILD ORDER ruling):
+            // Maya is added before Leo.
+            createdAt: Value(utc(9, 19, 8)),
+            createdAtTz: const Value(defaultFamilyZoneId),
           ),
         );
     await db
@@ -231,6 +235,9 @@ abstract final class Seed {
             happiness: const Value(4),
             happyDays: const Value(3),
             weeklyBasePence: const Value(150),
+            // Added after Maya (see above): creation order, not name order.
+            createdAt: Value(utc(9, 19, 8).add(const Duration(minutes: 1))),
+            createdAtTz: const Value(defaultFamilyZoneId),
           ),
         );
   }
