@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:nestling/core/design_system/motion/pip_rive.dart';
 import 'package:nestling/core/design_system/tokens/nest_tokens.dart';
 import 'package:nestling/core/design_system/tokens/spacing.dart';
@@ -209,7 +208,8 @@ class NestSpeechBubble extends StatelessWidget {
           ),
           child: Text(
             text,
-            style: GoogleFonts.nunito(
+            style: TextStyle(
+              fontFamily: 'Nunito',
               fontSize: 16,
               height: 24 / 16,
               fontWeight: FontWeight.w800,
