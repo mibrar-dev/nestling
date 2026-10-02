@@ -7,34 +7,41 @@ class TodayItem extends Equatable {
   const new({
     required this.id,
     required this.title,
-    required this.detail,
     required this.questId,
     required this.childId,
     required this.childName,
     required this.status,
     required this.coins,
+    this.repeatRule = '',
+    this.iconKey = '',
   });
 
   final String id;
   final String title;
-  final String detail;
   final String questId;
   final String childId;
   final String childName;
 
-  /// `to_do | done_pending | approved`.
+  /// `to_do | done_pending | approved | not_yet`.
   final String status;
   final int coins;
+
+  /// Quest cadence: `once | daily | weekly` (from `quests.repeat_rule`).
+  final String repeatRule;
+
+  /// Icon key (from `quests.icon`); mapped to NestIcons in the view.
+  final String iconKey;
 
   @override
   List<Object?> get props => <Object?>[
     id,
     title,
-    detail,
     questId,
     childId,
     childName,
     status,
     coins,
+    repeatRule,
+    iconKey,
   ];
 }
