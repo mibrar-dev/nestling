@@ -1,238 +1,134 @@
-# P04 · Privacy consent — bug hunt (Stage 6, iteration 1)
+# P04 · Privacy consent — bug hunt (Stage 6, iteration 2)
 
 Route `/privacy` · feature `privacy_consent` · parent mode · seeds `demo` and
-first-run (`fresh`-equivalent, empty DB). **No screen code was changed.**
-Added `app/test/features/privacy_consent/p04_bugs_test.dart`: **7 skipped bug
-proofs** (each FAILS against the iteration-1 tree) plus **5 passing checks**
-for the classes I cleared. Run the failing proofs with:
+first-run (empty DB). **No screen code was changed.** Re-hunted the
+iteration-2 tree after the build fixes and the shared compact-nav merge
+(`main` `fc981bc` via `b93ad6d`/`bccbde8`).
+
+`app/test/features/privacy_consent/p04_bugs_test.dart` now has **15 proofs:
+11 green + 4 skipped** (P04-2/P04-4/P04-7 shared-blocked, P04-8 new). Run the
+skipped ones with:
 
 ```
 flutter test --run-skipped test/features/privacy_consent/p04_bugs_test.dart
+→ 11 passed, 4 failed (the four open defects, by design)
 ```
 
-Method: read the view/bloc/repository, the shared `Nest*` components, the
-router/DI/schema/seed and both design sources; measured the design PNGs
-(`design/screens/{light,dark}/P04-privacy.png`) and the committed simulator
-shots (`docs/screens/P04/ui/app_{light,dark}_1.png`, `p04-{light,dark}.png`)
-with pixel probes; every behavioural claim was first reproduced with a
-throwaway test before it was written up. `ORCHESTRATOR_NOTES.md` (written
-11:47) is honoured: items 1–3 are findings P04-2/P04-3/P04-4 below.
+Method: re-read the iteration-2 view/bloc/repository plus the shared component
+diffs; measured the new simulator shots (`ui/app_{light,dark}_2.png`) against
+the design PNGs with pixel probes; probed every edge class in the brief with
+throwaway tests before writing anything (first-run upsert races, rapid
+double/triple taps, interleaved write failures, async gaps, guards,
+persistence); every claim below is reproduced by a committed test.
 
-New findings: **P04-1 … P04-7** (5 major, 2 minor). The screen cannot pass:
-`VERDICT: FAIL`.
+**New finding this iteration: P04-8 (minor).** Four iteration-1 findings are
+fixed and pinned; two majors and one minor remain open, all shared-owned.
+The screen still cannot pass: `VERDICT: FAIL`.
 
-## New findings
+## Iteration-1 findings — disposition
 
-### P04-1 — the crash-report opt-in is silently dropped on a first run — MAJOR
+| Id | Sev | Finding | Status |
+|---|---|---|---|
+| P04-1 | major | first-run opt-in silently dropped | **FIXED** — upsert in `setCrashConsent` (`data/privacy_consent_repository_impl.dart:63-87`); `[P04-1]` green; two new first-run guards below |
+| P04-2 | major | row 4 empty peach tile (no trash glyph) | **OPEN — shared** (`ic_trash.svg` + `NestIcons.trash` still absent; `SHARED_REQUEST` §1) |
+| P04-3 | major | compact nav bar 16 px short | **FIXED by the shared merge** — 60 px bar, chevron centre 69→73, h1 91→107; `[P04-3]` green |
+| P04-4 | major | real 1 px dividers inflate the list by 3 px | **OPEN — shared** (`NestList` draws layout-height `Divider`s; §6) |
+| P04-5 | minor | rapid double-tap wrote the same value twice | **FIXED** — optimistic emit; `[P04-5]` green |
+| P04-6 | major | failed OFF write claimed "it stays off" | **FIXED** — state-aware caption; `[P04-6]` green |
+| P04-7 | minor | dark mode renders the light-baked shield | **OPEN — shared asset** (§2) |
+| P04-8 | minor | double-failed rapid toggle reverts to an unpersisted value | **NEW** (below) |
 
-- **Carried from stage 3** (BUG(P04-1)); still open. Re-proved this stage at
-  the widget level.
-- **Where:** `app/lib/features/privacy_consent/data/privacy_consent_repository_impl.dart:63`
-  (`setCrashConsent` → `UPDATE settings WHERE family_id = 'fam1'`), surfaced
-  by `privacy_consent_view.dart:151-163`.
-- **Why:** a real first launch is an empty database. `Seed.fresh`
-  (`app/lib/core/data/seed.dart:94-104`) writes only `app_state`, and nothing
-  before P04 creates the `fam1` settings row (`AuthRepositoryImpl.createAccount`
-  inserts a `members` row only). The UPDATE matches zero rows, the stream never
-  re-emits, and the toggle stays OFF with no error — the screen's only
-  interactive control is a no-op on the exact flow it belongs to.
-- **Repro (test):** `--run-skipped … --plain-name '[P04-1]'` →
-  `setUpTestScope(seedDemo: false)` + `pumpAppRoute('/privacy')` + tap
-  `p04_crash_toggle` → expected stored `true`, actual `false`. The existing
-  repository-level red test is
-  `privacy_consent_repository_test.dart:105` (left red on purpose by stage 3
-  as the loop's forcing function; it is the one red test in the suite).
-- **Failing test:** `[P04-1] first run: the toggle tap is actually stored`.
-- **Fix (feature-local, P04 data/ is editable):** follow the
-  `AppSession._write` precedent — UPDATE, and when `changed == 0` insert the
-  `settings` row (`insertOnConflictUpdate`, or `insert … onConflictDoUpdate`).
-  `watchItems()` already watches that query, so the row appearing re-emits and
-  the existing bloc path flips the toggle with no optimistic emit. Review
-  stage 4 has the exact snippet; `SettingsRepositoryImpl._write` (P16) shares
-  the defect and needs the same shared helper (SHARED_REQUEST §4).
+## New finding
 
-### P04-2 — promise row 4 renders an empty peach tile (no trash glyph) — MAJOR
+### P04-8 — a double-failed rapid toggle reverts to a value that was never persisted — MINOR
 
-- **Where:** `privacy_consent_view.dart:104-114` — the `_PromiseRow` for
-  "Delete everything anytime" has no `leadingAsset`; the root cause is the
-  missing shared asset (`app/assets/icons/ic_trash.svg` +
-  `NestIcons.trash`). `ic_bin` is a wheelie bin and `ic_basket` a laundry
-  basket; neither matches the HTML glyph
-  `M4 7h16M9.5 7V5h5v2M6.5 7l1 13h9l1-13` (peach tile, `aPeach` ink).
-- **Repro (test):** `--run-skipped … --plain-name '[P04-2]'` → 4 `NestIcon`s
-  expected, 3 found. Simulator: `docs/screens/P04/ui/app_light_1.png` /
-  `app_dark_1.png` row 4 = blank peach square; design = peach tile with the
-  trash glyph.
-- **Failing test:** `[P04-2] every promise row renders its leading glyph`.
-- **Fix:** land SHARED_REQUEST §1 (`ic_trash.svg` + `NestIcons.trash`) and
-  pass `leadingAsset: NestIcons.trash, tint: NestTileTint.peach`; delete the
-  `TODO(P04)`; then extend the proof to assert the icon asset name. Until the
-  shared asset exists no correct in-scope substitute exists (orchestrator
-  note 1 calls it "red-ink bin glyph").
+- **Where:** `app/lib/features/privacy_consent/presentation/bloc/privacy_consent_bloc.dart:52`
+  (`final previous = state.crashConsent;`) + `:60` (`crashConsent: previous`).
+  With the iteration-2 optimistic emit, `state.crashConsent` can be another
+  event's **in-flight optimistic** value, not the stored one. (Also flagged by
+  the iteration-2 review, finding 4.)
+- **Why it matters:** interleaving ON → OFF with both writes failing, the
+  first failure reverts to the stored OFF, then the second failure reverts to
+  the first tap's optimistic ON: nothing was persisted, yet the switch shows
+  ON, the caption says "Crash reports are still on", and `status == failure`
+  disables the toggle, so the parent cannot correct it without leaving the
+  screen. A never-persisted consent being announced as ON is the wrong
+  direction for this control (same root cause can strand other orderings,
+  e.g. a failed first tap after a later successful tap).
+- **Repro (test):** `--run-skipped … --plain-name '[P04-8]'` — fake repository
+  whose ON write fails at 10 ms and OFF write at 50 ms (items stream never
+  re-emits); tap twice → expected `NestToggle.value == false` and no "still
+  on" caption, actual `true` + caption. Bloc-level probe confirmed
+  `state.crashConsent == true`, `status == failure`, stored value `false`.
+- **Failing test:** `[P04-8] a double-failed rapid toggle reverts to the
+  stored value`.
+- **Fix (one line, feature-local):** revert to the stored value the state
+  already carries — `final previous = _crashFrom(state.items);` (the existing
+  static helper; `items` mirrors the database) instead of
+  `state.crashConsent` — or expose a `storedCrashConsent` getter. Review
+  finding 4 has the same fix.
 
-### P04-3 — compact nav bar is 16 px short; the whole header block sits high — MAJOR
+## Remaining defects — all shared-owned, none fixable in RULES §1
 
-- **Where:** `privacy_consent_view.dart:28-41` uses
-  `NestNavBar(compact: true)`; the component's compact branch
-  (`nest_nav_bar.dart:42-82`) is `minHeight: 44` + horizontal padding only.
-  The design's `.nav-bar.compact` is `min-height: 52; padding: 4px 12px 12px`
-  → **60 px**, so the scroll area starts at 47 + 60 = 107, not 91.
-- **Evidence (logical px, design → app):** back-chevron centre 73 → 69
-  (screen probe), h1 cap top 112.3 → 96.3, subtitle 155 → 139, shield circle
-  188.3–269.3 → 172.3–253.3, list top 287 → 271. Uniform −16 px; the bottom
-  CTA is bottom-anchored and matches (Continue top 690 in both). In the widget
-  proof, h1 line box 107 → 91 and chevron centre 73 → 69.
-- **Repro (test):** `--run-skipped … --plain-name '[P04-3]'` → expected
-  chevron centre 73, actual 69; expected h1 top 107, actual 91.
-- **Failing test:** `[P04-3] header block matches the 60px design bar`.
-- **Fix (shared, core):** compact bar → `minHeight: 52` with
-  `EdgeInsets.fromLTRB(s3, s2, s3, s3)`, and drop the `title: ''` workaround
-  in the view (SHARED_REQUEST §5, same file as §3). A local 4/12 padding shim
-  around `NestNavBar` would match P04 but leaves every other compact screen
-  broken — prefer the shared fix.
+| Id | Sev | Defect | Evidence (iteration-2 shots) | Action needed |
+|---|---|---|---|---|
+| P04-2 | major | row 4 "Delete everything anytime" renders an empty peach tile; the design draws the trash glyph | `ui/app_light_2.png` x=52: peach tile 466–505.7 continuous `#FFEDE4` (no glyph pixels); design 463–502.7 with rust glyph | add `app/assets/icons/ic_trash.svg` (path `M4 7h16M9.5 7V5h5v2M6.5 7l1 13h9l1-13`, 24×24, `currentColor`, 2 px, round caps) + `NestlingIcons.trash`/`NestIcons.trash`; then P04 adds `leadingAsset: NestIcons.trash` and `[P04-2]` goes green (one line) |
+| P04-4 | major | `NestList`'s real 1 px `Divider`s make the list 227 px instead of 224; every row after the first drifts 1 px and everything below +3 px | app tile tops **295 / 352 / 409 / 466** (57 px apart) vs design **295 / 351 / 407 / 463** (56 px apart); opt card top 530 vs 527; `compare.py` bands 3–5 stay the worst (7.86 / 7.31 / 6.52 % light) | one shared change in `nest_list_row.dart`: paint the separator over the row boundary (Stack/overlay/negative offset) keeping `indent: 72` + `line`; then `[P04-4]` goes green |
+| P04-7 | minor | dark mode shows `#E6EFFE` disc + `#FFFFFF` shield body instead of the design's `#1A2A4A` + `#1F1C2E` | dark shot probes: disc `(165,229)` design `#1A2A4A` vs app `#E6EFFE`; body `(195,250)` design `#1F1C2E` vs app `#FFFFFF` | themed shield asset (light + dark variant or token-coloured layers); then `[P04-7]` asserts the dark artwork |
 
-### P04-4 — real list dividers add 3 px; rows drift 57 px apart, opt card 13 px high — MAJOR
+**Mandatory `ORCHESTRATOR_NOTES.md` status:** item 1 **unmet** (P04-2,
+blocked on the shared asset); item 2 **met** (shared merge, probes Δ0);
+item 3 **partly met** (row heights/indent exact, residual is the 3 divider
+px — P04-4); item 4 **met** (bottom panel to the edge both themes, 20 px
+gutters, header/CTA aligned).
 
-- **Where:** `NestList` (`nest_list_row.dart:131-135`) inserts
-  `Divider(height: 1)` widgets between rows. The design overlays a 1 px
-  `::before` on the row boundary, so 4 rows stay exactly 4 × 56 = 224 px;
-  the app list is 227 px and every row after the first starts 1 px lower.
-- **Evidence (logical px):** widget proof: list 427 = rows 424 + 3 (the sum
-  invariant). Simulator: promise-tile tops 279 / 336 / 393 / 450 → 57 px
-  apart, design 295 / 351 / 407 / 463 → 56 px apart; the opt card top is 514
-  vs the design 527 (orchestrator target ≈ 528). Row content itself is
-  correct (56 px, tiles 40/r12, divider indent 72).
-- **Repro (test):** `--run-skipped … --plain-name '[P04-4]'` → expected
-  `424.0` (sum of the four rows), actual `427.0`.
-- **Failing test:** `[P04-4] dividers do not add height to the promise list`.
-- **Fix (shared, core):** paint the separator over the boundary (Stack /
-  overlay / negative offset) so it contributes no layout height; keep
-  `indent: 72` and the `line` token (SHARED_REQUEST §6). No in-scope P04 fix
-  exists: re-implementing the list would violate the design-system rule.
+## Adversarial checks this iteration (cleared, proofs in the file)
 
-### P04-5 — a rapid double-tap on the crash switch loses the second tap — MINOR
+- **First-run upsert races — clean.** An ON→OFF double tap on an empty DB
+  persists the last tap (`false`) across 5 consecutive runs, so the
+  `insertOrIgnore` fallback does not drop the later overlapping write in
+  practice; pinned as a new guard test. A first-run opt-in also survives a
+  route close/reopen (new guard). Single-tap upsert was already P04-1.
+- **Interleaved write outcomes — only the double-failure ordering is wrong.**
+  First-fails-then-second-succeeds and first-succeeds-then-second-fails both
+  settle on the last successful write's value; captured as P04-8.
+- **Async gap:** unchanged — a write failing after the parent leaves the
+  screen is caught (bloc 9.2 drops emits after close); proof still green.
+- **Guard / deep link:** kid mode still redirects `/privacy` →
+  `/parental-gate`; back with no history still lands on `/create-account`.
+- **Visual owner rules on the iteration-2 shots:** gutters 20 px on headline,
+  list, opt card and CTA; bottom CTA surface runs to the physical edge in both
+  themes (`#FFFFFF` / `#1F1C2E` at y 838); header and CTA are pixel-exact
+  (h1 113–138, chevron 66–80, Continue 690). The three shared deviations are
+  the only visual gaps.
+- **Unchanged / N/A for this screen:** text scale 1.3 at 320 px (matrix still
+  green), dark contrast on token pairs, Pip rule (no Pip), children/money/
+  timezone edge classes (P04 reads no child, quest or ledger data, no dates).
+- **New cleanup obligations only (not defects):** the contract test still pins
+  row 4's *missing* glyph (`findsNothing`) — flip it with P04-2; the view's
+  `title: ''` + obsolete `TODO(P04)` should be dropped now that `NestNavBar`
+  handles a null title (review finding 3); `2_build.md` has three stale
+  sentences (review finding 5). The next build stage owns these.
 
-- **Where:** `NestToggle.onTap: () => changed(!value)`
-  (`nest_toggle.dart:35`) plus the bloc's deliberate no-optimistic-emit rule
-  (`privacy_consent_bloc.dart:42-55`). Until the Drift stream re-emits, the
-  widget still shows the old `value`, so a second tap before the round-trip
-  requests the same value again: OFF → tap → tap ends ON instead of OFF.
-- **Repro (test):** `--run-skipped … --plain-name '[P04-5]'` — tap twice with
-  a frame between (the stream cannot re-emit under fake async without
-  `runAsync`), then flush Drift: expected stored `false` (two toggles), actual
-  `true` (the same value written twice). On a device the window is the
-  write → stream → rebuild round-trip (1–2 frames; larger under load).
-- **Failing test:** `[P04-5] double-tapping the switch toggles twice`.
-- **Fix options (feature-local):** dispatch a value-free toggle event whose
-  handler flips the current `state.crashConsent`, and/or add an in-flight
-  guard while a write is pending, and/or emit the requested value
-  optimistically (keep the RULES §4 no-load-event rule; the stream still
-  reconciles). Product call: a debounced single tap is also acceptable if the
-  design says so, but then the double tap must not leave the opposite state.
+## Suite state at hand-off
 
-### P04-6 — a failed OFF write tells the parent "it stays off" while it stays ON — MAJOR
-
-- **Where:** `privacy_consent_view.dart:167-176` — the failure caption is the
-  fixed string "Oops — your choice wasn't saved. Continue anyway; it stays
-  off."; `_onCrashToggled` keeps the prior `crashConsent` on error
-  (`privacy_consent_bloc.dart:48-55`).
-- **Why:** the caption's second sentence is only true when the prior state was
-  OFF. When the parent tries to turn crash reports OFF and the write fails,
-  the stored opt-in remains ON — the screen then makes a false statement
-  about consent (ICO/Children's-Code messaging), even though the switch
-  visibly stays ON.
-- **Repro (test):** `--run-skipped … --plain-name '[P04-6]'` — fake repo emits
-  a crash row with `enabled: true`, `setCrashConsent` throws; tap the toggle:
-  `NestToggle.value` is `true` and `textContaining('stays off')` finds the
-  caption.
-- **Failing test:** `[P04-6] a failed OFF write never claims "it stays off"`.
-- **Fix:** make the caption state-aware — e.g. when `state.crashConsent` is
-  true: "Oops — your choice wasn't saved. Crash reports are still on.
-  Continue anyway."; when false keep the spec'd line. (Plan §d's copy assumed
-  the OFF-by-default path; check the wording with design.)
-
-### P04-7 — dark mode renders the light-baked shield illustration — MINOR
-
-- **Where:** `privacy_consent_view.dart:74-78` renders
-  `NestlingIllustrations.privacyShield` (same asset both themes).
-  `privacy_shield.svg` bakes the light sky-tint disc `#E6EFFE` and a white
-  shield body (`#FFFFFF`); the dark design uses `#1A2A4A` + `#1F1C2E`.
-- **Evidence (RGB probes on the committed shots):** disc at (165, 229):
-  design dark `#1A2A4A` vs app dark `#E6EFFE`; shield body: design
-  `#1F1C2E` vs app `#FFFFFF`. In `app_dark_1.png` the illustration is a
-  glaring light blob on the dark surface.
-- **Repro (test):** `--run-skipped … --plain-name '[P04-7]'` — pump dark, take
-  the shield's `SvgAssetLoader` asset, load its XML in `runAsync`; expected
-  "not contains `#E6EFFE`", actual the XML contains it (and `#FFFFFF`).
-- **Failing test:** `[P04-7] the dark-mode shield does not bake light colours`.
-- **Fix (shared asset):** a dark variant selected by theme, or a token-driven
-  circle/body layer (SHARED_REQUEST §2; extend it to cover the body, not just
-  the circle). Do not hand-edit core assets from P04. When the fix lands the
-  proof should look up the dark asset (e.g. `privacy_shield_dark.svg`) and
-  assert the new colours.
-
-## Verified clean this iteration (passing proofs in the same file)
-
-- **Parent/kid guard:** kid mode + `setAppMode('kid')` + deep link `/privacy`
-  → `/parental-gate` (`/privacy` is in `_onboardingLocations`, so the guard
-  covers it); no bypass found.
-- **Deep link / back:** `/privacy` with no history renders and the chevron
-  falls back to `/create-account` exactly as plan §c specifies; with history
-  it pops (stage-3 coverage still green).
-- **Restart persistence:** turn the opt-in ON, dispose the route, reopen
-  `/privacy` on the same database → the switch is ON again. (The first-run
-  case is the P04-1 bug; `Seed.demo`/`empty` are fine.)
-- **Async gap (emit after close):** a write that fails after the parent has
-  left is caught; bloc 9.2.1's handler emitter drops emits once the bloc
-  closes (probe: delayed-throw repository inside `runZonedGuarded`, no zone
-  error). A `Completer` completed with an error *after* `bloc.close()` can be
-  reported as unhandled by the harness, but the production shape
-  (repository awaits internally) is clean — not a bug.
-- **Rapid double tap on the notice link:** two synchronous taps open exactly
-  one dialog (barrier backs the second tap); Close returns to `/privacy`.
-- **Text scale 1.3 / width 320:** the stage-2/3 matrix (320/390/430 × 1.0/1.3,
-  320×568) is still green, including the dialog — no overflow found.
-- **Dark-mode contrast:** tokens only; link `sky` 7.21:1, danger caption
-  7.37:1 on dark paper, toggle track/knob fine. The one dark defect is the
-  shared shield artwork (P04-7).
-- **N/A classes with no surface here:** 0/1/6 children, long UK names, £0.00 /
-  £999.99 / 9 999 coins, empty lists, money rounding and Europe/London / BST —
-  P04 renders fixed copy and one settings boolean; it reads no child, quest or
-  ledger data and no dates. The demo seed values are irrelevant to this
-  screen by design.
-
-## Carried items (stages 3–5, still open — not re-proved here)
-
-- SHARED_REQUEST §1 (trash asset) = P04-2; §2 (dark shield) = P04-7;
-  §3 (`NestNavBar` null title) folded into §5; §4 (first-run settings row)
-  = P04-1 — review stage 4 shows the fix is feature-local and must be done by
-  P04's own data layer, not deferred.
-- New SHARED_REQUEST §5 (compact nav bar 60 px) and §6 (`NestList` divider
-  overlay) were appended this stage with the measured evidence above.
-- Review findings 4–8 (token literals in `_PromiseRow`, `'crash'` string
-  literal in three places, `copyWith` can never clear `errorMessage`, the
-  notice dialog is one run-on sentence instead of the four bullets the plan
-  specifies, dead `PrivacyConsentPlaceholderCard`) are polish; review has the
-  detail and none is user-blocking.
-- **Suite state at hand-off:** `dart format --set-exit-if-changed .` → 356
-  files, 0 changed; `flutter analyze` → No issues found; `flutter test
-  test/features/privacy_consent/` → **76 passed, 7 skipped, 1 failed** — the
-  single failure is the deliberate P04-1 proof
-  (`privacy_consent_repository_test.dart:105`); full `flutter test` → **555
-  passed, 7 skipped, 1 failed** (same single cause). My 7 new bug proofs are
-  `skip`-marked so they add no red; every one fails when run with
-  `--run-skipped`, as reported above. Iteration 2 must fix P04-1 (which turns
-  the existing red test green) and un-skip the proofs it fixes.
+- `dart format --set-exit-if-changed .` → 357 files, 0 changed.
+- `flutter analyze` → No issues found.
+- `flutter test test/features/privacy_consent/` → **97 passed, 4 skipped,
+  0 failed**.
+- `flutter test` (whole app) → **584 passed, 4 skipped, 0 failed**.
+- `--run-skipped` on the bug file → 11 passed, **4 failed** (P04-2/P04-4/
+  P04-7 shared-blocked, P04-8 new), each with its own repro above.
 
 ## Verdict
 
-Five majors: the only interactive control is a no-op on first run (P04-1,
-feature-local fix), the fourth promise row has no glyph (P04-2), the whole
-header block is 16 px out of position (P04-3), and the list's real dividers
-break the vertical rhythm (P04-4), plus the false "it stays off" consent
-message (P04-6). Two minors: the double-tap toggle race (P04-5) and the
-light-baked dark shield (P04-7). The owner alignment rule and the orchestrator
-notes 1–3 are not met yet, and the suite still carries the deliberate
-first-run red test. Nothing here is a process item.
+The iteration-1 in-scope bugs are fixed and pinned, the shared nav fix closed
+the header offset, and the first-run upsert holds under overlap probes. But
+two majors remain visibly open on this screen — the empty row-4 tile (P04-2)
+and the +3 px list/row drift (P04-4) — plus the dark shield artwork (P04-7)
+and the new double-failure revert (P04-8, minor). The three visual defects are
+owned by `lib/core`/assets and need orchestrator action (items 1 and 3 of the
+mandatory notes are not met); "all tests pass" must not be read as "no
+defects open".
 
 VERDICT: FAIL

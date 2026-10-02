@@ -5,3 +5,6 @@
 2. Header block is ~16 px HIGH: back chevron, title and subtitle must match the design (390×844 logical): chevron centre ≈ y 73, title cap top ≈ y 112, subtitle ≈ y 161, shield badge centre ≈ y 229 (measure from design/screens/light/P04-privacy.png ÷3 and the HTML).
 3. List rows: each row is ~1–2 px taller than the design so the list drifts; match row height and divider insets exactly from the HTML (row heights and the 1 px divider), so the "Optional: help improve" card top lands at ≈ y 528 and Continue at ≈ y 690.
 4. Owner rules: bottom panel surface runs to the screen edge (currently correct); perfect alignment.
+
+## UPDATE (orchestrator, 12:03) — overrides item 2 above
+The ~16 px header offset is SHARED (P05 has the identical offset); a shared fix is in progress on main (branch shared/onboarding_header_and_seed). Do NOT move the back row / title locally in P04. Items 1 (missing bin icon) and 3 (row heights) are still P04's to fix.

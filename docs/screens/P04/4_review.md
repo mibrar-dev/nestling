@@ -1,248 +1,261 @@
-# P04 · Privacy consent — QA code review (STAGE 4, iteration 1)
+# P04 · Privacy consent — QA code review (STAGE 4, iteration 2)
 
 Feature `privacy_consent` · route `/privacy` · parent mode · branch `screen/P04`.
 Reviewed surface: `git diff main...HEAD` **plus** the uncommitted working-tree
 build and the untracked `app/test/features/privacy_consent/**` (the loop commits
-each iteration, so the effective change set is both).
+each iteration). `main` has been merged twice since iteration 1, so this review
+also re-baselines against the merged shared components.
+
+`docs/screens/P04/ORCHESTRATOR_NOTES.md` exists, so its items (with the 12:03
+UPDATE) are treated as mandatory — status table at the end.
 
 Checks run for this review:
 
 ```
 dart format --output=none --set-exit-if-changed lib/features/privacy_consent \
-     test/features/privacy_consent      → 16 files, 0 changed
-flutter analyze                          → No issues found! (ran in 5.4s)
-flutter test test/features/privacy_consent/
-                                          → 00:01 +71 -1: Some tests failed.
-tools/screens/compare.py (light)         → mean diff 7.52%
-                                           band 0 0-105   2.74%
-                                           band 1 105-211 13.18%   <-- worst
-                                           band 2 211-316  6.97%
-                                           band 3 316-422 12.39%   <-- worst
-                                           band 4 422-527  9.74%
-                                           band 5 527-633  9.79%
-                                           band 6 633-738  0.40%
-                                           band 7 738-844  4.84%
+     test/features/privacy_consent        → 16 files, 0 changed
+flutter analyze                            → No issues found! (ran in 3.7s)
+flutter test test/features/privacy_consent/ → 00:02 +95 ~3: All tests passed!
+flutter test  (whole app)                  → 00:11 +582 ~3: All tests passed!
+tools/screens/compare.py vs ui/app_light_2.png → mean diff 4.48%
+     bands 1.55 / 6.02 / 1.98 / 7.86 / 7.31 / 6.52 / 0.40 / 4.17 %
+tools/screens/compare.py vs ui/app_dark_2.png  → mean diff 5.61%
+     bands 1.54 / 8.50 / 9.14 / 7.76 / 7.12 / 6.69 / 0.39 / 3.67 %
 ```
 
-Pixel measurements below are logical px (PNG ÷ 3) taken from
-`design/screens/light/P04-privacy.png` vs `docs/screens/P04/ui/p04-light.png`.
+Pixel probes of `design/screens/{light,dark}/P04-privacy.png` vs
+`docs/screens/P04/ui/app_{light,dark}_2.png` (logical px, PNG ÷ 3):
+
+| probe | design | app (it. 2) | it. 1 |
+|---|---|---|---|
+| back-chevron glyph band | 66–80 | **66–80** | 61–76 |
+| h1 glyph band | 113–138 | **113–138** | 97–122 |
+| subtitle glyph band | 156–170 | **156–170** | 140–154 |
+| promise-list card (top) | 289 | **289** | 273 |
+| promise-list card (bottom) | 509 | **512** | 490 |
+| opt card (top → bottom) | 532–616 | **535–619** | 527–594 |
+| bottom-CTA surface | 674–809 | **675–843** | 675–843 |
+| strip below CTA, light | `#FBF7F0` | **`#FFFFFF`** ✓ owner rule | ✓ |
+| strip below CTA, dark | `#15131F` | **`#1F1C2E`** ✓ owner rule | ✓ |
+
+Mean diff improved 7.52% → **4.48%** (light) and 8.12% → **5.61%** (dark).
+
+---
+
+## Iteration 1 findings — disposition
+
+| # | Finding | Status |
+|---|---|---|
+| 1 | BLOCKER first-run opt-in dropped / red test | **FIXED** — upsert in `setCrashConsent`; repository test green; `[P04-1]` un-skipped |
+| 2 | MAJOR 16 px header offset (shared `NestNavBar`) | **FIXED by the shared merge** (compact bar now 60 px) — probes above confirm the header is pixel-exact; `[P04-3]` un-skipped and green |
+| 3 | MINOR `2_build.md` UI claim contradicted by pixels | Superseded — see finding 5 |
+| 4 | MINOR magic numbers where tokens exist | **FIXED** for `12/7/16/40` (`s3`/`gap7`/`s4`/`s10`); the token-less literals (`84`, `13`, `56`, `22 / 16`, `decorationThickness`) match `NestListRow` and stay |
+| 5 | MINOR bare `'crash'` literal | **FIXED** — `ConsentOptionIds.crash` in the domain entity, used in impl, bloc and tests |
+| 6 | MINOR `errorMessage` could never be cleared | **FIXED** — `_unset` sentinel + `errorMessage: null` on fresh stream data |
+| 7 | MINOR notice dialog ran the promises together | **FIXED** — four centred lines from a shared `_promiseTitles` const |
+| 8 | MINOR dead placeholder widget | **FIXED** — `privacy_consent_placeholder_card.dart` deleted |
+
+New defects found by Stage 6 were also addressed in scope: `P04-5` (double-tap
+lost the second tap → optimistic emit) and `P04-6` (a failed OFF write claimed
+"it stays off" → state-aware caption). RULES §1 is still respected: `git diff
+main --name-only | grep -v 'features/privacy_consent\|test/features/privacy_consent\|docs/screens/P04'`
+returns nothing.
 
 ---
 
 ## Findings
 
-### 1. BLOCKER — the crash-report opt-in is silently dropped on a real first run, and a red test is left in the tree
+### 1. MAJOR — promise row 4 still ships an empty peach tile (ORCHESTRATOR_NOTES item 1, mandatory)
 
-- **Where:**
-  `app/lib/features/privacy_consent/data/privacy_consent_repository_impl.dart:62-67`
-  (`setCrashConsent` → `UPDATE settings WHERE family_id = 'fam1'`), surfaced by
-  `app/lib/features/privacy_consent/presentation/views/privacy_consent_view.dart:151-163`,
-  pinned by the failing test
-  `app/test/features/privacy_consent/privacy_consent_repository_test.dart:105`.
-- **Evidence:** `flutter test test/features/privacy_consent/` → `+71 -1`, the single
-  failure being `BUG(P04-1): consent persists on a first-run database`. RULES §7
-  done-criteria #1 requires `flutter test` → all pass, so the whole-app suite is
-  red on this branch and it cannot land.
-- **Why it matters:** the screen's only interactive control is a no-op on the very
-  flow the screen belongs to. On first launch `Seed.fresh`
-  (`app/lib/core/data/seed.dart:96-104`) writes only the `app_state` row, and
-  nothing before P04 creates the `fam1` `settings` row
-  (`AuthRepositoryImpl.createAccount` inserts a `members` row only,
-  `app/lib/features/auth/data/auth_repository_impl.dart:36-52`), so the UPDATE
-  matches zero rows, the stream never re-emits, the toggle snaps back to OFF and
-  **no error is shown**. This is also the ICO/Children's-Code control, so a
-  silently-dropped opt-in is exactly the failure mode that rule cares about.
-- **In P04's scope, not shared:** RULES §1 allows
-  `app/lib/features/privacy_consent/data/**` ("repository interface + impl") and
-  `SHARED_REQUEST.md` item 4 itself labels the file "feature-local,
-  screen-agent territory". Filing it and deferring is not the right move; the
-  screen can and must fix it.
-- **Concrete fix** (`privacy_consent_repository_impl.dart`):
+- **Where:** `app/lib/features/privacy_consent/presentation/views/privacy_consent_view.dart:115-125`
+  — `_PromiseRow(title: _promiseTitles[3], subtitle: …, tint: NestTileTint.peach)`
+  with no `leadingAsset`; `TODO(P04)` at `:118-123`.
+- **Mandatory requirement:** "It must show the red-ink bin glyph like the design,
+  light + dark. Add a widget test that all four row icons find their SvgPicture/Icon."
+- **Current state:** rows 1–3 now have a real proof
+  (`privacy_consent_view_contract_test.dart` — asset name, size 24, tile ink and
+  `colorFilter != null` in light and dark, `NestIcon`/`SvgPicture` counts), so
+  the orchestrator's second half is done for three rows. Row 4 remains the one
+  row with no glyph, and the test now *pins the wrong behaviour*
+  (`findsNothing` for row 4). `[P04-2]` stays skipped.
+- **Not fixable inside RULES §1, and that is now proven, not assumed:** the
+  57 files in `app/assets/icons/` contain no trash can. `ic_bin.svg` is a
+  wheelie bin (lid + body + two wheel dots) and `ic_basket.svg` a laundry
+  basket; neither matches the HTML glyph
+  `M4 7h16M9.5 7V5h5v2M6.5 7l1 13h9l1-13`. `NestIcons`
+  (`core/design_system/components/nest_icon.dart:11`) is a core alias of
+  `NestlingIcons`, so the entry must be added there too. RULES §1 puts
+  `app/lib/core/**` and `app/assets/**` off limits.
+- **What the orchestrator must land to close it:**
+  1. `app/assets/icons/ic_trash.svg` — 24×24, `stroke="currentColor"`,
+     `stroke-width="2"`, round caps, the path above, peach ink via
+     `NestTileTint.peach` → `tokens.aPeach`.
+  2. `NestlingIcons.trash` + `NestIcons.trash`.
+  Then P04 needs exactly one line: `leadingAsset: NestIcons.trash` on row 4,
+  the `TODO(P04)` deleted, `[P04-2]` un-skipped, and the
+  `findsNothing` assertion flipped to `findsOneWidget`.
+  Already filed as `SHARED_REQUEST.md` item 1 (from iteration 1) and still
+  unanswered — `git log main -- app/lib/core/design_system/assets/` shows only the
+  baseline commit.
+- **Severity rationale:** visible design deviation the orchestrator has called
+  out by name and 5_ui.md itself calls "a designer would reject". It is major
+  because the screen is not visually complete, not because P04 has work left it
+  can perform.
 
-  ```dart
-  @override
-  Future<void> setCrashConsent({required bool consent}) async {
-    final changed = await (_db.update(_db.settings)
-          ..where((s) => s.familyId.equals(Seed.familyId)))
-        .write(SettingsCompanion(crashReportConsent: Value(consent)));
-    if (changed == 0) {
-      await _db.into(_db.settings).insert(
-        SettingsCompanion.insert(
-          familyId: Seed.familyId,
-          crashReportConsent: Value(consent),
-        ),
-        mode: InsertMode.insertOrIgnore,
-      );
-    }
-  }
-  ```
+### 2. MAJOR — the promise list is 3 px taller than the design, drifting every row after the first (ORCHESTRATOR_NOTES item 3, mandatory)
 
-  `watchItems()` already watches that query, so the row appearing re-emits and the
-  existing bloc path (`_crashFrom` → `crashConsent`) flips the toggle with no
-  optimistic emit and no event re-add (RULES §4). Drift does not enable
-  `PRAGMA foreign_keys` (`app/lib/core/data/app_database.dart:280-286`), so the
-  insert succeeds while the `families` row is still missing; if FKs are ever
-  turned on, add an `insertOrIgnore` of `FamiliesCompanion.insert(id: Seed.familyId)`
-  first. Then the red test goes green and `flutter test` is clean.
-  Keep SHARED_REQUEST item 4's second half — `SettingsRepositoryImpl._write`
-  (P16) has the same UPDATE-only shape and still needs a shared helper.
+- **Where:** shared `NestList` inserts real `Divider(height: 1, thickness: 1)`
+  widgets between children
+  (`app/lib/core/design_system/components/nest_list_row.dart:131-135`), consumed
+  by `privacy_consent_view.dart:94`.
+- **Evidence:** list card 289→512 in the app vs 289→509 in the design — same top,
+  **+3 px** at the bottom; the opt card sits at 535 vs 532; rows are 57 px apart
+  where the design is 56 px (`compare.py` bands 3–5 remain the worst:
+  7.86 / 7.31 / 6.52 %). The design draws the separators as absolutely
+  positioned 1 px `::before` overlays (`.list-row + .list-row::before`), so
+  4 × 56 px rows stay 224 px; with real dividers the list is 227 px.
+- **Mandatory requirement:** "match row height and divider insets exactly from
+  the HTML … so the 'Optional: help improve' card top lands at ≈ y 528 and
+  Continue at ≈ y 690."
+- **Partly satisfied:** the row heights themselves are now exactly right (56 px,
+  40 px tiles at r12, divider indent 72, no padding drift) — the residual is
+  purely the 3 divider pixels, so the opt card lands at 530.5 rather than 528.
+- **Not fixable inside RULES §1:** the separators come from the shared
+  `NestList`. P04 cannot add a flag to it, and rebuilding the list in the
+  feature layer to overlay the separators would (a) re-implement a
+  design-system component and (b) need `NestCard`, whose `standard` variant is
+  `NestRadii.allL` (24) instead of the list's `allM` (16) — the card would
+  change shape. Correctly filed as `SHARED_REQUEST.md` item 6 with the exact fix
+  (paint the separator over the row boundary — Stack/overlay/negative offset —
+  keeping `indent: 72` and the `line` token). `[P04-4]` stays skipped and pins
+  `NestList.height == sum(row heights)`.
+- **Orchestrator action needed:** one change in `nest_list_row.dart`, e.g.
+  `separatorsAsOverlay: true` (default off so no other screen moves), then
+  un-skip `[P04-4]`.
+- **Severity rationale:** a cumulative 1 px-per-row offset is exactly the
+  "nothing a few px off" case of the OWNER ALIGNMENT rule, and the orchestrator
+  asked for the exact targets.
 
-### 2. MAJOR — the whole scroll area renders 16 px higher than the design (shared `NestNavBar` compact height), never filed
+### 3. MINOR — the `title: ''` workaround and its `TODO(P04)` are now stale and false
 
-- **Where:** `app/lib/features/privacy_consent/presentation/views/privacy_consent_view.dart:28-41`
-  (`NestNavBar(compact: true, title: '', onBack: …)`).
-- **Evidence** (glyph bands, logical px, design → app): h1 `113–138` → `97–122`;
-  subtitle `156–170` → `140–154`; shield circle `199–257` → `183–241`; nav chevron
-  centre `72.5` → `68.5`. Uniform **−16 px** for every content element, while the
-  bottom CTA starts at the same y in both (674) because it is bottom-anchored.
-  `compare.py` agrees: the two worst bands are 105–211 (13.18%) and 316–422
-  (12.39%) — exactly the h1 band and the promise-list band — and band 6
-  (633–738, blank paper in both) is 0.40%.
-- **Root cause:** `.nav-bar.compact` in `design/html-source/components.css:58`
-  is `min-height: 52px; padding: 4px 12px 12px` around the 44 px `.nav-back`
-  button → the bar is **60 px** tall, so the scroll area starts at y = 47 + 60 =
-  107. `NestNavBar`'s compact branch
-  (`app/lib/core/design_system/components/nest_nav_bar.dart:42-82`) is
-  `ConstrainedBox(minHeight: NestDevice.tapParent)` + horizontal padding only
-  → **44 px**, so P04's content starts at y = 91.
-- **In P04's scope only as a request:** the component is
-  `app/lib/core/**`, which RULES §1 puts off limits. What P04 can and must do is
-  file it (RULES §2) so the orchestrator can fix the bar once for every compact
-  screen. Nothing about the 16 px offset is mentioned in `SHARED_REQUEST.md`.
-- **Concrete fix:** append SHARED_REQUEST item 5 — `NestNavBar` compact should be
-  `minHeight: 52` with `EdgeInsets.fromLTRB(NestSpacing.s3, NestSpacing.gap2,
-  NestSpacing.s3, NestSpacing.s3)` (4 top / 12 sides / 12 bottom, matching
-  `.nav-bar.compact`) so it resolves to 60 px. Note the blast radius from
-  `nestling_assets.dart` (`NestIcons.back`, "Screens: P03, P04, P05, P06, P11,
-  P14, K02, K04, K06, K08, K09, K10, K11"), and fold it into item 3 (same file,
-  same ownership). Until it lands, P04's UI check must not be reported as clean.
+- **Where:** `privacy_consent_view.dart:37-42`.
+- **Why:** the comment claims "compact with null title nests Spacer (Expanded)
+  inside Expanded and throws ParentDataWidget … Empty title renders the same
+  back-only row until core is fixed". The shared merge fixed exactly that —
+  `nest_nav_bar.dart:69` now returns `SizedBox.shrink()` for a null **or empty**
+  title. `SHARED_REQUEST.md` item 3 even flags the leftover ("the workaround and
+  its comment can go"). A stale comment that misdescribes shared code is worse
+  than no comment: it will mislead the next agent into "fixing" a bug that does
+  not exist.
+- **Fix:** delete the `TODO(P04)` comment and the `title: ''` argument; pass
+  `NestNavBar(compact: true, onBack: …)` with a null title. Add
+  `backSemanticLabel` only if the default ever changes.
 
-### 3. MINOR — `2_build.md` states a UI-check conclusion the pixels contradict
+### 4. MINOR — the failure revert can restore a value that was never persisted
 
-- **Where:** `docs/screens/P04/2_build.md:79-86` — "heat-map shows sub-pixel font
-  edges only — cards/tiles/toggle/CTA overlap".
-- **Why:** finding 2 is a 16 px content offset, and `compare.py` reports 13.18%
-  / 12.39% drift in the two bands that contain it. Cards do **not** overlap the
-  design's cards. The build note is also the reason finding 2 was not caught.
-- **Fix:** replace the sentence with the band table from `compare.py`, the
-  measured glyph offsets, and the three known shared causes (items 1–3 of
-  `SHARED_REQUEST.md` + finding 2). Keep "gutters aligned, CTA surface reaches
-  the edge in both themes" — both are true and verified.
+- **Where:** `presentation/bloc/privacy_consent_bloc.dart:52` —
+  `final previous = state.crashConsent;` then `:60` `crashConsent: previous`.
+- **Why:** with the new optimistic emit, `state.crashConsent` can be a value
+  that is in flight rather than stored. Interleaving: tap ON (optimistic `true`,
+  write 1 in flight) → tap OFF (`previous` = the optimistic `true`, optimistic
+  `false`, write 2 in flight) → **write 2 fails first**. The revert emits
+  `crashConsent: true` while the database still holds `false`, the caption says
+  "Crash reports are still on", and because `status == failure` disables the
+  toggle the parent cannot correct it until the next stream emission. The
+  double-failure path (both writes fail) settles the same way with no stream
+  emission to heal it. Narrow — it needs two rapid taps plus an interleaved
+  failure — and self-heals in the common cases, so it is minor, not major.
+- **Fix:** revert to the *stored* value, which the state already carries and
+  which always mirrors the database:
+  `final previous = _crashFrom(state.items);` (the existing static helper), or
+  expose a `storedCrashConsent` getter. One line; also makes the intent explicit
+  next to the optimistic emit.
 
-### 4. MINOR — magic numbers where a token exists
+### 5. MINOR — three claims in `2_build.md` are stale after the shared merge
 
-- **Where:** `privacy_consent_view.dart:239` `fromLTRB(12, 7, 16, 7)`,
-  `:244-245` `width/height: 40`.
-- **Fix:** `NestSpacing.s3` (12), `NestSpacing.gap7` (7 — the token exists
-  precisely for this and is currently unused anywhere), `NestSpacing.s4` (16),
-  `NestSpacing.s10` (40). The remaining literals (`84` shield at `:76-77`,
-  `13` opt-card padding at `:120`, `56` min-height at `:237`, `22 / 16` at
-  `:136`/`:265`, `decorationThickness: 1` at `:337`) have no token; the shared
-  `NestListRow` hard-codes the same ones, so leave them or raise a small
-  shared-request item alongside finding 2 rather than inventing local constants.
+- **Where:** `docs/screens/P04/2_build.md` — "P04-3 … `[P04-3]` stays skipped"
+  (the proof is un-skipped and green, `p04_bugs_test.dart:248-272`); "Residual
+  drift is … the −16 px header offset (§5, bands 1/3)" (that offset no longer
+  exists — the probes above show the chevron, h1 and subtitle bands identical to
+  the design, and the note's own 4.48% figure is post-fix); the test tail
+  "`00:11 +568 ~4: All other tests passed!`" (the suite is now `+582 ~3`, and
+  "All other tests passed!" reads like a failure).
+- **Fix:** correct the three lines. The residual-drift sentence should read:
+  the empty row-4 tile (§1), the 3 px divider rhythm (§6) and the light-baked
+  dark shield disc (§2), plus font edges and the ignored status-bar clock.
 
-### 5. MINOR — `'crash'` is a bare string literal in three places
+### 6. MINOR — three bug proofs stay `skip`-marked pending shared fixes
 
-- **Where:** `presentation/bloc/privacy_consent_bloc.dart:18`, plus
-  `data/privacy_consent_repository_impl.dart:46` and the tests.
-- **Fix:** `abstract final class ConsentOptionIds { static const crash = 'crash'; }`
-  in `app/lib/features/privacy_consent/domain/entities/consent_option.dart`
-  (domain is P04's territory, RULES §1) and use it at every site, so the bloc's
-  dependency on a repository row id cannot silently rot.
-
-### 6. MINOR — `errorMessage` can never be cleared from the state
-
-- **Where:** `presentation/bloc/privacy_consent_state.dart:29`
-  (`errorMessage: errorMessage ?? this.errorMessage`).
-- **Fix:** a sentinel (`Object? errorMessage = _unset` with
-  `errorMessage == _unset ? this.errorMessage : errorMessage as String?`) or an
-  explicit `clearError` flag. Harmless today because the caption keys on
-  `status == failure`, but it blocks the retry path a future stage will want.
-
-### 7. MINOR — the Privacy Notice dialog body is a run-on sentence
-
-- **Where:** `privacy_consent_view.dart:311-319`.
-- **Plan mismatch:** `1_plan.md` §c specifies "the 4 promise bullets". As shipped
-  it renders one paragraph — "No ads or tracking — ever. Children only need a
-  nickname. Data stored in the UK (London). Delete everything anytime." — which
-  reads as broken prose.
-- **Fix:** render the four titles as four separate centred lines (reuse the same
-  const list the promise rows use so the copy cannot drift), then `Close`.
-
-### 8. MINOR — `PrivacyConsentPlaceholderCard` is now dead code
-
-- **Where:** `app/lib/features/privacy_consent/presentation/widgets/privacy_consent_placeholder_card.dart`
-  — zero references after the placeholder view was replaced (grep confirms).
-- **Fix:** delete it, or leave it if unreferenced placeholder cards are the
-  repo-wide convention (`OnboardingPlaceholderCard` and
-  `FamilyPlaceholderCard` are equally unreferenced on `main`, so this is a
-  codebase-wide tidy-up, not a P04 defect).
+- **Where:** `app/test/features/privacy_consent/p04_bugs_test.dart` —
+  `[P04-2]` (`:244`), `[P04-4]` (`:315`), `[P04-7]` (`:413`).
+- **Why it is not a blocker:** the brief forbids *skipping tests to dodge a
+  failure*; these are red-by-design proofs of defects owned by `lib/core/**`,
+  each annotated with its repro, its reason and the shared change that turns it
+  green, and each runnable with
+  `flutter test --run-skipped test/features/privacy_consent/p04_bugs_test.dart`.
+  The alternative — leaving them unskipped — would break the RULES §7
+  done-criteria for the whole app.
+- **Fix / obligation:** flip each `skip: true` off the moment its shared fix
+  lands (`[P04-2]` ← item 1, `[P04-4]` ← item 6, `[P04-7]` ← item 2) and delete
+  the `[P04-2]` `findsNothing` assertion in the contract test at the same time.
+  Until then the orchestrator must not read "all tests pass" as "no defects
+  open" — findings 1 and 2 above are the open ones.
 
 ---
 
 ## Verified correct (no action)
 
-- **Copy, DESIGN_SPEC §5 P04:** every string matches the design exactly, with the
-  curly apostrophes and em dashes from the HTML source, and UK spelling
-  ("analytics", "stored", no US forms). Equal-weight CTA respected: a single
-  primary "Continue", no manipulative accept/decline pair, and the opt-in toggle
-  is OFF by default (`app_database.dart:207-209`) per the ICO nudge rule.
-- **Design fidelity:** 20 px side gutters shared by headline, `NestList`, opt card
-  and CTA; the 14 / 16 / 16 vertical rhythm; 40 px tiles with radius 12; divider
-  indent 72; shield 84; toggle 51×31 in a 44 px box; opt card 13 v / 16 h with
-  16/22 title and 15/22 sub; no `maxLines`/ellipsis anywhere, so rows wrap per
-  SPACING_SPEC §9.3/§9.4.
-- **Architecture:** feature-first; `domain/` still only holds the entity + the
-  abstract repository; one bloc per feature with `LoadRequested` and
-  initial/loading/loaded/failure; DI and routes unchanged and per feature.
-  `analysis_options.yaml` untouched; no `lib/core/**`, `lib/app/**`,
-  `tools/screens/**` or foreign-feature files in the diff — RULES §1 respected.
-- **Architecture/DI:** `PrivacyConsentBloc` is a GetIt factory and the route
-  wraps it in `BlocProvider(create: …)`, so `context.go` / `pop` close the bloc and
-  cancel the `emit.forEach` subscription; no leaked streams. Bloc 9's default
-  concurrent transformer lets `_onCrashToggled` write while the load
-  `emit.forEach` is still open, which the current code depends on.
-- **Performance:** `const` widgets throughout; `BlocBuilder` sits outside the
-  scroll view so scroll offset survives a state change; a successful toggle
-  causes zero rebuilds (no optimistic emit) and one on the stream re-emit. No
-  rebuild storm, no `context.watch` in a builder callback.
-- **Error handling:** the toggle write is wrapped, emits `failure` keeping prior
-  items, and `Continue` stays enabled so the parent can never be trapped on this
-  screen. The inline danger caption matches the spec'd copy.
-- **Accessibility:** h1 is a header; the shield is `image: true` with the HTML
-  alt text and `ExcludeSemantics` on the `SvgPicture`; the four promise rows are
-  announced as containers, never as buttons; the toggle exposes
-  label + `toggled` + `enabled`; `Continue`, `Back` and the notice link are
-  labelled buttons; every target is ≥ 44 px (back 44, toggle 44, Continue 52,
-  notice 44); the notice link's label is not duplicated (`ExcludeSemantics` on
-  the inner `Text`). Contrast on token pairs: `ink`/`ink2` on paper and surface,
-  `sky` link 5.42:1 light / 7.21:1 dark, `danger` caption 4.73:1 light / 7.37:1
-  dark — all ≥ 4.5:1 for 13 px text.
-- **OWNER bottom-edge rule: correct, and better than the design PNG.** Probing
-  `(200, 820)` and `(200, 838)`: the design shows `rgb(251,247,240)` (cream paper)
-  from y ≈ 810 to the edge, because the HTML `.home-indicator` sits outside
-  `.bottom-cta`; the app shows `rgb(255,255,255)` all the way to y = 844 because
-  `NestBottomCta` puts `SafeArea(top: false)` inside its own surface. The app is
-  the intended behaviour — do not "fix" this against the PNG.
-- **PIP / STATUS BAR:** no Pip on this screen (shield illustration), so the
-  `PipAvatar` rule and the v1-Pip ban do not apply; `NestStatusBar` reserves 47 px
-  and draws no glyphs.
-- **Children's Code:** no analytics, ads or SDKs referenced anywhere in the diff;
-  no child data read on this screen; the one data write is an optional,
-  parent-only, default-OFF consent flag.
-- **Navigation:** `context.go(FamilyRoutePaths.addChildren)` matches the
-  onboarding flow convention already used by P01/P02 (`welcome_view.dart:37,43`);
-  back falls back to `/create-account` when there is no history.
+- **Architecture:** unchanged shape and still compliant — `domain/` holds the
+  entity (+ the new `ConsentOptionIds` const) and the abstract repository only;
+  one bloc per feature with `LoadRequested` and initial/loading/loaded/failure;
+  DI (`registerPrivacyConsent`, GetIt factory) and `privacy_consent_routes.dart`
+  untouched. `analysis_options.yaml` untouched; nothing outside RULES §1.
+- **Design-system usage:** `NestStatusBar`, `NestNavBar`, `NestList`, `NestCard`,
+  `NestToggle`, `NestButton`, `NestBottomCta`, `NestIcon`, `showNestModal` all
+  reused; the only feature-private widgets are the promise row and the
+  underlined notice link, both justified in the code. Colours come from
+  `context.nest` / `context.nestText` only — no hex, no raw `Colors.*` in the
+  view; type styles come from `NestType`; every literal that now has a token is
+  a token. Nothing re-implements a shared component.
+- **DESIGN_SPEC §5 P04:** all elements present in order, copy identical to
+  `design/html-source/screens/P04-privacy.html` (curly apostrophes, em dashes,
+  UK spelling), single equal-weight primary `Continue` (ICO nudge rule), opt-in
+  toggle OFF by default, footnote link present.
+- **Accessibility:** unchanged and still green — header on the h1, shield as an
+  `image` node with the HTML alt text, promise rows as containers (never
+  buttons), toggle exposing label + `toggled` + `enabled`, labelled buttons for
+  Back / Continue / notice link, every target ≥ 44 px, no `maxLines` anywhere so
+  rows wrap (SPACING_SPEC §9.3/§9.4), 320/390/430 × scale 1.0/1.3 matrix still
+  passing. Contrast on token pairs: sky link 5.42:1 light / 7.21:1 dark, danger
+  caption 4.73:1 light / 7.37:1 dark.
+- **Performance:** `const` widgets throughout; `BlocBuilder` outside the scroll
+  view so scroll offset survives; the optimistic emit adds one rebuild per tap
+  and the toggle is disabled after a failure, so there is no rebuild storm;
+  `emit.forEach` is cancelled when `BlocProvider` disposes the bloc on
+  `go`/`pop` — the "write fails after leaving" proof confirms no emit escapes.
+- **Error handling:** `Continue` is never disabled, the failure caption is
+  state-aware, and the message is now cleared by the next successful stream
+  emission (finding 6 of iteration 1 closed).
+- **Children's Code:** no analytics, ads, trackers or child data anywhere in the
+  diff; the only write is an optional, parent-only, default-OFF consent flag;
+  the failure copy now tells the truth about the stored value (P04-6); the
+  kid-mode guard redirects `/privacy` to `/parental-gate` (proof green).
+- **OWNER BOTTOM-EDGE rule: correct.** The CTA surface runs to the physical edge
+  in both themes (probe: `#FFFFFF` / `#1F1C2E` at y 820 and 838), while the
+  design PNGs show a cream/near-black strip there because the HTML
+  `.home-indicator` sits outside `.bottom-cta`. The app is the intended
+  behaviour — do not "fix" it toward the PNG.
+- **OWNER ALIGNMENT:** 20 px gutters shared by headline, list, opt card and CTA
+  at 320/390/430; the header is now pixel-exact against the design
+  (chevron/h1/subtitle bands all Δ0).
 
-## Open shared dependencies (already filed by earlier stages — no P04 action)
+## ORCHESTRATOR_NOTES status
 
-`SHARED_REQUEST.md` item 1 (missing `ic_trash.svg` + `NestIcons.trash`, so row 4
-ships a blank peach tile — a visible design deviation P04 cannot fix in scope),
-item 2 (`privacy_shield.svg` bakes the light `#E6EFFE` circle, so dark mode shows
-a light disc instead of the design's `#1A2A4A` — confirmed by reading
-`design/screens/dark/P04-privacy.png` against `ui/p04-dark.png`), item 3
-(`NestNavBar` compact + `title: null` crashes, worked around with `title: ''`
-behind `TODO(P04)`). Item 4 is **not** in this list — see finding 1, which P04
-must fix itself.
+| Item | Status |
+|---|---|
+| 1 — row-4 bin glyph + a test that all four rows find a glyph | **Unmet.** Rows 1–3 proven; row 4 blocked on `ic_trash.svg` + `NestIcons.trash` (SHARED_REQUEST item 1). Fix not available in RULES §1 → finding 1 |
+| 2 — 16 px header offset | **Met** by the shared merge; probes confirm Δ0. The 12:03 UPDATE was honoured — P04 moved nothing locally |
+| 3 — row heights / 1 px dividers → opt card ≈528, Continue ≈690 | **Partly met.** Row heights and indent are exact; the residual +3 px is `NestList`'s real dividers → finding 2 |
+| 4 — bottom panel to the edge, perfect alignment | **Met** in both themes |
 
 VERDICT: FAIL

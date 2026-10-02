@@ -32,6 +32,7 @@ import 'package:nestling/features/privacy_consent/domain/entities/consent_option
 import 'package:nestling/features/privacy_consent/domain/privacy_consent_repository.dart';
 import 'package:nestling/features/privacy_consent/presentation/bloc/privacy_consent_bloc.dart';
 import 'package:nestling/features/privacy_consent/presentation/bloc/privacy_consent_event.dart';
+import 'package:nestling/features/privacy_consent/presentation/bloc/privacy_consent_state.dart';
 import 'package:nestling/features/privacy_consent/presentation/views/privacy_consent_view.dart';
 
 import '../../test_scope.dart';
@@ -90,7 +91,12 @@ class _RecordingPrivacyConsentRepository implements PrivacyConsentRepository {
   @override
   Stream<List<ConsentOption>> watchItems() =>
       Stream<List<ConsentOption>>.value(const <ConsentOption>[
-        ConsentOption(id: 'crash', title: 'c', detail: 'd', enabled: false),
+        ConsentOption(
+          id: ConsentOptionIds.crash,
+          title: 'c',
+          detail: 'd',
+          enabled: false,
+        ),
       ]);
 
   @override
@@ -99,6 +105,31 @@ class _RecordingPrivacyConsentRepository implements PrivacyConsentRepository {
   @override
   Future<void> setCrashConsent({required bool consent}) async {
     writes.add(consent);
+  }
+}
+
+/// Repository with a scripted items stream and a scripted write path, for the
+/// optimistic-emit and write-failure contracts (P04-5, P04-6).
+class _ScriptedPrivacyConsentRepository implements PrivacyConsentRepository {
+  _ScriptedPrivacyConsentRepository({required this.items, this.onWrite});
+
+  final Stream<List<ConsentOption>> items;
+  final Future<void> Function({required bool consent})? onWrite;
+  final List<bool> writes = <bool>[];
+
+  @override
+  Future<List<ConsentOption>> getItems() => items.first;
+
+  @override
+  Stream<List<ConsentOption>> watchItems() => items;
+
+  @override
+  Stream<bool> watchCrashConsent() => Stream<bool>.value(false);
+
+  @override
+  Future<void> setCrashConsent({required bool consent}) {
+    writes.add(consent);
+    return onWrite?.call(consent: consent) ?? Future<void>.value();
   }
 }
 
@@ -436,11 +467,9 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      final body = tester.widget<Text>(
-        find.textContaining('No ads or tracking — ever.'),
-      );
+      // One centred line per promise (row copy + dialog line each).
       for (final title in _titles) {
-        expect(body.data, contains(title));
+        expect(find.text(title), findsNWidgets(2));
       }
 
       await disposeApp(tester);
@@ -511,6 +540,307 @@ void main() {
         expect(tester.getTopRight(_continue).dx, width - NestSpacing.padSide);
         expect(tester.takeException(), isNull);
 
+        await disposeApp(tester);
+      });
+    }
+  });
+
+  group('P04 — optimistic switch and failure caption (P04-5, P04-6)', () {
+    testWidgets('the switch answers on the next frame, before Drift replies', (
+      tester,
+    ) async {
+      GoogleFonts.config.allowRuntimeFetching = false;
+      final repository = _ScriptedPrivacyConsentRepository(
+        items: Stream<List<ConsentOption>>.value(const <ConsentOption>[
+          ConsentOption(
+            id: ConsentOptionIds.crash,
+            title: 'c',
+            detail: 'd',
+            enabled: false,
+          ),
+        ]),
+        // The write stays in flight for 400 fake ms, so the frame rendered
+        // right after the tap lands before the database has answered.
+        onWrite: ({required consent}) =>
+            Future<void>.delayed(const Duration(milliseconds: 400)),
+      );
+      final bloc = PrivacyConsentBloc(repository: repository);
+      addTearDown(bloc.close);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: NestTheme.light(),
+          home: BlocProvider<PrivacyConsentBloc>.value(
+            value: bloc,
+            child: const PrivacyConsentView(),
+          ),
+        ),
+      );
+      bloc.add(const PrivacyConsentLoadRequested());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _scrollToToggle(tester);
+      await tester.tap(_toggle);
+      await tester.pump();
+
+      expect(
+        tester.widget<NestToggle>(_toggle).value,
+        isTrue,
+        reason: 'the switch must not wait for the database round-trip',
+      );
+      expect(repository.writes, <bool>[true]);
+      expect(bloc.state.crashConsent, isTrue);
+      expect(tester.takeException(), isNull);
+
+      // Let the in-flight write finish so the bloc closes cleanly.
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    });
+
+    testWidgets('a failed OFF write says crash reports are still on', (
+      tester,
+    ) async {
+      GoogleFonts.config.allowRuntimeFetching = false;
+      final repository = _ScriptedPrivacyConsentRepository(
+        items: Stream<List<ConsentOption>>.value(const <ConsentOption>[
+          ConsentOption(
+            id: ConsentOptionIds.crash,
+            title: 'c',
+            detail: 'd',
+            enabled: true,
+          ),
+        ]),
+        onWrite: ({required consent}) =>
+            Future<void>.error(Exception('read only')),
+      );
+      final bloc = PrivacyConsentBloc(repository: repository);
+      addTearDown(bloc.close);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: NestTheme.light(),
+          home: BlocProvider<PrivacyConsentBloc>.value(
+            value: bloc,
+            child: const PrivacyConsentView(),
+          ),
+        ),
+      );
+      bloc.add(const PrivacyConsentLoadRequested());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _scrollToToggle(tester);
+      await tester.tap(_toggle);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(
+        tester.widget<NestToggle>(_toggle).value,
+        isTrue,
+        reason: 'the failed write reverts to the stored opt-in',
+      );
+      expect(find.textContaining('it stays off'), findsNothing);
+      expect(
+        find.textContaining('Crash reports are still on.'),
+        findsOneWidget,
+      );
+      expect(bloc.state.status, PrivacyConsentStatus.failure);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    });
+
+    testWidgets('a failed ON write says the choice stays off', (tester) async {
+      GoogleFonts.config.allowRuntimeFetching = false;
+      final repository = _ScriptedPrivacyConsentRepository(
+        items: Stream<List<ConsentOption>>.value(const <ConsentOption>[
+          ConsentOption(
+            id: ConsentOptionIds.crash,
+            title: 'c',
+            detail: 'd',
+            enabled: false,
+          ),
+        ]),
+        onWrite: ({required consent}) =>
+            Future<void>.error(Exception('disk full')),
+      );
+      final bloc = PrivacyConsentBloc(repository: repository);
+      addTearDown(bloc.close);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: NestTheme.light(),
+          home: BlocProvider<PrivacyConsentBloc>.value(
+            value: bloc,
+            child: const PrivacyConsentView(),
+          ),
+        ),
+      );
+      bloc.add(const PrivacyConsentLoadRequested());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _scrollToToggle(tester);
+      await tester.tap(_toggle);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(tester.widget<NestToggle>(_toggle).value, isFalse);
+      expect(
+        find.textContaining(
+          'Oops — your choice wasn’t saved. Continue anyway; it stays off.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('still on'), findsNothing);
+      expect(bloc.state.errorMessage, contains('disk full'));
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    });
+
+    testWidgets('the failure state keeps Continue and the screen usable', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _useRepository(
+        _FakePrivacyConsentRepository(
+          Stream<List<ConsentOption>>.error(Exception('offline')),
+        ),
+      );
+      await pumpAppRoute(tester, '/privacy');
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(_failureCaption, findsOneWidget);
+      expect(
+        tester.getSize(_continue).height,
+        greaterThanOrEqualTo(NestDevice.tapParent),
+      );
+      await tester.tap(_continue);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(currentPath(tester), '/add-children');
+
+      await disposeApp(tester);
+    });
+  });
+
+  group('P04 — promise row glyphs (orchestrator note item 1)', () {
+    // The orchestrator asked for "a widget test that all four row icons find
+    // their SvgPicture/Icon". Rows 1-3 are verifiable here and green; row 4 is
+    // covered by the skipped `[P04-2]` proof in p04_bugs_test.dart because the
+    // trash glyph needs the shared `ic_trash.svg` (SHARED_REQUEST §1), which
+    // RULES §1 forbids P04 from adding. This test pins the three shipped
+    // glyphs — asset AND tint — so a wrong-asset or invisible-glyph regression
+    // cannot slip through, and documents row 4 as the open gap.
+    testWidgets('rows 1-3 render their own tinted glyph; row 4 is the gap', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/privacy');
+
+      final expected = <String, ({String asset, Color ink})>{
+        'No ads or tracking — ever': (
+          asset: NestIcons.noAds,
+          ink: NestColors.light.leafInk,
+        ),
+        'Children only need a nickname': (
+          asset: NestIcons.person,
+          ink: NestColors.light.lilac,
+        ),
+        'Data stored in the UK (London)': (
+          asset: NestIcons.pinUk,
+          ink: NestColors.light.sky,
+        ),
+      };
+
+      for (final entry in expected.entries) {
+        final row = find
+            .ancestor(
+              of: find.text(entry.key),
+              matching: find.byType(Semantics),
+            )
+            .first;
+        final icon = find.descendant(of: row, matching: find.byType(NestIcon));
+        expect(icon, findsOneWidget, reason: entry.key);
+
+        final widget = tester.widget<NestIcon>(icon);
+        expect(widget.assetName, entry.value.asset, reason: entry.key);
+        expect(widget.size, 24, reason: entry.key);
+        expect(widget.color, entry.value.ink, reason: entry.key);
+
+        // The glyph is really painted, not an empty tile: one SVG per row.
+        final picture = find.descendant(
+          of: row,
+          matching: find.byType(SvgPicture),
+        );
+        expect(picture, findsOneWidget, reason: entry.key);
+        final svg = tester.widget<SvgPicture>(picture);
+        expect(
+          (svg.bytesLoader as SvgAssetLoader).assetName,
+          entry.value.asset,
+        );
+        expect(
+          svg.colorFilter,
+          isNotNull,
+          reason: '${entry.key}: the glyph must be tinted, never default black',
+        );
+        expect(svg.width, 24);
+        expect(svg.height, 24);
+      }
+
+      // Row 4: tile present and tinted, glyph still missing (SHARED_REQUEST §1).
+      final deleteRow = find
+          .ancestor(
+            of: find.text('Delete everything anytime'),
+            matching: find.byType(Semantics),
+          )
+          .first;
+      expect(
+        find.descendant(of: deleteRow, matching: find.byType(NestIcon)),
+        findsNothing,
+        reason:
+            'row 4 has no trash glyph yet — ic_trash.svg is still missing; this '
+            'assertion flips when the shared asset lands ([P04-2])',
+      );
+      final deleteTile = find
+          .descendant(of: deleteRow, matching: find.byType(Container))
+          .first;
+      final decoration =
+          tester.widget<Container>(deleteTile).decoration! as BoxDecoration;
+      expect(decoration.color, NestColors.light.peachTint);
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      testWidgets('${theme.name}: the three shipped glyphs are tinted', (
+        tester,
+      ) async {
+        await setUpTestScope();
+        await pumpAppRoute(tester, '/privacy', theme: theme);
+        final icons = find.descendant(
+          of: find.byType(NestList),
+          matching: find.byType(NestIcon),
+        );
+        expect(icons, findsNWidgets(3));
+
+        final palette = theme == ThemeMode.light
+            ? NestColors.light
+            : NestColors.dark;
+        final inks = <Color>[palette.leafInk, palette.lilac, palette.sky];
+        for (final icon in icons.evaluate()) {
+          final widget = tester.widget<NestIcon>(
+            find.byElementPredicate((e) => e == icon),
+          );
+          expect(
+            inks,
+            contains(widget.color),
+            reason:
+                '${widget.assetName} must use its tile ink in ${theme.name}',
+          );
+        }
+        expect(tester.takeException(), isNull);
         await disposeApp(tester);
       });
     }

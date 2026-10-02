@@ -1,9 +1,12 @@
-// P04 · Privacy & consent — adversarial bug proofs (Stage 6, iteration 1).
+// P04 · Privacy & consent — adversarial bug proofs (Stage 6, iteration 2).
 //
-// Every bug below was found while hunting the iteration-1 tree. The proofs
-// assert the CORRECT behaviour and therefore FAIL against the shipped screen;
-// they are `skip`-marked with their bug id so the suite stays green until the
-// fix stage lands (the loop un-skips them in the next iteration).
+// The iteration-1 proofs assert the CORRECT behaviour. Iterations 1-2 fixed
+// P04-1, P04-3, P04-5 and P04-6 (P04-3 by the shared compact-nav merge), so
+// those proofs are un-skipped and green. P04-2, P04-4 and P04-7 assert
+// shared-side fixes (asset / design-system artwork) outside RULES §1 and stay
+// `skip`-marked until the orchestrator lands them. P04-8 is new this
+// iteration: the optimistic toggle can revert to a value that was never
+// persisted when two rapid writes fail.
 //
 // Run the proofs against the current tree with:
 //   flutter test --run-skipped test/features/privacy_consent/p04_bugs_test.dart
@@ -11,17 +14,19 @@
 // Findings, severity, repro and suggested fixes: docs/screens/P04/6_bugs.md.
 //
 // Bug index:
-//   P04-1 major   first-run crash-consent opt-in is silently dropped
-//   P04-2 major   promise row 4 has no trash glyph (empty peach tile)
-//   P04-3 major   compact nav bar 16 px short — header block sits high
-//   P04-4 major   1 px real dividers inflate the promise list (design overlay)
-//   P04-5 minor   rapid double-tap writes the same toggle value twice
-//   P04-6 major   failed OFF write still tells the parent "it stays off"
-//   P04-7 minor   dark mode renders the light-baked shield artwork
+//   P04-1 major   first-run crash-consent opt-in is silently dropped  [FIXED]
+//   P04-2 major   promise row 4 has no trash glyph (empty peach tile)  [shared]
+//   P04-3 major   compact nav bar 16 px short — header block sits high [FIXED]
+//   P04-4 major   1 px real dividers inflate the promise list          [shared]
+//   P04-5 minor   rapid double-tap writes the same toggle value twice [FIXED]
+//   P04-6 major   failed OFF write still tells the parent "it stays off" [FIXED]
+//   P04-7 minor   dark mode renders the light-baked shield artwork    [shared]
+//   P04-8 minor   double-failed rapid toggle reverts to an unpersisted value
 //
 // Checked and clean (passing proofs at the bottom): kid-mode guard, deep-link
-// back navigation, restart persistence, async-gap emit-after-close, and the
-// notice link under a double tap.
+// back navigation, restart persistence (demo and first-run), first-run
+// double-tap last-write-wins, async-gap emit-after-close, and the notice link
+// under a double tap.
 
 import 'dart:async';
 
@@ -55,7 +60,12 @@ const List<ConsentOption> _crashOff = <ConsentOption>[
   ConsentOption(id: 'nickname', title: 'b', detail: 'b', enabled: true),
   ConsentOption(id: 'uk-data', title: 'c', detail: 'c', enabled: true),
   ConsentOption(id: 'delete', title: 'd', detail: 'd', enabled: true),
-  ConsentOption(id: 'crash', title: 'e', detail: 'e', enabled: false),
+  ConsentOption(
+    id: ConsentOptionIds.crash,
+    title: 'e',
+    detail: 'e',
+    enabled: false,
+  ),
 ];
 
 const List<ConsentOption> _crashOn = <ConsentOption>[
@@ -63,7 +73,12 @@ const List<ConsentOption> _crashOn = <ConsentOption>[
   ConsentOption(id: 'nickname', title: 'b', detail: 'b', enabled: true),
   ConsentOption(id: 'uk-data', title: 'c', detail: 'c', enabled: true),
   ConsentOption(id: 'delete', title: 'd', detail: 'd', enabled: true),
-  ConsentOption(id: 'crash', title: 'e', detail: 'e', enabled: true),
+  ConsentOption(
+    id: ConsentOptionIds.crash,
+    title: 'e',
+    detail: 'e',
+    enabled: true,
+  ),
 ];
 
 Finder get _toggle => find.byKey(const ValueKey('p04_crash_toggle'));
@@ -88,6 +103,34 @@ class _SlowFailPrivacyConsentRepository implements PrivacyConsentRepository {
   Future<void> setCrashConsent({required bool consent}) async {
     await Future<void>.delayed(const Duration(milliseconds: 30));
     throw Exception('disk full');
+  }
+}
+
+/// Repository whose two rapid writes both fail, the first before the second —
+/// nothing is persisted and the items stream never re-emits (P04-8).
+class _DoubleFailPrivacyConsentRepository implements PrivacyConsentRepository {
+  final List<bool> calls = <bool>[];
+
+  @override
+  Future<List<ConsentOption>> getItems() => watchItems().first;
+
+  @override
+  Stream<List<ConsentOption>> watchItems() =>
+      Stream<List<ConsentOption>>.value(_crashOff);
+
+  @override
+  Stream<bool> watchCrashConsent() => Stream<bool>.value(false);
+
+  @override
+  Future<void> setCrashConsent({required bool consent}) {
+    calls.add(consent);
+    final delay = consent
+        ? const Duration(milliseconds: 10)
+        : const Duration(milliseconds: 50);
+    return Future<void>.delayed(
+      delay,
+      () => throw Exception('write $consent failed'),
+    );
   }
 }
 
@@ -201,8 +244,7 @@ void main() {
 
         await disposeApp(tester);
       },
-      // P04-1: setCrashConsent UPDATEs a settings row that does not exist yet.
-      skip: true,
+      // P04-1 FIXED (iteration 2): setCrashConsent upserts.
     );
   });
 
@@ -255,8 +297,8 @@ void main() {
 
         await disposeApp(tester);
       },
-      // P04-3: NestNavBar compact resolves to 44px; content sits 16px high.
-      skip: true,
+      // P04-3 FIXED (iteration 2): the shared compact-nav merge (min 52 +
+      // padding 4/12/12 = 60) moved the header back to the design position.
     );
   });
 
@@ -328,8 +370,8 @@ void main() {
       );
 
       await disposeApp(tester);
-      // P04-5: both taps read the stale OFF value and write true twice.
-    }, skip: true);
+      // P04-5 FIXED (iteration 2): optimistic emit + serialised writes.
+    });
   });
 
   group('P04-6 — failure caption vs stored consent', () {
@@ -361,8 +403,8 @@ void main() {
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
-      // P04-6: the spec caption assumes the prior state was OFF.
-    }, skip: true);
+      // P04-6 FIXED (iteration 2): the caption is state-aware.
+    });
   });
 
   group('P04-7 — dark shield artwork', () {
@@ -400,6 +442,47 @@ void main() {
       await disposeApp(tester);
       // P04-7: the same light-baked asset renders in both themes.
     }, skip: true);
+  });
+
+  group('P04-8 — failure revert vs stored value', () {
+    testWidgets(
+      '[P04-8] a double-failed rapid toggle reverts to the stored value',
+      (tester) async {
+        final repository = _DoubleFailPrivacyConsentRepository();
+        await _pumpView(tester, repository);
+        await _scrollToToggle(tester);
+
+        // ON (write 1, fails at 10ms) then OFF (write 2, fails at 50ms).
+        // Neither write persists, so the stored consent is false = the
+        // items stream the state keeps re-reading.
+        await tester.tap(_toggle);
+        await tester.pump();
+        await tester.tap(_toggle);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+
+        expect(
+          tester.widget<NestToggle>(_toggle).value,
+          isFalse,
+          reason:
+              'the revert must restore the stored value (false), not the '
+              'other handler optimistic value (true)',
+        );
+        expect(
+          find.textContaining('still on'),
+          findsNothing,
+          reason:
+              'nothing was persisted — the caption must not claim crash '
+              'reports are still on',
+        );
+
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+        // P04-8: both catches revert to `state.crashConsent` at their start,
+        // so the last failure restores the first tap's optimistic ON.
+      },
+      skip: true,
+    );
   });
 
   // -------------------------------------------------------------------------
@@ -456,6 +539,53 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(tester.widget<NestToggle>(_toggle).value, isTrue);
+      await disposeApp(tester);
+    });
+
+    testWidgets('first run: a double tap persists the last tap (upsert path)', (
+      tester,
+    ) async {
+      // The upsert's insertOrIgnore fallback must not drop the later write
+      // when two first-run writes overlap.
+      await setUpTestScope(seedDemo: false);
+      await pumpAppRoute(tester, '/privacy');
+      await _scrollToToggle(tester);
+
+      await tester.tap(_toggle);
+      await tester.pump();
+      await tester.tap(_toggle);
+      await tester.pump();
+      await _flushDrift(tester);
+
+      expect(
+        await _consentInDb(tester),
+        isFalse,
+        reason: 'two taps on OFF = ON then OFF; the row must hold the OFF',
+      );
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('first run: the opt-in survives reopening the screen', (
+      tester,
+    ) async {
+      await setUpTestScope(seedDemo: false);
+      await pumpAppRoute(tester, '/privacy');
+      await _scrollToToggle(tester);
+      await tester.tap(_toggle);
+      await tester.pump();
+      await _flushDrift(tester);
+      expect(await _consentInDb(tester), isTrue);
+
+      await disposeApp(tester);
+      await pumpAppRoute(tester, '/privacy');
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(
+        tester.widget<NestToggle>(_toggle).value,
+        isTrue,
+        reason: 'the upserted settings row must persist across a restart',
+      );
       await disposeApp(tester);
     });
 

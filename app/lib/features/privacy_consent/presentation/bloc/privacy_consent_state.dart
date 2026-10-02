@@ -16,17 +16,23 @@ final class PrivacyConsentState extends Equatable {
   final bool crashConsent;
   final String? errorMessage;
 
+  /// Sentinel distinguishing "not passed" (keep) from an explicit null
+  /// (clear): without it a failure message could never be removed again.
+  static const Object _unset = Object();
+
   PrivacyConsentState copyWith({
     PrivacyConsentStatus? status,
     List<ConsentOption>? items,
     bool? crashConsent,
-    String? errorMessage,
+    Object? errorMessage = _unset,
   }) {
     return PrivacyConsentState(
       status: status ?? this.status,
       items: items ?? this.items,
       crashConsent: crashConsent ?? this.crashConsent,
-      errorMessage: errorMessage ?? this.errorMessage,
+      errorMessage: errorMessage == _unset
+          ? this.errorMessage
+          : errorMessage as String?,
     );
   }
 

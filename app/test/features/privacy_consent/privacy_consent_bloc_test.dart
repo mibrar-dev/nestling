@@ -27,12 +27,43 @@ class _MockPrivacyConsentRepository extends Mock
 
 late _MockPrivacyConsentRepository _delegatingRepo;
 
+/// Hand-written repository for the iteration-2 optimistic-emit paths: a
+/// scripted stream plus a write callback that may throw, so the bloc can be
+/// driven through two in-flight writes.
+class _RacyRepository implements PrivacyConsentRepository {
+  _RacyRepository(this._items, this._onWrite);
+
+  final Stream<List<ConsentOption>> _items;
+  final void Function() _onWrite;
+  final List<bool> writes = <bool>[];
+
+  @override
+  Future<List<ConsentOption>> getItems() => _items.first;
+
+  @override
+  Stream<List<ConsentOption>> watchItems() => _items;
+
+  @override
+  Stream<bool> watchCrashConsent() => Stream<bool>.value(false);
+
+  @override
+  Future<void> setCrashConsent({required bool consent}) async {
+    writes.add(consent);
+    _onWrite();
+  }
+}
+
 const List<ConsentOption> _crashOff = <ConsentOption>[
   ConsentOption(id: 'no-ads', title: 'a', detail: 'a', enabled: true),
   ConsentOption(id: 'nickname', title: 'b', detail: 'b', enabled: true),
   ConsentOption(id: 'uk-data', title: 'c', detail: 'c', enabled: true),
   ConsentOption(id: 'delete', title: 'd', detail: 'd', enabled: true),
-  ConsentOption(id: 'crash', title: 'e', detail: 'e', enabled: false),
+  ConsentOption(
+    id: ConsentOptionIds.crash,
+    title: 'e',
+    detail: 'e',
+    enabled: false,
+  ),
 ];
 
 const List<ConsentOption> _crashOn = <ConsentOption>[
@@ -40,7 +71,12 @@ const List<ConsentOption> _crashOn = <ConsentOption>[
   ConsentOption(id: 'nickname', title: 'b', detail: 'b', enabled: true),
   ConsentOption(id: 'uk-data', title: 'c', detail: 'c', enabled: true),
   ConsentOption(id: 'delete', title: 'd', detail: 'd', enabled: true),
-  ConsentOption(id: 'crash', title: 'e', detail: 'e', enabled: true),
+  ConsentOption(
+    id: ConsentOptionIds.crash,
+    title: 'e',
+    detail: 'e',
+    enabled: true,
+  ),
 ];
 
 void main() {
@@ -75,6 +111,22 @@ void main() {
       final on = loading.copyWith(crashConsent: true);
       expect(on.crashConsent, isTrue);
       expect(on.status, PrivacyConsentStatus.loading);
+    });
+
+    test('errorMessage is sticky by default but explicitly clearable', () {
+      const failed = PrivacyConsentState(
+        status: PrivacyConsentStatus.failure,
+        errorMessage: 'offline',
+      );
+
+      // Omitted => kept.
+      expect(failed.copyWith().errorMessage, 'offline');
+      // Explicit null => cleared, so a later success never shows stale text.
+      final cleared = failed.copyWith(
+        status: PrivacyConsentStatus.loaded,
+        errorMessage: null,
+      );
+      expect(cleared.errorMessage, isNull);
     });
 
     test('equality is driven by status, items, crash flag and error', () {
@@ -212,9 +264,15 @@ void main() {
         isA<PrivacyConsentState>()
             .having((s) => s.status, 'status', PrivacyConsentStatus.loaded)
             .having((s) => s.crashConsent, 'crashConsent', isFalse),
+        // Optimistic emit answers the tap instantly; the stream re-emit
+        // below carries a new items list with the same values.
         isA<PrivacyConsentState>()
             .having((s) => s.status, 'status', PrivacyConsentStatus.loaded)
             .having((s) => s.crashConsent, 'crashConsent', isTrue),
+        isA<PrivacyConsentState>()
+            .having((s) => s.status, 'status', PrivacyConsentStatus.loaded)
+            .having((s) => s.crashConsent, 'crashConsent', isTrue)
+            .having((s) => s.items.length, 'items', 5),
       ],
     );
 
@@ -296,9 +354,14 @@ void main() {
           items: _crashOn,
           crashConsent: true,
         ),
+        // Optimistic emit: the switch answers instantly; the static mock
+        // stream never re-emits, so this is the final state.
+        PrivacyConsentState(
+          status: PrivacyConsentStatus.loaded,
+          items: _crashOn,
+        ),
       ],
       verify: (_) {
-        // No optimistic emit: the state only moves when the stream re-emits.
         verify(() => _delegatingRepo.setCrashConsent(consent: false)).called(1);
       },
     );
@@ -327,9 +390,15 @@ void main() {
         isA<PrivacyConsentState>()
             .having((s) => s.status, 'status', PrivacyConsentStatus.loaded)
             .having((s) => s.items, 'items', _crashOff),
+        // Optimistic emit flips first; the failed write reverts to the
+        // prior consent below.
+        isA<PrivacyConsentState>()
+            .having((s) => s.status, 'status', PrivacyConsentStatus.loaded)
+            .having((s) => s.crashConsent, 'crashConsent', isTrue),
         isA<PrivacyConsentState>()
             .having((s) => s.status, 'status', PrivacyConsentStatus.failure)
             .having((s) => s.items, 'items', _crashOff)
+            .having((s) => s.crashConsent, 'crashConsent', isFalse)
             .having(
               (s) => s.errorMessage,
               'errorMessage',
@@ -353,11 +422,22 @@ void main() {
         expect(loadedOff.crashConsent, isFalse);
 
         bloc.add(const PrivacyConsentCrashToggled(value: true));
+        // The optimistic emit flips the flag with stale items; wait for the
+        // reconciled state whose crash row is enabled too.
         final loadedOn = await bloc.stream.firstWhere(
-          (s) => s.status == PrivacyConsentStatus.loaded && s.crashConsent,
+          (s) =>
+              s.status == PrivacyConsentStatus.loaded &&
+              s.crashConsent &&
+              s.items
+                  .where((i) => i.id == ConsentOptionIds.crash)
+                  .single
+                  .enabled,
         );
         expect(
-          loadedOn.items.where((i) => i.id == 'crash').single.enabled,
+          loadedOn.items
+              .where((i) => i.id == ConsentOptionIds.crash)
+              .single
+              .enabled,
           isTrue,
         );
         expect(
@@ -389,7 +469,10 @@ void main() {
         (s) =>
             s.status == PrivacyConsentStatus.loaded &&
             !s.crashConsent &&
-            !s.items.where((i) => i.id == 'crash').single.enabled,
+            !s.items
+                .where((i) => i.id == ConsentOptionIds.crash)
+                .single
+                .enabled,
       );
       expect(backOff.crashConsent, isFalse);
       expect(
@@ -426,6 +509,11 @@ void main() {
           'crashConsent',
           isTrue,
         ),
+        // Optimistic emit flips to OFF first; the failed write reverts to
+        // the prior ON consent below.
+        isA<PrivacyConsentState>()
+            .having((s) => s.status, 'status', PrivacyConsentStatus.loaded)
+            .having((s) => s.crashConsent, 'crashConsent', isFalse),
         isA<PrivacyConsentState>()
             .having((s) => s.status, 'status', PrivacyConsentStatus.failure)
             .having((s) => s.crashConsent, 'crashConsent', isTrue)
@@ -437,5 +525,84 @@ void main() {
             ),
       ],
     );
+
+    // Iteration 2 added the optimistic emit. Two quick taps mean two writes in
+    // flight; if the FIRST one fails after the second already succeeded, the
+    // revert must not leave the switch showing a value the database does not
+    // hold. The `watchItems` re-emit after the good write is what settles it.
+    test(
+      'a failed first write does not strand the switch after a later success',
+      () async {
+        final controller = StreamController<List<ConsentOption>>();
+        addTearDown(controller.close);
+        var writes = 0;
+        final repository = _RacyRepository(controller.stream, () {
+          writes += 1;
+          // First write fails, the second succeeds.
+          if (writes == 1) {
+            throw Exception('transient');
+          }
+        });
+
+        final bloc = PrivacyConsentBloc(repository: repository);
+        addTearDown(bloc.close);
+        controller.add(_crashOff);
+        bloc.add(const PrivacyConsentLoadRequested());
+        await bloc.stream.firstWhere(
+          (s) => s.status == PrivacyConsentStatus.loaded,
+        );
+
+        // Tap ON (fails) then immediately OFF (succeeds).
+        bloc
+          ..add(const PrivacyConsentCrashToggled(value: true))
+          ..add(const PrivacyConsentCrashToggled(value: false));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        expect(repository.writes, <bool>[true, false]);
+        controller.add(_crashOff);
+        final settled = await bloc.stream.firstWhere(
+          (s) => s.status == PrivacyConsentStatus.loaded && !s.crashConsent,
+        );
+
+        // Whatever the transient failure did on the way, the state the parent
+        // is left with matches the last write.
+        expect(settled.crashConsent, isFalse);
+        expect(settled.status, PrivacyConsentStatus.loaded);
+        expect(settled.errorMessage, isNull);
+      },
+    );
+
+    test('a stream emission after a failure clears the error', () async {
+      final controller = StreamController<List<ConsentOption>>();
+      addTearDown(controller.close);
+      final bloc = PrivacyConsentBloc(
+        repository: _RacyRepository(controller.stream, () {
+          throw Exception('transient');
+        }),
+      );
+      addTearDown(bloc.close);
+
+      controller.add(_crashOff);
+      bloc.add(const PrivacyConsentLoadRequested());
+      await bloc.stream.firstWhere(
+        (s) => s.status == PrivacyConsentStatus.loaded,
+      );
+      bloc.add(const PrivacyConsentCrashToggled(value: true));
+      final failed = await bloc.stream.firstWhere(
+        (s) => s.status == PrivacyConsentStatus.failure,
+      );
+      expect(failed.errorMessage, contains('transient'));
+
+      controller.add(_crashOff);
+      final recovered = await bloc.stream.firstWhere(
+        (s) =>
+            s.status == PrivacyConsentStatus.loaded && s.errorMessage == null,
+      );
+      expect(
+        recovered.errorMessage,
+        isNull,
+        reason: 'a healthy emission must not keep showing a stale error',
+      );
+    });
   });
 }

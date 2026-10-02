@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/features/privacy_consent/data/privacy_consent_repository_impl.dart';
+import 'package:nestling/features/privacy_consent/domain/entities/consent_option.dart';
 
 void main() {
   group('PrivacyConsentRepository (in-memory Drift)', () {
@@ -49,13 +50,19 @@ void main() {
           'nickname',
           'uk-data',
           'delete',
-          'crash',
+          ConsentOptionIds.crash,
         ]);
-        expect(items.singleWhere((i) => i.id == 'crash').enabled, isFalse);
+        expect(
+          items.singleWhere((i) => i.id == ConsentOptionIds.crash).enabled,
+          isFalse,
+        );
 
         await repository.setCrashConsent(consent: true);
         items = await repository.watchItems().first;
-        expect(items.singleWhere((i) => i.id == 'crash').enabled, isTrue);
+        expect(
+          items.singleWhere((i) => i.id == ConsentOptionIds.crash).enabled,
+          isTrue,
+        );
         expect(items.length, 5);
       },
     );
@@ -65,7 +72,7 @@ void main() {
       await repository.setCrashConsent(consent: true);
 
       final items = await repository.getItems();
-      for (final item in items.where((i) => i.id != 'crash')) {
+      for (final item in items.where((i) => i.id != ConsentOptionIds.crash)) {
         expect(
           item.enabled,
           isTrue,
@@ -94,15 +101,15 @@ void main() {
       expect(after.kidGateEnabled, before.kidGateEnabled);
     });
 
-    // BUG(P04-1) — FAILS on purpose. First-run repro: a real first launch has
+    // Regression test for P04-1 (fixed in iteration 2 by upserting in
+    // PrivacyConsentRepositoryImpl.setCrashConsent): a real first launch has
     // an empty database (Seed.fresh writes only `app_state`), and P04 is the
     // first screen in the onboarding flow that writes a setting. The UPDATE
-    // matches zero rows, the write is silently dropped, and the toggle snaps
-    // back to OFF with no error. Root cause: PrivacyConsentRepositoryImpl
-    // (data/privacy_consent_repository_impl.dart:63) updates instead of
-    // upserting, and nothing creates the fam1 `settings` row before P04.
-    // See docs/screens/P04/3_test.md and SHARED_REQUEST.md item 4.
-    test('BUG(P04-1): consent persists on a first-run database', () async {
+    // used to match zero rows and the write was silently dropped; now the
+    // repository inserts the row when nothing was updated.
+    // See docs/screens/P04/3_test.md and SHARED_REQUEST.md item 4 (kept for
+    // the P16 SettingsRepositoryImpl half, which shares the UPDATE-only shape).
+    test('consent persists on a first-run database', () async {
       await Seed.fresh(db);
       expect(
         (await db.select(db.settings).get()).length,
@@ -119,10 +126,94 @@ void main() {
       );
       expect(
         (await repository.watchItems().first)
-            .singleWhere((i) => i.id == 'crash')
+            .singleWhere((i) => i.id == ConsentOptionIds.crash)
             .enabled,
         isTrue,
       );
+    });
+
+    // The upsert must insert exactly one row and then UPDATE it in place. A
+    // second insert would break `watchSetting` (two rows for fam1) and the
+    // `SettingsRepositoryImpl` reads that follow it.
+    test('the first-run upsert creates one row and reuses it', () async {
+      await Seed.fresh(db);
+
+      await repository.setCrashConsent(consent: true);
+      var rows = await db.select(db.settings).get();
+      expect(rows.length, 1, reason: 'the insert fallback must add one row');
+      expect(rows.single.familyId, Seed.familyId);
+      expect(rows.single.crashReportConsent, isTrue);
+      final created = rows.single;
+
+      await repository.setCrashConsent(consent: false);
+      rows = await db.select(db.settings).get();
+      expect(
+        rows.length,
+        1,
+        reason: 'the second write must UPDATE, not insert',
+      );
+      expect(rows.single.crashReportConsent, isFalse);
+
+      // Back on again: still one row, and the stream reports it.
+      await repository.setCrashConsent(consent: true);
+      rows = await db.select(db.settings).get();
+      expect(rows.length, 1);
+      expect(rows.single.crashReportConsent, isTrue);
+      expect(
+        await repository.watchCrashConsent().first,
+        isTrue,
+        reason: 'the stored opt-in survives repeated writes',
+      );
+      expect(created.familyId, rows.single.familyId);
+    });
+
+    test('the inserted row takes the settings table defaults', () async {
+      await Seed.fresh(db);
+      await repository.setCrashConsent(consent: true);
+      final row = (await db.select(db.settings).get()).single;
+
+      // Only the consent column is written by P04; everything else keeps the
+      // schema defaults (`Settings` in core/data/app_database.dart), never
+      // demo-seed values.
+      expect(row.crashReportConsent, isTrue);
+      expect(row.kidGateEnabled, isTrue, reason: 'table default');
+      expect(row.notifApprovals, isTrue, reason: 'table default');
+      expect(row.notifPayout, isTrue, reason: 'table default');
+      expect(row.notifSummary, isTrue, reason: 'table default');
+      expect(row.pocketMoneyMode, 'both', reason: 'table default');
+      expect(row.payoutDay, 6, reason: 'table default');
+      expect(row.coinValuePencePerCoin, 1, reason: 'table default');
+    });
+
+    // Writing the value that is already stored must be idempotent: no second row,
+    // no error, no lost write.
+    test('re-writing the stored value changes nothing', () async {
+      await Seed.fresh(db);
+      await repository.setCrashConsent(consent: true);
+      await repository.setCrashConsent(consent: true);
+
+      final rows = await db.select(db.settings).get();
+      expect(rows.length, 1);
+      expect(rows.single.crashReportConsent, isTrue);
+      expect(await repository.watchCrashConsent().first, isTrue);
+    });
+
+    test('concurrent first-run writes still leave exactly one row', () async {
+      await Seed.fresh(db);
+
+      await Future.wait<void>(<Future<void>>[
+        repository.setCrashConsent(consent: true),
+        repository.setCrashConsent(consent: true),
+        repository.setCrashConsent(consent: false),
+      ]);
+
+      final rows = await db.select(db.settings).get();
+      expect(
+        rows.length,
+        1,
+        reason: 'insertOrIgnore keeps a racing pair from duplicating the row',
+      );
+      expect(await repository.watchCrashConsent().first, isA<bool>());
     });
   });
 }

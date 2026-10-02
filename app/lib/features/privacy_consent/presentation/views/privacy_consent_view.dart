@@ -9,6 +9,15 @@ import 'package:nestling/features/privacy_consent/presentation/bloc/privacy_cons
 import 'package:nestling/features/privacy_consent/presentation/bloc/privacy_consent_event.dart';
 import 'package:nestling/features/privacy_consent/presentation/bloc/privacy_consent_state.dart';
 
+/// The four promise titles, shared by the list rows and the Privacy Notice
+/// dialog so the copy cannot drift between the two.
+const List<String> _promiseTitles = <String>[
+  'No ads or tracking — ever',
+  'Children only need a nickname',
+  'Data stored in the UK (London)',
+  'Delete everything anytime',
+];
+
 /// P04 · Privacy & consent, route `/privacy`.
 ///
 /// Static parent-mode screen: the four promise rows and the shield render in
@@ -80,29 +89,31 @@ class PrivacyConsentView extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: NestSpacing.s4),
-                      const NestList(
+                      // Not const: the rows read their titles from the shared
+                      // `_promiseTitles` list (also used by the dialog).
+                      NestList(
                         children: <Widget>[
                           _PromiseRow(
-                            title: 'No ads or tracking — ever',
+                            title: _promiseTitles[0],
                             subtitle: 'No analytics profiles, no ad SDKs, ever',
                             leadingAsset: NestIcons.noAds,
                             tint: NestTileTint.leaf,
                           ),
                           _PromiseRow(
-                            title: 'Children only need a nickname',
+                            title: _promiseTitles[1],
                             subtitle:
                                 'No photos, no email, no chat, no location',
                             leadingAsset: NestIcons.person,
                             tint: NestTileTint.lilac,
                           ),
                           _PromiseRow(
-                            title: 'Data stored in the UK (London)',
+                            title: _promiseTitles[2],
                             subtitle: 'Kept on UK servers, nothing leaves',
                             leadingAsset: NestIcons.pinUk,
                             tint: NestTileTint.sky,
                           ),
                           _PromiseRow(
-                            title: 'Delete everything anytime',
+                            title: _promiseTitles[3],
                             subtitle: 'One tap and your family data is gone',
                             // TODO(P04): trash-can glyph pending
                             // docs/screens/P04/SHARED_REQUEST.md
@@ -168,8 +179,15 @@ class PrivacyConsentView extends StatelessWidget {
                         Padding(
                           padding: const EdgeInsets.only(top: NestSpacing.s2),
                           child: Text(
-                            'Oops — your choice wasn’t saved. '
-                            'Continue anyway; it stays off.',
+                            // State-aware (P04-6): "it stays off" is only
+                            // true when the prior consent was OFF; a failed
+                            // OFF write leaves the opt-in ON, so say so.
+                            state.crashConsent
+                                ? 'Oops — your choice wasn’t saved. '
+                                      'Crash reports are still on. '
+                                      'Continue anyway.'
+                                : 'Oops — your choice wasn’t saved. '
+                                      'Continue anyway; it stays off.',
                             style: NestType.caption(color: tokens.danger),
                             softWrap: true,
                           ),
@@ -236,13 +254,18 @@ class _PromiseRow extends StatelessWidget {
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 56),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 7, 16, 7),
+          padding: const EdgeInsets.fromLTRB(
+            NestSpacing.s3,
+            NestSpacing.gap7,
+            NestSpacing.s4,
+            NestSpacing.gap7,
+          ),
           child: Row(
             spacing: NestSpacing.s3,
             children: <Widget>[
               Container(
-                width: 40,
-                height: 40,
+                width: NestSpacing.s10,
+                height: NestSpacing.s10,
                 decoration: BoxDecoration(
                   color: tileBg,
                   borderRadius: BorderRadius.circular(NestSpacing.s3),
@@ -308,15 +331,15 @@ class _NoticeLink extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               spacing: NestSpacing.s2,
               children: <Widget>[
-                Text(
-                  'No ads or tracking — ever. '
-                  'Children only need a nickname. '
-                  'Data stored in the UK (London). '
-                  'Delete everything anytime.',
-                  style: NestType.bodySmall(color: tokens.ink2),
-                  textAlign: TextAlign.center,
-                  softWrap: true,
-                ),
+                // The four promises as separate lines (plan §c), reusing the
+                // row titles so the copy cannot drift (review finding 7).
+                for (final title in _promiseTitles)
+                  Text(
+                    title,
+                    style: NestType.bodySmall(color: tokens.ink2),
+                    textAlign: TextAlign.center,
+                    softWrap: true,
+                  ),
                 NestButton(
                   label: 'Close',
                   variant: NestButtonVariant.secondary,

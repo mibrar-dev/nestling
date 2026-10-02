@@ -24,7 +24,7 @@ Blocks: no — light mode is pixel-close; dark circle is a tint-only deviation.
 P04 lands as-is behind no TODO.
 
 ---
-# Shared request — P04 NestNavBar compact null-title crash
+# Shared request — P04 NestNavBar compact null-title crash — RESOLVED (STAGE 3, it. 2)
 Need: `NestNavBar` compact with `title: null` nests a `Spacer` (an `Expanded`)
 inside the title slot's `Expanded` and throws "Incorrect use of
 ParentDataWidget" at build time (ownership chain ends in `NestNavBar`).
@@ -33,6 +33,13 @@ instead of `Spacer`). P04 works around it with `title: ''` (visually
 identical back-only row) behind a `TODO(P04)`.
 Files: `app/lib/core/design_system/components/nest_nav_bar.dart`
 Blocks: no — workaround in place; remove `title: ''` once fixed.
+**Status:** fixed by the shared merge (`shared/onboarding_header_and_seed`) —
+the compact branch returns `SizedBox.shrink()` for a null *or empty* title
+and resolves to 60 px tall (`min 52 + padding 4/12/12`). `[P04-3]` is
+un-skipped and green. Leftover for the next build stage: P04 still passes
+`title: ''` with the now-obsolete TODO comment at
+`views/privacy_consent_view.dart:38-42`. It renders identically, so nothing
+is broken; the workaround and its comment can go.
 
 ---
 # Shared request — P04 settings row missing on a first run (BUG P04-1)
@@ -59,7 +66,18 @@ nothing on first run. Red test left in place on purpose:
 `app/test/features/privacy_consent/privacy_consent_repository_test.dart:105`.
 
 ---
-# Shared request — P04 compact NestNavBar height (review stage-4 finding 2 + orchestrator note 2)
+
+# RESOLVED in iteration 2 — P04-1 upsert (kept for the P16 half)
+`PrivacyConsentRepositoryImpl.setCrashConsent` now inserts the `fam1`
+settings row (other columns take table defaults) when the UPDATE affects 0
+rows; `watchSetting` re-emits and the toggle flips. The red test
+(`consent persists on a first-run database`) is green and the `[P04-1]` bug
+proof is un-skipped and passing. Remaining shared half: give P16's
+`SettingsRepositoryImpl._write` (same UPDATE-only shape) the same treatment
+via a shared helper.
+
+---
+# Shared request — P04 compact NestNavBar height — RESOLVED (STAGE 3, it. 2)
 Need: `NestNavBar(compact: true)` resolves to 44 px, but the design's
 `.nav-bar.compact` is `min-height: 52; padding: 4px 12px 12px` around the
 44 px back button → **60 px**. Every compact screen's content therefore
@@ -74,6 +92,10 @@ Files: `app/lib/core/design_system/components/nest_nav_bar.dart`
 Blocks: no for P04 alone (a local 4/12 padding shim could match the design),
 yes for every compact screen to be fixed once. P04's bug proof is
 `[P04-3]` in `app/test/features/privacy_consent/p04_bugs_test.dart`.
+**Status:** resolved by the same shared merge. Verified in the test stage:
+the back-chevron centre is now y 73 and the h1 line box top y 107, exactly
+the design values (`[P04-3]` un-skipped and green in
+`p04_bugs_test.dart`).
 
 ---
 # Shared request — P04 NestList real dividers add height (orchestrator note 3)
