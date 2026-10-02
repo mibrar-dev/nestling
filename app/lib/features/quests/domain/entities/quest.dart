@@ -14,6 +14,7 @@ class Quest extends Equatable {
     required this.needsApproval,
     required this.assigneeChildId,
     required this.active,
+    this.dueTimeLocal,
   });
 
   final String id;
@@ -30,6 +31,12 @@ class Quest extends Equatable {
   /// CSV of 1..7 (Mon..Sun); empty = no fixed days.
   final String days;
   final String? dueLabel;
+
+  /// Floating local due time `HH:MM` evaluated in `families.time_zone`
+  /// (e.g. `17:00`); null = no fixed time. Presentation shows it next to
+  /// [dueLabel]; the data layer stores it verbatim (no zone conversion —
+  /// it is a wall-clock rule, not an instant).
+  final String? dueTimeLocal;
   final bool needsApproval;
 
   /// Null = "Anyone".
@@ -46,6 +53,7 @@ class Quest extends Equatable {
     repeatRule,
     days,
     dueLabel,
+    dueTimeLocal,
     needsApproval,
     assigneeChildId,
     active,
