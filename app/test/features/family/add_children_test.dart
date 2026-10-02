@@ -2113,6 +2113,91 @@ void main() {
     }
   });
 
+  group('P05 chip row vertical geometry (final polish note)', () {
+    // QA of cmp_light_4: "Age-band chips row centre ≈ +5 px low, Avatar-colour
+    // row ≈ +12 px, helper text ≈ +12. Cause: chip height and the gap below the
+    // chips." Measured below: both gaps are already the design's 8 and 4, and
+    // the swatch row matches (44 + 8 gaps) — the whole remaining delta is the
+    // shared chip's 44 px tap box sitting *in the flow* where the design's
+    // `.chip { height: 32px }` occupies 32.
+    testWidgets(
+      'the chip row height is the design value plus the 44-px tap box',
+      (tester) async {
+        await setUpTestScope();
+        await pumpAppRoute(tester, '/add-children');
+
+        final chip = tester.getRect(find.byKey(const Key('ageChip-4-6')));
+        // `.chip { height: 32px }` (components.css) is the flow height the design
+        // measures from; SPACING_SPEC §6 asks for a 44-min tap area on top of it.
+        // The shared component puts that 44 in the flow, so the chip row — and
+        // every row below it — sits exactly 12 px lower than the design (the
+        // chip's own centre is 6 px lower, which QA measured as ≈ +5).
+        expect(
+          chip.height - NestSpacing.s8,
+          NestDevice.tapParent - NestSpacing.s8,
+          reason:
+              'shared NestChip: 44-px tap box in the flow, design .chip = 32 '
+              'so this 12 px is the entire remaining in-card drift; it '
+              'becomes 0 when the shared fix lands',
+        );
+
+        expect(tester.takeException(), isNull);
+        await disposeApp(tester);
+      },
+    );
+
+    testWidgets('the swatch row matches the design: 44 px circles, 8 px gaps', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/add-children');
+
+      final boxes = <String, Rect>{
+        for (final colour in AddChildFormCard.swatchColours)
+          colour: tester.getRect(find.byKey(Key('swatch-$colour'))),
+      };
+      for (final entry in boxes.entries) {
+        expect(entry.value.width, NestDevice.tapParent, reason: entry.key);
+        expect(entry.value.height, NestDevice.tapParent, reason: entry.key);
+      }
+      // `.swatches { display: flex; gap: 8px }`
+      final lefts = boxes.values.map((r) => r.left).toList()..sort();
+      expect(
+        lefts.first,
+        NestSpacing.padSide + NestSpacing.gap14,
+        reason: 'the row starts on the card content edge',
+      );
+      for (var i = 1; i < lefts.length; i++) {
+        expect(
+          lefts[i] - lefts[i - 1],
+          NestDevice.tapParent + NestSpacing.s2,
+          reason: '8 px gap between swatches',
+        );
+      }
+      // Same row (all five fit 5×44 + 4×8 = 252 ≤ 280 at any tested width).
+      expect(boxes.values.map((r) => r.top).toSet(), hasLength(1));
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    testWidgets('the head starts below the status bar and the 60-px compact '
+        'nav', (tester) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/add-children');
+
+      // `.nav-bar.compact { padding 4px 12px 12px }` around a 44-px back
+      // button = 60, below `NestStatusBar`'s 47 reserve. Pins the shared
+      // nav-height fix from the screen side: a bar regression moves the head.
+      const compactNav = NestDevice.tapParent + NestSpacing.s1 + NestSpacing.s3;
+      final h1 = tester.getRect(find.text('Who\u2019s in your nest?'));
+      expect(h1.top, NestDevice.statusH + compactNav);
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+  });
+
   group('P05 focused nickname field', () {
     testWidgets('focus paints the leaf focus ring and unfocused does not', (
       tester,

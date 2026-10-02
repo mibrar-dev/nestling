@@ -259,3 +259,46 @@ Files: `app/lib/core/design_system/tokens/typography.dart` (and any
 
 Blocks: no for P05 — every P05 gap and row height is spec-exact and is now
 pinned by tests; the screen's residual drift is this shared effect.
+
+---
+
+# Shared request — P05 `NestChip`: the 44-px tap box is in the flow, the design
+# measures a 32-px `.chip` (vertical twin of the landed width fix)
+
+Need: the width fix that landed in `7eaa1f7` made chips shrink-wrap
+horizontally, but the **vertical** half of the same trade-off is still there:
+`nest_chip.dart:87-102` builds `ConstrainedBox(minWidth 44) → Padding(4.5) →
+Ink(32)`, so the chip **occupies 44 px of vertical flow** while the design's
+`.chip { height: 32px }` occupies 32. Everything below the chip row therefore
+sits 12 px lower than the design — measured on P05 with `cmp_light_4`: chips row
+centre ≈ +5 px (44/2 − 32/2 = 6) and "Avatar colour" row + helper text ≈ +12
+(44 − 32).
+
+Measured on the current code, everything else in that block is already exact, so
+this is the whole remaining in-card delta:
+
+| | design | app | Δ |
+|---|---|---|---|
+| `.chip` flow height | 32 | **44** (44-min tap box) | +12 |
+| chip row → "Avatar colour" | 8 | 8 | 0 |
+| "Avatar colour" → `.swatches` | 4 | 4 | 0 |
+| `.sw` diameter / gaps | 44 / 8 | 44 / 8 | 0 |
+| `.form-note { margin-top: 6px }` | 6 | 6 | 0 |
+
+Options for the design-system owner: (a) keep the 44 minimum out of the flow —
+e.g. a `Stack`/`SizedBox(44)` hit area around a 32-px pill, the same shape as
+the landed width fix; (b) accept 44 and treat the P05 designs' `.chip` as 44 in
+the flow. P05 cannot do either locally: the chip is shared and the design
+explicitly wants a 44-min tap target (`SPACING_SPEC` §6), so shrinking the flow
+height in `add_child_form_card.dart` would either clip the tap area or
+re-implement the component.
+
+The screen side is finished and pinned: `add_children_test.dart` asserts the
+12-px delta explicitly ("the chip row height is the design value plus the 44-px
+tap box"), so the day the shared fix lands that assertion goes to 0 and the
+test fails until the expectation is flipped to 32.
+
+Files: `app/lib/core/design_system/components/nest_chip.dart`
+
+Blocks: no for P05 — every P05 gap, row height, swatch and gutter is
+design-exact and pinned; the residual is this shared effect.

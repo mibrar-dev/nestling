@@ -1,92 +1,82 @@
-# P05 · Add children — bug hunt (STAGE 6, iteration 4 — final)
+# P05 · Add children — bug hunt (STAGE 6, iteration 5 — final)
 
 Route `/add-children` (feature `family`, parent mode). Adversarial re-hunt of
-the iteration-4 build (working tree after `d5e5621`, main merged through
-`8de83cb`; iteration-4 fixes uncommitted). No screen code was changed and
-**no new bug was found**.
+the iteration-5 build (working tree after `c5dcb00`, main merged through
+`28d62fe`, including the shared `router_push_test_fix` and
+`shared/family_time_zone` merges). No screen code was changed and **no new bug
+was found**.
 
 Gates on this build: `dart format` clean · `flutter analyze` No issues found! ·
-`flutter test test/features/family` **116 passed, 0 skipped, 0 failed** · full
-`flutter test` **642 passed, 0 skipped, 1 failed** — the single failure is the
-shared `app/test/app/router_push_test.dart`, outside RULES §1 (see *Carried
-shared items*) · no file outside RULES §1 touched.
+`flutter test test/features/family` **119 passed, 0 skipped, 0 failed** · full
+`flutter test` **672 passed, 0 skipped, 0 failed** (the iteration-3/4 shared
+gate is fixed on main: `cdd4cf5` made the push/pop contract path-based) · no
+file outside RULES §1 touched.
 
 Proofs: `app/test/features/family/p05_bugs_test.dart` — **11 proofs, all
-un-skipped and green** (P05-BUG-1…10 plus the two iteration-4 fixes). No proof
-needed to be re-skipped; no `skip` remains anywhere in
-`app/test/features/family/`.
+un-skipped and green**. No `skip` remains anywhere in
+`test/features/family/`; nothing needed re-skipping this iteration.
 
-**Result: 0 new bugs, 0 P05-owned bugs open. The screen’s only remaining
-deviation is a shared design-system component (the 44 px chip tap box vs the
-design’s 32 px row) and the repo gate is red on a shared test file — both are
-carried shared items, outside RULES §1 and already escalated.
-VERDICT: PASS.**
+**Result: 0 new bugs, 0 P05-owned bugs open. The one remaining screen
+deviation is the shared `NestChip` flow height (+12 px, design `.chip` is
+32), which P05 cannot fix and which is filed, quantified and pinned by test.
+VERDICT: PASS** — per the orchestrator’s iteration-5 rule that a shared-only
+residual is recorded explicitly and does not block when every P05-owned test
+passes.
 
 ---
 
-## Iteration-3 findings — closed and re-verified
+## Iteration-4 carried items — closed / verified
 
-| # | Finding | Evidence |
-|---|---|---|
-| P05-BUG-9 (major) | children rendered alphabetically (Leo | Maya) | **fixed** — `FamilyRepositoryImpl._watchChildrenInAddedOrder` orders by `rowid` inside `features/family/data/**`; probes on `Seed.demo` and `Seed.onboarding_kids` both read **Maya left (30), Leo right (210)**; new children append; rename keeps insertion order (test stage’s rename proof) |
-| P05-BUG-10 (minor) | kid card 124 vs design 116 | **fixed** — `cardH` = 22 + 44 + 2 + 24 + 6 + 18 = 116; probe measures card height **116.0**, avatar 257–301, name 303–327 (gap 2), age 333–351 (gap 6) — the HTML rhythm exactly |
-| review 3 | dead `IntrinsicWidth` wrappers | removed; the shared `NestChip` shrink-wraps; BUG-1 geometry proofs still green |
-| review 4 | test pinned the forbidden alphabetical order | flipped to `maya.left < leo.left`; now proves the ruling |
-| review 6 | wrong “cannot be done in RULES §1” claims | corrected in the build/test notes |
-
-The iteration-4 diff was re-read adversarially: the rowid query filters by
-family and preserves stream re-emission; `combineLatest3` still emits the
-roster with quest counts; the card’s Column spacing (`gap2`, `gap6`) matches
-the `cardH` formula at 1.0 and 1.3×; the removed wrappers left the group
-semantics and tap targets intact.
+| Item | State |
+|---|---|
+| Shared `router_push_test.dart` red | **resolved on main** — `099748e`/`cdd4cf5` assert router paths; full suite green; P05 untouched |
+| `NestChip` 44 px flow box vs design 32 (+5 centre, +12 below) | **filed in its own iteration-5 request** with the measured delta table; pinned by the new test `the chip row height is the design value plus the 44-px tap box`, which flips to 0 when the shared fix lands |
+| Shared typography line-box claim | re-checked — the iteration-4/5 UI landmarks are ±0 through “Age band”, so the residual is the chip box, not per-row font growth; the shared typography request stays non-blocking and separately filed |
+| `rowid` interim `VACUUM` caveat | one-line doc nit only; the durable shared `createdAt` request remains the permanent fix |
 
 ## Adversarial checks this iteration
 
 | Check | Result |
 |---|---|
-| Order — demo seed | Maya left, Leo right ✓ |
-| Order — `onboarding_kids` seed (UI-check state) | Maya left, Leo right ✓ |
-| Order — add + restart over the same DB | `[Ollie]` persisted and rendered; rowids survive restart ✓ |
-| Order — rename / append / bloc passthrough | covered by the test stage’s five-test group, all green |
-| Card geometry | height 116.0; avatar/name/age gaps 2 and 6 — design-exact ✓ |
-| Chip row | boxes 73.8 / 73.8 / 102.3 / 73.8 × **44.0**; one row on device (UI check), 8 px gaps, left-aligned ✓ (the 44 height is the carried shared item) |
-| Rapid double taps | two same-frame taps with the real DB insert one child ✓ |
-| Kid-mode guard | kid-mode deep link → `/parental-gate` ✓ |
-| Dark / owner rules / COPY | UI check iteration 4: dark within 0.5% of light; CTA to the physical edge; curly `’`, em/en dashes, “Avatar colour” character-exact ✓ |
-| Data edges (0/1/6 children, long names, 320×1.3) | existing tests + probes: no overflow, no exceptions ✓ |
-| Money / timezone / async gaps | P05 renders no money or dates; bloc drops late emits, callbacks `mounted`-guarded — N/A / sound ✓ |
+| Order — `Seed.demo` | Maya left (30), Leo right (210) ✓ |
+| Order — `Seed.onboarding_kids` (UI state) | Maya left, Leo right ✓ |
+| Kid cards | height **116.0** (design-exact) ✓ |
+| Chips | one row on device, 8 px gaps, left-aligned; boxes 73.75/73.75/102.25/73.75 × **44.0** (the shared residual) |
+| Head anchor | `h1.top == 107` = status 47 + compact nav 60 ✓ |
+| Rapid double taps | two same-frame taps with the real DB → one child ✓ |
+| Restart / Drift persistence | child persisted and rendered after relaunch over the same DB ✓ |
+| Kid-mode guard | deep link → `/parental-gate` ✓ |
+| Data edges | 0/1/6 children, “Maximilian-Alexander”, 320×1.3 → no overflow, no exceptions ✓ |
+| `family_time_zone` merge | schema v2 adds `…_tz` columns to event tables only (quest completions, redemptions, ledger); the children table and P05 paths are untouched; all 119 feature tests green ✓ |
+| Transient UI frame (`devLocale=…` debug text in `app_light_5.png`) | `grep` over `app/lib`, `app/test`, `design` finds no such string — a stale simulator frame, not product code; the re-shot `app_light_5b.png` is stable ✓ |
+| Money / timezone / async gaps | P05 renders no money or dates; bloc drops late emits and callbacks are `mounted`-guarded — N/A / sound ✓ |
 
-## Carried shared items (not P05 defects — no local fix exists)
+## The one carried shared item, precisely
 
-1. **`NestChip`’s 44 px layout box vs the design’s 32 px chip row** — the one
-   remaining UI deviation (iteration-4 UI check deviation 1: chip labels +5,
-   “Avatar colour”/swatches/caption +12, band5 drift 10.8%). The tap minimum
-   is the layout box (`ConstrainedBox(minWidth 44)` + 4.5 px padding around the
-   35 px pill), so every row below sits 12 px low. I probed the obvious local
-   interim — `SizedBox(height: 32)` + `OverflowBox(44)` around each chip — and
-   it **cannot** work in P05: the wrapper lays the row out at 32 but the
-   6 px of tap area above/below the parent no longer hit-tests (measured:
-   above-edge tap 0 hits, centre tap 1 hit), i.e. the effective target drops
-   to 32 px and violates the 44-min rule. `core/**` is read-only for this
-   screen, so the fix is a shared DS decision (overlay/alternative geometry)
-   or an explicit orchestrator accept of the +12. Note for the orchestrator:
-   `SHARED_REQUEST.md` #4 is marked “LANDED” for the **width** half only; the
-   **height** half is still open and that status header is misleading.
-2. **`app/test/app/router_push_test.dart:104`** still passes
-   `showsFrom: 'P05 Add children'` (the pre-build placeholder title), so the
-   full suite is red. Filed since iteration 3; a shared fix worktree
-   (`_shared_router_push_test_fix`) is already briefed.
-3. **Shared typography line-box request** (`SHARED_REQUEST.md` §7): its
-   premise (a +4/+8 cumulative per-row drift from runtime font metrics) is
-   **not reproduced** by the iteration-4 UI landmarks — h3/Nickname/Age-band
-   are ±0 vs the design, and the residual +5/+12 is exactly the chip box
-   above. Worth re-checking before spending a shared batch on font metrics.
+`NestChip`’s 44 px minimum tap box sits **in the flow**, so the chip row and
+everything below it is +12 px vs the design’s 32 px `.chip` (labels centred
++5, “Avatar colour”/swatches/caption +12; UI iteration-5 band5 10.8–11.1%).
+
+I re-probed the only local construction that could shrink the row without
+touching `core/` — `SizedBox(height: 32)` + `OverflowBox(44)` around each
+chip: the row does become 32, but the 6 px of tap area above/below the parent
+**stops hit-testing** (measured: above-edge tap 0 hits, centre tap 1 hit).
+This is inherent to Flutter hit testing — a hit area cannot extend beyond an
+ancestor’s bounds — so no P05-local wrapper can keep the 44×44 target and the
+32 px row at the same time. The resolution is an owner/shared decision:
+keep the 44 px flow box (accept +12), amend the design’s `.chip` to 44, or
+build shared hit-routing that owns the overlay. P05’s gaps are already exact
+(chip-row→label 8, label→swatch 4, swatch 44 with 8 px gaps, note gap 6).
 
 ## Notes
 
-* The BUG-9 proof and the test stage’s five-test order group together pin the
-  ruling so the durable shared `createdAt` fix cannot regress it.
-* `rowid` remains the documented interim (SQLite `VACUUM` caveat noted in the
-  repository comment); the shared request stays open as the durable fix.
+* The new `add_children_test.dart` chip-height test asserts the shared delta
+  (44 − 32) with the reason inline, so it fails loudly in the right direction
+  when the shared fix lands — the acceptance criterion for that request.
+* `SHARED_REQUEST.md`’s `router_push_test` entry still reads “Blocks: yes”
+  although the gate is green (review iteration-5 finding 1) — a one-line
+  status move for the fix pass, not a P05 defect.
+* No skipped proofs were added this iteration: there are no P05-owned bugs to
+  prove.
 
 VERDICT: PASS

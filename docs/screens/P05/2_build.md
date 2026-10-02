@@ -1,83 +1,76 @@
-# P05 · Add children — build notes (STAGE 2, iteration 4)
+# P05 · Add children — build notes (STAGE 2, iteration 5)
 
-Route `/add-children` (feature `family`, parent mode). Iteration 3 record is
-superseded below. Every item in `docs/screens/P05/FIXES_3.md` is addressed;
-both skipped proofs (P05-BUG-9, P05-BUG-10) are un-skipped and green; zero
-skips remain.
+Route `/add-children` (feature `family`, parent mode). Iteration 4 record is
+superseded below. Every item in `docs/screens/P05/FIXES_4.md` is addressed;
+no skipped bug tests exist or are referenced. No product-code change was
+needed this iteration: all remaining FIXES_4 items are shared/out-of-scope
+with standing filings, and the one gate that was red is green again via
+main. Working tree is clean apart from these notes.
 
 ## Files changed (RULES §1 only)
 
-- `app/lib/features/family/data/family_repository_impl.dart` — the roster
-  query now orders by `rowid` (insertion proxy) instead of the core helper's
-  nickname order (CHILD ORDER ruling, P05-BUG-9); interface untouched.
-- `app/lib/features/family/presentation/widgets/kid_card_grid.dart` —
-  `cardH` drops the 10 px pencil clearance and the name→age gap is 6
-  (`gap6`), so cards render the design's 116 (P05-BUG-10); `TODO(P05)`
-  deferral replaced by a comment stating the ruling is satisfied locally.
-- `app/lib/features/family/presentation/widgets/add_child_form_card.dart` —
-  the four now-redundant `IntrinsicWidth` wrappers removed (shared
-  `NestChip` shrink-wraps since `7eaa1f7`); stale "until the shared fix
-  lands" comment replaced.
-- `app/test/features/family/add_children_test.dart` — order test flipped
-  to creation order (`maya.left < leo.left`); 5-child grid height updated
-  124 → 116; pencil containment now resolves Maya's own card (order-proof).
-- `app/test/features/family/p05_bugs_test.dart` — BUG-9 + BUG-10 skips
-  removed; header comment updated.
-- `docs/screens/P05/3_test.md` — the two stale claims corrected (child
-  order satisfied via interim; chip workaround removed).
-- `docs/screens/P05/SHARED_REQUEST.md` — child-order request kept open as
-  the DURABLE fix with the interim recorded; chip component request marked
-  LANDED.
-- `docs/screens/P05/2_build.md` — this file.
+- `docs/screens/P05/2_build.md` — this file. Nothing else.
 
-No files outside RULES §1 touched. No `domain/` interface changes, no core
-changes, no signature changes to existing members.
+No product, test, or shared file touched: there was nothing in RULES §1
+left to fix (details per item below).
 
 ## What was done about each fix item
 
-- **Finding 1 (shared gate) — `router_push_test` asserts placeholder copy.**
-  Still failing on main's file, still outside RULES §1, still filed as
-  blocking. Verified below; not counted against this diff.
-- **Finding 2 / P05-BUG-9 (major) — CHILD ORDER.** Implemented the
-  review-verified interim exactly: `FamilyRepositoryImpl.watchChildren`
-  runs its own `rowid`-ordered query (allowed `data/**` path, own DB
-  handle) instead of the nickname-ordered core helper. Demo seed yields
-  `[Maya, Leo]`; new children append by insertion. `TODO(P05)` dropped.
-  Un-skipped proof (`maya.left < leo.left`) passes; the old
-  nickname-order test was flipped, not deleted. Shared createdAt request
-  stays as the durable fix.
-- **Finding 3 — dead `IntrinsicWidth` wrappers.** Removed all four (group
-  semantics kept); the BUG-1 geometry proofs (box < run, ≤2 rows, block
-  height) still pass against the fixed component.
-- **Finding 4 — order-pinning test.** Inverted to the ruling
-  (`maya.left < leo.left`); it now proves the fix instead of the defect.
-- **Finding 5 / P05-BUG-10 — 124 px cards.** `cardH` = 22 + 44 + 2 + 24 +
-  6 + 18 = 116 at 1.0 (text-scaler-scaled beyond); the name→age gap uses
-  the existing `gap6` token. Un-skipped proof (≤118) passes, as does the
-  kept pencil-inside-card assertion (the 44 px pencil overlays a 116 card).
-- **Finding 6 — wrong feasibility claims.** Corrected here and in
-  `3_test.md` (interim feasible and landed; shared request durable-only).
-- **Finding 7 — carried accepts (no action).** Dropped-Continue, `onSaved`
-  deferral, `child_display` placement, raw error string, 1 px offsets —
-  unchanged positions, listed so the delta is explicit.
-- **COPY ruling.** Re-verified character-exact vs the HTML (no copy
-  touched this iteration); the `’` fix from iteration 3 is pinned by the
-  code-unit guard.
-- **Orchestrator items.** All prior notes hold (chips, header, bottom
-  edge, alignment, focus ring); item 2 (rowid meanwhile) now implemented.
+- **Test bug 1 — `router_push_test` placeholder copy: RESOLVED via main,
+  verified.** `cdd4cf5` ("shared/router_push_test_fix: push/pop contract
+  asserts router paths, not placeholder titles") reworked the shared test
+  to assert router paths. Full-suite tail this run: `00:29 +669: All tests
+  passed!` (exit 0) — the BLOCKING filing in `SHARED_REQUEST.md` is now
+  historical; the gate is green on this branch unmodified.
+- **Test bug 2 — residual drift is a shared typography effect: no P05
+  action, filing verified.** The `SHARED_REQUEST.md` entry is complete and
+  its factual claims re-checked: `pubspec.yaml` carries no bundled fonts
+  (only the template comment), `google_fonts` fetches at runtime, and every
+  P05 gap/row is a literal `SizedBox`/DS height pinned by the iteration-4
+  tests — so per-row line-box growth is the only remaining variable and it
+  lives in the shared type scale. The delegated brief
+  (`docs/screens/_shared/body_text_width.md`) explicitly scopes its fix to
+  shared styles with "no per-screen hacks", so touching P05 here would
+  contradict it.
+- **UI deviation 1 (+12 from the 44 px chip tap box): shared, already
+  filed, no P05-local workaround exists.** Verified against the HTML/CSS
+  sources that every P05-owned vertical value is already exact: `.field`
+  margin-top 10, label→input 6 (DS field internals), `.lbl` margin-top 8,
+  `.chip-row` margin-top 4, `.swatches` margin-top 4, gap 8, swatch 44×44,
+  `.form-note` margin-top 6 — all literal in `add_child_form_card.dart` via
+  tokens. Taking a 32 px chip height locally would mean overriding the DS
+  component's height, breaking the 44-min tap targets the suite pins and
+  `SPACING_SPEC` §10.6 ("keep visual size"); negative spacing or fixed
+  heights would break tokens and text-scale behaviour, exactly as the UI
+  stage concluded. Standing `SHARED_REQUEST.md` #3 (overlay construction:
+  32 px layout row, 44 px tap area overlaid) remains the fix.
+- **UI note 6 (orchestrator §18.2–3 targets): no action.** The UI stage
+  showed those numbers do not reproduce from the design PNG; its own
+  measured table is the reproducible record, and the only open residual in
+  it is the +12 above.
+- **Orchestrator iteration-5 targets: met where P05-owned.** Chips render
+  one row left-aligned with 8 px gaps (verified iteration 2 on-simulator,
+  still the code); swatches 44 px diameter with 8 px gaps (literal
+  `NestDevice.tapParent` + `spacing: s2`); chip-row→label 8 and
+  label→swatch 4 taken exactly from the HTML (see table above). The +5/+12
+  centres are the shared chip-box effect, not gap errors.
+- **No skipped tests.** `grep -c "skip:"` returns 0 in both family test
+  files; FIXES_4 references no skipped proofs. P05-BUG-1…10 proofs all run
+  un-skipped and green inside the suite.
+- **Main merges consumed, not re-patched.** `family_time_zone` (UTC
+  instants, Drift migration) and the router-test fix merged cleanly; core
+  `watchChildren` still orders by nickname and the table still has no
+  `createdAt`, so the iteration-4 `rowid` interim stands as the ruling's
+  implementation. Suite green throughout.
 
 ## Verification tails
 
-`dart format .` — clean (re-ran after every edit).
+`dart format .` — clean (0 changed, 362+ files).
 
 `flutter analyze` — `No issues found!` (full-app run, exit 0).
 
-`flutter test` (full suite) — `00:11 +636 -1`: the single failure is
-`app/test/app/router_push_test.dart` ("push between top-level onboarding
-routes"), which asserts P05's pre-build placeholder title, arrived from
-main, is outside RULES §1, and has been filed as BLOCKING since iteration
-3. Every in-scope test passes (110/110 in `test/features/family/`, zero
-skips — `grep -c "skip:"` returns 0 in both files). Every widget test that
-pumps the app ends with `disposeApp(tester)`.
+`flutter test` (full suite) — `00:29 +669: All tests passed!` (exit 0,
+zero skips in `test/features/family/`). Every widget test that pumps the
+app ends with `disposeApp(tester)`.
 
 VERDICT: PASS
