@@ -32,6 +32,30 @@ abstract final class NestSpacing {
   static const double gap14 = 14;
 }
 
+/// P02 value-tour pager geometry (`design/html-source/screens/P02-value-tour.html`).
+///
+/// Screen-specific metrics with no entry on the 4pt grid, kept here so pager
+/// screens share one source instead of documented `static const`s.
+abstract final class NestPager {
+  const new _();
+
+  /// `.pg-stage`: 52px progress-stage circle.
+  static const double stage = 52;
+
+  /// `.pg-pet`: 158px pager pet illustration.
+  static const double pet = 158;
+
+  /// `.pg-line`: 32px minimum row height.
+  static const double lineMinHeight = 32;
+
+  /// `.pv-add` dashed "add" row: 1.5px dashes, 6px dash / 4px gap, radius
+  /// `r-m` (16), 44px minimum height.
+  static const double addDashWidth = 1.5;
+  static const double addDashLength = 6;
+  static const double addDashGap = 4;
+  static const double addMinHeight = 44;
+}
+
 /// Device metrics the designs were built at (iPhone 15/16, 390x844).
 ///
 /// Use for design QA only — never hard-code layout widths from these except

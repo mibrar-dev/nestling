@@ -40,8 +40,10 @@ class NestNavBar extends StatelessWidget {
       // `4px 12px 12px`, 44px back button. With border-box sizing the
       // rendered bar is 4 + 44 + 12 = 60 high, so the chevron centres at
       // status (47) + 4 + 22 = 73 and the scroll title below lands at the
-      // design y. Fixed 44px side slots keep a centred title on one line;
-      // the action text clips (never wraps) inside its slot.
+      // design y. The leading slot stays a fixed 44 (back button or the
+      // `.nav-gap` spacer); the trailing slot is content-sized with a 44
+      // minimum (P02: the `Skip` text action is ~64 wide and must fit, not
+      // ellipsize). Slots whose content fits 44 render identically.
       return ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 52),
         child: Padding(
@@ -79,9 +81,17 @@ class NestNavBar extends StatelessWidget {
                   },
                 ),
               ),
-              SizedBox(
-                width: NestDevice.tapParent,
-                child: trailing ?? _compactAction(),
+              ConstrainedBox(
+                constraints: const BoxConstraints(
+                  minWidth: NestDevice.tapParent,
+                ),
+                // Empty slot keeps the 44-wide `.nav-gap` spacer with no
+                // height of its own (a back-less, action-less bar still
+                // resolves to the 52 minimum); content sizes the slot.
+                child:
+                    trailing ??
+                    _compactAction() ??
+                    const SizedBox(width: NestDevice.tapParent),
               ),
             ],
           ),
@@ -187,13 +197,16 @@ class _NavActionButton extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: NestSpacing.s3),
               child: Center(
-                child: Text(
-                  label,
-                  style: NestType.buttonLabel(color: tokens.leaf),
-                  // Fixed 44px slot in the compact bar: clip, never wrap
-                  // (documented exception to the no-ellipsis rule).
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                // One announcement: the outer `Semantics(label:)` owns it.
+                child: ExcludeSemantics(
+                  child: Text(
+                    label,
+                    style: NestType.buttonLabel(color: tokens.leaf),
+                    // Content-sized compact slot (P02): fit, never wrap
+                    // (documented exception to the no-ellipsis rule).
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
             ),
