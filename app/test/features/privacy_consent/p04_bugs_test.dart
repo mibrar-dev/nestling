@@ -33,7 +33,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:nestling/app/controllers.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
@@ -163,7 +162,6 @@ Future<PrivacyConsentBloc> _pumpView(
   PrivacyConsentRepository repository, {
   ThemeMode theme = ThemeMode.light,
 }) async {
-  GoogleFonts.config.allowRuntimeFetching = false;
   final bloc = PrivacyConsentBloc(repository: repository);
   addTearDown(bloc.close);
   await tester.pumpWidget(

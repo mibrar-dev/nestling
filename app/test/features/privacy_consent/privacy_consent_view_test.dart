@@ -15,7 +15,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 import 'package:nestling/features/privacy_consent/domain/entities/consent_option.dart';
@@ -96,7 +95,6 @@ Future<PrivacyConsentBloc> _pumpPrivacyView(
   PrivacyConsentRepository repository, {
   ThemeMode theme = ThemeMode.light,
 }) async {
-  GoogleFonts.config.allowRuntimeFetching = false;
   final bloc = PrivacyConsentBloc(repository: repository);
   addTearDown(bloc.close);
   await tester.pumpWidget(
@@ -239,10 +237,6 @@ void main() {
   });
 
   group('P04 privacy — BLoC states render the static screen', () {
-    setUp(() {
-      GoogleFonts.config.allowRuntimeFetching = false;
-    });
-
     testWidgets('initial: content renders before the load event', (
       tester,
     ) async {

@@ -12,7 +12,7 @@
 //     overflow at text scale 1.3 and the back/notice control labels.
 //
 // Note on fonts: widget tests run without the bundled Inter/Nunito faces
-// (GoogleFonts runtime fetching is off in tests), so the block test font
+// (asset fonts do not load in the test harness), so the block test font
 // renders every glyph at full em width. The opt card therefore sits lower
 // than it does on a device and must be scrolled into reach before tapping.
 
@@ -25,7 +25,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
@@ -472,7 +471,6 @@ void main() {
     });
 
     testWidgets('the dialog restates all four promises', (tester) async {
-      GoogleFonts.config.allowRuntimeFetching = false;
       await setUpTestScope();
       await _pumpPrivacy(
         tester,
@@ -597,7 +595,6 @@ void main() {
     testWidgets('the switch answers on the next frame, before Drift replies', (
       tester,
     ) async {
-      GoogleFonts.config.allowRuntimeFetching = false;
       final repository = _ScriptedPrivacyConsentRepository(
         items: Stream<List<ConsentOption>>.value(const <ConsentOption>[
           ConsentOption(
@@ -649,7 +646,6 @@ void main() {
     testWidgets('a failed OFF write says crash reports are still on', (
       tester,
     ) async {
-      GoogleFonts.config.allowRuntimeFetching = false;
       final repository = _ScriptedPrivacyConsentRepository(
         items: Stream<List<ConsentOption>>.value(const <ConsentOption>[
           ConsentOption(
@@ -699,7 +695,6 @@ void main() {
     });
 
     testWidgets('a failed ON write says the choice stays off', (tester) async {
-      GoogleFonts.config.allowRuntimeFetching = false;
       final repository = _ScriptedPrivacyConsentRepository(
         items: Stream<List<ConsentOption>>.value(const <ConsentOption>[
           ConsentOption(
@@ -1386,7 +1381,6 @@ void main() {
   testWidgets('the toggle dispatches PrivacyConsentCrashToggled', (
     tester,
   ) async {
-    GoogleFonts.config.allowRuntimeFetching = false;
     final repository = _RecordingPrivacyConsentRepository();
     final bloc = PrivacyConsentBloc(repository: repository);
     addTearDown(bloc.close);
