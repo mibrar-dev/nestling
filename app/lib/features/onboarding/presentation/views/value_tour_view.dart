@@ -3,8 +3,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nestling/core/data/env_flags.dart';
-import 'package:nestling/core/data/london_time.dart';
-import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 import 'package:nestling/features/auth/auth_routes.dart';
@@ -53,12 +51,13 @@ class _ValueTourViewState extends State<ValueTourView> {
   static const double _dotsTop = 22;
   static const double _titleGap = 30;
 
-  /// Step copy, verbatim from `OnboardingRepositoryImpl._steps`.
+  /// Step copy, verbatim from `OnboardingRepositoryImpl._steps` (which mirrors
+  /// the design's typographic punctuation per ORCHESTRATOR_NOTES 2).
   static const List<({String title, String detail})> _steps = [
     (
       title: 'Set quests in seconds',
       detail:
-          "Pick from 40+ ready-made jobs like 'Put the bins out' or make "
+          'Pick from 40+ ready-made jobs like “Put the bins out” — or make '
           'your own.',
     ),
     (
@@ -88,23 +87,10 @@ class _ValueTourViewState extends State<ValueTourView> {
     );
   }
 
-  /// Date chip: the next payout Saturday strictly after the story "today".
-  ///
-  /// The design hard-codes `Sat 4 Oct`, but 4 Oct 2026 is a Sunday — the
-  /// seed anchors the story to Sat 3 Oct 2026 (and `formatLondonDay`
-  /// renders weekday labels via `london_time.dart`), so the chip derives
-  /// the upcoming payout Saturday (`payoutDay` 6 in the seeded family row)
-  /// instead: `Sat 10 Oct` under the pinned test clock, the next real
-  /// Saturday in production. UTC midnight always maps to the same London
-  /// date (London is UTC or UTC+1), so the label is stable.
-  static String _payoutChipLabel() {
-    final anchor = Seed.anchorDay;
-    var ahead = (DateTime.saturday - anchor.weekday) % 7;
-    if (ahead == 0) {
-      ahead = DateTime.daysPerWeek;
-    }
-    return formatLondonDay(anchor.add(Duration(days: ahead)));
-  }
+  /// Date chip: the design's static `Sat 4 Oct` (ORCHESTRATOR_NOTES 1 — the
+  /// tour is a marketing illustration, so the design copy is mandatory, not
+  /// the database).
+  static const String _dateChipLabel = 'Sat 4 Oct';
 
   int _page = 0;
   PageController? _controller;
@@ -358,15 +344,15 @@ class _TourNav extends StatelessWidget {
   }
 }
 
-/// Card 1 — "Today's quests": static preview of the seeded demo quests.
+/// Card 1 — "Today's quests": the design's static illustration copy.
 ///
-/// Assignee/repeat follow `Seed.demo` (DATA OVER MOCKS), not the design PNG:
-/// dishwasher maya/daily, bins maya/weekly, reading maya/daily, tidy
-/// maya/daily. Coins (15/15/10/15) and the 4-of-6 progress match the seed.
+/// ORCHESTRATOR_NOTES 1 (mandatory) makes the design the spec for this
+/// marketing illustration — the assignee/repeat strings below intentionally
+/// mirror `P02-value-tour.html:72-88`, not `Seed.demo`.
 class _QuestPreviewCard extends StatelessWidget {
   const _QuestPreviewCard();
 
-  /// Preview rows: icon, tile tint, title, seeded subtitle, coin amount.
+  /// Preview rows: icon, tile tint, title, design subtitle, coin amount.
   static const List<
     ({String asset, NestTileTint tint, String title, String sub, String coins})
   >
@@ -375,14 +361,14 @@ class _QuestPreviewCard extends StatelessWidget {
       asset: NestIcons.target,
       tint: NestTileTint.sky,
       title: 'Empty the dishwasher',
-      sub: 'Maya · daily',
+      sub: 'Maya · weekly',
       coins: '15',
     ),
     (
       asset: NestIcons.bin,
       tint: NestTileTint.coin,
       title: 'Put the bins out',
-      sub: 'Maya · weekly',
+      sub: 'Leo · once',
       coins: '15',
     ),
     (
@@ -396,7 +382,7 @@ class _QuestPreviewCard extends StatelessWidget {
       asset: NestIcons.bed,
       tint: NestTileTint.peach,
       title: 'Tidy your bedroom',
-      sub: 'Maya · daily',
+      sub: 'Maya · weekly',
       coins: '15',
     ),
   ];
@@ -412,15 +398,13 @@ class _QuestPreviewCard extends StatelessWidget {
             children: <Widget>[
               Expanded(
                 child: Text(
-                  "Today's quests",
+                  'Today’s quests',
                   style: context.nestText.h3,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              _ValueTourViewState._headChip(
-                _ValueTourViewState._payoutChipLabel(),
-              ),
+              _ValueTourViewState._headChip(_ValueTourViewState._dateChipLabel),
             ],
           ),
           const SizedBox(height: NestSpacing.gap14),
@@ -471,7 +455,7 @@ class _PipPreviewCard extends StatelessWidget {
             children: <Widget>[
               Expanded(
                 child: Text(
-                  "Pip's nest",
+                  'Pip’s nest',
                   style: context.nestText.h3,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -572,15 +556,13 @@ class _JarPreviewCard extends StatelessWidget {
             children: <Widget>[
               Expanded(
                 child: Text(
-                  "Maya's jar",
+                  'Maya’s jar',
                   style: context.nestText.h3,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              _ValueTourViewState._headChip(
-                _ValueTourViewState._payoutChipLabel(),
-              ),
+              _ValueTourViewState._headChip(_ValueTourViewState._dateChipLabel),
             ],
           ),
           const SizedBox(height: NestSpacing.gap14),
