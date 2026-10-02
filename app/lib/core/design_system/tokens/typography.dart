@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 /// Type scale from `tokens.css`.
 ///
-/// Parent UI uses Inter, display text and all kid text uses Nunito.
-/// Every style carries `height = lineHeight / fontSize` so line boxes match
-/// the CSS exactly. In widget tests set
-/// `GoogleFonts.config.allowRuntimeFetching = false` to avoid network loads.
+/// Parent UI uses Inter, display text and all kid text uses Nunito. Both
+/// families are bundled in `assets/fonts` (Inter 4.001, Nunito 3.602 — the
+/// exact builds the design HTML loads from Google Fonts, pinned so text
+/// metrics match the design renders without a runtime download). Every
+/// style carries `height = lineHeight / fontSize` so line boxes match
+/// the CSS exactly.
 abstract final class NestType {
   const new _();
+
+  static const String _interFamily = 'Inter';
+  static const String _nunitoFamily = 'Nunito';
 
   static TextStyle _inter(
     double size,
@@ -17,7 +21,8 @@ abstract final class NestType {
     double? letterSpacing,
     Color? color,
   }) {
-    return GoogleFonts.inter(
+    return TextStyle(
+      fontFamily: _interFamily,
       fontSize: size,
       height: lineHeight / size,
       fontWeight: weight,
@@ -33,7 +38,8 @@ abstract final class NestType {
     double? letterSpacing,
     Color? color,
   }) {
-    return GoogleFonts.nunito(
+    return TextStyle(
+      fontFamily: _nunitoFamily,
       fontSize: size,
       height: lineHeight / size,
       fontWeight: weight,
