@@ -1,11 +1,9 @@
-// P04 · Privacy & consent — adversarial bug proofs (Stage 6, iteration 4).
+// P04 · Privacy & consent — adversarial bug proofs (Stage 6, iteration 4,
+// maintained in iteration 5).
 //
-// The proofs assert the CORRECT behaviour. Iterations 1-4 fixed P04-1, P04-3,
-// P04-4, P04-5, P04-6, P04-8 and P04-9 (P04-3 by the shared compact-nav
-// merge), so those proofs are un-skipped and green. The shared batch (merge
-// ce89889) landed `NestIcons.trash` and `NestPrivacyShield`, so P04-2 and
-// P04-7 are now fixable in P04 scope (one wire-up each) and their proofs stay
-// `skip`-marked only until that wire-up happens.
+// The proofs assert the CORRECT behaviour. All nine are fixed, so every
+// proof is un-skipped and green; the two shared-batch wire-ups (P04-2 trash
+// glyph, P04-7 themed shield) landed in iteration 5.
 //
 // Run the proofs against the current tree with:
 //   flutter test --run-skipped test/features/privacy_consent/p04_bugs_test.dart
@@ -14,12 +12,12 @@
 //
 // Bug index:
 //   P04-1 major   first-run crash-consent opt-in is silently dropped  [FIXED]
-//   P04-2 major   promise row 4 has no trash glyph (empty peach tile) [actionable]
+//   P04-2 major   promise row 4 has no trash glyph (empty peach tile)  [FIXED]
 //   P04-3 major   compact nav bar 16 px short — header block sits high [FIXED]
 //   P04-4 major   1 px real dividers inflate the promise list         [FIXED]
 //   P04-5 minor   rapid double-tap writes the same toggle value twice [FIXED]
 //   P04-6 major   failed OFF write still tells the parent "it stays off" [FIXED]
-//   P04-7 major   dark mode renders the light-baked shield artwork  [actionable]
+//   P04-7 major   dark mode renders the light-baked shield artwork   [FIXED]
 //   P04-8 minor   double-failed rapid toggle reverts to unpersisted  [FIXED]
 //   P04-9 minor   overlapping first-run writes keep the earlier value [FIXED]
 //
@@ -280,8 +278,8 @@ void main() {
       );
 
       await disposeApp(tester);
-      // P04-2: row 4 ships an empty peach tile (trash asset not wired yet).
-    }, skip: true);
+      // P04-2 FIXED (iteration 5): row 4 wires the shared trash glyph.
+    });
   });
 
   group('P04-3 — compact nav bar height', () {
@@ -451,9 +449,8 @@ void main() {
         );
 
         await disposeApp(tester);
-        // P04-7: the view still renders NestlingIllustrations.privacyShield.
+        // P04-7 FIXED (iteration 5): dark mode uses NestPrivacyShield.
       },
-      skip: true,
     );
   });
 

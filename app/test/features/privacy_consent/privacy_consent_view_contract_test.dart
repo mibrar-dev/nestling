@@ -774,15 +774,10 @@ void main() {
 
   group('P04 — promise row glyphs (orchestrator note item 1)', () {
     // The orchestrator asked for "a widget test that all four row icons find
-    // their SvgPicture/Icon". Rows 1-3 are verifiable here and green; row 4 is
-    // covered by the skipped `[P04-2]` proof in p04_bugs_test.dart because the
-    // trash glyph needs the shared `ic_trash.svg` (SHARED_REQUEST §1), which
-    // RULES §1 forbids P04 from adding. This test pins the three shipped
-    // glyphs — asset AND tint — so a wrong-asset or invisible-glyph regression
-    // cannot slip through, and documents row 4 as the open gap.
-    testWidgets('rows 1-3 render their own tinted glyph; row 4 is the gap', (
-      tester,
-    ) async {
+    // their SvgPicture/Icon". All four rows render the shared line glyph in
+    // their tile ink — asset AND tint are asserted, so a wrong-asset or
+    // invisible-glyph regression cannot slip through.
+    testWidgets('all four rows render their own tinted glyph', (tester) async {
       await setUpTestScope();
       await pumpAppRoute(tester, '/privacy');
 
@@ -798,6 +793,10 @@ void main() {
         'Data stored in the UK (London)': (
           asset: NestIcons.pinUk,
           ink: NestColors.light.sky,
+        ),
+        'Delete everything anytime': (
+          asset: NestIcons.trash,
+          ink: NestColors.light.aPeach,
         ),
       };
 
@@ -836,20 +835,13 @@ void main() {
         expect(svg.height, 24);
       }
 
-      // Row 4: tile present and tinted, glyph still missing (SHARED_REQUEST §1).
+      // Row 4 uses the shared trash glyph in peach ink (SHARED_REQUEST §1).
       final deleteRow = find
           .ancestor(
             of: find.text('Delete everything anytime'),
             matching: find.byType(Semantics),
           )
           .first;
-      expect(
-        find.descendant(of: deleteRow, matching: find.byType(NestIcon)),
-        findsNothing,
-        reason:
-            'row 4 has no trash glyph yet — ic_trash.svg is still missing; this '
-            'assertion flips when the shared asset lands ([P04-2])',
-      );
       final deleteTile = find
           .descendant(of: deleteRow, matching: find.byType(Container))
           .first;
@@ -862,7 +854,7 @@ void main() {
     });
 
     for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
-      testWidgets('${theme.name}: the three shipped glyphs are tinted', (
+      testWidgets('${theme.name}: the four shipped glyphs are tinted', (
         tester,
       ) async {
         await setUpTestScope();
@@ -871,12 +863,17 @@ void main() {
           of: find.byType(NestList),
           matching: find.byType(NestIcon),
         );
-        expect(icons, findsNWidgets(3));
+        expect(icons, findsNWidgets(4));
 
         final palette = theme == ThemeMode.light
             ? NestColors.light
             : NestColors.dark;
-        final inks = <Color>[palette.leafInk, palette.lilac, palette.sky];
+        final inks = <Color>[
+          palette.leafInk,
+          palette.lilac,
+          palette.sky,
+          palette.aPeach,
+        ];
         for (final icon in icons.evaluate()) {
           final widget = tester.widget<NestIcon>(
             find.byElementPredicate((e) => e == icon),
@@ -908,14 +905,15 @@ void main() {
         .ancestor(of: find.text(rows[index]), matching: find.byType(Semantics))
         .first;
 
-    /// The separator is a SIBLING of the row content inside the row's Stack
-    /// (`Stack` sizes to its non-positioned child), so it is found through the
-    /// Stack, not through the row's own subtree.
-    Finder stackOf(int index) =>
-        find.ancestor(of: rowOf(index), matching: find.byType(Stack)).first;
-
-    Finder dividerOf(int index) =>
-        find.descendant(of: stackOf(index), matching: find.byType(Divider));
+    /// The separator over row `index`'s top boundary, painted by shared
+    /// `NestList` as a 1 px colour-filled `Container` inside a `Positioned`.
+    /// Row 1 carries none, so `dividerOf(0)` finds nothing.
+    Finder dividerOf(int index) => find.descendant(
+      of: find.ancestor(of: rowOf(index), matching: find.byType(Stack)),
+      matching: find.byWidgetPredicate(
+        (widget) => widget is Container && widget.color != null,
+      ),
+    );
 
     for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
       testWidgets('${theme.name}: each row after the first paints one line', (
@@ -931,12 +929,12 @@ void main() {
         // regression that stacked all three on one row would still satisfy a
         // bare "3 dividers" count, so check the ownership per row.
         expect(find.byType(NestList), findsOneWidget);
-        // Row 1 is the card's top edge: no Stack, no separator. Rows 2-4 each
-        // own exactly one line.
+        // Row 1 is the card's top edge: it paints no separator. Rows 2-4
+        // each own exactly one line.
         expect(
-          find.ancestor(of: rowOf(0), matching: find.byType(Stack)),
+          dividerOf(0),
           findsNothing,
-          reason: 'the first row is not wrapped, so it cannot paint a line',
+          reason: "the first row is the card's top edge",
         );
         for (var i = 1; i < rows.length; i++) {
           expect(dividerOf(i), findsOneWidget, reason: 'row ${i + 1} boundary');
@@ -965,10 +963,8 @@ void main() {
           );
           expect(tester.getSize(divider).height, 1);
 
-          final line = tester.widget<Divider>(divider);
+          final line = tester.widget<Container>(divider);
           expect(line.color, palette.line, reason: 'row ${i + 1} tint');
-          expect(line.thickness, 1);
-          expect(line.height, 1);
         }
         expect(tester.takeException(), isNull);
         await disposeApp(tester);
@@ -1105,8 +1101,9 @@ void main() {
 
       // Rows after the first only.
       expect(
-        find.ancestor(of: rowOf(0), matching: find.byType(Stack)),
+        dividerOf(0),
         findsNothing,
+        reason: "the first row is the card's top edge",
       );
       for (var i = 1; i < rows.length; i++) {
         final positioned = tester.widget<Positioned>(
@@ -1117,9 +1114,13 @@ void main() {
         expect(positioned.top, 0, reason: 'design: top: 0');
         expect(positioned.left!.round(), indent, reason: 'design: left');
         expect(positioned.right, 0, reason: 'design: right: 0');
-        expect(positioned.height, thickness, reason: 'design: height');
         expect(
-          tester.widget<Divider>(dividerOf(i)).color,
+          tester.getSize(dividerOf(i)).height,
+          thickness,
+          reason: 'design: height',
+        );
+        expect(
+          tester.widget<Container>(dividerOf(i)).color,
           NestColors.light.line,
           reason: 'design: background: var(--line)',
         );
@@ -1130,37 +1131,11 @@ void main() {
   });
 
   group('P04 — promise row geometry (SPACING_SPEC §9.3/§9.4)', () {
-    testWidgets('four 40px tiles, tints in order, three 72px-indent dividers', (
+    testWidgets('four 40px tiles, tints in order, three overlay dividers', (
       tester,
     ) async {
       await setUpTestScope();
       await pumpAppRoute(tester, '/privacy');
-
-      final list = find.byType(NestList);
-      // The separators are overlays painted by the rows, not layout-height
-      // dividers injected by NestList (P04-4): exactly three 1 px lines.
-      expect(
-        find.descendant(of: list, matching: find.byType(Divider)),
-        findsNWidgets(3),
-      );
-      for (final divider
-          in find
-              .descendant(of: list, matching: find.byType(Divider))
-              .evaluate()) {
-        final dividerFinder = find.byElementPredicate((e) => e == divider);
-        final geometry = tester.widget<Positioned>(
-          find
-              .ancestor(of: dividerFinder, matching: find.byType(Positioned))
-              .first,
-        );
-        expect(geometry.top, 0);
-        expect(geometry.left, 72);
-        expect(geometry.right, 0);
-        expect(geometry.height, 1);
-        final line = tester.widget<Divider>(dividerFinder);
-        expect(line.height, 1);
-        expect(line.thickness, 1);
-      }
 
       final tints = <String, Color>{
         'No ads or tracking — ever': NestColors.light.leafTint,
@@ -1168,6 +1143,42 @@ void main() {
         'Data stored in the UK (London)': NestColors.light.skyTint,
         'Delete everything anytime': NestColors.light.peachTint,
       };
+
+      final list = find.byType(NestList);
+      // The separators are zero-height overlays painted by shared NestList,
+      // not layout-height dividers (P04-4): exactly three 1 px lines.
+      expect(
+        find.descendant(
+          of: list,
+          matching: find.byWidgetPredicate(
+            (widget) => widget is Container && widget.color != null,
+          ),
+        ),
+        findsNWidgets(3),
+      );
+      for (var i = 1; i < 4; i++) {
+        final row = find
+            .ancestor(
+              of: find.text(tints.keys.elementAt(i)),
+              matching: find.byType(Semantics),
+            )
+            .first;
+        final line = find.descendant(
+          of: find.ancestor(of: row, matching: find.byType(Stack)),
+          matching: find.byWidgetPredicate(
+            (widget) => widget is Container && widget.color != null,
+          ),
+        );
+        expect(line, findsOneWidget, reason: 'row ${i + 1} separator');
+        final geometry = tester.widget<Positioned>(
+          find.ancestor(of: line, matching: find.byType(Positioned)).first,
+        );
+        expect(geometry.top, 0);
+        expect(geometry.left, 72);
+        expect(geometry.right, 0);
+        expect(tester.getSize(line).height, 1);
+        expect(tester.widget<Container>(line).color, NestColors.light.line);
+      }
 
       for (final entry in tints.entries) {
         final row = find
@@ -1195,20 +1206,25 @@ void main() {
         expect(tester.getSize(row).height, greaterThanOrEqualTo(56));
       }
 
-      // Rows 1-3 carry their line icon; row 4 keeps the peach tile reserved
-      // with no stand-in glyph until the shared ic_trash.svg lands
-      // (docs/screens/P04/SHARED_REQUEST.md item 1).
+      // All four rows carry their line icon; row 4 uses the shared trash
+      // glyph (SHARED_REQUEST §1, landed) in peach ink.
       final icons = find.descendant(of: list, matching: find.byType(NestIcon));
-      expect(icons, findsNWidgets(3));
+      expect(icons, findsNWidgets(4));
       final deleteRow = find
           .ancestor(
             of: find.text('Delete everything anytime'),
             matching: find.byType(Semantics),
           )
           .first;
+      final deleteIcon = find.descendant(
+        of: deleteRow,
+        matching: find.byType(NestIcon),
+      );
+      expect(deleteIcon, findsOneWidget);
+      expect(tester.widget<NestIcon>(deleteIcon).assetName, NestIcons.trash);
       expect(
-        find.descendant(of: deleteRow, matching: find.byType(NestIcon)),
-        findsNothing,
+        tester.widget<NestIcon>(deleteIcon).color,
+        NestColors.light.aPeach,
       );
 
       expect(tester.takeException(), isNull);
@@ -1236,21 +1252,19 @@ void main() {
       await disposeApp(tester);
     });
 
-    testWidgets('the shield illustration is 84x84 and labelled', (
-      tester,
-    ) async {
+    testWidgets('the shield is 84x84 and labelled', (tester) async {
       await setUpTestScope();
       await pumpAppRoute(tester, '/privacy');
 
-      final picture = find.descendant(
-        of: find.bySemanticsLabel(
-          'A shield with a leaf and a heart, protecting your family',
-        ),
-        matching: find.byType(SvgPicture),
+      // The shared token-coloured component (SHARED_REQUEST §2), not the
+      // light-baked SVG asset.
+      final shield = find.byType(NestPrivacyShield);
+      expect(shield, findsOneWidget);
+      expect(tester.widget<NestPrivacyShield>(shield).size, 84);
+      expect(
+        tester.widget<NestPrivacyShield>(shield).semanticLabel,
+        'A shield with a leaf and a heart, protecting your family',
       );
-      expect(picture, findsOneWidget);
-      expect(tester.getSize(picture).width, 84);
-      expect(tester.getSize(picture).height, 84);
       expect(
         find.bySemanticsLabel(
           'A shield with a leaf and a heart, protecting your family',
