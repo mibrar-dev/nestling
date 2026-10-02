@@ -207,17 +207,16 @@ void main() {
       expect(tops, hasLength(1));
     });
 
-    testWidgets('chip tap box keeps the 44 minimum', (tester) async {
+    testWidgets('chip lays out 32 high with an overlaid 44 hit area', (
+      tester,
+    ) async {
       await pumpNest(tester, NestChip(label: '4-6', onSelected: (_) {}));
+      // Design `.chip` geometry: the layout box is 32 high (the 44 tap
+      // minimum is an overlaid hit test — shared batch 2 — proven by the
+      // tap-outside tests in shared_batch2_test.dart).
       final size = tester.getSize(find.byType(NestChip));
-      expect(size.height, 44);
+      expect(size.height, 32);
       expect(size.width, greaterThanOrEqualTo(44));
-      // The visible pill keeps the design geometry: 32 content + the 1.5
-      // border `Ink` reserves on each side.
-      final ink = tester.getSize(
-        find.descendant(of: find.byType(NestChip), matching: find.byType(Ink)),
-      );
-      expect(ink.height, 35);
     });
 
     testWidgets('chips stay on one row at 320 wide and textScale 1.3', (

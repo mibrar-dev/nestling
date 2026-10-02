@@ -11,11 +11,32 @@ cd "${WORKDIR:-$ROOT}"
 ev START "model=$MODEL"
 for i in 1 2 3 4 5; do
   if [ "$SID" != "-" ]; then
-    opencode run --auto -s "$SID" -m "$MODEL" "$(cat "$BRIEF")" < /dev/null > "$LOG" 2>&1
+    opencode run --auto -s "$SID" -m "$MODEL" "$(cat "$BRIEF")" < /dev/null > "$LOG" 2>&1 &
   else
-    opencode run --auto --title "$TITLE" -m "$MODEL" "$(cat "$BRIEF")" < /dev/null > "$LOG" 2>&1
+    opencode run --auto --title "$TITLE" -m "$MODEL" "$(cat "$BRIEF")" < /dev/null > "$LOG" 2>&1 &
   fi
-  rc=$?
+  OC=$!
+  # Idle watchdog: an agent whose log has not grown for IDLE_MAX seconds is
+  # stuck (hung tool call, dead socket). Kill it; the retry resumes the same
+  # session, so the work already done is kept.
+  IDLE_MAX="${IDLE_MAX:-1200}"; idle=0; last=-1
+  while kill -0 $OC 2>/dev/null; do
+    sleep 30
+    sz=$(wc -c < "$LOG" 2>/dev/null | tr -d ' ')
+    if [ "$sz" = "$last" ]; then idle=$((idle+30)); else idle=0; last=$sz; fi
+    if [ $idle -ge $IDLE_MAX ]; then
+      pkill -P $OC 2>/dev/null; kill $OC 2>/dev/null; echo "Error: idle watchdog killed the agent after ${idle}s" >> "$LOG"; break
+    fi
+  done
+  wait $OC; rc=$?
+  if grep -q "idle watchdog killed" "$LOG"; then
+    ev RETRY "attempt=$i reason=idle_${IDLE_MAX}s"
+    [ "$SID" = "-" ] && SID=$(opencode session list 2>/dev/null | grep -F "$TITLE" | head -1 | awk '{print $1}')
+    [ -z "$SID" ] && SID="-"
+    BRIEF_ORIG="${BRIEF_ORIG:-$BRIEF}"; CONT="$ST/$NAME.continue.md"
+    { echo "CONTINUE: your previous run stalled and was restarted (work on disk is kept). Check what you already changed (git status/diff), avoid the step that hung (e.g. a never-ending command), and finish the task:"; echo; cat "$BRIEF_ORIG"; } > "$CONT"; BRIEF="$CONT"
+    continue
+  fi
   if [ $rc -ne 0 ] && [ "$SID" != "-" ] && tail -40 "$LOG" | grep -qE "has expired|Session not found|reasoning item .* was not found"; then
     ev RETRY "session_expired=$SID starting_fresh"; SID="-"; continue
   fi
