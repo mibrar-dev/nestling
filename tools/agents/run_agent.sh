@@ -27,6 +27,13 @@ for i in 1 2 3 4 5; do
     [ -z "$SID" ] && SID="-"
     sleep 120; continue
   fi
+  # Killed by the OS (memory pressure) or interrupted: retry, never treat as done.
+  if [ $rc -eq 137 ] || [ $rc -eq 143 ] || [ $rc -eq 130 ] || [ $rc -eq 9 ]; then
+    ev RETRY "attempt=$i reason=killed_rc$rc"
+    [ "$SID" = "-" ] && SID=$(opencode session list 2>/dev/null | grep "$TITLE" | head -1 | awk '{print $1}')
+    [ -z "$SID" ] && SID="-"
+    sleep 60; continue
+  fi
   [ $rc -eq 0 ] && { ev DONE "bytes=$(wc -c <"$LOG" | tr -d ' ')"; exit 0; }
   ev FAILED "rc=$rc"; exit $rc
 done
