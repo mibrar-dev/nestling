@@ -1,4 +1,4 @@
-# P03 Create account — test notes (Stage 3, iteration 4)
+# P03 Create account — test notes (Stage 3, iteration 5)
 
 Route `/create-account` · feature `auth` · parent mode. Tests live in
 `app/test/features/auth/`; the in-memory Drift DB comes from
@@ -8,146 +8,132 @@ was touched by this stage.
 
 ## Verdict
 
-**Two real bugs found**: one new regression the iteration-4 build introduced
-(P03-BUG-21, accessibility), and one defect the build *retired the proof for*
-instead of fixing (P03-BUG-16). Everything the build did fix is genuinely
-fixed — I re-verified it on the simulator and with new proofs — and the
-layout is byte-identical to iteration 3 (compare.py mean diff 4.66%, CTA
-surface top 678 vs the design's 677, submit button 694–745.7 exactly, both
-caption lines exact). Per the brief the screen is **not** patched, so
-`flutter test` is **red by design**: 2 proofs fail. Everything else passes
-(669 green, 1 skipped, 2 red).
+**One real bug remains open**: P03-BUG-16 (an invalid input paints no
+`danger` border). The iteration-5 build closed everything else — both bugs I
+reported, including the a11y regression — and I verified each fix on the
+simulator and with new proofs. What is left is a single **shared-blocked**
+defect: the screen cannot have both the design's red border and the live
+region the error needs, because the shared `NestTextField` only offers one
+or the other.
 
-## The iteration-4 fixes, verified
+I have **un-skipped** that proof rather than leave it skipped: a skipped
+proof is not evidence, the standing rule for this stage is never to skip a
+test, and the premise the skip rested on is stale (§5 of the shared request
+already records that the change it was waiting for landed). So `flutter test`
+is red by design: **1** proof fails, everything else passes (790 green, **0
+skipped**).
 
-- **BUG-15 (curly apostrophe)** — fixed: the subtitle now ships U+2019 and
-  the whole copy audit is green (10/10 strings byte-identical to the HTML).
-- **BUG-18 (overhang not hittable)** — works, and without changing layout:
-  probed the whole 44 dp column of both targets through the real hit test;
-  the Privacy Notice target is hittable through its 12 dp overhang below the
-  caption block (838 of 840), taps inside the bar take the normal path, the
-  enabled submit button still navigates to `/privacy`, and the CTA hairline
-  is still at 678.
-- **BUG-19 (first frame / stale measurement)** — fixed and now pinned hard:
-  the targets are built from a synchronous `TextPainter` mirror, and I added
-  five proofs that compare the built rects against the *real* laid-out
-  paragraph's own glyph boxes at 320/390/430 × 1.0/1.3 — exact equality, so
-  the mirror can never silently drift from the text again.
-- **BUG-20 (no live region)** — see below: the flag is set, but the region is
-  empty, which is a regression rather than a fix.
+## The iteration-5 fixes, verified
+
+- **BUG-21 (MAJOR, the empty live region) — fixed properly.** Walking the
+  whole semantics tree after a rejected submit now shows
+  `live=true label="Enter a valid email address"` and
+  `live=true label="Use at least 8 characters"`, each exactly once, with no
+  duplicate node: the message rides on the `Semantics` wrapper and the inner
+  `Text` stays excluded. The BUG-20 proof was extended to assert the *label*
+  as well as the flag, which closes the hole the regression went through.
+- **BUG-6 (MINOR, shared) — fixed by the shared batch, un-skipped.** The CTA
+  is now a single `Create account` node. That was the suite's last skip, so
+  the feature suite now runs with **zero** skipped tests.
+- **Review finding 5 (`_verifyTotal` capped for the widget's lifetime) —
+  fixed.** Five consecutive resizes (320 → 430 → 390 → 390 → 320) leave both
+  link targets on their words; before the fix the verification chain would
+  have been exhausted after ~3 relayouts.
+- **Layout is unchanged**: compare.py mean diff **4.65%** (was 4.66%), CTA
+  surface top 678 (design 677), submit button 694–745.7 exactly, both
+  caption lines exact, bottom-edge owner rule holds (surface to y=844). The
+  shared component change did not shift anything, because P03 hands it
+  `errorText: null` and owns the helper row.
 
 ## Tests added this stage
 
-`copy_audit_test.dart` 10 → **15** (5 added, all green) — *"targets equal the
-paragraph boxes"*: for each of 320/390/430 at scale 1.0 and 320/390 at 1.3,
-the `p03_terms` / `p03_privacy` rect must equal exactly the box derived from
-the rendered paragraph (label glyph box, re-centred on its own line, ≥44×44).
-Font-independent — both sides come from real glyph metrics — and it is the
-contract the whole mirror/verify machinery exists to keep.
+`copy_audit_test.dart` 15 → **16** (1 added, green) — *"five consecutive
+resizes keep both targets on their words"*: the regression guard for the
+re-armed verification chain.
 
-`p03_bugs_test.dart` 24 → **27** (2 added, both red) — P03-BUG-16 restored,
-P03-BUG-21 new.
+`p03_bugs_test.dart` — BUG-16 un-skipped (now red) and the file header
+rewritten to state the suite's real status (it still described skip-marked
+open proofs; there are none). No new proofs were needed: BUG-21 and BUG-6 are
+already pinned by the build's own (now green) proofs, which I re-verified
+against the semantics tree rather than taking on trust.
 
-No gaps left in the bloc, navigation, seeded-repository, submitting-state or
-tap-target coverage: `auth_bloc_test.dart` (45), `create_account_view_test.dart`
-(48) and `seeded_submit_test.dart` (7) are unchanged and green — every event
-and state path the build left in place is already pinned.
+Coverage is otherwise complete and unchanged: `auth_bloc_test.dart` (45),
+`create_account_view_test.dart` (48) and `seeded_submit_test.dart` (7) cover
+every bloc event/state path, the 320/390/430 × 1.0/1.3 matrix in both
+themes, all five bloc statuses, both seeds, every tap target and route, the
+44 dp rule and the bottom-edge rule. I found no new gap.
 
-Feature total: 132 → **142** (140 green, 1 skipped, 2 red).
+Feature total: 142 → **145** (144 green, 0 skipped, 1 red).
 
 ## Bugs found
 
-### P03-BUG-21 (MAJOR, regression from the BUG-20 fix) — the validation error
-### is no longer in the semantics tree
+### P03-BUG-16 (MINOR, still open — now provably local, blocked only on §8)
 
-`app/lib/features/auth/presentation/views/create_account_view.dart:190-201`
-(email) and `246-258` (password):
+An invalid input keeps the resting `line` border. Measured on the current
+tree: the only opaque borders painted anywhere on the screen are `ff000000`
+and `ff000000`/`ffe7e0d4` (= `tokens.line`) — **no `tokens.danger` border is
+painted at all**. The design marks the input itself:
+`.field input[aria-invalid="true"] { border-color: var(--danger) }`
+(`design/html-source/components.css:135`, `docs/design/SPACING_SPEC.md` §3).
 
-```dart
-Semantics(
-  liveRegion: true,
-  child: ExcludeSemantics(
-    child: Text(state.emailError!, …),
-  ),
-),
-```
+What changed since I first reported it (iteration 3): the shared batch
+`7eaa1f7` landed **both** halves of what was missing — `NestTextField` now
+renders `errorText` as a gutter-aligned row (`nest_text_field.dart:197-206`)
+*and* forces the danger border when `errorText != null` (`:160-172`), and
+pinned both in `shared_batch1_test.dart`. So passing `errorText` no longer
+re-opens P03-BUG-11; the screen's owned gutter rows are now redundant with
+the component's.
 
-`ExcludeSemantics` drops the `Text`'s own node, and the wrapper supplies only
-a flag — no label. The resulting semantics node is
-`liveRegion: true, label: ""`. Walking the whole tree after a rejected
-submit shows it plainly:
+The build skip-marked the proof on the premise that this needed a shared
+`hasError` flag that "never landed", and its own proof comment says the
+opposite ("in fact `7eaa1f7` landed the gutter row + forced danger border, so
+the remaining work is local"). The real remaining gap is narrower: the
+component's error row is a plain `Text`, not a live region, so switching
+today would trade BUG-16 for BUG-20 — dropping the announcement of the
+validation message, which is the worse of the two. That half is
+SHARED_REQUEST §8, and it is a three-line core change (wrap the shared row
+in `Semantics(liveRegion: true)`).
 
-```
-SemanticsNode liveRegion=true label=""      ← the email error
-SemanticsNode liveRegion=true label=""      ← the password error
-```
-
-So a screen reader announces an *empty* live region and cannot read the
-message at all — it is not in the tree to navigate to either. Before
-iteration 4 the error was a plain `Text` and produced a labelled node. The
-existing BUG-20 proof passes anyway because
-`tester.getSemantics(find.text(error))` resolves to the nearest enclosing
-node — the empty live region — and only asserts `isLiveRegion`, never the
-label. That is the hole the regression went through.
+**Path to green**: land §8 in core, then in the screen pass `errorText:` to
+both fields and delete the two owned rows (and their `buildWhen` selectors).
+That closes BUG-16 and BUG-11 together, and this proof goes green with no
+other change. I did not make that change — the brief forbids the test stage
+patching the screen.
 
 Repro: `flutter test test/features/auth/p03_bugs_test.dart` — proof
-P03-BUG-21 asserts each error is findable by semantics label *and* that the
-node carrying it is the live region.
-
-### P03-BUG-16 (MINOR) — retired rather than fixed; the defect is unchanged
-
-The iteration-4 build deleted this proof ("the shared `hasError` flag did
-not land … per review finding 1 the proof is retired"), which is fair as
-process but leaves the defect in place with no guard: an invalid input still
-paints the resting `line` border, while the design marks the input itself —
-`.field input[aria-invalid="true"] { border-color: var(--danger) }`
-(`design/html-source/components.css:135`, and `docs/design/SPACING_SPEC.md` §3
-"input [aria-invalid=true] border danger").
-
-The build's reasoning is sound (re-passing `errorText` would re-open
-P03-BUG-11's 20 dp indent, and the blocker really is shared code), but
-retiring a proof is not the same as fixing a bug, so I have restored it as a
-failing proof. `SHARED_REQUEST.md` §5 owns the unblock.
-
-Repro: proof P03-BUG-16 — measure the borders painted inside the keyed field
-before and after a rejected submit.
+P03-BUG-16 measures the borders painted inside the keyed field before and
+after a rejected submit.
 
 ## Non-blocking observations
 
-- On the device geometry the Terms target's top overlaps the submit button's
-  last ~4 dp (button 694–745.7, caption line 1 centre ≈763.7 → target
-  741.7–785.7), so a tap in that strip is delivered to both. The build
-  records it ("both fire there and the submit wins functionally"); it is
-  inert only because the links are still inert (`TODO(P03)`). Worth a
-  comment where the link routes land.
-- `_HitTestExpand.extra` is never read by `hitTest` — the overhang is bounded
-  by each target's own 44 dp box instead, which is correct, but the field and
-  its `markNeedsPaint` are dead weight and the name suggests it does
-  something it does not.
-- `_verifyTotal` is capped at 12 for the State's lifetime, so the post-frame
-  font-swap verification stops after ~3 relayouts. Harmless today (every
-  rebuild re-measures synchronously, which the five new proofs pin), but it
-  is a silent ceiling on the safety net.
-- P03-BUG-17 (subtitle breaks after "Children") remains a shared font-pipeline
-  item (`SHARED_REQUEST.md` §6); no local test can pin it.
-- ORCHESTRATOR_NOTES §3 (filled-state simulator capture) is still the UI
-  stage's; the filled *state* is pinned by the widget test.
-- Shared items 2, 4, 5 remain open; P03-BUG-6 is the suite's only skip.
+- The trade the screen currently makes is the defensible side of it: a screen
+  reader must hear the error, and the message itself is already red, so the
+  missing border is a redundant cue rather than the only one. Worth stating
+  plainly so this is not mistaken for an oversight.
+- The device geometry has a ~4 dp strip where the submit button and the Terms
+  target both receive a tap (button 694–745.7, Terms target ≈741.7–785.7).
+  Inert today because the links are (`TODO(P03)`); note it where the link
+  routes land.
+- `_HitTestExpand.extra` is still never read by `hitTest` — the overhang is
+  bounded by each target's own 44 dp box, which is correct, but the field and
+  its `markNeedsPaint` are dead weight.
+- P03-BUG-17 (the subtitle breaks after "Children") stays a shared
+  font-pipeline item (SHARED_REQUEST §6); the orchestrator's iteration-5 note
+  confirms a shared `shared/body_text_width` fix is in flight, and no local
+  test can pin a break the harness font does not produce.
+- ORCHESTRATOR_NOTES §3 (filled-state simulator capture) remains the UI
+  stage's; the filled state is pinned by the widget test.
 
 ## Results (`app/`)
 
-- `dart format --set-exit-if-changed .` → `Formatted 364 files (0 changed)`.
+- `dart format --set-exit-if-changed .` → `Formatted 371 files (0 changed)`.
 - `flutter analyze` → `No issues found!` — no ignores, no weakened options.
-- `flutter test test/features/auth` → **140 passed, 1 skipped, 2 failed**
-  (only the two proofs above are red). Per file: `auth_bloc_test.dart` 45/45,
-  `create_account_view_test.dart` 48/48, `copy_audit_test.dart` 15/15,
-  `seeded_submit_test.dart` 7/7, `p03_bugs_test.dart` 27 green + 1 skipped +
-  2 red.
-- `flutter test` (full suite) → **669 passed, 1 skipped, 2 failed**.
-- Prior iterations' reports are in the loop history; this file is the
-  current one.
+- `flutter test test/features/auth` → **144 passed, 0 skipped, 1 failed**
+  (the single red proof above). Per file: `auth_bloc_test.dart` 45/45,
+  `create_account_view_test.dart` 48/48, `copy_audit_test.dart` 16/16,
+  `seeded_submit_test.dart` 7/7, `p03_bugs_test.dart` 29 green + 1 red.
+- `flutter test` (full suite) → **790 passed, 0 skipped, 1 failed**.
 - `shot.sh` light + `compare.py` → `ui/light.png`, `ui/compare-light.png`
-  (mean diff 4.66%, unchanged from iteration 3 — the hit-test work moved no
-  pixels, as claimed; bands 0–5 all under 3%).
+  (mean diff 4.65%; bands 0–5 all under 3%; the CTA is pixel-exact).
 
 VERDICT: FAIL

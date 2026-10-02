@@ -41,9 +41,17 @@ forced explicitly, and an error suppresses the helper (error-wins).
 Consequence for P03: passing `errorText` no longer re-opens `P03-BUG-11`
 (the row is on the gutter), so `P03-BUG-16` (no danger border) is a local
 switch away — pass `errorText` to both fields and delete the screen-owned
-error rows. The one remaining gap is announcement (§8 below), which is why
-the proof is still skip-marked: doing the switch without §8 would trade
-BUG-16 for BUG-20.
+error rows.
+
+Status (bugs stage, iteration 5 — **final disposition: Decision A**): the
+screen keeps its own live-region error rows and the proof is
+skip-marked with this reason until §8 lands. Switching to the shared row
+today would fix the border but drop the announcement of the validation
+message (the test/review stages both judge the announcement the higher
+value; see `6_bugs.md` P03-BUG-16). When §8 lands, the switch is: pass
+`errorText` to both fields, delete the owned rows and their `buildWhen`
+selectors, un-skip P03-BUG-16. Do **not** pass `errorText` while keeping the
+owned rows — the message would render twice.
 
 ## 6. The served Inter build is ~3–4% wider than the design's, so line
 ## breaks land early (new, non-blocking)
@@ -99,5 +107,6 @@ its attempt to re-add the live region regressed into an empty-label node
 `Semantics(liveRegion: true, label: errorText,
 child: ExcludeSemantics(child: Text(errorText, …)))`), P03 can pass
 `errorText`, delete its owned rows, and close P03-BUG-16/20/21 together.
-Blocks: no — P03 can fix BUG-21 locally on its owned rows, but not BUG-16
-without this or a decision to drop the live-region requirement.
+Blocks: no — P03 keeps its own live-region rows and skip-marks P03-BUG-16
+pending this (Decision A, see §5). Landing it is a ~3-line core change and
+P03's switch then closes the last open P03-local defect.

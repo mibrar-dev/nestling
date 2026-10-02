@@ -1,47 +1,39 @@
 // P03 Create account — adversarial bug proofs.
 //
-// Iterations 2–4's builds closed every bug reported by iterations 1–3; those
-// proofs run green as regression guards. Two proofs remain open after the
-// iteration-4 pass: P03-BUG-16 (unblocked and local, gated on the §8 live
-// region) and P03-BUG-21 (a regression this iteration introduced). Every
-// open-bug proof is `skip:`-marked with its id so `flutter test` stays
-// green; the fix must un-skip each one and make it pass. Full reports live
-// in `docs/screens/P03/6_bugs.md`.
+// Iterations 2–5 closed every bug reported by iterations 1–4; those proofs
+// run green as regression guards (including P03-BUG-6 and P03-BUG-21, fixed
+// by the shared batch `7eaa1f7` and the iteration-5 build respectively).
+// Two proofs are open and skip-marked with their ids so the suite stays
+// green; un-skip each with its fix. Full reports live in
+// `docs/screens/P03/6_bugs.md`.
 //
 //   flutter test test/features/auth/p03_bugs_test.dart
 //
-// P03-BUG-1..8   iteration-1 bugs — all fixed. The shared label doublings
-//                (P03-BUG-6, brand buttons) were fixed by the shared batch
-//                `7eaa1f7` (inner label Texts excluded from semantics), so
-//                those proofs now run green.
-// P03-BUG-9..14  iteration-2 bugs — all fixed in iteration 3.
-// P03-BUG-15     the subtitle's straight U+0027 apostrophe — fixed in
-//                iteration 4 (the copy audit is green).
-// P03-BUG-16 (MINOR, open — UNBLOCKED, not shared-blocked as iteration 4's
-//                build claimed): shared batch `7eaa1f7` already landed
-//                `NestTextField`'s gutter-aligned `errorText` row AND forced
-//                danger border, so passing `errorText` fixes the missing
-//                border without re-opening BUG-11. Caveat: the component's
-//                row is a plain `Text` (no live region), so the switch also
-//                needs SHARED_REQUEST §8 (or accept losing BUG-20's live
-//                announcement). Do not put `errorText` back while keeping
-//                the owned row — the message would render twice.
+// P03-BUG-1..15  iterations 1–4's bugs — all fixed; regression guards.
+// P03-BUG-16 (MINOR, open — Decision A)  an invalid input paints no danger
+//                border. The shared `NestTextField` (`7eaa1f7`) now renders
+//                the error gutter row + forced danger border via `errorText`,
+//                but its row is a plain `Text` with no live region (§8), so
+//                switching to it would trade BUG-16 for BUG-20. Decision
+//                (review, iteration 5): keep the screen-owned live-region
+//                rows and leave this skip-marked pending SHARED_REQUEST §8.
+//                Do not pass `errorText` while keeping the owned rows (the
+//                message would render twice).
 // P03-BUG-17 (MINOR, shared §6)  the served Inter build is ~3–4% wider than
 //                the design's, so the subtitle breaks after "Children"
 //                instead of "Children never". No local test is possible and
 //                no token-violating local fix is acceptable.
-// P03-BUG-18/19/20  iteration-3 bugs — fixed in iteration 4 (hit-test
-//                expansion for the overhang, layout-synchronous
-//                measurement, live-region error rows).
-// P03-BUG-21 (MAJOR, regression)  the BUG-20 fix wrapped each owned error
-//                row's `Text` in `ExcludeSemantics` inside
-//                `Semantics(liveRegion: true)`: the live-region node carries
-//                an EMPTY label, so the validation message is neither
-//                announced nor present in the semantics tree. Fix: carry the
-//                message on the wrapper — `Semantics(liveRegion: true,
-//                label: message, child: ExcludeSemantics(Text(message)))` —
-//                or drop the exclusion (watch for the label-doubling merge
-//                the legal links show).
+// P03-BUG-18..21  all fixed (overhang reachability, first-frame/stale
+//                measurement, live regions, the empty-live-region
+//                regression).
+// P03-BUG-22 (MINOR, latent)  the overhang fallback in `_RenderHitTestExpand`
+//                has no `!hit` gate: where a legal target's 44dp box overlaps
+//                the submit button (the device's normal geometry —
+//                harness-synthesised at scale 0.7 because the test font is
+//                ~2× wider than Inter), a tap is delivered to the button
+//                *and* to the link. Inert today, a double activation once the
+//                Terms/Notice routes land. Fix: run the fallback only when
+//                the normal path hit nothing.
 //
 // Checked and clean this iteration (no proof needed): kid-mode deep link →
 // `/parental-gate`; restart persistence (one owner row); back/deep links;
@@ -51,12 +43,6 @@
 // owner rules; the two legal targets' lateral overlap is design-faithful;
 // money/timezone/children cases N/A; CHILD ORDER N/A. The harness' fallback
 // font is not Inter, so its line breaks are not product geometry.
-//
-// Carried review items, no local proof possible: the `_HitTestExpand.extra`
-// dead field (pointless repaint), the fallback pass firing even when the
-// normal path already hit (a device-only ~4dp strip once the links become
-// live), and `_verifyTotal` never reset (the font-swap safety net stops
-// after 12 schedules). Suggested fixes are in `docs/screens/P03/6_bugs.md`.
 
 import 'dart:async';
 
@@ -905,6 +891,14 @@ void main() {
     await disposeApp(tester);
   });
 
+  // NOTE (review finding 4): a `tapAt` proof for the button/link overlap
+  // strip was attempted and removed — the strip never exists in the widget
+  // harness (its wide fallback font always pushes "Terms" off caption
+  // line 1, so the target cannot reach the submit row at 320/390/430).
+  // On the device geometry it does (target top ≈ button bottom − 4dp);
+  // taps there fire both, the submit wins functionally, and the links are
+  // inert until their routes land (see the TODO on `_LegalTarget`).
+
   // -------------------------------------------------------------------
   // P03-BUG-19 (MINOR) — the targets come from a one-shot post-frame
   // measurement: they are missing from the first painted frame, and any
@@ -949,33 +943,33 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
-    expect(
-      tester
-          .getSemantics(find.text(_passwordError))
-          .flagsCollection
-          .isLiveRegion,
-      isTrue,
-      reason:
-          'Material wraps InputDecoration.errorText in a live region; after '
-          'the BUG-11 fix the owned row announces nothing',
-    );
-    expect(
-      tester.getSemantics(find.text(_emailError)).flagsCollection.isLiveRegion,
-      isTrue,
-    );
+    // The node carrying each message is the live region (P03-BUG-20) and
+    // carries the message itself (P03-BUG-21: an empty live region
+    // announces nothing).
+    for (final message in const <String>[_passwordError, _emailError]) {
+      expect(find.bySemanticsLabel(message), findsOneWidget);
+      final data = tester
+          .getSemantics(find.bySemanticsLabel(message).first)
+          .getSemanticsData();
+      expect(data.label, message);
+      expect(data.flagsCollection.isLiveRegion, isTrue);
+    }
 
     handle.dispose();
     await disposeApp(tester);
   });
 
   // -------------------------------------------------------------------
-  // P03-BUG-16 (MINOR, open — UNBLOCKED) — an invalid field paints no danger
-  // border. Iteration 4 both deleted and restored this proof on the premise
-  // that the shared `hasError` flag never landed; in fact `7eaa1f7` landed
-  // the gutter row + forced danger border, so the remaining work is local
-  // (`errorText` + drop the owned rows) gated on SHARED_REQUEST §8 for the
-  // live-region half. The design marks the input itself, not just the
-  // message: `.field input[aria-invalid="true"] { border-color: var(--danger) }`
+  // P03-BUG-16 (MINOR, STILL OPEN — un-skipped by Stage 3 iteration 5)
+  // — an invalid field paints no danger border. Iteration 4 deleted and
+  // iteration 5 skip-marked this proof on the premise that the shared
+  // `hasError` flag never landed; in fact `7eaa1f7` landed it, together with
+  // the gutter-aligned error row, so passing `errorText` no longer re-opens
+  // P03-BUG-11 — the shared field already puts the message on the 20dp
+  // gutter. What is still missing is only the live-region wrapper on that
+  // shared row (SHARED_REQUEST §8), not a shared release. The design marks
+  // the input itself, not just the message:
+  // `.field input[aria-invalid="true"] { border-color: var(--danger) }`
   // (design/html-source/components.css:135, SPACING_SPEC §3).
   // -------------------------------------------------------------------
   testWidgets('P03-BUG-16 an invalid field paints the danger border', (
@@ -1038,13 +1032,14 @@ void main() {
     );
 
     await disposeApp(tester);
-    // skip: P03-BUG-16 (MINOR, open, now unblocked by shared batch 7eaa1f7).
-    // `NestTextField` now renders `errorText` as a gutter-aligned row AND
-    // forces the danger border, so passing errorText would fix this without
-    // re-opening BUG-11. Caveat: the component's row is a plain Text (no
-    // live region), so switching to it trades BUG-16 for BUG-20 unless core
-    // lands SHARED_REQUEST §8 (live-region error row). Do not pass errorText
-    // while keeping the owned row — the message would render twice.
+    // skip: P03-BUG-16 (MINOR, open — Decision A, review iteration 5).
+    // The shared `NestTextField` now offers the gutter row + forced danger
+    // border via `errorText` (`7eaa1f7`), so the layout half is unblocked;
+    // but its row is a plain Text with no live region (§8), so switching
+    // would trade this defect for BUG-20 (lost announcement). Keep the
+    // screen-owned live-region rows; un-skip when SHARED_REQUEST §8 lands
+    // and both fields can pass `errorText` with the owned rows deleted. Do
+    // not pass `errorText` while keeping the owned rows (duplicate message).
   }, skip: true);
 
   // -------------------------------------------------------------------
@@ -1083,7 +1078,70 @@ void main() {
 
     handle.dispose();
     await disposeApp(tester);
-    // skip: P03-BUG-21 (MAJOR, open) — the live-region nodes have empty
-    // labels; the message left the semantics tree.
-  }, skip: true);
+  });
+
+  // -------------------------------------------------------------------
+  // P03-BUG-22 (MINOR, latent) — the overhang fallback fires even when the
+  // submit button already owns the tap, so a point in their overlap is
+  // delivered to both. The device geometry always has that overlap (Terms
+  // ends caption line 1; its 44dp box overhangs ~12dp into the button), but
+  // the harness font is ~2x wider than Inter, so its caption pushes Terms to
+  // line 2 — scale 0.7 restores the device's line distribution for this
+  // proof. The app clamps the scaler at >= 1.0, so this is a harness
+  // synthesis of the device geometry, not a reachable UI state.
+  // -------------------------------------------------------------------
+  testWidgets(
+    'P03-BUG-22 a tap owned by the submit button does not also hit a legal '
+    'target',
+    (tester) async {
+      GoogleFonts.config.allowRuntimeFetching = false;
+      tester.platformDispatcher.textScaleFactorTestValue = 0.7;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      tester.view.physicalSize = const Size(390 * 3, 844 * 3);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+
+      final bloc = AuthBloc(repository: _SilentAuthRepository());
+      addTearDown(bloc.close);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: NestTheme.light(),
+          home: BlocProvider<AuthBloc>.value(
+            value: bloc,
+            child: const CreateAccountView(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      final button = tester.getRect(find.byKey(const ValueKey('p03_submit')));
+      final terms = tester.getRect(find.byKey(const ValueKey('p03_terms')));
+      final overlap = button.intersect(terms);
+      expect(
+        overlap.height,
+        greaterThan(1),
+        reason: 'geometry precondition: the target overhangs into the button',
+      );
+
+      final point = Offset(overlap.center.dx, overlap.center.dy);
+      final path = tester.hitTestOnBinding(point).path;
+      final targetRender = tester.renderObject(
+        find.byKey(const ValueKey('p03_terms')),
+      );
+      expect(
+        path.any((entry) => entry.target == targetRender),
+        isFalse,
+        reason:
+            'the submit button owns this point; the overhang fallback must '
+            'run only when the normal path hit nothing (`if (!hit && …)`), or '
+            'the link double-activates with the button once the routes land',
+      );
+
+      await disposeApp(tester);
+      // skip: P03-BUG-22 (MINOR, latent) — no `!hit` gate on the overhang
+      // fallback; a button-strip tap reaches the link too.
+    },
+    skip: true,
+  );
 }

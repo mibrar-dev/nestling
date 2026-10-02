@@ -185,10 +185,14 @@ class _CreateAccountViewState extends State<CreateAccountView> {
                               ),
                               if (state.emailError != null) ...[
                                 const SizedBox(height: NestSpacing.gap6),
-                                // P03-BUG-20: the owned row must announce like
-                                // Material's live-region error row did.
+                                // P03-BUG-20/21: the owned row must announce
+                                // like Material's live-region error row did —
+                                // and the message rides on the wrapper: an
+                                // `ExcludeSemantics` child leaves the node
+                                // labelless (P03-BUG-21).
                                 Semantics(
                                   liveRegion: true,
+                                  label: state.emailError,
                                   child: ExcludeSemantics(
                                     child: Text(
                                       state.emailError!,
@@ -241,10 +245,12 @@ class _CreateAccountViewState extends State<CreateAccountView> {
                                 ),
                               ] else ...[
                                 const SizedBox(height: NestSpacing.gap6),
-                                // P03-BUG-20: announce like Material's
-                                // live-region error row did.
+                                // P03-BUG-20/21: announce like Material's
+                                // live-region row did, with the message on
+                                // the wrapper (see the email row).
                                 Semantics(
                                   liveRegion: true,
+                                  label: errorText,
                                   child: ExcludeSemantics(
                                     child: Text(
                                       errorText,
@@ -287,7 +293,6 @@ class _CreateAccountViewState extends State<CreateAccountView> {
               BlocBuilder<AuthBloc, AuthState>(
                 builder: (context, state) {
                   return _HitTestExpand(
-                    extra: (NestDevice.tapParent - NestSpacing.s5) / 2,
                     child: NestBottomCta(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -381,6 +386,8 @@ class _LegalLineState extends State<_LegalLine> {
 
   /// Hard stop for verification scheduling (P03-BUG-19): even under
   /// permanent drift the chain must end, or `pumpAndSettle` never settles.
+  /// Reset on every dependency change below, so it bounds a chain, never
+  /// the widget's lifetime.
   int _verifyTotal = 0;
   static const int _verifyTotalCap = 12;
 
@@ -395,10 +402,11 @@ class _LegalLineState extends State<_LegalLine> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     // The caption's metrics move with these; rebuild re-measures
-    // synchronously, and the verification chain is re-armed.
+    // synchronously, and both verification budgets are re-armed.
     MediaQuery.sizeOf(context);
     MediaQuery.textScalerOf(context);
     _verifyLeft = _verifyBudget;
+    _verifyTotal = 0;
     _scheduleVerify();
   }
 
@@ -642,36 +650,14 @@ class _LegalLineState extends State<_LegalLine> {
 /// box applies only its own bounds. Layout size is untouched (the 678
 /// hairline holds).
 class _HitTestExpand extends SingleChildRenderObjectWidget {
-  const _HitTestExpand({required this.extra, required super.child});
-
-  final double extra;
+  const _HitTestExpand({required super.child});
 
   @override
   RenderObject createRenderObject(BuildContext context) =>
-      _RenderHitTestExpand(extra);
-
-  @override
-  void updateRenderObject(
-    BuildContext context,
-    _RenderHitTestExpand renderObject,
-  ) {
-    renderObject.extra = extra;
-  }
+      _RenderHitTestExpand();
 }
 
 class _RenderHitTestExpand extends RenderProxyBox {
-  _RenderHitTestExpand(double extra) : _extra = extra;
-
-  double _extra;
-
-  double get extra => _extra;
-
-  set extra(double value) {
-    if (value == _extra) return;
-    _extra = value;
-    markNeedsPaint();
-  }
-
   @override
   bool hitTest(BoxHitTestResult entry, {required Offset position}) {
     final child = this.child;
@@ -747,7 +733,11 @@ class _LegalTarget extends StatelessWidget {
       label: label,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        // TODO(P03): inert — no Terms/Notice routes exist in v1.
+        // TODO(P03): inert — no Terms/Notice routes exist in v1. When they
+        // land, note the targets overlap: the Terms box reaches ~4dp into
+        // the submit button's row (and the boxes overlap each other where
+        // lines stack), so a tap there activates both — keep the submit
+        // winning functionally or disambiguate then.
         onTap: () {},
         child: const SizedBox.expand(),
       ),

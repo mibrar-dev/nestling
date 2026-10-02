@@ -314,4 +314,40 @@ void main() {
       );
     }
   });
+
+  group('P03 legal targets survive repeated relayouts', () {
+    // The post-frame verification chain is capped per chain, not per widget
+    // (it used to stop after 12 verifications for the State's whole life,
+    // i.e. after ~3 relayouts). Five relayouts in a row must still leave both
+    // targets on their words.
+    testWidgets('five consecutive resizes keep both targets on their words', (
+      tester,
+    ) async {
+      await _pump(tester);
+
+      for (final width in const <int>[320, 430, 390, 390, 320]) {
+        tester.view.physicalSize = Size(width.toDouble() * 3, 844 * 3);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+
+        for (final pair in <List<String>>[
+          <String>['Terms', 'p03_terms'],
+          <String>['Privacy${nbsp}Notice', 'p03_privacy'],
+        ]) {
+          expect(
+            _labelRect(
+              tester,
+              pair[0],
+            ).overlaps(tester.getRect(find.byKey(ValueKey(pair[1])))),
+            isTrue,
+            reason:
+                'the ${pair[1]} target drifted at ${width}dp, the '
+                'verification chain having exhausted its budget',
+          );
+        }
+      }
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+  });
 }
