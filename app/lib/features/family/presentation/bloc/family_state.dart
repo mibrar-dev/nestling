@@ -1,31 +1,76 @@
 import 'package:equatable/equatable.dart';
+import 'package:nestling/features/family/domain/entities/family_child.dart';
 import 'package:nestling/features/family/domain/entities/family_member.dart';
 
 enum FamilyStatus { initial, loading, loaded, failure }
+
+/// Sentinel default for [FamilyState.copyWith]'s `nicknameError`: passing
+/// `null` explicitly clears the error, omitting it keeps the current value.
+const _keepNicknameError = Object();
 
 final class FamilyState extends Equatable {
   const new({
     this.status = FamilyStatus.initial,
     this.items = const <FamilyMember>[],
+    this.children = const <FamilyChild>[],
+    this.draftNickname = '',
+    this.draftAgeBand = '7-9',
+    this.draftAvatarColour = 'peach',
+    this.nicknameError,
+    this.saveInProgress = false,
     this.errorMessage,
   });
 
   final FamilyStatus status;
   final List<FamilyMember> items;
+  final List<FamilyChild> children;
+
+  /// Add-child form draft (P05). The design defaults are the 7–9 age chip
+  /// and the peach swatch.
+  final String draftNickname;
+  final String draftAgeBand;
+  final String draftAvatarColour;
+  final String? nicknameError;
+  final bool saveInProgress;
+
   final String? errorMessage;
 
   FamilyState copyWith({
     FamilyStatus? status,
     List<FamilyMember>? items,
+    List<FamilyChild>? children,
+    String? draftNickname,
+    String? draftAgeBand,
+    String? draftAvatarColour,
+    Object? nicknameError = _keepNicknameError,
+    bool? saveInProgress,
     String? errorMessage,
   }) {
     return FamilyState(
       status: status ?? this.status,
       items: items ?? this.items,
+      children: children ?? this.children,
+      draftNickname: draftNickname ?? this.draftNickname,
+      draftAgeBand: draftAgeBand ?? this.draftAgeBand,
+      draftAvatarColour: draftAvatarColour ?? this.draftAvatarColour,
+      nicknameError: identical(nicknameError, _keepNicknameError)
+          ? this.nicknameError
+          : nicknameError as String?,
+      saveInProgress: saveInProgress ?? this.saveInProgress,
       errorMessage: errorMessage ?? this.errorMessage,
     );
   }
 
   @override
-  List<Object?> get props => <Object?>[status, items, errorMessage];
+  List<Object?> get props => <Object?>[
+    status,
+    items,
+    children,
+    draftNickname,
+    draftAgeBand,
+    draftAvatarColour,
+    nicknameError,
+    saveInProgress,
+    errorMessage,
+  ];
 }
