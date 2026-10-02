@@ -1,77 +1,77 @@
-# P01 Welcome — UI check (Stage 5, iteration 1)
+# P01 Welcome — UI check (Stage 5, iteration 2)
 
 Simulator: 604697A9-11DA-462F-9837-396E9CA2493A (390×844, matches designs).
-Shots: `shot.sh $PWD/app /welcome <out> <udid> light|dark fresh parent maya`
-(non-interactive; absolute out path — relative out fails after the script's
-`cd $APP_DIR`). Compares: `compare.py design/screens/<theme>/P01-welcome.png
-docs/screens/P01/ui/app_<theme>_1.png docs/screens/P01/ui/cmp_<theme>_1.png`.
-No code edited this stage.
+Shots: `shot.sh $PWD/app /welcome $PWD/docs/screens/P01/ui/app_<theme>_2.png
+<udid> light|dark fresh parent maya` (absolute out path; non-interactive).
+Compares: `compare.py design/screens/<theme>/P01-welcome.png
+docs/screens/P01/ui/app_<theme>_2.png docs/screens/P01/ui/cmp_<theme>_2.png`.
+No code edited this stage. Orchestrator overrides applied to judgement:
+PipAvatar replaces the v1 SVG (slot, not artwork, is compared);
+status-bar differences ignored; DB-over-mock N/A (P01 renders no numbers);
+`ORCHESTRATOR_NOTES.md` items 1–2 honoured.
 
-## Results (clean frames)
+## Results
 
-- Light: mean diff **6.89%**
-  - band 0 (0–105): 1.32% · 1 (105–211): 0.21% · 2 (211–316): 0.18% ·
-    3 (316–422): 0.12% · 4 (422–527): 5.75% · 5 (527–633): 11.47% ·
-    6 (633–738): 30.68% · 7 (738–844): 5.51%
-- Dark: mean diff **5.92%**
-  - band 0: 1.23% · 1: 0.20% · 2: 0.16% · 3: 0.08% · 4: 5.92% ·
-    5: 11.23% · 6: 23.43% · 7: 5.20%
+- Light: mean diff **3.41%**
+  - band 0 (0–105): 1.58% · 1 (105–211): 0.69% · 2 (211–316): 8.41% ·
+    3 (316–422): 0.17% · 4 (422–527): 5.75% · 5 (527–633): 5.58% ·
+    6 (633–738): 0.39% · 7 (738–844): 4.75%
+- Dark: mean diff **3.31%**
+  - band 0: 1.58% · 1: 0.70% · 2: 7.63% · 3: 0.13% · 4: 5.92% ·
+    5: 5.97% · 6: 0.35% · 7: 4.19%
 
-Note: the first light capture (mean 13.22%, bands 1–3 up to 18.7%) was
-scrolled ~25px (headline top 420 vs design 445, body bottom 570 vs 593.3).
-Retook once; the retake is the filed `app_light_1.png` (headline 445.0 =
-design 445.0, body bottom 595.0 vs 593.3). Bands 1–3 ≤0.21% confirm the
-illustration is pixel-aligned; remaining bands 4–6 are real deviations below.
+Capture caveat: both shots exited 1 (`frame never stabilised in 25 s; saved
+last capture`). Frames are still representative — headline top 445.0,
+body bottom 595.0, primary top/bot 656.7/708.3 all exact vs design (see
+below), matching iteration-1 stable geometry — but the instability itself
+is flagged for the build stage (possible font-fetch re-layout; PipAvatar
+is static under `DISABLE_ANIMATIONS`, code-verified).
 
-## What matches (element by element)
+Fixed since iteration 1: CTA block now exact (band 6: 30.68%/23.43% →
+0.39%/0.35%; primary top 656.7 = design 656.7, h 51.7, both themes).
+The shared bottom-inset double-count (old deviation 2) has landed.
 
-- Presence/order/copy: status bar 9:41, circle/nest/Pip/3 coins, headline,
-  body, primary `Get started`, ghost `I already have an account`, caption
-  `Made in the UK · No ads, ever` — all present, in order, character-exact
-  (em dash and UK spelling preserved).
-- Scene: 350×388 geometry, circle 320 @15/44, nest 264 @43/104, Pip 168
-  @91/120, coins 40/34/36 @16/104, 308/132, 7/241 — bands 1–3 ≤0.21%,
-  no overflow/clipping at 390.
-- Colours (sampled, full-res): paper, leafTint circle, leaf/onLeaf button
-  all exact in both themes (light leaf 23,128,79; dark leaf 60,201,138).
-  Dark-mode tokens flip correctly; no hard-coded colours.
-- Body text: same 3-line wrap as design; bottom 595.0 vs 593.3 (+1.7px,
-  within ±2px). Side padding: button left 21.7 vs 20.0 (+1.7px, within
-  tolerance); button height 51.7 vs 52 (−0.3px). Radii (pill), ghost
-  transparency, caption style correct. No ellipsis/clipping at 390.
+## What matches
+
+- Presence/order/copy: circle/nest/Pip-slot/3 coins, headline, body,
+  primary `Get started`, ghost `I already have an account`, caption
+  `Made in the UK · No ads, ever` — present, ordered, character-exact
+  (em dash, UK spelling). No overflow/clipping/ellipsis at 390.
+- Scene geometry: circle 320 @15/44, nest 264 @43/104, coins 40/34/36
+  @16/104, 308/132, 7/241 — bands 1+3 ≤0.70%; nest/circle/coins align.
+- Pip slot (mandate): `PipAvatar(style: mochi, skin: sunny-default,
+  stage: 2, idle)` in the unchanged 168×168 @91/120 slot, centred on the
+  nest exactly where the v1 chick sat. Artwork differs by explicit
+  orchestrator order — compliant, not a deviation.
+- Text metrics: headline top 445.0 (all four frames exact); body bottom
+  595.0 vs 593.3 (+1.7px, within ±2px); body wraps the same 3 lines.
+- CTA: top/height/side-padding exact both themes; leaf/onLeaf colours,
+  pill radii, ghost transparency, caption style correct.
+- Dark mode: paper/circle/button tokens flip correctly; no hard-coded
+  colours. Status bar: ignored per mandate (app correctly shows only the
+  OS clock now — no mock `9:41`).
 
 ## Deviations
 
-1. Headline line break (both themes, designer-visible).
+1. Headline line break (both themes, designer-visible, P01-owned).
    Design value: `Chores that feel` / `like a game.`
    App value: `Chores that feel like` / `a game.` (orphan second line;
-   drives band 4 ≈6%).
-   Fix (P01-editable, `presentation/views/welcome_view.dart` + display
-   style check): headline keeps full 350 width yet fits more per line than
-   the HTML — suspect missing −1% letter-spacing and/or Nunito metric
-   delta. Match the HTML tracking/line-height exactly; if Flutter still
-   wraps late, constrain the headline box or break to the design's two
-   lines without altering copy.
-2. Bottom-CTA block ~33px too high (both themes, designer-visible).
-   Design value: primary top 656.7 logical, button h 51.7.
-   App value: primary top 623.3 logical (−33.4px), button h 51.7 (correct);
-   ghost/caption shift with the block; internals otherwise correct.
-   Drives band 6 (23–31%).
-   Fix: SHARED_REQUEST (P01 must not touch `core/**`): `NestBottomCta`
-   wraps `SafeArea(top:false)` (bottom inset live) AND `NestHomeIndicator`
-   adds 34 below it — the OS bottom inset is counted twice. Drop the
-   redundant bottom safe padding when the home indicator follows so the
-   block top returns to ~657.
-3. Screenshot chrome double-render (harness artifact, not app UI, both
-   themes). Design value: single `9:41` + icon row; single 134×5 pill.
-   App shot value: faint OS time `00:38` overlapping `9:41`, doubled
-   signal/wifi/battery glyphs; doubled home pill (Flutter + iOS bar).
-   Drives bands 0/7 (≈1–5%). Fix: none in P01 code (`NestStatusBar` /
-   `NestHomeIndicator` match spec §1); note only — `simctl io screenshot`
-   captures the OS status/home bars over the mock.
-4. (Carried, not re-probed at 390) Stage-4 blocker still open:
-   scene `Transform.scale` crops (not scales) below 390dp
-   (`welcome_view.dart:91-104`; 320dp coin fully clipped). Invisible at
-   this stage's 390 width but keeps the branch red until fixed.
+   drives band 4 ≈6%). Unchanged since iteration 1 across stable and
+   fallback captures, so systematic, not a font-timing artifact.
+   Fix: `presentation/views/welcome_view.dart` + display-style check —
+   match the HTML tracking (−1%) / line-height exactly; if Flutter Nunito
+   still wraps late, break to the design's two lines without altering copy.
+2. Home pill ~6px low, tinted (minor, chrome).
+   Design value: 134×5 ink pill centred at ≈826.7 logical.
+   App value: pill centred at ≈833.3 (−6.6px), grey (light 101 vs ink 52;
+   dark 76 vs 221). Drives band 7 (≈4–5%).
+   Fix: disposition to build/orchestrator — likely shared bottom-chrome
+   reserve and/or the iOS home bar compositing in `simctl` screenshots;
+   not P01-editable if it lives in `core/**`.
+3. Frame instability (process, both themes). `shot.sh` never saw two
+   identical frames in 25 s. Layout measures exact, so shots stand — but
+   something still repaints (suspect font-fetch re-layout; cf. bundled-fonts
+   request). Fix: build stage to identify the repaint source and confirm
+   RULES §6 still-frame compliance.
 
 VERDICT: FAIL

@@ -1,37 +1,30 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nestling/core/design_system/design_system.dart';
+import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 import 'package:nestling/features/auth/auth_routes.dart';
 import 'package:nestling/features/onboarding/onboarding_routes.dart';
-import 'package:nestling/features/onboarding/presentation/bloc/onboarding_bloc.dart';
-import 'package:nestling/features/onboarding/presentation/bloc/onboarding_state.dart';
 
 /// P01 Welcome — parent-mode brand screen at `/welcome`.
 ///
 /// Static brand content (no data dependency): the illustration scene, the
-/// headline/body and the two CTAs render identically for every
-/// [OnboardingState] status. The [OnboardingBloc] is still subscribed via
-/// [BlocBuilder] so the route-level `watchItems()` stream stays live for the
-/// rest of the onboarding flow.
+/// headline/body and the two CTAs render identically whatever the onboarding
+/// bloc status is, so the view subscribes to nothing — the route-level
+/// `BlocProvider` in `onboarding_routes.dart` owns the `OnboardingBloc` and
+/// its `watchItems()` subscription.
 class WelcomeView extends StatelessWidget {
   const WelcomeView({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.nest.paper,
       body: Column(
         children: <Widget>[
           const NestStatusBar(),
-          Expanded(
-            child: BlocBuilder<OnboardingBloc, OnboardingState>(
-              builder: (_, _) => const _WelcomeScroll(),
-            ),
-          ),
+          const Expanded(child: _WelcomeScroll()),
           NestBottomCta(
             caption: 'Made in the UK · No ads, ever',
             child: Column(
@@ -79,28 +72,43 @@ class _WelcomeScroll extends StatelessWidget {
   }
 }
 
-/// 350x388 illustration block: leaf-tint circle, twig nest, Pip stage 2 and
-/// three floating coins on the circle rim. Scales down (never up) when the
-/// content width is narrower than 390dp so nothing overflows at 320dp.
+/// 350x388 illustration block (design/html-source/screens/P01-welcome.html:12-25,
+/// SPACING_SPEC §8): leaf-tint circle, twig nest, Pip (Mochi, sunny, stage 2
+/// per ORCHESTRATOR_NOTES) and three floating coins on the circle rim.
+///
+/// Scales down (never up) below 390dp: the outer box reserves the scaled
+/// frame while the [OverflowBox] lays the 350x388 design frame out at full
+/// size, so only the *paint* is scaled and nothing is cropped (BUG-1). The
+/// [Stack] does not clip, matching the HTML `.scene` (BUG-5).
 class _WelcomeScene extends StatelessWidget {
   const _WelcomeScene();
+
+  /// Design frame width: the 390dp canvas minus both 20dp side paddings.
+  static const double _frameW = 350;
+
+  /// Design frame height (`_frameW` + 38).
+  static const double _frameH = 388;
 
   @override
   Widget build(BuildContext context) {
     final tokens = context.nest;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final scale = (constraints.maxWidth / 350).clamp(0.0, 1.0);
+        final scale = (constraints.maxWidth / _frameW).clamp(0.0, 1.0);
         return SizedBox(
-          width: 350 * scale,
-          height: 388 * scale,
+          width: _frameW * scale,
+          height: _frameH * scale,
           child: Transform.scale(
             scale: scale,
             alignment: Alignment.topLeft,
-            child: SizedBox(
-              width: 350,
-              height: 388,
+            child: OverflowBox(
+              minWidth: _frameW,
+              maxWidth: _frameW,
+              minHeight: _frameH,
+              maxHeight: _frameH,
+              alignment: Alignment.topLeft,
               child: Stack(
+                clipBehavior: Clip.none,
                 children: <Widget>[
                   Positioned(
                     left: 15,
@@ -132,12 +140,12 @@ class _WelcomeScene extends StatelessWidget {
                     top: 120,
                     width: 168,
                     height: 168,
-                    child: SvgPicture.asset(
-                      NestlingIllustrations.pipStage2,
-                      width: 168,
-                      height: 168,
-                      semanticsLabel:
-                          'Pip the hatchling bird sitting in a twig nest',
+                    child: Semantics(
+                      label: 'Pip the hatchling bird sitting in a twig nest',
+                      image: true,
+                      // Mochi / sunny (the default skin) / stage 2 per
+                      // ORCHESTRATOR_NOTES; idle mood and no accessory.
+                      child: const PipAvatar(style: PipStyle.mochi, stage: 2),
                     ),
                   ),
                   Positioned(

@@ -1,162 +1,115 @@
-# P01 Welcome — test notes (Stage 3, iteration 1)
+# P01 Welcome — test notes (Stage 3, iteration 2)
 
 Route `/welcome`, feature `onboarding`, parent mode. Tests live in
-`app/test/features/onboarding/`. All pumping tests use the in-memory Drift DB
-through `setUpTestScope()` (`Seed.demo` default, `Seed.empty`/`Seed.fresh`
-where the case needs them) and the shared `disposeApp()` drain.
+`app/test/features/onboarding/`, use the in-memory Drift DB through
+`setUpTestScope()` (`Seed.demo` default, `Seed.empty`/`Seed.fresh`) and the
+shared `disposeApp()` drain.
 
-## Tests added
+This iteration re-verified the iteration-1 work after the build stage's
+iteration-2 fixes and updated the suite to the new shared contracts
+(`NestStatusBar` height-only, `PipAvatar` orchestrator rule, kid-mode
+onboarding gate).
 
-### `app/test/features/onboarding/onboarding_bloc_test.dart` — new, 11 tests
+## Tests added / changed this iteration
 
-OnboardingState:
+### `app/test/features/onboarding/welcome_view_test.dart` (30 tests)
 
-1. `copyWith` replaces only the given fields.
-2. equality + hashCode driven by status/items/errorMessage.
+- **Status bar (new contract):** light test now asserts the mock `9:41`
+  clock is **absent** and that `NestStatusBar` reserves exactly
+  `NestDevice.statusH` (47dp) — the OS draws the real bar. The old
+  `find.text('9:41')` assertion was removed.
+- **PipAvatar group (new, mandatory ORCHESTRATOR_NOTES #1):**
+  - renders `PipAvatar` with `style: mochi` · `skin: sunny` (default) ·
+    `stage: 2` · `mood: idle`;
+  - fills the design slot — 168×168 at (91,120) inside the 350×388 scene;
+  - the v1 `pip_stage_2.svg` illustration is absent;
+  - in `flutter test` the Rive runtime is absent, so the approved idle
+    still-frame SVG `pip_v2/mochi/s2_idle_1.svg` is what paints;
+  - the HTML alt text is still exposed (`Semantics(image, label)`).
+- **Accessibility:** added the heading flag assertion
+  (`flagsCollection.isHeader` on the headline), alongside the existing CTA
+  labels + `isButton`, Pip alt text, excluded chrome, ≥44dp (and ≥52dp spec)
+  tap targets, and no icon-only/kid controls.
+- **BUG-1 regressions strengthened:** the four `no crop` tests now also pin
+  `sceneStack.size == Size(350, 388)` at 320/360/390/430dp — the layout is
+  genuinely fixed, not merely masked by `Clip.none`.
 
-OnboardingBloc (`blocTest`, every event/state path):
+### `app/test/features/onboarding/p01_bugs_test.dart` (6 proofs)
 
-3. starts `initial`, no items, no error.
-4. `OnboardingLoadRequested` on the Drift-backed repository →
-   `loading` → `loaded` with the 3 static tour cards (exact items).
-5. live repository stream (two emissions) → `loading` → `loaded` →
-   `loaded` (second item set) — pins the `emit.forEach` subscription path.
-6. empty repository stream → `loading` → `loaded` with no items.
-7. repository stream error → `loading` → `failure` with `errorMessage`.
+- **Un-skipped and now enforced:** BUG-1 (scene scale), BUG-3 + BUG-3b
+  (kid-mode gate), BUG-5 (coin shadow clip) — all pass.
+- **BUG-3b rewritten:** the old "kid taps Get started" setup is impossible
+  once `/welcome` itself redirects to the gate, so the proof now asserts the
+  real contract — in kid mode, pumping `/value-tour` lands on
+  `/parental-gate` (the whole onboarding flow is gated).
+- **Still skipped (shared code, not P01-editable):** BUG-2 and BUG-4. Both
+  were verified to still fail when un-skipped (temporary copy, removed
+  afterwards: `+4 -2`), so the skips are honest.
 
-OnboardingRepository over in-memory Drift:
+## Results (run by this stage, `app/`)
 
-8. `watchItems`/`getItems` return exactly the 3 tour cards (Seed.demo).
-9. `Seed.demo` has `onboardingComplete == true`.
-10. `Seed.empty` is onboarded with no children.
-11. `Seed.fresh` starts `false`; `completeOnboarding()` flips
-    `watchComplete()` to `true`.
-
-### `app/test/features/onboarding/welcome_view_test.dart` — extended, 29 tests
-
-Copy/theming:
-
-1. light @390: `9:41`, headline, body, both CTA labels, footer caption,
-   Pip semantics label, no `NestIconButton`, no exception.
-2. dark @390: same content, no exception.
-
-Width × text-scale matrix (12 tests): {light, dark} × {320, 390, 430}dp ×
-text scale {1.0, 1.3} — all copy present, `takeException()` null (catches
-RenderFlex overflow). The app's 1.0–1.3 text-scaler clamp is exercised.
-
-Seeds:
-
-15. `Seed.empty` (onboarded parent, no children) still renders P01.
-16. `Seed.fresh` + pump `/today` → redirect lands on the real P01 headline.
-
-BLoC states (content is static for every status):
-
-17. `initial` — content renders before the load event.
-18. `loading` — content renders while no items have arrived.
-19. `loaded` with no items — full brand screen.
-20. `loaded` with the 2 scripted tour cards — cards do not alter P01.
-21. `failure` — repository error never blocks the brand screen, and
-    `errorMessage` is populated.
-
-Navigation (asserted against the live `GoRouter` location, not placeholder
-titles):
-
-22. `Get started` → `/value-tour`.
-23. `I already have an account` → `/create-account`.
-
-Accessibility:
-
-24. CTA semantics: labels found, `getSemantics(...).flagsCollection.isButton`
-    true for both; Pip artwork carries the HTML alt text; status-bar `9:41`
-    is excluded from semantics; no icon-only buttons (`NestIconButton`) and
-    no kid controls (`NestKidButton`); CTA hit boxes are 350×52 at 390dp
-    (≥44 parent rule and ≥52 spec min-height); kid ≥56 rule N/A on this
-    parent screen.
-25. Tap targets still ≥44 high and full-width at 320dp, text scale 1.3.
-
-Bug regression tests:
-
-26–29. `scene frame is painted in full (no crop) at {320, 360, 390, 430}dp`
-— pumps `/welcome`, locates the scene `RenderStack` and asserts
-`describeApproximatePaintClip(sceneStack.firstChild!)` is null. 390/430 pass;
-**320 and 360 fail — real bug, details below.**
-
-## Results
-
-- `dart format .` — 340 files, 0 changed (clean).
+- `dart format .` — 341 files, 0 changed (clean).
 - `flutter analyze` — `No issues found!`
-- `flutter test test/features/onboarding` — **38 passed, 2 failed** (40):
-  the two failures are the 320dp/360dp bug regressions below (expected).
-- `flutter test` (full suite) — **324 passed, 3 failed** (327): the two P01
-  bug regressions plus the pre-existing shared placeholder assertion
-  (below).
+- `flutter test test/features/onboarding` — **45 passed, 2 skipped,
+  0 failed** (`+45 ~2: All tests passed!`).
+- `flutter test` (full suite) — **333 passed, 2 skipped, 0 failed**
+  (`+333 ~2: All tests passed!`). The 2 skips are the shared BUG-2/BUG-4
+  proofs.
 
-## Bug found — NOT patched (stage-3 rule)
+## Bugs found
 
-### BUG-1: P01 scene crops its content at 320/360dp instead of scaling it
+**None in the screen this iteration.** All P01-owned bugs from iteration 1
+are fixed and now pinned by passing tests (independently re-verified here):
 
-**Where:** `app/lib/features/onboarding/presentation/views/welcome_view.dart:91-104`
-(`_WelcomeScene` LayoutBuilder). The outer `SizedBox(width: 350 * scale,
-height: 388 * scale)` hands **tight** constraints to `Transform.scale`, so
-the inner `SizedBox(width: 350, height: 388)` is constrained down to
-280×310.4 at 320dp *before* the 0.8 paint scale. The Stack therefore lays out
-350×388 design coordinates in a 280-wide frame and clips the overflow, then
-the whole already-cropped box is scaled by 0.8 — the right ~20% of the scene
-is lost, and the painted frame is only 224pt wide (empty band at right).
+| Bug | Evidence it is fixed |
+|---|---|
+| BUG-1 scene cropped below 390dp | `welcome_view.dart:98-111` — outer box reserves the scaled frame, `OverflowBox` lays the Stack out at full 350×388, only paint scales. At 320dp the Stack is 350×388 and `describeApproximatePaintClip` is `null` (was 280×310.4 / non-null). 390/430 unchanged. |
+| BUG-5 coin `--sh-1` shadow clipped | `welcome_view.dart:111` — `Stack(clipBehavior: Clip.none)`, matching the HTML `.scene`; proof asserts it. |
+| v1 `pipStage2` SVG in a product screen | `welcome_view.dart:138-150` — `PipAvatar(style: mochi, stage: 2)` (idle, sunny) in the same slot, v1 asset absent, alt text kept. |
 
-**Repro:**
+### Remaining — shared-code bugs (tracked, not in P01's edit scope)
 
-```
-cd app
-flutter test test/features/onboarding/welcome_view_test.dart --plain-name 'no crop'
-```
+Both are outside `app/lib/features/onboarding/**` and were verified to still
+reproduce when their proofs are un-skipped. `docs/screens/P01/SHARED_REQUEST.md`
+lists them (the fixed kid-mode item was removed; the gate is now provided by
+main's `71d2400`, merged here via `8ac81ec`):
 
-or pump `/welcome` on a 320×844 surface and inspect the scene `RenderStack`:
+1. **BUG-2 — bottom system inset counted twice.**
+   `app/lib/core/design_system/components/nest_bottom_cta.dart:17` wraps the
+   CTA in `SafeArea` while `NestHomeIndicator` already reserves 34dp, so P01's
+   CTAs sit 34dp high on home-indicator devices. Repro:
+   `flutter test test/features/onboarding/p01_bugs_test.dart --plain-name 'BUG-2'`
+   (after removing its `skip:`); on the simulator this is the stage-5
+   623.3 vs 656.7 drift.
+2. **BUG-4 — fresh install never creates the `app_state` row.**
+   `app/lib/core/data/app_session.dart` (`_write` UPDATE-only) plus
+   `OnboardingRepositoryImpl.completeOnboarding`; nothing inserts row 1 at
+   startup (no `beforeOpen`/bootstrap insert in `app/lib/app/di.dart`), so a
+   release first launch never persists onboarding completion. Repro:
+   the `BUG-4` proof.
 
-- 320dp: Stack size 280×310.4, `describeApproximatePaintClip` →
-  `Rect.fromLTRB(0.0, 0.0, 280.0, 310.4)`; painted clip ends at x≈244.
-  - top-right coin (design `left: 308, width: 34`) painted rect
-    ≈ `LTRB(270.7, 149.4, 289.3, 183.0)` → **entirely outside the clip,
-    invisible**;
-  - nest painted right edge ≈265.6 → ~22pt cropped;
-  - leaf-tint circle painted ≈32..288 → ~44pt cropped (should span the full
-    content width).
-- 360dp: Stack 320×354.7, clip non-null; coin painted `LTRB(306.5, …,
-  327.8, …)` vs painted clip ending at ≈312.6 → only a thin sliver visible.
-- 390/430dp: Stack 350×388, `describeApproximatePaintClip` → `null` (pass).
+Shared request item 3 (warm the first-frame SVGs / bundle Inter+Nunito,
+review findings 4+8) is unchanged and also non-blocking here.
 
-**Impact:** on narrow portrait devices (<390pt, e.g. iPhone SE 1st/2nd gen at
-320, some 360 Android) the illustration loses the top-right floating coin
-entirely and crops the nest/circle, while leaving a dead band on the right —
-not the "scale down, nothing overflows" behaviour required by plan §a /
-SPACING_SPEC §10.2.
-
-**Suggested fix (build stage):** keep the 350×388 design frame laid out at
-full size and scale only the paint, e.g. `SizedBox(350 * scale, 388 * scale,
-child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.topLeft,
-child: SizedBox(width: 350, height: 388, child: Stack(…))))`, or wrap the
-inner frame in `OverflowBox(minWidth: 350, maxWidth: 350, minHeight: 388,
-maxHeight: 388, alignment: Alignment.topLeft)` before the `Transform.scale`.
-The 390/430 paths must stay pixel-identical (scale 1).
-
-**Failing tests:** `welcome_view_test.dart` group
-`P01 welcome — bug regressions` (lines 483–508); assertion at lines 502–503.
-
-## Shared-suite issue (not a P01 bug)
-
-`app/test/app/router_redirect_test.dart:20` still asserts
-`find.text('P01 Welcome')`, the foundation placeholder. Already filed in
-`docs/screens/P01/SHARED_REQUEST.md` (stage 2); outside §1 edit scope. The
-redirect itself is verified by test 16 (`Seed.fresh` → `/today` → real P01).
-
-## Harness note (not a product bug)
+## Harness note (unchanged, not a product bug)
 
 `bloc.close()` on a bloc with a pending `emit.forEach` over a
-`StreamController`-backed stream deadlocks under the widget-test
-fake-async zone (isolated with temporary probes, now deleted; plain-async
-tests close fine). The loading-state widget test therefore uses an
-immediately-completing empty stream (state stays `loading`) — the
-pending-stream state path is covered by `blocTest` in
+`StreamController`-backed stream deadlocks under the widget-test fake-async
+zone; the loading-state widget test uses an immediately-completing empty
+stream and the pending-stream path is covered by `blocTest` in
 `onboarding_bloc_test.dart`.
 
-VERDICT: FAIL
+## Correction (Stage 6, iteration 2)
+
+- **BUG-2 is fixed on main** (`763192d`). `NestHomeIndicator` is a no-op in
+  the app and `NestBottomCta`'s `SafeArea` owns the OS inset exactly once; the
+  proof is now un-skipped in `p01_bugs_test.dart` and asserts the shipped
+  contract (`insetTop == baselineTop − 34`, caption bottom at
+  `844 − 34 − s4`). The "still skipped" claim above is superseded — do not
+  touch `core/design_system/components/nest_bottom_cta.dart`.
+- **BUG-4's remaining root cause is narrower** than stated above:
+  `AppSession._write` upserts now; only the onboarding/paywall repositories
+  (direct `UPDATE … WHERE id = 1`) and the missing startup bootstrap remain.
+  See `SHARED_REQUEST.md` (item BUG-4).
+
+VERDICT: PASS

@@ -2,19 +2,22 @@
 //
 // Covers: the brand copy and artwork, light + dark themes, widths 320/390/430
 // at text scales 1.0/1.3, every OnboardingBloc status (initial/loading/
-// empty/loaded/failure), both navigation taps, and the accessibility
-// contract (semantic labels, 44dp parent tap targets, no kid controls).
+// empty/loaded/failure), both navigation taps, the PipAvatar orchestrator
+// rule and the accessibility contract (semantic labels, 44dp parent tap
+// targets, no kid controls).
 //
-// Layout regression found here (recorded in docs/screens/P01/3_test.md,
-// NOT patched in stage 3): at 320/360dp the scene's 350x388 frame is laid
-// out inside the already-shrunk box, so the Stack crops its content (the
-// top-right coin disappears) instead of scaling it.
+// The four no-crop regressions pin BUG-1's fix (the 350x388 scene now lays
+// out at full design size and only the paint scales). The two remaining
+// shared-code defects (BUG-2 bottom-inset double count, BUG-4 app_state
+// bootstrap) are tracked in docs/screens/P01/SHARED_REQUEST.md with skipped
+// proofs in p01_bugs_test.dart — they are outside this screen's edit scope.
 
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
@@ -22,6 +25,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
+import 'package:nestling/core/design_system/motion/pip_avatar.dart' as v2;
 import 'package:nestling/features/onboarding/domain/entities/onboarding_step.dart';
 import 'package:nestling/features/onboarding/domain/onboarding_repository.dart';
 import 'package:nestling/features/onboarding/presentation/bloc/onboarding_bloc.dart';
@@ -48,6 +52,21 @@ const OnboardingStep _secondStep = OnboardingStep(
   id: 'pip',
   title: 'Pip grows as they help',
   detail: 'Every finished quest feeds Pip the bird.',
+);
+
+/// The scene's illustration Stack (the only Stack inside the scroll).
+Finder get _sceneStackFinder => find.descendant(
+  of: find.byType(SingleChildScrollView),
+  matching: find.byType(Stack),
+);
+
+/// Any SvgPicture still loading the v1 `pip_stage_2.svg` illustration.
+Finder get _v1PipFinder => find.byWidgetPredicate(
+  (widget) =>
+      widget is SvgPicture &&
+      widget.bytesLoader is SvgAssetLoader &&
+      (widget.bytesLoader as SvgAssetLoader).assetName ==
+          NestlingIllustrations.pipStage2,
 );
 
 /// In-memory repository with a caller-controlled item stream, used to reach
@@ -130,7 +149,14 @@ void main() {
         textScale: 1,
       );
 
-      expect(find.text('9:41'), findsOneWidget);
+      // Orchestrator rule: NestStatusBar only reserves height — the OS
+      // draws the real status bar, so no mock clock glyphs in the app.
+      expect(find.text('9:41'), findsNothing);
+      expect(find.byType(NestStatusBar), findsOneWidget);
+      expect(
+        tester.getSize(find.byType(NestStatusBar)).height,
+        NestDevice.statusH,
+      );
       expect(find.text(_headline), findsOneWidget);
       expect(find.text(_body), findsOneWidget);
       expect(find.text('Get started'), findsOneWidget);
@@ -224,6 +250,56 @@ void main() {
       expect(find.text(_headline), findsOneWidget);
       expect(find.text('Get started'), findsOneWidget);
       expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+  });
+
+  group('P01 welcome — Pip is the v2 avatar (mandatory orchestrator rule)', () {
+    testWidgets('PipAvatar mochi/sunny/stage 2 fills the 168x168 slot', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpWelcome(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      // The v1 onboarding SVG must never render in a product screen.
+      expect(_v1PipFinder, findsNothing);
+
+      final pip = find.byType(v2.PipAvatar);
+      expect(pip, findsOneWidget);
+      final avatar = tester.widget<v2.PipAvatar>(pip);
+      expect(avatar.style, v2.PipStyle.mochi);
+      expect(avatar.skin, v2.PipSkin.sunny);
+      expect(avatar.stage, 2);
+      expect(avatar.mood, v2.PipMood.idle);
+
+      // Same slot as the design: 168x168 at (91,120) inside the 350x388
+      // scene. In flutter test the Rive runtime is absent, so PipAvatar
+      // paints its approved idle SVG still frame (the reduced-motion path).
+      final scene = tester.getRect(_sceneStackFinder);
+      final pipRect = tester.getRect(pip);
+      expect(pipRect.left - scene.left, moreOrLessEquals(91, epsilon: 0.01));
+      expect(pipRect.top - scene.top, moreOrLessEquals(120, epsilon: 0.01));
+      expect(pipRect.width, moreOrLessEquals(168, epsilon: 0.01));
+      expect(pipRect.height, moreOrLessEquals(168, epsilon: 0.01));
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is SvgPicture &&
+              widget.bytesLoader is SvgAssetLoader &&
+              (widget.bytesLoader as SvgAssetLoader).assetName ==
+                  v2.PipAvatar.fallbackAsset(v2.PipStyle.mochi, 2),
+        ),
+        findsOneWidget,
+      );
+
+      // The design alt text stays exposed (the view labels the avatar).
+      expect(find.bySemanticsLabel(_pipLabel), findsOneWidget);
 
       await disposeApp(tester);
     });
@@ -429,6 +505,12 @@ void main() {
       expect(haveAccountData.label, 'I already have an account');
       expect(haveAccountData.flagsCollection.isButton, isTrue);
 
+      // The headline is the screen's only heading (HTML `<h1>`).
+      final headlineData = tester
+          .getSemantics(find.text(_headline))
+          .getSemanticsData();
+      expect(headlineData.flagsCollection.isHeader, isTrue);
+
       // Decorative chrome carries no semantics (status bar excluded).
       expect(find.bySemanticsLabel('9:41'), findsNothing);
 
@@ -493,12 +575,11 @@ void main() {
           textScale: 1,
         );
 
-        final sceneStack = tester.renderObject<RenderStack>(
-          find.descendant(
-            of: find.byType(SingleChildScrollView),
-            matching: find.byType(Stack),
-          ),
-        );
+        final sceneStack = tester.renderObject<RenderStack>(_sceneStackFinder);
+        // Layout is genuinely fixed (not masked by Clip.none): the Stack
+        // always lays out at the full 350x388 design size (old code laid
+        // out 280x310.4 at 320dp).
+        expect(sceneStack.size, const Size(350, 388));
         expect(
           sceneStack.describeApproximatePaintClip(sceneStack.firstChild!),
           isNull,

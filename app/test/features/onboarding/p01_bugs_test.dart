@@ -1,18 +1,22 @@
-// P01 Welcome — adversarial bug proofs (Stage 6, iteration 1).
+// P01 Welcome — adversarial bug proofs (Stage 6, iteration 1; updated in
+// iteration 2).
 //
-// Each test below fails against the current code and is skipped (`skip: true`)
-// with its bug id in the test name so the suite stays green until the bug is
-// fixed. Remove the skip together with the fix, then re-run:
+// Fixed proofs are un-skipped and enforced: BUG-1 (scene scale), BUG-2 (OS
+// bottom inset counted exactly once, shared fix 763192d), BUG-3 / BUG-3b
+// (kid-mode gate, shared fix 71d2400) and BUG-5 (coin shadow clip). The one
+// remaining shared-code proof stays skipped (`skip: true`) so the suite stays
+// green until the orchestrator lands the shared fix
+// (docs/screens/P01/SHARED_REQUEST.md):
 //
 //   flutter test test/features/onboarding/p01_bugs_test.dart
 //
 // Details, severity and suggested fixes: docs/screens/P01/6_bugs.md.
 //
-// BUG-1  scene crops instead of scaling below 390dp        (welcome_view.dart)
-// BUG-2  system bottom inset counted twice                 (shared NestBottomCta)
-// BUG-3  kid mode opens /welcome + the flow without a gate (shared router.dart)
-// BUG-4  fresh install never persists onboarding completion(shared AppSession)
-// BUG-5  scene Stack clips the coins' --sh-1 shadow        (welcome_view.dart)
+// BUG-1  scene crops instead of scaling below 390dp        (welcome_view.dart) fixed
+// BUG-2  system bottom inset counted twice                 (shared NestBottomCta) fixed
+// BUG-3  kid mode opens /welcome + the flow without a gate (shared router.dart) fixed
+// BUG-4  fresh install never persists onboarding completion(shared repos) open
+// BUG-5  scene Stack clips the coins' --sh-1 shadow        (welcome_view.dart) fixed
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -22,6 +26,7 @@ import 'package:nestling/app/controllers.dart';
 import 'package:nestling/app/di.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
+import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/onboarding/domain/onboarding_repository.dart';
 
 import '../../test_scope.dart';
@@ -56,107 +61,102 @@ Finder get _sceneStack => find.descendant(
 
 void main() {
   group('P01 welcome — bug proofs (Stage 6)', () {
-    testWidgets(
-      'BUG-1 scene paints in full at 320dp',
-      (tester) async {
-        await setUpTestScope();
-        await _pumpWelcome(tester, width: 320);
+    testWidgets('BUG-1 scene paints in full at 320dp', (tester) async {
+      await setUpTestScope();
+      await _pumpWelcome(tester, width: 320);
 
-        final sceneStack = tester.renderObject<RenderStack>(_sceneStack);
-        expect(
-          sceneStack.describeApproximatePaintClip(sceneStack.firstChild!),
-          isNull,
-          reason:
-              'at 320dp the 350x388 design frame must be scaled down in full; '
-              'a non-null clip means the top-right coin (design x=308..342) '
-              'and the nest/circle right edges are cropped',
-        );
+      final sceneStack = tester.renderObject<RenderStack>(_sceneStack);
+      // Layout is genuinely fixed (not masked by Clip.none): the Stack
+      // always lays out at the full 350x388 design size, even when the
+      // frame is narrower (old code laid out 280x310.4 at 320dp).
+      expect(sceneStack.size, const Size(350, 388));
+      expect(
+        sceneStack.describeApproximatePaintClip(sceneStack.firstChild!),
+        isNull,
+        reason:
+            'at 320dp the 350x388 design frame must be scaled down in full; '
+            'a non-null clip means the top-right coin (design x=308..342) '
+            'and the nest/circle right edges are cropped',
+      );
 
-        await disposeApp(tester);
-      },
-      skip: true, // BUG-1: scene crops at 320dp instead of scaling.
-    );
+      await disposeApp(tester);
+    });
 
-    testWidgets(
-      'BUG-2 system bottom inset is added twice',
-      (tester) async {
-        await setUpTestScope();
-        await _pumpWelcome(tester);
-        final baselineTop = tester.getTopLeft(find.byKey(_getStarted)).dy;
+    testWidgets('BUG-2 OS bottom inset is counted exactly once', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpWelcome(tester);
+      final baselineTop = tester.getTopLeft(find.byKey(_getStarted)).dy;
 
-        await _pumpWelcome(tester, bottomInset: 34);
-        final insetTop = tester.getTopLeft(find.byKey(_getStarted)).dy;
+      await _pumpWelcome(tester, bottomInset: 34);
+      final insetTop = tester.getTopLeft(find.byKey(_getStarted)).dy;
 
-        expect(
-          insetTop,
-          closeTo(baselineTop, 1),
-          reason:
-              'NestHomeIndicator already draws the 34dp home reserve; the '
-              'SafeArea inside NestBottomCta adds the OS inset a second time, '
-              'moving the CTAs 34dp up on every device with a home indicator',
-        );
+      // Fixed on main (763192d): NestBottomCta's SafeArea consumes the OS
+      // bottom inset, NestHomeIndicator no longer reserves a second 34dp
+      // band. With a 34dp inset the whole CTA block moves up exactly 34 and
+      // its surface panel ends 34dp above the screen edge, as in the design.
+      expect(insetTop, closeTo(baselineTop - 34, 1));
+      expect(
+        tester.getBottomRight(find.text('Made in the UK · No ads, ever')).dy,
+        closeTo(844 - 34 - NestSpacing.s4, 1),
+      );
+      expect(
+        tester.getSize(find.byType(NestHomeIndicator)).height,
+        0,
+        reason: 'the app home indicator is a no-op; the OS draws the real one',
+      );
 
-        await disposeApp(tester);
-      },
-      // BUG-2: bottom safe inset + NestHomeIndicator double-counted
-      // (core/design_system/components/nest_bottom_cta.dart).
-      skip: true,
-    );
+      await disposeApp(tester);
+    });
 
-    testWidgets(
-      'BUG-3 kid mode opens /welcome without the parental gate',
-      (tester) async {
-        await setUpTestScope();
-        GetIt.instance<AppModeController>().selectMode(AppMode.kid);
-        final session = GetIt.instance<AppSession>();
-        await session.setAppMode('kid');
-        await session.refresh();
+    testWidgets('BUG-3 kid mode opens /welcome without the parental gate', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+      final session = GetIt.instance<AppSession>();
+      await session.setAppMode('kid');
+      await session.refresh();
 
-        await _pumpWelcome(tester);
+      await _pumpWelcome(tester);
 
-        expect(
-          currentPath(tester),
-          '/parental-gate',
-          reason:
-              'P01 is a parent-mode screen; kid mode must be redirected to '
-              'the gate (app/lib/app/router.dart parentOnly list)',
-        );
+      expect(
+        currentPath(tester),
+        '/parental-gate',
+        reason:
+            'P01 is a parent-mode screen; kid mode must be redirected to '
+            'the gate (app/lib/app/router.dart parentOnly list)',
+      );
 
-        await disposeApp(tester);
-      },
-      // BUG-3: /welcome (and the onboarding flow) is not on the kid-mode
-      // parentOnly list (app/lib/app/router.dart).
-      skip: true,
-    );
+      await disposeApp(tester);
+    });
 
-    testWidgets(
-      'BUG-3b kid mode can tap Get started into /value-tour',
-      (tester) async {
-        await setUpTestScope();
-        GetIt.instance<AppModeController>().selectMode(AppMode.kid);
-        final session = GetIt.instance<AppSession>();
-        await session.setAppMode('kid');
-        await session.refresh();
+    testWidgets('BUG-3b kid mode cannot open the onboarding step /value-tour', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+      final session = GetIt.instance<AppSession>();
+      await session.setAppMode('kid');
+      await session.refresh();
 
-        await _pumpWelcome(tester);
-        await tester.tap(find.byKey(_getStarted));
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 300));
+      // The gate fires when /welcome is requested (see BUG-3), so the old
+      // "tap Get started" setup is unreachable — the contract is that the
+      // next onboarding step is gated too.
+      await pumpAppRoute(tester, '/value-tour');
 
-        expect(
-          currentPath(tester),
-          '/parental-gate',
-          reason:
-              'in kid mode a parent onboarding step must not be reachable; '
-              'the redirect guard only gates /today, /money, /settings, …',
-        );
+      expect(
+        currentPath(tester),
+        '/parental-gate',
+        reason:
+            'in kid mode every onboarding route (P01–P07) must be gated; '
+            'pumping /value-tour must land on the parental gate, not the '
+            'tour',
+      );
 
-        await disposeApp(tester);
-      },
-      // BUG-3: /value-tour is not on the kid-mode parentOnly list
-      // (app/lib/app/router.dart).
-      skip: true,
-    );
+      await disposeApp(tester);
+    });
 
     test(
       'BUG-4 fresh install never persists onboarding completion',
@@ -188,33 +188,30 @@ void main() {
               'restart the user is sent back to /welcome forever',
         );
       },
-      // BUG-4: fresh install has no app_state singleton row; all session
-      // writes are silent no-ops (core/data/app_session.dart).
+      // BUG-4: fresh install has no app_state singleton row. AppSession is
+      // fixed (763192d), but the feature repositories (onboarding, paywall)
+      // still UPDATE-only and nothing bootstraps row 1 at DB open.
       skip: true,
     );
 
-    testWidgets(
-      'BUG-5 scene Stack clips the coins --sh-1 shadow',
-      (tester) async {
-        await setUpTestScope();
-        await _pumpWelcome(tester);
+    testWidgets('BUG-5 scene Stack clips the coins --sh-1 shadow', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpWelcome(tester);
 
-        final sceneStack = tester.renderObject<RenderStack>(_sceneStack);
-        expect(
-          sceneStack.clipBehavior,
-          Clip.none,
-          reason:
-              'the HTML .scene has no overflow:hidden, so the 8px-blur shadow '
-              'of c3 (left 7, rotated 22deg) and c2 (left 308) paints outside '
-              'the 350x388 frame; Clip.hardEdge cuts 1-4px, most visible in '
-              'dark mode (black@40%)',
-        );
+      final sceneStack = tester.renderObject<RenderStack>(_sceneStack);
+      expect(
+        sceneStack.clipBehavior,
+        Clip.none,
+        reason:
+            'the HTML .scene has no overflow:hidden, so the 8px-blur shadow '
+            'of c3 (left 7, rotated 22deg) and c2 (left 308) paints outside '
+            'the 350x388 frame; Clip.hardEdge cuts 1-4px, most visible in '
+            'dark mode (black@40%)',
+      );
 
-        await disposeApp(tester);
-      },
-      // BUG-5: scene Stack uses Clip.hardEdge, cutting the coin shadows
-      // (welcome_view.dart).
-      skip: true,
-    );
+      await disposeApp(tester);
+    });
   });
 }

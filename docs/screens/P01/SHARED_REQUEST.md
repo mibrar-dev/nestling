@@ -1,37 +1,46 @@
-# Shared request — P01 Welcome (Stage 6)
+# Shared request — P01 Welcome (Stage 6, iteration 2)
 
 Supersedes the stale request about `router_redirect_test.dart` (that test
-passes — routed to the route-location check in `2f723db`). Three real shared
-defects surfaced by the P01 bug hunt; each has a skipped proof in
-`app/test/features/onboarding/p01_bugs_test.dart`. Details and repro steps:
-`docs/screens/P01/6_bugs.md` (BUG-2, BUG-3, BUG-4).
+passes — route-location based since `2f723db`).
 
-**Need:**
+**Closed on main, verified here** (proofs un-skipped and passing in
+`app/test/features/onboarding/p01_bugs_test.dart`):
 
-1. **Kid-mode gate skips the onboarding/auth routes.** The `parentOnly` list
-   in `app/lib/app/router.dart:96-106` excludes `/welcome`, `/value-tour`,
-   `/create-account`, `/privacy`, `/add-children` and `/pocket-money-setup`,
-   so a kid-mode session can open P01 and walk the parent flow to `/paywall`
-   without the gate. Add the onboarding/auth/setup paths (or invert to an
-   allow-list of kid routes).
-2. **Bottom inset counted twice.** `NestBottomCta` wraps its content in
-   `SafeArea` while P01 also renders the 34dp `NestHomeIndicator`, so CTAs
-   sit 34dp higher than the design on every home-indicator device
-   (simulator: 623.3 vs 656.7). Let the home indicator reserve
-   `max(viewPadding.bottom, 34)` (mirroring the new `NestStatusBar`) and stop
-   the CTA from adding the inset again; keep 390dp parity when inset = 0.
-3. **Fresh install never creates the `app_state` row.** Only `Seed` inserts
-   row id = 1; `AppSession._write`, `OnboardingRepositoryImpl.completeOnboarding`
-   and `PaywallRepositoryImpl` only UPDATE it. On a release first launch the
-   update affects 0 rows, so onboarding completion is never persisted and
-   every restart returns the user to `/welcome`. Insert-if-missing at DB open
-   (`MigrationStrategy.beforeOpen` or the `configureDependencies` bootstrap).
+- BUG-2 bottom inset counted twice — fixed by `763192d`
+  (`NestHomeIndicator` is a no-op in the app; `NestBottomCta`'s `SafeArea`
+  owns the OS inset exactly once). The proof now asserts the shipped contract
+  (`insetTop == baselineTop − 34`), not the pre-fix inverse.
+- BUG-3 kid-mode gate skipped the onboarding flow — fixed by `71d2400`
+  (onboarding locations are parent-only).
+- BUG-1 / BUG-5 (P01-owned scene scale + coin shadow clip) — fixed in
+  `welcome_view.dart`.
 
-**Files:** `app/lib/app/router.dart` (1) ·
-`app/lib/core/design_system/components/nest_bottom_cta.dart` (2) ·
-`app/lib/core/data/app_session.dart` + `app/lib/app/di.dart` (3).
+**Need (one remaining shared defect, BUG-4):**
 
-**Blocks:** **no** for P01's visual landing (BUG-1/BUG-5 are P01-owned).
-**Yes** for the product's onboarding persistence (3) and the parental-gate
-contract (1); (2) is a cross-screen visual defect but P01's screenshots stay
-acceptable until fixed.
+**Fresh install never creates the `app_state` row.** `AppSession._write`
+upserts now (`763192d`), but the feature repositories still write directly:
+`features/onboarding/data/onboarding_repository_impl.dart:24-28`
+(`completeOnboarding`) and `features/paywall/data/paywall_repository_impl.dart`
+(`startTrial` / `activate`) do `UPDATE … WHERE id = 1` with no
+insert-if-missing, and nothing bootstraps row 1 when the DB opens. On a
+release first launch (no `SEED` flag) the update affects 0 rows, so onboarding
+completion is never persisted and every restart returns the user to
+`/welcome` — the screen loops forever.
+
+Fix (either): insert-if-missing in `MigrationStrategy.beforeOpen` (preferred —
+covers every writer at once), or an upsert in each repository. Whoever lands it
+must un-skip and pass the `BUG-4` proof in
+`app/test/features/onboarding/p01_bugs_test.dart`.
+
+**Files:** `app/lib/core/data/app_database.dart` (beforeOpen) ·
+`app/lib/features/onboarding/data/onboarding_repository_impl.dart` ·
+`app/lib/features/paywall/data/paywall_repository_impl.dart`.
+
+**Blocks:** **no** for P01's visual landing (the P01-owned bugs BUG-1/BUG-5
+are fixed). **Yes** for the product's first-launch onboarding persistence.
+
+**Also open (non-blocking, from the review):** warm P01's five first-frame
+SVGs at startup with `precachePicture` (nothing calls `NestlingImages.precache`,
+and it lists the webp rasters) and bundle Inter + Nunito with
+`GoogleFonts.config.allowRuntimeFetching = false` in `lib/main.dart` — fonts
+currently come from the Google-Fonts CDN on first paint.
