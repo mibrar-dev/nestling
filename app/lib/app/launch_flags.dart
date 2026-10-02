@@ -4,7 +4,7 @@
 // harness (`tools/screens/shot.sh`) and the 30 screen agents to open any
 // screen in a deterministic state:
 //
-//   SEED=demo|empty|fresh   reseed the database on launch when given
+//   SEED=demo|empty|fresh|onboarding_kids   reseed the database on launch when given
 //   INITIAL_ROUTE=/today    jump straight to a route (see route constants)
 //   APP_MODE=parent|kid     app mode at launch
 //   THEME=light|dark|system theme at launch
@@ -22,6 +22,14 @@ abstract final class LaunchFlags {
     'DISABLE_ANIMATIONS',
   );
 
-  static bool get hasSeed =>
-      seed == 'demo' || seed == 'empty' || seed == 'fresh';
+  static bool get hasSeed => isSupportedSeed(seed);
+
+  /// All `SEED=` values `applyLaunchFlags` understands (see `launch.dart`).
+  /// Split out for tests: `seed` itself is compile-time, so widget/unit
+  /// tests cannot set it per-case.
+  static bool isSupportedSeed(String value) =>
+      value == 'demo' ||
+      value == 'empty' ||
+      value == 'fresh' ||
+      value == 'onboarding_kids';
 }
