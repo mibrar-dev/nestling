@@ -24,7 +24,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:nestling/app/controllers.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
-import 'package:nestling/core/data/london_time.dart';
+import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
@@ -389,8 +389,10 @@ void main() {
       () async {
         final db = await setUpTestScope();
         final now = DateTime.now().toUtc();
-        final stale = londonDayStartUtc(now)
-            .subtract(const Duration(minutes: 1));
+        final stale = dayStartUtc(
+          'Europe/London',
+          now,
+        ).subtract(const Duration(minutes: 1));
         await (db.delete(
           db.questCompletions,
         )..where((c) => c.questId.equals('q-reading'))).go();
@@ -425,8 +427,10 @@ void main() {
       () async {
         final db = await setUpTestScope();
         final now = DateTime.now().toUtc();
-        final stale = londonWeekStartUtc(now)
-            .subtract(const Duration(minutes: 1));
+        final stale = weekStartUtc(
+          'Europe/London',
+          now,
+        ).subtract(const Duration(minutes: 1));
         await (db.delete(
           db.questCompletions,
         )..where((c) => c.questId.equals('q-bins'))).go();
@@ -459,7 +463,10 @@ void main() {
     ) async {
       final db = await setUpTestScope();
       final now = DateTime.now().toUtc();
-      final stale = londonDayStartUtc(now).subtract(const Duration(minutes: 1));
+      final stale = dayStartUtc(
+        'Europe/London',
+        now,
+      ).subtract(const Duration(minutes: 1));
       await (db.delete(
         db.questCompletions,
       )..where((c) => c.questId.equals('q-reading'))).go();
@@ -602,8 +609,10 @@ void main() {
         // Derive the stale instant from the pinned story clock (repo default
         // clock is `Seed.anchorOverride`) instead of duplicating a literal.
         final pin = Seed.anchorOverride ?? DateTime.now().toUtc();
-        final stale = londonDayStartUtc(pin)
-            .subtract(const Duration(minutes: 30));
+        final stale = dayStartUtc(
+          'Europe/London',
+          pin,
+        ).subtract(const Duration(minutes: 30));
         await (db.delete(
           db.questCompletions,
         )..where((c) => c.questId.equals('q-reading'))).go();
@@ -646,8 +655,10 @@ void main() {
     ) async {
       final db = await setUpTestScope();
       final pin = Seed.anchorOverride ?? DateTime.now().toUtc();
-      final stale = londonDayStartUtc(pin)
-          .subtract(const Duration(minutes: 30));
+      final stale = dayStartUtc(
+        'Europe/London',
+        pin,
+      ).subtract(const Duration(minutes: 30));
       await (db.delete(
         db.questCompletions,
       )..where((c) => c.questId.equals('q-reading'))).go();

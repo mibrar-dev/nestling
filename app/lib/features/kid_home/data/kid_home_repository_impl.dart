@@ -1,6 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_database.dart';
-import 'package:nestling/core/data/london_time.dart';
+import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/pin_hash.dart' as pin_hash;
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/data/stream_combine.dart';
@@ -21,23 +21,25 @@ class KidHomeRepositoryImpl implements KidHomeRepository {
   Stream<List<KidQuest>> watchItems() {
     return watchActiveChild().asyncExpand((kid) {
       if (kid == null) return Stream.value(<KidQuest>[]);
-      return combineLatest2(
+      return combineLatest3(
         _db.watchActiveQuests(Seed.familyId),
         _db.watchCompletionsForChild(kid.id),
+        _db.watchFamilyZoneId(),
       ).map((parts) {
         final quests = parts[0] as List<Quest>;
         final completions = parts[1] as List<QuestCompletion>;
         final now = DateTime.now().toUtc();
+        final zone = normalizeZoneId(parts[2] as String);
         final mine = quests.where((q) => q.assigneeChildId == kid.id).toList()
           ..sort((a, b) => a.title.compareTo(b.title));
         return mine.map((q) {
           final rows = completions.where((c) => c.questId == q.id).toList()
             ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
           // Period rule (orchestrator ruling for K03-BUG-4): only
-          // completions inside the quest's current London period count; a
-          // completion outside it means the quest is "to do" again.
+          // completions inside the quest's current family-zone period count;
+          // a completion outside it means the quest is "to do" again.
           final current = rows.where(
-            (c) => countsForCurrentPeriod(q.repeatRule, c.createdAt, now),
+            (c) => countsForCurrentPeriod(q.repeatRule, c.createdAt, now, zone),
           );
           final status = current.isEmpty ? 'to_do' : current.first.status;
           return KidQuest(
@@ -93,12 +95,15 @@ class KidHomeRepositoryImpl implements KidHomeRepository {
       _db.quests,
     )..where((q) => q.id.equals(questId))).getSingleOrNull();
     if (quest == null) return;
+    // Writer's zone: the current family zone (validated, London fallback).
+    // History renders in this stored zone even after a family move.
+    final zone = await _db.familyZoneId();
     // Idempotent inside one transaction (K03-BUG-1): a rapid double tap
-    // must not write a second pending row. Only the current London period
-    // matters (K03-BUG-4 ruling): a `to_do`/`not_yet` inside it flips to
-    // `done_pending`; anything already recorded this period stays untouched,
-    // and a new period starts a fresh row so coins can never be minted twice
-    // for one tap.
+    // must not write a second pending row. Only the current family-zone
+    // period matters (K03-BUG-4 ruling): a `to_do`/`not_yet` inside it flips
+    // to `done_pending`; anything already recorded this period stays
+    // untouched, and a new period starts a fresh row so coins can never be
+    // minted twice for one tap.
     await _db.transaction(() async {
       final existing =
           await (_db.select(_db.questCompletions)
@@ -115,7 +120,12 @@ class KidHomeRepositoryImpl implements KidHomeRepository {
       final now = DateTime.now().toUtc();
       final inPeriod = existing
           .where(
-            (c) => countsForCurrentPeriod(quest.repeatRule, c.createdAt, now),
+            (c) => countsForCurrentPeriod(
+              quest.repeatRule,
+              c.createdAt,
+              now,
+              zone,
+            ),
           )
           .toList();
       if (inPeriod.isNotEmpty) {
@@ -127,6 +137,7 @@ class KidHomeRepositoryImpl implements KidHomeRepository {
             QuestCompletionsCompanion(
               status: const Value('done_pending'),
               createdAt: Value(now),
+              createdAtTz: Value(zone),
             ),
           );
         }
@@ -142,6 +153,7 @@ class KidHomeRepositoryImpl implements KidHomeRepository {
               status: const Value('done_pending'),
               coins: Value(quest.coins),
               createdAt: Value(now),
+              createdAtTz: Value(zone),
             ),
           );
     });

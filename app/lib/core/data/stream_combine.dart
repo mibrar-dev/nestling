@@ -20,6 +20,16 @@ Stream<List<dynamic>> combineLatest3(
   return _combine([a, b, c]);
 }
 
+/// Re-emits `[a, b, c, d]` whenever any source emits (after all have emitted).
+Stream<List<dynamic>> combineLatest4(
+  Stream<dynamic> a,
+  Stream<dynamic> b,
+  Stream<dynamic> c,
+  Stream<dynamic> d,
+) {
+  return _combine([a, b, c, d]);
+}
+
 Stream<List<dynamic>> _combine(List<Stream<dynamic>> sources) {
   late final StreamController<List<dynamic>> controller;
   controller = StreamController<List<dynamic>>(
