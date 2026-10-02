@@ -45,6 +45,23 @@ verdict() { # file -> PASS/FAIL
   [ -f "$f" ] && grep -E "^VERDICT: (PASS|FAIL)" "$f" | tail -1 | awk '{print $2}' || echo FAIL
 }
 
+
+# --- simulator pool: SIM=pool borrows a simulator only for the UI stage ---
+POOL_FILE="$MAIN/docs/screens/SIM_POOL.txt"; LOCKS="$ST/simlock"; mkdir -p "$LOCKS"
+HELD_SIM=""
+acquire_sim() {
+  while true; do
+    for u in $(grep -v '^#' "$POOL_FILE"); do
+      if mkdir "$LOCKS/$u" 2>/dev/null; then echo "$ID $$" > "$LOCKS/$u/owner"; HELD_SIM="$u"; return 0; fi
+      # stale lock: owner loop gone
+      o=$(awk '{print $2}' "$LOCKS/$u/owner" 2>/dev/null); if [ -n "$o" ] && ! kill -0 "$o" 2>/dev/null; then rm -rf "$LOCKS/$u"; fi
+    done
+    sleep 15
+  done
+}
+release_sim() { [ -n "$HELD_SIM" ] && rm -rf "$LOCKS/$HELD_SIM"; HELD_SIM=""; }
+trap release_sim EXIT
+
 ev LOOP_START "feature=$FEATURE route=$ROUTE sim=$SIM"
 FIXES=""
 START="${START_IT:-1}"
@@ -59,7 +76,9 @@ for IT in $(seq "$START" "$MAX"); do
   stage build "$MUSE" 2_build.md "$IT" "$FIXES"
   stage test  "$DEEP"  3_test.md   "$IT"
   stage review "$BUNNY" 4_review.md "$IT"
+  if [ "$SIM" = "pool" ]; then acquire_sim; ev SIM_ACQUIRED "$HELD_SIM"; SIM_SAVE="$SIM"; SIM="$HELD_SIM"; fi
   stage ui    "$MUSE"  5_ui.md     "$IT"
+  if [ -n "$HELD_SIM" ]; then release_sim; SIM="$SIM_SAVE"; fi
   stage bugs  "$DEEP"  6_bugs.md   "$IT"
   B=$(verdict 2_build.md); T=$(verdict 3_test.md); R=$(verdict 4_review.md); U=$(verdict 5_ui.md); G=$(verdict 6_bugs.md)
   echo "iter $IT build=$B test=$T review=$R ui=$U bugs=$G" >> "$WT/docs/screens/$ID/LOOP.md"
