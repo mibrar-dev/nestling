@@ -1,5 +1,7 @@
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/family_time.dart';
+import 'package:nestling/core/data/family_zone_service.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/data/stream_combine.dart';
 import 'package:nestling/features/settings/domain/entities/app_settings.dart';
@@ -73,10 +75,31 @@ class SettingsRepositoryImpl implements SettingsRepository {
   Future<void> setKidGateEnabled({required bool enabled}) =>
       _write(SettingsCompanion(kidGateEnabled: Value(enabled)));
 
-  Future<void> _write(SettingsCompanion companion) {
-    return (_db.update(
+  @override
+  Future<void> setFamilyTimeZone(String zoneId) =>
+      FamilyZoneService(_db).setFamilyTimeZone(zoneId);
+
+  @override
+  Stream<String> watchFamilyTimeZone() => _db.watchFamilyZoneId();
+
+  Future<void> _write(SettingsCompanion companion) async {
+    final zone = await _db.familyZoneId();
+    final stamped = companion.copyWith(
+      updatedAt: Value(DateTime.now().toUtc()),
+      updatedAtTz: Value(normalizeZoneId(zone)),
+    );
+    await (_db.update(
       _db.settings,
-    )..where((s) => s.familyId.equals(Seed.familyId))).write(companion);
+    )..where((s) => s.familyId.equals(Seed.familyId))).write(stamped);
+    // Keep the `families` rule row in step (payout day / zone live there).
+    await (_db.update(
+      _db.families,
+    )..where((f) => f.id.equals(Seed.familyId))).write(
+      FamiliesCompanion(
+        updatedAt: Value(DateTime.now().toUtc()),
+        updatedAtTz: Value(normalizeZoneId(zone)),
+      ),
+    );
   }
 
   List<SettingsItem> _rows(AppSettings s) {

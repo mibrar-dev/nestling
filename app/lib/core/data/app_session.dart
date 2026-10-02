@@ -41,12 +41,16 @@ class AppSession extends ChangeNotifier {
   Future<void> setSubscription(String status) =>
       _write(AppStateCompanion(subscriptionStatus: Value(status)));
 
-  Future<void> startTrialNow() => _write(
-    AppStateCompanion(
-      subscriptionStatus: const Value('trial'),
-      trialStart: Value(DateTime.now().toUtc()),
-    ),
-  );
+  Future<void> startTrialNow() async {
+    final zone = await _db.familyZoneId();
+    await _write(
+      AppStateCompanion(
+        subscriptionStatus: const Value('trial'),
+        trialStart: Value(DateTime.now().toUtc()),
+        trialStartTz: Value(zone),
+      ),
+    );
+  }
 
   /// Re-reads the `app_state` row immediately. The stream subscription
   /// delivers updates asynchronously, so launch code (seed → route) calls
