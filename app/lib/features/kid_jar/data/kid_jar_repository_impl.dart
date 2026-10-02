@@ -1,6 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_database.dart';
-import 'package:nestling/core/data/london_time.dart';
+import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/data/stream_combine.dart';
 import 'package:nestling/features/kid_jar/domain/entities/jar_entry.dart';
@@ -25,7 +25,16 @@ class KidJarRepositoryImpl implements KidJarRepository {
   }
 
   Stream<List<JarEntry>> _entries(String childId) {
-    return _db.watchLedger(childId).map((rows) => rows.map(_toEntity).toList());
+    // History renders in each row's stored zone (named when the family
+    // moved); the stream re-emits when the family zone changes.
+    return combineLatest2(
+      _db.watchLedger(childId),
+      _db.watchFamilyZoneId(),
+    ).map(
+      (parts) => (parts[0] as List<LedgerEntry>)
+          .map((row) => _toEntity(row, normalizeZoneId(parts[1] as String)))
+          .toList(),
+    );
   }
 
   @override
@@ -66,6 +75,7 @@ class KidJarRepositoryImpl implements KidJarRepository {
     required int amountPence,
   }) async {
     final now = DateTime.now().toUtc();
+    final zone = await _db.familyZoneId();
     await _db.transaction(() async {
       await _db
           .into(_db.ledgerEntries)
@@ -77,6 +87,7 @@ class KidJarRepositoryImpl implements KidJarRepository {
               amountPence: amountPence.abs(),
               note: const Value('Jar → savings goal'),
               date: Value(now),
+              dateTz: Value(zone),
             ),
           );
       final goal = await (_db.select(
@@ -94,11 +105,11 @@ class KidJarRepositoryImpl implements KidJarRepository {
     });
   }
 
-  JarEntry _toEntity(LedgerEntry row) {
+  JarEntry _toEntity(LedgerEntry row, String familyZone) {
     return JarEntry(
       id: '${row.id}',
       title: row.note.isEmpty ? row.type : row.note,
-      detail: formatLondonDay(row.date),
+      detail: formatDay(row.date, row.dateTz, familyZoneId: familyZone),
       type: row.type,
       amountPence: row.amountPence,
       date: row.date,

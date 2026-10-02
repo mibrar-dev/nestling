@@ -1,6 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_database.dart';
-import 'package:nestling/core/data/london_time.dart';
+import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/data/stream_combine.dart';
 import 'package:nestling/features/approvals/domain/approvals_repository.dart';
@@ -17,10 +17,11 @@ class ApprovalsRepositoryImpl implements ApprovalsRepository {
 
   @override
   Stream<List<Approval>> watchItems() {
-    return combineLatest3(
+    return combineLatest4(
       _db.watchPendingApprovals(Seed.familyId),
       _db.select(_db.quests).watch(),
       _db.watchChildren(Seed.familyId),
+      _db.watchFamilyZoneId(),
     ).map((parts) {
       final pending = parts[0] as List<QuestCompletion>;
       final quests = <String, Quest>{
@@ -29,6 +30,9 @@ class ApprovalsRepositoryImpl implements ApprovalsRepository {
       final kids = <String, ChildrenData>{
         for (final k in parts[2] as List<ChildrenData>) k.id: k,
       };
+      // History renders in each row's stored zone; when the family moved,
+      // the zone is named so "Sat 3 Oct (London)" stays unambiguous.
+      final familyZone = normalizeZoneId(parts[3] as String);
       return pending.map((c) {
         final quest = quests[c.questId];
         final kid = kids[c.childId];
@@ -38,7 +42,8 @@ class ApprovalsRepositoryImpl implements ApprovalsRepository {
           title: title,
           detail:
               '${kid?.nickname ?? 'Child'} · '
-              '${formatLondonDay(c.createdAt)} ${formatLondonTime(c.createdAt)}',
+              '${formatDay(c.createdAt, c.createdAtTz, familyZoneId: familyZone)} '
+              '${formatTime(c.createdAt, c.createdAtTz, familyZoneId: familyZone)}',
           completionId: c.id,
           questId: c.questId,
           questTitle: title,
@@ -59,6 +64,7 @@ class ApprovalsRepositoryImpl implements ApprovalsRepository {
     )..where((c) => c.id.equals(completionId))).getSingleOrNull();
     if (completion == null || completion.status != 'done_pending') return;
     final now = DateTime.now().toUtc();
+    final zone = await _db.familyZoneId();
     await _db.transaction(() async {
       await (_db.update(
         _db.questCompletions,
@@ -66,6 +72,7 @@ class ApprovalsRepositoryImpl implements ApprovalsRepository {
         QuestCompletionsCompanion(
           status: const Value('approved'),
           decidedAt: Value(now),
+          decidedAtTz: Value(zone),
         ),
       );
       final quest = await (_db.select(
@@ -81,19 +88,22 @@ class ApprovalsRepositoryImpl implements ApprovalsRepository {
               amountPence: completion.coins,
               note: Value(quest?.title ?? 'Quest'),
               date: Value(now),
+              dateTz: Value(zone),
             ),
           );
     });
   }
 
   @override
-  Future<void> markNotYet(int completionId) {
-    return (_db.update(
+  Future<void> markNotYet(int completionId) async {
+    final zone = await _db.familyZoneId();
+    await (_db.update(
       _db.questCompletions,
     )..where((c) => c.id.equals(completionId))).write(
       QuestCompletionsCompanion(
         status: const Value('not_yet'),
         decidedAt: Value(DateTime.now().toUtc()),
+        decidedAtTz: Value(zone),
       ),
     );
   }

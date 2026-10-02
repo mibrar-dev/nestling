@@ -55,6 +55,7 @@ class KidShopRepositoryImpl implements KidShopRepository {
     if (reward == null) return;
     final status = reward.needsOk ? 'requested' : 'approved';
     final now = DateTime.now().toUtc();
+    final zone = await _db.familyZoneId();
     await _db.transaction(() async {
       await _db
           .into(_db.rewardRedemptions)
@@ -65,6 +66,7 @@ class KidShopRepositoryImpl implements KidShopRepository {
               familyId: Seed.familyId,
               status: Value(status),
               createdAt: Value(now),
+              createdAtTz: Value(zone),
             ),
           );
       if (!reward.needsOk) {

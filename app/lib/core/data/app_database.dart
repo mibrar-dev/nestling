@@ -1,7 +1,11 @@
 // Nestling — local-only database (Drift + SQLite).
 //
 // One [AppDatabase] owns every table the 30 screens need. Money is integer
-// pence; every timestamp is UTC (display via `london_time.dart`).
+// pence; every event instant is stored as a UTC [DateTime] plus the IANA
+// zone id in force when it was written (`…_tz`, e.g. `createdAtTz`).
+// Calendar rules (daily/weekly periods, payout weekday, `dueTimeLocal`
+// `HH:MM`) are floating local rules evaluated in `families.time_zone`
+// (see `family_time.dart`).
 //
 // Conventions shared with screen agents:
 // * `family_id` is `'fam1'` in every seed; queries default to it.
@@ -9,6 +13,8 @@
 // * Ledger `type`: `weekly_base | quest_bonus | gift | spend | payout |
 //   savings_move`. Amounts are signed pence (`payout`/`spend` negative).
 // * `app_state` has exactly one row (`id = 1`).
+// * History renders in its stored `…_tz` zone; "today / this week / payout
+//   day / due" use the CURRENT `families.time_zone`.
 
 import 'dart:io';
 
@@ -30,6 +36,14 @@ class Families extends Table {
   // weekly | per_quest | both.
   TextColumn get pocketMoneyMode =>
       text().withDefault(const Constant('both'))();
+  // IANA zone id for floating calendar rules (schema v2). Never a fixed
+  // offset. London default; see `family_time.dart`.
+  TextColumn get timeZone =>
+      text().withDefault(const Constant('Europe/London'))();
+  // Last family/settings update instant (UTC) + the zone in force then.
+  DateTimeColumn get updatedAt => dateTime().nullable()();
+  TextColumn get updatedAtTz =>
+      text().withDefault(const Constant('Europe/London'))();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -91,6 +105,9 @@ class Quests extends Table {
   // CSV of 1..7 (Mon..Sun); empty = no fixed days.
   TextColumn get days => text().withDefault(const Constant(''))();
   TextColumn get dueLabel => text().nullable()();
+  // Floating local due time `HH:MM` (e.g. `17:00` = "before tea 5pm"),
+  // evaluated in `families.time_zone`. Null = no fixed time.
+  TextColumn get dueTimeLocal => text().nullable()();
   BoolColumn get needsApproval => boolean().withDefault(const Constant(true))();
   // Null = "Anyone".
   TextColumn get assigneeChildId => text().nullable()();
@@ -110,7 +127,12 @@ class QuestCompletions extends Table {
   // Coin snapshot at completion time.
   IntColumn get coins => integer().withDefault(const Constant(0))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  // IANA zone id in force when the row was written (schema v2).
+  TextColumn get createdAtTz =>
+      text().withDefault(const Constant('Europe/London'))();
   DateTimeColumn get decidedAt => dateTime().nullable()();
+  TextColumn get decidedAtTz =>
+      text().withDefault(const Constant('Europe/London'))();
 }
 
 class LedgerEntries extends Table {
@@ -123,6 +145,9 @@ class LedgerEntries extends Table {
   IntColumn get amountPence => integer()();
   TextColumn get note => text().withDefault(const Constant(''))();
   DateTimeColumn get date => dateTime().withDefault(currentDateAndTime)();
+  // IANA zone id in force when the row was written (schema v2).
+  TextColumn get dateTz =>
+      text().withDefault(const Constant('Europe/London'))();
 }
 
 class SavingsGoals extends Table {
@@ -157,6 +182,9 @@ class RewardRedemptions extends Table {
   // requested | approved | denied.
   TextColumn get status => text().withDefault(const Constant('requested'))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  // IANA zone id in force when the row was written (schema v2).
+  TextColumn get createdAtTz =>
+      text().withDefault(const Constant('Europe/London'))();
 }
 
 class Badges extends Table {
@@ -176,6 +204,9 @@ class EarnedBadges extends Table {
   TextColumn get childId => text().references(Children, #id)();
   TextColumn get familyId => text().references(Families, #id)();
   DateTimeColumn get earnedAt => dateTime().withDefault(currentDateAndTime)();
+  // IANA zone id in force when the row was written (schema v2).
+  TextColumn get earnedAtTz =>
+      text().withDefault(const Constant('Europe/London'))();
 
   @override
   List<String> get customConstraints => <String>['UNIQUE(badge_id, child_id)'];
@@ -209,6 +240,13 @@ class Settings extends Table {
       boolean().withDefault(const Constant(false))();
   BoolColumn get kidGateEnabled =>
       boolean().withDefault(const Constant(true))();
+  // Mirror of `families.time_zone` so rule reads never join (schema v2).
+  TextColumn get timeZone =>
+      text().withDefault(const Constant('Europe/London'))();
+  // Last settings update instant (UTC) + the zone in force then.
+  DateTimeColumn get updatedAt => dateTime().nullable()();
+  TextColumn get updatedAtTz =>
+      text().withDefault(const Constant('Europe/London'))();
 
   @override
   Set<Column> get primaryKey => {familyId};
@@ -222,6 +260,9 @@ class AppState extends Table {
   TextColumn get subscriptionStatus =>
       text().withDefault(const Constant('trial'))();
   DateTimeColumn get trialStart => dateTime().nullable()();
+  // IANA zone id in force when the trial started (schema v2).
+  TextColumn get trialStartTz =>
+      text().withDefault(const Constant('Europe/London'))();
   TextColumn get activeChildId => text().nullable()();
   // parent | kid.
   TextColumn get appMode => text().withDefault(const Constant('parent'))();
@@ -271,22 +312,46 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
-  /// Guarantees the single `app_state` row (id 1) exists. A real first
-  /// install has no seed, and repositories update `WHERE id = 1`, so without
-  /// this every onboarding/trial/mode write was silently dropped (P01 BUG-4).
-  ///
-  /// Also guarantees the `fam1` family + settings rows (P04 first-run bug):
-  /// P04 is the first onboarding screen that writes a setting and both
-  /// repositories issue `UPDATE settings WHERE family_id = 'fam1'`, which
-  /// matches zero rows on a real first launch and silently drops the parent's
-  /// choice. `crashReportConsent` keeps its table default (OFF, ICO rule).
-  /// `'fam1'` mirrors `Seed.familyId` (kept a literal: `seed.dart` imports
-  /// this file, so importing it back would be a cycle).
+  /// v1 → v2: every event instant gains a `…_tz` zone column, `families`
+  /// (+ `settings` mirror) gains `time_zone`, and `quests` gains the
+  /// floating `due_time_local` rule. New `NOT NULL … DEFAULT
+  /// 'Europe/London'` columns backfill existing rows to London, so a
+  /// family that never moves sees byte-identical behaviour.
   @override
   MigrationStrategy get migration => MigrationStrategy(
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        await m.addColumn(families, families.timeZone);
+        await m.addColumn(families, families.updatedAt);
+        await m.addColumn(families, families.updatedAtTz);
+        await m.addColumn(quests, quests.dueTimeLocal);
+        await m.addColumn(questCompletions, questCompletions.createdAtTz);
+        await m.addColumn(questCompletions, questCompletions.decidedAtTz);
+        await m.addColumn(ledgerEntries, ledgerEntries.dateTz);
+        await m.addColumn(rewardRedemptions, rewardRedemptions.createdAtTz);
+        await m.addColumn(earnedBadges, earnedBadges.earnedAtTz);
+        await m.addColumn(settings, settings.timeZone);
+        await m.addColumn(settings, settings.updatedAt);
+        await m.addColumn(settings, settings.updatedAtTz);
+        await m.addColumn(appState, appState.trialStartTz);
+      }
+    },
     beforeOpen: (details) async {
+      // Guarantees the single `app_state` row (id 1) exists. A real first
+      // install has no seed, and repositories update `WHERE id = 1`, so
+      // without this every onboarding/trial/mode write was silently dropped
+      // (P01 BUG-4).
+      //
+      // Also guarantees the `fam1` family + settings rows (P04 first-run
+      // bug): P04 is the first onboarding screen that writes a setting and
+      // both repositories issue `UPDATE settings WHERE family_id = 'fam1'`,
+      // which matches zero rows on a real first launch and silently drops
+      // the parent's choice. `crashReportConsent` keeps its table default
+      // (OFF, ICO rule). `'fam1'` mirrors `Seed.familyId` (kept a literal:
+      // `seed.dart` imports this file, so importing it back would be a
+      // cycle). New rows pick up the London `time_zone` table defaults.
       await into(appState).insert(
         const AppStateCompanion(id: Value(1)),
         mode: InsertMode.insertOrIgnore,
@@ -303,6 +368,29 @@ class AppDatabase extends _$AppDatabase {
   );
 
   // -- Streams shared by repositories -------------------------------------
+
+  /// Current family zone id (`families.time_zone`, London fallback for
+  /// missing/unknown values). Calendar rules ("today", "this week", payout
+  /// day) are evaluated in this zone; see `family_time.dart`.
+  Future<String> familyZoneId([String familyId = 'fam1']) async {
+    final row = await (select(
+      families,
+    )..where((f) => f.id.equals(familyId))).getSingleOrNull();
+    final stored = row?.timeZone;
+    if (stored == null || stored.isEmpty) return 'Europe/London';
+    return stored;
+  }
+
+  /// Live stream of the family zone id (London fallback, as above).
+  Stream<String> watchFamilyZoneId([String familyId = 'fam1']) {
+    return (select(
+      families,
+    )..where((f) => f.id.equals(familyId))).watchSingleOrNull().map((row) {
+      final stored = row?.timeZone;
+      if (stored == null || stored.isEmpty) return 'Europe/London';
+      return stored;
+    });
+  }
 
   Stream<List<ChildrenData>> watchChildren(String familyId) {
     return (select(children)

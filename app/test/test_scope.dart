@@ -65,3 +65,19 @@ String currentPath(WidgetTester tester) {
   final context = tester.element(find.byType(Navigator).first);
   return GoRouter.of(context).routerDelegate.currentConfiguration.uri.path;
 }
+
+/// The location of the top-most rendered route — [currentPath] plus any
+/// imperatively pushed route (`GoRouter.push`).
+///
+/// `RouteMatchList.uri` deliberately excludes `ImperativeRouteMatch`s (see
+/// go_router `match.dart`), so after a `push` [currentPath] still reports the
+/// declarative location it pushed from. `GoRouter.state` is built from the
+/// full match list and therefore reflects what the Navigator actually renders.
+///
+/// Assertions on a pushed screen MUST use this helper and never the view's
+/// title text: screen agents replace placeholder views, but they must not
+/// change the route path.
+String pushedPath(WidgetTester tester) {
+  final context = tester.element(find.byType(Navigator).first);
+  return GoRouter.of(context).state.uri.path;
+}
