@@ -1,281 +1,247 @@
-# P01 Welcome — QA code review (Stage 4, iteration 2)
+# P01 Welcome — QA code review (Stage 4, iteration 3)
 
-Scope: `git diff main` (the branch's five commits **plus** six uncommitted
-files) = `app/lib/features/onboarding/presentation/views/welcome_view.dart`,
-three files under `app/test/features/onboarding/`, and `docs/screens/P01/**`.
-No code was edited during this review; one temporary probe test was created,
-run and deleted (tree verified clean afterwards).
+> ## ⚠️ ORCHESTRATOR ACTION REQUIRED (not a screen defect — P01 needs no change)
+>
+> `ORCHESTRATOR_NOTES.md` item 5 asks the branch to assert "**CTA top identical**
+> with bottomInset 0 vs 34". The enforced proof asserts the opposite of
+> "identical" — `p01_bugs_test.dart:96` expects `baselineTop - 34` — because
+> `NestBottomCta` reserves exactly the OS inset (measured: 672.0 → 638.0, a
+> clean −34). The item's *intent* ("i.e. inset counted once") **is** satisfied,
+> and design parity is confirmed on the reference device (stage-5 iteration 2:
+> primary top 656.7 = design 656.7, band 6 0.39%). "Identical" is reachable only
+> with a `max(viewPadding.bottom, NestDevice.homeH)` floor in the shared
+> component — already filed as non-blocking `SHARED_REQUEST.md` item 2.
+> **Pick one:** (a) amend item 5 to the shipped contract, or (b) land the floor
+> and flip the proof to `closeTo(baselineTop, 1)` in the same commit. Neither is
+> in P01's RULES §1 scope, so the screen cannot resolve it. Finding 1 below.
 
-Mandatory inputs applied: `ORCHESTRATOR_NOTES.md` (both items) and the
-orchestrator rules in the stage brief (PipAvatar for Pip, status bar, data over
-mocks).
+Scope: `git diff main` (branch commits + 6 uncommitted files) =
+`app/lib/features/onboarding/presentation/views/welcome_view.dart`,
+three files under `app/test/features/onboarding/`, `docs/screens/P01/**`.
+No code was edited in this stage; one temporary probe test was created, run and
+deleted (tree verified clean).
 
-## Verification run by this stage (all first-hand, `app/`)
+## Verification (first-hand, `app/`)
 
-| Check | Command | Result |
-|---|---|---|
-| Format | `dart format --output=none --set-exit-if-changed .` | 342 files, 0 changed — clean |
-| Analyze | `flutter analyze` | `No issues found!` (3.2s) |
-| Feature tests | `flutter test test/features/onboarding` | `+45 ~2: All tests passed!` |
-| Full suite | `flutter test` | `+334 ~2: All tests passed!` (0 failed, 2 skipped) |
-| Isolation | `git diff main --name-only` | only RULES §1 paths (see below) |
-| BUG-2 / BUG-4 reality probe | temporary test, now deleted | see findings 1–2 |
+| Check | Result |
+|---|---|
+| `dart format --output=none --set-exit-if-changed .` | 342 files, 0 changed — clean |
+| `flutter analyze` | `No issues found!` (3.2s) |
+| `flutter test test/features/onboarding` | all pass, **0 skipped** |
+| `flutter test` (full suite) | **`+355: All tests passed!`** — 0 failed, **0 skipped anywhere in the repo** |
+| Isolation (`git diff main --name-only`) | only RULES §1 paths (view + 3 feature test files + `docs/screens/P01/**`) |
+| Headline-metric probe | temporary, deleted — see finding 2 |
 
-Skips in the branch: exactly two, both in
-`app/test/features/onboarding/p01_bugs_test.dart` (`skip: true` at lines 106
-and 189). One of them is now unjustified — finding 1.
-
-**The product code is in good shape.** Every iteration-1 finding and both
-P01-owned bugs are fixed and pinned by passing tests, the mandatory Pip rule is
-implemented and verified, and the suite is green. The single blocker-class item
-left is test/doc hygiene around a shared fix that has already landed.
+Every bug proof from stage 6 is now **enforced and passing** (`BUG-1`, `BUG-2`,
+`BUG-3`, `BUG-3b`, `BUG-4`, `BUG-5`); the last two shared defects (kid-mode
+gate, first-install persistence) were fixed on `main` (`71d2400`/`ded8eb9`,
+`045d190`) and their proofs rewritten to the shipped contract.
 
 ---
 
 ## Findings
 
-### 1. MAJOR — BUG-2's proof is left `skip: true` even though its shared fix landed in this branch, and its assertion is now the *inverse* of the shipped contract
+### 1. MINOR — mandatory note item 5's wording contradicts the enforced BUG-2 proof (owner: orchestrator)
 
-**Where:** `app/test/features/onboarding/p01_bugs_test.dart:83-107`
-(`skip: true` at :106; stale premise in the header comment at :1-18), and the
-same stale claim in `docs/screens/P01/2_build.md:52`,
-`docs/screens/P01/3_test.md:77-83` and `docs/screens/P01/SHARED_REQUEST.md:16-21`
-("the bottom inset is counted twice", "Blocks: yes for item 2").
+**Where:** `docs/screens/P01/ORCHESTRATOR_NOTES.md:6` (item 5) vs
+`app/test/features/onboarding/p01_bugs_test.dart:82-108`
+(`expect(insetTop, closeTo(baselineTop - 34, 1))` at :96).
 
-main's `763192d` (merged here via `ac1b217`) fixed it:
-`nest_chrome.dart:222-225` now returns `SizedBox.shrink()` from
-`NestHomeIndicator` unless `NestStatusBar.showMockGlyphs` (gallery only), so the
-OS bottom inset is consumed exactly once, by `NestBottomCta`'s `SafeArea`.
+The note says to assert "CTA top **identical** with bottomInset 0 vs 34 … i.e.
+inset counted once", and glosses "counted once" as *identical*. Under
+`NestBottomCta`'s plain `SafeArea(top: false)` those are not the same thing: a
+passthrough inset necessarily moves the block up by the inset (probe: 672.0 at
+inset 0, 638.0 at inset 34, exactly −34), and the note's own "identical"
+wording is inherited from a misreading of iteration-2 finding 1, which quoted
+`baselineTop - 34`.
 
-I measured the shipped behaviour with a temporary probe (deleted):
+The enforced proof is the accurate description of the shipped, design-verified
+behaviour, and it also pins the two things that matter: the CTA surface ends
+34dp above the screen edge with a 34dp inset (:97-100) and the app home
+indicator is a no-op (:101-105). I keep this **minor** rather than major
+because: the item's stated intent is met, the screen's product state is
+verified against the design on the reference device, and the "identical"
+variant is not reachable from P01's edit scope — `NestBottomCta` is `core/**`
+(RULES §1), and a local `MediaQuery`/`Padding` workaround would re-implement
+the safe-area logic the component owns and would double-reserve once the floor
+lands.
 
-```
-PROBE baseline inset=0: primary=Rect.fromLTRB(20.0, 672.0, 370.0, 724.0)
-PROBE inset=34:        primary=Rect.fromLTRB(20.0, 638.0, 370.0, 690.0)
-PROBE delta top = -34.0        (the proof asserts ≈ 0)
-```
+**Concrete fix (orchestrator, one line):** amend item 5 to "assert the shipped
+contract: with a 34dp inset the CTA block moves up exactly 34 and its surface
+ends 34dp above the screen edge", or land `max(viewPadding.bottom,
+NestDevice.homeH)` in `nest_bottom_cta.dart` (symmetric with `NestStatusBar`'s
+`max(viewPadding.top, NestDevice.statusH)`, which `SHARED_REQUEST.md` item 2
+already asks for) and change :96 to `closeTo(baselineTop, 1)` in the same
+commit. If the floor lands, also drop finding 4 below.
 
-The defect is gone — with a 34dp inset the CTA block moves up exactly 34dp
-(so it is never overlapped by the OS indicator), and on the 390×844 simulator
-that is the stage-5 drift closing: primary top 623.3 + 34 ≈ 657.3 vs the
-design's 656.7. The proof now fails for the wrong reason: it encodes the
-*pre-fix* contract ("the CTA never moves"), so it would fail even though the
-product is correct.
+### 2. MINOR — the headline-break test is vacuous; the design break is only verifiable with real fonts
 
-**Why this is more than cosmetic:** the only guard on bottom-inset geometry in
-the branch is dead; the notes and the SHARED_REQUEST tell the orchestrator a
-fixed bug is still open, which invites a second, redundant change to shared
-CTA code; and if someone "completes" the fix by deleting the `skip:` marker
-they get a red test and a reason to delete the assertion altogether. The stage
-brief also forbids shipping skipped tests.
+**Where:** `app/test/features/onboarding/welcome_view_test.dart:194-212`,
+assertion at :209.
 
-**Concrete fix (P01-owned, ~10 min):** rewrite the invariant to the contract
-that now holds and unskip. In `p01_bugs_test.dart:83-107` replace the
-`closeTo(baselineTop, 1)` assertion with:
+`expect(headlineSize.width, lessThanOrEqualTo(300.0 + 0.001))` re-asserts the
+`ConstrainedBox`'s own width, so it passes for *any* cap value — including one
+that fails to force the design's break. It cannot detect the regression it
+names. The reason is environmental, and I measured it: in `flutter test` the
+display style resolves to `Nunito_900` → the monospace test fallback, ~33.7pt
+per glyph, i.e. "Chores that feel" measures 538.6 and the full headline 976.1 —
+roughly 2.2× real Nunito, where "Chores that feel" is ≈250pt. A widget test
+therefore cannot measure the design's line break at all.
 
-```dart
-// The OS inset is counted exactly once: NestBottomCta's SafeArea owns it and
-// NestHomeIndicator no longer reserves 34 (main 763192d), so with a 34dp
-// inset the whole CTA block moves up by exactly 34 and its bottom edge lands
-// 34dp above the screen bottom.
-expect(insetTop, closeTo(baselineTop - 34, 1));
-expect(tester.getBottomRight(find.text('Made in the UK · No ads, ever')).dy,
-    closeTo(844 - 34 - NestSpacing.s4, 1));
-```
+**Concrete fix:** stop pretending the assertion guards the break. Either
+(a) delete :209 and state in the test's comment that the break is owned by the
+stage-5 band check (`band 4`), or (b) make it metric-conditional once fonts are
+bundled (SHARED_REQUEST item 1 — with Inter/Nunito as real assets the fallback
+disappears and a `TextPainter`-based assertion becomes valid:
+`expect(_width('Chores that feel like'), greaterThan(300))` **and**
+`expect(_width('Chores that feel'), lessThanOrEqualTo(300))`).
+Note the 12 width × scale × theme tests remain a valid, in fact *conservative*,
+overflow gate — the test font is far wider than Nunito, so wrapping there is
+harder than in the app.
 
-then delete the `skip: true` marker and the "BUG-2: bottom safe inset +
-NestHomeIndicator double-counted" comment. Verify with
-`flutter test test/features/onboarding/p01_bugs_test.dart --plain-name 'BUG-2'`
-(passes) and re-run the full suite. Then correct `3_test.md:77-83` and
-`SHARED_REQUEST.md:16-21` to record BUG-2 as **fixed on main** (with the
-measured −34 evidence) so the orchestrator does not touch
-`core/design_system/components/nest_bottom_cta.dart` again.
+### 3. MINOR — `1_plan.md` still prescribes the uncapped headline
 
-### 2. MINOR — SHARED_REQUEST item 2 is stale after `763192d`; the real remaining gap is narrower (and is still a genuine product bug)
+**Where:** `docs/screens/P01/1_plan.md:44-45` (and §a generally).
 
-**Where:** `docs/screens/P01/SHARED_REQUEST.md:22-27` (says
-"`AppSession._write` … only UPDATE[s] it"), `docs/screens/P01/3_test.md:84-89`.
+The plan specifies a bare `Text(... style: context.nestText.display)` with
+`softWrap: true` and no measure cap, which `ORCHESTRATOR_NOTES.md` item 3
+mandates away (`welcome_view.dart:236-237`). A later agent reading the plan
+first could "restore" the plan and silently reintroduce the deviation the
+orchestrator explicitly asked to be fixed.
 
-`AppSession._write` now upserts (`app/lib/core/data/app_session.dart:61-72`,
-plus a new shared regression test `app/test/core/app_session_fresh_install_test.dart`).
-My probe shows what is *still* broken:
+**Concrete fix:** add one line to `1_plan.md` §a: "superseded by
+`ORCHESTRATOR_NOTES.md` item 3 — the headline is wrapped in
+`ConstrainedBox(maxWidth: 300)` to reproduce the HTML's `text-wrap: balance`
+break; never a hard `\n`."
 
-```
-PROBE before:                        onboardingComplete=false
-PROBE after repo.completeOnboarding: onboardingComplete=false
-PROBE app_state row after repo write: null
-PROBE after session.completeOnboarding: onboardingComplete=true
-```
+### 4. MINOR — `2_build.md` misstates the final state of the branch
 
-So the surviving defect is that the **feature repositories write directly**:
-`features/onboarding/data/onboarding_repository_impl.dart:24-28`
-(`completeOnboarding`) and `features/paywall/data/paywall_repository_impl.dart`
-(`startTrial` / `activate`) still `UPDATE … WHERE id = 1` with no
-insert-if-missing, and nothing bootstraps row 1 at DB open.
+**Where:** `docs/screens/P01/2_build.md:26-28` and `:53-56`.
 
-**Fix:** narrow item 2 to exactly that (drop the `AppSession._write` clause),
-and state the two acceptable resolutions: insert-if-missing in
-`MigrationStrategy.beforeOpen` (preferred — fixes every writer at once), or an
-upsert in each repository. Keep it in SHARED_REQUEST rather than fixing it
-here: the root cause is `core/data`, the same defect exists in the paywall
-feature (outside §1), and patching only P01's repository would leave two
-divergent write paths. The proof in `p01_bugs_test.dart:157-190` correctly
-stays skipped until then.
+It records "BUG-4 — stays skipped, still reproduces, filed" and
+"353 passed, 1 skipped". Both were true when written and are now wrong:
+`045d190` (`beforeOpen` insert-if-missing) landed, `p01_bugs_test.dart:157-…`
+was rewritten to the shipped contract and un-skipped, and the suite is
+`+355: All tests passed!` with **zero** skips. `3_test.md` and
+`SHARED_REQUEST.md` are already correct and consistent, so only the build note
+is stale.
 
-### 3. MINOR — BUG-4 is still product-blocking for the onboarding flow (shared, correctly deferred, but it is the last thing between P01 and a working first launch)
+**Concrete fix:** update those lines to "BUG-4 — fixed on main (`045d190`);
+proof rewritten and enforced, passing" and "`+355: All tests passed!`, 0
+skipped".
 
-**Where:** same code as finding 2. Consequence: on a release first launch (no
-`SEED` flag) the user completes onboarding, the write affects 0 rows, and the
-router sends them back to `/welcome` on every restart — P01 is the screen that
-loops.
+### 5. RETRACTED — explicit `skin`/`mood` on `PipAvatar` (iteration-2 finding 5): the decline was correct
 
-Not a P01 defect: P01 never calls `completeOnboarding()` (plan §b — completion
-belongs to P06/P07), and the fix is shared. The skip at
-`p01_bugs_test.dart:189` is legitimate on the brief's "never skip tests" rule
-because it asserts shared behaviour outside §1, is committed with a repro, and
-is tracked in SHARED_REQUEST. **Requirement:** whoever lands the shared fix must
-unskip it in the same change (and it should then pass). Keep the loop from
-re-litigating this each iteration — it is filed, not forgotten.
+I asked for `PipAvatar(style: mochi, skin: sunny, mood: idle, stage: 2)`. The
+build stage declined and documented why; I verified both claims and **my
+finding was wrong**:
 
-### 4. MINOR — `NestHomeIndicator()` in the P01 column is now a no-op, so the design's fixed 34pt bottom band exists only when the OS reports an inset
+- `skin: PipSkin.sunny` equals the parameter default
+  (`pip_avatar.dart:235`), and `avoid_redundant_argument_values` is enabled
+  through `include: package:very_good_analysis/analysis_options.yaml`
+  (`app/analysis_options.yaml:1`; the rule is listed in
+  `very_good_analysis-11.0.0/lib/analysis_options.10.2.0.yaml:45`), so the
+  argument would fail `flutter analyze` — a RULES §7.1 gate.
+- `PipMood` is declared twice: `pip_avatar.dart:43` and `pip_rive.dart:50`,
+  and the DS barrel exports `pip_rive.dart`
+  (`design_system.dart:35`) while the view imports `pip_avatar.dart`
+  directly (`welcome_view.dart:7`) — an unqualified `PipMood.idle` is an
+  ambiguous reference, i.e. a compile error.
 
-**Where:** `welcome_view.dart:48`.
+Keeping the defaults is correct, the rationale is now in the code
+(`welcome_view.dart:146-152`), and the resolved values are pinned by
+`welcome_view_test.dart:276-279` (style/skin/mood/stage) plus the still-frame
+and slot geometry. No change. (The underlying barrel collision is a shared
+naming wart worth a `hide`/`show` or a prefix in the barrel — out of scope,
+non-blocking, not filed since it does not affect behaviour.)
 
-With the shared fix, that child is `SizedBox.shrink()` in the app. On a
-home-indicator device the 34pt band comes from `SafeArea` (correct, and it
-matches the design). On an inset-0 device (390pt Android with gesture nav,
-iPhone SE-class) the CTA block sits flush with the screen edge — 34pt lower
-than the design's band, because `NestBottomCta` has no
-`max(viewPadding.bottom, NestDevice.homeH)` floor the way `NestStatusBar` has
-`max(viewPadding.top, NestDevice.statusH)`. Keeping the widget is harmless and
-self-documenting, so no P01 code change is required.
+### 6. INFO — mandatory note 3 is implemented but not yet visually confirmed
 
-**Fix (shared, low priority):** add the symmetric floor in
-`nest_bottom_cta.dart` — `padding: EdgeInsets.only(bottom: max(inset, NestDevice.homeH))`
-— or accept the divergence as part of the orchestrator's "the OS draws the
-chrome" rule and say so in the design spec. Either way, **stage 5 must re-run
-`shot.sh` + `compare.py` on a 390×844 simulator (real 34pt inset)**: the
-existing `ui/*.png` were captured before `763192d` and before the
-`PipAvatar` swap, so bands 4–7 of the filed comparison are stale.
+`ConstrainedBox(maxWidth: 300)` (`welcome_view.dart:236-237`) landed *after* the
+filed UI comparison, so `ui/cmp_*_2.png` (light 3.41%, dark 3.31%, band 4 ≈
+5.8% — the headline break) still shows the pre-fix render. The next stage-5 run
+is the gate for the one item the orchestrator called "the ONLY design item
+left": the headline must read `Chores that feel` / `like a game.` at 390dp and
+band 4 should collapse. Everything else is already exact (CTA block 656.7 =
+656.7, body bottom 595.0 vs 593.3, bands 1/3 ≤ 0.70%).
 
-### 5. MINOR — the mandatory Pip rule is met through `PipAvatar` defaults rather than explicit arguments
+### 7. INFO — `_headlineW = 300` is an emulation constant
 
-**Where:** `welcome_view.dart:148` —
-`const PipAvatar(style: PipStyle.mochi, stage: 2)`.
+Flutter has no `text-wrap: balance`, which is what produced the design's
+balanced break in the HTML; a measure cap is the standard workaround and the
+note sanctioned ≈300. No design token exists for a text measure, the value is a
+named constant with a provenance comment (`welcome_view.dart:223-227`), and it
+never hard-codes a colour, font or spacing token. Once fonts are bundled
+(SHARED_REQUEST item 1) the cap can be re-derived from real metrics instead of
+being tuned.
 
-`ORCHESTRATOR_NOTES.md` item 1 mandates `style: mochi, skin: sunny, stage: 2`
-with an idle mood. The defaults are exactly `sunny` / `idle` / `none`
-(`pip_avatar.dart:234-236`) and `welcome_view_test.dart:276-279` pins the four
-resolved values, so behaviour is correct today — this is robustness, not a
-defect: a future change to `PipAvatar`'s default skin would silently change
-the brand Pip on the app's first screen, and only that widget test would catch
-it (a product test failing for a DS default is a confusing signal).
+### 8. INFO — carried, no action
 
-**Fix:** pass `skin: PipSkin.sunny, mood: PipMood.idle` explicitly (still
-`const`), and keep the comment at :146-147.
-
-### 6. INFO — P01's hero Pip now animates where the design PNG is static
-
-`PipAvatar` runs the Rive idle loop on a normal launch (the fallback SVG is
-for reduced motion / missing runtime). RULES §6 is satisfied inside the widget
-(`reduceMotion = MediaQuery.disableAnimations || kDisableAnimations` →
-approved idle still frame, `pip_avatar.dart:389-391, 433-435`), so
-`shot.sh` runs with `DISABLE_ANIMATIONS=1` and the comparison is unaffected.
-No action; do not read a live first frame in stage 5 as drift.
-
-### 7. INFO — carried cosmetics from iteration 1
-
-`Positioned(width/height: 40/34/36)` duplicates the `_SceneCoin(size: …)` and
-`SvgPicture` dimensions (`welcome_view.dart:151-180`); `welcome_view.dart:5`
-still imports `flutter_svg` for the nest and coins (correct — only Pip moved
-off SVG). Both are harmless.
+Rive idle loop vs the static design PNG (§6 compliant by construction inside
+`PipAvatar`; `shot.sh` always passes `DISABLE_ANIMATIONS=1`); `Positioned`
+width/height duplicating `_SceneCoin(size: …)`; `NestHomeIndicator()` now a
+no-op in the app (correct for the reference device — see finding 1 for the
+inset-0 case).
 
 ---
-
-## Iteration-1 findings — disposition (all resolved)
-
-| # | Finding | Status |
-|---|---|---|
-| 1 | blocker: scene cropped below 390dp | **fixed** — `OverflowBox` lays the Stack out at full 350×388 and only paint scales (`welcome_view.dart:98-111`); pinned by `welcome_view_test.dart:582` (`size == Size(350, 388)`, so it cannot be masked by `Clip.none`) and `p01_bugs_test.dart:62-81` |
-| 2 | major: fictional shared-suite failure | **fixed** — request superseded; `router_redirect_test.dart` is route-location based and green |
-| 3 | minor: coin shadow clipped | **fixed** — `Stack(clipBehavior: Clip.none)` (`welcome_view.dart:111`), proof at `p01_bugs_test.dart:192-210` |
-| 4 | minor: first-frame SVGs never pre-cached | filed as SHARED_REQUEST item 3 (non-blocking) |
-| 5 | minor: `350` hard-coded | **fixed** — `_frameW` / `_frameH` with a source comment (`welcome_view.dart:86-90`) |
-| 6 | minor: dead `BlocBuilder` + wrong doc claim | **fixed** — subscription removed; the doc comment now states the route owns the bloc (`:11-17`) |
-| 7 | minor: heading flag unasserted | **fixed** — `welcome_view_test.dart:512` |
-| 8 | minor: Google-Fonts CDN fetch | filed as SHARED_REQUEST item 3 |
-| 9 | minor: cross-feature `auth_routes` import | kept deliberately (plan §c) |
-| 10 | minor: redundant `backgroundColor` | **fixed** — removed; theme owns it |
-| 11 | info: 430dp scene left-aligned | kept (matches `.scene { width: 350px }`) |
-| — | stage-6 process finding 0: stale `9:41` | **fixed** — `welcome_view_test.dart:154-158` now asserts the mock clock is absent and the 47dp reserve is exact |
 
 ## What passed
 
 - **Architecture (docs/ARCHITECTURE.md):** feature-first shape intact; the view
   stays at `features/onboarding/presentation/views/welcome_view.dart`; no bloc
-  subscription, no domain/data edits, no use-case classes; `OnboardingBloc`
+  subscription, no `domain/`/`data/` edits, no use-case classes; `OnboardingBloc`
   remains owned by the route-level `BlocProvider`
   (`onboarding_routes.dart:30-37`) and its `emit.forEach` subscription is
-  closed with the route. Navigation uses route constants, not literals.
-- **Isolation (docs/screens/RULES.md):** `git diff main --name-only` lists only
+  closed with the route; navigation via route constants only.
+- **Isolation (docs/screens/RULES.md):** `git diff main --name-only` =
   `features/onboarding/presentation/**`, `app/test/features/onboarding/**`
-  (3 files) and `docs/screens/P01/**`. `app/lib/core/**`, `app/lib/app/**`,
-  `tools/**` and every other test directory are untouched — the shared fixes
-  arrived via merges of `main` (`71d2400`, `763192d`, both verified as
-  ancestors of `main`), not as edits in this worktree. No `analysis_options`
-  weakening, no deleted or renamed tests.
-- **ORCHESTRATOR_NOTES (mandatory, both items):** item 1 — `PipAvatar` replaces
-  the v1 `pip_stage_2.svg` in the same 168×168 slot at (91,120) with Mochi/sunny
-  stage 2 idle, the v1 asset is asserted absent, the still-frame SVG renders
-  under reduced motion, and the HTML alt text is preserved
-  (`welcome_view_test.dart:258-305`). Item 2 — status-bar differences treated
-  as harness artefacts; the stale `9:41` assertion is gone.
-- **Design system:** every colour, font, spacing and device value still resolves
+  (3 files), `docs/screens/P01/**`. Nothing in `app/lib/core/**`,
+  `app/lib/app/**`, `tools/**` or any other test directory. Every shared fix
+  arrived through merges of `main` (`71d2400`, `763192d`, `ded8eb9`, `e94d063`,
+  `045d190` — all verified ancestors of `main`), not as worktree edits. No
+  `analysis_options` change, no test deleted, renamed, weakened or skipped.
+- **Design system:** every colour, font, spacing and device value resolves
   through `context.nest` / `context.nestText` / `NestSpacing` / `NestType` /
-  `NestDevice` / `NestlingIllustrations` / `PipAvatar`; no hex literals, no
-  hand-built `TextStyle`, no re-implemented components (`NestStatusBar`,
-  `NestBottomCta`, `NestButton` primary + ghost, `NestHomeIndicator`).
-- **Spec parity (DESIGN_SPEC §5 P01, DESIGN_SPEC.md:146):** every element
-  present, in order, with character-exact UK copy ("Chores that feel like a
+  `NestDevice` / `NestlingIllustrations` / `PipAvatar`; zero hex literals, no
+  hand-built `TextStyle`, no re-implemented component (`NestStatusBar`,
+  `NestBottomCta`, `NestButton` primary + ghost, `NestHomeIndicator`,
+  `PipAvatar` all reused).
+- **Spec parity (DESIGN_SPEC §5 P01, `DESIGN_SPEC.md:146`):** every element
+  present and ordered, copy character-exact and UK ("Chores that feel like a
   game." / "…want to finish — and keeps pocket money fair and tidy." /
-  "Made in the UK · No ads, ever"). The only deliberate divergence is the Pip
-  asset, which the orchestrator rules override.
-- **Accessibility:** heading is the first semantic node and its `isHeader` flag
-  is pinned; decorative nest/coins and chrome excluded; the HTML alt text is
-  exposed on the Pip; both CTAs are full-width 52dp ≥ `NestDevice.tapParent`
-  with `isButton`; no overflow across {light, dark} × {320, 390, 430}dp ×
-  {1.0, 1.3} text scale.
+  "Made in the UK · No ads, ever"). The one divergence is the Pip asset, which
+  the orchestrator rules mandate.
+- **ORCHESTRATOR_NOTES:** item 1 — `PipAvatar` in the unchanged 168×168 @ (91,120)
+  slot, v1 SVG asserted absent, idle still frame under reduced motion, HTML alt
+  text preserved. Item 2 — status-bar differences ignored, stale `9:41`
+  assertion gone. Item 3 — cap implemented (`:236-237`), pending visual
+  confirmation (finding 6). Item 4 — home pill / frame instability not chased,
+  correctly. Item 5 — proof un-skipped and enforced; wording conflict is finding 1.
+- **Accessibility:** single heading with `isHeader` pinned; decorative nest,
+  coins and chrome excluded from semantics; the HTML alt text exposed on the
+  Pip; both CTAs full-width 52dp ≥ `NestDevice.tapParent` with `isButton` and
+  no icon-only or kid controls; no overflow across
+  {light, dark} × {320, 390, 430}dp × {1.0, 1.3} scale.
 - **Performance:** `const` throughout the static subtree; no `setState`, no
-  timers, no rebuild storms; the Rive file is loaded once per style through the
-  widget's shared loader and falls back to a still frame when the native
-  decoder is absent; no stream is created by the view.
+  timers, no rebuild storms; the narrow-width fix is a paint transform with a
+  fixed 350×388 layout; the Rive file is loaded once per style behind an FFI
+  capability gate and degrades to a still frame; no stream is created or
+  retained by the view.
 - **Error handling:** identical brand content for `initial`, `loading`,
-  `loaded` (empty and populated) and `failure` — a repository error cannot
+  `loaded` (empty and populated) and `failure`; a repository error can never
   blank the screen.
-- **Children's Code:** no child data, no analytics, ads, tracking or
-  identifiers on the screen; P01 is parent-only and main's `71d2400` now gates
-  the whole onboarding flow in kid mode, with a passing proof
-  (`p01_bugs_test.dart:109-155`) that `/welcome` and `/value-tour` both land
-  on `/parental-gate`. The Pip shown is the mandated onboarding default
+- **Children's Code:** no child data, analytics, ads, tracking or identifiers;
+  P01 is parent-only and the whole onboarding flow is now gated in kid mode,
+  with two enforced proofs that `/welcome` and `/value-tour` both land on
+  `/parental-gate`; the Pip shown is the mandated onboarding default
   (Mochi/sunny), not another family's data.
 
-## For iteration 2 (one focused pass, no product change)
+## Remaining work
 
-1. **Finding 1** — rewrite the BUG-2 proof to the "inset counted exactly once"
-   invariant (assertions above), delete its `skip: true`, and correct
-   `3_test.md:77-83` + `SHARED_REQUEST.md:16-21` to record BUG-2 as fixed on
-   `main` (with the measured −34dp evidence).
-2. **Finding 2** — narrow SHARED_REQUEST item 2 to the repository writers +
-   the missing insert-if-missing bootstrap (drop the `AppSession._write`
-   clause, now fixed by `763192d`).
-3. **Finding 5** — pass `skin: PipSkin.sunny, mood: PipMood.idle` explicitly
-   at `welcome_view.dart:148`.
-4. Gate: `dart format .`, `flutter analyze` → `No issues found!`,
-   `flutter test` → `+335` with **exactly one** remaining skip (the BUG-4
-   shared proof). No other changes; do not re-open the resolved findings.
-5. Re-run stage 5 (`shot.sh` + `compare.py`, light and dark) — the filed
-   `ui/*.png` predate both the `763192d` inset fix and the `PipAvatar` swap, so
-   the band table must be regenerated before this screen can be called
-   visually done (finding 4).
+Screen: **none** — code, tests (0 skips, 355 green), isolation and docs are
+complete. Two cheap follow-ups for whoever picks this up: findings 2 and 4
+(vacuous assertion; stale build note), and finding 1 for the orchestrator
+(note amendment **or** the shared floor). Stage 5 must re-run `shot.sh` +
+`compare.py` (light and dark) to close finding 6 — the last open design item.
 
-VERDICT: FAIL
+VERDICT: PASS

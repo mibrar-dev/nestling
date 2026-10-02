@@ -1,21 +1,18 @@
-// P01 Welcome — adversarial bug proofs (Stage 6, iteration 1; updated in
-// iteration 2).
+// P01 Welcome — adversarial bug proofs (Stage 6, iteration 1; updated through
+// iteration 3).
 //
-// Fixed proofs are un-skipped and enforced: BUG-1 (scene scale), BUG-2 (OS
-// bottom inset counted exactly once, shared fix 763192d), BUG-3 / BUG-3b
-// (kid-mode gate, shared fix 71d2400) and BUG-5 (coin shadow clip). The one
-// remaining shared-code proof stays skipped (`skip: true`) so the suite stays
-// green until the orchestrator lands the shared fix
-// (docs/screens/P01/SHARED_REQUEST.md):
+// All six proofs are un-skipped and enforced; every underlying fix has landed
+// (BUG-2 and BUG-4 now pin the fixed contract, not the old failure):
 //
 //   flutter test test/features/onboarding/p01_bugs_test.dart
 //
-// Details, severity and suggested fixes: docs/screens/P01/6_bugs.md.
+// Details and history: docs/screens/P01/6_bugs.md,
+// docs/screens/P01/SHARED_REQUEST.md.
 //
 // BUG-1  scene crops instead of scaling below 390dp        (welcome_view.dart) fixed
 // BUG-2  system bottom inset counted twice                 (shared NestBottomCta) fixed
 // BUG-3  kid mode opens /welcome + the flow without a gate (shared router.dart) fixed
-// BUG-4  fresh install never persists onboarding completion(shared repos) open
+// BUG-4  fresh install never persists onboarding completion(shared beforeOpen) fixed
 // BUG-5  scene Stack clips the coins' --sh-1 shadow        (welcome_view.dart) fixed
 
 import 'package:flutter/material.dart';
@@ -158,40 +155,72 @@ void main() {
       await disposeApp(tester);
     });
 
-    test(
-      'BUG-4 fresh install never persists onboarding completion',
-      () async {
-        // A release first launch has no SEED flag: no row is ever inserted
-        // into `app_state`.
+    test('BUG-4 fresh install persists onboarding completion', () async {
+      // A release first launch has no SEED flag, but the database now
+      // guarantees the app_state singleton row at open (beforeOpen,
+      // 045d190), so every repository write (UPDATE WHERE id = 1) lands.
+      await GetIt.instance.reset();
+      final db = AppDatabase.memory();
+      await configureDependencies(database: db);
+      final session = GetIt.instance<AppSession>();
+      await session.refresh();
+
+      expect(
+        await (db.select(
+          db.appState,
+        )..where((a) => a.id.equals(1))).getSingleOrNull(),
+        isNotNull,
+        reason: 'the app_state row must exist on a brand-new database',
+      );
+      expect(session.onboardingComplete, isFalse);
+
+      await GetIt.instance<OnboardingRepository>().completeOnboarding();
+      await session.refresh();
+
+      expect(
+        session.onboardingComplete,
+        isTrue,
+        reason:
+            'completeOnboarding must persist on a real first install; '
+            'before the fix the UPDATE affected 0 rows and every restart '
+            'returned the user to /welcome forever',
+      );
+    });
+
+    testWidgets(
+      'BUG-4b fresh install restart lands on Today after onboarding',
+      (tester) async {
+        // End-to-end proof of the regression the bug caused: complete
+        // onboarding through the real repository on an unseeded install, then
+        // "restart" (a fresh NestlingApp on the same DB) — the router must not
+        // send the user back to /welcome.
         await GetIt.instance.reset();
         final db = AppDatabase.memory();
         await configureDependencies(database: db);
         final session = GetIt.instance<AppSession>();
         await session.refresh();
-        expect(session.onboardingComplete, isFalse);
+
+        await pumpAppRoute(tester, '/today');
         expect(
-          await (db.select(
-            db.appState,
-          )..where((a) => a.id.equals(1))).getSingleOrNull(),
-          isNull,
+          currentPath(tester),
+          '/welcome',
+          reason: 'an un-onboarded install must start at the welcome screen',
         );
+        await disposeApp(tester);
 
         await GetIt.instance<OnboardingRepository>().completeOnboarding();
         await session.refresh();
 
+        await pumpAppRoute(tester, '/today');
         expect(
-          session.onboardingComplete,
-          isTrue,
+          currentPath(tester),
+          '/today',
           reason:
-              'AppSession._write and completeOnboarding only UPDATE row 1; '
-              'with no seeded row the update affects 0 rows, so after a '
-              'restart the user is sent back to /welcome forever',
+              'after onboarding completes, a restart must stay on the parent '
+              'app instead of looping back to /welcome',
         );
+        await disposeApp(tester);
       },
-      // BUG-4: fresh install has no app_state singleton row. AppSession is
-      // fixed (763192d), but the feature repositories (onboarding, paywall)
-      // still UPDATE-only and nothing bootstraps row 1 at DB open.
-      skip: true,
     );
 
     testWidgets('BUG-5 scene Stack clips the coins --sh-1 shadow', (

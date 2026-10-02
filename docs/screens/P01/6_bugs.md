@@ -1,144 +1,97 @@
-# P01 Welcome — bug hunt (Stage 6, iteration 2)
+# P01 Welcome — bug hunt (Stage 6, iteration 3)
 
 Adversarial re-test of `/welcome` (parent mode, feature `onboarding`) on
-`screen/P01`, HEAD `773de5e` (main merged through `ded8eb9`; shared fixes
-`763192d` and `71d2400` are ancestors of `main`). The iteration-2 build's
-uncommitted work is in the tree (`welcome_view.dart` + the onboarding tests).
+`screen/P01` at `ca45deb` (main merged through `045d190`). All iteration-1/2
+bugs have landed fixes; this pass re-verified every proof, added an
+end-to-end restart proof for the last one, and re-ran the adversarial probes.
+No new bugs found.
 
-Method this iteration: re-ran every iteration-1 proof against the new code,
-rewrote the BUG-2 proof to the shipped contract and un-skipped it (mandatory
-`ORCHESTRATOR_NOTES.md` item 5 / Stage-4 finding 1), re-ran the adversarial
-probes on the new `PipAvatar`/`OverflowBox` code, and audited the freshly
-merged router gate. Proofs live in
-`app/test/features/onboarding/p01_bugs_test.dart` (5 enforced + 1 skipped).
+Proofs live in `app/test/features/onboarding/p01_bugs_test.dart` — **7 tests,
+0 skips**: BUG-1, BUG-2, BUG-3, BUG-3b, BUG-4, **BUG-4b (new)**, BUG-5.
 
-Gates after this stage: `dart format` 342 files clean · `flutter analyze`
-No issues found · `flutter test test/features/onboarding` **46 passed,
-1 skipped, 0 failed** · full suite **352 passed, 1 skipped, 0 failed**. The
-single skip is the still-reproducing BUG-4 proof (verified failing when
-un-skipped, temporary copy removed).
+Gates: `dart format` 342 files clean · `flutter analyze` No issues found ·
+`flutter test test/features/onboarding` **49 passed, 0 skipped, 0 failed** ·
+full suite **356 passed, 0 skipped, 0 failed** (no skipped test anywhere in
+the repo).
 
 ---
 
-## Resolved and now enforced (verified this iteration)
+## Fixed, enforced and re-verified
 
-### BUG-1 — scene cropped below 390dp → **fixed** (P01-owned)
+| # | Bug | Fix | Proof |
+|---|---|---|---|
+| BUG-1 | Scene cropped, not scaled, below 390dp | `welcome_view.dart:98-111` — `OverflowBox` lays the Stack out at full 350×388, only paint scales | `sceneStack.size == Size(350, 388)`, no paint clip at 320dp; 4 width regressions |
+| BUG-2 | OS bottom inset counted twice | `763192d` — `NestHomeIndicator` no-op, `NestBottomCta`'s `SafeArea` owns the inset once | baseline 672.0 → inset 638.0 (−34), caption bottom 794, indicator 0×0 |
+| BUG-3 / 3b | Kid mode entered the onboarding flow un-gated | `71d2400` + `ded8eb9` — onboarding/parent routes redirect to `/parental-gate` | `/welcome` and `/value-tour` proofs land on the gate |
+| BUG-4 | Fresh install never created the `app_state` row | `045d190` — `MigrationStrategy.beforeOpen` inserts row 1 (`insertOrIgnore`) | row exists on a brand-new DB; `OnboardingRepository.completeOnboarding()` persists (`true` after `refresh`) |
+| BUG-5 | Coin `--sh-1` shadow clipped by the scene Stack | `welcome_view.dart:111` — `Stack(clipBehavior: Clip.none)` | `clipBehavior == Clip.none` |
 
-`welcome_view.dart:98-111`: the outer box reserves `_frameW * scale`, the
-`OverflowBox` lays the `Stack` out at full 350×388 and only paint scales.
-Proofs pass at 320dp (`sceneStack.size == Size(350, 388)`,
-`describeApproximatePaintClip == null`) and the four width regressions
-(320/360/390/430) are green with the stronger size pin.
+### New this iteration — BUG-4b (end-to-end restart proof)
 
-### BUG-2 — OS bottom inset counted twice → **fixed** (shared `763192d`)
+`BUG-4b fresh install restart lands on Today after onboarding`: on an
+unseeded in-memory DB (the release first-launch shape), launch 1 redirects
+`/today` → `/welcome`; the real repository write completes onboarding; a
+second launch (simulated restart, same DB) stays on `/today`. This closes the
+loop the bug caused, which the persistence-only proof could not show on its
+own.
 
-`NestHomeIndicator` is a no-op in the app (`nest_chrome.dart:222-225`) and
-`NestBottomCta`'s `SafeArea` owns the inset exactly once. The proof was
-rewritten to the shipped contract and **un-skipped**
-(`BUG-2 OS bottom inset is counted exactly once`):
-`insetTop == baselineTop − 34`, caption bottom at `844 − 34 − s4`, and
-`NestHomeIndicator` measures 0×0. Measured: baseline primary top 672.0,
-with a 34dp inset 638.0 (delta −34). The Stage-5 simulator drift
-(623.3 → design 656.7) is closed. Do not touch `nest_bottom_cta.dart`.
-
-### BUG-3 / BUG-3b — kid-mode gate bypass → **fixed** (shared `71d2400`)
-
-Onboarding locations are now parent-only; both proofs pass (`/welcome` and
-`/value-tour` land on `/parental-gate`). The follow-up merge `ded8eb9` (P08)
-completed the gate for `/today-empty` and `/quest-editor`, and the shared
-`router_redirect_test.dart` now parameterizes all 17 parent routes — audited:
-every product parent route is gated; only the dev-only `/design-system`
-gallery is open, which is intentional (default boot route for dev).
-
-### BUG-5 — coin `--sh-1` shadow clipped → **fixed** (P01-owned)
-
-`welcome_view.dart:111` is `Stack(clipBehavior: Clip.none)`, matching the
-HTML `.scene`; the proof is un-skipped and passes.
+Also probed the iteration-3 headline cap (mandatory `ORCHESTRATOR_NOTES` #3):
+the headline render box is 300 wide at 390dp (constraint `maxWidth: 300`) and
+correctly parent-capped to **280** at 320dp with text scale 1.3 — no
+overflow, no exception. Stage 5 confirmed the design break visually:
+`Chores that feel` / `like a game.` in both themes, band 4 **5.9% → 0.6%**.
 
 ---
 
-## Open
+## Verified sound (probes)
 
-### BUG-4 — MAJOR (shared): fresh install never creates the `app_state` row
+| Area | Result |
+|---|---|
+| Rapid double tap | single `/value-tour`, no exception |
+| Data edge cases (0/2/6 children, "Maximilian-Alexander", 9999 coins, £999.99 goal) | P01 renders no child/money data; screen unchanged, no exception |
+| Back navigation / deep links | `/welcome` root route unchanged in parent mode; kid-mode deep link now gated (BUG-3) |
+| State after restart | **BUG-4b passes** (see above) |
+| Parent/kid guard | all 17 parent routes gated (shared parameterized test) |
+| Dark/light contrast | headline 16.30/15.45:1, body 10.84/8.31:1, caption 9.82/8.87:1, primary 8.43/4.96:1 — all ≥4.5 |
+| Text scale 1.3 × width 320 (+390/430, light/dark) | 12-case matrix green; headline capped to 280; no overflow/ellipsis |
+| Async gap / emit after close | bloc closed mid-load cancels cleanly |
+| Timezone (Europe/London) / money rounding | P01 renders no dates or money — N/A by construction |
+| PipAvatar / semantics | mandated mochi·sunny·stage 2·idle in the 168×168 @ (91,120) slot; one labelled semantics node, HTML alt text intact |
 
-- **Severity:** major — on a release first launch (no `SEED` flag) onboarding
-  completion is never persisted, so every restart returns the user to
-  `/welcome`: the screen loops forever. This is the "state after app restart
-  (Drift persistence)" case.
-- **Where (shared):** `AppSession._write` upserts now (`763192d`), but the
-  feature repositories still write directly:
-  `app/lib/features/onboarding/data/onboarding_repository_impl.dart:24-28`
-  (`completeOnboarding`) and the paywall repo (`startTrial`/`activate`) do
-  `UPDATE … WHERE id = 1`; nothing bootstraps row 1 at DB open.
-- **Repro:** `configureDependencies(database: AppDatabase.memory())` with no
-  seed → `app_state` select is empty → `OnboardingRepository.completeOnboarding()`
-  → `session.refresh()` → `onboardingComplete` is still `false`.
-- **Failing test:** `BUG-4 fresh install never persists onboarding completion`
-  (skipped with its bug id; verified `Expected: true / Actual: <false>` when
-  un-skipped this iteration).
-- **Suggested fix (shared):** insert-if-missing in
-  `MigrationStrategy.beforeOpen` (preferred — covers every writer) or an
-  upsert in each repository. Do **not** patch only the onboarding repo: the
-  paywall has the same defect and the two paths must not diverge. The
-  `SHARED_REQUEST.md` item is narrowed to exactly this.
+## Open, non-blocking (not defects / not blockers)
 
-### OPEN MANDATORY ITEM — headline line break (`ORCHESTRATOR_NOTES` #3, Stage-5 dev 1)
+1. **Shared request — fonts + first-frame warm-up.** Inter/Nunito still load
+   from the Google-Fonts CDN at first paint, and nothing calls
+   `NestlingImages.precache` (it lists webp rasters while screens render SVG).
+   Non-blocking; the only remaining cause of the `shot.sh` repaint warning.
+2. **Shared, low priority — inset-0 bottom band.** On devices reporting no
+   bottom inset, the CTA panel sits flush with the edge (no 34dp band). On the
+   reference (home-indicator) device it is exact; the orchestrator's chrome
+   rule accepts it. Optional shared floor filed.
+3. **Test quality — the headline-width assertion is cap-agnostic** (review
+   finding 2): it guards against cap removal but cannot validate the design
+   break; a metric-based assertion needs bundled fonts (item 1).
+4. **`ORCHESTRATOR_NOTES` item 5 wording** vs the enforced proof (review
+   finding 1): the note says "identical"; the shipped contract is "moves up by
+   exactly the inset" (measured −34, design-verified). Owner: orchestrator
+   (amend the note or land the floor in item 2).
 
-Design wraps `Chores that feel` / `like a game.`; the app wraps
-`Chores that feel like` / `a game.` (band 4 ≈5.75%). The orchestrator's
-mandatory note prescribes constraining the headline width (≈300,
-`ConstrainedBox`; never a hard `\n`, must still wrap at 320dp / scale 1.3).
-Not applied in the current tree — it belongs to the next build pass. No
-widget-test proof is possible here: `flutter test` falls back to the test
-font, so the wrap cannot be measured without bundled Inter/Nunito
-(cf. shared request item 3); the Stage-5 pixel comparison is the check.
-
-### INFO — inset-0 devices have no 34dp bottom band (review finding 4)
-
-With `NestHomeIndicator` a no-op and no OS inset (tests, some Android nav
-modes), the CTA panel sits flush with the screen edge — 34dp lower than the
-design's band. Not a defect under the orchestrator's OS-chrome rule; the
-optional shared floor (`max(viewPadding.bottom, 34)` in `NestBottomCta`) is
-recorded in the review, not here.
-
-### INFO — `PipAvatar` defaults instead of explicit args (review finding 5)
-
-`welcome_view.dart:148` is `PipAvatar(style: mochi, stage: 2)`; `sunny`/`idle`
-are defaults and pinned by the widget test. Behaviour is correct today; pass
-`skin: PipSkin.sunny, mood: PipMood.idle` explicitly for robustness (next
-build pass).
-
----
-
-## Verified sound (probes run this iteration)
-
-| Area | Probe | Result |
-|---|---|---|
-| Rapid double tap | two taps on Get started, no pump between | single `/value-tour`, `takeException()` null |
-| Data edge cases (0/2/6 children, "Maximilian-Alexander", 9999 coins, £999.99 goal) | seeded 4 extra children with extremes on top of `Seed.demo`, pumped P01; `Seed.empty` (0 children) covered by the suite | no exception, extreme strings/numbers absent — P01 still reads no child/money data |
-| Back navigation / deep links | `/welcome` is a root route; parent-mode deep link still renders P01 (unchanged); kid-mode deep link now gated (BUG-3) | no regression; `go` to `/value-tour` matches the P02 design (no back affordance) |
-| Pip semantics | `Semantics(image, label)` wrapper + `PipAvatar` | exactly one labelled node, HTML alt text intact, no duplicate |
-| Home-indicator layout | `NestHomeIndicator` size | 0×0 in app (OS draws it), CTA bottom flush at inset 0 (see INFO) |
-| Text scale 1.3 × width 320 (+390/430, light/dark) | existing 12-case matrix | all green, no overflow/ellipsis |
-| Dark/light contrast | token pairs (unchanged) | headline 16.30/15.45:1, body 10.84/8.31:1, caption 9.82/8.87:1, primary 8.43/4.96:1 — all ≥4.5 |
-| Async gap / emit after close | bloc closed mid-load | subscription cancelled cleanly (carried from iteration 1) |
-| Timezone / money rounding | P01 renders no dates or money | N/A by construction |
+Docs corrected this pass: `2_build.md` (BUG-4 is fixed, suite 356/0/0),
+`1_plan.md` (headline cap supersedes the uncapped plan), `SHARED_REQUEST.md`
+(BUG-2/3/4 closed; remaining items are the non-blockers above).
 
 ## Summary
 
-| # | Severity | Owner | Status |
-|---|---|---|---|
-| BUG-1 | blocker | P01 | **fixed**, proof enforced |
-| BUG-2 | major | shared | **fixed** (`763192d`), proof rewritten + enforced |
-| BUG-3/3b | major | shared | **fixed** (`71d2400`), proofs enforced |
-| BUG-4 | major | shared repos + bootstrap | **open**, proof skipped, filed |
-| BUG-5 | minor | P01 | **fixed**, proof enforced |
-| — | mandatory | P01 | headline break pending (next build) |
-| — | minor/info | P01/shared | PipAvatar explicit args; inset-0 band |
+| # | Severity | Status |
+|---|---|---|
+| BUG-1 | blocker | fixed, proof enforced |
+| BUG-2 | major | fixed, proof rewritten + enforced |
+| BUG-3/3b | major | fixed, proofs enforced |
+| BUG-4 / BUG-4b | major | fixed, persistence + restart proofs enforced |
+| BUG-5 | minor | fixed, proof enforced |
 
-P01's own code has no known major defects left. The stage cannot pass while
-BUG-4 still reproduces: it is a major, product-blocking persistence bug in the
-flow this screen starts, even though its fix is shared and already filed with
-a repro (`SHARED_REQUEST.md`).
+No major bugs remain; every proof is enforced, the suite has zero skips, and
+the one design item the orchestrator called out (headline break) is visually
+verified in both themes.
 
-VERDICT: FAIL
+VERDICT: PASS

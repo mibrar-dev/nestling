@@ -191,6 +191,28 @@ void main() {
       await disposeApp(tester);
     });
 
+    testWidgets('headline is capped so it wraps like the design at 390dp', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpWelcome(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      // ORCHESTRATOR_NOTES #3: a ~300pt max-width cap (never a hard \n), so
+      // "like" falls to line 2 at 390dp; 320dp / scale 1.3 still wrap
+      // naturally (covered by the width x scale matrix).
+      final headlineSize = tester.getSize(find.text(_headline));
+      expect(headlineSize.width, lessThanOrEqualTo(300.0 + 0.001));
+      expect(find.text(_headline), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
     for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
       for (final width in const <int>[320, 390, 430]) {
         for (final scale in const <double>[1, 1.3]) {

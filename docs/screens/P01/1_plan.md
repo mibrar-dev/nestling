@@ -43,6 +43,11 @@ on P01:
    - Text block (`Column`, `crossAxisAlignment: start`):
      - `Text('Chores that feel like a game.', style: context.nestText.display)`
        (Nunito 34/40 w900, ls −0.34, ink). `softWrap: true`.
+       **Superseded by `ORCHESTRATOR_NOTES.md` item 3 (iteration 3):** the
+       headline is wrapped in `ConstrainedBox(maxWidth: 300)` so the design
+       break `Chores that feel` / `like a game.` is reproduced at 390dp —
+       a cap, never a hard `\n`; 320dp and text scale 1.3 still wrap naturally
+       (`welcome_view.dart` `_headlineW`).
      - `SizedBox(height: NestSpacing.s3)` (12 — from `.p01-text p margin-top:12`).
      - `Text('Nestling turns family jobs into quests your children actually want '
        'to finish — and keeps pocket money fair and tidy.',

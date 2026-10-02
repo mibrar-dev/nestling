@@ -143,8 +143,13 @@ class _WelcomeScene extends StatelessWidget {
                     child: Semantics(
                       label: 'Pip the hatchling bird sitting in a twig nest',
                       image: true,
-                      // Mochi / sunny (the default skin) / stage 2 per
-                      // ORCHESTRATOR_NOTES; idle mood and no accessory.
+                      // Mochi / sunny (default) / stage 2 per ORCHESTRATOR_NOTES;
+                      // idle mood and no accessory (defaults). Passed
+                      // explicitly they trip avoid_redundant_argument_values,
+                      // and mood is additionally an ambiguous import
+                      // (pip_avatar and pip_rive both define PipMood); the
+                      // resolved values are pinned by welcome_view_test's
+                      // PipAvatar test.
                       child: const PipAvatar(style: PipStyle.mochi, stage: 2),
                     ),
                   ),
@@ -215,6 +220,12 @@ class _SceneCoin extends StatelessWidget {
 class _WelcomeText extends StatelessWidget {
   const _WelcomeText();
 
+  /// Headline cap (ORCHESTRATOR_NOTES #3): at 390dp the display line "Chores
+  /// that feel like" must not fit, so "like" falls to line 2 as in the
+  /// design. A cap (not a hard break) still wraps sensibly at 320dp
+  /// (content 280 < cap) and text scale 1.3.
+  static const double _headlineW = 300;
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -222,9 +233,12 @@ class _WelcomeText extends StatelessWidget {
       children: <Widget>[
         Semantics(
           header: true,
-          child: Text(
-            'Chores that feel like a game.',
-            style: context.nestText.display,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: _headlineW),
+            child: Text(
+              'Chores that feel like a game.',
+              style: context.nestText.display,
+            ),
           ),
         ),
         const SizedBox(height: NestSpacing.s3),
