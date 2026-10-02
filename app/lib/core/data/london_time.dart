@@ -57,3 +57,40 @@ String formatLondonTime(DateTime utc) {
   final minute = local.minute.toString().padLeft(2, '0');
   return '$hour:$minute$suffix';
 }
+
+/// UTC instant of 00:00 Europe/London on the London day containing [utc].
+DateTime londonDayStartUtc(DateTime utc) {
+  final local = toLondon(utc);
+  final midnightAsUtc = DateTime.utc(local.year, local.month, local.day);
+  // London midnight is 23:00 UTC the previous day during BST.
+  final probe = midnightAsUtc.subtract(const Duration(hours: 1));
+  return isLondonSummerTime(probe) ? probe : midnightAsUtc;
+}
+
+/// UTC instant of Monday 00:00 Europe/London for the week containing [utc].
+DateTime londonWeekStartUtc(DateTime utc) {
+  final local = toLondon(utc);
+  final monday = DateTime.utc(
+    local.year,
+    local.month,
+    local.day,
+  ).subtract(Duration(days: local.weekday - 1));
+  final probe = monday.subtract(const Duration(hours: 1));
+  return isLondonSummerTime(probe) ? probe : monday;
+}
+
+/// Whether a completion at [completedUtc] still counts for a quest with
+/// [repeatRule] at [nowUtc]: daily → same London day, weekly → same London
+/// week (Mon–Sun), once → always.
+bool countsForCurrentPeriod(
+  String repeatRule,
+  DateTime completedUtc,
+  DateTime nowUtc,
+) {
+  final start = switch (repeatRule) {
+    'daily' => londonDayStartUtc(nowUtc),
+    'weekly' => londonWeekStartUtc(nowUtc),
+    _ => null,
+  };
+  return start == null || !completedUtc.toUtc().isBefore(start);
+}
