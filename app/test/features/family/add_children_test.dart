@@ -576,7 +576,7 @@ void main() {
       await setUpTestScope();
       await pumpAppRoute(tester, '/add-children');
 
-      expect(find.text("Who's in your nest?"), findsOneWidget);
+      expect(find.text('Who\u2019s in your nest?'), findsOneWidget);
       expect(
         find.text('Nicknames only \u2014 no photos, no email.'),
         findsOneWidget,
@@ -801,7 +801,7 @@ void main() {
       await GetIt.instance<AppSession>().refresh();
       await pumpAppRoute(tester, '/add-children');
 
-      expect(find.text("Who's in your nest?"), findsOneWidget);
+      expect(find.text('Who\u2019s in your nest?'), findsOneWidget);
       expect(find.text('Add a child'), findsOneWidget);
       expect(find.text('Maya'), findsNothing);
       expect(find.text('Leo'), findsNothing);
@@ -817,7 +817,7 @@ void main() {
       await setUpTestScope();
       await pumpAppRoute(tester, '/add-children', theme: ThemeMode.dark);
 
-      expect(find.text("Who's in your nest?"), findsOneWidget);
+      expect(find.text('Who\u2019s in your nest?'), findsOneWidget);
       expect(find.text('Maya'), findsOneWidget);
       expect(find.text('Add a child'), findsOneWidget);
       expect(find.text('Continue'), findsOneWidget);
@@ -840,7 +840,7 @@ void main() {
       await _pumpAddChildrenView(tester, bloc);
 
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
-      expect(find.text("Who's in your nest?"), findsNothing);
+      expect(find.text('Who\u2019s in your nest?'), findsNothing);
       expect(tester.takeException(), isNull);
     });
 
@@ -869,7 +869,7 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      expect(find.text("Who's in your nest?"), findsOneWidget);
+      expect(find.text('Who\u2019s in your nest?'), findsOneWidget);
       expect(find.text('Maya'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
@@ -898,7 +898,7 @@ void main() {
       await pumpAppRoute(tester, '/add-children');
       await _resize(tester, 320, 1.3);
 
-      expect(find.text("Who's in your nest?"), findsOneWidget);
+      expect(find.text('Who\u2019s in your nest?'), findsOneWidget);
       expect(find.text('Maya'), findsOneWidget);
 
       final list = find.byType(Scrollable).first;
@@ -934,7 +934,7 @@ void main() {
           await pumpAppRoute(tester, '/add-children');
           await _resize(tester, width, scale);
 
-          expect(find.text("Who's in your nest?"), findsOneWidget);
+          expect(find.text('Who\u2019s in your nest?'), findsOneWidget);
           expect(find.text('Maya'), findsOneWidget);
           expect(find.text('Add a child'), findsOneWidget);
 
@@ -978,7 +978,7 @@ void main() {
         await pumpAppRoute(tester, '/add-children');
         await _resize(tester, width, 1);
 
-        final head = tester.getRect(find.text("Who's in your nest?"));
+        final head = tester.getRect(find.text('Who\u2019s in your nest?'));
         final grid = tester.getRect(find.byType(KidCardGrid));
         final formCard = tester.getRect(find.byType(NestCard).last);
         final addAnother = tester.getRect(
@@ -1508,7 +1508,7 @@ void main() {
       await pumpAppRoute(tester, '/add-children');
 
       expect(find.byType(KidCardGrid), findsNothing);
-      expect(find.text("Who's in your nest?"), findsOneWidget);
+      expect(find.text('Who\u2019s in your nest?'), findsOneWidget);
       expect(find.text('Add a child'), findsOneWidget);
       expect(find.text('Continue'), findsOneWidget);
 
@@ -1762,6 +1762,279 @@ void main() {
         await disposeApp(tester);
       });
     }
+  });
+
+  group('P05 copy is character-exact (orchestrator COPY rule)', () {
+    // Every string below is compared against
+    // design/html-source/screens/P05-add-children.html character by
+    // character. Escapes are written out on purpose: a straight quote or an
+    // ASCII hyphen must not slip back in unnoticed.
+    const heading =
+        'Who\u2019s in your nest?'; // <h1>Who&rsquo;s in your nest?</h1>
+    const sub = 'Nicknames only \u2014 no photos, no email.'; // &mdash;
+    const caption = 'You can change any of this later in Family.';
+    const note = 'We only ask for an age range so quests suit them.';
+
+    testWidgets('the h1 uses the curly apostrophe, not ASCII', (tester) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/add-children');
+
+      expect(find.text(heading), findsOneWidget);
+      final rendered = tester.widget<Text>(find.text(heading)).data!;
+      expect(rendered, heading);
+      expect(rendered.codeUnits, contains(0x2019));
+      expect(
+        rendered.contains(RegExp("'")),
+        isFalse,
+        reason: 'ASCII U+0027 apostrophe',
+      );
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    testWidgets('the subtitle keeps the em dash and the rest of the copy', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/add-children');
+
+      for (final line in <String>[sub, caption, note]) {
+        expect(find.text(line), findsOneWidget, reason: line);
+      }
+      expect(sub.codeUnits, contains(0x2014), reason: 'em dash U+2014');
+      expect(
+        find.textContaining('-'),
+        findsNothing,
+        reason: 'no ASCII hyphen in the screen copy',
+      );
+      expect(
+        find.text("Who's"),
+        findsNothing,
+        reason: 'no ASCII apostrophe anywhere in the heading',
+      );
+      // UK spelling, exactly as the HTML spells it.
+      expect(find.text('Avatar colour'), findsOneWidget);
+      expect(find.textContaining('color'), findsNothing);
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    testWidgets('age bands and card ages use en dashes (U+2013)', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/add-children');
+
+      for (final band in AddChildFormCard.ageBands) {
+        expect(
+          find.text(displayAgeBand(band)),
+          findsOneWidget,
+          reason: 'chip $band',
+        );
+      }
+      expect(find.text('Age 7\u20139'), findsOneWidget);
+      expect(find.text('Age 4\u20136'), findsOneWidget);
+      expect(
+        find.text('Age 7-9'),
+        findsNothing,
+        reason: 'the hyphen form is only what the database stores',
+      );
+      // `displayAgeBand` is the single place that converts for display.
+      expect(displayAgeBand('7-9'), '7\u20139');
+      expect(displayAgeBand('13+'), '13+', reason: 'no hyphen to convert');
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    test('the seed stores hyphens while the design shows en dashes', () {
+      // Guards the conversion boundary: DB tokens are hyphenated by design
+      // (Seed writes `ageBand: Value('7-9')`), the UI must never echo them.
+      expect(displayAgeBand('4-6'), '4\u20136');
+      expect(displayAgeBand('10-12'), '10\u201312');
+      expect('7-9', isNot(displayAgeBand('7-9')));
+    });
+  });
+
+  // Orchestrator ruling (app-wide): children are listed in the order they were
+  // added, never alphabetically. P05 renders the repository order verbatim and
+  // sorts nothing locally, so the invariant below holds both today (core still
+  // orders by nickname — see SHARED_REQUEST.md, creation-order fix pending) and
+  // after the shared fix lands (creation order). TODO(P05): delete nothing, but
+  // expect Maya before Leo once `watchChildren` orders by creation.
+  group('P05 child order follows the repository (CHILD ORDER ruling)', () {
+    List<String> renderedOrder(WidgetTester tester, List<String> names) {
+      final rects = <String, Rect>{
+        for (final name in names) name: tester.getRect(find.text(name).first),
+      };
+      return rects.keys.toList()..sort((a, b) {
+        // Reading order: row by row, then left to right inside a row.
+        final byTop = rects[a]!.top.compareTo(rects[b]!.top);
+        return byTop != 0 ? byTop : rects[a]!.left.compareTo(rects[b]!.left);
+      });
+    }
+
+    testWidgets('the grid renders the repository order, unsorted', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/add-children');
+
+      // `watchChildren().first` does not resolve under the shared test scope
+      // (2_build.md deviation 6), and FamilyBloc is a GetIt *factory*, so the
+      // authoritative order is read off the bloc the screen itself uses.
+      final roster = BlocProvider.of<FamilyBloc>(
+        tester.element(find.byType(KidCardGrid)),
+      ).state.children;
+      final expected = roster.map((c) => c.nickname).toList();
+      expect(expected, hasLength(2));
+      expect(
+        renderedOrder(tester, expected),
+        expected,
+        reason: 'P05 must not re-sort the repository roster',
+      );
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    testWidgets('a newly saved child lands where the repository puts it', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/add-children');
+
+      await tester.enterText(find.byKey(const Key('nicknameField')), 'Ollie');
+      await tester.pump();
+      await tester.tap(find.text('Add another child'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      final roster = BlocProvider.of<FamilyBloc>(
+        tester.element(find.byType(KidCardGrid)),
+      ).state.children;
+      final expected = roster.map((c) => c.nickname).toList();
+      expect(expected, hasLength(3));
+      expect(renderedOrder(tester, expected), expected);
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    test('the bloc never reorders the roster', () async {
+      // Both directions, so the guarantee does not depend on which order the
+      // database happens to produce.
+      for (final kids in <List<FamilyChild>>[
+        <FamilyChild>[_maya, _leo],
+        <FamilyChild>[_leo, _maya],
+      ]) {
+        final repo = _MockFamilyRepository();
+        when(repo.watchItems).thenAnswer((_) => Stream.value(_members));
+        when(repo.watchChildren).thenAnswer((_) => Stream.value(kids));
+        final bloc = FamilyBloc(repository: repo)
+          ..add(const FamilyLoadRequested());
+        await bloc.stream.firstWhere((s) => s.status == FamilyStatus.loaded);
+        expect(bloc.state.children, kids);
+        await bloc.close();
+      }
+    });
+  });
+
+  group('P05 focused nickname field', () {
+    testWidgets('focus paints the leaf focus ring and unfocused does not', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/add-children');
+
+      // The field's own wrapper Container — the card and the selected swatch
+      // carry shadows as well, so the finder must not sweep the whole card.
+      BoxDecoration? fieldDecoration() =>
+          tester
+                  .widget<Container>(
+                    find
+                        .ancestor(
+                          of: find.byType(TextField),
+                          matching: find.byType(Container),
+                        )
+                        .first,
+                  )
+                  .decoration
+              as BoxDecoration?;
+
+      final tokens = _tokensOf(tester, find.byType(NestBottomCta));
+      expect(
+        fieldDecoration()?.boxShadow,
+        isNull,
+        reason: 'no focus ring before focusing',
+      );
+
+      await tester.tap(find.byKey(const Key('nicknameField')));
+      await tester.pump();
+
+      expect(
+        fieldDecoration()?.boxShadow,
+        NestShadows.focusRing(tokens.leafTint, tokens.leaf),
+      );
+      final decoration = tester
+          .widget<TextField>(find.byType(TextField).first)
+          .decoration!;
+      final focusedBorder = decoration.focusedBorder;
+      expect(focusedBorder, isA<OutlineInputBorder>());
+      expect(
+        (focusedBorder! as OutlineInputBorder).borderSide.color,
+        tokens.leaf,
+      );
+
+      // Losing focus removes the ring again.
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pump();
+      expect(fieldDecoration()?.boxShadow, isNull);
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+  });
+
+  group('P05 BUG-8 device insets', () {
+    testWidgets('with a device safe area the form is still fully reachable', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      const insets = FakeViewPadding(top: 47 * 3, bottom: 34 * 3);
+      tester.view.padding = insets;
+      tester.view.viewPadding = insets;
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetViewPadding);
+
+      await pumpAppRoute(tester, '/add-children');
+
+      final cta = tester.getRect(find.byType(NestBottomCta));
+      final list = find.byType(Scrollable).first;
+      await tester.scrollUntilVisible(
+        find.text('We only ask for an age range so quests suit them.'),
+        300,
+        scrollable: list,
+      );
+      await tester.pump();
+
+      // The symptom of the missing `padding: EdgeInsets.zero`: the grid
+      // re-applied 47 + 34 px of inset and pushed the tail of the form under
+      // the CTA, where scrolling could not lift it clear.
+      final note = tester.getRect(
+        find.text('We only ask for an age range so quests suit them.'),
+      );
+      expect(
+        note.bottom,
+        lessThanOrEqualTo(cta.top),
+        reason: 'the closing note must be reachable above the CTA',
+      );
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
   });
 
   group('P05 BUG-5 conditional clear', () {

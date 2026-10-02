@@ -1,3 +1,29 @@
+# Shared request — P05 children in creation order (CHILD ORDER ruling, BLOCKS the P05 UI gate)
+
+Need: the orchestrator's standing CHILD ORDER ruling says children are always
+listed in the order they were added (Maya, then Leo), never alphabetically —
+in every screen and repository. `AppDatabase.watchChildren`
+(`app/lib/core/data/app_database.dart:291-296`) orders by `nickname`
+(BINARY collation), so the P05 grid shows Leo left / Maya right, and any
+mixed-case or accented nickname sorts worse. The `children` table has no
+creation marker (no `createdAt`, unlike `quests`/`quest_completions`), and
+the `FamilyChild` entity carries none either, so the feature cannot recover
+the order locally: whatever it does with the nickname-ordered list is a
+guess. Options: (a) add a `createdAt` column (default `currentDateAndTime`)
+to `children` + order `watchChildren` by it, or (b) order `watchChildren` by
+`rowid` as the creation proxy. Either way every roster screen inherits the
+ruling-compliant order at once.
+
+Files: `app/lib/core/data/app_database.dart` (schema and/or the
+`watchChildren` ordering; drift migration if (a))
+
+Blocks: **yes** — until it lands P05 consumes the repository order behind
+`TODO(P05)` (`kid_card_grid.dart`) and the UI gate sees Leo|Maya against a
+Maya|Leo mock. The existing order-locking test documents the current
+(nickname) behaviour and flips with the shared fix.
+
+---
+
 # Shared request — P05 Add children nav bar — LANDED on main
 
 > Status (iteration 2): landed — `nest_nav_bar.dart` now returns
@@ -139,3 +165,42 @@ Files: `app/lib/core/design_system/components/nest_nav_bar.dart`
 
 Blocks: no — P05 uses the design-system component as-is; a one-line
 `minHeight` change fixes every compact bar at once.
+
+---
+
+# Shared request — P05 `router_push_test.dart` asserts the pre-build P05
+# placeholder title (breaks the full `flutter test` run)
+
+Need: `app/test/app/router_push_test.dart:104` passes
+`showsFrom: 'P05 Add children'` — the title the **placeholder** view rendered
+before this screen was built. P05 is now the real screen, so the assertion at
+`router_push_test.dart:37` (`find.text(showsFrom)` is non-empty) fails and the
+full `flutter test` run is red:
+
+```
+00:01 +3 -1: push/pop contract push between top-level onboarding routes,
+pop returns [E]
+The following TestFailure was thrown running a test:
+Expected: true
+  Actual: <false>
+  ... router_push_test.dart line 37
+```
+
+Fix (test-side, one string): `showsFrom` should be a string the real
+`/add-children` route renders — the h1, `Who’s in your nest?` (U+2019), i.e.
+`'Who\u2019s in your nest?'`. `showsTo: 'P06 Pocket money setup'` is still
+correct (`pocket_money_setup_view.dart:12`). Nothing in P05 needs to change:
+the test drives `GoRouter.of(context).push('/pocket-money-setup')` on the
+router itself, so it does not depend on how P05 navigates.
+
+Evidence this is not a P05 regression: the string `'P05 Add children'` exists
+nowhere in `app/lib` (only in that test); the file arrived from main in
+`7eaa1f7` ("Shared requests batch 1 … + contract tests", the batch that
+answered P05's push/pop investigation); and this worktree has never touched
+`app/test/app/**` or `app/lib/app/**`.
+
+Files: `app/test/app/router_push_test.dart`
+
+Blocks: **yes for the repo gate** — `flutter test` is red on every branch where
+P05 is built until this string is updated. It is outside RULES §1, so no screen
+agent can fix it.

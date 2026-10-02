@@ -8,6 +8,10 @@ enum FamilyStatus { initial, loading, loaded, failure }
 /// `null` explicitly clears the error, omitting it keeps the current value.
 const _keepNicknameError = Object();
 
+/// Same pattern for `lastSavedNickname`, which copyWith would otherwise keep
+/// forever once set.
+const _keepLastSavedNickname = Object();
+
 final class FamilyState extends Equatable {
   const new({
     this.status = FamilyStatus.initial,
@@ -50,7 +54,7 @@ final class FamilyState extends Equatable {
     String? draftAvatarColour,
     Object? nicknameError = _keepNicknameError,
     bool? saveInProgress,
-    String? lastSavedNickname,
+    Object? lastSavedNickname = _keepLastSavedNickname,
     String? errorMessage,
   }) {
     return FamilyState(
@@ -64,7 +68,9 @@ final class FamilyState extends Equatable {
           ? this.nicknameError
           : nicknameError as String?,
       saveInProgress: saveInProgress ?? this.saveInProgress,
-      lastSavedNickname: lastSavedNickname ?? this.lastSavedNickname,
+      lastSavedNickname: identical(lastSavedNickname, _keepLastSavedNickname)
+          ? this.lastSavedNickname
+          : lastSavedNickname as String?,
       errorMessage: errorMessage ?? this.errorMessage,
     );
   }

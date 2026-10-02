@@ -10,6 +10,10 @@ import 'package:nestling/features/family/presentation/widgets/child_display.dart
 /// Column widths are computed (`(W − 40 − 10) / 2`, never a fixed 170) and
 /// the row height is derived from the card content scaled by the ambient
 /// [TextScaler], so cards hug at 320 px wide and at text scale 1.3 alike.
+//
+// TODO(P05): roster order follows the repository (currently DB nickname
+// order) until the shared creation-order fix lands (CHILD ORDER ruling, see
+// SHARED_REQUEST.md) — then Maya renders before Leo with no code change here.
 class KidCardGrid extends StatelessWidget {
   const KidCardGrid({required this.children, super.key});
 
@@ -31,6 +35,10 @@ class KidCardGrid extends StatelessWidget {
             NestSpacing.gap10;
         final colW = (constraints.maxWidth - NestSpacing.gap10) / 2;
         return GridView.builder(
+          // P05-BUG-8: without explicit padding the grid re-applies the
+          // device safe-area insets as its own SliverPadding (+47 top,
+          // +34 bottom on-device), pushing the form under the CTA.
+          padding: EdgeInsets.zero,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: children.length,

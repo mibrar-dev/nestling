@@ -1,9 +1,9 @@
 // P05 · Add children — bug proofs.
 //
-// P05-BUG-1…7 (iteration 1) are fixed and their proofs below run un-skipped
-// as regressions. P05-BUG-8 (iteration 2) is open and its proof carries
-// `skip: true` with the id in the name so `flutter test` stays green; the fix
-// stage removes the skip. Run the skipped proof with
+// P05-BUG-1…8 are fixed; their proofs below run un-skipped as regressions.
+// P05-BUG-9 (child order ruling) and P05-BUG-10 (card height) are open and
+// carry `skip: true` with the id in the name so `flutter test` stays green;
+// the fix stage removes the skips. Run them with
 // `flutter test --run-skipped test/features/family/p05_bugs_test.dart`.
 // Full reports: `docs/screens/P05/6_bugs.md`.
 
@@ -127,7 +127,7 @@ void main() {
       });
 
       testWidgets(
-        '[P05-BUG-1] the avatar swatches are visible and selectable without scrolling',
+        '[P05-BUG-1] the avatar swatches are selectable after scrolling',
         (tester) async {
           await setUpTestScope();
           await pumpAppRoute(tester, '/add-children');
@@ -368,7 +368,7 @@ void main() {
       await setUpTestScope();
       await pumpAppRoute(tester, '/add-children');
 
-      final node = tester.getSemantics(find.text("Who's in your nest?"));
+      final node = tester.getSemantics(find.text('Who\u2019s in your nest?'));
       expect(
         node.getSemanticsData().flagsCollection.isHeader,
         isTrue,
@@ -388,7 +388,6 @@ void main() {
   group('P05-BUG-8 kid grid re-applies the device insets (major)', () {
     testWidgets(
       '[P05-BUG-8] the kid grid does not add the device safe-area insets',
-      skip: true,
       (tester) async {
         await setUpTestScope();
         // iPhone-class insets (physical px at 3x): 47 logical top, 34 bottom.
@@ -424,6 +423,64 @@ void main() {
           form.top - lastCard.bottom,
           NestSpacing.s3,
           reason: 'the grid must not re-apply the home-indicator inset',
+        );
+
+        await disposeApp(tester);
+      },
+    );
+  });
+
+  // P05-BUG-9 — CHILD ORDER ruling: children are listed in the order they
+  // were added, never alphabetically. `FamilyRepositoryImpl.watchChildren`
+  // consumes the core helper, which orders by nickname, so the grid renders
+  // Leo | Maya; ordering by `rowid` inside `features/family/data/**` (RULES
+  // §1) yields Maya | Leo — verified against the demo DB.
+  group('P05-BUG-9 children are not listed in creation order (major)', () {
+    testWidgets(
+      '[P05-BUG-9] Maya renders before Leo (order added, never alphabetical)',
+      skip: true,
+      (tester) async {
+        await setUpTestScope(); // Seed.demo inserts Maya, then Leo.
+        await pumpAppRoute(tester, '/add-children');
+
+        final maya = tester.getRect(find.text('Maya'));
+        final leo = tester.getRect(find.text('Leo'));
+        expect(
+          maya.left,
+          lessThan(leo.left),
+          reason: 'CHILD ORDER ruling: creation order (Maya, then Leo)',
+        );
+
+        await disposeApp(tester);
+      },
+    );
+  });
+
+  // P05-BUG-10 — `cardH` ends in a 10 px "pencil clearance" the design does
+  // not have (`.edit` is absolutely positioned and adds no height), and uses
+  // 4 px between name and age where the design's flex gap + margin is 6.
+  // Net: cards render 124 tall against the design's 116, pushing the whole
+  // form region +8 px low (UI check iteration 3, deviation 2).
+  group('P05-BUG-10 kid card is taller than the design (minor)', () {
+    testWidgets(
+      '[P05-BUG-10] kid card height matches the design 116 (±2)',
+      skip: true,
+      (tester) async {
+        await setUpTestScope();
+        await pumpAppRoute(tester, '/add-children');
+
+        final card = find
+            .descendant(
+              of: find.byType(KidCardGrid),
+              matching: find.byType(NestCard),
+            )
+            .first;
+        // HTML `.kid-card`: padding 12+10, avatar 44, gap 2, name 24,
+        // gap 2 + age margin 4, age 18 → 116.
+        expect(
+          tester.getSize(card).height,
+          lessThanOrEqualTo(118),
+          reason: 'no pencil clearance; design card is 116 tall',
         );
 
         await disposeApp(tester);

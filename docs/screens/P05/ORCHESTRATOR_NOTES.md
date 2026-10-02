@@ -14,3 +14,8 @@
 2. ORDER RULE (orchestrator ruling, applies app-wide): children are listed in the order they were added (Maya first, then Leo), never alphabetically. In this feature's repository order by the child's creation time / insertion order; if the children table lacks a usable column, file it in SHARED_REQUEST.md and order by rowid meanwhile.
 3. Copy: curly apostrophe "Who’s in your nest?" (U+2019) exactly as the design/HTML.
 4. Nickname field: the design shows the field focused (green 2 px ring) — that is the focused state; the unfocused launch state is fine. Add a widget test for the focused ring colour = leaf token.
+
+## QA of cmp_light_3 (4.87%, was 5.51%) — iteration 4 targets (last iteration — be exact)
+1. STILL OPEN: children order. The app shows Leo, Maya; the design and the CHILD ORDER rule require Maya, then Leo (order added). Fix in this feature's repository (order by creation/rowid) and add a test that asserts Maya is first.
+2. "Add a child" card top ≈ y 399 (app ≈ 407): the gap between the kid-card row and this card must be 12 px as in the HTML.
+3. Inside the card the rows drift down cumulatively (≈ +4 at Nickname, +8 at the field, +13 at the chips, +20 at Avatar colour). Take every vertical gap from the HTML (`.field` label→input gap, input height 52, section gaps) — likely the label-to-field gap and the field height are each a few px too big. Targets: field top ≈ 471, chips row centre ≈ 569, colour row centre ≈ 637, helper text ≈ 674.

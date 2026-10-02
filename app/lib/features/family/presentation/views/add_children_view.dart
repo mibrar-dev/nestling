@@ -195,7 +195,7 @@ class _Body extends StatelessWidget {
             Semantics(
               header: true,
               child: Text(
-                "Who's in your nest?",
+                'Who\u2019s in your nest?',
                 style: NestType.h1(color: tokens.ink),
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
