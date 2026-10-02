@@ -150,20 +150,24 @@ class _NestTextFieldState extends State<NestTextField> {
         decoration: InputDecoration(
           hintText: widget.hintText,
           hintStyle: NestType.body(color: tokens.ink3),
-          errorText: errorText,
-          helperText: widget.helperText,
+          // No `errorText` here by design (P03 §5): Material lays the
+          // decoration error out on the field's content box (indented
+          // ~20px), while the design's `.field` is a column where label,
+          // input, helper and error share one gutter — the error renders
+          // as a gutter-aligned row below the input instead. When an error
+          // is present it also replaces the helper, matching Material's
+          // error-wins behaviour.
+          helperText: errorText == null ? widget.helperText : null,
           helperStyle: NestType.caption(color: tokens.ink2),
-          errorStyle: NestType.caption(color: tokens.danger)
-              .copyWith(fontWeight: FontWeight.w600),
           filled: true,
           fillColor: tokens.surface,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: NestSpacing.s4,
             vertical: 14,
           ),
-          border: enabledBorder,
-          enabledBorder: enabledBorder,
-          focusedBorder: focusedBorder,
+          border: errorText == null ? enabledBorder : errorBorder,
+          enabledBorder: errorText == null ? enabledBorder : errorBorder,
+          focusedBorder: errorText == null ? focusedBorder : errorBorder,
           errorBorder: errorBorder,
           focusedErrorBorder: errorBorder,
           prefixIcon: widget.prefixIcon,
@@ -190,6 +194,16 @@ class _NestTextFieldState extends State<NestTextField> {
           Semantics(label: label, textField: true, child: field)
         else
           field,
+        // Gutter-aligned error row (P03 §5): same x as the label above,
+        // never the indented decoration slot.
+        if (errorText != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            errorText,
+            style: NestType.caption(color: tokens.danger)
+                .copyWith(fontWeight: FontWeight.w600),
+          ),
+        ],
       ],
     );
   }

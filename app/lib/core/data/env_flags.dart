@@ -5,5 +5,11 @@
 // `DISABLE_ANIMATIONS` at compile time: Rive/Lottie render their still
 // frame and implicit animations are skipped.
 
-/// `1` when launched with `--dart-define=DISABLE_ANIMATIONS=1`.
-const bool kDisableAnimations = bool.fromEnvironment('DISABLE_ANIMATIONS');
+/// `true` when launched with `--dart-define=DISABLE_ANIMATIONS=1` (or
+/// `=true`). `bool.fromEnvironment` only maps the string `'true'`, so the
+/// `=1` form `tools/screens/shot.sh` always passes needs the explicit
+/// string comparison (P08 §6, K03 #5: without it every Rive screen takes
+/// the live path during screenshot runs and the frame never stabilises).
+const bool kDisableAnimations =
+    bool.fromEnvironment('DISABLE_ANIMATIONS') ||
+    String.fromEnvironment('DISABLE_ANIMATIONS') == '1';
