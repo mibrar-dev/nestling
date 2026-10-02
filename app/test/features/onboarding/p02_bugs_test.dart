@@ -7,9 +7,11 @@
 // match" proofs and created P02-BUG-8; it also confirmed P02-BUG-7 (no
 // truncation) and P02-BUG-9 (design typographic punctuation).
 //
-// The iteration-3 build fixed BUG-7, BUG-8 and BUG-9, so Stage 3, iteration 3
-// un-skipped all three: this file now runs with ZERO skips and every proof is
-// an enforced regression.
+// The iteration-3 build fixed BUG-7, BUG-8 and BUG-9 (their proofs now pass).
+// Stage 6, iteration 3 opened BUG-10: the FittedBox shrink used for BUG-7 has
+// no lower bound, so at 320dp (and 390dp x 1.3) the design's 15dp titles paint
+// as small as ~0.43x instead of wrapping (review iteration 3, finding 1).
+// That proof is marked `skip: true` until the fix lands.
 // Findings, repros and fixes: `docs/screens/P02/6_bugs.md`.
 //
 //   flutter test test/features/onboarding/p02_bugs_test.dart
@@ -18,11 +20,12 @@
 // fixed  P02-BUG-2  card-1 preview rows 60dp vs the design's 38dp → titles cut
 // fixed  P02-BUG-3  short screens (375x667 / 320x568) overflow or lose the copy
 // fixed  P02-BUG-6  system back from /value-tour did not return to /welcome
-// fixed  P02-BUG-7  titles truncated at 390dp (mandatory: render in full)
+// fixed  P02-BUG-7  titles truncated at 390dp (effectiveness now in BUG-10)
 // fixed  P02-BUG-8  card subs + date chips are the design's static copy
 // fixed  P02-BUG-9  curly quotes / em dash / curly apostrophes per the design
 // void   P02-BUG-4  "seed subs win" — reversed by ORCHESTRATOR_NOTES 1
 // void   P02-BUG-5  "derived date chip" — reversed by ORCHESTRATOR_NOTES 1
+// OPEN   P02-BUG-10 preview titles shrink below 0.9x at 320dp / 1.3 (wrap, don't scale)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -52,6 +55,25 @@ Finder _cardOne() => find.ancestor(
   of: find.text('Today’s quests'),
   matching: find.byType(NestCard),
 );
+
+/// Effective painted scale of a preview title.
+///
+/// The row renders the title inside `FittedBox(fit: scaleDown)`, whose child
+/// is laid out with unbounded constraints: the paragraph's own size is the
+/// type's natural (token) size and the FittedBox box is the scaled result, so
+/// `slot / natural` is the effective scale. When no FittedBox wraps the title
+/// (a wrap/ellipsis implementation) the type paints at token size → 1.0.
+double _paintedTitleScale(WidgetTester tester, String title) {
+  final fitted = find.ancestor(
+    of: find.text(title),
+    matching: find.byType(FittedBox),
+  );
+  if (fitted.evaluate().isEmpty) return 1;
+  final paragraph = tester.renderObject<RenderParagraph>(find.text(title));
+  final slot = tester.getSize(fitted.first);
+  final ratio = slot.width / paragraph.size.width;
+  return ratio.clamp(0, 1).toDouble();
+}
 
 void main() {
   // ---------------------------------------------------------------------
@@ -329,45 +351,56 @@ void main() {
   });
 
   // ---------------------------------------------------------------------
-  // P02-BUG-7 (MAJOR) — the longest card-1 title ellipsised at the design
-  // width ("Empty the dishwas…"); device evidence: ink ended x=234.3 vs the
-  // design's x=240.7, both themes (docs/screens/P02/ui/app_light_2.png).
-  // ORCHESTRATOR_NOTES 3 is mandatory: render the design's names in full.
-  // Fixed by the iteration-3 build (the title lays out unbounded inside a
-  // FittedBox(scaleDown), so the design width shows every name and no
-  // ellipsis can trip); the 320dp + scale 1.3 half of the note is pinned in
-  // `value_tour_view_test.dart` ("no preview title is truncated at 320dp ×
-  // 1.3").
+  // P02-BUG-7 (MAJOR, fixed) — the longest card-1 title ellipsised at the
+  // design width; the iteration-3 build fixed it with a FittedBox(scaleDown)
+  // title slot. The former proof here was tautological (the FittedBox lays
+  // the paragraph out unbounded, so intrinsic width == laid-out width; review
+  // iteration 3, finding 2) and has been replaced by the effective-scale
+  // proofs below. The 390dp "one line, no U+2026" requirement is verified on
+  // the device shot by the UI stage (title ink 81.0→244.0, pill at 254).
   // ---------------------------------------------------------------------
-  testWidgets('P02-BUG-7 card-1 titles render in full at the design width', (
-    tester,
-  ) async {
-    await setUpTestScope();
-    await _pumpTour(tester, surface: const Size(390, 844));
 
-    for (final title in const <String>[
-      'Empty the dishwasher',
-      'Put the bins out',
-      'Reading – 20 minutes',
-      'Tidy your bedroom',
-    ]) {
-      final paragraph = tester.renderObject<RenderParagraph>(find.text(title));
-      expect(
-        paragraph.getMaxIntrinsicWidth(double.infinity),
-        lessThanOrEqualTo(paragraph.size.width + 0.5),
-        reason:
-            'ORCHESTRATOR_NOTES 3 (mandatory): the design shows "$title" in '
-            'full, but the screen renders the title with maxLines: 1 + '
-            "ellipsis into a slot that Flutter's Inter overruns by a few px "
-            '(on device row 1 reads "Empty the dishwas…"; the design slot '
-            'ends at x≈245 = pill 253 − 8px gap and the full text needs '
-            '≈246). Match the design title/badge widths (the badge must not '
-            'squeeze the title) and/or scale the title within its slot so '
-            'the design width shows every name in full; at 320dp + scale '
-            '1.3 wrap instead of ellipsising where there is room.',
-      );
-    }
+  // ---------------------------------------------------------------------
+  // P02-BUG-10 (MAJOR, OPEN) — the FittedBox shrink knows no lower bound: at
+  // 320dp (and 390dp × text scale 1.3) the preview titles paint far below
+  // their 15dp token size instead of wrapping (review iteration 3, finding 1;
+  // DESIGN_SPEC §0 rules 4/9; ORCHESTRATOR_NOTES 3 second half).
+  // ---------------------------------------------------------------------
+  for (final spec in const <(String, Size, double)>[
+    ('P02-BUG-10a', Size(320, 844), 1.0),
+    ('P02-BUG-10b', Size(320, 844), 1.3),
+    ('P02-BUG-10c', Size(390, 844), 1.3),
+  ]) {
+    testWidgets(
+      '${spec.$1} preview titles do not paint below 0.9x at '
+      '${spec.$2.width.toInt()}dp x ${spec.$3}',
+      (tester) async {
+        await setUpTestScope();
+        await _pumpTour(tester, surface: spec.$2, textScale: spec.$3);
 
-    await disposeApp(tester);
-  });
+        for (final title in const <String>[
+          'Empty the dishwasher',
+          'Put the bins out',
+          'Reading – 20 minutes',
+          'Tidy your bedroom',
+        ]) {
+          final scale = _paintedTitleScale(tester, title);
+          expect(
+            scale,
+            greaterThanOrEqualTo(0.9),
+            reason:
+                'the title slot must wrap (or ellipsise at full size) rather '
+                "than scale the design's 15/600 type below 0.9x; measured "
+                'scale ${scale.toStringAsFixed(2)} for "$title". On device '
+                'the current scale is ~0.60 at 320dp and ~0.43 at 320x1.3 '
+                '(review iteration 3 finding 1).',
+          );
+        }
+        expect(tester.takeException(), isNull);
+
+        await disposeApp(tester);
+      },
+      skip: true, // P02-BUG-10
+    );
+  }
 }

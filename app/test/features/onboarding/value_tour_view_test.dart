@@ -46,6 +46,8 @@ const String _step1Body =
     'Pick from 40+ ready-made jobs like “Put the bins out” — or make '
     'your own.';
 const String _step2Title = 'Pip grows as they help';
+const String _step2Body =
+    'Every finished quest feeds Pip the bird, from egg to songbird.';
 const String _step3Title = 'Pocket money, sorted';
 const String _step3Body =
     'No bank card needed — we keep score, you pay your way.';
@@ -148,6 +150,16 @@ Future<void> _tapNext(WidgetTester tester) async {
 /// The tour card that contains [text] (all three are [NestCard]s).
 Finder _cardWith(String text) =>
     find.ancestor(of: find.text(text), matching: find.byType(NestCard));
+
+/// The shared Skip action in the compact nav bar. The design-system
+/// `_NavActionButton` owns the labeled node (no feature key), so tests
+/// target its [InkWell] — the only one inside `NestNavBar` on this screen —
+/// for size, tap action and geometry, and the `Skip` semantics node for
+/// label/button.
+Finder get _skipInkwell => find.descendant(
+  of: find.byType(NestNavBar),
+  matching: find.byType(InkWell),
+);
 
 /// The single progress bar inside [card].
 NestProgress _progressIn(WidgetTester tester, Finder card) =>
@@ -453,6 +465,180 @@ void main() {
     });
   });
 
+  group('P02 value tour — orchestrator rule: copy characters', () {
+    // Orchestrator COPY rule + ORCHESTRATOR_NOTES 2 (mandatory): the design's
+    // typographic characters exactly — curly apostrophes and quotes, en/em
+    // dashes, the middle dot — compared against
+    // design/html-source/screens/P02-value-tour.html. The literals below are
+    // the design's own characters, and each special character is additionally
+    // pinned by code point so a same-wrong-character change cannot slip
+    // through. These assertions are font-independent, which matters here: the
+    // widget-test font is ~2x wider than real Inter and cannot judge line
+    // fitting (see `p02_bugs_test.dart` P02-BUG-7 for the device evidence).
+    const readingTitle = 'Reading \u2013 20 minutes'; // &ndash;
+    const headQuests = 'Today\u2019s quests'; // &rsquo;
+    const headNest = 'Pip\u2019s nest';
+    const headJar = 'Maya\u2019s jar';
+    const subWeekly = 'Maya \u00b7 weekly'; // &middot;
+    const subOnce = 'Leo \u00b7 once';
+    const subDaily = 'Maya \u00b7 daily';
+    const caption = '175 of 250 coins \u00b7 Pip evolves at 250';
+
+    testWidgets('every design character is the typographic code point', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpTour(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      // en dash (U+2013) where the design uses &ndash;
+      expect(readingTitle, contains('\u2013'));
+      expect(readingTitle, isNot(contains('\u002D')));
+      // curly apostrophe (U+2019) where the design uses &rsquo;
+      for (final head in const [headQuests, headNest, headJar]) {
+        expect(head, contains('\u2019'));
+        expect(head, isNot(contains("\u0027")));
+      }
+      // middle dot (U+00B7) where the design uses &middot;
+      for (final sub in const [subWeekly, subOnce, subDaily, caption]) {
+        expect(sub, contains('\u00b7'));
+        expect(sub, isNot(contains('\u002E')), reason: 'no ASCII period');
+      }
+      // curly double quotes (U+201C / U+201D) and an em dash (U+2014)
+      expect(_step1Body, contains('\u201C'));
+      expect(_step1Body, contains('\u201D'));
+      expect(_step1Body, contains('\u2014'));
+      expect(_step3Body, contains('\u2014'));
+      expect(
+        _step2Body.contains('\u2014'),
+        isFalse,
+        reason: 'the egg-to-songbird copy has no dash in the design',
+      );
+
+      // …and the same characters reach the screen.
+      expect(find.text(readingTitle), findsOneWidget);
+      expect(find.text(headQuests), findsOneWidget);
+      await _tapNext(tester);
+      expect(find.text(caption), findsOneWidget);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('all three pages render exactly the design’s characters', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpTour(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      // Copy per page, straight from P02-value-tour.html (strings that appear
+      // once per page; the duplicated subs are asserted with their counts).
+      final perPage = <List<String>>[
+        [
+          headQuests,
+          'Sat 4 Oct',
+          'Empty the dishwasher',
+          'Put the bins out',
+          readingTitle,
+          'Tidy your bedroom',
+          '4 of 6 quests done today',
+          'New quest',
+        ],
+        // 'Fledgling' appears twice on this card (chip + label).
+        [headNest, caption, 'Next stage: Songbird'],
+        [headJar, 'Weekly base', 'Total', 'No bank card needed'],
+      ];
+
+      final rendered = <String>{};
+      expect(find.text(subWeekly), findsNWidgets(2), reason: 'rows 1 and 4');
+      for (var page = 0; page < 3; page++) {
+        for (final text in perPage[page]) {
+          expect(
+            find.text(text),
+            findsOneWidget,
+            reason: 'page ${page + 1}: "$text"',
+          );
+        }
+        for (final element in find.byType(RichText).evaluate()) {
+          final render = element.renderObject;
+          if (render is RenderParagraph) {
+            final text = render.text.toPlainText().trim();
+            if (text.isNotEmpty) {
+              rendered.add(text);
+            }
+          }
+        }
+        if (page < 2) {
+          await _tapNext(tester);
+        }
+      }
+
+      // No ASCII quotes or ellipsis anywhere: the design sets none, and an
+      // ellipsis can only come from truncation. Hyphens need care — the
+      // design *does* use a plain one inside "ready-made", so only a SPACED
+      // hyphen (a dash where – or — belongs) is a character regression.
+      const forbidden = <String>[
+        "\u0027", // ASCII apostrophe
+        '\u0022', // ASCII quote
+        '\u2026', // ellipsis (only truncation introduces one)
+      ];
+      final spacedHyphen = RegExp(r'\s-\s');
+      final offenders = <String>[
+        for (final text in rendered)
+          if (forbidden.any(text.contains) || spacedHyphen.hasMatch(text)) text,
+      ];
+      expect(
+        offenders,
+        isEmpty,
+        reason:
+            'wrong dash/quote characters in rendered copy: '
+            '${offenders.join(' | ')}',
+      );
+
+      // The design's own word-level hyphen survives (ready-made, U+002D).
+      expect(_step1Body, contains('ready-made'));
+      expect(_step1Body, isNot(matches(spacedHyphen)));
+
+      await disposeApp(tester);
+    });
+  });
+
+  group('P02 value tour — orchestrator ruling: child order', () {
+    testWidgets('seeded children keep insertion order, not alphabetical', (
+      tester,
+    ) async {
+      // Orchestrator ruling: children are always listed in the order they
+      // were added (Maya, then Leo), never alphabetically — in every screen
+      // and repository. Seed.demo inserts maya before leo (seed.dart:182,
+      // :204); alphabetical would yield [leo, maya], so this assertion
+      // actually discriminates between the two rules.
+      final db = await setUpTestScope();
+
+      final ordered = await db.select(db.children).get();
+      expect(
+        ordered.map((child) => child.id).toList(),
+        ['maya', 'leo'],
+        reason:
+            'children must come back in insertion order; alphabetical order '
+            'would be [leo, maya] and would break every roster that pairs a '
+            'child with their quests',
+      );
+      expect(
+        ordered.map((child) => child.id).toList(),
+        isNot(['leo', 'maya']),
+        reason: 'alphabetical order is explicitly ruled out',
+      );
+    });
+  });
+
   group('P02 value tour — pager behaviour', () {
     testWidgets('Next advances one step at a time, then becomes Continue', (
       tester,
@@ -586,7 +772,7 @@ void main() {
         textScale: 1,
       );
 
-      await tester.tap(find.byKey(const ValueKey('p02_skip')));
+      await tester.tap(find.text('Skip'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
@@ -786,14 +972,22 @@ void main() {
         findsOneWidget,
       );
 
-      // Skip and Next expose button semantics with their labels, and Skip
-      // carries its activation action on the labeled node itself.
+      // Skip and Next expose button semantics with their labels. Skip's
+      // labeled node is shared design-system code (no feature key), so the
+      // label/button come from its semantics node and the activation action
+      // from its own InkWell.
       final skipData = tester
-          .getSemantics(find.byKey(const ValueKey('p02_skip')))
+          .getSemantics(find.bySemanticsLabel('Skip'))
           .getSemanticsData();
       expect(skipData.label, 'Skip');
       expect(skipData.flagsCollection.isButton, isTrue);
-      expect(skipData.hasAction(SemanticsAction.tap), isTrue);
+      expect(
+        tester
+            .getSemantics(_skipInkwell)
+            .getSemanticsData()
+            .hasAction(SemanticsAction.tap),
+        isTrue,
+      );
       final nextData = tester
           .getSemantics(find.byKey(const ValueKey('p02_next')))
           .getSemanticsData();
@@ -807,7 +1001,7 @@ void main() {
       expect(find.byType(NestKidButton), findsNothing);
 
       // Parent rule: Skip is at least 44x44, Next is a 52dp pill CTA.
-      final skipSize = tester.getSize(find.byKey(const ValueKey('p02_skip')));
+      final skipSize = tester.getSize(_skipInkwell);
       final nextSize = tester.getSize(find.byKey(const ValueKey('p02_next')));
       expect(skipSize.height, greaterThanOrEqualTo(NestDevice.tapParent));
       expect(skipSize.width, greaterThanOrEqualTo(NestDevice.tapParent));
@@ -828,7 +1022,7 @@ void main() {
         textScale: 1.3,
       );
 
-      final skipSize = tester.getSize(find.byKey(const ValueKey('p02_skip')));
+      final skipSize = tester.getSize(_skipInkwell);
       final nextSize = tester.getSize(find.byKey(const ValueKey('p02_next')));
       expect(skipSize.height, greaterThanOrEqualTo(NestDevice.tapParent));
       expect(nextSize.height, greaterThanOrEqualTo(52));
@@ -1671,7 +1865,7 @@ void main() {
           final cardW = math.min(310, math.max(240, width - 80)).toDouble();
           final card = tester.getRect(_cardWith('Today’s quests'));
           final cta = tester.getRect(find.byKey(const ValueKey('p02_next')));
-          final skip = tester.getRect(find.byKey(const ValueKey('p02_skip')));
+          final skip = tester.getRect(_skipInkwell);
           final bar = tester.getRect(find.byType(NestBottomCta));
 
           // Step copy and the CTA button both sit on the 20px gutter.

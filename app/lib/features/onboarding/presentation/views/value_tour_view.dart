@@ -185,7 +185,18 @@ class _ValueTourViewState extends State<ValueTourView> {
         body: Column(
           children: <Widget>[
             const NestStatusBar(),
-            _TourNav(onSkip: _skip),
+            // Shared compact bar: 4 + 44 + 12 = 60 with a content-sized
+            // trailing slot. The outer 8px puts Skip on the 20px owner
+            // gutter (the design nav inset is 12px, the cards/buttons sit
+            // on 20px, and every right edge stays on the same gutter).
+            Padding(
+              padding: const EdgeInsets.only(right: NestSpacing.s2),
+              child: NestNavBar(
+                compact: true,
+                actionLabel: 'Skip',
+                onAction: _skip,
+              ),
+            ),
             Expanded(
               child: SingleChildScrollView(
                 child: Column(
@@ -269,76 +280,6 @@ class _ValueTourViewState extends State<ValueTourView> {
             const NestHomeIndicator(),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// Tour header: right-aligned Skip (1_plan §g).
-///
-/// Compact spec geometry: 4px top + 44px content + 12px bottom = 60 total
-/// (design `.nav-bar.compact`). The action button follows the shared
-/// `_NavActionButton` Material/InkWell pattern (ripple, hover, keyboard
-/// focus); the explicit `Semantics.onTap` carries the activation action on
-/// the labeled node itself.
-//
-// TODO(P02): adopt the shared compact-bar wide-action fix for the trailing
-// slot (see `docs/screens/P02/SHARED_REQUEST.md`) and retire this bar.
-class _TourNav extends StatelessWidget {
-  const _TourNav({required this.onSkip});
-
-  final VoidCallback onSkip;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(
-        top: NestSpacing.s1,
-        right: NestSpacing.padSide,
-        bottom: NestSpacing.s3,
-      ),
-      child: Row(
-        children: <Widget>[
-          const Expanded(child: SizedBox.shrink()),
-          Semantics(
-            key: const ValueKey('p02_skip'),
-            button: true,
-            container: true,
-            label: 'Skip',
-            // On the labeled node itself (screen-reader activation); the
-            // inner InkWell below serves touch/mouse/keyboard visuals.
-            onTap: onSkip,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                minWidth: NestDevice.tapParent,
-                minHeight: NestDevice.tapParent,
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: onSkip,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: NestSpacing.s3,
-                    ),
-                    child: Center(
-                      // Announced by the labeled button node above; keeping
-                      // the raw text out of the tree avoids a 'Skip\nSkip'
-                      // merge (sibling text always folds into the nearest
-                      // actionless ancestor).
-                      child: ExcludeSemantics(
-                        child: Text(
-                          'Skip',
-                          style: NestType.buttonLabel(color: context.nest.leaf),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -440,8 +381,8 @@ class _QuestPreviewCard extends StatelessWidget {
 class _PipPreviewCard extends StatelessWidget {
   const _PipPreviewCard();
 
-  /// Stage-dot visuals (`.pg-stage` 52, art 40).
-  static const double _dotD = 52;
+  /// Stage-dot art: 40px Pip inside the 52px `NestPager.stage` circle (the
+  /// only pager metric without a token; the rest come from `NestPager`).
   static const double _artD = 40;
 
   @override
@@ -471,7 +412,7 @@ class _PipPreviewCard extends StatelessWidget {
               image: true,
               container: true,
               child: const SizedBox.square(
-                dimension: 158,
+                dimension: NestPager.pet,
                 child: PipAvatar(style: PipStyle.mochi, stage: 3),
               ),
             ),
@@ -523,8 +464,8 @@ class _StageDot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: _PipPreviewCard._dotD,
-      height: _PipPreviewCard._dotD,
+      width: NestPager.stage,
+      height: NestPager.stage,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
@@ -598,8 +539,8 @@ class _JarPreviewCard extends StatelessWidget {
   }
 }
 
-/// One ledger line (`.pg-line`: 15px rows, min-height 32, space-between;
-/// tabular amounts via `NestType.money`).
+/// One ledger line (`.pg-line`: 15px rows, `NestPager.lineMinHeight`,
+/// space-between; tabular amounts via `NestType.money`).
 class _LedgerLine extends StatelessWidget {
   const _LedgerLine({
     required this.label,
@@ -615,7 +556,7 @@ class _LedgerLine extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.nest;
     return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 32),
+      constraints: const BoxConstraints(minHeight: NestPager.lineMinHeight),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         spacing: NestSpacing.s2,
@@ -643,8 +584,9 @@ class _LedgerLine extends StatelessWidget {
   }
 }
 
-/// Dashed preview add-row (`.pv-add`: min-height 44, r-m 16, 1.5px dashed
-/// `line` border, 15 w600 ink2). Non-interactive, but the label stays a
+/// Dashed preview add-row (`.pv-add`: `NestPager.addMinHeight`, r-m 16,
+/// dashed `line` border per `NestPager.addDash*`, 15 w600 ink2).
+/// Non-interactive, but the label stays a
 /// plain-text semantics node (the HTML exposes it; the last one is a product
 /// claim) while the leading icon is excluded as decorative.
 class _DashedAddRow extends StatelessWidget {
@@ -657,7 +599,7 @@ class _DashedAddRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.nest;
     return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: NestDevice.tapParent),
+      constraints: const BoxConstraints(minHeight: NestPager.addMinHeight),
       child: CustomPaint(
         painter: _DashedBorder(color: tokens.line, radius: NestRadii.m),
         child: Center(
@@ -693,7 +635,7 @@ class _DashedAddRow extends StatelessWidget {
   }
 }
 
-/// 1.5px dashed rounded-rectangle border.
+/// Dashed rounded-rectangle border (`NestPager.addDash*` metrics).
 class _DashedBorder extends CustomPainter {
   const _DashedBorder({required this.color, required this.radius});
 
@@ -702,9 +644,9 @@ class _DashedBorder extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    const strokeW = 1.5;
-    const dashW = 6.0;
-    const gapW = 4.0;
+    const strokeW = NestPager.addDashWidth;
+    const dashW = NestPager.addDashLength;
+    const gapW = NestPager.addDashGap;
     final path = Path()
       ..addRRect(
         RRect.fromRectAndRadius(
