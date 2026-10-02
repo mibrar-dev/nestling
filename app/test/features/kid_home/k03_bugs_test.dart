@@ -1,24 +1,31 @@
-// K03 (kid home) adversarial test suite — Stage 6 bug hunt, iteration 2.
+// K03 (kid home) adversarial test suite — Stage 6 bug hunt, iteration 3.
 //
 // Iteration-1 proofs K03-BUG-1..6 all run un-skipped (fixed in iteration 2:
 // repo transaction/idempotency, success-driven celebration, actionNonce,
 // period scoping, router guard, per-card tap latch).
 //
-// Iteration-2 new work:
+// Iteration-2 work (kept):
 // - Period-ruling probes (daily/weekly/once, London day/week, BST edges).
-// - K03-BUG-7: the documented `--dart-define=DISABLE_ANIMATIONS=1` parses as
-//   false (`bool.fromEnvironment` only understands "true"), so Rive Pip
-//   still animates and the shot harness never stabilises. The proof is
+// - K03-BUG-7: the documented `--dart-define=DISABLE_ANIMATIONS=1` still
+//   parses as false (`bool.fromEnvironment` only understands "true"); main
+//   wired kDisableAnimations into MediaQuery.disableAnimations, but with "1"
+//   the flag is false so the still path is not taken. The proof is
 //   `skip`ped unless the define is present:
 //   `flutter test --dart-define=DISABLE_ANIMATIONS=1 --plain-name K03-BUG-7`.
-// - K03-BUG-8 (fixed mid-loop, proof runs): a successful completion is no
-//   longer swallowed when a second completion is in flight and fails
-//   (pending celebrations are now keyed per quest).
-// - K03-BUG-9 (fixed mid-loop, proof runs): the lock now has a tap latch
-//   (_GateLockButton), so a double tap pushes one gate route.
+// - K03-BUG-8/9 fixed mid-loop (per-quest celebrations, gate tap latch);
+//   proofs run un-skipped.
+//
+// Iteration-3 work:
+// - Owner alignment probe (20 px gutters shared by bar, cards, dock) — passes.
+// - Failure / empty-quests states use PipAvatar, never v1 `pip_stage_*.svg`
+//   — passes.
+// - K03-BUG-10 (skipped): the owner BOTTOM EDGE rule is violated — the dock
+//   surface does not reach the physical bottom edge, so meadow/sky shows as a
+//   coloured strip below the dock and around the home-indicator area.
+//   Proof: `flutter test --run-skipped --plain-name K03-BUG-10`.
 //
 // Run the skipped proofs with
-// `flutter test --run-skipped --plain-name "K03-BUG"`.
+// `flutter test --run-skipped --plain-name "K03-BUG"` (BUG-7 needs its flag).
 //
 // Probes that pass are kept as evidence for the "checked, clean" categories
 // (contrast, overflow, persistence, money rounding, deep links).
@@ -30,6 +37,7 @@ import 'dart:math' as math;
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:nestling/app/app.dart';
@@ -620,6 +628,94 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
+  // Iteration 3 — owner rules (bottom edge, alignment) and state art
+  // -------------------------------------------------------------------------
+
+  group('owner rules', () {
+    testWidgets('20px gutters shared by bar, cards and dock', (tester) async {
+      await _pump(tester);
+      await _revealCards(tester);
+      expect(
+        tester.getTopLeft(find.byType(NestProgress)).dx,
+        closeTo(NestSpacing.padSide, 0.01),
+      );
+      expect(
+        tester.getTopRight(find.byType(NestProgress)).dx,
+        closeTo(390 - NestSpacing.padSide, 0.01),
+      );
+      final firstCard = find.byType(NestKidQuestCard).first;
+      expect(
+        tester.getTopLeft(firstCard).dx,
+        closeTo(NestSpacing.padSide, 0.01),
+      );
+      expect(
+        tester.getTopRight(firstCard).dx,
+        closeTo(390 - NestSpacing.padSide, 0.01),
+      );
+      final pipButton = find.ancestor(
+        of: find.text('Pip'),
+        matching: find.byType(NestKidButton),
+      );
+      final jarButton = find.ancestor(
+        of: find.text('My jar'),
+        matching: find.byType(NestKidButton),
+      );
+      expect(
+        tester.getTopLeft(pipButton).dx,
+        closeTo(NestSpacing.padSide, 0.01),
+      );
+      expect(
+        tester.getTopRight(jarButton).dx,
+        closeTo(390 - NestSpacing.padSide, 0.01),
+      );
+      await disposeApp(tester);
+    });
+
+    testWidgets('the failure state uses PipAvatar, never v1 art', (
+      tester,
+    ) async {
+      await _useFakeRepository(_FailLoadRepository());
+      await _pump(tester);
+      expect(find.text('Oh no! Pip got lost.'), findsOneWidget);
+      expect(find.byType(PipAvatar), findsOneWidget);
+      expect(
+        _svgAssetNames(tester).where((a) => a.contains('pip_stage_')),
+        isEmpty,
+      );
+      await disposeApp(tester);
+    });
+
+    testWidgets('the empty-quests state uses the child\u2019s own PipAvatar', (
+      tester,
+    ) async {
+      final db = GetIt.instance<AppDatabase>();
+      await tester.runAsync(() async {
+        await db
+            .into(db.children)
+            .insert(
+              ChildrenCompanion.insert(
+                id: 'nina',
+                familyId: Seed.familyId,
+                nickname: 'Nina',
+              ),
+            );
+        await (db.update(db.appState)..where((a) => a.id.equals(1))).write(
+          const AppStateCompanion(activeChildId: Value<String?>('nina')),
+        );
+        await GetIt.instance<AppSession>().refresh();
+      });
+      await _pump(tester);
+      expect(find.text('No quests today'), findsOneWidget);
+      expect(find.byType(PipAvatar), findsOneWidget);
+      expect(
+        _svgAssetNames(tester).where((a) => a.contains('pip_stage_')),
+        isEmpty,
+      );
+      await disposeApp(tester);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Iteration 2 — period ruling probes (daily / weekly / once)
   // -------------------------------------------------------------------------
 
@@ -820,12 +916,16 @@ void main() {
   // Iteration 2 — new bug proofs
   // -------------------------------------------------------------------------
 
-  /// RULES §6: `DISABLE_ANIMATIONS=1` must render still frames. Proof only
-  /// runs when the define is present, so the plain suite stays green:
+  /// RULES §6: `DISABLE_ANIMATIONS=1` must render still frames. Main wired
+  /// `kDisableAnimations` into `MediaQuery.disableAnimations` (app.dart), but
+  /// the parse still fails for "1". Proof only runs when the define is
+  /// present, so the plain suite stays green:
   /// `flutter test --dart-define=DISABLE_ANIMATIONS=1 --plain-name K03-BUG-7`.
-  test(
+  testWidgets(
     'K03-BUG-7: the documented DISABLE_ANIMATIONS=1 flag must disable motion',
-    () {
+    (tester) async {
+      await _pump(tester);
+      final context = tester.element(find.byType(PipAvatar));
       expect(
         kDisableAnimations,
         isTrue,
@@ -833,6 +933,12 @@ void main() {
             'bool.fromEnvironment only understands "true"; with "1" the '
             'still-frame path is skipped and Rive Pip keeps animating',
       );
+      expect(
+        MediaQuery.disableAnimationsOf(context),
+        isTrue,
+        reason: 'the app root must receive reduced motion for the flag',
+      );
+      await disposeApp(tester);
     },
     skip: !const bool.hasEnvironment('DISABLE_ANIMATIONS'),
   );
@@ -895,6 +1001,46 @@ void main() {
     semantics.dispose();
     await disposeApp(tester);
   });
+
+  testWidgets(
+    'K03-BUG-10: the dock surface must run to the physical bottom edge',
+    (tester) async {
+      // Simulate the iPhone home inset; the owner rule says the dock's own
+      // surface colour must fill from its top border to the screen edge —
+      // no meadow/sky strip around the home-indicator area.
+      tester.view.padding = const FakeViewPadding(bottom: 34);
+      tester.view.viewPadding = const FakeViewPadding(bottom: 34);
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetViewPadding);
+      await _pump(tester);
+      const scheme = NestColors.light;
+      final screenH =
+          tester.view.physicalSize.height / tester.view.devicePixelRatio;
+      final surfaceBoxes = find.byWidgetPredicate(
+        (w) =>
+            w is Container &&
+            w.decoration is BoxDecoration &&
+            (w.decoration! as BoxDecoration).color == scheme.surface,
+      );
+      final covering = surfaceBoxes.evaluate().where((element) {
+        final rect = tester.getRect(
+          find.byElementPredicate((e) => identical(e, element)),
+        );
+        return rect.left <= 0.5 &&
+            rect.right >= 389.5 &&
+            rect.bottom >= screenH - 0.5;
+      });
+      expect(
+        covering,
+        isNotEmpty,
+        reason:
+            'the dock surface must reach the screen bottom; a coloured '
+            'strip currently shows below the dock',
+      );
+      await disposeApp(tester);
+    },
+    skip: true,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -997,6 +1143,41 @@ const List<KidQuest> _items = <KidQuest>[
 Future<void> _useFakeRepository(KidHomeRepository repo) async {
   await GetIt.instance.unregister<KidHomeRepository>();
   GetIt.instance.registerSingleton<KidHomeRepository>(repo);
+}
+
+/// Asset names of every [SvgPicture] currently in the tree.
+List<String> _svgAssetNames(WidgetTester tester) => tester
+    .widgetList<SvgPicture>(find.byType(SvgPicture))
+    .map((picture) => picture.bytesLoader)
+    .whereType<SvgAssetLoader>()
+    .map((loader) => loader.assetName)
+    .toList();
+
+/// Streams error on listen (load-failure state probe).
+class _FailLoadRepository implements KidHomeRepository {
+  @override
+  Future<List<KidQuest>> getItems() async => throw Exception('load failed');
+
+  @override
+  Stream<List<KidQuest>> watchItems() =>
+      Stream<List<KidQuest>>.error(Exception('items down'));
+
+  @override
+  Stream<List<KidChild>> watchProfiles() =>
+      Stream<List<KidChild>>.error(Exception('profiles down'));
+
+  @override
+  Stream<KidChild?> watchActiveChild() =>
+      Stream<KidChild?>.error(Exception('child down'));
+
+  @override
+  List<String> stepsFor(String questId) => const <String>['Step one'];
+
+  @override
+  Future<bool> verifyPin(String childId, String pin) async => true;
+
+  @override
+  Future<void> completeQuest(String childId, String questId) async {}
 }
 
 void _load(KidHomeBloc bloc) => bloc.add(const KidHomeLoadRequested());

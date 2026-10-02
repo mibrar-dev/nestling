@@ -461,68 +461,88 @@ class _KidHomeBody extends StatelessWidget {
                       ],
                     ),
             ),
-            Container(
-              decoration: BoxDecoration(
-                color: tokens.surface,
-                border: Border(top: BorderSide(color: tokens.ink, width: 3)),
-              ),
-              padding: const EdgeInsets.fromLTRB(
-                NestSpacing.padSide,
-                NestSpacing.s3,
-                NestSpacing.padSide,
-                NestSpacing.gap10,
-              ),
-              child: Row(
-                spacing: NestSpacing.s3,
+            // Bottom chrome owns the OS inset (ORCHESTRATOR_NOTES #8):
+            // the shared `NestHomeIndicator` no longer reserves space and
+            // the kid dock is not inside `NestBottomCta`, so `SafeArea`
+            // pads the dock + indicator zone here. On the 390x844 iPhone
+            // this lands the dock top at the design rows and leaves the
+            // meadow hill visible below; in tests (zero padding) nothing
+            // changes.
+            SafeArea(
+              top: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: NestKidButton(
-                      label: 'Pip',
-                      color: NestKidButtonColor.lilac,
-                      icon: NestIcon(NestIcons.pipFace, color: tokens.onAccent),
-                      axis: Axis.vertical,
-                      gap: NestSpacing.s1,
-                      minHeight: 66,
-                      fontSize: 17,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: NestSpacing.gap6,
+                  Container(
+                    decoration: BoxDecoration(
+                      color: tokens.surface,
+                      border: Border(
+                        top: BorderSide(color: tokens.ink, width: 3),
                       ),
-                      onPressed: () => context.go(PipRoutePaths.nest),
+                    ),
+                    padding: const EdgeInsets.fromLTRB(
+                      NestSpacing.padSide,
+                      NestSpacing.s3,
+                      NestSpacing.padSide,
+                      NestSpacing.gap10,
+                    ),
+                    child: Row(
+                      spacing: NestSpacing.s3,
+                      children: [
+                        Expanded(
+                          child: NestKidButton(
+                            label: 'Pip',
+                            color: NestKidButtonColor.lilac,
+                            icon: NestIcon(
+                              NestIcons.pipFace,
+                              color: tokens.onAccent,
+                            ),
+                            axis: Axis.vertical,
+                            gap: NestSpacing.s1,
+                            minHeight: 66,
+                            fontSize: 17,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: NestSpacing.gap6,
+                            ),
+                            onPressed: () => context.go(PipRoutePaths.nest),
+                          ),
+                        ),
+                        Expanded(
+                          child: NestKidButton(
+                            label: 'Shop',
+                            color: NestKidButtonColor.coin,
+                            icon: NestIcon(NestIcons.bag, color: tokens.onWarm),
+                            axis: Axis.vertical,
+                            gap: NestSpacing.s1,
+                            minHeight: 66,
+                            fontSize: 17,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: NestSpacing.gap6,
+                            ),
+                            onPressed: () => context.go(KidShopRoutePaths.shop),
+                          ),
+                        ),
+                        Expanded(
+                          child: NestKidButton(
+                            label: 'My jar',
+                            icon: NestIcon(NestIcons.jar, color: tokens.onLeaf),
+                            axis: Axis.vertical,
+                            gap: NestSpacing.s1,
+                            minHeight: 66,
+                            fontSize: 17,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: NestSpacing.gap6,
+                            ),
+                            onPressed: () => context.go(KidJarRoutePaths.jar),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  Expanded(
-                    child: NestKidButton(
-                      label: 'Shop',
-                      color: NestKidButtonColor.coin,
-                      icon: NestIcon(NestIcons.bag, color: tokens.onWarm),
-                      axis: Axis.vertical,
-                      gap: NestSpacing.s1,
-                      minHeight: 66,
-                      fontSize: 17,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: NestSpacing.gap6,
-                      ),
-                      onPressed: () => context.go(KidShopRoutePaths.shop),
-                    ),
-                  ),
-                  Expanded(
-                    child: NestKidButton(
-                      label: 'My jar',
-                      icon: NestIcon(NestIcons.jar, color: tokens.onLeaf),
-                      axis: Axis.vertical,
-                      gap: NestSpacing.s1,
-                      minHeight: 66,
-                      fontSize: 17,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: NestSpacing.gap6,
-                      ),
-                      onPressed: () => context.go(KidJarRoutePaths.jar),
-                    ),
-                  ),
+                  const NestHomeIndicator(),
                 ],
               ),
             ),
-            const NestHomeIndicator(),
           ],
         ),
       ),

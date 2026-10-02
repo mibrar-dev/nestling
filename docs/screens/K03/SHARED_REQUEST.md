@@ -18,20 +18,20 @@
    K03's `watchItems` now scopes status to the quest's current London period.
    The day-boundary proof runs un-skipped and passes (daily/weekly/once
    probes added; BST switch days covered). No action needed.
-5. Need (Stage 6 iter-2, K03-BUG-7): `--dart-define=DISABLE_ANIMATIONS=1`
-   parses as **false** — `bool.fromEnvironment` only understands `"true"`, so
-   `kDisableAnimations` (`app/lib/core/data/env_flags.dart`) and
-   `LaunchFlags.disableAnimations` are off even though RULES §6 and
-   `tools/screens/shot.sh` pass `=1`. On device the Rive Pip therefore keeps
-   animating and `shot.sh` reports "frame never stabilised in 25 s" for K03
-   (both iterations). Fix: parse `'1'` as true in `env_flags.dart` (e.g.
+5. PARTIALLY fixed on main (Stage 6 iter-2, K03-BUG-7): `5eea2ad` wires
+   `kDisableAnimations` into `MediaQuery.disableAnimations` app-wide, but
+   `bool.fromEnvironment('DISABLE_ANIMATIONS')` still parses the documented
+   `=1` as **false** (only `"true"` is true), so on device the Rive Pip keeps
+   animating and `shot.sh` (which passes `=1`) reports "frame never
+   stabilised". Still needed: parse `'1'` as true in
+   `app/lib/core/data/env_flags.dart` (e.g.
    `String.fromEnvironment('DISABLE_ANIMATIONS') == '1' ||
-   bool.fromEnvironment(...)`) and, ideally, drive
-   `MediaQueryData.disableAnimations` from it at the app root so every
-   motion path obeys one switch; passing `=true` in shot.sh also works.
+   bool.fromEnvironment(...)`) and mirror it in `launch_flags.dart`.
    Files: `app/lib/core/data/env_flags.dart`, `app/lib/app/launch_flags.dart`,
-   optionally `app/lib/app/app.dart`, `tools/screens/shot.sh`.
-   Blocks: K03's still-frame gate and the UI screenshot pipeline.
+   optionally `tools/screens/shot.sh` (passing `=true` also works).
+   Blocks: K03's still-frame gate (RULES §6) and the UI screenshot pipeline.
+   The `K03-BUG-7` proof stays conditionally skipped and is run with the
+   documented flag to confirm the failure until this lands.
 
 No schema/DI/token changes needed. No new assets needed (all icons +
 `nest`/`coin`/`meadowHill` exist in `nestling_assets.dart`; Pip renders via

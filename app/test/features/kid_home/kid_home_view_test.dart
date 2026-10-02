@@ -19,6 +19,7 @@ import 'package:nestling/app/app.dart';
 import 'package:nestling/app/controllers.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
+import 'package:nestling/core/data/london_time.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
@@ -254,6 +255,20 @@ List<String> _svgAssets(WidgetTester tester) => find
     .whereType<SvgAssetLoader>()
     .map((loader) => loader.assetName)
     .toList();
+
+/// The dock's surface container: a top-only 3 px ink border (design
+/// `.k3-dock`), which distinguishes it from quest cards (all-side borders).
+Finder _dockSurfaceFinder() => find.byWidgetPredicate((widget) {
+  if (widget is! Container) {
+    return false;
+  }
+  final decoration = widget.decoration;
+  if (decoration is! BoxDecoration) {
+    return false;
+  }
+  final border = decoration.border;
+  return border is Border && border.top.width == 3 && border.left.width == 0;
+});
 
 /// v1 Pip illustrations — the orchestrator forbids them in product screens.
 List<String> _v1PipAssets(WidgetTester tester) =>
@@ -492,6 +507,320 @@ void main() {
       expect(_v1PipAssets(tester), isEmpty);
       await disposeApp(tester);
     });
+
+    testWidgets('an accessorised child drives the full look mapping', (
+      tester,
+    ) async {
+      final db = GetIt.instance<AppDatabase>();
+      await tester.runAsync(() async {
+        await db
+            .into(db.children)
+            .insert(
+              ChildrenCompanion.insert(
+                id: 'ali',
+                familyId: Seed.familyId,
+                nickname: 'Ali',
+                pipStyle: const Value('storybook'),
+                pipSkin: const Value('mint'),
+                pipAccessory: const Value('scarf'),
+                pipStage: const Value(4),
+              ),
+            );
+        await (db.update(db.appState)..where((a) => a.id.equals(1))).write(
+          const AppStateCompanion(activeChildId: Value<String?>('ali')),
+        );
+        await GetIt.instance<AppSession>().refresh();
+      });
+      await _pumpRoute(tester);
+      final avatar = tester.widget<PipAvatar>(find.byType(PipAvatar));
+      expect(avatar.style, PipStyle.storybook);
+      expect(avatar.skin, PipSkin.mint);
+      expect(avatar.accessory, PipAccessory.scarf);
+      expect(avatar.stage, 4);
+      expect(_v1PipAssets(tester), isEmpty);
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+  });
+
+  group('K03 periods (PERIODS ruling)', () {
+    /// Replaces every completion with one for [questId] at [at].
+    Future<void> seedCompletion(
+      WidgetTester tester, {
+      required String questId,
+      required String status,
+      required DateTime at,
+      int coins = 10,
+    }) async {
+      final db = GetIt.instance<AppDatabase>();
+      await tester.runAsync(() async {
+        await db.delete(db.questCompletions).go();
+        await db
+            .into(db.questCompletions)
+            .insert(
+              QuestCompletionsCompanion.insert(
+                questId: questId,
+                childId: 'maya',
+                familyId: Seed.familyId,
+                status: Value(status),
+                coins: Value(coins),
+                createdAt: Value(at),
+                decidedAt: Value(at),
+              ),
+            );
+      });
+    }
+
+    /// Moves the completion for [questId] to [at] and pumps the emission.
+    Future<void> moveCompletion(
+      WidgetTester tester,
+      String questId,
+      DateTime at,
+    ) async {
+      final db = GetIt.instance<AppDatabase>();
+      await tester.runAsync(() async {
+        await (db.update(
+          db.questCompletions,
+        )..where((c) => c.questId.equals(questId))).write(
+          QuestCompletionsCompanion(createdAt: Value(at), decidedAt: Value(at)),
+        );
+      });
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+    }
+
+    testWidgets('daily: before the London day start reads to do again', (
+      tester,
+    ) async {
+      final now = DateTime.now().toUtc();
+      final dayStart = londonDayStartUtc(now);
+      await seedCompletion(
+        tester,
+        questId: 'q-reading',
+        status: 'approved',
+        at: dayStart.subtract(const Duration(minutes: 1)),
+      );
+      await _pumpRoute(tester);
+      expect(find.text('0 done today'), findsOneWidget);
+      await _revealCards(tester);
+      final card = find.ancestor(
+        of: find.text('Reading – 20 minutes'),
+        matching: find.byType(NestKidQuestCard),
+      );
+      expect(
+        find.descendant(of: card, matching: find.text('Done')),
+        findsNothing,
+      );
+      // The to-do rendering is the coin pill, not a status chip.
+      expect(
+        find.descendant(of: card, matching: find.text('+10')),
+        findsOneWidget,
+      );
+      // Move the completion inside today's London day: it counts again.
+      await moveCompletion(tester, 'q-reading', now);
+      expect(find.text('1 done today'), findsOneWidget);
+      expect(
+        find.descendant(of: card, matching: find.text('Done')),
+        findsOneWidget,
+      );
+      await disposeApp(tester);
+    });
+
+    testWidgets("weekly: last week's completion reads to do again", (
+      tester,
+    ) async {
+      final now = DateTime.now().toUtc();
+      final weekStart = londonWeekStartUtc(now);
+      await seedCompletion(
+        tester,
+        questId: 'q-bins',
+        status: 'approved',
+        at: weekStart.subtract(const Duration(minutes: 1)),
+        coins: 15,
+      );
+      await _pumpRoute(tester);
+      expect(find.text('0 done today'), findsOneWidget);
+      await _revealCards(tester);
+      final card = find.ancestor(
+        of: find.text('Put the bins out'),
+        matching: find.byType(NestKidQuestCard),
+      );
+      expect(
+        find.descendant(of: card, matching: find.text('Done')),
+        findsNothing,
+      );
+      // Inside this London week (Mon 00:00) it counts.
+      await moveCompletion(
+        tester,
+        'q-bins',
+        weekStart.add(const Duration(minutes: 1)),
+      );
+      expect(
+        find.descendant(of: card, matching: find.text('Done')),
+        findsOneWidget,
+      );
+      await disposeApp(tester);
+    });
+
+    testWidgets('once: a completion from long ago still counts', (
+      tester,
+    ) async {
+      final db = GetIt.instance<AppDatabase>();
+      await tester.runAsync(() async {
+        await db
+            .into(db.quests)
+            .insert(
+              QuestsCompanion.insert(
+                id: 'q-once',
+                familyId: Seed.familyId,
+                title: 'Old one-off quest',
+                coins: const Value(5),
+                assigneeChildId: const Value('maya'),
+              ),
+            );
+        await db.delete(db.questCompletions).go();
+        await db
+            .into(db.questCompletions)
+            .insert(
+              QuestCompletionsCompanion.insert(
+                questId: 'q-once',
+                childId: 'maya',
+                familyId: Seed.familyId,
+                status: const Value('approved'),
+                coins: const Value(5),
+                createdAt: Value(
+                  DateTime.now().toUtc().subtract(const Duration(days: 400)),
+                ),
+              ),
+            );
+      });
+      await _pumpRoute(tester);
+      expect(find.text('1 done today'), findsOneWidget);
+      await _revealCards(tester);
+      final card = find.ancestor(
+        of: find.text('Old one-off quest'),
+        matching: find.byType(NestKidQuestCard),
+      );
+      expect(
+        find.descendant(of: card, matching: find.text('Done')),
+        findsOneWidget,
+      );
+      await disposeApp(tester);
+    });
+
+    testWidgets('a period-expired daily quest starts a fresh completion', (
+      tester,
+    ) async {
+      final now = DateTime.now().toUtc();
+      final dayStart = londonDayStartUtc(now);
+      await seedCompletion(
+        tester,
+        questId: 'q-reading',
+        status: 'approved',
+        at: dayStart.subtract(const Duration(minutes: 1)),
+      );
+      final semantics = tester.ensureSemantics();
+      await _pumpRoute(tester);
+      await _revealCards(tester);
+      final card = find.ancestor(
+        of: find.text('Reading – 20 minutes'),
+        matching: find.byType(NestKidQuestCard),
+      );
+      final check = find.descendant(
+        of: card,
+        matching: find.bySemanticsLabel('Mark done'),
+      );
+      expect(check, findsOneWidget);
+      await tester.ensureVisible(check);
+      await tester.pump();
+      await tester.tap(check);
+      await _settleRoute(tester);
+      // The new completion celebrates, so the home is offstage until back.
+      expect(find.text('K05 Quest complete'), findsOneWidget);
+      await tester.pageBack();
+      await _settleRoute(tester);
+      expect(
+        find.descendant(of: card, matching: find.text('Waiting for Mum')),
+        findsOneWidget,
+      );
+      expect(find.text('1 done today'), findsOneWidget);
+      // The old out-of-period row is untouched; a fresh one carries the tap.
+      final rows = await tester.runAsync(() async {
+        final db = GetIt.instance<AppDatabase>();
+        final query = db.select(db.questCompletions)
+          ..where((c) => c.questId.equals('q-reading'));
+        return await query.get();
+      });
+      expect(rows, hasLength(2));
+      expect(rows!.map((row) => row.status).toSet(), <String>{
+        'approved',
+        'done_pending',
+      });
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+  });
+
+  group('K03 bottom edge (owner rules)', () {
+    const themes = <(String, ThemeMode)>[
+      ('light', ThemeMode.light),
+      ('dark', ThemeMode.dark),
+    ];
+
+    testWidgets('gutters align: header, cards and dock share the 20 px edge', (
+      tester,
+    ) async {
+      await _pumpRoute(tester);
+      await _revealCards(tester);
+      expect(
+        tester.getRect(find.byType(NestAvatar)).left,
+        closeTo(NestSpacing.padSide, 0.5),
+      );
+      expect(
+        tester.getRect(find.byType(NestKidQuestCard).first).left,
+        closeTo(NestSpacing.padSide, 0.5),
+      );
+      expect(
+        tester.getRect(find.byType(NestKidButton).first).left,
+        closeTo(NestSpacing.padSide, 0.5),
+      );
+      await disposeApp(tester);
+    });
+
+    for (final (themeName, theme) in themes) {
+      testWidgets('$themeName: the dock owns the OS bottom inset', (
+        tester,
+      ) async {
+        // A 34 px system inset (physical px at 3x) must lift the chrome.
+        tester.view.padding = const FakeViewPadding(bottom: 34 * 3);
+        await _pumpRoute(tester, theme: theme);
+        final safeArea = find
+            .ancestor(of: find.text('Pip'), matching: find.byType(SafeArea))
+            .first;
+        expect(tester.widget<SafeArea>(safeArea).top, isFalse);
+        // The OS draws the home pill: the shared indicator reserves nothing.
+        expect(tester.getSize(find.byType(NestHomeIndicator)), Size.zero);
+        // OWNER RULE (bottom edge): the bar's surface runs to the physical
+        // screen edge — no meadow strip under the dock or home indicator.
+        final dock = _dockSurfaceFinder();
+        expect(dock, findsOneWidget);
+        expect(
+          tester.getRect(dock).bottom,
+          closeTo(844, 0.5),
+          reason: 'the dock surface must cover the OS inset to the edge',
+        );
+        final insetTop = tester.getRect(find.byType(NestKidButton).first).top;
+        // Without the inset the dock sits exactly 34 px lower.
+        tester.view.resetPadding();
+        await tester.pump();
+        final noInsetTop = tester.getRect(find.byType(NestKidButton).first).top;
+        expect(noInsetTop - insetTop, closeTo(34, 0.5));
+        // The chrome still reaches the bottom edge; the inset sits below it.
+        expect(tester.getRect(safeArea).bottom, closeTo(844, 0.5));
+        expect(tester.takeException(), isNull);
+        await disposeApp(tester);
+      });
+    }
   });
 
   group('K03 navigation', () {

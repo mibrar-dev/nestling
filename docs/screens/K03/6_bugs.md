@@ -1,177 +1,174 @@
-# K03 Kid home — bug hunt (Stage 6, iteration 2)
+# K03 Kid home — bug hunt (Stage 6, iteration 3)
 
-Adversarial pass over `kid_home` K03 after the iteration-2 fixes and the
-main-branch PERIODS ruling: data edges, rapid double taps, back navigation,
-deep links, restart persistence, mode guards, dark contrast, 320px + 1.3
-scale, async gaps, Europe/London periods (daily/weekly/once, BST edges) and
-integer money. No screen code was changed in this stage.
+Adversarial pass over `kid_home` K03 after the iteration-3 fixes, the owner
+bottom-edge/alignment rules and the main `DISABLE_ANIMATIONS` / PipAvatar
+fallback merges: data edges, rapid double taps, back navigation, deep links,
+restart persistence, mode guards, dark contrast, 320px + 1.3 scale, async
+gaps, Europe/London periods (daily/weekly/once, BST edges), integer money,
+and the owner rules (bar surface to the screen edge, 20px alignment).
+No screen code was changed in this stage.
 
-- Suite: `app/test/features/kid_home/k03_bugs_test.dart` — 33 tests:
-  32 run green, 1 skipped (`K03-BUG-7` needs its flag-specific run).
-- Iteration-1 proofs K03-BUG-1..6 all run un-skipped and pass.
-- K03-BUG-8 and K03-BUG-9 were fixed mid-loop by the concurrent iteration
-  and their proofs now run un-skipped.
-- Re-verified after the main merge `f6b02d8` (PipAvatar fallback art for
-  every style, recoloured to the child's skin): K03's still path uses
-  `mochi/s3_idle_1.svg`; new probes assert the mandated Pip attributes for
-  Maya and Leo and the pipStage 0/9 clamp.
-- Run the motion-flag proof:
+- Suite: `app/test/features/kid_home/k03_bugs_test.dart` — 37 tests:
+  35 run green, 2 skipped (`K03-BUG-7` needs its flag-specific run,
+  `K03-BUG-10` is open).
+- Run the open proofs:
+  `cd app && flutter test --run-skipped --plain-name "K03-BUG-10"` and
   `flutter test --dart-define=DISABLE_ANIMATIONS=1 --plain-name "K03-BUG-7"`.
+- Independent confirmation: the loop's stage-3 `kid_home_view_test.dart`
+  also added two **un-skipped failing** bottom-edge tests ("light/dark: the
+  dock owns the OS bottom inset", Expected within 0.5 of 844, Actual 810) —
+  the whole `flutter test` run is red on those until iteration 4 fixes them.
 
-## Iteration-1 bugs — fixed and re-verified
+## Status of earlier bugs
 
-| ID | Severity | Fix landed | Proof (green) |
-|---|---|---|---|
-| K03-BUG-1 | Major | `completeQuest` is idempotent inside a Drift transaction; per-card `_busy` latch blocks the second event in the same frame | repo + widget double-tap proofs |
-| K03-BUG-2 | Moderate | celebration navigation rides `justCompletedQuestId` (success only); failed write keeps the list + SnackBar | failed-completion proof |
-| K03-BUG-3 | Minor | `actionNonce` makes every failure a distinct state; reset on completion start / healthy stream | double-failure proof |
-| K03-BUG-4 | Moderate | main PERIODS ruling: `watchItems` scopes status via `countsForCurrentPeriod` (daily/weekly/once); day-boundary proof now un-skipped | day-boundary proof + new period probes |
-| K03-BUG-5 | Moderate | main router gates `/today-empty`, `/quest-editor`, `/add-children`, `/pocket-money-setup` from kid mode | both deep-link proofs |
-| K03-BUG-6 | Minor | per-card `_busy` latch covers card body + check; one route per gesture burst | both route-stacking proofs |
+| ID | Severity | Status |
+|---|---|---|
+| K03-BUG-1 | Major | fixed (idempotent transaction + per-card latch); proof green |
+| K03-BUG-2 | Moderate | fixed (success-driven celebration); proof green |
+| K03-BUG-3 | Minor | fixed (actionNonce); proof green |
+| K03-BUG-4 | Moderate | fixed (PERIODS ruling); proof green |
+| K03-BUG-5 | Moderate | fixed on main (router guard); proofs green |
+| K03-BUG-6 | Minor | fixed (per-card latch); proofs green |
+| K03-BUG-7 | Major | **open** — see below (shared parse still broken) |
+| K03-BUG-8 | Minor | fixed mid-loop; proof green |
+| K03-BUG-9 | Minor | fixed mid-loop (`_GateLockButton`); proof green |
 
-## New bugs (iteration 2)
+## New bugs (iteration 3)
 
-### K03-BUG-7 — `DISABLE_ANIMATIONS=1` does not disable animations
+### K03-BUG-10 — The dock surface does not reach the physical bottom edge
+
+**Severity: Major (owner BOTTOM EDGE rule; UI MUST-FAIL).**
+Where: `kid_home_view.dart` bottom chrome — `SafeArea(top: false)` wraps the
+dock `Container(surface)` and the (now zero-sized) `NestHomeIndicator`. The
+SafeArea inset area and the strip below the dock keep the `KidScope`
+sky/meadow background, so a coloured strip shows under the dock and around
+the home-indicator area in both themes. The owner rule: the area below the
+bar down to the physical edge must use the **same surface colour** as the
+bar; never a coloured strip.
+
+Repro (device, UI iteration 3): light capture shows meadow green
+(191,232,176) from y≈805 to y842 under the white dock; dark shows green
+(30,74,58) under the navy dock. The design PNG shows green there too — the
+owner rule explicitly overrides the design.
+
+Repro (widget, deterministic): simulate the 34px home inset
+(`tester.view.padding/viewPadding = FakeViewPadding(bottom: 34)`), pump
+`/kid-home`, and assert some surface-filled box spans the full width and
+reaches the screen bottom (844). The dock container ends at 832.7 and no
+surface box reaches the edge, so the proof fails; with the same setup the
+stage-3 test measures the dock bottom at 810.0 on both themes.
+
+Failing test (skipped so the suite stays green):
+- `K03-BUG-10: the dock surface must run to the physical bottom edge`
+  (also independently failed by the stage-3 view tests for light and dark).
+
+Suggested fix (feature-local, iteration 4): paint the dock's own surface
+across the whole bottom chrome, e.g.
+`ColoredBox(color: tokens.surface, child: SafeArea(top: false, child: …))`
+with the dock's 3px ink top border as the first row inside it, so:
+- the meadow/panel ends at the dock's top border,
+- the surface fills the dock, the inset padding and the indicator area to
+  the screen edge,
+- no coloured strip remains in either theme.
+Keep the dock top border ink line visible (it must not be covered by the
+background), and re-check the dock top target (≈y720) after the change.
+
+### K03-BUG-7 — `DISABLE_ANIMATIONS=1` still parses as false (updated status)
 
 **Severity: Major (shared; motion rule + screenshot determinism).**
-Where: `app/lib/core/data/env_flags.dart` (`kDisableAnimations`),
-`app/lib/app/launch_flags.dart` (`disableAnimations`). RULES §6 and
-`tools/screens/shot.sh` both document/pass `--dart-define=DISABLE_ANIMATIONS=1`,
-but `bool.fromEnvironment` only treats the literal `"true"` as true — `"1"`
-parses as **false**. Nothing else sets `MediaQueryData.disableAnimations`, so
-on device every motion path that checks the compile-time flag believes
-animations are enabled.
+The main commit `5eea2ad` wired `kDisableAnimations` into
+`MediaQuery.disableAnimations` at the app root (`app.dart`), but
+`kDisableAnimations` itself is still
+`bool.fromEnvironment('DISABLE_ANIMATIONS')`
+(`app/lib/core/data/env_flags.dart:9`), which only understands the literal
+`"true"`. With the documented `=1` the flag stays false, the new MediaQuery
+wiring never fires, the Rive `PipAvatar` keeps animating and `shot.sh`
+still reports `WARNING — frame never stabilised in 25 s` (all iteration-1/2/3
+captures). The orchestrator note ("K03-BUG-7 is shared and fixed") is not
+yet true for the documented value.
 
 Repro:
-1. `cd app && flutter test --dart-define=DISABLE_ANIMATIONS=1 --plain-name "K03-BUG-7" test/features/kid_home/k03_bugs_test.dart`
-   → `Expected: true, Actual: false`.
-2. On the simulator, `tools/screens/shot.sh` (which always passes `=1`)
-   captures K03 with the live Rive `PipAvatar` running; the harness prints
-   `WARNING — frame never stabilised in 25 s` in **both** iteration-1 and
-   iteration-2 UI runs. With Rive idle motion there is never a stable frame.
-3. Control: `--dart-define=DISABLE_ANIMATIONS=true` makes the proof pass and
-   the `PipAvatar` build takes the static SVG fallback
-   (`reduceMotion || !riveEnabled` → `_PipAvatarSvgFallback`).
+- `cd app && flutter test --dart-define=DISABLE_ANIMATIONS=1 --plain-name "K03-BUG-7" test/features/kid_home/k03_bugs_test.dart`
+  → `Expected: true, Actual: <false>` (asserts both `kDisableAnimations` and
+  `MediaQuery.disableAnimationsOf` inside the pumped home).
+- Control: the same proof passes with `--dart-define=DISABLE_ANIMATIONS=true`,
+  which proves the app-root wiring itself is correct.
 
-Failing test:
+Failing test (skipped in the plain suite):
 - `K03-BUG-7: the documented DISABLE_ANIMATIONS=1 flag must disable motion`
-  (skipped in the plain suite; runs and fails under the documented flag).
 
-Suggested fix (shared): treat `"1"` as true, e.g.
-`String.fromEnvironment('DISABLE_ANIMATIONS') == '1' || bool.fromEnvironment('DISABLE_ANIMATIONS')`
-in `env_flags.dart` (and `launch_flags.dart`), and ideally set
-`MediaQueryData.disableAnimations` from it once at the app root so every
-motion path obeys the same switch. Passing `=true` in `shot.sh` is a one-line
-workaround. Filed as SHARED_REQUEST #5.
-
-### K03-BUG-8 — A failed later tap swallowed an earlier success (fixed mid-loop)
-
-**Severity: Minor (UX; no data loss).**
-Where: `kid_home_bloc.dart` `_awaitingCelebration` was a single record; two
-quick completions of different quests overwrote each other, and if the second
-write failed the first quest's flip was never celebrated.
-
-Repro (proof): gate the first `completeQuest`; tap quest A, tap quest B;
-release A (card flips while the pending slot already holds B); fail B.
-Actual before the fix: `state.justCompletedQuestId == null` (A never
-celebrated). Fixed during this stage by keying the pending map per quest
-(`Map<String,int>` + first-flip-wins loop); the proof now runs un-skipped.
-
-Failing test (now green):
-- `K03-BUG-8: a failed second completion swallows the first success (no celebration)`
-
-### K03-BUG-9 — Double-tapping the lock stacked two gate routes (fixed mid-loop)
-
-**Severity: Minor (back-stack UX).**
-Where: `kid_home_view.dart` — the lock pushed `/parental-gate` with no
-per-tap latch (unlike `_QuestCard`); the lock is a 56px kid target, so a
-fast double tap is realistic.
-
-Repro: open `/kid-home`, tap "Grown-ups" twice inside one frame.
-Actual before the fix: two `/parental-gate` routes were pushed; one system
-back press left the user on the second gate instead of returning home.
-Fixed during this stage with a `_GateLockButton` stateful wrapper whose
-`_busy` latch wraps `context.push(gate)` in `try/finally`; the proof now
-runs un-skipped.
-
-Failing test (now green):
-- `K03-BUG-9: double-tapping the lock stacks two gate routes`
+Suggested fix (shared): parse `"1"` as true in
+`app/lib/core/data/env_flags.dart`, e.g.
+`const kDisableAnimations = bool.fromEnvironment('DISABLE_ANIMATIONS') || String.fromEnvironment('DISABLE_ANIMATIONS') == '1';`
+(and mirror in `app/lib/app/launch_flags.dart`), or change `shot.sh` and
+RULES §5/§6 to pass `=true`. Filed as SHARED_REQUEST #5.
 
 ## Verified clean (probes in the same file)
 
 | Category | Probe | Result |
 |---|---|---|
-| periods | day/week starts inclusive, older excluded; daily/weekly/once; explicit BST→GMT (25 Oct) and GMT→BST (29 Mar) switch days | pass |
-| mandated Pip | home renders `PipAvatar` with Maya = mochi/sunny/none/stage 3; Leo deep-link = bolt/sky/stage 2; pipStage 0 → 1 and 9 → 4 (clamped, no assert) | pass |
-| period + repo | daily completion 1s before the London day start → to_do, at the start → approved; weekly outside the week → to_do; once 400 days old → approved | pass |
-| retry | failed completion → SnackBar, no celebration; retry after the failure → K05 opens | pass |
-| 0 children | `Seed.empty` → "Who's playing?" + Choose | pass |
-| 1 child / 6 children | Leo removed / four extra children: Maya's home unchanged | pass |
-| long UK name | "Maximilian-Alexander" + 9999 coins at 320px / scale 1.3 | pass |
-| £0.00 / £999.99 | coins only; `+0` for a zero-coin quest, no `£` anywhere | pass |
-| back navigation | check → K05 → back → home with the card flipped to "Waiting for Mum" | pass |
-| deep links | `/kid-home` kid mode with/without active child; `/kid-home` in parent mode still deliberate (see observations) | pass |
+| owner alignment | 20 px gutters: progress bar, first card, dock buttons all share x=20 / x=370 at 390px | pass |
+| owner bottom (pre-fix) | surface reaches the edge — covered by K03-BUG-10 (failing) | open |
+| state art | failure state renders `PipAvatar`, no `pip_stage_*.svg` | pass |
+| state art | empty-quests state renders the child's own `PipAvatar`, no v1 art | pass |
+| mandated Pip | Maya = mochi/sunny/none/stage 3; Leo link = bolt/sky/stage 2; pipStage 0/9 clamped | pass |
+| periods | day/week starts inclusive; daily/weekly/once; BST/GMT switch days | pass |
+| period + repo | daily just before the start → to_do, at the start → approved; weekly outside → to_do; once 400 days → approved | pass |
+| retry | failed completion → SnackBar, no K05; retry → K05 | pass |
+| data edges | 0 / 1 / 6 children; "Maximilian-Alexander" + 9999 coins at 320/1.3; `+0` coins, no `£` | pass |
+| back nav | check → K05 → back → home, card flipped to "Waiting for Mum" | pass |
+| deep links | `/kid-home` kid mode with/without active child | pass |
 | restart | Drift file DB closed/reopened: completion still `done_pending` | pass |
-| guard | `/today`, `/today-empty`, `/quest-editor`, `/add-children`, `/pocket-money-setup` all redirect to the gate in kid mode | pass |
+| guard | `/today`, `/today-empty`, `/quest-editor`, `/add-children`, `/pocket-money-setup` → gate in kid mode | pass |
 | dark contrast | 16 K03 token pairs ≥ 4.5:1 in both themes | pass |
 | async gap | late `completeQuest` failure after `bloc.close()` does not throw | pass |
-| money rounding | integer coins only; pence arithmetic lives in the parent money screens | pass |
+| money | integer coins only on this screen | pass |
 
 ## Observations (checked, not raised as bugs)
 
-1. **Period rollover without a DB change.** `watchItems` computes status at
-   stream-map time; at London midnight a daily completion stops counting only
-   when the stream re-emits (any DB write) or the screen reloads. There is no
-   day-tick timer and no injectable clock, so this cannot be proven in-suite;
-   worth a foundation tick if kids keep the app open overnight.
-2. **Test-suite wall-clock coupling.** `test/flutter_test_config.dart` pins
-   `Seed.anchorOverride` to Sat 3 Oct 2026 but nothing pins `DateTime.now()`,
-   which both `watchItems` and `completeQuest` use. The demo "4 of 6" and the
-   period proofs stay deterministic only while the machine clock is in the
-   same London day/week as the pinned anchor; a clock seam
-   (`DateTime Function() now` or `package:clock`) would make it robust.
-3. **`inNest` note vs composition.** ORCHESTRATOR_NOTES #1 asks for
-   `PipAvatar(..., inNest true)`; the screen renders the child's `PipAvatar`
-   (Mochi/sunny/stage 3, attributes from the DB) at 152px over the `nest`
-   art instead, which matches the measurable slot requirements (Pip 152 on a
-   260×236 nest) and avoids double-nesting with the Rive `PipStage` artboard.
-   Stage 5 accepted the result (A3); flagged here only for traceability.
-4. **Parent mode → `/kid-home`.** Still reachable by deep link; the spec
-   guard is one-way (kid → parent/gate) and there is no in-app parent entry.
-5. **PIN bypass.** `/kid-home` in kid mode does not require the K02 PIN;
-   K01/K02 are placeholders owned by other K screens, so no PIN state exists
-   to enforce yet.
-6. **Debug routes in kid mode.** `/design-system`, `/motion-lab`, `/pip-lab`
-   are not in the guard list (debug-only entry points).
-7. **Leo's icon fallback.** `paw`/`bag`/`leaf` icons still fall back to the
-   generic quest-card glyph (`_iconFor`); per plan, design shows Maya only.
-8. **Accessories in the still frame.** The merged `f6b02d8` fallback
-   (`_PipAvatarSvgFallback`) recolours by skin but takes no accessory, so
-   under `DISABLE_ANIMATIONS`/reduced motion a child wearing a bow/cap/
-   scarf/glasses shows the bare idle art. Neither seed child equips one
-   today, so no design impact; a golden/screenshot check with an accessorised
-   child would be needed to raise it as a defect (shared component).
+1. **Dock top ≈6px high (UI iteration 3 #2).** On the simulator the dock top
+   measured y≈713-715 vs the ORCHESTRATOR_NOTES target y≈720. A widget-test
+   assertion is unreliable (GoogleFonts metrics differ in tests), so this
+   stays a UI-stage deviation; re-check with stable frames after the
+   bottom-edge fix.
+2. **Upper-stack residuals (UI iteration 3 #3).** Hearts +12, progress +8,
+   card-1 top +4, green start +38 vs the PNG. The build notes argue the
+   specified inter-block gaps are exact and the residual is live-Rive
+   variance; re-measure once `DISABLE_ANIMATIONS=1` actually freezes frames
+   (K03-BUG-7).
+3. **Period rollover without a DB change.** Status is computed at stream-map
+   time; at London midnight a daily completion stops counting only on the
+   next stream emission or reload. No injectable clock, so not provable here.
+4. **Test-suite wall-clock coupling.** `flutter_test_config.dart` pins
+   `Seed.anchorOverride` but not `DateTime.now()`, which the period filter
+   uses; the demo "4 of 6" and period proofs stay deterministic only while
+   the machine clock is in the pinned anchor's day/week.
+5. **`inNest` note vs composition.** The screen composes the child's
+   `PipAvatar` over the `nest` art instead of `inNest: true`; the measurable
+   slot requirements are met and stage 5 accepted it.
+6. **Parent mode → `/kid-home`** still reachable by deep link (spec guard is
+   one-way); **`/kid-home` does not require the K02 PIN** (K01/K02 are
+   placeholders); debug gallery routes are not in the guard list.
+7. **Accessories in the still frame.** The static `PipAvatar` fallback takes
+   no accessory; no seed child equips one today.
+8. **Process note (not a finding).** The iteration-3 stage-3 tests leave two
+   un-skipped bottom-edge failures in `kid_home_view_test.dart`; they confirm
+   K03-BUG-10 and are expected to be made green by the iteration-4 fix.
 
 ## Summary
 
 | ID | Severity | Area | Status |
 |---|---|---|---|
-| K03-BUG-1 | Major | duplicate pending completions / double payout | fixed, proof green |
-| K03-BUG-2 | Moderate | celebration before successful save | fixed, proof green |
-| K03-BUG-3 | Minor | swallowed repeat failure feedback | fixed, proof green |
-| K03-BUG-4 | Moderate | "done today" period semantics | fixed (main ruling), proof green |
-| K03-BUG-5 | Moderate | kid-mode guard misses parent routes | fixed on main, proofs green |
-| K03-BUG-6 | Minor | stacked duplicate routes on double tap | fixed, proofs green |
-| K03-BUG-7 | **Major** | `DISABLE_ANIMATIONS=1` parses false → Rive Pip never still, screenshots never stabilise | **open (shared)** |
-| K03-BUG-8 | Minor | in-flight failure swallowed an earlier celebration | fixed mid-loop, proof green |
-| K03-BUG-9 | Minor | double-tap on the lock stacked gate routes | fixed mid-loop, proof green |
+| K03-BUG-7 | **Major** | `DISABLE_ANIMATIONS=1` parses false → Rive never still, screenshots never stabilise | **open (shared, SHARED_REQUEST #5)** |
+| K03-BUG-10 | **Major** | dock surface does not reach the screen edge → coloured strip under the dock (owner MUST-FAIL) | **open (feature-local)** |
+| K03-BUG-1..6 | — | iteration-1 defects | fixed, proofs green |
+| K03-BUG-8/9 | Minor | celebration swallow, lock route stacking | fixed mid-loop, proofs green |
 
-The screen itself is in good shape: every iteration-1 bug is fixed and
-re-verified, period semantics now match the ruling, and the new edge probes
-pass. The one major finding is shared infrastructure (K03-BUG-7): the
-documented still-frame flag silently parses as false, so K03's Rive Pip
-keeps animating on device and the UI stage's screenshots cannot stabilise.
-Until that flag (or `shot.sh`) is fixed, the screenshot evidence is a random
-animation frame and RULES §6 is not actually satisfied on device.
+The iteration-3 screen code genuinely improved (PipAvatar states, period
+semantics, retry, tap guards, alignment all verified green), but two major
+issues remain: the owner bottom-edge rule is visibly violated on device
+(green strip under the dock in both themes — independently failing the
+stage-3 suite), and the documented `DISABLE_ANIMATIONS=1` still does not
+disable motion, which also keeps every screenshot a random animation frame.
 
 VERDICT: FAIL
