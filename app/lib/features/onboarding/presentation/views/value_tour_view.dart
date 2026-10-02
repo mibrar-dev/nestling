@@ -3,19 +3,23 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nestling/core/data/env_flags.dart';
+import 'package:nestling/core/data/london_time.dart';
+import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 import 'package:nestling/features/auth/auth_routes.dart';
+import 'package:nestling/features/onboarding/onboarding_routes.dart';
+import 'package:nestling/features/onboarding/presentation/widgets/value_tour_preview_row.dart';
 
 /// P02 Value tour — parent-mode marketing pager at `/value-tour`.
 ///
 /// Static marketing screen (same pattern as P01 `WelcomeView`): three tour
 /// cards in a clipped horizontal pager + dots + per-page title/body + a fixed
-/// bottom CTA. The copy mirrors `OnboardingRepositoryImpl._steps` verbatim so
-/// pre-load frames match loaded frames; the view subscribes to no bloc state
-/// (the route-level `BlocProvider` in `onboarding_routes.dart` owns the
-/// `OnboardingBloc` and its `watchItems()` subscription). Pager index is
-/// ephemeral UI state owned here (`_page` + `PageController`).
+/// bottom CTA. The step copy mirrors `OnboardingRepositoryImpl._steps`
+/// verbatim so pre-load frames match loaded frames; the view subscribes to no
+/// bloc state (the route-level `BlocProvider` in `onboarding_routes.dart`
+/// owns the `OnboardingBloc` and its `watchItems()` subscription). Pager index
+/// is ephemeral UI state owned here (`_page` + `PageController`).
 class ValueTourView extends StatefulWidget {
   const ValueTourView({super.key});
 
@@ -24,8 +28,9 @@ class ValueTourView extends StatefulWidget {
 }
 
 class _ValueTourViewState extends State<ValueTourView> {
-  /// Design left inset of the first card (`.pg-card.c1 left 20`).
-  static const double _pagerInsetLeft = 20;
+  /// Design left inset of the first card (`.pg-card.c1 left 20`, same 20px
+  /// screen gutter used everywhere on this screen).
+  static const double _pagerInsetLeft = NestSpacing.padSide;
 
   /// Card width clamp (`min(310, max(240, viewportW - 80))` per 1_plan §a:
   /// 390dp → 310; 320dp → 240; 430dp → 310).
@@ -36,21 +41,12 @@ class _ValueTourViewState extends State<ValueTourView> {
   /// Inter-card gap (c2 left 342 = 20 + 310 + 12).
   static const double _cardGap = 12;
 
-  /// Pager base height.
-  ///
-  /// 1_plan §a specifies `400 × ts` (design `.pager` 400), which assumes
-  /// compact rows of 56px. `NestListRow` compact rows really are 60px (56
-  /// min-height, but the 22px title + 18px subtitle lines plus 20px of row
-  /// padding win), so card 1 needs 444px even before two further measured
-  /// facts: (a) `Container` folds a decoration border into its effective
-  /// padding, so the 1.5px-bordered chips are 35px, not 32 (+3); (b) under
-  /// the widget-test fallback font the 26-char caption wraps to two lines
-  /// (+18). Tallest measured content is 465px; the base grows 400 → 468 to
-  /// fit it with 3px to spare. All plan spacings and components are kept;
-  /// cards 2–3 absorb the extra via their `Spacer` (HTML `margin-top:
-  /// auto`). The whole screen still fits 390×844 (the scroll region absorbs
-  /// 3px of its bottom padding).
-  static const double _pagerBaseH = 468;
+  /// Pager base height: the design's `.pager` 400 (SPACING_SPEC §7), scaled
+  /// by the clamped text scaler. Card 1 fits because its preview rows use
+  /// the feature-private `ValueTourPreviewRow` at the design's 38dp
+  /// `.pv-row` metrics (see that widget and `SHARED_REQUEST.md`); cards 2–3
+  /// absorb slack via their `Spacer` (HTML `margin-top: auto`).
+  static const double _pagerBaseH = 400;
 
   /// Below-pager rhythm (`.scroll > .pg-dots margin-top 22`, `.pg-title`
   /// margin-top 30, `.pg-body` margin-top 12).
@@ -74,6 +70,41 @@ class _ValueTourViewState extends State<ValueTourView> {
       detail: 'No bank card needed — we keep score, you pay your way.',
     ),
   ];
+
+  /// Head-chip width cap: content wider than this scales down instead of
+  /// overflowing narrow screens (SPACING_SPEC §10.3 scaleDown precedent for
+  /// tight chips). Above the cap nothing changes — the box shrink-wraps —
+  /// so design sizes render exactly as before.
+  static const double _chipMaxW = 180;
+
+  /// Date/status chip for the card heads (`.chip` 32px).
+  static Widget _headChip(String label, {bool selected = false}) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: _chipMaxW),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: NestChip(label: label, selected: selected),
+      ),
+    );
+  }
+
+  /// Date chip: the next payout Saturday strictly after the story "today".
+  ///
+  /// The design hard-codes `Sat 4 Oct`, but 4 Oct 2026 is a Sunday — the
+  /// seed anchors the story to Sat 3 Oct 2026 (and `formatLondonDay`
+  /// renders weekday labels via `london_time.dart`), so the chip derives
+  /// the upcoming payout Saturday (`payoutDay` 6 in the seeded family row)
+  /// instead: `Sat 10 Oct` under the pinned test clock, the next real
+  /// Saturday in production. UTC midnight always maps to the same London
+  /// date (London is UTC or UTC+1), so the label is stable.
+  static String _payoutChipLabel() {
+    final anchor = Seed.anchorDay;
+    var ahead = (DateTime.saturday - anchor.weekday) % 7;
+    if (ahead == 0) {
+      ahead = DateTime.daysPerWeek;
+    }
+    return formatLondonDay(anchor.add(Duration(days: ahead)));
+  }
 
   int _page = 0;
   PageController? _controller;
@@ -115,6 +146,17 @@ class _ValueTourViewState extends State<ValueTourView> {
 
   void _skip() => context.go(AuthRoutePaths.createAccount);
 
+  /// System back returns to `/welcome` (1_plan §c). P01 reaches the tour
+  /// with `context.go`, so no `/welcome` sits below us on the stack — the
+  /// pop is vetoed and re-routed instead. (Pushing from P01 was considered
+  /// instead, but `push` routes through the engine echo and never lands in
+  /// widget tests, so the BUG-6 proof could not observe it.)
+  void _onSystemBack(bool didPop, Object? result) {
+    if (!didPop && context.mounted) {
+      context.go(OnboardingRoutePaths.welcome);
+    }
+  }
+
   void _goTo(int page) {
     final target = page.clamp(0, _steps.length - 1);
     final controller = _controller;
@@ -129,7 +171,11 @@ class _ValueTourViewState extends State<ValueTourView> {
     if (reduce) {
       controller.jumpToPage(target);
     } else {
-      controller.nextPage(
+      // Retargetable: a second tap mid-animation heads for the same page
+      // instead of skipping one (`nextPage` would advance from the current
+      // offset).
+      controller.animateToPage(
+        target,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
       );
@@ -142,93 +188,116 @@ class _ValueTourViewState extends State<ValueTourView> {
     final ts = rawScale.clamp(1.0, 1.3);
     final pagerH = _pagerBaseH * ts;
     final step = _steps[_page];
-    return Scaffold(
-      body: Column(
-        children: <Widget>[
-          const NestStatusBar(),
-          _TourNav(onSkip: _skip),
-          Semantics(
-            label: 'Tour preview, step ${_page + 1} of ${_steps.length}',
-            container: true,
-            child: Padding(
-              padding: const EdgeInsets.only(left: _pagerInsetLeft),
-              child: SizedBox(
-                height: pagerH,
-                child: PageView.builder(
-                  controller: _controller,
-                  padEnds: false,
-                  // Viewport edge clipping is PageView's default
-                  // (Clip.hardEdge), matching the design's clipped peek.
-                  itemCount: _steps.length,
-                  onPageChanged: (index) => setState(() => _page = index),
-                  itemBuilder: (context, index) => Padding(
-                    padding: const EdgeInsets.only(right: _cardGap),
-                    child: SizedBox(
-                      width: _cardW,
-                      height: pagerH,
-                      child: const <Widget>[
-                        _QuestPreviewCard(),
-                        _PipPreviewCard(),
-                        _JarPreviewCard(),
-                      ][index],
+    // Pager + step copy share one scrollable (P02-BUG-3): fixed chrome is
+    // only status + nav + CTA, so short screens scroll instead of
+    // overflowing. At 390×844 the content is shorter than the viewport, so
+    // every y matches the fixed-stack layout pixel-for-pixel.
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: _onSystemBack,
+      child: Scaffold(
+        body: Column(
+          children: <Widget>[
+            const NestStatusBar(),
+            _TourNav(onSkip: _skip),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Semantics(
+                      label:
+                          'Tour preview, step ${_page + 1} of ${_steps.length}',
+                      container: true,
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: _pagerInsetLeft),
+                        child: SizedBox(
+                          height: pagerH,
+                          child: PageView.builder(
+                            controller: _controller,
+                            padEnds: false,
+                            // Viewport edge clipping is PageView's default
+                            // (Clip.hardEdge), matching the design's clipped
+                            // peek.
+                            itemCount: _steps.length,
+                            onPageChanged: (index) =>
+                                setState(() => _page = index),
+                            itemBuilder: (context, index) => Padding(
+                              padding: const EdgeInsets.only(right: _cardGap),
+                              child: SizedBox(
+                                width: _cardW,
+                                height: pagerH,
+                                child: const <Widget>[
+                                  _QuestPreviewCard(),
+                                  _PipPreviewCard(),
+                                  _JarPreviewCard(),
+                                ][index],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        NestSpacing.padSide,
+                        0,
+                        NestSpacing.padSide,
+                        NestSpacing.s8,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          const SizedBox(height: _dotsTop),
+                          NestPagerDots(count: _steps.length, index: _page),
+                          const SizedBox(height: _titleGap),
+                          Semantics(
+                            header: true,
+                            child: Text(step.title, style: context.nestText.h1),
+                          ),
+                          const SizedBox(height: NestSpacing.s3),
+                          Text(
+                            step.detail,
+                            style: NestType.body(color: context.nest.ink2),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(
-                NestSpacing.padSide,
-                0,
-                NestSpacing.padSide,
-                NestSpacing.s8,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  const SizedBox(height: _dotsTop),
-                  NestPagerDots(count: _steps.length, index: _page),
-                  const SizedBox(height: _titleGap),
-                  Semantics(
-                    header: true,
-                    child: Text(step.title, style: context.nestText.h1),
-                  ),
-                  const SizedBox(height: NestSpacing.s3),
-                  Text(
-                    step.detail,
-                    style: NestType.body(color: context.nest.ink2),
-                  ),
-                ],
-              ),
+            NestBottomCta(
+              child: _page < _steps.length - 1
+                  ? NestButton(
+                      key: const ValueKey('p02_next'),
+                      label: 'Next',
+                      onPressed: () => _goTo(_page + 1),
+                    )
+                  : NestButton(
+                      key: const ValueKey('p02_continue'),
+                      label: 'Continue',
+                      onPressed: _skip,
+                    ),
             ),
-          ),
-          NestBottomCta(
-            child: _page < _steps.length - 1
-                ? NestButton(
-                    key: const ValueKey('p02_next'),
-                    label: 'Next',
-                    onPressed: () => _goTo(_page + 1),
-                  )
-                : NestButton(
-                    key: const ValueKey('p02_continue'),
-                    label: 'Continue',
-                    onPressed: _skip,
-                  ),
-          ),
-          const NestHomeIndicator(),
-        ],
+            const NestHomeIndicator(),
+          ],
+        ),
       ),
     );
   }
 }
 
 /// Tour header: right-aligned Skip (1_plan §g).
+///
+/// Compact spec geometry: 4px top + 44px content + 12px bottom = 60 total
+/// (design `.nav-bar.compact`). The action button follows the shared
+/// `_NavActionButton` Material/InkWell pattern (ripple, hover, keyboard
+/// focus); the explicit `Semantics.onTap` carries the activation action on
+/// the labeled node itself.
 //
-// TODO(P02): `NestNavBar` compact traps the trailing action in a fixed 44px
-// slot, so this feature-private 52px bar ships until the shared wide-action
-// fix lands (see `docs/screens/P02/SHARED_REQUEST.md`).
+// TODO(P02): adopt the shared compact-bar wide-action fix for the trailing
+// slot (see `docs/screens/P02/SHARED_REQUEST.md`) and retire this bar.
 class _TourNav extends StatelessWidget {
   const _TourNav({required this.onSkip});
 
@@ -236,25 +305,31 @@ class _TourNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 52,
-      child: Padding(
-        padding: const EdgeInsets.only(right: NestSpacing.padSide),
-        child: Row(
-          children: <Widget>[
-            const Expanded(child: SizedBox.shrink()),
-            Semantics(
-              key: const ValueKey('p02_skip'),
-              button: true,
-              container: true,
-              label: 'Skip',
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  minWidth: NestDevice.tapParent,
-                  minHeight: NestDevice.tapParent,
-                ),
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
+    return Padding(
+      padding: const EdgeInsets.only(
+        top: NestSpacing.s1,
+        right: NestSpacing.padSide,
+        bottom: NestSpacing.s3,
+      ),
+      child: Row(
+        children: <Widget>[
+          const Expanded(child: SizedBox.shrink()),
+          Semantics(
+            key: const ValueKey('p02_skip'),
+            button: true,
+            container: true,
+            label: 'Skip',
+            // On the labeled node itself (screen-reader activation); the
+            // inner InkWell below serves touch/mouse/keyboard visuals.
+            onTap: onSkip,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                minWidth: NestDevice.tapParent,
+                minHeight: NestDevice.tapParent,
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
                   onTap: onSkip,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
@@ -276,18 +351,22 @@ class _TourNav extends StatelessWidget {
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-/// Card 1 — "Today's quests" (static preview consts per 1_plan §a).
+/// Card 1 — "Today's quests": static preview of the seeded demo quests.
+///
+/// Assignee/repeat follow `Seed.demo` (DATA OVER MOCKS), not the design PNG:
+/// dishwasher maya/daily, bins maya/weekly, reading maya/daily, tidy
+/// maya/daily. Coins (15/15/10/15) and the 4-of-6 progress match the seed.
 class _QuestPreviewCard extends StatelessWidget {
   const _QuestPreviewCard();
 
-  /// Preview rows: icon, tile tint, title, subtitle, coin amount.
+  /// Preview rows: icon, tile tint, title, seeded subtitle, coin amount.
   static const List<
     ({String asset, NestTileTint tint, String title, String sub, String coins})
   >
@@ -296,14 +375,14 @@ class _QuestPreviewCard extends StatelessWidget {
       asset: NestIcons.target,
       tint: NestTileTint.sky,
       title: 'Empty the dishwasher',
-      sub: 'Maya · weekly',
+      sub: 'Maya · daily',
       coins: '15',
     ),
     (
       asset: NestIcons.bin,
       tint: NestTileTint.coin,
       title: 'Put the bins out',
-      sub: 'Leo · once',
+      sub: 'Maya · weekly',
       coins: '15',
     ),
     (
@@ -317,7 +396,7 @@ class _QuestPreviewCard extends StatelessWidget {
       asset: NestIcons.bed,
       tint: NestTileTint.peach,
       title: 'Tidy your bedroom',
-      sub: 'Maya · weekly',
+      sub: 'Maya · daily',
       coins: '15',
     ),
   ];
@@ -325,7 +404,6 @@ class _QuestPreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return NestCard(
-      padding: const EdgeInsets.all(NestSpacing.s4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
@@ -340,7 +418,9 @@ class _QuestPreviewCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              const NestChip(label: 'Sat 4 Oct'),
+              _ValueTourViewState._headChip(
+                _ValueTourViewState._payoutChipLabel(),
+              ),
             ],
           ),
           const SizedBox(height: NestSpacing.gap14),
@@ -350,16 +430,12 @@ class _QuestPreviewCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               for (final row in _rows)
-                NestListRow(
-                  compact: true,
+                ValueTourPreviewRow(
                   title: row.title,
                   subtitle: row.sub,
                   leadingAsset: row.asset,
                   tint: row.tint,
-                  trailing: NestCoinPill(
-                    amount: row.coins,
-                    size: NestCoinPillSize.small,
-                  ),
+                  coins: row.coins,
                 ),
             ],
           ),
@@ -387,7 +463,6 @@ class _PipPreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return NestCard(
-      padding: const EdgeInsets.all(NestSpacing.s4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
@@ -402,7 +477,7 @@ class _PipPreviewCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              const NestChip(label: 'Fledgling', selected: true),
+              _ValueTourViewState._headChip('Fledgling', selected: true),
             ],
           ),
           const SizedBox(height: NestSpacing.gap10),
@@ -423,8 +498,17 @@ class _PipPreviewCard extends StatelessWidget {
           Text(
             '175 of 250 coins · Pip evolves at 250',
             style: context.nestText.caption,
+            // Single line (as at the design width): the 38-char caption
+            // would wrap under the wide widget-test font and push a 400dp
+            // card over budget; below ~350dp it ellipsises per the
+            // small-screen rules instead of breaking the card.
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: NestSpacing.gap10),
+          // 9dp, not the HTML 10: the bordered head chip (+3dp, shared
+          // `NestChip` behaviour) leaves card 2 exactly 1dp over 400dp
+          // otherwise — sub-perceptual, keeps the 158 Pip slot exact.
+          const SizedBox(height: NestSpacing.gap9),
           ExcludeSemantics(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -480,7 +564,6 @@ class _JarPreviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.nest;
     return NestCard(
-      padding: const EdgeInsets.all(NestSpacing.s4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
@@ -495,7 +578,9 @@ class _JarPreviewCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              const NestChip(label: 'Sat 4 Oct'),
+              _ValueTourViewState._headChip(
+                _ValueTourViewState._payoutChipLabel(),
+              ),
             ],
           ),
           const SizedBox(height: NestSpacing.gap14),
@@ -577,7 +662,9 @@ class _LedgerLine extends StatelessWidget {
 }
 
 /// Dashed preview add-row (`.pv-add`: min-height 44, r-m 16, 1.5px dashed
-/// `line` border, 15 w600 ink2). Non-interactive.
+/// `line` border, 15 w600 ink2). Non-interactive, but the label stays a
+/// plain-text semantics node (the HTML exposes it; the last one is a product
+/// claim) while the leading icon is excluded as decorative.
 class _DashedAddRow extends StatelessWidget {
   const _DashedAddRow({required this.iconAsset, required this.label});
 
@@ -587,23 +674,26 @@ class _DashedAddRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = context.nest;
-    return ExcludeSemantics(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: NestDevice.tapParent),
-        child: CustomPaint(
-          painter: _DashedBorder(color: tokens.line, radius: NestRadii.m),
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: NestSpacing.s3,
-                vertical: NestSpacing.gap10,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                spacing: NestSpacing.s2,
-                children: <Widget>[
-                  NestIcon(iconAsset, size: 20, color: tokens.ink2),
-                  Flexible(
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: NestDevice.tapParent),
+      child: CustomPaint(
+        painter: _DashedBorder(color: tokens.line, radius: NestRadii.m),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: NestSpacing.s3,
+              vertical: NestSpacing.gap10,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              spacing: NestSpacing.s2,
+              children: <Widget>[
+                ExcludeSemantics(
+                  child: NestIcon(iconAsset, size: 20, color: tokens.ink2),
+                ),
+                Flexible(
+                  child: Semantics(
+                    container: true,
                     child: Text(
                       label,
                       style: NestType.bodySmallStrong(color: tokens.ink2),
@@ -611,8 +701,8 @@ class _DashedAddRow extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),

@@ -1,172 +1,192 @@
-# P02 Value tour — QA code review (Stage 4, iteration 1)
+# P02 Value tour — QA code review (Stage 4, iteration 2)
 
-Reviewed `git diff main...HEAD` (docs only) plus the working-tree change to
-`app/lib/features/onboarding/presentation/views/value_tour_view.dart` and the new
-`app/test/features/onboarding/value_tour_view_test.dart`.
+Reviewed the current branch diff (`git diff main...HEAD` + working tree):
+`value_tour_view.dart` (rewrite), the new
+`presentation/widgets/value_tour_preview_row.dart`, `value_tour_view_test.dart`,
+`p02_bugs_test.dart` (9 skipped proofs un-skipped), and the notes.
 
-Verified locally in `app/`: `flutter analyze` → *No issues found!*;
-`dart format --output=none --set-exit-if-changed .` → *0 changed* (346 files);
-`flutter test` → *422 passed, 0 failed*. Design bands measured off
-`design/screens/light|P02-value-tour.png` at ÷3 (card 1 = y 107→507, i.e. 400 tall;
-dots ink 534–542; title ink 583.7–603; body lines 623–647 / 647–671; CTA hairline
-725; body line 1 ink x 21.3→353, line 2 x 21.0→246.3).
+Verified in `app/`: `flutter analyze` → *No issues found!*;
+`dart format --output=none --set-exit-if-changed .` → *0 changed* (349 files);
+`flutter test` → *443 passed, 0 failed, 0 skipped*.
+
+**Iteration-1 findings 1–9 are all closed**, and I re-measured the design bands
+against the new device screenshot `ui/app_light_2.png` to confirm it:
+
+| Band | Design (÷3) | App | |
+|---|---|---|---|
+| card 1 top / bottom | 107 / 507 | 107 / 507 | exact |
+| preview-row tile pitch | 50 (170,220,270,320) | 50 (173,223,273,323) | pitch exact, +3 shared chip drift |
+| progress bar | 371–379 | 374–382 | +3 (same cause) |
+| dashed add-row | 447 → 490 | 447 → 490.3 | exact |
+| dots ink | 534–542 (x 170–191.7/198–205.7/212–219.7) | identical | exact |
+| title ink | 582–608.3 | 582–608.3 | exact |
+| CTA hairline / button | 725 / 742–794 | 726 / 742–794 | 1px hairline, button exact |
+| bottom edge (y 800…843) | paper (design) | surface `#FFFFFF` / `#1F1C2E` | owner rule wins ✓ |
+
+All four preview titles now render in full (row-title ink ends at 234.7/196.7/
+239.3/220.3 — no ellipsis), the step copy is no longer clipped, and card 1's
+content (359) leaves the design's 44px `margin-top:auto` slack. No blocker or
+major findings remain.
 
 ## Findings
 
-### 1. MAJOR — fixed pager height 468 breaks the design's 400 and slices the step copy
-`app/lib/features/onboarding/presentation/views/value_tour_view.dart:53`
-(`_pagerBaseH = 468`), `:143` (`pagerH = _pagerBaseH * ts`), `:155-156`.
+### 1. MINOR — card 1's date chip shows the *payout* Saturday, not today
+`value_tour_view.dart:100-107` (`_payoutChipLabel`), used at `:421-423` (card 1,
+"Today's quests") and `:581-583` (card 3, "coming on Saturday"). Both chips now
+read "the next Saturday after `Seed.anchorDay`" (`Sat 10 Oct` under the pinned
+test clock). On card 1 that implies today is a week away from the chip's date,
+and the card's own title says "Today's quests". The design's `Sat 4 Oct` was
+meant to be *today* on card 1 and the payout day on card 3; only the weekday
+letter was wrong (BUG-5).
+Fix: card 1 → `formatLondonDay(Seed.anchorDay)` (today); keep the next-Saturday
+derivation for card 3 only. Add a test asserting the two chips differ and that
+card 1's equals the anchor day.
 
-`SPACING_SPEC` §7 (l. 317) and the PNG both fix the pager card at **400**; the
-screen uses 468. Consequences at the design's own 390×844:
+### 2. MINOR — the presentation layer derives a production date from the seeder
+`value_tour_view.dart:7` imports `core/data/seed.dart` and calls
+`Seed.anchorDay` (`:101`). `Seed` is the demo/test seeder: the screen's chrome
+now silently follows `Seed.anchorOverride`, which only exists for tests.
+Architecturally a view should not read a seeder (data comes from
+repository/bloc; `ARCHITECTURE` per-feature contract), and the chip is a clock
+concern, not seed data.
+Fix: compute it from `london_time.dart` (`toLondon(DateTime.now().toUtc())`)
+and keep test determinism by passing the anchor in (a `DateTime anchor`
+parameter defaulting to today, set by the test helpers) — or, if `Seed.anchorDay`
+is kept deliberately, say so in the doc comment at `:91-99`.
 
-- Card top 47 + nav 52 = 99 (design 107) and the card is 468 tall (design 400), so
-  everything below the pager sits **+60px** lower than the PNG: dots ink at
-  594 (design 534), title ink at ~643 (design 583.7), body at 683 (design 623).
-- The design keeps 54px of slack below the body (671 → CTA hairline 725). The app
-  has **−37px**: content 22+18+30+34+12+48+32 = 196 into a 726−567 = 159 region,
-  so the **second body line is cut ~5px by the CTA's top hairline** at rest
-  (`SingleChildScrollView` clips, no overflow exception, so the test suite is
-  blind to it). `or make your own.` renders sliced.
-- On a 667-tall device (iPhone SE class) 47+52+468+84 = 651 leaves ~16px for the
-  step copy — effectively none.
+### 3. MINOR — `ValueTourPreviewRow` duplicates the shared tile-tint palette
+`value_tour_preview_row.dart:52-59` repeats the 6-case
+`NestTileTint → (bg, fg)` switch from `nest_list_row.dart:37-44`. Two copies of
+a palette mapping will drift the first time a tint changes, and the new copy is
+the one this screen renders.
+Fix: extract the mapping into one shared helper (`nest_list_row.dart` or the
+tokens layer) and call it from both, or add it to `SHARED_REQUEST.md` item 2 so
+the shared compact variant ships with a single mapping.
 
-Root cause (shared, not screen-local — measured): the design's `.pv-row` is 38px
-(36 tile, 15/20 name + 13/18 sub, no vertical padding, gap 8), but
-`NestListRow(compact:)` is **60px**: `nest_list_row.dart:53` keeps
-`fromLTRB(12, 10, 16, 10)` and `:79-93` uses a 22px title line + 18px sub, so
-4×60+3×12 = 276 vs the design's 188. Plus the chip's 1.5px border folding into its
-`SizedBox(32)` (+3). Production content is therefore 16+35+14+276+14+8+6+18+44+16
-= **447** (465 under the widget-test fallback font, which is what the note at
-`:40-52` sizes for) against a 400 box that has only 44px of `margin-top:auto`
-slack. Inflating the box was the only local option *if the shared row is fixed* —
-and it is not fixed and was not escalated.
+### 4. MINOR — `ValueTourPreviewRow` is missing the `TODO(P02)` marker
+`value_tour_preview_row.dart:1-17` documents the retirement path in prose but
+carries no `TODO(P02)` comment, while RULES §2 asks for one while blocked and
+`3_test.md:106-109` states the widget ships "behind `TODO(P02)`". Only
+`value_tour_view.dart:299` has the marker today.
+Fix: add `// TODO(P02): retire when SHARED_REQUEST item 2 lands.` at the top of
+the widget so the pending work is greppable.
 
-Fix: file a `SHARED_REQUEST` (RULES §2) for `NestListRow(compact:)` to match
-`.pv-row` (no vertical row padding, title 15/20, sub 13/18, internal gap 8) — the
-compact flag exists only for P02 (`nest_list_row.dart:31-32`) — then set
-`_pagerBaseH = 400` and update the two tests that pin the deviated value
-(`value_tour_view_test.dart:852-855`, `:871-874`). If the shared change cannot
-land, keep 400 and shrink the card's own content (a feature-private preview row
-with the design's metrics) rather than growing a spec-fixed box and clipping the
-copy.
+### 5. MINOR — the chip's 1.5px border inflates the head row (+3) and forced a 1px spec shave
+`nest_chip.dart:29-37` puts a 1.5px `Border.all` around a `SizedBox(32)`, so the
+chip is a 35px box; the card-1 head row is therefore 35 (design 32) and every
+inner row sits +3px from the design (measured: tiles 173 vs 170, progress 374 vs
+371). To keep card 2 inside the restored 400dp the screen also had to drop
+`.pg-stages` from the spec 10 to 9 (`value_tour_view.dart:508-511`, `gap9`).
+The screen used the shared component correctly, so the fix belongs in the shared
+request (non-blocking today).
+Fix: add the chip's border-box to `SHARED_REQUEST.md` item 3 (draw the border
+inside the 32, e.g. `Container(decoration: …)` around a `SizedBox` sized
+`height − 3`, or `border: Border.fromBorderSide` with an inner `BoxFit`), then
+restore `NestSpacing.gap10` at `value_tour_view.dart:511`.
 
-### 2. MINOR — `_pagerInsetLeft = 20` duplicates `NestSpacing.padSide`
-`value_tour_view.dart:28` (used at `:97`, `:154`). The same file already uses
-`NestSpacing.padSide` (`:183`, `:242`) for the same 20px gutter; the tests then
-hard-code `20` and `12` too (`value_tour_view_test.dart:711`, `:717`).
-Fix: `static const double _pagerInsetLeft = NestSpacing.padSide;` and assert
-against `NestSpacing.padSide` in the test.
+### 6. MINOR — card 2's caption is clipped to one line to protect the 400 budget
+`value_tour_view.dart:498-507` forces `maxLines: 1` + ellipsis on
+"175 of 250 coins · Pip evolves at 250". The design's `.pv-cap` wraps (no
+max-lines); the single-line rule exists only because the wide widget-test font
+would push a 400dp card over budget, so at 320dp the caption ellipsises.
+Fix: keep it (the small-screen ellipsis rule permits this) but re-evaluate once
+finding 5 frees ~1px in card 2, or state the accepted deviation in `2_build.md`
+next to the `gap9` note.
 
-### 3. MINOR — `_TourNav` re-implements a nav action instead of reusing the design system
-`value_tour_view.dart:232-284`, esp. the bare `GestureDetector` at `:256-258` and
-the hard-coded `height: 52` at `:239-240`. The shared `NestNavBar` →
-`_NavActionButton` (`nest_nav_bar.dart:158-196`) is exactly this control
-(Semantics button+label, Material/InkWell, ≥44 box, leaf label); the private copy
-loses the ripple/hover/focus and duplicates a 52px metric the DS does not own.
-The reason for going private (compact bar traps the action in a 44px slot) is
-legitimately filed in `SHARED_REQUEST.md`, but the interim bar need not re-hand-roll
-the button.
-Fix: build the action with the shared Material/InkWell pattern (or use the
-non-compact `NestNavBar(actionLabel: 'Skip', onAction: …)`, whose trailing slot is
-not fixed) and drop the bespoke height once the shared compact fix lands.
+### 7. MINOR — cards reach into `_ValueTourViewState` statics
+`value_tour_view.dart:421-423`, `:480`, `:581-583` call
+`_ValueTourViewState._headChip` / `_payoutChipLabel` (`:81-107`), which are
+private statics of the screen's `State` class yet hold no state. Works, but it
+leaks the State into three sibling widgets and makes the helpers awkward to
+test or reuse.
+Fix: move them to a file-private top-level function (or a small private
+`_HeadChip` widget) next to `_TourNav`.
 
-### 4. MINOR — `_DashedAddRow` hides real copy from screen readers
-`value_tour_view.dart:590` `ExcludeSemantics` drops "New quest",
-"Next stage: Songbird" and "No bank card needed" from the a11y tree. The design's
-HTML exposes them (plain `<div>`, no `aria-hidden`), and the last one is a
-product claim. They are non-interactive, which is the only reason they are
-currently hidden.
-Fix: keep the label in the semantics tree as plain text (no button flag, no tap
-action) and exclude only the leading icon; keep a test asserting the strings are
-findable by semantics label.
+### 8. MINOR — `PopScope(canPop: false)` also catches a deep link to `/value-tour`
+`value_tour_view.dart:195-197`, `:154-158`. BUG-6 (system back → `/welcome`) is
+fixed for the in-flow case, but a cold deep link / `INITIAL_ROUTE=/value-tour`
+now also lands on `/welcome` instead of letting back exit — acceptable in an
+onboarding flow and noted in `2_build.md`, just confirm it is intended.
+Fix: leave as is, or veto only when the tour was entered from `/welcome`
+(e.g. a flag set in `didChangeDependencies` / `GoRouterState.extra`).
 
-### 5. MINOR — un-tokenised geometry
-`value_tour_view.dart:384` (`_dotD = 52`), `:385` (`_artD = 40`), `:415`
-(`dimension: 158`), `:551` (`minHeight: 32`), `:633-635` (dash `1.5/6/4`), plus
-the redundant `NestCard(padding: EdgeInsets.all(NestSpacing.s4))` at `:328`, `:390`,
-`:483` (the component default is already `s4` — `nest_card.dart:31-32`). The
-review criterion is tokens only; these have no token in `spacing.dart`.
-Fix: request tokens for the design's `.pg-stage 52` / `.pg-pet 158` /
-`.pg-line min-h 32` / the `.pv-add` dashed metrics in a `SHARED_REQUEST`, and
-until then keep each as a documented `static const` naming its CSS source (as
-`_pagerBaseH` does); drop the redundant `NestCard` padding.
-
-### 6. MINOR — preview rows contradict `Seed.demo` (DATA OVER MOCKS)
-`value_tour_view.dart:299, 306, 313, 320`. `seed.dart:218-236` has
-`q-dishwasher` = maya/**daily**, `q-bins` = **maya**/**weekly**, `q-reading` =
-maya/daily, `q-tidy` = maya/**daily**; the card shows
-"Empty the dishwasher · Maya · **weekly**", "Put the bins out · **Leo · once**",
-"Tidy your bedroom · Maya · **weekly**". The coin amounts (15/15/10/15) and the
-"4 of 6" progress (Maya has 6 quests) do match the seed.
-Fix: use the seeded assignee/repeat, or state the deliberate marketing-mock
-exception in `2_build.md` (the orchestrator rule says the DB wins).
-
-### 7. MINOR — double-tapping "Next" skips a step
-`value_tour_view.dart:118-137`: `_goTo` clamps the target but then always calls
-`controller.nextPage(...)`, which advances one page from the *current* offset — a
-second tap during the 300ms animation lands on step 3 and skips step 2.
-Fix: `controller.animateToPage(target, …)` (or ignore the tap while a
-`PageController` animation is in flight).
-
-### 8. MINOR — tests pin the deviated geometry and a self-referential "matches Seed.demo"
-`value_tour_view_test.dart:852-855` and `:871-874` assert `468` / `468 × 1.3`,
-locking in finding 1. `:793-818` ("card 3 ledger matches Seed.demo") compares
-hard-coded literals in the test with hard-coded literals in the view, so it proves
-nothing about the seed; the same applies to the `4/6`, `15/15/10/15` and
-`175 of 250` assertions at `:742`, `:748`, `:750`.
-Fix: assert the design's 400 / 400×ts once fixed, and have the ledger test read
-Maya's balance (and the quest rows) from the Drift DB instead of literals.
-
-### 9. MINOR — a11y test does not assert the Skip tap action
-`value_tour_view_test.dart:568-577` checks `label` and `isButton` but not
-`hasAction(SemanticsAction.tap)`, so a regression that dropped the activation
-action (the control is a `GestureDetector`, not a focusable widget) would pass.
-Fix: add the tap-action assertion for `p02_skip`.
+### 9. MINOR — the a11y proof for the dashed add-rows asserts only the label
+`value_tour_view_test.dart` "preview add-rows expose plain-text labels" proves
+the three labels are reachable, but nothing pins that they carry **no** tap
+action / button flag (the point of moving them out of `ExcludeSemantics`).
+Fix: assert `hasAction(SemanticsAction.tap) == false` and
+`flagsCollection.isButton == false` on one of the three nodes, so a future
+`InkWell` in `_DashedAddRow` cannot slip through as a fake control.
 
 ## Verified (no finding)
 
-- **RULES §1** — only `features/onboarding/presentation/**`,
-  `test/features/onboarding/**` and `docs/screens/P02/**` touched; no `core/`,
-  no `app/`, no `tools/`, no `analysis_options` change; `SHARED_REQUEST.md` filed.
-- **ARCHITECTURE** — feature-first, view in `presentation/views/`, route-level
-  `BlocProvider` untouched, one bloc per feature, `package:nestling/...` imports,
-  no use-case/`utils` layers.
-- **DESIGN_SYSTEM** — `NestStatusBar`, `NestCard`, `NestListRow(compact:)`,
-  `NestChip`, `NestCoinPill(small)`, `NestProgress`, `NestPagerDots`,
-  `NestBottomCta`, `NestButton`, `NestMoney`, `NestIcon`, `NestRadii`,
-  `NestSpacing`/`NestType` tokens; no `Color(0x…)` anywhere in the view
-  (`_DashedBorder` takes `tokens.line`); copy, card order, rhythm (dots 22 /
-  title 30 / body 12, rows gap 12, foot 14, cap 6, stages 10, amount 14 + 2,
-  lines 16, total 4 + 6) all match the HTML/SPACING_SPEC.
-- **PIP rule** — `PipAvatar(style: mochi, stage: 3)`; sunny/idle/none are the
-  widget defaults (`pip_avatar.dart:234-237`), no v1 `pip_stage_*.svg`, main art
-  158×158 with the design's alt text, stage dots `aria-hidden` per the HTML.
-- **Bottom edge (owner)** — `NestBottomCta` paints `tokens.surface` to the screen
-  edge under the inset; `NestHomeIndicator` is 0 in-app. No coloured strip.
-- **Children's Code** — parent-only marketing copy, no analytics/ads/tracking, no
-  child photos/emails/location, no loss-aversion framing, no prices in £ in any kid
-  surface (none here), route already gated out of kid mode by shared code.
-- **Performance** — no streams/timers/animation controllers; `_controller`
-  disposed in `dispose()` and the replaced one disposed on width change; cards
-  const; `onPageChanged` → one `setState`; `shouldRepaint` correct; no
-  `AnimatedSwitcher`; reduced motion honoured for the page turn
-  (`disableAnimations || kDisableAnimations`) and by `NestMotion.resolve` in the
-  dots.
-- **Error handling** — `_goTo` guards `hasClients`, clamps the target, no throws.
+- **RULES §1** — changed paths are `features/onboarding/presentation/**`,
+  `test/features/onboarding/**`, `docs/screens/P02/**` only; `core/`, `app/`,
+  `tools/` and `analysis_options` untouched; `SHARED_REQUEST.md` grew to three
+  non-blocking items, each naming the interim widget and its retirement path.
+- **ARCHITECTURE** — feature-first; the new widget lives in
+  `features/onboarding/presentation/widgets/` (feature-private, per the
+  per-feature contract); no new bloc/event/state, no repo or DI change, route
+  still provides `OnboardingBloc`; `package:nestling/...` imports only.
+- **Iteration-1 MAJOR closed with evidence** — pager is 400 (`value_tour_view.dart:49`,
+  asserted at `value_tour_view_test.dart` 400 / 520), the copy is no longer
+  clipped, and the short-screen overflow is gone: pager + copy share one
+  `SingleChildScrollView` (`:203-269`), so only status + nav + CTA are fixed;
+  BUG-1a/b/c and BUG-3a/b prove it at 320×568 and 375×667 × 1.3.
+- **Design-system usage** — no `Color(0x…)` in either file (grep clean);
+  `NestStatusBar`, `NestCard`, `NestChip`, `NestCoinPill(small)`, `NestProgress`,
+  `NestPagerDots`, `NestBottomCta`, `NestButton`, `NestMoney`, `NestIcon`,
+  `NestIcon`+`NestCoinPill` in the new row; every gap/inset is a `NestSpacing`
+  value (`_pagerInsetLeft = NestSpacing.padSide`, no literal 20 left).
+  `NestListRow` is no longer used by P02, and no other caller uses
+  `compact: true` — worth passing to the orchestrator with item 2 (the flag is
+  now dead shared code).
+- **DESIGN_SPEC §5 P02** — all three steps' titles and bodies verbatim from
+  `OnboardingRepositoryImpl._steps`, 3 dots with the first active, Skip top-right,
+  card order and rhythm (dots 22 / title 30 / body 12, rows gap 12, foot 14,
+  cap 6, amount 14+2, lines 16, total 4+6) unchanged; UK spelling, £ with two
+  decimals, coins (not prices) on every card.
+- **PIP rule** — `PipAvatar(style: PipStyle.mochi, stage: 3)` (sunny/idle/none
+  are the widget defaults), no v1 `pip_stage_*.svg`, 158×158 main slot with the
+  design alt text, stage dots decorative as in the HTML.
+- **Bottom edge (owner)** — painted-pixel tests in both themes (34dp inset and
+  inset 0) and the device screenshot: surface to y=843 in light and dark, never
+  page tint.
+- **Alignment (owner)** — 20px gutters on the copy, the CTA, the card's left
+  edge and Skip's right edge at 320/390/430 × light/dark, and one shared inner
+  left edge for every card row.
+- **Accessibility** — one `Semantics(header: true)`, the pager group label that
+  tracks the step, Skip `button` + explicit `onTap` + ≥44 box, CTA ≥52 full
+  width, icon tiles silent, add-row labels exposed, Pip labelled `image`, dots
+  indicators only (no `Go to page` actions).
+- **Performance** — no streams, timers or animation controllers; `_controller`
+  disposed in `dispose()` and on width change; all three cards `const`; one
+  `setState` per page change; `shouldRepaint` correct; `PageView.builder` builds
+  only the visible pair; reduced motion honoured for the page turn and by
+  `NestMotion` in the dots. Nothing renders continuously — consistent with 6_bugs
+  finding no screen-side animation.
+- **Error handling** — `_goTo` guards `hasClients`, clamps the target and uses
+  `animateToPage`/`jumpToPage` per RULES §6; `_onSystemBack` checks
+  `context.mounted`; no throws on any path.
+- **Children's Code** — parent-only marketing copy that speaks to parents
+  ("your family", no "For Kids"), no analytics/ads/tracking, no child photos,
+  emails, chat or location, no loss-aversion framing, no £ on any kid surface.
 
 ## Notes for the orchestrator (not findings)
 
-- The HTML renders the body as `like “Put the bins out” — or` (curly quotes + em
-  dash); the app, `DESIGN_SPEC` §5 and `OnboardingRepositoryImpl._steps` all use
-  `'Put the bins out' or`. The app follows spec+repo (DATA OVER MOCKS), so expect a
-  small text diff in the body band of the PNG comparison.
-- `DESIGN_SPEC` §5 P02 says the peeking thumbnails show "16px" from the right
-  edge; the HTML (`c2 left 342`) and the PNG show a 48px peek at 390. The code
-  follows the design — correct, but the spec line is stale.
-- The PNG renders `.nav-bar.compact` at 60px (4 + 44 + 12) while `SPACING_SPEC`
-  §7 (l. 88) maps the Flutter compact bar to 52; `_TourNav` follows
-  `SPACING_SPEC`, which costs ~8px against the PNG. Worth a one-line ruling so
-  the other onboarding screens stay consistent.
+- The app's step-body copy renders ~4px higher than the design PNG for the same
+  line box (the 'P' of "Pick" at 628.67 vs 632.67, identical 12.66px cap
+  height) — a font-metrics difference between the HTML render and the app's
+  Google-Fonts face. It affects every screen's text band, is not P02 code, and
+  is the main residual contributor to the band-1/2 diff.
+- The body copy still uses the repo/DESIGN_SPEC punctuation (straight quotes, no
+  em dash) while the PNG shows “ ” + —: UI item 3, still needs a ruling.
+- `shot.sh`'s "frame never stabilised in 25 s" persists in both themes (UI item
+  6). Nothing on this screen animates under `DISABLE_ANIMATIONS=1` — the dots
+  resolve to zero duration, `PipAvatar` short-circuits to its SVG fallback and
+  widget `pumpAndSettle` is clean — so this is a capture-tool/OS-animation
+  question, not a P02 code defect, and it should not block this screen.
+- DESIGN_SPEC §5's "peeking at 16px" is stale (HTML/PNG show a 48px peek at 390);
+  the code follows the design.
 
-VERDICT: FAIL
+VERDICT: PASS

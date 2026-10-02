@@ -15,12 +15,17 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
+import 'package:flutter/semantics.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:nestling/app/app.dart';
+import 'package:nestling/app/controllers.dart';
 import 'package:nestling/core/data/app_session.dart';
+import 'package:nestling/core/data/london_time.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/core/design_system/motion/pip_avatar.dart' as v2;
@@ -30,6 +35,7 @@ import 'package:nestling/features/onboarding/presentation/bloc/onboarding_bloc.d
 import 'package:nestling/features/onboarding/presentation/bloc/onboarding_event.dart';
 import 'package:nestling/features/onboarding/presentation/bloc/onboarding_state.dart';
 import 'package:nestling/features/onboarding/presentation/views/value_tour_view.dart';
+import 'package:nestling/features/onboarding/presentation/widgets/value_tour_preview_row.dart';
 
 import '../../test_scope.dart';
 
@@ -41,6 +47,19 @@ const String _step3Title = 'Pocket money, sorted';
 const String _step3Body =
     'No bank card needed — we keep score, you pay your way.';
 const String _pipLabel = 'Pip the fledgling bird';
+
+/// Expected date chip: the next payout Saturday strictly after the pinned
+/// story day. Mirrors the view's derivation against `Seed.anchorDay`
+/// (Sat 3 Oct 2026 under the test clock → `Sat 10 Oct`); the weekday part is
+/// generically guarded by `p02_bugs_test.dart` P02-BUG-5.
+String _expectedPayoutChip() {
+  final anchor = Seed.anchorDay;
+  var ahead = (DateTime.saturday - anchor.weekday) % 7;
+  if (ahead == 0) {
+    ahead = DateTime.daysPerWeek;
+  }
+  return formatLondonDay(anchor.add(Duration(days: ahead)));
+}
 
 /// Any SvgPicture still loading a v1 `pip_stage_*.svg` illustration.
 Finder get _v1PipFinder => find.byWidgetPredicate(
@@ -137,6 +156,64 @@ NestProgress _progressIn(WidgetTester tester, Finder card) =>
       find.descendant(of: card, matching: find.byType(NestProgress)),
     );
 
+/// Probe boundary for the BOTTOM EDGE owner rule (painted-pixel proof).
+const Key _pixelProbe = ValueKey('p02_pixel_probe');
+
+/// Pumps the real app inside a [RepaintBoundary] so painted pixels can be
+/// sampled, optionally with an OS bottom inset (home-indicator devices).
+Future<void> _pumpTourForPixels(
+  WidgetTester tester, {
+  required ThemeMode theme,
+  required Size surface,
+  double bottomInset = 0,
+}) async {
+  GetIt.instance<ThemeModeController>().selectMode(theme);
+  tester.view.physicalSize = surface * 3;
+  tester.view.devicePixelRatio = 3;
+  addTearDown(tester.view.reset);
+  if (bottomInset > 0) {
+    // View padding is physical; the test surface is 3x.
+    tester.view.padding = FakeViewPadding(bottom: bottomInset * 3);
+    addTearDown(tester.view.resetPadding);
+  }
+  await tester.pumpWidget(
+    const RepaintBoundary(
+      key: _pixelProbe,
+      child: NestlingApp(initialRoute: '/value-tour'),
+    ),
+  );
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 200));
+}
+
+/// Painted RGBA bytes at logical (x, y) of the app surface.
+Future<List<int>> _pixelAt(WidgetTester tester, double x, double y) async {
+  final boundary = tester.renderObject<RenderRepaintBoundary>(
+    find.byKey(_pixelProbe),
+  );
+  late List<int> pixel;
+  await tester.runAsync(() async {
+    final image = await boundary.toImage();
+    final data = await image.toByteData();
+    final offset = (y.round() * image.width + x.round()) * 4;
+    pixel = <int>[
+      data!.getUint8(offset),
+      data.getUint8(offset + 1),
+      data.getUint8(offset + 2),
+      data.getUint8(offset + 3),
+    ];
+  });
+  return pixel;
+}
+
+/// The opaque RGBA bytes of [color] at 8-bit precision.
+List<int> _rgba(Color color) => <int>[
+  (color.r * 255).round(),
+  (color.g * 255).round(),
+  (color.b * 255).round(),
+  255,
+];
+
 void main() {
   group('P02 value tour — copy, theming, width and scale', () {
     testWidgets('light: renders card 1, dots, step copy and CTAs', (
@@ -156,7 +233,8 @@ void main() {
       expect(find.byType(NestStatusBar), findsOneWidget);
       expect(find.text('Skip'), findsOneWidget);
       expect(find.text("Today's quests"), findsOneWidget);
-      expect(find.text('Sat 4 Oct'), findsWidgets);
+      expect(find.text(_expectedPayoutChip()), findsWidgets);
+      expect(find.text('Sat 4 Oct'), findsNothing);
       expect(find.text('Empty the dishwasher'), findsOneWidget);
       expect(find.text('Put the bins out'), findsOneWidget);
       expect(find.text('Reading – 20 minutes'), findsOneWidget);
@@ -564,12 +642,14 @@ void main() {
         findsOneWidget,
       );
 
-      // Skip and Next expose button semantics with their labels.
+      // Skip and Next expose button semantics with their labels, and Skip
+      // carries its activation action on the labeled node itself.
       final skipData = tester
           .getSemantics(find.byKey(const ValueKey('p02_skip')))
           .getSemanticsData();
       expect(skipData.label, 'Skip');
       expect(skipData.flagsCollection.isButton, isTrue);
+      expect(skipData.hasAction(SemanticsAction.tap), isTrue);
       final nextData = tester
           .getSemantics(find.byKey(const ValueKey('p02_next')))
           .getSemanticsData();
@@ -708,13 +788,17 @@ void main() {
 
         final cardW = math.min(310, math.max(240, width - 80)).toDouble();
         final rect = tester.getRect(_cardWith("Today's quests"));
-        expect(rect.left, moreOrLessEquals(20, epsilon: 0.01));
+        expect(rect.left, moreOrLessEquals(NestSpacing.padSide, epsilon: 0.01));
         expect(rect.width, moreOrLessEquals(cardW, epsilon: 0.01));
 
-        // The next card starts one pitch later (cardW + 12), clipped by the
-        // pager edge exactly like the design's peek.
+        // The next card starts one pitch later (cardW + the 12px design gap,
+        // c2 left 342 = 20 + 310 + 12), clipped by the pager edge exactly
+        // like the design's peek.
         final peek = tester.getRect(_cardWith("Pip's nest"));
-        expect(peek.left, moreOrLessEquals(20 + cardW + 12, epsilon: 0.01));
+        expect(
+          peek.left,
+          moreOrLessEquals(NestSpacing.padSide + cardW + 12, epsilon: 0.01),
+        );
         expect(tester.takeException(), isNull);
 
         await disposeApp(tester);
@@ -736,9 +820,8 @@ void main() {
       Finder inCard(Finder matching) =>
           find.descendant(of: card, matching: matching);
 
-      expect(inCard(find.text('Maya · weekly')), findsNWidgets(2));
-      expect(inCard(find.text('Leo · once')), findsOneWidget);
-      expect(inCard(find.text('Maya · daily')), findsOneWidget);
+      expect(inCard(find.text('Maya · daily')), findsNWidgets(3));
+      expect(inCard(find.text('Maya · weekly')), findsOneWidget);
       expect(inCard(find.text('4 of 6 quests done today')), findsOneWidget);
 
       final pills = tester
@@ -751,9 +834,10 @@ void main() {
         moreOrLessEquals(4 / 6, epsilon: 1e-9),
       );
 
-      // The dashed add-row is a non-interactive preview.
+      // The dashed add-row is a non-interactive preview whose label stays
+      // exposed as plain text (the HTML does not hide it).
       expect(inCard(find.text('New quest')), findsOneWidget);
-      expect(inCard(find.bySemanticsLabel('New quest')), findsNothing);
+      expect(inCard(find.bySemanticsLabel('New quest')), findsOneWidget);
 
       await disposeApp(tester);
     });
@@ -790,8 +874,10 @@ void main() {
       await disposeApp(tester);
     });
 
-    testWidgets('card 3 ledger matches Seed.demo', (tester) async {
-      await setUpTestScope();
+    testWidgets('card 3 ledger matches the seeded Maya balance', (
+      tester,
+    ) async {
+      final db = await setUpTestScope();
       await _pumpTour(
         tester,
         theme: ThemeMode.light,
@@ -801,17 +887,32 @@ void main() {
       await _tapNext(tester);
       await _tapNext(tester);
 
+      // DATA OVER MOCKS: the expected strings come from the Drift rows, not
+      // from literals shared with the view.
+      final maya = (await db.select(db.children).get()).firstWhere(
+        (child) => child.id == 'maya',
+      );
+      final family = (await db.select(db.families).get()).single;
+      final basePence = maya.weeklyBasePence;
+      final bonusPence = maya.coins * family.coinValuePencePerCoin;
+
       final card = _cardWith("Maya's jar");
       Finder inCard(Finder matching) =>
           find.descendant(of: card, matching: matching);
 
       expect(inCard(find.text('coming on Saturday')), findsOneWidget);
       expect(inCard(find.text('Weekly base')), findsOneWidget);
-      expect(inCard(find.text('£3.00')), findsOneWidget);
-      expect(inCard(find.text('Quests (120 coins)')), findsOneWidget);
-      expect(inCard(find.text('+£1.20')), findsOneWidget);
+      expect(inCard(find.text(formatPounds(basePence / 100))), findsOneWidget);
+      expect(inCard(find.text('Quests (${maya.coins} coins)')), findsOneWidget);
+      expect(
+        inCard(find.text('+${formatPounds(bonusPence / 100)}')),
+        findsOneWidget,
+      );
       expect(inCard(find.text('Total')), findsOneWidget);
-      expect(inCard(find.text('£4.20')), findsNWidgets(2));
+      expect(
+        inCard(find.text(formatPounds((basePence + bonusPence) / 100))),
+        findsNWidgets(2),
+      );
       expect(inCard(find.text('No bank card needed')), findsOneWidget);
 
       await disposeApp(tester);
@@ -851,7 +952,7 @@ void main() {
 
       expect(
         tester.getSize(find.byType(PageView)).height,
-        moreOrLessEquals(468, epsilon: 0.01),
+        moreOrLessEquals(400, epsilon: 0.01),
       );
 
       await disposeApp(tester);
@@ -870,7 +971,7 @@ void main() {
 
       expect(
         tester.getSize(find.byType(PageView)).height,
-        moreOrLessEquals(468 * 1.3, epsilon: 0.01),
+        moreOrLessEquals(400 * 1.3, epsilon: 0.01),
       );
       expect(tester.takeException(), isNull);
 
@@ -977,6 +1078,27 @@ void main() {
         findsOneWidget,
       );
       expect(find.bySemanticsLabel('Page 2 of 3'), findsOneWidget);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('preview add-rows expose plain-text labels', (tester) async {
+      await setUpTestScope();
+      await _pumpTour(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      // Non-interactive, but exposed (the HTML does not hide them).
+      expect(find.bySemanticsLabel('New quest'), findsOneWidget);
+
+      await _tapNext(tester);
+      expect(find.bySemanticsLabel('Next stage: Songbird'), findsOneWidget);
+
+      await _tapNext(tester);
+      expect(find.bySemanticsLabel('No bank card needed'), findsOneWidget);
 
       await disposeApp(tester);
     });
@@ -1091,6 +1213,185 @@ void main() {
       expect(tester.takeException(), isNull);
 
       await _disposeView(tester);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Owner rule — BOTTOM EDGE: the area below the bottom bar, down to the
+  // physical screen edge, must carry the SAME surface colour as the bar
+  // itself. A page-tint strip under the CTA panel is a UI failure in light
+  // and dark mode alike.
+  // -------------------------------------------------------------------------
+  group('P02 value tour — owner rule: bottom edge', () {
+    for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      final themeName = theme == ThemeMode.light ? 'light' : 'dark';
+
+      testWidgets('$themeName: no page-colour strip under the CTA panel', (
+        tester,
+      ) async {
+        await setUpTestScope();
+        // A 34dp OS inset (home-indicator device) is where a strip shows up:
+        // the bar content is lifted, the surface must not be.
+        await _pumpTourForPixels(
+          tester,
+          theme: theme,
+          surface: const Size(390, 844),
+          bottomInset: 34,
+        );
+
+        final bar = tester.getRect(find.byType(NestBottomCta));
+        expect(
+          bar.bottom,
+          moreOrLessEquals(844, epsilon: 0.01),
+          reason:
+              'the CTA panel must run to the physical screen edge; ending it '
+              'at ${bar.bottom} exposes page colour below the bar',
+        );
+
+        // Painted-pixel proof: the last row of pixels the OS draws over must
+        // be the bar surface, not the scaffold paper underneath.
+        final tokens = tester.element(find.byType(NestBottomCta)).nest;
+        expect(
+          tokens.paper,
+          isNot(tokens.surface),
+          reason:
+              'the probe must discriminate: page colour and bar surface are '
+              'different colours, so a strip below the bar cannot pass',
+        );
+        final edgePixel = await _pixelAt(tester, 195, 843);
+        expect(
+          edgePixel,
+          _rgba(tokens.surface),
+          reason:
+              'the strip below the bar (y=843, inside the 34dp inset) must be '
+              'the bar surface ${_rgba(tokens.surface)}; the scaffold paper '
+              '${_rgba(tokens.paper)} must not show through there',
+        );
+
+        await disposeApp(tester);
+      });
+
+      testWidgets('$themeName: bar surface is flush with the edge inset 0', (
+        tester,
+      ) async {
+        await setUpTestScope();
+        await _pumpTourForPixels(
+          tester,
+          theme: theme,
+          surface: const Size(390, 844),
+        );
+
+        final bar = tester.getRect(find.byType(NestBottomCta));
+        expect(bar.bottom, moreOrLessEquals(844, epsilon: 0.01));
+
+        final tokens = tester.element(find.byType(NestBottomCta)).nest;
+        final edgePixel = await _pixelAt(tester, 195, 843);
+        expect(edgePixel, _rgba(tokens.surface));
+
+        await disposeApp(tester);
+      });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Owner rule — ALIGNMENT: consistent 20px side gutters, cards and bars on
+  // the same edges, nothing a few px off.
+  // -------------------------------------------------------------------------
+  group('P02 value tour — owner rule: alignment', () {
+    for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      for (final width in const <int>[320, 390, 430]) {
+        final themeName = theme == ThemeMode.light ? 'light' : 'dark';
+        testWidgets('$themeName ${width}dp: 20px gutters on every edge', (
+          tester,
+        ) async {
+          await setUpTestScope();
+          await _pumpTour(
+            tester,
+            theme: theme,
+            surface: Size(width.toDouble(), 844),
+            textScale: 1,
+          );
+
+          final cardW = math.min(310, math.max(240, width - 80)).toDouble();
+          final card = tester.getRect(_cardWith("Today's quests"));
+          final cta = tester.getRect(find.byKey(const ValueKey('p02_next')));
+          final skip = tester.getRect(find.byKey(const ValueKey('p02_skip')));
+          final bar = tester.getRect(find.byType(NestBottomCta));
+
+          // Step copy and the CTA button both sit on the 20px gutter.
+          expect(
+            tester.getTopLeft(find.text(_step1Title)).dx,
+            moreOrLessEquals(NestSpacing.padSide, epsilon: 0.01),
+          );
+          expect(
+            cta.left,
+            moreOrLessEquals(NestSpacing.padSide, epsilon: 0.01),
+          );
+          expect(
+            cta.right,
+            moreOrLessEquals(width - NestSpacing.padSide, epsilon: 0.01),
+          );
+
+          // The card shares the copy's left edge; its right edge is the
+          // design's clipped peek (card 1 spans 20 … 20+cardW at 390).
+          expect(
+            card.left,
+            moreOrLessEquals(NestSpacing.padSide, epsilon: 0.01),
+          );
+          expect(card.width, moreOrLessEquals(cardW, epsilon: 0.01));
+
+          // The bar is full-bleed (its panel owns the edge rule) and Skip is
+          // right-aligned to the same gutter as the button.
+          expect(bar.left, 0);
+          expect(bar.right, moreOrLessEquals(width.toDouble(), epsilon: 0.01));
+          expect(
+            skip.right,
+            moreOrLessEquals(width - NestSpacing.padSide, epsilon: 0.01),
+          );
+
+          expect(tester.takeException(), isNull);
+
+          await disposeApp(tester);
+        });
+      }
+    }
+
+    testWidgets('card content shares one inner left edge', (tester) async {
+      await setUpTestScope();
+      await _pumpTour(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      final card = _cardWith("Today's quests");
+      final cardRect = tester.getRect(card);
+      // The card pads its content by s4; every row of that content — head,
+      // preview rows, progress bar, dashed add-row — starts on that one edge
+      // (the preview-row *titles* sit further in, after their 36dp icon
+      // tile, so the row container is the reference).
+      final inner = cardRect.left + NestSpacing.s4;
+      final rows = find.byType(ValueTourPreviewRow);
+      expect(rows, findsNWidgets(4));
+
+      for (final finder in <Finder>[
+        find.text("Today's quests"),
+        rows.first,
+        find.descendant(of: card, matching: find.byType(NestProgress)),
+        find.ancestor(
+          of: find.text('New quest'),
+          matching: find.byType(CustomPaint),
+        ),
+      ]) {
+        expect(
+          tester.getTopLeft(finder).dx,
+          moreOrLessEquals(inner, epsilon: 0.01),
+          reason: 'every card row must start on the same inner edge',
+        );
+      }
+
+      await disposeApp(tester);
     });
   });
 }

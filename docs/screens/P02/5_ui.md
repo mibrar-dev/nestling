@@ -1,94 +1,70 @@
-# P02 Value tour — Stage 5 UI check (iteration 1)
+# P02 Value tour — Stage 5 UI check (iteration 2)
 
 Route `/value-tour`, seed `fresh`, mode `parent`, child `maya`, simulator
 604697A9-11DA-462F-9837-396E9CA2493A (390×844). No `ORCHESTRATOR_NOTES.md`
 exists; orchestrator stage-prompt rules apply (Pip = `PipAvatar` mochi/sunny,
-status-bar differences ignored, bottom-edge owner rule enforced).
+status-bar differences ignored, data-over-mocks, bottom-edge owner rule).
 
-Shots: `docs/screens/P02/ui/app_light_1.png`, `app_dark_1.png`
-(stable-frame wait timed out on both — see item 6).
-Compares: `cmp_light_1.png`, `cmp_dark_1.png`.
+Provenance: `ui/app_light_2.png` / `app_dark_2.png` were captured earlier in
+this iteration (08:35/08:37) after the last screen-code edit (08:31) and were
+verified current; `compare.py` was re-run by this stage below.
+Compares: `cmp_light_2.png`, `cmp_dark_2.png`.
 
 ## Mean diff
 
-- Light: **6.50%** (bands: 0: 2.14, 1: 7.94, 2: 6.03, 3: 9.37, 4: 5.10,
-  5: 7.01, 6: 10.60, 7: 3.80). Band 0 is the OS status bar (ignored per
-  orchestrator rule).
-- Dark: **6.41%** (bands: 0: 2.09, 1: 7.84, 2: 6.49, 3: 8.99, 4: 4.61,
-  5: 7.42, 6: 11.09, 7: 2.70). Same pattern as light.
+- Light: **4.05%** (bands: 0: 2.01, 1: 5.48, 2: 5.26, 3: 6.61, 4: 0.87,
+  5: 3.94, 6: 4.39, 7: 3.80). Was 6.50% in iteration 1.
+- Dark: **3.85%** (bands: 0: 1.90, 1: 5.36, 2: 5.31, 3: 6.05, 4: 0.81,
+  5: 4.09, 6: 4.68, 7: 2.58). Dark token colours sampled identical to
+  design. All layout findings apply to both themes.
 
-Dark-mode token colours sampled identical to design (bg #15131F, card
-#1F1C2E, CTA leaf, CTA strip surface to the physical edge). All layout
-deviations below apply to both themes.
+## Fixed since iteration 1 (verified)
 
-## What matches (checked, no action)
+Card geometry now exact (top y=107, pitch 50 px, dots y=534–540, title
+y=584–604, button y=742–792 — all identical counts/positions); rows 2–4
+titles render in full; tour nav is the spec 60 px; Next button, dots,
+progress 4/6, chips, icons/tints, dashed row, CTA padding all match.
 
-Gutters/card geometry in x (card left x=20, right x=330, peek card at
-x=342 in both); dots (18 h, 22 px active leaf pill, centred); Next button
-(y 742–792, geometry and leaf identical both themes); progress 4/6 +
-caption copy; chips (`Sat 4 Oct`); icon glyphs + tile tints
-(sky/coin/lilac/peach); dashed `New quest` row style (15 w600 ink2, 1.5 px
-dashed line, r16); CTA side padding 20; no overflow/clipping; bottom edge
-is bar-surface colour to the screen edge (design PNG shows paper there,
-but the owner bottom-edge rule overrides the PNG — app is correct).
+## Accepted overrides (not deviations)
 
-## Deviations (all measured in logical px, design ÷ 3)
+- Chip `Sat 3 Oct` vs PNG `Sat 4 Oct`: database wins (4 Oct 2026 is a
+  Sunday; seed anchored to Sat 3 Oct 2026 — P02-BUG-5). Correct as shown.
+- Row subtitles (`Maya · daily`, `Maya · weekly`, …) vs PNG assignees:
+  seeded quest rows win (P02-BUG-4). Correct as shown.
+- Bottom edge is bar-surface colour to the physical edge (PNG shows paper;
+  owner bottom-edge rule overrides). Correct as shown.
+- Status-bar glyphs/time differ (OS-drawn; ignored per rule).
 
-1. Quest-row titles ellipsised (MAJOR). Element: card-1 preview rows.
-   Design value: full names on one line — `Empty the dishwasher`,
-   `Put the bins out`, `Reading – 20 minutes`, `Tidy your bedroom`
-   (15 px semibold, fits the ~174 px text slot). App value: `Empty th…`,
-   `Put the bi…`, `Reading –…`, `Tidy your…` — all four titles truncated
-   with ellipsis. Fix: shrink the row's fixed costs to the design values
-   (tile 36 r12, row gap 8, small coin pill, 15 px title — shared
-   `NestListRow` currently spends ~20 px more per row via 40 tile / 12
-   gaps / larger pill / 16 px title) or file a SHARED_REQUEST for a
-   compact preview-row variant; do not fork shared components locally.
+## Deviations (logical px, design ÷ 3)
 
-2. Card 1 is 68 px too tall; below-card composition cramped (MAJOR).
-   Element: pager card + dots/title/body block. Design value: card
-   310×400 (top y≈107, bottom y≈507), dots y≈534–540, step title
-   y≈584–604, body y≈634–668, body-to-button gap ≈74 px. App value: card
-   top y≈99, white card region runs to y≈567 (≈468 tall), dots y≈594–600,
-   title y≈644–664, body y≈690–722, body-to-button gap ≈20 px. Row pitch
-   is ≈72 px vs design 50 px (`NestListRow` compact min-height/padding
-   wins over the design's 38 px rows). The code comment on `_pagerBaseH`
-   (468) documents this trade-off, but the visible result — title/body
-   jammed against the CTA — is a designer-reject. Fix: make card-1
-   content fit 400 px (compact rows per item 1, or per-row fixed 38 px
-   preview layout), restore pager base to 400, keeping cards 2–3 on
-   `Spacer`.
+1. Row-1 title still ellipsised (MAJOR — the one designer-reject left).
+   Element: card-1 row 1. Design value: `Empty the dishwasher` in full
+   (ends x=240, 14 px clear of the pill at x=254). App value:
+   `Empty the dishwas…` (ellipsis, ends x=234). Measured geometry is
+   otherwise identical on both sides — pill x=254–312 (w 58), tile x=36–71
+   (w 35) — so the text slot is the same 174 px; Flutter's Inter 600
+   renders this longest title ~2 px wider than the browser and trips the
+   ellipsis. Rows 2–4 fit with a few px to spare. Fix: reclaim a few px on
+   this row without touching shared code or spec type (e.g. verify
+   `NestCoinPill.small` internals — gap/padding — against design-small and
+   tighten if any slack; otherwise shrink nothing and seek designer /
+   orchestrator sign-off, since no token-compliant lever remains).
 
-3. Step-body punctuation (MINOR). Element: step-1 body copy. Design value:
-   `Pick from 40+ ready-made jobs like “Put the bins out” — or make your
-   own.` (curly quotes, em dash). App value:
-   `Pick from 40+ ready-made jobs like 'Put the bins out' or make your
-   own.` (straight quotes, no dash; matches DESIGN_SPEC §5 P02 and the
-   repo strings, conflicts with the HTML/PNG). Fix: orchestrator to rule
-   which source wins; if the PNG wins, update repo strings + view const.
+2. Body block sits ~4 px high (MINOR). Element: step-1 body. Design value:
+   lines y≈634–644 + 662–668, left x=22. App value: y≈630–640 + 658–664,
+   same left edge, same 2-line wrap. Fix: nudge the title→body gap so the
+   block lands on the design rows; not a reject on its own.
 
-4. Tour nav 8 px too short (MINOR). Element: Skip bar. Design value:
-   compact nav totals 60 px (44 content + 4 top + 12 bottom padding), card
-   top y≈107. App value: `SizedBox` 52 px, card top y≈99. Fix: give
-   `_TourNav` the spec paddings (total 60) instead of a fixed 52 box.
-
-5. Chip height +3 px (COSMETIC). Element: `Sat 4 Oct` chip. Design value:
-   32 px. App value: ~35 px (1.5 px border folds into the `Container` decoration padding, as the code comment notes). Fix: accept
-   as shared-component drift or pick up the shared fix; not a reject alone.
-
-6. Frames never stabilise under `DISABLE_ANIMATIONS=1` (MAJOR, motion
-   rule). Both `shot.sh` runs exited `WARNING — frame never stabilised in
-   25 s`. RULES §6 requires a still frame when animations are disabled.
-   Prime suspect: `PipAvatar` Rive instances on the eagerly-built adjacent
-   pager card keep ticking (4 avatars once page 2 builds). Fix: verify
-   `PipAvatar` renders its SVG still frame when `kDisableAnimations` /
-   `MediaQuery.disableAnimations` is set, so screenshots are
-   deterministic.
+3. Body punctuation unchanged (MINOR, needs ruling, not a builder defect).
+   Element: step-1 body copy. Design PNG: curly quotes + em dash
+   (`…“Put the bins out” — or…`). App: straight quotes, no dash, which
+   matches DESIGN_SPEC §5 P02 and the repo strings verbatim. Fix:
+   orchestrator to rule PNG vs spec-doc; builder then follows.
 
 ## Coverage gap (not a failure)
 
-Iteration 1 captures step 1 only. Cards 2–3 (Pip nest, jar) and steps
-2–3 copy/CTA (`Continue`) were verified in widget tests but not
-pixel-compared; capture pages 2–3 in the next iteration.
+Steps 2–3 (Pip nest / jar cards, `Continue`) are still only peek-visible;
+widget tests cover their content (Stage 6: 4 `PipAvatar`s mochi/sunny
+[3,1,2,3], no v1 SVGs). Capture pages 2–3 if the loop wants full proof.
 
 VERDICT: FAIL
