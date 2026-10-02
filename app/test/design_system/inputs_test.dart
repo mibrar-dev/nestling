@@ -6,9 +6,7 @@ import 'test_harness.dart';
 
 void main() {
   group('NestChip', () {
-    testWidgets('static chip is 32 high; interactive chip is 44 hit', (
-      tester,
-    ) async {
+    testWidgets('static and interactive chips lay out 32 high', (tester) async {
       await pumpBothModes(
         tester,
         const Row(
@@ -21,13 +19,19 @@ void main() {
         ),
       );
       expect(tester.getSize(find.text('Static')).height, lessThan(44));
+      // The pill lays out at the design's 32 px; the 44 tap minimum is an
+      // overlaid hit test (shared batch 2), not layout.
+      final staticChip = tester.getSize(
+        find.ancestor(of: find.text('Static'), matching: find.byType(NestChip)),
+      );
+      expect(staticChip.height, 32);
       final hit = tester.getSize(
         find.ancestor(
           of: find.text('Tappable'),
           matching: find.byType(NestChip),
         ),
       );
-      expect(hit.height, greaterThanOrEqualTo(44));
+      expect(hit.height, 32);
       expect(hit.width, greaterThanOrEqualTo(44));
     });
 

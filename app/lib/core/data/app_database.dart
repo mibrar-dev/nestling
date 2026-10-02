@@ -89,6 +89,12 @@ class Children extends Table {
   // 0..7 happy days this week (K11 / P15).
   IntColumn get happyDays => integer().withDefault(const Constant(0))();
   IntColumn get weeklyBasePence => integer().withDefault(const Constant(0))();
+  // Creation instant (UTC) + the zone in force then (schema v3). Roster
+  // order is creation order everywhere (CHILD ORDER ruling): `watchChildren`
+  // sorts by this, then `rowid`.
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  TextColumn get createdAtTz =>
+      text().withDefault(const Constant('Europe/London'))();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -312,13 +318,19 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   /// v1 → v2: every event instant gains a `…_tz` zone column, `families`
   /// (+ `settings` mirror) gains `time_zone`, and `quests` gains the
   /// floating `due_time_local` rule. New `NOT NULL … DEFAULT
   /// 'Europe/London'` columns backfill existing rows to London, so a
   /// family that never moves sees byte-identical behaviour.
+  ///
+  /// v2 → v3: `children` gains `created_at` (+ `created_at_tz`, London
+  /// default). `ADD COLUMN` stamps every existing row with the same
+  /// `CURRENT_TIMESTAMP`, so the backfill below staggers them one second
+  /// apart in `rowid` order — the insertion order — and roster order is
+  /// creation order from then on.
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onUpgrade: (m, from, to) async {
@@ -336,6 +348,29 @@ class AppDatabase extends _$AppDatabase {
         await m.addColumn(settings, settings.updatedAt);
         await m.addColumn(settings, settings.updatedAtTz);
         await m.addColumn(appState, appState.trialStartTz);
+      }
+      if (from < 3) {
+        // `children.created_at` (+ `created_at_tz`, London default).
+        // SQLite forbids non-constant defaults in `ADD COLUMN` (drift's
+        // `currentDateAndTime` default), so the instant column arrives via
+        // raw SQL with a constant 0 placeholder and is immediately
+        // backfilled below — one second apart in `rowid` (insertion) order,
+        // oldest first. `strftime` is UTC seconds; the `+ rowid` arithmetic
+        // coerces the (text) timestamp to the integer drift stores
+        // `DateTime` as on native. Empty table ⇒ no-op. Fresh installs take
+        // the declared `currentDateAndTime` default from `CREATE TABLE`
+        // instead, and every write path sets an explicit instant, so the 0
+        // placeholder never survives on a real row.
+        await m.database.customStatement(
+          'ALTER TABLE children ADD COLUMN created_at INTEGER NOT NULL '
+          'DEFAULT 0',
+        );
+        await m.addColumn(children, children.createdAtTz);
+        await m.database.customStatement(
+          'UPDATE children SET created_at = '
+          "strftime('%s', 'now') + rowid - "
+          '(SELECT MIN(rowid) FROM children)',
+        );
       }
     },
     beforeOpen: (details) async {
@@ -392,10 +427,17 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
+  /// Roster order (CHILD ORDER ruling): creation order — Maya before Leo in
+  /// the seed — never alphabetical. Ties (same-second inserts) fall back to
+  /// `rowid`, which is insertion order on every write path.
   Stream<List<ChildrenData>> watchChildren(String familyId) {
     return (select(children)
           ..where((c) => c.familyId.equals(familyId))
-          ..orderBy([(c) => OrderingTerm(expression: c.nickname)]))
+          ..orderBy([
+            (c) => OrderingTerm(expression: c.createdAt),
+            (c) =>
+                OrderingTerm(expression: const CustomExpression<int>('rowid')),
+          ]))
         .watch();
   }
 
