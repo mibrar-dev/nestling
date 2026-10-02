@@ -38,7 +38,17 @@ stage() { # name model template iter fixes
   local brief="$WT/docs/screens/$ID/.brief_${name}.md"
   render "$tpl" "$it" "$fx" > "$brief"
   local sid; sid=$(opencode session list 2>/dev/null | grep -F "$title" | head -1 | awk '{print $1}')
+  local out="$WT/docs/screens/$ID/${tpl%.md}.md" mark="$WT/docs/screens/$ID/.start_${name}"
+  touch "$mark"
   STATUS_DIR="$ST" WORKDIR="$WT" "$MAIN/tools/agents/run_agent.sh" "${ID}_${name}_i${it}" "$model" "$brief" "${sid:--}" "$title"
+  # The stage must (re)write its report with a VERDICT line; nudge once if not.
+  if [ ! -f "$out" ] || [ "$out" -ot "$mark" ] || ! grep -qE "^VERDICT: (PASS|FAIL)" "$out"; then
+    local nudge="$WT/docs/screens/$ID/.brief_${name}_nudge.md"
+    { echo "You ended without writing docs/screens/$ID/${tpl} for iteration $it. Write it NOW from your findings; its last line must be exactly VERDICT: PASS or VERDICT: FAIL. Original brief:"; echo; cat "$brief"; } > "$nudge"
+    sid=$(opencode session list 2>/dev/null | grep -F "$title" | head -1 | awk '{print $1}')
+    ev NUDGE "${name}_i${it} missing_report"
+    STATUS_DIR="$ST" WORKDIR="$WT" "$MAIN/tools/agents/run_agent.sh" "${ID}_${name}_i${it}_nudge" "$model" "$nudge" "${sid:--}" "$title"
+  fi
 }
 verdict() { # file -> PASS/FAIL
   local f="$WT/docs/screens/$ID/$1"
