@@ -15,3 +15,4 @@ ORCHESTRATOR RULES (override the design PNGs where they conflict):
 - ALIGNMENT (OWNER): screens must look perfectly aligned — consistent 20 px side gutters, cards and bars aligned to the same edges, nothing a few px off. Treat visible misalignment as a UI failure.
 - CHILD ORDER (orchestrator ruling): children are always listed in the order they were added (Maya, then Leo), never alphabetically — in every screen and repository.
 - COPY: use the design's typographic characters exactly (curly ’ “ ”, en/em dashes –/—, ellipsis …, non-breaking spaces where a phrase must not split). Compare copy character-by-character with the HTML source.
+- FONTS: google_fonts was removed (Inter/Nunito are bundled assets). Never import google_fonts or call GoogleFonts.* in code or tests; delete any such lines in your feature's tests.
