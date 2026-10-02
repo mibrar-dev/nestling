@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:nestling/app/controllers.dart';
 import 'package:nestling/app/router.dart';
 import 'package:nestling/core/data/app_session.dart';
+import 'package:nestling/core/data/env_flags.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:provider/provider.dart';
 
@@ -60,8 +61,13 @@ class _NestlingAppState extends State<NestlingApp> {
             themeMode: themeMode.mode,
             routerConfig: _router,
             builder: (context, child) {
+              // DISABLE_ANIMATIONS (screenshots/QA) behaves exactly like the
+              // OS Reduce Motion setting for every widget that honours it.
+              final media = _clampTextScaler(context, MediaQuery.of(context));
               return MediaQuery(
-                data: _clampTextScaler(context, MediaQuery.of(context)),
+                data: kDisableAnimations
+                    ? media.copyWith(disableAnimations: true)
+                    : media,
                 child: child ?? const SizedBox.shrink(),
               );
             },
