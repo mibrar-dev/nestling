@@ -165,6 +165,11 @@ abstract final class NestlingIcons {
   /// Screens: P02.
   static const String target = 'assets/icons/ic_target.svg';
 
+  /// Privacy list row: delete everything anytime (lid + body outline).
+  /// Distinct from [bin] (wheeled cart) and [basket] (laundry basket).
+  /// Screens: P04.
+  static const String trash = 'assets/icons/ic_trash.svg';
+
   // ---- Money & rewards ---------------------------------------------------
   /// K09 'Pocket money' history row. A real \u00a3: hook, crossbar, base.
   /// Screens: K09.
