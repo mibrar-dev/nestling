@@ -46,6 +46,7 @@ abstract final class NestIcons {
   static const String pinUk = assets.NestlingIcons.pinUk;
   static const String shieldCheck = assets.NestlingIcons.shieldCheck;
   static const String target = assets.NestlingIcons.target;
+  static const String trash = assets.NestlingIcons.trash;
   static const String poundCoin = assets.NestlingIcons.poundCoin;
   static const String ribbon = assets.NestlingIcons.ribbon;
   static const String gift = assets.NestlingIcons.gift;

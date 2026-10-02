@@ -46,7 +46,11 @@ class NestChip extends StatelessWidget {
             const SizedBox(width: NestSpacing.gap6),
           ],
           Flexible(
-            child: Text(label, style: NestType.chipLabel(color: foreground)),
+            // The outer `Semantics(label:)` (interactive branch) owns the
+            // announcement; the inner text never merges a second copy.
+            child: ExcludeSemantics(
+              child: Text(label, style: NestType.chipLabel(color: foreground)),
+            ),
           ),
         ],
       ),
@@ -66,18 +70,30 @@ class NestChip extends StatelessWidget {
       button: true,
       selected: selected,
       label: label,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          minWidth: NestDevice.tapParent,
-          minHeight: NestDevice.tapParent,
-        ),
-        child: Center(
-          child: Material(
-            color: Colors.transparent,
-            borderRadius: NestRadii.allPill,
-            child: InkWell(
-              borderRadius: NestRadii.allPill,
-              onTap: () => callback(!selected),
+      // One node per chip: the label above owns the announcement and the
+      // subtree below contributes no second copy.
+      excludeSemantics: true,
+      // Shrink-wrap (P05): the old `ConstrainedBox → Center` took
+      // `constraints.biggest`, so inside a `Wrap` run every chip reported
+      // the full run width and each chip broke onto its own line. Every box
+      // below sizes to the pill, so the `Wrap` sees the intrinsic width
+      // and lays chips out in one row.
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: NestRadii.allPill,
+        child: InkWell(
+          borderRadius: NestRadii.allPill,
+          onTap: () => callback(!selected),
+          child: ConstrainedBox(
+            // SPACING_SPEC §6: the 32-high pill is below the 44 minimum, so
+            // the tap box (not the pill) carries the minimum. The pill
+            // measures 35 (32 content + the 1.5 border `Ink` reserves on
+            // each side), so symmetric 4.5 padding centres it in exactly
+            // 44; width keeps a 44 minimum (narrow pills left-align the
+            // sub-pixel slack inside it).
+            constraints: const BoxConstraints(minWidth: NestDevice.tapParent),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4.5),
               child: Ink(
                 padding: visualPadding,
                 decoration: decoration,

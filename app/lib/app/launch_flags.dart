@@ -18,9 +18,9 @@ abstract final class LaunchFlags {
   static const String theme = String.fromEnvironment('THEME');
   static const String child = String.fromEnvironment('CHILD');
 
-  static const bool disableAnimations = bool.fromEnvironment(
-    'DISABLE_ANIMATIONS',
-  );
+  static const bool disableAnimations =
+      bool.fromEnvironment('DISABLE_ANIMATIONS') ||
+      String.fromEnvironment('DISABLE_ANIMATIONS') == '1';
 
   static bool get hasSeed => isSupportedSeed(seed);
 
