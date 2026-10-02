@@ -1,13 +1,13 @@
-// P08 · Today (home) — adversarial bug proofs (Stage 6, iteration 1).
+// P08 · Today (home) — adversarial bug proofs (Stage 6, iteration 1 + 2).
 //
-// Every test below asserts the CORRECT behaviour for a bug found while
-// hunting: data edge cases (children with no quests, 3+/6 children, family
-// wide pending approvals), parent/kid guard bypass, back navigation, rapid
-// retry leaks, and design-system/mandatory-rule violations.
-//
-// They FAIL against the iteration-1 screen, so each widget test is
-// `skip: true` with its bug id in the test name (the suite stays green until
-// the fix lands; the fix stage removes the skips). Run the proofs with
+// Iteration 1 found 11 bugs (P08-B01…B10); iteration 2 fixed all of them and
+// un-skipped the proofs. This iteration adds:
+//   P08-B11 — period scoping is missing (mandatory orchestrator ruling)
+//   P08-B12 — a rapid double-tap pushes two editors
+// plus a Reduce Motion regression pin for the shared Pip still-art (M1 from
+// 4_review iteration 2; fixed on main mid-stage by `f6b02d8`, now green).
+// Every failing proof carries `skip` (or `skip: true`) with its bug id so the
+// suite stays green until the fix lands; run them all with
 // `flutter test --run-skipped test/features/today/p08_bugs_test.dart`.
 //
 // Full reports with severity, repro and suggested fixes:
@@ -18,12 +18,15 @@ import 'dart:async';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
+import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:nestling/app/controllers.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
+import 'package:nestling/core/data/london_time.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
@@ -36,6 +39,11 @@ import 'package:nestling/features/today/presentation/bloc/today_event.dart';
 import 'package:nestling/features/today/presentation/views/today_view.dart';
 
 import '../../test_scope.dart';
+
+/// The pushed page's own location (the shell branch still reports `/today`
+/// via `currentConfiguration` after a `push`, so read the page URI).
+Uri currentUri(WidgetTester tester, Finder anchor) =>
+    GoRouter.of(tester.element(anchor)).state.uri;
 
 class _MockTodayRepository extends Mock implements TodayRepository;
 
@@ -108,7 +116,7 @@ void main() {
 
       expect(currentPath(tester), '/parental-gate');
       await disposeApp(tester);
-    }, skip: true);
+    });
   });
 
   group('P08 Pip artwork (mandatory orchestrator rule)', () {
@@ -133,7 +141,7 @@ void main() {
       expect(pips.last.stage, 2);
 
       await disposeApp(tester);
-    }, skip: true);
+    });
 
     testWidgets('[P08-B03] P08b empty state uses PipAvatar (mochi/sunny/1)', (
       tester,
@@ -152,7 +160,7 @@ void main() {
       expect(pips.single.stage, 1);
 
       await disposeApp(tester);
-    }, skip: true);
+    });
   });
 
   group('P08 data edge cases', () {
@@ -168,7 +176,7 @@ void main() {
       // still show the child (design: a card per child).
       expect(find.text('Sam'), findsOneWidget);
       await disposeApp(tester);
-    }, skip: true);
+    });
 
     testWidgets('[P08-B05] three children keep the 2-up kids grid', (
       tester,
@@ -189,8 +197,14 @@ void main() {
       // second row instead of squeezing three cards into one row.
       expect(rows, hasLength(2));
 
+      // Half of the 350px content width minus the 10px gap.
+      final samCard = find
+          .ancestor(of: find.text('Sam'), matching: find.byType(NestCard))
+          .first;
+      expect(tester.getSize(samCard).width, closeTo(170, 1));
+
       await disposeApp(tester);
-    }, skip: true);
+    });
 
     testWidgets('[P08-B05] six children keep the 2-up grid with no overflow', (
       tester,
@@ -213,7 +227,7 @@ void main() {
       expect(tester.takeException(), isNull, reason: 'no RenderFlex overflow');
 
       await disposeApp(tester);
-    }, skip: true);
+    });
 
     testWidgets('[P08-B06] banner counts family-wide pending approvals', (
       tester,
@@ -239,7 +253,7 @@ void main() {
       // Review opens /approvals, which lists 3 seeded + this one.
       expect(find.text('4 quests waiting for your thumbs-up'), findsOneWidget);
       await disposeApp(tester);
-    }, skip: true);
+    });
   });
 
   group('P08 navigation', () {
@@ -252,7 +266,11 @@ void main() {
       await tester.tap(find.text('Review'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
-      expect(currentPath(tester), '/approvals');
+      // The pushed page observes the new location (the shell branch still
+      // reports `/today` via `currentConfiguration`, so read the URI from
+      // the pushed page itself — same method as the navigation tests).
+      expect(find.text('P11 Approvals'), findsOneWidget);
+      expect(currentUri(tester, find.text('P11 Approvals')).path, '/approvals');
 
       final popped = await tester.binding.handlePopRoute();
       await tester.pump();
@@ -262,7 +280,7 @@ void main() {
       expect(currentPath(tester), '/today');
 
       await disposeApp(tester);
-    }, skip: true);
+    });
   });
 
   group('P08 resilience', () {
@@ -284,6 +302,7 @@ void main() {
           .thenAnswer((_) => Stream.value(const <ChildDaySummary>[]));
       when(repo.watchParentName).thenAnswer((_) => Stream.value('Sarah'));
       when(repo.watchPayoutDay).thenAnswer((_) => Stream.value(6));
+      when(repo.watchPendingCount).thenAnswer((_) => Stream.value(0));
       final bloc = TodayBloc(repository: repo)..add(const TodayLoadRequested());
 
       await _pumpTodayView(tester, bloc);
@@ -306,7 +325,7 @@ void main() {
       expect(cancels, 1, reason: 'the failed load was cancelled on error');
 
       await disposeApp(tester);
-    }, skip: true);
+    });
   });
 
   group('P08 layout fidelity', () {
@@ -335,7 +354,7 @@ void main() {
       expect(tester.getSize(card).width, lessThanOrEqualTo(175));
 
       await disposeApp(tester);
-    }, skip: true);
+    });
 
     test(
       '[P08-B10] quest rows are ordered pending-first like the design',
@@ -363,7 +382,219 @@ void main() {
           ]),
         );
       },
-      skip: 'P08-B10: rows() sorts alphabetically, scattering "Needs a look"',
     );
+  });
+
+  group('P08 period scoping (mandatory orchestrator ruling)', () {
+    test(
+      '[P08-B11] a daily completion from the previous London day is to do',
+      () async {
+        final db = await setUpTestScope();
+        final now = DateTime.now().toUtc();
+        final stale = londonDayStartUtc(now)
+            .subtract(const Duration(minutes: 1));
+        await (db.delete(
+          db.questCompletions,
+        )..where((c) => c.questId.equals('q-reading'))).go();
+        await db
+            .into(db.questCompletions)
+            .insert(
+              QuestCompletionsCompanion.insert(
+                questId: 'q-reading',
+                childId: 'maya',
+                familyId: Seed.familyId,
+                status: const Value('approved'),
+                coins: const Value(10),
+                createdAt: Value(stale),
+              ),
+            );
+
+        final impl = TodayRepositoryImpl(db: db);
+        final items = await impl.getItems();
+
+        expect(
+          items.firstWhere((i) => i.questId == 'q-reading').status,
+          'to_do',
+          reason:
+              "yesterday's daily completion is outside today's London day — "
+              'the ruling says the quest is to do again',
+        );
+      },
+      skip: 'P08-B11: rows() ignores countsForCurrentPeriod',
+    );
+
+    test(
+      '[P08-B11] a weekly completion from last week is to do again',
+      () async {
+        final db = await setUpTestScope();
+        final now = DateTime.now().toUtc();
+        final stale = londonWeekStartUtc(now)
+            .subtract(const Duration(minutes: 1));
+        await (db.delete(
+          db.questCompletions,
+        )..where((c) => c.questId.equals('q-bins'))).go();
+        await db
+            .into(db.questCompletions)
+            .insert(
+              QuestCompletionsCompanion.insert(
+                questId: 'q-bins',
+                childId: 'maya',
+                familyId: Seed.familyId,
+                status: const Value('approved'),
+                coins: const Value(15),
+                createdAt: Value(stale),
+              ),
+            );
+
+        final impl = TodayRepositoryImpl(db: db);
+        final items = await impl.getItems();
+
+        expect(
+          items.firstWhere((i) => i.questId == 'q-bins').status,
+          'to_do',
+          reason: "last week's weekly completion is outside this London week",
+        );
+      },
+      skip: 'P08-B11: rows() ignores countsForCurrentPeriod',
+    );
+
+    testWidgets('[P08-B11] the kid card count excludes stale completions', (
+      tester,
+    ) async {
+      final db = await setUpTestScope();
+      final now = DateTime.now().toUtc();
+      final stale = londonDayStartUtc(now).subtract(const Duration(minutes: 1));
+      await (db.delete(
+        db.questCompletions,
+      )..where((c) => c.questId.equals('q-reading'))).go();
+      await db
+          .into(db.questCompletions)
+          .insert(
+            QuestCompletionsCompanion.insert(
+              questId: 'q-reading',
+              childId: 'maya',
+              familyId: Seed.familyId,
+              status: const Value('approved'),
+              coins: const Value(10),
+              createdAt: Value(stale),
+            ),
+          );
+
+      await pumpAppRoute(tester, '/today');
+
+      // Maya's "done" count must not include yesterday's daily quest.
+      expect(find.text('4 of 6 quests'), findsOneWidget);
+      expect(find.text('5 of 6 quests'), findsNothing);
+
+      await disposeApp(tester);
+    }, skip: true);
+
+    test('[P08-B11] a "once" completion from years ago still counts', () async {
+      final db = await setUpTestScope();
+      await db
+          .into(db.quests)
+          .insert(
+            QuestsCompanion.insert(
+              id: 'q-once',
+              familyId: Seed.familyId,
+              title: 'Return the library book',
+              coins: const Value(5),
+              repeatRule: const Value('once'),
+              assigneeChildId: const Value('maya'),
+            ),
+          );
+      await db
+          .into(db.questCompletions)
+          .insert(
+            QuestCompletionsCompanion.insert(
+              questId: 'q-once',
+              childId: 'maya',
+              familyId: Seed.familyId,
+              status: const Value('approved'),
+              coins: const Value(5),
+              createdAt: Value(DateTime.utc(2020)),
+            ),
+          );
+
+      final impl = TodayRepositoryImpl(db: db);
+      final items = await impl.getItems();
+
+      // `once` → forever: the ruling must not reset this one (pin).
+      expect(items.firstWhere((i) => i.questId == 'q-once').status, 'approved');
+    });
+  });
+
+  group('P08 rapid taps', () {
+    testWidgets('[P08-B12] a rapid double-tap opens one quest editor', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/today');
+
+      // Two taps before the first frame rebuilds: without a guard each tap
+      // runs `push('/quest-editor?questId=…')`.
+      await tester.tap(find.text('Empty the dishwasher'));
+      await tester.tap(find.text('Empty the dishwasher'), warnIfMissed: false);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(
+        find.text('P09 Quest editor', skipOffstage: false),
+        findsOneWidget,
+        reason: 'a double-tap must not stack two editor pages',
+      );
+
+      final popped = await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(popped, isTrue);
+      expect(find.text("Today's quests", skipOffstage: false), findsOneWidget);
+
+      await disposeApp(tester);
+    }, skip: true);
+  });
+
+  group('P08 Pip under Reduce Motion (regression pin, shared art)', () {
+    // M1 (4_review iteration 2): Bolt/Storybook fallbacks were dashed
+    // placeholders, so Reduce Motion showed an outline for Leo. Fixed on main
+    // (`f6b02d8`, approved art per style) — this pins the screen outcome.
+    testWidgets("Leo's Pip renders real art, not the placeholder", (
+      tester,
+    ) async {
+      await setUpTestScope();
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures(disableAnimations: true);
+      addTearDown(
+        tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+      );
+      await pumpAppRoute(tester, '/today');
+
+      String? pipAssetFor(String nickname) {
+        final card = find
+            .ancestor(of: find.text(nickname), matching: find.byType(NestCard))
+            .first;
+        final svgs = tester.widgetList<SvgPicture>(
+          find.descendant(of: card, matching: find.byType(SvgPicture)),
+        );
+        for (final svg in svgs) {
+          final loader = svg.bytesLoader;
+          if (loader is SvgAssetLoader && loader.assetName.contains('pip_v2')) {
+            return loader.assetName;
+          }
+        }
+        return null;
+      }
+
+      expect(pipAssetFor('Maya'), isNotNull);
+      expect(pipAssetFor('Maya'), isNot(contains('placeholder')));
+      expect(pipAssetFor('Leo'), isNotNull);
+      expect(
+        pipAssetFor('Leo'),
+        isNot(contains('placeholder')),
+        reason: 'Reduce Motion must not draw the dashed placeholder outline',
+      );
+
+      await disposeApp(tester);
+    });
   });
 }

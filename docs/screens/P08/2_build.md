@@ -1,85 +1,98 @@
-# P08 · Today (home) — build notes (Stage 2, iteration 1)
+# P08 · Today (home) — build notes (Stage 2, iteration 2)
 
-Implemented exactly per `docs/screens/P08/1_plan.md` (§a–§g).
+Built per `1_plan.md` + every item in `FIXES_1.md` + `ORCHESTRATOR_NOTES.md`
+(all 4 mandatory items). The 11 skipped proofs in `p08_bugs_test.dart` are
+unskipped and pass; the 4 suite reds from iteration 1 are green.
 
 ## Files changed (all RULES §1-legal)
 
-- `app/lib/features/today/domain/entities/today_item.dart` — added
-  `repeatRule` (default `''`) and `iconKey` (default `''`) to `TodayItem`.
-- `app/lib/features/today/domain/entities/child_day_summary.dart` — added
-  `ageYears: int?` and `happyDays` (default `0`).
-- `app/lib/features/today/domain/today_repository.dart` — added
-  `watchParentName()` and `watchPayoutDay()` (plan §b; payout day drives
-  `· Weekly · Sat` meta text, read from `families.payout_day`).
-- `app/lib/features/today/data/today_repository_impl.dart` — carries
-  `repeatRule`/`iconKey` in `rows()`; summaries carry `ageYears`/`happyDays`
-  and sort eldest-first (Maya 9 before Leo 6, then nickname); new streams
-  read `members` (owner row, else first by name, else `'Sarah'`) and
-  `families` (else `6`). No schema/seed change.
-- `app/lib/features/today/data/models/today_item_model.dart` — new fields in
-  ctor + `fromJson`/`toJson`.
-- `app/lib/features/today/presentation/bloc/today_state.dart` — extended
-  state: `summaries`, `pendingCount`, `parentName` (`'Sarah'`),
-  `greeting` (day part), `dateLine` (`Sat 3 Oct · Happy week: 4 days` shape,
-  via `london_time.dart`), `happyDays`, `payoutDay` (`6`).
-- `app/lib/features/today/presentation/bloc/today_bloc.dart` — single
-  `emit.forEach` over nested `combineLatest2(watchItems+watchSummaries,
-  watchParentName+watchPayoutDay)` (contract-compliant, no re-added events);
-  pure `dayPartForHour()` helper. `pendingCount` = `done_pending` rows;
-  `happyDays` = max over summaries.
-- `app/lib/features/today/presentation/widgets/today_loaded_body.dart` (new)
-  — shared `TodayLoadedBody` (+ `TodayFailureBody`, `TodayStatusChip`, icon /
-  tint / repeat / Pip / avatar maps). Greeting row, leaf-tint approvals
-  banner (hidden when 0), kids 2-up `Expanded` grid, `Today's quests` header,
-  `MAYA · 9` group labels, `NestQuestCard(maxLines: 2)` rows with coin pill +
-  repeat + status chip in HTML order, `Hand to …` button, P08b empty card.
-  Zero theme branches (tokens only). Navigation per plan §c:
-  `+`→`/quest-editor`, avatar→`/settings`, Review→`/approvals`, kid
-  card→`/child-profile?childId=`, See all→`/quests`, quest
-  row→`/quest-editor?questId=`, Hand→`/who-is-playing`.
-- `app/lib/features/today/presentation/views/today_view.dart`,
-  `today_empty_view.dart` — placeholder replaced; both render the shared body
-  (empty card appears when `summaries.isEmpty`, i.e. `Seed.empty()`).
-- `app/test/features/today/` (new) — `today_repository_test.dart` (10 rows,
-  α-order, latest-completion wins incl. newer `done_pending`/`not_yet`
-  inserts, Maya 4/6+120 / Leo 2/4+45, parent `Sarah`, payout `6`, model
-  round-trip), `today_bloc_test.dart` (loaded with counts, error→failure,
-  empty streams, `dayPartForHour` boundaries), `today_view_test.dart`
-  (light content + all navigation taps, dark content, empty card + Browse
-  ideas, 320-wide + textScale 1.3 no-overflow + ≥44 taps; every widget test
-  ends with `disposeApp`).
+Lib (`app/lib/features/today/**`):
 
-## Fix items (plan had no numbered fix list; deviations/decisions)
+- `domain/entities/today_item.dart` — **dropped `detail`** (B13/C7: dead
+  second source of status copy; the view's `todayStatusLabel` is the one
+  mapper). Gained nothing; `repeatRule`/`iconKey` kept.
+- `domain/entities/child_day_summary.dart` — added `pipStyle`/`pipSkin`/
+  `pipAccessory` (defaults mochi/sunny/none) for `PipAvatar` (B02).
+- `domain/today_repository.dart` — added `watchPendingCount()` (B06).
+- `data/today_repository_impl.dart` — `rows()` sorts by **(statusRank,
+  title)** with done_pending 0 / to_do 1 / not_yet 2 / approved 3 (B11/B10);
+  `watchSummaries()` builds from **all** children (B04: zero-quest children
+  get `0 of 6`-style cards — `0 of 0 quests`) and carries pip fields;
+  `watchPendingCount()` counts family-wide `done_pending` (B06, same set P11
+  lists); dropped `_statusLabel`; `import package:drift/drift.dart` (house
+  pattern, needed for `&`).
+- `data/models/today_item_model.dart` — `detail` removed from ctor/json.
+- `presentation/bloc/today_bloc.dart` — `pendingCount` from
+  `watchPendingCount()` (B06); `happyWeekLabel()` plural helper (B5);
+  combined stream transformed by `_closeOnError` (first error forwarded,
+  then close) so a failed load releases its watchers and retry starts fresh
+  (B14/B08). Raw message stays in state for logs/tests.
+- `presentation/widgets/today_loaded_body.dart` —
+  - `todayPendingLabel()` singular/plural (B4), used by visible text;
+    banner `Semantics` keeps `liveRegion` but drops the duplicating explicit
+    label (B10/C5).
+  - `todayBannerSubtitle()` from state nicknames: `Maya and Leo did
+    brilliantly yesterday` (B3, orchestrator note 2).
+  - Greeting `fontWeight w900 + letterSpacing -0.22` on the token style (B9).
+  - Quest gaps `i == 0 ? s2 : s4` (B2).
+  - `_KidsGrid` chunks pairs; lone card gets `Row[Expanded, Spacer]` so one
+    child keeps the 170 column (B6/B05/B09).
+  - `_KidCard` renders each child's own `PipAvatar(style/skin/accessory,
+    clamped stage, size 72)` in the design slot (orchestrator note 1, B02);
+    v1 `pipStageAsset` helper deleted; `pipStageName` kept for the semantics
+    label. `PipAvatar` handles the still frame itself (`DISABLE_ANIMATIONS`/
+    `MediaQuery.disableAnimations`).
+  - `_GroupLabel` → `NestSectionLabel` (B12, restores `header: true`).
+  - `push` for `/approvals` + `/quest-editor` (±`questId`, incl. P08b `Add a
+    quest`); `go` kept for shell destinations and `/who-is-playing` (B07);
+    coordination note filed as `SHARED_REQUEST.md` §4.
+  - Hand-off 3+ copy → `Hand to Maya and 2 others` (B20/C12).
+  - P08b art → `PipAvatar(mochi, stage 1, 140)` (B03; `skin` omitted — sunny
+    is the default and the lint forbids redundant args).
+  - `TodayFailureBody` renders a fixed kind string; raw error stays in state
+    (B15/C8).
+- `presentation/views/today_view.dart`, `today_empty_view.dart` — failure
+  branch is now `const TodayFailureBody()`.
 
-- Plan test expected the header date `Sat 3 Oct`; the header shows *today*
-  (live `DateTime.now` via `london_time`), so tests compute the expected date
-  string at runtime instead. Seed-anchor note concerns static content only.
-- Group order: DB streams are α-ordered (Leo first); view/summaries use
-  eldest-first so Maya leads, matching the design.
-- All 10 assigned quests render (design mock shows 5 of 10); scroll handles it.
-- Status chip: first built as fixed-height `Container(alignment: center)` —
-  screenshots showed it stretching full-width on its own Wrap line, and a
-  `Row` variant overflowed at 320/1.3 (nested flex-in-flex). Final: padding-
-  sized pill (26px at base scale) as a direct `Wrap` child — one line at 390,
-  graceful wrap at 320, zero overflow.
-- No `SHARED_REQUEST` needed for the build itself (sofa/plate icons fall back
-  to `table`/`questCard` in-feature). One request filed for the stale shared
-  router test (see below).
+Tests (`app/test/features/today/**`): unskipped all 11 proofs (B01 passes
+as-is — guard already on main; B07's path assertion now reads the pushed
+page's `GoRouterState.uri` because `currentConfiguration` keeps reporting
+the shell branch after a `push` — same method the navigation tests use, see
+2_build note); new repo tests (no-quest child summary, family-wide pending
+count); updated stale expectations (dishwasher `daily` per seed `e94d063`,
+status-order list, `_expectedDateLine` plural, friendly-copy assertions,
+`watchPendingCount` stubs on every mock, pending-controller rework of the
+re-emission test, scroll loops follow render order). `detail` references
+removed.
+
+## Fix-item ledger (FIXES_1 refs)
+
+Review B1–B8 + UI 1–6 + bugs B01–B10 + carried C1–C15: **all fixed except**
+C9/B16 (balance substitution — accepted, note only), C10/B17 (liveRegion
+re-announce on unrelated emissions — kept `liveRegion`, minor, deferred),
+C11/B21 (P08b divergences — that loop's scope), C13 second half (shared
+`NestCard` semantics — `SHARED_REQUEST.md` §2 stays open), C14/B22 (doc —
+`SHARED_REQUEST.md` §5), B18 (shared runSpacing — new §7). B19 needed no
+filing (seed `e94d063` resolved it). **New shared bug found: §6**
+(`DISABLE_ANIMATIONS=1` never parses to `true`, so `shot.sh` frames never
+stabilise once Rive widgets are on screen — see below).
 
 ## Verification tails
 
-- `dart format .` → `Formatted 342 files (0 changed)`.
-- `flutter analyze` → `No issues found!` (whole app, incl. info lints).
-- `flutter test test/features/today` → `All tests passed!` (+22).
-- `flutter test` (full) → `+308 -1`; sole failure is the shared
-  `test/app/router_redirect_test.dart` (`onboarded parent lands on Today`
-  expects the removed placeholder text `P08 Today`). Screen agent may not
-  touch shared files (RULES §1) — filed as `SHARED_REQUEST.md` (blocking).
-- `shot.sh` light + dark + empty screenshots in `docs/screens/P08/ui/`;
-  `compare.py` vs `design/screens/light/P08-today.png` → mean diff 6.66%
-  (bands 4.6–9.4%). Residual is content, not spacing: live greeting/date
-  (`Good evening / Thu 1 Oct` vs mock `Good morning / Sat 4 Oct`) and all 10
-  real quest rows vs the mock's 5. Meta-row geometry, banner, kid cards and
-  tab bar align with the design.
+- `dart format .` → `Formatted 344 files (0 changed)`.
+- `flutter analyze` → `No issues found!` (whole app).
+- `flutter test test/features/today` → `All tests passed!` (+65: 52 + 11
+  proofs + 2 new repo tests).
+- `flutter test` (full) → `All tests passed!` (+372).
+- `shot.sh` light + dark + empty from final sources (all newer than the
+  sources; all three read back). Each run warns `frame never stabilised in
+  25 s` — caused by shared §6 (Rive idle loop runs because the flag parses
+  to false), not by this screen: captures are complete and correct.
+- `compare.py` vs design PNGs: light mean **5.22 %** (was 6.66),
+  dark **4.85 %**. Residual is data-driven, not spacing: live date
+  (`Fri 2 Oct` vs mock `Sat 4 Oct`), seed repeats (`· Daily` vs mock's mixed
+  labels — DB is correct per DATA OVER MOCKS), all 10 real rows vs the
+  mock's 5, banner balance-wrap. Dark: zero theme branches, all tokens flip
+  (banner, cards, pills, chips, progress). Status bar ignored per rules.
 
-VERDICT: FAIL
+VERDICT: PASS

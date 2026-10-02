@@ -17,7 +17,6 @@ const _items = <TodayItem>[
   TodayItem(
     id: 'q-dishwasher:maya',
     title: 'Empty the dishwasher',
-    detail: 'Maya · waiting for thumbs-up',
     questId: 'q-dishwasher',
     childId: 'maya',
     childName: 'Maya',
@@ -29,7 +28,6 @@ const _items = <TodayItem>[
   TodayItem(
     id: 'q-reading:maya',
     title: 'Reading – 20 minutes',
-    detail: 'Maya · to do',
     questId: 'q-reading',
     childId: 'maya',
     childName: 'Maya',
@@ -41,7 +39,6 @@ const _items = <TodayItem>[
   TodayItem(
     id: 'q-bed:leo',
     title: 'Make your bed',
-    detail: 'Leo · waiting for thumbs-up',
     questId: 'q-bed',
     childId: 'leo',
     childName: 'Leo',
@@ -74,6 +71,8 @@ const _summaries = <ChildDaySummary>[
     coins: 45,
     ageYears: 6,
     happyDays: 3,
+    pipStyle: 'bolt',
+    pipSkin: 'sky',
   ),
 ];
 
@@ -87,6 +86,7 @@ void main() {
         when(repo.watchSummaries).thenAnswer((_) => Stream.value(_summaries));
         when(repo.watchParentName).thenAnswer((_) => Stream.value('Sarah'));
         when(repo.watchPayoutDay).thenAnswer((_) => Stream.value(6));
+        when(repo.watchPendingCount).thenAnswer((_) => Stream.value(2));
         return TodayBloc(repository: repo);
       },
       act: (bloc) => bloc.add(const TodayLoadRequested()),
@@ -118,6 +118,7 @@ void main() {
         );
         when(repo.watchParentName).thenAnswer((_) => Stream.value('Sarah'));
         when(repo.watchPayoutDay).thenAnswer((_) => Stream.value(6));
+        when(repo.watchPendingCount).thenAnswer((_) => Stream.value(0));
         return TodayBloc(repository: repo);
       },
       act: (bloc) => bloc.add(const TodayLoadRequested()),
@@ -141,6 +142,7 @@ void main() {
             .thenAnswer((_) => Stream.value(const <ChildDaySummary>[]));
         when(repo.watchParentName).thenAnswer((_) => Stream.value('Sarah'));
         when(repo.watchPayoutDay).thenAnswer((_) => Stream.value(6));
+        when(repo.watchPendingCount).thenAnswer((_) => Stream.value(0));
         return TodayBloc(repository: repo);
       },
       act: (bloc) => bloc.add(const TodayLoadRequested()),
@@ -174,6 +176,7 @@ void main() {
         when(repo.watchSummaries).thenAnswer((_) => Stream.value(_summaries));
         when(repo.watchParentName).thenAnswer((_) => Stream.value('James'));
         when(repo.watchPayoutDay).thenAnswer((_) => Stream.value(3));
+        when(repo.watchPendingCount).thenAnswer((_) => Stream.value(2));
         return TodayBloc(repository: repo);
       },
       act: (bloc) => bloc.add(const TodayLoadRequested()),
@@ -190,25 +193,59 @@ void main() {
       ],
     );
 
+    blocTest<TodayBloc, TodayState>(
+      'pendingCount is the family-wide count, not the visible rows',
+      build: () {
+        final repo = MockTodayRepository();
+        // No visible rows (e.g. every pending completion belongs to an
+        // "Anyone" quest) but three approvals are still waiting in P11.
+        when(repo.watchItems)
+            .thenAnswer((_) => Stream.value(const <TodayItem>[]));
+        when(repo.watchSummaries).thenAnswer((_) => Stream.value(_summaries));
+        when(repo.watchParentName).thenAnswer((_) => Stream.value('Sarah'));
+        when(repo.watchPayoutDay).thenAnswer((_) => Stream.value(6));
+        when(repo.watchPendingCount).thenAnswer((_) => Stream.value(3));
+        return TodayBloc(repository: repo);
+      },
+      act: (bloc) => bloc.add(const TodayLoadRequested()),
+      expect: () => [
+        const TodayState(status: TodayStatus.loading),
+        predicate<TodayState>(
+          (s) =>
+              s.status == TodayStatus.loaded &&
+              s.items.isEmpty &&
+              s.pendingCount == 3,
+        ),
+      ],
+    );
+
     late StreamController<List<TodayItem>> items;
+    late StreamController<int> pending;
 
     blocTest<TodayBloc, TodayState>(
       'a second items emission updates the state without a new event',
       build: () {
         final repo = MockTodayRepository();
         items = StreamController<List<TodayItem>>();
+        pending = StreamController<int>();
         addTearDown(items.close);
+        addTearDown(pending.close);
         when(repo.watchItems).thenAnswer((_) => items.stream);
         when(repo.watchSummaries).thenAnswer((_) => Stream.value(_summaries));
         when(repo.watchParentName).thenAnswer((_) => Stream.value('Sarah'));
         when(repo.watchPayoutDay).thenAnswer((_) => Stream.value(6));
+        when(repo.watchPendingCount).thenAnswer((_) => pending.stream);
         return TodayBloc(repository: repo);
       },
-      act: (bloc) {
+      act: (bloc) async {
         bloc.add(const TodayLoadRequested());
-        items
-          ..add(_items)
-          ..add(const <TodayItem>[]);
+        pending.add(2);
+        items.add(_items);
+        await Future<void>.delayed(Duration.zero);
+        // Items and the family-wide pending count move independently.
+        items.add(const <TodayItem>[]);
+        await Future<void>.delayed(Duration.zero);
+        pending.add(0);
       },
       expect: () => [
         const TodayState(status: TodayStatus.loading),
@@ -216,6 +253,12 @@ void main() {
           (s) =>
               s.status == TodayStatus.loaded &&
               s.items.length == 3 &&
+              s.pendingCount == 2,
+        ),
+        predicate<TodayState>(
+          (s) =>
+              s.status == TodayStatus.loaded &&
+              s.items.isEmpty &&
               s.pendingCount == 2,
         ),
         predicate<TodayState>(
@@ -237,6 +280,7 @@ void main() {
         when(repo.watchSummaries).thenAnswer((_) => Stream.value(_summaries));
         when(repo.watchParentName).thenAnswer((_) => Stream.value('Sarah'));
         when(repo.watchPayoutDay).thenAnswer((_) => Stream.value(6));
+        when(repo.watchPendingCount).thenAnswer((_) => Stream.value(0));
         return TodayBloc(repository: repo);
       },
       act: (bloc) {
@@ -272,6 +316,7 @@ void main() {
         when(repo.watchSummaries).thenAnswer((_) => Stream.value(_summaries));
         when(repo.watchParentName).thenAnswer((_) => Stream.value('Sarah'));
         when(repo.watchPayoutDay).thenAnswer((_) => Stream.value(6));
+        when(repo.watchPendingCount).thenAnswer((_) => Stream.value(2));
         return TodayBloc(repository: repo);
       },
       act: (bloc) async {
@@ -313,6 +358,7 @@ void main() {
         );
         when(repo.watchParentName).thenAnswer((_) => Stream.value('Sarah'));
         when(repo.watchPayoutDay).thenAnswer((_) => Stream.value(6));
+        when(repo.watchPendingCount).thenAnswer((_) => Stream.value(0));
         final bloc = TodayBloc(repository: repo)
           ..add(const TodayLoadRequested());
 
@@ -337,6 +383,14 @@ void main() {
       expect(dayPartForHour(17), 'Good afternoon');
       expect(dayPartForHour(18), 'Good evening');
       expect(dayPartForHour(23), 'Good evening');
+    });
+  });
+
+  group('happyWeekLabel', () {
+    test('singular / plural', () {
+      expect(happyWeekLabel(0), 'Happy week: 0 days');
+      expect(happyWeekLabel(1), 'Happy week: 1 day');
+      expect(happyWeekLabel(4), 'Happy week: 4 days');
     });
   });
 }

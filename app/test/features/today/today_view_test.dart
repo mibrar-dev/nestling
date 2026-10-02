@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
@@ -10,12 +11,14 @@ import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/london_time.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
+import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 import 'package:nestling/features/today/domain/entities/child_day_summary.dart';
 import 'package:nestling/features/today/domain/entities/today_item.dart';
 import 'package:nestling/features/today/domain/today_repository.dart';
 import 'package:nestling/features/today/presentation/bloc/today_bloc.dart';
 import 'package:nestling/features/today/presentation/bloc/today_event.dart';
 import 'package:nestling/features/today/presentation/views/today_view.dart';
+import 'package:nestling/features/today/presentation/widgets/today_loaded_body.dart';
 
 import '../../test_scope.dart';
 
@@ -27,7 +30,6 @@ const _mockItems = <TodayItem>[
   TodayItem(
     id: 'q-dishwasher:maya',
     title: 'Empty the dishwasher',
-    detail: 'Maya · waiting for thumbs-up',
     questId: 'q-dishwasher',
     childId: 'maya',
     childName: 'Maya',
@@ -58,7 +60,8 @@ String _expectedGreeting() {
 }
 
 String _expectedDateLine(int happyDays) {
-  return '${formatLondonDay(DateTime.now().toUtc())} · Happy week: $happyDays days';
+  final day = happyDays == 1 ? 'day' : 'days';
+  return '${formatLondonDay(DateTime.now().toUtc())} · Happy week: $happyDays $day';
 }
 
 /// Pumps [TodayView] directly (no router, no shell) over [bloc].
@@ -94,6 +97,61 @@ Future<void> _resize(WidgetTester tester, double width, double scale) async {
   await tester.pump(const Duration(milliseconds: 200));
 }
 
+/// Extra child row for the 3+ and 1-child copy cases.
+Future<void> _insertChild(
+  AppDatabase db,
+  String id,
+  String nickname,
+  int age, {
+  String pipStyle = 'mochi',
+  String pipSkin = 'sunny',
+  String pipAccessory = 'none',
+  int pipStage = 1,
+}) async {
+  await db
+      .into(db.children)
+      .insert(
+        ChildrenCompanion.insert(
+          id: id,
+          familyId: Seed.familyId,
+          nickname: nickname,
+          ageYears: Value(age),
+          avatarColour: const Value('sky'),
+          pipStyle: Value(pipStyle),
+          pipSkin: Value(pipSkin),
+          pipAccessory: Value(pipAccessory),
+          pipStage: Value(pipStage),
+        ),
+      );
+}
+
+/// Removes a seeded child with its quests and completions.
+Future<void> _removeChild(AppDatabase db, String id) async {
+  await (db.delete(
+    db.questCompletions,
+  )..where((c) => c.childId.equals(id))).go();
+  await (db.delete(db.quests)..where((q) => q.assigneeChildId.equals(id))).go();
+  await (db.delete(db.children)..where((c) => c.id.equals(id))).go();
+}
+
+/// Any [SvgPicture] drawing an asset whose path contains [needle].
+Finder _svgAssetContaining(String needle) => find.byWidgetPredicate((w) {
+  if (w is! SvgPicture) return false;
+  final loader = w.bytesLoader;
+  return loader is SvgAssetLoader && loader.assetName.contains(needle);
+});
+
+/// Minimal summary for the pure copy-helper tests.
+ChildDaySummary _kidNamed(String name) => ChildDaySummary(
+  childId: name.toLowerCase(),
+  nickname: name,
+  avatarColour: 'lilac',
+  pipStage: 2,
+  done: 0,
+  total: 1,
+  coins: 10,
+);
+
 void main() {
   group('P08 Today (light, demo seed)', () {
     testWidgets('shows greeting, banner, kids, groups and hand-off', (
@@ -118,12 +176,15 @@ void main() {
       expect(find.text('See all'), findsOneWidget);
       expect(find.text('MAYA · 9'), findsOneWidget);
 
-      // Maya's six quests are α-ordered; scroll through them in order.
+      // Maya's rows are pending-first, then α; scroll through them in order.
       final list = find.byType(Scrollable).first;
       for (final title in <String>[
         'Empty the dishwasher',
-        'Put the bins out',
+        'Lay the table',
         'Reading – 20 minutes',
+        'Tidy your bedroom',
+        'Hoover the stairs',
+        'Put the bins out',
         'LEO · 6',
         'Make your bed',
         'Feed Biscuit the cat',
@@ -340,11 +401,12 @@ void main() {
         greaterThanOrEqualTo(44),
       );
 
-      // Scroll through every row so each lays out under the constraints.
+      // Scroll through every row (in render order) so each lays out under
+      // the constraints.
       final list = find.byType(Scrollable).first;
       for (final title in <String>[
-        'Put the bins out',
         'Reading – 20 minutes',
+        'Put the bins out',
         'LEO · 6',
         'Feed Biscuit the cat',
         'Hand to Maya or Leo',
@@ -376,6 +438,7 @@ void main() {
       when(repo.watchParentName)
           .thenAnswer((_) => const Stream<String>.empty());
       when(repo.watchPayoutDay).thenAnswer((_) => const Stream<int>.empty());
+      when(repo.watchPendingCount).thenAnswer((_) => Stream.value(0));
       // No `bloc.close()` here (nor below): TodayBloc's `emit.forEach` holds
       // the long-lived repository streams open — as in the app — so the close
       // future only resolves when a source ends. The unreferenced bloc is
@@ -403,12 +466,18 @@ void main() {
       when(repo.watchSummaries).thenAnswer((_) => Stream.value(_mockSummaries));
       when(repo.watchParentName).thenAnswer((_) => Stream.value('Sarah'));
       when(repo.watchPayoutDay).thenAnswer((_) => Stream.value(6));
+      when(repo.watchPendingCount).thenAnswer((_) => Stream.value(0));
       final bloc = TodayBloc(repository: repo)..add(const TodayLoadRequested());
 
       await _pumpTodayView(tester, bloc);
       await tester.pump();
 
-      expect(find.textContaining('offline'), findsOneWidget);
+      expect(
+        find.text(
+          "We couldn't load today's quests. Your data is safe — please try again.",
+        ),
+        findsOneWidget,
+      );
       expect(find.text('Try again'), findsOneWidget);
 
       await tester.tap(find.text('Try again'));
@@ -428,12 +497,18 @@ void main() {
       when(repo.watchSummaries).thenAnswer((_) => Stream.value(_mockSummaries));
       when(repo.watchParentName).thenAnswer((_) => Stream.value('Sarah'));
       when(repo.watchPayoutDay).thenAnswer((_) => Stream.value(6));
+      when(repo.watchPendingCount).thenAnswer((_) => Stream.value(0));
       final bloc = TodayBloc(repository: repo)..add(const TodayLoadRequested());
 
       await _pumpTodayView(tester, bloc, theme: ThemeMode.dark);
       await tester.pump();
 
-      expect(find.textContaining('offline'), findsOneWidget);
+      expect(
+        find.text(
+          "We couldn't load today's quests. Your data is safe — please try again.",
+        ),
+        findsOneWidget,
+      );
       expect(find.text('Try again'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
@@ -639,6 +714,279 @@ void main() {
         tester.widget<Text>(subtitle).data,
         'Maya and Leo did brilliantly yesterday',
       );
+
+      await disposeApp(tester);
+    });
+  });
+
+  group('P08 Today copy helpers', () {
+    test('pending label pluralises', () {
+      expect(todayPendingLabel(0), '0 quests waiting for your thumbs-up');
+      expect(todayPendingLabel(1), '1 quest waiting for your thumbs-up');
+      expect(todayPendingLabel(3), '3 quests waiting for your thumbs-up');
+    });
+
+    test('banner subtitle names 0 / 1 / 2 / 3+ children', () {
+      expect(
+        todayBannerSubtitle(const <ChildDaySummary>[]),
+        'Your nestlings did brilliantly yesterday',
+      );
+      expect(
+        todayBannerSubtitle([_kidNamed('Maya')]),
+        'Maya did brilliantly yesterday',
+      );
+      expect(
+        todayBannerSubtitle([_kidNamed('Maya'), _kidNamed('Leo')]),
+        'Maya and Leo did brilliantly yesterday',
+      );
+      expect(
+        todayBannerSubtitle([
+          _kidNamed('Maya'),
+          _kidNamed('Leo'),
+          _kidNamed('Sam'),
+        ]),
+        'Maya, Leo and Sam did brilliantly yesterday',
+      );
+    });
+
+    test('Pip mappers cover every DB token and fall back safely', () {
+      expect(pipStyleFor('mochi'), PipStyle.mochi);
+      expect(pipStyleFor('bolt'), PipStyle.bolt);
+      expect(pipStyleFor('storybook'), PipStyle.storybook);
+      expect(pipStyleFor('v1-legacy'), PipStyle.mochi);
+
+      expect(pipSkinFor('sunny'), PipSkin.sunny);
+      expect(pipSkinFor('berry'), PipSkin.berry);
+      expect(pipSkinFor('sky'), PipSkin.sky);
+      expect(pipSkinFor('mint'), PipSkin.mint);
+      expect(pipSkinFor('plum'), PipSkin.sunny);
+
+      expect(pipAccessoryFor('none'), PipAccessory.none);
+      expect(pipAccessoryFor('bow'), PipAccessory.bow);
+      expect(pipAccessoryFor('cap'), PipAccessory.cap);
+      expect(pipAccessoryFor('scarf'), PipAccessory.scarf);
+      expect(pipAccessoryFor('glasses'), PipAccessory.glasses);
+      expect(pipAccessoryFor('hat'), PipAccessory.none);
+    });
+  });
+
+  group('P08 Today Pip artwork (orchestrator rule)', () {
+    testWidgets("kid cards use each child's PipAvatar, never a v1 SVG", (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/today');
+
+      final pips = tester
+          .widgetList<PipAvatar>(find.byType(PipAvatar))
+          .toList();
+      expect(pips, hasLength(2));
+      expect(pips.first.style, PipStyle.mochi);
+      expect(pips.first.skin, PipSkin.sunny);
+      expect(pips.first.stage, 3);
+      expect(pips.last.style, PipStyle.bolt);
+      expect(pips.last.skin, PipSkin.sky);
+      expect(pips.last.stage, 2);
+
+      // The rule forbids the v1 `pip_stage_*.svg` illustrations; whatever
+      // art does load (Rive, or PipAvatar's own SVG fallback) is v2.
+      expect(_svgAssetContaining('pip_stage'), findsNothing);
+      final assets = tester
+          .widgetList<SvgPicture>(find.byType(SvgPicture))
+          .where((w) => w.bytesLoader is SvgAssetLoader)
+          .map((w) => (w.bytesLoader as SvgAssetLoader).assetName)
+          .toList();
+      for (final asset in assets) {
+        if (asset.contains('pip')) {
+          expect(asset, contains('pip_v2'));
+        }
+      }
+
+      // Both slots keep the design's 72px size.
+      expect(tester.getSize(find.byType(PipAvatar).first), const Size(72, 72));
+      expect(tester.getSize(find.byType(PipAvatar).last), const Size(72, 72));
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('P08b empty card uses PipAvatar(mochi, stage 1) at 140', (
+      tester,
+    ) async {
+      final db = await setUpTestScope(seedDemo: false);
+      await Seed.empty(db);
+      await GetIt.instance<AppSession>().refresh();
+      await pumpAppRoute(tester, '/today-empty');
+
+      expect(_svgAssetContaining('pip_stage'), findsNothing);
+      final pips = tester
+          .widgetList<PipAvatar>(find.byType(PipAvatar))
+          .toList();
+      expect(pips, hasLength(1));
+      expect(pips.single.style, PipStyle.mochi);
+      expect(pips.single.stage, 1);
+      expect(tester.getSize(find.byType(PipAvatar)), const Size(140, 140));
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('non-default Pip fields travel from the DB to the card', (
+      tester,
+    ) async {
+      final db = await setUpTestScope();
+      await _insertChild(
+        db,
+        'ava',
+        'Ava',
+        4,
+        pipStyle: 'storybook',
+        pipSkin: 'mint',
+        pipAccessory: 'scarf',
+        pipStage: 4,
+      );
+      await pumpAppRoute(tester, '/today');
+
+      final pips = tester
+          .widgetList<PipAvatar>(find.byType(PipAvatar))
+          .toList();
+      expect(pips, hasLength(3));
+      // Eldest first: Maya, Leo, then Ava.
+      final ava = pips.last;
+      expect(ava.style, PipStyle.storybook);
+      expect(ava.skin, PipSkin.mint);
+      expect(ava.accessory, PipAccessory.scarf);
+      expect(ava.stage, 4);
+
+      await disposeApp(tester);
+    });
+  });
+
+  group('P08 Today family-size copy', () {
+    testWidgets('three children: banner and hand-off name all of them', (
+      tester,
+    ) async {
+      final db = await setUpTestScope();
+      await _insertChild(db, 'sam', 'Sam', 5);
+      await pumpAppRoute(tester, '/today');
+
+      expect(
+        find.text('Maya, Leo and Sam did brilliantly yesterday'),
+        findsOneWidget,
+      );
+
+      await tester.scrollUntilVisible(
+        find.textContaining('Hand to'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump();
+      expect(find.text('Hand to Maya and 2 others'), findsOneWidget);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('one child: banner and hand-off use the one name', (
+      tester,
+    ) async {
+      final db = await setUpTestScope();
+      await _removeChild(db, 'leo');
+      await pumpAppRoute(tester, '/today');
+
+      expect(find.text('Maya did brilliantly yesterday'), findsOneWidget);
+      expect(find.text('2 quests waiting for your thumbs-up'), findsOneWidget);
+
+      await tester.scrollUntilVisible(
+        find.text('Hand to Maya'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump();
+      expect(find.text('Hand to Maya'), findsOneWidget);
+
+      await disposeApp(tester);
+    });
+  });
+
+  group('P08 Today a11y regressions', () {
+    testWidgets('the banner announces its copy exactly once', (tester) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/today');
+
+      final banner = find.byWidgetPredicate(
+        (w) => w is Semantics && w.properties.liveRegion == true,
+      );
+      expect(banner, findsOneWidget);
+      final label = tester.getSemantics(banner).getSemanticsData().label;
+      expect('waiting for your thumbs-up'.allMatches(label), hasLength(1));
+      expect(label, contains('3 quests waiting for your thumbs-up'));
+      expect(label, contains('Maya and Leo did brilliantly yesterday'));
+
+      await disposeApp(tester);
+    });
+  });
+
+  group('P08 Today navigation (push)', () {
+    testWidgets('system back from the quest editor returns to Today', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/today');
+
+      await tester.tap(find.text('Empty the dishwasher'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.text('P09 Quest editor'), findsOneWidget);
+      expect(
+        _currentUri(
+          tester,
+          find.text('P09 Quest editor'),
+        ).queryParameters['questId'],
+        'q-dishwasher',
+      );
+
+      final popped = await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(popped, isTrue, reason: 'the OS must not exit the app');
+      expect(find.text("Today's quests"), findsOneWidget);
+
+      await disposeApp(tester);
+    });
+  });
+
+  group('P08 Today stress', () {
+    testWidgets('six children at 320 px + 1.3x, long names, no overflow', (
+      tester,
+    ) async {
+      final db = await setUpTestScope();
+      final extras = <String>['Sam', 'Ada', 'Maximilian-Alexander', 'Nia'];
+      for (var i = 0; i < extras.length; i++) {
+        final id = 'kid$i';
+        await _insertChild(db, id, extras[i], 5 + i, pipStage: 2);
+        await db
+            .into(db.quests)
+            .insert(
+              QuestsCompanion.insert(
+                id: 'q-$id',
+                familyId: Seed.familyId,
+                title: 'Maximilian-Alexander tidies the whole bedroom $i',
+                coins: const Value(9999),
+                assigneeChildId: Value(id),
+              ),
+            );
+      }
+      await pumpAppRoute(tester, '/today');
+      await _resize(tester, 320, 1.3);
+
+      await tester.scrollUntilVisible(
+        find.text('Hand to Maya and 5 others'),
+        400,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump();
+
+      expect(find.text('Hand to Maya and 5 others'), findsOneWidget);
+      expect(tester.takeException(), isNull);
 
       await disposeApp(tester);
     });

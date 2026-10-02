@@ -1,221 +1,174 @@
-# P08 · Today (home) — bug hunt (Stage 6, iteration 1)
+# P08 · Today (home) — bug hunt (Stage 6, iteration 2)
 
 Route `/today` (+ `/today-empty` · P08b), feature `today`, mode parent,
-seed `demo`/`empty`. **No screen code was changed.** Added
-`app/test/features/today/p08_bugs_test.dart` — 11 proofs, every one
-`skip`-marked with its bug id so the suite stays green until the fixes land
-(run them with
-`flutter test --run-skipped test/features/today/p08_bugs_test.dart` — all 11
-fail against iteration-1 code, by design).
+seeds `Seed.demo()` / `Seed.empty()`. **No screen code was changed.** Re-hunted
+the iteration-2 working tree (after the fix pass and `main` merges `b0809f6`,
+`f6b02d8`, `e7ad050`).
 
-Method: read the feature, the shared data layer, the router and the design
-references, then probed every edge class in the brief with throwaway Drift
-tests; each finding below is reproduced by a committed failing test.
+The feature suite now has 86 tests
+(82 passed, 4 skipped). `p08_bugs_test.dart` itself has 17: the 11
+iteration-1 proofs (unskipped, green), **4 new skipped proofs** for the two
+findings below, and 2 unskipped regression pins. Run the proofs with
+`flutter test --run-skipped test/features/today/p08_bugs_test.dart` — all 4
+fail against the current screen, by design.
 
-New findings: **P08-B01 … P08-B10** (7 major, 3 minor) + the carried-over
-list. The screen cannot pass: `VERDICT: FAIL`.
+## Iteration-1 ledger — all 11 fixed and re-verified
 
-## New findings (this stage)
+| ID | Iteration-1 finding | Status / proof |
+|---|---|---|
+| P08-B01 | kid mode could open `/today-empty` | fixed on `main` (`ded8eb9`); proof green |
+| P08-B02/B03 | v1 Pip SVGs instead of per-child `PipAvatar` | fixed; proofs assert Maya mochi·sunny·3 / Leo bolt·sky·2, P08b mochi·1 |
+| P08-B04 | questless children invisible | fixed (`watchSummaries` from `watchChildren`); proof green |
+| P08-B05 | kids grid N-up, 3+/6 children | fixed (pair chunking); proofs green + new width assertion (170 px) |
+| P08-B06 | banner ignored family-wide pendings | fixed (`watchPendingCount`); proof green |
+| P08-B07 | back from Review exited the app | fixed (`push`); proof green |
+| P08-B08 | retry leaked watchers | fixed (`_closeOnError`); proof green |
+| P08-B09 | single child card 350 px | fixed (`Row + Spacer`); proof green |
+| P08-B10 | quest rows α-sorted | fixed (rank then title); proof green |
 
-### P08-B01 — kid mode can deep-link into `/today-empty` without the parental gate — MAJOR
+Carried C1–C15 from the iteration-1 list: fixed or dispositioned in
+`2_build.md` (accepted: C9/B16 balance wrap; deferred: C10/B17 liveRegion,
+C11/B21 P08b polish; shared: C13 §2, C14 §5, §6, §7).
 
-- **Where:** `app/lib/app/router.dart` (shared) — the `parentOnly` list has
-  `/today` but not `/today-empty`; the matcher only expands `/today/…`, so a
-  kid-mode deep link to the P08b route renders the full parent Today body.
+## New findings (this iteration)
+
+### P08-B11 — a quest's status ignores the mandatory period ruling — MAJOR
+
+- **Where:** `app/lib/features/today/data/today_repository_impl.dart:154-168`
+  — `_statusOf()` returns the latest completion's raw status with no
+  `countsForCurrentPeriod` check, and `rows()` (`:119-152`) never passes the
+  quest's `repeatRule` or a `now`. The summaries' `done` count (`:59-64`)
+  inherits the stale statuses.
+- **Rule:** `ORCHESTRATOR_NOTES.md` §"Ruling on 'done today'" (K03-BUG-4):
+  *"treat a quest's latest completion as current only if
+  `countsForCurrentPeriod(quest.repeatRule, completion.createdAt,
+  DateTime.now().toUtc())`; otherwise the quest is 'to do'."* The ruling is
+  restated in this stage's brief. Stages 2/3/5 claimed it done; the feature
+  contains no call to `countsForCurrentPeriod` (grep: only `core/data/
+  london_time.dart` and `test/core/london_period_test.dart` reference it).
 - **Repro:** `flutter test --run-skipped test/features/today/p08_bugs_test.dart
-  --plain-name '[P08-B01]'` → expected `/parental-gate`, actual
-  `/today-empty`.
-- **Failing test:** `[P08-B01] kid mode cannot deep-link into /today-empty`.
-- **Fix:** add `/today-empty` to `parentOnly` (or match on route names rather
-  than path prefixes). Shared file → `SHARED_REQUEST.md` §3.
+  --plain-name '[P08-B11]'`
+  - daily quest with a completion *before today's London day start* →
+    expected `to_do`, actual `approved`;
+  - weekly quest with a completion *before this London week's start* →
+    expected `to_do`, actual `approved`;
+  - Maya's kid card with one stale daily approval → expected `4 of 6 quests`,
+    actual `5 of 6 quests` (probe measured `5of6=1, 4of6=0`).
+- **Failing tests:**
+  `[P08-B11] a daily completion from the previous London day is to do`,
+  `[P08-B11] a weekly completion from last week is to do again`,
+  `[P08-B11] the kid card count excludes stale completions`.
+  Unskipped pin (passes now and must keep passing):
+  `[P08-B11] a "once" completion from years ago still counts`.
+- **Suggested fix (feature-local, `data/`+`domain/` only):**
+  1. `_statusOf(Quest quest, String childId, List<QuestCompletion>
+     completions, DateTime now)`: keep the latest completion; if `latest ==
+     null` → `'to_do'`; else `countsForCurrentPeriod(quest.repeatRule,
+     latest.createdAt, now) ? latest.status : 'to_do'`.
+  2. Pass the `Quest` (not just its id) and a single
+     `now = DateTime.now().toUtc()` computed once per `rows()` call
+     (sort and rows must agree).
+  3. `done`/progress follow automatically — they are derived from item
+     statuses.
+  4. **Testability caveat:** `flutter_test_config.dart` pins only
+     `Seed.anchorOverride`, not the wall clock. With a hard-wired
+     `DateTime.now()`, the demo assertions ("4 of 6", pending chips) become a
+     time bomb — they pass while the real date sits within the seed's
+     London day/week and fail after. Inject a clock seam
+     (`TodayRepositoryImpl({required db, DateTime Function()? clock})`,
+     default `() => DateTime.now().toUtc()`) and pin it in tests, or pin
+     `now` the same way `Seed.anchorOverride` is pinned. (The ruling's
+     "do not hard-code dates" still holds.)
+  5. Decide explicitly whether `watchPendingCount` (approvals banner) should
+     also be period-scoped. Today it is family-wide to match P11, and P11
+     lists every `done_pending`; if the banner is scoped but P11 is not, the
+     Review list will disagree with the count. Flag for the orchestrator
+     rather than guessing.
 
-### P08-B02 — kid cards render v1 `pip_stage_*.svg`, not each child's PipAvatar — MAJOR
+### P08-B12 — a rapid double-tap pushes two pages — MINOR
 
-- **Where:** `today_loaded_body.dart` (`pipStageAsset`, `_KidCard`'s
-  `SvgPicture.asset`); `ChildDaySummary` has no pip style/skin/accessory
-  fields at all. Violates the mandatory orchestrator rule (products screens
-  must use `PipAvatar` with the child's `pip_style / pip_skin /
-  pip_accessory / pip_stage`).
-- **Repro:** `--run-skipped … --plain-name '[P08-B02]'` → expected 2
-  `PipAvatar` (Maya = mochi · sunny · stage 3, Leo = bolt · sky · stage 2),
-  actual 0 (two v1 stage SVGs).
-- **Failing test:** `[P08-B02] kid cards render each child's own PipAvatar`.
-- **Fix (feature-local):** extend `ChildDaySummary` + `watchSummaries()` with
-  `pipStyle`/`pipSkin`/`pipAccessory` from `children`, render
-  `PipAvatar(style/stage/skin/accessory)` in the same 72×72 centred slot.
-  Clamp `stage` to 1..4 (`PipAvatar` asserts) — the DB column has no check.
+- **Where:** `today_loaded_body.dart:658` (quest row), `:376` (`+`), `:460`
+  (Review) — `context.push` with no in-flight guard. The taps land before the
+  first frame rebuilds, so each runs its own push.
+- **Repro:** `--run-skipped … --plain-name '[P08-B12]'` — double-tap
+  "Empty the dishwasher": two `/quest-editor?questId=q-dishwasher` pages are
+  stacked (`skipOffstage: false` count = 2; probe: after the first system back
+  the editor is still on screen for a second back). `+` and `Review` behave
+  the same.
+- **Failing test:** `[P08-B12] a rapid double-tap opens one quest editor`.
+- **Suggested fix (feature-local):** guard the push while a navigation is
+  already in flight — e.g. `if (ModalRoute.of(context)?.isCurrent ?? true)
+  context.push(...)`, or hold a local `_pushing` flag cleared on return; keep
+  `push` (the back-stack contract from B07). Re-run the proof (it also
+  asserts one back returns to `Today's quests`).
 
-### P08-B03 — P08b empty card still uses the v1 egg SVG — MAJOR
+## Resolved during this stage
 
-- **Where:** `today_loaded_body.dart` `_EmptyCard` —
-  `SvgPicture.asset(NestlingIllustrations.pipStage1)`. Same mandatory rule:
-  never use the v1 `pip_stage_*.svg` in product screens.
-- **Repro:** `--run-skipped … --plain-name '[P08-B03]'` with `Seed.empty` →
-  expected 1 `PipAvatar` (mochi · sunny · stage 1), actual 0.
-- **Failing test:** `[P08-B03] P08b empty state uses PipAvatar (mochi/sunny/1)`.
-- **Fix:** `PipAvatar(style: PipStyle.mochi, skin: PipSkin.sunny, stage: 1)`
-  at the design's 140×140.
+- **4_review M1 — Reduce Motion drew the dashed Pip placeholder for Leo.**
+  Was real (probe: `bolt/placeholder.svg` for Leo). `main` `f6b02d8`
+  ("PipAvatar fallback: approved art for every style") landed while this
+  stage ran and is merged (`e7ad050`); the new unskipped regression pin
+  *"Leo's Pip renders real art, not the placeholder"* passes. With §6 fixed,
+  the screenshots will now fall back to real art rather than placeholders —
+  the §6/§8 coupling noted in `4_review` is no longer a hazard.
+- **M3 — branch behind `main`.** Resolved by `e7ad050`: P01's tests are
+  present and the full suite is green (455 tests).
 
-### P08-B04 — children with no assigned quests are invisible on Today — MAJOR
+## Carried / still open
 
-- **Where:** `today_repository_impl.dart` `watchSummaries()` — cards are built
-  from `byChild`, a map built from *items*. A child with zero active assigned
-  quests (the ordinary state right after P05 "Add a child") never appears in
-  `summaries`, so no card, no `NAME · age` group, no hand-off name.
-- **Repro:** `--run-skipped … --plain-name '[P08-B04]'` — insert child `Sam`
-  with no quests, pump `/today` → expected `find.text('Sam')`, actual none
-  (probe measured 0).
-- **Failing test:** `[P08-B04] a child with no assigned quests still gets a
-  card`.
-- **Fix:** build summaries from `watchChildren(familyId)` (all children) and
-  attach `done`/`total` from the items; agree the 0-quest copy with design
-  ("0 of 0 quests" vs "No quests yet").
+- **M2 (process).** The iteration-2 work is still uncommitted at hand-off
+  (`app/` working tree modified). The loop's rule "process items are not
+  review findings" applies; the orchestrator commits between stages.
+- **m4** `TodayState.pendingCount` doc comment still describes it as "items
+  with status done_pending" while it is now the family-wide DB count.
+- **m6** childless family header still reads "Happy week: 0 days" (P08b's own
+  header copy is a separate loop's scope).
+- **m7** P08b empty-card content inset 36 px vs the design's 20 (P08b loop).
+- **m8** `liveRegion` banner re-announces on unrelated emissions (deferred).
+- **m9** `TodayState.happyDays` is write-only (nothing reads it).
+- **m10** unreachable `'sofa'` arm in `todayTintFor`.
+- **m11** ~10 Drift watchers per open (re-subscription smell; not
+  user-visible).
+- **Shared §6** `kDisableAnimations = bool.fromEnvironment('DISABLE_ANIMATIONS')`
+  still never parses `=1` (screenshot frame stability); **§2** core card
+  semantics duplication; **§4** push coordination for P09/P11; **§5** stale
+  DESIGN_SPEC floating-pill line; **§7** quest-meta `runSpacing` 4 vs 6.
 
-### P08-B05 — kids grid is N-up: 3+ children collapse, 5+ children overflow — MAJOR
+## Checked, no bug found (this iteration)
 
-- **Where:** `today_loaded_body.dart` `_KidsGrid` — one `Row` of `Expanded`
-  cards for any child count.
-- **Evidence (probes + proofs):**
-  - 3 children → all cards on one row: 3 × 110 px; "4 of 6 quests" ellipsises
-    to "4 o…" (the number the card exists to show). Distinct card rows: 1 vs
-    the design's 2.
-  - 6 children → one row of ~50 px cards; each card's interior is 22 px while
-    avatar (32) + gap (8) = 40 → **`A RenderFlex overflowed by 18 pixels on
-    the right.`** (6 exceptions in one pump).
-- **Repro:** `--run-skipped … --plain-name '[P08-B05]'` (two tests).
-- **Failing tests:** `[P08-B05] three children keep the 2-up kids grid`,
-  `[P08-B05] six children keep the 2-up grid with no overflow`.
-- **Fix:** chunk into pairs (Stage 4 B6 snippet) so `.kids` stays the design's
-  2 × 170 + gap 10 grid; add the two tests above to the suite.
-
-### P08-B06 — approvals banner undercounts family-wide pending approvals — MAJOR
-
-- **Where:** `today_bloc.dart` `pendingCount = items.where(done_pending)`.
-  `items` only contains quests assigned to a child, but P11 (`watchPending
-  Approvals(familyId)`) lists every `done_pending` completion — including
-  "Anyone" quests. The banner count disagrees with the screen `Review` opens.
-- **Repro:** `--run-skipped … --plain-name '[P08-B06]'` — insert a
-  `done_pending` completion for the unassigned quest `q-living`, pump
-  `/today` → banner expected "4 quests waiting for your thumbs-up", actual
-  "3 quests waiting for your thumbs-up".
-- **Failing test:** `[P08-B06] banner counts family-wide pending approvals`.
-- **Fix:** add `Stream<int> watchPendingCount()` to the repository (COUNT of
-  `done_pending` completions for `Seed.familyId`) and use it for
-  `pendingCount`; keep `items` for the rows. Do not derive it from per-child
-  items (see P08-B04).
-
-### P08-B07 — system back from Review exits the app instead of returning to Today — MAJOR
-
-- **Where:** `today_loaded_body.dart` — Review uses `context.go('/approvals')`;
-  `/approvals` is a top-level route and `go` **replaces** the stack, so there
-  is nothing to pop. Same for `/quest-editor` (+`?questId`) and P08b's CTAs.
-- **Repro:** `--run-skipped … --plain-name '[P08-B07]'` — tap Review, then
-  `tester.binding.handlePopRoute()` → expected `true` + `/today`, actual
-  `false` and the path stays `/approvals` (probe: Android back / iOS
-  swipe-back would exit the app).
-- **Failing test:** `[P08-B07] system back from approvals returns to Today`.
-- **Fix:** `context.push` for `/approvals` and `/quest-editor` (with and
-  without `questId`); keep `go` for shell destinations (`/settings`,
-  `/child-profile?childId=`) and the mode switch (`/who-is-playing`). Note in
-  `SHARED_REQUEST.md` so P09/P11 return with `context.pop()`.
-
-### P08-B08 — retry after a stream error leaks the failed load's watchers — MINOR
-
-- **Where:** `today_bloc.dart` `emit.forEach(combineLatest2…)` +
-  `core/data/stream_combine.dart` (`controller.addError` without close). The
-  errored handler never completes, so its subscriptions stay; every "Try
-  again" adds another full set of live Drift watchers.
-- **Repro:** `--run-skipped … --plain-name '[P08-B08]'` — error an open
-  stream, tap Try again → `watchItems` called twice (ok) but the first
-  subscription never cancelled: cancels 0, expected 1.
-- **Failing test:** `[P08-B08] retry releases the failed load's watchers`.
-- **Fix (feature-local):** make the first error terminal before `emit.forEach`
-  (`StreamTransformer.fromHandlers`: `sink.addError(e, s); sink.close();`) —
-  then the handler completes and cancels; or cancel in `onError`.
-
-### P08-B09 — a single child's card stretches to 350 px, not the design's 170 px column — MINOR
-
-- **Where:** `today_loaded_body.dart` `_KidsGrid` — `if (cards.length == 1)
-  return cards.single;`.
-- **Repro:** `--run-skipped … --plain-name '[P08-B09]'` — delete Leo, measure
-  the remaining kid card → 350.0 px; design `.kids
-  {grid-template-columns:170px 170px}` (≤ 175 expected); probe measured
-  350.0.
-- **Failing test:** `[P08-B09] a single child keeps the 2-up grid card width`.
-- **Fix:** pair-chunking alone does not cover the odd count — put the lone
-  card in a 2-up row (`Row` + `Expanded` + `Spacer`/`SizedBox(width:170)`).
-  If a full-width single card is deliberate, document it in SPACING_SPEC §8
-  and close this as a doc deviation instead.
-
-### P08-B10 — quest rows are α-sorted; the design orders pending-first — MINOR
-
-- **Where:** `today_repository_impl.dart` `rows()` — `..sort((a, b) =>
-  a.title.compareTo(b.title))`.
-- **Repro:** `--run-skipped … --plain-name '[P08-B10]'` — Maya's order is
-  `Empty the dishwasher → Hoover the stairs → Lay the table …`; design order
-  is done_pending → to_do → approved, which scatters the "Needs a look" rows
-  the banner exists to surface.
-- **Failing test:** `[P08-B10] quest rows are ordered pending-first like the
-  design`.
-- **Fix:** sort by `(statusRank, title)` with `done_pending` 0, `to_do` 1,
-  `not_yet` 2, `approved` 3, and update `today_repository_test.dart`'s
-  α-order assertion in step.
-
-## Carried over from earlier stages (still open)
-
-| Ref | Sev | Item | Where / evidence |
-|---|---|---|---|
-| C1 | major | Banner "N quests…" + header "Happy week: N days" are not pluralised ("1 quests", "1 days") | `today_loaded_body.dart:361/378`, `today_bloc.dart:59`; 2 suite reds (3_test B1/B2, 4_review B4/B5) |
-| C2 | major | Banner subtitle is hard-coded "Your little birds did brilliantly" instead of "Maya and Leo did brilliantly yesterday" built from state | `today_loaded_body.dart:385`; 1 suite red (4_review B3) |
-| C3 | major | Quest-row gap is 8 px on every row; spec/plan say 16 px (8 only label→first) | `today_loaded_body.dart:240`; 4_review B2 / 5_ui §3 |
-| C4 | minor | Greeting renders Nunito 800, design 900 / −0.22 tracking | `today_loaded_body.dart:288`; 4_review B9 / 5_ui §6 |
-| C5 | minor | Banner `Semantics(liveRegion, label:)` duplicates its children in the announced node | `today_loaded_body.dart:359-361`; 3_test B4a / 4_review B10 |
-| C6 | minor | `NestSectionLabel` exists but group labels are hand-rolled (loses `header: true`) | `today_loaded_body.dart:566`; 4_review B12 |
-| C7 | minor | Dead `TodayItem.detail` + `_statusLabel` (second source of status copy) | `today_repository_impl.dart:121/136`; 4_review B13 |
-| C8 | minor | Raw `error.toString()` rendered to the parent | `today_bloc.dart:66` / `today_loaded_body.dart:698`; 4_review B15 |
-| C9 | minor | `text-wrap: balance` banner wrap cannot match the mock — accepted substitution, note only | 4_review B16 |
-| C10 | minor | `liveRegion` banner re-announces on unrelated stream emissions | `today_loaded_body.dart:360`; 4_review B17 |
-| C11 | minor | P08b divergences beyond this screen ID's design refs (header "A fresh nest", long message, "Browse ideas" as a link, "Tip for new nests" card) | 3_test §4; 4_review B21 covers the 36 px inset |
-| C12 | minor | Hand-off copy for 3+ children ("Hand to Maya and friends") | `today_loaded_body.dart:630`; 4_review B20 |
-| C13 | shared | `NestCard`/`NestQuestCard` semantics duplication + 4 px vs 6 px runSpacing | `SHARED_REQUEST.md` §2; 4_review B18 |
-| C14 | doc | DESIGN_SPEC §5 P08 still describes a floating "+ New quest" pill the design does not have | 4_review B22 |
-| C15 | test debt | `today_repository_test.dart` asserts `q-dishwasher` repeat `'weekly'`, but the mid-iteration seed merge `e94d063` made it `'daily'` (DATA OVER MOCKS: the DB is right). One suite red — update the expectation (and keep `q-bins`/`q-hoover` `weekly`) in the fix stage. | 4th suite red |
-
-## Checked, no bug found
-
-- **Rapid double taps** — `+`, `Review`, quest rows, Hand: `go` is
-  idempotent, one editor page, no exception (probe).
-- **State after restart (Drift persistence)** — approve everything, dispose
-  the app, relaunch: banner stays hidden, "Approved ✓" persists (probe).
-- **Timezone Europe/London / BST** — `toLondon` boundaries (last Sunday
-  March/Oct, 01:00 UTC) are correct; P08 renders the live date (Fri 2 Oct
-  2026, not the mock's Sat 4 Oct — expected).
-- **Long UK names** ("Maximilian-Alexander") at 320 px / 1.3× — no overflow
-  (name ellipsises per plan §e).
-- **Coins edges** — 9999 coins (kid card + quest pill) and 0-coin quests
-  render at 320 / 1.3×; P08 never shows £, so £0.00/£999.99 and integer-pence
-  rounding do not apply here.
-- **Dark-mode contrast** (computed WCAG ratios): ink/surface 16.5/14.8,
-  ink2/paper 8.3/10.8, leaf link/paper 4.6/8.7, coin chip 7.0/9.6, leaf chip
-  7.1/8.5, banner subtitle (85 % alpha) 5.0/6.6 — all ≥ 4.5 in both themes.
-- **Empty seed at 320 px / 1.3×** — no overflow.
-- **Async gaps / emit after close** — bloc 9.2.1 cancels the `forEach`
-  subscription when the bloc closes, so P08 has no post-close emission path.
+- Parent/kid guard: `/today`, `/today-empty`, `/quest-editor` all gated;
+  `[P08-B01]` green.
+- Back navigation: `push` + system back from approvals and editor returns to
+  Today (proofs green).
+- Restart persistence: no changes to the load path since the iteration-1
+  check (approve → dispose → relaunch keeps the banner hidden, statuses
+  approved).
+- Dark-mode contrast (labels unchanged, tokens unchanged) and 320 px / 1.3×,
+  long UK names, 0/1/6 children, empty lists, 9 999 coins, `£`/pence: all
+  covered by the existing suites and iteration-1 checks; P08 still renders
+  coins only, so money rounding is N/A.
+- `once`/daily/weekly boundary maths: `countsForCurrentPeriod`,
+  `londonDayStartUtc`, `londonWeekStartUtc` are correct incl. BST
+  (`test/core/london_period_test.dart`); the gap is that the feature never
+  calls them (P08-B11).
+- Emit-after-close / async gaps: `_closeOnError` + bloc 9.2.1 cancellation;
+  `[P08-B08]` green.
 
 ## Suite state at hand-off
 
-- `dart format --set-exit-if-changed .` → `344 files (0 changed)`.
+- `dart format --set-exit-if-changed .` → `350 files (0 changed)`.
 - `flutter analyze` → `No issues found!`.
-- `flutter test` (full) → **+337 −4 ~11**. The −4: C1 ×2, C2 ×1 and C15 ×1
-  (the stale seed assertion); the ~11 are this stage's skipped proofs. None
-  of the four is caused by this stage (all four reproduce on the unmodified
-  working tree).
+- `flutter test test/features/today` → **82 passed, 4 skipped, 0 failed**.
+- `flutter test` (full) → **455 passed, 4 skipped, 0 failed**.
+- The 4 skips are this stage's proofs for P08-B11 (×3) and P08-B12; they are
+  the only red results under `--run-skipped`.
 
 ## Verdict
 
-Seven new major bugs (B01–B07) — a guard bypass, a mandatory Pip-rule
-violation on both surfaces, invisible children, a collapsed/overflowing kids
-grid, an approvals count that lies, and back navigation that exits the app —
-plus B08–B10 and the 15 carried items. No PASS is possible.
+One new **major** bug (P08-B11 — the mandatory periods ruling is not
+implemented, so stale completions keep showing as done/pending and inflate
+the kid-card counts) plus one minor (P08-B12). Fix them, unskip the four
+proofs, and re-run the suite; B11's clock seam is part of the fix so the demo
+assertions do not become date-dependent.
 
 VERDICT: FAIL

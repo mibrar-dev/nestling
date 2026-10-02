@@ -1,3 +1,5 @@
+import 'package:drift/drift.dart';
+
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/data/stream_combine.dart';
@@ -7,9 +9,9 @@ import 'package:nestling/features/today/domain/today_repository.dart';
 
 /// Drift-backed [TodayRepository]: joins quests, completions and children.
 ///
-/// Rows are grouped by child (alphabetical) then quest title. Only directly
-/// assigned quests appear here ("4 of 6" on P08); "Anyone" quests live in
-/// the quest library (P10).
+/// Rows are ordered pending-first (design order), then by title. Only
+/// directly assigned quests appear here ("4 of 6" on P08); "Anyone" quests
+/// live in the quest library (P10).
 class TodayRepositoryImpl implements TodayRepository {
   new({required this._db});
 
@@ -39,21 +41,21 @@ class TodayRepositoryImpl implements TodayRepository {
       parts,
     ) {
       final items = parts[0] as List<TodayItem>;
-      final kids = <String, ChildrenData>{
-        for (final k in parts[1] as List<ChildrenData>) k.id: k,
-      };
+      final kids = parts[1] as List<ChildrenData>;
       final byChild = <String, List<TodayItem>>{};
       for (final item in items) {
         byChild.putIfAbsent(item.childId, () => <TodayItem>[]).add(item);
       }
+      // Every child gets a card — including children with no assigned
+      // quests yet (the ordinary state right after P05 "Add a child").
       final summaries =
-          byChild.values.map((mine) {
-              final kid = kids[mine.first.childId];
+          kids.map((kid) {
+              final mine = byChild[kid.id] ?? const <TodayItem>[];
               return ChildDaySummary(
-                childId: mine.first.childId,
-                nickname: mine.first.childName,
-                avatarColour: kid?.avatarColour ?? 'lilac',
-                pipStage: kid?.pipStage ?? 1,
+                childId: kid.id,
+                nickname: kid.nickname,
+                avatarColour: kid.avatarColour,
+                pipStage: kid.pipStage,
                 done: mine
                     .where(
                       (i) =>
@@ -61,9 +63,12 @@ class TodayRepositoryImpl implements TodayRepository {
                     )
                     .length,
                 total: mine.length,
-                coins: kid?.coins ?? 0,
-                ageYears: kid?.ageYears,
-                happyDays: kid?.happyDays ?? 0,
+                coins: kid.coins,
+                ageYears: kid.ageYears,
+                happyDays: kid.happyDays,
+                pipStyle: kid.pipStyle,
+                pipSkin: kid.pipSkin,
+                pipAccessory: kid.pipAccessory,
               );
             }).toList()
             // Eldest first (Maya 9 before Leo 6 in the demo), then nickname.
@@ -97,6 +102,19 @@ class TodayRepositoryImpl implements TodayRepository {
         .map((family) => family?.payoutDay ?? 6);
   }
 
+  @override
+  Stream<int> watchPendingCount() {
+    // Family-wide: every `done_pending` completion, including "Anyone"
+    // quests — the same set P11 (`watchPendingApprovals`) lists.
+    return (_db.select(_db.questCompletions)..where(
+          (c) =>
+              c.familyId.equals(Seed.familyId) &
+              c.status.equals('done_pending'),
+        ))
+        .watch()
+        .map((rows) => rows.length);
+  }
+
   /// Pure row builder, shared with tests.
   List<TodayItem> rows(
     List<Quest> quests,
@@ -106,19 +124,19 @@ class TodayRepositoryImpl implements TodayRepository {
     final out = <TodayItem>[];
     for (final kid in kids) {
       final mine = quests.where((q) => q.assigneeChildId == kid.id).toList()
-        ..sort((a, b) => a.title.compareTo(b.title));
+        // Pending-first like the design, then alphabetical.
+        ..sort((a, b) {
+          final ra = _rankOf(_statusOf(a.id, kid.id, completions));
+          final rb = _rankOf(_statusOf(b.id, kid.id, completions));
+          if (ra != rb) return ra.compareTo(rb);
+          return a.title.compareTo(b.title);
+        });
       for (final quest in mine) {
-        final mine2 =
-            completions
-                .where((c) => c.questId == quest.id && c.childId == kid.id)
-                .toList()
-              ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        final status = mine2.isEmpty ? 'to_do' : mine2.first.status;
+        final status = _statusOf(quest.id, kid.id, completions);
         out.add(
           TodayItem(
             id: '${quest.id}:${kid.id}',
             title: quest.title,
-            detail: '${kid.nickname} · ${_statusLabel(status)}',
             questId: quest.id,
             childId: kid.id,
             childName: kid.nickname,
@@ -133,16 +151,33 @@ class TodayRepositoryImpl implements TodayRepository {
     return out;
   }
 
-  static String _statusLabel(String status) {
+  static String _statusOf(
+    String questId,
+    String childId,
+    List<QuestCompletion> completions,
+  ) {
+    QuestCompletion? latest;
+    for (final c in completions) {
+      if (c.questId == questId && c.childId == childId) {
+        if (latest == null || c.createdAt.isAfter(latest.createdAt)) {
+          latest = c;
+        }
+      }
+    }
+    return latest?.status ?? 'to_do';
+  }
+
+  /// Design order: `done_pending` → `to_do` → `not_yet` → `approved`.
+  static int _rankOf(String status) {
     switch (status) {
       case 'done_pending':
-        return 'waiting for thumbs-up';
-      case 'approved':
-        return 'approved';
+        return 0;
+      case 'to_do':
+        return 1;
       case 'not_yet':
-        return 'try again';
+        return 2;
       default:
-        return 'to do';
+        return 3;
     }
   }
 }

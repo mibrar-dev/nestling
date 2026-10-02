@@ -7,7 +7,6 @@ class TodayItem extends Equatable {
   const new({
     required this.id,
     required this.title,
-    required this.detail,
     required this.questId,
     required this.childId,
     required this.childName,
@@ -19,12 +18,11 @@ class TodayItem extends Equatable {
 
   final String id;
   final String title;
-  final String detail;
   final String questId;
   final String childId;
   final String childName;
 
-  /// `to_do | done_pending | approved`.
+  /// `to_do | done_pending | approved | not_yet`.
   final String status;
   final int coins;
 
@@ -38,7 +36,6 @@ class TodayItem extends Equatable {
   List<Object?> get props => <Object?>[
     id,
     title,
-    detail,
     questId,
     childId,
     childName,

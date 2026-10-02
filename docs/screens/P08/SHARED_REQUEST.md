@@ -41,20 +41,71 @@ Note: the same pattern exists in feature code for the P08 approvals banner
 (`today_loaded_body.dart:359-361`) and is reported as B4a in
 `docs/screens/P08/3_test.md` — that part is feature-fixable.
 
-## 3. NEW (blocking, kid-mode guard) — `/today-empty` is not parent-only
+## 3. RESOLVED (already on main) — `/today-empty` is not parent-only
 
-Need: add `/today-empty` to the router's `parentOnly` list in
-`app/lib/app/router.dart:96-106`. The list contains `/today` and the matcher
-only expands `/today/…`, so `'/today-empty'` neither equals nor starts with a
-parent prefix: in kid mode, a deep link to `/today-empty` renders the full
-parent P08b screen instead of redirecting to `/parental-gate`. Proved by
-`[P08-B01] kid mode cannot deep-link into /today-empty` in
-`app/test/features/today/p08_bugs_test.dart` (run with `--run-skipped`;
-expected path `/parental-gate`, actual `/today-empty`). Details:
-`docs/screens/P08/6_bugs.md` §P08-B01.
+Need (original): add `/today-empty` to the router's `parentOnly` list —
+kid-mode deep links to `/today-empty` rendered the parent screen.
 
-Fix: add `'/today-empty'` to `parentOnly` (or switch the guard to match on
-route names rather than path prefixes, which would not have missed it).
+Status: already fixed on `main` (`app/lib/app/router.dart` now lists both
+`/today` and `/today-empty`); the unskipped `[P08-B01]` proof passes on this
+branch. No action needed.
 
-Files: `app/lib/app/router.dart` (shared — the screen agent may not edit it).
-Blocks: yes — a parent-only screen is reachable in kid mode until this lands.
+## 4. NEW (non-blocking, cross-screen contract) — P08 reaches P09/P11 by `push`
+
+P08 now opens `/approvals` and `/quest-editor` (with and without `questId`)
+with `context.push`, so the OS back button returns to `/today` (was: `go`
+replaced the stack and back exited the app). Shell destinations
+(`/settings`, `/child-profile`, `/quests`) and the mode switch
+(`/who-is-playing`) still use `go`.
+
+Need: the P09 (quest editor) and P11 (approvals) loops must return with
+`context.pop()` and must not assume they were `go`-navigated to. No shared
+file change — this is a coordination note.
+
+Files: none (P08-local). Blocks: no.
+
+## 5. NEW (doc, orchestrator) — DESIGN_SPEC §5 P08 describes a floating pill
+
+`DESIGN_SPEC` §5 P08 asks for a floating primary `+ New quest` pill above
+the tab bar, but `P08-today.html:29` puts the 44 px leaf `+` in the greeting
+row, both design PNGs show no floating pill, and the code follows the
+design. The §5 text looks stale.
+
+Need: correct `DESIGN_SPEC` §5 P08 to describe the header `+` (shared doc
+edit by the orchestrator).
+
+Files: `docs/DESIGN_SPEC.md` §5. Blocks: no.
+
+## 6. NEW (blocking for screenshot determinism) — `DISABLE_ANIMATIONS=1` never parses
+
+`app/lib/core/data/env_flags.dart:9`:
+`const bool kDisableAnimations = bool.fromEnvironment('DISABLE_ANIMATIONS')`.
+Dart only maps the string `'true'` to `true`, so the `=1` that
+`tools/screens/shot.sh` always passes parses to **false**. Consequence for
+P08 iteration 2: `PipAvatar` takes the live Rive path during screenshot runs
+(the still-frame rule RULES §6 is silently off) and `shot.sh` reports
+`WARNING — frame never stabilised in 25 s` on every run (light, dark and
+empty this stage — the PNGs are still correct captures, but stability is
+unverifiable). Iteration-1 shots stabilised only because the screen had no
+animated widget yet.
+
+Need (shared): parse `'1'` too (e.g. `bool.fromEnvironment(..., defaultValue:
+false) || const String.fromEnvironment(...) == '1'`), or change `shot.sh`
+to pass `=true`. Every Rive/Lottie screen is affected, not just P08.
+
+Files: `app/lib/core/data/env_flags.dart` and/or `tools/screens/shot.sh`.
+Blocks: partially — P08 lands and tests green without it, but no Rive
+screen can produce a stable-frame screenshot until this lands.
+
+## 7. NEW (non-blocking, design system) — quest-meta `runSpacing` 4 px vs 6 px
+
+`core/design_system/components/nest_quest_card.dart:80` uses
+`runSpacing: NestSpacing.s1` (4) where `components.css:178` sets
+`.quest-meta { gap: 6px }` (both axes). Invisible at 390 px (one line) but
+visible when the meta wraps at 320 px / 1.3× text.
+
+Need: change the shared `runSpacing` to 6 (with §2's semantics fix — same
+files, one batch).
+
+Files: `app/lib/core/design_system/components/nest_quest_card.dart`.
+Blocks: no.

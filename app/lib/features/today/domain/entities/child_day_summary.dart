@@ -13,6 +13,9 @@ class ChildDaySummary extends Equatable {
     required this.coins,
     this.ageYears,
     this.happyDays = 0,
+    this.pipStyle = 'mochi',
+    this.pipSkin = 'sunny',
+    this.pipAccessory = 'none',
   });
 
   final String childId;
@@ -29,6 +32,12 @@ class ChildDaySummary extends Equatable {
   /// Happy days this week, 0..7 (from `children.happy_days`).
   final int happyDays;
 
+  /// Pip look (from `children.pip_style/pip_skin/pip_accessory`); fed into
+  /// `PipAvatar`. Raw DB strings, mapped in the view.
+  final String pipStyle;
+  final String pipSkin;
+  final String pipAccessory;
+
   @override
   List<Object?> get props => <Object?>[
     childId,
@@ -40,5 +49,8 @@ class ChildDaySummary extends Equatable {
     coins,
     ageYears,
     happyDays,
+    pipStyle,
+    pipSkin,
+    pipAccessory,
   ];
 }

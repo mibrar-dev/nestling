@@ -1,177 +1,119 @@
-# P08 · Today (home) — test notes (Stage 3, iteration 1)
+# P08 · Today (home) — test notes (Stage 3, iteration 2)
 
 Screen: `P08` · route `/today` (+ `P08b` `/today-empty`) · feature `today` ·
-mode parent · seed `Seed.demo()` / `Seed.empty()`.
-Scope of this stage: tests only. **No screen code was changed** (three real
-bugs were found and are recorded below, per the stage rule).
+mode parent · seeds `Seed.demo()` / `Seed.empty()`.
+Scope of this stage: tests only — **no screen code was changed**.
 
-Files touched (RULES §1): `app/test/features/today/**`,
-`docs/screens/P08/**`.
+## 1. Iteration-1 findings — re-verified closed
 
-## 1. Tests added — 30 new (feature suite 22 → 52)
-
-### `today_bloc_test.dart` — +6 (every event / state path, 10 total)
-
-| # | Test | Covers |
+| Iter-1 finding | Status | Proof in this suite |
 |---|---|---|
-| 1 | `initial state is initial with no data` | `TodayStatus.initial` before any event |
-| 2 | `parent name and payout day flow into the loaded state` | repo `watchParentName`/`watchPayoutDay` actually reach the state (previous default `'Sarah'`/`6` masked a regression) |
-| 3 | `a second items emission updates the state without a new event` | RULES §4 contract: `emit.forEach` reacts to stream re-emissions, no reload events |
-| 4 | `an error after a loaded emission switches to failure` | error path after data (stream error mid-session) |
-| 5 | `retry after a failure reloads and reaches loaded` | the view's only retry (`Try again` re-adds `TodayLoadRequested`): loading→failure→loading→loaded |
-| 6 | `date line uses the singular "1 day"` (plain test) | header pluralisation — **fails, B2** |
+| **B1** banner `"1 quests"` | fixed (`todayPendingLabel`) | `P08 Today copy one pending approval reads "1 quest"`, helper test `pending label pluralises` (0/1/3) |
+| **B2** header `"Happy week: 1 days"` | fixed (`happyWeekLabel`) | `date line uses the singular "1 day"`, helper test `happyWeekLabel singular / plural` |
+| **B3** banner subtitle generic vs design names | fixed (`todayBannerSubtitle` from state) | `banner subtitle names the children`, helper test `banner subtitle names 0 / 1 / 2 / 3+ children`, plus the 3-/1-child widget tests |
+| **B4a** banner semantics double-announced | fixed (liveRegion without duplicate label) | `the banner announces its copy exactly once` (node label contains the pending line once) |
+| **B4b** core `NestCard`/`NestQuestCard` double-announce | carried — shared files, `SHARED_REQUEST.md` §2 (non-blocking) | not a P08-owned bug; still recorded |
+| 11 skipped stage-6 proofs | all unskipped and passing | `p08_bugs_test.dart` (no `skip:` anywhere in `app/test/features/today/`) |
 
-Existing 4 tests (load/error/empty + `dayPartForHour` boundaries) kept.
+## 2. Tests added this iteration — 15 new (feature suite 65 → 80)
 
-### `today_repository_test.dart` — +1 (10 total)
+`today_view_test.dart` (+11):
 
-- `watchItems re-emits when a completion is inserted` — in-memory Drift DB
-  (`Seed.demo`): first emission `to_do`, then insert a `done_pending`
-  completion → the same subscription re-emits with `done_pending`. This is
-  the live-update contract the bloc and the banner rely on.
+- `P08 Today copy helpers` — `todayPendingLabel` 0/1/3; `todayBannerSubtitle`
+  for 0, 1, 2 and 3 children; every Pip token → enum (`mochi`/`bolt`/
+  `storybook`, all four skins, all five accessories) + safe fallbacks.
+- `P08 Today Pip artwork (orchestrator rule)` — each kid card renders
+  `PipAvatar` with the child's DB fields (Maya mochi·sunny·3, Leo
+  bolt·sky·2), at the design's 72 px slot; **no v1 `pip_stage_*.svg`** is
+  rendered and any Pip SVG that does load is `pip_v2`; P08b empty card is
+  `PipAvatar(mochi, stage 1)` at 140; a non-default child
+  (storybook·mint·scarf·stage 4) travels DB → card unchanged.
+- `P08 Today family-size copy` — 3 children: `"Maya, Leo and Sam did
+  brilliantly yesterday"` + `"Hand to Maya and 2 others"`; 1 child:
+  `"Maya did brilliantly yesterday"` + `"Hand to Maya"` + `"2 quests
+  waiting…"`.
+- `P08 Today a11y regressions` — the banner live-region announces its copy
+  exactly once.
+- `P08 Today navigation (push)` — system back from the quest editor returns
+  to `/today` (the `push` contract; mirrors the approvals proof).
+- `P08 Today stress` — 6 children, long quest titles, 320 px @ 1.3×:
+  no overflow, hand-off copy `"Hand to Maya and 5 others"`.
 
-### `today_view_test.dart` — +23 (32 total)
+`today_repository_test.dart` (+2):
 
-States (mock `TodayRepository`; a healthy Drift DB cannot fail):
+- `not_yet rows sit between to_do and approved` — full render order
+  pending → to_do → not_yet → approved, title within rank (newer completion
+  wins), on `Seed.demo`.
+- `watchPendingCount re-emits when a new approval arrives` — same
+  subscription sees 3 → 4 after an “Anyone”-quest approval (family-wide set,
+  identical filter to P11's `watchPendingApprovals` — verified in
+  `app_database.dart:315`).
 
-1. `loading shows the spinner`
-2. `failure shows the reason and Try again recovers` — taps `Try again`,
-   second load succeeds, full loaded body renders
-3. `failure renders in dark theme too`
+`today_bloc_test.dart` (+2):
 
-Navigation — every tap lands on the right route; the four that carry params
-are checked against `GoRouterState.uri`:
+- `pendingCount is the family-wide count, not the visible rows` (no visible
+  items, count 3 → banner still shows).
+- `happyWeekLabel` singular/plural unit test.
 
-4. `Review opens approvals` → `/approvals`
-5. `plus opens the quest editor without a questId` → `/quest-editor`
-6. `quest row opens the editor with its questId` →
-   `/quest-editor?questId=q-dishwasher`
-7. `hand-off button opens who-is-playing` → `/who-is-playing`
-8. `See all opens the quest library` → `/quests`
-9. `avatar opens settings` → `/settings` (semantics label `"Sarah's profile"`)
-10. `kid card opens the child profile with its childId` →
-    `/child-profile?childId=maya`
-11. P08b: `/today-empty` shows the quiet-nest card; `Add a quest` →
-    `/quest-editor`; `Browse ideas` (existing test) → `/quests`
+The stage-2 build also adapted the existing tests to the new APIs
+(`detail` dropped, `watchPendingCount` stubs, seed `e94d063` daily/weekly,
+pending-first scroll order, friendly failure copy) — reviewed in the diff:
+no assertion was weakened, the two copy-bug proofs from iteration 1 were left
+intact and now pass.
 
-Live data:
+## 3. Coverage vs the stage checklist
 
-12. `approving every pending quest hides the banner` — update all
-    `done_pending` completions to `approved` in the Drift DB → stream
-    re-emission → banner disappears, rows keep `Approved ✓`, rest unchanged.
+- **bloc_test every event/state path:** single event (`TodayLoadRequested`)
+  → loading / loaded / failure / retry / re-emission / family-wide pending;
+  every `TodayState` field asserted at least once.
+- **Widget tests light + dark, 320/390/430, scale 1.0/1.3:** 12-case matrix
+  (no `RenderFlex overflowed`, content reachable, `disposeApp` on every
+  widget test) + dark content, dark failure.
+- **empty / loading / error:** all three; loading/error drive `TodayView`
+  with a mock `TodayRepository` (a healthy in-memory Drift DB cannot fail),
+  everything else uses the in-memory DB with `Seed.demo`/`Seed.empty`.
+- **every tap navigates to the right route:** Review→`/approvals`,
+  `+`→`/quest-editor` (no `questId`), row→`/quest-editor?questId=…`,
+  See all→`/quests`, avatar→`/settings`, kid card→
+  `/child-profile?childId=…`, Hand→`/who-is-playing`, `Add a quest`→
+  `/quest-editor`, `Browse ideas`→`/quests`; pushed pages also prove back
+  navigation (approvals + editor).
+- **semantics labels on icon buttons:** `New quest`, `"Sarah's profile"`,
+  `See all quests` + card/row/Pip/progress labels; kid-mode ≥56 px targets
+  do not apply (parent mode; `/today` and `/today-empty` are gated to P17 by
+  the shell — `[P08-B01]` proof).
 
-Accessibility:
-
-13. `icon buttons, cards and rows expose semantics labels` — `New quest`,
-    `"Sarah's profile"`, `See all quests`, kid card
-    `Maya, 4 of 6 quests, 120 coins`, quest row
-    `Empty the dishwasher, 15 coins, Needs a look`, banner live-region text;
-    Pip art + per-child progress labels asserted on the declared `Semantics`
-    widgets (they merge into the card node).
-14. `parent tap targets are at least 44 high` — `+` (44), avatar (44),
-    `Review` (44), `See all` (44), quest row (≥56 by content), `Hand to …`
-    (52). See §4 for why ≥56 kid targets do not apply to P08.
-
-Copy (two tests here + the bloc test #6):
-
-15. `one pending approval reads "1 quest" (singular)` — **fails, B1**
-16. `banner subtitle names the children` — **fails, B3**
-
-Size matrix (12 tests), light + dark × widths 320/390/430 × text scale
-1.0/1.3, all with `Seed.demo`: greeting, banner, kid cards, `MAYA · 9`,
-scroll through every row to `Hand to Maya or Leo`, `takeException()` null
-(no `RenderFlex overflowed`), `disposeApp` on every widget test.
-
-## 2. Results
+## 4. Results
 
 | Check | Result |
 |---|---|
-| `dart format --set-exit-if-changed .` | `342 files (0 changed)` |
+| `dart format --set-exit-if-changed .` | `344 files (0 changed)` |
 | `flutter analyze` | `No issues found!` |
-| `flutter test test/features/today` | **49 passed, 3 failed** (the 3 failures are the bug-proving tests below; nothing else is red) |
-| `flutter test` (full app) | **+336 −3**; only the same 3 failures |
-| Shared suite | `router_redirect_test.dart` was red in Stage 2; fixed on `main` (`2f723db`) and merged into this branch (`5c0267e`) — verified green, `SHARED_REQUEST.md` §1 marked resolved |
+| `flutter test test/features/today` | **80 passed, 0 failed, 0 skipped** (12 bloc · 14 repo · 43 view · 11 bug proofs) |
+| `flutter test` (full app) | **+387, all passed**, nothing skipped |
 
-## 3. Bugs found (do NOT patch in this stage — fix in the next build)
+## 5. Bugs found this iteration
 
-### B1 — banner says "1 quests waiting…" (major, user-visible copy)
+**None.** The three copy bugs and the banner a11y defect from iteration 1 are
+fixed and regression-tested; the iteration-2 screen behaves per the design,
+`ORCHESTRATOR_NOTES.md` (all 4 items) and the stage checklist.
 
-- File: `app/lib/features/today/presentation/widgets/today_loaded_body.dart:378`
-  (visible text) and `:361` (Semantics label — same string, same bug).
-- Repro: `flutter test test/features/today/today_view_test.dart --plain-name 'one pending approval reads'`
-  (test approves all but one pending completion, then renders `/today`):
-  expected `'1 quest waiting for your thumbs-up'`, actual
-  `'1 quests waiting for your thumbs-up'`.
-- Reachable in normal use: a parent approving 3 pending quests one at a time
-  passes through `pendingCount == 1`.
-- Suggested fix: `pendingCount == 1 ? '1 quest waiting for your thumbs-up' : '$pendingCount quests waiting for your thumbs-up'`
-  in both places.
+Carried shared items (not P08-owned, all in `SHARED_REQUEST.md`):
+§2 core card semantics duplication (a11y quality), §4 `push` coordination,
+§5 doc, §6 `DISABLE_ANIMATIONS` flag never parsing (affects `shot.sh` frame
+stability), §7 quest-meta `runSpacing`.
 
-### B2 — header says "Happy week: 1 days" (major, user-visible copy)
+Notes / limits:
 
-- File: `app/lib/features/today/presentation/bloc/today_bloc.dart:59`
-  (`'${formatLondonDay(...)} · Happy week: $happyDays days'`).
-- Repro: `flutter test test/features/today/today_bloc_test.dart --plain-name 'date line uses the singular'`
-  expected `'Fri 2 Oct · Happy week: 1 day'`, actual
-  `'Fri 2 Oct · Happy week: 1 days'` (repo returns `happyDays == 1`).
-- Suggested fix: pluralise — `'Happy week: $happyDays day${happyDays == 1 ? '' : 's'}'`.
+- The still-frame path (`MediaQuery.disableAnimations`) is owned by the shared
+  component test `app/test/pip_avatar_test.dart:187`; at the screen level it
+  cannot be distinguished under `flutter test` because the Rive runtime never
+  binds there (probe: 0 `RiveWidget`s with or without the flag), so no
+  screen-level still-frame assertion was added rather than a vacuous one.
+- P08b visual polish beyond DESIGN_SPEC §5 P08b (header `"· A fresh nest"`,
+  tip card, link styling, longer message, no header actions) is still P08b's
+  loop scope, recorded for that plan.
+- Stale `errorMessage` surviving a successful retry remains cosmetic only
+  (state hygiene, never rendered).
 
-### B3 — banner subtitle differs from the design (minor, design fidelity)
-
-- File: `today_loaded_body.dart:385` — hard-coded
-  `'Your little birds did brilliantly'`.
-- Design: `design/screens/light/P08-today.png`,
-  `design/screens/dark/P08-today.png` and
-  `design/html-source/screens/P08-today.html:30` all show
-  **"Maya and Leo did brilliantly yesterday"**.
-- Repro: `flutter test test/features/today/today_view_test.dart --plain-name 'banner subtitle names the children'`
-  expected `'Maya and Leo did brilliantly yesterday'`, actual
-  `'Your little birds did brilliantly'`.
-- Suggested fix: build the line from `state.summaries` nicknames
-  (`'Maya and Leo'`, single child `'Maya'`, 3+ `'Maya, Leo and Sam'`) — the
-  banner only renders when pending quests (and therefore summaries) exist.
-
-### B4 — duplicated semantics announcements (minor, a11y)
-
-A `Semantics(label: …)` wrapper whose child repeats the same text/labels gets
-merged by Flutter into one node carrying **both**, so a screen reader reads
-everything twice. Semantics dump from `/today` (Seed.demo):
-
-- (a) feature, `_ApprovalsBanner` (`today_loaded_body.dart:359-361`):
-  banner node label =
-  `"3 quests waiting for your thumbs-up\n3 quests waiting for your
-  thumbs-up\nYour little birds did brilliantly\nReview"`.
-  Fix: keep `liveRegion: true`, drop the duplicate explicit label (or wrap
-  the text column in `ExcludeSemantics`).
-- (b) shared components `NestCard` (`nest_card.dart:60-65`) and
-  `NestQuestCard` (`nest_quest_card.dart:107-111`) — quest row node label =
-  `"Empty the dishwasher, 15 coins, Needs a look\nEmpty the dishwasher\n
-  15 coins\n· Weekly · Sat\nNeeds a look"`, kid card adds its children
-  again. Not fixable from feature code → filed as
-  `docs/screens/P08/SHARED_REQUEST.md` §2 (`excludeSemantics: true`).
-
-## 4. Scope notes / deliberate non-findings
-
-- **P08b visual polish is left to the P08b loop.** `Seed.empty()` renders the
-  shared body with the DESIGN_SPEC §5 P08b title/message/CTAs, but the P08b
-  design PNG/HTML differ further (header `"Sat 4 Oct · A fresh nest"` at 28px
-  with no header actions, the longer message *"… Maya and Leo will see it
-  straight away."*, `Browse ideas` as an underlined link, and a
-  *"Tip for new nests"* card). This stage's design references are P08
-  light/dark and P08b is a separate screen ID/loop — recorded here so P08b's
-  plan picks it up rather than failing P08 for it.
-- `1 of 1 quests` on a kid card is left as-is: the *"X of Y quests"* idiom
-  reads acceptably (unlike B1).
-- Kid-mode ≥56px tap targets do not apply to P08: `/today` is parent mode and
-  the shell redirects kid mode to P17 (covered by the shared router tests).
-- Loading/error widget tests drive `TodayView` with a mock `TodayRepository`
-  because an in-memory Drift DB can never fail; all other tests use the
-  in-memory DB with `Seed.demo` / `Seed.empty`.
-- Tests never await `TodayBloc.close()`: `emit.forEach` holds the long-lived
-  watch streams (as in the app), so the close future only resolves when a
-  source ends — commented in the two state tests that create blocs directly.
-- Minor state hygiene (not a bug, not user-visible): after a successful retry
-  the stale `errorMessage` survives in `TodayState` (the failure UI keys off
-  `status`, so nothing renders it).
-
-VERDICT: FAIL
+VERDICT: PASS

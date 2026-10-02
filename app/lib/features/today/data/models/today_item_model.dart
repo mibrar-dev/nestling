@@ -4,7 +4,6 @@ class TodayItemModel extends TodayItem {
   const new({
     required super.id,
     required super.title,
-    required super.detail,
     required super.questId,
     required super.childId,
     required super.childName,
@@ -18,7 +17,6 @@ class TodayItemModel extends TodayItem {
     return TodayItemModel(
       id: json['id'] as String,
       title: json['title'] as String,
-      detail: json['detail'] as String,
       questId: json['questId'] as String,
       childId: json['childId'] as String,
       childName: json['childName'] as String,
@@ -33,7 +31,6 @@ class TodayItemModel extends TodayItem {
     return <String, dynamic>{
       'id': id,
       'title': title,
-      'detail': detail,
       'questId': questId,
       'childId': childId,
       'childName': childName,

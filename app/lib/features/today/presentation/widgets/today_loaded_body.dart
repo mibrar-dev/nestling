@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nestling/core/design_system/design_system.dart';
+import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 import 'package:nestling/features/approvals/approvals_routes.dart';
 import 'package:nestling/features/family/family_routes.dart';
 import 'package:nestling/features/kid_home/kid_home_routes.dart';
@@ -107,16 +107,63 @@ String todayRepeatText(String repeatRule, int payoutDay) {
   }
 }
 
-String pipStageAsset(int stage) {
-  switch (stage) {
-    case 1:
-      return NestlingIllustrations.pipStage1;
-    case 2:
-      return NestlingIllustrations.pipStage2;
-    case 4:
-      return NestlingIllustrations.pipStage4;
+/// `'3 quests waiting for your thumbs-up'` vs `'1 quest …'` (B4).
+String todayPendingLabel(int pendingCount) {
+  return pendingCount == 1
+      ? '1 quest waiting for your thumbs-up'
+      : '$pendingCount quests waiting for your thumbs-up';
+}
+
+/// Banner subtitle from state (B3): `'Maya and Leo did brilliantly
+/// yesterday'`, `'Maya did brilliantly yesterday'`,
+/// `'Maya, Leo and Sam did brilliantly yesterday'`.
+String todayBannerSubtitle(List<ChildDaySummary> kids) {
+  final names = kids.map((k) => k.nickname).toList();
+  final who = switch (names.length) {
+    0 => 'Your nestlings',
+    1 => names.first,
+    2 => '${names[0]} and ${names[1]}',
+    _ => '${names.take(names.length - 1).join(', ')} and ${names.last}',
+  };
+  return '$who did brilliantly yesterday';
+}
+
+PipStyle pipStyleFor(String style) {
+  switch (style) {
+    case 'bolt':
+      return PipStyle.bolt;
+    case 'storybook':
+      return PipStyle.storybook;
     default:
-      return NestlingIllustrations.pipStage3;
+      return PipStyle.mochi;
+  }
+}
+
+PipSkin pipSkinFor(String skin) {
+  switch (skin) {
+    case 'berry':
+      return PipSkin.berry;
+    case 'sky':
+      return PipSkin.sky;
+    case 'mint':
+      return PipSkin.mint;
+    default:
+      return PipSkin.sunny;
+  }
+}
+
+PipAccessory pipAccessoryFor(String accessory) {
+  switch (accessory) {
+    case 'bow':
+      return PipAccessory.bow;
+    case 'cap':
+      return PipAccessory.cap;
+    case 'scarf':
+      return PipAccessory.scarf;
+    case 'glasses':
+      return PipAccessory.glasses;
+    default:
+      return PipAccessory.none;
   }
 }
 
@@ -221,7 +268,12 @@ class TodayLoadedBody extends StatelessWidget {
     if (state.pendingCount > 0) {
       children
         ..add(const SizedBox(height: NestSpacing.s4))
-        ..add(_ApprovalsBanner(pendingCount: state.pendingCount));
+        ..add(
+          _ApprovalsBanner(
+            pendingCount: state.pendingCount,
+            summaries: state.summaries,
+          ),
+        );
     }
     children
       ..add(const SizedBox(height: NestSpacing.s4))
@@ -235,10 +287,11 @@ class TodayLoadedBody extends StatelessWidget {
       final mine = state.items
           .where((i) => i.childId == summary.childId)
           .toList();
-      for (final item in mine) {
+      // Label → first card is 8; card-to-card is the 16 base rhythm.
+      for (var i = 0; i < mine.length; i++) {
         children
-          ..add(const SizedBox(height: NestSpacing.s2))
-          ..add(_QuestRow(item: item, payoutDay: state.payoutDay));
+          ..add(SizedBox(height: i == 0 ? NestSpacing.s2 : NestSpacing.s4))
+          ..add(_QuestRow(item: mine[i], payoutDay: state.payoutDay));
       }
     }
     children
@@ -285,8 +338,12 @@ class _Greeting extends StatelessWidget {
                   header: true,
                   child: Text(
                     '$greeting, $parentName',
-                    style: NestType.h2(color: tokens.ink)
-                        .copyWith(fontSize: 22, height: 28 / 22),
+                    style: NestType.h2(color: tokens.ink).copyWith(
+                      fontSize: 22,
+                      height: 28 / 22,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.22,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -316,7 +373,7 @@ class _Greeting extends StatelessWidget {
                 backgroundColor: tokens.leaf,
                 foregroundColor: tokens.onLeaf,
                 borderColor: Colors.transparent,
-                onPressed: () => context.go(QuestsRoutePaths.editor),
+                onPressed: () => context.push(QuestsRoutePaths.editor),
               ),
               SizedBox.square(
                 dimension: NestDevice.tapParent,
@@ -349,16 +406,18 @@ class _Greeting extends StatelessWidget {
 }
 
 class _ApprovalsBanner extends StatelessWidget {
-  const _ApprovalsBanner({required this.pendingCount});
+  const _ApprovalsBanner({required this.pendingCount, required this.summaries});
 
   final int pendingCount;
+  final List<ChildDaySummary> summaries;
 
   @override
   Widget build(BuildContext context) {
     final tokens = context.nest;
+    // liveRegion with no explicit label: the children's own text announces
+    // once (an explicit label would merge with the children and repeat).
     return Semantics(
       liveRegion: true,
-      label: '$pendingCount quests waiting for your thumbs-up',
       child: Container(
         padding: const EdgeInsets.all(NestSpacing.s4),
         decoration: BoxDecoration(
@@ -375,14 +434,14 @@ class _ApprovalsBanner extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    '$pendingCount quests waiting for your thumbs-up',
+                    todayPendingLabel(pendingCount),
                     style: NestType.bodyStrong(color: tokens.leafInk),
                     softWrap: true,
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                   ),
                   Text(
-                    'Your little birds did brilliantly',
+                    todayBannerSubtitle(summaries),
                     style: NestType.caption(
                       color: tokens.leafInk.withValues(alpha: 0.85),
                     ),
@@ -398,7 +457,7 @@ class _ApprovalsBanner extends StatelessWidget {
               minHeight: NestDevice.tapParent,
               fontSize: 15,
               horizontalPadding: 18,
-              onPressed: () => context.go(ApprovalsRoutePaths.approvals),
+              onPressed: () => context.push(ApprovalsRoutePaths.approvals),
             ),
           ],
         ),
@@ -414,12 +473,27 @@ class _KidsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The design's 2-up grid (170 + 170, gap 10): chunk into pairs, and give
+    // a lone card its own 2-up row so it keeps the 170 column, not 350.
+    final rows = <Widget>[];
     final cards = summaries.map(_KidCard.new).toList();
-    if (cards.length == 1) return cards.single;
-    return Row(
+    for (var i = 0; i < cards.length; i += 2) {
+      final pair = cards.skip(i).take(2).toList();
+      rows.add(
+        Row(
+          spacing: NestSpacing.gap10,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final card in pair) Expanded(child: card),
+            if (pair.length == 1) const Spacer(),
+          ],
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: NestSpacing.gap10,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [for (final card in cards) Expanded(child: card)],
+      children: rows,
     );
   }
 }
@@ -488,10 +562,12 @@ class _KidCard extends StatelessWidget {
                 label:
                     "${summary.nickname}'s Pip, ${pipStageName(summary.pipStage)}",
                 child: ExcludeSemantics(
-                  child: SvgPicture.asset(
-                    pipStageAsset(summary.pipStage),
-                    width: 72,
-                    height: 72,
+                  child: PipAvatar(
+                    style: pipStyleFor(summary.pipStyle),
+                    stage: summary.pipStage.clamp(1, 4),
+                    skin: pipSkinFor(summary.pipSkin),
+                    accessory: pipAccessoryFor(summary.pipAccessory),
+                    size: 72,
                   ),
                 ),
               ),
@@ -558,12 +634,10 @@ class _GroupLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = context.nest;
     final age = summary.ageYears;
-    final label = age == null
-        ? summary.nickname.toUpperCase()
-        : '${summary.nickname.toUpperCase()} · $age';
-    return Text(label, style: NestType.sectionLabel(color: tokens.ink2));
+    // NestSectionLabel upper-cases internally, so pass mixed case.
+    final label = age == null ? summary.nickname : '${summary.nickname} · $age';
+    return NestSectionLabel(label: label);
   }
 }
 
@@ -581,7 +655,7 @@ class _QuestRow extends StatelessWidget {
       title: item.title,
       maxLines: 2,
       onTap: () =>
-          context.go('${QuestsRoutePaths.editor}?questId=${item.questId}'),
+          context.push('${QuestsRoutePaths.editor}?questId=${item.questId}'),
       semanticLabel:
           '${item.title}, ${item.coins} coins, ${todayStatusLabel(item.status)}',
       leading: ExcludeSemantics(
@@ -627,7 +701,7 @@ class _HandButton extends StatelessWidget {
       0 => 'Hand to child',
       1 => 'Hand to ${names[0]}',
       2 => 'Hand to ${names[0]} or ${names[1]}',
-      _ => 'Hand to ${names[0]} and friends',
+      _ => 'Hand to ${names[0]} and ${names.length - 1} others',
     };
     return NestButton(
       label: label,
@@ -652,9 +726,9 @@ class _EmptyCard extends StatelessWidget {
         NestSpacing.s8 - NestSpacing.s1,
       ),
       child: NestEmptyState(
-        art: SizedBox.square(
+        art: const SizedBox.square(
           dimension: 140,
-          child: SvgPicture.asset(NestlingIllustrations.pipStage1),
+          child: PipAvatar(style: PipStyle.mochi, stage: 1, size: 140),
         ),
         title: 'Your nest is quiet',
         message: 'Add your first quest and Pip will start to hatch.',
@@ -664,7 +738,7 @@ class _EmptyCard extends StatelessWidget {
           children: [
             NestButton(
               label: 'Add a quest',
-              onPressed: () => context.go(QuestsRoutePaths.editor),
+              onPressed: () => context.push(QuestsRoutePaths.editor),
             ),
             NestButton(
               label: 'Browse ideas',
@@ -679,10 +753,11 @@ class _EmptyCard extends StatelessWidget {
 }
 
 /// Failure body with the only legal retry (re-add [TodayLoadRequested]).
+///
+/// Renders a fixed, kind message — the raw `errorMessage` stays in the state
+/// for logs and bloc tests, never on screen (B15).
 class TodayFailureBody extends StatelessWidget {
-  const TodayFailureBody({required this.message, super.key});
-
-  final String message;
+  const TodayFailureBody({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -695,7 +770,8 @@ class TodayFailureBody extends StatelessWidget {
           spacing: NestSpacing.s4,
           children: [
             Text(
-              message,
+              "We couldn't load today's quests. Your data is safe — "
+              'please try again.',
               style: NestType.bodySmall(color: tokens.ink2),
               textAlign: TextAlign.center,
               maxLines: 5,

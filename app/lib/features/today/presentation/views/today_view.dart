@@ -27,9 +27,7 @@ class TodayView extends StatelessWidget {
                   child: CircularProgressIndicator(color: tokens.leaf),
                 );
               case TodayStatus.failure:
-                return TodayFailureBody(
-                  message: state.errorMessage ?? 'Something went wrong',
-                );
+                return const TodayFailureBody();
               case TodayStatus.loaded:
                 return TodayLoadedBody(state: state);
             }

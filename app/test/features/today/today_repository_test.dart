@@ -23,9 +23,19 @@ void main() {
       expect(maya, hasLength(6));
       expect(leo, hasLength(4));
 
-      // Quests α-sorted within each child.
+      // Pending-first like the design, then α-sorted within each rank.
       final titles = maya.map((i) => i.title).toList();
-      expect(titles, orderedEquals(List.of(titles)..sort()));
+      expect(
+        titles,
+        orderedEquals(<String>[
+          'Empty the dishwasher',
+          'Lay the table',
+          'Reading – 20 minutes',
+          'Tidy your bedroom',
+          'Hoover the stairs',
+          'Put the bins out',
+        ]),
+      );
 
       // Latest completion wins: pending, approved, and to-do rows present.
       final byQuest = {for (final i in items) i.questId: i};
@@ -33,8 +43,10 @@ void main() {
       expect(byQuest['q-bins']!.status, 'approved');
       expect(byQuest['q-reading']!.status, 'to_do');
 
-      // Cadence + icon snapshot travel on the item.
-      expect(byQuest['q-dishwasher']!.repeatRule, 'weekly');
+      // Cadence + icon snapshot travel on the item (seed e94d063: everyday
+      // chores repeat daily; bins + hoover stay weekly).
+      expect(byQuest['q-dishwasher']!.repeatRule, 'daily');
+      expect(byQuest['q-bins']!.repeatRule, 'weekly');
       expect(byQuest['q-dishwasher']!.iconKey, 'dishwasher');
       expect(byQuest['q-reading']!.iconKey, 'book');
       expect(byQuest['q-biscuit']!.iconKey, 'paw');
@@ -60,7 +72,46 @@ void main() {
       expect(reading.status, 'done_pending');
     });
 
-    test('not_yet maps to the try-again label', () async {
+    test('not_yet rows sit between to_do and approved', () async {
+      final db = await setUpTestScope();
+      // A newer "try again" completion outranks the seeded to_do row.
+      await db
+          .into(db.questCompletions)
+          .insert(
+            QuestCompletionsCompanion.insert(
+              questId: 'q-reading',
+              childId: 'maya',
+              familyId: Seed.familyId,
+              status: const Value('not_yet'),
+              coins: const Value(10),
+              createdAt: Value(Seed.utc(10, 3, 9)),
+            ),
+          );
+      final impl = TodayRepositoryImpl(db: db);
+      final items = await impl.getItems();
+      final maya = items
+          .where((i) => i.childId == 'maya')
+          .map((i) => i.title)
+          .toList();
+
+      expect(
+        maya,
+        orderedEquals(<String>[
+          'Empty the dishwasher', // done_pending
+          'Lay the table', // done_pending
+          'Tidy your bedroom', // to_do
+          'Reading – 20 minutes', // not_yet (newest completion wins)
+          'Hoover the stairs', // approved
+          'Put the bins out', // approved
+        ]),
+      );
+      expect(
+        items.firstWhere((i) => i.questId == 'q-reading').status,
+        'not_yet',
+      );
+    });
+
+    test('not_yet status travels on the item', () async {
       final db = await setUpTestScope();
       await db
           .into(db.questCompletions)
@@ -78,7 +129,6 @@ void main() {
       final items = await impl.getItems();
       final tidy = items.firstWhere((i) => i.questId == 'q-tidy');
       expect(tidy.status, 'not_yet');
-      expect(tidy.detail, contains('try again'));
     });
   });
 
@@ -119,6 +169,35 @@ void main() {
         reason: 'the bloc relies on this live re-emission (no reload events)',
       );
     });
+
+    test('watchPendingCount re-emits when a new approval arrives', () async {
+      final db = await setUpTestScope();
+      final impl = TodayRepositoryImpl(db: db);
+      final counts = <int>[];
+      final sub = impl.watchPendingCount().listen(counts.add);
+      addTearDown(sub.cancel);
+
+      await pumpEventQueue();
+      expect(counts.last, 3);
+
+      // "Anyone" quest (q-washing) pending: still counts on Today's banner.
+      await db
+          .into(db.questCompletions)
+          .insert(
+            QuestCompletionsCompanion.insert(
+              questId: 'q-washing',
+              childId: 'maya',
+              familyId: Seed.familyId,
+              status: const Value('done_pending'),
+              coins: const Value(15),
+              createdAt: Value(Seed.utc(10, 3, 9)),
+            ),
+          );
+      await pumpEventQueue();
+
+      expect(counts.length, greaterThan(1));
+      expect(counts.last, 4);
+    });
   });
 
   group('TodayRepository summaries', () {
@@ -141,6 +220,9 @@ void main() {
       expect(maya.avatarColour, 'lilac');
       expect(maya.ageYears, 9);
       expect(maya.happyDays, 4);
+      expect(maya.pipStyle, 'mochi');
+      expect(maya.pipSkin, 'sunny');
+      expect(maya.pipAccessory, 'none');
 
       final leo = summaries[1];
       expect(leo.done, 2); // bed pending, bag approved
@@ -149,6 +231,52 @@ void main() {
       expect(leo.pipStage, 2);
       expect(leo.ageYears, 6);
       expect(leo.happyDays, 3);
+      expect(leo.pipStyle, 'bolt');
+      expect(leo.pipSkin, 'sky');
+    });
+
+    test('a child with no assigned quests still gets a summary', () async {
+      final db = await setUpTestScope();
+      await db
+          .into(db.children)
+          .insert(
+            ChildrenCompanion.insert(
+              id: 'sam',
+              familyId: Seed.familyId,
+              nickname: 'Sam',
+              ageYears: const Value(5),
+            ),
+          );
+      final impl = TodayRepositoryImpl(db: db);
+      final summaries = await impl.watchSummaries().first;
+
+      expect(summaries, hasLength(3));
+      final sam = summaries.firstWhere((s) => s.childId == 'sam');
+      expect(sam.nickname, 'Sam');
+      expect(sam.done, 0);
+      expect(sam.total, 0);
+      expect(sam.coins, 0);
+      expect(sam.ageYears, 5);
+    });
+
+    test('pending count covers unassigned quests too', () async {
+      final db = await setUpTestScope();
+      final impl = TodayRepositoryImpl(db: db);
+      expect(await impl.watchPendingCount().first, 3);
+
+      await db
+          .into(db.questCompletions)
+          .insert(
+            QuestCompletionsCompanion.insert(
+              questId: 'q-living',
+              childId: 'leo',
+              familyId: Seed.familyId,
+              status: const Value('done_pending'),
+              coins: const Value(10),
+              createdAt: Value(Seed.utc(10, 3, 9)),
+            ),
+          );
+      expect(await impl.watchPendingCount().first, 4);
     });
 
     test('empty seed has no summaries', () async {
@@ -181,7 +309,6 @@ void main() {
       const item = TodayItemModel(
         id: 'q1:maya',
         title: 'Test',
-        detail: 'Maya · to do',
         questId: 'q1',
         childId: 'maya',
         childName: 'Maya',
