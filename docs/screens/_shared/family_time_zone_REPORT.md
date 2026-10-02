@@ -1,136 +1,103 @@
 # Family time zone — shared implementation report
 
-Branch: `shared/family_time_zone`. Spec: task summary (owner-approved
-DATETIME_STORAGE design: UTC instant + IANA `…_tz`, floating rules in
-`families.time_zone`). Note: `docs/research/DATETIME_STORAGE.md` does not
-exist in this worktree (research dir holds only `BRIEF_datetime.md` + business
-round files), so the task summary §2–§5 equivalent in the brief was treated
-as the spec.
+Branch: `shared/family_time_zone` (merged with main post-review).
+Spec: `docs/research/DATETIME_STORAGE.md` (§2 table, §3 rules, §4
+libraries/tests, §5 migration brief), via the brief
+`docs/screens/_shared/family_time_zone.md`.
 
-## Files changed (what / why)
+## Item-by-item vs the brief
 
-Core (`app/lib/core/**` — allowed):
-- `data/family_time.dart` (NEW): `initFamilyTime()` (tz `latest_10y`
-  database), `isKnownZoneId`, `normalizeZoneId` (never throws; unknown →
-  family → London → UTC), `resolveWriteZone` (device → family → London),
-  `toFamilyZone`, `dayStartUtc` / `weekStartUtc` (plain UTC returns),
-  `countsForCurrentPeriod(rule, completed, now, zoneId)`,
-  `formatDay` / `formatTime` (optional `(Zone)` label when stored zone ≠
-  family zone), `shortZoneLabel`. DST handled by the tz database.
-- `data/family_zone_service.dart` (NEW): `FamilyZoneService`
-  (`deviceZoneReader` injectable): `deviceZoneId`, `familyZoneId`,
-  `watchFamilyZone`, `pendingMove` (device ≠ family, never auto-switches),
-  `confirmPendingMove`, `setFamilyTimeZone` (validated; mirrors settings).
-- `data/app_database.dart`: schema v1 → v2. New: `families.time_zone` /
-  `updatedAt(+Tz)`, `settings.time_zone` / `updatedAt(+Tz)`,
-  `quests.due_time_local` (nullable HH:MM), `quest_completions.createdAtTz`
-  / `decidedAtTz`, `ledger_entries.dateTz`,
-  `reward_redemptions.createdAtTz`, `earned_badges.earnedAtTz`,
-  `app_state.trialStartTz` (all `TEXT NOT NULL DEFAULT 'Europe/London'`);
-  real `onUpgrade` (`m.addColumn` × 13, backfill via defaults); kept
-  `beforeOpen` bootstrap; added `familyZoneId()` / `watchFamilyZoneId()`
-  (London fallback) for repositories.
-- `data/app_database.g.dart`: regenerated via build_runner.
-- `data/london_time.dart`: now `@Deprecated` shims delegating to
-  `family_time` pinned to `'Europe/London'` (London behaviour identical).
-- `data/seed.dart`: family `time_zone` London; every seeded instant stamped
-  London; `anchorDay` via `family_time`; NEW `Seed.movedToDubai()` fixture
-  (flips family+settings to Dubai, touches no instants).
-- `data/stream_combine.dart`: added `combineLatest4` (repo zone streams).
-- `data/app_session.dart`: `startTrialNow` stamps `trialStartTz`.
+1. Event instants store UTC + IANA `…_tz` — DONE. `quest_completions`
+   (`createdAtTz`/`decidedAtTz`), `ledger_entries` (`dateTz`, covers
+   payouts), `reward_redemptions` (`createdAtTz`),
+   `earned_badges` (`earnedAtTz`), `app_state` (`trialStartTz`),
+   `families`/`settings` (`updatedAt` + `updatedAtTz`, recording the move
+   itself per §2). All `TEXT NOT NULL DEFAULT 'Europe/London'`, stamped
+   with the writer's zone (validated; fallback family → London → UTC).
+   Partial deviation: repos stamp the current FAMILY zone, not the raw
+   device zone — the data layer has no device access; `FamilyZoneService`
+   owns device reads (see §3). Threading the device zone into repo writes
+   is a follow-up.
+2. Calendar rules floating in `families.time_zone` — DONE. `time_zone TEXT
+   NOT NULL DEFAULT 'Europe/London'` on families (+ settings mirror);
+   `quests.due_time_local` nullable `HH:MM`; `repeatRule`/`days`/`payoutDay`
+   unchanged (already zone-agnostic); all period math takes the family zone.
+3. History in stored zone; today/week/payout/due in CURRENT family zone —
+   DONE. Repository detail strings render via stored `…_tz` (zone named
+   when it differs from the family zone); `TodayRepository.rows()` /
+   pending count use the live family zone.
+4. Drift v1 → v2 `MigrationStrategy.onUpgrade` + migration test —
+   DONE. 13 `m.addColumn` calls (NOT NULL DEFAULT backfills London);
+   `beforeOpen` bootstrap kept. Test is a real file upgrade (raw-SQL v1 at
+   `user_version = 1` → v2 open asserts backfill + intact instants), not a
+   drift_dev verifier (no generated schema snapshots exist in tree).
+5. `timezone` + `flutter_timezone`, tz init at startup (`latest_10y`) —
+   DONE. `timezone ^0.11.1`, `flutter_timezone 4.1.1` (NOT 5.x: 5.x requires
+   equatable ^2, app pins equatable ^3 — solver-forbidden; 4.1.1 exposes the
+   same `Future<String> getLocalTimezone()` used here).
+   `family_time.dart` exposes exactly `toFamilyZone`, `dayStartUtc`,
+   `weekStartUtc`, `countsForCurrentPeriod(rule, completed, now, zone)`,
+   `formatDay`/`formatTime` (+ zone label), plus `normalizeZoneId`,
+   `resolveWriteZone`, `shortZoneLabel`, `initFamilyTime`.
+6. Shims + call-site migration — DONE per review revision. `london_time.dart`
+   keeps UNANNOTATED shims (review override: `@Deprecated` broke every
+   screen gate; header notes removal after screens migrate). All call sites
+   on this branch in `core`, `app`, feature DATA repos and shared tests use
+   `family_time`; only in-flight screen PRESENTATION (`today_bloc.dart`)
+   still calls shims. No `features/**/presentation/**` edited.
+7. `FamilyZoneService` + `setFamilyTimeZone` + P16 note — DONE. Service in
+   core (device read, `pendingMove` one-time prompt input, never silent,
+   `confirmPendingMove`, validated `setFamilyTimeZone`); registered in DI;
+   `SettingsRepository.setFamilyTimeZone` / `watchFamilyTimeZone`; no UI
+   (see `docs/screens/P16/ORCHESTRATOR_NOTES.md`).
+8. Seed — DONE. `families.time_zone = 'Europe/London'`; every seeded
+   instant stamped; `Seed.movedToDubai()` fixture (zone flip, instants
+   untouched).
+9. `docs/data/POSTGRES_TIME.md` — DONE. Mirror DDL (`timestamptz` + `TEXT`
+   tz) + migration notes.
+10. Tests — DONE, all pass (550/550, incl. all pre-existing London tests
+    unchanged in expectation):
+    - DST gap 2026-03-29 + ambiguous hour 2026-10-25
+      (`family_time_test.dart`: spring-forward gap, autumn-back ambiguous
+      hour, autumn-back day start).
+    - London→Dubai move (`family_time_test.dart`: history display
+      unchanged, day/week/payout follow Dubai, straddling period expires).
+    - Device ≠ family uses family today (`family_time_test.dart`: family
+      "today" follows the family zone).
+    - Unknown zone fallback (`family_time_test.dart`: normalize/helpers/
+      resolveWriteZone/set-guard).
+    - Migration v1→v2 backfill (`time_migration_test.dart`).
+    - London behaviour pinned (`london_period_test.dart` via new API).
 
-App (`app/lib/app/**`, `main.dart` — allowed):
-- `main.dart`: `initFamilyTime()` before DI. `app/di.dart`: registers
-  `FamilyZoneService` lazy singleton.
+## Differences vs DATETIME_STORAGE.md §2 table (checked after main merge)
 
-Features — DATA layer only, no presentation (allowed exception):
-- `today`: `watchItems`/`watchPendingCount` combine the family zone;
-  `rows()` takes `zoneId` (default London); periods zone-aware.
-- `approvals`: history detail via stored `createdAtTz` (+ zone label after
-  a move); `approve`/`markNotYet` stamp `decidedAtTz` + ledger `dateTz`.
-- `pocket_money`: ledger detail via stored `dateTz`; `addMoney` /
-  `recordSpending` / `recordPayout` stamp `dateTz`; payout note uses
-  family-zone day.
-- `kid_jar`: entries via stored `dateTz`; `moveToSavings` stamps `dateTz`.
-- `kid_home`: `completeQuest` stamps `createdAtTz` (insert + to_do/not_yet
-  update paths).
-- `kid_shop`: `requestReward` stamps redemption `createdAtTz`.
-- `quests`: `dueTimeLocal` passthrough (create/update/entity); domain
-  `Quest.dueTimeLocal` OPTIONAL (default null) + `QuestModel` JSON — all
-  existing call sites compile unchanged.
-- `paywall`: `startTrial` stamps `trialStartTz`.
-- `settings`: NEW `setFamilyTimeZone` + `watchFamilyTimeZone` on the
-  interface/impl; `_write` stamps `updatedAt(+Tz)` on both tables.
-- Untouched (no timestamp writes / no period math): badges (read-only),
-  family, rewards, pip, onboarding, auth, privacy_consent, parental_gate.
-  `badges.earnedAtTz` is written by seed; a future award-write path must
-  stamp it (see follow-ups).
-
-Deps / docs:
-- `pubspec.yaml` (+lock): `timezone ^0.11.1`,
-  `flutter_timezone 4.1.1` (exact: 5.x needs equatable 2, app uses
-  equatable 3 — solver-forbidden; 4.1.1 API is `Future<String>
-  getLocalTimezone()`), `sqlite3 ^3.5.2` dev (migration test only).
-- `docs/data/POSTGRES_TIME.md` (NEW): mirror DDL
-  (`timestamptz` + `…_tz`) + migration notes for Supabase later.
-- `docs/screens/P16/ORCHESTRATOR_NOTES.md` (NEW): setting row + one-time
-  move prompt spec for P16 (service API, copy, test hooks).
-- Shared tests migrated off deprecated shims: `london_period_test.dart`
-  (same expectations via `family_time` + London), `p08_bugs_test`,
-  `today_bloc_test`, `today_view_test`.
-
-## Tests added
-
-`test/core/family_time_test.dart` (22 tests):
-- DST spring gap 2026-03-29 (`01:30 UTC → 02:30 BST`; day starts midnight
-  GMT); ambiguous hour 2026-10-25 (1:30 twice, offsets +1/0; day starts
-  23:00 UTC prev day).
-- Move: history unchanged (stored zone wins; `(London)` label under Dubai);
-  day boundary follows Dubai; week boundary follows Dubai (Sun→Mon split);
-  payout weekday in new zone; straddling period expires (`done_pending` →
-  `to_do` under Dubai).
-- Device ≠ family: family "today" still London (Maya 4/6); `pendingMove`
-  null when equal; surfaces Dubai without switching; confirm switches.
-- Unknown zones: `normalizeZoneId` never throws; helpers accept bad ids;
-  `resolveWriteZone` chain; `setFamilyTimeZone` ignores bad ids.
-- Plumbing: seed stamps London everywhere; `dueTimeLocal` round-trip
-  (+ null default); kid_home stamps London→Dubai; approvals decision stamp;
-  payout note + zone; settings zone watch/set/validate.
-
-`test/core/data/time_migration_test.dart` (1 test):
-- `v1 → v2 backfills London zones and keeps every instant`: raw-SQL v1 file
-  at `user_version = 1` → real `onUpgrade` → all `…_tz`/`time_zone`
-  backfilled London, instants intact, new Dubai write works.
-
-Existing: ALL pass — `flutter test`: 550/550 (includes pinned London
-period tests proving unchanged behaviour for never-moved families).
+- Column names: doc sketches `created_tz`/`decided_tz`/`entry_tz`/`trial_tz`;
+  implemented `created_at_tz`/`decided_at_tz`/`date_tz`/`earned_at_tz`/
+  `trial_start_tz` (derived from the Drift field names, same pattern).
+  No functional difference.
+- Doc §3 stamps Dad's rows with the DEVICE zone; v1 stamps the family zone
+  (see item 1) — device-zone threading is the deferred follow-up.
+- Doc §2 "owed aggregates bucket by current family zone": owed stays
+  since-last-payout (no weekly bucket exists); payout weekday IS evaluated
+  in the family zone (tested).
+- RFC 9557 wire form, `members.preferred_tz`, Postgres migration itself:
+  N/A yet (local-only, no API boundary) — POSTGRES_TIME.md stages the DDL.
+- Doc §5(4) zone-setting UI + §5 acceptance "london_time.dart deleted":
+  explicitly out of scope (P16 later; shims kept per review so screens keep
+  compiling).
 
 ## Verification
 
-- `cd app && dart format .` clean (run last).
-- `flutter analyze`: 0 errors, 0 warnings; 2 info-level
-  `deprecated_member_use_from_same_package` remain at
-  `today/presentation/bloc/today_bloc.dart:63-64` — the INTENTIONAL shims
-  the task requires so screen branches keep compiling (file not editable
-  per isolation rules; no ignores added anywhere).
-- `flutter test`: 550/550 pass.
+- `dart format .` clean; `flutter analyze` → `No issues found!`
+  (no ignores added); `flutter test` → 550/550 pass.
 
-## Follow-ups screens must do
+## Follow-ups for screens
 
-1. Presentation still on shims: `today_bloc.dart` greeting/dateLine
-   (`toLondon`/`formatLondonDay`), `kid_jar`/`pocket_money`/`approvals`
-   views that format dates themselves — migrate to `family_time` with the
-   family zone + stored `…_tz` when touching those files (do NOT bulk-edit
-   other screens' branches; coordinate via orchestrator).
-2. P16 Settings: build the zone row + one-time move prompt per
-   `docs/screens/P16/ORCHESTRATOR_NOTES.md`.
-3. First future `earned_badges` award-write path must stamp `earnedAtTz`
-   (currently only seed writes it).
-4. Notification scheduling ("before tea 5pm", payout reminders): evaluate
-   `dueTimeLocal`/times in the CURRENT family zone at fire time (no code
-   yet — no scheduler exists).
-5. `docs/research/DATETIME_STORAGE.md` (the approved design doc the task
-   cites) is missing from this worktree — orchestrator may want it restored
-   from main for traceability.
+- P16: build zone row + one-time move prompt per P16/ORCHESTRATOR_NOTES.md.
+- First future `earned_badges` award-write path must stamp `earnedAtTz`.
+- Presentation still on shims (`today_bloc` greeting/dateLine): migrate to
+  `family_time` when those screens are touched; delete `london_time.dart`
+  once zero callers remain. Notification-time evaluation in family zone when
+  a scheduler exists.
 
 VERDICT: PASS

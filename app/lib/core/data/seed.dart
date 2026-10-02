@@ -11,7 +11,7 @@
 //
 // Date anchor: the designs say "Sat 4 Oct", but 4 Oct 2026 is a Sunday, so
 // the seed uses Sat 3 Oct 2026 (and Sat 26 Sep 2026 for "last Saturday") and
-// every weekday label renders correctly via `london_time.dart`.
+// every weekday label renders correctly via `family_time.dart`.
 
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_database.dart';
