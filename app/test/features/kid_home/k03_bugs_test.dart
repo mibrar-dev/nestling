@@ -1039,7 +1039,6 @@ void main() {
       );
       await disposeApp(tester);
     },
-    skip: true,
   );
 }
 

@@ -461,86 +461,93 @@ class _KidHomeBody extends StatelessWidget {
                       ],
                     ),
             ),
-            // Bottom chrome owns the OS inset (ORCHESTRATOR_NOTES #8):
-            // the shared `NestHomeIndicator` no longer reserves space and
-            // the kid dock is not inside `NestBottomCta`, so `SafeArea`
-            // pads the dock + indicator zone here. On the 390x844 iPhone
-            // this lands the dock top at the design rows and leaves the
-            // meadow hill visible below; in tests (zero padding) nothing
-            // changes.
-            SafeArea(
-              top: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      color: tokens.surface,
-                      border: Border(
-                        top: BorderSide(color: tokens.ink, width: 3),
+            // Bottom edge (owner rule, K03-BUG-10): the bar's own surface
+            // runs to the physical screen edge — the `SafeArea` inset sits
+            // INSIDE the surface box (same pattern as the shared
+            // `NestBottomCta` on main), so no meadow/sky strip shows
+            // under the dock. Buttons stay above the inset; the OS draws
+            // the home pill. This supersedes the meadow-to-the-edge half of
+            // ORCHESTRATOR_NOTES #8 (the inset half still holds).
+            Container(
+              decoration: BoxDecoration(
+                color: tokens.surface,
+                border: Border(top: BorderSide(color: tokens.ink, width: 3)),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        NestSpacing.padSide,
+                        NestSpacing.s3,
+                        NestSpacing.padSide,
+                        NestSpacing.gap10,
+                      ),
+                      child: Row(
+                        spacing: NestSpacing.s3,
+                        children: [
+                          Expanded(
+                            child: NestKidButton(
+                              label: 'Pip',
+                              color: NestKidButtonColor.lilac,
+                              icon: NestIcon(
+                                NestIcons.pipFace,
+                                color: tokens.onAccent,
+                              ),
+                              axis: Axis.vertical,
+                              gap: NestSpacing.s1,
+                              minHeight: 66,
+                              fontSize: 17,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: NestSpacing.gap6,
+                              ),
+                              onPressed: () => context.go(PipRoutePaths.nest),
+                            ),
+                          ),
+                          Expanded(
+                            child: NestKidButton(
+                              label: 'Shop',
+                              color: NestKidButtonColor.coin,
+                              icon: NestIcon(
+                                NestIcons.bag,
+                                color: tokens.onWarm,
+                              ),
+                              axis: Axis.vertical,
+                              gap: NestSpacing.s1,
+                              minHeight: 66,
+                              fontSize: 17,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: NestSpacing.gap6,
+                              ),
+                              onPressed: () =>
+                                  context.go(KidShopRoutePaths.shop),
+                            ),
+                          ),
+                          Expanded(
+                            child: NestKidButton(
+                              label: 'My jar',
+                              icon: NestIcon(
+                                NestIcons.jar,
+                                color: tokens.onLeaf,
+                              ),
+                              axis: Axis.vertical,
+                              gap: NestSpacing.s1,
+                              minHeight: 66,
+                              fontSize: 17,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: NestSpacing.gap6,
+                              ),
+                              onPressed: () => context.go(KidJarRoutePaths.jar),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    padding: const EdgeInsets.fromLTRB(
-                      NestSpacing.padSide,
-                      NestSpacing.s3,
-                      NestSpacing.padSide,
-                      NestSpacing.gap10,
-                    ),
-                    child: Row(
-                      spacing: NestSpacing.s3,
-                      children: [
-                        Expanded(
-                          child: NestKidButton(
-                            label: 'Pip',
-                            color: NestKidButtonColor.lilac,
-                            icon: NestIcon(
-                              NestIcons.pipFace,
-                              color: tokens.onAccent,
-                            ),
-                            axis: Axis.vertical,
-                            gap: NestSpacing.s1,
-                            minHeight: 66,
-                            fontSize: 17,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: NestSpacing.gap6,
-                            ),
-                            onPressed: () => context.go(PipRoutePaths.nest),
-                          ),
-                        ),
-                        Expanded(
-                          child: NestKidButton(
-                            label: 'Shop',
-                            color: NestKidButtonColor.coin,
-                            icon: NestIcon(NestIcons.bag, color: tokens.onWarm),
-                            axis: Axis.vertical,
-                            gap: NestSpacing.s1,
-                            minHeight: 66,
-                            fontSize: 17,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: NestSpacing.gap6,
-                            ),
-                            onPressed: () => context.go(KidShopRoutePaths.shop),
-                          ),
-                        ),
-                        Expanded(
-                          child: NestKidButton(
-                            label: 'My jar',
-                            icon: NestIcon(NestIcons.jar, color: tokens.onLeaf),
-                            axis: Axis.vertical,
-                            gap: NestSpacing.s1,
-                            minHeight: 66,
-                            fontSize: 17,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: NestSpacing.gap6,
-                            ),
-                            onPressed: () => context.go(KidJarRoutePaths.jar),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const NestHomeIndicator(),
-                ],
+                    const NestHomeIndicator(),
+                  ],
+                ),
               ),
             ),
           ],
