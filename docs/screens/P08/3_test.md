@@ -1,115 +1,104 @@
-# P08 · Today (home) — test notes (Stage 3, iteration 3)
+# P08 · Today (home) — test notes (Stage 3, iteration 4 — final loop iteration)
 
 Screen: `P08` · route `/today` (+ `P08b` `/today-empty`) · feature `today` ·
 mode parent · seeds `Seed.demo()` / `Seed.empty()`.
 Scope of this stage: tests only — **no screen code was changed**.
 
-## 1. Focus of this iteration — the PERIODS ruling
+## 1. Focus of this iteration — the two behaviour changes iteration 4 shipped
 
-The repository now scopes a quest's latest completion with
-`countsForCurrentPeriod(repeatRule, completedAt, nowUtc)`
-(`daily` → current Europe/London day, `weekly` → current London week
-Mon 00:00–Sun 24:00, `once` → forever) through the new clock seam
-(`TodayRepositoryImpl({db, clock})`, default `Seed.anchorOverride ?? wall
-clock`), so stale completions read `to_do` again and the kid-card `done`
-counts follow (`today_repository_impl.dart:134-192`).
+The orchestrator fixed the shared red with a **seed** change (`e972b46`: Leo's
+daily school-bag approval happens on the story day), so `repositories_test`
+and P08 agree again and Leo is `2 of 4` again. The build then shipped two
+mechanisms that this stage verifies independently:
 
-Verified independently, with **fixed UTC instants** (not values derived from
-the helper under test) so a UTC-day implementation would fail:
+- **P08-B13 — period-scoped banner.** `watchPendingCount()` now applies
+  `countsForCurrentPeriod(rule ?? 'once', createdAt, now)` to
+  `done_pending` completions, so a stale approval no longer inflates the
+  banner (`today_repository_impl.dart:115-140`). The build's proofs cover
+  "one stale extra pending"; my tests cover the magnitudes around it.
+- **P08-B14 — per-frame push guard.** `_PushOnce` was rewritten from
+  clear-on-pop to `_armed` + `addPostFrameCallback`, because the old latch
+  stuck when a pushed page navigated away with `go('/today')`
+  (`today_loaded_body.dart:254-269`). The build proves the latch releases;
+  my tests prove the two properties that make the frame guard safe.
 
-| Case | Completion | Now | Expected | Why |
-|---|---|---|---|---|
-| daily, after London midnight | 2 Oct 23:30Z | 3 Oct 00:00Z | counts | 00:30 BST on 3 Oct — same London day although the UTC date is 2 Oct |
-| daily, before London midnight | 2 Oct 22:30Z | 3 Oct 00:00Z | `to_do` | 23:30 BST on 2 Oct — yesterday |
-| weekly, Monday 00:30 London | 27 Sep 23:30Z | 3 Oct | counts | the London week starts Mon 28 Sep 00:00 BST = 27 Sep 23:00Z |
-| weekly, Sunday night | 27 Sep 22:30Z | 3 Oct | `to_do` | previous London week |
-| daily, BST→GMT switch day | 24 Oct 23:30Z / 22:30Z | 25 Oct 12:00Z | counts / `to_do` | 25 Oct is GMT; the day start is 24 Oct 23:00Z |
-| summary `done` moves with the clock | seed `q-bag` daily approval 2 Oct | 3 Oct vs 2 Oct | Leo 1/4 vs 2/4 | the same data, two "now"s |
+## 2. Tests added this iteration — 7 new (feature suite 99 → 106)
 
-The 4 proofs un-skipped by the iteration-3 build (P08-B11 ×3, P08-B12
-double-tap `_PushOnce` guard) pass unskipped; **no `skip:` remains anywhere
-in `app/test/features/today/`**.
+`today_repository_test.dart` (+3, group `TodayRepository streams`):
 
-## 2. Tests added this iteration — 10 new (feature suite 86 → 96)
-
-`today_repository_test.dart` (+6, group
-`TodayRepository periods (Europe/London ruling)`): the six boundary/summary
-cases above, each with an explicit `clock`.
+- `watchPendingCount: every stale pending drops the total to zero` — live
+  stream, all three seeded approvals moved to 2 Oct 22:30 UTC (23:30 London,
+  previous London day) → count 0 **and** no row is `done_pending`, so banner
+  and rows cannot disagree.
+- `watchPendingCount: one stale seeded pending drops the total by one` — 3 → 2
+  and the same quest's row reads `to_do`.
+- `watchPendingCount: a pending on a deactivated quest still counts` — pins
+  the documented `rule ?? 'once'` fallback: archiving the quest removes its
+  Today row but must not silently drop an approval P11 still lists.
 
 `today_view_test.dart` (+4):
 
-- `P08 Today alignment (owner rule)` — at 390 px: greeting text and section
-  title flush to the 20 px left gutter; avatar flush to 370; `+` exactly
-  8 + 44 px left of it; banner (live-region wrapper), kid cards (Maya left /
-  Leo right), `See all`, every quest row and the hand-off button all share
-  the same gutters.
-- `P08 Today bottom edge (owner rule)` ×2 (light + dark) — the tab bar's
-  own surface `Container` spans the full width and its bottom edge **is** the
-  physical screen bottom (`rect.bottom == 844`, height `NestDevice.tabH`), in
-  both themes: no coloured strip under the bar or around the home indicator.
-- `P08 Today period scoping in the view` — a stale daily approval
-  (2 Oct 22:30Z) renders its row as `To do`, not `Approved ✓`.
+- `every pending stale: banner gone and the counts agree` — no banner, no
+  `Review`, no `Needs a look`, and the cards read `2 of 6` (Maya: this week's
+  weekly approvals) and `1 of 4` (Leo: the story-day daily approval).
+- `a later tap cannot stack a second editor` — after the editor is pushed,
+  the row is behind the opaque route, so a tap in a *later frame* cannot
+  reach it; one pop lands back on Today. This is the safety argument for a
+  per-frame guard (a human double-tap can only land in the same frame).
+- `the guard does not latch after a normal pop` — pop, then tap the same row
+  again: the editor opens a second time.
+- `the empty-state card shares the same gutters` — P08b's card and greeting
+  use the same 20/370 column as the loaded screen (owner alignment rule).
 
-Also fixed a stale test *name* (`demo seed cards: … Leo 1/4 + 45`) and
-re-reviewed the build's test edits: no assertion was weakened; the shared
-`repositories_test.dart` expectation it could not touch is the only red (§6).
+Also corrected two stale test *names* left by the seed change (`Leo 1/4` →
+`Leo 2/4`) and marked the superseded duplicate section in
+`SHARED_REQUEST.md` so the resolved shared red is not read as open.
 
-## 3. Coverage vs the stage checklist (unchanged parts re-run green)
+## 3. Audit of the changed code (no findings)
 
-- **bloc_test every event/state path**: load → loading/loaded, error →
-  failure, retry, re-emission without events, family-wide pending count
-  (12 tests).
-- **Widget tests light + dark, widths 320/390/430, scale 1.0/1.3**: 12-case
-  matrix, no `RenderFlex overflowed`, plus the dark content and dark failure
-  tests and the 6-children/320 px/1.3× stress case.
-- **empty / loading / error**: `/today` + `/today-empty` with
-  `Seed.demo`/`Seed.empty`; loading/error drive `TodayView` over a mock
-  repository (a healthy in-memory DB cannot fail).
-- **every tap → right route**: Review, `+`, quest row (±`questId`), See all,
-  avatar, kid card (`childId`), Hand, `Add a quest`, `Browse ideas`; pushed
-  pages also prove system-back returns to Today.
-- **semantics labels on icon buttons** and the banner announcing exactly
-  once; tap targets ≥ 44 px parent (≥ 56 px kid is N/A — parent mode; the
-  route is gated to P17 in kid mode, P08-B01).
-- **Pip rule**: each card renders the child's own `PipAvatar` from the DB,
-  no v1 `pip_stage_*.svg`; P08b egg `mochi`/stage 1 at 140; non-default
-  style/skin/accessory travels unchanged; Reduce-Motion art pinned
-  (P08 M1 proof).
+- `watchPendingCount()` reads the clock once per emission ✓, treats an
+  unknown quest as `once` ✓ (tested), keeps counting "Anyone"-quest
+  approvals ✓ (P08-B06 proof still green), and re-emits live ✓.
+- `_PushOnce` cannot latch: `_armed` is re-armed in a post-frame callback,
+  and by that frame the pushed page covers the button; a rejected/failed
+  push also recovers. Tested for the same-frame double tap (P08-B12), the
+  later-frame tap, the normal pop and the `go`-replace latch (P08-B14).
+- Observation (not a bug, for review/UI): the banner counts *completions*,
+  so a quest completed twice in one day reads "2 quests waiting" while
+  Today shows one row — coherent with P11, which also lists one card per
+  completion; the wording is Stage 4/5 copy territory.
 
-## 4. Results
+## 4. Coverage vs the stage checklist (all re-run green)
+
+bloc/state paths (12) · light+dark · widths 320/390/430 · scales 1.0/1.3 (12-case
+matrix) · empty/loading/error (`Seed.demo` + `Seed.empty`, mock repo for the
+impossible-from-DB states) · every tap → right route incl. `questId`/`childId`
+params and back-navigation · semantics labels on icon buttons + banner
+announced once · tap targets ≥ 44 parent (≥ 56 kid N/A: parent mode, route
+gated to P17) · Pip rule per child from the DB, no v1 SVG, Reduce-Motion art ·
+period ruling incl. London day/week boundaries and the BST→GMT switch ·
+owner alignment + bottom-edge (light and dark).
+
+## 5. Results
 
 | Check | Result |
 |---|---|
-| `dart format --set-exit-if-changed .` | `350 files (0 changed)` |
+| `dart format --set-exit-if-changed .` | `351 files (0 changed)` |
 | `flutter analyze` | `No issues found!` |
-| `flutter test test/features/today` | **96 passed, 0 failed, 0 skipped** (12 bloc · 20 repo · 47 view · 17 bug proofs) |
-| `flutter test` (full app) | **+468 −1** — the single failure is the shared test in §5 below |
+| `flutter test test/features/today` | **106 passed, 0 failed, 0 skipped** (12 bloc · 23 repo · 50 view · 21 bug proofs) |
+| `flutter test` (full app) | **+479, all passed** — the shared seed-contract red is gone (`e972b46`); `SHARED_REQUEST.md` §8 closed |
 
-## 5. Bugs found this iteration
+## 6. Bugs found this iteration
 
-**None in the screen.** The period ruling, the alignment rule and the
-bottom-edge rule are all implemented, tested and green.
+**None.** Every mechanism this stage exercised behaves as specified; the
+whole app suite is green for the first time in the loop.
 
-One red remains in the full suite and it is **not a screen bug**:
-
-- `app/test/core/data/repositories_test.dart:53` (`today Maya 4 of 6, Leo 2
-  of 4`) still expects `leo.done == 2`; the ruling makes `q-bag`'s daily
-  approval from the previous London day stale, so Leo is `1 of 4`.
-  The file is shared (`app/test/core/**`) and RULES §1 forbids the screen
-  agent from editing it; it is filed **blocking** as `SHARED_REQUEST.md` §8
-  with the one-line fix. The build stage flagged the same item (its verdict
-  is FAIL for this reason), so the loop will hand it to the orchestrator
-  before the next build.
-
-Still awaiting an orchestrator ruling (`SHARED_REQUEST.md` §9, non-blocking):
-whether the approvals banner should also be period-scoped — it deliberately
-counts every family-wide `done_pending` completion so it matches P11. The
-current unscoped behaviour is pinned by the P08-B06 proof; no test was added
-either way so the ruling stays free to land.
-
-Notes / limits (unchanged from iteration 2): P08b visual polish beyond
-DESIGN_SPEC §5 belongs to the P08b loop; the Rive still-frame contract is
-owned by the shared `test/pip_avatar_test.dart` (the runtime never binds
-under `flutter test`); stale `errorMessage` after a retry is cosmetic only.
+Open items are shared and already filed (not P08-owned, none blocking this
+screen): `SHARED_REQUEST.md` §2 core card semantics, §4 `push` contract with
+P09/P11, §6 `DISABLE_ANIMATIONS` flag (still blocks deterministic
+`screenshot frames), §7 quest-meta `runSpacing`, §9 P11 must apply the same
+period scoping as P08's banner (P08 is done and proved; until P11 follows,
+the two screens can disagree the other way), §10 Bolt/Storybook still-art
+coverage, §11 period rollover re-evaluation for an app left open overnight.
 
 VERDICT: PASS

@@ -2,16 +2,11 @@
 //
 // Iteration 1 found 11 bugs (P08-B01…B10); iteration 2 fixed all of them and
 // un-skipped the proofs. Iteration 2's findings (P08-B11 periods, P08-B12
-// double-tap push) were fixed in iteration 3 and run unskipped too.
+// double-tap push) and iteration 3's findings (P08-B13 banner scoping,
+// P08-B14 push-guard latch) were fixed in the following iterations — every
+// proof below runs unskipped and green.
 //
-// Iteration 3 adds:
-//   P08-B13 — the approvals banner count ignores the period ruling
-//   P08-B14 — the _PushOnce guard latches when the pushed page is replaced
-//             by `go` (its future never completes), killing the button
-// All proofs run unskipped in the normal suite; the two iteration-3 proofs
-// carry `skip` (or `skip: true`) with their bug id so the suite stays green.
-// Run them with
-// `flutter test --run-skipped test/features/today/p08_bugs_test.dart`.
+// Iteration 4 re-hunted the tree and found no new bugs; no skips remain.
 //
 // Full reports with severity, repro and suggested fixes:
 // `docs/screens/P08/6_bugs.md`.
@@ -644,7 +639,6 @@ void main() {
               'list with 3 "Needs a look" rows',
         );
       },
-      skip: 'P08-B13: watchPendingCount ignores countsForCurrentPeriod',
     );
 
     testWidgets('[P08-B13] the banner count matches the current-period rows', (
@@ -676,7 +670,7 @@ void main() {
       expect(find.text('4 quests waiting for your thumbs-up'), findsNothing);
 
       await disposeApp(tester);
-    }, skip: true);
+    });
   });
 
   group('P08 push guard robustness', () {
@@ -716,6 +710,6 @@ void main() {
       );
 
       await disposeApp(tester);
-    }, skip: true);
+    });
   });
 }

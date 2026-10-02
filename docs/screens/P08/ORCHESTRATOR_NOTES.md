@@ -6,3 +6,6 @@
 
 ## Ruling on "done today" (K03-BUG-4 / SHARED_REQUEST #4) — mandatory
 Main now has `countsForCurrentPeriod` (app/lib/core/data/london_time.dart). In this feature's repository, treat a quest's latest completion as current only if `countsForCurrentPeriod(quest.repeatRule, completion.createdAt, DateTime.now().toUtc())`; otherwise the quest is "to do". Un-skip the day-boundary bug test and make it pass. The seed is anchored to today in the app and to Sat 3 Oct 2026 in tests (test/flutter_test_config.dart) — do not hard-code dates.
+
+## Orchestrator QA of cmp_light_4 (5.03%, UI PASS) — polish item (owner wants perfect alignment)
+- Approvals banner title must break like the design: "3 quests waiting / for your thumbs-up" (constrain the title width to the design's text column so the line break matches; no hard "\n"). Its extra height currently pushes the kids grid and "Today's quests" ~4 px low — after the fix, kids-card top ≈ y 335 and section title ≈ y 575 (390×844).

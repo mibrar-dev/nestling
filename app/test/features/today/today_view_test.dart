@@ -168,7 +168,7 @@ void main() {
       expect(find.text('Maya'), findsWidgets);
       expect(find.text('Leo'), findsWidgets);
       expect(find.text('4 of 6 quests'), findsOneWidget);
-      expect(find.text('1 of 4 quests'), findsOneWidget);
+      expect(find.text('2 of 4 quests'), findsOneWidget);
       expect(find.text('120'), findsWidgets);
       expect(find.text('45'), findsWidgets);
 
@@ -1078,6 +1078,30 @@ void main() {
       expect(tester.takeException(), isNull);
       await disposeApp(tester);
     });
+
+    testWidgets('the empty-state card shares the same gutters', (tester) async {
+      final db = await setUpTestScope(seedDemo: false);
+      await Seed.empty(db);
+      await GetIt.instance<AppSession>().refresh();
+      await pumpAppRoute(tester, '/today-empty');
+
+      final card = find
+          .ancestor(
+            of: find.text('Your nest is quiet'),
+            matching: find.byType(NestCard),
+          )
+          .first;
+      expect(tester.getTopLeft(card).dx, 20);
+      expect(tester.getTopRight(card).dx, 370);
+      expect(
+        tester.getTopLeft(find.text(_expectedGreeting())).dx,
+        20,
+        reason: 'the empty screen keeps the same 20 px gutter',
+      );
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
   });
 
   group('P08 Today bottom edge (owner rule)', () {
@@ -1167,6 +1191,98 @@ void main() {
         findsNothing,
         reason: "yesterday's approval is not today's status",
       );
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('every pending stale: banner gone and the counts agree', (
+      tester,
+    ) async {
+      final db = await setUpTestScope();
+      // Move all three seeded approvals to yesterday's London day
+      // (2 Oct 22:30 UTC = 23:30 London; the story day is pinned to 3 Oct).
+      await (db.update(
+        db.questCompletions,
+      )..where((c) => c.status.equals('done_pending'))).write(
+        QuestCompletionsCompanion(
+          createdAt: Value(DateTime.utc(2026, 10, 2, 22, 30)),
+        ),
+      );
+
+      await pumpAppRoute(tester, '/today');
+
+      expect(find.textContaining('waiting for your thumbs-up'), findsNothing);
+      expect(find.text('Review'), findsNothing);
+      expect(find.text('Needs a look'), findsNothing);
+      // Only this week's approvals remain, on both cards.
+      expect(find.text('2 of 6 quests'), findsOneWidget); // bins + hoover
+      expect(find.text('1 of 4 quests'), findsOneWidget); // bag, story day
+
+      await tester.scrollUntilVisible(
+        find.text('Put the bins out'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump();
+      expect(find.text('Approved ✓'), findsWidgets);
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+  });
+
+  group('P08 Today push guard (per frame)', () {
+    testWidgets('a later tap cannot stack a second editor', (tester) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/today');
+
+      await tester.tap(find.text('Empty the dishwasher'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      // The pushed page covers the list, so a tap in a later frame cannot
+      // reach the row — that is what makes the per-frame guard safe. (Match
+      // the row itself: P09's placeholder repeats the quest title.)
+      final behind = find.byWidgetPredicate(
+        (w) => w is NestQuestCard && w.title == 'Empty the dishwasher',
+        skipOffstage: false,
+      );
+      expect(behind, findsOneWidget, reason: 'the row is still in the tree');
+      await tester.tap(behind, warnIfMissed: false);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(
+        find.text('P09 Quest editor', skipOffstage: false),
+        findsOneWidget,
+      );
+
+      expect(await tester.binding.handlePopRoute(), isTrue);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text("Today's quests", skipOffstage: false), findsOneWidget);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the guard does not latch after a normal pop', (tester) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/today');
+
+      await tester.tap(find.text('Empty the dishwasher'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('P09 Quest editor'), findsOneWidget);
+
+      expect(await tester.binding.handlePopRoute(), isTrue);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text("Today's quests"), findsOneWidget);
+
+      // The same row must still work: the guard released.
+      await tester.tap(find.text('Empty the dishwasher'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('P09 Quest editor'), findsOneWidget);
 
       await disposeApp(tester);
     });

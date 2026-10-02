@@ -170,6 +170,102 @@ void main() {
       );
     });
 
+    test(
+      'watchPendingCount: every stale pending drops the total to zero',
+      () async {
+        final db = await setUpTestScope();
+        final impl = TodayRepositoryImpl(db: db);
+        final counts = <int>[];
+        final sub = impl.watchPendingCount().listen(counts.add);
+        addTearDown(sub.cancel);
+        await pumpEventQueue();
+        expect(
+          counts.last,
+          3,
+          reason: 'three seeded pendings on the story day',
+        );
+
+        // Story day is pinned to Sat 3 Oct 2026; 2 Oct 22:30 UTC is
+        // 23:30 London — yesterday's London day.
+        final stale = DateTime.utc(2026, 10, 2, 22, 30);
+        final pending = await (db.select(
+          db.questCompletions,
+        )..where((c) => c.status.equals('done_pending'))).get();
+        for (final row in pending) {
+          await (db.update(db.questCompletions)
+                ..where((c) => c.id.equals(row.id)))
+              .write(QuestCompletionsCompanion(createdAt: Value(stale)));
+        }
+        await pumpEventQueue();
+
+        expect(
+          counts.last,
+          0,
+          reason: 'every pending is outside its period, so none counts',
+        );
+        // Rows agree: nothing is "waiting" any more.
+        final items = await impl.getItems();
+        expect(
+          items.where((i) => i.status == 'done_pending'),
+          isEmpty,
+          reason: 'the rows reset to to_do, so the banner total must be 0 too',
+        );
+      },
+    );
+
+    test(
+      'watchPendingCount: a pending on a deactivated quest still counts',
+      () async {
+        final db = await setUpTestScope();
+        final impl = TodayRepositoryImpl(db: db);
+        expect(await impl.watchPendingCount().first, 3);
+
+        // `watchActiveQuests` no longer yields the quest, so the count falls
+        // back to "once" (count forever) and does not silently drop a pending
+        // that P11 still lists.
+        await (db.update(db.quests)..where((q) => q.id.equals('q-dishwasher')))
+            .write(const QuestsCompanion(active: Value(false)));
+
+        expect(
+          await impl.watchPendingCount().first,
+          3,
+          reason: 'an archived quest must not silently drop its approval',
+        );
+        expect(
+          await impl.getItems().then(
+            (i) => i.where((r) => r.questId == 'q-dishwasher'),
+          ),
+          isEmpty,
+          reason: 'the row is gone from Today, but the approval still waits',
+        );
+      },
+    );
+
+    test(
+      'watchPendingCount: one stale seeded pending drops the total by one',
+      () async {
+        final db = await setUpTestScope();
+        // Make one seeded pending stale: 2 Oct 22:30 UTC = 23:30 London.
+        await (db.update(
+          db.questCompletions,
+        )..where((c) => c.questId.equals('q-bed'))).write(
+          QuestCompletionsCompanion(
+            createdAt: Value(DateTime.utc(2026, 10, 2, 22, 30)),
+          ),
+        );
+        final impl = TodayRepositoryImpl(db: db);
+
+        expect(await impl.watchPendingCount().first, 2);
+        expect(
+          (await impl.getItems())
+              .firstWhere((i) => i.questId == 'q-bed')
+              .status,
+          'to_do',
+          reason: 'the row is to do again, so the banner must not count it',
+        );
+      },
+    );
+
     test('watchPendingCount re-emits when a new approval arrives', () async {
       final db = await setUpTestScope();
       final impl = TodayRepositoryImpl(db: db);
@@ -201,7 +297,7 @@ void main() {
   });
 
   group('TodayRepository summaries', () {
-    test('demo seed cards: Maya 4/6 + 120, Leo 1/4 + 45', () async {
+    test('demo seed cards: Maya 4/6 + 120, Leo 2/4 + 45', () async {
       final db = await setUpTestScope();
       final impl = TodayRepositoryImpl(db: db);
       final summaries = await impl.watchSummaries().first;
@@ -225,7 +321,7 @@ void main() {
       expect(maya.pipAccessory, 'none');
 
       final leo = summaries[1];
-      expect(leo.done, 1); // bed pending; bag's daily approval is yesterday's
+      expect(leo.done, 2); // bed pending, bag approved on the story day
       expect(leo.total, 4);
       expect(leo.coins, 45);
       expect(leo.pipStage, 2);
@@ -305,6 +401,11 @@ void main() {
   });
 
   group('TodayRepository periods (Europe/London ruling)', () {
+    // Single local source for the pinned story day (mirrors
+    // `flutter_test_config.dart`'s `Seed.anchorOverride`; kept local because
+    // screen agents may not add shared test helpers). Boundaries are offsets
+    // from it — only the 25 Oct BST→GMT edge keeps a real calendar literal.
+    final storyDay = DateTime.utc(2026, 10, 3);
     Future<void> clearCompletions(AppDatabase db, String questId) => (db.delete(
       db.questCompletions,
     )..where((c) => c.questId.equals(questId))).go();
@@ -350,11 +451,11 @@ void main() {
           questId: 'q-reading',
           childId: 'maya',
           status: 'approved',
-          createdAt: DateTime.utc(2026, 10, 2, 23, 30),
+          createdAt: storyDay.subtract(const Duration(minutes: 30)),
         );
 
         expect(
-          await statusOf(db, DateTime.utc(2026, 10, 3), 'q-reading'),
+          await statusOf(db, storyDay, 'q-reading'),
           'approved',
           reason: 'the ruling is about the London day, not the UTC day',
         );
@@ -370,13 +471,10 @@ void main() {
         questId: 'q-reading',
         childId: 'maya',
         status: 'approved',
-        createdAt: DateTime.utc(2026, 10, 2, 22, 30),
+        createdAt: storyDay.subtract(const Duration(hours: 1, minutes: 30)),
       );
 
-      expect(
-        await statusOf(db, DateTime.utc(2026, 10, 3), 'q-reading'),
-        'to_do',
-      );
+      expect(await statusOf(db, storyDay, 'q-reading'), 'to_do');
     });
 
     test('weekly: Monday 00:30 London counts (Sunday 23:30 UTC)', () async {
@@ -388,13 +486,10 @@ void main() {
         questId: 'q-bins',
         childId: 'maya',
         status: 'approved',
-        createdAt: DateTime.utc(2026, 9, 27, 23, 30),
+        createdAt: storyDay.subtract(const Duration(days: 5, minutes: 30)),
       );
 
-      expect(
-        await statusOf(db, DateTime.utc(2026, 10, 3), 'q-bins'),
-        'approved',
-      );
+      expect(await statusOf(db, storyDay, 'q-bins'), 'approved');
     });
 
     test('weekly: Sunday night before the week start does not count', () async {
@@ -405,11 +500,13 @@ void main() {
         questId: 'q-bins',
         childId: 'maya',
         status: 'approved',
-        createdAt: DateTime.utc(2026, 9, 27, 22, 30),
+        createdAt: storyDay.subtract(
+          const Duration(days: 5, hours: 1, minutes: 30),
+        ),
       );
 
       expect(
-        await statusOf(db, DateTime.utc(2026, 10, 3), 'q-bins'),
+        await statusOf(db, storyDay, 'q-bins'),
         'to_do',
         reason: 'Sunday 23:30 London belongs to the previous London week',
       );
@@ -449,12 +546,19 @@ void main() {
 
     test('summary counts follow the same period rule', () async {
       final db = await setUpTestScope();
-      // Before the switch day, Leo bag's approval is still yesterday's:
-      // 1 done of 4 on 3 Oct, but 2 of 4 if "now" is 2 Oct.
-      final onStoryDay = TodayRepositoryImpl(
-        db: db,
-        clock: () => DateTime.utc(2026, 10, 3),
+      // Pin bag's approval to the previous London day regardless of how the
+      // seed stamps it: 2 Oct 07:30 UTC = 08:30 London on 2 Oct.
+      await clearCompletions(db, 'q-bag');
+      await insertCompletion(
+        db,
+        questId: 'q-bag',
+        childId: 'leo',
+        status: 'approved',
+        createdAt: storyDay.subtract(const Duration(hours: 16, minutes: 30)),
       );
+      // On the story day the stale daily approval no longer counts: bed is
+      // the only done quest (1 of 4).
+      final onStoryDay = TodayRepositoryImpl(db: db, clock: () => storyDay);
       final leo = (await onStoryDay.watchSummaries().first).firstWhere(
         (s) => s.childId == 'leo',
       );
@@ -463,7 +567,7 @@ void main() {
 
       final onPreviousDay = TodayRepositoryImpl(
         db: db,
-        clock: () => DateTime.utc(2026, 10, 2, 12),
+        clock: () => storyDay.subtract(const Duration(hours: 12)),
       );
       final yesterday = (await onPreviousDay.watchSummaries().first).firstWhere(
         (s) => s.childId == 'leo',

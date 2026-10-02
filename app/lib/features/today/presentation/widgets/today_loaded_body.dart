@@ -235,10 +235,12 @@ class TodayStatusChip extends StatelessWidget {
   }
 }
 
-/// Pushes [location] at most once per foregrounding: while the pushed page
-/// is on top, further taps are dropped (B12 — a rapid double-tap must not
-/// stack two pages). The flag clears when the pushed page pops; `go`
-/// destinations need no guard (`go` replaces instead of stacking).
+/// Pushes [location] at most once per frame: a second tap in the same frame
+/// (rapid double-tap, B12) is dropped, then the guard re-arms on the next
+/// frame. Unlike a flag cleared when the push future completes, this cannot
+/// latch: a pushed page that leaves via `go` (B14), or a push that throws,
+/// still re-arms next frame. `go` destinations need no guard (`go`
+/// replaces instead of stacking).
 class _PushOnce extends StatefulWidget {
   const _PushOnce({required this.location, required this.builder});
 
@@ -250,19 +252,16 @@ class _PushOnce extends StatefulWidget {
 }
 
 class _PushOnceState extends State<_PushOnce> {
-  bool _busy = false;
+  bool _armed = true;
 
   void _push() {
-    if (_busy) return;
-    _busy = true;
-    // No setState: nothing visual changes. Clearing needs none either —
-    // the flag is plain state, so a disposed widget cannot throw.
-    unawaited(_pushAndClear());
-  }
-
-  Future<void> _pushAndClear() async {
-    await context.push(widget.location);
-    _busy = false;
+    if (!_armed) return;
+    _armed = false;
+    // Re-arm next frame. By then the pushed page covers this button, so a
+    // later tap cannot reach it until the user returns. Plain field writes
+    // only — safe if the widget is gone by then.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _armed = true);
+    unawaited(context.push(widget.location));
   }
 
   @override

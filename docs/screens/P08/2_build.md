@@ -1,88 +1,83 @@
-# P08 · Today (home) — build notes (Stage 2, iteration 3)
+# P08 · Today (home) — build notes (Stage 2, iteration 4)
 
-Built per `1_plan.md` + every item in `FIXES_2.md` + the stage brief's
-PERIODS ruling. The 4 skipped proofs (P08-B11 ×3, P08-B12) are unskipped and
-pass; the 2 unskipped regression pins still pass.
+Built per `1_plan.md` + every item in `FIXES_3.md` + the stage brief's
+PERIODS ruling. The 3 skipped proofs (P08-B13 ×2, P08-B14) are unskipped and
+pass; all prior proofs stay green.
 
 ## Files changed (all RULES §1-legal)
 
 Lib (`app/lib/features/today/**`):
 
-- `data/today_repository_impl.dart` — **P08-B11**: `_statusOf` now takes the
-  `Quest` + a single `now` and applies `countsForCurrentPeriod(repeatRule,
-  latest.createdAt, now)` (daily → London day, weekly → London week, once →
-  forever); stale completions read `to_do`, and `done`/progress derive from
-  the scoped statuses. `rows()` gained an optional `now` (one clock read per
-  call so sort and rows agree). New clock seam:
-  `TodayRepositoryImpl({required this._db, DateTime Function()? clock})`
-  defaulting to `Seed.anchorOverride ?? DateTime.now().toUtc()` — tests pin
-  the anchor (story "today"), production uses the wall clock, so demo
-  assertions ("4 of 6", banner 3) are date-independent. No DI change needed.
-- `presentation/bloc/today_state.dart` — m4: `pendingCount` doc now says
-  family-wide DB count, not "items with done_pending".
+- `data/today_repository_impl.dart` —
+  - **P08-B13**: `watchPendingCount()` is now period-scoped like the rows:
+    combines `watchAllCompletions` + `watchActiveQuests`, keeps only
+    `done_pending` completions with `countsForCurrentPeriod(rule ?? 'once',
+    createdAt, now)` (unknown quests default to `once` so a pending on a
+    removed quest is not silently dropped). A stale pending no longer
+    inflates the banner, closing the double-payout path. (Dropped the now
+    unused `drift` import.) NOTE filed for P11: its list must apply the same
+    scoping or the Review list will disagree with the banner
+    (`SHARED_REQUEST.md` §9).
+  - `rows()` doc comment records the ruling (statuses re-evaluated per call).
 - `presentation/widgets/today_loaded_body.dart` —
-  - **P08-B12**: new `_PushOnce` StatefulWidget (per-push-site `_busy` flag,
-    cleared when the pushed page pops) wrapping Review, `+`, quest rows and
-    P08b `Add a quest`. `go` destinations need no guard. (A
-    `ModalRoute.isCurrent` check would not work: both taps run before the
-    Navigator rebuilds.)
-  - m10: `sofa` tint arm documented as unreachable-by-construction.
-- `today_view.dart` / `today_empty_view.dart` — untouched this iteration.
+  - **P08-B14**: `_PushOnce` rewritten from clear-on-pop to a **per-frame
+    guard** (push at most once per frame, re-arm on next frame). The old
+    latch was structural: `go('/today')` re-selects the shell branch and
+    preserves the subtree, so the push future never completes and `_busy`
+    stuck true (a `ModalRoute.isCurrent` check could not help either — both
+    taps run before the Navigator rebuilds). The frame guard cannot latch
+    by construction: same-frame double-taps share one push; anything later
+    (pop, `go`-replace, or a throw) works again.
+- `presentation/bloc/today_state.dart` — untouched (m4 doc already fixed).
 
 Tests (`app/test/features/today/**`):
 
-- `p08_bugs_test.dart` — 4 skips removed; all 11 + 4 + 2 green.
-- `today_view_test.dart` — m5: the three-children test now also asserts
-  Sam's card is ≈170 px wide (measured after scrolling it into view;
-  `NestCard.at(2)` only exists once built).
-- Expectations updated for the ruling (Leo `done 1` / `1 of 4 quests` —
-  see below; scroll loops already follow render order).
+- `p08_bugs_test.dart` — 3 skips removed.
+- `today_repository_test.dart` — B5: the periods group now takes boundaries
+  as offsets from one local `storyDay` (mirrors the pinned anchor; kept
+  local because screen agents may not add shared helpers) — only the 25 Oct
+  BST→GMT edge keeps real calendar literals. The `summary counts` test pins
+  bag's approval to the previous London day itself instead of relying on
+  seed stamps (it broke when the seed moved bag's approval onto the story
+  day, `e972b46`).
+- Expectations reverted for the seed fix: Leo is **2 of 4** again
+  (`e972b46` approves `q-bag` on the story day, so it counts under the
+  ruling; the iteration-3 `done 1` / `1 of 4` expectations were updated
+  back). `SHARED_REQUEST.md` §8 marked resolved — no action needed.
 
-## Fix-item ledger (FIXES_2 refs)
+## Fix-item ledger (FIXES_3 refs)
 
-- **P08-B11 (major)** — fixed as above. Consequence worth stating: Leo now
-  renders **1 of 4 quests** (was "2 of 4"): `q-bag` repeats `daily` and its
-  approval is from the previous London day, so per the ruling it is "to do"
-  again. The design mock's "2 of 4" predates the ruling; the brief's
-  ORCHESTRATOR RULES + PERIODS section explicitly override design PNGs, and
-  DATA OVER MOCKS says the DB is right — the expectation (not the code) was
-  updated, in P08's tests and filed for the shared contract test
-  (`SHARED_REQUEST.md` §8, blocking).
-- **P08-B12 (minor)** — fixed as above; proof also asserts one system-back
-  returns to `Today's quests`.
-- **m4** (pendingCount doc) — fixed. **m5** (grid width assertion) — added.
-  **m10** (sofa arm) — commented.
-- **m6** ("Happy week: 0 days" for a childless family) — left: P08b header
-  copy is that loop's scope. **m8** (liveRegion re-announce) — still
-  deferred. **m9** (`happyDays` write-only) — kept as the seam (the ledger
-  allows keep-or-drop). **m11** (watcher count) — unchanged, not
-  user-visible. **B16/C9** (balance wrap) — accepted platform limit, note
-  only. **B21/C11/m7** (P08b) — that loop's scope.
-- **M1** (Bolt placeholder under Reduce Motion) — resolved on main
-  (`f6b02d8`); the regression pin passes; no filing needed. **M2/M3** —
-  process items per the brief ("handled by the loop and the orchestrator"),
-  not reported as findings.
-- **B11.5** (should the banner be period-scoped?) — kept family-wide so the
-  banner ≡ the P11 list; filed as `SHARED_REQUEST.md` §9 for a ruling.
+- **B1** (shared `leo.done == 2` red) — resolved on main by `e972b46`;
+  full suite green, §8 closed.
+- **B2/B13** (banner not period-scoped, major) — fixed as above; both
+  proofs green. Cross-screen coordinate in §9.
+- **B14** (push-guard latch, minor) — fixed as above; proof green
+  (tap → editor, `go('/today')`, tap → editor again).
+- **B3** (rollover re-eval) — shared pattern needed; filed as §11 (new).
+- **B5** (literal drift) — fixed as above. **B6** (still-art coverage) —
+  filed as §10 (shared test file). **B7** (§6) — still open (prioritise per
+  review). **B8/B9** — P08b loop scope, untouched. **B10/B11** — still
+  deferred seam/notes. **B12** (grid-width assert) — already present in
+  `today_view_test.dart` from iteration 3 (verified: `NestCard.at(2)` ≈
+  170 px); the finding looked at the copy test only.
+- Carried m6/m8 — still deferred (P08b scope / minor).
 
 ## Verification tails
 
 - `dart format .` → `350 files (0 changed)`.
 - `flutter analyze` → `No issues found!` (whole app).
-- `flutter test test/features/today` → `All tests passed!` (+86).
-- `flutter test` (full) → `+458 −1`; the single failure is the **shared**
-  `test/core/data/repositories_test.dart` (`leo.done == 2`, pre-ruling
-  number) — screen agents may not touch shared files (RULES §1), filed as
-  `SHARED_REQUEST.md` §8 (blocking).
+- `flutter test test/features/today` → `All tests passed!` (+99).
+- `flutter test` (full) → `All tests passed!` (+472).
 - `shot.sh` light + dark + empty from final sources (all newer; all three
-  read back). Every run warns `frame never stabilised in 25 s` — shared §6
-  (`DISABLE_ANIMATIONS=1` parses to false, Rive idle loop runs); captures
-  are complete. Two dark captures in a row showed another screen entirely
-  (K03 kid-home, then springboard) — parallel-loop contention on the shared
-  simulator; a third run captured the correct screen.
-- `compare.py`: light mean **5.20 %**, dark **4.84 %**. Residual is
-  data-driven: live date (`Fri 2 Oct` vs mock `Sat 4 Oct`), ruling-driven
-  Leo count/repeat labels, all 10 real rows vs the mock's 5, banner
-  balance-wrap. Dark: zero theme branches, everything flips.
+  read back). Every run warns `frame never stabilised in 25 s` (shared §6,
+  still open); captures are complete and correct.
+- `compare.py`: light mean **5.21 %**, dark **4.85 %**. Residual is
+  data-driven: live date, all 10 real rows vs the mock's 5, banner
+  balance-wrap.
+- Owner rules re-verified on the fresh shots: **BOTTOM EDGE** — sampled the
+  centre column to the physical edge: white `(255,255,255)` light /
+  `(31,28,46)` dark continuously (home pill only interruption) ✓;
+  **ALIGNMENT** — no horizontal geometry changed this iteration; gutters
+  visually consistent, review's numeric check (cards `20.00 → 369.67`) stands.
 
-VERDICT: FAIL
+VERDICT: PASS

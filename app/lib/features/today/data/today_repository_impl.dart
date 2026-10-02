@@ -1,5 +1,3 @@
-import 'package:drift/drift.dart';
-
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/london_time.dart';
 import 'package:nestling/core/data/seed.dart';
@@ -114,15 +112,32 @@ class TodayRepositoryImpl implements TodayRepository {
 
   @override
   Stream<int> watchPendingCount() {
-    // Family-wide: every `done_pending` completion, including "Anyone"
-    // quests — the same set P11 (`watchPendingApprovals`) lists.
-    return (_db.select(_db.questCompletions)..where(
-          (c) =>
-              c.familyId.equals(Seed.familyId) &
-              c.status.equals('done_pending'),
-        ))
-        .watch()
-        .map((rows) => rows.length);
+    // Period-scoped like the rows (P08-B13): only current-period
+    // `done_pending` completions count — a stale pending is "to do" again
+    // per the ruling, so the banner must not count it. Unknown quests
+    // default to `once` (count forever) so a pending on a removed quest is
+    // not silently dropped. NOTE: P11 must apply the same scoping or the
+    // Review list will disagree with this count (SHARED_REQUEST §9).
+    return combineLatest2(
+      _db.watchAllCompletions(Seed.familyId),
+      _db.watchActiveQuests(Seed.familyId),
+    ).map((parts) {
+      final rule = <String, String>{
+        for (final q in parts[1] as List<Quest>) q.id: q.repeatRule,
+      };
+      final now = _clock();
+      return (parts[0] as List<QuestCompletion>)
+          .where(
+            (c) =>
+                c.status == 'done_pending' &&
+                countsForCurrentPeriod(
+                  rule[c.questId] ?? 'once',
+                  c.createdAt,
+                  now,
+                ),
+          )
+          .length;
+    });
   }
 
   /// Pure row builder, shared with tests.

@@ -22,8 +22,8 @@ final class TodayState extends Equatable {
   final List<TodayItem> items;
   final List<ChildDaySummary> summaries;
 
-  /// Family-wide `done_pending` completions (the set P11 lists, including
-  /// "Anyone" quests) — not just the rows shown here.
+  /// Current-period `done_pending` completions, family-wide (rows' statuses
+  /// under the periods ruling, plus "Anyone" quests) — drives the banner.
   final int pendingCount;
   final String parentName;
 
