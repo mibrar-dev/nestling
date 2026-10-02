@@ -1,308 +1,256 @@
-# P05 · Add children — QA code review (STAGE 4, iteration 3)
+# P05 · Add children — QA code review (STAGE 4, iteration 4)
 
 Scope reviewed: `git diff main...HEAD` + the working tree for `screen/P05`
-(RULES §1 paths only). No product code was edited in this stage; one throwaway
-ordering probe (`app/test/features/family/zz_probe_tmp_test.dart`) was created
-and deleted.
+(RULES §1 paths only). No product code was edited in this stage.
 
 Reviewed against `docs/ARCHITECTURE.md`, `docs/screens/RULES.md`,
 `docs/DESIGN_SPEC.md` §5 P05, `docs/design/SPACING_SPEC.md`, the design system
-(including what landed from main in `7eaa1f7`), both design PNGs, the HTML
-source, and `docs/screens/P05/ORCHESTRATOR_NOTES.md` (all items checked below).
+(including the `NestChip` shrink-wrap fix that landed from main in `7eaa1f7`),
+both design PNGs, the HTML source, and
+`docs/screens/P05/ORCHESTRATOR_NOTES.md` (all items checked below).
 
 Gates re-run independently in this stage:
 
 ```
 dart format --set-exit-if-changed .   → 362 files, 0 changed
 flutter analyze                        → No issues found!   (full app)
-flutter test test/features/family     → 00:04 +108: All tests passed!
-flutter test (full suite)              → 1 failure, in a SHARED file:
-   app/test/app/router_push_test.dart: "push between top-level onboarding
-   routes, pop returns" (asserts P05's pre-build placeholder title)
+flutter test test/features/family     → 00:05 +116: All tests passed!
+flutter test (full suite)              → 00:12 +642 -1: the one failure is the
+                                         shared app/test/app/router_push_test.dart
+                                         (see "Shared gate status" — outside RULES §1)
 grep -c "skip:" test/features/family/*.dart → 0 / 0
 git status → features/family/{presentation,data}, test/features/family,
-             docs/screens/P05   (all RULES §1; nothing in core or app/)
+             docs/screens/P05   (all RULES §1; nothing in core, app/ or app/test/app)
 ```
 
-**Result: 1 blocker (merge gate, shared file, outside RULES §1), 1 major,
-4 minor, 0 findings against the P05 diff's own quality. The iteration-2 major
-(P05-BUG-8, the grid re-applying the device insets) is fixed and proved; the
-new major is the standing CHILD ORDER ruling, which this screen still does not
-satisfy — and which I have now proved is fixable inside RULES §1.**
+**Result: 0 blocker, 0 major, 3 minor against the P05 diff. Every iteration-3
+finding is closed and proved, and the mandatory CHILD ORDER item is satisfied
+inside RULES §1. VERDICT: PASS.**
+
+The one red test in the full run is in a shared file this worktree may not
+edit, arrived from main, and predates every P05 iteration — it is reported
+below for the orchestrator but is not counted against this diff (the loop and
+the orchestrator own shared batching and merge order).
 
 ---
 
 ## Findings
 
-### 1. BLOCKER (repo gate, not a P05 code defect) — the full `flutter test` run is red on a shared test that asserts P05's placeholder copy
+### 1. MINOR — the rowid interim carries a `VACUUM` caveat worth one line of documentation
 
-`app/test/app/router_push_test.dart:104` passes `showsFrom: 'P05 Add children'`.
-P05 is no longer the placeholder, so the assertion at
-`router_push_test.dart:37` (`find.text(showsFrom)` is non-empty) fails.
+`app/lib/features/family/data/family_repository_impl.dart:50-62`
+(`_watchChildrenInAddedOrder`).
 
-I reproduced it here:
+The interim is correct for every path the app exercises: `Seed.demo()` /
+`Seed.onboardingKids()` insert Maya then Leo (rowid order → `[Maya, Leo]`), a
+child added at runtime takes `max(rowid)+1` and therefore sorts last, and a
+deleted child does not disturb the survivors' relative order. The one caveat is
+SQLite's documented behaviour for tables without an `INTEGER PRIMARY KEY`:
+`VACUUM` **may** renumber rowids. Drift does not run `VACUUM`, so this is
+theoretical today — and the filed durable fix (`createdAt`) removes it
+entirely.
 
-```
-00:01 +3 -1: push/pop contract push between top-level onboarding routes,
-pop returns [E]
-Expected: true   Actual: <false>   … router_push_test.dart line 37
-```
+Fix: one clause in the doc comment, e.g. *"rowid is the insertion proxy; the
+durable fix is the shared `createdAt` column — see SHARED_REQUEST.md, which
+also retires the VACUUM-renumbering caveat"*. Then delete this helper in the
+same commit that lands the durable fix.
 
-Not attributable to the P05 diff, and not fixable by a screen agent:
+### 2. MINOR — the chip row now depends entirely on the shared component, and the design's single row is still only provable on-device
 
-* `'P05 Add children'` appears nowhere in `app/lib` — only in that test;
-* the file arrived from **main** in `7eaa1f7` ("Shared requests batch 1 …
-  + contract tests"), written while P05 was still a placeholder;
-* `app/test/app/**` and `app/lib/app/**` are both outside RULES §1, and this
-  worktree has never touched them (`git status` on both paths is empty).
+`app/lib/features/family/presentation/widgets/add_child_form_card.dart:75-86`.
 
-It is correctly escalated in `SHARED_REQUEST.md:171-206` with the right fix
-(`showsFrom: 'Who’s in your nest?'` — note the U+2019 now in the view). I
-record it here because the suite must be green before this branch lands
-(RULES §7), and because a reviewer reading only the stage notes would
-otherwise be told the suite passes. It does not change the P05-diff verdict;
-it needs a shared batch.
+Removing the four `IntrinsicWidth` wrappers was right (the shared `NestChip`
+shrink-wraps by construction since `7eaa1f7`, and the wrapper's "until the
+shared fix lands" comment had become false). The consequence is that P05's
+chip geometry is now whatever the design system produces: the BUG-1 proofs
+assert the *mechanism* — no box claims the `Wrap` run, at most two rows, the
+block stays ≤100 px — which is font-robust but stops short of the design's
+single row, because the test fallback font is ~30 % wider than Nunito.
 
-### 2. MAJOR — the CHILD ORDER ruling is not satisfied, and the interim it asks for is implementable inside RULES §1
+What is still owed, and by whom: the shared chip's tap box is 44 tall against
+the design's 32 visual pill (`nest_chip.dart` — `Padding(vertical: 4.5)` around
+a 35 px pill), which the iteration-2 UI check measured as a +12 px row drift.
+That is core, it is already in `SHARED_REQUEST.md` #3, and P05 must not patch
+it. The width half of that request is marked LANDED ✓.
 
-`app/lib/features/family/data/family_repository_impl.dart:37-41` (consumes
-`_db.watchChildren(...)`, which orders by `nickname` at
-`app/lib/core/data/app_database.dart:310`) and
-`app/lib/features/family/presentation/widgets/kid_card_grid.dart:13-16` (the
-`TODO(P05)` deferral).
+Fix: none in P05. The iteration-4 UI check re-asserts the single row on the
+simulator, which is the only place it can be asserted.
 
-`ORCHESTRATOR_NOTES.md` iteration 3, item 2, is mandatory and says: children are
-always listed **in the order they were added (Maya first, then Leo), never
-alphabetically — in every screen and repository**; *"if the children table
-lacks a usable column, file it in SHARED_REQUEST.md **and order by rowid
-meanwhile**"*. The shared request was filed (correct — it is the durable fix,
-and the table genuinely has no `createdAt`: `app_database.dart:51-81`). But the
-interim ordering was not implemented, and `2_build.md:75-79` asserts it *"cannot
-be done in RULES §1 … so no local sort can recover insertion order"*.
+### 3. MINOR — stage-note counts have drifted between stages (documentation only)
 
-**That claim is wrong, and I verified the fix end to end.** The family
-repository impl *is* an allowed path (RULES §1: `domain/** + data/**`) and is
-handed the database by DI (`app/lib/features/family/family_di.dart:13` →
-`FamilyRepositoryImpl(db: sl<AppDatabase>())`), so it can run its own ordered
-query instead of the core helper. Drift 2.35.1's `OrderingTerm` takes a plain
-`Expression` and `package:drift/drift.dart` exports `CustomExpression`, so:
+`docs/screens/P05/2_build.md:79` says "110/110 in `test/features/family/`";
+the test stage's later run and mine both report **116** (the build stage wrote
+its number before the test stage added its own proofs). `3_test.md:56` is
+correct.
 
-```dart
-// app/lib/features/family/data/family_repository_impl.dart  (data/** = RULES §1)
-Stream<List<ChildrenData>> _watchChildrenInAddedOrder() {
-  return (_db.select(_db.children)
-        ..where((c) => c.familyId.equals(Seed.familyId))
-        ..orderBy([
-          (c) => OrderingTerm(
-            expression: CustomExpression<Object>('rowid'),
-          ),
-        ]))
-      .watch();
-}
-```
+Fix: one number in the build notes; nothing else.
 
-Verification (throwaway probe, since deleted):
+### Carried, accepted with stated reasons (unchanged this iteration — listed so the delta stays explicit)
 
-* `flutter analyze` on the probe: **no errors** — `OrderingTerm(expression:
-  CustomExpression<Object>('rowid'))` type-checks inside the generated
-  `orderBy([(c) => …])` form.
-* Runtime against the seeded demo DB: `ROWID ORDER: [Maya, Leo]` — the ruling's
-  order, and the design PNG's order. (The nickname-ordered stream the screen
-  consumes today yields `[Leo, Maya]`; the iteration-2 UI stage measured the
-  rendered result as "Leo | Maya" against a "Maya | Leo" mock.)
-
-Impact if left as is: the screen renders the roster in the one order the
-ruling forbids, against the design mock, and the fix is one query away. Cost
-of doing it in-feature: a short-lived duplicate of a query the shared fix will
-retire — which is precisely what an interim is for.
-
-Fix: implement the rowid-ordered watch above (keep the filed shared request as
-the permanent fix), drop the `TODO(P05)` deferral in `kid_card_grid.dart`, and
-replace the order-pinning test at
-`add_children_test.dart:1487-1501` (finding 4).
-
-### 3. MINOR — the `IntrinsicWidth` chip workaround is now dead weight, and its comment (and one test note) claim a bug that main already fixed
-
-`app/lib/features/family/presentation/widgets/add_child_form_card.dart:78-90`
-— *"until the shared fix lands"* — plus `docs/screens/P05/3_test.md:136-138`
-(*"`NestChip` full-width `Center` (`nest_chip.dart:74`) is still unfixed"*).
-
-The shared fix landed in `7eaa1f7`: `app/lib/core/design_system/components/nest_chip.dart:65-108`
-no longer has the greedy `Center` at all — the interactive branch is
-`Material → InkWell → ConstrainedBox(minWidth 44) → Padding(4.5) → Ink(pill)`,
-which shrink-wraps by construction (the comment in that file names P05 as the
-motivation). The wrappers are now redundant work (an intrinsic-dimension pass
-per chip per layout) guarding nothing, and both comments mislead the next
-reader — and P15, which imports this feature.
-
-Fix: drop the four `IntrinsicWidth` wrappers (keep the `Semantics` group),
-re-run the BUG-1 geometry proofs — they assert the *mechanism* ("no box claims
-the run", "at most two rows") and must still pass — and delete the stale claim
-from `3_test.md`. The remaining chip question is the DS one already filed: the
-44-tall tap box against the design's 32 visual (+12 in the UI check), which is
-shared, not P05.
-
-### 4. MINOR — a test pins the alphabetical order the ruling forbids
-
-`app/test/features/family/add_children_test.dart:1487-1501`
-(`'roster order comes from the database (nickname order)'` asserts
-`leo.left < maya.left`).
-
-It passes today *because* the ruling is unsatisfied, and it will fail the day
-the shared fix lands. The new invariant tests added this iteration
-("the grid renders the bloc's roster verbatim", "the bloc never reorders") are
-the right shape; this older one contradicts them.
-
-Fix: delete it, or invert it to `maya.left < leo.left` when finding 2's interim
-lands.
-
-### 5. MINOR — `cardH` reserves 10 px of pencil clearance the design does not have, against a design with zero vertical slack
-
-`app/lib/features/family/presentation/widgets/kid_card_grid.dart:24-31` — the
-computed height ends in a trailing `NestSpacing.gap10` "pencil clearance".
-
-The design does not have it: `.kid-card { padding: 12px 10px 10px }` over
-44 + 2 + 24 + 4 + 18 = ~113/114 tall, and `.edit` is `position: absolute` —
-the 44 px pencil overlays and adds no height (`5_ui.md` measured app 124 vs
-design ~113). This is now the largest P05-local vertical error left, and it
-matters more than 11 px: the iteration-2 UI stage computed that the design
-fits with **zero slack** (content ends 645, CTA top 644), so P05's 10 px plus
-the DS chip's +12 push the closing note "We only ask for an age range so quests
-suit them." to or under the CTA bar. The UI stage flagged it as optional; the
-next UI check will show it.
-
-Fix: drop the trailing `gap10` from `cardH` (the `Positioned` pencil needs 45 px
-of headroom inside a 124 px card and more than that inside a 114 px one, so
-keep the pencil assertion in the geometry test that already exists).
-
-### 6. MINOR — the build notes' feasibility claim is wrong (documentation, but it is what will be read next)
-
-`docs/screens/P05/2_build.md:75-79` and `3_test.md:130-135` both assert the
-CHILD ORDER ruling cannot be satisfied inside RULES §1. Per finding 2 it can.
-Stage notes are part of the screen's record, and a wrong feasibility claim
-here is what caused a whole iteration to defer.
-
-Fix: correct both to match finding 2 (the shared request stays; the interim is
-rowid ordering inside `features/family/data/`).
-
-### 7. MINOR — carried from iteration 2, accepted with stated reasons (no new action, listed so the delta is explicit)
-
-* **Iteration-2 finding 4** — a "Continue" tapped inside the save frame is
-  dropped with no feedback: intended; buttons disable for the whole save and
-  the design has no "still saving" state.
-* **Finding 5** — `FamilyAddChildRequested.onSaved` still carries navigation
-  into the bloc: deferred until P15 lands (changing the signature would touch
-  a shared member).
-* **Finding 6** — `presentation/widgets/child_display.dart` holds no widgets:
-  accepted (a feature-private mapper; ARCHITECTURE forbids extra *folders*).
-* **Finding 9** — the failure panel shows `error.toString()`: app-wide pattern
-  (P08 identical); orchestrator decision if it should change.
-* **Finding 10** — `Positioned(top: 1, right: 1)`: signed off as a faithful
-  mirror of `.edit { top: 1px }`; no 1 px step exists in `NestSpacing`.
+* **Dropped "Continue" in the save frame** — intended: the buttons disable for
+  the whole save, the window is one frame, and the design has no "still
+  saving" state.
+* **`FamilyAddChildRequested.onSaved`** still carries navigation into the bloc —
+  deferred until P15 lands (changing the signature would touch a member two
+  features share). The double-fire path stays closed by the
+  `saveInProgress` guard.
+* **`presentation/widgets/child_display.dart` holds no widgets** — accepted: a
+  feature-private mapper; ARCHITECTURE forbids extra *folders*, not files.
+* **Failure panel shows `error.toString()`** — app-wide pattern (P08
+  identical); an orchestrator decision if it should change.
+* **`Positioned(top: 1, right: 1)`** — signed off as a faithful mirror of
+  `.edit { top: 1px }`; no 1 px step exists in `NestSpacing`.
 
 ---
 
-## Iteration-2 findings — closed
+## Iteration-3 findings — all closed
 
 | # | Finding | State |
 |---|---|---|
-| 1 | MAJOR · grid re-applied the device insets (P05-BUG-8), grid +47 / form +89 | **fixed** — `padding: EdgeInsets.zero` on the inner `GridView.builder` (`kid_card_grid.dart:36-40`), with an un-skipped proof that measures exactly 14.0/12.0 with 47/34 insets present, plus a reachability test that scrolls to the end with the closing note above the CTA. This closes the mystery I flagged in iteration 2 ("a `const SizedBox(height: 14)` cannot measure 60 on a device") — the UI stage traced it to the nested scroll view re-applying the ambient MediaQuery insets as its own `SliverPadding`, exactly as suspected. |
-| 2 | MINOR · single-row chips only provable on the simulator | **resolved** — the shared chip fix landed; see finding 3 for the leftover wrapper. |
-| 3 | MINOR · proof name promised no-scroll visibility | **fixed** — renamed to `… are selectable after scrolling`, body unchanged. |
-| 7 | MINOR · `copyWith` could never clear `lastSavedNickname` | **fixed** — `_keepLastSavedNickname` sentinel (`family_state.dart:11-14, 57, 71-73`). |
-| 8 | MINOR · unknown `avatar_colour` invisible | **fixed** — `debugPrint('P05 unknown avatar colour: $raw')` with the neutral fallback kept (`child_display.dart:11-22`). |
-| 4/5/6/9/10 | accepted with reasons | carried as finding 7 above. |
+| 2 | MAJOR · CHILD ORDER ruling unsatisfied; interim feasible in `data/**` | **fixed** — `FamilyRepositoryImpl.watchChildren` now runs its own rowid-ordered query (`family_repository_impl.dart:38-41, 50-62`), exactly the shape I verified, keeping the repository interface untouched. Proved by two decisive tests: `the seeded roster reads Maya, then Leo` (via the `onboarding_kids` seed the UI check uses, with the note that alphabetical would put Leo first) and `a child added in this session appends to the end` — `'Ollie'` sorts *between* Leo and Maya alphabetically, so that test can only pass on insertion order. The `TODO(P05)` deferral in the grid is replaced by a comment stating the ruling is satisfied. The shared `createdAt` request stays open as the durable fix. |
+| 3 | MINOR · dead `IntrinsicWidth` wrappers + stale comment | **fixed** — all four removed, comment replaced; the BUG-1 geometry proofs still pass against the fixed component. |
+| 4 | MINOR · a test pinned the alphabetical order | **fixed** — flipped to the ruling (`maya.left < leo.left`), so it now proves the fix; a rename test ("rowid order survives a rename; nickname order would flip") guards it. |
+| 5 | MINOR · `cardH` reserved 10 px the design does not have | **fixed** — `cardH = 22 + 44 + 2 + 24 + 6 + 18 = 116` at scale 1.0, matching the design's measured 116 (the trailing `gap10` pencil clearance is gone — the 44 px pencil is absolutely positioned and adds no height) and the name→age gap is now the HTML's `gap: 2 + margin-top: 4 = 6` via the existing `gap6` token. Proved by an un-skipped BUG-10 bound (≤118) and the kept pencil-containment assertion, at 1.0 and 1.3×, 320–430 px. |
+| 6 | MINOR · stage notes claimed the interim was impossible | **fixed** — corrected in `2_build.md` and `3_test.md`. |
+| 1 | BLOCKER (shared) · `router_push_test` red | unchanged — see below. |
 
-## Orchestrator items (`ORCHESTRATOR_NOTES.md`, iteration 3 — all mandatory)
+---
 
-1. **Grid inherits the MediaQuery insets → `padding: EdgeInsets.zero`; cards
-   ~16 px under the subtitle, "Add a child" top ≈ y 399.** Done
-   (`kid_card_grid.dart:36-40`), proved with insets in the test, and the UI
-   stage re-measures this iteration. No local patch of the shared header, per
-   item 3 of the previous block ✓.
-2. **CHILD ORDER (creation order, never alphabetical; order by rowid
-   meanwhile).** **Not satisfied — finding 2.** The escalation is right; the
-   interim is not implemented and is feasible in an allowed path.
-3. **Copy: curly `’` (U+2019).** Done (`add_children_view.dart:198`), pinned by
-   a code-unit test with a guard against any remaining ASCII `'`. I re-read
-   every P05 literal against the HTML entities (`&rsquo;`, `&mdash;`,
-   `&ndash;`): all other strings were already character-exact, including
-   `Avatar colour` (UK) and the em dash.
-4. **Nickname field: focused ring = leaf token; unfocused launch state is fine.**
-   Done (`add_children_test.dart:1946+`: unfocused wrapper has no `boxShadow`;
-   focused equals `NestShadows.focusRing(tokens.leafTint, tokens.leaf)` with
-   the `focusedBorder` on `tokens.leaf`; unfocusing removes both), and no
-   autofocus was added.
+## Orchestrator items (`ORCHESTRATOR_NOTES.md` — all mandatory)
+
+1. **Children order — fix in this feature's repository (order by
+   creation/rowid) and add a test asserting Maya is first.** Done, inside
+   `features/family/data/**` (RULES §1), with two decisive order proofs (see
+   the table above). The grid now renders `Maya | Leo`, matching both the
+   ruling and the design PNG.
+2. **"Add a child" card top ≈ y 399 (app was ≈ 407); the gap between the
+   kid-card row and the card must be 12 px.** Satisfied by construction: the
+   116 px card (`kid_card_grid.dart:26-35`) is exactly 8 px shorter than the
+   previous 124, and the gap stays the HTML's `margin-top: 12`
+   (`NestSpacing.s3`, `add_children_view.dart:214`). No new magic value was
+   introduced to hit the number.
+3. **Inside-card cumulative drift (+4 Nickname, +8 field, +13 chips, +20
+   Avatar colour).** Diagnosed correctly and escalated as shared, and it is not
+   P05-fixable: every P05 gap and row height is a literal `SizedBox` or a DS
+   token measured exactly at the HTML value, so none of them can grow on
+   device. The residual is Flutter applying `TextStyle.height` to the *font's*
+   natural line height (Inter ≈ 1.21 em, Nunito ≈ 1.3 em) rather than to a fixed
+   CSS box — which is why the test fallback font (1.0 em) measures exact while
+   the runtime-fetched families are ~+4–5 px per row and the ladder compounds
+   down the card. Filed in `SHARED_REQUEST.md` ("residual band drift … shared
+   typography, app-wide", blocks: no for P05) with the three real options
+   (`TextHeightBehavior`/strut, bundled families with matching metrics, or
+   accept the delta). I re-derived the arithmetic and agree with it.
+4. **Earlier mandatory items still hold**: chips in one left-aligned row with
+   8 px gaps; header not patched locally (the shared compact nav is consumed);
+   bottom panel to the physical edge and 20 px gutters aligned across
+   head/grid/form/CTA/caption; curly `’` (U+2019) copy pinned by a code-unit
+   guard; focused-ring tokens pinned by test; the field still launches
+   unfocused (no autofocus invented).
 
 ---
 
 ## Confirmed clean (no action)
 
-* **RULES §1 scope.** `git status` touches only
-  `features/family/presentation/**`, `features/family/data/**` (used once, for
-  `ageYears`), `test/features/family/**`, `docs/screens/P05/**`. Nothing in
-  `app/lib/core/**`, `app/lib/app/**`, `app/test/app/**`, another feature, or
-  `tools/screens/**`. `analysis_options.yaml` untouched; no test skipped.
+* **RULES §1 scope.** Only `features/family/presentation/**`,
+  `features/family/data/**` (the rowid query — allowed, and the data layer is
+  the right owner for ordering), `test/features/family/**` and
+  `docs/screens/P05/**`. Nothing in `app/lib/core/**`, `app/lib/app/**`,
+  `app/test/app/**`, another feature, or `tools/screens/**`;
+  `analysis_options.yaml` untouched; no test skipped, ignored or weakened.
 * **ARCHITECTURE.md.** Feature-first layout intact; one bloc per feature; one
-  view per route; feature-private widgets; no use-case classes, no new folders;
-  the route still provides the bloc and the view never re-creates it. The
+  view per route; feature-private widgets; no use-case classes and no new
+  folders. The repository interface is untouched (ordering is an
+  implementation detail, exactly where `ARCHITECTURE.md` puts it), DI is
+  unchanged (`family_di.dart:13` still passes the same database), and the
   shared bloc surface stays additive (`lastSavedNickname` only) with no
-  renames or signature changes, so P15 merges cleanly.
-* **Design-system usage.** `NestStatusBar`, `NestNavBar`, `NestCard`,
-  `NestAvatar`, `NestTextField`, `NestChip`, `NestButton`, `NestBottomCta`,
-  `NestIcon` — nothing re-implemented, and the new code consumes the *fixed*
-  shared chip rather than fighting it. Colours only from `context.nest`, sizes
-  only from `NestSpacing` / `NestDevice` / `NestAvatarSize` / DS props, type
-  only from `NestType`; the only raw value left is the accepted 1 px pencil
-  offset (finding 7).
-* **Copy / UK spelling / spec §5 P05.** Character-exact against the HTML after
-  decoding entities; "Who's in your nest?" now carries U+2019, the subtitle
-  U+2014, the bands and ages U+2013, "Avatar colour" never "color", and no
-  ellipsis or non-breaking space is needed by this screen's copy. Age bands
-  and avatar colours come from the seeded rows (`seed.dart:152-177`).
-* **Owner rules.** Bottom edge: `NestBottomCta` last in the column, its own
+  renames or signature changes — so P15 still merges cleanly.
+* **Design-system usage.** The new code *consumes* the fixed shared `NestChip`
+  instead of fighting it, and the only raw value in the diff is the accepted
+  `rowid` identifier (a SQLite built-in, not a colour or size). Colours from
+  `context.nest`, sizes from `NestSpacing` / `NestDevice` /
+  `NestAvatarSize`, type from `NestType`; `EdgeInsets.zero` on the grid is the
+  documented fix for P05-BUG-8, not a spacing value.
+* **Copy / UK spelling / spec §5 P05.** Re-verified character-by-character
+  against the HTML entities: h1 with U+2019, subtitle with U+2014, bands and
+  card ages with U+2013 (composed from the stored hyphen via
+  `displayAgeBand`), "Avatar colour" never "color", no ASCII hyphen or
+  apostrophe anywhere on screen. No copy changed this iteration and the guards
+  still hold.
+* **DATA OVER MOCKS + CHILD ORDER.** Age bands, avatar colours and age text
+  come from the seeded rows; the roster order comes from the repository and is
+  now creation order. The screen invents nothing.
+* **Owner rules.** Bottom edge: `NestBottomCta` last in the column with its own
   `SafeArea(top: false)` and `tokens.surface` over a `tokens.paper` Scaffold —
-  no strip in light or dark (UI stage: CTA top 645 vs design 644, identical
-  geometry). Alignment: one `NestSpacing.padSide` gutter on the `ListView`, so
-  head, cards, form card, CTA buttons and caption share the same edges; the
-  grid column is computed `(W − 40 − 10)/2` per `SPACING_SPEC` §10.2 and the
-  inner grid no longer double-counts insets (finding 1 closed).
+  no strip under the bar or around the home indicator in light or dark.
+  Alignment: one `NestSpacing.padSide` gutter on the `ListView`, so head, cards,
+  form card, CTA buttons and caption share the same left/right edges at
+  320/390/430; the grid column is computed `(W − 40 − 10)/2`
+  (`SPACING_SPEC` §10.2) and the pencil stays inside its own card now that the
+  card is 116.
 * **Accessibility.** h1 exposed as a header landmark; `Edit <nickname>` per
   pencil; chip and swatch groups are labelled containers with reachable
-  children; swatches are `Material` + `InkWell(CircleBorder)` with
-  `selected` semantics (no raw `GestureDetector` left in product code); the
-  focus ring is token-driven and now pinned by test; tap targets 44/44/44/48/52.
+  children; swatches are `Material` + `InkWell(CircleBorder)` with `selected`
+  semantics (no raw `GestureDetector` left in product code); the nickname
+  field's focus ring is token-driven and pinned; tap targets 44/44/44/48/52.
 * **Error handling.** Spinner for `initial|loading`; failure panel + `Try again`
-  that releases the failed load before re-subscribing; empty nickname and
-  >24 chars rejected inline with no repository call; repository throw → inline
-  message + `debugPrint`, form preserved; mid-save typing survives the
-  conditional clear.
+  that releases the failed load before re-subscribing (`_closeOnError`); empty
+  nickname and >24 chars rejected inline with no repository call; repository
+  throw → inline message + `debugPrint` with the form preserved; typing during
+  a save survives the conditional clear.
 * **Resource hygiene / performance.** `TextEditingController` + `FocusNode`
   disposed; the only stream is `emit.forEach` and its error path terminates the
-  subscription; no `Timer`, `AnimationController` or manual `Listener`. No
-  rebuild storm — one `BlocBuilder` over a short list per keystroke, all
-  `const`-able widgets are `const`. (Finding 3 also removes an
-  intrinsic-layout pass per chip.)
+  subscription; no `Timer`, `AnimationController` or manual `Listener`. One
+  `BlocBuilder` over a short list per keystroke; all `const`-able widgets are
+  `const`; this iteration *removes* an intrinsic-layout pass per chip, and the
+  rowid query replaces rather than adds to the core watch it was already
+  paying for.
 * **Children's Code.** Parent-only screen; no analytics, ads, telemetry or
-  network calls; no child data logged; nothing crosses into kid mode and
+  network calls; no child data logged (the one `debugPrint` logs an
+  unrecognised *colour token*, never a name); nothing crosses into kid mode and
   kid-mode deep links to `/add-children` redirect to the parental gate. Pip is
-  correctly N/A (initial-letter avatars marked `aria-hidden` in the design).
-* **Tests.** 108 in `test/features/family/`, zero skips, no weakened bodies,
-  every app-pumping test ends with `disposeApp`; nine new tests this iteration
-  cover the COPY ruling by code unit, the CHILD ORDER invariants, the focused
-  ring, and the BUG-8 reachability symptom.
+  correctly N/A — the design shows initial-letter avatars marked `aria-hidden`,
+  not Pip.
+* **Tests.** 116 in `test/features/family/`, zero skips, no tautological bodies
+  (the two order proofs discriminate insertion order from alphabetical on
+  purpose), every app-pumping test ends with `disposeApp`. The BUG-9/BUG-10
+  proofs this iteration are un-skipped and green, and the pre-existing
+  chip/owner-rule/semantics/navigation suites are unaffected.
+
+---
+
+## Shared gate status (not a P05 finding — needs an orchestrator batch)
+
+`app/test/app/router_push_test.dart:104` passes `showsFrom: 'P05 Add children'`,
+the title P05's *placeholder* rendered. The real screen shows
+`Who’s in your nest?`, so the assertion at `router_push_test.dart:37` fails and
+the full run stays red (`00:12 +642 -1`, reproduced here independently).
+
+* `'P05 Add children'` appears nowhere in `app/lib` — only in that test.
+* The file arrived from **main** in `7eaa1f7`, written while P05 was still a
+  placeholder; it is not a P05 regression.
+* `app/test/app/**` is outside RULES §1, so no screen agent can fix it.
+
+Fix is one string: `showsFrom: 'Who’s in your nest?'` (`showsTo: 'P06 Pocket
+money setup'` is still correct). Filed as BLOCKING in `SHARED_REQUEST.md`
+since iteration 3 and untouched since. It does not count against this diff —
+shared batching and merge order are the loop's and the orchestrator's — but
+the branch cannot land green until it is applied.
+
+Also still owed by the design system (both filed, neither P05's to patch):
+the chip tap box 44 tall against the design's 32 visual pill (~+12 px row
+drift), and the app-wide typography line-box delta (~+4–5 px per text row on
+device) that bounds every screen's achievable drift percentage.
 
 ## For the next stages (not findings)
 
-* **Re-shoot this iteration** (stage 5) with `SEED=onboarding_kids`; the two
-  chip/grid fixes should move band-2…5 drift substantially. Expect the ~11 px
-  card-height excess (finding 5) and the DS chip's ~12 px tap-box excess
-  (finding 3, shared) to be what remains.
-* **If the orchestrator wants the card order right before the shared batch
-  lands**, finding 2 is a one-query change inside an allowed path — it does not
-  need the schema decision first.
-* **Do not re-open the `NestChip` width question in P05**: it is fixed on main;
-  only the shared 44-tall tap box vs the design's 32 visual is still owed, and
-  it belongs to `SHARED_REQUEST.md` #3.
+* **Iteration-4 UI check**: re-shoot with `SEED=onboarding_kids`; expect band
+  2–5 drift to drop materially now that the cards are 116 and the form card
+  top lands at ≈399. What remains should be the two shared items above.
+* **Do not chase the inside-card ladder in P05**: every gap is already a
+  literal and spec-exact; further nudging would mean hard-coding pixel offsets
+  against a shared type-scale effect.
+* **When the shared `createdAt` fix lands**, delete
+  `_watchChildrenInAddedOrder` in the same change (finding 1).
 
-VERDICT: FAIL
+VERDICT: PASS

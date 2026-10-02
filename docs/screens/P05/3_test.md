@@ -1,143 +1,113 @@
-# P05 · Add children — test notes (STAGE 3, iteration 3)
+# P05 · Add children — test notes (STAGE 3, iteration 4)
 
-Route `/add-children`, feature `family`, parent mode. All changes are in
-`app/test/features/family/add_children_test.dart` — no screen code touched.
+Route `/add-children`, feature `family`, parent mode. Changes are confined to
+`app/test/features/family/add_children_test.dart` plus these notes — no screen
+code touched.
 
-Two new orchestrator rulings arrived this iteration (**CHILD ORDER**, **COPY**)
-plus four mandatory items in `ORCHESTRATOR_NOTES.md`. All four are now covered
-by tests. P05's own suite is fully green (108 tests), but **the full
-`flutter test` run is red on one shared test** that asserts P05's pre-build
-placeholder copy — outside RULES §1, filed in `SHARED_REQUEST.md`. Hence FAIL.
+Iteration 4 is the loop's last iteration and its brief is "be exact". The
+orchestrator's four targets are addressed; the build stage's fixes (rowid child
+order, 116 px cards, the `IntrinsicWidth` removal now that the shared chip is
+fixed) are all re-proved. **P05's own suite is green (116 tests).** The full
+`flutter test` run is still red on the one shared test filed as BLOCKING in
+iteration 3, which arrived from main and is outside RULES §1 — hence FAIL.
 
-## Tests added (9, in `add_children_test.dart`)
+## Tests added / rewritten (9 added; 3 superseded)
 
-### COPY — character-exact against the HTML (ruling + note 3)
+### CHILD ORDER ruling — now asserted directly (note 1)
 
-Compared every P05 string with
-`design/html-source/screens/P05-add-children.html` after decoding the entities
-(`&rsquo;` → U+2019, `&mdash;` → U+2014, `&ndash;` → U+2013). The only strings
-the app does not hold as literals are composed from the database band
-(`Age 7–9`, `4–6`…) via `displayAgeBand`; all other literals match exactly, and
-the iteration-3 build's `’` fix is confirmed in the rendered output. Pinned by:
+The build implemented the interim `rowid` ordering in
+`family_repository_impl.dart`, and flipped one assertion to `maya.left <
+leo.left`. I replaced that single assertion — and my iteration-3 invariant
+group — with a five-test group that proves the ruling itself:
 
-1. the h1 is `’` (U+2019), asserted by code unit, with a guard that no ASCII
-   `'` remains;
-2. the subtitle keeps the em dash (U+2014), `findsNothing` for any ASCII
-   hyphen anywhere on screen, `Avatar colour` present and `color` absent (UK
-   spelling);
-3. every chip label and both card ages use en dashes (U+2013) and the hyphen
-   forms never render;
-4. a pure unit guard on the conversion boundary: the seed stores `7-9`, the UI
-   shows `7–9`, `13+` passes through unchanged.
+| Test | What it rules out |
+|---|---|
+| the seeded roster reads **Maya, then Leo** (on `onboarding_kids`) | alphabetical order (Leo < Maya is the trap) |
+| a child added in this session **appends**: `[Maya, Leo, Ollie]` | sorted-into-place — 'Ollie' lands between Leo and Maya alphabetically, so only insertion order gives this |
+| **renaming** Maya → 'Zoe' keeps `[Zoe, Leo]` | nickname ordering: 'Zoe' would sort *after* Leo and flip the roster |
+| the grid renders the bloc's roster **verbatim, unsorted** | a local re-sort in the grid |
+| the bloc never reorders (fed both orders) | a sort in the bloc |
 
-### CHILD ORDER — the grid follows the repository (ruling + note 2)
+The rename test is the decisive one for the durable fix: it passes on the
+`rowid` interim and would fail on any nickname-based ordering, so it keeps
+proving the ruling after the shared `createdAt` column lands. Two harness
+details that cost a cycle and are now written down: `pumpEventQueue()` hangs in
+`testWidgets` (its `Future.delayed` never fires in the fake-async zone — drive
+the clock with `tester.pump()` instead), and `FamilyBloc` is a GetIt *factory*,
+so the rendered order must be read from `BlocProvider.of` on the grid.
 
-P05 must show children in the order they were added and must never sort
-locally. Core still orders `watchChildren` by `nickname`
-(`app_database.dart:310`) and the table has no creation marker, so the ruling
-cannot be satisfied inside RULES §1 (blocking shared request filed by the build
-stage). The tests therefore pin the invariant that makes the ruling true the
-moment the shared fix lands, without hard-coding either order:
+### Form-card rhythm — every gap and row height vs the HTML (note 3)
 
-5. the grid renders the bloc's roster verbatim (reading order: row by row) —
-   passes today with Leo-before-Maya and will pass unchanged with
-   Maya-before-Leo;
-6. a child saved in-test lands exactly where the repository puts it (3 cards, 2
-   rows — also exercises the row-major reading order);
-7. the bloc never reorders: fed `[Maya, Leo]` and `[Leo, Maya]` it stores each
-   list untouched.
-
-Two harness facts worth recording: `FamilyBloc` is a GetIt **factory**
-(`family_di.dart:19`), so `GetIt.instance<FamilyBloc>()` is an empty bloc — the
-order must be read from `BlocProvider.of<FamilyBloc>` on the rendered grid; and
-`watchChildren().first` never resolves under the shared test scope (2_build.md
-deviation 6), so the same accessor is used.
-
-### Note 4 — focused nickname field
-
-8. unfocused: the field's wrapper `Container` has no `boxShadow`; focused: it
-   equals `NestShadows.focusRing(tokens.leafTint, tokens.leaf)` and the
-   `InputDecoration.focusedBorder` (an `OutlineInputBorder`) side is
-   `tokens.leaf`; unfocusing removes both. The finder is scoped to the field's
-   own container because the card and the selected swatch carry shadows too.
-
-### Note 1 / P05-BUG-8 — the fix's user-visible symptom
-
-9. with iPhone-class insets (`view.padding` + `view.viewPadding` = 47/34
-   logical) and the seed's two children, scrolling to the end leaves the
-   closing note **above** the CTA. That is precisely what the missing
-   `padding: EdgeInsets.zero` broke: the grid re-applied 47 + 34 px of
-   MediaQuery padding as its own `SliverPadding` and pushed the tail of the form
-   under the bar, where scrolling could not lift it clear. The gap proof
-   (14.0 / 12.0 with insets present) already lives in `p05_bugs_test.dart`.
+The note asked me to take every vertical gap from the HTML because the rows
+"drift down cumulatively". Measured on the current code, **they do not drift —
+every gap and every row height is the design value** (390 px, scale 1.0):
+`h3` 24 · →field 10 · label 18 · →input 6 · input **52** · →Age band 8 ·
+label 18 · →chips 4 · →Avatar colour 8 · label 18 · →swatch 4 · swatch 44 ·
+→note 6. Two new tests pin exactly that table (row heights + the seven gaps,
+with the HTML selector quoted in the reason strings) and a second test asserts
+`sub → grid = 14` and `grid → form card = 12` at **320, 390 and 430** (notes 2
+and 3's gap targets).
 
 ## Results
 
 ```
 dart format .        clean (362 files, 0 changed)
-flutter analyze      No issues found!                       (full app)
-flutter test test/features/family/    00:04 +108: All tests passed!
+flutter analyze      No issues found!
+flutter test test/features/family/    00:05 +116: All tests passed!
+    add_children_test.dart   105 · p05_bugs_test.dart 11 · zero skips
 flutter test (full suite)             1 failure — app/test/app/router_push_test.dart
 ```
 
-99 tests in `add_children_test.dart`, 9 in `p05_bugs_test.dart`, **zero skips**
-in both files.
-
 ## Bugs found
 
-### 1. Shared contract test still asserts P05's placeholder title (red repo gate)
+### None in P05 code
 
-`app/test/app/router_push_test.dart:104` passes `showsFrom: 'P05 Add children'`
-— the string the **placeholder** view rendered before P05 was built. The real
-screen shows `Who’s in your nest?`, so `router_push_test.dart:37` fails:
+Nothing in this iteration's diff produced a defect: the order fix, the 116 px
+card, the chip-component cleanup and the removed `IntrinsicWidth` wrappers all
+re-pass, including the BUG-1 geometry proofs (no chip claims the run, ≤2 rows in
+the test font, one row in production).
 
-```
-00:01 +3 -1: push/pop contract push between top-level onboarding routes,
-pop returns [E]
-Expected: true   Actual: <false>   … router_push_test.dart line 37
-```
+### 1. Still-open shared gate: `router_push_test.dart` asserts P05's placeholder
 
-Not a P05 regression and not fixable here:
+Unchanged from iteration 3 — `app/test/app/router_push_test.dart:104` passes
+`showsFrom: 'P05 Add children'`, the pre-build placeholder title, so line 37
+fails and the repo gate stays red on every branch where P05 is built. The file
+is still at main's `7eaa1f7`, this worktree has never touched
+`app/test/app/**` or `app/lib/app/**`, and the fix is one string
+(`'Who\u2019s in your nest?'`). Filed as BLOCKING since iteration 3.
 
-* `'P05 Add children'` appears nowhere in `app/lib` — only in that test;
-* the file arrived from **main** (`7eaa1f7`, "Shared requests batch 1 … +
-  contract tests" — the batch that answered P05's push/pop investigation), and
-  it was written while P05 was still a placeholder;
-* this worktree has never touched `app/test/app/**` or `app/lib/app/**`
-  (`git status` on both paths is empty), and both are outside RULES §1.
+### 2. The residual 4.87% band drift is a shared typography effect, not P05's
 
-Fix is one string: `showsFrom: 'Who\u2019s in your nest?'`. `showsTo:
-'P06 Pocket money setup'` is still correct
-(`pocket_money_setup_view.dart:12`), and the test pushes on the router itself,
-so it does not depend on how P05 navigates. Filed in `SHARED_REQUEST.md`
-("Blocks: yes for the repo gate").
+The QA note's ladder (+4 at "Nickname", +8 at the field, +13 at the chips, +20
+at "Avatar colour", and the form card top at ≈407 vs the design's 399) is real,
+but **it is not produced by P05's layout**: every gap is a literal `SizedBox`
+and every row height measures the HTML value in a widget test (table above).
+The only variable left is the line boxes, and they only differ on device —
+`NestType` promises "line boxes match the CSS exactly"
+(`typography.dart:8`), which holds for the test fallback font (1.0 em) but not
+for Nunito/Inter, which the app **fetches at runtime** (`pubspec.yaml` bundles
+no fonts). Flutter scales a font's ascent+descent, whose natural line height
+exceeds 1 em, so each row grows ~4 px and the error compounds down the card —
+which reproduces the QA ladder and the 8 px head offset exactly.
 
-### No P05 screen bugs
+Consequence: I could not reproduce it in tests, so it is not something this
+stage can gate on; it belongs to the type scale, and it affects **every**
+screen's vertical rhythm equally. Filed in `SHARED_REQUEST.md` with the
+measurement table and three owner options (clamp line height with
+`TextHeightBehavior`/strut, bundle metrics-matching fonts, or accept it as a
+known delta). P05's action is complete: the gaps and heights are now pinned, so
+any future drift is either caught here or attributable to that shared effect.
 
-The two findings that would have blocked the UI gate are closed and proved:
+## Noted, not bugs
 
-* **Iteration-2 open item — the vertical rhythm around the kid grid is
-  RESOLVED.** My measurement (+45 px above the grid, +34 px below, form card
-  +89) was handed to the UI stage, which traced it to the grid re-applying the
-  device safe-area insets as its own `SliverPadding`; `padding:
-  EdgeInsets.zero` fixes it, and the BUG-8 proof now measures exactly 14.0/12.0
-  with insets present, plus my new reachability test.
-* **Iteration-1 P05-BUG-1/2 and iteration-2 P05-BUG-4/5/6/7/8** all have
-  un-skipped proofs in `p05_bugs_test.dart` and are green.
-
-## Still open (not a test-stage action)
-
-* **CHILD ORDER ruling is not yet satisfied in data.** P05 renders the
-  repository order verbatim, but that order is alphabetical today, so the
-  screen shows **Leo before Maya** while the ruling wants Maya first. The
-  invariant tests above hold either way and will start proving the ruling
-  itself the moment core orders by creation; the blocking shared request for
-  that (createdAt column or rowid ordering) is already filed.
-* **`NestChip` full-width `Center`** (`nest_chip.dart:74`) is still unfixed at
-  the design-system level; P05 works around it with `IntrinsicWidth`. Any new
-  screen that puts interactive chips in a `Wrap` will hit the same defect.
-* **Nickname autofocus**: the design mock shows the field focused; the screen
-  launches unfocused (per review, no screen autofocuses). The focus *ring*
-  tokens are now pinned by test 8.
+* `NestChip`'s 44 px tap row still occupies 44 (design `.chip` visual is 32);
+  correct per `SPACING_SPEC` §6 ("base 32 high is below 44 → wrap in a 44-min
+  tap area").
+* The chips wrap to two rows **in tests only** (the fallback font is ~30%
+  wider); production renders one row, verified on the simulator in iteration 2.
+* Mid-save Continue is still dropped by the BUG-2 guard (buttons disable for the
+  whole save; the design has no "still saving" state).
+* `onSaved` on the event, `child_display.dart` placement, the raw exception
+  string and the 1 px pencil offsets remain carried accepts from the review.
 
 VERDICT: FAIL

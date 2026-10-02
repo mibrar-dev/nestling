@@ -127,6 +127,13 @@ Future<void> _pumpAppView(WidgetTester tester, FamilyBloc bloc) async {
   await tester.pump(const Duration(milliseconds: 200));
 }
 
+/// The bottom of the whole age-chip block (the test font is wider than
+/// Nunito, so the row can wrap to two lines here while production shows one).
+double chipsRowBottom(WidgetTester tester) => <double>[
+  for (final band in AddChildFormCard.ageBands)
+    tester.getRect(find.byKey(Key('ageChip-$band'))).bottom,
+].reduce((a, b) => a > b ? a : b);
+
 /// The design tokens resolved under the currently pumped subtree.
 NestTokens _tokensOf(WidgetTester tester, Finder finder) =>
     Theme.of(tester.element(finder)).extension<NestTokens>()!;
@@ -1028,8 +1035,11 @@ void main() {
       expect(second.right, 320 - NestSpacing.padSide);
 
       final pencil = tester.getRect(find.byKey(const Key('editChild-maya')));
-      expect(second.contains(pencil.topLeft), isTrue);
-      expect(second.contains(pencil.bottomRight), isTrue);
+      final mayaCard = tester.getRect(
+        find.ancestor(of: find.text('Maya'), matching: find.byType(NestCard)),
+      );
+      expect(mayaCard.contains(pencil.topLeft), isTrue);
+      expect(mayaCard.contains(pencil.bottomRight), isTrue);
       expect(tester.takeException(), isNull);
 
       await disposeApp(tester);
@@ -1476,25 +1486,25 @@ void main() {
       );
       expect(cards, findsNWidgets(5));
       final grid = tester.getRect(find.byType(KidCardGrid));
-      // 3 rows x 124 + 2 x 10 spacing.
-      expect(grid.height, 3 * 124 + 2 * NestSpacing.gap10);
+      // 3 rows x 116 + 2 x 10 spacing.
+      expect(grid.height, 3 * 116 + 2 * NestSpacing.gap10);
       expect(find.text('Three'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
       await disposeApp(tester);
     });
 
-    testWidgets('roster order comes from the database (nickname order)', (
+    testWidgets('roster order is the order added (Maya, then Leo)', (
       tester,
     ) async {
       await setUpTestScope();
       await pumpAppRoute(tester, '/add-children');
 
-      // Seeded roster, ordered by `watchChildren` (ORDER BY nickname): the
-      // design mock shows the seed insertion order instead.
+      // CHILD ORDER ruling: creation order, never alphabetical. The
+      // repository's rowid-ordered watch yields the seed insertion order.
       final maya = tester.getRect(find.text('Maya'));
       final leo = tester.getRect(find.text('Leo'));
-      expect(leo.left, lessThan(maya.left));
+      expect(maya.left, lessThan(leo.left));
 
       expect(tester.takeException(), isNull);
       await disposeApp(tester);
@@ -1858,23 +1868,120 @@ void main() {
     });
   });
 
-  // Orchestrator ruling (app-wide): children are listed in the order they were
-  // added, never alphabetically. P05 renders the repository order verbatim and
-  // sorts nothing locally, so the invariant below holds both today (core still
-  // orders by nickname — see SHARED_REQUEST.md, creation-order fix pending) and
-  // after the shared fix lands (creation order). TODO(P05): delete nothing, but
-  // expect Maya before Leo once `watchChildren` orders by creation.
-  group('P05 child order follows the repository (CHILD ORDER ruling)', () {
+  group('P05 child order is the order added (CHILD ORDER ruling)', () {
+    /// Reading order of the rendered cards: row by row, left to right.
     List<String> renderedOrder(WidgetTester tester, List<String> names) {
       final rects = <String, Rect>{
         for (final name in names) name: tester.getRect(find.text(name).first),
       };
       return rects.keys.toList()..sort((a, b) {
-        // Reading order: row by row, then left to right inside a row.
         final byTop = rects[a]!.top.compareTo(rects[b]!.top);
         return byTop != 0 ? byTop : rects[a]!.left.compareTo(rects[b]!.left);
       });
     }
+
+    testWidgets('the seeded roster reads Maya, then Leo', (tester) async {
+      final db = await setUpTestScope(seedDemo: false);
+      await Seed.onboardingKids(db);
+      await GetIt.instance<AppSession>().refresh();
+      await pumpAppRoute(tester, '/add-children');
+
+      expect(
+        renderedOrder(tester, <String>['Maya', 'Leo']),
+        <String>['Maya', 'Leo'],
+        reason:
+            'order added, never alphabetical (Maya < Leo is the trap: '
+            'alphabetical would put Leo first)',
+      );
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    testWidgets('a child added in this session appends to the end', (
+      tester,
+    ) async {
+      // The decisive ruling proof: 'Ollie' sorts between Leo and Maya
+      // alphabetically, so this only holds for insertion order.
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/add-children');
+
+      await tester.enterText(find.byKey(const Key('nicknameField')), 'Ollie');
+      await tester.pump();
+      await tester.tap(find.text('Add another child'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(renderedOrder(tester, <String>['Maya', 'Leo', 'Ollie']), <String>[
+        'Maya',
+        'Leo',
+        'Ollie',
+      ], reason: 'a new child goes last, it is not sorted into place');
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    testWidgets('renaming a child does not move it in the roster', (
+      tester,
+    ) async {
+      // Roster position is creation order, not the (mutable) nickname: Maya
+      // renamed to 'Zoe' must stay ahead of Leo, which alphabetical order
+      // would break (Leo < Zoe).
+      await setUpTestScope();
+      final repository = GetIt.instance<FamilyRepository>();
+      final maya = await repository.getChild('maya');
+      expect(maya, isNotNull);
+
+      final emitted = <List<FamilyChild>>[];
+      final subscription = repository.watchChildren().listen(emitted.add);
+      addTearDown(subscription.cancel);
+      // Drift delivers watch updates through zero-duration timers, so drive
+      // the fake clock instead of `pumpEventQueue` (its `Future.delayed` never
+      // fires inside the testWidgets fake-async zone).
+      Future<void> settle() async {
+        for (var i = 0; i < 4; i++) {
+          await tester.pump();
+        }
+      }
+
+      await settle();
+      expect(emitted, isNotEmpty);
+      expect(emitted.last.map((c) => c.nickname).toList(), <String>[
+        'Maya',
+        'Leo',
+      ]);
+
+      await repository.updateChild(
+        FamilyChild(
+          id: maya!.id,
+          nickname: 'Zoe',
+          ageBand: maya.ageBand,
+          ageYears: maya.ageYears,
+          avatarColour: maya.avatarColour,
+          pinSet: maya.pinSet,
+          pipStyle: maya.pipStyle,
+          pipSkin: maya.pipSkin,
+          pipAccessory: maya.pipAccessory,
+          pipStage: maya.pipStage,
+          pipTotalCoins: maya.pipTotalCoins,
+          coins: maya.coins,
+          happiness: maya.happiness,
+          happyDays: maya.happyDays,
+          weeklyBasePence: maya.weeklyBasePence,
+          activeQuests: maya.activeQuests,
+          doneQuests: maya.doneQuests,
+        ),
+      );
+      await settle();
+
+      expect(emitted, isNotEmpty);
+      expect(emitted.last.map((c) => c.nickname).toList(), <String>[
+        'Zoe',
+        'Leo',
+      ], reason: 'rowid order survives a rename; nickname order would flip');
+      await disposeApp(tester);
+    });
 
     testWidgets('the grid renders the repository order, unsorted', (
       tester,
@@ -1889,35 +1996,12 @@ void main() {
         tester.element(find.byType(KidCardGrid)),
       ).state.children;
       final expected = roster.map((c) => c.nickname).toList();
-      expect(expected, hasLength(2));
+      expect(expected, <String>['Maya', 'Leo']);
       expect(
         renderedOrder(tester, expected),
         expected,
         reason: 'P05 must not re-sort the repository roster',
       );
-
-      expect(tester.takeException(), isNull);
-      await disposeApp(tester);
-    });
-
-    testWidgets('a newly saved child lands where the repository puts it', (
-      tester,
-    ) async {
-      await setUpTestScope();
-      await pumpAppRoute(tester, '/add-children');
-
-      await tester.enterText(find.byKey(const Key('nicknameField')), 'Ollie');
-      await tester.pump();
-      await tester.tap(find.text('Add another child'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
-
-      final roster = BlocProvider.of<FamilyBloc>(
-        tester.element(find.byType(KidCardGrid)),
-      ).state.children;
-      final expected = roster.map((c) => c.nickname).toList();
-      expect(expected, hasLength(3));
-      expect(renderedOrder(tester, expected), expected);
 
       expect(tester.takeException(), isNull);
       await disposeApp(tester);
@@ -1940,6 +2024,93 @@ void main() {
         await bloc.close();
       }
     });
+  });
+
+  // Orchestrator note 3 (iteration 4): "inside the card the rows drift down
+  // cumulatively … take every vertical gap from the HTML". Each value below is
+  // the HTML/CSS figure (components.css: `.form-card .field { margin-top:10 }`,
+  // `.field { gap:6 }`, `.field input { height:52 }`, `.form-card .lbl
+  // { margin-top:8 }`, `.chip-row { margin-top:4 }`, `.swatches { margin-top:4 }`,
+  // `.form-note { margin-top:6 }`), so any future drift fails here first.
+  group('P05 form card rhythm matches the HTML', () {
+    testWidgets('every internal gap and row height is the design value', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/add-children');
+
+      final h3 = tester.getRect(find.text('Add a child'));
+      final label = tester.getRect(find.text('Nickname'));
+      final input = tester.getRect(find.byType(TextField));
+      final ageLabel = tester.getRect(find.text('Age band'));
+      final chips = tester.getRect(find.byKey(const Key('ageChip-4-6')));
+      final colourLabel = tester.getRect(find.text('Avatar colour'));
+      final swatch = tester.getRect(find.byKey(const Key('swatch-lilac')));
+      final note = tester.getRect(
+        find.text('We only ask for an age range so quests suit them.'),
+      );
+
+      // Row heights: `.h3` 18/24, `.field label` 13/18, `.field input` 52,
+      // `.lbl` 13/18, `.sw` 44, `.caption` 13/18 (18 per line).
+      expect(h3.height, 24);
+      expect(label.height, 18);
+      expect(input.height, 52, reason: 'HTML: .field input { height: 52px }');
+      expect(ageLabel.height, 18);
+      expect(colourLabel.height, 18);
+      expect(swatch.height, NestDevice.tapParent);
+      expect(note.height % 18, 0, reason: 'the note is set on an 18 px grid');
+
+      // Gaps, in document order.
+      void gap(String what, double actual, double spec) =>
+          expect(actual, spec, reason: '$what (HTML spec $spec)');
+
+      gap('h3 → field', label.top - h3.bottom, 10);
+      gap('label → input', input.top - label.bottom, 6);
+      gap('input → Age band', ageLabel.top - input.bottom, 8);
+      gap('Age band → chips', chips.top - ageLabel.bottom, 4);
+      gap('chips → Avatar colour', colourLabel.top - chipsRowBottom(tester), 8);
+      gap('Avatar colour → swatch', swatch.top - colourLabel.bottom, 4);
+      gap('swatch → note', note.top - swatch.bottom, 6);
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    for (final width in <double>[320, 390, 430]) {
+      testWidgets('the grid sits 14 px under the subtitle and the form card '
+          '12 px under the cards at ${width.toInt()} px', (tester) async {
+        await setUpTestScope();
+        await pumpAppRoute(tester, '/add-children');
+        await _resize(tester, width, 1);
+
+        final sub = tester.getRect(
+          find.text('Nicknames only \u2014 no photos, no email.'),
+        );
+        final grid = tester.getRect(find.byType(KidCardGrid));
+        final formCard = tester.getRect(
+          find.ancestor(
+            of: find.byType(TextField),
+            matching: find.byType(NestCard),
+          ),
+        );
+
+        // `.scroll > .kid-grid { margin-top: 14px }`
+        expect(
+          grid.top - sub.bottom,
+          NestSpacing.gap14,
+          reason: 'subtitle → kid grid',
+        );
+        // `.scroll > .form-card { margin-top: 12px }`
+        expect(
+          formCard.top - grid.bottom,
+          NestSpacing.s3,
+          reason: 'kid grid → Add a child card',
+        );
+
+        expect(tester.takeException(), isNull);
+        await disposeApp(tester);
+      });
+    }
   });
 
   group('P05 focused nickname field', () {

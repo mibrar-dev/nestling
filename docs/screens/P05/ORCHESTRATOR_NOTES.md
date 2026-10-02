@@ -19,3 +19,8 @@
 1. STILL OPEN: children order. The app shows Leo, Maya; the design and the CHILD ORDER rule require Maya, then Leo (order added). Fix in this feature's repository (order by creation/rowid) and add a test that asserts Maya is first.
 2. "Add a child" card top ≈ y 399 (app ≈ 407): the gap between the kid-card row and this card must be 12 px as in the HTML.
 3. Inside the card the rows drift down cumulatively (≈ +4 at Nickname, +8 at the field, +13 at the chips, +20 at Avatar colour). Take every vertical gap from the HTML (`.field` label→input gap, input height 52, section gaps) — likely the label-to-field gap and the field height are each a few px too big. Targets: field top ≈ 471, chips row centre ≈ 569, colour row centre ≈ 637, helper text ≈ 674.
+
+## QA of cmp_light_4 (3.78%) — iteration 5 (final polish)
+- DONE & verified: Maya first; header; kid cards; "Add a child" card top. Keep them.
+- Remaining drift inside the card: Age-band chips row centre is ≈ +5 px low (app ≈ 574 vs design ≈ 569) and the Avatar-colour row ≈ +12 px low (app ≈ 649 vs ≈ 637), helper text ≈ +12 px. Cause: chip height and the gap below the chips. Take the chip height (design ≈ 32 px), the chip-row→"Avatar colour" label gap and the label→swatch gap exactly from P05-add-children.html / components.css. Swatch diameter 44 with 8 px gaps — match.
+- Test stage: if your FAIL is only a shared/skipped item, write that explicitly in 3_test.md and mark PASS when every P05-owned test passes.

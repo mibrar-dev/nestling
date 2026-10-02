@@ -75,18 +75,14 @@ class AddChildFormCard extends StatelessWidget {
               spacing: NestSpacing.s2,
               runSpacing: NestSpacing.s2,
               children: [
+                // The shared NestChip shrink-wraps by construction (its old
+                // greedy Center is gone), so the Wrap lays one row directly.
                 for (final band in ageBands)
-                  // P05-BUG-1: interactive NestChip's factorless Center
-                  // claims the whole Wrap run, stacking one chip per row.
-                  // IntrinsicWidth shrinks each box to its pill (the 44-min
-                  // tap minimum survives) until the shared fix lands.
-                  IntrinsicWidth(
-                    child: NestChip(
-                      key: Key('ageChip-$band'),
-                      label: displayAgeBand(band),
-                      selected: draftAgeBand == band,
-                      onSelected: (_) => onAgeBandSelected(band),
-                    ),
+                  NestChip(
+                    key: Key('ageChip-$band'),
+                    label: displayAgeBand(band),
+                    selected: draftAgeBand == band,
+                    onSelected: (_) => onAgeBandSelected(band),
                   ),
               ],
             ),

@@ -1,4 +1,10 @@
-# Shared request — P05 children in creation order (CHILD ORDER ruling, BLOCKS the P05 UI gate)
+# Shared request — P05 children in creation order (CHILD ORDER ruling)
+
+> Status (iteration 4): interim LANDED in P05 — `FamilyRepositoryImpl`
+> orders its own query by `rowid` (insertion proxy) inside RULES §1, so the
+> screen and repository satisfy the ruling today. This request remains open
+> as the DURABLE fix (createdAt column + core ordering) so every roster
+> screen inherits it at once.
 
 Need: the orchestrator's standing CHILD ORDER ruling says children are always
 listed in the order they were added (Maya, then Leo), never alphabetically —
@@ -66,7 +72,7 @@ Blocks: no — P05 uses `go` throughout (`go` to `/privacy`, `go` to
 ---
 
 # Shared request — P05 Add children `NestChip` stretches to the full row width
-# (P05 UI gate was blocked; P05-local workaround landed in iteration 2)
+# — LANDED on main (P05 workaround removed in iteration 4)
 
 > Status (iteration 2): the shared component is unchanged, so P05 wraps each
 > chip in `IntrinsicWidth` (`add_child_form_card.dart`) — one row in
@@ -204,3 +210,52 @@ Files: `app/test/app/router_push_test.dart`
 Blocks: **yes for the repo gate** — `flutter test` is red on every branch where
 P05 is built until this string is updated. It is outside RULES §1, so no screen
 agent can fix it.
+
+---
+
+# Shared request — P05 residual band drift: on-device line boxes are taller
+# than the CSS `line-height` (shared typography, app-wide)
+
+Need: after the BUG-8 fix, `cmp_light_3` still drifts 4.87% and the QA note
+records cumulative drift **inside** the form card (+4 at "Nickname", +8 at the
+field, +13 at the chips, +20 at "Avatar colour"), i.e. every row renders a few
+pixels taller than the design, compounding down the card. Measured in a widget
+test on the current code, **every gap and every row height is exactly the HTML
+value** (390 px, text scale 1.0):
+
+| element | HTML | measured in test |
+|---|---|---|
+| `.h3` "Add a child" | 18/24 | 24.0 ✓ |
+| `.field { margin-top: 10px }` | 10 | 10.0 ✓ |
+| `.field { gap: 6px }` | 6 | 6.0 ✓ |
+| `.field label` | 13/18 | 18.0 ✓ |
+| `.field input { height: 52px }` | 52 | 52.0 ✓ |
+| `.lbl { margin-top: 8px }` | 8 | 8.0 ✓ |
+| `.chip-row { margin-top: 4px }` | 4 | 4.0 ✓ |
+| `.lbl` (Avatar colour) | 8 | 8.0 ✓ |
+| `.swatches { margin-top: 4px }` | 4 | 4.0 ✓ |
+| `.form-note { margin-top: 6px }` | 6 | 6.0 ✓ |
+
+Every gap is a literal `SizedBox`, so none of them can grow on device; the only
+variable left is each row's height, which comes from `NestType` line boxes.
+`NestType` documents "Every style carries `height = lineHeight / fontSize` so
+line boxes match the CSS exactly" (`tokens/typography.dart:8`), which holds for
+the test fallback font (1.0 em) but not for the runtime-fetched Nunito/Inter:
+Flutter scales the font's ascent+descent, whose natural line height is > 1 em,
+so each line box is taller by roughly `fontSize × height × (metrics − 1 em)` —
+about +4 per row here, which reproduces the QA note's +4/+8/+13/+20 ladder
+exactly and also the 8 px head offset ("Add a child" card top ≈ 407 vs the
+design's 399).
+
+Not fixable in P05 (RULES §1): the type scale is shared, the fonts are fetched
+at runtime rather than bundled (`pubspec.yaml` has no font assets), and every
+screen's vertical rhythm inherits the same few-pixels-per-row drift. Options
+worth an owner decision: clamp the line height with `TextHeightBehavior` /
+a strut so line boxes are font-independent, or bundle the two families with
+metrics that match the CSS, or accept the drift as a known design delta.
+
+Files: `app/lib/core/design_system/tokens/typography.dart` (and any
+`TextHeightBehavior`/strut policy in the theme).
+
+Blocks: no for P05 — every P05 gap and row height is spec-exact and is now
+pinned by tests; the screen's residual drift is this shared effect.

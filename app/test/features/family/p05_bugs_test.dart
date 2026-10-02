@@ -1,10 +1,6 @@
 // P05 · Add children — bug proofs.
 //
-// P05-BUG-1…8 are fixed; their proofs below run un-skipped as regressions.
-// P05-BUG-9 (child order ruling) and P05-BUG-10 (card height) are open and
-// carry `skip: true` with the id in the name so `flutter test` stays green;
-// the fix stage removes the skips. Run them with
-// `flutter test --run-skipped test/features/family/p05_bugs_test.dart`.
+// P05-BUG-1…10 are fixed; all proofs below run un-skipped as regressions.
 // Full reports: `docs/screens/P05/6_bugs.md`.
 
 import 'dart:async';
@@ -438,7 +434,6 @@ void main() {
   group('P05-BUG-9 children are not listed in creation order (major)', () {
     testWidgets(
       '[P05-BUG-9] Maya renders before Leo (order added, never alphabetical)',
-      skip: true,
       (tester) async {
         await setUpTestScope(); // Seed.demo inserts Maya, then Leo.
         await pumpAppRoute(tester, '/add-children');
@@ -462,29 +457,27 @@ void main() {
   // Net: cards render 124 tall against the design's 116, pushing the whole
   // form region +8 px low (UI check iteration 3, deviation 2).
   group('P05-BUG-10 kid card is taller than the design (minor)', () {
-    testWidgets(
-      '[P05-BUG-10] kid card height matches the design 116 (±2)',
-      skip: true,
-      (tester) async {
-        await setUpTestScope();
-        await pumpAppRoute(tester, '/add-children');
+    testWidgets('[P05-BUG-10] kid card height matches the design 116 (±2)', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/add-children');
 
-        final card = find
-            .descendant(
-              of: find.byType(KidCardGrid),
-              matching: find.byType(NestCard),
-            )
-            .first;
-        // HTML `.kid-card`: padding 12+10, avatar 44, gap 2, name 24,
-        // gap 2 + age margin 4, age 18 → 116.
-        expect(
-          tester.getSize(card).height,
-          lessThanOrEqualTo(118),
-          reason: 'no pencil clearance; design card is 116 tall',
-        );
+      final card = find
+          .descendant(
+            of: find.byType(KidCardGrid),
+            matching: find.byType(NestCard),
+          )
+          .first;
+      // HTML `.kid-card`: padding 12+10, avatar 44, gap 2, name 24,
+      // gap 2 + age margin 4, age 18 → 116.
+      expect(
+        tester.getSize(card).height,
+        lessThanOrEqualTo(118),
+        reason: 'no pencil clearance; design card is 116 tall',
+      );
 
-        await disposeApp(tester);
-      },
-    );
+      await disposeApp(tester);
+    });
   });
 }

@@ -11,9 +11,8 @@ import 'package:nestling/features/family/presentation/widgets/child_display.dart
 /// the row height is derived from the card content scaled by the ambient
 /// [TextScaler], so cards hug at 320 px wide and at text scale 1.3 alike.
 //
-// TODO(P05): roster order follows the repository (currently DB nickname
-// order) until the shared creation-order fix lands (CHILD ORDER ruling, see
-// SHARED_REQUEST.md) — then Maya renders before Leo with no code change here.
+// The roster arrives in added order (CHILD ORDER ruling) from the
+// repository's rowid-ordered watch; the grid renders it verbatim.
 class KidCardGrid extends StatelessWidget {
   const KidCardGrid({required this.children, super.key});
 
@@ -24,15 +23,16 @@ class KidCardGrid extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final textScaler = MediaQuery.textScalerOf(context);
+        // Design `.kid-card`: 12 + 44 + 2 + 24 + (2 + 4) + 18 + 10 = 116.
+        // The 44 px pencil is absolutely positioned and adds no height.
         const verticalChrome = NestSpacing.s3 + NestSpacing.gap10;
         final cardH =
             verticalChrome +
             NestAvatarSize.s44.dimension +
             NestSpacing.gap2 +
             textScaler.scale(24) +
-            NestSpacing.s1 +
-            textScaler.scale(18) +
-            NestSpacing.gap10;
+            NestSpacing.gap6 +
+            textScaler.scale(18);
         final colW = (constraints.maxWidth - NestSpacing.gap10) / 2;
         return GridView.builder(
           // P05-BUG-8: without explicit padding the grid re-applies the
@@ -96,7 +96,7 @@ class _KidCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(height: NestSpacing.s1),
+                  const SizedBox(height: NestSpacing.gap6),
                   Text(
                     'Age ${displayAgeBand(child.ageBand)}',
                     style: NestType.caption(color: tokens.ink2),
