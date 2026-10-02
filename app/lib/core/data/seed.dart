@@ -178,7 +178,7 @@ abstract final class Seed {
       String icon,
       int coins,
       String? assignee, [
-      String repeat = 'weekly',
+      String repeat = 'daily',
     ]) {
       return db
           .into(db.quests)
@@ -206,9 +206,16 @@ abstract final class Seed {
       'maya',
     );
     await quest('q-reading', 'Reading – 20 minutes', 'book', 10, 'maya');
-    await quest('q-bins', 'Put the bins out', 'bins', 15, 'maya');
+    await quest('q-bins', 'Put the bins out', 'bins', 15, 'maya', 'weekly');
     await quest('q-tidy', 'Tidy your bedroom', 'bed', 15, 'maya');
-    await quest('q-hoover', 'Hoover the stairs', 'hoover', 20, 'maya');
+    await quest(
+      'q-hoover',
+      'Hoover the stairs',
+      'hoover',
+      20,
+      'maya',
+      'weekly',
+    );
     await quest('q-table', 'Lay the table', 'plate', 10, 'maya');
     // Leo — 4 active ("2 of 4" on P08).
     await quest('q-bed', 'Make your bed', 'bed', 5, 'leo');
