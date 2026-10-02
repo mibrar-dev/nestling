@@ -85,5 +85,36 @@ void main() {
       expect(currentPath(tester), '/parental-gate');
       await disposeApp(tester);
     });
+    for (final route in const <String>[
+      '/today',
+      '/today-empty',
+      '/quest-editor',
+      '/quests',
+      '/approvals',
+      '/money',
+      '/payout',
+      '/rewards',
+      '/child-profile',
+      '/settings',
+      '/welcome',
+      '/value-tour',
+      '/create-account',
+      '/privacy',
+      '/add-children',
+      '/pocket-money-setup',
+      '/paywall',
+    ]) {
+      testWidgets('kid mode gates parent route $route', (tester) async {
+        await setUpTestScope();
+        GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+        final session = GetIt.instance<AppSession>();
+        await session.setAppMode('kid');
+        await session.refresh();
+
+        await pumpAppRoute(tester, route);
+        expect(currentPath(tester), '/parental-gate');
+        await disposeApp(tester);
+      });
+    }
   });
 }
