@@ -23,12 +23,15 @@ import 'package:nestling/features/onboarding/presentation/bloc/onboarding_state.
 
 import '../../test_scope.dart';
 
+// Step copy is the design's, punctuation included (ORCHESTRATOR_NOTES 2:
+// curly quotes + em dash) — the repository mirrors the view's static copy so
+// the loaded and pre-load frames cannot drift.
 const List<OnboardingStep> _tourSteps = <OnboardingStep>[
   OnboardingStep(
     id: 'quests',
     title: 'Set quests in seconds',
     detail:
-        "Pick from 40+ ready-made jobs like 'Put the bins out' or make "
+        'Pick from 40+ ready-made jobs like “Put the bins out” — or make '
         'your own.',
   ),
   OnboardingStep(
@@ -46,7 +49,7 @@ const List<OnboardingStep> _tourSteps = <OnboardingStep>[
 const OnboardingStep _firstStep = OnboardingStep(
   id: 'quests',
   title: 'Set quests in seconds',
-  detail: "Pick from 40+ ready-made jobs like 'Put the bins out'.",
+  detail: 'Pick from 40+ ready-made jobs like “Put the bins out”.',
 );
 
 const OnboardingStep _secondStep = OnboardingStep(
