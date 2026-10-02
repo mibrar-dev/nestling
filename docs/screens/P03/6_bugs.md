@@ -1,16 +1,17 @@
-# P03 Create account — bug hunt (Stage 6, iteration 3)
+# P03 Create account — bug hunt (Stage 6, iteration 4)
 
 Route `/create-account` · feature `auth` · parent mode · design
 `design/screens/{light,dark}/P03-create-account.png` + HTML source. Tree
-tested: worktree `screen/P03` at `29162fc` plus the uncommitted iteration-3
+tested: worktree `screen/P03` at `3d45950` plus the uncommitted iteration-4
 build/test work. **No screen code was changed by this stage** — only
-`app/test/features/auth/**` and this report. `ORCHESTRATOR_NOTES.md`'s
-iteration-2/3 items and the standing rules (PIP — vacuous here, status bar,
-data-over-mocks, bottom edge, alignment, COPY, CHILD ORDER) were applied.
+`app/test/features/auth/p03_bugs_test.dart`, `SHARED_REQUEST.md` and this
+report. `ORCHESTRATOR_NOTES.md` (all items) and the standing rules (PIP —
+vacuous here, status bar, data-over-mocks, bottom edge, alignment, COPY,
+CHILD ORDER) were applied. CHILD ORDER is N/A (P03 lists no children).
 
-Executable proofs: `app/test/features/auth/p03_bugs_test.dart` — every
-open-bug proof is `skip:`-marked with its id so the suite stays green
-(7 skipped across the feature). Run
+Executable proofs: `app/test/features/auth/p03_bugs_test.dart` — the two
+open-bug proofs are `skip:`-marked with their ids so the suite stays green
+(2 skipped). Run
 `flutter test test/features/auth/p03_bugs_test.dart --run-skipped` to watch
 them fail; un-skip each one with its fix.
 
@@ -18,196 +19,168 @@ them fail; un-skip each one with its fix.
 
 | ID | Severity | Area | Status |
 |---|---|---|---|
-| P03-BUG-1…14 | — | iterations 1–2's bugs (caption geometry, validation gating, nav bar, labels, spinner, headline, helper/targets/lines/stack) | **all fixed** by iteration 3; proofs green |
-| P03-BUG-6 | minor | `NestButton` announces "Create account\nCreate account" | **open, shared** (§4); proof skipped |
-| P03-BUG-15 | **MAJOR** | subtitle ships `You're` with a straight U+0027 where the design HTML has U+2019 | open, in scope; proofs `P03-BUG-15` + `copy_audit_test.dart` "subtitle" |
-| P03-BUG-16 | minor | an invalid field no longer paints the danger border | open, **blocked on shared §5**; proof skipped |
-| P03-BUG-17 | minor | subtitle breaks after "Children" instead of "Children never" | open, **shared §6** (font pipeline); no local test possible |
-| P03-BUG-18 | minor | the legal targets' overhang is not hit-testable — ~32dp effective height, not 44dp | new this stage; proof 18 |
-| P03-BUG-19 | minor | legal targets lag the first painted frame; the one-shot measurement can go stale (font swap) | new this stage; proof 19 |
-| P03-BUG-20 | minor | validation errors lost Material's live region — client errors are announced by nothing | new this stage; proof 20 |
+| P03-BUG-1…15 | — | iterations 1–3's bugs | **all fixed**; proofs green |
+| P03-BUG-6 | — | `NestButton` announced its label twice | **fixed** by shared batch `7eaa1f7` (inner `Text` excluded); proof un-skipped and green — correction to iteration 3 |
+| P03-BUG-16 | minor | an invalid field paints no danger border | **open — UNBLOCKED, not shared-blocked**; proof skipped with the correct reason |
+| P03-BUG-17 | minor | subtitle breaks after “Children” instead of “Children never” | open, **shared §6** (font pipeline); no local test possible |
+| P03-BUG-18/19/20 | — | target overhang, first-frame/stale measurement, live regions | **fixed** in iteration 4; proofs green |
+| P03-BUG-21 | **MAJOR** | the validation error left the semantics tree — the live-region nodes have empty labels | new regression this iteration; proof skipped |
 
-Iteration-3 closures were independently re-checked by me: the caption is
-unbreakable (NBSP), each target overlaps its own word at 320/390/430 and
-survives live resize/scale/theme changes, the error sits on the 20dp gutter,
-the caption lines are 20dp and the CTA hairline lands at 678 vs the design's
-677, and a repository `Error` is both surfaced and reported to observers.
+**Corrections to earlier records made this stage.** The shared
+`shared_requests_batch1` fix (`7eaa1f7`) is an **ancestor of the pre-build
+sync `29162fc`**, so it was present when iteration 4's build ran. It resolved
+P03's §2/§4/§5: brand and `NestButton` labels are now single, and
+`NestTextField` renders `errorText` as a **gutter-aligned row with the danger
+border forced** (its contract tests pass). Iteration 4's build note (“the
+shared hasError flag did not land”) is wrong, and my iteration-3 report's
+“mutually exclusive” analysis is obsolete: passing `errorText` no longer
+re-opens BUG-11. `SHARED_REQUEST.md` §§2/4/5 are marked RESOLVED and a new §8
+covers the one remaining component gap (its error row is not a live region).
 
-ORCHESTRATOR_NOTES status: **item 1 FIXED** (one U+00A0; device line 1 =
-"Terms" only, line 2 = "Privacy Notice"); **item 2 half** — the curly
-apostrophe is still U+0027 (P03-BUG-15, mandatory) and the specified break is
-font-pipeline-blocked (P03-BUG-17, shared §6); **item 3 outstanding** — the
-filled-state capture is still host-blocked (no SimulatorKit/HID in this
-Xcode; the filled *state* is pinned by the green widget test); iteration-2
-items §4/§5/§6 are all satisfied (helper gutter, two-line caption, note row).
+## P03-BUG-21 (MAJOR, regression introduced this iteration) — the validation message is not in the semantics tree
 
-## P03-BUG-15 (MAJOR) — the subtitle uses a straight apostrophe where the design has U+2019
+**Where** `create_account_view.dart:190-201` (email) and `:246-258`
+(password):
 
-**Where** `create_account_view.dart:116` — `"You're the grown-up in charge. "`
-with U+0027. The HTML writes `You&rsquo;re` (U+2019); ORCHESTRATOR_NOTES
-iteration-3 item 2 names the character explicitly, and the standing COPY
-rule requires the design's typographic characters exactly.
+```dart
+Semantics(
+  liveRegion: true,
+  child: ExcludeSemantics(
+    child: Text(state.emailError!, …),
+  ),
+),
+```
 
-**Repro** Open `/create-account`: the subtitle's apostrophe is a straight
-tick. Byte check on the view: subtitle apostrophe `0x27`, zero U+2019
-anywhere in the file. `copy_audit_test.dart` ("subtitle") is red on it.
+`ExcludeSemantics` drops the `Text`'s node, and the wrapper supplies a flag
+but **no label**. My own semantics-tree probe after a rejected submit:
 
-**Proofs** `P03-BUG-15` (finds the U+2019 string; fails today) and
-`copy_audit_test.dart` "subtitle". Both are skip-marked with this id; un-skip
-both with the fix. **Suggested fix** one character:
-`'You\u2019re the grown-up in charge. '` (keep the rest verbatim; no hard
-newline).
+```
+[Email] [] live=true        ← the error: empty label
+[Password] [] live=true     ← the error: empty label
+find.bySemanticsLabel('Enter a valid email address') -> 0
+find.bySemanticsLabel('Use at least 8 characters')   -> 0
+```
 
-## P03-BUG-16 (minor, shared §5) — an invalid field no longer paints the danger border
+So the message is neither announced (the live region is empty) nor reachable
+at all — worse than iteration 3's plain labelled `Text`, and worse than
+Material's row, which is a live region *with* content. The iteration-3
+review's shorthand (“keep the inner `Text` out of semantics so the label is
+read once”) omitted the explicit label, and the BUG-20 proof's
+`getSemantics(find.text(...))` resolves to the nearest enclosing node, so it
+passed while the label was gone.
 
-**Where** `create_account_view.dart:173-185`, `:210-223` — both fields pass
-`errorText: null` so the error can own the gutter (the BUG-11 fix), but
-`NestTextField` derives its `errorBorder` from the same `errorText` flag. The
-invalid input keeps the resting `line` border; only the message is red. The
-design marks the input itself:
+**Repro** `P03-BUG-21` (asserts each message is findable by semantics label
+*and* that the node carrying it is the live region). **Suggested fix** carry
+the message on the wrapper:
+
+```dart
+Semantics(
+  liveRegion: true,
+  label: state.emailError!,
+  child: ExcludeSemantics(child: Text(state.emailError!, …)),
+)
+```
+
+(or drop the `ExcludeSemantics` — but then the wrapper merges with the
+`Text`, doubling the label the way the legal links used to). This is the
+three-line fix the review also asks for.
+
+## P03-BUG-16 (minor, open — unblocked) — an invalid field paints no danger border
+
+**Where** `create_account_view.dart:173-185`/`:210-223` pass
+`errorText: null` and render their own error rows, so the input keeps the
+resting `line` border. The design marks the input itself:
 `.field input[aria-invalid="true"] { border-color: var(--danger) }`
-(`components.css:135`, SPACING_SPEC §3).
+(`components.css:135`, SPACING_SPEC §3). My probe of all borders painted
+inside the email field after a rejected submit sees `line` only — no
+`danger`.
 
-**Repro** Reject a submit with an invalid form (programmatic — the CTA is
-disabled while invalid): the email/password boxes stay grey while their
-messages turn red. **Proof** `P03-BUG-16` (skipped).
+**What changed** shared batch `7eaa1f7` made `NestTextField` render
+`errorText` as a gutter-aligned row **and** force the danger border (pinned
+by its own tests: “error aligns with the label gutter”, “error border still
+turns danger”, “error replaces the helper”). `P03-BUG-11` no longer blocks
+this, so the fix is local: **pass `errorText` to both fields and delete the
+screen-owned error rows**. Do not pass `errorText` while keeping the owned
+rows (the message would render twice).
 
-**Fix / decision** P03 cannot fix this without re-opening BUG-11: with the
-component as it stands the two proofs are mutually exclusive. SHARED_REQUEST
-§5 now asks for a separate `hasError`/`errorBorder` flag so the border is
-independent of the message row. Keep the visible gutter fix; if the
-orchestrator declines the shared change, retire this proof explicitly rather
-than passing `errorText` again.
+**One caveat (why the proof is still skipped):** the component's error row
+is a plain `Text` with no live region, so switching to it would trade
+BUG-16 for BUG-20 unless `SHARED_REQUEST.md` §8 lands (make the shared row
+announce). Recommended order for iteration 5: fix BUG-21 (above), then
+either land §8 and switch (closes 16/20/21 together) or keep BUG-16 skipped
+and accept the border gap for v1. **Proof** `P03-BUG-16` (skip-marked with
+this reasoning).
 
 ## P03-BUG-17 (minor, shared §6) — the subtitle breaks one word early
 
-**Where** `create_account_view.dart:113-117` — `NestType.body` (Inter 16/24,
-no letter-spacing) is already the design token, but the Inter build
-`google_fonts` serves is ~3–4% wider than the design's render, so the
-subtitle that fits "…Children never" in 350dp (design line 1 ends x 368.3)
-runs out of room in the app (line 1 ends x 330.7; "never" drops to line 2,
-which ends x 180.3 vs the design's 128.3). Pixel-verified this stage.
+Carried from iteration 3 and unchanged: the served Inter build is ~3–4%
+wider than the design's, so the subtitle wraps after “Children” (app line 1
+ends x≈330) instead of “…Children never” (design x≈368). The style is
+already the design token (`NestType.body` 16/24, no letter-spacing), so the
+UI stage's “localised style-metrics fix” is not available without a
+token-rule violation; the review agrees this stays with SHARED_REQUEST §6
+(pin/bundle the design's Inter build). No local test can pin a break the
+harness font does not produce.
 
-**No local test is possible**: the harness font is not Inter, so a widget
-test's break says nothing about the device. The copy is verbatim and the
-style is the token, so this is not a styling bug — SHARED_REQUEST §6 (pin or
-bundle the design's Inter build). Do **not** chase it with a local
-size/letter-spacing/width hack; that trades a 3% glyph drift for a token-rule
-violation.
+## Carried from review (iteration 4) — no local proof possible
 
-## P03-BUG-18 (minor, new) — the legal targets are only ~32dp reachable
-
-**Where** `create_account_view.dart:414-418` (`_targetRect`) and `:456-468`
-(`Positioned.fromRect`). Each 44dp box is centred on its word, so it
-overhangs the caption Stack (40dp for two 20dp lines) by ~12dp at one end.
-Flutter only hit-tests a child when the tap is inside the parent box
-(`rendering/proxy_box.dart:183-192`), so the overhang is dead: the effective
-height per target is ~32dp, though `tester.getSize` reports 44dp. The design
-HTML does not clip the same way — `.link { min-height:44px; margin:-12px 0 }`
-boxes stay fully hit-testable in the browser.
-
-**Repro** `P03-BUG-18` (430dp, the device's two-line geometry): a hit test at
-the target box's top+1 and bottom-1 must land on that target; today the
-overhang end misses. Hit-test-based, so it cannot be fooled by the rendered
-rect. **Suggested fix (decide explicitly)** either make the caption block at
-least 44dp tall (`ConstrainedBox(minHeight: NestDevice.tapParent)` around the
-Stack; the hairline moves 678 → ~674 vs the design's 677) or implement a
-custom render object whose hit test accepts the overhang (keeps the 678
-hairline). Since the links are inert v1, keeping the current geometry plus a
-documented limitation is also defensible — but then this proof should be
-retired with that decision recorded.
-
-## P03-BUG-19 (minor, new) — the targets lag the first frame and the measurement can go stale
-
-**Where** `create_account_view.dart:350-411` (`_scheduleMeasure`/`_measure`):
-the boxes are read from the laid-out paragraph in a post-frame callback and
-re-scheduled only from `initState`/`didChangeDependencies` (MediaQuery size,
-text scaler, theme). Consequences:
-
-- the targets do not exist in the first painted frame (proof: one
-  `pumpWidget` → no `p03_terms`);
-- any reflow that is not a MediaQuery/theme change leaves them stale. The
-  real one on device is the runtime Google Fonts swap: no font is bundled
-  (`pubspec.yaml` has no `fonts:`), so the first layout can use a fallback
-  face; when Inter arrives the paragraph reflows and nothing re-measures
-  until an unrelated dependency change.
-
-**Repro** `P03-BUG-19` (first frame). **Suggested fix** derive the boxes
-during layout (a small `RenderBox`/`CustomPainter` that computes them from a
-`TextPainter` in `performLayout`), which fixes both halves; a chained
-post-frame re-measure would still leave the first-frame window. Add/extend a
-proof that a relayout without a dependency change keeps each target on its
-word.
-
-## P03-BUG-20 (minor, new) — validation errors are no longer announced
-
-**Where** `create_account_view.dart:186-192` (email) and `:234-240`
-(password). Moving the message out of `InputDecoration` (correct for the
-gutter) also moved it out of Material's live region
-(`material/input_decorator.dart:419`), and the screen's
-`SemanticsService.sendAnnouncement` only fires for server `formError`s. A
-VoiceOver user therefore hears nothing when a field goes invalid.
-
-**Repro** `P03-BUG-20`: after a rejected submit, the error nodes'
-`isLiveRegion` flag is false. **Suggested fix** wrap each owned error row in
-`Semantics(liveRegion: true, child: ExcludeSemantics(child: Text(...)))` so
-it announces once, and keep `sendAnnouncement` for `formError`.
-
-## Carried — not numbered
-
-- **`height: 20 / 13` hard-codes a type metric** (`:425`, `:430`) — review
-  finding 7; filed as SHARED_REQUEST §7 (`NestType.legalCaption` 13/20). The
-  override is legitimate until the token lands (P03-BUG-12 pins it); the
-  stopgap is `NestSpacing.s5 / 13`.
-- **The filled-state capture** (ORCHESTRATOR_NOTES item 3) is still
-  host-blocked: this Xcode ships no SimulatorKit/HID and there is no
-  Simulator.app GUI. The filled state itself is pinned by the green "design
-  filled state" widget test; re-attempt when HID tooling exists.
-- **Shared items §2/§4/§6** (brand labels, `NestButton` label, font width)
-  remain open and non-blocking.
+- **`_HitTestExpand.extra` is dead** (`:290`, `:644-673`): `hitTest` never
+  reads it, yet `updateRenderObject` assigns it and calls
+  `markNeedsPaint()` — a pointless repaint per bar rebuild, and the number
+  is unrelated to the caption line height it nominally mirrors. Fix: delete
+  the field, setter, `markNeedsPaint` and the `extra:` argument.
+- **The overhang pass fires even when the normal path already hit**
+  (`_RenderHitTestExpand.hitTest`): a tap in the device-only ~4dp strip where
+  the Terms target overlaps the submit button is delivered to both. Inert
+  today (links are no-ops), a double activation once the routes land. Fix:
+  `if (!hit && !stackRect.contains(position)) { … }`; add a `tapAt` proof
+  when the strip becomes reachable in the harness.
+- **`_verifyTotal` is a lifetime cap** (`:498-502`): after 12 schedules the
+  font-swap safety net is permanently off for that `State`. The synchronous
+  layout measurement still runs on every rebuild, so the impact is latent.
+  Fix: reset `_verifyTotal = 0` in `didChangeDependencies` alongside
+  `_verifyLeft`.
 
 ## Checked — no bug found
 
-- **Kid-mode guard** — `APP_MODE=kid` + session kid mode deep-linking
-  `/create-account` redirects to `/parental-gate`.
-- **Restart / Drift persistence** — one owner row after create, no rename,
-  password never written (`seeded_submit_test.dart`).
+- **COPY** — the copy audit is green (15/15): the subtitle now carries
+  U+2019 (byte-verified by the test and review stages), the note U+2014 and
+  “Privacy Notice” the single blessed U+00A0; all nine strings are
+  byte-identical to the HTML.
+- **Kid-mode guard** — `APP_MODE=kid` + session kid mode → `/parental-gate`.
+- **Restart / Drift persistence** — one owner row, no rename, password never
+  written.
 - **Back / deep links** — no history → `/value-tour`; back-pops when a route
   is stacked; the form renders on all three seeds.
-- **Rapid double taps** — the `isSubmitting` guard blocks a second submit;
-  all three buttons disable/spin together.
-- **Text scale 1.3 + width 320/390/430** — matrix clean; the caption targets
-  survive live resize/scale/theme changes (new iteration-3 proofs).
-- **Dark-mode contrast** — unchanged token pairs (text ≥4.5:1; lilac shield
-  decorative).
-- **0/1/6 children, long UK names, empty lists, money, timezone/BST** — N/A
-  on this screen (static form, no money/date logic, `members` stream never
-  displayed). **CHILD ORDER** N/A (no children listed).
-- **Design-faithful non-finding** — the two legal targets overlap when the
-  caption wraps to two lines (the later box wins); the HTML's inline hit
-  boxes overlap between consecutive lines the same way. Do not “fix” it.
-- **Observations** — the first-frame target gap is invisible in screenshots
-  (`shot.sh` waits for a stable frame); `submitAttempted` stays sticky by
-  design; the design PNG's home-indicator pill is a `simctl` capture
-  artefact.
+- **Rapid double taps** — the `isSubmitting` guard blocks a second submit.
+- **Text scale 1.3 + width 320/390/430** — matrix clean; targets survive
+  live resize/scale/theme changes and equal the real paragraph boxes.
+- **Dark-mode contrast** — unchanged tokens (text ≥4.5:1; lilac decorative).
+- **0/1/6 children, long UK names, money, timezone/BST, empty lists** — N/A
+  on this screen (static form; no money/date logic; members stream never
+  displayed).
+- **Geometry / owner rules** — CTA hairline 678 vs the design's 677, submit
+  button 694–745 in both, note clearance 39dp; bottom edge uniform `surface`
+  to y=844 in both themes; 20px gutters hold.
+- **Design-faithful non-finding** — the two legal targets overlap laterally
+  when the caption wraps; the HTML's inline hit boxes overlap the same way.
 
 ## Suite state at hand-off (`app/`)
 
-- `dart format --set-exit-if-changed .` → `364 files (0 changed)`.
+- `dart format --set-exit-if-changed .` → `359 files (0 changed)`.
 - `flutter analyze` → `No issues found!` (no ignores added).
-- `flutter test test/features/auth` → **132 passed, 7 skipped, 0 failed**.
-- `flutter test` (full) → **659 passed, 7 skipped, 0 failed**.
-- The 7 skips are the open-bug proofs: `P03-BUG-6` (shared),
-  `P03-BUG-15` ×2 (`p03_bugs_test.dart` + `copy_audit_test.dart`),
-  `P03-BUG-16` (shared-blocked), `P03-BUG-18`, `P03-BUG-19`, `P03-BUG-20`.
-  `--run-skipped` fails each for the documented reason.
+- `flutter test test/features/auth` → **143 passed, 2 skipped, 0 failed**
+  (the skips are `P03-BUG-16` and `P03-BUG-21`; `P03-BUG-6` is now green).
+- `flutter test` (full) → **670 passed, 2 skipped, 0 failed**.
+- `--run-skipped` fails both skipped proofs for the documented reasons.
 
 ## Verdict
 
-One MAJOR bug remains (P03-BUG-15: the mandatory curly apostrophe — a
-one-character fix) plus four minor ones, two of which need an explicit
-decision (P03-BUG-16 shared component fix, P03-BUG-18 target geometry) and
-one shared font-pipeline item (P03-BUG-17). Fix 15, 19 and 20 in P03, decide
-16/18, then un-skip their proofs and re-run the simulator compare.
+One MAJOR regression remains open (P03-BUG-21: the empty live region — a
+three-line fix), plus P03-BUG-16 (now unblocked locally, coupled to
+SHARED_REQUEST §8) and the shared font-pipeline item P03-BUG-17. The rest of
+the screen is converged: geometry within 1–4dp, exact copy, green proof
+suite, and the iteration-4 mechanisms (`_HitTestExpand`, synchronous
+measurement) are sound but carry the three review hardening items above.
 
 VERDICT: FAIL

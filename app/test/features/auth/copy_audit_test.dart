@@ -77,9 +77,7 @@ void main() {
             'different character and must be flagged (COPY rule)',
       );
       await disposeApp(tester);
-      // skip: P03-BUG-15 (MAJOR, open) — the app ships U+0027; the same bug
-      // is also proved by p03_bugs_test.dart P03-BUG-15.
-    }, skip: true);
+    });
 
     testWidgets('note', (tester) async {
       await _pump(tester);
@@ -218,5 +216,102 @@ void main() {
       expect(tester.takeException(), isNull);
       await disposeApp(tester);
     });
+  });
+
+  group('P03 legal targets land exactly on the laid-out words', () {
+    // The targets are measured from a TextPainter mirror during layout
+    // (`_LegalLineState._measureSync`) and re-checked post-frame
+    // (`_verify`). This pins the mirror to the *real* paragraph: both sides
+    // are computed from the rendered glyphs, so it holds for any font.
+    for (final cfg in const <List<Object>>[
+      <Object>[320, 1.0],
+      <Object>[390, 1.0],
+      <Object>[430, 1.0],
+      <Object>[390, 1.3],
+      <Object>[320, 1.3],
+    ]) {
+      testWidgets(
+        '${cfg[0]}dp at scale ${cfg[1]}: targets equal the paragraph boxes',
+        (tester) async {
+          await _pump(tester, size: Size((cfg[0] as int).toDouble(), 844));
+          tester.platformDispatcher.textScaleFactorTestValue = cfg[1] as double;
+          addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 200));
+
+          final caption = find
+              .descendant(
+                of: find.byType(NestBottomCta),
+                matching: find.byType(RichText),
+              )
+              .last;
+          final paragraph = tester.renderObject<RenderParagraph>(caption);
+          final plain = paragraph.text.toPlainText();
+          final origin = paragraph.localToGlobal(Offset.zero);
+          // Line metrics from a mirror painter over the real paragraph
+          // (RenderParagraph has no public accessor).
+          final metrics = (TextPainter(
+            text: paragraph.text,
+            textAlign: paragraph.textAlign,
+            textDirection: paragraph.textDirection,
+            textScaler: paragraph.textScaler,
+            locale: paragraph.locale,
+            strutStyle: paragraph.strutStyle,
+          )..layout(maxWidth: paragraph.size.width)).computeLineMetrics();
+
+          /// The target the real paragraph implies: the label's union glyph
+          /// box, re-centred vertically on its own line, at least 44x44.
+          /// Computed in paragraph coordinates, then moved to global.
+          Rect expected(String label) {
+            final start = plain.indexOf(label);
+            Rect? box;
+            for (final found in paragraph.getBoxesForSelection(
+              TextSelection(
+                baseOffset: start,
+                extentOffset: start + label.length,
+              ),
+            )) {
+              box = box == null
+                  ? found.toRect()
+                  : box.expandToInclude(found.toRect());
+            }
+            final glyph = box!;
+            var y = 0.0;
+            var lineCentre = y;
+            for (final metric in metrics) {
+              if (glyph.center.dy >= y &&
+                  glyph.center.dy <= y + metric.height) {
+                lineCentre = y + metric.height / 2;
+                break;
+              }
+              y += metric.height;
+            }
+            return Rect.fromCenter(
+              center: Offset(glyph.center.dx, lineCentre),
+              width: glyph.width < NestDevice.tapParent
+                  ? NestDevice.tapParent
+                  : glyph.width,
+              height: NestDevice.tapParent,
+            ).shift(origin);
+          }
+
+          for (final pair in <List<String>>[
+            <String>['Terms', 'p03_terms'],
+            <String>['Privacy${nbsp}Notice', 'p03_privacy'],
+          ]) {
+            final key = ValueKey<String>(pair[1]);
+            expect(
+              tester.getRect(find.byKey(key)),
+              expected(pair[0]),
+              reason:
+                  'the $key target drifted from the laid-out text at '
+                  '${cfg[0]}dp scale ${cfg[1]}',
+            );
+          }
+          expect(tester.takeException(), isNull);
+          await disposeApp(tester);
+        },
+      );
+    }
   });
 }

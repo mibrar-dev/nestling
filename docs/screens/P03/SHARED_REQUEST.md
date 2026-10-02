@@ -8,16 +8,12 @@ merged into this worktree by `2027506`): the compact branch now renders a
 nested `Expanded`/`Spacer`. P03 reverted its `title: ''` workaround to
 `title: null` in build iteration 2 — no P03 action remains.
 
-## 2. Brand buttons expose a doubled screen-reader label (non-blocking)
+## 2. Brand buttons expose a doubled screen-reader label — RESOLVED
 
-`NestAppleButton`/`NestGoogleButton` (`nest_brand_buttons.dart`
-`_BrandButton`) wrap an explicit `Semantics(label:)` around an `InkWell`
-whose subtree holds a `Text` with the same string; the InkWell merges both
-into one node, so assistive tech hears e.g.
-`'Continue with Apple\nContinue with Apple'`. P03's widget tests pin the
-label with `contains` rather than exact equality. Suggested core fix:
-`excludeSemantics: true` on the inner label `Text` (or an `ExcludeSemantics`
-around it) so only the explicit label survives. Blocks: no.
+Resolved by the shared batch `7eaa1f7` ("…a11y/type fixes", merged `4751c52`):
+`_BrandButton` now wraps the inner label `Text` in `ExcludeSemantics`
+(`nest_brand_buttons.dart:171-173`), so assistive tech hears the label once.
+P03's `P03-BUG-4` proof and the view tests' labels are unchanged and green.
 
 ## 3. Compact nav-bar height: 44dp rendered vs the design's 60dp — RESOLVED
 
@@ -26,46 +22,28 @@ spec's 4/12 vertical padding around its 44dp slots and renders **60dp** on
 P03. The former `P03-BUG-3` proof is now green and kept as a regression
 guard.
 
-## 4. `NestButton` exposes a doubled screen-reader label (new, non-blocking)
+## 4. `NestButton` exposes a doubled screen-reader label — RESOLVED
 
-`NestButton` (`nest_button.dart:151-153`) wraps
-`Semantics(button: true, label: widget.semanticLabel ?? widget.label)` around
-a `GestureDetector` whose `Text(widget.label)` merges into the same node, so
-every primary CTA announces its label twice. P03's submit button reads
-`'Create account\nCreate account'` in the semantics tree (proof
-`P03-BUG-6`, currently skipped; the app-wide blast radius is every
-`NestButton`). Suggested core fix: same as item 2 — exclude the inner label
-`Text` from semantics. Blocks: no.
+Resolved by the same shared batch (`7eaa1f7`): the CTA label `Text` is now
+inside an `ExcludeSemantics` (`nest_button.dart:216-218`), so the P03 submit
+button announces exactly "Create account". The `P03-BUG-6` proof is now
+green (un-skipped, kept as a regression guard).
 
-## 5. `NestTextField` couples the error row's layout and the error border to one flag (new, blocking P03-BUG-16)
+## 5. `NestTextField` couples the error row's layout and the error border to one flag — RESOLVED
 
-`NestTextField` (`nest_text_field.dart:150-171`) hands `errorText` to
-Material's `InputDecoration`, which lays it out on the field's *content* box
-— measured `left = 40` for a field whose label, border and input all start at
-`left = 20`. The design's `.field` is a flex column
-(`components.css:129-135`: label, input, `.helper` and `.error` all share the
-column), so the error belongs on the same gutter as the label. P03 already
-hides the shared `helperText` and renders its own gutter-aligned helper row
-(iteration-2 fix for ORCHESTRATOR_NOTES §4), and iteration 3 also owns the
-error row — which is why the error is now on the gutter
-(proof `P03-BUG-11`).
+Resolved by the shared batch `7eaa1f7` (merged before iteration 4's build;
+the build note's claim that it "did not land" is wrong): the decoration no
+longer takes `errorText`, the error renders as a **gutter-aligned row under
+the input** (13/18 danger w600, same x as the label), the danger border is
+forced explicitly, and an error suppresses the helper (error-wins).
+`shared_batch1_test.dart` pins all three behaviours.
 
-The catch: `errorText != null` is also the *only* flag that selects
-`errorBorder` (`nest_text_field.dart:128-171`). With `errorText: null` the
-input keeps its resting `line` border, so the design's
-`input[aria-invalid="true"] { border-color: var(--danger) }`
-(`components.css:135`, SPACING_SPEC §3) is lost — an invalid field now reads
-as untouched with red text only (proof `P03-BUG-16`). Passing `errorText`
-again restores the border but re-opens the 20dp indent, so BUG-11 and BUG-16
-are mutually exclusive with the component as it stands.
-
-Suggested core fix: separate the two concerns — a `hasError` (or
-`errorBorder`) flag that drives the border independently of whether the
-component renders the message row; a gutter-aligned error layout would close
-the other half. Blocks: yes for P03-BUG-16 — the screen cannot converge on
-both proofs until this lands (P03 keeps the visible gutter fix and leaves
-`P03-BUG-16` skipped; if the shared change is not taken, the orchestrator
-should explicitly retire that proof instead).
+Consequence for P03: passing `errorText` no longer re-opens `P03-BUG-11`
+(the row is on the gutter), so `P03-BUG-16` (no danger border) is a local
+switch away — pass `errorText` to both fields and delete the screen-owned
+error rows. The one remaining gap is announcement (§8 below), which is why
+the proof is still skip-marked: doing the switch without §8 would trade
+BUG-16 for BUG-20.
 
 ## 6. The served Inter build is ~3–4% wider than the design's, so line
 ## breaks land early (new, non-blocking)
@@ -106,3 +84,20 @@ owns (the standing tokens-only rule). Suggested core addition:
 in `core/design_system/tokens/typography.dart`, after which both P03
 overrides disappear. Blocks: no — `P03-BUG-12` pins the current override and
 the geometry matches the design.
+
+## 8. `NestTextField`'s gutter error row should announce like Material's did
+## (new, non-blocking)
+
+Need: the shared `errorText` row renders as a plain `Text`
+(`nest_text_field.dart:199-206`) — no live region, no explicit label node
+beyond the text's own. Material wrapped `InputDecoration.errorText` in a
+`liveRegion` (`material/input_decorator.dart:419`), so a VoiceOver user heard
+a client-side validation error the moment it appeared; the shared row no
+longer does. P03 currently works around Material and owns its error rows, and
+its attempt to re-add the live region regressed into an empty-label node
+(P03-BUG-21); once this shared row announces (e.g.
+`Semantics(liveRegion: true, label: errorText,
+child: ExcludeSemantics(child: Text(errorText, …)))`), P03 can pass
+`errorText`, delete its owned rows, and close P03-BUG-16/20/21 together.
+Blocks: no — P03 can fix BUG-21 locally on its owned rows, but not BUG-16
+without this or a decision to drop the live-region requirement.

@@ -1,66 +1,62 @@
 // P03 Create account — adversarial bug proofs.
 //
-// Iterations 2–3's builds closed every iteration-1/2 bug except the shared
-// `NestButton` doubling (P03-BUG-6); those proofs now run green as regression
-// guards. This file's newest proofs capture the bugs still open after the
-// iteration-3 fix pass. Every open-bug proof is `skip:`-marked with its id so
-// `flutter test` stays green; the fix iteration must un-skip each one and
-// make it pass. Full reports (severity, repro, suggested fix) live in
-// `docs/screens/P03/6_bugs.md`.
+// Iterations 2–4's builds closed every bug reported by iterations 1–3; those
+// proofs run green as regression guards. Two proofs remain open after the
+// iteration-4 pass: P03-BUG-16 (unblocked and local, gated on the §8 live
+// region) and P03-BUG-21 (a regression this iteration introduced). Every
+// open-bug proof is `skip:`-marked with its id so `flutter test` stays
+// green; the fix must un-skip each one and make it pass. Full reports live
+// in `docs/screens/P03/6_bugs.md`.
 //
 //   flutter test test/features/auth/p03_bugs_test.dart
 //
-// P03-BUG-1..8  iteration-1 bugs. BUG-1/2/3/4/5/7/8 are fixed (proofs green
-//               regression guards). BUG-6 stays skipped — shared core
-//               (`NestButton` announces its label twice, SHARED_REQUEST §4).
-// P03-BUG-9..14 iteration-2 bugs, all fixed in iteration 3 (proofs green):
-//               split "Privacy Notice" label, misplaced/oversized legal
-//               targets, indented error, 18dp caption lines, dropped stack
-//               trace.
-//
-// P03-BUG-15 (MAJOR)  the subtitle ships a straight U+0027 apostrophe where
-//               the design HTML has `You&rsquo;re` (U+2019). Mandatory
-//               ORCHESTRATOR_NOTES iteration-3 item 2 + the standing COPY
-//               rule. Also proved in `copy_audit_test.dart` ("subtitle").
-// P03-BUG-16 (MINOR, shared)  the iteration-3 BUG-11 fix passes
-//               `errorText: null` to the shared field so the error can own
-//               the gutter — which also switches the input border off
-//               `danger` (`.field input[aria-invalid="true"] { border-color:
-//               var(--danger) }`, components.css:135; SPACING_SPEC §3). The
-//               invalid field now reads as untouched with red text only.
-//               Blocked on SHARED_REQUEST §5 (a separate error flag in
-//               `NestTextField`); P03 cannot fix it without re-opening
-//               BUG-11.
-// P03-BUG-18 (MINOR)  the legal targets' overhang beyond the caption block
-//               is not hit-testable (Flutter bounds hit tests at the parent
-//               box), so each target's effective height is ~32dp, not the
-//               rendered 44dp. The rendered size assertions are blind to it;
-//               this proof taps the extreme points.
-// P03-BUG-19 (MINOR)  the targets are built from a one-shot post-frame
-//               measurement, so they are missing from the first painted
-//               frame and any reflow that is not a MediaQuery/theme change
-//               (the runtime font swap is the real one) leaves them stale.
-// P03-BUG-20 (MINOR)  moving the validation error out of
-//               `InputDecoration` also moved it out of Material's live
-//               region: client-side errors are announced by nothing (the
-//               screen's `sendAnnouncement` only covers server `formError`).
-//
-// Carried, no local test possible: P03-BUG-17 (MINOR, shared §6) — the
-// served Inter build is ~3–4% wider than the design's, so the subtitle
-// breaks after "Children" instead of "Children never" (ORCHESTRATOR_NOTES
-// iteration-3 item 2). The style is already the design token; see
-// SHARED_REQUEST §6.
+// P03-BUG-1..8   iteration-1 bugs — all fixed. The shared label doublings
+//                (P03-BUG-6, brand buttons) were fixed by the shared batch
+//                `7eaa1f7` (inner label Texts excluded from semantics), so
+//                those proofs now run green.
+// P03-BUG-9..14  iteration-2 bugs — all fixed in iteration 3.
+// P03-BUG-15     the subtitle's straight U+0027 apostrophe — fixed in
+//                iteration 4 (the copy audit is green).
+// P03-BUG-16 (MINOR, open — UNBLOCKED, not shared-blocked as iteration 4's
+//                build claimed): shared batch `7eaa1f7` already landed
+//                `NestTextField`'s gutter-aligned `errorText` row AND forced
+//                danger border, so passing `errorText` fixes the missing
+//                border without re-opening BUG-11. Caveat: the component's
+//                row is a plain `Text` (no live region), so the switch also
+//                needs SHARED_REQUEST §8 (or accept losing BUG-20's live
+//                announcement). Do not put `errorText` back while keeping
+//                the owned row — the message would render twice.
+// P03-BUG-17 (MINOR, shared §6)  the served Inter build is ~3–4% wider than
+//                the design's, so the subtitle breaks after "Children"
+//                instead of "Children never". No local test is possible and
+//                no token-violating local fix is acceptable.
+// P03-BUG-18/19/20  iteration-3 bugs — fixed in iteration 4 (hit-test
+//                expansion for the overhang, layout-synchronous
+//                measurement, live-region error rows).
+// P03-BUG-21 (MAJOR, regression)  the BUG-20 fix wrapped each owned error
+//                row's `Text` in `ExcludeSemantics` inside
+//                `Semantics(liveRegion: true)`: the live-region node carries
+//                an EMPTY label, so the validation message is neither
+//                announced nor present in the semantics tree. Fix: carry the
+//                message on the wrapper — `Semantics(liveRegion: true,
+//                label: message, child: ExcludeSemantics(Text(message)))` —
+//                or drop the exclusion (watch for the label-doubling merge
+//                the legal links show).
 //
 // Checked and clean this iteration (no proof needed): kid-mode deep link →
 // `/parental-gate`; restart persistence (one owner row); back/deep links;
-// 320/390/430 × 1.0/1.3 matrix; dark-mode contrast; the two legal targets'
-// lateral overlap is design-faithful (the HTML's inline hit boxes overlap
-// between consecutive lines too); money/timezone edge cases N/A (no money or
-// dates on this screen); 0/1/6 children N/A (the form is static and never
-// renders the members list); CHILD ORDER N/A. The test harness' fallback
-// font is far wider than Nunito/Inter, so headline line-count measurements
-// taken with it are NOT product bugs — the real fonts were used to verify
-// `maxLines: 3` fits at scale 1.3.
+// 320/390/430 × 1.0/1.3 matrix; dark-mode contrast; all nine strings
+// byte-identical to the HTML (U+2019, U+2014, one U+00A0) with the
+// target/paragraph equality proofs green; bottom edge/alignment per the
+// owner rules; the two legal targets' lateral overlap is design-faithful;
+// money/timezone/children cases N/A; CHILD ORDER N/A. The harness' fallback
+// font is not Inter, so its line breaks are not product geometry.
+//
+// Carried review items, no local proof possible: the `_HitTestExpand.extra`
+// dead field (pointless repaint), the fallback pass firing even when the
+// normal path already hit (a device-only ~4dp strip once the links become
+// live), and `_verifyTotal` never reset (the font-swap safety net stops
+// after 12 schedules). Suggested fixes are in `docs/screens/P03/6_bugs.md`.
 
 import 'dart:async';
 
@@ -533,9 +529,9 @@ void main() {
 
     handle.dispose();
     await disposeApp(tester);
-    // skip: P03-BUG-6 (MINOR, shared) — NestButton label merges with the
-    // inner Text (SHARED_REQUEST §4).
-  }, skip: true);
+    // P03-BUG-6 is FIXED: the shared batch (7eaa1f7) excludes the inner
+    // label Text, so the CTA node is a single 'Create account'. Kept green.
+  });
 
   // -------------------------------------------------------------------
   // P03-BUG-7 (MINOR) — the headline does not take the design's line break
@@ -839,77 +835,12 @@ void main() {
     },
   );
 
-  // -------------------------------------------------------------------
-  // P03-BUG-16 (MINOR) — an invalid field no longer paints the danger border.
-  // The design marks the input itself, not just the message:
-  // `.field input[aria-invalid="true"] { border-color: var(--danger) }`
-  // (design/html-source/components.css:135, SPACING_SPEC §3).
-  // -------------------------------------------------------------------
-  testWidgets('P03-BUG-16 an invalid field paints the danger border', (
-    tester,
-  ) async {
-    await _pumpCreateAccount(tester);
-    final bloc = BlocProvider.of<AuthBloc>(
-      tester.element(find.byType(CreateAccountView)),
-    );
-    final tokens = tester.element(find.byType(NestBottomCta)).nest;
-
-    /// Every border painted inside the keyed field, innermost last.
-    List<Color> fieldBorders(ValueKey<String> key) {
-      final painted = find
-          .byWidgetPredicate(
-            (w) =>
-                (w is DecoratedBox && w.decoration is BoxDecoration) ||
-                (w is Container && w.decoration is BoxDecoration),
-            description: 'box-decorated',
-          )
-          .evaluate();
-      final colours = <Color>[];
-      for (final element in painted) {
-        final decoration = element.widget is DecoratedBox
-            ? (element.widget as DecoratedBox).decoration as BoxDecoration
-            : (element.widget as Container).decoration! as BoxDecoration;
-        final border = decoration.border;
-        if (border is! Border) {
-          continue;
-        }
-        // Only the field's own outline: opaque, token-coloured borders.
-        final colour = border.top.color;
-        if (colour.a > 0 &&
-            (colour == tokens.line || colour == tokens.danger)) {
-          colours.add(colour);
-        }
-      }
-      return colours;
-    }
-
-    expect(
-      fieldBorders(const ValueKey('p03_email')),
-      isNot(contains(tokens.danger)),
-      reason: 'a clean field must not be marked invalid',
-    );
-
-    bloc.add(const AuthSubmitted());
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text(_emailError), findsOneWidget);
-
-    expect(
-      fieldBorders(const ValueKey('p03_email')),
-      contains(tokens.danger),
-      reason:
-          'the design marks the invalid input itself '
-          '(`input[aria-invalid="true"] { border-color: var(--danger) }`, '
-          'components.css:135; SPACING_SPEC §3). Since the iteration-3 '
-          'BUG-11 fix the field is handed errorText: null, so it keeps the '
-          'resting `line` border and only the message is red',
-    );
-
-    await disposeApp(tester);
-    // skip: P03-BUG-16 (MINOR, shared) — blocked on SHARED_REQUEST §5 (a
-    // separate `hasError` flag in NestTextField). Passing errorText again
-    // would re-open P03-BUG-11.
-  }, skip: true);
+  // P03-BUG-16, open (see its restored proof near the end of this file): the
+  // shared batch `7eaa1f7` already made `NestTextField` render an
+  // `errorText` row on the gutter with the danger border forced, so the old
+  // "mutually exclusive with BUG-11" note is obsolete — the fix is to pass
+  // `errorText` and drop the screen-owned rows, gated on SHARED_REQUEST §8
+  // for the live-region half (or an explicit decision to drop BUG-20).
 
   // -------------------------------------------------------------------
   // P03-BUG-15 (MAJOR, mandatory) — the subtitle uses a straight U+0027
@@ -933,8 +864,7 @@ void main() {
     );
 
     await disposeApp(tester);
-    // skip: P03-BUG-15 (MAJOR, open) — subtitle apostrophe is U+0027.
-  }, skip: true);
+  });
 
   // -------------------------------------------------------------------
   // P03-BUG-18 (MINOR) — the legal targets' overhang beyond the caption
@@ -973,8 +903,7 @@ void main() {
     }
 
     await disposeApp(tester);
-    // skip: P03-BUG-18 (MINOR, open) — the overhang is not hit-testable.
-  }, skip: true);
+  });
 
   // -------------------------------------------------------------------
   // P03-BUG-19 (MINOR) — the targets come from a one-shot post-frame
@@ -1004,8 +933,7 @@ void main() {
     expect(find.byKey(const ValueKey('p03_privacy')), findsOneWidget);
 
     await disposeApp(tester);
-    // skip: P03-BUG-19 (MINOR, open) — targets lag the first frame.
-  }, skip: true);
+  });
 
   // -------------------------------------------------------------------
   // P03-BUG-20 (MINOR) — owning the error row moved the validation message
@@ -1038,7 +966,124 @@ void main() {
 
     handle.dispose();
     await disposeApp(tester);
-    // skip: P03-BUG-20 (MINOR, open) — validation errors are not live
-    // regions.
+  });
+
+  // -------------------------------------------------------------------
+  // P03-BUG-16 (MINOR, open — UNBLOCKED) — an invalid field paints no danger
+  // border. Iteration 4 both deleted and restored this proof on the premise
+  // that the shared `hasError` flag never landed; in fact `7eaa1f7` landed
+  // the gutter row + forced danger border, so the remaining work is local
+  // (`errorText` + drop the owned rows) gated on SHARED_REQUEST §8 for the
+  // live-region half. The design marks the input itself, not just the
+  // message: `.field input[aria-invalid="true"] { border-color: var(--danger) }`
+  // (design/html-source/components.css:135, SPACING_SPEC §3).
+  // -------------------------------------------------------------------
+  testWidgets('P03-BUG-16 an invalid field paints the danger border', (
+    tester,
+  ) async {
+    await _pumpCreateAccount(tester);
+    final bloc = BlocProvider.of<AuthBloc>(
+      tester.element(find.byType(CreateAccountView)),
+    );
+    final tokens = tester.element(find.byType(NestBottomCta)).nest;
+
+    /// The colours of every outline painted inside the keyed field.
+    List<Color> fieldBorders(ValueKey<String> key) {
+      final painted = find
+          .byWidgetPredicate(
+            (w) =>
+                (w is DecoratedBox && w.decoration is BoxDecoration) ||
+                (w is Container && w.decoration is BoxDecoration),
+            description: 'box-decorated',
+          )
+          .evaluate();
+      final colours = <Color>[];
+      for (final element in painted) {
+        final decoration = element.widget is DecoratedBox
+            ? (element.widget as DecoratedBox).decoration as BoxDecoration
+            : (element.widget as Container).decoration! as BoxDecoration;
+        final border = decoration.border;
+        if (border is! Border) {
+          continue;
+        }
+        final colour = border.top.color;
+        if (colour.a > 0 &&
+            (colour == tokens.line || colour == tokens.danger)) {
+          colours.add(colour);
+        }
+      }
+      return colours;
+    }
+
+    expect(
+      fieldBorders(const ValueKey('p03_email')),
+      isNot(contains(tokens.danger)),
+      reason: 'a clean field must not be marked invalid',
+    );
+
+    bloc.add(const AuthSubmitted());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text(_emailError), findsOneWidget);
+
+    expect(
+      fieldBorders(const ValueKey('p03_email')),
+      contains(tokens.danger),
+      reason:
+          'the design marks the invalid input itself '
+          '(`input[aria-invalid="true"] { border-color: var(--danger) }`, '
+          'components.css:135; SPACING_SPEC §3). The field is handed '
+          'errorText: null so the message can own the gutter, which also '
+          'leaves the resting `line` border on an invalid field',
+    );
+
+    await disposeApp(tester);
+    // skip: P03-BUG-16 (MINOR, open, now unblocked by shared batch 7eaa1f7).
+    // `NestTextField` now renders `errorText` as a gutter-aligned row AND
+    // forces the danger border, so passing errorText would fix this without
+    // re-opening BUG-11. Caveat: the component's row is a plain Text (no
+    // live region), so switching to it trades BUG-16 for BUG-20 unless core
+    // lands SHARED_REQUEST §8 (live-region error row). Do not pass errorText
+    // while keeping the owned row — the message would render twice.
+  }, skip: true);
+
+  // -------------------------------------------------------------------
+  // P03-BUG-21 (MAJOR, regression) — the BUG-20 fix wrapped the owned error
+  // row in `ExcludeSemantics` inside `Semantics(liveRegion: true)`, so the
+  // live region announces an empty node: the validation message is neither
+  // announced nor present in the semantics tree for a screen reader.
+  // -------------------------------------------------------------------
+  testWidgets('P03-BUG-21 the validation errors are reachable by a screen '
+      'reader', (tester) async {
+    await _pumpCreateAccount(tester);
+    final handle = tester.ensureSemantics();
+    BlocProvider.of<AuthBloc>(tester.element(find.byType(CreateAccountView)))
+        .add(const AuthSubmitted());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    for (final message in const <String>[_emailError, _passwordError]) {
+      expect(
+        find.bySemanticsLabel(message),
+        findsOneWidget,
+        reason:
+            'the error row wraps its Text in ExcludeSemantics, so the '
+            'live-region node it leaves behind has an empty label and the '
+            'message cannot be read or announced',
+      );
+      final data = tester
+          .getSemantics(find.bySemanticsLabel(message).first)
+          .getSemanticsData();
+      expect(
+        data.flagsCollection.isLiveRegion,
+        isTrue,
+        reason: 'and the node that carries it must be the live region',
+      );
+    }
+
+    handle.dispose();
+    await disposeApp(tester);
+    // skip: P03-BUG-21 (MAJOR, open) — the live-region nodes have empty
+    // labels; the message left the semantics tree.
   }, skip: true);
 }

@@ -29,7 +29,7 @@ import '../../test_scope.dart';
 
 const String _title = 'Create your family account';
 const String _subtitle =
-    "You're the grown-up in charge. Children never need an email.";
+    'You’re the grown-up in charge. Children never need an email.';
 const String _note = 'No child emails or photos — ever.';
 
 const ValueKey<String> _appleKey = ValueKey('p03_apple');

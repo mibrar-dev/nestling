@@ -113,7 +113,7 @@ class _CreateAccountViewState extends State<CreateAccountView> {
                       ),
                       const SizedBox(height: NestSpacing.s2),
                       Text(
-                        "You're the grown-up in charge. "
+                        'You’re the grown-up in charge. '
                         'Children never need an email.',
                         style: NestType.body(color: tokens.ink2),
                       ),
@@ -185,10 +185,18 @@ class _CreateAccountViewState extends State<CreateAccountView> {
                               ),
                               if (state.emailError != null) ...[
                                 const SizedBox(height: NestSpacing.gap6),
-                                Text(
-                                  state.emailError!,
-                                  style: NestType.caption(color: tokens.danger)
-                                      .copyWith(fontWeight: FontWeight.w600),
+                                // P03-BUG-20: the owned row must announce like
+                                // Material's live-region error row did.
+                                Semantics(
+                                  liveRegion: true,
+                                  child: ExcludeSemantics(
+                                    child: Text(
+                                      state.emailError!,
+                                      style: NestType.caption(
+                                        color: tokens.danger,
+                                      ).copyWith(fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
                                 ),
                               ],
                             ],
@@ -233,10 +241,18 @@ class _CreateAccountViewState extends State<CreateAccountView> {
                                 ),
                               ] else ...[
                                 const SizedBox(height: NestSpacing.gap6),
-                                Text(
-                                  errorText,
-                                  style: NestType.caption(color: tokens.danger)
-                                      .copyWith(fontWeight: FontWeight.w600),
+                                // P03-BUG-20: announce like Material's
+                                // live-region error row did.
+                                Semantics(
+                                  liveRegion: true,
+                                  child: ExcludeSemantics(
+                                    child: Text(
+                                      errorText,
+                                      style: NestType.caption(
+                                        color: tokens.danger,
+                                      ).copyWith(fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
                                 ),
                               ],
                             ],
@@ -270,23 +286,26 @@ class _CreateAccountViewState extends State<CreateAccountView> {
               ),
               BlocBuilder<AuthBloc, AuthState>(
                 builder: (context, state) {
-                  return NestBottomCta(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: <Widget>[
-                        NestButton(
-                          key: const ValueKey('p03_submit'),
-                          label: 'Create account',
-                          loading: state.isSubmitting,
-                          onPressed: state.canSubmit
-                              ? () => context.read<AuthBloc>().add(
-                                  const AuthSubmitted(),
-                                )
-                              : null,
-                        ),
-                        const SizedBox(height: NestSpacing.s2),
-                        const _LegalLine(),
-                      ],
+                  return _HitTestExpand(
+                    extra: (NestDevice.tapParent - NestSpacing.s5) / 2,
+                    child: NestBottomCta(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          NestButton(
+                            key: const ValueKey('p03_submit'),
+                            label: 'Create account',
+                            loading: state.isSubmitting,
+                            onPressed: state.canSubmit
+                                ? () => context.read<AuthBloc>().add(
+                                    const AuthSubmitted(),
+                                  )
+                                : null,
+                          ),
+                          const SizedBox(height: NestSpacing.s2),
+                          const _LegalLine(),
+                        ],
+                      ),
                     ),
                   );
                 },
@@ -350,127 +369,364 @@ class _LegalLine extends StatefulWidget {
 class _LegalLineState extends State<_LegalLine> {
   final GlobalKey _paragraphKey = GlobalKey();
 
-  /// Stack-local boxes of the two link words, measured post-frame.
-  Rect? _termsRect;
-  Rect? _privacyRect;
+  /// Boxes the overlay currently shows (verification compares against these).
+  Rect? _shownTerms;
+  Rect? _shownPrivacy;
+
+  /// Remaining post-frame verification passes (P03-BUG-19): a runtime font
+  /// swap reflows the paragraph without rebuilding the widget, so a bounded
+  /// chain re-checks the real paragraph against what was built.
+  int _verifyLeft = 0;
+  static const int _verifyBudget = 4;
+
+  /// Hard stop for verification scheduling (P03-BUG-19): even under
+  /// permanent drift the chain must end, or `pumpAndSettle` never settles.
+  int _verifyTotal = 0;
+  static const int _verifyTotalCap = 12;
 
   @override
   void initState() {
     super.initState();
-    _scheduleMeasure();
+    _verifyLeft = _verifyBudget;
+    _scheduleVerify();
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // The caption's metrics move with these; re-measure after the frame.
+    // The caption's metrics move with these; rebuild re-measures
+    // synchronously, and the verification chain is re-armed.
     MediaQuery.sizeOf(context);
     MediaQuery.textScalerOf(context);
-    _scheduleMeasure();
+    _verifyLeft = _verifyBudget;
+    _scheduleVerify();
   }
 
-  void _scheduleMeasure() {
-    WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
+  /// The single span children for the paragraph and the measuring painter,
+  /// so the two can never diverge (P03-BUG-19).
+  static List<TextSpan> _captionChildren(TextStyle link) => <TextSpan>[
+    const TextSpan(text: 'By continuing you agree to our '),
+    TextSpan(text: 'Terms', style: link),
+    const TextSpan(text: ' and '),
+    TextSpan(text: _LegalLine.privacyLabel, style: link),
+  ];
+
+  /// Target rects in paragraph coordinates, laid out synchronously with the
+  /// same spans, alignment and text metrics the paragraph itself uses — so
+  /// the targets exist in the first painted frame (P03-BUG-19). The root
+  /// style repeats exactly what `Text.rich` resolves internally
+  /// (`DefaultTextStyle` merged with the `style:` argument); without it the
+  /// mirror would drift forever and the verification chain below would never
+  /// settle. Each target is centred horizontally on its word and vertically
+  /// on its *line* (not the glyph box, whose leading offset would make the
+  /// overhang lopsided): exactly 12dp of overhang on every side, which
+  /// `_HitTestExpand` covers exactly (P03-BUG-18).
+  /// Union glyph box for [label] in [plain], via [boxesOf].
+  static Rect? _unionBox(
+    String plain,
+    List<TextBox> Function(TextSelection) boxesOf,
+    String label,
+  ) {
+    final start = plain.indexOf(label);
+    if (start < 0) return null;
+    Rect? box;
+    for (final textBox in boxesOf(
+      TextSelection(baseOffset: start, extentOffset: start + label.length),
+    )) {
+      final rect = textBox.toRect();
+      box = box == null ? rect : box.expandToInclude(rect);
+    }
+    return box;
   }
 
-  void _measure() {
-    if (!mounted) return;
-    final renderObject = _paragraphKey.currentContext?.findRenderObject();
-    if (renderObject is! RenderParagraph) return;
-    final paragraph = renderObject;
-    Rect? boxFor(String label) {
-      final plain = paragraph.text.toPlainText();
-      final start = plain.indexOf(label);
-      if (start < 0) return null;
-      Rect? box;
-      for (final textBox in paragraph.getBoxesForSelection(
-        TextSelection(baseOffset: start, extentOffset: start + label.length),
-      )) {
-        final rect = textBox.toRect();
-        box = box == null ? rect : box.expandToInclude(rect);
+  /// A 44dp target centred horizontally on [box] and vertically on its line
+  /// (not the glyph box, whose leading offset would make the overhang
+  /// lopsided): exactly 12dp of overhang on every side, which
+  /// `_HitTestExpand` covers exactly (P03-BUG-18).
+  static Rect? _targetOnLines(List<LineMetrics> metrics, Rect? box) {
+    if (box == null) return null;
+    final cy = box.center.dy;
+    var y = 0.0;
+    for (final metric in metrics) {
+      if (cy >= y && cy <= y + metric.height) {
+        return Rect.fromCenter(
+          center: Offset(box.center.dx, y + metric.height / 2),
+          width: math.max(box.width, NestDevice.tapParent),
+          height: NestDevice.tapParent,
+        );
       }
-      if (box == null) return null;
-      // Boxes are paragraph-local; the overlay lives in the Stack, which
-      // sizes exactly to the paragraph.
-      final origin = paragraph.localToGlobal(Offset.zero);
-      final stack = context.findRenderObject();
-      final stackOrigin = stack is RenderBox
-          ? stack.localToGlobal(Offset.zero)
-          : origin;
-      return box.shift(origin - stackOrigin);
+      y += metric.height;
     }
-
-    final terms = boxFor('Terms');
-    final privacy = boxFor(_LegalLine.privacyLabel);
-    if (terms != _termsRect || privacy != _privacyRect) {
-      setState(() {
-        _termsRect = terms;
-        _privacyRect = privacy;
-      });
-    }
+    return null;
   }
 
-  /// A 44dp target centred over its word (P03-BUG-10/13).
-  static Rect _targetRect(Rect label) => Rect.fromCenter(
-    center: label.center,
-    width: math.max(label.width, NestDevice.tapParent),
-    height: NestDevice.tapParent,
-  );
+  static ({Rect? terms, Rect? privacy}) _measureSync(
+    TextStyle rootStyle,
+    List<TextSpan> children,
+    TextAlign textAlign,
+    TextDirection textDirection,
+    TextScaler textScaler,
+    Locale? locale,
+    double maxWidth,
+  ) {
+    if (!maxWidth.isFinite || maxWidth <= 0) {
+      return (terms: null, privacy: null);
+    }
+    final painter = TextPainter(
+      text: TextSpan(style: rootStyle, children: children),
+      textAlign: textAlign,
+      textDirection: textDirection,
+      textScaler: textScaler,
+      locale: locale,
+    )..layout(maxWidth: maxWidth);
+    final metrics = painter.computeLineMetrics();
+    Rect? targetFor(String label) => _targetOnLines(
+      metrics,
+      _unionBox(
+        painter.text!.toPlainText(),
+        painter.getBoxesForSelection,
+        label,
+      ),
+    );
+
+    return (
+      terms: targetFor('Terms'),
+      privacy: targetFor(_LegalLine.privacyLabel),
+    );
+  }
+
+  void _scheduleVerify() {
+    if (_verifyTotal >= _verifyTotalCap) return;
+    _verifyTotal++;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _verify());
+  }
+
+  /// Re-measures the real paragraph and rebuilds on drift (font swaps).
+  /// Quiescent trees never call setState, so tests stay deterministic.
+  void _verify() {
+    if (!mounted || _verifyLeft <= 0) return;
+    _verifyLeft--;
+    final renderObject = _paragraphKey.currentContext?.findRenderObject();
+    final shownTerms = _shownTerms;
+    final shownPrivacy = _shownPrivacy;
+    if (renderObject is! RenderParagraph ||
+        shownTerms == null ||
+        shownPrivacy == null) {
+      if (_verifyLeft > 0) _scheduleVerify();
+      return;
+    }
+    final paragraph = renderObject;
+    // Mirror the paragraph (same resolved text and metrics, like the
+    // proofs' own helpers) so real boxes and built targets compare in the
+    // same coordinates.
+    final mirror = TextPainter(
+      text: paragraph.text,
+      textAlign: paragraph.textAlign,
+      textDirection: paragraph.textDirection,
+      textScaler: paragraph.textScaler,
+      locale: paragraph.locale,
+      maxLines: paragraph.maxLines,
+      strutStyle: paragraph.strutStyle,
+    )..layout(maxWidth: paragraph.size.width);
+    final metrics = mirror.computeLineMetrics();
+    final origin = paragraph.localToGlobal(Offset.zero);
+    final stack = context.findRenderObject();
+    final stackOrigin = stack is RenderBox
+        ? stack.localToGlobal(Offset.zero)
+        : origin;
+    final shift = origin - stackOrigin;
+    Rect? targetFor(String label) {
+      final target = _targetOnLines(
+        metrics,
+        _unionBox(
+          mirror.text!.toPlainText(),
+          mirror.getBoxesForSelection,
+          label,
+        ),
+      );
+      return target?.shift(shift);
+    }
+
+    if (targetFor('Terms') != shownTerms ||
+        targetFor(_LegalLine.privacyLabel) != shownPrivacy) {
+      // Fonts (or metrics) moved under us: rebuild re-measures synchronously.
+      setState(() {});
+      _verifyLeft = _verifyBudget;
+    }
+    if (_verifyLeft > 0) _scheduleVerify();
+  }
 
   @override
   Widget build(BuildContext context) {
     final tokens = context.nest;
-    // P03-BUG-12: the design's link lines are 20dp, not the 18dp caption
-    // default — every caption line holds a link, so the block is 40dp.
-    final base = NestType.caption(color: tokens.ink2).copyWith(height: 20 / 13);
+    // Design `.link { line-height: 20px }` via the spacing token until
+    // `NestType` grows a legal-caption variant (SHARED_REQUEST §7) —
+    // every caption line holds a link, so the block is 40dp (P03-BUG-12).
+    final base = NestType.caption(color: tokens.ink2)
+        .copyWith(height: NestSpacing.s5 / 13);
     final link = NestType.caption(color: tokens.sky).copyWith(
       fontWeight: FontWeight.w600,
       decoration: TextDecoration.underline,
       decorationColor: tokens.sky,
-      height: 20 / 13,
+      height: NestSpacing.s5 / 13,
     );
-    return Semantics(
-      label:
-          'By continuing you agree to our Terms and ${_LegalLine.privacyLabel}',
-      explicitChildNodes: true,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: <Widget>[
-          ExcludeSemantics(
-            child: Text.rich(
-              key: _paragraphKey,
-              TextSpan(
-                children: <TextSpan>[
-                  const TextSpan(text: 'By continuing you agree to our '),
-                  TextSpan(text: 'Terms', style: link),
-                  const TextSpan(text: ' and '),
-                  TextSpan(text: _LegalLine.privacyLabel, style: link),
-                ],
+    // P03-BUG-19: boxes are measured synchronously from the layout
+    // constraints (same spans the paragraph lays out, rooted in the same
+    // ambient-plus-caption default style `Text.rich` resolves), so the
+    // targets exist in the first painted frame.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final rootStyle = DefaultTextStyle.of(context).style.merge(base);
+        final boxes = _LegalLineState._measureSync(
+          rootStyle,
+          _LegalLineState._captionChildren(link),
+          TextAlign.center,
+          Directionality.of(context),
+          MediaQuery.textScalerOf(context),
+          Localizations.maybeLocaleOf(context),
+          constraints.maxWidth,
+        );
+        final terms = boxes.terms;
+        final privacy = boxes.privacy;
+        // Recorded for the verification chain (plain fields: assigning
+        // during layout is safe, no setState).
+        _shownTerms = terms;
+        _shownPrivacy = privacy;
+        return Semantics(
+          label:
+              'By continuing you agree to our Terms and ${_LegalLine.privacyLabel}',
+          explicitChildNodes: true,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: <Widget>[
+              ExcludeSemantics(
+                child: Text.rich(
+                  key: _paragraphKey,
+                  TextSpan(children: _LegalLineState._captionChildren(link)),
+                  style: base,
+                  textAlign: TextAlign.center,
+                  softWrap: true,
+                ),
               ),
-              style: base,
-              textAlign: TextAlign.center,
-              softWrap: true,
-            ),
+              if (terms != null)
+                Positioned.fromRect(
+                  rect: terms,
+                  child: const _LegalTarget(
+                    key: ValueKey('p03_terms'),
+                    label: 'Terms',
+                  ),
+                ),
+              if (privacy != null)
+                Positioned.fromRect(
+                  rect: privacy,
+                  child: const _LegalTarget(
+                    key: ValueKey('p03_privacy'),
+                    label: _LegalLine.privacyLabel,
+                  ),
+                ),
+            ],
           ),
-          if (_termsRect != null)
-            Positioned.fromRect(
-              rect: _targetRect(_termsRect!),
-              child: const _LegalTarget(
-                key: ValueKey('p03_terms'),
-                label: 'Terms',
-              ),
-            ),
-          if (_privacyRect != null)
-            Positioned.fromRect(
-              rect: _targetRect(_privacyRect!),
-              child: const _LegalTarget(
-                key: ValueKey('p03_privacy'),
-                label: _LegalLine.privacyLabel,
-              ),
-            ),
-        ],
-      ),
+        );
+      },
     );
+  }
+}
+
+/// Expands the hit-test area without changing layout (P03-BUG-18).
+///
+/// The 44dp legal-link targets overhang the 40dp caption block, and every
+/// box between the bar and the words bounds-checks taps away — so the
+/// overhang would be dead. This wraps the whole bottom bar: taps inside its
+/// own box take the normal path (zero behaviour change), while taps in the
+/// extra strip are resolved by visiting every descendant directly, so each
+/// box applies only its own bounds. Layout size is untouched (the 678
+/// hairline holds).
+class _HitTestExpand extends SingleChildRenderObjectWidget {
+  const _HitTestExpand({required this.extra, required super.child});
+
+  final double extra;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderHitTestExpand(extra);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderHitTestExpand renderObject,
+  ) {
+    renderObject.extra = extra;
+  }
+}
+
+class _RenderHitTestExpand extends RenderProxyBox {
+  _RenderHitTestExpand(double extra) : _extra = extra;
+
+  double _extra;
+
+  double get extra => _extra;
+
+  set extra(double value) {
+    if (value == _extra) return;
+    _extra = value;
+    markNeedsPaint();
+  }
+
+  @override
+  bool hitTest(BoxHitTestResult entry, {required Offset position}) {
+    final child = this.child;
+    if (child == null) return false;
+    // Normal path first: taps the layout box resolves keep working exactly
+    // as before (a single path, no duplicates).
+    var hit = child.hitTest(entry, position: position);
+    // Caption overhang (P03-BUG-18): points outside the caption Stack never
+    // reach the targets through normal descent — every intermediate box
+    // bounds-checks them away (and the bar background would claim them
+    // first). Descend into the caption Stack's children directly for those
+    // points only; each box still applies its own bounds.
+    final stack = _captionStack();
+    if (stack != null) {
+      final origin = stack.localToGlobal(Offset.zero);
+      final mine = localToGlobal(Offset.zero);
+      if (!Rect.fromLTWH(
+        origin.dx - mine.dx,
+        origin.dy - mine.dy,
+        stack.size.width,
+        stack.size.height,
+      ).contains(position)) {
+        stack.visitChildren((grandchild) {
+          if (grandchild is RenderBox) {
+            final childOrigin = grandchild.localToGlobal(Offset.zero);
+            if (grandchild.hitTest(
+              entry,
+              position: position - (childOrigin - mine),
+            )) {
+              hit = true;
+            }
+          }
+        });
+      }
+    }
+    return hit;
+  }
+
+  /// The caption Stack, found by descent: the CTA subtree holds exactly one
+  /// `Stack` (the caption's own — buttons and bars here are
+  /// `GestureDetector`-based, never `Stack`s).
+  RenderStack? _captionStack() {
+    final child = this.child;
+    RenderStack? found;
+    void visit(RenderObject object) {
+      if (found != null) return;
+      if (object is RenderStack) {
+        found = object;
+        return;
+      }
+      object.visitChildren(visit);
+    }
+
+    if (child != null) visit(child);
+    return found;
   }
 }
 
