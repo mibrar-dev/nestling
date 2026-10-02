@@ -147,6 +147,35 @@ final Matcher _failure = predicate<KidHomeState>(
       state.status == KidHomeStatus.failure && state.errorMessage != null,
 );
 
+/// Loaded with a completion failure recorded (list kept, error surfaced).
+final Matcher _failed = predicate<KidHomeState>(
+  (state) =>
+      state.status == KidHomeStatus.loaded &&
+      state.doneCount == 4 &&
+      state.actionError != null,
+);
+
+/// Loaded with no pending completion outcome (a retry reset the error).
+final Matcher _reset = predicate<KidHomeState>(
+  (state) =>
+      state.status == KidHomeStatus.loaded &&
+      state.doneCount == 4 &&
+      state.actionError == null &&
+      state.justCompletedQuestId == null,
+);
+
+/// Loaded with the celebration signal for [questId].
+Matcher _celebrating(String questId, {int? coins}) =>
+    predicate<KidHomeState>((state) {
+      if (state.status != KidHomeStatus.loaded) {
+        return false;
+      }
+      if (state.justCompletedQuestId != questId) {
+        return false;
+      }
+      return coins == null || state.justCompletedCoins == coins;
+    });
+
 /// Controllable fake: fresh streams per call, pushable updates, injectable
 /// error and silence modes, and a record of `completeQuest` calls.
 class _FakeKidHomeRepository implements KidHomeRepository {
@@ -164,6 +193,10 @@ class _FakeKidHomeRepository implements KidHomeRepository {
 
   /// [completeQuest] throws (actionError path).
   bool failComplete = false;
+
+  /// [completeQuest] records the call but leaves the stream alone (e.g. the
+  /// quest was already approved elsewhere), so nothing flips.
+  bool completeIsNoop = false;
 
   /// Watch streams never emit (loading path).
   bool hang = false;
@@ -227,6 +260,9 @@ class _FakeKidHomeRepository implements KidHomeRepository {
     completed.add(<String>[childId, questId]);
     if (failComplete) {
       throw Exception('save failed');
+    }
+    if (completeIsNoop) {
+      return;
     }
     pushItems(<KidQuest>[
       for (final KidQuest quest in _items)
@@ -321,6 +357,54 @@ void main() {
       expect(a, isNot(differentCoins));
       expect(a, isNot(differentQuest));
       expect(a, isNot(differentChild));
+    });
+
+    test('completion outcomes are explicit and nonce-bumped', () {
+      final base = KidHomeState(
+        status: KidHomeStatus.loaded,
+        child: _maya,
+        items: _mayaItems(),
+      );
+      final success = base.withCompletionSucceeded(
+        questId: 'q-reading',
+        coins: 10,
+      );
+      expect(success.status, KidHomeStatus.loaded);
+      expect(success.child, _maya);
+      expect(success.items, _mayaItems());
+      expect(success.justCompletedQuestId, 'q-reading');
+      expect(success.justCompletedCoins, 10);
+      expect(success.actionError, isNull);
+
+      final first = base.withCompletionFailed(Exception('save failed'));
+      final second = first.withCompletionFailed(Exception('save failed'));
+      expect(first.actionError, 'Exception: save failed');
+      expect(first.actionNonce, 1);
+      expect(second.actionNonce, 2);
+      expect(first, isNot(second));
+      expect(first.justCompletedQuestId, isNull);
+
+      final started = first.withCompletionStarted();
+      expect(started.actionError, isNull);
+      expect(started.actionNonce, 0);
+      expect(started.items, base.items);
+    });
+
+    test('copyWithLoaded clears transient completion outcomes', () {
+      final state = KidHomeState(
+        status: KidHomeStatus.loaded,
+        child: _maya,
+        items: _mayaItems(),
+        actionError: 'Exception: save failed',
+        actionNonce: 2,
+        justCompletedQuestId: 'q-reading',
+        justCompletedCoins: 10,
+      );
+      final reloaded = state.copyWithLoaded(child: _maya, items: _mayaItems());
+      expect(reloaded.actionError, isNull);
+      expect(reloaded.actionNonce, 0);
+      expect(reloaded.justCompletedQuestId, isNull);
+      expect(reloaded.justCompletedCoins, isNull);
     });
   });
 
@@ -445,9 +529,10 @@ void main() {
       expect: () => <Matcher>[
         _loading,
         _loaded(done: 4, total: 6),
-        _loaded(done: 5, total: 6),
+        // The celebration signal rides the flip emission itself.
+        _celebrating('q-reading', coins: 10),
       ],
-      verify: (_) {
+      verify: (bloc) {
         expect(repo.completed, <List<String>>[
           <String>['maya', 'q-reading'],
         ]);
@@ -457,6 +542,67 @@ void main() {
               .status,
           'done_pending',
         );
+        expect(bloc.state.doneCount, 5);
+      },
+    );
+
+    blocTest<KidHomeBloc, KidHomeState>(
+      'the celebration signal clears on the next stream emission',
+      build: () {
+        repo = _FakeKidHomeRepository();
+        return KidHomeBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        bloc.add(
+          const KidHomeQuestCompleted(
+            childId: 'maya',
+            questId: 'q-reading',
+            coins: 10,
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        // A healthy emission that does not change the data still consumes
+        // the one-shot signal, so the view cannot celebrate twice.
+        repo.pushItems(repo.items);
+      },
+      wait: const Duration(milliseconds: 100),
+      expect: () => <Matcher>[
+        _loading,
+        _loaded(done: 4, total: 6),
+        _celebrating('q-reading', coins: 10),
+        predicate<KidHomeState>(
+          (state) =>
+              state.status == KidHomeStatus.loaded &&
+              state.doneCount == 5 &&
+              state.justCompletedQuestId == null,
+        ),
+      ],
+    );
+
+    blocTest<KidHomeBloc, KidHomeState>(
+      'a completion that does not flip the card never celebrates',
+      build: () {
+        repo = _FakeKidHomeRepository()..completeIsNoop = true;
+        return KidHomeBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        bloc.add(
+          const KidHomeQuestCompleted(
+            childId: 'maya',
+            questId: 'q-reading',
+            coins: 10,
+          ),
+        );
+      },
+      wait: const Duration(milliseconds: 100),
+      expect: () => <Matcher>[_loading, _loaded(done: 4, total: 6)],
+      verify: (bloc) {
+        expect(repo.completed, hasLength(1));
+        expect(bloc.state.justCompletedQuestId, isNull);
       },
     );
 
@@ -484,6 +630,8 @@ void main() {
         expect(bloc.state.items, hasLength(6));
         expect(bloc.state.doneCount, 4);
         expect(bloc.state.actionError, contains('save failed'));
+        expect(bloc.state.actionNonce, 1);
+        expect(bloc.state.justCompletedQuestId, isNull);
         expect(bloc.state.errorMessage, isNull);
         expect(
           repo.items
@@ -491,6 +639,85 @@ void main() {
               .status,
           'to_do',
         );
+      },
+    );
+
+    blocTest<KidHomeBloc, KidHomeState>(
+      'two identical failures both surface (reset between attempts)',
+      build: () {
+        repo = _FakeKidHomeRepository()..failComplete = true;
+        return KidHomeBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        bloc.add(
+          const KidHomeQuestCompleted(
+            childId: 'maya',
+            questId: 'q-reading',
+            coins: 10,
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        bloc.add(
+          const KidHomeQuestCompleted(
+            childId: 'maya',
+            questId: 'q-reading',
+            coins: 10,
+          ),
+        );
+      },
+      wait: const Duration(milliseconds: 100),
+      expect: () => <Matcher>[
+        _loading,
+        _loaded(done: 4, total: 6),
+        _failed,
+        // The second attempt resets the previous outcome first, so the
+        // repeat failure is a distinct state and is announced again.
+        _reset,
+        _failed,
+      ],
+      verify: (bloc) => expect(repo.completed, hasLength(2)),
+    );
+
+    blocTest<KidHomeBloc, KidHomeState>(
+      'retry after a failure clears the error and celebrates on success',
+      build: () {
+        repo = _FakeKidHomeRepository()..failComplete = true;
+        return KidHomeBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        bloc.add(
+          const KidHomeQuestCompleted(
+            childId: 'maya',
+            questId: 'q-reading',
+            coins: 10,
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        repo.failComplete = false;
+        bloc.add(
+          const KidHomeQuestCompleted(
+            childId: 'maya',
+            questId: 'q-reading',
+            coins: 10,
+          ),
+        );
+      },
+      wait: const Duration(milliseconds: 100),
+      expect: () => <Matcher>[
+        _loading,
+        _loaded(done: 4, total: 6),
+        _failed,
+        _reset,
+        _celebrating('q-reading', coins: 10),
+      ],
+      verify: (bloc) {
+        expect(repo.completed, hasLength(2));
+        expect(bloc.state.actionError, isNull);
+        expect(bloc.state.doneCount, 5);
       },
     );
 

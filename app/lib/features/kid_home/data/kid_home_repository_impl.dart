@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/london_time.dart';
 import 'package:nestling/core/data/pin_hash.dart' as pin_hash;
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/data/stream_combine.dart';
@@ -26,12 +27,19 @@ class KidHomeRepositoryImpl implements KidHomeRepository {
       ).map((parts) {
         final quests = parts[0] as List<Quest>;
         final completions = parts[1] as List<QuestCompletion>;
+        final now = DateTime.now().toUtc();
         final mine = quests.where((q) => q.assigneeChildId == kid.id).toList()
           ..sort((a, b) => a.title.compareTo(b.title));
         return mine.map((q) {
           final rows = completions.where((c) => c.questId == q.id).toList()
             ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-          final status = rows.isEmpty ? 'to_do' : rows.first.status;
+          // Period rule (orchestrator ruling for K03-BUG-4): only
+          // completions inside the quest's current London period count; a
+          // completion outside it means the quest is "to do" again.
+          final current = rows.where(
+            (c) => countsForCurrentPeriod(q.repeatRule, c.createdAt, now),
+          );
+          final status = current.isEmpty ? 'to_do' : current.first.status;
           return KidQuest(
             id: '${q.id}:${kid.id}',
             title: q.title,
@@ -85,44 +93,58 @@ class KidHomeRepositoryImpl implements KidHomeRepository {
       _db.quests,
     )..where((q) => q.id.equals(questId))).getSingleOrNull();
     if (quest == null) return;
-    final existing =
-        await (_db.select(_db.questCompletions)
-              ..where(
-                (c) => c.questId.equals(questId) & c.childId.equals(childId),
-              )
-              ..orderBy([
-                (c) => OrderingTerm(
-                  expression: c.createdAt,
-                  mode: OrderingMode.desc,
-                ),
-              ]))
-            .get();
-    final now = DateTime.now().toUtc();
-    if (existing.isNotEmpty &&
-        (existing.first.status == 'to_do' ||
-            existing.first.status == 'not_yet')) {
-      await (_db.update(
-        _db.questCompletions,
-      )..where((c) => c.id.equals(existing.first.id))).write(
-        QuestCompletionsCompanion(
-          status: const Value('done_pending'),
-          createdAt: Value(now),
-        ),
-      );
-      return;
-    }
-    await _db
-        .into(_db.questCompletions)
-        .insert(
-          QuestCompletionsCompanion.insert(
-            questId: questId,
-            childId: childId,
-            familyId: Seed.familyId,
-            status: const Value('done_pending'),
-            coins: Value(quest.coins),
-            createdAt: Value(now),
-          ),
-        );
+    // Idempotent inside one transaction (K03-BUG-1): a rapid double tap
+    // must not write a second pending row. Only the current London period
+    // matters (K03-BUG-4 ruling): a `to_do`/`not_yet` inside it flips to
+    // `done_pending`; anything already recorded this period stays untouched,
+    // and a new period starts a fresh row so coins can never be minted twice
+    // for one tap.
+    await _db.transaction(() async {
+      final existing =
+          await (_db.select(_db.questCompletions)
+                ..where(
+                  (c) => c.questId.equals(questId) & c.childId.equals(childId),
+                )
+                ..orderBy([
+                  (c) => OrderingTerm(
+                    expression: c.createdAt,
+                    mode: OrderingMode.desc,
+                  ),
+                ]))
+              .get();
+      final now = DateTime.now().toUtc();
+      final inPeriod = existing
+          .where(
+            (c) => countsForCurrentPeriod(quest.repeatRule, c.createdAt, now),
+          )
+          .toList();
+      if (inPeriod.isNotEmpty) {
+        final latest = inPeriod.first.status;
+        if (latest == 'to_do' || latest == 'not_yet') {
+          await (_db.update(
+            _db.questCompletions,
+          )..where((c) => c.id.equals(inPeriod.first.id))).write(
+            QuestCompletionsCompanion(
+              status: const Value('done_pending'),
+              createdAt: Value(now),
+            ),
+          );
+        }
+        return;
+      }
+      await _db
+          .into(_db.questCompletions)
+          .insert(
+            QuestCompletionsCompanion.insert(
+              questId: questId,
+              childId: childId,
+              familyId: Seed.familyId,
+              status: const Value('done_pending'),
+              coins: Value(quest.coins),
+              createdAt: Value(now),
+            ),
+          );
+    });
   }
 
   KidChild _toChild(ChildrenData row) {

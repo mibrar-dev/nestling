@@ -7,8 +7,11 @@
 // feature-local fake repository registered over the real one in GetIt.
 // Every pumped app ends with `disposeApp` (see test_scope.dart).
 
+import 'dart:async';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
@@ -18,6 +21,7 @@ import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
+import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_child.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_quest.dart';
 import 'package:nestling/features/kid_home/domain/kid_home_repository.dart';
@@ -99,7 +103,9 @@ List<KidQuest> _mayaItems() => const <KidQuest>[
 /// Fake repository for the states a Drift database cannot produce:
 /// silent streams (loading), stream errors (load failure) and a failing
 /// completion write (actionError). Streams are rebuilt per `watch…()` call,
-/// matching the Drift repository.
+/// matching the Drift repository; a successful `completeQuest` flips the
+/// quest to `done_pending` and re-emits, so the celebration can ride the
+/// flip exactly as it does on the real repository.
 class _FakeKidHomeRepository implements KidHomeRepository {
   _FakeKidHomeRepository({
     this.failLoad = false,
@@ -112,9 +118,13 @@ class _FakeKidHomeRepository implements KidHomeRepository {
   bool failComplete;
 
   final List<List<String>> completed = <List<String>>[];
+  final StreamController<List<KidQuest>> _itemsPushed =
+      StreamController<List<KidQuest>>.broadcast();
+
+  List<KidQuest> _items = _mayaItems();
 
   @override
-  Future<List<KidQuest>> getItems() async => _mayaItems();
+  Future<List<KidQuest>> getItems() async => _items;
 
   @override
   Stream<List<KidQuest>> watchItems() {
@@ -124,7 +134,12 @@ class _FakeKidHomeRepository implements KidHomeRepository {
     if (failLoad) {
       return Stream<List<KidQuest>>.error(Exception('items down'));
     }
-    return Stream<List<KidQuest>>.value(_mayaItems());
+    return _watchItems();
+  }
+
+  Stream<List<KidQuest>> _watchItems() async* {
+    yield _items;
+    yield* _itemsPushed.stream;
   }
 
   @override
@@ -154,6 +169,22 @@ class _FakeKidHomeRepository implements KidHomeRepository {
     if (failComplete) {
       throw Exception('save failed');
     }
+    _items = <KidQuest>[
+      for (final quest in _items)
+        if (quest.questId == questId)
+          KidQuest(
+            id: quest.id,
+            title: quest.title,
+            detail: quest.detail,
+            questId: quest.questId,
+            icon: quest.icon,
+            coins: quest.coins,
+            status: 'done_pending',
+          )
+        else
+          quest,
+    ];
+    _itemsPushed.add(_items);
   }
 }
 
@@ -213,6 +244,43 @@ Future<void> _revealCards(WidgetTester tester) async {
 Future<void> _settleRoute(WidgetTester tester) async {
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 400));
+}
+
+/// Asset names of every [SvgPicture] currently in the tree.
+List<String> _svgAssets(WidgetTester tester) => find
+    .byType(SvgPicture)
+    .evaluate()
+    .map((element) => (element.widget as SvgPicture).bytesLoader)
+    .whereType<SvgAssetLoader>()
+    .map((loader) => loader.assetName)
+    .toList();
+
+/// v1 Pip illustrations — the orchestrator forbids them in product screens.
+List<String> _v1PipAssets(WidgetTester tester) =>
+    _svgAssets(tester).where((name) => name.contains('pip_stage')).toList();
+
+/// Adds a quest-less child and makes them the active child.
+Future<void> _addQuestlessChild(
+  WidgetTester tester, {
+  required String id,
+  required String nickname,
+}) async {
+  final db = GetIt.instance<AppDatabase>();
+  await tester.runAsync(() async {
+    await db
+        .into(db.children)
+        .insert(
+          ChildrenCompanion.insert(
+            id: id,
+            familyId: Seed.familyId,
+            nickname: nickname,
+          ),
+        );
+    await (db.update(db.appState)..where((a) => a.id.equals(1))).write(
+      AppStateCompanion(activeChildId: Value<String?>(id)),
+    );
+    await GetIt.instance<AppSession>().refresh();
+  });
 }
 
 void main() {
@@ -286,22 +354,7 @@ void main() {
     testWidgets('a child with no quests shows the gentle empty state', (
       tester,
     ) async {
-      final db = GetIt.instance<AppDatabase>();
-      await tester.runAsync(() async {
-        await db
-            .into(db.children)
-            .insert(
-              ChildrenCompanion.insert(
-                id: 'nina',
-                familyId: Seed.familyId,
-                nickname: 'Nina',
-              ),
-            );
-        await (db.update(db.appState)..where((a) => a.id.equals(1))).write(
-          const AppStateCompanion(activeChildId: Value<String?>('nina')),
-        );
-        await GetIt.instance<AppSession>().refresh();
-      });
+      await _addQuestlessChild(tester, id: 'nina', nickname: 'Nina');
       await _pumpRoute(tester);
       expect(find.text('Hi Nina!'), findsOneWidget);
       expect(find.text('0 done today'), findsOneWidget);
@@ -368,10 +421,75 @@ void main() {
       await tester.tap(check);
       await _settleRoute(tester);
       expect(find.text('Hmm, that did not work. Try again.'), findsOneWidget);
+      // A failed write never celebrates (K03-BUG-2).
+      expect(find.text('K05 Quest complete'), findsNothing);
       expect(repo.completed, <List<String>>[
         <String>['maya', 'q-reading'],
       ]);
       semantics.dispose();
+      await disposeApp(tester);
+    });
+  });
+
+  group('K03 Pip (orchestrator mandate)', () {
+    testWidgets("the pet slot renders the child's own PipAvatar", (
+      tester,
+    ) async {
+      await _pumpRoute(tester);
+      final avatar = tester.widget<PipAvatar>(find.byType(PipAvatar));
+      expect(avatar.style, PipStyle.mochi);
+      expect(avatar.skin, PipSkin.sunny);
+      expect(avatar.accessory, PipAccessory.none);
+      expect(avatar.stage, 3);
+      expect(avatar.size, 152);
+      expect(_v1PipAssets(tester), isEmpty);
+      await disposeApp(tester);
+    });
+
+    testWidgets("the active child's database look drives PipAvatar (Leo)", (
+      tester,
+    ) async {
+      final db = GetIt.instance<AppDatabase>();
+      await tester.runAsync(() async {
+        await (db.update(db.appState)..where((a) => a.id.equals(1))).write(
+          const AppStateCompanion(activeChildId: Value<String?>('leo')),
+        );
+        await GetIt.instance<AppSession>().refresh();
+      });
+      await _pumpRoute(tester);
+      expect(find.text('Hi Leo!'), findsOneWidget);
+      final avatar = tester.widget<PipAvatar>(find.byType(PipAvatar));
+      expect(avatar.style, PipStyle.bolt);
+      expect(avatar.skin, PipSkin.sky);
+      expect(avatar.accessory, PipAccessory.none);
+      expect(avatar.stage, 2);
+      expect(_v1PipAssets(tester), isEmpty);
+      await disposeApp(tester);
+    });
+
+    testWidgets("the empty-quests state shows the child's own Pip", (
+      tester,
+    ) async {
+      await _addQuestlessChild(tester, id: 'nina', nickname: 'Nina');
+      await _pumpRoute(tester);
+      expect(find.text('No quests today'), findsOneWidget);
+      expect(find.byType(PipAvatar), findsOneWidget);
+      final avatar = tester.widget<PipAvatar>(find.byType(PipAvatar));
+      expect(avatar.style, PipStyle.mochi);
+      expect(avatar.skin, PipSkin.sunny);
+      expect(avatar.stage, 1);
+      expect(_v1PipAssets(tester), isEmpty);
+      await disposeApp(tester);
+    });
+
+    testWidgets('no product state renders the v1 pip_stage_*.svg art', (
+      tester,
+    ) async {
+      final repo = _FakeKidHomeRepository(failLoad: true);
+      await _useFakeRepository(repo);
+      await _pumpRoute(tester);
+      expect(find.text('Oh no! Pip got lost.'), findsOneWidget);
+      expect(_v1PipAssets(tester), isEmpty);
       await disposeApp(tester);
     });
   });
@@ -453,6 +571,55 @@ void main() {
             .first,
       );
       expect(pending, hasLength(3));
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('double-tapping the check completes once', (tester) async {
+      final repo = _FakeKidHomeRepository();
+      await _useFakeRepository(repo);
+      final semantics = tester.ensureSemantics();
+      await _pumpRoute(tester);
+      await _revealCards(tester);
+      final check = find.bySemanticsLabel('Mark done').first;
+      await tester.ensureVisible(check);
+      await tester.pump();
+      // Two taps inside one frame: the tap guard must swallow the second.
+      await tester.tap(check);
+      await tester.tap(check);
+      await _settleRoute(tester);
+      expect(repo.completed, hasLength(1));
+      expect(find.text('K05 Quest complete'), findsOneWidget);
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('a failed check tap can be retried and then celebrates', (
+      tester,
+    ) async {
+      final repo = _FakeKidHomeRepository(failComplete: true);
+      await _useFakeRepository(repo);
+      final semantics = tester.ensureSemantics();
+      await _pumpRoute(tester);
+      await _revealCards(tester);
+      final check = find.bySemanticsLabel('Mark done').first;
+      await tester.ensureVisible(check);
+      await tester.pump();
+      await tester.tap(check);
+      await _settleRoute(tester);
+      expect(find.text('Hmm, that did not work. Try again.'), findsOneWidget);
+      expect(find.text('K05 Quest complete'), findsNothing);
+      // Let the SnackBar go, then retry the same check: the failure reset
+      // must release the tap guard.
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pump(const Duration(milliseconds: 400));
+      repo.failComplete = false;
+      await tester.ensureVisible(check);
+      await tester.pump();
+      await tester.tap(check);
+      await _settleRoute(tester);
+      expect(find.text('K05 Quest complete'), findsOneWidget);
+      expect(repo.completed, hasLength(2));
       semantics.dispose();
       await disposeApp(tester);
     });

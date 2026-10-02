@@ -1,9 +1,23 @@
-// K03 (kid home) adversarial test suite — Stage 6 bug hunt.
+// K03 (kid home) adversarial test suite — Stage 6 bug hunt, iteration 2.
 //
-// Every bug proof is written to FAIL while the corresponding bug exists and
-// is marked `skip: true` (this Flutter test API takes a bool, so the
-// `K03-BUG-n` id lives in the test name) to keep the suite green. The full
-// write-up lives in docs/screens/K03/6_bugs.md; run the proofs with
+// Iteration-1 proofs K03-BUG-1..6 all run un-skipped (fixed in iteration 2:
+// repo transaction/idempotency, success-driven celebration, actionNonce,
+// period scoping, router guard, per-card tap latch).
+//
+// Iteration-2 new work:
+// - Period-ruling probes (daily/weekly/once, London day/week, BST edges).
+// - K03-BUG-7: the documented `--dart-define=DISABLE_ANIMATIONS=1` parses as
+//   false (`bool.fromEnvironment` only understands "true"), so Rive Pip
+//   still animates and the shot harness never stabilises. The proof is
+//   `skip`ped unless the define is present:
+//   `flutter test --dart-define=DISABLE_ANIMATIONS=1 --plain-name K03-BUG-7`.
+// - K03-BUG-8 (fixed mid-loop, proof runs): a successful completion is no
+//   longer swallowed when a second completion is in flight and fails
+//   (pending celebrations are now keyed per quest).
+// - K03-BUG-9 (fixed mid-loop, proof runs): the lock now has a tap latch
+//   (_GateLockButton), so a double tap pushes one gate route.
+//
+// Run the skipped proofs with
 // `flutter test --run-skipped --plain-name "K03-BUG"`.
 //
 // Probes that pass are kept as evidence for the "checked, clean" categories
@@ -22,9 +36,11 @@ import 'package:nestling/app/app.dart';
 import 'package:nestling/app/controllers.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
+import 'package:nestling/core/data/env_flags.dart';
 import 'package:nestling/core/data/london_time.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
+import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 import 'package:nestling/features/kid_home/data/kid_home_repository_impl.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_child.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_quest.dart';
@@ -117,7 +133,7 @@ void main() {
       hasLength(1),
       reason: 'a quest must have at most one pending completion',
     );
-  }, skip: true);
+  });
 
   testWidgets(
     'K03-BUG-1 widget: double-tapping the check creates two pending rows',
@@ -146,7 +162,6 @@ void main() {
         reason: 'rapid double tap must be idempotent',
       );
     },
-    skip: true,
   );
 
   // -------------------------------------------------------------------------
@@ -172,7 +187,7 @@ void main() {
     );
     semantics.dispose();
     await disposeApp(tester);
-  }, skip: true);
+  });
 
   // -------------------------------------------------------------------------
   // K03-BUG-3 — identical failures after the first are never surfaced
@@ -209,10 +224,14 @@ void main() {
       hasLength(2),
       reason: 'the second failed tap must also surface feedback',
     );
-  }, skip: true);
+  });
 
   // -------------------------------------------------------------------------
   // K03-BUG-4 — "done today" counts completions from previous London days
+  //
+  // FIXED in iteration 2 via the main-branch ruling (PERIODS): the repo
+  // scopes status to the quest's current London period with
+  // `countsForCurrentPeriod`, so this proof runs un-skipped.
   // -------------------------------------------------------------------------
 
   testWidgets(
@@ -252,7 +271,6 @@ void main() {
       );
       await disposeApp(tester);
     },
-    skip: true,
   );
 
   // -------------------------------------------------------------------------
@@ -266,7 +284,6 @@ void main() {
       expect(currentPath(tester), '/parental-gate');
       await disposeApp(tester);
     },
-    skip: true,
   );
 
   testWidgets(
@@ -276,7 +293,6 @@ void main() {
       expect(currentPath(tester), '/parental-gate');
       await disposeApp(tester);
     },
-    skip: true,
   );
 
   // -------------------------------------------------------------------------
@@ -447,7 +463,7 @@ void main() {
       );
       semantics.dispose();
       await disposeApp(tester);
-    }, skip: true);
+    });
 
     testWidgets('K03-BUG-6: double-tapping the check stacks two celebration '
         'routes', (tester) async {
@@ -470,7 +486,7 @@ void main() {
       );
       semantics.dispose();
       await disposeApp(tester);
-    }, skip: true);
+    });
 
     test('verified clean: a late failure emitted after bloc close does not '
         'throw', () async {
@@ -532,6 +548,352 @@ void main() {
         );
       }
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // Iteration 2 — mandated PIP rendering probes
+  // -------------------------------------------------------------------------
+
+  group('mandated Pip', () {
+    testWidgets('the home renders the child\u2019s own PipAvatar attributes', (
+      tester,
+    ) async {
+      await _pump(tester);
+      final avatars = tester
+          .widgetList<PipAvatar>(find.byType(PipAvatar))
+          .toList();
+      expect(avatars, isNotEmpty);
+      expect(avatars.first.style, PipStyle.mochi);
+      expect(avatars.first.skin, PipSkin.sunny);
+      expect(avatars.first.accessory, PipAccessory.none);
+      expect(avatars.first.stage, 3);
+      await disposeApp(tester);
+    });
+
+    testWidgets('Leo deep-link uses bolt/sky/stage 2 from the database', (
+      tester,
+    ) async {
+      final db = GetIt.instance<AppDatabase>();
+      await tester.runAsync(() async {
+        await (db.update(db.appState)..where((a) => a.id.equals(1))).write(
+          const AppStateCompanion(activeChildId: Value<String?>('leo')),
+        );
+        await GetIt.instance<AppSession>().refresh();
+      });
+      await _pump(tester);
+      expect(find.text('Hi Leo!'), findsOneWidget);
+      final avatars = tester
+          .widgetList<PipAvatar>(find.byType(PipAvatar))
+          .toList();
+      expect(avatars, isNotEmpty);
+      expect(avatars.first.style, PipStyle.bolt);
+      expect(avatars.first.skin, PipSkin.sky);
+      expect(avatars.first.stage, 2);
+      await disposeApp(tester);
+    });
+
+    testWidgets('a broken pipStage (0 then 9) is clamped, never asserted', (
+      tester,
+    ) async {
+      final db = GetIt.instance<AppDatabase>();
+      await tester.runAsync(() async {
+        await (db.update(db.children)..where((c) => c.id.equals('maya'))).write(
+          const ChildrenCompanion(pipStage: Value(0)),
+        );
+      });
+      await _pump(tester);
+      expect(tester.takeException(), isNull);
+      var avatar = tester.widgetList<PipAvatar>(find.byType(PipAvatar)).first;
+      expect(avatar.stage, 1);
+      await tester.runAsync(() async {
+        await (db.update(db.children)..where((c) => c.id.equals('maya'))).write(
+          const ChildrenCompanion(pipStage: Value(9)),
+        );
+      });
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      avatar = tester.widgetList<PipAvatar>(find.byType(PipAvatar)).first;
+      expect(avatar.stage, 4);
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Iteration 2 — period ruling probes (daily / weekly / once)
+  // -------------------------------------------------------------------------
+
+  group('period ruling', () {
+    test('London day/week starts are inclusive; older completions are out', () {
+      final now = DateTime.utc(2026, 10, 24, 12); // Sat 24 Oct, BST
+      final dayStart = londonDayStartUtc(now);
+      expect(dayStart, DateTime.utc(2026, 10, 23, 23));
+      expect(countsForCurrentPeriod('daily', dayStart, now), isTrue);
+      expect(
+        countsForCurrentPeriod(
+          'daily',
+          dayStart.subtract(const Duration(seconds: 1)),
+          now,
+        ),
+        isFalse,
+      );
+
+      final weekStart = londonWeekStartUtc(now);
+      expect(weekStart, DateTime.utc(2026, 10, 18, 23)); // Mon 19 Oct, BST
+      expect(countsForCurrentPeriod('weekly', weekStart, now), isTrue);
+      expect(
+        countsForCurrentPeriod(
+          'weekly',
+          weekStart.subtract(const Duration(seconds: 1)),
+          now,
+        ),
+        isFalse,
+      );
+
+      // once: any age still counts.
+      expect(countsForCurrentPeriod('once', DateTime.utc(2020), now), isTrue);
+    });
+
+    test('BST/GMT switch days start on the right UTC instants', () {
+      // BST ends Sun 25 Oct 2026 01:00 UTC.
+      expect(
+        londonDayStartUtc(DateTime.utc(2026, 10, 24, 12)),
+        DateTime.utc(2026, 10, 23, 23),
+      );
+      expect(
+        londonDayStartUtc(DateTime.utc(2026, 10, 26, 12)),
+        DateTime.utc(2026, 10, 26),
+      );
+      // BST starts Sun 29 Mar 2026 01:00 UTC.
+      expect(
+        londonDayStartUtc(DateTime.utc(2026, 3, 29, 12)),
+        DateTime.utc(2026, 3, 29),
+      );
+      expect(
+        londonDayStartUtc(DateTime.utc(2026, 3, 30, 12)),
+        DateTime.utc(2026, 3, 29, 23),
+      );
+    });
+
+    test('repo: a daily completion just before the London day start reads '
+        'to_do; at the start it counts', () async {
+      final db = GetIt.instance<AppDatabase>();
+      final repo = KidHomeRepositoryImpl(db: db);
+      final dayStart = londonDayStartUtc(DateTime.now().toUtc());
+      await (db.delete(
+        db.questCompletions,
+      )..where((c) => c.questId.equals('q-reading'))).go();
+      await db
+          .into(db.questCompletions)
+          .insert(
+            QuestCompletionsCompanion.insert(
+              questId: 'q-reading',
+              childId: 'maya',
+              familyId: Seed.familyId,
+              status: const Value('approved'),
+              coins: const Value(10),
+              createdAt: Value(dayStart.subtract(const Duration(seconds: 1))),
+            ),
+          );
+      var items = await repo.getItems();
+      expect(
+        items.singleWhere((q) => q.questId == 'q-reading').status,
+        'to_do',
+      );
+      await (db.update(db.questCompletions)
+            ..where((c) => c.questId.equals('q-reading')))
+          .write(QuestCompletionsCompanion(createdAt: Value(dayStart)));
+      items = await repo.getItems();
+      expect(
+        items.singleWhere((q) => q.questId == 'q-reading').status,
+        'approved',
+      );
+    });
+
+    test(
+      'repo: a weekly completion outside this London week reads to_do',
+      () async {
+        final db = GetIt.instance<AppDatabase>();
+        final repo = KidHomeRepositoryImpl(db: db);
+        final weekStart = londonWeekStartUtc(DateTime.now().toUtc());
+        await (db.delete(
+          db.questCompletions,
+        )..where((c) => c.questId.equals('q-bins'))).go();
+        await db
+            .into(db.questCompletions)
+            .insert(
+              QuestCompletionsCompanion.insert(
+                questId: 'q-bins',
+                childId: 'maya',
+                familyId: Seed.familyId,
+                status: const Value('approved'),
+                coins: const Value(15),
+                createdAt: Value(
+                  weekStart.subtract(const Duration(seconds: 1)),
+                ),
+              ),
+            );
+        var items = await repo.getItems();
+        expect(items.singleWhere((q) => q.questId == 'q-bins').status, 'to_do');
+        // The week start itself is inclusive, so it always counts.
+        await (db.update(db.questCompletions)
+              ..where((c) => c.questId.equals('q-bins')))
+            .write(QuestCompletionsCompanion(createdAt: Value(weekStart)));
+        items = await repo.getItems();
+        expect(
+          items.singleWhere((q) => q.questId == 'q-bins').status,
+          'approved',
+        );
+      },
+    );
+
+    test('repo: a once quest keeps an old completion forever', () async {
+      final db = GetIt.instance<AppDatabase>();
+      final repo = KidHomeRepositoryImpl(db: db);
+      await db
+          .into(db.quests)
+          .insert(
+            QuestsCompanion.insert(
+              id: 'q-once',
+              familyId: Seed.familyId,
+              title: 'Make a time capsule',
+              repeatRule: const Value('once'),
+              assigneeChildId: const Value('maya'),
+            ),
+          );
+      await db
+          .into(db.questCompletions)
+          .insert(
+            QuestCompletionsCompanion.insert(
+              questId: 'q-once',
+              childId: 'maya',
+              familyId: Seed.familyId,
+              status: const Value('approved'),
+              coins: const Value(10),
+              createdAt: Value(
+                DateTime.now().toUtc().subtract(const Duration(days: 400)),
+              ),
+            ),
+          );
+      final items = await repo.getItems();
+      expect(
+        items.singleWhere((q) => q.questId == 'q-once').status,
+        'approved',
+      );
+    });
+
+    testWidgets('retry after a failed completion still celebrates', (
+      tester,
+    ) async {
+      final repo = _ToggleFailRepository();
+      final semantics = tester.ensureSemantics();
+      await _useFakeRepository(repo);
+      await _pump(tester);
+      await _revealCards(tester);
+      final check = find.bySemanticsLabel('Mark done').first;
+      await tester.ensureVisible(check);
+      await tester.pump();
+      await tester.tap(check);
+      await _settle(tester);
+      expect(find.text('K05 Quest complete'), findsNothing);
+      expect(find.text('Hmm, that did not work. Try again.'), findsOneWidget);
+      repo.failComplete = false;
+      await tester.tap(check);
+      await _settle(tester);
+      expect(find.text('K05 Quest complete'), findsOneWidget);
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('kid mode also gates /add-children and '
+        '/pocket-money-setup', (tester) async {
+      await _pump(tester, route: '/add-children');
+      expect(currentPath(tester), '/parental-gate');
+      await disposeApp(tester);
+      await _pump(tester, route: '/pocket-money-setup');
+      expect(currentPath(tester), '/parental-gate');
+      await disposeApp(tester);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Iteration 2 — new bug proofs
+  // -------------------------------------------------------------------------
+
+  /// RULES §6: `DISABLE_ANIMATIONS=1` must render still frames. Proof only
+  /// runs when the define is present, so the plain suite stays green:
+  /// `flutter test --dart-define=DISABLE_ANIMATIONS=1 --plain-name K03-BUG-7`.
+  test(
+    'K03-BUG-7: the documented DISABLE_ANIMATIONS=1 flag must disable motion',
+    () {
+      expect(
+        kDisableAnimations,
+        isTrue,
+        reason:
+            'bool.fromEnvironment only understands "true"; with "1" the '
+            'still-frame path is skipped and Rive Pip keeps animating',
+      );
+    },
+    skip: !const bool.hasEnvironment('DISABLE_ANIMATIONS'),
+  );
+
+  test('K03-BUG-8: a failed second completion swallows the first success '
+      '(no celebration)', () async {
+    final repo = _GatedCompletionRepository();
+    final bloc = KidHomeBloc(repository: repo);
+    final sub = bloc.stream.listen((_) {});
+    bloc.add(const KidHomeLoadRequested());
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    bloc.add(
+      const KidHomeQuestCompleted(
+        childId: 'maya',
+        questId: 'q-reading',
+        coins: 10,
+      ),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    bloc.add(
+      const KidHomeQuestCompleted(
+        childId: 'maya',
+        questId: 'q-tidy',
+        coins: 15,
+      ),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    // The first write lands and flips its card; the pending set still holds
+    // the second quest, so the flip celebrates the first quest anyway.
+    repo.releaseFirst();
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(
+      bloc.state.justCompletedQuestId,
+      'q-reading',
+      reason: 'a saved quest must be celebrated even if the next tap fails',
+    );
+    repo.failSecond();
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    await sub.cancel();
+    await bloc.close();
+  });
+
+  testWidgets('K03-BUG-9: double-tapping the lock stacks two gate routes', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await _pump(tester);
+    final lock = find.bySemanticsLabel('Grown-ups');
+    await tester.tap(lock);
+    await tester.tap(lock);
+    await _settle(tester);
+    expect(find.text('P17 Parental gate'), findsOneWidget);
+    await tester.pageBack();
+    await _settle(tester);
+    expect(
+      find.text('Hi Maya!'),
+      findsOneWidget,
+      reason: 'one back press must leave the gate',
+    );
+    semantics.dispose();
+    await disposeApp(tester);
   });
 }
 
@@ -642,3 +1004,136 @@ void _load(KidHomeBloc bloc) => bloc.add(const KidHomeLoadRequested());
 void _complete(KidHomeBloc bloc, String questId, int coins) => bloc.add(
   KidHomeQuestCompleted(childId: 'maya', questId: questId, coins: coins),
 );
+
+KidQuest _withStatus(KidQuest quest, String status) => KidQuest(
+  id: quest.id,
+  title: quest.title,
+  detail: quest.detail,
+  questId: quest.questId,
+  icon: quest.icon,
+  coins: quest.coins,
+  status: status,
+);
+
+/// Healthy streams; `completeQuest` fails until [failComplete] is cleared,
+/// then flips the quest and pushes the new list (retry probe).
+class _ToggleFailRepository implements KidHomeRepository {
+  bool failComplete = true;
+  List<KidQuest> _items = List<KidQuest>.of(_items2);
+  final StreamController<List<KidQuest>> _pushed =
+      StreamController<List<KidQuest>>.broadcast();
+
+  @override
+  Future<List<KidQuest>> getItems() async => _items;
+
+  @override
+  Stream<List<KidQuest>> watchItems() async* {
+    yield _items;
+    yield* _pushed.stream;
+  }
+
+  @override
+  Stream<List<KidChild>> watchProfiles() =>
+      Stream<List<KidChild>>.value(const <KidChild>[_maya]);
+
+  @override
+  Stream<KidChild?> watchActiveChild() => Stream<KidChild?>.value(_maya);
+
+  @override
+  List<String> stepsFor(String questId) => const <String>['Step one'];
+
+  @override
+  Future<bool> verifyPin(String childId, String pin) async => true;
+
+  @override
+  Future<void> completeQuest(String childId, String questId) async {
+    if (failComplete) throw Exception('save failed');
+    _items = <KidQuest>[
+      for (final quest in _items)
+        if (quest.questId == questId)
+          _withStatus(quest, 'done_pending')
+        else
+          quest,
+    ];
+    _pushed.add(_items);
+  }
+}
+
+/// Each completion waits on its own gate, so a test can land the first write
+/// while the second is still in flight (K03-BUG-8).
+class _GatedCompletionRepository implements KidHomeRepository {
+  List<KidQuest> _items = List<KidQuest>.of(_items2);
+  final StreamController<List<KidQuest>> _pushed =
+      StreamController<List<KidQuest>>.broadcast();
+  final Completer<void> _first = Completer<void>();
+  final Completer<void> _second = Completer<void>();
+
+  void releaseFirst() {
+    _items = <KidQuest>[
+      for (final quest in _items)
+        if (quest.questId == 'q-reading')
+          _withStatus(quest, 'done_pending')
+        else
+          quest,
+    ];
+    _pushed.add(_items);
+    _first.complete();
+  }
+
+  void failSecond() {
+    if (!_second.isCompleted) {
+      _second.completeError(Exception('save failed'));
+    }
+  }
+
+  @override
+  Future<List<KidQuest>> getItems() async => _items;
+
+  @override
+  Stream<List<KidQuest>> watchItems() async* {
+    yield _items;
+    yield* _pushed.stream;
+  }
+
+  @override
+  Stream<List<KidChild>> watchProfiles() =>
+      Stream<List<KidChild>>.value(const <KidChild>[_maya]);
+
+  @override
+  Stream<KidChild?> watchActiveChild() => Stream<KidChild?>.value(_maya);
+
+  @override
+  List<String> stepsFor(String questId) => const <String>['Step one'];
+
+  @override
+  Future<bool> verifyPin(String childId, String pin) async => true;
+
+  @override
+  Future<void> completeQuest(String childId, String questId) {
+    if (questId == 'q-reading') return _first.future;
+    return _second.future;
+  }
+}
+
+/// Two to_do quests used by the fake repositories above (`_items` is const
+/// and shared with the failure fakes, which must not mutate it).
+const List<KidQuest> _items2 = <KidQuest>[
+  KidQuest(
+    id: 'q-reading:maya',
+    title: 'Reading \u2013 20 minutes',
+    detail: 'To do \u00b7 +10',
+    questId: 'q-reading',
+    icon: 'book',
+    coins: 10,
+    status: 'to_do',
+  ),
+  KidQuest(
+    id: 'q-tidy:maya',
+    title: 'Tidy your bedroom',
+    detail: 'To do \u00b7 +15',
+    questId: 'q-tidy',
+    icon: 'bed',
+    coins: 15,
+    status: 'to_do',
+  ),
+];

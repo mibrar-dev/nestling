@@ -1,31 +1,35 @@
-# K03 Kid home — UI check (Stage 5, iteration 1)
+# K03 Kid home — UI check (Stage 5, iteration 2)
 
 Method (simulator E7D5555E-378A-49DF-AAEE-16677AF4B9DB, 390x844):
-- `bash tools/screens/shot.sh "$PWD/app" /kid-home "$PWD/docs/screens/K03/ui/app_light_1.png" <udid> light demo kid maya` -> `docs/screens/K03/ui/app_light_1.png` (1170x2532). Same with `dark` -> `app_dark_1.png`.
-- NOTE: both runs printed `WARNING — frame never stabilised in 25 s` and exited 1; the saved last-capture frames are still usable. Also NOTE: `shot.sh` does `cd "$APP_DIR"`, so a relative `<out>` resolves under `app/`; absolute OUT paths were used.
-- `python3 tools/screens/compare.py design/screens/light/K03-kid-home.png docs/screens/K03/ui/app_light_1.png docs/screens/K03/ui/cmp_light_1.png` (and dark).
+- `bash tools/screens/shot.sh "$PWD/app" /kid-home "$PWD/docs/screens/K03/ui/app_light_2.png" <udid> light demo kid maya` -> `docs/screens/K03/ui/app_light_2.png` (1170x2532). Same with `dark` -> `app_dark_2.png`.
+- NOTE: absolute OUT paths used (`shot.sh` does `cd "$APP_DIR"`, so a relative OUT resolves under `app/`). Both runs again printed `WARNING — frame never stabilised in 25 s` and exited 1; saved last-capture frames are usable and mutually consistent (light/dark differ only in theme).
+- `python3 tools/screens/compare.py design/screens/light/K03-kid-home.png docs/screens/K03/ui/app_light_2.png docs/screens/K03/ui/cmp_light_2.png` (and dark).
+- Read: `cmp_light_2.png`, `cmp_dark_2.png`. All numbers logical px (PNG/3), tolerance ±2px.
+- Overrides applied: ORCHESTRATOR PIP rule (`PipAvatar`, Maya Mochi/sunny/stage 3 — never v1 SVGs), STATUS BAR rule (ignore status-bar diffs), DATA OVER MOCKS (DB numbers win), `ORCHESTRATOR_NOTES.md` #1 (Pip slot: Pip ≈152 on 260x236 nest, nest top ≈y300) and #2 (4/4-of-6 correct).
 
 Results:
-- light mean diff: 11.74% — bands: 0 (0-105) 2.73% · 1 (105-211) 5.56% · 2 (211-316) 11.17% · 3 (316-422) 4.96% · 4 (422-527) 12.53% · 5 (527-633) 22.74% · 6 (633-738) 25.27% · 7 (738-844) 8.97%
-- dark mean diff: 10.89% — bands: 0: 2.71% · 1: 5.04% · 2: 9.47% · 3: 4.74% · 4: 13.00% · 5: 20.22% · 6: 23.50% · 7: 8.52%
-- Read: `cmp_light_1.png`, `cmp_dark_1.png` (design | app | diff). All logical px (PNG/3). Tolerance ±2px.
+- light mean diff: 15.14% — bands: 0 (0-105) 2.99% · 1 (105-211) 4.84% · 2 (211-316) 10.86% · 3 (316-422) 13.18% · 4 (422-527) 13.20% · 5 (527-633) 24.82% · 6 (633-738) 24.67% · 7 (738-844) 26.52%
+- dark mean diff: 13.94% — bands: 0: 3.02% · 1: 4.47% · 2: 8.89% · 3: 9.71% · 4: 12.90% · 5: 23.72% · 6: 21.76% · 7: 26.95%
+- Diff rose vs iter1 (11.74%/10.89%) for explained reasons: mandated PipAvatar art swap (bands 2-4), now-fully-visible card-2 content mismatch vs the PNG sample (Hoover/Done vs Reading/+10 — data order, bands 5-6), and the dock/home-strip offset below (band 7).
+- Fixed since iter1: green band now present behind progress/cards; hearts stroked + closer (+12, was +30); dock icons correct glyphs + fg both themes; dark glow circle gone (matches PNG); card-1 top within +3px.
 
-Accepted (per `1_plan.md` §g + `SHARED_REQUEST.md`, NOT deviations):
-- A1 counts copy: design "3 done today" / "3 of 6 done" / 50% bar vs app "4 done today" / "4 of 6 done" / ~66.7% bar. Demo DB yields done=4 (bins+hoover approved, dishwasher+table done_pending); live counts win, no seed fork (RULES §4).
-- A2 quest icon tiles: design tints per quest (sky-tint dishwasher, lilac-tint reading) vs app `surface2` for all. Known `NestKidQuestCard` limitation, SHARED_REQUEST #1 filed, non-blocking. Measured light tile: design (230,239,254) vs app (243,238,229).
+Accepted / overridden (NOT defects, excluded from verdict):
+- A1 counts: design "3 done today"/"3 of 6 done"/50% vs app "4 done today"/"4 of 6 done"/~66.7% — database is correct (ORCHESTRATOR_NOTES #2, DATA rule).
+- A2 card order/content: app 2nd card "Hoover the stairs"/"Done" (approved) vs PNG "Reading – 20 minutes"/"+10" — repo alphabetical order wins per `1_plan.md` §(a) (do NOT re-sort); "Done" chip + green check is the correct approved rendering.
+- A3 Pip artwork: v1 SVG chick (hair spikes, green wing tips) vs `PipAvatar` Mochi/sunny/stage-3 (cheek discs, top curl) — MANDATED by the PIP rule; slot size/position kept close.
+- A4 status bar: mock "9:41" vs real OS "02:30"/"02:32" — IGNORED per STATUS BAR rule (band 0 ≈3% is this only).
+- A5 quest icon tiles `surface2` beige vs per-quest tints (measured light tile design (230,239,254) vs app beige) — SHARED_REQUEST #1, non-blocking.
+- A6 card title ≈17/22 vs 18/24 — pre-declared shared token (noted iter1), not locally fixable.
 
 Deviations (design value → app value + fix):
-1. Meadow/background band missing behind lower content (major, both themes). Design light: pale green from y≈524 to y≈717 at x=10 (e.g. (231,246,222) at y=550) behind progress bar + quest cards; home strip green. App light: sky blue at same rows ((230,244,255) at y=550); green only below the dock (e.g. (191,232,176) at y=830). Dark: design teal band behind progress/cards vs app navy. Fix: reconcile `KidScope` meadow hill (spec 390x136 pinned bottom) with the PNG green band (524-717, ~194px); check scroll transparency over the hill, hill height/offset, and the baked `hill-front` colour (SPACING §9.14).
-2. Pet-stage → hearts vertical gap ~30px too tall (major). Yellow-heart rows at x=30: design y 443-452 vs app y 471-485; section-title dark text: design y≈490+ vs app y≈520+ (≈30px shift, bands 2/4/5/6). Consequence: design shows 2nd card ("Reading – 20 minutes", +10 pill, check top) while app shows only its top edge. Fix: match HTML `.k3-pet` (260x236, pip 152 at bottom 96, margin 14 top) + `NestPetStage` bottom padding so hearts sit ≈30px higher.
-3. Pip/nest scale + position drift (moderate). Diff heat-map shows a strong red outline around Pip + nest in both themes; app Pip renders larger/higher than the PNG 152px pip on the 260x236 nest. Fix: check `NestPetStage` still-frame (`DISABLE_ANIMATIONS=1` SVG path) geometry/scale vs HTML `.k3-pet .pip`/`.nest`.
-4. Dark pet glow mismatch (minor). App dark shows a lighter-navy circle behind Pip/nest (≈230px glow, SPACING §7 `white@10%`); design dark PNG is flat navy with no circle. App follows the spec, PNG omits it — flag for orchestrator to rule which wins; listed as a deviation vs the PNG either way.
-5. Filled-hearts stroke (minor). HTML l.57: filled hearts `fill coin + 2px ink-2 stroke`, 26px, gap 8; empty `surface-2/ink-3`. App filled hearts render solid coin with little/no visible outline and look larger (15 rows vs 10 in the scan). Fix: match the 2px `ink-2` stroke on filled hearts.
-6. Quest-card title size (minor, pre-declared). HTML/SPACING: Nunito 18/24 w800; app renders ≈1px smaller (≈17/22 per `1_plan.md` §f). Shared-component token; builder cannot fix locally — noted.
-7. Dock icons glyph + light-theme fg (minor). HTML: 24px outline set (speech-bubble Pip, bag, jar); app: `NestIcons.pipFace/bag/jar` at 26px (plan accepts 26) — recognisable but different drawings. In light, design Pip/My-jar icons read white on coloured buttons while the app's read dark. Fix: verify `NestKidButton` IconTheme fg (`on-accent`/`on-leaf`) in light theme.
-8. Status-bar double render (capture artifact, informational, band 0 ≈2.7%). Native simulator time ("00:39"/"00:42") + status icons overlap the mock `NestStatusBar` "9:41". Harness artifact of `simctl screenshot`, not app code; excluded from verdict.
+1. Home-indicator strip background wrong (major, both themes). Design: meadow green continues under dock + home area to y843 (light green; dark (30,65,56)) with a 134x5 pill (dark rows 825-829). App: light strip is WHITE (255,255,255 at y835/840) with only a thin mark; dark strip is NAVY ((31,28,46) at y838/842). Fix: extend the meadow/background layer under the bottom chrome — check `KidScope` layering vs Scaffold/dock/`NestHomeIndicator` backgrounds in both themes.
+2. Dock sits ~28px too low (major). Dock top border: design y≈719-721 vs app y≈747-749 (light, measured). Card-1 top matches (+3: 560-561 vs 563-564), so ≈25px of excess height sits between card-1 top and dock top. Fix: audit progress→card-1 gap, card-1→card-2 gap (spec `.k3-quests` gap 12 vs base 16), and card internal heights until the dock + home pill land back on design rows.
+3. Green band starts ~39px too low (moderate). Left-edge green: design y≈524 (behind the progress bar) vs app y≈563 (just below it). Same fix family as #2 — upper stack still slightly tall (hearts +12 accounts for part of it).
+4. Hearts row +12px low (minor; was +30 in iter1). Yellow-heart rows: design y443-452 vs app y455-464. Outside ±2px but much improved. Fix: trim pet-stage bottom padding toward the orchestrator slot (nest top ≈y300, Pip ≈152).
+5. Iteration-1 items #4 (dark glow) and #7 (dock icon fg) are FIXED — verified in both themes (dark dock icons: dark-on-lavender/amber/mint; light: white/dark/white as designed). Iter1 #5 hearts stroke FIXED. Iter1 #2 gap and #3 Pip scale substantially improved (slot now close; residual is the mandated art swap).
 
-Otherwise correct: header (`k3-top` pad 4/20/10, s64 lilac avatar, 22/26 w900 name, 15/20 sub, 120 coin pill, 56 r18 lock), speech bubble (surface, 3px ink border, r18, tail), "Today's quests" 28/34 + `kchip` style, kid progress (h16, 2px ink border, leaf fill + gloss), card geometry (min-h 72, pad 12, r24, 3px ink border, kid shadow, 56 checks, "Waiting for Mum" chip), dock layout (surface, 3px top border, pad 12/20/10, 3x min-h 66 17/20 buttons; dark token colours correct), home pill (134x5), no horizontal overflow, no bad ellipsis, coins-only (no £), dark-mode tokens correct elsewhere.
+Otherwise correct: header (`k3-top`, s64 lilac M, 22/26 w900 name, 15/20 sub, 120 pill, 56 r18 lock), speech bubble, "Today's quests" 28/34 + `kchip`, kid progress (h16, 2px border, leaf fill + gloss), card geometry (min-h 72, pad 12, r24, 3px border, kid shadow, 56 checks, correct chips per status), dock layout/colours both themes, no overflow/ellipsis issues, coins-only (no £), dark token flips correct.
 
-Iteration-2 fixes (local): #1 meadow band, #2 pet→hearts gap, #3 Pip scale, #5 heart stroke, #7 dock icon fg. Shared/pre-declared: tile tint + title size (filed/noted).
+Iteration-3 fixes (local): #1 home-strip background both themes, #2 dock height audit (≈25px between card-1 and dock), #3/#4 upper-stack trim. Shared/pre-declared: tile tint, title size.
 
 VERDICT: FAIL

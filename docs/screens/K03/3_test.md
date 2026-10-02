@@ -1,123 +1,127 @@
-# K03 Kid home — test notes (Stage 3, iteration 1)
+# K03 Kid home — test notes (Stage 3, iteration 2)
 
-Scope: `kid_home` feature, route `/kid-home` (`KidHomeRoutePaths.home`), kid
-mode. Screen code is Stage 2's; this stage adds tests only (plus this note).
+Iteration 1 left K03 green (44 tests). Iteration 2 re-tests the fixed screen
+(K03-BUG-1/2/3/5/6 fixes, the new completion/celebration state machine) and
+extends the suite for the mandatory orchestrator PipAvatar rules. Two real
+requirement violations were found and are recorded below; the screen was NOT
+patched.
 
 ## Files
 
-- `app/test/features/kid_home/kid_home_bloc_test.dart` — extended (4 → 14
-  tests): every `KidHomeEvent` path, every `KidHomeStatus`, live stream
-  re-emission, retry, action-error, plus `KidHomeState` value semantics.
-- `app/test/features/kid_home/kid_home_view_test.dart` — extended (10 → 30
-  tests): 12-cell layout matrix, empty/loading/error states, all tap
-  destinations, semantics labels and kid tap sizes.
-- No `app/lib/**` change in this stage; no files outside RULES §1.
+- `app/test/features/kid_home/kid_home_bloc_test.dart` — 14 → 20 tests.
+- `app/test/features/kid_home/kid_home_view_test.dart` — 30 → 36 tests.
+- `app/test/features/kid_home/k03_bugs_test.dart` — bug-hunt proofs
+  (unchanged this stage; K03-BUG-1/2/3/5/6 un-skipped and green, K03-BUG-4
+  skipped pending the foundation ruling).
+- No `app/lib/**` change in this stage; nothing outside RULES §1 touched.
 
-## Bloc + state coverage (14 tests)
+## New / extended tests (this iteration)
 
-`KidHomeState` (5):
-- defaults idle/empty (status, child, items, counts, fraction, errors);
-- `doneCount` counts `approved` + `done_pending` only (4 items → 2, 0.5);
-- `copyWith` keeps the child; `copyWithLoaded` can clear it;
-- equal states compare equal; `KidHomeQuestCompleted` equality covers
-  childId/questId/coins.
+Bloc + state (7):
+- state: completion outcomes are explicit and nonce-bumped
+  (`withCompletionSucceeded` carries questId/coins; `withCompletionFailed`
+  bumps `actionNonce`; `withCompletionStarted` clears the outcome);
+- state: `copyWithLoaded` clears transient completion outcomes;
+- bloc: the celebration signal rides the flip emission itself
+  (`justCompletedQuestId`/`Coins` on the 5/6 state — extended existing test);
+- bloc: the celebration signal clears on the next stream emission (one-shot,
+  cannot celebrate twice);
+- bloc: a completion that does not flip the card never celebrates;
+- bloc: two identical failures both surface (reset between attempts);
+- bloc: retry after a failure clears the error and celebrates on success.
 
-`KidHomeBloc` (9 `blocTest`s) over a stream fake that hands out fresh streams
-per call (like the Drift repo):
-- load → `loading` → `loaded` (Maya, 6 items, 4/6, fraction ≈ 0.667);
-- load mirrors live item and child stream updates (4/6 → 5/6 → child null);
-- loaded child with no quests → zero counts;
-- silent streams stay `loading`;
-- load failure → `failure` with `errorMessage`;
-- failure then retry → `loading` → `loaded`;
-- check tap: `completeQuest('maya','q-reading')`, flip streams back in as
-  5/6;
-- completion failure: list kept, `actionError` set, item still `to_do`;
-- completion before any load still reaches the repository.
+View (6 new + 3 extended):
+- Pip: the pet slot renders the child's own `PipAvatar` (Maya =
+  mochi/sunny/none/stage 3, size 152) with no v1 art;
+- Pip: the active child's database look drives `PipAvatar` (Leo =
+  bolt/sky/none/stage 2);
+- Pip: the empty-quests state shows the child's own Pip (**FAILS**);
+- Pip: no product state renders the v1 `pip_stage_*.svg` art (**FAILS**);
+- navigation: double-tapping the check completes once (one event, one
+  celebration);
+- navigation: a failed check tap can be retried and then celebrates;
+- extended: a failed completion asserts no `/quest-complete` opens;
+- extended: the child-with-no-quests test uses the shared quest-less-child
+  helper.
 
-## Widget coverage (30 tests, all over the in-memory Drift DB)
-
-Layout matrix — light + dark × 320/390/430 × text scale 1.0/1.3 (12):
-header ('Hi Maya!', '120', '4 of 6 done'), all 6 quest cards, dock
-Pip/Shop/My jar, no `£` anywhere, `takeException()` null (no overflow).
-The card list is scrolled into view first (see notes).
-
-States:
-- `Seed.empty` (no active child) light + dark: 'Who's playing?' + 'Choose';
-  Choose navigates to `/who-is-playing`;
-- child with no quests (extra child row, no quests): 'Hi Nina!',
-  '0 done today', 'No quests today', 'Enjoy playing with Pip!', dock kept;
-- loading light + dark (silent fake repo): spinner + semantics
-  'Loading your quests';
-- load failure light + dark (erroring fake repo): 'Oh no! Pip got lost.' +
-  'Try again' → recovers to the loaded home;
-- failed completion (fake repo): SnackBar 'Hmm, that did not work. Try
-  again.', list kept, `completeQuest` attempted.
-
-Navigation (every tap):
-- quest card body → `/quest-detail` with `extra {questId: q-reading,
-  childId: maya}`;
-- to-do check → `/quest-complete` with `extra {questId, childId, coins:10}`
-  and the DB row flips to `done_pending` (read back through the repository);
-- done check (done_pending card) → no completion action (pending approvals
-  still 3); the tap falls through to the card and opens `/quest-detail`;
-- lock → `/parental-gate`;
-- dock → `/pip`, `/reward-shop`, `/my-jar`;
-- 'Choose' → `/who-is-playing` (state group);
-- 'Try again' re-fires the load (state group).
-
-Accessibility:
-- semantics: lock 'Grown-ups', coin '120 coins', header 'Hi Maya, 4 done
-  today', progress '4 of 6 of today's quests done', hearts 'Pip is happy
-  today, 4 of 5 hearts', checks 'Mark done' ×2 / 'Done' ×4, card nodes
-  'Empty the dishwasher, Waiting for Mum's thumbs-up' and 'Put the bins out,
-  Done' (merged node, read via `tester.getSemantics`);
-- tap targets ≥ 56 (`NestDevice.tapKid`): lock 56×56, to-do check, all 3 dock
-  buttons, all 6 quest card rows;
-- 320 px at scale 1.3 keeps lock + progress semantics, no overflow.
+The view fake repository now models the real one: a successful
+`completeQuest` flips the quest to `done_pending` and re-emits, so the
+celebration rides the flip in fake-backed tests exactly as it does on Drift.
 
 ## Results
 
-- `dart format --set-exit-if-changed .` — 341 files, 0 changed.
+- `dart format --set-exit-if-changed .` — 343 files, 0 changed.
 - `flutter analyze` — `No issues found!`
-- `flutter test` — `00:06 +331: All tests passed!` (kid_home: 44 = 14 bloc +
-  30 view; suite was 301 before).
+- `flutter test` — `+380 ~1 -2`: 380 pass, 1 skip (K03-BUG-4, filed as
+  SHARED_REQUEST #4), 2 fail — the two bug proofs below.
+- K03 alone: bloc 20/20; view 34/36.
 
-## Bugs found
+## Bugs found (screen NOT patched)
 
-None. Every test passes; no screen defect was exposed. The items below were
-investigated and are behaviour, not defects.
+### K03-BUG-7 — empty-quests state renders the v1 Pip SVG
+
+**Severity: Moderate (mandatory orchestrator rule).**
+Where: `app/lib/features/kid_home/presentation/views/kid_home_view.dart:877`
+(`_KidEmptyQuests` → `NestEmptyState(art: SvgPicture.asset(pipStage1))`).
+
+Rule: the stage brief says every Pip on a product screen must be the child's
+OWN `PipAvatar`, and v1 `pip_stage_*.svg` art is never allowed in product
+screens. This state has the active child loaded, so the child's look is
+available.
+
+Repro: insert a quest-less child (`Nina`, DB defaults mochi/sunny/stage 1),
+set `app_state.active_child_id`, open `/kid-home` → "No quests today" shows
+`assets/illustrations/pip_stage_1.svg` and zero `PipAvatar` widgets.
+
+Failing test: `kid_home_view_test.dart:470` "the empty-quests state shows the
+child's own Pip" — Expected exactly one `PipAvatar`; found 0.
+
+Fix hint: keep the 160 px art slot, render
+`PipAvatar(style/skin/accessory/stage from the child)` instead of the v1 SVG.
+
+### K03-BUG-8 — failure state renders the v1 Pip SVG
+
+**Severity: Moderate (mandatory orchestrator rule).**
+Where: `app/lib/features/kid_home/presentation/views/kid_home_view.dart:200`
+(`_KidFailure` → `SvgPicture.asset(pipStage1)`).
+
+Repro: register a repository whose streams error (or stop the DB), open
+`/kid-home` → "Oh no! Pip got lost." renders
+`assets/illustrations/pip_stage_1.svg`.
+
+Failing test: `kid_home_view_test.dart:485` "no product state renders the v1
+`pip_stage_*.svg` art" — Expected empty; actual
+`['assets/illustrations/pip_stage_1.svg']`.
+
+Fix hint: this state has no child data, so the brief's no-child fallback
+applies: a neutral `PipAvatar(style: mochi, skin: sunny, stage: 1)` (or no
+art at all) — never the v1 illustration.
+
+## Verified green this iteration
+
+- K03-BUG-1/2/3/6 fixes hold under the stage-3 suite: double-tap check →
+  exactly one completion and one celebration; failed write → no K05, list
+  kept, SnackBar; retry after failure → celebration; two identical failures
+  both announce; the celebration signal is one-shot (cleared by the next
+  stream emission).
+- PipAvatar mandate in the loaded state: Maya mochi/sunny/none/stage 3 at
+  size 152; Leo bolt/sky/none/stage 2; no v1 art while loaded.
+- All iteration-1 coverage still green: 12-cell light/dark × 320/390/430 ×
+  scale 1.0/1.3 matrix, empty/loading/error states, every tap destination,
+  semantics labels, kid tap targets ≥ 56.
 
 ## Notes / observations (not bugs)
 
-1. Lazy list: `ListView` at `kid_home_view.dart:317` builds the trailing card
-   column only when it enters the viewport + cache extent. At 390/430 px and
-   text scale 1.3 the column starts below that line, so the cards are absent
-   from the tree until the list scrolls (standard Flutter). The tests scroll
-   explicitly before counting cards; nothing is unreachable at runtime.
-2. Two Drift sources can each forward an error (`kid_home_bloc.dart:28`), so a
-   double failure emits two equal-looking `failure` states. The view renders
-   the same failure screen; the view tests drive this path with both fake
-   streams erroring.
-3. `copyWithLoaded` keeps the previous `errorMessage`
-   (`kid_home_state.dart:61`), so after a successful retry the loaded state
-   still carries the stale message. Not rendered while `status == loaded`;
-   no user-visible effect on K03.
-4. `NestKidQuestCard` labels both approved and `done_pending` checks 'Done'
-   (`nest_quest_card.dart:318`, shared component); the card node carries the
-   'Waiting for Mum's thumbs-up' status, which is what screen readers announce
-   for the row. A per-check pending label would need a shared-component change
-   (not requested; non-blocking).
+1. The pet slot composes the nest SVG with a standalone `PipAvatar`
+   (`inNest` left at its default `false`) instead of the `PipStage` artboard.
+   The note's slot intent — Pip ≈152 px on the 260×236 nest, feet at the rim
+   — is met; checked visually against the design crop and the iteration-2
+   capture, so this is not raised as a bug.
+2. K03-BUG-4 ("done today" day-boundary semantics) stays skipped: needs the
+   foundation ruling in `SHARED_REQUEST.md` #4.
+3. Harness notes from iteration 1 still apply: direct Drift work inside a
+   `testWidgets` body must go through `tester.runAsync`; avoid
+   `pumpAndSettle` while a loading spinner can be on screen; use
+   `tester.getSemantics` for merged card labels.
 
-## Harness notes (for other screen agents)
-
-- Direct Drift work in a `testWidgets` body (e.g. `Seed.empty`, raw inserts,
-  repository reads) deadlocks under the fake-async zone; wrap it in
-  `tester.runAsync(...)`. Streams driven through `tester.pump` are fine.
-- Avoid `pumpAndSettle` on screens that can be loading: the
-  `CircularProgressIndicator` never settles; bounded
-  `pump()`/`pump(Duration)` steps are deterministic.
-- `find.bySemanticsLabel` matches explicit `Semantics` widgets and cannot see
-  merged nodes; use `tester.getSemantics(finder).label` for merged card nodes.
-
-VERDICT: PASS
+VERDICT: FAIL

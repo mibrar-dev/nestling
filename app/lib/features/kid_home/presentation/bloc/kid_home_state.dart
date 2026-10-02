@@ -11,6 +11,9 @@ final class KidHomeState extends Equatable {
     this.items = const <KidQuest>[],
     this.errorMessage,
     this.actionError,
+    this.actionNonce = 0,
+    this.justCompletedQuestId,
+    this.justCompletedCoins,
   });
 
   final KidHomeStatus status;
@@ -23,6 +26,16 @@ final class KidHomeState extends Equatable {
   /// Last `completeQuest` failure; the list stays visible and a SnackBar
   /// explains it. Never used for the load failure path.
   final String? actionError;
+
+  /// Bumps on every completion failure so two identical failures are still
+  /// distinct states (K03-BUG-3): without it the second emit is swallowed.
+  final int actionNonce;
+
+  /// Quest id + coins of the completion that just saved. The view pushes
+  /// `/quest-complete` for this value (K03-BUG-2: never celebrate a failed
+  /// write) and it clears on the next stream emission.
+  final String? justCompletedQuestId;
+  final int? justCompletedCoins;
 
   /// Done = `approved` + `done_pending` (live counts from the DB).
   int get doneCount => items
@@ -37,19 +50,60 @@ final class KidHomeState extends Equatable {
     KidHomeStatus? status,
     List<KidQuest>? items,
     String? errorMessage,
-    String? actionError,
   }) {
     return KidHomeState(
       status: status ?? this.status,
       child: child,
       items: items ?? this.items,
       errorMessage: errorMessage ?? this.errorMessage,
-      actionError: actionError ?? this.actionError,
+      actionError: actionError,
+      actionNonce: actionNonce,
+      justCompletedQuestId: justCompletedQuestId,
+      justCompletedCoins: justCompletedCoins,
+    );
+  }
+
+  /// A completion attempt starts: forget the previous outcome so a repeat
+  /// failure is announced again (K03-BUG-3).
+  KidHomeState withCompletionStarted() {
+    return KidHomeState(
+      status: status,
+      child: child,
+      items: items,
+      errorMessage: errorMessage,
+    );
+  }
+
+  /// The write failed: distinct state per failure via [actionNonce].
+  KidHomeState withCompletionFailed(Object error) {
+    return KidHomeState(
+      status: status,
+      child: child,
+      items: items,
+      errorMessage: errorMessage,
+      actionError: error.toString(),
+      actionNonce: actionNonce + 1,
+    );
+  }
+
+  /// The write saved: the view celebrates exactly this completion.
+  KidHomeState withCompletionSucceeded({
+    required String questId,
+    required int coins,
+  }) {
+    return KidHomeState(
+      status: status,
+      child: child,
+      items: items,
+      errorMessage: errorMessage,
+      justCompletedQuestId: questId,
+      justCompletedCoins: coins,
     );
   }
 
   /// Loaded emission from the combined child + items streams. Built
-  /// explicitly (not via [copyWith]) so a null child clears the previous one.
+  /// explicitly (not via [copyWith]) so a null child clears the previous
+  /// one; a healthy stream also clears transient completion outcomes.
   KidHomeState copyWithLoaded({
     required KidChild? child,
     required List<KidQuest> items,
@@ -59,7 +113,6 @@ final class KidHomeState extends Equatable {
       child: child,
       items: items,
       errorMessage: errorMessage,
-      actionError: actionError,
     );
   }
 
@@ -70,5 +123,8 @@ final class KidHomeState extends Equatable {
     items,
     errorMessage,
     actionError,
+    actionNonce,
+    justCompletedQuestId,
+    justCompletedCoins,
   ];
 }

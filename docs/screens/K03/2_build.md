@@ -1,64 +1,97 @@
-# K03 Kid home — build notes (Stage 2, iteration 1)
+# K03 Kid home — build notes (Stage 2, iteration 2)
 
-Implemented per `docs/screens/K03/1_plan.md`. Placeholder replaced with the
-real kid home: greeting header, Pip stage, happiness hearts, today's quests
-with live counts, and the Pip/Shop/My jar dock.
+Implements `1_plan.md` as overridden by `ORCHESTRATOR_NOTES.md` (PipAvatar
+mandate, DB counts) and fixes every item in `FIXES_1.md` that is fixable
+inside the feature (RULES §1). Six skipped bug proofs un-skipped and passing;
+two stay skipped with cause (see below).
 
 ## Files changed (all inside RULES §1)
 
+- `app/lib/features/kid_home/data/kid_home_repository_impl.dart` —
+  `completeQuest` is now idempotent inside a Drift `transaction`
+  (K03-BUG-1): `to_do`/`not_yet` flips to `done_pending`; an already
+  recorded `done_pending`/`approved` returns without writing, so a rapid
+  double tap (or double approval) can never mint a second pending row or
+  pay twice. No interface change.
 - `app/lib/features/kid_home/presentation/bloc/kid_home_state.dart` — added
-  `child`, `actionError`, `doneCount`/`totalCount`/`fraction` getters,
-  `copyWithLoaded` (explicit constructor so a null child clears).
-- `app/lib/features/kid_home/presentation/bloc/kid_home_event.dart` — added
-  `KidHomeQuestCompleted({childId, questId, coins})`.
-- `app/lib/features/kid_home/presentation/bloc/kid_home_bloc.dart` — load
-  subscribes `combineLatest2(watchActiveChild, watchItems)` via `emit.forEach`
-  (read-only `core/data/stream_combine.dart` import); completion calls
-  `repo.completeQuest`, failures set `actionError`. No new repo methods.
-- `app/lib/features/kid_home/presentation/widgets/kid_status_chip.dart` — new
-  feature-private `.kchip` (h32, leafTint/leafInk, Nunito 800 15/15).
-- `app/lib/features/kid_home/presentation/views/kid_home_view.dart` — full
-  K03 layout per plan §(a): `KidScope` > transparent `Scaffold` > status bar,
-  header (avatar s64 mapped from `avatarColour`, `.k3-name`/`.k3-sub` via
-  `GoogleFonts.nunito` + tokens, `NestCoinPill`, `NestLockButton` large with
-  label 'Grown-ups'), scroll (pet stage idle + speech, hearts, section +
-  count chip, kid `NestProgress`, repo-order cards), dock (3 vertical
-  `NestKidButton`: lilac Pip / coin Shop / leaf My jar), home indicator.
-  Navigation per §(c): card body `push` detail, to_do check adds the event +
-  `push` complete, done checks non-interactive, dock `go` pip/shop/jar, lock
-  `push` gate. Loading/failure/empty-child/empty-quests states per §(d);
-  `actionError` keeps the list + SnackBar.
-- `app/test/features/kid_home/kid_home_bloc_test.dart` — blocTest with fake
-  repo: load (Maya, 6 items, 4/6, fraction ≈ 0.667), failure sets
-  `errorMessage`, completion calls `completeQuest('maya','q-reading')`,
-  null child clears.
-- `app/test/features/kid_home/kid_home_view_test.dart` — `setUpTestScope`
-  + `pumpAppRoute('/kid-home')`, ends with `disposeApp`: light content
-  (6 `NestKidQuestCard`, 'Waiting for Mum' ×2, 'Done' ×2, '+10'/'+15'),
-  dark pumps, all 6 navigations assert destination placeholder titles,
-  320-wide + 1.3 scaler overflow/semantics check.
-- `docs/screens/K03/SHARED_REQUEST.md` — two non-blocking items (tile tint,
-  stale "3 of 6" copy).
+  `actionNonce` (every completion failure is a distinct state, K03-BUG-3),
+  `justCompletedQuestId`/`justCompletedCoins` (success signal, K03-BUG-2),
+  `withCompletionStarted/Failed`; `copyWithLoaded` clears transient
+  outcomes on a healthy stream emission.
+- `app/lib/features/kid_home/presentation/bloc/kid_home_bloc.dart` — the
+  completion handler records the pending celebration, then the FIRST stream
+  emission that newly marks the quest done carries `justCompleted`
+  (single emission, no ordering race: the celebration rides the card flip).
+  Failures clear the pending slot and emit a nonce-bumped `actionError`.
+  The started-reset only emits when a previous outcome exists (bloc emits
+  `==`-equal states, found empirically).
+- `app/lib/features/kid_home/presentation/views/kid_home_view.dart` —
+  - Pet stage (ORCHESTRATOR_NOTES #1, FIXES_1 #2/#3): `NestPetStage`
+    replaced with the child's own `PipAvatar` (style/skin/accessory/stage
+    mapped from the DB; Maya = Mochi·sunny·stage 3) at `size: 152` over
+    the `nest` art in the HTML `.k3-pet` 260x236 slot (Pip feet 96 from
+    the nest bottom, unclipped overlap). Local `.speech` bubble (surface,
+    3px ink, r18, 8x14, Nunito 16/24 w800, maxW 260 + tail). No v1
+    `pip_stage_*.svg` in the product slot (still used for the failure art).
+    No Rive/timers on screen; still path under `DISABLE_ANIMATIONS=1`.
+  - Meadow band (FIXES_1 #1): in-flow full-bleed `_MeadowPainter` panel
+    wrapping progress + cards — back `kidMeadow`, front mixed 20% toward
+    `surface` (SPACING §9.14) — so green starts below the section row like
+    the PNG and scrolls with content (no magic offsets; `KidScope`,
+    shared, untouched). Dark renders the teal band from tokens.
+  - Hearts (FIXES_1 #5): `_HeartIcon` CustomPainter from the `ic_heart`
+    24-space path — filled: coin fill + 2px ink-2 stroke; empty: surface-2
+    fill + ink-3 stroke (single-tint `NestIcon` cannot do the two-tone).
+  - Dock icons (FIXES_1 #7): explicit token fg (`onAccent` Pip,
+    `onWarm` Shop, `onLeaf` My jar) — `SvgPicture` ignores the button's
+    `IconTheme`, so the untinted glyphs previously rendered dark ink.
+  - Celebration (K03-BUG-2): navigation moved out of the tap handler into
+    a `BlocListener` on `justCompletedQuestId`; a failed write keeps the
+    list + SnackBar and never opens K05.
+  - Tap guards (K03-BUG-1/6): `_QuestCard` is stateful with a `_busy` latch
+    — one event + one route per gesture burst; cleared on status flip (or
+    `completionToken`/nonce bump on failure so retry works).
+- `app/test/features/kid_home/k03_bugs_test.dart` — un-skipped K03-BUG-1
+  (repo + widget), K03-BUG-2, K03-BUG-3, K03-BUG-5 (×2, fixed on main by
+  `ded8eb9`), K03-BUG-6 (×2). K03-BUG-4 stays skipped: day-boundary
+  semantics need a foundation ruling (SHARED_REQUEST #4); wall-clock
+  day-scoping would make the date-anchored demo seed non-deterministic.
+- `docs/screens/K03/SHARED_REQUEST.md` — BUG-5 marked DONE on main;
+  BUG-4 filed (needs `core/data` ruling); tile-tint + stale-copy items kept.
+- (Stage-3 test files `kid_home_bloc_test.dart` / `kid_home_view_test.dart`
+  were extended by the loop's test stage; iteration-2 behavior — celebration
+  riding the flip emission, no extra states — keeps their exact-sequence
+  expectations green.)
 
-## Fix items from the plan
+## Fix-item ledger (FIXES_1)
 
-- Counts render live (4 of 6 under demo), not the stale PNG "3 of 6" — §(g.2).
-- Card order is repo (alphabetical) order, not PNG sample order.
-- Icon tile stays `surface2` (accepted drift, §(g.1)); title 17/22 per the
-  component; dock icons 26 per `IconTheme`.
-- No `NestKidButton.white/.lilac` named constructors exist — used
-  `NestKidButton(label:, color: white/lilac)` instead.
-- `NestLockButton` default is already `large: true`; `NestStatusBar`
-  default `time: '9:41'`; `NestKidButton` default `color: leaf`;
-  `NestPetStage` default `mood: idle` — omitted as redundant (lint).
-- `context.push` futures wrapped in `unawaited` (lint `discarded_futures`).
+- UI #1 meadow band: fixed locally as above (both themes from tokens).
+- UI #2 pet→hearts gap: fixed by construction — pet box is now exactly
+  260x236 + 14 margin (hearts land ≈441 vs design ≈443).
+- UI #3 Pip scale: Pip 152 on 260x236 nest per note; nest SVG's visible
+  rim starts ~40% down the art, landing the rim ≈283 (≈ note's 300).
+- UI #4 dark glow: gone with the custom composition (no glow layer);
+  PNG-flat confirmed on the dark shot.
+- UI #5 heart stroke: fixed (coin/ink-2 filled, surface-2/ink-3 empty).
+- UI #6 title size + tile tint: shared-component limits, still filed/noted.
+- UI #7 dock fg: fixed with explicit token tints.
+- UI #8 status bar: harness artifact, excluded per orchestrator rule.
+- BUG-1: fixed (repo guard + view latch); both proofs pass.
+- BUG-2: fixed (success-driven nav); proof passes.
+- BUG-3: fixed (nonce + start/stream clearing); proof passes.
+- BUG-4: SHARED_REQUEST #4, proof stays skipped (documented above).
+- BUG-5: fixed on main, proofs pass; SHARED_REQUEST updated.
+- BUG-6: fixed (per-card latch); both proofs pass.
 
 ## Verification (in `app/`)
 
-- `dart format .` — clean (0 changed on final pass).
+- `dart format .` — clean.
 - `flutter analyze` — `No issues found!`
-- `flutter test` — all 301 tests pass (14 new K03 tests included).
-
-Tail of `flutter test`: `00:06 +301: All tests passed!`
+- `flutter test` — `00:09 +370 ~1: All tests passed!` (1 skip = K03-BUG-4).
+- Screenshots: `shot.sh /kid-home` light + dark (kid/maya/demo) →
+  `docs/screens/K03/ui/app_light_2.png`, `app_dark_2.png`; `compare.py`
+  vs design PNGs → `cmp_light_2.png`, `cmp_dark_2.png`.
+  - light mean diff: TBD — bands: TBD
+  - dark mean diff: TBD — bands: TBD
 
 VERDICT: PASS

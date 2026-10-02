@@ -1,238 +1,177 @@
-# K03 Kid home — bug hunt (Stage 6, iteration 1)
+# K03 Kid home — bug hunt (Stage 6, iteration 2)
 
-Adversarial pass over `kid_home` K03: data edges, rapid double taps, back
-navigation, deep links, restart persistence, mode guards, dark contrast,
-320px + 1.3 text scale, async gaps, Europe/London day boundaries and integer
-money. No screen code was changed in this stage.
+Adversarial pass over `kid_home` K03 after the iteration-2 fixes and the
+main-branch PERIODS ruling: data edges, rapid double taps, back navigation,
+deep links, restart persistence, mode guards, dark contrast, 320px + 1.3
+scale, async gaps, Europe/London periods (daily/weekly/once, BST edges) and
+integer money. No screen code was changed in this stage.
 
-- Suite: `app/test/features/kid_home/k03_bugs_test.dart` (20 tests: 11 probes
-  pass, 9 bug proofs skipped so `flutter test` stays green).
-- Run the proofs: `cd app && flutter test --run-skipped --plain-name "K03-BUG"`.
-- Every proof below fails on the current code for the reason stated.
-- Environment: demo seed (`Seed.demo`), in-memory Drift (bug 1/4) and
-  file-backed Drift (persistence probe).
+- Suite: `app/test/features/kid_home/k03_bugs_test.dart` — 33 tests:
+  32 run green, 1 skipped (`K03-BUG-7` needs its flag-specific run).
+- Iteration-1 proofs K03-BUG-1..6 all run un-skipped and pass.
+- K03-BUG-8 and K03-BUG-9 were fixed mid-loop by the concurrent iteration
+  and their proofs now run un-skipped.
+- Re-verified after the main merge `f6b02d8` (PipAvatar fallback art for
+  every style, recoloured to the child's skin): K03's still path uses
+  `mochi/s3_idle_1.svg`; new probes assert the mandated Pip attributes for
+  Maya and Leo and the pipStage 0/9 clamp.
+- Run the motion-flag proof:
+  `flutter test --dart-define=DISABLE_ANIMATIONS=1 --plain-name "K03-BUG-7"`.
 
-## Bugs (numbered, severity)
+## Iteration-1 bugs — fixed and re-verified
 
-### K03-BUG-1 — Rapid double tap writes a duplicate pending completion
+| ID | Severity | Fix landed | Proof (green) |
+|---|---|---|---|
+| K03-BUG-1 | Major | `completeQuest` is idempotent inside a Drift transaction; per-card `_busy` latch blocks the second event in the same frame | repo + widget double-tap proofs |
+| K03-BUG-2 | Moderate | celebration navigation rides `justCompletedQuestId` (success only); failed write keeps the list + SnackBar | failed-completion proof |
+| K03-BUG-3 | Minor | `actionNonce` makes every failure a distinct state; reset on completion start / healthy stream | double-failure proof |
+| K03-BUG-4 | Moderate | main PERIODS ruling: `watchItems` scopes status via `countsForCurrentPeriod` (daily/weekly/once); day-boundary proof now un-skipped | day-boundary proof + new period probes |
+| K03-BUG-5 | Moderate | main router gates `/today-empty`, `/quest-editor`, `/add-children`, `/pocket-money-setup` from kid mode | both deep-link proofs |
+| K03-BUG-6 | Minor | per-card `_busy` latch covers card body + check; one route per gesture burst | both route-stacking proofs |
 
-**Severity: Major (data integrity).**
-Where: `kid_home > data/kid_home_repository_impl.dart` `completeQuest()`
-(no transaction, no latest-status guard) and
-`presentation/views/kid_home_view.dart` `_QuestCard._complete()` (no
-debounce; the route push does not disable the check in the same frame).
+## New bugs (iteration 2)
 
-Repro (widget): open `/kid-home` (kid mode, demo), scroll to a to_do card,
-tap the round check twice inside one frame (a genuine fast double tap).
-Repro (repo): `completeQuest('maya', 'q-reading')` twice in a row.
+### K03-BUG-7 — `DISABLE_ANIMATIONS=1` does not disable animations
 
-Actual: two `done_pending` rows for the same quest/child are written. The
-first call flips the seeded `to_do` row; the second call sees the latest
-status as `done_pending`, skips the update branch and **inserts a new row**
-(`completeQuest` has an else-insert for any non-to_do/not_yet latest status).
-Read-back evidence: `id: 7` and `id: 13`, both `done_pending`, same second.
+**Severity: Major (shared; motion rule + screenshot determinism).**
+Where: `app/lib/core/data/env_flags.dart` (`kDisableAnimations`),
+`app/lib/app/launch_flags.dart` (`disableAnimations`). RULES §6 and
+`tools/screens/shot.sh` both document/pass `--dart-define=DISABLE_ANIMATIONS=1`,
+but `bool.fromEnvironment` only treats the literal `"true"` as true — `"1"`
+parses as **false**. Nothing else sets `MediaQueryData.disableAnimations`, so
+on device every motion path that checks the compile-time flag believes
+animations are enabled.
 
-Impact: `watchPendingApprovals` now returns 4 items for a family the spec
-seeds with 3; P11 lists the same quest twice; `ApprovalsRepositoryImpl`
-`.approve()` treats every row as a distinct completion and inserts a second
-`quest_bonus` ledger entry, so double approval pays the child twice.
-`approveAll()` compounds it. UI guards (`done_pending` check becomes
-inactive) only help after the stream round-trips, which is longer than a
-double tap.
-
-Failing tests:
-- `K03-BUG-1 repo: second completeQuest after done_pending creates a duplicate row`
-- `K03-BUG-1 widget: double-tapping the check creates two pending rows`
-
-Suggested fix (feature-local): make `completeQuest` idempotent inside a
-`transaction`: read the latest completion for (quest, child); if it is
-`to_do`/`not_yet` update it, if it is `done_pending`/`approved` return
-without writing. In the view, disable the check the moment it is tapped
-(local `_completing` flag/bloc `completingQuestId`) so the second tap is a
-no-op even before the stream re-emits. A DB uniqueness constraint on
-(quest_id, child_id, day) would be a stronger shared-layer fix (schema →
-SHARED_REQUEST).
-
-### K03-BUG-2 — The celebration opens even when the completion write fails
-
-**Severity: Moderate.**
-Where: `kid_home_view.dart` `_QuestCard._complete()` — `bloc.add(...)` then
-`unawaited(context.push(/quest-complete))`, unconditionally and without
-waiting for the write.
-
-Repro: use a repository whose `completeQuest` throws (or stop the DB). Tap a
-to_do check.
-
-Actual: `/quest-complete` (K05) opens, so the child is celebrated for a
-quest the database never recorded; the "Hmm, that did not work." SnackBar
-fires over the celebration, and after back navigation the card is still
-to_do. Same shape if the quest row was deleted while the list was stale:
-`completeQuest` silently `return`s when the quest does not exist, so there
-is not even an `actionError`.
+Repro:
+1. `cd app && flutter test --dart-define=DISABLE_ANIMATIONS=1 --plain-name "K03-BUG-7" test/features/kid_home/k03_bugs_test.dart`
+   → `Expected: true, Actual: false`.
+2. On the simulator, `tools/screens/shot.sh` (which always passes `=1`)
+   captures K03 with the live Rive `PipAvatar` running; the harness prints
+   `WARNING — frame never stabilised in 25 s` in **both** iteration-1 and
+   iteration-2 UI runs. With Rive idle motion there is never a stable frame.
+3. Control: `--dart-define=DISABLE_ANIMATIONS=true` makes the proof pass and
+   the `PipAvatar` build takes the static SVG fallback
+   (`reduceMotion || !riveEnabled` → `_PipAvatarSvgFallback`).
 
 Failing test:
-- `K03-BUG-2: a failed completion still opens the celebration`
-  (expects `K05 Quest complete` absent; found one).
+- `K03-BUG-7: the documented DISABLE_ANIMATIONS=1 flag must disable motion`
+  (skipped in the plain suite; runs and fails under the documented flag).
 
-Suggested fix: drive navigation from success. Have the
-`KidHomeQuestCompleted` handler emit a `justCompletedQuestId` (cleared on
-the next load/stream emission) and a `BlocListener` push `/quest-complete`
-only for that value; on failure keep the list and show the SnackBar as
-today.
+Suggested fix (shared): treat `"1"` as true, e.g.
+`String.fromEnvironment('DISABLE_ANIMATIONS') == '1' || bool.fromEnvironment('DISABLE_ANIMATIONS')`
+in `env_flags.dart` (and `launch_flags.dart`), and ideally set
+`MediaQueryData.disableAnimations` from it once at the app root so every
+motion path obeys the same switch. Passing `=true` in `shot.sh` is a one-line
+workaround. Filed as SHARED_REQUEST #5.
 
-### K03-BUG-3 — A second identical completion failure is never announced
+### K03-BUG-8 — A failed later tap swallowed an earlier success (fixed mid-loop)
 
-**Severity: Minor.**
-Where: `kid_home_state.dart` `copyWith` keeps `actionError ?? this.actionError`
-(write-only) and the view listens for `previous.actionError != current.actionError`.
+**Severity: Minor (UX; no data loss).**
+Where: `kid_home_bloc.dart` `_awaitingCelebration` was a single record; two
+quick completions of different quests overwrote each other, and if the second
+write failed the first quest's flip was never celebrated.
 
-Repro: two completion attempts fail with the same error string (e.g. both
-`Exception: save failed`) before any reload.
+Repro (proof): gate the first `completeQuest`; tap quest A, tap quest B;
+release A (card flips while the pending slot already holds B); fail B.
+Actual before the fix: `state.justCompletedQuestId == null` (A never
+celebrated). Fixed during this stage by keying the pending map per quest
+(`Map<String,int>` + first-flip-wins loop); the proof now runs un-skipped.
 
-Actual: the first failure emits `actionError`; the second `copyWith` produces
-an equatable-equal state, so `bloc.emit` swallows it and the BlocListener
-never fires again. The child/parent gets no feedback on the second attempt.
+Failing test (now green):
+- `K03-BUG-8: a failed second completion swallows the first success (no celebration)`
 
-Failing test:
-- `K03-BUG-3: state keeps the first actionError forever so a second identical failure is not announced`
-  (collects 1 error state, expects 2).
+### K03-BUG-9 — Double-tapping the lock stacked two gate routes (fixed mid-loop)
 
-Suggested fix: clear `actionError` when a new completion starts, or give it
-a `errorNonce`/counter so every failure is a distinct state. `copyWithLoaded`
-should also clear it once the stream is healthy (stage 3 noted this already).
+**Severity: Minor (back-stack UX).**
+Where: `kid_home_view.dart` — the lock pushed `/parental-gate` with no
+per-tap latch (unlike `_QuestCard`); the lock is a 56px kid target, so a
+fast double tap is realistic.
 
-### K03-BUG-4 — "Done today" never resets at the London day boundary
+Repro: open `/kid-home`, tap "Grown-ups" twice inside one frame.
+Actual before the fix: two `/parental-gate` routes were pushed; one system
+back press left the user on the second gate instead of returning home.
+Fixed during this stage with a `_GateLockButton` stateful wrapper whose
+`_busy` latch wraps `context.push(gate)` in `try/finally`; the proof now
+runs un-skipped.
 
-**Severity: Moderate (screen claim vs data semantics).**
-Where: `kid_home_state.dart` `doneCount` (status-only) and
-`kid_home_repository_impl.dart` `watchItems()` (latest completion of any age),
-which ignore dates entirely; `kid_home_view.dart` renders "X done today",
-"X of Y done" and the progress bar from it.
-
-Repro: remove completions, insert one `approved` completion for a quest
-whose `createdAt` is 30 hours ago (always a previous Europe/London day), open
-`/kid-home`.
-
-Actual: header says "1 done today" (and the bar advances). Nothing in the
-query or state consults `london_time.dart`, `repeatRule` or the current day,
-so on any later day yesterday's approvals (and even last week's) still count
-as done today. There is no daily reset path anywhere in the app; midnight or
-the BST↔GMT switch (25 Oct 2026 01:00 UTC) does not change what the child is
-shown.
-
-Failing test:
-- `K03-BUG-4: a completion from a previous London day still reads as done today`
-  (expects `0 done today`; finds `1 done today`).
-
-Suggested fix: decide the semantics with the foundation (quest model lives
-in `core/data`). Either (a) scope kid status to the current London day:
-`watchItems` returns the latest completion *created on the current London
-day* (or none → `to_do`) and K03's counts stay a pure projection; or
-(b) if per-quest-latest is intended, stop claiming "today" in the header,
-chip and progress semantics. (a) matches the K03 design copy and daily
-quests; because `TodayRepositoryImpl` uses the same status model, file the
-ruling as a SHARED_REQUEST if it is not screen-local.
-
-### K03-BUG-5 — Kid-mode parental guard misses parent routes
-
-**Severity: Moderate (guard bypass; shared router).**
-Where: `app/lib/app/router.dart` `parentOnly` — matches `/today` exactly and
-`/today/` prefixes only; later parent routes were never added.
-`/today-empty`, `/quest-editor`, `/add-children`, `/pocket-money-setup` are
-reachable in kid mode.
-
-Repro: `APP_MODE=kid` (or `AppModeController.selectMode(AppMode.kid)`) and
-deep-link `/today-empty` or `/quest-editor`.
-
-Actual: the parent placeholder screen renders; no redirect to
-`/parental-gate`. The same list does block `/today`, `/settings`, etc., so
-this is an omission, not a design decision.
-
-Failing tests:
-- `K03-BUG-5: kid mode can deep-link to /today-empty without the gate`
-- `K03-BUG-5: kid mode can deep-link to /quest-editor without the gate`
-  (both expect `currentPath == '/parental-gate'`; get the parent route).
-
-Suggested fix (shared, cannot be fixed in the feature — file
-SHARED_REQUEST): route metadata (`GoRoute`-level `parentOnly` flag) instead
-of a prefix list, or extend the list with `/today-empty`, `/quest-editor`,
-`/add-children`, `/pocket-money-setup` and add a router test enumerating
-every parent path so future screens cannot silently miss the guard.
-
-### K03-BUG-6 — Double tap stacks duplicate navigation routes
-
-**Severity: Minor (UX / back-stack).**
-Where: `kid_home_view.dart` `_QuestCard._openDetail()` / `_complete()` —
-every tap pushes; nothing debounces.
-
-Repro: fast double-tap a quest card body, or the check, without a frame in
-between.
-
-Actual: two `/quest-detail` (or two `/quest-complete`) routes are pushed.
-One back press returns to the *second* copy, not to `/kid-home`. A child
-must press back twice; on the celebration flow this reads as the app
-"not going back".
-
-Failing tests:
-- `K03-BUG-6: double-tapping a quest card stacks two detail routes`
-- `K03-BUG-6: double-tapping the check stacks two celebration routes`
-  (after one `pageBack()`, `Hi Maya!` is not found).
-
-Suggested fix: same guard as BUG-1/2 — a per-card pending flag (or
-`context.push` gated on a `_navigating` bool plus `isCurrent` route check)
-so only one route can be pushed per gesture burst.
+Failing test (now green):
+- `K03-BUG-9: double-tapping the lock stacks two gate routes`
 
 ## Verified clean (probes in the same file)
 
 | Category | Probe | Result |
 |---|---|---|
-| 0 children | deep link `/kid-home` with `Seed.empty` → "Who's playing?" + Choose | pass |
-| 1 child | family with Leo removed still renders Maya 4/6 | pass |
-| 6 children | adding 4 children does not change the home | pass |
-| long UK name | "Maximilian-Alexander" at 320px / scale 1.3, no overflow | pass |
-| 9999 coins | coin pill renders, no overflow | pass |
-| £0.00 / £999.99 | K03 shows coins only (`+0` for a zero-coin quest, no `£` anywhere) | pass |
-| empty lists | empty-quests state covered by stage 3 | pass (existing) |
-| back navigation | check → K05 → back returns to the home with the card flipped to "Waiting for Mum" | pass |
-| deep links | `/kid-home` direct in kid mode rehydrates the active child from `app_state` | pass |
-| restart | Drift file DB closed and reopened: completion still `done_pending` | pass |
-| mode guard | kid mode → `/today` still redirects to `/parental-gate` | pass |
-| dark contrast | 16 K03 token pairs (ink/ink2/coin/leaf/chip/buttons, sky + surface) ≥ 4.5:1 both themes | pass |
-| 320 + 1.3 | matrix covered in stage 3; edge-data variant here | pass |
-| async gap | late `completeQuest` failure after `bloc.close()` does not throw (bloc 9 ignores post-close emits) | pass |
-| timezone | `london_time.dart` BST boundaries are correct (Oct switch 01:00 UTC); K03 itself does no time math | pass (see BUG-4) |
-| money rounding | no pence arithmetic on this screen; all amounts integer coins | pass |
+| periods | day/week starts inclusive, older excluded; daily/weekly/once; explicit BST→GMT (25 Oct) and GMT→BST (29 Mar) switch days | pass |
+| mandated Pip | home renders `PipAvatar` with Maya = mochi/sunny/none/stage 3; Leo deep-link = bolt/sky/stage 2; pipStage 0 → 1 and 9 → 4 (clamped, no assert) | pass |
+| period + repo | daily completion 1s before the London day start → to_do, at the start → approved; weekly outside the week → to_do; once 400 days old → approved | pass |
+| retry | failed completion → SnackBar, no celebration; retry after the failure → K05 opens | pass |
+| 0 children | `Seed.empty` → "Who's playing?" + Choose | pass |
+| 1 child / 6 children | Leo removed / four extra children: Maya's home unchanged | pass |
+| long UK name | "Maximilian-Alexander" + 9999 coins at 320px / scale 1.3 | pass |
+| £0.00 / £999.99 | coins only; `+0` for a zero-coin quest, no `£` anywhere | pass |
+| back navigation | check → K05 → back → home with the card flipped to "Waiting for Mum" | pass |
+| deep links | `/kid-home` kid mode with/without active child; `/kid-home` in parent mode still deliberate (see observations) | pass |
+| restart | Drift file DB closed/reopened: completion still `done_pending` | pass |
+| guard | `/today`, `/today-empty`, `/quest-editor`, `/add-children`, `/pocket-money-setup` all redirect to the gate in kid mode | pass |
+| dark contrast | 16 K03 token pairs ≥ 4.5:1 in both themes | pass |
+| async gap | late `completeQuest` failure after `bloc.close()` does not throw | pass |
+| money rounding | integer coins only; pence arithmetic lives in the parent money screens | pass |
 
 ## Observations (checked, not raised as bugs)
 
-1. Parent mode can deep-link to `/kid-home` and see the kid home. The
-   DESIGN_SPEC guard is one-way (kid → parent/gate); no spec line requires a
-   gate on kid routes and there is no in-app path from parent mode. Kept as
-   an observation until the deep-link/product pass decides.
-2. `/kid-home` in kid mode does not require the K02 PIN. K01/K02 are still
-   placeholders owned by other K screens, so there is no PIN state to
-   enforce yet; needs a family-feature ruling, not a K03 fix.
-3. Leo's quests `paw`/`bag`/`leaf` fall back to the generic quest-card glyph
-   (`_iconFor` map). The fallback is per plan (K03 design shows Maya only);
-   `NestIcons.paw`/`bag` exist if the loop later wants the richer map.
-4. `completeQuest` does not check that the quest is assigned to `childId`
-   (only reachable via crafted extras into K04, which is a placeholder). The
-   UI never produces a mismatched pair.
+1. **Period rollover without a DB change.** `watchItems` computes status at
+   stream-map time; at London midnight a daily completion stops counting only
+   when the stream re-emits (any DB write) or the screen reloads. There is no
+   day-tick timer and no injectable clock, so this cannot be proven in-suite;
+   worth a foundation tick if kids keep the app open overnight.
+2. **Test-suite wall-clock coupling.** `test/flutter_test_config.dart` pins
+   `Seed.anchorOverride` to Sat 3 Oct 2026 but nothing pins `DateTime.now()`,
+   which both `watchItems` and `completeQuest` use. The demo "4 of 6" and the
+   period proofs stay deterministic only while the machine clock is in the
+   same London day/week as the pinned anchor; a clock seam
+   (`DateTime Function() now` or `package:clock`) would make it robust.
+3. **`inNest` note vs composition.** ORCHESTRATOR_NOTES #1 asks for
+   `PipAvatar(..., inNest true)`; the screen renders the child's `PipAvatar`
+   (Mochi/sunny/stage 3, attributes from the DB) at 152px over the `nest`
+   art instead, which matches the measurable slot requirements (Pip 152 on a
+   260×236 nest) and avoids double-nesting with the Rive `PipStage` artboard.
+   Stage 5 accepted the result (A3); flagged here only for traceability.
+4. **Parent mode → `/kid-home`.** Still reachable by deep link; the spec
+   guard is one-way (kid → parent/gate) and there is no in-app parent entry.
+5. **PIN bypass.** `/kid-home` in kid mode does not require the K02 PIN;
+   K01/K02 are placeholders owned by other K screens, so no PIN state exists
+   to enforce yet.
+6. **Debug routes in kid mode.** `/design-system`, `/motion-lab`, `/pip-lab`
+   are not in the guard list (debug-only entry points).
+7. **Leo's icon fallback.** `paw`/`bag`/`leaf` icons still fall back to the
+   generic quest-card glyph (`_iconFor`); per plan, design shows Maya only.
+8. **Accessories in the still frame.** The merged `f6b02d8` fallback
+   (`_PipAvatarSvgFallback`) recolours by skin but takes no accessory, so
+   under `DISABLE_ANIMATIONS`/reduced motion a child wearing a bow/cap/
+   scarf/glasses shows the bare idle art. Neither seed child equips one
+   today, so no design impact; a golden/screenshot check with an accessorised
+   child would be needed to raise it as a defect (shared component).
 
 ## Summary
 
-| ID | Severity | Area | Fixable in K03 feature? |
+| ID | Severity | Area | Status |
 |---|---|---|---|
-| K03-BUG-1 | Major | duplicate pending completions / double payout | yes (repo + view) |
-| K03-BUG-2 | Moderate | celebration before successful save | yes (view + bloc) |
-| K03-BUG-3 | Minor | swallowed repeat failure feedback | yes (state/bloc) |
-| K03-BUG-4 | Moderate | "done today" day-boundary semantics | partly (needs foundation ruling) |
-| K03-BUG-5 | Moderate | kid-mode guard misses parent routes | no (shared router → SHARED_REQUEST) |
-| K03-BUG-6 | Minor | stacked duplicate routes on double tap | yes (view) |
+| K03-BUG-1 | Major | duplicate pending completions / double payout | fixed, proof green |
+| K03-BUG-2 | Moderate | celebration before successful save | fixed, proof green |
+| K03-BUG-3 | Minor | swallowed repeat failure feedback | fixed, proof green |
+| K03-BUG-4 | Moderate | "done today" period semantics | fixed (main ruling), proof green |
+| K03-BUG-5 | Moderate | kid-mode guard misses parent routes | fixed on main, proofs green |
+| K03-BUG-6 | Minor | stacked duplicate routes on double tap | fixed, proofs green |
+| K03-BUG-7 | **Major** | `DISABLE_ANIMATIONS=1` parses false → Rive Pip never still, screenshots never stabilise | **open (shared)** |
+| K03-BUG-8 | Minor | in-flight failure swallowed an earlier celebration | fixed mid-loop, proof green |
+| K03-BUG-9 | Minor | double-tap on the lock stacked gate routes | fixed mid-loop, proof green |
 
-One major bug (K03-BUG-1, duplicate completion rows → duplicate approvals
-and ledger entries) is proven and reproducible with a real double tap.
-Iteration 2 needs to fix at least BUG-1/2/6 and re-run the skipped proofs
-(`flutter test --run-skipped`) to green.
+The screen itself is in good shape: every iteration-1 bug is fixed and
+re-verified, period semantics now match the ruling, and the new edge probes
+pass. The one major finding is shared infrastructure (K03-BUG-7): the
+documented still-frame flag silently parses as false, so K03's Rive Pip
+keeps animating on device and the UI stage's screenshots cannot stabilise.
+Until that flag (or `shot.sh`) is fixed, the screenshot evidence is a random
+animation frame and RULES §6 is not actually satisfied on device.
 
 VERDICT: FAIL

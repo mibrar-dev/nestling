@@ -14,6 +14,13 @@ class KidHomeBloc extends Bloc<KidHomeEvent, KidHomeState> {
 
   final KidHomeRepository _repository;
 
+  /// Completions waiting for their stream flip, questId → coins. Set on the
+  /// tap event; the first emission that newly marks a waiting quest done
+  /// carries its celebration (K03-BUG-2, K03-BUG-8: every saved quest is
+  /// celebrated exactly once, even when a later tap fails). Entries clear on
+  /// their flip or on their failure.
+  final Map<String, int> _awaitingCelebration = <String, int>{};
+
   Future<void> _onLoadRequested(
     KidHomeLoadRequested event,
     Emitter<KidHomeState> emit,
@@ -21,10 +28,36 @@ class KidHomeBloc extends Bloc<KidHomeEvent, KidHomeState> {
     emit(state.copyWith(status: KidHomeStatus.loading));
     await emit.forEach<List<dynamic>>(
       combineLatest2(_repository.watchActiveChild(), _repository.watchItems()),
-      onData: (parts) => state.copyWithLoaded(
-        child: parts[0] as KidChild?,
-        items: (parts[1] as List<dynamic>).cast<KidQuest>(),
-      ),
+      onData: (parts) {
+        final previouslyDone = state.items
+            .where((item) => _isDoneStatus(item.status))
+            .map((item) => item.questId)
+            .toSet();
+        final next = state.copyWithLoaded(
+          child: parts[0] as KidChild?,
+          items: (parts[1] as List<dynamic>).cast<KidQuest>(),
+        );
+        final pending = _awaitingCelebration.keys.toSet();
+        if (pending.isNotEmpty) {
+          String? celebrate;
+          for (final item in next.items) {
+            if (pending.contains(item.questId) &&
+                _isDoneStatus(item.status) &&
+                !previouslyDone.contains(item.questId)) {
+              celebrate = item.questId;
+              break;
+            }
+          }
+          if (celebrate != null) {
+            final coins = _awaitingCelebration.remove(celebrate)!;
+            return next.withCompletionSucceeded(
+              questId: celebrate,
+              coins: coins,
+            );
+          }
+        }
+        return next;
+      },
       onError: (error, _) => state.copyWith(
         status: KidHomeStatus.failure,
         errorMessage: error.toString(),
@@ -36,10 +69,20 @@ class KidHomeBloc extends Bloc<KidHomeEvent, KidHomeState> {
     KidHomeQuestCompleted event,
     Emitter<KidHomeState> emit,
   ) async {
+    _awaitingCelebration[event.questId] = event.coins;
+    // The bloc emits `==`-equal states, so only announce the reset when a
+    // previous outcome is actually pending.
+    if (state.actionError != null || state.justCompletedQuestId != null) {
+      emit(state.withCompletionStarted());
+    }
     try {
       await _repository.completeQuest(event.childId, event.questId);
     } on Object catch (error) {
-      emit(state.copyWith(actionError: error.toString()));
+      _awaitingCelebration.remove(event.questId);
+      emit(state.withCompletionFailed(error));
     }
   }
 }
+
+bool _isDoneStatus(String status) =>
+    status == 'approved' || status == 'done_pending';
