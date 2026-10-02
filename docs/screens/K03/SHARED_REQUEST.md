@@ -18,20 +18,12 @@
    K03's `watchItems` now scopes status to the quest's current London period.
    The day-boundary proof runs un-skipped and passes (daily/weekly/once
    probes added; BST switch days covered). No action needed.
-5. PARTIALLY fixed on main (Stage 6 iter-2, K03-BUG-7): `5eea2ad` wires
-   `kDisableAnimations` into `MediaQuery.disableAnimations` app-wide, but
-   `bool.fromEnvironment('DISABLE_ANIMATIONS')` still parses the documented
-   `=1` as **false** (only `"true"` is true), so on device the Rive Pip keeps
-   animating and `shot.sh` (which passes `=1`) reports "frame never
-   stabilised". Still needed: parse `'1'` as true in
-   `app/lib/core/data/env_flags.dart` (e.g.
-   `String.fromEnvironment('DISABLE_ANIMATIONS') == '1' ||
-   bool.fromEnvironment(...)`) and mirror it in `launch_flags.dart`.
-   Files: `app/lib/core/data/env_flags.dart`, `app/lib/app/launch_flags.dart`,
-   optionally `tools/screens/shot.sh` (passing `=true` also works).
-   Blocks: K03's still-frame gate (RULES §6) and the UI screenshot pipeline.
-   The `K03-BUG-7` proof stays conditionally skipped and is run with the
-   documented flag to confirm the failure until this lands.
+5. DONE on main (Stage 6 iteration 5 re-verified): shared batch `4751c52`
+   (`7eaa1f7`) makes `env_flags.dart` parse the documented
+   `DISABLE_ANIMATIONS=1` as true
+   (`bool.fromEnvironment(...) || String.fromEnvironment(...) == '1'`).
+   The `K03-BUG-7` proof passes under `=1` and the still-frame path is
+   taken; `shot.sh` frames are deterministic again. No action needed.
 6. Need (review finding 1c, iteration 5): a `KidScope` meadow-band
    height/inset parameter so screens stop painting their own hill. K03
    paints one in-flow full-bleed band (`_MeadowPainter`, marked
@@ -65,6 +57,20 @@
     cards but the screen correctly renders every active quest (6 under
     the demo seed, repo alphabetical order per DATA OVER MOCKS) — not a
     defect, recorded so future compares don't flag the extra cards.
+11. Need (orchestrator CHILD ORDER ruling, iteration 5; proof added by
+    Stage 6 iter-5 — K03-BUG-12): children must be listed in insertion order
+    (Maya, then Leo), never alphabetically. `KidHomeRepository.watchProfiles`
+    passes through shared `watchChildren`, which orders by nickname in
+    `app/lib/core/data/app_database.dart` (shared — not editable here), so
+    `watchProfiles()` currently returns `['Leo', 'Maya']`; the failing proof
+    is `K03-BUG-12: profiles come in added order (Maya then Leo), never
+    alphabetical` (skipped, run with `--run-skipped`). The children table
+    exposes no insertion-order key (no createdAt / sequence column), so the
+    repository cannot reconstruct insertion order locally. Either add the
+    key to the shared schema / order `watchChildren` by `rowid`, or fix it
+    in the K01 picker loop (sole profile consumer today). Quest order stays
+    title-alphabetical per `1_plan.md` §(a), accepted deviation A2.
+    Blocks: no.
 
 No schema/DI/token changes needed. No new assets needed (all icons +
 `nest`/`coin`/`meadowHill` exist in `nestling_assets.dart`; Pip renders via

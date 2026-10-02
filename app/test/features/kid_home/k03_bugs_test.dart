@@ -1,4 +1,4 @@
-// K03 (kid home) adversarial test suite — Stage 6 bug hunt, iteration 4.
+// K03 (kid home) adversarial test suite — Stage 6 bug hunt, iteration 5.
 //
 // Iteration-1 proofs K03-BUG-1..6 all run un-skipped (fixed in iteration 2:
 // repo transaction/idempotency, success-driven celebration, actionNonce,
@@ -6,11 +6,10 @@
 //
 // Iteration-2 work (kept):
 // - Period-ruling probes (daily/weekly/once, London day/week, BST edges).
-// - K03-BUG-7: the documented `--dart-define=DISABLE_ANIMATIONS=1` still
-//   parses as false (`bool.fromEnvironment` only understands "true"); main
-//   wired kDisableAnimations into MediaQuery.disableAnimations, but with "1"
-//   the flag is false so the still path is not taken. The proof is
-//   `skip`ped unless the define is present:
+// - K03-BUG-7: FIXED on main (`4751c52` parses `DISABLE_ANIMATIONS=1` as
+//   true). The proof asserts both `kDisableAnimations` and
+//   `MediaQuery.disableAnimationsOf` inside the pumped home and stays
+//   `skip`ped unless the define is present (it must be `true` under it):
 //   `flutter test --dart-define=DISABLE_ANIMATIONS=1 --plain-name K03-BUG-7`.
 // - K03-BUG-8/9 fixed mid-loop (per-quest celebrations, gate tap latch);
 //   proofs run un-skipped.
@@ -26,6 +25,15 @@
 //   the card latch on the next frame (post-frame reset; the bloc emits
 //   nothing for a noop) and evicts the pending entry when the quest is
 //   absent from an emission. Proof runs un-skipped.
+//
+// Iteration-5 work:
+// - Copy probe: the visible strings match the HTML source character for
+//   character (ASCII apostrophes in "Let's"/"Today's"/"Mum", en dash in the
+//   seed quest title) — passes.
+// - K03-BUG-12 (skipped): CHILD ORDER ruling violated — `watchProfiles()`
+//   returns `['Leo', 'Maya']` (shared `watchChildren` orders by nickname)
+//   instead of the added order. Proof:
+//   `flutter test --run-skipped --plain-name K03-BUG-12`.
 //
 // Run the skipped proofs with
 // `flutter test --run-skipped --plain-name "K03-BUG"` (BUG-7 needs its flag).
@@ -332,7 +340,7 @@ void main() {
       await tester.runAsync(() => Seed.empty(GetIt.instance<AppDatabase>()));
       await tester.runAsync(() => GetIt.instance<AppSession>().refresh());
       await _pump(tester);
-      expect(find.text('Who\u2019s playing?'), findsOneWidget);
+      expect(find.text("Who's playing?"), findsOneWidget);
       await disposeApp(tester);
     });
 
@@ -1110,6 +1118,34 @@ void main() {
       await disposeApp(tester);
     },
   );
+
+  test('K03-BUG-12: profiles come in added order (Maya then Leo), never '
+      'alphabetical', () async {
+    final profiles = await GetIt.instance<KidHomeRepository>()
+        .watchProfiles()
+        .first;
+    expect(profiles.map((child) => child.nickname).toList(), <String>[
+      'Maya',
+      'Leo',
+    ], reason: 'CHILD ORDER ruling: order added, not alphabetical');
+  }, skip: true);
+
+  testWidgets('copy matches the K03 HTML character-for-character', (
+    tester,
+  ) async {
+    await _pump(tester);
+    await _revealCards(tester);
+    // ASCII apostrophes exactly as authored in the HTML source.
+    expect(find.text('Hi Maya!'), findsOneWidget);
+    expect(find.text("Let's do some quests!"), findsOneWidget);
+    expect(find.text('Pip is happy today'), findsOneWidget);
+    expect(find.text("Today's quests"), findsOneWidget);
+    expect(find.text('Waiting for Mum'), findsNWidgets(2));
+    // Design en dash in the seed quest title (&ndash; in the HTML).
+    expect(find.text('Reading \u2013 20 minutes'), findsOneWidget);
+    expect(find.text('My jar'), findsOneWidget);
+    await disposeApp(tester);
+  });
 }
 
 // ---------------------------------------------------------------------------

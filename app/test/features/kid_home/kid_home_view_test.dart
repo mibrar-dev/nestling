@@ -58,7 +58,7 @@ List<KidQuest> _mayaItems() => const <KidQuest>[
   KidQuest(
     id: 'q-dishwasher:maya',
     title: 'Empty the dishwasher',
-    detail: 'Waiting for Mum\u2019s thumbs-up · +15',
+    detail: "Waiting for Mum's thumbs-up · +15",
     questId: 'q-dishwasher',
     icon: 'dishwasher',
     coins: 15,
@@ -76,7 +76,7 @@ List<KidQuest> _mayaItems() => const <KidQuest>[
   KidQuest(
     id: 'q-table:maya',
     title: 'Lay the table',
-    detail: 'Waiting for Mum\u2019s thumbs-up · +10',
+    detail: "Waiting for Mum's thumbs-up · +10",
     questId: 'q-table',
     icon: 'plate',
     coins: 10,
@@ -355,7 +355,7 @@ void main() {
       await _pumpRoute(tester);
       final pet = tester.getRect(find.byType(NestPetStage));
       final hearts = tester.getRect(find.byType(NestHeart).first);
-      final section = tester.getRect(find.text('Today\u2019s quests'));
+      final section = tester.getRect(find.text("Today's quests"));
       final progress = tester.getRect(find.byType(NestProgress));
       final card1 = tester.getRect(find.byType(NestKidQuestCard).first);
       final card2 = tester.getRect(find.byType(NestKidQuestCard).at(1));
@@ -399,9 +399,9 @@ void main() {
       tester,
     ) async {
       await _pumpRoute(tester);
-      expect(find.text('Let\u2019s do some quests!'), findsOneWidget);
+      expect(find.text("Let's do some quests!"), findsOneWidget);
       final petStage = tester.widget<NestPetStage>(find.byType(NestPetStage));
-      expect(petStage.speech, 'Let\u2019s do some quests!');
+      expect(petStage.speech, "Let's do some quests!");
       expect(petStage.pip, isA<PipAvatar>());
       await disposeApp(tester);
     });
@@ -412,7 +412,7 @@ void main() {
       await tester.runAsync(() => Seed.empty(GetIt.instance<AppDatabase>()));
       await tester.runAsync(() => GetIt.instance<AppSession>().refresh());
       await _pumpRoute(tester);
-      expect(find.text('Who\u2019s playing?'), findsOneWidget);
+      expect(find.text("Who's playing?"), findsOneWidget);
       expect(find.byType(NestKidQuestCard), findsNothing);
       expect(find.byType(NestLockButton), findsOneWidget);
       await tester.tap(find.text('Choose'));
@@ -426,7 +426,7 @@ void main() {
       await tester.runAsync(() => Seed.empty(GetIt.instance<AppDatabase>()));
       await tester.runAsync(() => GetIt.instance<AppSession>().refresh());
       await _pumpRoute(tester, theme: ThemeMode.dark);
-      expect(find.text('Who\u2019s playing?'), findsOneWidget);
+      expect(find.text("Who's playing?"), findsOneWidget);
       expect(find.byType(NestKidQuestCard), findsNothing);
       expect(tester.takeException(), isNull);
       await disposeApp(tester);
@@ -476,7 +476,7 @@ void main() {
         await _useFakeRepository(repo);
         await _pumpRoute(tester, theme: theme);
         expect(find.text('Oh no! Pip got lost.'), findsOneWidget);
-        expect(find.text('Let\u2019s try again.'), findsOneWidget);
+        expect(find.text("Let's try again."), findsOneWidget);
         expect(find.byType(NestKidQuestCard), findsNothing);
         repo.failLoad = false;
         await tester.tap(find.text('Try again'));
@@ -535,7 +535,7 @@ void main() {
       await tester.runAsync(() => GetIt.instance<AppSession>().refresh());
       final semantics = tester.ensureSemantics();
       await _pumpRoute(tester);
-      expect(find.text('Who\u2019s playing?'), findsOneWidget);
+      expect(find.text("Who's playing?"), findsOneWidget);
       expect(find.bySemanticsLabel('Grown-ups'), findsOneWidget);
       await tester.tap(find.bySemanticsLabel('Grown-ups'));
       await _settleRoute(tester);
@@ -1186,14 +1186,18 @@ void main() {
         of: find.text('Empty the dishwasher'),
         matching: find.byType(NestKidQuestCard),
       );
-      final doneCheck = find.descendant(
-        of: card,
-        matching: find.bySemanticsLabel('Done'),
-      );
-      expect(doneCheck, findsOneWidget);
-      await tester.ensureVisible(doneCheck);
+      await tester.ensureVisible(card);
       await tester.pump();
-      await tester.tap(doneCheck);
+      // The done check is display-only (excluded from semantics by the
+      // shared card contract): tap its centre — card padding 12 plus half
+      // of the 56 check — and verify the tap falls through to the card.
+      final cardRect = tester.getRect(card);
+      await tester.tapAt(
+        Offset(
+          cardRect.right - NestSpacing.s3 - NestDevice.tapKid / 2,
+          cardRect.center.dy,
+        ),
+      );
       await _settleRoute(tester);
       // No completion action on the check; the card beneath opens detail
       // and the pending-approval count is untouched.
@@ -1303,7 +1307,7 @@ void main() {
       expect(find.bySemanticsLabel('120 coins'), findsOneWidget);
       expect(find.bySemanticsLabel('Hi Maya, 4 done today'), findsOneWidget);
       expect(
-        find.bySemanticsLabel('4 of 6 of today\u2019s quests done'),
+        find.bySemanticsLabel("4 of 6 of today's quests done"),
         findsOneWidget,
       );
       expect(
@@ -1311,16 +1315,18 @@ void main() {
         findsOneWidget,
       );
       await _revealCards(tester);
-      // Four cards are done (2 approved + 2 done_pending), so all four
-      // checks read 'Done'; only the two to-do checks read 'Mark done'.
+      // The two to-do checks are functional ('Mark done'); done checks
+      // are display-only and excluded from semantics by the shared card
+      // contract, so their status is announced at the card level
+      // instead (asserted below).
       expect(find.bySemanticsLabel('Mark done'), findsNWidgets(2));
-      expect(find.bySemanticsLabel('Done'), findsNWidgets(4));
+      expect(find.bySemanticsLabel('Done'), findsNothing);
       // Card nodes merge title + status into one label (read via the merged
       // node, since `bySemanticsLabel` cannot see merged nodes). Descendant
       // texts append after the button label, so match the prefix.
       expect(
         tester.getSemantics(find.text('Empty the dishwasher')).label,
-        startsWith('Empty the dishwasher, Waiting for Mum\u2019s thumbs-up'),
+        startsWith("Empty the dishwasher, Waiting for Mum's thumbs-up"),
       );
       expect(
         tester.getSemantics(find.text('Put the bins out')).label,
@@ -1379,7 +1385,7 @@ void main() {
       expect(find.text('Pip'), findsOneWidget);
       expect(find.bySemanticsLabel('Grown-ups'), findsOneWidget);
       expect(
-        find.bySemanticsLabel('4 of 6 of today\u2019s quests done'),
+        find.bySemanticsLabel("4 of 6 of today's quests done"),
         findsOneWidget,
       );
       await _revealCards(tester);

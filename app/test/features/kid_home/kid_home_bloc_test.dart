@@ -45,7 +45,7 @@ List<KidQuest> _mayaItems() => const <KidQuest>[
   KidQuest(
     id: 'q-dishwasher:maya',
     title: 'Empty the dishwasher',
-    detail: 'Waiting for Mum\u2019s thumbs-up · +15',
+    detail: "Waiting for Mum's thumbs-up · +15",
     questId: 'q-dishwasher',
     icon: 'dishwasher',
     coins: 15,
@@ -63,7 +63,7 @@ List<KidQuest> _mayaItems() => const <KidQuest>[
   KidQuest(
     id: 'q-table:maya',
     title: 'Lay the table',
-    detail: 'Waiting for Mum\u2019s thumbs-up · +10',
+    detail: "Waiting for Mum's thumbs-up · +10",
     questId: 'q-table',
     icon: 'plate',
     coins: 10,

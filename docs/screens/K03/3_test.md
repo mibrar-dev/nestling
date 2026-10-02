@@ -184,6 +184,24 @@ filed as SHARED_REQUEST #5 rather than counted as a K03 defect):
   above the hearts row.
 - Dock-button *heights* are still not compared in the alignment tests: the
   fallback test font wraps "My jar" (80 vs 72 px) — a font artifact.
+- **Owner rules re-checked.** BOTTOM EDGE: the K03-BUG-10 proofs (light +
+  dark, with the OS inset emulated) pass, so no coloured strip shows under
+  the dock or around the home indicator. ALIGNMENT: the alignment group still
+  pins 20 px gutters, shared card/bar edges and equal-width dock buttons.
+- **COPY (orchestrator rule) verified character-by-character** for every string
+  this stage asserts: `design/html-source/screens/K03-kid-home.html` contains
+  **0 curly apostrophes and 4 straight ones** (and the same is true across all
+  screen HTML sources: 0 curly / 25 straight), so the app's straight `'`
+  in `Today's quests` (`kid_home_view.dart:492`) and
+  `Let's do some quests!` (`:694`) is correct — the test expectations match
+  the design source exactly. The K03 source's only em dash (U+2014) is in
+  `<title>Kid mode — Today · Nestling</title>`, i.e. not screen copy; the app's
+  em dashes appear only in code comments. No ellipsis or curly quotes are used
+  on this screen.
+- **CHILD ORDER (orchestrator rule) has no surface on K03**: the kid home
+  renders only the single active child (avatar, Pip, hearts, quests) — there is
+  no child list to order. The picker that lists children is K01, out of scope
+  here.
 - `google_fonts` logs "unable to load font …" noise in every pumped test; it is
   harmless (the tests run on the fallback font) and is not a finding.
 

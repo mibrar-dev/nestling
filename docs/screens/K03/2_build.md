@@ -82,11 +82,40 @@ that is fixable inside the feature (RULES §1).
   follow block heights; live-Rive variance documented.
 - ALIGNMENT rule: probe-green (20px edges); no action.
 
+## New orchestrator rules compliance (late iteration 5)
+
+- COPY (typographic characters vs HTML source): audited every K03-visible
+  string byte-for-byte against `design/html-source/screens/K03-kid-home.html`.
+  The HTML uses straight apostrophes (`Let's do some quests!`,
+  `Today's quests`, aria `Waiting for Mum's thumbs-up`,
+  `Half of today's quests done`) — no curly quotes exist in the file —
+  while the view used `\u2019`. Normalised all six rendered/semantics
+  sites in `kid_home_view.dart` to straight `'` (double-quoted Dart
+  literals) plus mirroring fixtures/assertions in all three feature test
+  files (test names and reason strings untouched). En dash (`\u2013`,
+  `Reading – 20 minutes`) and middle dot (`\u00b7`) already match the
+  HTML entity/bytes; seed title bytes verified (`e2 80 93`).
+- CHILD ORDER (insertion order, never alphabetical): no K03 behaviour
+  change — the screen shows a single active child and quest order stays
+  title-alphabetical per `1_plan.md` §(a) (accepted A2; quests are not
+  children). `watchProfiles` passes shared-DB order through (nickname
+  sort lives in untouchable `app_database.dart`, and the children table
+  exposes no insertion-order key), so correct compliance needs shared
+  support — filed as SHARED_REQUEST #11 for the orchestrator/K01 loop.
+  No K03 test asserts profile order.
+- Shared-contract fallout (main `7eaa1f7`): display-only checks are now
+  excluded from semantics, which broke two K03 tests. Updated to the new
+  contract instead of working around it: the a11y test asserts card-level
+  status labels + `findsNothing` for `Done` check nodes; the done-tap
+  test taps the check centre (token-derived offset: padding 12 + half of
+  the 56 check) and still verifies fall-through-to-detail with untouched
+  approvals.
+
 ## Verification (in `app/`)
 
 - `dart format .` — clean.
 - `flutter analyze` — `No issues found!`
-- `flutter test` — full suite: `+593 ~1, All tests passed!` (1 skip =
+- `flutter test` — full suite: `+641 ~1, All tests passed!` (1 skip =
   K03-BUG-7 motion proof, conditional on the dart-define by design).
 - Screenshots: `shot.sh /kid-home` light + dark (kid/maya/demo) →
   `docs/screens/K03/ui/app_light_8.png`, `app_dark_8.png`; `compare.py` →

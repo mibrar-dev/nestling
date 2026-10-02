@@ -115,7 +115,7 @@ bool _isDone(KidQuest item) =>
 /// Card-level status text for the `{title}, {status text}` semantics label.
 String _statusText(KidQuest item) {
   return switch (item.status) {
-    'done_pending' => 'Waiting for Mum\u2019s thumbs-up',
+    'done_pending' => "Waiting for Mum's thumbs-up",
     'approved' => 'Done',
     _ => 'To do',
   };
@@ -280,7 +280,7 @@ class _KidFailure extends StatelessWidget {
                         textAlign: TextAlign.center,
                       ),
                       Text(
-                        'Let\u2019s try again.',
+                        "Let's try again.",
                         style: NestType.bodySmall(color: tokens.ink2),
                         textAlign: TextAlign.center,
                       ),
@@ -336,7 +336,7 @@ class _NoActiveChild extends StatelessWidget {
                   spacing: NestSpacing.s3,
                   children: [
                     Text(
-                      'Who\u2019s playing?',
+                      "Who's playing?",
                       style: NestType.h2(color: tokens.ink),
                       textAlign: TextAlign.center,
                     ),
@@ -489,7 +489,7 @@ class _KidHomeBody extends StatelessWidget {
                             children: [
                               Expanded(
                                 child: Text(
-                                  'Today\u2019s quests',
+                                  "Today's quests",
                                   style: NestType.kidTitle(color: tokens.ink),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
@@ -523,7 +523,7 @@ class _KidHomeBody extends StatelessWidget {
                                   fraction: state.fraction,
                                   kid: true,
                                   semanticLabel:
-                                      '$done of $total of today\u2019s quests done',
+                                      "$done of $total of today's quests done",
                                 ),
                                 Column(
                                   spacing: NestSpacing.s3,
@@ -691,7 +691,7 @@ class _KidPetStage extends StatelessWidget {
         skin: _pipSkin(child.pipSkin),
         accessory: _pipAccessory(child.pipAccessory),
       ),
-      speech: 'Let\u2019s do some quests!',
+      speech: "Let's do some quests!",
       pipSize: _kPipSlotSize,
       stage: _pipStage(stage),
       semanticLabel: 'Pip the ${_pipStageName(stage)}, stage $stage of 4',
