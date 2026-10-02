@@ -7,6 +7,8 @@
 // accessibility contract (radiogroup labels, selected flags, stepper labels,
 // 44dp parent tap targets).
 
+import 'dart:ui' show Tristate;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -28,24 +30,28 @@ import '../../test_scope.dart';
 
 /// In-memory repository with caller-controlled streams, used to reach the
 /// states the Drift repository cannot (pending load, stream error).
+/// Streams are built by factories so every `watch…()` subscription (initial
+/// load, Retry) gets a fresh single-subscription stream — re-listening to one
+/// instance throws `Bad state: Stream has already been listened to`.
 class _FakePocketMoneyRepository implements PocketMoneyRepository {
   _FakePocketMoneyRepository({
-    Stream<List<PocketMoneyEntry>>? items,
-    Stream<PocketMoneySetup>? setup,
-  }) : _items = items ?? const Stream<List<PocketMoneyEntry>>.empty(),
-       _setup = setup ?? const Stream<PocketMoneySetup>.empty();
+    Stream<List<PocketMoneyEntry>> Function()? items,
+    Stream<PocketMoneySetup> Function()? setup,
+  }) : _itemsFactory =
+           items ?? (() => const Stream<List<PocketMoneyEntry>>.empty()),
+       _setupFactory = setup ?? (() => const Stream<PocketMoneySetup>.empty());
 
-  final Stream<List<PocketMoneyEntry>> _items;
-  final Stream<PocketMoneySetup> _setup;
-
-  @override
-  Future<List<PocketMoneyEntry>> getItems() => _items.first;
+  final Stream<List<PocketMoneyEntry>> Function() _itemsFactory;
+  final Stream<PocketMoneySetup> Function() _setupFactory;
 
   @override
-  Stream<List<PocketMoneyEntry>> watchItems() => _items;
+  Future<List<PocketMoneyEntry>> getItems() => watchItems().first;
 
   @override
-  Stream<List<PocketMoneyEntry>> watchLedger(String childId) => _items;
+  Stream<List<PocketMoneyEntry>> watchItems() => _itemsFactory();
+
+  @override
+  Stream<List<PocketMoneyEntry>> watchLedger(String childId) => _itemsFactory();
 
   @override
   Future<OwedSummary> owed(String childId) async => OwedSummary(
@@ -83,7 +89,7 @@ class _FakePocketMoneyRepository implements PocketMoneyRepository {
   }) async {}
 
   @override
-  Stream<PocketMoneySetup> watchSetup() => _setup;
+  Stream<PocketMoneySetup> watchSetup() => _setupFactory();
 
   @override
   Future<void> setMode(String mode) async {}
@@ -115,6 +121,16 @@ Future<void> _pumpSetup(
 
 /// Pumps [PocketMoneySetupView] directly (no router) under the real theme
 /// with [repository] driving the bloc; returns the bloc for assertions.
+///
+/// NOTE: the bloc is deliberately NOT closed here. `close()` (plain or via
+/// `runAsync`) deadlocks under the widget-test FakeAsync clock once a load
+/// has subscribed the combined watch streams (the P01-documented hazard:
+/// the shared `combineLatest` controller never terminates, so `emit.forEach`
+/// stays pending and `close` waits on it forever — verified by bisect, while
+/// the identical sequence closes instantly in real async). This is safe: the
+/// fake repository owns no database, timers, or tickers (verified: no "Timer
+/// is still pending", clean exit), so the leftover subscriptions are inert
+/// once the test ends.
 Future<PocketMoneyBloc> _pumpSetupView(
   WidgetTester tester, {
   required PocketMoneyRepository repository,
@@ -122,7 +138,6 @@ Future<PocketMoneyBloc> _pumpSetupView(
 }) async {
   GoogleFonts.config.allowRuntimeFetching = false;
   final bloc = PocketMoneyBloc(repository: repository);
-  addTearDown(bloc.close);
   await tester.pumpWidget(
     MaterialApp(
       theme: NestTheme.light(),
@@ -239,15 +254,15 @@ void main() {
           .getSemantics(find.byKey(const ValueKey('p06_option_both')))
           .getSemanticsData();
       expect(selected.flagsCollection.isButton, isTrue);
-      expect(selected.flagsCollection.isSelected, isTrue);
+      expect(selected.flagsCollection.isSelected, Tristate.isTrue);
       final weekly = tester
           .getSemantics(find.byKey(const ValueKey('p06_option_weekly')))
           .getSemanticsData();
-      expect(weekly.flagsCollection.isSelected, isFalse);
+      expect(weekly.flagsCollection.isSelected, Tristate.isFalse);
       final sat = tester
           .getSemantics(find.byKey(const ValueKey('p06_day_6')))
           .getSemanticsData();
-      expect(sat.flagsCollection.isSelected, isTrue);
+      expect(sat.flagsCollection.isSelected, Tristate.isTrue);
       expect(tester.takeException(), isNull);
 
       await disposeApp(tester);
@@ -332,11 +347,11 @@ void main() {
       final perQuest = tester
           .getSemantics(find.byKey(const ValueKey('p06_option_per_quest')))
           .getSemanticsData();
-      expect(perQuest.flagsCollection.isSelected, isTrue);
+      expect(perQuest.flagsCollection.isSelected, Tristate.isTrue);
       final both = tester
           .getSemantics(find.byKey(const ValueKey('p06_option_both')))
           .getSemanticsData();
-      expect(both.flagsCollection.isSelected, isFalse);
+      expect(both.flagsCollection.isSelected, Tristate.isFalse);
       expect(tester.takeException(), isNull);
 
       await disposeApp(tester);
@@ -357,11 +372,11 @@ void main() {
       final sun = tester
           .getSemantics(find.byKey(const ValueKey('p06_day_7')))
           .getSemanticsData();
-      expect(sun.flagsCollection.isSelected, isTrue);
+      expect(sun.flagsCollection.isSelected, Tristate.isTrue);
       final sat = tester
           .getSemantics(find.byKey(const ValueKey('p06_day_6')))
           .getSemanticsData();
-      expect(sat.flagsCollection.isSelected, isFalse);
+      expect(sat.flagsCollection.isSelected, Tristate.isFalse);
       expect(tester.takeException(), isNull);
 
       await disposeApp(tester);
@@ -377,13 +392,19 @@ void main() {
       );
 
       await tester.tap(
-        find.bySemanticsLabel('More weekly pocket money for Maya'),
+        find.bySemanticsLabel(RegExp('More weekly pocket money for Maya')),
       );
       await _settle(tester);
       expect(find.text('£3.50'), findsOneWidget);
 
+      // Leo's row starts below the fold (the content scrolls behind the
+      // fixed bottom CTA), so bring it into view before tapping.
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('p06_base_row_leo')),
+      );
+      await _settle(tester);
       await tester.tap(
-        find.bySemanticsLabel('Less weekly pocket money for Leo'),
+        find.bySemanticsLabel(RegExp('Less weekly pocket money for Leo')),
       );
       await _settle(tester);
       expect(find.text('£1.00'), findsOneWidget);
@@ -456,7 +477,7 @@ void main() {
       final bloc = await _pumpSetupView(
         tester,
         repository: _FakePocketMoneyRepository(
-          setup: Stream<PocketMoneySetup>.error(Exception('offline')),
+          setup: () => Stream<PocketMoneySetup>.error(Exception('offline')),
         ),
         theme: ThemeMode.light,
       );
@@ -510,19 +531,19 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.bySemanticsLabel('Less weekly pocket money for Maya'),
+        find.bySemanticsLabel(RegExp('Less weekly pocket money for Maya')),
         findsOneWidget,
       );
       expect(
-        find.bySemanticsLabel('More weekly pocket money for Maya'),
+        find.bySemanticsLabel(RegExp('More weekly pocket money for Maya')),
         findsOneWidget,
       );
       expect(
-        find.bySemanticsLabel('Less weekly pocket money for Leo'),
+        find.bySemanticsLabel(RegExp('Less weekly pocket money for Leo')),
         findsOneWidget,
       );
       expect(
-        find.bySemanticsLabel('More weekly pocket money for Leo'),
+        find.bySemanticsLabel(RegExp('More weekly pocket money for Leo')),
         findsOneWidget,
       );
 
@@ -562,7 +583,7 @@ void main() {
         'Less weekly pocket money for Leo',
         'More weekly pocket money for Leo',
       ]) {
-        final size = tester.getSize(find.bySemanticsLabel(label));
+        final size = tester.getSize(find.bySemanticsLabel(RegExp(label)));
         expect(size.width, 44);
         expect(size.height, 44);
       }

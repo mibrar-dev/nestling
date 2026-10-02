@@ -528,10 +528,20 @@ class _DayCell extends StatelessWidget {
 
 /// One per-child weekly-base row in insertion order: 32px avatar + name +
 /// stepper. The stepper buttons carry the HTML aria-labels verbatim.
+///
+/// Narrow screens reflow to two lines (name line, then the stepper
+/// right-aligned): the fixed 44px stepper buttons plus a wide value string
+/// cannot share one 248px line with the avatar and the name at large text
+/// scales, and the shared `NestStepper` cannot shrink its buttons.
 class _WeeklyBaseRow extends StatelessWidget {
   const _WeeklyBaseRow({required this.child});
 
   final PocketMoneySetupChild child;
+
+  /// Below this row width the single line cannot fit avatar + name + the
+  /// 44px stepper at text scale 1.3 (248px at 320dp does not fit; 318px at
+  /// 390dp does), so the row wraps instead of overflowing.
+  static const double _wrapWidth = 300;
 
   static NestAvatarColor _avatarColor(String avatarColour) {
     return switch (avatarColour) {
@@ -549,46 +559,77 @@ class _WeeklyBaseRow extends StatelessWidget {
     final initial = child.nickname.isEmpty
         ? '?'
         : child.nickname.characters.first.toUpperCase();
+    final avatar = NestAvatar(
+      initial: initial,
+      size: NestAvatarSize.s32,
+      color: _avatarColor(child.avatarColour),
+    );
+    final name = Expanded(
+      child: Text(
+        child.nickname,
+        style: context.nestText.bodyStrong,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+    final stepper = _BaseStepper(child: child);
     return ConstrainedBox(
       constraints: const BoxConstraints(minHeight: NestDevice.tapParent),
-      child: Row(
-        key: ValueKey<String>('p06_base_row_${child.id}'),
-        children: <Widget>[
-          NestAvatar(
-            initial: initial,
-            size: NestAvatarSize.s32,
-            color: _avatarColor(child.avatarColour),
-          ),
-          const SizedBox(width: NestSpacing.s3),
-          Expanded(
-            child: Text(
-              child.nickname,
-              style: context.nestText.bodyStrong,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          NestStepper(
-            valueText: '£${(child.weeklyBasePence / 100).toStringAsFixed(2)}',
-            onDecrease: () => context.read<PocketMoneyBloc>().add(
-              PocketMoneyWeeklyBaseStepped(
-                child.id,
-                -PocketMoneySetupView.stepPence,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth >= _wrapWidth) {
+            return Row(
+              key: ValueKey<String>('p06_base_row_${child.id}'),
+              children: <Widget>[
+                avatar,
+                const SizedBox(width: NestSpacing.s3),
+                name,
+                stepper,
+              ],
+            );
+          }
+          return Column(
+            key: ValueKey<String>('p06_base_row_${child.id}'),
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  avatar,
+                  const SizedBox(width: NestSpacing.s3),
+                  name,
+                ],
               ),
-            ),
-            onIncrease: () => context.read<PocketMoneyBloc>().add(
-              PocketMoneyWeeklyBaseStepped(
-                child.id,
-                PocketMoneySetupView.stepPence,
-              ),
-            ),
-            decreaseSemanticLabel:
-                'Less weekly pocket money for ${child.nickname}',
-            increaseSemanticLabel:
-                'More weekly pocket money for ${child.nickname}',
-          ),
-        ],
+              const SizedBox(height: NestSpacing.s2),
+              Align(alignment: Alignment.centerRight, child: stepper),
+            ],
+          );
+        },
       ),
+    );
+  }
+}
+
+/// The weekly-base stepper with the HTML aria-labels verbatim. Split out so
+/// the row can place one instance in either the single-line or the wrapped
+/// layout (only one branch builds at a time).
+class _BaseStepper extends StatelessWidget {
+  const _BaseStepper({required this.child});
+
+  final PocketMoneySetupChild child;
+
+  @override
+  Widget build(BuildContext context) {
+    return NestStepper(
+      valueText: '£${(child.weeklyBasePence / 100).toStringAsFixed(2)}',
+      onDecrease: () => context.read<PocketMoneyBloc>().add(
+        PocketMoneyWeeklyBaseStepped(child.id, -PocketMoneySetupView.stepPence),
+      ),
+      onIncrease: () => context.read<PocketMoneyBloc>().add(
+        PocketMoneyWeeklyBaseStepped(child.id, PocketMoneySetupView.stepPence),
+      ),
+      decreaseSemanticLabel: 'Less weekly pocket money for ${child.nickname}',
+      increaseSemanticLabel: 'More weekly pocket money for ${child.nickname}',
     );
   }
 }

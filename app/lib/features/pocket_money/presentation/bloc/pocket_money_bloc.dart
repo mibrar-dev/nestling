@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:nestling/core/data/stream_combine.dart';
 import 'package:nestling/features/pocket_money/domain/entities/pocket_money_entry.dart';
@@ -24,7 +26,10 @@ class PocketMoneyBloc extends Bloc<PocketMoneyEvent, PocketMoneyState> {
     // ONE emit.forEach: the two streams are combined first (two sequential
     // forEach calls would never reach the second).
     await emit.forEach<List<dynamic>>(
-      combineLatest2(_repository.watchItems(), _repository.watchSetup()),
+      combineLatest2(
+        _repository.watchItems(),
+        _repository.watchSetup(),
+      ).transform(_closeOnError),
       onData: (parts) => state.copyWith(
         status: PocketMoneyStatus.loaded,
         items: parts[0] as List<PocketMoneyEntry>,
@@ -91,3 +96,17 @@ class PocketMoneyBloc extends Bloc<PocketMoneyEvent, PocketMoneyState> {
     }
   }
 }
+
+/// Errors are terminal: forward the first error, then close — otherwise the
+/// failed load's watchers stay subscribed and every "Try again" leaks
+/// another full set (same pattern as TodayBloc). Closing lets `emit.forEach`
+/// complete and cancel, so the bloc can close cleanly and Retry resubscribes
+/// from scratch.
+final _closeOnError =
+    StreamTransformer<List<dynamic>, List<dynamic>>.fromHandlers(
+      handleError: (error, stackTrace, sink) {
+        sink
+          ..addError(error, stackTrace)
+          ..close();
+      },
+    );
