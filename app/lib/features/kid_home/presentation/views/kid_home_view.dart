@@ -2,11 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:nestling/core/design_system/assets/nestling_assets.dart'
-    as nest_assets;
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_child.dart';
@@ -59,6 +56,44 @@ PipAccessory _pipAccessory(String raw) {
     _ => PipAccessory.none,
   };
 }
+
+/// Design-slot numbers (review finding 2: single place to change, cited to
+/// `.k3-pet` in `design/html-source/screens/K03-kid-home.html`):
+/// Pip ≈152 px tall on the 260×236 nest. The shared `NestPetStage` scales
+/// this cap by the available width, so the still frame keeps the slot
+/// proportions at a smaller absolute size on 390 px screens.
+const double _kPipSlotSize = 152;
+
+/// v1 growth stage for the shared nest scene's feet-contact math, from the
+/// DB integer (clamped: the suite probes 0 → egg and 9 → songbird).
+PipStage _pipStage(int raw) {
+  return switch (raw.clamp(1, 4)) {
+    1 => PipStage.egg,
+    2 => PipStage.hatchling,
+    3 => PipStage.fledgling,
+    _ => PipStage.songbird,
+  };
+}
+
+/// Display name for the pet-stage semantics label (design alt text).
+String _pipStageName(int stage) {
+  return switch (stage) {
+    1 => 'Egg',
+    2 => 'Hatchling',
+    4 => 'Songbird',
+    _ => 'Fledgling',
+  };
+}
+
+/// Meadow crest silhouette (review finding 2: single place to change).
+/// Numbers cite the `.meadow` hill in
+/// `design/html-source/screens/K03-kid-home.html`, flattened so the band
+/// starts uniformly just above the progress bar like the design (green at
+/// panel top, bar 4 px below it): the crest rises only a few px.
+const double _kCrestLeftY = 6;
+const double _kCrestBend = 0.5;
+const double _kCrestControlY = 0;
+const double _kCrestRightY = 5;
 
 /// Icon tile glyph per `KidQuest.icon` (K03 glyph per `nestling_assets.dart`).
 String _iconFor(String raw) {
@@ -120,9 +155,9 @@ class KidHomeView extends StatelessWidget {
                 previous.actionNonce != current.actionNonce) &&
             current.actionError != null,
         listener: (context, state) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Hmm, that did not work. Try again.')),
-          );
+          // Design-system toast (review finding 7): token palette, floats
+          // above the dock inset, and announces via a live region.
+          showNestToast(context, 'Hmm, that did not work. Try again.');
         },
         child: BlocBuilder<KidHomeBloc, KidHomeState>(
           builder: (context, state) {
@@ -131,7 +166,7 @@ class KidHomeView extends StatelessWidget {
               case KidHomeStatus.loading:
                 return const _KidLoading();
               case KidHomeStatus.failure:
-                return const _KidFailure();
+                return _KidFailure(child: state.child);
               case KidHomeStatus.loaded:
                 final child = state.child;
                 if (child == null) {
@@ -158,6 +193,17 @@ class _KidLoading extends StatelessWidget {
         body: Column(
           children: [
             const NestStatusBar(),
+            // Parental gate on every kid screen (DESIGN_SPEC §5 Group C,
+            // review finding 11), top-right like the loaded header.
+            const Padding(
+              padding: EdgeInsets.fromLTRB(
+                NestSpacing.padSide,
+                NestSpacing.s1,
+                NestSpacing.padSide,
+                0,
+              ),
+              child: Row(children: [Spacer(), _GateLockButton()]),
+            ),
             Expanded(
               child: Center(
                 child: Semantics(
@@ -175,17 +221,33 @@ class _KidLoading extends StatelessWidget {
 }
 
 class _KidFailure extends StatelessWidget {
-  const new();
+  const new({this.child});
+
+  /// The last known child, when the stream failed after a load (review
+  /// finding 9): the error card shows their own Pip, not a stranger's.
+  final KidChild? child;
 
   @override
   Widget build(BuildContext context) {
     final tokens = context.nest;
+    final known = child;
     return KidScope(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: Column(
           children: [
             const NestStatusBar(),
+            // Parental gate on every kid screen (DESIGN_SPEC §5 Group C,
+            // review finding 11), top-right like the loaded header.
+            const Padding(
+              padding: EdgeInsets.fromLTRB(
+                NestSpacing.padSide,
+                NestSpacing.s1,
+                NestSpacing.padSide,
+                0,
+              ),
+              child: Row(children: [Spacer(), _GateLockButton()]),
+            ),
             Expanded(
               child: Center(
                 child: SingleChildScrollView(
@@ -198,11 +260,20 @@ class _KidFailure extends StatelessWidget {
                     children: [
                       // No child is known here, so the neutral look
                       // (orchestrator rule for childless screens).
-                      const PipAvatar(
-                        style: PipStyle.mochi,
-                        stage: 1,
-                        size: 140,
-                      ),
+                      if (known != null)
+                        PipAvatar(
+                          style: _pipStyle(known.pipStyle),
+                          stage: known.pipStage.clamp(1, 4),
+                          skin: _pipSkin(known.pipSkin),
+                          accessory: _pipAccessory(known.pipAccessory),
+                          size: 140,
+                        )
+                      else
+                        const PipAvatar(
+                          style: PipStyle.mochi,
+                          stage: 1,
+                          size: 140,
+                        ),
                       Text(
                         'Oh no! Pip got lost.',
                         style: NestType.h2(color: tokens.ink),
@@ -247,6 +318,17 @@ class _NoActiveChild extends StatelessWidget {
         body: Column(
           children: [
             const NestStatusBar(),
+            // Parental gate on every kid screen (DESIGN_SPEC §5 Group C,
+            // review finding 11), top-right like the loaded header.
+            const Padding(
+              padding: EdgeInsets.fromLTRB(
+                NestSpacing.padSide,
+                NestSpacing.s1,
+                NestSpacing.padSide,
+                0,
+              ),
+              child: Row(children: [Spacer(), _GateLockButton()]),
+            ),
             Expanded(
               child: Center(
                 child: Column(
@@ -378,7 +460,7 @@ class _KidHomeBody extends StatelessWidget {
                               spacing: NestSpacing.s2,
                               children: [
                                 for (var i = 0; i < 5; i++)
-                                  _HeartIcon(filled: i < filledHearts),
+                                  NestHeart(filled: i < filledHearts),
                                 Flexible(
                                   child: Text(
                                     'Pip is happy today',
@@ -585,11 +667,15 @@ class _GateLockButtonState extends State<_GateLockButton> {
   }
 }
 
-/// Pet stage: speech bubble over the child's own Pip on the nest.
-/// Geometry follows the HTML `.k3-pet` slot: 260x236 box, nest art filling
-/// it, Pip 152 tall with its feet 96 from the nest bottom (so Pip overlaps
-/// 12 above the box — the stack is unclipped). The nest SVG's visible rim
-/// starts ~40% down the art, which lands the rim at nest top + ~94.
+/// Pet stage: the child's own Pip on the nest (review finding 1:
+/// shared `NestPetStage` with a `PipAvatar` in its `pip:` slot — no local
+/// scene fork). `pipSize: 152` is the design slot cap; the shared geometry
+/// scales it by the available width (Pip ≈ 0.55 × nest), so on a 390 px
+/// screen the still frame renders proportionally smaller — positions, not
+/// pixels, are what carry over. `inNest` is intentionally omitted: it
+/// defaults to false (lint forbids the redundant argument) and the custom
+/// `pip:` path seats the avatar between the nest rims without the v1 Rive
+/// artboard either way (inNest waiver: SHARED_REQUEST #8).
 class _KidPetStage extends StatelessWidget {
   const new({required this.child});
 
@@ -597,198 +683,30 @@ class _KidPetStage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const _SpeechBubble(text: 'Let\u2019s do some quests!'),
-        const SizedBox(height: NestSpacing.gap14),
-        Semantics(
-          image: true,
-          label: 'Pip in the nest',
-          child: SizedBox(
-            width: 260,
-            height: 236,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                SvgPicture.asset(
-                  nest_assets.NestlingIllustrations.nest,
-                  width: 260,
-                  height: 236,
-                  fit: BoxFit.fill,
-                  placeholderBuilder: (_) => const SizedBox.shrink(),
-                ),
-                Positioned(
-                  left: 54,
-                  bottom: 96,
-                  child: PipAvatar(
-                    style: _pipStyle(child.pipStyle),
-                    stage: child.pipStage.clamp(1, 4),
-                    skin: _pipSkin(child.pipSkin),
-                    accessory: _pipAccessory(child.pipAccessory),
-                    size: 152,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Speech bubble (`.speech` in K03-kid-home.html): surface, 3px ink border,
-/// r18, padding 8x14, Nunito 16/24 w800, maxW 260 + tail.
-class _SpeechBubble extends StatelessWidget {
-  const new({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = context.nest;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          constraints: const BoxConstraints(maxWidth: 260),
-          padding: const EdgeInsets.symmetric(
-            horizontal: NestSpacing.gap14,
-            vertical: NestSpacing.s2,
-          ),
-          decoration: BoxDecoration(
-            color: tokens.surface,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: tokens.ink,
-              width: context.nestKid.borderWidth,
-            ),
-          ),
-          child: Text(
-            text,
-            style: GoogleFonts.nunito(
-              fontSize: 16,
-              height: 24 / 16,
-              fontWeight: FontWeight.w800,
-              color: tokens.ink,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ),
-        CustomPaint(
-          painter: _TailPainter(
-            inkColor: tokens.ink,
-            fillColor: tokens.surface,
-          ),
-          size: const Size(18, 10),
-        ),
-      ],
-    );
-  }
-}
-
-class _TailPainter extends CustomPainter {
-  const _TailPainter({required this.inkColor, required this.fillColor});
-
-  final Color inkColor;
-  final Color fillColor;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final inkPaint = Paint()..color = inkColor;
-    canvas.drawPath(
-      Path()
-        ..moveTo(0, 0)
-        ..lineTo(18, 0)
-        ..lineTo(9, 10)
-        ..close(),
-      inkPaint,
-    );
-    final fillPaint = Paint()..color = fillColor;
-    canvas.drawPath(
-      Path()
-        ..moveTo(3.5, 0)
-        ..lineTo(14.5, 0)
-        ..lineTo(9, 6.5)
-        ..close(),
-      fillPaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _TailPainter oldDelegate) =>
-      oldDelegate.inkColor != inkColor || oldDelegate.fillColor != fillColor;
-}
-
-/// Happiness heart (FIXES_1 #5): the `ic_heart` asset bakes fill and stroke
-/// into one `currentColor`, so a single tint cannot render the HTML's coin
-/// fill + 2px ink-2 stroke. Painted locally from the same 24-space path
-/// with token colours instead.
-class _HeartIcon extends StatelessWidget {
-  const new({required this.filled});
-
-  final bool filled;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = context.nest;
-    return ExcludeSemantics(
-      child: CustomPaint(
-        painter: _HeartPainter(
-          fill: filled ? tokens.coin : tokens.surface2,
-          stroke: filled ? tokens.ink2 : tokens.ink3,
-        ),
-        size: const Size(26, 26),
+    final stage = child.pipStage.clamp(1, 4);
+    return NestPetStage(
+      pip: PipAvatar(
+        style: _pipStyle(child.pipStyle),
+        stage: stage,
+        skin: _pipSkin(child.pipSkin),
+        accessory: _pipAccessory(child.pipAccessory),
       ),
+      speech: 'Let\u2019s do some quests!',
+      pipSize: _kPipSlotSize,
+      stage: _pipStage(stage),
+      semanticLabel: 'Pip the ${_pipStageName(stage)}, stage $stage of 4',
     );
   }
 }
 
-class _HeartPainter extends CustomPainter {
-  const _HeartPainter({required this.fill, required this.stroke});
-
-  final Color fill;
-  final Color stroke;
-
-  static Path _path(double s) {
-    return Path()
-      ..moveTo(12 * s, 20.4 * s)
-      ..lineTo(4.9 * s, 13.4 * s)
-      ..arcToPoint(Offset(11.3 * s, 7 * s), radius: Radius.circular(4.5 * s))
-      ..lineTo(12 * s, 7.7 * s)
-      ..lineTo(12.7 * s, 7 * s)
-      ..arcToPoint(Offset(19.1 * s, 13.4 * s), radius: Radius.circular(4.5 * s))
-      ..close();
-  }
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final s = size.width / 24;
-    final path = _path(s);
-    final fillPaint = Paint()..color = fill;
-    final strokePaint = Paint()
-      ..color = stroke
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2 * s
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    canvas
-      ..drawPath(path, fillPaint)
-      ..drawPath(path, strokePaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _HeartPainter oldDelegate) =>
-      oldDelegate.fill != fill || oldDelegate.stroke != stroke;
-}
-
-/// Tall meadow band behind progress + cards (FIXES_1 #1). The shared
-/// `KidScope` hill is only 136px at the very bottom, while the design shows
-/// green from just below the section row; this in-flow full-bleed panel
-/// paints the hill behind the scroll content. The tone is `kidHorizon`:
-/// pixel measurement of both design PNGs lands on it, while the shared
-/// hill (untouched) stays `kidMeadow`.
+/// Tall meadow band behind progress + cards (FIXES_1 #1).
+// TODO(K03): replace with a `KidScope` meadow-band height/inset parameter
+// once the design system owns one (SHARED_REQUEST #6) and delete this
+// painter. The shared 136 px hill cannot cover the band: the design shows
+/// green from just below the section row, so until the shared API exists
+/// this in-flow full-bleed panel paints it. Tone is `kidHorizon` (pixel
+/// measurement of both design PNGs lands on it); curve numbers below cite
+/// the `.meadow` silhouette in `design/html-source/screens/K03-kid-home.html`.
 class _MeadowPainter extends CustomPainter {
   const _MeadowPainter({required this.color});
 
@@ -800,8 +718,8 @@ class _MeadowPainter extends CustomPainter {
     final h = size.height;
     canvas.drawPath(
       Path()
-        ..moveTo(0, 24)
-        ..quadraticBezierTo(w * 0.45, 2, w, 20)
+        ..moveTo(0, _kCrestLeftY)
+        ..quadraticBezierTo(w * _kCrestBend, _kCrestControlY, w, _kCrestRightY)
         ..lineTo(w, h)
         ..lineTo(0, h)
         ..close(),
@@ -856,6 +774,15 @@ class _QuestCardState extends State<_QuestCard> {
         coins: widget.item.coins,
       ),
     );
+    // Release the latch on the next frame (K03-BUG-11): the bloc emits
+    // nothing when a write lands without flipping (silent no-op), so a
+    // state-driven reset would leave the check dead and unretryable.
+    // Same-frame double taps are still blocked (no frame runs between
+    // them); the idempotent repository guard plus the per-quest pending
+    // map keep rapid taps to one row and one celebration either way.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _busy) setState(() => _busy = false);
+    });
   }
 
   Future<void> _openDetail() async {

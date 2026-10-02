@@ -505,7 +505,11 @@ void main() {
         _loading,
         _loaded(done: 4, total: 6),
       ],
-      verify: (bloc) => expect(bloc.state.status, KidHomeStatus.loaded),
+      verify: (bloc) {
+        expect(bloc.state.status, KidHomeStatus.loaded);
+        // Review finding 5: a healthy stream clears the stale load error.
+        expect(bloc.state.errorMessage, isNull);
+      },
     );
 
     blocTest<KidHomeBloc, KidHomeState>(

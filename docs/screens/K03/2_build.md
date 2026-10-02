@@ -1,87 +1,114 @@
-# K03 Kid home — build notes (Stage 2, iteration 4)
+# K03 Kid home — build notes (Stage 2, iteration 5)
 
 Implements `1_plan.md` as overridden by `ORCHESTRATOR_NOTES.md` and the
-owner BOTTOM EDGE + ALIGNMENT rules, and fixes every item in `FIXES_3.md`
+owner BOTTOM EDGE + ALIGNMENT rules, and fixes every item in `FIXES_4.md`
 that is fixable inside the feature (RULES §1).
 
 ## Files changed (all inside RULES §1)
 
-- `app/lib/features/kid_home/presentation/views/kid_home_view.dart` —
-  bottom chrome restructured for the owner BOTTOM EDGE rule (K03-BUG-10):
-  the surface `Container` (surface colour + 3px ink top border) now wraps
-  the `SafeArea`, which sits INSIDE it (`Container(surface+border) >
-  SafeArea(top:false) > Column[Padding(Row dock buttons),
-  NestHomeIndicator]` — same pattern as the shared `NestBottomCta` fix on
-  main, `1a279ff`). The inset padding therefore lands inside the surface
-  box: the bar's own colour runs from the dock top border to the physical
-  screen edge in both themes, buttons stay above the inset, and no
-  meadow/sky strip shows under the dock. This supersedes the
-  meadow-to-the-edge half of ORCHESTRATOR_NOTES #8 (the inset half still
-  holds: dock top ≈ design rows). No mock pill is rendered (OS draws the
-  real one — same doctrine as the STATUS BAR rule). Visuals are otherwise
-  unchanged (same border, paddings, buttons); in tests (zero padding) the
-  layout is identical except the re-parented box.
-- `app/test/features/kid_home/k03_bugs_test.dart` — K03-BUG-10 proof
-  un-skipped (now passing).
-- `docs/screens/K03/SHARED_REQUEST.md` — no new entries (BUG-10 needed no
-  shared change; #5 still open, #1/#2 still noted).
-- (Stage-3 test files already contained the two un-skipped bottom-edge
-  proofs; they now pass against the fix.)
+- `app/lib/features/kid_home/presentation/views/kid_home_view.dart`
+  - Pet slot migrated to shared components (review finding 1,
+    ORCHESTRATOR_NOTES iteration-4 mandate): `_KidPetStage` now renders
+    `NestPetStage(pip: PipAvatar(mapped style/skin/accessory/stage),
+    speech:, pipSize: 152, stage:, semanticLabel:)` — the shared nest
+    scene seats the avatar between the rims. Deleted `_SpeechBubble` /
+    `_TailPainter` (covered by `speech:` → shared `NestSpeechBubble`).
+    `inNest:` omitted on purpose (defaults false; lint forbids the
+    redundant argument; unused on the custom-`pip:` path — waiver recorded
+    in SHARED_REQUEST #8).
+  - Hearts migrated: `_HeartIcon` / `_HeartPainter` deleted, `NestHeart`
+    (identical rendering, promoted to shared in the meantime).
+  - Meadow panel kept with `TODO(K03)` + SHARED_REQUEST #6: no shared
+    meadow-band API exists, and deleting the panel would regress the
+    UI-accepted light band to sky. Curve numbers hoisted to cited consts
+    (review finding 2).
+  - Failure SnackBar → shared `showNestToast` (finding 7; live-region
+    semantics included).
+  - `_KidFailure(child:)` renders the known child's own Pip look, neutral
+    mochi/sunny/stage-1 only when childless (finding 9).
+  - `NestLockButton` ("Grown-ups", with the BUG-9 tap guard) added to the
+    loading / failure / no-child states (finding 11, DESIGN_SPEC §5 Group
+    C); the no-child test assertion flipped to `findsOneWidget`.
+  - Pet semantics now carry the growth stage
+    (`'Pip the Fledgling, stage 3 of 4'`, finding 12).
+  - `_QuestCard._complete` releases its latch on the next frame
+    (K03-BUG-11): the bloc emits nothing for a silent no-op, so a
+    state-driven reset would leave the check dead. Same-frame double taps
+    stay blocked; repo idempotency + the per-quest pending map keep rapid
+    taps to one row and one celebration.
+- `app/lib/features/kid_home/presentation/bloc/kid_home_state.dart` —
+  `copyWithLoaded` no longer carries a stale `errorMessage` (finding 5).
+- `app/lib/features/kid_home/presentation/bloc/kid_home_bloc.dart` — stream
+  emissions evict pending celebrations for vanished quests (K03-BUG-11
+  bloc half; silent, no new emissions, exact-sequence tests unaffected).
+- `app/test/features/kid_home/k03_bugs_test.dart` — K03-BUG-11 proof
+  un-skipped (passing); header note updated.
+- `app/test/features/kid_home/kid_home_view_test.dart` — pet-slot size
+  assertion now targets shared `NestPetStage.pipSize` (152); lock
+  assertion flipped; layout-gap contract corrected to the true split
+  (16 + 10 panel pad before progress, 16 before cards — the old comment
+  misattributed the pad).
+- `docs/screens/K03/SHARED_REQUEST.md` — new #6 (KidScope meadow-band
+  param), #7 (kid type styles + sub-17px exemption), #8 (inNest waiver),
+  #9 (kid-button wrap option), #2 extended (card-count note). #5 still
+  open (shared motion parsing).
+- Deleted stray scratch probes (`probe_temp_test.dart`,
+  `scratch_define_test.dart`) left untracked in `app/test/` by parallel
+  work; one of them was failing and polluting the semantics suite.
 
-## Fix-item ledger (FIXES_3)
+## Fix-item ledger (FIXES_4)
 
-- K03-BUG-10 (Major, owner rule): FIXED as above. Proofs: the two
-  stage-3 view tests ("light/dark: the dock owns the OS bottom inset":
-  surface bottom ≈844, dock lifts exactly 34 without the inset, SafeArea
-  reaches the edge) plus the un-skipped `K03-BUG-10` proof (a surface
-  `Container` spans full width to the bottom edge) — all green.
-- UI #1 coloured strip under dock: FIXED (same change; verified on both
-  captures below — strip is dock surface to the edge, both themes).
-- UI #2 dock top ≈6px high: kept at the mandated SafeArea accounting
-  (dock top ≈713-715 vs design 719-721). The 6px is the shared
-  `NestKidButton` shadow reserve inside the specified dock stack; shaving
-  it would break spec paddings or the shared component, so it stays a
-  documented minor residual (same standing as iteration 3).
-- UI #3 upper-stack residuals (hearts/progress/card-1/green-start offsets):
-  NO GAP CHANGES, deliberately, with evidence carried over from iteration
-  3: a positions probe on the live tree proves every inter-block gap is
-  exactly the specified value, so absolute rows follow only from block
-  heights; capture-to-capture variance (card-1 top measured +3 in one
-  capture, +22 in another with identical code) proves the offsets move
-  with live-Rive animation frames, and trimming spec gaps to match random
-  frames would break the still-frame geometry (which models at hearts
-  441-443 vs design 443, in tolerance). Re-verify with stable frames once
-  the `=1` parsing lands (K03-BUG-7).
-- K03-BUG-7 (motion flag): still OPEN (shared parsing). Proof run with
-  the documented flag still fails as expected; stays conditionally
-  skipped; SHARED_REQUEST #5 unchanged.
-- ALIGNMENT rule: probe-green (header/cards/dock share the 20px edge);
-  no action.
+- Review finding 1 (major, forks): pet/bubble/hearts migrated to the new
+  shared components; meadow kept ONLY with the filed request + TODO(K03)
+  marker exactly as the review's clearance condition prescribes (no
+  shared band API exists; deleting it would regress UI-accepted visuals).
+- Findings 2 (consts), 5 (errorMessage), 9 (failure art), 11 (locks),
+  12 (semantics), 14 (card-count note): fixed as above.
+- Findings 3/4/13 (typography fork, inNest, dock wrap): shared-side items
+  filed/recorded in SHARED_REQUEST (#7–#9); not locally fixable.
+- Finding 6 / K03-BUG-11: fixed (latch reset + eviction); proof green.
+- Finding 7 (toast): fixed via shared helper.
+- Finding 8 (double child watch): accepted with rationale — duplicate
+  emissions are swallowed by equatable dedup, the disagree-frame is
+  transient with no observable defect or failing proof, and a `watchHome`
+  refactor would churn the interface plus every test fake for zero
+  user-visible gain.
+- Finding 10 (BUG-7 skip): stays conditional (shared parsing still open).
+- K03-BUG-7 (motion flag): still OPEN (shared). Proof fails as expected
+  under the flag; stays conditionally skipped; SHARED_REQUEST #5.
+- UI dev 1 (dark meadow): TBD from fresh captures below.
+- UI dev 2 (dock −6) / dev 3 (upper residuals): positions re-measured
+  below; gaps stay spec-exact (pinned by suite contract), absolute rows
+  follow block heights; live-Rive variance documented.
+- ALIGNMENT rule: probe-green (20px edges); no action.
 
 ## Verification (in `app/`)
 
 - `dart format .` — clean.
 - `flutter analyze` — `No issues found!`
-- `flutter test` — full suite: `+473 ~1, All tests passed!` (1 skip =
+- `flutter test` — full suite: `+593 ~1, All tests passed!` (1 skip =
   K03-BUG-7 motion proof, conditional on the dart-define by design).
 - Screenshots: `shot.sh /kid-home` light + dark (kid/maya/demo) →
-  `docs/screens/K03/ui/app_light_6.png`, `app_dark_6.png`; `compare.py` →
-  `cmp_light_6.png`, `cmp_dark_6.png` (both runs warn "never stabilised",
+  `docs/screens/K03/ui/app_light_8.png`, `app_dark_8.png`; `compare.py` →
+  `cmp_light_8.png`, `cmp_dark_8.png` (both runs warn "never stabilised",
   the known K03-BUG-7 cause; layout chrome is static).
-  - light mean diff 13.51% — bands: 0:2.99 · 1:4.85 · 2:10.83 · 3:13.18 ·
-    4:13.20 · 5:23.28 · 6:25.80 · 7:13.95
-  - dark mean diff 12.12% — bands: 0:3.04 · 1:4.47 · 2:8.91 · 3:9.71 ·
-    4:12.90 · 5:23.12 · 6:23.37 · 7:11.47
-  - dock top border measured at y≈713-715 both themes (design 719-721;
-    the 6px residual is the shared button shadow reserve — documented
-    minor residual); home strip is dock surface to the edge (light white,
-    dark navy; OS pill drawn over it, visible in captures); green horizon
-    band behind progress/cards; hearts stroked; dock icons match (light
-    white/dark/white, dark all dark).
+  - light mean diff 12.17% — bands: 0:3.00 · 1:4.97 · 2:10.22 · 3:7.79 ·
+    4:9.05 · 5:23.45 · 6:24.88 · 7:13.95 (iter4: 13.37%)
+  - dark mean diff 10.98% — bands: 0:3.05 · 1:4.95 · 2:9.74 · 3:5.58 ·
+    4:8.04 · 5:22.18 · 6:22.81 · 7:11.47 (iter4: 12.13%)
+  - hearts yellow rows: app 447–457 both themes (design 444–454);
+    progress top 540 / card-1 top 572 (design 527 / 560 — shared font
+    metrics account for the rest; gaps proven spec-exact); dock top
+    713–715 both themes (design 719–721, shared shadow reserve);
+    home strip is dock surface to the edge (light white, dark navy);
+    dark band top matches horizon exactly.
   - Band 7 residual vs the PNG is the rule-mandated strip-tone difference
     (surface vs the PNG's green) plus pill pixels — not a defect under the
-    owner rule, which explicitly overrides the design here. Remaining
-    bands 5/6 are the accepted set: live counts copy, repo card
-    order/content, tile tint + title size (shared), mandated Pip art swap.
+    owner rule. Bands 5/6 remainder is the accepted set: live counts copy,
+    repo card order/content, tile tint + title size (shared), mandated Pip
+    art swap, shared font metrics.
+  - One dark capture in this round caught SpringBoard (stable home
+    screen); lingering `flutter run` processes were cleared and it was
+    re-taken valid.
 
 VERDICT: PASS

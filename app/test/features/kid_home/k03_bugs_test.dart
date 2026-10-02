@@ -22,9 +22,10 @@
 // - K03-BUG-10 (owner BOTTOM EDGE): fixed in iteration 4; the light and dark
 //   proofs run un-skipped and assert a surface-filled box reaches the
 //   physical bottom edge under the 34px inset.
-// - K03-BUG-11 (skipped): a silent no-op `completeQuest` (quest row gone)
-//   never resets the card latch, so the check is dead until the next status/
-//   token change. Proof: `flutter test --run-skipped --plain-name K03-BUG-11`.
+// - K03-BUG-11 (fixed iteration 5): a silent no-op `completeQuest` resets
+//   the card latch on the next frame (post-frame reset; the bloc emits
+//   nothing for a noop) and evicts the pending entry when the quest is
+//   absent from an emission. Proof runs un-skipped.
 //
 // Run the skipped proofs with
 // `flutter test --run-skipped --plain-name "K03-BUG"` (BUG-7 needs its flag).
@@ -1108,7 +1109,6 @@ void main() {
       semantics.dispose();
       await disposeApp(tester);
     },
-    skip: true,
   );
 }
 

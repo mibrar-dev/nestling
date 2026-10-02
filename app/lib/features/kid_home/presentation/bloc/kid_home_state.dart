@@ -103,7 +103,8 @@ final class KidHomeState extends Equatable {
 
   /// Loaded emission from the combined child + items streams. Built
   /// explicitly (not via [copyWith]) so a null child clears the previous
-  /// one; a healthy stream also clears transient completion outcomes.
+  /// one; a healthy stream also clears transient completion outcomes and
+  /// any stale load error (review finding 5).
   KidHomeState copyWithLoaded({
     required KidChild? child,
     required List<KidQuest> items,
@@ -112,7 +113,6 @@ final class KidHomeState extends Equatable {
       status: KidHomeStatus.loaded,
       child: child,
       items: items,
-      errorMessage: errorMessage,
     );
   }
 

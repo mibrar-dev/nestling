@@ -342,6 +342,71 @@ void main() {
     }
   });
 
+  group('K03 layout invariants', () {
+    // The orchestrator's absolute band targets (ORCHESTRATOR_NOTES, QA of
+    // cmp_light_4: hearts 443 / section 490 / progress 520 / card 560 /
+    // dock 720) are capture rows for one device + inset combination, so the
+    // UI stage measures them. What a test can pin deterministically is the
+    // layout CONTRACT: the block order and the specified gaps from
+    // `1_plan.md` §(a) / SPACING §8, which any future trim must preserve.
+    testWidgets('blocks stack in order with the specified gaps', (
+      tester,
+    ) async {
+      await _pumpRoute(tester);
+      final pet = tester.getRect(find.byType(NestPetStage));
+      final hearts = tester.getRect(find.byType(NestHeart).first);
+      final section = tester.getRect(find.text('Today\u2019s quests'));
+      final progress = tester.getRect(find.byType(NestProgress));
+      final card1 = tester.getRect(find.byType(NestKidQuestCard).first);
+      final card2 = tester.getRect(find.byType(NestKidQuestCard).at(1));
+      final dock = tester.getRect(_dockSurfaceFinder());
+
+      // Order: pet → hearts → section → progress → cards, with the scroll
+      // viewport ending exactly where the fixed dock starts (content
+      // scrolls behind the bar, as the design intends).
+      expect(pet.top, lessThan(hearts.top));
+      expect(hearts.bottom, lessThanOrEqualTo(section.top));
+      expect(section.bottom, lessThanOrEqualTo(progress.top));
+      expect(progress.bottom, lessThanOrEqualTo(card1.top));
+      expect(
+        tester.getRect(find.byType(ListView)).bottom,
+        closeTo(dock.top, 0.5),
+        reason: 'the quest list ends at the dock, never under it',
+      );
+
+      // Gaps between blocks whose heights are fixed by the design system,
+      // so they cannot drift with the test font:
+      //  · hearts → section: 16 (the heart is a fixed 26 px slot)
+      //  · progress → first card: 16 (meadow panel column spacing)
+      //  · card → card: 12 (the card's 6 px shadow reserve is inside its
+      //    own rect, so the inter-card gap is the bare 12 px token)
+      // The section → progress gap is NOT asserted: the section title is
+      // the only block whose height depends on glyph metrics (it wraps to
+      // two lines in the test font), so the exact value is a font fact,
+      // not a layout fact.
+      expect(section.top - hearts.bottom, closeTo(NestSpacing.s4, 1));
+      expect(
+        progress.top - section.bottom,
+        greaterThanOrEqualTo(NestSpacing.s4),
+        reason: 'the progress bar never rides up into the section header',
+      );
+      expect(card1.top - progress.bottom, closeTo(NestSpacing.s4, 1));
+      expect(card2.top - card1.bottom, closeTo(NestSpacing.s3, 1));
+      await disposeApp(tester);
+    });
+
+    testWidgets('the pet slot carries the design speech bubble', (
+      tester,
+    ) async {
+      await _pumpRoute(tester);
+      expect(find.text('Let\u2019s do some quests!'), findsOneWidget);
+      final petStage = tester.widget<NestPetStage>(find.byType(NestPetStage));
+      expect(petStage.speech, 'Let\u2019s do some quests!');
+      expect(petStage.pip, isA<PipAvatar>());
+      await disposeApp(tester);
+    });
+  });
+
   group('K03 states', () {
     testWidgets('light: no active child offers the picker', (tester) async {
       await tester.runAsync(() => Seed.empty(GetIt.instance<AppDatabase>()));
@@ -349,7 +414,7 @@ void main() {
       await _pumpRoute(tester);
       expect(find.text('Who\u2019s playing?'), findsOneWidget);
       expect(find.byType(NestKidQuestCard), findsNothing);
-      expect(find.byType(NestLockButton), findsNothing);
+      expect(find.byType(NestLockButton), findsOneWidget);
       await tester.tap(find.text('Choose'));
       await _settleRoute(tester);
       expect(find.text('K01 Who is playing'), findsOneWidget);
@@ -447,6 +512,70 @@ void main() {
     });
   });
 
+  group('K03 grown-ups lock (every kid state)', () {
+    // DESIGN_SPEC §5 Group C: "Top-right on every kid screen: small lock
+    // button that leads to P17" (review finding 11).
+    testWidgets('loaded home: the lock opens the parental gate', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await _pumpRoute(tester);
+      expect(find.bySemanticsLabel('Grown-ups'), findsOneWidget);
+      await tester.tap(find.bySemanticsLabel('Grown-ups'));
+      await _settleRoute(tester);
+      expect(find.text('P17 Parental gate'), findsOneWidget);
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('no active child: the lock still opens the parental gate', (
+      tester,
+    ) async {
+      await tester.runAsync(() => Seed.empty(GetIt.instance<AppDatabase>()));
+      await tester.runAsync(() => GetIt.instance<AppSession>().refresh());
+      final semantics = tester.ensureSemantics();
+      await _pumpRoute(tester);
+      expect(find.text('Who\u2019s playing?'), findsOneWidget);
+      expect(find.bySemanticsLabel('Grown-ups'), findsOneWidget);
+      await tester.tap(find.bySemanticsLabel('Grown-ups'));
+      await _settleRoute(tester);
+      expect(find.text('P17 Parental gate'), findsOneWidget);
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('failure state: the lock still opens the parental gate', (
+      tester,
+    ) async {
+      final repo = _FakeKidHomeRepository(failLoad: true);
+      await _useFakeRepository(repo);
+      final semantics = tester.ensureSemantics();
+      await _pumpRoute(tester);
+      expect(find.text('Oh no! Pip got lost.'), findsOneWidget);
+      expect(find.bySemanticsLabel('Grown-ups'), findsOneWidget);
+      await tester.tap(find.bySemanticsLabel('Grown-ups'));
+      await _settleRoute(tester);
+      expect(find.text('P17 Parental gate'), findsOneWidget);
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('loading state: the lock is reachable and opens the gate', (
+      tester,
+    ) async {
+      await _useFakeRepository(_FakeKidHomeRepository(hang: true));
+      final semantics = tester.ensureSemantics();
+      await _pumpRoute(tester);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.bySemanticsLabel('Grown-ups'), findsOneWidget);
+      await tester.tap(find.bySemanticsLabel('Grown-ups'));
+      await _settleRoute(tester);
+      expect(find.text('P17 Parental gate'), findsOneWidget);
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+  });
+
   group('K03 Pip (orchestrator mandate)', () {
     testWidgets("the pet slot renders the child's own PipAvatar", (
       tester,
@@ -457,7 +586,9 @@ void main() {
       expect(avatar.skin, PipSkin.sunny);
       expect(avatar.accessory, PipAccessory.none);
       expect(avatar.stage, 3);
-      expect(avatar.size, 152);
+      // The shared slot sizes the avatar: design cap 152, scaled by width.
+      final slot = tester.widget<NestPetStage>(find.byType(NestPetStage));
+      expect(slot.pipSize, 152);
       expect(_v1PipAssets(tester), isEmpty);
       await disposeApp(tester);
     });
@@ -540,6 +671,86 @@ void main() {
       expect(avatar.stage, 4);
       expect(_v1PipAssets(tester), isEmpty);
       expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    testWidgets('the pet slot announces the child stage, not a generic label', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await _pumpRoute(tester);
+      // Review finding 12: the alt text carries the growth stage, so a
+      // screen reader never hears a bare "mascot".
+      expect(
+        tester.getSemantics(find.byType(NestPetStage)).label,
+        contains('Pip the Fledgling, stage 3 of 4'),
+      );
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets(
+      'the stage name follows the active child (Leo is a hatchling)',
+      (tester) async {
+        final db = GetIt.instance<AppDatabase>();
+        await tester.runAsync(() async {
+          await (db.update(db.appState)..where((a) => a.id.equals(1))).write(
+            const AppStateCompanion(activeChildId: Value<String?>('leo')),
+          );
+          await GetIt.instance<AppSession>().refresh();
+        });
+        final semantics = tester.ensureSemantics();
+        await _pumpRoute(tester);
+        expect(find.text('Hi Leo!'), findsOneWidget);
+        expect(
+          tester.getSemantics(find.byType(NestPetStage)).label,
+          contains('Pip the Hatchling, stage 2 of 4'),
+        );
+        semantics.dispose();
+        await disposeApp(tester);
+      },
+    );
+
+    testWidgets('hearts mirror happiness and clamp to 0..5', (tester) async {
+      await _pumpRoute(tester);
+      expect(find.byType(NestHeart), findsNWidgets(5));
+      // Maya: happiness 4 → four filled, one outline.
+      expect(
+        <bool>[
+          for (var i = 0; i < 5; i++)
+            tester.widget<NestHeart>(find.byType(NestHeart).at(i)).filled,
+        ],
+        <bool>[true, true, true, true, false],
+      );
+
+      final db = GetIt.instance<AppDatabase>();
+      Future<void> setHappiness(int value) async {
+        await tester.runAsync(() async {
+          await (db.update(db.children)..where((c) => c.id.equals('maya')))
+              .write(ChildrenCompanion(happiness: Value(value)));
+        });
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+
+      await setHappiness(0);
+      expect(
+        <bool>[
+          for (var i = 0; i < 5; i++)
+            tester.widget<NestHeart>(find.byType(NestHeart).at(i)).filled,
+        ],
+        <bool>[false, false, false, false, false],
+        reason: 'happiness 0 fills nothing and never frames Pip negatively',
+      );
+      await setHappiness(9);
+      expect(
+        <bool>[
+          for (var i = 0; i < 5; i++)
+            tester.widget<NestHeart>(find.byType(NestHeart).at(i)).filled,
+        ],
+        <bool>[true, true, true, true, true],
+        reason: 'happiness above 5 clamps to five hearts',
+      );
       await disposeApp(tester);
     });
   });

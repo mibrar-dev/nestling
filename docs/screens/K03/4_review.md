@@ -1,219 +1,162 @@
-# K03 Kid home — QA code review (Stage 4, iteration 4)
+# K03 Kid home — QA code review (Stage 4, iteration 5)
 
 Scope: `kid_home` / `/kid-home`, kid mode. Reviewed `git diff main...HEAD`
-(committed) **plus** the current working tree, so the verdict reflects the
-code as it stands. Per the orchestrator rule, uncommitted work / merge state
-are **not** findings and are not reported.
+plus the current working tree, so the verdict reflects the code as it
+stands. Per the orchestrator rule, uncommitted work / branch-vs-main /
+merge order are **not** findings and are not reported.
 
 ## Verification run (in `app/`, this iteration)
 
-- `dart format --set-exit-if-changed .` → 349 files, 0 changed.
-- `flutter analyze` → **No issues found!** (no ignores, `analysis_options.yaml` untouched).
-- `flutter test` → **`+476 ~1: All tests passed!`** (1 conditional skip, finding 10).
-- RULES §1: only `app/lib/features/kid_home/**`, `app/test/features/kid_home/**`,
-  `docs/screens/K03/**` are touched. No `core/`, no `app/`, no other feature,
-  no `tools/`. ✅
-- Bottom edge (owner rule): fixed and verified — `kid_home_view.dart:471-478`
-  puts the dock's surface `Container` **outside** `SafeArea(top: false)`, so
-  the inset is painted with the bar's own colour; `ui/app_dark_6.png` reads
-  `(31,28,46)` at x=5/195/1165 from y=716 to the physical edge y=843 (no
-  meadow strip), and 4 new tests assert `left 0 / right 390 / bottom 844` in
-  both themes. ✅
-- Mandates: PIP identity — no `pip_stage_*.svg` anywhere in the feature
-  (`PipAvatar` in the pet slot, empty and failure states); PERIODS ruling —
-  `countsForCurrentPeriod` applied in `kid_home_repository_impl.dart:40`
-  (status) and `:118` (write guard), day-boundary proof un-skipped and green;
-  coins only, no `£`; UK spelling ("Mum", "colour"-class words, curly
-  apostrophes) ✅.
-- ARCHITECTURE: domain stays entities + abstract repository; one bloc per
-  feature (`KidHomeBloc`, one file, `emit.forEach` streams, no re-add load
-  events); routes/DI untouched and still per feature. ✅
-- Children's Code: no analytics/ads/SDK/network calls, no child identifiers
-  beyond nickname/coins/Pip look, no location/chat, parental gate reachable
-  from the loaded home. ✅
+- `dart format --set-exit-if-changed .` → 355 files, 0 changed.
+- `flutter analyze` → **No issues found!** (no ignores; `analysis_options.yaml` untouched).
+- `flutter test` → **`+593 ~1: All tests passed!`** (1 conditional skip, finding 5).
+- RULES §1: only `app/lib/features/kid_home/**`,
+  `app/test/features/kid_home/**`, `docs/screens/K03/**`. No `core/`, no
+  `app/`, no other feature, no `tools/`. ✅
+- Bottom edge (owner rule) still correct: `ui/app_light_8.png` x=5 shows the
+  dock's surface `(255,255,255)` from y=716 to the physical edge y=843 with
+  no green transition, and `ui/app_dark_8.png` likewise — the surface
+  `Container` still wraps `SafeArea(top: false)` (view:471-478). ✅
+- Mandates: PIP identity — `PipAvatar` only (no `pip_stage_*.svg` anywhere in
+  the feature) and the child's DB `pip_style / pip_skin / pip_accessory /
+  pip_stage` drive it in all three states; PERIODS ruling intact
+  (`countsForCurrentPeriod` at `kid_home_repository_impl.dart:40` and `:118`);
+  coins only, no `£`; UK spelling. ✅
+- ARCHITECTURE: feature-first, domain = entities + abstract repository only,
+  one bloc per feature with `emit.forEach` streams (no re-added load events),
+  routes/DI untouched and per feature. ✅
+- Children's Code: no analytics/ads/SDK/network, no child identifiers beyond
+  nickname/coins/Pip look, parental gate reachable from every kid state. ✅
+
+## Closed since the last review (verified in code)
+
+- **Design-system forks removed.** `_SpeechBubble` / `_TailPainter` /
+  `_HeartIcon` / `_HeartPainter` are gone from the view; the pet slot now uses
+  the shared `NestPetStage(pip:, speech:, pipSize:, semanticLabel:)`
+  (`kid_home_view.dart:686-698`, whose `pip` slot exists at
+  `core/design_system/components/nest_pet_stage.dart:29`) and the hearts use the
+  shared `NestHeart(filled:)` (`core/design_system/components/nest_heart.dart:8`).
+  The one remaining local painter carries `TODO(K03)` + `SHARED_REQUEST` #6,
+  which is the pattern RULES §2 prescribes.
+- Semantics label is now stage-aware (`'Pip the Fledgling, stage 3 of 4'`, view:697).
+- `showNestToast` replaces the inline `SnackBar` (view:158-160) — keeps the
+  token toast's `liveRegion: true`.
+- Parental-gate lock added to the loading, failure and no-child states
+  (view:196-204, 246-254, 328-336); the test that asserted its absence is gone.
+- The failure state renders the known child's Pip when one is loaded (view:260-271).
+- `copyWithLoaded` no longer carries a stale `errorMessage`
+  (`kid_home_state.dart:108-115`).
+- `_awaitingCelebration` evicts entries whose quest vanished from the list
+  (`kid_home_bloc.dart:40-47`), closing the silent-no-op latch.
+- Slot geometry hoisted into cited named constants (`_kPipSlotSize`,
+  `_kCrest*`, view:60-95).
+- `SHARED_REQUEST.md` now carries the requested `KidScope` meadow band (#6),
+  the missing `NestType` kid styles + the sub-17 px kid-copy exemption (#7),
+  the `inNest` waiver against `ORCHESTRATOR_NOTES` #1 (#8), the
+  `NestKidButton` label-wrap option (#9) and the card-count record (#10).
 
 ## Findings
 
-### 1. [major] Design-system components re-implemented in the feature view, with no SHARED_REQUEST / TODO trail
-`kid_home_view.dart:593-639` (`_KidPetStage`), `:643-689` (`_SpeechBubble`),
-`:691-720` (`_TailPainter`), `:728-746` (`_HeartIcon`), `:748-777`
-(`_HeartPainter`), `:792-815` (`_MeadowPainter`).
+### 1. [major] Pet slot shrank below the mandatory size in `ORCHESTRATOR_NOTES` #1
+`kid_home_view.dart:686-698` (`NestPetStage(pipSize: _kPipSlotSize, …)`),
+combined with `core/design_system/components/nest_pet_stage.dart:69-74` and
+`core/design_system/motion/pip_rive.dart:468`.
 
-- `_SpeechBubble`/`_TailPainter` are a line-for-line fork of the shared
-  `_SpeechBubble`/`_TailPainter` in
-  `app/lib/core/design_system/components/nest_pet_stage.dart:169` and `:217`
-  (same `maxWidth 260`, `r18`, `gap14`/`s2` padding, 3 px border,
-  Nunito 16/24 w800, `Size(18, 10)` tail, identical tail path), and
-  `_KidPetStage` re-does the nest+Pip scene that `NestPetStage:19`/`_PetScene:87`
-  already owns.
-- `_HeartIcon`/`_HeartPainter` copy the 24-space heart path out of the shared
-  `assets/icons/ic_heart.svg` / `ic_heart_outline.svg` (`NestIcons.heart` /
-  `heartOutline`, `nest_icon.dart:65-66`) because the asset bakes fill and
-  stroke into one `currentColor`. Icon updates will not propagate.
-- `_MeadowPainter` draws a second, in-flow hill while `KidScope`
-  (`kid_scope.dart:47-58`) already owns the meadow art (token colour is
-  correct now — `tokens.kidHorizon` — but the geometry is screen-local).
+The migration to the shared component is the right call, but the shared scene
+sizes itself from the available width, and `pipSize` is only a **cap**:
 
-RULES §2 says shared work goes in `SHARED_REQUEST.md` and that a screen may
-build "against the foundation as-is behind a `TODO(<ID>)` comment".
-`SHARED_REQUEST.md` has 5 items (tile tint, stale copy, router guard,
-periods ruling, motion flag) and covers none of these; there is no
-`TODO(K03)` marker anywhere. The PIP mandate does genuinely block
-`NestPetStage` (its fallback is the forbidden v1 art), so a local composition
-is defensible — it just has to be *claimed* so the orchestrator can land the
-shared fix once instead of per screen (K06/K07 need the same slot).
+```dart
+var pipH = maxW * 0.62 * 0.55;      // 350 × 0.341 = 119.35
+if (pipH > pipSize) pipH = pipSize; // 119.35 < 152 → unchanged
+```
 
-Fix (cheapest, keeps the visuals): add to `SHARED_REQUEST.md` —
-(a) `NestPetStage` gains `style` / `skin` / `accessory` (or a
-`PipAvatar`-backed mode) + `pipSize`; (b) a two-tone heart asset or
-`NestIcon(fill:, stroke:)`; (c) a `KidScope` meadow-band inset/height param —
-and mark the three local classes `// TODO(K03): replace with <shared component>`
-with the request id. Alternative: delete `_SpeechBubble`/`_TailPainter` and
-call `NestPetStage(speech: …, pipSize: …)` with only a `PipAvatar` overlay,
-then re-measure the slot.
+`PipNestFallback` then derives the nest (`pipH / 0.55` = 217) and the stage
+(`nestW / 0.62` = 350) from `pipH`, and positions the `pip` slot from it, so
+the screen cannot reach the note's ≈152 px Pip on a 390 px screen at all
+(that would need `maxW ≈ 446`). Measured on the captures (logical px):
 
-### 2. [minor] Hard-coded geometry in the pet slot and painters
-`kid_home_view.dart:609-610, 616-617, 622-623` (`260 × 236`, `left 54`,
-`bottom 96`, `size 152`), `:655` (`maxWidth: 260`), `:658` (`r18`),
-`:684` (`Size(18, 10)`), `:742` (`Size(26, 26)`), `:748-777`
-(`strokeWidth = 2 * s` off a copied path), `:796-797` (curve points
-`24`, `w*0.45`, `2`, `20`). None are `NestSpacing` / `NestDevice` /
-`NestRadii` values, and the stage rule is tokens only. Fix: these numbers
-belong to the shared component's parameters (finding 1); if the screen must
-own them, hoist them into one `private const` block with the
-`.k3-pet` spec citation (as `1_plan.md` §(a) already does for the type
-sizes) so there is a single place to change.
+| | design PNG | app iter-5 (`app_light_8`) | app iter-4 (`app_light_5`) |
+|---|---|---|---|
+| nest, widest | 198.3 | **182.3** (−16) | 197.0 |
+| Pip, widest | 93.7 | **79.7** (−14) | ~94 |
+| Pip band (y) | 197–288 | 197–~265 | 211–288 |
 
-### 3. [minor] Typography forked past `NestType`; kid body copy below the spec minimum
-`kid_home_view.dart:325, 337, 386, 670` and
-`widgets/kid_status_chip.dart:31` call `GoogleFonts.nunito(fontSize: 22 / 15 /
-16, …)` directly instead of `NestType` (`tokens/typography.dart:10`), so the
-type scale is bypassed for this screen only. The 15 px `.k3-sub` / `.kcap` /
-`.kchip` copy is also below DESIGN_SPEC §0.9's "body text ≥ 17 px kid"
-minimum (the K03 HTML uses 15 px, so the design and the a11y rule disagree).
-Fix: file the missing styles as a shared request — `NestType.kidName`
-(22/26 w900), `kidCaption` (15/20 w700), `kidChipLabel` (15/15 w800) — and
-either move to them or record the sub-17 px kid-copy exemption in
-`SHARED_REQUEST.md`. (Colours, radii and spacing in the same widgets are
-correctly tokenised.)
+So this iteration moved the hero slot ~15 % narrower and ~25 px shorter than
+the design — a regression from iteration 4, which matched. The *position*
+half of the note is met (Pip top y=197 vs design 197; nest rim y≈286-292 vs
+design 288-294); only the absolute size is unmet, and the code comment
+concedes it ("renders proportionally smaller — positions, not pixels are what
+carry over"). The note is mandatory and states the numbers.
 
-### 4. [minor] Mandatory `ORCHESTRATOR_NOTES` #1 asks for `PipAvatar(..., inNest true)`; the screen leaves it false
-`kid_home_view.dart:614-630` composes `nest.svg` + a standalone `PipAvatar`
-(`inNest` defaults to `false`), so the shared `PipStage` artboard's
-"front rim biting the feet" z-order is not used. I measured the slot against
-both design PNGs: app Pip box 152 with a ~92-100 px silhouette at y≈214-300
-vs design ~94 px at y≈198-288, nest rim y≈294-300 vs design ≈288-294 — i.e.
-the *measurable* part of the note ("keep the design's size and position") is
-met, and the UI stage accepted the result twice (5_ui A3). Fix for the
-traceability gap only: either pass `inNest: true` and drop the separate nest
-SVG (then re-measure the slot), or record the waiver against note #1 in
-`SHARED_REQUEST.md` so the deviation from a mandatory note is on the record.
+Fix (needs one shared change, then a one-line screen change):
+1. `SHARED_REQUEST.md`: give `NestPetStage` a target instead of a cap —
+   e.g. `nestWidth:` / `pipHeight:` (or a `stageWidth:` that no longer derives
+   from `maxW`) so a screen can pin the design's 260×236 slot.
+2. Until it lands, keep the shared `NestPetStage` (so the bubble/geometry stay
+   in core) but give the stage the design's box so the shared math lands on
+   152/260; if that is impossible with the current formula, restore the
+   previous 260×236 composition with `TODO(K03)` + a request entry — the
+   sanctioned RULES §2 pattern.
+3. Re-measure with `compare.py` and re-check against `ORCHESTRATOR_NOTES` #1
+   before closing.
 
-### 5. [minor] `copyWithLoaded` keeps a stale `errorMessage` after a successful retry
-`kid_home_state.dart:115` passes `errorMessage: errorMessage` (the old
-value) into the loaded state, so after failure → "Try again" → success the
-state is `loaded` while still carrying the previous failure string. No
-visible effect on K03 (the failure branch is status-gated) and
-`3_test.md` recorded it, but K03b/K04/K05 share this state object.
-Fix: `errorMessage: null` — a healthy stream has no error.
+### 2. [minor] `_MeadowPainter` is still a screen-local hill
+`kid_home_view.dart:710-733`. Now sanctioned (`TODO(K03)` + `SHARED_REQUEST`
+#6) and correctly token-coloured (`tokens.kidHorizon`), so this is a tracked
+debt rather than a defect. Fix: delete it and its call site when the
+`KidScope` meadow-band parameter lands; do not extend the painter meanwhile.
 
-### 6. [minor] A silent no-op write can leave the card's completion latch stuck
-`kid_home_bloc.dart:72` adds to `_awaitingCelebration`, which is only
-cleared on the flip (`:52`) or on a thrown write (`:81`).
-`kid_home_repository_impl.dart:95` returns **silently** when the quest row
-has disappeared, so in that race no flip and no error arrive: the map entry
-lingers (a later completion of the same id would celebrate unexpectedly) and
-`_QuestCardState._busy` (`kid_home_view.dart:835-846`) never resets, leaving
-a dead check until a status/token change. Fix: treat "no flip, no error" as a
-terminal outcome (evict the pending entry and surface `actionError` after a
-bounded wait), or reset `_busy` in the listener when
-`justCompletedQuestId == item.questId`.
+### 3. [minor] Typography fork: sanctioned, but not marked at the call sites
+`kid_home_view.dart:407, 419, 468` and `widgets/kid_status_chip.dart:31` call
+`GoogleFonts.nunito(...)` directly, bypassing `NestType`. `SHARED_REQUEST` #7
+records the need (and the documented sub-17 px kid-copy exemption), so the
+fork is legitimate — but unlike the meadow painter there is no `TODO(K03)` at
+the four call sites, so a future reader cannot tell the fork is temporary.
+Fix: add `// TODO(K03): use NestType.kidName / kidCaption / kidChipLabel when
+SHARED_REQUEST #7 lands` at each call site.
 
-### 7. [minor] Hand-rolled `SnackBar` instead of the design-system toast
-`kid_home_view.dart:121-125` calls
-`ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:
-Text(…)))`. The shared helper `showNestToast`
-(`components/nest_toast.dart:39`) is the sanctioned path: it keeps the token
-palette, floats above the dock inset, and — the part that matters here —
-wraps the message in `Semantics(liveRegion: true)`, which the inline version
-drops, so a screen-reader user is not guaranteed the failure message.
-Fix: `showNestToast(context, 'Hmm, that did not work. Try again.')`.
-
-### 8. [minor] The child stream is watched twice per load
-`kid_home_bloc.dart:29-30` combines `watchActiveChild()` with
-`watchItems()`, but `watchItems()` itself opens `watchActiveChild()`
+### 4. [minor] The child stream is still watched twice per load
+`kid_home_bloc.dart:30` combines `watchActiveChild()` with `watchItems()`,
+but `watchItems()` already opens `watchActiveChild()`
 (`kid_home_repository_impl.dart:22`). Every `app_state` / `children` change
-therefore drives two subscriptions, `combineLatest2` emits twice per change
-(the duplicate is swallowed by `Bloc`'s equal-state check), and on a child
-switch there is one frame where `child` is the new child while `items` are
-still the old child's quests. Fix: one combined stream from the repository
-(`Stream<KidHomeData> watchHome()`), so the screen subscribes once and child
-+ items can never disagree.
+drives two subscriptions and two `combineLatest2` emissions (the duplicate is
+swallowed by `Bloc`'s equal-state check), and on a child switch there is one
+frame where `child` is the new child while `items` are still the old child's
+quests. Fix: a single combined stream from the repository
+(`Stream<KidHomeData> watchHome()`), so child and items cannot disagree.
 
-### 9. [minor] The failure state ignores an available child
-`kid_home_view.dart:199-205` renders `const PipAvatar(style: mochi, stage: 1,
-size: 140)` even when `state.child` is populated (a stream error after a
-successful load), so a child with e.g. Bolt/sky/stage 2 sees a different bird
-on the error card than everywhere else. Fix: read `state.child` and reuse the
-same `_pipStyle`/`_pipSkin`/`_pipAccessory` mapping as the pet slot, falling
-back to the neutral look only when `child == null`.
+### 5. [minor] Shared motion flag still unfixed (open, not K03-fixable)
+`bool.fromEnvironment('DISABLE_ANIMATIONS')` parses the documented `=1` as
+false, so `shot.sh` captures keep running Rive and report "frame never
+stabilised"; `ui/` PNGs are therefore live-animation frames, not stills.
+`SHARED_REQUEST` #5 tracks it and the `K03-BUG-7` proof is conditionally
+skipped (runs and fails with the documented flag). Fix is shared
+(`core/data/env_flags.dart` + `core/app/launch_flags.dart`); K03 cannot edit
+`core/`. Keep treating the `ui/` PNGs as non-deterministic until it lands —
+which is why finding 1 is measured against the design PNG and the shared
+geometry, not against a pixel diff of the captures alone.
 
-### 10. [minor] One test is conditionally skipped; the underlying bug is shared and still open
-`test/features/kid_home/k03_bugs_test.dart:943` —
-`skip: !const bool.hasEnvironment('DISABLE_ANIMATIONS')` for K03-BUG-7.
-`core/data/env_flags.dart` reads
-`bool.fromEnvironment('DISABLE_ANIMATIONS')`, which parses `"1"` as **false**,
-so the documented launch flag (RULES §5, `tools/screens/shot.sh`) does not
-disable motion: `ui/` captures are live-animation frames and `shot.sh`
-prints "frame never stabilised". Fix is shared (`SHARED_REQUEST.md` #5 —
-accept `"1"` as true, or set `MediaQueryData.disableAnimations` at the app
-root); K03 cannot edit `core/`. Until it lands, treat the `ui/` PNGs as
-non-deterministic evidence and keep the skip visible.
-
-### 11. [minor] No parental-gate lock in the loading / failure / no-child states
-DESIGN_SPEC §5 Group C: a small lock button on **every** kid screen.
-`kid_home_view.dart:149-175` (loading), `:177-238` (failure), `:240-279`
-(no active child) render no `NestLockButton`, and
-`test/features/kid_home/kid_home_view_test.dart:352` asserts its absence —
-i.e. the gap is locked in by a test. The no-child state still routes to
-K01 (which has its own lock), so this is not a dead end. Fix: render the
-`NestLockButton(semanticLabel: 'Grown-ups')` in all three states and flip that
-assertion.
-
-### 12. [minor] Pet-stage semantics label is generic
-`kid_home_view.dart:607` announces `"Pip in the nest"`; the design's alt text
-is `"Pip the Fledgling"` (HTML l.53) and `NestPetStage` previously fell back
-to the bubble text. Fix: include the child's stage name
-(`'Pip the Fledgling, stage 3 of 4'`) so a screen-reader user gets the same
-information the artwork carries.
-
-### 13. [minor] Dock labels can wrap (no `FittedBox`)
-`1_plan.md` §(e) asked for `FittedBox(scaleDown)` inside the dock buttons;
-`NestKidButton` wraps the label in `Flexible` + `Text` only, so with a wider
-fallback font "My jar" wraps to two lines and the dock grows (the iteration-4
-test notes already flag this and skip the height comparison). On device with
-real Nunito at 390 px it fits, and the 320 px × 1.3 matrix is green, so this
-is cosmetic. Fix: add `softWrap: false` + `FittedBox` (or a
-`NestKidButton` param) in the shared component.
-
-### 14. [minor] Card-count difference vs the design is undocumented
-The design shows three sample cards; the screen renders every active quest
-(6 under the demo seed, `kid_home_view.dart:449-457`). Data wins per RULES §4
-/ DATA OVER MOCKS, so this is correct behaviour — but `SHARED_REQUEST.md` #2
-only records the "3 of 6" copy, so a future compare note could read the extra
-cards as a defect. Fix: extend SHARED_REQUEST #2 (or `2_build.md`) with the
-card-count note.
+### 6. [minor] Dock label can still wrap
+`NestKidButton` gives the label `Flexible` + `Text` only, so "My jar" wraps to
+two lines under wide fallback fonts and the dock grows. Cosmetic on device
+with real Nunito; tracked as `SHARED_REQUEST` #9 (a `softWrap: false` +
+`FittedBox(scaleDown)` option). Fix: land #9, or pass a shorter label
+(consistent with the design's "My jar") if a screen-local mitigation is ever
+needed.
 
 ## Verdict
 
-Blockers from the previous iterations are closed: the bottom-edge violation is
-fixed in code, on device and in tests; the suite is green (`+476 ~1`);
-`dart format` and `flutter analyze` are clean; the PIP identity, PERIODS and
-data-over-mocks mandates are satisfied; and no file outside RULES §1 is
-touched. One major finding remains — the three unrequested design-system
-forks in the feature view (finding 1) — whose only defect is the missing
-SHARED_REQUEST / `TODO(K03)` trail that RULES §2 prescribes; it is cleared by
-filing that request and marking the classes, with no visual change. The other
-13 findings are minor.
+Iteration 5 cleared the previous blocker: the design-system forks are gone in
+favour of the shared `NestPetStage(pip:)` and `NestHeart`, the shared-request
+trail is complete, seven of the eight earlier minor findings are fixed, and
+the gates are green (`dart format` clean, `flutter analyze` clean,
+`flutter test` `+593 ~1`, RULES §1 clean, bottom edge and PIP identity
+verified on device). One major finding remains: the migration to the shared
+pet stage left the hero slot ~15 % smaller than the design and ~25 px shorter,
+which does not meet `ORCHESTRATOR_NOTES` #1 and regressed against iteration
+4's capture. It needs one shared parameter (`NestPetStage` currently caps
+instead of targeting `pipSize`) plus a re-measure — the same
+request-then-interim pattern RULES §2 prescribes, which this screen has now
+used correctly for every other gap.
 
 VERDICT: FAIL

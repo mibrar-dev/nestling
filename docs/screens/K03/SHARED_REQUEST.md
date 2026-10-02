@@ -32,6 +32,39 @@
    Blocks: K03's still-frame gate (RULES §6) and the UI screenshot pipeline.
    The `K03-BUG-7` proof stays conditionally skipped and is run with the
    documented flag to confirm the failure until this lands.
+6. Need (review finding 1c, iteration 5): a `KidScope` meadow-band
+   height/inset parameter so screens stop painting their own hill. K03
+   paints one in-flow full-bleed band (`_MeadowPainter`, marked
+   `TODO(K03)`) because the shared 136 px bottom hill cannot cover the
+   band the design shows behind progress/cards; same need will hit K06+.
+   Files: `app/lib/core/design_system/theme/kid_scope.dart`.
+   Blocks: no (local panel kept until the API exists).
+7. Need (review finding 3, iteration 5): kid type styles missing from
+   `NestType` — `kidName` (Nunito 22/26 w900 ink), `kidCaption` (Nunito
+   15/20 w700 ink2), `kidChipLabel` (Nunito 15/15 w800 leafInk) — so K03
+   can stop calling `GoogleFonts.nunito` directly. Exemption on record:
+   the K03 HTML uses 15 px kid copy, below DESIGN_SPEC §0.9's 17 px kid
+   minimum; the screen follows the design per `1_plan.md` §(a)/(e).
+   Files: `app/lib/core/design_system/tokens/typography.dart`.
+   Blocks: no.
+8. Record (review finding 4, iteration 5 — waiver, no shared change
+   needed): K03 composes `nest.svg` + `PipAvatar(inNest: false)` via the
+   shared `NestPetStage(pip:)` slot instead of the Rive `PipStage`
+   artboard, so the front-rim-bites-feet z-order comes from the shared
+   fallback scene, not the artboard. `inNest:` is omitted (it defaults
+   to false; lint forbids the redundant argument) and is in any case
+   unused on the custom-`pip:` path. Slot measurements met; UI stage
+   accepted twice.
+9. Need (review finding 13, iteration 5): a `NestKidButton` label-wrap
+   option (`softWrap: false` + `FittedBox(scaleDown)` or equivalent) for
+   narrow screens / large text scales — "My jar" wraps to two lines
+   under fallback fonts today (cosmetic; real Nunito fits). Files:
+   `app/lib/core/design_system/components/nest_kid_button.dart`.
+   Blocks: no.
+10. Extend #2 above (review finding 14): the design shows three sample
+    cards but the screen correctly renders every active quest (6 under
+    the demo seed, repo alphabetical order per DATA OVER MOCKS) — not a
+    defect, recorded so future compares don't flag the extra cards.
 
 No schema/DI/token changes needed. No new assets needed (all icons +
 `nest`/`coin`/`meadowHill` exist in `nestling_assets.dart`; Pip renders via

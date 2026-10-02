@@ -37,11 +37,17 @@ class KidHomeBloc extends Bloc<KidHomeEvent, KidHomeState> {
           child: parts[0] as KidChild?,
           items: (parts[1] as List<dynamic>).cast<KidQuest>(),
         );
-        final pending = _awaitingCelebration.keys.toSet();
-        if (pending.isNotEmpty) {
+        if (_awaitingCelebration.isNotEmpty) {
+          // Evict entries for quests that vanished from the list
+          // (K03-BUG-11): no flip can ever arrive for them, and a later
+          // flip of a recycled id must not celebrate this tap. Silent —
+          // eviction alone changes no observable state.
+          _awaitingCelebration.removeWhere(
+            (questId, _) => !next.items.any((q) => q.questId == questId),
+          );
           String? celebrate;
           for (final item in next.items) {
-            if (pending.contains(item.questId) &&
+            if (_awaitingCelebration.containsKey(item.questId) &&
                 _isDoneStatus(item.status) &&
                 !previouslyDone.contains(item.questId)) {
               celebrate = item.questId;
