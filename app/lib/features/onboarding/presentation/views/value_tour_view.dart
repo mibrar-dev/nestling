@@ -25,6 +25,28 @@ class ValueTourView extends StatefulWidget {
   State<ValueTourView> createState() => _ValueTourViewState();
 }
 
+/// Head-chip width cap: content wider than this scales down instead of
+/// overflowing narrow screens (SPACING_SPEC §10.3 scaleDown precedent for
+/// tight chips). Above the cap nothing changes — the box shrink-wraps —
+/// so design sizes render exactly as before.
+const double _chipMaxW = 180;
+
+/// Date/status chip for the card heads (`.chip` 32px).
+Widget _headChip(String label, {bool selected = false}) {
+  return ConstrainedBox(
+    constraints: const BoxConstraints(maxWidth: _chipMaxW),
+    child: FittedBox(
+      fit: BoxFit.scaleDown,
+      child: NestChip(label: label, selected: selected),
+    ),
+  );
+}
+
+/// Date chip: the design's static `Sat 4 Oct` (ORCHESTRATOR_NOTES 1 — the
+/// tour is a marketing illustration, so the design copy is mandatory, not
+/// the database).
+const String _dateChipLabel = 'Sat 4 Oct';
+
 class _ValueTourViewState extends State<ValueTourView> {
   /// Design left inset of the first card (`.pg-card.c1 left 20`, same 20px
   /// screen gutter used everywhere on this screen).
@@ -69,28 +91,6 @@ class _ValueTourViewState extends State<ValueTourView> {
       detail: 'No bank card needed — we keep score, you pay your way.',
     ),
   ];
-
-  /// Head-chip width cap: content wider than this scales down instead of
-  /// overflowing narrow screens (SPACING_SPEC §10.3 scaleDown precedent for
-  /// tight chips). Above the cap nothing changes — the box shrink-wraps —
-  /// so design sizes render exactly as before.
-  static const double _chipMaxW = 180;
-
-  /// Date/status chip for the card heads (`.chip` 32px).
-  static Widget _headChip(String label, {bool selected = false}) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: _chipMaxW),
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        child: NestChip(label: label, selected: selected),
-      ),
-    );
-  }
-
-  /// Date chip: the design's static `Sat 4 Oct` (ORCHESTRATOR_NOTES 1 — the
-  /// tour is a marketing illustration, so the design copy is mandatory, not
-  /// the database).
-  static const String _dateChipLabel = 'Sat 4 Oct';
 
   int _page = 0;
   PageController? _controller;
@@ -345,7 +345,7 @@ class _QuestPreviewCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              _ValueTourViewState._headChip(_ValueTourViewState._dateChipLabel),
+              _headChip(_dateChipLabel),
             ],
           ),
           const SizedBox(height: NestSpacing.gap14),
@@ -402,7 +402,7 @@ class _PipPreviewCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              _ValueTourViewState._headChip('Fledgling', selected: true),
+              _headChip('Fledgling', selected: true),
             ],
           ),
           const SizedBox(height: NestSpacing.gap10),
@@ -420,15 +420,9 @@ class _PipPreviewCard extends StatelessWidget {
           Text('Fledgling', style: context.nestText.h2),
           const NestProgress(fraction: 0.7),
           const SizedBox(height: NestSpacing.gap6),
-          Text(
-            '175 of 250 coins · Pip evolves at 250',
+          ValueTourFitText(
+            text: '175 of 250 coins · Pip evolves at 250',
             style: context.nestText.caption,
-            // Single line (as at the design width): the 38-char caption
-            // would wrap under the wide widget-test font and push a 400dp
-            // card over budget; below ~350dp it ellipsises per the
-            // small-screen rules instead of breaking the card.
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
           // 9dp, not the HTML 10: the bordered head chip (+3dp, shared
           // `NestChip` behaviour) leaves card 2 exactly 1dp over 400dp
@@ -503,7 +497,7 @@ class _JarPreviewCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              _ValueTourViewState._headChip(_ValueTourViewState._dateChipLabel),
+              _headChip(_dateChipLabel),
             ],
           ),
           const SizedBox(height: NestSpacing.gap14),

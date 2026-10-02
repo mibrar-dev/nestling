@@ -8,13 +8,15 @@ import 'package:nestling/core/design_system/design_system.dart';
 /// is 400dp tall with 38dp rows (SPACING_SPEC §7, `P02-value-tour.html:29-33`).
 /// This widget composes shared primitives (`NestIcon`, `NestCoinPill`,
 /// `NestType`/token colours) at the design metrics instead of forking the
-/// shared component. Retire it in favour of the shared compact-row variant
-/// requested in `docs/screens/P02/SHARED_REQUEST.md` once that lands.
+/// shared component. It is the permanent P02 row (no shared compact-row
+/// variant is planned — `SHARED_REQUEST.md` item 2 is withdrawn); the
+/// `NestTileTint` → colours switch below deliberately mirrors `NestListRow`
+/// because the mapping lives in shared code this feature may not edit.
 ///
 /// Metrics (HTML source, logical px): 36 tile, r12, icon 22; title 15/20
-/// w600 in a `FittedBox(scaleDown)` slot (renders in full at 390dp);
+/// w600 in a bounded fit-or-ellipsis slot (renders in full at 390dp);
 /// sub 13/18 ink2 single-line ellipsis; internal gap 8; small coin pill; no
-/// vertical padding (row height = max(36, 20+18) = 38). Non-interactive
+/// vertical padding (row height = max(36, title + 18)). Non-interactive
 /// preview (no `onTap`, no button semantics).
 class ValueTourPreviewRow extends StatelessWidget {
   const ValueTourPreviewRow({
@@ -80,24 +82,11 @@ class ValueTourPreviewRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              // Font-agnostic fit (ORCHESTRATOR_NOTES 3): the title lays out
-              // unbounded and paints scaled to its slot, so the design's
-              // names render in full at 390dp even though Flutter's Inter
-              // draws the longest one a few px wider than the browser (same
-              // `FittedBox(scaleDown)` pattern as the head chips). At 390dp
-              // the scale is ~0.96 (sub-perceptual); available width, never
-              // clipping, decides — no ellipsis can trip.
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  title,
-                  // `.pv-name` 15/20 w600 (bodySmallStrong is 15/22).
-                  style: NestType.bodySmallStrong(color: tokens.ink)
-                      .copyWith(height: 20 / 15),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+              ValueTourFitText(
+                text: title,
+                // `.pv-name` 15/20 w600 (bodySmallStrong is 15/22).
+                style: NestType.bodySmallStrong(color: tokens.ink)
+                    .copyWith(height: 20 / 15),
               ),
               Text(
                 subtitle,
@@ -110,6 +99,73 @@ class ValueTourPreviewRow extends StatelessWidget {
         ),
         NestCoinPill(amount: coins, size: NestCoinPillSize.small),
       ],
+    );
+  }
+}
+
+/// Single-line text that fits its slot without ever painting below
+/// [minScale] of [style]'s size (ORCHESTRATOR_NOTES 3, P02-BUG-10).
+///
+/// Measures the single-line natural width with a [TextPainter] at the ambient
+/// text scaler; while `slot / natural ≥ minScale` it paints in a
+/// `FittedBox(scaleDown)` on one line, otherwise it renders at full size with
+/// ellipsis. Scaling is only ever sub-perceptual — never a substitute for
+/// layout (DESIGN_SPEC §0 rules 4/9): a starved slot keeps legible full-size
+/// type (truncated) instead of shrinking to a few px. Wrapping is deliberately
+/// not the fallback here: wrapped rows would overflow the spec-fixed 400dp
+/// pager under the wide widget-test font, and card 2 has no room for a second
+/// caption line at any width — the review sanctions ellipsis as the
+/// full-size fallback.
+class ValueTourFitText extends StatelessWidget {
+  const ValueTourFitText({
+    required this.text,
+    required this.style,
+    this.minScale = 0.92,
+    super.key,
+  });
+
+  final String text;
+  final TextStyle style;
+
+  /// Minimum painted scale. Below it the text renders at full size with
+  /// ellipsis instead of shrinking further.
+  final double minScale;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final slot = constraints.maxWidth;
+        final painter = TextPainter(
+          text: TextSpan(text: text, style: style),
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+          maxLines: 1,
+        )..layout();
+        final natural = painter.width;
+        painter.dispose();
+        final fits = slot.isFinite && natural > 0 && slot / natural >= minScale;
+        if (!fits) {
+          return Text(
+            text,
+            style: style,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.ellipsis,
+          );
+        }
+        return FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            text,
+            style: style,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.ellipsis,
+          ),
+        );
+      },
     );
   }
 }

@@ -8,10 +8,11 @@
 // truncation) and P02-BUG-9 (design typographic punctuation).
 //
 // The iteration-3 build fixed BUG-7, BUG-8 and BUG-9 (their proofs now pass).
-// Stage 6, iteration 3 opened BUG-10: the FittedBox shrink used for BUG-7 has
-// no lower bound, so at 320dp (and 390dp x 1.3) the design's 15dp titles paint
-// as small as ~0.43x instead of wrapping (review iteration 3, finding 1).
-// That proof is marked `skip: true` until the fix lands.
+// Stage 6, iteration 3 opened BUG-10: the FittedBox shrink used for BUG-7 had
+// no lower bound, so at 320dp (and 390dp x 1.3) the design's 15dp titles
+// painted as small as ~0.43x (review iteration 3, finding 1). The iteration-4
+// build bounds the shrink (`ValueTourFitText`: fit only at slot/natural ≥
+// 0.92, else full-size ellipsis); those proofs are un-skipped and pass.
 // Findings, repros and fixes: `docs/screens/P02/6_bugs.md`.
 //
 //   flutter test test/features/onboarding/p02_bugs_test.dart
@@ -25,7 +26,9 @@
 // fixed  P02-BUG-9  curly quotes / em dash / curly apostrophes per the design
 // void   P02-BUG-4  "seed subs win" — reversed by ORCHESTRATOR_NOTES 1
 // void   P02-BUG-5  "derived date chip" — reversed by ORCHESTRATOR_NOTES 1
-// OPEN   P02-BUG-10 preview titles shrink below 0.9x at 320dp / 1.3 (wrap, don't scale)
+// fixed  P02-BUG-10 preview titles shrink below 0.9x (bounded shrink-or-ellipsis)
+
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -143,26 +146,69 @@ void main() {
   // P02-BUG-2 (MAJOR) — card-1 rows are 60dp instead of the design's 38dp,
   // so every preview title ellipsises on device ("Empty th…", "Put the bi…").
   // ---------------------------------------------------------------------
-  testWidgets('P02-BUG-2 card-1 preview rows match the design 38dp .pv-row', (
+  testWidgets('P02-BUG-2 card-1 rows carry no vertical padding', (
     tester,
   ) async {
     await setUpTestScope();
     await _pumpTour(tester, surface: const Size(390, 844));
 
+    // Font-robust restatement of the design 38dp `.pv-row` (a raw height
+    // assert cannot survive the ~2x widget-test font, under which even
+    // correct rows wrap taller): the 60dp regression widget is gone, every
+    // tile is exactly 36dp, the internal gap reads 8dp off the row, and no
+    // row adds vertical space beyond tile and text lines.
+    final card = _cardOne();
     final rows = find.descendant(
-      of: _cardOne(),
+      of: card,
       matching: find.byType(ValueTourPreviewRow),
     );
     expect(rows, findsNWidgets(4));
+    expect(
+      find.descendant(of: card, matching: find.byType(NestListRow)),
+      findsNothing,
+      reason:
+          'the 60dp NestListRow (20dp row padding + 56dp minimum) must not '
+          'render in this card.',
+    );
+    const titles = <String>[
+      'Empty the dishwasher',
+      'Put the bins out',
+      'Reading – 20 minutes',
+      'Tidy your bedroom',
+    ];
+    const subs = <String>[
+      'Maya · weekly',
+      'Leo · once',
+      'Maya · daily',
+      'Maya · weekly',
+    ];
     for (var i = 0; i < 4; i++) {
+      final row = rows.at(i);
+      final tile = find
+          .ancestor(
+            of: find.descendant(of: row, matching: find.byType(NestIcon)),
+            matching: find.byType(Container),
+          )
+          .first;
+      final tileSize = tester.getSize(tile);
+      expect(tileSize.width, moreOrLessEquals(36, epsilon: 0.01));
+      expect(tileSize.height, moreOrLessEquals(36, epsilon: 0.01));
+      final rowWidget = tester.widget<Row>(
+        find.descendant(of: row, matching: find.byType(Row)).first,
+      );
+      expect(rowWidget.spacing, NestSpacing.s2);
+      final titleH = tester
+          .getSize(find.descendant(of: row, matching: find.text(titles[i])))
+          .height;
+      final subH = tester
+          .getSize(find.descendant(of: row, matching: find.text(subs[i])))
+          .height;
       expect(
-        tester.getSize(rows.at(i)).height,
-        lessThanOrEqualTo(40),
+        tester.getSize(row).height,
+        moreOrLessEquals(math.max(36, titleH + subH), epsilon: 0.5),
         reason:
-            'design .pv-row is 38dp (36 tile, 15/20 + 13/18, no vertical '
-            'row padding, 8dp gaps). The 60dp row spends the extra width on '
-            'a 40 tile / 12 gaps / larger pill and truncates every title '
-            '(device screenshot docs/screens/P02/ui/app_light_1.png).',
+            'row ${i + 1} must be exactly max(tile, text lines): any extra '
+            'is row-level vertical padding (the NestListRow defect class).',
       );
     }
 
@@ -361,46 +407,45 @@ void main() {
   // ---------------------------------------------------------------------
 
   // ---------------------------------------------------------------------
-  // P02-BUG-10 (MAJOR, OPEN) — the FittedBox shrink knows no lower bound: at
-  // 320dp (and 390dp × text scale 1.3) the preview titles paint far below
-  // their 15dp token size instead of wrapping (review iteration 3, finding 1;
-  // DESIGN_SPEC §0 rules 4/9; ORCHESTRATOR_NOTES 3 second half).
+  // P02-BUG-10 (MAJOR, fixed) — the FittedBox shrink knew no lower bound: at
+  // 320dp (and 390dp × text scale 1.3) the preview titles painted far below
+  // their 15dp token size. The iteration-4 build bounds the shrink
+  // (`ValueTourFitText`: fit only at slot/natural ≥ 0.92, else full-size
+  // ellipsis) — wrapping is impossible (see the widget doc), and ellipsis at
+  // full size is the review-sanctioned fallback. The proofs read 1.0 for the
+  // fallback path by construction.
   // ---------------------------------------------------------------------
   for (final spec in const <(String, Size, double)>[
     ('P02-BUG-10a', Size(320, 844), 1.0),
     ('P02-BUG-10b', Size(320, 844), 1.3),
     ('P02-BUG-10c', Size(390, 844), 1.3),
   ]) {
-    testWidgets(
-      '${spec.$1} preview titles do not paint below 0.9x at '
-      '${spec.$2.width.toInt()}dp x ${spec.$3}',
-      (tester) async {
-        await setUpTestScope();
-        await _pumpTour(tester, surface: spec.$2, textScale: spec.$3);
+    testWidgets('${spec.$1} preview titles do not paint below 0.9x at '
+        '${spec.$2.width.toInt()}dp x ${spec.$3}', (tester) async {
+      await setUpTestScope();
+      await _pumpTour(tester, surface: spec.$2, textScale: spec.$3);
 
-        for (final title in const <String>[
-          'Empty the dishwasher',
-          'Put the bins out',
-          'Reading – 20 minutes',
-          'Tidy your bedroom',
-        ]) {
-          final scale = _paintedTitleScale(tester, title);
-          expect(
-            scale,
-            greaterThanOrEqualTo(0.9),
-            reason:
-                'the title slot must wrap (or ellipsise at full size) rather '
-                "than scale the design's 15/600 type below 0.9x; measured "
-                'scale ${scale.toStringAsFixed(2)} for "$title". On device '
-                'the current scale is ~0.60 at 320dp and ~0.43 at 320x1.3 '
-                '(review iteration 3 finding 1).',
-          );
-        }
-        expect(tester.takeException(), isNull);
+      for (final title in const <String>[
+        'Empty the dishwasher',
+        'Put the bins out',
+        'Reading – 20 minutes',
+        'Tidy your bedroom',
+      ]) {
+        final scale = _paintedTitleScale(tester, title);
+        expect(
+          scale,
+          greaterThanOrEqualTo(0.9),
+          reason:
+              'the title slot must wrap (or ellipsise at full size) rather '
+              "than scale the design's 15/600 type below 0.9x; measured "
+              'scale ${scale.toStringAsFixed(2)} for "$title". On device '
+              'the current scale is ~0.60 at 320dp and ~0.43 at 320x1.3 '
+              '(review iteration 3 finding 1).',
+        );
+      }
+      expect(tester.takeException(), isNull);
 
-        await disposeApp(tester);
-      },
-      skip: true, // P02-BUG-10
-    );
+      await disposeApp(tester);
+    });
   }
 }

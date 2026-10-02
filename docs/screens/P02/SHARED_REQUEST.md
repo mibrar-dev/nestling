@@ -36,31 +36,31 @@ Files: was `app/lib/core/design_system/tokens/spacing.dart`.
 
 Blocks: no.
 
-## 4. Shared push/pop contract expects the P02 placeholder title
+## 4. Shared push/pop contract expects the P02 placeholder title — DONE
+(orchestrator rewrote the shared test)
 
-Need: `app/test/app/router_push_test.dart` (`push /value-tour from /welcome,
-pop returns`) asserts `find.text('P02 Value tour')` after pushing
-`/value-tour`. That literal only exists on main's placeholder
-(`AppBar(title: 'P02 Value tour')`); on screen/P02 the screen is fully
-implemented per the design, so the assertion fails. Suggested: expect real
-copy for the implemented screen (e.g. `'Set quests in seconds'`), as the
-same file already does for P01 (`showsFrom: 'Chores that feel like a
-game.'`).
+The orchestrator replaced the view-string assertions with router-location
+assertions (`GoRouter.state.uri` before/after push/pop), so the contract no
+longer depends on placeholder titles and passes with the implemented screen.
+No screen change was needed.
 
-Files: `app/test/app/router_push_test.dart:91` (`showsTo`).
+Files: was `app/test/app/router_push_test.dart`.
 
-Blocks: yes — `flutter test` (full) cannot go all-green on this branch until
-the shared expectation is updated; the screen code itself is complete
-(RULES §1 keeps `test/app/` outside screen scope, and no design text may be
-added to the view to satisfy a test).
+Blocks: no.
 
-Stage 3 (test) confirmation, iteration 3: still red, independently
-reproduced. `flutter test test/app/router_push_test.dart` fails at
-`router_push_test.dart:46` via `showsTo` (`:91`) with
-`Expected: true / Actual: <false>`; the other three cases in that file pass.
-`grep -rn "P02 Value tour" lib/features/onboarding/` matches only a doc
-comment, so no rendered string can satisfy it. Feature suite is unaffected:
-`flutter test test/features/onboarding` → 135 passed / 0 failed, and the full
-suite is 612 passed / 1 failed (only this case). Fix stays one line: expect
-real copy (`showsTo: 'Set quests in seconds'`), as the same file already does
-for P01's `showsFrom`.
+## 5. Chip border-box (1.5px border inflates every chip by 3px)
+
+Need: `NestChip` draws its 1.5px `Border.all` OUTSIDE the 32px content box
+(`Container` folds decoration border into effective padding), so every chip
+measures 35px instead of the spec 32. Measured consequences on P02: card-1's
+first tile sits at y173 vs the design's y170 (+3 through the card body), and
+card 2 only fits the restored 400dp pager because `.pg-stages` was shaved
+from the spec 10 to 9 (`value_tour_view.dart` stages gap, `NestSpacing.gap9`).
+Suggested: border-box the chip (reserve the 1.5px border inside a 32px box,
+or inset the border), then P02 restores `NestSpacing.gap10` on card 2.
+
+Files: `app/lib/core/design_system/components/nest_chip.dart` (static
+branch, ~lines 26-33).
+
+Blocks: no — P02 absorbs the +3 locally (documented `gap9`); restoring
+`gap10` waits for the shared fix.

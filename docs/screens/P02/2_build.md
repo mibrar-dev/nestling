@@ -1,77 +1,73 @@
-# P02 Value tour — build notes (Stage 2, iteration 3)
+# P02 Value tour — build notes (Stage 2, iteration 4)
 
 Implemented per `docs/screens/P02/1_plan.md`, the mandatory
-`docs/screens/P02/ORCHESTRATOR_NOTES.md`, the new COPY / CHILD ORDER /
+`docs/screens/P02/ORCHESTRATOR_NOTES.md`, the COPY / CHILD ORDER /
 bottom-edge / alignment owner rules, and every item in
-`docs/screens/P02/FIXES_2.md`. Main has moved since iteration 2
-(`shared_requests_batch1`: chip/nav/typography/pager-token fixes,
-`DISABLE_ANIMATIONS` parsing, `router_push_test.dart`); this build adopts
-what it delivered for P02 and re-verifies everything against it.
+`docs/screens/P02/FIXES_3.md` (review findings 1–7 + P02-BUG-10a/b/c).
 
 ## Files changed (this stage)
 
+- `app/lib/features/onboarding/presentation/widgets/value_tour_preview_row.dart`:
+  new `ValueTourFitText` — single-line text that fits its slot without ever
+  painting below 0.92× of its style size (`LayoutBuilder` slot vs
+  `TextPainter` natural width at the ambient scaler; `FittedBox(scaleDown)`
+  while `slot/natural ≥ 0.92`, else full-size ellipsis). Title slot uses it;
+  row doc updated (permanent P02 row; tint-switch duplication deliberate —
+  the mapping lives in shared code this feature may not edit). Wrapping is
+  deliberately NOT the fallback: wrapped rows would overflow the spec-fixed
+  400dp pager under the wide widget-test font, and card 2 has no room for a
+  second caption line at any width — the review sanctions ellipsis as the
+  full-size fallback, and there is no room (notes-3 qualifier).
 - `app/lib/features/onboarding/presentation/views/value_tour_view.dart`:
-  retired the feature-private `_TourNav` for the shared compact bar
-  (`NestNavBar(compact: true, actionLabel: 'Skip', …)` — content-sized
-  trailing slot landed in batch 1) plus an 8px outer pad that keeps Skip on
-  the 20px owner gutter (design nav inset is 12px); adopted the new
-  `NestPager` tokens (`stage`, `pet`, `lineMinHeight`, `addDash*`,
-  `addMinHeight`) for every pager metric except the 40px stage-dot art.
-  Height stays 4+44+12 = 60, card top stays y=107, Skip stays at width−20.
-- `app/test/features/onboarding/value_tour_view_test.dart`: Skip finders
-  reworked onto the shared node (tap/size via `find.text('Skip')` and the
-  bar's `InkWell`; label/button via `bySemanticsLabel('Skip')`; tap action
-  on the `InkWell` node); added the `_skipInkwell` helper. No expectation
-  weakened — sizes, labels, gutter and action asserts are unchanged.
-- `docs/screens/P02/SHARED_REQUEST.md`: item 1 (compact slot) and item 3
-  (pager tokens) marked DONE/adopted; item 2 stays withdrawn; new item 4
-  (shared push/pop contract, Blocks: yes — see below).
-- Screenshots: `ui/app_light_4.png`, `ui/app_dark_4.png`, `ui/cmp_light_4.png`,
-  `ui/cmp_dark_4.png` (step 1, sim 16e, fresh seed; both frames stable).
+  card-2 caption uses `ValueTourFitText` (identical pixels at 390dp —
+  ratio 1.13 renders 1.0); `_headChip`/`_chipMaxW`/`_dateChipLabel` moved
+  from `_ValueTourViewState` statics to file-private top level (review 6).
+- `app/test/features/onboarding/p02_bugs_test.dart`: BUG-10a/b/c un-skipped
+  (read 1.0 by construction on the fallback path — verified passing);
+  BUG-2 rewritten font-robust (no `NestListRow` in card; 36dp tiles via
+  `NestIcon` ancestors; row `spacing == s2`; row height == max(tile, text
+  lines) ±0.5); header comments updated.
+- `app/test/features/onboarding/value_tour_view_test.dart`: vacuous
+  `didExceedMaxLines == false` test replaced with "starved titles keep full
+  size and ellipsise" (no `FittedBox` ancestor, `didExceedMaxLines == true`,
+  15dp style at 320dp × 1.3).
+- `docs/screens/P02/SHARED_REQUEST.md`: item 4 marked DONE (orchestrator
+  rewrote the shared push/pop contract to router locations — full suite
+  green); new item 5 (chip border-box; `gap9` stays until it lands).
+- Screenshots: `ui/app_light_5.png`, `ui/app_dark_5.png`, `ui/cmp_light_5.png`,
+  `ui/cmp_dark_5.png` (step 1, sim 16e, fresh seed; both frames stable).
 
-## Fix items (FIXES_2 → state)
+## Fix items (FIXES_3 → state)
 
-- BUG-7 (titles truncate): already in tree — `FittedBox(scaleDown)` title
-  slot in `ValueTourPreviewRow`; proof passes; device shot shows `Empty the
-  dishwasher` in full. Verified, no change needed.
-- BUG-8 (design copy): already in tree — design subs, static `Sat 4 Oct`
-  chips, derivation deleted. Verified.
-- BUG-9 (punctuation): already in tree — curly body/heads in view, repo
-  impl mirror, bloc/contract/bug tests. Verified.
-- Review/UI residue (body 4px, punctuation ruling): resolved by BUG-9; no
-  action.
-- Already-green proofs (BUG-1a/b/c, 2, 3a/b, 6) re-verified green after the
-  nav/token adoption.
-- COPY rule audit vs HTML: `’` heads, `“”`/`—` body, `–` reading, `·`
-  separators, `£` amounts all match; no `&nbsp;` in the P02 source to mirror.
-- CHILD ORDER: card rows follow the design illustration order (not a
-  children list; nothing alphabetical).
-- Bottom edge: CTA surface to the physical edge, both themes (re-verified on
-  the new shots).
+- Review 1 / BUG-10 (unbounded shrink): bounded via `ValueTourFitText`;
+  proofs read 1.0 (fallback path); device 390 unchanged (0.96 fit path).
+- Review 2 (vacuous tests): BUG-7 proof already replaced by BUG-10 (bugs
+  stage); contract test replaced as above.
+- Review 3 (stale doc/duplication): doc updated as permanent + deliberate.
+- Review 4 (chip border): shared request filed (item 5); `gap10` restore
+  pending its landing (card 2 would overflow by 1px today).
+- Review 5 (caption maxLines): same bounded rule (fit-or-ellipsis, no room
+  to wrap); device pixels unchanged.
+- Review 6 (state-owned statics): moved to file-private top level.
+- Review 7 (PopScope deep link): confirmed intended — in-flow and cold
+  deep-link back both land `/welcome` (onboarding entry, never exits
+  mid-flow); documented here as requested.
+- COPY/CHILD ORDER/bottom-edge/alignment: unchanged, still compliant
+  (character audit, illustration order, bar-surface edge, 20px gutters).
 
 ## UI verification (sim 16e, `shot.sh` + `compare.py`, step 1)
 
-- Light mean diff 3.92% → **4.00%** (bands 0–7: 1.95/5.54/5.03/6.43/0.89/
-  3.95/4.37/3.80); dark 3.83% → **3.83%**. Deltas vs iteration 3 are noise
-  (stable-frame captures, Rive still art); layout/copy identical: full
-  titles, `Sat 4 Oct`, design subs, curly body, 400dp pager, dots/title/CTA
-  on the design rows, Skip on the 20px gutter.
-- Both `shot.sh` runs saved **stable frames** (no 25s warning this round —
-  the shared `DISABLE_ANIMATIONS` parsing fix resolved iteration 1–3's
-  UI-6 residue).
+- Light mean diff 4.00% → **3.91%**; dark **3.83%** (unchanged). Full titles
+  incl. `Empty the dishwasher`, design copy/chip/subs, curly body, 400dp
+  pager geometry, dots/title/CTA rows, Skip on the 20px gutter — confirmed
+  on pixels. Residual bands 1–3 are font-raster detail only.
 
 ## Verification (in `app/`)
 
 - `dart format .` — clean (0 changed on final pass).
 - `flutter analyze` tail: `No issues found!`
-- `flutter test` (full) tail: `00:11 +609 -1` — the single failure is
-  `test/app/router_push_test.dart` (`push /value-tour from /welcome`),
-  which asserts `find.text('P02 Value tour')`. That literal exists only on
-  main's placeholder (`AppBar(title: 'P02 Value tour')`); this branch
-  implements the screen per the design, so the expectation contradicts the
-  implemented screen. It is outside screen scope (`test/app/`, RULES §1),
-  cannot be fixed by any in-scope change, and passes on main — filed as
-  SHARED_REQUEST item 4 (Blocks: yes) with the one-line fix specified
-  (`showsTo: 'Set quests in seconds'`, matching the file's own P01 pattern).
+- `flutter test` (full) tail: `00:12 +641: All tests passed!` (0 failed,
+  0 skipped — includes the 3 un-skipped BUG-10 proofs and the orchestrator's
+  rewritten push/pop contract).
 
-VERDICT: FAIL
+VERDICT: PASS

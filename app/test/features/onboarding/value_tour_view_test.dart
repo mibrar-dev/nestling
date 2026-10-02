@@ -611,6 +611,155 @@ void main() {
     });
   });
 
+  group('P02 value tour — ValueTourFitText contract (P02-BUG-10)', () {
+    // The preview title must render the design's names in full at 390
+    // (ORCHESTRATOR_NOTES 3) without ever painting below 0.92 of the 15dp
+    // token size (P02-BUG-10). Both halves are decided by the
+    // slot ÷ natural-width ratio, so these tests measure the natural width
+    // themselves and hand the widget exact slots — which makes them immune
+    // to the ~2x-wide widget-test font and true for any font.
+
+    /// Natural single-line width of [text] in [style] at the ambient scaler.
+    double naturalWidthOf(
+      WidgetTester tester,
+      String text,
+      TextStyle style,
+      double textScale,
+    ) {
+      final painter = TextPainter(
+        text: TextSpan(text: text, style: style),
+        textDirection: TextDirection.ltr,
+        textScaler: TextScaler.linear(textScale),
+        maxLines: 1,
+      )..layout();
+      final width = painter.width;
+      painter.dispose();
+      return width;
+    }
+
+    /// The scale [title] is painted at, measured from the render tree.
+    double paintedScaleOf(WidgetTester tester, String title) {
+      final fitted = find.ancestor(
+        of: find.text(title),
+        matching: find.byType(FittedBox),
+      );
+      if (fitted.evaluate().isEmpty) return 1;
+      final paragraph = tester.renderObject<RenderParagraph>(find.text(title));
+      final ratio = tester.getSize(fitted.first).width / paragraph.size.width;
+      return ratio.clamp(0, 1).toDouble();
+    }
+
+    /// Pumps [title] in a slot [slotRatio]× its natural width.
+    Future<void> pumpFitted(
+      WidgetTester tester, {
+      required String title,
+      required TextStyle style,
+      required double slotRatio,
+      required double textScale,
+    }) async {
+      GoogleFonts.config.allowRuntimeFetching = false;
+      tester.view.physicalSize = const Size(390 * 3, 844 * 3);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      // The widget measures with MediaQuery's scaler, so the probe below must
+      // use the same one or the slot would not be the ratio we asked for.
+      tester.platformDispatcher.textScaleFactorTestValue = textScale;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final natural = naturalWidthOf(tester, title, style, textScale);
+      final slot = natural * slotRatio;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: NestTheme.light(),
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: slot,
+                child: ValueTourFitText(text: title, style: style),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+    }
+
+    const title = 'Empty the dishwasher';
+    const style = TextStyle(fontSize: 15, fontWeight: FontWeight.w600);
+
+    for (final textScale in const <double>[1, 1.3]) {
+      testWidgets(
+        'a slot at or above 0.92 scales, never truncates ($textScale)',
+        (tester) async {
+          for (final slotRatio in const <double>[1, 0.95, 0.92]) {
+            await pumpFitted(
+              tester,
+              title: title,
+              style: style,
+              slotRatio: slotRatio,
+              textScale: textScale,
+            );
+
+            final painted = paintedScaleOf(tester, title);
+            expect(
+              painted,
+              moreOrLessEquals(slotRatio, epsilon: 0.02),
+              reason:
+                  'slot ${slotRatio}x natural must paint at that scale — fitting '
+                  'is always preferred over truncating',
+            );
+            expect(
+              tester
+                  .renderObject<RenderParagraph>(find.text(title))
+                  .didExceedMaxLines,
+              isFalse,
+              reason:
+                  'at ${slotRatio}x the name still fits on one line in full',
+            );
+            await tester.pumpWidget(const SizedBox.shrink());
+            await tester.pump();
+          }
+        },
+      );
+
+      testWidgets('a starved slot ellipsises at full size ($textScale)', (
+        tester,
+      ) async {
+        await pumpFitted(
+          tester,
+          title: title,
+          style: style,
+          slotRatio: 0.5,
+          textScale: textScale,
+        );
+
+        expect(
+          find.ancestor(of: find.text(title), matching: find.byType(FittedBox)),
+          findsNothing,
+          reason:
+              'below 0.92 the widget must not fit — that is the BUG-10 shrink',
+        );
+        expect(
+          tester.widget<Text>(find.text(title)).style?.fontSize,
+          moreOrLessEquals(15, epsilon: 0.01),
+          reason:
+              "the fallback paints the design's 15dp token size (the ambient "
+              'scaler is applied by MediaQuery on top, never baked in)',
+        );
+        expect(
+          tester
+              .renderObject<RenderParagraph>(find.text(title))
+              .didExceedMaxLines,
+          isTrue,
+          reason: 'a starved slot truncates honestly instead of shrinking',
+        );
+        expect(tester.takeException(), isNull);
+
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+      });
+    }
+  });
+
   group('P02 value tour — orchestrator ruling: child order', () {
     testWidgets('seeded children keep insertion order, not alphabetical', (
       tester,
@@ -1310,7 +1459,7 @@ void main() {
       await disposeApp(tester);
     });
 
-    testWidgets('no preview title is truncated at 320dp × text scale 1.3', (
+    testWidgets('starved titles keep full size and ellipsise, never shrink', (
       tester,
     ) async {
       await setUpTestScope();
@@ -1321,28 +1470,36 @@ void main() {
         textScale: 1.3,
       );
 
-      // ORCHESTRATOR_NOTES 3 (mandatory), second half: at the narrowest width
-      // and the largest supported scale the design still has room, so no name
-      // may be cut ("Empty the dishwas…"). Font-agnostic: whether the row
-      // scales the title down or lets it wrap, the paragraph must not have
-      // exceeded its max lines.
+      // ORCHESTRATOR_NOTES 3 (mandatory) + P02-BUG-10: below the 0.92 bound
+      // the slot must NOT contain a FittedBox (which would read < 0.9 there)
+      // — the title renders at the full 15dp style and truncates honestly.
+      // (In the wide widget-test font every title is starved at this
+      // surface, so all four take the fallback path.)
       for (final title in const <String>[
         'Empty the dishwasher',
         'Put the bins out',
         'Reading – 20 minutes',
         'Tidy your bedroom',
       ]) {
-        final paragraph = tester.renderObject<RenderParagraph>(
-          find.text(title),
+        final text = find.text(title);
+        expect(
+          find.ancestor(of: text, matching: find.byType(FittedBox)),
+          findsNothing,
+          reason:
+              'below the bound "$title" must not sit in a FittedBox (it '
+              'would paint below 0.9x); it keeps full size and ellipsises.',
         );
+        final paragraph = tester.renderObject<RenderParagraph>(text);
         expect(
           paragraph.didExceedMaxLines,
-          isFalse,
+          isTrue,
           reason:
-              'ORCHESTRATOR_NOTES 3: "$title" must render in full at 320dp × '
-              '1.3, not ellipsise. Row metric: maxIntrinsic '
-              '${paragraph.getMaxIntrinsicWidth(double.infinity)} vs slot '
-              '${paragraph.size.width}.',
+              '"$title" overruns its slot here, so the honest fallback is a '
+              'visible ellipsis at full size — not a silent shrink.',
+        );
+        expect(
+          tester.widget<Text>(text).style?.fontSize,
+          moreOrLessEquals(15, epsilon: 0.01),
         );
       }
       expect(tester.takeException(), isNull);
