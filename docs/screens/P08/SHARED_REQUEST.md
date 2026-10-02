@@ -41,6 +41,20 @@ Note: the same pattern exists in feature code for the P08 approvals banner
 (`today_loaded_body.dart:359-361`) and is reported as B4a in
 `docs/screens/P08/3_test.md` — that part is feature-fixable.
 
+> RESOLVED on main by shared/shared_requests_batch1: `excludeSemantics:
+> true` added to the `NestCard` (labelled branches only — unlabelled cards
+> still expose their children) and `NestQuestCard`/`NestKidQuestCard` tap
+> wrappers, except when the card carries a working check (`done != null` /
+> `onToggled != null` — its `Mark done` node must stay reachable, as the
+> shared display/overflow tests pin); same one-node treatment applied to
+> `NestButton`, `NestAppleButton`/`NestGoogleButton`, `NestKidButton`,
+> `NestChip` (interactive) and the nav-bar text action. `NestQuestCard` meta
+> `runSpacing` also corrected 4 → 6 (§7 below). Proven by
+> `app/test/design_system/shared_batch1_test.dart` (exact-label
+> assertions). Follow-up for P08: keep passing full announcements in
+> `semanticLabel` (children no longer merge on check-less cards) and fix
+> the feature-side B4a banner the same way.
+
 ## 3. RESOLVED (already on main) — `/today-empty` is not parent-only
 
 Need (original): add `/today-empty` to the router's `parentOnly` list —
@@ -64,6 +78,16 @@ file change — this is a coordination note.
 
 Files: none (P08-local). Blocks: no.
 
+> RESOLVED on main by shared/shared_requests_batch1: the shared side is
+> proved — `app/test/app/router_push_test.dart` pushes `/quest-editor` and
+> `/approvals` from `/today` (plus `/value-tour` from `/welcome` and a
+> top-level pair), asserts the pushed screen renders, and asserts `pop`
+> returns to the origin. Related finding: `push` was never broken — the P05
+> probe asserted `routerDelegate.currentConfiguration`, which excludes
+> imperative matches; `GoRouter.state.uri` is the truthful accessor after a
+> push (see the batch report). No `router.dart` change was needed.
+> Follow-up stays with P09/P11: return with `context.pop()`.
+
 ## 5. NEW (doc, orchestrator) — DESIGN_SPEC §5 P08 describes a floating pill
 
 `DESIGN_SPEC` §5 P08 asks for a floating primary `+ New quest` pill above
@@ -75,6 +99,9 @@ Need: correct `DESIGN_SPEC` §5 P08 to describe the header `+` (shared doc
 edit by the orchestrator).
 
 Files: `docs/DESIGN_SPEC.md` §5. Blocks: no.
+
+> RESOLVED on main by shared/shared_requests_batch1: `docs/DESIGN_SPEC.md`
+> §5 P08 now describes the header-row 44 px leaf `+` (no floating pill).
 
 ## 6. NEW (blocking for screenshot determinism) — `DISABLE_ANIMATIONS=1` never parses
 
@@ -96,6 +123,14 @@ to pass `=true`. Every Rive/Lottie screen is affected, not just P08.
 Files: `app/lib/core/data/env_flags.dart` and/or `tools/screens/shot.sh`.
 Blocks: partially — P08 lands and tests green without it, but no Rive
 screen can produce a stable-frame screenshot until this lands.
+
+> RESOLVED on main by shared/shared_requests_batch1: both
+> `app/lib/core/data/env_flags.dart` (`kDisableAnimations`) and
+> `app/lib/app/launch_flags.dart` (`disableAnimations`) now OR in
+> `String.fromEnvironment('DISABLE_ANIMATIONS') == '1'`. `shot.sh`
+> unchanged (it documents `=1`). Pinned by
+> `app/test/app/launch_flags_test.dart` (unset ⇒ false); the `=1` parse is
+> proved by the screenshot harness stabilising (see the batch report).
 
 ## 8. RESOLVED on main — shared seed-contract test pins pre-ruling Leo count
 
@@ -166,6 +201,9 @@ files, one batch).
 Files: `app/lib/core/design_system/components/nest_quest_card.dart`.
 Blocks: no.
 
+> RESOLVED on main by shared/shared_requests_batch1: `runSpacing` is now
+> `NestSpacing.gap6` (same batch as the §2 semantics fix).
+
 ## 10. NEW (non-blocking, test coverage) — still-art fallback only tested for Mochi
 
 `app/test/pip_avatar_test.dart:84-91` asserts `fallbackAsset` for Mochi
@@ -177,6 +215,10 @@ Need (shared): loop the reduced-motion assertion over `PipStyle.values` ×
 stages 1..4 and assert an `SvgPicture` renders.
 
 Files: `app/test/pip_avatar_test.dart`. Blocks: no.
+
+> RESOLVED on main by shared/shared_requests_batch1: the reduced-motion
+> test now pumps every style × stage 1..4 and asserts an `SvgPicture`
+> renders, plus a `fallbackAsset` pin per style (was Mochi-only).
 
 ## 11. NEW (non-blocking, needs a shared pattern) — statuses never re-evaluated at a day/week rollover
 

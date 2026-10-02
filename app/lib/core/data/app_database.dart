@@ -276,11 +276,27 @@ class AppDatabase extends _$AppDatabase {
   /// Guarantees the single `app_state` row (id 1) exists. A real first
   /// install has no seed, and repositories update `WHERE id = 1`, so without
   /// this every onboarding/trial/mode write was silently dropped (P01 BUG-4).
+  ///
+  /// Also guarantees the `fam1` family + settings rows (P04 first-run bug):
+  /// P04 is the first onboarding screen that writes a setting and both
+  /// repositories issue `UPDATE settings WHERE family_id = 'fam1'`, which
+  /// matches zero rows on a real first launch and silently drops the parent's
+  /// choice. `crashReportConsent` keeps its table default (OFF, ICO rule).
+  /// `'fam1'` mirrors `Seed.familyId` (kept a literal: `seed.dart` imports
+  /// this file, so importing it back would be a cycle).
   @override
   MigrationStrategy get migration => MigrationStrategy(
     beforeOpen: (details) async {
       await into(appState).insert(
         const AppStateCompanion(id: Value(1)),
+        mode: InsertMode.insertOrIgnore,
+      );
+      await into(families).insert(
+        FamiliesCompanion.insert(id: 'fam1'),
+        mode: InsertMode.insertOrIgnore,
+      );
+      await into(settings).insert(
+        SettingsCompanion.insert(familyId: 'fam1'),
         mode: InsertMode.insertOrIgnore,
       );
     },

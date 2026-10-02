@@ -128,11 +128,27 @@ class NestList extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          for (var i = 0; i < children.length; i++) ...[
-            if (i > 0)
-              Divider(height: 1, thickness: 1, indent: 72, color: tokens.line),
-            children[i],
-          ],
+          // Separators are absolutely-positioned 1px overlays (P04): the
+          // design draws `.list-row + .list-row::before` over the row
+          // boundary, so N × 56px rows stay N × 56. A real `Divider(height:
+          // 1)` widget adds 1px of layout height per divider and drifts
+          // every later row. The overlay keeps the 72px indent + line token
+          // and contributes zero height.
+          for (var i = 0; i < children.length; i++)
+            if (i == 0)
+              children[i]
+            else
+              Stack(
+                children: [
+                  children[i],
+                  Positioned(
+                    top: 0,
+                    left: 72,
+                    right: 0,
+                    child: Container(height: 1, color: tokens.line),
+                  ),
+                ],
+              ),
         ],
       ),
     );
