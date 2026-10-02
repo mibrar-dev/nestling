@@ -20,6 +20,7 @@
 // "no exception", not "full text visible".
 
 import 'dart:async';
+import 'dart:ui' show Tristate;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart'
@@ -678,12 +679,16 @@ void main() {
       ];
       expect(tops[0], lessThan(tops[1]), reason: 'Today, then Day 12');
       expect(tops[1], lessThan(tops[2]), reason: 'Day 12, then Day 14');
-      expect(tops[1], moreOrLessEquals(tops[2], epsilon: 0.01));
+      // NOTE (Stage 2, iteration 2): the next line used to assert
+      // `tops[1] ≈ tops[2]` (±0.01) right after asserting `tops[1] <
+      // tops[2]` — self-contradictory, since the Day 12 item is ~78px
+      // tall. Removed as a typo; the shared left edge is pinned below.
 
       final lefts = <double>[
         for (final (title, _) in _timeline)
           tester.getRect(find.text(title)).left,
       ];
+      expect(lefts[0], moreOrLessEquals(lefts[1], epsilon: 0.01));
       expect(lefts[1], moreOrLessEquals(lefts[2], epsilon: 0.01));
 
       await disposeApp(tester);
@@ -703,8 +708,15 @@ void main() {
       expect(close.height, greaterThanOrEqualTo(NestDevice.tapParent));
 
       // The primary CTA is a 52dp pill; P07 is a parent screen, so the 56dp
-      // kid target does not apply.
-      expect(tester.getRect(find.text(_cta)).height, greaterThanOrEqualTo(52));
+      // kid target does not apply. NOTE (Stage 2, iteration 2): this used
+      // to measure the label *text* (24px line box) instead of the button —
+      // `find.text` can never be 52px tall. The button carries
+      // `ValueKey('p07_start_trial')`, so measure that: same 52dp-pill
+      // intent, correct finder.
+      expect(
+        tester.getRect(find.byKey(const ValueKey('p07_start_trial'))).height,
+        greaterThanOrEqualTo(52),
+      );
       expect(find.byType(NestKidButton), findsNothing);
 
       for (final link in _legalLinks) {
@@ -1015,10 +1027,14 @@ void main() {
       }
 
       // The selected plan is announced as selected (one plan, pre-selected).
+      // NOTE (Stage 2, iteration 2): `flagsCollection.isSelected` is a
+      // `Tristate` (engine `SemanticsFlags`), which the `isTrue` matcher
+      // (bool-only) can never match — same assertion as `isButton` above,
+      // but with the correctly-typed matcher.
       final plan = tester
           .getSemantics(find.bySemanticsLabel(RegExp('Annual')))
           .getSemanticsData();
-      expect(plan.flagsCollection.isSelected, isTrue);
+      expect(plan.flagsCollection.isSelected, Tristate.isTrue);
 
       await disposeApp(tester);
     });
@@ -1035,13 +1051,26 @@ void main() {
 
       // The nest and the three coins are `alt=""` in the design, and the
       // benefits' ticks are `aria-hidden`, so none of them may announce
-      // itself; the hero's only labelled image is Pip.
-      expect(
-        find.bySemanticsLabel(
-          RegExp('nest|coin|tick|checkmark', caseSensitive: false),
-        ),
-        findsNothing,
-      );
+      // itself; the hero's only labelled image is Pip. The pattern below
+      // legitimately matches exactly two labels — the hero title (it
+      // contains "Nestling") and Pip's alt — so the assertion is "no
+      // THIRD match", i.e. nothing decorative contributes its own node.
+      final decorativeMatches = find
+          .bySemanticsLabel(
+            RegExp('nest|coin|tick|checkmark', caseSensitive: false),
+          )
+          .evaluate()
+          .map(
+            (element) => (element as RenderObjectElement)
+                .renderObject
+                .debugSemantics
+                ?.label,
+          )
+          .where(
+            (label) => label != null && label != _pipLabel && label != _title,
+          )
+          .toList();
+      expect(decorativeMatches, isEmpty);
       expect(find.bySemanticsLabel(_pipLabel), findsOneWidget);
 
       // Each benefit is one labelled row, tick excluded.

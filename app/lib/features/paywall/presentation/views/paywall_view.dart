@@ -98,10 +98,14 @@ class _PaywallNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = context.nest;
+    // explicitChildNodes keeps the close button's label on its own node:
+    // with the default (false) descendants annotate the parent node and the
+    // two labels merge into one ('Subscription\nClose and go back').
     return Semantics(
       label: 'Subscription',
       header: true,
       container: true,
+      explicitChildNodes: true,
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 52),
         child: Padding(
