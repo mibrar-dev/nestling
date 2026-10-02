@@ -1,9 +1,9 @@
 // P03 Create account — adversarial bug proofs.
 //
-// Iteration 2's build closed every iteration-1 bug except the shared
+// Iterations 2–3's builds closed every iteration-1/2 bug except the shared
 // `NestButton` doubling (P03-BUG-6); those proofs now run green as regression
-// guards. The proofs at the end of this file capture the six bugs still open
-// after that fix pass. Every open-bug proof is `skip:`-marked with its id so
+// guards. This file's newest proofs capture the bugs still open after the
+// iteration-3 fix pass. Every open-bug proof is `skip:`-marked with its id so
 // `flutter test` stays green; the fix iteration must un-skip each one and
 // make it pass. Full reports (severity, repro, suggested fix) live in
 // `docs/screens/P03/6_bugs.md`.
@@ -13,38 +13,54 @@
 // P03-BUG-1..8  iteration-1 bugs. BUG-1/2/3/4/5/7/8 are fixed (proofs green
 //               regression guards). BUG-6 stays skipped — shared core
 //               (`NestButton` announces its label twice, SHARED_REQUEST §4).
-// P03-BUG-9  (MAJOR)  the caption splits the "Privacy Notice" label across
-//               two lines — a lone underlined "Notice" on line 2.
-//               ORCHESTRATOR_NOTES §5 requires "…Terms and" /
-//               "Privacy Notice". The label must be unbreakable.
-// P03-BUG-10 (MAJOR)  the 44dp link targets no longer sit over their words:
-//               the overlay centres both as one adjacent 88dp block, so the
-//               visible links are untappable and plain words are covered.
-// P03-BUG-11 (MINOR)  the validation error is indented 20dp inside the field
-//               while the label, input and the BUG-8 helper sit on the
-//               gutter — the text jumps sideways when an error appears.
-// P03-BUG-12 (MINOR)  the caption's link lines are 18dp tall instead of the
-//               design's 20dp (`P03-create-account.html:26`
-//               `.link { line-height: 20px }`), so the CTA panel is ~4dp
-//               short and the hairline sits at 682.7 vs the design's 677.7
-//               (UI iteration-2 deviation 2).
-// P03-BUG-13 (MINOR)  on a two-line caption the 44dp legal targets render
-//               44×36 — the stack is only 36 tall — below DESIGN_SPEC §0.9's
-//               44×44 parent minimum. Two-line is the device's normal 390dp
-//               geometry; the harness reproduces it at 430dp, where its
-//               wider font wraps the caption to two lines.
-// P03-BUG-14 (MINOR)  `on Object catch` without `addError(stackTrace)`: the
-//               failure surfaces as formError but no observer ever receives
-//               the stack trace (the one place a developer wants it).
+// P03-BUG-9..14 iteration-2 bugs, all fixed in iteration 3 (proofs green):
+//               split "Privacy Notice" label, misplaced/oversized legal
+//               targets, indented error, 18dp caption lines, dropped stack
+//               trace.
+//
+// P03-BUG-15 (MAJOR)  the subtitle ships a straight U+0027 apostrophe where
+//               the design HTML has `You&rsquo;re` (U+2019). Mandatory
+//               ORCHESTRATOR_NOTES iteration-3 item 2 + the standing COPY
+//               rule. Also proved in `copy_audit_test.dart` ("subtitle").
+// P03-BUG-16 (MINOR, shared)  the iteration-3 BUG-11 fix passes
+//               `errorText: null` to the shared field so the error can own
+//               the gutter — which also switches the input border off
+//               `danger` (`.field input[aria-invalid="true"] { border-color:
+//               var(--danger) }`, components.css:135; SPACING_SPEC §3). The
+//               invalid field now reads as untouched with red text only.
+//               Blocked on SHARED_REQUEST §5 (a separate error flag in
+//               `NestTextField`); P03 cannot fix it without re-opening
+//               BUG-11.
+// P03-BUG-18 (MINOR)  the legal targets' overhang beyond the caption block
+//               is not hit-testable (Flutter bounds hit tests at the parent
+//               box), so each target's effective height is ~32dp, not the
+//               rendered 44dp. The rendered size assertions are blind to it;
+//               this proof taps the extreme points.
+// P03-BUG-19 (MINOR)  the targets are built from a one-shot post-frame
+//               measurement, so they are missing from the first painted
+//               frame and any reflow that is not a MediaQuery/theme change
+//               (the runtime font swap is the real one) leaves them stale.
+// P03-BUG-20 (MINOR)  moving the validation error out of
+//               `InputDecoration` also moved it out of Material's live
+//               region: client-side errors are announced by nothing (the
+//               screen's `sendAnnouncement` only covers server `formError`).
+//
+// Carried, no local test possible: P03-BUG-17 (MINOR, shared §6) — the
+// served Inter build is ~3–4% wider than the design's, so the subtitle
+// breaks after "Children" instead of "Children never" (ORCHESTRATOR_NOTES
+// iteration-3 item 2). The style is already the design token; see
+// SHARED_REQUEST §6.
 //
 // Checked and clean this iteration (no proof needed): kid-mode deep link →
 // `/parental-gate`; restart persistence (one owner row); back/deep links;
-// 320/390/430 × 1.0/1.3 matrix; dark-mode contrast; money/timezone edge
-// cases N/A (no money or dates on this screen); 0/1/6 children N/A (the form
-// is static and never renders the members list); double-taps guarded. The
-// test harness' fallback font is far wider than Nunito/Inter, so headline
-// line-count measurements taken with it are NOT product bugs — the real
-// fonts were used to verify `maxLines: 3` fits at scale 1.3.
+// 320/390/430 × 1.0/1.3 matrix; dark-mode contrast; the two legal targets'
+// lateral overlap is design-faithful (the HTML's inline hit boxes overlap
+// between consecutive lines too); money/timezone edge cases N/A (no money or
+// dates on this screen); 0/1/6 children N/A (the form is static and never
+// renders the members list); CHILD ORDER N/A. The test harness' fallback
+// font is far wider than Nunito/Inter, so headline line-count measurements
+// taken with it are NOT product bugs — the real fonts were used to verify
+// `maxLines: 3` fits at scale 1.3.
 
 import 'dart:async';
 
@@ -52,7 +68,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get_it/get_it.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:nestling/app/app.dart';
+import 'package:nestling/app/controllers.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/auth/domain/auth_repository.dart';
 import 'package:nestling/features/auth/domain/entities/auth_account.dart';
@@ -149,29 +168,52 @@ double _captionBlockHeight(WidgetTester tester) {
   return panel.bottom - button.bottom - NestSpacing.s2 - NestSpacing.s4;
 }
 
+/// The legal caption's `RichText`: the one whose text holds the sentence
+/// (inner link `Text`s inside `WidgetSpan`s match `RichText` too, so `.last`
+/// no longer finds the paragraph).
+Finder _captionTextFinder() => find.byWidgetPredicate(
+  (w) =>
+      w is RichText && w.text.toPlainText().contains('By continuing you agree'),
+);
+
 /// The caption's `RenderParagraph`.
 RenderParagraph _captionParagraph(WidgetTester tester) {
-  final caption = find.descendant(
-    of: find.byType(NestBottomCta),
-    matching: find.byType(RichText),
-  );
-  return tester.renderObject<RenderParagraph>(caption.last);
+  return tester.renderObject<RenderParagraph>(_captionTextFinder());
 }
+
+/// The caption's global top-left, so paragraph-local line metrics can be
+/// compared against global label boxes.
+Offset _captionOrigin(WidgetTester tester) =>
+    tester.getRect(_captionTextFinder()).topLeft;
 
 /// The laid-out box of [label] inside the legal caption, read off the
 /// caption's own `RenderParagraph` (font-independent: it asks the engine
-/// where the glyphs actually went).
+/// where the glyphs actually went), shifted to global coordinates.
+///
+/// Rendered link labels use U+00A0 (COPY rule), so a space-form query falls
+/// back to the no-break-space form.
 Rect _labelBox(WidgetTester tester, String label) {
   final paragraph = _captionParagraph(tester);
   final plain = paragraph.text.toPlainText();
-  final start = plain.indexOf(label);
+  var query = label;
+  var start = plain.indexOf(query);
+  if (start < 0) {
+    query = label.replaceAll(' ', String.fromCharCode(0xa0));
+    start = plain.indexOf(query);
+  }
+  expect(
+    start,
+    greaterThanOrEqualTo(0),
+    reason: 'label "$label" must occur in the caption text',
+  );
   Rect? box;
   for (final found in paragraph.getBoxesForSelection(
-    TextSelection(baseOffset: start, extentOffset: start + label.length),
+    TextSelection(baseOffset: start, extentOffset: start + query.length),
   )) {
     box = box == null ? found.toRect() : box.expandToInclude(found.toRect());
   }
-  return box!;
+  final origin = tester.getRect(_captionTextFinder()).topLeft;
+  return box!.shift(origin);
 }
 
 /// The caption's line metrics, computed from its own span (so the harness
@@ -191,9 +233,12 @@ List<LineMetrics> _captionLineMetrics(WidgetTester tester) {
 }
 
 /// The height of the caption line that [label] sits on.
+///
+/// The label box is global while line metrics accumulate from the paragraph
+/// top, so the paragraph's global top offsets the comparison.
 double _linkLineHeight(WidgetTester tester, String label) {
   final box = _labelBox(tester, label);
-  final center = (box.top + box.bottom) / 2;
+  final center = (box.top + box.bottom) / 2 - _captionOrigin(tester).dy;
   var y = 0.0;
   for (final metric in _captionLineMetrics(tester)) {
     if (center >= y && center <= y + metric.height) {
@@ -204,16 +249,21 @@ double _linkLineHeight(WidgetTester tester, String label) {
   return -1;
 }
 
-/// The rendered lines of the legal caption, by their vertical position.
-Set<double> _captionLineTops(WidgetTester tester) {
-  final paragraph = _captionParagraph(tester);
-  final plain = paragraph.text.toPlainText();
-  return paragraph
-      .getBoxesForSelection(
-        TextSelection(baseOffset: 0, extentOffset: plain.length),
-      )
-      .map((box) => box.top)
-      .toSet();
+/// The rendered lines of the legal caption as global bands.
+///
+/// Derived from line metrics (not glyph boxes) so every laid-out line is
+/// included exactly once. Bands — not 1px top strips — are what a label box
+/// overlaps: a 13px font in a 20dp line starts several px below the line top.
+List<Rect> _captionLineBands(WidgetTester tester) {
+  final left = _captionOrigin(tester).dx;
+  final width = tester.getRect(_captionTextFinder()).width;
+  var y = _captionOrigin(tester).dy;
+  final bands = <Rect>[];
+  for (final metric in _captionLineMetrics(tester)) {
+    bands.add(Rect.fromLTRB(left, y, left + width, y + metric.height));
+    y += metric.height;
+  }
+  return bands;
 }
 
 void main() {
@@ -224,8 +274,9 @@ void main() {
   // Bounds are calibrated against the widget-test harness font, which is
   // ~1em per glyph and therefore wider than Nunito/Inter: the caption needs
   // 3 lines at 390dp and 4 lines at 320dp × 1.3 in this harness (2 lines on
-  // a real device). The design's ~38dp caption is 2×18dp on device; in the
-  // harness the equivalent bound is 3×18dp+4 = 58dp. See 6_bugs.md.
+  // a real device). The design's 40dp caption is 2×20dp link lines on
+  // device (P03-BUG-12); in the harness the equivalent bound is
+  // 3×20dp+4 = 64dp. See 6_bugs.md.
   // -------------------------------------------------------------------
   testWidgets(
     'P03-BUG-1a the legal caption is its text lines, not 44dp link rows',
@@ -234,7 +285,7 @@ void main() {
 
       expect(
         _captionBlockHeight(tester),
-        lessThanOrEqualTo(3 * 18 + 4),
+        lessThanOrEqualTo(3 * 20 + 4),
         reason:
             'each link hit target must overlap its text line (the HTML '
             '`.link { min-height:44px; margin:-12px 0 }` trick) instead of '
@@ -250,12 +301,12 @@ void main() {
     (tester) async {
       await _pumpCreateAccount(tester);
 
-      // Design: 16 + 52 + 8 + 2×18 + 16 ≈ 146dp of content in the harness
+      // Design: 16 + 52 + 8 + 2×20 + 16 ≈ 148dp of content in the harness
       // (the design's extra home-indicator inset is not modelled here; the
       // device measurement in iteration 1 was 214dp vs the design's 167dp).
       expect(
         tester.getSize(find.byType(NestBottomCta)).height,
-        lessThanOrEqualTo(150),
+        lessThanOrEqualTo(156),
         reason: 'the bottom bar must not eat the form above it',
       );
 
@@ -268,10 +319,10 @@ void main() {
   ) async {
     await _pumpCreateAccount(tester, textScale: 1.3);
 
-    // 16 + 52 + 8 + 3×18×1.3 + 16 ≈ 162dp (iteration 1 measured 232dp).
+    // 16 + 52 + 8 + 3×20×1.3 + 16 ≈ 170dp (iteration 1 measured 232dp).
     expect(
       tester.getSize(find.byType(NestBottomCta)).height,
-      lessThanOrEqualTo(170),
+      lessThanOrEqualTo(174),
       reason: 'the caption must not double at larger text scales',
     );
 
@@ -287,10 +338,11 @@ void main() {
         textScale: 1.3,
       );
 
-      // At 320dp the harness font needs four caption lines: 4×18×1.3 ≈ 94dp.
+      // At 320dp the harness font needs four caption lines: 4×20×1.3 ≈
+      // 104dp.
       expect(
         _captionBlockHeight(tester),
-        lessThanOrEqualTo(100),
+        lessThanOrEqualTo(108),
         reason:
             'at 320dp the caption may wrap, but never as 44dp link rows; '
             'iteration 1 measured 140dp',
@@ -418,11 +470,11 @@ void main() {
 
     expect(find.bySemanticsLabel('Terms\nTerms'), findsNothing);
     expect(
-      find.bySemanticsLabel('Privacy Notice\nPrivacy Notice'),
+      find.bySemanticsLabel('Privacy Notice\nPrivacy Notice'),
       findsNothing,
     );
     expect(find.bySemanticsLabel('Terms'), findsOneWidget);
-    expect(find.bySemanticsLabel('Privacy Notice'), findsOneWidget);
+    expect(find.bySemanticsLabel('Privacy Notice'), findsOneWidget);
 
     handle.dispose();
     await disposeApp(tester);
@@ -548,10 +600,8 @@ void main() {
     await _pumpCreateAccount(tester);
 
     final label = _labelBox(tester, 'Privacy Notice');
-    final lines = _captionLineTops(tester);
-    final onOneLine = lines.where(
-      (top) => label.overlaps(Rect.fromLTRB(0, top, 390, top + 1)),
-    );
+    final lines = _captionLineBands(tester);
+    final onOneLine = lines.where((band) => band.overlaps(label));
     expect(
       onOneLine.length,
       1,
@@ -562,9 +612,7 @@ void main() {
     );
 
     await disposeApp(tester);
-    // skip: P03-BUG-9 (MAJOR, open) — "Privacy Notice" splits across two
-    // caption lines.
-  }, skip: true);
+  });
 
   testWidgets('P03-BUG-9b the caption never leaves a lone link fragment on a '
       'line by itself', (tester) async {
@@ -586,11 +634,9 @@ void main() {
       );
       for (final label in const <String>['Terms', 'Privacy Notice']) {
         final box = _labelBox(tester, label);
-        final tops = _captionLineTops(tester);
+        final bands = _captionLineBands(tester);
         expect(
-          tops
-              .where((t) => box.overlaps(Rect.fromLTRB(0, t, 9999, t + 1)))
-              .length,
+          bands.where((band) => band.overlaps(box)).length,
           1,
           reason:
               '"$label" splits across caption lines at ${cfg[0]}dp '
@@ -602,8 +648,7 @@ void main() {
     }
 
     await disposeApp(tester);
-    // skip: P03-BUG-9 (MAJOR, open) — same split at every width/scale.
-  }, skip: true);
+  });
 
   // -------------------------------------------------------------------
   // P03-BUG-10 (MAJOR) — the 44dp link targets no longer sit over the words
@@ -635,9 +680,7 @@ void main() {
       }
 
       await disposeApp(tester);
-      // skip: P03-BUG-10 (MAJOR, open) — overlay targets are a centred
-      // 88dp block, not over their words.
-    }, skip: true);
+    });
   }
 
   testWidgets('P03-BUG-10b the two link targets are not one contiguous block', (
@@ -645,19 +688,23 @@ void main() {
   ) async {
     await _pumpCreateAccount(tester);
 
+    // Stacked centred lines legitimately share x-projection (the design's
+    // own 44px-tall inline hit boxes overlap the same way), so contiguity
+    // is decided vertically: separate caption lines mean separate targets.
+    // Iteration 2 put both boxes on one centred row, sharing an edge.
     final terms = tester.getRect(find.byKey(const ValueKey('p03_terms')));
     final privacy = tester.getRect(find.byKey(const ValueKey('p03_privacy')));
-    // The caption always has " and " between the two links, so the targets
-    // can never touch.
     expect(
-      privacy.left,
-      greaterThan(terms.right),
-      reason: 'the words " and " sit between the two links',
+      (terms.center.dy - privacy.center.dy).abs(),
+      greaterThan(10),
+      reason:
+          'the two links sit on different caption lines ("Terms" line 1, '
+          '"Privacy Notice" line 2), so their 44dp targets must centre '
+          '20dp apart, not share one centred row',
     );
 
     await disposeApp(tester);
-    // skip: P03-BUG-10 (MAJOR, open) — the targets touch (one 88dp block).
-  }, skip: true);
+  });
 
   // -------------------------------------------------------------------
   // P03-BUG-11 (MINOR) — the error text is indented 20dp inside the field
@@ -698,8 +745,7 @@ void main() {
     );
 
     await disposeApp(tester);
-    // skip: P03-BUG-11 (MINOR, open) — the error renders at left 40.
-  }, skip: true);
+  });
 
   // -------------------------------------------------------------------
   // P03-BUG-12 (MINOR) — the caption's link lines are 18dp tall instead of
@@ -725,8 +771,7 @@ void main() {
     }
 
     await disposeApp(tester);
-    // skip: P03-BUG-12 (MINOR, open) — caption link lines are 18dp.
-  }, skip: true);
+  });
 
   // -------------------------------------------------------------------
   // P03-BUG-13 (MINOR) — on a two-line caption the 44dp targets are 44×36
@@ -755,8 +800,7 @@ void main() {
     }
 
     await disposeApp(tester);
-    // skip: P03-BUG-13 (MINOR, open) — targets are 44×36 with 2 lines.
-  }, skip: true);
+  });
 
   // -------------------------------------------------------------------
   // P03-BUG-14 (MINOR) — `on Object catch` surfaces the error but never
@@ -793,6 +837,208 @@ void main() {
 
       await bloc.close();
     },
-    skip: 'P03-BUG-14 (MINOR, open): on Object catch drops the stack trace',
   );
+
+  // -------------------------------------------------------------------
+  // P03-BUG-16 (MINOR) — an invalid field no longer paints the danger border.
+  // The design marks the input itself, not just the message:
+  // `.field input[aria-invalid="true"] { border-color: var(--danger) }`
+  // (design/html-source/components.css:135, SPACING_SPEC §3).
+  // -------------------------------------------------------------------
+  testWidgets('P03-BUG-16 an invalid field paints the danger border', (
+    tester,
+  ) async {
+    await _pumpCreateAccount(tester);
+    final bloc = BlocProvider.of<AuthBloc>(
+      tester.element(find.byType(CreateAccountView)),
+    );
+    final tokens = tester.element(find.byType(NestBottomCta)).nest;
+
+    /// Every border painted inside the keyed field, innermost last.
+    List<Color> fieldBorders(ValueKey<String> key) {
+      final painted = find
+          .byWidgetPredicate(
+            (w) =>
+                (w is DecoratedBox && w.decoration is BoxDecoration) ||
+                (w is Container && w.decoration is BoxDecoration),
+            description: 'box-decorated',
+          )
+          .evaluate();
+      final colours = <Color>[];
+      for (final element in painted) {
+        final decoration = element.widget is DecoratedBox
+            ? (element.widget as DecoratedBox).decoration as BoxDecoration
+            : (element.widget as Container).decoration! as BoxDecoration;
+        final border = decoration.border;
+        if (border is! Border) {
+          continue;
+        }
+        // Only the field's own outline: opaque, token-coloured borders.
+        final colour = border.top.color;
+        if (colour.a > 0 &&
+            (colour == tokens.line || colour == tokens.danger)) {
+          colours.add(colour);
+        }
+      }
+      return colours;
+    }
+
+    expect(
+      fieldBorders(const ValueKey('p03_email')),
+      isNot(contains(tokens.danger)),
+      reason: 'a clean field must not be marked invalid',
+    );
+
+    bloc.add(const AuthSubmitted());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text(_emailError), findsOneWidget);
+
+    expect(
+      fieldBorders(const ValueKey('p03_email')),
+      contains(tokens.danger),
+      reason:
+          'the design marks the invalid input itself '
+          '(`input[aria-invalid="true"] { border-color: var(--danger) }`, '
+          'components.css:135; SPACING_SPEC §3). Since the iteration-3 '
+          'BUG-11 fix the field is handed errorText: null, so it keeps the '
+          'resting `line` border and only the message is red',
+    );
+
+    await disposeApp(tester);
+    // skip: P03-BUG-16 (MINOR, shared) — blocked on SHARED_REQUEST §5 (a
+    // separate `hasError` flag in NestTextField). Passing errorText again
+    // would re-open P03-BUG-11.
+  }, skip: true);
+
+  // -------------------------------------------------------------------
+  // P03-BUG-15 (MAJOR, mandatory) — the subtitle uses a straight U+0027
+  // apostrophe where the design HTML has `You&rsquo;re` (U+2019).
+  // ORCHESTRATOR_NOTES iteration-3 item 2 + the standing COPY rule.
+  // -------------------------------------------------------------------
+  testWidgets('P03-BUG-15 the subtitle uses the design U+2019 apostrophe', (
+    tester,
+  ) async {
+    await _pumpCreateAccount(tester);
+
+    expect(
+      find.text(
+        'You\u2019re the grown-up in charge. Children never need an email.',
+      ),
+      findsOneWidget,
+      reason:
+          'the HTML writes `You&rsquo;re`; a straight U+0027 is a different '
+          'character (COPY rule). The app ships U+0027 today — also proved '
+          'by copy_audit_test.dart ("subtitle")',
+    );
+
+    await disposeApp(tester);
+    // skip: P03-BUG-15 (MAJOR, open) — subtitle apostrophe is U+0027.
+  }, skip: true);
+
+  // -------------------------------------------------------------------
+  // P03-BUG-18 (MINOR) — the legal targets' overhang beyond the caption
+  // block is not hit-testable: Flutter bounds hit tests at the parent box,
+  // so the rendered 44dp targets have ~32dp of effective height (the
+  // `tester.getSize` proofs cannot see this).
+  // -------------------------------------------------------------------
+  testWidgets('P03-BUG-18 the legal targets are reachable over their full '
+      '44dp box', (tester) async {
+    // 430dp is the harness' two-line caption — the device's normal geometry.
+    await _pumpCreateAccount(tester, surface: const Size(430, 844));
+
+    for (final key in const <ValueKey<String>>[
+      ValueKey('p03_terms'),
+      ValueKey('p03_privacy'),
+    ]) {
+      final target = tester.renderObject(find.byKey(key));
+      final rect = tester.getRect(find.byKey(key));
+      for (final point in <Offset>[
+        Offset(rect.center.dx, rect.top + 1),
+        Offset(rect.center.dx, rect.bottom - 1),
+      ]) {
+        final hit = tester
+            .hitTestOnBinding(point)
+            .path
+            .any((entry) => entry.target == target);
+        expect(
+          hit,
+          isTrue,
+          reason:
+              'DESIGN_SPEC §0.9 needs a 44dp-tall target; the box at $point '
+              'is outside the caption Stack, so Flutter never hit-tests it '
+              '(only the intersecting ~32dp is reachable)',
+        );
+      }
+    }
+
+    await disposeApp(tester);
+    // skip: P03-BUG-18 (MINOR, open) — the overhang is not hit-testable.
+  }, skip: true);
+
+  // -------------------------------------------------------------------
+  // P03-BUG-19 (MINOR) — the targets come from a one-shot post-frame
+  // measurement: they are missing from the first painted frame, and any
+  // reflow that is not a MediaQuery/theme change (the runtime font swap is
+  // the real one) leaves them stale. Layout-derived boxes fix both.
+  // -------------------------------------------------------------------
+  testWidgets('P03-BUG-19 the legal targets exist in the first painted frame', (
+    tester,
+  ) async {
+    await setUpTestScope();
+    tester.view.physicalSize = const Size(390 * 3, 844 * 3);
+    addTearDown(tester.view.reset);
+    GetIt.instance<ThemeModeController>().selectMode(ThemeMode.light);
+
+    // Exactly one pump: the first painted frame.
+    await tester.pumpWidget(const NestlingApp(initialRoute: '/create-account'));
+
+    expect(
+      find.byKey(const ValueKey('p03_terms')),
+      findsOneWidget,
+      reason:
+          'the link targets are part of the caption and must exist in the '
+          'first painted frame; today a post-frame callback adds them one '
+          'frame later (and a font swap can leave them stale)',
+    );
+    expect(find.byKey(const ValueKey('p03_privacy')), findsOneWidget);
+
+    await disposeApp(tester);
+    // skip: P03-BUG-19 (MINOR, open) — targets lag the first frame.
+  }, skip: true);
+
+  // -------------------------------------------------------------------
+  // P03-BUG-20 (MINOR) — owning the error row moved the validation message
+  // out of Material's live region: client-side errors are announced by
+  // nothing (the screen only announces server `formError`s).
+  // -------------------------------------------------------------------
+  testWidgets('P03-BUG-20 a validation error is a live region', (tester) async {
+    await _pumpCreateAccount(tester);
+    final handle = tester.ensureSemantics();
+
+    BlocProvider.of<AuthBloc>(tester.element(find.byType(CreateAccountView)))
+        .add(const AuthSubmitted());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(
+      tester
+          .getSemantics(find.text(_passwordError))
+          .flagsCollection
+          .isLiveRegion,
+      isTrue,
+      reason:
+          'Material wraps InputDecoration.errorText in a live region; after '
+          'the BUG-11 fix the owned row announces nothing',
+    );
+    expect(
+      tester.getSemantics(find.text(_emailError)).flagsCollection.isLiveRegion,
+      isTrue,
+    );
+
+    handle.dispose();
+    await disposeApp(tester);
+    // skip: P03-BUG-20 (MINOR, open) — validation errors are not live
+    // regions.
+  }, skip: true);
 }

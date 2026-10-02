@@ -1,5 +1,7 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nestling/core/design_system/design_system.dart';
@@ -164,16 +166,32 @@ class _CreateAccountViewState extends State<CreateAccountView> {
                         buildWhen: (previous, current) =>
                             previous.emailError != current.emailError,
                         builder: (context, state) {
-                          return NestTextField(
-                            key: const ValueKey('p03_email'),
-                            label: 'Email',
-                            controller: _emailController,
-                            keyboardType: TextInputType.emailAddress,
-                            textInputAction: TextInputAction.next,
-                            onChanged: (value) => context.read<AuthBloc>().add(
-                              AuthEmailChanged(value),
-                            ),
-                            errorText: state.emailError,
+                          return Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              NestTextField(
+                                key: const ValueKey('p03_email'),
+                                label: 'Email',
+                                controller: _emailController,
+                                keyboardType: TextInputType.emailAddress,
+                                textInputAction: TextInputAction.next,
+                                onChanged: (value) => context
+                                    .read<AuthBloc>()
+                                    .add(AuthEmailChanged(value)),
+                                // P03-BUG-11: no errorText — Material indents
+                                // it 20dp inside the field; the error lives
+                                // in the owned row below, on the gutter.
+                              ),
+                              if (state.emailError != null) ...[
+                                const SizedBox(height: NestSpacing.gap6),
+                                Text(
+                                  state.emailError!,
+                                  style: NestType.caption(color: tokens.danger)
+                                      .copyWith(fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ],
                           );
                         },
                       ),
@@ -198,7 +216,10 @@ class _CreateAccountViewState extends State<CreateAccountView> {
                                 onChanged: (value) => context
                                     .read<AuthBloc>()
                                     .add(AuthPasswordChanged(value)),
-                                errorText: errorText,
+                                // P03-BUG-11: no errorText — Material indents
+                                // it 20dp inside the field; the error lives
+                                // in the owned row below, on the gutter like
+                                // the helper it replaces.
                               ),
                               // P03-BUG-8: the helper is a feature-owned row
                               // on the field gutter (6dp below the input),
@@ -209,6 +230,13 @@ class _CreateAccountViewState extends State<CreateAccountView> {
                                 Text(
                                   'At least 8 characters',
                                   style: NestType.caption(color: tokens.ink2),
+                                ),
+                              ] else ...[
+                                const SizedBox(height: NestSpacing.gap6),
+                                Text(
+                                  errorText,
+                                  style: NestType.caption(color: tokens.danger)
+                                      .copyWith(fontWeight: FontWeight.w600),
                                 ),
                               ],
                             ],
@@ -296,42 +324,127 @@ class _OrRow extends StatelessWidget {
   }
 }
 
-/// Legal caption (P03-BUG-1, P03-BUG-4).
+/// Legal caption (P03-BUG-1/4/9/10/12/13).
 ///
-/// The caption lays out as plain centred text lines (the design's two 18dp
-/// lines); the two 44dp link targets live in a zero-height overlay centred
-/// over the text — the HTML `.link { min-height:44px; margin:-12px 0 }`
-/// trick, where the hit box overlaps its line instead of adding layout
-/// height. The links are inert in v1 (`TODO(P03)`). Never use
-/// `NestBottomCta.caption` here — it cannot render links.
-class _LegalLine extends StatelessWidget {
+/// The caption lays out as plain centred text lines at the design's 20dp
+/// link-line height (`.link { line-height: 20px }`), so the line breaker
+/// flows the words exactly like the design. The two-word label uses U+00A0
+/// so it can never split across lines (ORCHESTRATOR_NOTES §5, COPY rule).
+/// Each link's 44dp target is an overlay box measured off the laid-out text
+/// (post-frame) and centred over its word — the HTML
+/// `.link { min-height:44px; margin:-12px 0 }` trick, where the hit box
+/// overlaps its line instead of adding layout height. The links are inert in
+/// v1 (`TODO(P03)`). Never use `NestBottomCta.caption` here — it cannot
+/// render links.
+class _LegalLine extends StatefulWidget {
   const new();
 
-  static const String _sentence =
-      'By continuing you agree to our Terms and Privacy Notice';
+  /// Two-word link label joined by U+00A0 NO-BREAK SPACE (COPY rule) so the
+  /// line breaker can never split it (P03-BUG-9).
+  static const String privacyLabel = 'Privacy Notice';
+
+  @override
+  State<_LegalLine> createState() => _LegalLineState();
+}
+
+class _LegalLineState extends State<_LegalLine> {
+  final GlobalKey _paragraphKey = GlobalKey();
+
+  /// Stack-local boxes of the two link words, measured post-frame.
+  Rect? _termsRect;
+  Rect? _privacyRect;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleMeasure();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The caption's metrics move with these; re-measure after the frame.
+    MediaQuery.sizeOf(context);
+    MediaQuery.textScalerOf(context);
+    _scheduleMeasure();
+  }
+
+  void _scheduleMeasure() {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
+  }
+
+  void _measure() {
+    if (!mounted) return;
+    final renderObject = _paragraphKey.currentContext?.findRenderObject();
+    if (renderObject is! RenderParagraph) return;
+    final paragraph = renderObject;
+    Rect? boxFor(String label) {
+      final plain = paragraph.text.toPlainText();
+      final start = plain.indexOf(label);
+      if (start < 0) return null;
+      Rect? box;
+      for (final textBox in paragraph.getBoxesForSelection(
+        TextSelection(baseOffset: start, extentOffset: start + label.length),
+      )) {
+        final rect = textBox.toRect();
+        box = box == null ? rect : box.expandToInclude(rect);
+      }
+      if (box == null) return null;
+      // Boxes are paragraph-local; the overlay lives in the Stack, which
+      // sizes exactly to the paragraph.
+      final origin = paragraph.localToGlobal(Offset.zero);
+      final stack = context.findRenderObject();
+      final stackOrigin = stack is RenderBox
+          ? stack.localToGlobal(Offset.zero)
+          : origin;
+      return box.shift(origin - stackOrigin);
+    }
+
+    final terms = boxFor('Terms');
+    final privacy = boxFor(_LegalLine.privacyLabel);
+    if (terms != _termsRect || privacy != _privacyRect) {
+      setState(() {
+        _termsRect = terms;
+        _privacyRect = privacy;
+      });
+    }
+  }
+
+  /// A 44dp target centred over its word (P03-BUG-10/13).
+  static Rect _targetRect(Rect label) => Rect.fromCenter(
+    center: label.center,
+    width: math.max(label.width, NestDevice.tapParent),
+    height: NestDevice.tapParent,
+  );
 
   @override
   Widget build(BuildContext context) {
     final tokens = context.nest;
-    final base = NestType.caption(color: tokens.ink2);
+    // P03-BUG-12: the design's link lines are 20dp, not the 18dp caption
+    // default — every caption line holds a link, so the block is 40dp.
+    final base = NestType.caption(color: tokens.ink2).copyWith(height: 20 / 13);
     final link = NestType.caption(color: tokens.sky).copyWith(
       fontWeight: FontWeight.w600,
       decoration: TextDecoration.underline,
       decorationColor: tokens.sky,
+      height: 20 / 13,
     );
     return Semantics(
-      label: _sentence,
+      label:
+          'By continuing you agree to our Terms and ${_LegalLine.privacyLabel}',
       explicitChildNodes: true,
       child: Stack(
+        clipBehavior: Clip.none,
         children: <Widget>[
           ExcludeSemantics(
             child: Text.rich(
+              key: _paragraphKey,
               TextSpan(
                 children: <TextSpan>[
                   const TextSpan(text: 'By continuing you agree to our '),
                   TextSpan(text: 'Terms', style: link),
                   const TextSpan(text: ' and '),
-                  TextSpan(text: 'Privacy Notice', style: link),
+                  TextSpan(text: _LegalLine.privacyLabel, style: link),
                 ],
               ),
               style: base,
@@ -339,32 +452,34 @@ class _LegalLine extends StatelessWidget {
               softWrap: true,
             ),
           ),
-          const Positioned.fill(
-            child: Center(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  _LegalHitTarget(key: ValueKey('p03_terms'), label: 'Terms'),
-                  _LegalHitTarget(
-                    key: ValueKey('p03_privacy'),
-                    label: 'Privacy Notice',
-                  ),
-                ],
+          if (_termsRect != null)
+            Positioned.fromRect(
+              rect: _targetRect(_termsRect!),
+              child: const _LegalTarget(
+                key: ValueKey('p03_terms'),
+                label: 'Terms',
               ),
             ),
-          ),
+          if (_privacyRect != null)
+            Positioned.fromRect(
+              rect: _targetRect(_privacyRect!),
+              child: const _LegalTarget(
+                key: ValueKey('p03_privacy'),
+                label: _LegalLine.privacyLabel,
+              ),
+            ),
         ],
       ),
     );
   }
 }
 
-/// One inert 44dp legal-link target (P03-BUG-1/4).
+/// One inert legal-link target (P03-BUG-1/4/10/13).
 ///
-/// Carries the `p03_*` key and the exact single-node button semantics; the
-/// child paints nothing, so the target overlaps the caption text (P03-BUG-1)
-/// without contributing layout height.
-class _LegalHitTarget extends StatelessWidget {
+/// Carries the `p03_*` key and the exact single-node button semantics. The
+/// `Positioned.fromRect` parent gives it tight ≥44×44 constraints, so it
+/// fills its measured box over its word.
+class _LegalTarget extends StatelessWidget {
   const new({required this.label, super.key});
 
   final String label;
@@ -374,17 +489,11 @@ class _LegalHitTarget extends StatelessWidget {
     return Semantics(
       button: true,
       label: label,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          minWidth: NestDevice.tapParent,
-          minHeight: NestDevice.tapParent,
-        ),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          // TODO(P03): inert — no Terms/Notice routes exist in v1.
-          onTap: () {},
-          child: const SizedBox.shrink(),
-        ),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        // TODO(P03): inert — no Terms/Notice routes exist in v1.
+        onTap: () {},
+        child: const SizedBox.expand(),
       ),
     );
   }

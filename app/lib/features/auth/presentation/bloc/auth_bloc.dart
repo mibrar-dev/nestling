@@ -97,9 +97,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       emit(state.copyWith(isSubmitting: false, submitted: true));
       // P03-BUG-5: a repository failure may be an Error, not an Exception
       // (Drift/SDK internals). Catch Object so a failure always surfaces as
-      // a formError instead of stranding the screen in a spinner.
-    } on Object catch (error) {
+      // a formError instead of stranding the screen in a spinner. P03-BUG-14:
+      // re-report to the bloc observer so the stack trace is kept.
+    } on Object catch (error, stackTrace) {
       emit(state.copyWith(isSubmitting: false, formError: error.toString()));
+      addError(error, stackTrace);
     }
   }
 
@@ -114,8 +116,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       await _repository.createAccountSocial(provider: provider);
       emit(state.copyWith(isSubmitting: false, submitted: true));
       // P03-BUG-5: see _onSubmitted — Errors must surface, not spin forever.
-    } on Object catch (error) {
+      // P03-BUG-14: keep the stack trace for observers.
+    } on Object catch (error, stackTrace) {
       emit(state.copyWith(isSubmitting: false, formError: error.toString()));
+      addError(error, stackTrace);
     }
   }
 

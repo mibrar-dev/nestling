@@ -194,7 +194,7 @@ void main() {
       expect(find.text(_note), findsOneWidget);
       expect(find.text('Create account'), findsOneWidget);
       expect(find.textContaining('Terms'), findsOneWidget);
-      expect(find.textContaining('Privacy Notice'), findsOneWidget);
+      expect(find.textContaining('Privacy Notice'), findsOneWidget);
       expect(find.byKey(_termsKey), findsOneWidget);
       expect(find.byKey(_privacyKey), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -223,7 +223,7 @@ void main() {
       expect(find.text(_note), findsOneWidget);
       expect(find.text('Create account'), findsOneWidget);
       expect(find.textContaining('Terms'), findsOneWidget);
-      expect(find.textContaining('Privacy Notice'), findsOneWidget);
+      expect(find.textContaining('Privacy Notice'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
       await disposeApp(tester);
@@ -622,7 +622,7 @@ void main() {
 
       for (final entry in const <MapEntry<ValueKey<String>, String>>[
         MapEntry(_termsKey, 'Terms'),
-        MapEntry(_privacyKey, 'Privacy Notice'),
+        MapEntry(_privacyKey, 'Privacy Notice'),
       ]) {
         final size = tester.getSize(find.byKey(entry.key));
         expect(size.width, greaterThanOrEqualTo(NestDevice.tapParent));
@@ -1113,7 +1113,7 @@ void main() {
       }
       for (final entry in const <MapEntry<ValueKey<String>, String>>[
         MapEntry(_termsKey, 'Terms'),
-        MapEntry(_privacyKey, 'Privacy Notice'),
+        MapEntry(_privacyKey, 'Privacy Notice'),
       ]) {
         final data = tester
             .getSemantics(find.byKey(entry.key))
