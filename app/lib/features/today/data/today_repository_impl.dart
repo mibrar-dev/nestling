@@ -46,23 +46,55 @@ class TodayRepositoryImpl implements TodayRepository {
       for (final item in items) {
         byChild.putIfAbsent(item.childId, () => <TodayItem>[]).add(item);
       }
-      return byChild.values.map((mine) {
-        final kid = kids[mine.first.childId];
-        return ChildDaySummary(
-          childId: mine.first.childId,
-          nickname: mine.first.childName,
-          avatarColour: kid?.avatarColour ?? 'lilac',
-          pipStage: kid?.pipStage ?? 1,
-          done: mine
-              .where(
-                (i) => i.status == 'done_pending' || i.status == 'approved',
-              )
-              .length,
-          total: mine.length,
-          coins: kid?.coins ?? 0,
-        );
-      }).toList();
+      final summaries =
+          byChild.values.map((mine) {
+              final kid = kids[mine.first.childId];
+              return ChildDaySummary(
+                childId: mine.first.childId,
+                nickname: mine.first.childName,
+                avatarColour: kid?.avatarColour ?? 'lilac',
+                pipStage: kid?.pipStage ?? 1,
+                done: mine
+                    .where(
+                      (i) =>
+                          i.status == 'done_pending' || i.status == 'approved',
+                    )
+                    .length,
+                total: mine.length,
+                coins: kid?.coins ?? 0,
+                ageYears: kid?.ageYears,
+                happyDays: kid?.happyDays ?? 0,
+              );
+            }).toList()
+            // Eldest first (Maya 9 before Leo 6 in the demo), then nickname.
+            ..sort((a, b) {
+              final age = (b.ageYears ?? -1).compareTo(a.ageYears ?? -1);
+              if (age != 0) return age;
+              return a.nickname.compareTo(b.nickname);
+            });
+      return summaries;
     });
+  }
+
+  @override
+  Stream<String> watchParentName() {
+    return (_db.select(
+      _db.members,
+    )..where((m) => m.familyId.equals(Seed.familyId))).watch().map((rows) {
+      if (rows.isEmpty) return 'Sarah';
+      for (final row in rows) {
+        if (row.role == 'owner') return row.name;
+      }
+      final sorted = rows.toList()..sort((a, b) => a.name.compareTo(b.name));
+      return sorted.first.name;
+    });
+  }
+
+  @override
+  Stream<int> watchPayoutDay() {
+    return (_db.select(_db.families)..where((f) => f.id.equals(Seed.familyId)))
+        .watchSingleOrNull()
+        .map((family) => family?.payoutDay ?? 6);
   }
 
   /// Pure row builder, shared with tests.
@@ -92,6 +124,8 @@ class TodayRepositoryImpl implements TodayRepository {
             childName: kid.nickname,
             status: status,
             coins: quest.coins,
+            repeatRule: quest.repeatRule,
+            iconKey: quest.icon,
           ),
         );
       }

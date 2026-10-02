@@ -1,0 +1,216 @@
+import 'package:drift/drift.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/seed.dart';
+import 'package:nestling/features/today/data/models/today_item_model.dart';
+import 'package:nestling/features/today/data/today_repository_impl.dart';
+import 'package:nestling/features/today/domain/entities/child_day_summary.dart';
+import 'package:nestling/features/today/domain/entities/today_item.dart';
+
+import '../../test_scope.dart';
+
+void main() {
+  group('TodayRepository rows()', () {
+    test('demo seed groups by child with latest-completion status', () async {
+      final db = await setUpTestScope();
+      final impl = TodayRepositoryImpl(db: db);
+      final items = await impl.getItems();
+
+      // 6 Maya + 4 Leo assigned quests ("Anyone" quests excluded).
+      expect(items, hasLength(10));
+      final maya = items.where((i) => i.childId == 'maya').toList();
+      final leo = items.where((i) => i.childId == 'leo').toList();
+      expect(maya, hasLength(6));
+      expect(leo, hasLength(4));
+
+      // Quests α-sorted within each child.
+      final titles = maya.map((i) => i.title).toList();
+      expect(titles, orderedEquals(List.of(titles)..sort()));
+
+      // Latest completion wins: pending, approved, and to-do rows present.
+      final byQuest = {for (final i in items) i.questId: i};
+      expect(byQuest['q-dishwasher']!.status, 'done_pending');
+      expect(byQuest['q-bins']!.status, 'approved');
+      expect(byQuest['q-reading']!.status, 'to_do');
+
+      // Cadence + icon snapshot travel on the item.
+      expect(byQuest['q-dishwasher']!.repeatRule, 'weekly');
+      expect(byQuest['q-dishwasher']!.iconKey, 'dishwasher');
+      expect(byQuest['q-reading']!.iconKey, 'book');
+      expect(byQuest['q-biscuit']!.iconKey, 'paw');
+    });
+
+    test('a newer completion overrides an older one', () async {
+      final db = await setUpTestScope();
+      await db
+          .into(db.questCompletions)
+          .insert(
+            QuestCompletionsCompanion.insert(
+              questId: 'q-reading',
+              childId: 'maya',
+              familyId: Seed.familyId,
+              status: const Value('done_pending'),
+              coins: const Value(10),
+              createdAt: Value(Seed.utc(10, 3, 9)),
+            ),
+          );
+      final impl = TodayRepositoryImpl(db: db);
+      final items = await impl.getItems();
+      final reading = items.firstWhere((i) => i.questId == 'q-reading');
+      expect(reading.status, 'done_pending');
+    });
+
+    test('not_yet maps to the try-again label', () async {
+      final db = await setUpTestScope();
+      await db
+          .into(db.questCompletions)
+          .insert(
+            QuestCompletionsCompanion.insert(
+              questId: 'q-tidy',
+              childId: 'maya',
+              familyId: Seed.familyId,
+              status: const Value('not_yet'),
+              coins: const Value(15),
+              createdAt: Value(Seed.utc(10, 3, 9)),
+            ),
+          );
+      final impl = TodayRepositoryImpl(db: db);
+      final items = await impl.getItems();
+      final tidy = items.firstWhere((i) => i.questId == 'q-tidy');
+      expect(tidy.status, 'not_yet');
+      expect(tidy.detail, contains('try again'));
+    });
+  });
+
+  group('TodayRepository streams', () {
+    test('watchItems re-emits when a completion is inserted', () async {
+      final db = await setUpTestScope();
+      final impl = TodayRepositoryImpl(db: db);
+      final emissions = <List<TodayItem>>[];
+      final sub = impl.watchItems().listen(emissions.add);
+      addTearDown(sub.cancel);
+
+      await pumpEventQueue();
+      expect(emissions, isNotEmpty);
+      expect(
+        emissions.last.firstWhere((i) => i.questId == 'q-reading').status,
+        'to_do',
+        reason: 'seed state before the new completion',
+      );
+
+      await db
+          .into(db.questCompletions)
+          .insert(
+            QuestCompletionsCompanion.insert(
+              questId: 'q-reading',
+              childId: 'maya',
+              familyId: Seed.familyId,
+              status: const Value('done_pending'),
+              coins: const Value(10),
+              createdAt: Value(Seed.utc(10, 3, 9)),
+            ),
+          );
+      await pumpEventQueue();
+
+      expect(emissions.length, greaterThan(1));
+      expect(
+        emissions.last.firstWhere((i) => i.questId == 'q-reading').status,
+        'done_pending',
+        reason: 'the bloc relies on this live re-emission (no reload events)',
+      );
+    });
+  });
+
+  group('TodayRepository summaries', () {
+    test('demo seed cards: Maya 4/6 + 120, Leo 2/4 + 45', () async {
+      final db = await setUpTestScope();
+      final impl = TodayRepositoryImpl(db: db);
+      final summaries = await impl.watchSummaries().first;
+
+      expect(summaries, hasLength(2));
+      // Eldest first: Maya (9) before Leo (6).
+      expect(summaries[0].childId, 'maya');
+      expect(summaries[1].childId, 'leo');
+
+      final maya = summaries[0];
+      expect(maya.nickname, 'Maya');
+      expect(maya.done, 4); // dishwasher+table pending, bins+hoover approved
+      expect(maya.total, 6);
+      expect(maya.coins, 120);
+      expect(maya.pipStage, 3);
+      expect(maya.avatarColour, 'lilac');
+      expect(maya.ageYears, 9);
+      expect(maya.happyDays, 4);
+
+      final leo = summaries[1];
+      expect(leo.done, 2); // bed pending, bag approved
+      expect(leo.total, 4);
+      expect(leo.coins, 45);
+      expect(leo.pipStage, 2);
+      expect(leo.ageYears, 6);
+      expect(leo.happyDays, 3);
+    });
+
+    test('empty seed has no summaries', () async {
+      final db = await setUpTestScope(seedDemo: false);
+      await Seed.empty(db);
+      final impl = TodayRepositoryImpl(db: db);
+      expect(await impl.watchSummaries().first, isEmpty);
+      expect(await impl.watchItems().first, isEmpty);
+    });
+  });
+
+  group('TodayRepository header', () {
+    test('parent name is Sarah, payout day is Saturday', () async {
+      final db = await setUpTestScope();
+      final impl = TodayRepositoryImpl(db: db);
+      expect(await impl.watchParentName().first, 'Sarah');
+      expect(await impl.watchPayoutDay().first, 6);
+    });
+
+    test('fresh db falls back to Sarah / Saturday', () async {
+      final db = await setUpTestScope(seedDemo: false);
+      final impl = TodayRepositoryImpl(db: db);
+      expect(await impl.watchParentName().first, 'Sarah');
+      expect(await impl.watchPayoutDay().first, 6);
+    });
+  });
+
+  group('Today entities', () {
+    test('TodayItemModel round-trips repeat fields', () {
+      const item = TodayItemModel(
+        id: 'q1:maya',
+        title: 'Test',
+        detail: 'Maya · to do',
+        questId: 'q1',
+        childId: 'maya',
+        childName: 'Maya',
+        status: 'to_do',
+        coins: 10,
+        repeatRule: 'daily',
+        iconKey: 'book',
+      );
+      final json = item.toJson();
+      expect(json['repeatRule'], 'daily');
+      expect(json['iconKey'], 'book');
+      final back = TodayItemModel.fromJson(json);
+      expect(back, item);
+    });
+
+    test('ChildDaySummary carries age + happy days', () {
+      const summary = ChildDaySummary(
+        childId: 'maya',
+        nickname: 'Maya',
+        avatarColour: 'lilac',
+        pipStage: 3,
+        done: 4,
+        total: 6,
+        coins: 120,
+        ageYears: 9,
+        happyDays: 4,
+      );
+      expect(summary.ageYears, 9);
+      expect(summary.happyDays, 4);
+    });
+  });
+}

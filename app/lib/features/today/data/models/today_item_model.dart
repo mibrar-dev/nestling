@@ -10,6 +10,8 @@ class TodayItemModel extends TodayItem {
     required super.childName,
     required super.status,
     required super.coins,
+    super.repeatRule,
+    super.iconKey,
   });
 
   factory TodayItemModel.fromJson(Map<String, dynamic> json) {
@@ -22,6 +24,8 @@ class TodayItemModel extends TodayItem {
       childName: json['childName'] as String,
       status: json['status'] as String,
       coins: json['coins'] as int,
+      repeatRule: json['repeatRule'] as String? ?? '',
+      iconKey: json['iconKey'] as String? ?? '',
     );
   }
 
@@ -35,6 +39,8 @@ class TodayItemModel extends TodayItem {
       'childName': childName,
       'status': status,
       'coins': coins,
+      'repeatRule': repeatRule,
+      'iconKey': iconKey,
     };
   }
 }

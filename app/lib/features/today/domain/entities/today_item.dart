@@ -13,6 +13,8 @@ class TodayItem extends Equatable {
     required this.childName,
     required this.status,
     required this.coins,
+    this.repeatRule = '',
+    this.iconKey = '',
   });
 
   final String id;
@@ -26,6 +28,12 @@ class TodayItem extends Equatable {
   final String status;
   final int coins;
 
+  /// Quest cadence: `once | daily | weekly` (from `quests.repeat_rule`).
+  final String repeatRule;
+
+  /// Icon key (from `quests.icon`); mapped to NestIcons in the view.
+  final String iconKey;
+
   @override
   List<Object?> get props => <Object?>[
     id,
@@ -36,5 +44,7 @@ class TodayItem extends Equatable {
     childName,
     status,
     coins,
+    repeatRule,
+    iconKey,
   ];
 }

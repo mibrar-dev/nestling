@@ -11,6 +11,8 @@ class ChildDaySummary extends Equatable {
     required this.done,
     required this.total,
     required this.coins,
+    this.ageYears,
+    this.happyDays = 0,
   });
 
   final String childId;
@@ -21,6 +23,12 @@ class ChildDaySummary extends Equatable {
   final int total;
   final int coins;
 
+  /// Age in years (from `children.age_years`); drives the `MAYA · 9` label.
+  final int? ageYears;
+
+  /// Happy days this week, 0..7 (from `children.happy_days`).
+  final int happyDays;
+
   @override
   List<Object?> get props => <Object?>[
     childId,
@@ -30,5 +38,7 @@ class ChildDaySummary extends Equatable {
     done,
     total,
     coins,
+    ageYears,
+    happyDays,
   ];
 }
