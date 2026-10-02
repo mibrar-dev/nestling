@@ -1,5 +1,5 @@
 import 'package:equatable/equatable.dart';
-import 'package:nestling/features/auth/domain/auth_provider.dart';
+import 'package:nestling/features/auth/domain/auth_repository.dart';
 
 sealed class AuthEvent extends Equatable {
   const new();

@@ -1,80 +1,80 @@
-# P03 Create account — build note (Stage 2, iteration 1)
+# P03 Create account — build note (Stage 2, iteration 2)
 
-Route `/create-account` · parent mode · feature `auth`. Built exactly per
-`docs/screens/P03/1_plan.md` with five documented deviations (all below).
+Route `/create-account` · parent mode · feature `auth`. Implements
+`1_plan.md` plus every item in `FIXES_1.md` (bugs P03-BUG-1…8, review
+findings 1–8, the six mandatory `ORCHESTRATOR_NOTES.md` items).
 
-## Files changed (all inside RULES §1 scope)
+## Files changed (all inside RULES §1)
 
-- `app/lib/features/auth/domain/auth_provider.dart` (new) — `AuthProvider { apple, google }`.
-- `app/lib/features/auth/domain/auth_repository.dart` — `createAccount({String? email, String? name})`
-  + `createAccountSocial({required AuthProvider provider})` (see deviation 1).
-- `app/lib/features/auth/data/auth_repository_impl.dart` — email local-part derives the owner
-  name (fallback `'Parent'`); social ensures owner `'Parent'`; password never written (`TODO(P03)`).
-- `app/lib/features/auth/presentation/bloc/auth_event.dart` — added `AuthEmailChanged`,
-  `AuthPasswordChanged`, `AuthSubmitted`, `AuthSocialSubmitted`, `AuthSubmitConsumed`.
-- `app/lib/features/auth/presentation/bloc/auth_state.dart` — added `email`, `password`,
-  `emailError`, `passwordError`, `isSubmitting`, `submitted`, `formError` (+ `canSubmit` getter,
-  shared `isAuthEmailValid`/`isAuthPasswordValid` helpers, error strings).
-- `app/lib/features/auth/presentation/bloc/auth_bloc.dart` — live validation on change,
-  validate-then-submit, social submit, `isSubmitting` re-entrancy guard, consumed reset.
-- `app/lib/features/auth/presentation/widgets/apple_glyph.dart` (new) — single-path Apple mark
-  from the HTML source, tinted via ambient `IconTheme` (token-driven dark flip).
-- `app/lib/features/auth/presentation/widgets/google_glyph.dart` (new) — 4-path `G` in fixed
-  brand colours from the HTML source.
-- `app/lib/features/auth/presentation/views/create_account_view.dart` — replaced placeholder with
-  the real screen (see below).
-- `app/test/features/auth/auth_bloc_test.dart` (new, 23 tests) — state/validation units, blocTest
-  for every event path incl. throwing repos, Drift-backed load + repository contract tests.
-- `app/test/features/auth/create_account_view_test.dart` (new, 28 tests) — copy/themes, 320/390/430
-  × 1.0/1.3 matrix both themes, all five bloc states, validation, submit/social/back navigation,
-  throwing-repo error, full a11y contract.
-- `docs/screens/P03/SHARED_REQUEST.md` (new) — two non-blocking shared-code defects found while
-  building (plan §(g) said none; the null-title nav-bar crash forced one).
+- `app/lib/features/auth/domain/auth_repository.dart` — now also owns
+  `enum AuthProvider` (review finding 6).
+- `app/lib/features/auth/domain/auth_provider.dart` — deleted (finding 6).
+- `app/lib/features/auth/presentation/bloc/auth_event.dart`,
+  `data/auth_repository_impl.dart`,
+  `presentation/views/create_account_view.dart` — import updates for the move.
+- `app/lib/features/auth/presentation/bloc/auth_state.dart` — new
+  `submitAttempted` flag (copyWith/props).
+- `app/lib/features/auth/presentation/bloc/auth_bloc.dart` — dirty-gated
+  validation (P03-BUG-2), `on Object` catches (P03-BUG-5).
+- `app/lib/features/auth/presentation/views/create_account_view.dart` —
+  caption overlay (P03-BUG-1/4), headline cap (P03-BUG-7), feature-owned
+  helper (P03-BUG-8), `title: null` revert (P03-BUG-3 cleanup), scoped
+  rebuilds (finding 8).
+- `app/test/features/auth/p03_bugs_test.dart` — un-skipped 1a–1d, 2a–2c, 4,
+  5, 7, 8 (all green); BUG-3/2d untouched green; BUG-6 stays skipped
+  (shared core, SHARED_REQUEST §4).
+- `app/test/features/auth/auth_bloc_test.dart` — updated the four tests that
+  pinned first-keystroke errors; flag coverage added.
+- `app/test/features/auth/create_account_view_test.dart` — validation group
+  rewritten for gated errors; caption finders moved to `textContaining`;
+  Terms/Privacy assertions tightened to `equals`; link sizes measured on the
+  keyed targets.
+- `docs/screens/P03/SHARED_REQUEST.md` — item 1 marked fully done (revert
+  landed); items 2/4 still open/non-blocking.
 
-## What was built (plan §(a)–(f))
+## What was done about each fix item
 
-- Chrome: `NestStatusBar` (height-only) + `NestNavBar(compact)` back-only + `Expanded` scroll
-  (`20/0/20/32` padding) + `NestBottomCta` (surface runs to the edge; no extra home indicator).
-  Scaffold background is the paper token.
-- Form order/spacing per spec: h1 + 8 + subtitle, 24 Apple, 12 Google, 16 or-row
-  (token dividers, `ExcludeSemantics`), 16 Email, 16 Password (built-in eye toggle, helper
-  `At least 8 characters`), 12 lilac-shield note. Submit disabled until both fields validate
-  (opacity .45 via component); loading spinners + all buttons dead while submitting.
-- Legal line as centred `Wrap` with two inert 44dp `TODO(P03)` link targets (Terms / Privacy
-  Notice, sky + underline); `NestBottomCta.caption` not used.
-- Navigation: back → `canPop ? pop : go('/value-tour')`; email/social success →
-  consume + `go('/privacy')`; submit failure → `formError` as password `errorText` +
-  `SemanticsService.sendAnnouncement`.
-- Static form renders for initial/loading/loaded/failure; member rows never displayed.
-- Headline is the only `header: true` semantics; glyphs/note-icon/or-row excluded; eye tooltip
-  flips Show/Hide; every tap target ≥ 44 (brand/submit full-width ≥ 52).
-
-## Deviations from 1_plan.md (all deliberate)
-
-1. `createAccount({required String email})` → `({String? email, String? name})`: the shared
-   `app/test/core/data/repositories_test.dart` (outside §1, uneditable) still calls
-   `createAccount(name:)`; the optional legacy alias keeps `flutter test` green. New callers pass
-   `email:`; orchestrator should migrate the shared test and restore `required`.
-2. `NestNavBar(compact, title: null)` → `title: ''`: compact + null title crashes in shared
-   `nest_nav_bar.dart` (Expanded around Spacer) — filed as SHARED_REQUEST item 1, workaround
-   marked `NOTE(P03)`.
-3. Email `autocorrect/enableSuggestions: false` not passed: `NestTextField` (shared) exposes no
-   such params; keyboardType email + component defaults used (non-blocking, not filed).
-4. Validation helpers are public top-levels in `auth_state.dart` (not private in the bloc) so the
-   view's `canSubmit` shares the single source.
-5. `SemanticsService.announce` → `sendAnnouncement(View.of(context), …)`: `announce` is
-   deprecated/removed-path in this SDK; same behaviour, modern API.
-6. Brand-button label assertions use `contains`: shared `_BrandButton` merges its explicit label
-   with the inner Text (`'X\nX'`, double-announced) — filed as SHARED_REQUEST item 2.
-7. `shot.sh`/`compare.py` not run in this stage (no simulator in this loop); light/dark + sizes
-   are covered by widget tests. Screenshots belong to the test stage.
+- **BUG-1 (MAJOR, caption eats the form)**: `_LegalLine` is now a
+  `Text.rich` visual (exact text lines, `ExcludeSemantics`) with the two
+  keyed 44dp `_LegalHitTarget`s in a zero-height `Positioned.fill` overlay —
+  the HTML negative-margin trick. Caption is text-height; targets keep keys
+  and 44dp boxes. Proofs 1a–1d green.
+- **BUG-2 (MAJOR, first-keystroke errors)**: new `submitAttempted` state, set
+  only when a submit is rejected as invalid; change handlers write the value
+  always but set/clear the error only when already errored or attempted,
+  while always dropping a stale `formError`. Empty-submit path unchanged.
+  Proofs 2a–2c green, 2d stays green.
+- **BUG-3 (nav 60dp)**: was already fixed on main; reverted the `title: ''`
+  workaround to `title: null`, proof stays green.
+- **BUG-4 (double-announced links)**: overlay targets carry the exact single
+  button label (no inner `Text` to merge); caption sentence exposed once via
+  `explicitChildNodes`. Proof green; view assertions now `equals`.
+- **BUG-5 (non-Exception spinner)**: both submit handlers catch `Object` and
+  surface `formError`. Proof green (no `addError`, so the zone stays clean).
+- **BUG-6 (shared NestButton doubling)**: not patchable here; proof stays
+  skipped, SHARED_REQUEST §4 open.
+- **BUG-7 (headline break)**: `ConstrainedBox(maxWidth: 240)` — inside the
+  measured [198, 252) window, no hard newline. Proof green.
+- **BUG-8 (helper indent)**: helper is now a feature-owned caption row 6dp
+  under the input on the 20dp gutter (hidden while an error shows
+  in-decoration). Proof green.
+- **Findings 5/6/8**: moot by redesign (no padding literals left) / enum
+  moved, file deleted / brand buttons on `BlocSelector(isSubmitting)`,
+  fields on `buildWhen` error selectors, CTA unchanged.
+- **ORCHESTRATOR_NOTES**: §1 shared-done; §2 headline cap; §3 filled-state
+  widget pin kept green (filled simulator capture is UI-stage work, not run
+  here); §4 helper gutter+6dp; §5 two-line caption; §6 note row untouched.
+- Screenshots intentionally not re-captured in this stage (UI stage owns
+  `shot.sh`/`compare.py`); geometry is pinned by the widget proofs.
 
 ## Evidence tails (app/)
 
-- `dart format --set-exit-if-changed .` → `Formatted 356 files (0 changed)`, exit 0.
-- `flutter analyze` → `No issues found! (ran in 3.1s)`
-- `flutter test` (full suite) → `00:09 +530: All tests passed!` (51 new P03 tests included)
-- `git status` touches only `app/lib/features/auth/**`, `app/test/features/auth/**`,
-  `docs/screens/P03/**` — nothing shared.
+- `dart format --set-exit-if-changed .` → `Formatted 359 files (0 changed)`.
+- `flutter analyze` → `No issues found! (ran in 3.7s)` — no ignores.
+- `flutter test test/features/auth` → `104 passed, 1 skipped` (the skip is
+  shared P03-BUG-6 only).
+- `flutter test` (full suite) → `591 passed, 1 skipped, 0 failed`.
+- `git status` touches only `app/lib/features/auth/**`,
+  `app/test/features/auth/**`, `docs/screens/P03/**` — nothing shared.
 
 VERDICT: PASS

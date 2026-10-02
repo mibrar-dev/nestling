@@ -8,12 +8,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:nestling/core/design_system/design_system.dart';
-import 'package:nestling/features/auth/domain/auth_provider.dart';
+import 'package:nestling/features/auth/auth_routes.dart';
 import 'package:nestling/features/auth/domain/auth_repository.dart';
 import 'package:nestling/features/auth/domain/entities/auth_account.dart';
 import 'package:nestling/features/auth/presentation/bloc/auth_bloc.dart';
@@ -191,8 +193,8 @@ void main() {
       expect(find.text('At least 8 characters'), findsOneWidget);
       expect(find.text(_note), findsOneWidget);
       expect(find.text('Create account'), findsOneWidget);
-      expect(find.text('Terms'), findsOneWidget);
-      expect(find.text('Privacy Notice'), findsOneWidget);
+      expect(find.textContaining('Terms'), findsOneWidget);
+      expect(find.textContaining('Privacy Notice'), findsOneWidget);
       expect(find.byKey(_termsKey), findsOneWidget);
       expect(find.byKey(_privacyKey), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -220,8 +222,8 @@ void main() {
       expect(find.text('At least 8 characters'), findsOneWidget);
       expect(find.text(_note), findsOneWidget);
       expect(find.text('Create account'), findsOneWidget);
-      expect(find.text('Terms'), findsOneWidget);
-      expect(find.text('Privacy Notice'), findsOneWidget);
+      expect(find.textContaining('Terms'), findsOneWidget);
+      expect(find.textContaining('Privacy Notice'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
       await disposeApp(tester);
@@ -362,7 +364,7 @@ void main() {
   });
 
   group('P03 create account — validation', () {
-    testWidgets('bad input errors and disables submit; fixing enables', (
+    testWidgets('typing alone never errors; valid input enables submit', (
       tester,
     ) async {
       await _pumpCreateAccount(
@@ -374,8 +376,9 @@ void main() {
 
       await _enterForm(tester, email: 'not-an-email', password: 'short');
 
-      expect(find.text('Enter a valid email address'), findsOneWidget);
-      expect(find.text('Use at least 8 characters'), findsOneWidget);
+      // P03-BUG-2: no red on first paint — errors wait for a submit attempt.
+      expect(find.text('Enter a valid email address'), findsNothing);
+      expect(find.text('Use at least 8 characters'), findsNothing);
       expect(
         tester.widget<NestButton>(find.byKey(_submitKey)).onPressed,
         isNull,
@@ -393,6 +396,80 @@ void main() {
         tester.widget<NestButton>(find.byKey(_submitKey)).onPressed,
         isNotNull,
       );
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('a submit attempt surfaces errors that clear live', (
+      tester,
+    ) async {
+      await _pumpCreateAccount(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      // The CTA is disabled while the form is invalid, so this submits the
+      // way the button would — the errors must still appear (P03-BUG-2d
+      // through the UI).
+      BlocProvider.of<AuthBloc>(tester.element(find.byType(CreateAccountView)))
+          .add(const AuthSubmitted());
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Enter a valid email address'), findsOneWidget);
+      expect(find.text('Use at least 8 characters'), findsOneWidget);
+
+      // Fixing a field clears its error live; the other error stays until
+      // its field is fixed too.
+      await tester.enterText(_fieldInput(_emailKey), 'sarah@example.co.uk');
+      await tester.pump();
+      expect(find.text('Enter a valid email address'), findsNothing);
+      expect(find.text('Use at least 8 characters'), findsOneWidget);
+
+      await tester.enterText(_fieldInput(_passwordKey), 'password123');
+      await tester.pump();
+      expect(find.text('Use at least 8 characters'), findsNothing);
+      expect(
+        tester.widget<NestButton>(find.byKey(_submitKey)).onPressed,
+        isNotNull,
+      );
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+  });
+
+  group('P03 create account — helper and error lines', () {
+    testWidgets('the helper is replaced by the error and comes back', (
+      tester,
+    ) async {
+      await _pumpCreateAccount(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      expect(find.text('At least 8 characters'), findsOneWidget);
+
+      BlocProvider.of<AuthBloc>(tester.element(find.byType(CreateAccountView)))
+          .add(const AuthSubmitted());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      // The error takes the helper's place — never both at once.
+      expect(find.text('At least 8 characters'), findsNothing);
+      expect(find.text('Use at least 8 characters'), findsOneWidget);
+
+      await tester.enterText(_fieldInput(_passwordKey), 'password123');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.text('Use at least 8 characters'), findsNothing);
+      expect(find.text('At least 8 characters'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
       await disposeApp(tester);
@@ -497,6 +574,122 @@ void main() {
       expect(currentPath(tester), '/value-tour');
 
       await disposeApp(tester);
+    });
+
+    testWidgets('a stale server error also displaces the helper, then both '
+        'recover together', (tester) async {
+      await _pumpCreateAccount(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+        repository: _FakeAuthRepository(throwOnCreate: true),
+      );
+
+      await _enterForm(
+        tester,
+        email: 'sarah@example.co.uk',
+        password: 'password123',
+      );
+      await tester.tap(find.byKey(_submitKey));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.text('At least 8 characters'), findsNothing);
+      expect(find.textContaining('offline'), findsOneWidget);
+
+      await tester.enterText(_fieldInput(_passwordKey), 'password1234');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.textContaining('offline'), findsNothing);
+      expect(find.text('At least 8 characters'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the legal links are 44dp targets with a tap action', (
+      tester,
+    ) async {
+      await _pumpCreateAccount(
+        tester,
+        theme: ThemeMode.dark,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+      final handle = tester.ensureSemantics();
+
+      for (final entry in const <MapEntry<ValueKey<String>, String>>[
+        MapEntry(_termsKey, 'Terms'),
+        MapEntry(_privacyKey, 'Privacy Notice'),
+      ]) {
+        final size = tester.getSize(find.byKey(entry.key));
+        expect(size.width, greaterThanOrEqualTo(NestDevice.tapParent));
+        expect(size.height, greaterThanOrEqualTo(NestDevice.tapParent));
+        final node = tester.getSemantics(find.byKey(entry.key));
+        final data = node.getSemanticsData();
+        expect(data.label, entry.value);
+        expect(data.flagsCollection.isButton, isTrue);
+        expect(
+          data.hasAction(SemanticsAction.tap),
+          isTrue,
+          reason: 'VoiceOver must be able to activate the link',
+        );
+      }
+
+      handle.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('back pops when a route is stacked', (tester) async {
+      GoogleFonts.config.allowRuntimeFetching = false;
+      final bloc = AuthBloc(repository: _FakeAuthRepository());
+      addTearDown(bloc.close);
+      final router = GoRouter(
+        initialLocation: '/',
+        routes: <RouteBase>[
+          GoRoute(
+            path: '/',
+            builder: (context, state) => Scaffold(
+              body: Center(
+                child: TextButton(
+                  onPressed: () => context.push(AuthRoutePaths.createAccount),
+                  child: const Text('enter'),
+                ),
+              ),
+            ),
+          ),
+          GoRoute(
+            path: AuthRoutePaths.createAccount,
+            builder: (context, state) => BlocProvider<AuthBloc>.value(
+              value: bloc,
+              child: const CreateAccountView(),
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      tester.view.physicalSize = const Size(390 * 3, 844 * 3);
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        MaterialApp.router(theme: NestTheme.light(), routerConfig: router),
+      );
+      await tester.pump();
+      await tester.tap(find.text('enter'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CreateAccountView), findsOneWidget);
+
+      await tester.tap(find.bySemanticsLabel('Back'));
+      await tester.pumpAndSettle();
+
+      // With history the back control pops instead of routing to /value-tour.
+      expect(find.text('enter'), findsOneWidget);
+      expect(find.byType(CreateAccountView), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await _disposeView(tester);
     });
   });
 
@@ -902,22 +1095,30 @@ void main() {
         textScale: 1,
       );
 
-      // Button/link labels are read straight off their semantics nodes:
-      // `bySemanticsLabel` cannot see them because the InkWell merges each
-      // label with its inner Text into one node (shared-component structure).
+      // Button/link labels are read straight off their semantics nodes.
+      // The shared InkWell-based brand buttons merge the explicit label with
+      // the inner Text, so those nodes read e.g.
+      // 'Continue with Apple\nContinue with Apple' (see SHARED_REQUEST §2)
+      // and stay `contains` assertions; the feature-owned legal targets are
+      // exact single nodes (P03-BUG-4).
       for (final entry in const <MapEntry<ValueKey<String>, String>>[
         MapEntry(_appleKey, 'Continue with Apple'),
         MapEntry(_googleKey, 'Continue with Google'),
-        MapEntry(_termsKey, 'Terms'),
-        MapEntry(_privacyKey, 'Privacy Notice'),
       ]) {
         final data = tester
             .getSemantics(find.byKey(entry.key).first)
             .getSemanticsData();
-        // `contains`: the shared InkWell-based buttons merge the explicit
-        // label with the inner Text, so nodes read e.g.
-        // 'Continue with Apple\nContinue with Apple' (see SHARED_REQUEST).
         expect(data.label, contains(entry.value));
+        expect(data.flagsCollection.isButton, isTrue);
+      }
+      for (final entry in const <MapEntry<ValueKey<String>, String>>[
+        MapEntry(_termsKey, 'Terms'),
+        MapEntry(_privacyKey, 'Privacy Notice'),
+      ]) {
+        final data = tester
+            .getSemantics(find.byKey(entry.key))
+            .getSemanticsData();
+        expect(data.label, equals(entry.value));
         expect(data.flagsCollection.isButton, isTrue);
       }
       expect(find.byTooltip('Show password'), findsOneWidget);
@@ -947,12 +1148,10 @@ void main() {
         tester.getSize(find.byTooltip('Show password')).height,
         greaterThanOrEqualTo(NestDevice.tapParent),
       );
-      for (final linkText in const <String>['Terms', 'Privacy Notice']) {
-        final linkBox = find.ancestor(
-          of: find.text(linkText),
-          matching: find.byType(ConstrainedBox),
-        );
-        final size = tester.getSize(linkBox.first);
+      // The legal targets are overlay hit boxes (P03-BUG-1): measure the
+      // keyed widgets directly — each keeps a full 44dp target.
+      for (final key in <ValueKey<String>>[_termsKey, _privacyKey]) {
+        final size = tester.getSize(find.byKey(key));
         expect(size.width, greaterThanOrEqualTo(NestDevice.tapParent));
         expect(size.height, greaterThanOrEqualTo(NestDevice.tapParent));
       }

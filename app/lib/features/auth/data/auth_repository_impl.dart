@@ -1,7 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/seed.dart';
-import 'package:nestling/features/auth/domain/auth_provider.dart';
 import 'package:nestling/features/auth/domain/auth_repository.dart';
 import 'package:nestling/features/auth/domain/entities/auth_account.dart';
 

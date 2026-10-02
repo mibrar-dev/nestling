@@ -34,44 +34,33 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   void _onEmailChanged(AuthEmailChanged event, Emitter<AuthState> emit) {
     final email = event.email;
-    if (isAuthEmailValid(email)) {
-      emit(
-        state.copyWith(
-          email: email,
-          clearEmailError: true,
-          clearFormError: state.formError != null,
-        ),
-      );
-    } else {
-      emit(
-        state.copyWith(
-          email: email,
-          emailError: authEmailErrorText,
-          clearFormError: state.formError != null,
-        ),
-      );
-    }
+    // P03-BUG-2: the value is always written, but the error only appears
+    // once the field is dirty (already errored or a submit was attempted).
+    // A stale server error still clears on any edit so the form recovers.
+    final dirty = state.emailError != null || state.submitAttempted;
+    final invalid = dirty && !isAuthEmailValid(email);
+    emit(
+      state.copyWith(
+        email: email,
+        emailError: invalid ? authEmailErrorText : null,
+        clearEmailError: !invalid,
+        clearFormError: state.formError != null,
+      ),
+    );
   }
 
   void _onPasswordChanged(AuthPasswordChanged event, Emitter<AuthState> emit) {
     final password = event.password;
-    if (isAuthPasswordValid(password)) {
-      emit(
-        state.copyWith(
-          password: password,
-          clearPasswordError: true,
-          clearFormError: state.formError != null,
-        ),
-      );
-    } else {
-      emit(
-        state.copyWith(
-          password: password,
-          passwordError: authPasswordErrorText,
-          clearFormError: state.formError != null,
-        ),
-      );
-    }
+    final dirty = state.passwordError != null || state.submitAttempted;
+    final invalid = dirty && !isAuthPasswordValid(password);
+    emit(
+      state.copyWith(
+        password: password,
+        passwordError: invalid ? authPasswordErrorText : null,
+        clearPasswordError: !invalid,
+        clearFormError: state.formError != null,
+      ),
+    );
   }
 
   Future<void> _onSubmitted(
@@ -88,6 +77,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           clearEmailError: emailValid,
           passwordError: passwordValid ? null : authPasswordErrorText,
           clearPasswordError: passwordValid,
+          // From here on the fields are dirty: later keystrokes re-validate
+          // live until they are fixed (P03-BUG-2, plan §(b)).
+          submitAttempted: true,
         ),
       );
       return;
@@ -103,7 +95,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     try {
       await _repository.createAccount(email: state.email.trim());
       emit(state.copyWith(isSubmitting: false, submitted: true));
-    } on Exception catch (error) {
+      // P03-BUG-5: a repository failure may be an Error, not an Exception
+      // (Drift/SDK internals). Catch Object so a failure always surfaces as
+      // a formError instead of stranding the screen in a spinner.
+    } on Object catch (error) {
       emit(state.copyWith(isSubmitting: false, formError: error.toString()));
     }
   }
@@ -118,7 +113,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     try {
       await _repository.createAccountSocial(provider: provider);
       emit(state.copyWith(isSubmitting: false, submitted: true));
-    } on Exception catch (error) {
+      // P03-BUG-5: see _onSubmitted — Errors must surface, not spin forever.
+    } on Object catch (error) {
       emit(state.copyWith(isSubmitting: false, formError: error.toString()));
     }
   }

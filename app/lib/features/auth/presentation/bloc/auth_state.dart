@@ -25,6 +25,7 @@ final class AuthState extends Equatable {
     this.isSubmitting = false,
     this.submitted = false,
     this.formError,
+    this.submitAttempted = false,
   });
 
   final AuthStatus status;
@@ -38,6 +39,11 @@ final class AuthState extends Equatable {
   final bool isSubmitting;
   final bool submitted;
   final String? formError;
+
+  /// True once a submit was attempted while the form was invalid. Field
+  /// errors are only ever shown after this (or after an error is already
+  /// showing) — never on the first keystroke (P03-BUG-2, plan §(d)).
+  final bool submitAttempted;
 
   /// Submit CTA enabled iff both fields validate and no submit is in flight.
   bool get canSubmit =>
@@ -58,6 +64,7 @@ final class AuthState extends Equatable {
     bool? submitted,
     String? formError,
     bool clearFormError = false,
+    bool? submitAttempted,
   }) {
     return AuthState(
       status: status ?? this.status,
@@ -74,6 +81,7 @@ final class AuthState extends Equatable {
       isSubmitting: isSubmitting ?? this.isSubmitting,
       submitted: submitted ?? this.submitted,
       formError: clearFormError ? null : (formError ?? this.formError),
+      submitAttempted: submitAttempted ?? this.submitAttempted,
     );
   }
 
@@ -89,5 +97,6 @@ final class AuthState extends Equatable {
     isSubmitting,
     submitted,
     formError,
+    submitAttempted,
   ];
 }

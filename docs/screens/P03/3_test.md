@@ -1,193 +1,178 @@
-# P03 Create account — test notes (Stage 3, iteration 1)
+# P03 Create account — test notes (Stage 3, iteration 2)
 
 Route `/create-account` · feature `auth` · parent mode. Tests live in
 `app/test/features/auth/`; the in-memory Drift DB comes from
-`setUpTestScope()` (`Seed.demo` / `Seed.empty` / `Seed.fresh`) and every
-test that pumps the app ends with `disposeApp(tester)` (RULES §7). No
-`lib/` file was touched by this stage.
+`setUpTestScope()` (`Seed.demo` / `Seed.empty` / `Seed.fresh`) and every test
+that pumps the app ends with `disposeApp(tester)` (RULES §7). No `lib/` file
+was touched by this stage.
 
 ## Verdict
 
-**Three real bugs found** (P03-BUG-1/2/3 below, all reproduced by executable
-proofs in the new `p03_bugs_test.dart`). Per the Stage 3 brief the screen is
-**not** patched here, so `flutter test` on the full suite is **red by
-design**: 10 of the 11 proofs in `p03_bugs_test.dart` fail. Everything else
-passes (569 green, 10 red).
+**Three real bugs found** (P03-BUG-9/10/11, all new). The iteration-2 build
+fixed everything iteration 1 reported — I verified each fix against the
+design on the simulator, not just against the proofs — but the caption
+rewrite introduced two new defects and left a third from the shared field
+component. Per the brief the screen is **not** patched, so `flutter test` is
+**red by design**: 7 of the proofs in `p03_bugs_test.dart` fail. Everything
+else passes (600 green, 1 skipped, 7 red).
+
+## The iteration-2 fixes, verified
+
+Every iteration-1 finding is genuinely fixed. On-device evidence from
+`shot.sh` (BC440E48) plus `compare.py`:
+
+| | iteration 1 | iteration 2 | design |
+|---|---|---|---|
+| mean diff, light | 13.14% | **5.08%** | — |
+| mean diff, dark | 12.21% | **4.61%** | — |
+| compare band 6 (CTA) | 32.67% | 15.76% | — |
+| CTA panel top | y=630 | **y=682** | y=677 |
+| caption height | 80dp | two text lines | two text lines |
+| note clearance above the bar | 4dp | **38dp** | 35dp |
+| headline break | "Create your family / account" | **"Create your / family account"** | same |
+| compact nav bar | 44dp | **60dp** | 60dp |
+
+Per-band, the app now lands within **0–5dp** of the design for every
+element (back chevron 65.0–80.7 vs 65.0–80.7; Apple 255–306.7 vs 255–306.7;
+email field 445–496.7 vs 443–494.7; note 627.7–644 vs 625.7–642). The
+bottom-edge owner rule holds in both themes: the CTA's `surface` colour runs
+to y=844 with no page tint under it. ORCHESTRATOR_NOTES §1 (shared header),
+§2 (headline break), §4 (helper on the gutter, 6dp under the field) and §6
+(note row on the 20dp gutter) are all satisfied and now pinned by tests;
+§3's filled state is pinned by the existing `design filled state` group.
 
 ## Tests added this stage
 
-`auth_bloc_test.dart` 23 → **41** (18 added)
+`auth_bloc_test.dart` 41 → **45** (4 added) — the dirty-gating paths the
+P03-BUG-2 fix introduced, none of which had a proof:
 
-- **In-flight guards (4)** — a second `AuthSubmitted` while one is running is
-  ignored (no second repo call), and `AuthSocialSubmitted` is ignored while an
-  email submit is in flight and vice-versa. These are the re-entrancy paths
-  `auth_bloc.dart:81,115` implement; none had a proof.
-- **Fields stay live during a submit (1)** — the plan §(d) promise that the
-  user can keep typing while the request is in flight.
-- **Transient-failure retry (1)** — first `createAccount` throws, second
-  succeeds: the state machine goes `isSubmitting → formError → isSubmitting →
-  submitted` without losing the form values.
-- **`formError` clearing (2)** — editing either field after a submit failure
-  drops the server error (`auth_bloc.dart:42,50,68,74`), which is the
-  "recover by typing" path.
-- **`AuthSubmitConsumed` is a no-op when nothing was submitted (1)** — the
-  guard at `auth_bloc.dart:127` had no proof.
-- **A failing members stream (1)** — `AuthLoadRequested` on an erroring
-  stream still reaches `AuthStatus.failure` with the message, and the form
-  keeps working (the view-level half is in the widget suite).
-- **Load never disturbs an in-progress form (1)**.
-- **A social submit keeps a stale field error but still submits (1)** — pins
-  the current (harmless) behaviour: `emailError` survives a social sign-in.
-- **Repository, real Drift (8)** — local-part verbatim incl. dots/`+tag`,
-  whitespace-only local-part → `Parent`, an existing owner is never renamed,
-  owner row role/detail are right, second call after social keeps one row,
-  `watchItems` reflects a later insert, and **the members table has no
-  `email`/`password` column at all** (asserted on the schema, so the
-  password can never be persisted).
+- **A rejected submit arms live validation for both fields**, and each field
+  then clears only its own error as it is fixed.
+- **Clearing a field after a rejected submit re-shows its error** — the
+  `submitAttempted` flag is sticky, which is the intended trade (no red on
+  the first keystroke, red forever after a real submit attempt).
+- **A social sign-up never arms field validation** — a failed social submit
+  must show only the server error, never "Enter a valid email address".
+- **A valid submit after a rejected one still reaches the repository**, with
+  the full seven-state sequence pinned.
 
-`create_account_view_test.dart` 28 → **40** (12 added) — plus two shared
-helpers (`seedDemo`, `repository`) so the fake-repo tests no longer duplicate
-`GetIt` plumbing.
+`create_account_view_test.dart` 43 → **48** (5 added):
 
-- **Submitting state (4)** — all three buttons swap to a
-  `CircularProgressIndicator` and stop accepting taps; a slow social sign-up
-  blocks the email CTA as well; a failing social sign-up shows the error,
-  stays on `/create-account` and leaves the form usable; a **double tap on
-  Create account creates exactly one account** (the `isSubmitting` guard seen
-  from the UI).
-- **Layout geometry (7)** — chrome order top-down, the CTA is the last child,
-  20px side gutters on every control, the s3 gap between the password helper
-  and the note, 20px brand/shield glyphs, the eye toggle inside the field, a
-  34px home-indicator inset clipping nothing, and the bottom-edge owner rule
-  in both themes (the bar's `DecoratedBox` paints `tokens.surface` — never
-  `tokens.paper` — and reaches y=844).
-- **Accessibility (4 more)** — every interactive target clears 44dp at 430dp
-  ×1.3, the helper text is not announced as a button, the password input is
-  announced as a text field labelled `Password`, and the `or` divider row is
-  decorative.
+- **The helper is replaced by the error and comes back** (never both at
+  once) — the P03-BUG-8 helper row and the field error share one slot.
+- **A stale server error also displaces the helper, then both recover**.
+- **The legal links are 44dp targets with a tap action** — label, button
+  flag, `SemanticsAction.tap` (VoiceOver activation) for both.
+- **Back pops when a route is stacked** — the `canPop` branch of
+  `_onBack`, previously untested (only the deep-link `go('/value-tour')`
+  branch had a proof); drives a real `GoRouter` with `/` pushing
+  `/create-account`.
+- **The three helper/error recovery assertions run in dark mode too**, where
+  the error/helper colours differ.
 
-`seeded_submit_test.dart` (new, **7**) — the widget suite drives a fake
-repository, so this file closes the loop on the *shipped*
-`AuthRepositoryImpl` over real Drift under all three seeds:
+`p03_bugs_test.dart` 13 → **20** (7 new proofs, all RED — the bugs below).
+The other 13 proofs (BUG-1/2/3/4/5/7/8 + the skipped shared BUG-6) are green
+regression guards.
 
-- `Seed.demo` — submit advances to `/privacy` and the seeded owner row is
-  **not** renamed by a different email (`createAccount` is idempotent).
-- `Seed.empty` — same, on an onboarded parent with no children.
-- `Seed.fresh` — the email local-part becomes the owner name (`james`).
-- Apple and Google against `Seed.fresh` both advance and create one owner row
-  named `Parent`.
-- The password is never written — asserted on `members.$columns`.
-- An invalid form never reaches the repository (the CTA is disabled).
-
-Testing note worth keeping: Drift reads inside a `testWidgets` body must go
-through `tester.runAsync` — a query stream's first event is scheduled on the
-real event loop, which the fake-async test clock never advances. Seeding
-itself must **not** be wrapped (that deadlocks). Both are documented in the
-file header.
-
-## Results (`app/`)
-
-- `dart format --set-exit-if-changed .` → `Formatted 357 files (0 changed)`.
-- `flutter analyze` → `No issues found! (ran in 3.3s)` — no ignores added.
-- `flutter test test/features/auth` → **81 passed** (`auth_bloc_test.dart` 41,
-  `create_account_view_test.dart` 40).
-- `flutter test test/features/auth/seeded_submit_test.dart` → **7 passed**.
-- `flutter test` (full suite) → **569 passed, 10 failed** — every failure is
-  one of the `p03_bugs_test.dart` proofs below, nothing else.
-- `shot.sh` light + dark on the assigned simulator, `compare.py` against both
-  design PNGs → `ui/light.png`, `ui/dark.png`, `ui/compare-light.png`,
-  `ui/compare-dark.png`. Mean diff 13.14% light / 12.21% dark; bands 2 and 6
-  (the Apple button and the CTA) carry the drift BUG-1 explains.
+Total feature tests: 104 → **121** (113 green, 1 skipped, 7 red).
 
 ## Bugs found
 
-### P03-BUG-1 (MAJOR) — the legal caption is one link per row, so the bottom
-### bar is 47dp too tall and the privacy note is clipped
+### P03-BUG-9 (MAJOR) — the caption splits the "Privacy Notice" link, leaving a
+### lone underlined "Notice" on the second line
 
-`app/lib/features/auth/presentation/views/create_account_view.dart:259-315`
-(`_LegalLine` / `_LegalLink`).
+`app/lib/features/auth/presentation/views/create_account_view.dart:328-340`
+(`_LegalLine`'s `Text.rich`).
 
-`_LegalLine` is a `Wrap` whose link children are
-`ConstrainedBox(minHeight: NestDevice.tapParent)` (`:300-304`). A `Wrap` gives
-each child its own row at the child's full height, so every link contributes a
-**44dp** row instead of sharing the 18dp caption line. The HTML does the
-opposite — `.link { min-height: 44px; margin: -12px 0 }`
-(`design/html-source/screens/P03-create-account.html:26`): the 44dp hit box
-*overlaps* its text line and the caption stays two 18dp lines. Plan
-`1_plan.md` §(a) item 4 even called for "the HTML `.link` trick: `Padding(12,
-2)` + negative margin compensation"; the build took the `ConstrainedBox`
-without the compensation.
+The caption renders as plain text and lets the line breaker fall where it
+likes. With the app's Inter the sentence fits one word further than the
+design's font did, so the break lands **inside** the link:
+`…Terms and Privacy` / `Notice`. Measured on the device
+(`ui/light.png`, light): caption line 1 spans x 37–354 (nine word runs ending
+in "Privacy"), line 2 is a single 41dp run at x 175–215 with an underline
+band directly under it — one dangling underlined word.
 
-Measured (light PNG, `compare.py` sheet, and the proofs in
-`p03_bugs_test.dart`):
+ORCHESTRATOR_NOTES §5 (mandatory) requires
+`By continuing you agree to our Terms and` / `Privacy Notice`. Proof:
+P03-BUG-9 / 9b — the label's layout boxes, read off the caption's own
+`RenderParagraph`, must all sit on a single caption line, at 320/390/430 ×
+1.0/1.3. Fix direction: make the two-word label unbreakable (U+00A0 between
+the words) — this is also why the QA screenshot reads differently from the
+design even though the caption's *height* is now right.
 
-| | design | shipped | delta |
-|---|---|---|---|
-| caption block | ~38dp | 80dp (140dp at scale 1.3) | +42dp |
-| CTA panel height | 167dp | 172dp | +5dp… |
-| CTA panel height (320dp, 1.3) | — | 242dp | — |
-| CTA top edge | y=677 | y=630 | −47dp |
-| note clearance above the bar | 35dp | 4dp | −31dp |
-| form fits without scrolling | yes | **no** | — |
+### P03-BUG-10 (MAJOR) — the 44dp link targets no longer sit over the words
+### they represent
 
-Because the panel is bottom-anchored and over-tall, it eats the form above
-it: at 390×844 the note "No child emails or photos — ever." is clipped by
-the bar (widget proof: note bottom 709 vs CTA top 672; in the light PNG the
-note sits 4dp from the divider against the design's 35dp), and at text scale
-1.3 the whole lower form is cut off. This is also the dominant contributor to
-the 32.67% / 26.33% drift in compare band 6.
+`app/lib/features/auth/presentation/views/create_account_view.dart:342-355`
+and `367-390` (`_LegalLine`'s `Positioned.fill` overlay + `_LegalHitTarget`).
 
-Repro: `flutter test test/features/auth/p03_bugs_test.dart` — proofs
-P03-BUG-1a…1f. Fix direction: reproduce the HTML trick (negative margin or a
-zero-height overlay hit area) so the caption is two 18dp lines while both
-links keep a 44dp target.
+The P03-BUG-1 fix replaced the `Wrap` with a zero-height overlay that
+centres both targets as **one adjacent 88dp block**
+(`Row(mainAxisSize: min)`, x 151–239 at 390dp, both on the same row, gap 0)
+while the words they claim to represent sit elsewhere. Measured at every
+width: the "Terms" target does not overlap the word "Terms" (390: target
+151–195 vs label 89–155) and neither does the "Privacy Notice" target.
+Tapping the visible underlined "Terms" at the end of caption line 1 does
+nothing, while the middle of the sentence — plain words, not links — is
+covered by two invisible buttons.
 
-### P03-BUG-2 (MAJOR) — a validation error appears on the first keystroke
+This is a regression introduced by the iteration-2 fix: in iteration 1 each
+target wrapped its own label, so a tap on the word hit its target. The links
+are inert in v1 (`TODO(P03)`), so there is no user-visible failure yet, but
+the touch targets are simply in the wrong place and will stay wrong when the
+routes land. Proofs: P03-BUG-10 (320/390/430, overlap of each target with
+its own label) and P03-BUG-10b (the targets can never touch — the words
+" and " always separate the two links).
 
-`app/lib/features/auth/presentation/bloc/auth_bloc.dart:35-75`
-(`_onEmailChanged`, `_onPasswordChanged`).
+### P03-BUG-11 (MINOR) — the validation error is indented 20dp while the
+### helper it replaces sits on the gutter
 
-Both handlers set `emailError` / `passwordError` on **every** change, so the
-moment the user types the first character of an email the field shows "Enter
-a valid email address", and the first character of a password shows "Use at
-least 8 characters" on top of the helper "At least 8 characters". Clearing
-the field also errors immediately.
+`app/lib/features/auth/presentation/views/create_account_view.dart:181-217`
+(password field) — the error comes from the shared `NestTextField`'s
+`errorText`, which Material renders 20dp inside the field, while
+ORCHESTRATOR_NOTES §4 (and the iteration-2 BUG-8 fix) moved the helper onto
+the 20dp gutter. Measured: helper `left = 20`, error `left = 40`. The text
+therefore jumps 20dp sideways the moment an error appears — the same defect
+§4 fixed for the hint, left in place for the error line. The design's
+`.field` is a flex column (`.field .error`, `components.css:134`), so label,
+input, hint and error all share the gutter.
 
-This contradicts plan §(b) ("if the field was already errored, re-validate
-live") and §(d) ("field errors: shown only after the field was touched or a
-submit was attempted — no red-on-first-paint"), and it is the behaviour the
-rest of the app avoids. Repro: type one character into either field.
-
-Proofs P03-BUG-2a/2b/2c. Note P03-BUG-2d **passes**: submitting an empty
-form still surfaces both errors, so the fix must not remove that path.
-
-### P03-BUG-3 (MINOR) — the compact nav bar is 44dp against the design 60dp
-
-`app/lib/core/design_system/components/nest_nav_bar.dart:42-81` (shared, not
-editable by this screen) — `compact: true` is a bare 44dp row. The design's
-`.nav-bar.compact` is 4px top padding + a 44px button + 12px bottom
-(`design/html-source/screens/P03-create-account.html:58`), i.e. **60dp**. The
-whole form therefore renders ~16dp higher than the design (measured band
-offset is a consistent −14…−16dp from the headline down to the note).
-
-This is shared code, so it is filed for the orchestrator rather than patched
-— see the new SHARED_REQUEST item. P02 already hit the same bar and shipped a
-feature-private 60px `_TourNav` as a workaround; if the same treatment is
-wanted here, `1_plan.md` §(a) item 2 needs updating too (it prescribes
-`NestNavBar(compact: true)`).
+Proof: P03-BUG-11. Fix direction: own the error row the way the helper row is
+owned now (the screen may also want a shared fix for `NestTextField`'s
+errorText padding — filed as SHARED_REQUEST §5).
 
 ## Non-blocking observations
 
-- The design's own PNG shows a home-indicator pill; the app shows none. This
-  simulator does not draw the pill in `simctl` captures at all (verified
-  against a springboard screenshot), so it is a capture artefact, not a
-  screen defect. The bottom-edge rule itself holds: the CTA's `surface`
-  colour runs to y=844 with no page tint below, in both themes.
-- Brand-button semantics announce the label twice
-  ("Continue with Apple\nContinue with Apple") — shared `_BrandButton`
-  behaviour, already SHARED_REQUEST item 2, unchanged and non-blocking.
-- The blocked `createAccount(name:)` legacy alias in
-  `auth_repository_impl.dart` still exists solely for the shared
-  `app/test/core/data/repositories_test.dart`; unchanged this iteration.
+- `submitAttempted` is never reset. It is harmless today (the bloc is
+  route-scoped and a successful submit navigates away), but it means any
+  later refactor that keeps the bloc alive after navigation would inherit
+  permanently-dirty fields. Pinned by the "clearing a field after a rejected
+  submit re-shows its error" proof so the behaviour is a decision, not an
+  accident.
+- The design PNG shows a home-indicator pill; the app shows none. Verified
+  again this iteration to be a capture artefact: this simulator does not
+  draw the pill in `simctl` screenshots at all (a springboard capture shows
+  none either). The bottom-edge rule itself is satisfied and now has a
+  dedicated proof in `create_account_view_test.dart`.
+- `_headlineMaxWidth = 240` is a measured literal rather than a token. It is
+  documented and justified from the HTML break, and it produces the design's
+  line break, but it will drift if the Nunito build changes. Flagged for the
+  review stage rather than as a bug.
+- Shared items 2 and 4 (doubled screen-reader labels on `NestBrandButton` /
+  `NestButton`) remain open; the P03-BUG-6 proof stays skipped for that
+  reason — the only skip in the suite.
+
+## Results (`app/`)
+
+- `dart format --set-exit-if-changed .` → `Formatted 359 files (0 changed)`.
+- `flutter analyze` → `No issues found!` — no ignores, no weakened options.
+- `flutter test test/features/auth` → **113 passed, 1 skipped, 7 failed**
+  (the 7 are the new proofs above; nothing else is red).
+  Per file: `auth_bloc_test.dart` 45/45, `create_account_view_test.dart`
+  48/48, `seeded_submit_test.dart` 7/7, `p03_bugs_test.dart` 13 green + 1
+  skipped + 7 red.
+- `flutter test` (full suite) → **600 passed, 1 skipped, 7 failed**.
+- `shot.sh` light + dark + `compare.py` → `ui/light.png`, `ui/dark.png`,
+  `ui/compare-light.png`, `ui/compare-dark.png`.
 
 VERDICT: FAIL

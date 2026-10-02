@@ -14,7 +14,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/features/auth/data/auth_repository_impl.dart';
-import 'package:nestling/features/auth/domain/auth_provider.dart';
 import 'package:nestling/features/auth/domain/auth_repository.dart';
 import 'package:nestling/features/auth/domain/entities/auth_account.dart';
 import 'package:nestling/features/auth/presentation/bloc/auth_bloc.dart';
@@ -115,6 +114,10 @@ void main() {
       final cleared = errored.copyWith(clearEmailError: true);
       expect(cleared.emailError, isNull);
       expect(cleared.email, withEmail.email);
+
+      final attempted = state.copyWith(submitAttempted: true);
+      expect(attempted.submitAttempted, isTrue);
+      expect(state.submitAttempted, isFalse);
     });
 
     test('equality is driven by every field', () {
@@ -125,6 +128,7 @@ void main() {
       expect(a, isNot(const AuthState()));
       expect(a, isNot(a.copyWith(password: 'password123')));
       expect(a, isNot(a.copyWith(submitted: true)));
+      expect(a, isNot(a.copyWith(submitAttempted: true)));
     });
 
     test('email validation accepts a trimmed addr and rejects the rest', () {
@@ -179,26 +183,51 @@ void main() {
     );
 
     blocTest<AuthBloc, AuthState>(
-      'typing an invalid email errors live; fixing it clears',
+      'typing an invalid email stays clean until a submit attempt',
       build: () => AuthBloc(repository: _FakeAuthRepository()),
       act: (bloc) => bloc
         ..add(const AuthEmailChanged('not-an-email'))
+        ..add(const AuthSubmitted())
         ..add(const AuthEmailChanged('sarah@example.co.uk')),
       expect: () => const <AuthState>[
-        AuthState(email: 'not-an-email', emailError: authEmailErrorText),
-        AuthState(email: 'sarah@example.co.uk'),
+        // P03-BUG-2: the first keystroke writes the value with no error.
+        AuthState(email: 'not-an-email'),
+        // The rejected submit surfaces the error and arms live validation.
+        AuthState(
+          email: 'not-an-email',
+          emailError: authEmailErrorText,
+          passwordError: authPasswordErrorText,
+          submitAttempted: true,
+        ),
+        // Fixing the value clears its error live.
+        AuthState(
+          email: 'sarah@example.co.uk',
+          passwordError: authPasswordErrorText,
+          submitAttempted: true,
+        ),
       ],
     );
 
     blocTest<AuthBloc, AuthState>(
-      'typing a short password errors live; fixing it clears',
+      'typing a short password stays clean until a submit attempt',
       build: () => AuthBloc(repository: _FakeAuthRepository()),
       act: (bloc) => bloc
         ..add(const AuthPasswordChanged('short'))
+        ..add(const AuthSubmitted())
         ..add(const AuthPasswordChanged('password123')),
       expect: () => const <AuthState>[
-        AuthState(password: 'short', passwordError: authPasswordErrorText),
-        AuthState(password: 'password123'),
+        AuthState(password: 'short'),
+        AuthState(
+          password: 'short',
+          emailError: authEmailErrorText,
+          passwordError: authPasswordErrorText,
+          submitAttempted: true,
+        ),
+        AuthState(
+          password: 'password123',
+          emailError: authEmailErrorText,
+          submitAttempted: true,
+        ),
       ],
     );
 
@@ -210,6 +239,7 @@ void main() {
         AuthState(
           emailError: authEmailErrorText,
           passwordError: authPasswordErrorText,
+          submitAttempted: true,
         ),
       ],
     );
@@ -219,16 +249,25 @@ void main() {
       final bloc = AuthBloc(repository: repo);
       addTearDown(bloc.close);
 
+      // P03-BUG-2: typing alone never errors and never submits.
       bloc
         ..add(const AuthEmailChanged('bad'))
         ..add(const AuthPasswordChanged('short'));
-      await bloc.stream.firstWhere((s) => s.passwordError != null);
+      await bloc.stream.firstWhere(
+        (s) => s.email == 'bad' && s.password == 'short',
+      );
+      expect(bloc.state.emailError, isNull);
+      expect(bloc.state.passwordError, isNull);
+      expect(repo.createAccountCalls, 0);
+
+      // The rejected submit surfaces both errors without a repo call.
       bloc.add(const AuthSubmitted());
-      await Future<void>.delayed(Duration.zero);
+      await bloc.stream.firstWhere((s) => s.passwordError != null);
 
       expect(repo.createAccountCalls, 0);
       expect(bloc.state.emailError, authEmailErrorText);
       expect(bloc.state.passwordError, authPasswordErrorText);
+      expect(bloc.state.submitAttempted, isTrue);
       expect(bloc.state.submitted, isFalse);
     });
 
@@ -518,6 +557,133 @@ void main() {
             .having((s) => s.status, 'status', AuthStatus.loading)
             .having((s) => s.email, 'email', 'sarah@example.co.uk')
             .having((s) => s.password, 'password', 'password123'),
+      ],
+    );
+
+    // --- dirty gating (the P03-BUG-2 fix, iteration 2) ------------------
+    blocTest<AuthBloc, AuthState>(
+      'a rejected submit arms live validation for both fields',
+      build: () => AuthBloc(repository: _FakeAuthRepository()),
+      seed: () => const AuthState(
+        email: 'not-an-email',
+        password: 'short',
+        submitAttempted: true,
+        emailError: authEmailErrorText,
+        passwordError: authPasswordErrorText,
+      ),
+      act: (bloc) => bloc
+        ..add(const AuthEmailChanged('james@'))
+        ..add(const AuthPasswordChanged('long-enough')),
+      expect: () => const <AuthState>[
+        AuthState(
+          email: 'james@',
+          password: 'short',
+          emailError: authEmailErrorText,
+          passwordError: authPasswordErrorText,
+          submitAttempted: true,
+        ),
+        AuthState(
+          email: 'james@',
+          password: 'long-enough',
+          emailError: authEmailErrorText,
+          submitAttempted: true,
+        ),
+      ],
+    );
+
+    blocTest<AuthBloc, AuthState>(
+      'clearing a field after a rejected submit re-shows its error',
+      build: () => AuthBloc(repository: _FakeAuthRepository()),
+      seed: () => const AuthState(
+        email: 'sarah@example.co.uk',
+        password: 'short',
+        submitAttempted: true,
+        passwordError: authPasswordErrorText,
+      ),
+      act: (bloc) => bloc.add(const AuthPasswordChanged('')),
+      expect: () => const <AuthState>[
+        AuthState(
+          email: 'sarah@example.co.uk',
+          submitAttempted: true,
+          passwordError: authPasswordErrorText,
+        ),
+      ],
+    );
+
+    blocTest<AuthBloc, AuthState>(
+      'a social sign-up never arms field validation',
+      build: () =>
+          AuthBloc(repository: _FakeAuthRepository(throwOnSocial: true)),
+      act: (bloc) => bloc.add(const AuthSocialSubmitted(AuthProvider.apple)),
+      expect: () => <Matcher>[
+        isA<AuthState>().having((s) => s.isSubmitting, 'isSubmitting', isTrue),
+        isA<AuthState>()
+            .having((s) => s.submitAttempted, 'submitAttempted', isFalse)
+            .having((s) => s.emailError, 'emailError', isNull)
+            .having((s) => s.passwordError, 'passwordError', isNull)
+            .having((s) => s.formError, 'formError', isNotNull),
+      ],
+    );
+
+    blocTest<AuthBloc, AuthState>(
+      'typing never arms validation on its own',
+      build: () => AuthBloc(repository: _FakeAuthRepository()),
+      act: (bloc) => bloc
+        ..add(const AuthEmailChanged('nope'))
+        ..add(const AuthPasswordChanged('tiny'))
+        ..add(const AuthEmailChanged('still@nope'))
+        ..add(const AuthPasswordChanged('also-tiny')),
+      expect: () => const <AuthState>[
+        AuthState(email: 'nope'),
+        AuthState(email: 'nope', password: 'tiny'),
+        AuthState(email: 'still@nope', password: 'tiny'),
+        AuthState(email: 'still@nope', password: 'also-tiny'),
+      ],
+    );
+
+    blocTest<AuthBloc, AuthState>(
+      'a valid submit after a rejected one still reaches the repository',
+      build: () => AuthBloc(repository: _FakeAuthRepository()),
+      act: (bloc) => bloc
+        ..add(const AuthEmailChanged('nope'))
+        ..add(const AuthPasswordChanged('tiny'))
+        ..add(const AuthSubmitted())
+        ..add(const AuthEmailChanged('sarah@example.co.uk'))
+        ..add(const AuthPasswordChanged('password123'))
+        ..add(const AuthSubmitted()),
+      expect: () => const <AuthState>[
+        AuthState(email: 'nope'),
+        AuthState(email: 'nope', password: 'tiny'),
+        AuthState(
+          email: 'nope',
+          password: 'tiny',
+          emailError: authEmailErrorText,
+          passwordError: authPasswordErrorText,
+          submitAttempted: true,
+        ),
+        AuthState(
+          email: 'sarah@example.co.uk',
+          password: 'tiny',
+          passwordError: authPasswordErrorText,
+          submitAttempted: true,
+        ),
+        AuthState(
+          email: 'sarah@example.co.uk',
+          password: 'password123',
+          submitAttempted: true,
+        ),
+        AuthState(
+          email: 'sarah@example.co.uk',
+          password: 'password123',
+          isSubmitting: true,
+          submitAttempted: true,
+        ),
+        AuthState(
+          email: 'sarah@example.co.uk',
+          password: 'password123',
+          submitted: true,
+          submitAttempted: true,
+        ),
       ],
     );
   });

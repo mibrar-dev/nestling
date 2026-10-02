@@ -1,5 +1,7 @@
-import 'package:nestling/features/auth/domain/auth_provider.dart';
 import 'package:nestling/features/auth/domain/entities/auth_account.dart';
+
+/// Social sign-in provider for P03 create account.
+enum AuthProvider { apple, google }
 
 /// Account creation (P03), backed by Drift. Local-only for now: creating an
 /// account ensures the owner member row exists.

@@ -7,3 +7,8 @@
 4. "At least 8 characters" hint: left-aligned with the field/label edge (x = 20 px gutter), not indented 16 px; 6 px below the field.
 5. Legal footer: "By continuing you agree to our Terms and" / "Privacy Notice" — two centred lines with normal line height (no big gap), links in the design's link style (underline, link colour), inside the bottom panel that runs to the screen edge (owner rule).
 6. "No child emails or photos — ever." row: shield icon + text on one baseline, left edge at the 20 px gutter.
+
+## QA of cmp_light_2 (5.08%, was 13.15%) — remaining items for iteration 3
+1. Legal footer: keep "Privacy Notice" together (non-breaking space U+00A0 between the words) so it reads "By continuing you agree to our Terms and" / "Privacy Notice" exactly like the design.
+2. Subtitle copy: curly apostrophe "You’re" (U+2019) as in the design/HTML; it should break "Children never / need an email." at 390 width (check the subtitle text style size/letter-spacing vs the HTML — the app's line is slightly wider).
+3. The FILLED-state capture is still missing: in stage 5 type sarah@example.co.uk + an 18-character password into the fields on the simulator (tap field → type) and compare that capture with the design (enabled green button, dots, eye). Keep the empty launch state as is.
