@@ -1,17 +1,20 @@
-# P04 · Privacy consent — test notes (STAGE 3, iteration 5)
+# P04 · Privacy consent — test notes (STAGE 3, iteration 6)
 
 Feature `privacy_consent` · route `/privacy` · parent mode.
 Scope this stage: `app/test/features/privacy_consent/**` + `docs/screens/P04/**`
 (RULES §1). No production code touched; nothing patched.
 
-Inputs re-verified: `1_plan.md`, `2_build.md` (iteration 5), `4_review.md`,
-`5_ui.md`, `6_bugs.md`, `FIXES_4.md`, `SHARED_REQUEST.md` and the mandatory
-`ORCHESTRATOR_NOTES.md` — including the **15:27 UPDATE**: `ic_trash.svg` /
-`NestIcons.trash` and the token-coloured `NestPrivacyShield` are now in the
-tree (shared batch merged as `ce89889`), and the only visible deviation left
-was the blank row-4 tile.
+Inputs re-verified: `1_plan.md`, `2_build.md` (iteration 6 — no production
+change, every FIXES_5 wire-up verified present), `4_review.md`, `5_ui.md`,
+`6_bugs.md`, `FIXES_5.md`, `SHARED_REQUEST.md` and the mandatory
+`ORCHESTRATOR_NOTES.md` (12:03 / 13:42 / 15:27 updates).
 
-## Test inventory — 131 P04 tests, **0 skipped** (every bug proof is green)
+Because the build introduced no new rendering surface, this stage went after
+the parts of the contract that were still **asserted by prose rather than by a
+test**: contrast, the system text-scale clamp, screen-reader shape and the
+"tokens only" rule.
+
+## Test inventory — 156 P04 tests, 0 skipped
 
 | File | Tests | Role |
 |---|---|---|
@@ -20,132 +23,120 @@ was the blank row-4 tile.
 | `privacy_consent_view_test.dart` | 27 | copy, light+dark, 320/390/430 × 1.0/1.3 matrix, statuses, navigation, a11y, gutters, bottom edge |
 | `privacy_consent_view_contract_test.dart` | 39 | states through the real router, every tap destination, optimistic switch, failure captions, separator overlay, row glyphs, nav geometry, dialog stress, short screens, alignment |
 | `privacy_consent_copy_test.dart` | 5 | copy fidelity against the HTML design source (COPY rule) |
-| `privacy_consent_artwork_test.dart` | 11 **(new)** | artwork provenance + painted-pixel theme proof |
-| `p04_bugs_test.dart` | 16 | the nine bug proofs (all green) + clean-behaviour guards |
+| `privacy_consent_artwork_test.dart` | 11 | artwork provenance + painted-pixel theme proof |
+| `privacy_consent_a11y_test.dart` | 25 **(new)** | contrast, system text scale, screen-reader shape, token hygiene |
+| `p04_bugs_test.dart` | 16 | the nine bug proofs + clean-behaviour guards |
 
-## Tests added this iteration
+## Tests added this iteration — `privacy_consent_a11y_test.dart`
 
-The iteration-5 build wired three shared pieces into the screen (trash glyph,
-`NestPrivacyShield`, shared `NestList` overlay). Those are new rendering paths,
-so this stage pinned **where the artwork comes from** and **what it actually
-paints** — not just that something appears.
+### 1. WCAG contrast for every colour pair the screen paints
 
-### 1. Trash glyph provenance (orchestrator note item 1)
+The design spec claims "token pairs only … sky-on-surface link ≥ 4.5:1" and
+nothing asserted it. Nine pairs × both themes, computed with the WCAG 2.x
+relative-luminance formula from `Color.computeLuminance()`:
 
-- `the shipped SVG carries the design glyph path verbatim` — reads the row-4
-  icon's `d="…"` from `design/html-source/screens/P04-privacy.html` and the
-  `<path d>` from `app/assets/icons/ic_trash.svg` and asserts they are
-  **identical**. This is the assertion that would have caught the original
-  defect: a wheelie bin (`ic_bin`) or laundry basket (`ic_basket`) stand-in
-  renders *something*, so "an icon exists" is not evidence — the path is.
-- `the glyph is token-tintable, not a baked colour` — `currentColor`, no baked
-  `fill="#…"`/`stroke="#…"` (a baked hex would ignore the peach ink and render
-  wrong in both themes), 2 px stroke.
-- `the tile ink is the design --a-peach token in both themes` — reads
-  `--a-peach` from `design/html-source/tokens.css` (first = light block, last =
-  dark block) and asserts `NestColors.light.aPeach` / `NestColors.dark.aPeach`
-  match those hexes and differ from each other. Token-derived, so no hex is
-  hard-coded in the app or the test.
-- Light and dark widget tests: row 4 renders `NestIcons.trash` at 24 px, the
-  icon colour **is** the theme's `aPeach`, the tile background **is** the
-  theme's `peachTint`, and the painted `SvgPicture` carries that asset with a
-  non-null `ColorFilter` (i.e. it is really tinted, not defaulted to black).
+| Pair (both themes) | light | dark | floor |
+|---|---|---|---|
+| h1 + row titles — ink on paper | 15.45 | 16.30 | 4.5 |
+| standfirst + row subs — ink2 on paper | 8.31 | 10.84 | 4.5 |
+| failure caption — danger on paper | 4.74 | 7.26 | 4.5 |
+| footnote link — sky on surface (13 px) | 5.48 | 7.14 | 4.5 |
+| dialog promises — ink2 on surface | 8.87 | 9.82 | 4.5 |
+| no-ads glyph — leafInk on leafTint | 7.12 | 8.47 | 3.0 |
+| person glyph — lilac on lilacTint | **3.40** | 5.93 | 3.0 |
+| pin glyph — sky on skyTint | 4.73 | 6.12 | 3.0 |
+| trash glyph — aPeach on peachTint | 4.69 | 8.31 | 3.0 |
 
-### 2. The shield paints theme tokens — a pixel-level P04-7 proof
+Text pairs use WCAG 1.4.3 (4.5:1); the 24 px tile glyphs use 1.4.11 for
+meaningful non-text graphics (3:1). A separate test requires light and dark to
+**differ** for every token the screen paints, so a test that only inspects one
+palette cannot pass while the other ships a hard-coded colour.
 
-`NestPrivacyShield` is a `CustomPaint`, so the previous proof ("the SVG no
-longer bakes `#E6EFFE`") no longer covered what ships. The new tests
-rasterise the screen's own painter and read the pixels back:
+Teeth check: raising the icon floor to 4.5 made exactly the lilac pair fail
+(`3.399…`), then it was reverted — the assertions are real, not vacuous.
 
-- `the screen uses NestPrivacyShield, not the baked SVG` — one
-  `NestPrivacyShield`, **no** `SvgPicture` whose asset contains
-  `privacy_shield`, and the design's alt label is announced.
-- `84x84 by default and scaled by its size token`, and `the shield is announced
-  as an image` (`isImage` semantics flag).
-- `light` / `dark`: `every painted pixel is a theme token` — the painter is
-  replayed into an 84×84 picture, and the opaque pixels must contain **all
-  four** theme tokens (`skyTint` disc, `surface` body, `leaf` heart, `ink`
-  stroke) and **none** of the other theme's `skyTint`/`surface`/`leaf`. That
-  last assertion is the regression guard: it is precisely how the light-baked
-  illustration broke dark mode, and it can never pass vacuously because the
-  same test also requires > half the box to be painted.
-- `the light and dark disc tokens match the design CSS` — `--sky-tint` from the
-  design tokens file equals `NestColors.light.skyTint` / `NestColors.dark.skyTint`.
+### 2. System text scale above the design-system clamp
 
-Two harness facts this cost me and the file now documents: `Picture.toImage`
-clips to the requested box, so a transparent bounding rect is laid first; and
-the packed pixel ints must be `0xAARRGGBB` (matching `Color.toARGB32()`), not
-`0xRRGGBBAA` — the earlier wrong packing failed loudly rather than silently.
+A parent with large system text reports 1.6; `NestlingApp` clamps the ambient
+scaler to 1.0–1.3 (SPACING_SPEC §10). New tests assert, in both themes:
 
-### 3. Re-verified after the mechanism change (no regression)
+- the effective scaler at the headline really is **1.3**, read from the widget
+  context (`MediaQuery.textScalerOf(...).scale(1)`), so a future clamp change
+  that breaks the screen's 1.3 layout is visible;
+- the screen still renders head, rows and `Continue` with no exception;
+- at **320 dp with a 1.6 system scale** the opt card and the toggle stay
+  reachable — scrolled into view, tapped, and the opt-in persists.
 
-- **Separator (P04-4) with the shared `NestList` overlay:** row 1 carries none,
-  rows 2–4 exactly one each; the line sits on its row's top, inset **72 px**,
-  runs to the right edge, 1 px tall, `tokens.line` in both themes; the list is
-  exactly the sum of its rows (zero layout height); wrapped rows at 320/1.3
-  keep the line on the new boundary; each row stays one merged semantics node
-  with no tap/long-press/focus action; and the geometry is still derived from
-  the design's own `.list-row + .list-row::before` rule.
-- **Bloc / repository:** all 20 + 13 pass unchanged (load, empty, stream error,
-  both toggle directions, optimistic emit, revert-to-stored, error clearing,
-  transactional first-run upsert with last-write-wins).
-- **Routes, copy, a11y, owner rules:** Continue → `/add-children` in
-  loaded/loading/failure, back with and without history → `/create-account`,
-  toggle stays on `/privacy`, dialog opened and dismissed by `Close` and
-  barrier; copy character-by-character against the HTML source (curly
-  apostrophe, em dash, NBSP); 20 px gutters and card-edge alignment at
-  320/390/430; bottom-CTA surface to the physical edge in both themes.
+### 3. Screen-reader shape
+
+One header node on the h1; each promise row is a single merged node with no
+`tap`/`long-press` action and no `isButton` flag; every interactive control
+carries a readable label (`Back`, `Share anonymous crash reports`,
+`Read the full Privacy Notice`, `Continue`). The `SemanticsHandle` is released
+inside the test body — `addTearDown` runs after the end-of-test semantics
+check, which is a trap this suite hit before.
+
+### 4. Token hygiene — the "never hard-code colours" rule, enforced
+
+- `no feature source contains a colour literal`: every `.dart` file under
+  `lib/features/privacy_consent/` is scanned for `Color(0x`, `Colors.` and
+  `Color.fromARGB`; the scan is guarded to have found at least five files so it
+  cannot pass by reading nothing.
+- `the view paints only named palette entries`: every `tokens.<name>` the view
+  reaches for must exist in the design-system palette allow-list, and the ones
+  the screen must paint (`paper`, `ink`, `ink2`, `sky`, `danger`, `aPeach`,
+  `peachTint`) must be present.
+
+### 5. Re-verified unchanged (131 pre-existing tests still green)
+
+Bloc: loading→loaded, empty stream, stream error, items without a `crash` row,
+both toggle directions, optimistic emit, revert-to-stored, error clearing,
+transactional first-run upsert with last-write-wins. Repository: default OFF,
+5 rows, crash-row mirror, untouched columns, single-row upsert, idempotent
+write, `Seed.empty` / `Seed.demo`. Widget: light+dark, 320/390/430 × 1.0/1.3,
+320×568, empty/loading/error/first-run states, every tap destination, separator
+overlay (design-CSS-derived geometry), artwork provenance and painted pixels,
+copy character-by-character, owner alignment and bottom-edge rules.
 
 ## Results
 
 ```
-dart format --output=none --set-exit-if-changed .  → 367 files, 0 changed
-flutter analyze                                    → No issues found! (ran in 5.7s)
-flutter test test/features/privacy_consent/        → 00:04 +131: All tests passed!
-flutter test (whole app)                           → 00:25 +684: All tests passed!
+dart format --output=none --set-exit-if-changed .  → 371 files, 0 changed
+flutter analyze                                    → No issues found! (ran in 2.8s)
+flutter test test/features/privacy_consent/        → 00:02 +156: All tests passed!
+flutter test (whole app)                           → 00:16 +801: All tests passed!
 ```
 
-**Zero failures and zero skips** — first iteration where the whole P04 suite
-runs clean, including all nine bug proofs.
+Zero failures, zero skips — the whole app is green.
 
 ## Bugs found this iteration
 
-**None.** No defect surfaced in the iteration-5 tree. The shared artwork,
-the trash wire-up and the shared overlay behave exactly as the fixes describe.
+**None.** No defect surfaced in the iteration-6 tree.
 
-## Open items
+## Observations (not defects, nothing to patch)
 
-None in P04 scope. Every previously filed item is closed:
-
-- P04-1 first-run write dropped → upsert (green)
-- P04-2 empty row-4 tile → shared `ic_trash.svg` + wire-up (green, plus the
-  path-provenance proof above)
-- P04-3 header 16 px high → shared compact nav (green)
-- P04-4 separator drift → shared `NestList` overlay (green)
-- P04-5 double tap, P04-6 false "it stays off", P04-8 revert target,
-  P04-9 non-atomic upsert → all green
-- P04-7 dark shield → shared `NestPrivacyShield`, now proven on the painted
-  pixels rather than on the asset's source
-
-`SHARED_REQUEST.md` §4's P16 half was never P04's to fix (same UPDATE-only
-write shape in `SettingsRepositoryImpl`); §1/§2/§6 are consumed.
-
-Orchestrator notes: item 1 is now proven at the asset-path, token and pixel
-level in both themes; item 2 is pixel-exact; item 3 is exact (separator derived
-from the design CSS); item 4 owner rules are asserted in both themes.
-
-## Notes (not defects)
-
+- **Light `lilac` on `lilacTint` measures 3.40:1.** It clears WCAG 1.4.11
+  (3:1 for graphical objects) and the glyph it tints is a 24 px icon, so P04 is
+  compliant — but it is below the 4.5:1 text floor and sits just 0.4 above the
+  limit, so it is the most fragile pair on the screen. It is a shared palette
+  entry (`NestColors.light.lilac`) used by other screens, so changing it is an
+  orchestrator decision, not a P04 one; the test now pins the measured value so
+  a regression is caught rather than discovered in an audit.
 - Widget tests run without the bundled Inter/Nunito faces, so the block test
   font widens every line and pushes the opt card below the fold although it
   fits on a 390×844 device; helpers scroll with `ensureVisible` first.
   Absolute row heights stay a device (UI-check) measurement.
-- `SemanticsHandle` from `tester.ensureSemantics()` must be disposed **inside**
-  the test body; `addTearDown` runs after the end-of-test semantics check.
-- Drift reads inside `testWidgets` need `tester.runAsync`; so does
-  `Picture.toImage` when rasterising the shield.
-- The copy, separator and artwork tests read `design/html-source/**` at
-  runtime and fail loudly with the searched paths if the app is ever tested
-  outside the repo — deliberately, rather than passing silently.
+- `SemanticsHandle` must be disposed inside the test body; Drift reads and
+  `Picture.toImage` inside `testWidgets` need `tester.runAsync`; a
+  `Future.delayed` must never outlive a test.
+- The copy, separator, artwork and hygiene tests read
+  `design/html-source/**` and `lib/**` at runtime and fail loudly with the
+  searched paths if the layout changes — deliberately, never silently.
+
+## Open items
+
+None in P04 scope. P04-1 … P04-9 are all fixed and green; `SHARED_REQUEST.md`
+§1/§2/§6 are consumed, and §4's P16 half was never this screen's to fix.
+Orchestrator notes 1–4 are all satisfied and proven by tests.
 
 VERDICT: PASS

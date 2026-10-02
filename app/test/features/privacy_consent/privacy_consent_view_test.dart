@@ -5,8 +5,8 @@
 // navigation, the crash-toggle write-through, the no-Pip rule, the 20px
 // gutter alignment and the bottom-edge owner rule.
 //
-// The 4th promise row reserves its 40x40 peach tile behind TODO(P04)
-// (docs/screens/P04/SHARED_REQUEST.md): no stand-in icon is asserted.
+// All four promise rows render the shared tinted glyph in both themes
+// (`privacy_consent_artwork_test.dart`).
 
 import 'dart:async';
 

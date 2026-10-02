@@ -1,98 +1,78 @@
-# P04 · Privacy consent — build notes (STAGE 2, iteration 5)
+# P04 · Privacy consent — build notes (STAGE 2, iteration 6)
 
 Feature `privacy_consent` · route `/privacy` · parent mode.
-Built per `docs/screens/P04/1_plan.md`, fixing every item in
-`docs/screens/P04/FIXES_4.md`, and un-skipping the bug proofs the fixes
-turn green. The shared batch (`7eaa1f7`, merged in `ce89889`) supplied
-`ic_trash.svg` + `NestIcons.trash`, `NestPrivacyShield` and the shared
-`NestList` overlay — all three P04 wire-ups below consume them.
+Built per `docs/screens/P04/1_plan.md` and `docs/screens/P04/FIXES_5.md`.
+Situation on entry: iteration 5's build had already landed every FIXES_5
+wire-up (the file describes the iteration-4 tree — its timing note says the
+batch merged after that build was written, but the current worktree contains
+the completed work, verified line by line below). This iteration's code
+change is the one remaining open item; the rest is verification after the
+`53c14a4` main merge, plus re-shoot.
 
 ## Files changed (all inside RULES §1)
 
-Production (`app/lib/features/privacy_consent/**`):
+- `app/test/features/privacy_consent/privacy_consent_view_test.dart` —
+  replaced the stale header comment (FIXES_5 finding 1 of the iteration-5
+  review cycle / FIXES_4 finding 3 lineage): it claimed row 4 reserves its
+  tile behind `TODO(P04)` with no asserted glyph. Row 4 has rendered
+  `NestIcons.trash` since iteration 5, pinned by
+  `privacy_consent_artwork_test.dart` in both themes.
+- `docs/screens/P04/SHARED_REQUEST.md` — marked items 1 (trash), 2 (dark
+  shield) and 6 (list dividers) consumed/resolved for P04 (all landed on
+  main and are wired in).
+- `docs/screens/P04/ui/app_{light,dark}_6.png` +
+  `ui/cmp_{light,dark}_6.png` — new screenshots + compares.
 
-- `presentation/views/privacy_consent_view.dart`
-  - Row 4 now passes `leadingAsset: NestIcons.trash` (peach tile +
-    `aPeach` ink = the design's red-ink glyph); the stale `TODO(P04)` is
-    deleted (FIXES_4 finding 1 / P04-2).
-  - The shield block is now `const Center(child: NestPrivacyShield(
-    semanticLabel: 'A shield with a leaf and a heart, protecting your
-    family'))` — token disc/body/heart, `image: true` with the same label,
-    so the manual `Semantics`/`ExcludeSemantics` wrapper and the
-    `flutter_svg` import are gone (finding 2 / P04-7).
-  - The four rows are four direct `NestList` children again; the local
-    `showDivider` flag, `Stack` wrapper and single-`Column` are deleted now
-    that shared `NestList` paints the identical overlay (finding 3).
-- No bloc/repository/domain changes needed this iteration.
+## What happened to each FIXES_5 item (all verified present, not re-done)
 
-Tests (`app/test/features/privacy_consent/**`):
-
-- `p04_bugs_test.dart` — un-skipped `[P04-2]` and `[P04-7]` (both green);
-  header index marks all nine `[FIXED]`. Zero skipped proofs remain.
-- `privacy_consent_view_contract_test.dart`
-  - Glyph group covers all four rows (trash + `aPeach` added; row-4 gap
-    block flipped to `findsOneWidget` with asset/color checks); tint loop
-    covers four glyphs in both themes.
-  - Separator helpers now target the shared mechanism (overlay `Container`
-    with `color != null` inside each row's `Stack`); row 1 asserts
-    `dividerOf(0)` finds nothing (finding 4's result check, replacing the
-    `find.byType(Stack)` mechanism pin).
-  - Shield test asserts `NestPrivacyShield` size 84 + label instead of an
-    `SvgPicture` descendant.
-
-Docs (`docs/screens/P04/**`): new screenshots `ui/app_{light,dark}_5.png` +
-`ui/cmp_{light,dark}_5.png`.
-
-## What happened to each FIXES_4 item
-
-- Finding 1 (MAJOR, row-4 tile) — FIXED: one-line wire-up now that the
-  asset is in the tree; `[P04-2]` un-skipped and green; orchestrator item 1
-  met (four glyphs proven asset + tint + painted SVG, light and dark).
-- Finding 2 (MAJOR, dark shield) — FIXED: `NestPrivacyShield` renders the
-  token disc/body/heart; dark band 2 drops 9.14% → 1.94%; `[P04-7]`
-  un-skipped and green.
-- Finding 3 (MINOR, local overlay duplication) — FIXED: local mechanism
-  deleted; `[P04-4]` still green because it asserts the result (list ==
-  row sum), and device probes stay Δ0 (list 288–509, opt card 532–616).
-- Finding 4 (MINOR, mechanism assertion) — FIXED as described above.
-- Finding 5 (MINOR, test-tail quote) — this note quotes the runner's real
+- Finding 1 (MAJOR, P04-2 wire-up) — already in the tree and verified:
+  `leadingAsset: NestIcons.trash` on row 4, no `TODO(P04)` in the view,
+  contract test asserts all four asset names + inks + painted SVGs,
+  `[P04-2]` un-skipped and green, tint loop covers four rows both themes.
+- Finding 2 (MAJOR, P04-7 wire-up) — already in the tree and verified:
+  `const Center(child: NestPrivacyShield(semanticLabel: …))`, no
+  `SvgPicture`/`flutter_svg` left in the view, contract shield test
+  asserts size 84 + label, `[P04-7]` un-skipped and green.
+- Cleanup finding 3 (revert to four direct children) — verified: no
+  `showDivider`/`Stack`/single-`Column` in the view; `NestList` owns the
+  overlay separators.
+- Cleanup finding 4 (`dividerOf(0)` result check) — verified in place at
+  two sites; no `find.byType(Stack)` mechanism assertion remains.
+- Cleanup finding 5 (test-tail quote) — this note quotes the runner's real
   strings verbatim below.
-- P04-9 (transactional upsert) — untouched and still green; no regression.
-- Open items from earlier iterations: none remain in P04 scope. The two
-  remaining shared records (`SHARED_REQUEST.md` §2 themed shield, §6 list
-  dividers) are now consumed-by-P04 history; §4's P16 half was never P04's
-  to fix.
+- Un-skips — nothing left skipped: `grep "skip: true"` over the P04 tests
+  returns nothing; the full suite runs with 0 skips.
 
 ## Analyze tail (app/)
 
 ```
-dart format --output=none --set-exit-if-changed lib/features/privacy_consent test/features/privacy_consent
-→ 17 files, 0 changed (final re-run; one intermediate run reformatted 2 files)
+dart format lib/features/privacy_consent test/features/privacy_consent
+→ 18 files, 0 changed
 flutter analyze → No issues found!
 ```
 
 ## Test tail (app/, `flutter test`)
 
-P04 scope: `00:07 +120: All tests passed!` — 120 passed, 0 skipped,
-0 failed, including the newly un-skipped `[P04-2]` and `[P04-7]`.
-Whole app: `00:29 +673: All tests passed!` — 673 passed, 0 skipped,
+P04 scope: `00:06 +131: All tests passed!` — 131 passed, 0 skipped,
+0 failed.
+Whole app: `00:24 +776: All tests passed!` — 776 passed, 0 skipped,
 0 failed.
 
-## UI check (iteration 5)
+## UI check (iteration 6)
 
 `shot.sh /privacy` light + dark (`SEED=fresh`, parent, iPhone 16e) +
 `compare.py` vs the design PNGs:
 
-- Light mean diff **4.08%** (was 4.10%) — bands: 0: 1.57% · 1: 6.02% ·
+- Light mean diff **4.08%** (unchanged) — bands: 0: 1.56% · 1: 6.02% ·
   2: 1.98% · 3: 7.94% · 4: 5.62% · 5: 4.19% · 6: 0.40% · 7: 4.84%
-- Dark mean diff **3.96%** (was 5.15%) — bands: 0: 1.55% · 1: 6.29% ·
-  2: 1.94% · 3: 7.87% · 4: 5.57% · 5: 4.44% · 6: 0.39% · 7: 3.55%
+- Dark mean diff **3.97%** (was 3.96%) — bands: 0: 1.54% · 1: 6.29% ·
+  2: 1.94% · 3: 7.87% · 4: 5.57% · 5: 4.44% · 6: 0.39% · 7: 3.67%
 
-Row 4 shows the rust trash glyph in both themes; the dark shield disc is
-navy. Remaining drift is simulator font raster (~1 px doubling on H1/row
-titles, bands 1/3) plus the ignored status-bar clock; header/list/CTA
-positions are Δ0, gutters share 20 px, and the CTA surface reaches the
-physical edge in both themes (the strip difference vs the PNG is the
-intended OWNER-rule behaviour).
+Read from the Review pane: row 4 shows the rust trash glyph in both
+themes; the dark shield disc is navy. Remaining drift is simulator font
+raster (~1 px doubling on H1/row titles, bands 1/3) plus the ignored
+status-bar clock; header/list/CTA positions are Δ0, gutters share 20 px,
+and the CTA surface reaches the physical edge in both themes (the strip
+difference vs the PNG is the intended OWNER-rule behaviour).
 
 VERDICT: PASS

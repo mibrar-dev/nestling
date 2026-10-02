@@ -10,6 +10,8 @@ Files: `app/assets/icons/ic_trash.svg`,
 Blocks: yes — without it P04 cannot match the design (wrong-bin glyph is a visible
 defect). P04 builds layout-complete with the 40×40 tile reserved behind a
 `TODO(P04)` until this lands.
+**Status (iteration 5): landed on main as `ic_trash.svg` + `NestIcons.trash`;
+P04 wires it on row 4 with the TODO deleted. Resolved.**
 
 ---
 # Shared request — P04 dark shield (evidence from UI check)
@@ -22,6 +24,8 @@ Files: `app/assets/illustrations/privacy_shield.svg` (or new dark variant +
 asset entry)
 Blocks: no — light mode is pixel-close; dark circle is a tint-only deviation.
 P04 lands as-is behind no TODO.
+**Status (iteration 5): landed on main as `NestPrivacyShield` (token
+disc/body/heart); P04 renders it instead of the baked SVG. Resolved.**
 
 ---
 # Shared request — P04 NestNavBar compact null-title crash — RESOLVED (STAGE 3, it. 2)
@@ -108,3 +112,6 @@ Files: `app/lib/core/design_system/components/nest_list_row.dart`
 Blocks: no for light-mode pixel-close look; yes for exact vertical rhythm on
 every `NestList` screen. P04's bug proof is `[P04-4]` in
 `app/test/features/privacy_consent/p04_bugs_test.dart`.
+**Status (iteration 5): shared `NestList` now paints the identical overlay
+itself, and P04 consumes it with four direct row children (local overlay
+deleted). Resolved for P04.**
