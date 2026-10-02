@@ -73,10 +73,11 @@ void main() {
         tester.getSize(find.byType(NestNavBar).first).height,
         greaterThanOrEqualTo(64),
       );
-      // Compact: ONE 44px row — fixed 44px slots keep the centred title
-      // on a single line.
-      expect(tester.getSize(find.byType(NestNavBar).at(1)).height, 44);
-      expect(tester.getSize(find.byType(NestNavBar).at(2)).height, 44);
+      // Compact matches `.nav-bar.compact` (components.css): min-height 52,
+      // padding 4/12/12. Back-less bar renders at the 52 minimum; a 44px
+      // back button stretches it to 4 + 44 + 12 = 60.
+      expect(tester.getSize(find.byType(NestNavBar).at(1)).height, 52);
+      expect(tester.getSize(find.byType(NestNavBar).at(2)).height, 60);
     });
 
     testWidgets('compact action stays on the title line', (tester) async {
@@ -96,12 +97,39 @@ void main() {
         textScale: 1.3,
       );
       final bar = find.byType(NestNavBar);
-      expect(tester.getSize(bar).height, 44);
+      // 44px action row + 4 top + 12 bottom = 60.
+      expect(tester.getSize(bar).height, 60);
       final titleDy = tester
           .getCenter(find.text('A fairly long pushed-screen title'))
           .dy;
       final actionDy = tester.getCenter(find.text('+')).dy;
       expect(actionDy, moreOrLessEquals(titleDy, epsilon: 1));
+    });
+
+    testWidgets('compact back-only bar is 60 high', (tester) async {
+      await pumpBothModes(tester, NestNavBar(compact: true, onBack: () {}));
+      expect(tester.getSize(find.byType(NestNavBar)).height, 60);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('compact null and empty titles render the same', (
+      tester,
+    ) async {
+      await pumpNest(
+        tester,
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            NestNavBar(compact: true, onBack: () {}),
+            NestNavBar(compact: true, title: '', onBack: () {}),
+          ],
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      expect(
+        tester.getSize(find.byType(NestNavBar).first).height,
+        tester.getSize(find.byType(NestNavBar).at(1)).height,
+      );
     });
 
     testWidgets('back and action fire', (tester) async {
