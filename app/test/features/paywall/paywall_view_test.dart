@@ -29,7 +29,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:nestling/app/app.dart';
 import 'package:nestling/app/controllers.dart';
 import 'package:nestling/core/data/app_database.dart';
@@ -196,7 +195,6 @@ Future<PaywallBloc> _pumpPaywallView(
   // Real DI + in-memory Drift, so the view may resolve anything it needs
   // (AppSession lives in GetIt, not in the widget tree — see 2_build.md).
   await setUpTestScope(seedDemo: false);
-  GoogleFonts.config.allowRuntimeFetching = false;
   tester.view.physicalSize = const Size(390 * 3, 844 * 3);
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);

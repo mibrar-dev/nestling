@@ -1,17 +1,16 @@
 // P07 · Paywall — BLoC state machine and the Drift-backed repository.
 //
-// Scope note (Stage 3, iteration 1): `1_plan.md` §b specifies two action
-// events (`PaywallTrialStarted`, `PaywallRestoreRequested`) and a
-// `PaywallAction` field on the state. Neither exists in the bloc yet, so
-// naming them here would break compilation of the whole test target and hide
-// every other signal. The trial/restore contract is therefore asserted from
-// the view side (`paywall_view_test.dart`: tap the CTA, read `app_state`),
-// and the event-level unit tests are listed as follow-up work in
-// `docs/screens/P07/3_test.md`.
+// Scope note (Stage 2, iteration 2): `1_plan.md` §b's action events
+// (`PaywallTrialStarted`, `PaywallRestoreRequested`) and the `PaywallAction`
+// + `PaywallRequest` state now exist, so this file pins their transitions
+// alongside the `PaywallStatus` machine. The tap-to-`app_state` contract is
+// asserted from the view side (`paywall_view_test.dart`).
 //
-// What this file pins today: the `PaywallStatus` machine (initial →
-// loading → loaded | failure) over live, empty and erroring streams, and the
-// repository contract against an in-memory Drift database under every seed.
+// What this file pins: the `PaywallStatus` machine (initial →
+// loading → loaded | failure) over live, empty and erroring streams, the
+// trial/restore action transitions (working → success | failure, with the
+// request discriminator), and the repository contract against an in-memory
+// Drift database under every seed.
 
 import 'dart:async';
 
@@ -72,6 +71,12 @@ class _FakePaywallRepository implements PaywallRepository {
   int startTrialCalls = 0;
   int activateCalls = 0;
 
+  /// `startTrial()` throws — the trial action reports failure.
+  bool failTrial = false;
+
+  /// `activate()` throws — the restore action reports failure.
+  bool failRestore = false;
+
   @override
   Future<List<PaywallPlan>> getItems() => _items.first;
 
@@ -85,11 +90,13 @@ class _FakePaywallRepository implements PaywallRepository {
   @override
   Future<void> startTrial() async {
     startTrialCalls++;
+    if (failTrial) throw Exception('offline');
   }
 
   @override
   Future<void> activate() async {
     activateCalls++;
+    if (failRestore) throw Exception('offline');
   }
 }
 
@@ -119,6 +126,37 @@ void main() {
       expect(a, isNot(const PaywallState()));
       expect(a, isNot(a.copyWith(status: PaywallStatus.loading)));
       expect(a, isNot(a.copyWith(errorMessage: 'offline')));
+    });
+
+    test('equality includes the action and request discriminator', () {
+      const base = PaywallState();
+      expect(
+        base.copyWith(
+          action: PaywallAction.working,
+          request: PaywallRequest.trial,
+        ),
+        const PaywallState(
+          action: PaywallAction.working,
+          request: PaywallRequest.trial,
+        ),
+      );
+      expect(
+        base.copyWith(action: PaywallAction.success),
+        isNot(base.copyWith(action: PaywallAction.failure)),
+      );
+      expect(
+        base.copyWith(request: PaywallRequest.trial),
+        isNot(base.copyWith(request: PaywallRequest.restore)),
+      );
+    });
+
+    test('clearError resets a previous error message', () {
+      const failed = PaywallState(errorMessage: 'offline');
+      expect(failed.copyWith(clearError: true).errorMessage, isNull);
+      expect(
+        failed.copyWith(errorMessage: 'still here').errorMessage,
+        'still here',
+      );
     });
   });
 
@@ -243,6 +281,104 @@ void main() {
         bloc.add(const PaywallLoadRequested());
         await Future<void>.delayed(Duration.zero);
         expect(bloc.state.status, PaywallStatus.loading);
+      },
+    );
+  });
+
+  group('PaywallBloc trial and restore actions', () {
+    blocTest<PaywallBloc, PaywallState>(
+      'PaywallTrialStarted calls startTrial, then trial success',
+      build: () => PaywallBloc(repository: _FakePaywallRepository()),
+      act: (bloc) => bloc.add(const PaywallTrialStarted()),
+      expect: () => const <PaywallState>[
+        PaywallState(
+          action: PaywallAction.working,
+          request: PaywallRequest.trial,
+        ),
+        PaywallState(
+          action: PaywallAction.success,
+          request: PaywallRequest.trial,
+        ),
+      ],
+    );
+
+    blocTest<PaywallBloc, PaywallState>(
+      'a failing startTrial becomes trial failure with the message',
+      build: () =>
+          PaywallBloc(repository: _FakePaywallRepository()..failTrial = true),
+      act: (bloc) => bloc.add(const PaywallTrialStarted()),
+      expect: () => <Matcher>[
+        isA<PaywallState>()
+            .having((state) => state.action, 'action', PaywallAction.working)
+            .having((state) => state.request, 'request', PaywallRequest.trial),
+        isA<PaywallState>()
+            .having((state) => state.action, 'action', PaywallAction.failure)
+            .having((state) => state.request, 'request', PaywallRequest.trial)
+            .having(
+              (state) => state.errorMessage,
+              'errorMessage',
+              contains('offline'),
+            ),
+      ],
+    );
+
+    blocTest<PaywallBloc, PaywallState>(
+      'PaywallRestoreRequested calls activate, then restore success',
+      build: () => PaywallBloc(repository: _FakePaywallRepository()),
+      act: (bloc) => bloc.add(const PaywallRestoreRequested()),
+      expect: () => const <PaywallState>[
+        PaywallState(
+          action: PaywallAction.working,
+          request: PaywallRequest.restore,
+        ),
+        PaywallState(
+          action: PaywallAction.success,
+          request: PaywallRequest.restore,
+        ),
+      ],
+    );
+
+    blocTest<PaywallBloc, PaywallState>(
+      'a failing activate becomes restore failure with the message',
+      build: () =>
+          PaywallBloc(repository: _FakePaywallRepository()..failRestore = true),
+      act: (bloc) => bloc.add(const PaywallRestoreRequested()),
+      expect: () => <Matcher>[
+        isA<PaywallState>()
+            .having((state) => state.action, 'action', PaywallAction.working)
+            .having(
+              (state) => state.request,
+              'request',
+              PaywallRequest.restore,
+            ),
+        isA<PaywallState>()
+            .having((state) => state.action, 'action', PaywallAction.failure)
+            .having((state) => state.request, 'request', PaywallRequest.restore)
+            .having(
+              (state) => state.errorMessage,
+              'errorMessage',
+              contains('offline'),
+            ),
+      ],
+    );
+
+    test(
+      'the trial delegates to startTrial, the restore to activate',
+      () async {
+        final repository = _FakePaywallRepository();
+        final bloc = PaywallBloc(repository: repository);
+        addTearDown(bloc.close);
+
+        bloc.add(const PaywallTrialStarted());
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(repository.startTrialCalls, 1);
+        expect(repository.activateCalls, 0);
+        expect(bloc.state.request, PaywallRequest.trial);
+
+        bloc.add(const PaywallRestoreRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(repository.activateCalls, 1);
+        expect(bloc.state.request, PaywallRequest.restore);
       },
     );
   });

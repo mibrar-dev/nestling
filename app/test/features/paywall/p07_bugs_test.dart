@@ -139,67 +139,64 @@ void _drainExceptions(WidgetTester tester) {
 
 void main() {
   group('P07-BUG-1 — the paywall screen does not exist (blocker)', () {
-    testWidgets(
-      '[P07-BUG-1] the design surface renders at /paywall',
-      skip: true,
-      (tester) async {
-        await _pumpPaywallWithSeed(tester, Seed.fresh);
+    testWidgets('[P07-BUG-1] the design surface renders at /paywall', (
+      tester,
+    ) async {
+      await _pumpPaywallWithSeed(tester, Seed.fresh);
 
-        // Not the foundation placeholder.
-        expect(find.text('P07 Paywall'), findsNothing);
+      // Not the foundation placeholder.
+      expect(find.text('P07 Paywall'), findsNothing);
 
-        // Nav + hero.
-        expect(find.byType(NestStatusBar), findsOneWidget);
-        expect(find.bySemanticsLabel('Subscription'), findsOneWidget);
-        expect(find.bySemanticsLabel(_closeLabel), findsOneWidget);
-        expect(_v1PipFinder, findsNothing);
-        final avatars = tester.widgetList<v2.PipAvatar>(
-          find.byType(v2.PipAvatar),
-        );
-        expect(avatars, hasLength(1), reason: 'hero Pip');
-        expect(avatars.single.style, v2.PipStyle.mochi);
-        expect(avatars.single.skin, v2.PipSkin.sunny);
-        expect(avatars.single.stage, 4);
+      // Nav + hero.
+      expect(find.byType(NestStatusBar), findsOneWidget);
+      expect(find.bySemanticsLabel('Subscription'), findsOneWidget);
+      expect(find.bySemanticsLabel(_closeLabel), findsOneWidget);
+      expect(_v1PipFinder, findsNothing);
+      final avatars = tester.widgetList<v2.PipAvatar>(
+        find.byType(v2.PipAvatar),
+      );
+      expect(avatars, hasLength(1), reason: 'hero Pip');
+      expect(avatars.single.style, v2.PipStyle.mochi);
+      expect(avatars.single.skin, v2.PipSkin.sunny);
+      expect(avatars.single.stage, 4);
 
-        // Title + benefits + plan card.
-        expect(find.text(_title), findsOneWidget);
-        for (final benefit in _benefits) {
-          expect(find.text(benefit), findsOneWidget, reason: benefit);
-        }
-        expect(find.text(_planTitle), findsOneWidget);
-        expect(find.text(_planSub), findsOneWidget);
-        expect(find.text(_planTag), findsOneWidget);
+      // Title + benefits + plan card.
+      expect(find.text(_title), findsOneWidget);
+      for (final benefit in _benefits) {
+        expect(find.text(benefit), findsOneWidget, reason: benefit);
+      }
+      expect(find.text(_planTitle), findsOneWidget);
+      expect(find.text(_planSub), findsOneWidget);
+      expect(find.text(_planTag), findsOneWidget);
 
-        // Below the fold.
-        await tester.drag(find.byType(Scrollable).first, const Offset(0, -900));
-        await _settle(tester);
-        expect(find.text(_timelineHead), findsOneWidget);
-        expect(find.text('Today'), findsOneWidget);
-        expect(find.text('Full access, straight away'), findsOneWidget);
-        expect(find.text('Day 12'), findsOneWidget);
-        expect(find.text('We’ll remind you by email'), findsOneWidget);
-        expect(find.text('Day 14'), findsOneWidget);
-        expect(find.text('£29.99 billed — cancel any time'), findsOneWidget);
-        expect(find.text(_familyNote), findsOneWidget);
+      // Below the fold.
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -900));
+      await _settle(tester);
+      expect(find.text(_timelineHead), findsOneWidget);
+      expect(find.text('Today'), findsOneWidget);
+      expect(find.text('Full access, straight away'), findsOneWidget);
+      expect(find.text('Day 12'), findsOneWidget);
+      expect(find.text('We’ll remind you by email'), findsOneWidget);
+      expect(find.text('Day 14'), findsOneWidget);
+      expect(find.text('£29.99 billed — cancel any time'), findsOneWidget);
+      expect(find.text(_familyNote), findsOneWidget);
 
-        // Bottom bar.
-        expect(find.byType(NestBottomCta), findsOneWidget);
-        expect(find.text(_cta), findsOneWidget);
-        expect(find.text(_caption), findsOneWidget);
-        for (final link in _legalLinks) {
-          expect(find.text(link), findsOneWidget, reason: link);
-        }
+      // Bottom bar.
+      expect(find.byType(NestBottomCta), findsOneWidget);
+      expect(find.text(_cta), findsOneWidget);
+      expect(find.text(_caption), findsOneWidget);
+      for (final link in _legalLinks) {
+        expect(find.text(link), findsOneWidget, reason: link);
+      }
 
-        expect(tester.takeException(), isNull);
-        await disposeApp(tester);
-      },
-    );
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
   });
 
   group('P07-BUG-2 — no trial/restore action path (major)', () {
     testWidgets(
       '[P07-BUG-2] Start free trial completes onboarding and lands on /today',
-      skip: true,
       (tester) async {
         final db = await _pumpPaywallWithSeed(tester, Seed.fresh);
 
@@ -219,7 +216,6 @@ void main() {
 
     testWidgets(
       '[P07-BUG-2] Restore purchases activates (never downgrades) and lands on /today',
-      skip: true,
       (tester) async {
         final db = await _pumpPaywallWithSeed(tester, Seed.fresh);
 
@@ -237,7 +233,6 @@ void main() {
 
     testWidgets(
       '[P07-BUG-2] a rapid double tap starts one trial and navigates once',
-      skip: true,
       (tester) async {
         final db = await _pumpPaywallWithSeed(tester, Seed.fresh);
 
@@ -264,7 +259,6 @@ void main() {
   group('P07-BUG-3 — the bar cannot render the design order (major)', () {
     testWidgets(
       '[P07-BUG-3] CTA, then caption, then legal row — all inside the bottom bar',
-      skip: true,
       (tester) async {
         await _pumpPaywallWithSeed(tester, Seed.fresh);
 
@@ -314,7 +308,6 @@ void main() {
           reason: 'the HTML caption is “£29.99/year after the 14-day trial.”',
         );
       },
-      skip: true,
     );
   });
 
@@ -337,7 +330,6 @@ void main() {
         );
         expect(detail, contains(_planSub));
       },
-      skip: true,
     );
 
     test('[P07-BUG-5] the plan tag has a data source', () async {
@@ -352,7 +344,7 @@ void main() {
       // `tag` field on PaywallPlan or a string in `detail`; the tag must be
       // reachable from the data layer, not only from a hard-coded widget.
       expect(detail, contains(_planTag));
-    }, skip: true);
+    });
   });
 
   group('P07-BUG-6 — a stale error survives a successful retry (minor)', () {
@@ -375,7 +367,6 @@ void main() {
           reason: 'PaywallState.copyWith cannot clear a previous error message',
         );
       },
-      skip: true,
     );
   });
 
@@ -398,7 +389,6 @@ void main() {
         expect(row!.trialStart, isNotNull);
         expect(row.subscriptionStatus, 'trial');
       },
-      skip: true,
     );
   });
 
