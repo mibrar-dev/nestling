@@ -1,0 +1,428 @@
+// P07 · Paywall — BLoC state machine and the Drift-backed repository.
+//
+// Scope note (Stage 3, iteration 1): `1_plan.md` §b specifies two action
+// events (`PaywallTrialStarted`, `PaywallRestoreRequested`) and a
+// `PaywallAction` field on the state. Neither exists in the bloc yet, so
+// naming them here would break compilation of the whole test target and hide
+// every other signal. The trial/restore contract is therefore asserted from
+// the view side (`paywall_view_test.dart`: tap the CTA, read `app_state`),
+// and the event-level unit tests are listed as follow-up work in
+// `docs/screens/P07/3_test.md`.
+//
+// What this file pins today: the `PaywallStatus` machine (initial →
+// loading → loaded | failure) over live, empty and erroring streams, and the
+// repository contract against an in-memory Drift database under every seed.
+
+import 'dart:async';
+
+import 'package:bloc_test/bloc_test.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:get_it/get_it.dart';
+import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/seed.dart';
+import 'package:nestling/features/paywall/data/paywall_repository_impl.dart';
+import 'package:nestling/features/paywall/domain/entities/paywall_plan.dart';
+import 'package:nestling/features/paywall/domain/entities/subscription_status.dart';
+import 'package:nestling/features/paywall/domain/paywall_repository.dart';
+import 'package:nestling/features/paywall/presentation/bloc/paywall_bloc.dart';
+import 'package:nestling/features/paywall/presentation/bloc/paywall_event.dart';
+import 'package:nestling/features/paywall/presentation/bloc/paywall_state.dart';
+
+import '../../test_scope.dart';
+
+/// The single annual plan, exactly as `P07-paywall.html` writes it:
+/// `&mdash;` is an em dash (U+2014), not a hyphen.
+const String _planTitle = 'Annual — £29.99/year';
+const String _planSub = 'Just £2.50 a month, billed yearly';
+
+/// The design's CTA caption (`P07-paywall.html` `.caption`), which the plan
+/// detail repeats: note `after the 14-day trial` — with the article.
+const String _planCaption =
+    '£29.99/year after the 14-day trial. Cancel anytime in Settings.';
+
+const List<PaywallPlan> _annualPlan = <PaywallPlan>[
+  PaywallPlan(
+    id: 'annual',
+    title: _planTitle,
+    detail: '$_planSub. $_planCaption',
+  ),
+];
+
+const PaywallPlan _firstPlan = PaywallPlan(
+  id: 'annual',
+  title: _planTitle,
+  detail: _planSub,
+);
+
+const PaywallPlan _secondPlan = PaywallPlan(
+  id: 'annual-alt',
+  title: 'Annual — £39.99/year',
+  detail: 'Just £3.33 a month, billed yearly',
+);
+
+/// In-memory repository with a caller-controlled item stream, used to reach
+/// the states the static Drift repository cannot produce (pending load,
+/// empty, stream error, repeated live updates).
+class _FakePaywallRepository implements PaywallRepository {
+  _FakePaywallRepository({Stream<List<PaywallPlan>>? items})
+    : _items = items ?? const Stream<List<PaywallPlan>>.empty();
+
+  final Stream<List<PaywallPlan>> _items;
+
+  int startTrialCalls = 0;
+  int activateCalls = 0;
+
+  @override
+  Future<List<PaywallPlan>> getItems() => _items.first;
+
+  @override
+  Stream<List<PaywallPlan>> watchItems() => _items;
+
+  @override
+  Stream<SubscriptionStatus> watchSubscription() =>
+      const Stream<SubscriptionStatus>.empty();
+
+  @override
+  Future<void> startTrial() async {
+    startTrialCalls++;
+  }
+
+  @override
+  Future<void> activate() async {
+    activateCalls++;
+  }
+}
+
+void main() {
+  group('PaywallState', () {
+    test('copyWith replaces only the given fields', () {
+      const state = PaywallState();
+      final loading = state.copyWith(status: PaywallStatus.loading);
+      expect(loading.status, PaywallStatus.loading);
+      expect(loading.items, state.items);
+      expect(loading.errorMessage, isNull);
+
+      final failed = loading.copyWith(
+        status: PaywallStatus.failure,
+        errorMessage: 'offline',
+      );
+      expect(failed.status, PaywallStatus.failure);
+      expect(failed.errorMessage, 'offline');
+      expect(failed.items, isEmpty);
+    });
+
+    test('equality is driven by status, items and error message', () {
+      const a = PaywallState(status: PaywallStatus.loaded, items: _annualPlan);
+      const b = PaywallState(status: PaywallStatus.loaded, items: _annualPlan);
+      expect(a, b);
+      expect(a.hashCode, b.hashCode);
+      expect(a, isNot(const PaywallState()));
+      expect(a, isNot(a.copyWith(status: PaywallStatus.loading)));
+      expect(a, isNot(a.copyWith(errorMessage: 'offline')));
+    });
+  });
+
+  group('PaywallBloc', () {
+    test('starts initial with no items and no error', () {
+      final bloc = PaywallBloc(repository: _FakePaywallRepository());
+      addTearDown(bloc.close);
+
+      expect(bloc.state, const PaywallState());
+      expect(bloc.state.status, PaywallStatus.initial);
+      expect(bloc.state.items, isEmpty);
+      expect(bloc.state.errorMessage, isNull);
+    });
+
+    blocTest<PaywallBloc, PaywallState>(
+      'load on the Drift repository emits loading then the annual plan',
+      setUp: setUpTestScope,
+      build: () => PaywallBloc(repository: GetIt.instance<PaywallRepository>()),
+      act: (bloc) => bloc.add(const PaywallLoadRequested()),
+      expect: () => <Matcher>[
+        isA<PaywallState>().having(
+          (state) => state.status,
+          'status',
+          PaywallStatus.loading,
+        ),
+        isA<PaywallState>()
+            .having((state) => state.status, 'status', PaywallStatus.loaded)
+            .having((state) => state.items.length, 'plan count', 1)
+            .having((state) => state.items.single.id, 'plan id', 'annual')
+            .having(
+              (state) => state.items.single.title,
+              'plan title',
+              _planTitle,
+            ),
+      ],
+    );
+
+    blocTest<PaywallBloc, PaywallState>(
+      'live repository stream: every emission becomes a loaded state',
+      build: () => PaywallBloc(
+        repository: _FakePaywallRepository(
+          items: Stream<List<PaywallPlan>>.fromIterable(<List<PaywallPlan>>[
+            <PaywallPlan>[_firstPlan],
+            <PaywallPlan>[_firstPlan, _secondPlan],
+          ]),
+        ),
+      ),
+      act: (bloc) => bloc.add(const PaywallLoadRequested()),
+      expect: () => <Matcher>[
+        isA<PaywallState>().having(
+          (state) => state.status,
+          'status',
+          PaywallStatus.loading,
+        ),
+        isA<PaywallState>()
+            .having((state) => state.status, 'status', PaywallStatus.loaded)
+            .having((state) => state.items, 'items', <PaywallPlan>[_firstPlan]),
+        isA<PaywallState>()
+            .having((state) => state.status, 'status', PaywallStatus.loaded)
+            .having((state) => state.items, 'items', <PaywallPlan>[
+              _firstPlan,
+              _secondPlan,
+            ]),
+      ],
+    );
+
+    blocTest<PaywallBloc, PaywallState>(
+      'an empty repository stream is a loaded state with no items',
+      build: () => PaywallBloc(
+        repository: _FakePaywallRepository(
+          items: Stream<List<PaywallPlan>>.value(const <PaywallPlan>[]),
+        ),
+      ),
+      act: (bloc) => bloc.add(const PaywallLoadRequested()),
+      expect: () => const <PaywallState>[
+        PaywallState(status: PaywallStatus.loading),
+        PaywallState(status: PaywallStatus.loaded),
+      ],
+    );
+
+    blocTest<PaywallBloc, PaywallState>(
+      'a repository stream error becomes a failure state with the message',
+      build: () => PaywallBloc(
+        repository: _FakePaywallRepository(
+          items: Stream<List<PaywallPlan>>.error(Exception('offline')),
+        ),
+      ),
+      act: (bloc) => bloc.add(const PaywallLoadRequested()),
+      expect: () => <Matcher>[
+        isA<PaywallState>().having(
+          (state) => state.status,
+          'status',
+          PaywallStatus.loading,
+        ),
+        isA<PaywallState>()
+            .having((state) => state.status, 'status', PaywallStatus.failure)
+            .having(
+              (state) => state.errorMessage,
+              'errorMessage',
+              contains('offline'),
+            ),
+      ],
+    );
+
+    test(
+      'the load stream stays open, so a retry event is still accepted',
+      () async {
+        // `emit.forEach` keeps the handler alive for the bloc's lifetime; a
+        // screen that retries must be able to re-add the load event while the
+        // first stream is still pending, without the bloc throwing.
+        final bloc = PaywallBloc(
+          repository: _FakePaywallRepository(
+            items: const Stream<List<PaywallPlan>>.empty(),
+          ),
+        );
+        addTearDown(bloc.close);
+
+        bloc.add(const PaywallLoadRequested());
+        await Future<void>.delayed(Duration.zero);
+        expect(bloc.state.status, PaywallStatus.loading);
+
+        bloc.add(const PaywallLoadRequested());
+        await Future<void>.delayed(Duration.zero);
+        expect(bloc.state.status, PaywallStatus.loading);
+      },
+    );
+  });
+
+  group('PaywallRepository (in-memory Drift)', () {
+    late AppDatabase db;
+    late PaywallRepositoryImpl repository;
+
+    setUp(() {
+      db = AppDatabase.memory();
+      repository = PaywallRepositoryImpl(db: db);
+    });
+
+    tearDown(() => db.close());
+
+    Future<AppStateData?> appStateRow() =>
+        (db.select(db.appState)..where((a) => a.id.equals(1))).getSingle();
+
+    test('watchItems and getItems return the single annual plan', () async {
+      await Seed.demo(db);
+
+      final plans = await repository.watchItems().first;
+      expect(plans, hasLength(1), reason: 'P07 sells exactly one plan');
+      expect(plans.single.id, 'annual');
+      expect(plans.single.title, _planTitle);
+      expect(
+        plans.single.detail,
+        contains(_planSub),
+        reason: 'the plan sub line is part of the repository copy',
+      );
+      expect(await repository.getItems(), plans);
+    });
+
+    test('the plan detail carries the design’s caption verbatim', () async {
+      // `P07-paywall.html` `.caption` reads
+      // `£29.99/year after the 14-day trial. Cancel anytime in Settings.`
+      // — with the article “the”. Orchestrator COPY rule: the design's
+      // typographic characters and wording exactly, so a variant without
+      // the article must not reach the data layer (and from there a view
+      // that renders `detail` verbatim).
+      await Seed.demo(db);
+      final detail = (await repository.watchItems().first).single.detail;
+
+      expect(detail, contains(_planCaption));
+      expect(
+        detail,
+        isNot(contains('after 14-day trial')),
+        reason: 'the design says “after the 14-day trial”',
+      );
+      expect(
+        detail,
+        isNot(contains('\u2013')),
+        reason: 'no en dash in the copy',
+      );
+      expect(detail, contains('£29.99/year'));
+    });
+
+    test('the plan list is identical under every seed', () async {
+      final snapshots = <String>[];
+      for (final seed in const <String>['demo', 'empty', 'fresh']) {
+        if (seed == 'demo') {
+          await Seed.demo(db);
+        } else if (seed == 'empty') {
+          await Seed.empty(db);
+        } else {
+          await Seed.fresh(db);
+        }
+        snapshots.add(
+          (await repository.watchItems().first)
+              .map((plan) => '${plan.id}/${plan.title}')
+              .join(' | '),
+        );
+      }
+
+      expect(snapshots.toSet(), hasLength(1), reason: snapshots.join('\n'));
+      expect(snapshots.first, 'annual/$_planTitle');
+    });
+
+    test('Seed.demo already has an active subscription', () async {
+      await Seed.demo(db);
+
+      final status = await repository.watchSubscription().first;
+      expect(status.status, 'active');
+      expect(status.expired, isFalse);
+      expect(status.trialStart, isNotNull);
+    });
+
+    test('Seed.empty is a live trial', () async {
+      await Seed.empty(db);
+
+      final status = await repository.watchSubscription().first;
+      expect(status.status, 'trial');
+      expect(status.expired, isFalse);
+      expect(status.trialStart, isNotNull);
+    });
+
+    test('a fresh install reads trial with no start date yet', () async {
+      await Seed.fresh(db);
+
+      final status = await repository.watchSubscription().first;
+      expect(status.status, 'trial');
+      expect(status.expired, isFalse);
+      expect(status.trialStart, isNull);
+    });
+
+    test(
+      'startTrial records the status, a UTC start and the family zone',
+      () async {
+        await Seed.fresh(db);
+        final before = DateTime.now().toUtc();
+
+        await repository.startTrial();
+
+        final row = await appStateRow();
+        expect(row?.subscriptionStatus, 'trial');
+        expect(row?.trialStart, isNotNull);
+        expect(
+          row!.trialStart!.toUtc().isAfter(
+            before.subtract(const Duration(minutes: 1)),
+          ),
+          isTrue,
+          reason: 'the trial start must be written as “now”, not left unset',
+        );
+        expect(row.trialStartTz, 'Europe/London');
+
+        // The live stream reports the new status (the router's paywall
+        // redirect reads the same stream).
+        final status = await repository.watchSubscription().first;
+        expect(status.status, 'trial');
+      },
+    );
+
+    test(
+      'activate marks the subscription active and keeps the trial date',
+      () async {
+        await Seed.fresh(db);
+        await repository.startTrial();
+        final trialStart = (await appStateRow())?.trialStart;
+
+        await repository.activate();
+
+        final row = await appStateRow();
+        expect(row?.subscriptionStatus, 'active');
+        expect(
+          row?.trialStart,
+          trialStart,
+          reason: 'restoring purchases must not move the trial start date',
+        );
+      },
+    );
+
+    test(
+      'activate then startTrial is reachable (trial wins, by design)',
+      () async {
+        await Seed.fresh(db);
+        await repository.activate();
+        expect((await appStateRow())?.subscriptionStatus, 'active');
+
+        await repository.startTrial();
+        expect((await appStateRow())?.subscriptionStatus, 'trial');
+      },
+    );
+
+    test('watchSubscription emits again when the row changes', () async {
+      await Seed.fresh(db);
+      final emissions = <String>[];
+      final sub = repository.watchSubscription().listen(
+        (status) => emissions.add(status.status),
+      );
+      addTearDown(sub.cancel);
+
+      await repository.activate();
+      await repository.startTrial();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(emissions.first, 'trial');
+      expect(
+        emissions,
+        containsAllInOrder(<String>['trial', 'active', 'trial']),
+      );
+    });
+  });
+}

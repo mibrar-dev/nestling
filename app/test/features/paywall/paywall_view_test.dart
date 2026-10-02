@@ -1,0 +1,1143 @@
+// P07 · Paywall — widget contract (design + orchestrator rules).
+//
+// Covers: the design's copy character by character (P07-paywall.html), the
+// hero Pip as the v2 `PipAvatar` (mandatory orchestrator rule), light + dark,
+// widths 320/390/430 at text scales 1.0/1.3, the initial/loading/loaded/
+// failure/empty states, every navigation target (`/pocket-money-setup`,
+// `/today`), the ORCHESTRATOR_NOTES 1 onboarding handoff (`startTrialNow` +
+// `completeOnboarding`), the accessibility contract (semantics labels,
+// 44dp parent tap targets) and the two owner rules: 20px alignment gutters
+// and the bottom edge running to the physical screen edge.
+//
+// Scope note (Stage 3, iteration 1): the trial/restore events do not exist
+// in the bloc yet, so the action paths are asserted here from the outside —
+// tap the control, then read `app_state`. Event-level unit tests are listed
+// as follow-up work in `docs/screens/P07/3_test.md`.
+//
+// Font note: the widget-test font is far wider than Inter (see P02-BUG-7),
+// so no assertion here depends on a real line count. Where the design clamps
+// lines (h1 maxLines 3, caption maxLines 3) the tests deliberately assert
+// "no exception", not "full text visible".
+
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart'
+    show RenderParagraph, RenderRepaintBoundary;
+import 'package:flutter/semantics.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:get_it/get_it.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:nestling/app/app.dart';
+import 'package:nestling/app/controllers.dart';
+import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/app_session.dart';
+import 'package:nestling/core/data/seed.dart';
+import 'package:nestling/core/design_system/design_system.dart';
+import 'package:nestling/core/design_system/motion/pip_avatar.dart' as v2;
+import 'package:nestling/features/paywall/domain/entities/paywall_plan.dart';
+import 'package:nestling/features/paywall/domain/entities/subscription_status.dart';
+import 'package:nestling/features/paywall/domain/paywall_repository.dart';
+import 'package:nestling/features/paywall/presentation/bloc/paywall_bloc.dart';
+import 'package:nestling/features/paywall/presentation/bloc/paywall_event.dart';
+import 'package:nestling/features/paywall/presentation/bloc/paywall_state.dart';
+import 'package:nestling/features/paywall/presentation/views/paywall_view.dart';
+
+import '../../test_scope.dart';
+
+// -- the design's copy, verbatim from design/html-source/screens/P07-paywall.html
+
+/// `<h1 class="h1 balance pay-title">`.
+const String _title = 'Try Nestling free for 14 days';
+
+/// `<li class="benefit">` rows — `&rsquo;` is U+2019, `&amp;` a plain ampersand.
+const List<String> _benefits = <String>[
+  'Unlimited children & quests',
+  'Pip’s full evolution & seasonal outfits',
+  'Pocket money ledger & payout day',
+  'Co-parent sharing, so James sees the same',
+];
+
+/// `.plan` card: title `&mdash;` U+2014, `&pound;` U+00A3.
+const String _planTitle = 'Annual — £29.99/year';
+const String _planSub = 'Just £2.50 a month, billed yearly';
+const String _planTag = 'One price, the whole family';
+
+/// `.timeline` card: `What happens next` + three `<li>` steps.
+const String _timelineHead = 'What happens next';
+const List<(String, String)> _timeline = <(String, String)>[
+  ('Today', 'Full access, straight away'),
+  ('Day 12', 'We’ll remind you by email'),
+  ('Day 14', '£29.99 billed — cancel any time'),
+];
+
+/// `.center-note`.
+const String _familyNote = 'One subscription covers the whole family.';
+
+/// `.bottom-cta`: primary button, `.caption`, `.legal-row` links + `&middot;`.
+const String _cta = 'Start free trial';
+const String _caption =
+    '£29.99/year after the 14-day trial. Cancel anytime in Settings.';
+const String _middot = '·';
+const List<String> _legalLinks = <String>[
+  'Restore purchases',
+  'Terms',
+  'Privacy',
+];
+
+/// `<nav class="nav-bar compact" aria-label="Subscription">` and the close
+/// button's `aria-label`.
+const String _navLabel = 'Subscription';
+const String _closeLabel = 'Close and go back';
+
+/// Hero Pip `alt` text — the only image on the screen with a label.
+const String _pipLabel =
+    'Pip the songbird, fully grown, sitting in a twig nest';
+
+/// Any SvgPicture still loading a v1 `pip_stage_*.svg` illustration, which the
+/// orchestrator PIP rule forbids in a product screen.
+Finder get _v1PipFinder => find.byWidgetPredicate(
+  (widget) =>
+      widget is SvgPicture &&
+      widget.bytesLoader is SvgAssetLoader &&
+      (widget.bytesLoader as SvgAssetLoader).assetName.startsWith(
+        'assets/illustrations/pip_stage_',
+      ),
+);
+
+/// In-memory repository with a caller-controlled item stream, used to reach
+/// the states the static Drift repository cannot produce (pending load,
+/// empty, stream error, retry).
+class _FakePaywallRepository implements PaywallRepository {
+  _FakePaywallRepository({this.pending = false, this.fail = false});
+
+  /// Never emits — the screen stays in `loading`.
+  final bool pending;
+
+  /// Every `watchItems()` call errors — the screen shows its failure state.
+  bool fail;
+
+  int watchCalls = 0;
+  int startTrialCalls = 0;
+  int activateCalls = 0;
+
+  @override
+  Future<List<PaywallPlan>> getItems() async => <PaywallPlan>[];
+
+  @override
+  Stream<List<PaywallPlan>> watchItems() {
+    watchCalls++;
+    if (fail) return Stream<List<PaywallPlan>>.error(Exception('offline'));
+    if (pending) return const Stream<List<PaywallPlan>>.empty();
+    return Stream<List<PaywallPlan>>.value(const <PaywallPlan>[]);
+  }
+
+  @override
+  Stream<SubscriptionStatus> watchSubscription() =>
+      const Stream<SubscriptionStatus>.empty();
+
+  @override
+  Future<void> startTrial() async {
+    startTrialCalls++;
+  }
+
+  @override
+  Future<void> activate() async {
+    activateCalls++;
+  }
+}
+
+/// Pumps `/paywall` through the real app (router, DI, themes) at [surface]
+/// and [textScale]. Mirrors [pumpAppRoute], which takes neither.
+Future<void> _pumpPaywall(
+  WidgetTester tester, {
+  required ThemeMode theme,
+  required Size surface,
+  double textScale = 1,
+}) async {
+  tester.platformDispatcher.textScaleFactorTestValue = textScale;
+  addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+  await pumpAppRoute(tester, '/paywall', theme: theme);
+  tester.view.physicalSize = surface * 3;
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 200));
+}
+
+/// Pumps the app at `/paywall` on an arbitrary seed.
+Future<AppDatabase> _pumpPaywallWithSeed(
+  WidgetTester tester,
+  Future<void> Function(AppDatabase db) seed, {
+  ThemeMode theme = ThemeMode.light,
+  Size surface = const Size(390, 844),
+  double textScale = 1,
+}) async {
+  final db = await setUpTestScope(seedDemo: false);
+  await seed(db);
+  await GetIt.instance<AppSession>().refresh();
+  await _pumpPaywall(
+    tester,
+    theme: theme,
+    surface: surface,
+    textScale: textScale,
+  );
+  return db;
+}
+
+/// Pumps [PaywallView] directly (no router) under the real theme with
+/// [repository] driving the bloc; returns the bloc for state assertions.
+Future<PaywallBloc> _pumpPaywallView(
+  WidgetTester tester, {
+  required PaywallRepository repository,
+  ThemeMode theme = ThemeMode.light,
+}) async {
+  // Real DI + in-memory Drift, so the view may resolve anything it needs
+  // (AppSession lives in GetIt, not in the widget tree — see 2_build.md).
+  await setUpTestScope(seedDemo: false);
+  GoogleFonts.config.allowRuntimeFetching = false;
+  tester.view.physicalSize = const Size(390 * 3, 844 * 3);
+  tester.view.devicePixelRatio = 3;
+  addTearDown(tester.view.reset);
+  final bloc = PaywallBloc(repository: repository);
+  addTearDown(bloc.close);
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: NestTheme.light(),
+      darkTheme: NestTheme.dark(),
+      themeMode: theme,
+      home: BlocProvider<PaywallBloc>.value(
+        value: bloc,
+        child: const PaywallView(),
+      ),
+    ),
+  );
+  await tester.pump();
+  return bloc;
+}
+
+Future<void> _disposeView(WidgetTester tester) async {
+  await tester.pumpWidget(const SizedBox.shrink());
+  await tester.pump();
+}
+
+/// A few frames: enough for a tap, a Drift write and a go_router transition,
+/// without `pumpAndSettle` (a live Drift watch never settles).
+Future<void> _settle(WidgetTester tester) async {
+  for (var i = 0; i < 6; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+}
+
+/// Scrolls the paywall column to its end (the timeline and family note live
+/// below the fold; the PNG only shows the top).
+Future<void> _scrollToEnd(WidgetTester tester) async {
+  await tester.drag(find.byType(Scrollable).first, const Offset(0, -900));
+  await _settle(tester);
+}
+
+/// Every string painted on screen, in widget order.
+List<String> _renderedText(WidgetTester tester) {
+  final texts = <String>[];
+  for (final element in find.byType(RichText).evaluate()) {
+    final render = element.renderObject;
+    if (render is RenderParagraph) {
+      final text = render.text.toPlainText().trim();
+      if (text.isNotEmpty) texts.add(text);
+    }
+  }
+  return texts;
+}
+
+/// The font size [text] is painted at, read from the render tree.
+double _fontSizeOf(WidgetTester tester, String text) {
+  expect(find.text(text), findsOneWidget, reason: '"$text" must be on screen');
+  return tester
+          .renderObject<RenderParagraph>(find.text(text))
+          .text
+          .style
+          ?.fontSize ??
+      -1;
+}
+
+/// The font family [text] is painted with.
+String _fontFamilyOf(WidgetTester tester, String text) {
+  expect(find.text(text), findsOneWidget, reason: '"$text" must be on screen');
+  return tester
+          .renderObject<RenderParagraph>(find.text(text))
+          .text
+          .style
+          ?.fontFamily ??
+      '';
+}
+
+/// The card [NestCard] that contains [text].
+Finder _cardWith(String text) =>
+    find.ancestor(of: find.text(text), matching: find.byType(NestCard));
+
+Future<AppStateData?> _appStateRow(AppDatabase db) =>
+    (db.select(db.appState)..where((a) => a.id.equals(1))).getSingleOrNull();
+
+// Probe boundary for the BOTTOM EDGE owner rule (painted-pixel proof).
+const Key _pixelProbe = ValueKey('p07_pixel_probe');
+
+/// Paints the real app inside a [RepaintBoundary] so pixels can be sampled,
+/// optionally with an OS bottom inset (home-indicator devices).
+Future<void> _pumpPaywallForPixels(
+  WidgetTester tester, {
+  required ThemeMode theme,
+  required Size surface,
+  double bottomInset = 0,
+}) async {
+  GetIt.instance<ThemeModeController>().selectMode(theme);
+  tester.view.physicalSize = surface * 3;
+  tester.view.devicePixelRatio = 3;
+  addTearDown(tester.view.reset);
+  if (bottomInset > 0) {
+    // View padding is physical; the test surface is 3x.
+    tester.view.padding = FakeViewPadding(bottom: bottomInset * 3);
+    addTearDown(tester.view.resetPadding);
+  }
+  await tester.pumpWidget(
+    const RepaintBoundary(
+      key: _pixelProbe,
+      child: NestlingApp(initialRoute: '/paywall'),
+    ),
+  );
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 200));
+}
+
+/// Painted RGBA bytes at logical (x, y) of the app surface.
+Future<List<int>> _pixelAt(WidgetTester tester, double x, double y) async {
+  final boundary = tester.renderObject<RenderRepaintBoundary>(
+    find.byKey(_pixelProbe),
+  );
+  late List<int> pixel;
+  await tester.runAsync(() async {
+    final image = await boundary.toImage();
+    final data = await image.toByteData();
+    final offset = (y.round() * image.width + x.round()) * 4;
+    pixel = <int>[
+      data!.getUint8(offset),
+      data.getUint8(offset + 1),
+      data.getUint8(offset + 2),
+      data.getUint8(offset + 3),
+    ];
+  });
+  return pixel;
+}
+
+/// The opaque RGBA bytes of [color] at 8-bit precision.
+List<int> _rgba(Color color) => <int>[
+  (color.r * 255).round(),
+  (color.g * 255).round(),
+  (color.b * 255).round(),
+  255,
+];
+
+void main() {
+  group('P07 paywall — the design’s copy', () {
+    testWidgets('light 390: hero, title, benefits and plan card', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpPaywall(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+      );
+
+      // The screen is the paywall, not a placeholder.
+      expect(find.text('P07 Paywall'), findsNothing);
+      expect(find.byType(NestStatusBar), findsOneWidget);
+      expect(find.text(_title), findsOneWidget);
+
+      for (final benefit in _benefits) {
+        expect(find.text(benefit), findsOneWidget, reason: benefit);
+      }
+
+      expect(find.text(_planTitle), findsOneWidget);
+      expect(find.text(_planSub), findsOneWidget);
+      expect(find.text(_planTag), findsOneWidget);
+      expect(_cardWith(_planTitle), findsOneWidget);
+
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('light 390 scrolled: timeline and family note', (tester) async {
+      await setUpTestScope();
+      await _pumpPaywall(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+      );
+      await _scrollToEnd(tester);
+
+      expect(find.text(_timelineHead), findsOneWidget);
+      for (final (title, sub) in _timeline) {
+        expect(find.text(title), findsOneWidget, reason: title);
+        expect(find.text(sub), findsOneWidget, reason: sub);
+      }
+      expect(find.text(_familyNote), findsOneWidget);
+      expect(find.text(_caption), findsOneWidget);
+      expect(_cardWith(_timelineHead), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('bottom bar: CTA, caption and the three legal links', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpPaywall(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+      );
+
+      expect(find.byType(NestBottomCta), findsOneWidget);
+      expect(find.text(_cta), findsOneWidget);
+      expect(find.text(_caption), findsOneWidget);
+      for (final link in _legalLinks) {
+        expect(find.text(link), findsOneWidget, reason: link);
+      }
+      expect(
+        find.text(_middot),
+        findsNWidgets(2),
+        reason: 'two &middot; separators between the three links',
+      );
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('every copy character is the design’s typographic one', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpPaywall(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+      );
+
+      // Curly apostrophes (U+2019) where the HTML uses &rsquo;.
+      expect(_benefits[1], contains('’'));
+      expect(_timeline[1].$2, contains('’'));
+      // Em dash (U+2014) where the HTML uses &mdash;.
+      expect(_planTitle, contains('—'));
+      expect(_timeline[2].$2, contains('—'));
+      // Pound sign (U+00A3) and middle dot (U+00B7).
+      expect(_planTitle, contains('£'));
+      expect(_middot, '·');
+      expect(_middot.codeUnitAt(0), 0x00B7);
+
+      await _scrollToEnd(tester);
+      final rendered = _renderedText(tester);
+
+      // No ASCII apostrophe or quote, no ellipsis (truncation) and no SPACED
+      // hyphen (a dash where – or — belongs) anywhere on the screen.
+      const forbidden = <String>["'", '"', '…'];
+      final spacedHyphen = RegExp(r'\s-\s');
+      final offenders = <String>[
+        for (final text in rendered)
+          if (forbidden.any(text.contains) || spacedHyphen.hasMatch(text)) text,
+      ];
+      expect(
+        offenders,
+        isEmpty,
+        reason:
+            'wrong dash/quote characters in rendered copy: '
+            '${offenders.join(' | ')}',
+      );
+
+      // The screen never shows the repository's caption variant, which drops
+      // the article in “after the 14-day trial” (P07-paywall.html `.caption`).
+      expect(find.textContaining('after 14-day trial'), findsNothing);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('typography matches the design’s type scale', (tester) async {
+      await setUpTestScope();
+      await _pumpPaywall(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+      );
+
+      // `.h1` = Nunito 28/34; `.plan-title` = Nunito 800 18/24;
+      // `.benefit-txt` = Inter 15/24; `.plan-tag` = Inter 600 13/18.
+      expect(_fontSizeOf(tester, _title), 28);
+      expect(_fontFamilyOf(tester, _title), contains('Nunito'));
+      expect(_fontFamilyOf(tester, _benefits.first), contains('Inter'));
+      expect(_fontSizeOf(tester, _benefits.first), 15);
+      expect(_fontSizeOf(tester, _planTitle), 18);
+      expect(_fontSizeOf(tester, _planSub), 15);
+      expect(_fontSizeOf(tester, _planTag), 13);
+
+      await _scrollToEnd(tester);
+      expect(_fontSizeOf(tester, _timelineHead), 18); // `.h3`
+      expect(_fontSizeOf(tester, _timeline.first.$1), 15); // `.tl-title`
+      expect(_fontSizeOf(tester, _familyNote), 15); // `.center-note`
+      expect(_fontSizeOf(tester, _caption), 13); // `.caption`
+
+      await disposeApp(tester);
+    });
+  });
+
+  group('P07 paywall — Pip is the v2 avatar (mandatory orchestrator rule)', () {
+    testWidgets('one mochi/sunny PipAvatar at stage 4, labelled by the design', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpPaywall(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+      );
+
+      // The v1 `pip_stage_4.svg` illustration is forbidden in a product screen.
+      expect(_v1PipFinder, findsNothing);
+
+      final avatars = tester.widgetList<v2.PipAvatar>(
+        find.byType(v2.PipAvatar),
+      );
+      expect(avatars, hasLength(1), reason: 'one Pip in the hero');
+      final avatar = avatars.single;
+      expect(avatar.style, v2.PipStyle.mochi);
+      expect(avatar.skin, v2.PipSkin.sunny);
+      // `P07-paywall.html` ships `pip-stage-4.svg` — the fully grown songbird.
+      expect(avatar.stage, 4);
+      expect(avatar.inNest, isTrue, reason: 'Pip sits in the twig nest');
+
+      // The design's `alt` text, and the design's 120px slot.
+      expect(find.bySemanticsLabel(_pipLabel), findsOneWidget);
+      final rect = tester.getRect(find.bySemanticsLabel(_pipLabel));
+      expect(rect.width, moreOrLessEquals(120, epsilon: 0.01));
+      expect(rect.height, moreOrLessEquals(120, epsilon: 0.01));
+
+      await disposeApp(tester);
+    });
+  });
+
+  group('P07 paywall — widths, themes and text scales', () {
+    for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      for (final width in const <int>[320, 390, 430]) {
+        for (final scale in const <double>[1, 1.3]) {
+          final themeName = theme == ThemeMode.light ? 'light' : 'dark';
+          testWidgets('$themeName ${width}dp at text scale $scale', (
+            tester,
+          ) async {
+            await setUpTestScope();
+            await _pumpPaywall(
+              tester,
+              theme: theme,
+              surface: Size(width.toDouble(), 844),
+              textScale: scale,
+            );
+
+            expect(find.byType(NestBottomCta), findsOneWidget);
+            expect(find.text(_cta), findsOneWidget);
+            for (final link in _legalLinks) {
+              expect(find.text(link), findsOneWidget, reason: link);
+            }
+            // The design clamps lines in the test's wide font; the screen must
+            // degrade honestly (ellipsis) instead of throwing.
+            expect(tester.takeException(), isNull);
+
+            await disposeApp(tester);
+          });
+        }
+      }
+    }
+
+    for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      final themeName = theme == ThemeMode.light ? 'light' : 'dark';
+      testWidgets('$themeName: the benefits and timeline read in full', (
+        tester,
+      ) async {
+        await setUpTestScope();
+        await _pumpPaywall(tester, theme: theme, surface: const Size(390, 844));
+
+        for (final benefit in _benefits) {
+          expect(find.text(benefit), findsOneWidget, reason: benefit);
+        }
+
+        await _scrollToEnd(tester);
+        for (final (title, sub) in _timeline) {
+          expect(find.text(title), findsOneWidget, reason: title);
+          expect(find.text(sub), findsOneWidget, reason: sub);
+        }
+        expect(find.text(_familyNote), findsOneWidget);
+        expect(tester.takeException(), isNull);
+
+        await disposeApp(tester);
+      });
+    }
+  });
+
+  group('P07 paywall — alignment and tap targets (owner rules)', () {
+    for (final width in const <int>[320, 390, 430]) {
+      testWidgets('width $width: one 20px gutter on cards, bar and scroll', (
+        tester,
+      ) async {
+        await setUpTestScope();
+        await _pumpPaywall(
+          tester,
+          theme: ThemeMode.light,
+          surface: Size(width.toDouble(), 844),
+        );
+
+        final gutter = width - 2 * NestSpacing.padSide;
+
+        // The plan card and the timeline card share the scroll's edges.
+        expect(
+          tester.getRect(_cardWith(_planTitle)).left,
+          moreOrLessEquals(NestSpacing.padSide, epsilon: 0.01),
+        );
+        expect(
+          tester.getRect(_cardWith(_planTitle)).width,
+          moreOrLessEquals(gutter, epsilon: 0.01),
+        );
+
+        // The CTA spans the same content width, inside the bottom bar.
+        expect(
+          tester.getRect(find.text(_cta)).width,
+          lessThanOrEqualTo(gutter + 0.01),
+          reason: 'the button must not bleed past the 20px gutters',
+        );
+
+        await _scrollToEnd(tester);
+        expect(
+          tester.getRect(_cardWith(_timelineHead)).left,
+          moreOrLessEquals(NestSpacing.padSide, epsilon: 0.01),
+        );
+        expect(
+          tester.getRect(_cardWith(_timelineHead)).width,
+          moreOrLessEquals(gutter, epsilon: 0.01),
+        );
+
+        // Nothing may overflow horizontally at any width.
+        expect(tester.takeException(), isNull);
+
+        await disposeApp(tester);
+      });
+    }
+
+    testWidgets('the title is centred on the screen', (tester) async {
+      await setUpTestScope();
+      await _pumpPaywall(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+      );
+
+      final centre = tester.getRect(find.text(_title)).center.dx;
+      expect(centre, moreOrLessEquals(390 / 2, epsilon: 0.5));
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the plan text column shares one left edge', (tester) async {
+      await setUpTestScope();
+      await _pumpPaywall(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+      );
+
+      final titleLeft = tester.getRect(find.text(_planTitle)).left;
+      expect(
+        tester.getRect(find.text(_planSub)).left,
+        moreOrLessEquals(titleLeft, epsilon: 0.01),
+      );
+      expect(
+        tester.getRect(find.text(_planTag)).left,
+        moreOrLessEquals(titleLeft, epsilon: 0.01),
+      );
+    });
+
+    testWidgets('the timeline steps share one left edge in document order', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpPaywall(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+      );
+      await _scrollToEnd(tester);
+
+      final tops = <double>[
+        for (final (title, _) in _timeline)
+          tester.getRect(find.text(title)).top,
+      ];
+      expect(tops[0], lessThan(tops[1]), reason: 'Today, then Day 12');
+      expect(tops[1], lessThan(tops[2]), reason: 'Day 12, then Day 14');
+      expect(tops[1], moreOrLessEquals(tops[2], epsilon: 0.01));
+
+      final lefts = <double>[
+        for (final (title, _) in _timeline)
+          tester.getRect(find.text(title)).left,
+      ];
+      expect(lefts[1], moreOrLessEquals(lefts[2], epsilon: 0.01));
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('parent tap targets are at least 44dp', (tester) async {
+      await setUpTestScope();
+      await _pumpPaywall(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+      );
+
+      // Close button (HTML: 44x44 `nav-back.close`).
+      final close = tester.getRect(find.bySemanticsLabel(_closeLabel));
+      expect(close.width, greaterThanOrEqualTo(NestDevice.tapParent));
+      expect(close.height, greaterThanOrEqualTo(NestDevice.tapParent));
+
+      // The primary CTA is a 52dp pill; P07 is a parent screen, so the 56dp
+      // kid target does not apply.
+      expect(tester.getRect(find.text(_cta)).height, greaterThanOrEqualTo(52));
+      expect(find.byType(NestKidButton), findsNothing);
+
+      for (final link in _legalLinks) {
+        final rect = tester.getRect(find.bySemanticsLabel(link));
+        expect(
+          rect.height,
+          greaterThanOrEqualTo(NestDevice.tapParent),
+          reason: link,
+        );
+        expect(
+          rect.width,
+          greaterThanOrEqualTo(NestDevice.tapParent),
+          reason: link,
+        );
+      }
+
+      await disposeApp(tester);
+    });
+  });
+
+  group('P07 paywall — bottom edge runs to the physical edge (owner rule)', () {
+    for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      final themeName = theme == ThemeMode.light ? 'light' : 'dark';
+      testWidgets('$themeName: no page-colour strip under the bar', (
+        tester,
+      ) async {
+        await setUpTestScope();
+        await _pumpPaywallForPixels(
+          tester,
+          theme: theme,
+          surface: const Size(390, 844),
+        );
+
+        final cta = tester.getRect(find.byType(NestBottomCta));
+        expect(
+          cta.bottom,
+          moreOrLessEquals(844, epsilon: 0.01),
+          reason: 'the bar must reach the physical screen edge',
+        );
+        expect(cta.left, moreOrLessEquals(0, epsilon: 0.01));
+        expect(cta.right, moreOrLessEquals(390, epsilon: 0.01));
+
+        // Painted proof: the last row of pixels is the bar's surface, not the
+        // page tint and not a meadow-green strip.
+        final surface = Theme.of(tester.element(find.byType(NestBottomCta)))
+            .extension<NestTokens>()!
+            .surface;
+        final pixel = await _pixelAt(tester, 195, 843);
+        expect(
+          pixel,
+          _rgba(surface),
+          reason:
+              'a coloured strip under the bar (got $pixel, want '
+              '${_rgba(surface)})',
+        );
+
+        await disposeApp(tester);
+      });
+
+      testWidgets('$themeName: home-indicator inset stays on the bar surface', (
+        tester,
+      ) async {
+        await setUpTestScope();
+        await _pumpPaywallForPixels(
+          tester,
+          theme: theme,
+          surface: const Size(390, 844),
+          bottomInset: 34,
+        );
+
+        expect(
+          tester.getRect(find.byType(NestBottomCta)).bottom,
+          moreOrLessEquals(844, epsilon: 0.01),
+        );
+        final surface = Theme.of(tester.element(find.byType(NestBottomCta)))
+            .extension<NestTokens>()!
+            .surface;
+        expect(await _pixelAt(tester, 195, 843), _rgba(surface));
+        // The area around the indicator is the bar, never the page tint.
+        expect(await _pixelAt(tester, 6, 830), _rgba(surface));
+
+        await disposeApp(tester);
+      });
+    }
+  });
+
+  group('P07 paywall — loading, empty and failure states', () {
+    testWidgets('initial: a progress indicator before the load event', (
+      tester,
+    ) async {
+      final bloc = await _pumpPaywallView(
+        tester,
+        repository: _FakePaywallRepository(),
+      );
+
+      expect(bloc.state.status, PaywallStatus.initial);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await _disposeView(tester);
+    });
+
+    testWidgets('loading: a progress indicator while the plan is in flight', (
+      tester,
+    ) async {
+      final bloc = await _pumpPaywallView(
+        tester,
+        repository: _FakePaywallRepository(pending: true),
+      );
+
+      bloc.add(const PaywallLoadRequested());
+      await tester.pump();
+
+      expect(bloc.state.status, PaywallStatus.loading);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await _disposeView(tester);
+    });
+
+    testWidgets('loaded with no plans: the static paywall still renders', (
+      tester,
+    ) async {
+      // `1_plan.md` §d: an empty plan list is not an empty state — the copy is
+      // the spec, and the trial CTA must never be blocked by `items`.
+      final bloc = await _pumpPaywallView(
+        tester,
+        repository: _FakePaywallRepository(),
+      );
+
+      bloc.add(const PaywallLoadRequested());
+      await _settle(tester);
+
+      expect(bloc.state.status, PaywallStatus.loaded);
+      expect(bloc.state.items, isEmpty);
+      expect(find.text('No items yet'), findsNothing);
+      expect(find.text(_title), findsOneWidget);
+      expect(find.text(_cta), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await _disposeView(tester);
+    });
+
+    testWidgets('failure: an error message with a Retry that reloads', (
+      tester,
+    ) async {
+      final repository = _FakePaywallRepository(fail: true);
+      final bloc = await _pumpPaywallView(tester, repository: repository);
+
+      bloc.add(const PaywallLoadRequested());
+      await _settle(tester);
+
+      expect(bloc.state.status, PaywallStatus.failure);
+      expect(find.text('Something went wrong'), findsOneWidget);
+
+      // Retry re-adds the load event instead of dead-ending the screen.
+      repository.fail = false;
+      await tester.tap(find.text('Retry'));
+      await _settle(tester);
+
+      expect(repository.watchCalls, 2);
+      expect(bloc.state.status, PaywallStatus.loaded);
+      expect(find.text(_title), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await _disposeView(tester);
+    });
+  });
+
+  group('P07 paywall — navigation and the onboarding handoff', () {
+    testWidgets('the close button goes back to the onboarding money step', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpPaywall(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+      );
+
+      await tester.tap(find.bySemanticsLabel(_closeLabel));
+      await _settle(tester);
+
+      // P06 Pocket-money setup is the step before P07 in the onboarding flow.
+      expect(currentPath(tester), '/pocket-money-setup');
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('Start free trial completes onboarding and lands on /today', (
+      tester,
+    ) async {
+      final db = await _pumpPaywallWithSeed(tester, Seed.fresh);
+
+      await tester.tap(find.text(_cta));
+      await _settle(tester);
+
+      // ORCHESTRATOR_NOTES 1 (mandatory): the trial must call
+      // `startTrialNow()` + `completeOnboarding()` so a restart lands on
+      // Today, not /welcome (P01 BUG-4).
+      final row = await _appStateRow(db);
+      expect(row?.onboardingComplete, isTrue);
+      expect(row?.subscriptionStatus, 'trial');
+      expect(row?.trialStart, isNotNull);
+      expect(row?.trialStartTz, 'Europe/London');
+      expect(GetIt.instance<AppSession>().onboardingComplete, isTrue);
+
+      expect(currentPath(tester), '/today');
+
+      await disposeApp(tester);
+    });
+
+    testWidgets(
+      'Restore purchases activates the subscription and lands on /today',
+      (tester) async {
+        final db = await _pumpPaywallWithSeed(tester, Seed.fresh);
+
+        await tester.tap(find.text('Restore purchases'));
+        await _settle(tester);
+
+        // A restoring user is already paid: `active`, never downgraded to
+        // `trial` (that would throw away a paid subscription).
+        final row = await _appStateRow(db);
+        expect(row?.subscriptionStatus, 'active');
+        expect(row?.onboardingComplete, isTrue);
+        expect(currentPath(tester), '/today');
+
+        await disposeApp(tester);
+      },
+    );
+
+    testWidgets('Terms and Privacy are placeholders, not dead links', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpPaywall(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+      );
+
+      for (final link in const <String>['Terms', 'Privacy']) {
+        await tester.tap(find.bySemanticsLabel(link));
+        await _settle(tester);
+
+        // No onboarding route exists for the legal pages, so the screen must
+        // answer in place (a toast) and stay on /paywall.
+        expect(currentPath(tester), '/paywall', reason: link);
+        expect(
+          find.byType(SnackBar).evaluate().isNotEmpty ||
+              find.byType(NestToast).evaluate().isNotEmpty,
+          isTrue,
+          reason: '$link must tell the parent something happened',
+        );
+      }
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('tapping the plan card changes nothing (single plan)', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpPaywall(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+      );
+
+      await tester.tap(find.text(_planTitle));
+      await _settle(tester);
+
+      expect(currentPath(tester), '/paywall');
+      expect(find.text(_cta), findsOneWidget);
+
+      await disposeApp(tester);
+    });
+  });
+
+  group('P07 paywall — accessibility contract', () {
+    testWidgets('the nav bar and every control carry a semantics label', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpPaywall(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+      );
+
+      expect(find.bySemanticsLabel(_navLabel), findsOneWidget);
+      expect(find.bySemanticsLabel(_pipLabel), findsOneWidget);
+
+      final close = tester
+          .getSemantics(find.bySemanticsLabel(_closeLabel))
+          .getSemanticsData();
+      expect(close.label, _closeLabel);
+      expect(close.flagsCollection.isButton, isTrue);
+      expect(close.hasAction(SemanticsAction.tap), isTrue);
+
+      for (final link in _legalLinks) {
+        final data = tester
+            .getSemantics(find.bySemanticsLabel(link))
+            .getSemanticsData();
+        expect(data.label, link, reason: link);
+        expect(data.flagsCollection.isButton, isTrue, reason: link);
+        expect(data.hasAction(SemanticsAction.tap), isTrue, reason: link);
+      }
+
+      // The selected plan is announced as selected (one plan, pre-selected).
+      final plan = tester
+          .getSemantics(find.bySemanticsLabel(RegExp('Annual')))
+          .getSemanticsData();
+      expect(plan.flagsCollection.isSelected, isTrue);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('decorative hero art and tick marks stay out of semantics', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpPaywall(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+      );
+
+      // The nest and the three coins are `alt=""` in the design, and the
+      // benefits' ticks are `aria-hidden`, so none of them may announce
+      // itself; the hero's only labelled image is Pip.
+      expect(
+        find.bySemanticsLabel(
+          RegExp('nest|coin|tick|checkmark', caseSensitive: false),
+        ),
+        findsNothing,
+      );
+      expect(find.bySemanticsLabel(_pipLabel), findsOneWidget);
+
+      // Each benefit is one labelled row, tick excluded.
+      for (final benefit in _benefits) {
+        expect(find.bySemanticsLabel(benefit), findsOneWidget, reason: benefit);
+      }
+
+      await disposeApp(tester);
+    });
+  });
+
+  group('P07 paywall — static copy under every seed', () {
+    testWidgets('demo, empty and fresh render the identical paywall', (
+      tester,
+    ) async {
+      // DATA OVER MOCKS: P07 is marketing copy for a family that does not
+      // exist yet, so no seed may change a pixel of it — and the seeded
+      // children (Maya, Leo) must never leak onto the screen.
+      final snapshots = <String>[];
+
+      for (final seed in const <String>['demo', 'empty', 'fresh']) {
+        await _pumpPaywallWithSeed(tester, switch (seed) {
+          'demo' => Seed.demo,
+          'empty' => Seed.empty,
+          _ => Seed.fresh,
+        });
+
+        await _scrollToEnd(tester);
+        snapshots.add(
+          [
+            for (final text in _renderedText(tester))
+              if (!_legalLinks.contains(text)) text,
+          ].join(' | '),
+        );
+        await disposeApp(tester);
+      }
+
+      expect(snapshots.toSet(), hasLength(1), reason: snapshots.join('\n\n'));
+      final snapshot = snapshots.first;
+      for (final expected in <String>[
+        _title,
+        ..._benefits,
+        _planTitle,
+        _planSub,
+        _planTag,
+        _timelineHead,
+        for (final (title, sub) in _timeline) ...<String>[title, sub],
+        _familyNote,
+        _cta,
+      ]) {
+        expect(snapshot, contains(expected), reason: expected);
+      }
+      // 'James' is the design's co-parent name, not a seeded child.
+      expect(snapshot, contains('James'));
+      expect(snapshot, isNot(contains('Maya')));
+      expect(snapshot, isNot(contains('Leo')));
+    });
+  });
+
+  group('P07 paywall — route wiring', () {
+    testWidgets('the route provides a bloc that loads the annual plan', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpPaywall(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+      );
+
+      final bloc = BlocProvider.of<PaywallBloc>(
+        tester.element(find.byType(PaywallView)),
+      );
+      await _settle(tester);
+
+      expect(bloc.state.status, PaywallStatus.loaded);
+      expect(bloc.state.items, hasLength(1));
+      expect(bloc.state.items.single.id, 'annual');
+      expect(bloc.state.items.single.title, _planTitle);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('/paywall is reachable while onboarding is still incomplete', (
+      tester,
+    ) async {
+      await _pumpPaywallWithSeed(tester, Seed.fresh);
+
+      // The router guard must let the last onboarding step through, otherwise
+      // the onboarding flow dead-ends on P06.
+      expect(currentPath(tester), '/paywall');
+      expect(find.text(_cta), findsOneWidget);
+
+      await disposeApp(tester);
+    });
+  });
+}
