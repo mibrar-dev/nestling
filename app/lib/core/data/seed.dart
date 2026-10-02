@@ -1,10 +1,13 @@
 // Nestling — seed data for local-only development and screenshots.
 //
-// Three variants, selected with `--dart-define=SEED=…`:
+// Four variants, selected with `--dart-define=SEED=…`:
 // * `demo` — the exact spec family (DESIGN_SPEC §5). Every number visible in
 //   the designs (P08, P10–P12, P14, K03, K08, K09, K11) is asserted in tests.
 // * `empty` — onboarded parent, no children or quests (P08b).
 // * `fresh` — nothing at all: app_state only, onboarding incomplete.
+// * `onboarding_kids` — P05 UI-check state: family + Sarah + Maya (7-9
+//   lilac) + Leo (4-6 peach) exactly as in `demo`, no quests/ledger/etc.,
+//   onboarding incomplete.
 //
 // Date anchor: the designs say "Sat 4 Oct", but 4 Oct 2026 is a Sunday, so
 // the seed uses Sat 3 Oct 2026 (and Sat 26 Sep 2026 for "last Saturday") and
@@ -98,6 +101,36 @@ abstract final class Seed {
         .insert(
           AppStateCompanion.insert(
             id: const Value(1),
+            appMode: const Value('parent'),
+          ),
+        );
+  }
+
+  /// P05 UI-check state: the add-children step AFTER two children were
+  /// added (Maya 7–9 lilac, Leo 4–6 peach, exactly as in [demo]) while
+  /// onboarding is NOT complete. Family + parent Sarah + both children
+  /// only — no quests, completions, ledger, goals, rewards, badges or
+  /// wardrobe — plus default settings and `onboarding_complete = false`.
+  static Future<void> onboardingKids(AppDatabase db) async {
+    await db.clearAll();
+    await _family(db);
+    await db
+        .into(db.members)
+        .insert(
+          MembersCompanion.insert(
+            id: 'sarah',
+            familyId: familyId,
+            name: 'Sarah',
+          ),
+        );
+    await _childrenDemo(db);
+    await _settingsDemo(db);
+    await db
+        .into(db.appState)
+        .insert(
+          AppStateCompanion.insert(
+            id: const Value(1),
+            onboardingComplete: const Value(false),
             appMode: const Value('parent'),
           ),
         );
