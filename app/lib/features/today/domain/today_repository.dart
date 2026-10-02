@@ -11,4 +11,14 @@ abstract class TodayRepository {
 
   /// One summary card per child ("4 of 6 quests", 120 coins).
   Stream<List<ChildDaySummary>> watchSummaries();
+
+  /// Display name of the grown-up in charge ('Sarah' in the demo seed).
+  Stream<String> watchParentName();
+
+  /// Payout weekday, 1 = Mon … 7 = Sun (6 = Saturday in the demo seed).
+  Stream<int> watchPayoutDay();
+
+  /// Family-wide `done_pending` completions (the set P11 lists, including
+  /// "Anyone" quests) — drives the approvals banner count.
+  Stream<int> watchPendingCount();
 }
