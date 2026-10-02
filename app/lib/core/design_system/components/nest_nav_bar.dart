@@ -36,13 +36,21 @@ class NestNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (compact) {
-      // ONE 44px row: fixed 44px slots on both sides keep the title
-      // centred on a single line no matter what the action holds. The
-      // action text clips (never wraps) inside its 44px slot.
+      // `.nav-bar.compact` (components.css): min-height 52, padding
+      // `4px 12px 12px`, 44px back button. With border-box sizing the
+      // rendered bar is 4 + 44 + 12 = 60 high, so the chevron centres at
+      // status (47) + 4 + 22 = 73 and the scroll title below lands at the
+      // design y. Fixed 44px side slots keep a centred title on one line;
+      // the action text clips (never wraps) inside its slot.
       return ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: NestDevice.tapParent),
+        constraints: const BoxConstraints(minHeight: 52),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: NestSpacing.s3),
+          padding: const EdgeInsets.fromLTRB(
+            NestSpacing.s3,
+            NestSpacing.s1,
+            NestSpacing.s3,
+            NestSpacing.s3,
+          ),
           child: Row(
             children: <Widget>[
               SizedBox(
@@ -58,8 +66,8 @@ class NestNavBar extends StatelessWidget {
                 child: Builder(
                   builder: (context) {
                     final compactTitle = title;
-                    if (compactTitle == null) {
-                      return const Spacer();
+                    if (compactTitle == null || compactTitle.isEmpty) {
+                      return const SizedBox.shrink();
                     }
                     return Text(
                       compactTitle,
