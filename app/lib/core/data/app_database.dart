@@ -273,6 +273,19 @@ class AppDatabase extends _$AppDatabase {
   @override
   int get schemaVersion => 1;
 
+  /// Guarantees the single `app_state` row (id 1) exists. A real first
+  /// install has no seed, and repositories update `WHERE id = 1`, so without
+  /// this every onboarding/trial/mode write was silently dropped (P01 BUG-4).
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    beforeOpen: (details) async {
+      await into(appState).insert(
+        const AppStateCompanion(id: Value(1)),
+        mode: InsertMode.insertOrIgnore,
+      );
+    },
+  );
+
   // -- Streams shared by repositories -------------------------------------
 
   Stream<List<ChildrenData>> watchChildren(String familyId) {
