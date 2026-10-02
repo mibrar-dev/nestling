@@ -62,6 +62,41 @@ class $FamiliesTable extends Families with TableInfo<$FamiliesTable, Family> {
     requiredDuringInsert: false,
     defaultValue: const Constant('both'),
   );
+  static const VerificationMeta _timeZoneMeta = const VerificationMeta(
+    'timeZone',
+  );
+  @override
+  late final GeneratedColumn<String> timeZone = GeneratedColumn<String>(
+    'time_zone',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('Europe/London'),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _updatedAtTzMeta = const VerificationMeta(
+    'updatedAtTz',
+  );
+  @override
+  late final GeneratedColumn<String> updatedAtTz = GeneratedColumn<String>(
+    'updated_at_tz',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('Europe/London'),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -69,6 +104,9 @@ class $FamiliesTable extends Families with TableInfo<$FamiliesTable, Family> {
     payoutDay,
     coinValuePencePerCoin,
     pocketMoneyMode,
+    timeZone,
+    updatedAt,
+    updatedAtTz,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -117,6 +155,27 @@ class $FamiliesTable extends Families with TableInfo<$FamiliesTable, Family> {
         ),
       );
     }
+    if (data.containsKey('time_zone')) {
+      context.handle(
+        _timeZoneMeta,
+        timeZone.isAcceptableOrUnknown(data['time_zone']!, _timeZoneMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at_tz')) {
+      context.handle(
+        _updatedAtTzMeta,
+        updatedAtTz.isAcceptableOrUnknown(
+          data['updated_at_tz']!,
+          _updatedAtTzMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -146,6 +205,18 @@ class $FamiliesTable extends Families with TableInfo<$FamiliesTable, Family> {
         DriftSqlType.string,
         data['${effectivePrefix}pocket_money_mode'],
       )!,
+      timeZone: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}time_zone'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      ),
+      updatedAtTz: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}updated_at_tz'],
+      )!,
     );
   }
 
@@ -161,12 +232,18 @@ class Family extends DataClass implements Insertable<Family> {
   final int payoutDay;
   final int coinValuePencePerCoin;
   final String pocketMoneyMode;
+  final String timeZone;
+  final DateTime? updatedAt;
+  final String updatedAtTz;
   const Family({
     required this.id,
     required this.name,
     required this.payoutDay,
     required this.coinValuePencePerCoin,
     required this.pocketMoneyMode,
+    required this.timeZone,
+    this.updatedAt,
+    required this.updatedAtTz,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -176,6 +253,11 @@ class Family extends DataClass implements Insertable<Family> {
     map['payout_day'] = Variable<int>(payoutDay);
     map['coin_value_pence_per_coin'] = Variable<int>(coinValuePencePerCoin);
     map['pocket_money_mode'] = Variable<String>(pocketMoneyMode);
+    map['time_zone'] = Variable<String>(timeZone);
+    if (!nullToAbsent || updatedAt != null) {
+      map['updated_at'] = Variable<DateTime>(updatedAt);
+    }
+    map['updated_at_tz'] = Variable<String>(updatedAtTz);
     return map;
   }
 
@@ -186,6 +268,11 @@ class Family extends DataClass implements Insertable<Family> {
       payoutDay: Value(payoutDay),
       coinValuePencePerCoin: Value(coinValuePencePerCoin),
       pocketMoneyMode: Value(pocketMoneyMode),
+      timeZone: Value(timeZone),
+      updatedAt: updatedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(updatedAt),
+      updatedAtTz: Value(updatedAtTz),
     );
   }
 
@@ -202,6 +289,9 @@ class Family extends DataClass implements Insertable<Family> {
         json['coinValuePencePerCoin'],
       ),
       pocketMoneyMode: serializer.fromJson<String>(json['pocketMoneyMode']),
+      timeZone: serializer.fromJson<String>(json['timeZone']),
+      updatedAt: serializer.fromJson<DateTime?>(json['updatedAt']),
+      updatedAtTz: serializer.fromJson<String>(json['updatedAtTz']),
     );
   }
   @override
@@ -213,6 +303,9 @@ class Family extends DataClass implements Insertable<Family> {
       'payoutDay': serializer.toJson<int>(payoutDay),
       'coinValuePencePerCoin': serializer.toJson<int>(coinValuePencePerCoin),
       'pocketMoneyMode': serializer.toJson<String>(pocketMoneyMode),
+      'timeZone': serializer.toJson<String>(timeZone),
+      'updatedAt': serializer.toJson<DateTime?>(updatedAt),
+      'updatedAtTz': serializer.toJson<String>(updatedAtTz),
     };
   }
 
@@ -222,12 +315,18 @@ class Family extends DataClass implements Insertable<Family> {
     int? payoutDay,
     int? coinValuePencePerCoin,
     String? pocketMoneyMode,
+    String? timeZone,
+    Value<DateTime?> updatedAt = const Value.absent(),
+    String? updatedAtTz,
   }) => Family(
     id: id ?? this.id,
     name: name ?? this.name,
     payoutDay: payoutDay ?? this.payoutDay,
     coinValuePencePerCoin: coinValuePencePerCoin ?? this.coinValuePencePerCoin,
     pocketMoneyMode: pocketMoneyMode ?? this.pocketMoneyMode,
+    timeZone: timeZone ?? this.timeZone,
+    updatedAt: updatedAt.present ? updatedAt.value : this.updatedAt,
+    updatedAtTz: updatedAtTz ?? this.updatedAtTz,
   );
   Family copyWithCompanion(FamiliesCompanion data) {
     return Family(
@@ -240,6 +339,11 @@ class Family extends DataClass implements Insertable<Family> {
       pocketMoneyMode: data.pocketMoneyMode.present
           ? data.pocketMoneyMode.value
           : this.pocketMoneyMode,
+      timeZone: data.timeZone.present ? data.timeZone.value : this.timeZone,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      updatedAtTz: data.updatedAtTz.present
+          ? data.updatedAtTz.value
+          : this.updatedAtTz,
     );
   }
 
@@ -250,14 +354,25 @@ class Family extends DataClass implements Insertable<Family> {
           ..write('name: $name, ')
           ..write('payoutDay: $payoutDay, ')
           ..write('coinValuePencePerCoin: $coinValuePencePerCoin, ')
-          ..write('pocketMoneyMode: $pocketMoneyMode')
+          ..write('pocketMoneyMode: $pocketMoneyMode, ')
+          ..write('timeZone: $timeZone, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('updatedAtTz: $updatedAtTz')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, name, payoutDay, coinValuePencePerCoin, pocketMoneyMode);
+  int get hashCode => Object.hash(
+    id,
+    name,
+    payoutDay,
+    coinValuePencePerCoin,
+    pocketMoneyMode,
+    timeZone,
+    updatedAt,
+    updatedAtTz,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -266,7 +381,10 @@ class Family extends DataClass implements Insertable<Family> {
           other.name == this.name &&
           other.payoutDay == this.payoutDay &&
           other.coinValuePencePerCoin == this.coinValuePencePerCoin &&
-          other.pocketMoneyMode == this.pocketMoneyMode);
+          other.pocketMoneyMode == this.pocketMoneyMode &&
+          other.timeZone == this.timeZone &&
+          other.updatedAt == this.updatedAt &&
+          other.updatedAtTz == this.updatedAtTz);
 }
 
 class FamiliesCompanion extends UpdateCompanion<Family> {
@@ -275,6 +393,9 @@ class FamiliesCompanion extends UpdateCompanion<Family> {
   final Value<int> payoutDay;
   final Value<int> coinValuePencePerCoin;
   final Value<String> pocketMoneyMode;
+  final Value<String> timeZone;
+  final Value<DateTime?> updatedAt;
+  final Value<String> updatedAtTz;
   final Value<int> rowid;
   const FamiliesCompanion({
     this.id = const Value.absent(),
@@ -282,6 +403,9 @@ class FamiliesCompanion extends UpdateCompanion<Family> {
     this.payoutDay = const Value.absent(),
     this.coinValuePencePerCoin = const Value.absent(),
     this.pocketMoneyMode = const Value.absent(),
+    this.timeZone = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.updatedAtTz = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   FamiliesCompanion.insert({
@@ -290,6 +414,9 @@ class FamiliesCompanion extends UpdateCompanion<Family> {
     this.payoutDay = const Value.absent(),
     this.coinValuePencePerCoin = const Value.absent(),
     this.pocketMoneyMode = const Value.absent(),
+    this.timeZone = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.updatedAtTz = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id);
   static Insertable<Family> custom({
@@ -298,6 +425,9 @@ class FamiliesCompanion extends UpdateCompanion<Family> {
     Expression<int>? payoutDay,
     Expression<int>? coinValuePencePerCoin,
     Expression<String>? pocketMoneyMode,
+    Expression<String>? timeZone,
+    Expression<DateTime>? updatedAt,
+    Expression<String>? updatedAtTz,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -307,6 +437,9 @@ class FamiliesCompanion extends UpdateCompanion<Family> {
       if (coinValuePencePerCoin != null)
         'coin_value_pence_per_coin': coinValuePencePerCoin,
       if (pocketMoneyMode != null) 'pocket_money_mode': pocketMoneyMode,
+      if (timeZone != null) 'time_zone': timeZone,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (updatedAtTz != null) 'updated_at_tz': updatedAtTz,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -317,6 +450,9 @@ class FamiliesCompanion extends UpdateCompanion<Family> {
     Value<int>? payoutDay,
     Value<int>? coinValuePencePerCoin,
     Value<String>? pocketMoneyMode,
+    Value<String>? timeZone,
+    Value<DateTime?>? updatedAt,
+    Value<String>? updatedAtTz,
     Value<int>? rowid,
   }) {
     return FamiliesCompanion(
@@ -326,6 +462,9 @@ class FamiliesCompanion extends UpdateCompanion<Family> {
       coinValuePencePerCoin:
           coinValuePencePerCoin ?? this.coinValuePencePerCoin,
       pocketMoneyMode: pocketMoneyMode ?? this.pocketMoneyMode,
+      timeZone: timeZone ?? this.timeZone,
+      updatedAt: updatedAt ?? this.updatedAt,
+      updatedAtTz: updatedAtTz ?? this.updatedAtTz,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -350,6 +489,15 @@ class FamiliesCompanion extends UpdateCompanion<Family> {
     if (pocketMoneyMode.present) {
       map['pocket_money_mode'] = Variable<String>(pocketMoneyMode.value);
     }
+    if (timeZone.present) {
+      map['time_zone'] = Variable<String>(timeZone.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (updatedAtTz.present) {
+      map['updated_at_tz'] = Variable<String>(updatedAtTz.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -364,6 +512,9 @@ class FamiliesCompanion extends UpdateCompanion<Family> {
           ..write('payoutDay: $payoutDay, ')
           ..write('coinValuePencePerCoin: $coinValuePencePerCoin, ')
           ..write('pocketMoneyMode: $pocketMoneyMode, ')
+          ..write('timeZone: $timeZone, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('updatedAtTz: $updatedAtTz, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1715,6 +1866,17 @@ class $QuestsTable extends Quests with TableInfo<$QuestsTable, Quest> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _dueTimeLocalMeta = const VerificationMeta(
+    'dueTimeLocal',
+  );
+  @override
+  late final GeneratedColumn<String> dueTimeLocal = GeneratedColumn<String>(
+    'due_time_local',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _needsApprovalMeta = const VerificationMeta(
     'needsApproval',
   );
@@ -1764,6 +1926,7 @@ class $QuestsTable extends Quests with TableInfo<$QuestsTable, Quest> {
     repeatRule,
     days,
     dueLabel,
+    dueTimeLocal,
     needsApproval,
     assigneeChildId,
     active,
@@ -1831,6 +1994,15 @@ class $QuestsTable extends Quests with TableInfo<$QuestsTable, Quest> {
         dueLabel.isAcceptableOrUnknown(data['due_label']!, _dueLabelMeta),
       );
     }
+    if (data.containsKey('due_time_local')) {
+      context.handle(
+        _dueTimeLocalMeta,
+        dueTimeLocal.isAcceptableOrUnknown(
+          data['due_time_local']!,
+          _dueTimeLocalMeta,
+        ),
+      );
+    }
     if (data.containsKey('needs_approval')) {
       context.handle(
         _needsApprovalMeta,
@@ -1896,6 +2068,10 @@ class $QuestsTable extends Quests with TableInfo<$QuestsTable, Quest> {
         DriftSqlType.string,
         data['${effectivePrefix}due_label'],
       ),
+      dueTimeLocal: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}due_time_local'],
+      ),
       needsApproval: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}needs_approval'],
@@ -1926,6 +2102,7 @@ class Quest extends DataClass implements Insertable<Quest> {
   final String repeatRule;
   final String days;
   final String? dueLabel;
+  final String? dueTimeLocal;
   final bool needsApproval;
   final String? assigneeChildId;
   final bool active;
@@ -1938,6 +2115,7 @@ class Quest extends DataClass implements Insertable<Quest> {
     required this.repeatRule,
     required this.days,
     this.dueLabel,
+    this.dueTimeLocal,
     required this.needsApproval,
     this.assigneeChildId,
     required this.active,
@@ -1954,6 +2132,9 @@ class Quest extends DataClass implements Insertable<Quest> {
     map['days'] = Variable<String>(days);
     if (!nullToAbsent || dueLabel != null) {
       map['due_label'] = Variable<String>(dueLabel);
+    }
+    if (!nullToAbsent || dueTimeLocal != null) {
+      map['due_time_local'] = Variable<String>(dueTimeLocal);
     }
     map['needs_approval'] = Variable<bool>(needsApproval);
     if (!nullToAbsent || assigneeChildId != null) {
@@ -1975,6 +2156,9 @@ class Quest extends DataClass implements Insertable<Quest> {
       dueLabel: dueLabel == null && nullToAbsent
           ? const Value.absent()
           : Value(dueLabel),
+      dueTimeLocal: dueTimeLocal == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dueTimeLocal),
       needsApproval: Value(needsApproval),
       assigneeChildId: assigneeChildId == null && nullToAbsent
           ? const Value.absent()
@@ -1997,6 +2181,7 @@ class Quest extends DataClass implements Insertable<Quest> {
       repeatRule: serializer.fromJson<String>(json['repeatRule']),
       days: serializer.fromJson<String>(json['days']),
       dueLabel: serializer.fromJson<String?>(json['dueLabel']),
+      dueTimeLocal: serializer.fromJson<String?>(json['dueTimeLocal']),
       needsApproval: serializer.fromJson<bool>(json['needsApproval']),
       assigneeChildId: serializer.fromJson<String?>(json['assigneeChildId']),
       active: serializer.fromJson<bool>(json['active']),
@@ -2014,6 +2199,7 @@ class Quest extends DataClass implements Insertable<Quest> {
       'repeatRule': serializer.toJson<String>(repeatRule),
       'days': serializer.toJson<String>(days),
       'dueLabel': serializer.toJson<String?>(dueLabel),
+      'dueTimeLocal': serializer.toJson<String?>(dueTimeLocal),
       'needsApproval': serializer.toJson<bool>(needsApproval),
       'assigneeChildId': serializer.toJson<String?>(assigneeChildId),
       'active': serializer.toJson<bool>(active),
@@ -2029,6 +2215,7 @@ class Quest extends DataClass implements Insertable<Quest> {
     String? repeatRule,
     String? days,
     Value<String?> dueLabel = const Value.absent(),
+    Value<String?> dueTimeLocal = const Value.absent(),
     bool? needsApproval,
     Value<String?> assigneeChildId = const Value.absent(),
     bool? active,
@@ -2041,6 +2228,7 @@ class Quest extends DataClass implements Insertable<Quest> {
     repeatRule: repeatRule ?? this.repeatRule,
     days: days ?? this.days,
     dueLabel: dueLabel.present ? dueLabel.value : this.dueLabel,
+    dueTimeLocal: dueTimeLocal.present ? dueTimeLocal.value : this.dueTimeLocal,
     needsApproval: needsApproval ?? this.needsApproval,
     assigneeChildId: assigneeChildId.present
         ? assigneeChildId.value
@@ -2059,6 +2247,9 @@ class Quest extends DataClass implements Insertable<Quest> {
           : this.repeatRule,
       days: data.days.present ? data.days.value : this.days,
       dueLabel: data.dueLabel.present ? data.dueLabel.value : this.dueLabel,
+      dueTimeLocal: data.dueTimeLocal.present
+          ? data.dueTimeLocal.value
+          : this.dueTimeLocal,
       needsApproval: data.needsApproval.present
           ? data.needsApproval.value
           : this.needsApproval,
@@ -2080,6 +2271,7 @@ class Quest extends DataClass implements Insertable<Quest> {
           ..write('repeatRule: $repeatRule, ')
           ..write('days: $days, ')
           ..write('dueLabel: $dueLabel, ')
+          ..write('dueTimeLocal: $dueTimeLocal, ')
           ..write('needsApproval: $needsApproval, ')
           ..write('assigneeChildId: $assigneeChildId, ')
           ..write('active: $active')
@@ -2097,6 +2289,7 @@ class Quest extends DataClass implements Insertable<Quest> {
     repeatRule,
     days,
     dueLabel,
+    dueTimeLocal,
     needsApproval,
     assigneeChildId,
     active,
@@ -2113,6 +2306,7 @@ class Quest extends DataClass implements Insertable<Quest> {
           other.repeatRule == this.repeatRule &&
           other.days == this.days &&
           other.dueLabel == this.dueLabel &&
+          other.dueTimeLocal == this.dueTimeLocal &&
           other.needsApproval == this.needsApproval &&
           other.assigneeChildId == this.assigneeChildId &&
           other.active == this.active);
@@ -2127,6 +2321,7 @@ class QuestsCompanion extends UpdateCompanion<Quest> {
   final Value<String> repeatRule;
   final Value<String> days;
   final Value<String?> dueLabel;
+  final Value<String?> dueTimeLocal;
   final Value<bool> needsApproval;
   final Value<String?> assigneeChildId;
   final Value<bool> active;
@@ -2140,6 +2335,7 @@ class QuestsCompanion extends UpdateCompanion<Quest> {
     this.repeatRule = const Value.absent(),
     this.days = const Value.absent(),
     this.dueLabel = const Value.absent(),
+    this.dueTimeLocal = const Value.absent(),
     this.needsApproval = const Value.absent(),
     this.assigneeChildId = const Value.absent(),
     this.active = const Value.absent(),
@@ -2154,6 +2350,7 @@ class QuestsCompanion extends UpdateCompanion<Quest> {
     this.repeatRule = const Value.absent(),
     this.days = const Value.absent(),
     this.dueLabel = const Value.absent(),
+    this.dueTimeLocal = const Value.absent(),
     this.needsApproval = const Value.absent(),
     this.assigneeChildId = const Value.absent(),
     this.active = const Value.absent(),
@@ -2170,6 +2367,7 @@ class QuestsCompanion extends UpdateCompanion<Quest> {
     Expression<String>? repeatRule,
     Expression<String>? days,
     Expression<String>? dueLabel,
+    Expression<String>? dueTimeLocal,
     Expression<bool>? needsApproval,
     Expression<String>? assigneeChildId,
     Expression<bool>? active,
@@ -2184,6 +2382,7 @@ class QuestsCompanion extends UpdateCompanion<Quest> {
       if (repeatRule != null) 'repeat_rule': repeatRule,
       if (days != null) 'days': days,
       if (dueLabel != null) 'due_label': dueLabel,
+      if (dueTimeLocal != null) 'due_time_local': dueTimeLocal,
       if (needsApproval != null) 'needs_approval': needsApproval,
       if (assigneeChildId != null) 'assignee_child_id': assigneeChildId,
       if (active != null) 'active': active,
@@ -2200,6 +2399,7 @@ class QuestsCompanion extends UpdateCompanion<Quest> {
     Value<String>? repeatRule,
     Value<String>? days,
     Value<String?>? dueLabel,
+    Value<String?>? dueTimeLocal,
     Value<bool>? needsApproval,
     Value<String?>? assigneeChildId,
     Value<bool>? active,
@@ -2214,6 +2414,7 @@ class QuestsCompanion extends UpdateCompanion<Quest> {
       repeatRule: repeatRule ?? this.repeatRule,
       days: days ?? this.days,
       dueLabel: dueLabel ?? this.dueLabel,
+      dueTimeLocal: dueTimeLocal ?? this.dueTimeLocal,
       needsApproval: needsApproval ?? this.needsApproval,
       assigneeChildId: assigneeChildId ?? this.assigneeChildId,
       active: active ?? this.active,
@@ -2248,6 +2449,9 @@ class QuestsCompanion extends UpdateCompanion<Quest> {
     if (dueLabel.present) {
       map['due_label'] = Variable<String>(dueLabel.value);
     }
+    if (dueTimeLocal.present) {
+      map['due_time_local'] = Variable<String>(dueTimeLocal.value);
+    }
     if (needsApproval.present) {
       map['needs_approval'] = Variable<bool>(needsApproval.value);
     }
@@ -2274,6 +2478,7 @@ class QuestsCompanion extends UpdateCompanion<Quest> {
           ..write('repeatRule: $repeatRule, ')
           ..write('days: $days, ')
           ..write('dueLabel: $dueLabel, ')
+          ..write('dueTimeLocal: $dueTimeLocal, ')
           ..write('needsApproval: $needsApproval, ')
           ..write('assigneeChildId: $assigneeChildId, ')
           ..write('active: $active, ')
@@ -2376,6 +2581,18 @@ class $QuestCompletionsTable extends QuestCompletions
     requiredDuringInsert: false,
     defaultValue: currentDateAndTime,
   );
+  static const VerificationMeta _createdAtTzMeta = const VerificationMeta(
+    'createdAtTz',
+  );
+  @override
+  late final GeneratedColumn<String> createdAtTz = GeneratedColumn<String>(
+    'created_at_tz',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('Europe/London'),
+  );
   static const VerificationMeta _decidedAtMeta = const VerificationMeta(
     'decidedAt',
   );
@@ -2387,6 +2604,18 @@ class $QuestCompletionsTable extends QuestCompletions
     type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _decidedAtTzMeta = const VerificationMeta(
+    'decidedAtTz',
+  );
+  @override
+  late final GeneratedColumn<String> decidedAtTz = GeneratedColumn<String>(
+    'decided_at_tz',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('Europe/London'),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -2396,7 +2625,9 @@ class $QuestCompletionsTable extends QuestCompletions
     status,
     coins,
     createdAt,
+    createdAtTz,
     decidedAt,
+    decidedAtTz,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -2455,10 +2686,28 @@ class $QuestCompletionsTable extends QuestCompletions
         createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
       );
     }
+    if (data.containsKey('created_at_tz')) {
+      context.handle(
+        _createdAtTzMeta,
+        createdAtTz.isAcceptableOrUnknown(
+          data['created_at_tz']!,
+          _createdAtTzMeta,
+        ),
+      );
+    }
     if (data.containsKey('decided_at')) {
       context.handle(
         _decidedAtMeta,
         decidedAt.isAcceptableOrUnknown(data['decided_at']!, _decidedAtMeta),
+      );
+    }
+    if (data.containsKey('decided_at_tz')) {
+      context.handle(
+        _decidedAtTzMeta,
+        decidedAtTz.isAcceptableOrUnknown(
+          data['decided_at_tz']!,
+          _decidedAtTzMeta,
+        ),
       );
     }
     return context;
@@ -2498,10 +2747,18 @@ class $QuestCompletionsTable extends QuestCompletions
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
       )!,
+      createdAtTz: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}created_at_tz'],
+      )!,
       decidedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}decided_at'],
       ),
+      decidedAtTz: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}decided_at_tz'],
+      )!,
     );
   }
 
@@ -2519,7 +2776,9 @@ class QuestCompletion extends DataClass implements Insertable<QuestCompletion> {
   final String status;
   final int coins;
   final DateTime createdAt;
+  final String createdAtTz;
   final DateTime? decidedAt;
+  final String decidedAtTz;
   const QuestCompletion({
     required this.id,
     required this.questId,
@@ -2528,7 +2787,9 @@ class QuestCompletion extends DataClass implements Insertable<QuestCompletion> {
     required this.status,
     required this.coins,
     required this.createdAt,
+    required this.createdAtTz,
     this.decidedAt,
+    required this.decidedAtTz,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -2540,9 +2801,11 @@ class QuestCompletion extends DataClass implements Insertable<QuestCompletion> {
     map['status'] = Variable<String>(status);
     map['coins'] = Variable<int>(coins);
     map['created_at'] = Variable<DateTime>(createdAt);
+    map['created_at_tz'] = Variable<String>(createdAtTz);
     if (!nullToAbsent || decidedAt != null) {
       map['decided_at'] = Variable<DateTime>(decidedAt);
     }
+    map['decided_at_tz'] = Variable<String>(decidedAtTz);
     return map;
   }
 
@@ -2555,9 +2818,11 @@ class QuestCompletion extends DataClass implements Insertable<QuestCompletion> {
       status: Value(status),
       coins: Value(coins),
       createdAt: Value(createdAt),
+      createdAtTz: Value(createdAtTz),
       decidedAt: decidedAt == null && nullToAbsent
           ? const Value.absent()
           : Value(decidedAt),
+      decidedAtTz: Value(decidedAtTz),
     );
   }
 
@@ -2574,7 +2839,9 @@ class QuestCompletion extends DataClass implements Insertable<QuestCompletion> {
       status: serializer.fromJson<String>(json['status']),
       coins: serializer.fromJson<int>(json['coins']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      createdAtTz: serializer.fromJson<String>(json['createdAtTz']),
       decidedAt: serializer.fromJson<DateTime?>(json['decidedAt']),
+      decidedAtTz: serializer.fromJson<String>(json['decidedAtTz']),
     );
   }
   @override
@@ -2588,7 +2855,9 @@ class QuestCompletion extends DataClass implements Insertable<QuestCompletion> {
       'status': serializer.toJson<String>(status),
       'coins': serializer.toJson<int>(coins),
       'createdAt': serializer.toJson<DateTime>(createdAt),
+      'createdAtTz': serializer.toJson<String>(createdAtTz),
       'decidedAt': serializer.toJson<DateTime?>(decidedAt),
+      'decidedAtTz': serializer.toJson<String>(decidedAtTz),
     };
   }
 
@@ -2600,7 +2869,9 @@ class QuestCompletion extends DataClass implements Insertable<QuestCompletion> {
     String? status,
     int? coins,
     DateTime? createdAt,
+    String? createdAtTz,
     Value<DateTime?> decidedAt = const Value.absent(),
+    String? decidedAtTz,
   }) => QuestCompletion(
     id: id ?? this.id,
     questId: questId ?? this.questId,
@@ -2609,7 +2880,9 @@ class QuestCompletion extends DataClass implements Insertable<QuestCompletion> {
     status: status ?? this.status,
     coins: coins ?? this.coins,
     createdAt: createdAt ?? this.createdAt,
+    createdAtTz: createdAtTz ?? this.createdAtTz,
     decidedAt: decidedAt.present ? decidedAt.value : this.decidedAt,
+    decidedAtTz: decidedAtTz ?? this.decidedAtTz,
   );
   QuestCompletion copyWithCompanion(QuestCompletionsCompanion data) {
     return QuestCompletion(
@@ -2620,7 +2893,13 @@ class QuestCompletion extends DataClass implements Insertable<QuestCompletion> {
       status: data.status.present ? data.status.value : this.status,
       coins: data.coins.present ? data.coins.value : this.coins,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      createdAtTz: data.createdAtTz.present
+          ? data.createdAtTz.value
+          : this.createdAtTz,
       decidedAt: data.decidedAt.present ? data.decidedAt.value : this.decidedAt,
+      decidedAtTz: data.decidedAtTz.present
+          ? data.decidedAtTz.value
+          : this.decidedAtTz,
     );
   }
 
@@ -2634,7 +2913,9 @@ class QuestCompletion extends DataClass implements Insertable<QuestCompletion> {
           ..write('status: $status, ')
           ..write('coins: $coins, ')
           ..write('createdAt: $createdAt, ')
-          ..write('decidedAt: $decidedAt')
+          ..write('createdAtTz: $createdAtTz, ')
+          ..write('decidedAt: $decidedAt, ')
+          ..write('decidedAtTz: $decidedAtTz')
           ..write(')'))
         .toString();
   }
@@ -2648,7 +2929,9 @@ class QuestCompletion extends DataClass implements Insertable<QuestCompletion> {
     status,
     coins,
     createdAt,
+    createdAtTz,
     decidedAt,
+    decidedAtTz,
   );
   @override
   bool operator ==(Object other) =>
@@ -2661,7 +2944,9 @@ class QuestCompletion extends DataClass implements Insertable<QuestCompletion> {
           other.status == this.status &&
           other.coins == this.coins &&
           other.createdAt == this.createdAt &&
-          other.decidedAt == this.decidedAt);
+          other.createdAtTz == this.createdAtTz &&
+          other.decidedAt == this.decidedAt &&
+          other.decidedAtTz == this.decidedAtTz);
 }
 
 class QuestCompletionsCompanion extends UpdateCompanion<QuestCompletion> {
@@ -2672,7 +2957,9 @@ class QuestCompletionsCompanion extends UpdateCompanion<QuestCompletion> {
   final Value<String> status;
   final Value<int> coins;
   final Value<DateTime> createdAt;
+  final Value<String> createdAtTz;
   final Value<DateTime?> decidedAt;
+  final Value<String> decidedAtTz;
   const QuestCompletionsCompanion({
     this.id = const Value.absent(),
     this.questId = const Value.absent(),
@@ -2681,7 +2968,9 @@ class QuestCompletionsCompanion extends UpdateCompanion<QuestCompletion> {
     this.status = const Value.absent(),
     this.coins = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.createdAtTz = const Value.absent(),
     this.decidedAt = const Value.absent(),
+    this.decidedAtTz = const Value.absent(),
   });
   QuestCompletionsCompanion.insert({
     this.id = const Value.absent(),
@@ -2691,7 +2980,9 @@ class QuestCompletionsCompanion extends UpdateCompanion<QuestCompletion> {
     this.status = const Value.absent(),
     this.coins = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.createdAtTz = const Value.absent(),
     this.decidedAt = const Value.absent(),
+    this.decidedAtTz = const Value.absent(),
   }) : questId = Value(questId),
        childId = Value(childId),
        familyId = Value(familyId);
@@ -2703,7 +2994,9 @@ class QuestCompletionsCompanion extends UpdateCompanion<QuestCompletion> {
     Expression<String>? status,
     Expression<int>? coins,
     Expression<DateTime>? createdAt,
+    Expression<String>? createdAtTz,
     Expression<DateTime>? decidedAt,
+    Expression<String>? decidedAtTz,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -2713,7 +3006,9 @@ class QuestCompletionsCompanion extends UpdateCompanion<QuestCompletion> {
       if (status != null) 'status': status,
       if (coins != null) 'coins': coins,
       if (createdAt != null) 'created_at': createdAt,
+      if (createdAtTz != null) 'created_at_tz': createdAtTz,
       if (decidedAt != null) 'decided_at': decidedAt,
+      if (decidedAtTz != null) 'decided_at_tz': decidedAtTz,
     });
   }
 
@@ -2725,7 +3020,9 @@ class QuestCompletionsCompanion extends UpdateCompanion<QuestCompletion> {
     Value<String>? status,
     Value<int>? coins,
     Value<DateTime>? createdAt,
+    Value<String>? createdAtTz,
     Value<DateTime?>? decidedAt,
+    Value<String>? decidedAtTz,
   }) {
     return QuestCompletionsCompanion(
       id: id ?? this.id,
@@ -2735,7 +3032,9 @@ class QuestCompletionsCompanion extends UpdateCompanion<QuestCompletion> {
       status: status ?? this.status,
       coins: coins ?? this.coins,
       createdAt: createdAt ?? this.createdAt,
+      createdAtTz: createdAtTz ?? this.createdAtTz,
       decidedAt: decidedAt ?? this.decidedAt,
+      decidedAtTz: decidedAtTz ?? this.decidedAtTz,
     );
   }
 
@@ -2763,8 +3062,14 @@ class QuestCompletionsCompanion extends UpdateCompanion<QuestCompletion> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (createdAtTz.present) {
+      map['created_at_tz'] = Variable<String>(createdAtTz.value);
+    }
     if (decidedAt.present) {
       map['decided_at'] = Variable<DateTime>(decidedAt.value);
+    }
+    if (decidedAtTz.present) {
+      map['decided_at_tz'] = Variable<String>(decidedAtTz.value);
     }
     return map;
   }
@@ -2779,7 +3084,9 @@ class QuestCompletionsCompanion extends UpdateCompanion<QuestCompletion> {
           ..write('status: $status, ')
           ..write('coins: $coins, ')
           ..write('createdAt: $createdAt, ')
-          ..write('decidedAt: $decidedAt')
+          ..write('createdAtTz: $createdAtTz, ')
+          ..write('decidedAt: $decidedAt, ')
+          ..write('decidedAtTz: $decidedAtTz')
           ..write(')'))
         .toString();
   }
@@ -2872,6 +3179,16 @@ class $LedgerEntriesTable extends LedgerEntries
     requiredDuringInsert: false,
     defaultValue: currentDateAndTime,
   );
+  static const VerificationMeta _dateTzMeta = const VerificationMeta('dateTz');
+  @override
+  late final GeneratedColumn<String> dateTz = GeneratedColumn<String>(
+    'date_tz',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('Europe/London'),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -2881,6 +3198,7 @@ class $LedgerEntriesTable extends LedgerEntries
     amountPence,
     note,
     date,
+    dateTz,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -2944,6 +3262,12 @@ class $LedgerEntriesTable extends LedgerEntries
         date.isAcceptableOrUnknown(data['date']!, _dateMeta),
       );
     }
+    if (data.containsKey('date_tz')) {
+      context.handle(
+        _dateTzMeta,
+        dateTz.isAcceptableOrUnknown(data['date_tz']!, _dateTzMeta),
+      );
+    }
     return context;
   }
 
@@ -2981,6 +3305,10 @@ class $LedgerEntriesTable extends LedgerEntries
         DriftSqlType.dateTime,
         data['${effectivePrefix}date'],
       )!,
+      dateTz: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}date_tz'],
+      )!,
     );
   }
 
@@ -2998,6 +3326,7 @@ class LedgerEntry extends DataClass implements Insertable<LedgerEntry> {
   final int amountPence;
   final String note;
   final DateTime date;
+  final String dateTz;
   const LedgerEntry({
     required this.id,
     required this.familyId,
@@ -3006,6 +3335,7 @@ class LedgerEntry extends DataClass implements Insertable<LedgerEntry> {
     required this.amountPence,
     required this.note,
     required this.date,
+    required this.dateTz,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -3017,6 +3347,7 @@ class LedgerEntry extends DataClass implements Insertable<LedgerEntry> {
     map['amount_pence'] = Variable<int>(amountPence);
     map['note'] = Variable<String>(note);
     map['date'] = Variable<DateTime>(date);
+    map['date_tz'] = Variable<String>(dateTz);
     return map;
   }
 
@@ -3029,6 +3360,7 @@ class LedgerEntry extends DataClass implements Insertable<LedgerEntry> {
       amountPence: Value(amountPence),
       note: Value(note),
       date: Value(date),
+      dateTz: Value(dateTz),
     );
   }
 
@@ -3045,6 +3377,7 @@ class LedgerEntry extends DataClass implements Insertable<LedgerEntry> {
       amountPence: serializer.fromJson<int>(json['amountPence']),
       note: serializer.fromJson<String>(json['note']),
       date: serializer.fromJson<DateTime>(json['date']),
+      dateTz: serializer.fromJson<String>(json['dateTz']),
     );
   }
   @override
@@ -3058,6 +3391,7 @@ class LedgerEntry extends DataClass implements Insertable<LedgerEntry> {
       'amountPence': serializer.toJson<int>(amountPence),
       'note': serializer.toJson<String>(note),
       'date': serializer.toJson<DateTime>(date),
+      'dateTz': serializer.toJson<String>(dateTz),
     };
   }
 
@@ -3069,6 +3403,7 @@ class LedgerEntry extends DataClass implements Insertable<LedgerEntry> {
     int? amountPence,
     String? note,
     DateTime? date,
+    String? dateTz,
   }) => LedgerEntry(
     id: id ?? this.id,
     familyId: familyId ?? this.familyId,
@@ -3077,6 +3412,7 @@ class LedgerEntry extends DataClass implements Insertable<LedgerEntry> {
     amountPence: amountPence ?? this.amountPence,
     note: note ?? this.note,
     date: date ?? this.date,
+    dateTz: dateTz ?? this.dateTz,
   );
   LedgerEntry copyWithCompanion(LedgerEntriesCompanion data) {
     return LedgerEntry(
@@ -3089,6 +3425,7 @@ class LedgerEntry extends DataClass implements Insertable<LedgerEntry> {
           : this.amountPence,
       note: data.note.present ? data.note.value : this.note,
       date: data.date.present ? data.date.value : this.date,
+      dateTz: data.dateTz.present ? data.dateTz.value : this.dateTz,
     );
   }
 
@@ -3101,14 +3438,15 @@ class LedgerEntry extends DataClass implements Insertable<LedgerEntry> {
           ..write('type: $type, ')
           ..write('amountPence: $amountPence, ')
           ..write('note: $note, ')
-          ..write('date: $date')
+          ..write('date: $date, ')
+          ..write('dateTz: $dateTz')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode =>
-      Object.hash(id, familyId, childId, type, amountPence, note, date);
+      Object.hash(id, familyId, childId, type, amountPence, note, date, dateTz);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -3119,7 +3457,8 @@ class LedgerEntry extends DataClass implements Insertable<LedgerEntry> {
           other.type == this.type &&
           other.amountPence == this.amountPence &&
           other.note == this.note &&
-          other.date == this.date);
+          other.date == this.date &&
+          other.dateTz == this.dateTz);
 }
 
 class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntry> {
@@ -3130,6 +3469,7 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntry> {
   final Value<int> amountPence;
   final Value<String> note;
   final Value<DateTime> date;
+  final Value<String> dateTz;
   const LedgerEntriesCompanion({
     this.id = const Value.absent(),
     this.familyId = const Value.absent(),
@@ -3138,6 +3478,7 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntry> {
     this.amountPence = const Value.absent(),
     this.note = const Value.absent(),
     this.date = const Value.absent(),
+    this.dateTz = const Value.absent(),
   });
   LedgerEntriesCompanion.insert({
     this.id = const Value.absent(),
@@ -3147,6 +3488,7 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntry> {
     required int amountPence,
     this.note = const Value.absent(),
     this.date = const Value.absent(),
+    this.dateTz = const Value.absent(),
   }) : familyId = Value(familyId),
        childId = Value(childId),
        type = Value(type),
@@ -3159,6 +3501,7 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntry> {
     Expression<int>? amountPence,
     Expression<String>? note,
     Expression<DateTime>? date,
+    Expression<String>? dateTz,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -3168,6 +3511,7 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntry> {
       if (amountPence != null) 'amount_pence': amountPence,
       if (note != null) 'note': note,
       if (date != null) 'date': date,
+      if (dateTz != null) 'date_tz': dateTz,
     });
   }
 
@@ -3179,6 +3523,7 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntry> {
     Value<int>? amountPence,
     Value<String>? note,
     Value<DateTime>? date,
+    Value<String>? dateTz,
   }) {
     return LedgerEntriesCompanion(
       id: id ?? this.id,
@@ -3188,6 +3533,7 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntry> {
       amountPence: amountPence ?? this.amountPence,
       note: note ?? this.note,
       date: date ?? this.date,
+      dateTz: dateTz ?? this.dateTz,
     );
   }
 
@@ -3215,6 +3561,9 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntry> {
     if (date.present) {
       map['date'] = Variable<DateTime>(date.value);
     }
+    if (dateTz.present) {
+      map['date_tz'] = Variable<String>(dateTz.value);
+    }
     return map;
   }
 
@@ -3227,7 +3576,8 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntry> {
           ..write('type: $type, ')
           ..write('amountPence: $amountPence, ')
           ..write('note: $note, ')
-          ..write('date: $date')
+          ..write('date: $date, ')
+          ..write('dateTz: $dateTz')
           ..write(')'))
         .toString();
   }
@@ -4142,6 +4492,18 @@ class $RewardRedemptionsTable extends RewardRedemptions
     requiredDuringInsert: false,
     defaultValue: currentDateAndTime,
   );
+  static const VerificationMeta _createdAtTzMeta = const VerificationMeta(
+    'createdAtTz',
+  );
+  @override
+  late final GeneratedColumn<String> createdAtTz = GeneratedColumn<String>(
+    'created_at_tz',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('Europe/London'),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -4150,6 +4512,7 @@ class $RewardRedemptionsTable extends RewardRedemptions
     familyId,
     status,
     createdAt,
+    createdAtTz,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -4202,6 +4565,15 @@ class $RewardRedemptionsTable extends RewardRedemptions
         createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
       );
     }
+    if (data.containsKey('created_at_tz')) {
+      context.handle(
+        _createdAtTzMeta,
+        createdAtTz.isAcceptableOrUnknown(
+          data['created_at_tz']!,
+          _createdAtTzMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -4235,6 +4607,10 @@ class $RewardRedemptionsTable extends RewardRedemptions
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
       )!,
+      createdAtTz: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}created_at_tz'],
+      )!,
     );
   }
 
@@ -4252,6 +4628,7 @@ class RewardRedemption extends DataClass
   final String familyId;
   final String status;
   final DateTime createdAt;
+  final String createdAtTz;
   const RewardRedemption({
     required this.id,
     required this.rewardId,
@@ -4259,6 +4636,7 @@ class RewardRedemption extends DataClass
     required this.familyId,
     required this.status,
     required this.createdAt,
+    required this.createdAtTz,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -4269,6 +4647,7 @@ class RewardRedemption extends DataClass
     map['family_id'] = Variable<String>(familyId);
     map['status'] = Variable<String>(status);
     map['created_at'] = Variable<DateTime>(createdAt);
+    map['created_at_tz'] = Variable<String>(createdAtTz);
     return map;
   }
 
@@ -4280,6 +4659,7 @@ class RewardRedemption extends DataClass
       familyId: Value(familyId),
       status: Value(status),
       createdAt: Value(createdAt),
+      createdAtTz: Value(createdAtTz),
     );
   }
 
@@ -4295,6 +4675,7 @@ class RewardRedemption extends DataClass
       familyId: serializer.fromJson<String>(json['familyId']),
       status: serializer.fromJson<String>(json['status']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      createdAtTz: serializer.fromJson<String>(json['createdAtTz']),
     );
   }
   @override
@@ -4307,6 +4688,7 @@ class RewardRedemption extends DataClass
       'familyId': serializer.toJson<String>(familyId),
       'status': serializer.toJson<String>(status),
       'createdAt': serializer.toJson<DateTime>(createdAt),
+      'createdAtTz': serializer.toJson<String>(createdAtTz),
     };
   }
 
@@ -4317,6 +4699,7 @@ class RewardRedemption extends DataClass
     String? familyId,
     String? status,
     DateTime? createdAt,
+    String? createdAtTz,
   }) => RewardRedemption(
     id: id ?? this.id,
     rewardId: rewardId ?? this.rewardId,
@@ -4324,6 +4707,7 @@ class RewardRedemption extends DataClass
     familyId: familyId ?? this.familyId,
     status: status ?? this.status,
     createdAt: createdAt ?? this.createdAt,
+    createdAtTz: createdAtTz ?? this.createdAtTz,
   );
   RewardRedemption copyWithCompanion(RewardRedemptionsCompanion data) {
     return RewardRedemption(
@@ -4333,6 +4717,9 @@ class RewardRedemption extends DataClass
       familyId: data.familyId.present ? data.familyId.value : this.familyId,
       status: data.status.present ? data.status.value : this.status,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      createdAtTz: data.createdAtTz.present
+          ? data.createdAtTz.value
+          : this.createdAtTz,
     );
   }
 
@@ -4344,14 +4731,22 @@ class RewardRedemption extends DataClass
           ..write('childId: $childId, ')
           ..write('familyId: $familyId, ')
           ..write('status: $status, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('createdAtTz: $createdAtTz')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, rewardId, childId, familyId, status, createdAt);
+  int get hashCode => Object.hash(
+    id,
+    rewardId,
+    childId,
+    familyId,
+    status,
+    createdAt,
+    createdAtTz,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -4361,7 +4756,8 @@ class RewardRedemption extends DataClass
           other.childId == this.childId &&
           other.familyId == this.familyId &&
           other.status == this.status &&
-          other.createdAt == this.createdAt);
+          other.createdAt == this.createdAt &&
+          other.createdAtTz == this.createdAtTz);
 }
 
 class RewardRedemptionsCompanion extends UpdateCompanion<RewardRedemption> {
@@ -4371,6 +4767,7 @@ class RewardRedemptionsCompanion extends UpdateCompanion<RewardRedemption> {
   final Value<String> familyId;
   final Value<String> status;
   final Value<DateTime> createdAt;
+  final Value<String> createdAtTz;
   const RewardRedemptionsCompanion({
     this.id = const Value.absent(),
     this.rewardId = const Value.absent(),
@@ -4378,6 +4775,7 @@ class RewardRedemptionsCompanion extends UpdateCompanion<RewardRedemption> {
     this.familyId = const Value.absent(),
     this.status = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.createdAtTz = const Value.absent(),
   });
   RewardRedemptionsCompanion.insert({
     this.id = const Value.absent(),
@@ -4386,6 +4784,7 @@ class RewardRedemptionsCompanion extends UpdateCompanion<RewardRedemption> {
     required String familyId,
     this.status = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.createdAtTz = const Value.absent(),
   }) : rewardId = Value(rewardId),
        childId = Value(childId),
        familyId = Value(familyId);
@@ -4396,6 +4795,7 @@ class RewardRedemptionsCompanion extends UpdateCompanion<RewardRedemption> {
     Expression<String>? familyId,
     Expression<String>? status,
     Expression<DateTime>? createdAt,
+    Expression<String>? createdAtTz,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -4404,6 +4804,7 @@ class RewardRedemptionsCompanion extends UpdateCompanion<RewardRedemption> {
       if (familyId != null) 'family_id': familyId,
       if (status != null) 'status': status,
       if (createdAt != null) 'created_at': createdAt,
+      if (createdAtTz != null) 'created_at_tz': createdAtTz,
     });
   }
 
@@ -4414,6 +4815,7 @@ class RewardRedemptionsCompanion extends UpdateCompanion<RewardRedemption> {
     Value<String>? familyId,
     Value<String>? status,
     Value<DateTime>? createdAt,
+    Value<String>? createdAtTz,
   }) {
     return RewardRedemptionsCompanion(
       id: id ?? this.id,
@@ -4422,6 +4824,7 @@ class RewardRedemptionsCompanion extends UpdateCompanion<RewardRedemption> {
       familyId: familyId ?? this.familyId,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
+      createdAtTz: createdAtTz ?? this.createdAtTz,
     );
   }
 
@@ -4446,6 +4849,9 @@ class RewardRedemptionsCompanion extends UpdateCompanion<RewardRedemption> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (createdAtTz.present) {
+      map['created_at_tz'] = Variable<String>(createdAtTz.value);
+    }
     return map;
   }
 
@@ -4457,7 +4863,8 @@ class RewardRedemptionsCompanion extends UpdateCompanion<RewardRedemption> {
           ..write('childId: $childId, ')
           ..write('familyId: $familyId, ')
           ..write('status: $status, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('createdAtTz: $createdAtTz')
           ..write(')'))
         .toString();
   }
@@ -4842,6 +5249,18 @@ class $EarnedBadgesTable extends EarnedBadges
     requiredDuringInsert: false,
     defaultValue: currentDateAndTime,
   );
+  static const VerificationMeta _earnedAtTzMeta = const VerificationMeta(
+    'earnedAtTz',
+  );
+  @override
+  late final GeneratedColumn<String> earnedAtTz = GeneratedColumn<String>(
+    'earned_at_tz',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('Europe/London'),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -4849,6 +5268,7 @@ class $EarnedBadgesTable extends EarnedBadges
     childId,
     familyId,
     earnedAt,
+    earnedAtTz,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -4895,6 +5315,15 @@ class $EarnedBadgesTable extends EarnedBadges
         earnedAt.isAcceptableOrUnknown(data['earned_at']!, _earnedAtMeta),
       );
     }
+    if (data.containsKey('earned_at_tz')) {
+      context.handle(
+        _earnedAtTzMeta,
+        earnedAtTz.isAcceptableOrUnknown(
+          data['earned_at_tz']!,
+          _earnedAtTzMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -4924,6 +5353,10 @@ class $EarnedBadgesTable extends EarnedBadges
         DriftSqlType.dateTime,
         data['${effectivePrefix}earned_at'],
       )!,
+      earnedAtTz: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}earned_at_tz'],
+      )!,
     );
   }
 
@@ -4939,12 +5372,14 @@ class EarnedBadge extends DataClass implements Insertable<EarnedBadge> {
   final String childId;
   final String familyId;
   final DateTime earnedAt;
+  final String earnedAtTz;
   const EarnedBadge({
     required this.id,
     required this.badgeId,
     required this.childId,
     required this.familyId,
     required this.earnedAt,
+    required this.earnedAtTz,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -4954,6 +5389,7 @@ class EarnedBadge extends DataClass implements Insertable<EarnedBadge> {
     map['child_id'] = Variable<String>(childId);
     map['family_id'] = Variable<String>(familyId);
     map['earned_at'] = Variable<DateTime>(earnedAt);
+    map['earned_at_tz'] = Variable<String>(earnedAtTz);
     return map;
   }
 
@@ -4964,6 +5400,7 @@ class EarnedBadge extends DataClass implements Insertable<EarnedBadge> {
       childId: Value(childId),
       familyId: Value(familyId),
       earnedAt: Value(earnedAt),
+      earnedAtTz: Value(earnedAtTz),
     );
   }
 
@@ -4978,6 +5415,7 @@ class EarnedBadge extends DataClass implements Insertable<EarnedBadge> {
       childId: serializer.fromJson<String>(json['childId']),
       familyId: serializer.fromJson<String>(json['familyId']),
       earnedAt: serializer.fromJson<DateTime>(json['earnedAt']),
+      earnedAtTz: serializer.fromJson<String>(json['earnedAtTz']),
     );
   }
   @override
@@ -4989,6 +5427,7 @@ class EarnedBadge extends DataClass implements Insertable<EarnedBadge> {
       'childId': serializer.toJson<String>(childId),
       'familyId': serializer.toJson<String>(familyId),
       'earnedAt': serializer.toJson<DateTime>(earnedAt),
+      'earnedAtTz': serializer.toJson<String>(earnedAtTz),
     };
   }
 
@@ -4998,12 +5437,14 @@ class EarnedBadge extends DataClass implements Insertable<EarnedBadge> {
     String? childId,
     String? familyId,
     DateTime? earnedAt,
+    String? earnedAtTz,
   }) => EarnedBadge(
     id: id ?? this.id,
     badgeId: badgeId ?? this.badgeId,
     childId: childId ?? this.childId,
     familyId: familyId ?? this.familyId,
     earnedAt: earnedAt ?? this.earnedAt,
+    earnedAtTz: earnedAtTz ?? this.earnedAtTz,
   );
   EarnedBadge copyWithCompanion(EarnedBadgesCompanion data) {
     return EarnedBadge(
@@ -5012,6 +5453,9 @@ class EarnedBadge extends DataClass implements Insertable<EarnedBadge> {
       childId: data.childId.present ? data.childId.value : this.childId,
       familyId: data.familyId.present ? data.familyId.value : this.familyId,
       earnedAt: data.earnedAt.present ? data.earnedAt.value : this.earnedAt,
+      earnedAtTz: data.earnedAtTz.present
+          ? data.earnedAtTz.value
+          : this.earnedAtTz,
     );
   }
 
@@ -5022,13 +5466,15 @@ class EarnedBadge extends DataClass implements Insertable<EarnedBadge> {
           ..write('badgeId: $badgeId, ')
           ..write('childId: $childId, ')
           ..write('familyId: $familyId, ')
-          ..write('earnedAt: $earnedAt')
+          ..write('earnedAt: $earnedAt, ')
+          ..write('earnedAtTz: $earnedAtTz')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, badgeId, childId, familyId, earnedAt);
+  int get hashCode =>
+      Object.hash(id, badgeId, childId, familyId, earnedAt, earnedAtTz);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -5037,7 +5483,8 @@ class EarnedBadge extends DataClass implements Insertable<EarnedBadge> {
           other.badgeId == this.badgeId &&
           other.childId == this.childId &&
           other.familyId == this.familyId &&
-          other.earnedAt == this.earnedAt);
+          other.earnedAt == this.earnedAt &&
+          other.earnedAtTz == this.earnedAtTz);
 }
 
 class EarnedBadgesCompanion extends UpdateCompanion<EarnedBadge> {
@@ -5046,12 +5493,14 @@ class EarnedBadgesCompanion extends UpdateCompanion<EarnedBadge> {
   final Value<String> childId;
   final Value<String> familyId;
   final Value<DateTime> earnedAt;
+  final Value<String> earnedAtTz;
   const EarnedBadgesCompanion({
     this.id = const Value.absent(),
     this.badgeId = const Value.absent(),
     this.childId = const Value.absent(),
     this.familyId = const Value.absent(),
     this.earnedAt = const Value.absent(),
+    this.earnedAtTz = const Value.absent(),
   });
   EarnedBadgesCompanion.insert({
     this.id = const Value.absent(),
@@ -5059,6 +5508,7 @@ class EarnedBadgesCompanion extends UpdateCompanion<EarnedBadge> {
     required String childId,
     required String familyId,
     this.earnedAt = const Value.absent(),
+    this.earnedAtTz = const Value.absent(),
   }) : badgeId = Value(badgeId),
        childId = Value(childId),
        familyId = Value(familyId);
@@ -5068,6 +5518,7 @@ class EarnedBadgesCompanion extends UpdateCompanion<EarnedBadge> {
     Expression<String>? childId,
     Expression<String>? familyId,
     Expression<DateTime>? earnedAt,
+    Expression<String>? earnedAtTz,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -5075,6 +5526,7 @@ class EarnedBadgesCompanion extends UpdateCompanion<EarnedBadge> {
       if (childId != null) 'child_id': childId,
       if (familyId != null) 'family_id': familyId,
       if (earnedAt != null) 'earned_at': earnedAt,
+      if (earnedAtTz != null) 'earned_at_tz': earnedAtTz,
     });
   }
 
@@ -5084,6 +5536,7 @@ class EarnedBadgesCompanion extends UpdateCompanion<EarnedBadge> {
     Value<String>? childId,
     Value<String>? familyId,
     Value<DateTime>? earnedAt,
+    Value<String>? earnedAtTz,
   }) {
     return EarnedBadgesCompanion(
       id: id ?? this.id,
@@ -5091,6 +5544,7 @@ class EarnedBadgesCompanion extends UpdateCompanion<EarnedBadge> {
       childId: childId ?? this.childId,
       familyId: familyId ?? this.familyId,
       earnedAt: earnedAt ?? this.earnedAt,
+      earnedAtTz: earnedAtTz ?? this.earnedAtTz,
     );
   }
 
@@ -5112,6 +5566,9 @@ class EarnedBadgesCompanion extends UpdateCompanion<EarnedBadge> {
     if (earnedAt.present) {
       map['earned_at'] = Variable<DateTime>(earnedAt.value);
     }
+    if (earnedAtTz.present) {
+      map['earned_at_tz'] = Variable<String>(earnedAtTz.value);
+    }
     return map;
   }
 
@@ -5122,7 +5579,8 @@ class EarnedBadgesCompanion extends UpdateCompanion<EarnedBadge> {
           ..write('badgeId: $badgeId, ')
           ..write('childId: $childId, ')
           ..write('familyId: $familyId, ')
-          ..write('earnedAt: $earnedAt')
+          ..write('earnedAt: $earnedAt, ')
+          ..write('earnedAtTz: $earnedAtTz')
           ..write(')'))
         .toString();
   }
@@ -5602,6 +6060,41 @@ class $SettingsTable extends Settings with TableInfo<$SettingsTable, Setting> {
     ),
     defaultValue: const Constant(true),
   );
+  static const VerificationMeta _timeZoneMeta = const VerificationMeta(
+    'timeZone',
+  );
+  @override
+  late final GeneratedColumn<String> timeZone = GeneratedColumn<String>(
+    'time_zone',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('Europe/London'),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _updatedAtTzMeta = const VerificationMeta(
+    'updatedAtTz',
+  );
+  @override
+  late final GeneratedColumn<String> updatedAtTz = GeneratedColumn<String>(
+    'updated_at_tz',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('Europe/London'),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     familyId,
@@ -5613,6 +6106,9 @@ class $SettingsTable extends Settings with TableInfo<$SettingsTable, Setting> {
     notifSummary,
     crashReportConsent,
     kidGateEnabled,
+    timeZone,
+    updatedAt,
+    updatedAtTz,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -5703,6 +6199,27 @@ class $SettingsTable extends Settings with TableInfo<$SettingsTable, Setting> {
         ),
       );
     }
+    if (data.containsKey('time_zone')) {
+      context.handle(
+        _timeZoneMeta,
+        timeZone.isAcceptableOrUnknown(data['time_zone']!, _timeZoneMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at_tz')) {
+      context.handle(
+        _updatedAtTzMeta,
+        updatedAtTz.isAcceptableOrUnknown(
+          data['updated_at_tz']!,
+          _updatedAtTzMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -5748,6 +6265,18 @@ class $SettingsTable extends Settings with TableInfo<$SettingsTable, Setting> {
         DriftSqlType.bool,
         data['${effectivePrefix}kid_gate_enabled'],
       )!,
+      timeZone: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}time_zone'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      ),
+      updatedAtTz: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}updated_at_tz'],
+      )!,
     );
   }
 
@@ -5767,6 +6296,9 @@ class Setting extends DataClass implements Insertable<Setting> {
   final bool notifSummary;
   final bool crashReportConsent;
   final bool kidGateEnabled;
+  final String timeZone;
+  final DateTime? updatedAt;
+  final String updatedAtTz;
   const Setting({
     required this.familyId,
     required this.pocketMoneyMode,
@@ -5777,6 +6309,9 @@ class Setting extends DataClass implements Insertable<Setting> {
     required this.notifSummary,
     required this.crashReportConsent,
     required this.kidGateEnabled,
+    required this.timeZone,
+    this.updatedAt,
+    required this.updatedAtTz,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -5790,6 +6325,11 @@ class Setting extends DataClass implements Insertable<Setting> {
     map['notif_summary'] = Variable<bool>(notifSummary);
     map['crash_report_consent'] = Variable<bool>(crashReportConsent);
     map['kid_gate_enabled'] = Variable<bool>(kidGateEnabled);
+    map['time_zone'] = Variable<String>(timeZone);
+    if (!nullToAbsent || updatedAt != null) {
+      map['updated_at'] = Variable<DateTime>(updatedAt);
+    }
+    map['updated_at_tz'] = Variable<String>(updatedAtTz);
     return map;
   }
 
@@ -5804,6 +6344,11 @@ class Setting extends DataClass implements Insertable<Setting> {
       notifSummary: Value(notifSummary),
       crashReportConsent: Value(crashReportConsent),
       kidGateEnabled: Value(kidGateEnabled),
+      timeZone: Value(timeZone),
+      updatedAt: updatedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(updatedAt),
+      updatedAtTz: Value(updatedAtTz),
     );
   }
 
@@ -5824,6 +6369,9 @@ class Setting extends DataClass implements Insertable<Setting> {
       notifSummary: serializer.fromJson<bool>(json['notifSummary']),
       crashReportConsent: serializer.fromJson<bool>(json['crashReportConsent']),
       kidGateEnabled: serializer.fromJson<bool>(json['kidGateEnabled']),
+      timeZone: serializer.fromJson<String>(json['timeZone']),
+      updatedAt: serializer.fromJson<DateTime?>(json['updatedAt']),
+      updatedAtTz: serializer.fromJson<String>(json['updatedAtTz']),
     );
   }
   @override
@@ -5839,6 +6387,9 @@ class Setting extends DataClass implements Insertable<Setting> {
       'notifSummary': serializer.toJson<bool>(notifSummary),
       'crashReportConsent': serializer.toJson<bool>(crashReportConsent),
       'kidGateEnabled': serializer.toJson<bool>(kidGateEnabled),
+      'timeZone': serializer.toJson<String>(timeZone),
+      'updatedAt': serializer.toJson<DateTime?>(updatedAt),
+      'updatedAtTz': serializer.toJson<String>(updatedAtTz),
     };
   }
 
@@ -5852,6 +6403,9 @@ class Setting extends DataClass implements Insertable<Setting> {
     bool? notifSummary,
     bool? crashReportConsent,
     bool? kidGateEnabled,
+    String? timeZone,
+    Value<DateTime?> updatedAt = const Value.absent(),
+    String? updatedAtTz,
   }) => Setting(
     familyId: familyId ?? this.familyId,
     pocketMoneyMode: pocketMoneyMode ?? this.pocketMoneyMode,
@@ -5862,6 +6416,9 @@ class Setting extends DataClass implements Insertable<Setting> {
     notifSummary: notifSummary ?? this.notifSummary,
     crashReportConsent: crashReportConsent ?? this.crashReportConsent,
     kidGateEnabled: kidGateEnabled ?? this.kidGateEnabled,
+    timeZone: timeZone ?? this.timeZone,
+    updatedAt: updatedAt.present ? updatedAt.value : this.updatedAt,
+    updatedAtTz: updatedAtTz ?? this.updatedAtTz,
   );
   Setting copyWithCompanion(SettingsCompanion data) {
     return Setting(
@@ -5888,6 +6445,11 @@ class Setting extends DataClass implements Insertable<Setting> {
       kidGateEnabled: data.kidGateEnabled.present
           ? data.kidGateEnabled.value
           : this.kidGateEnabled,
+      timeZone: data.timeZone.present ? data.timeZone.value : this.timeZone,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      updatedAtTz: data.updatedAtTz.present
+          ? data.updatedAtTz.value
+          : this.updatedAtTz,
     );
   }
 
@@ -5902,7 +6464,10 @@ class Setting extends DataClass implements Insertable<Setting> {
           ..write('notifPayout: $notifPayout, ')
           ..write('notifSummary: $notifSummary, ')
           ..write('crashReportConsent: $crashReportConsent, ')
-          ..write('kidGateEnabled: $kidGateEnabled')
+          ..write('kidGateEnabled: $kidGateEnabled, ')
+          ..write('timeZone: $timeZone, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('updatedAtTz: $updatedAtTz')
           ..write(')'))
         .toString();
   }
@@ -5918,6 +6483,9 @@ class Setting extends DataClass implements Insertable<Setting> {
     notifSummary,
     crashReportConsent,
     kidGateEnabled,
+    timeZone,
+    updatedAt,
+    updatedAtTz,
   );
   @override
   bool operator ==(Object other) =>
@@ -5931,7 +6499,10 @@ class Setting extends DataClass implements Insertable<Setting> {
           other.notifPayout == this.notifPayout &&
           other.notifSummary == this.notifSummary &&
           other.crashReportConsent == this.crashReportConsent &&
-          other.kidGateEnabled == this.kidGateEnabled);
+          other.kidGateEnabled == this.kidGateEnabled &&
+          other.timeZone == this.timeZone &&
+          other.updatedAt == this.updatedAt &&
+          other.updatedAtTz == this.updatedAtTz);
 }
 
 class SettingsCompanion extends UpdateCompanion<Setting> {
@@ -5944,6 +6515,9 @@ class SettingsCompanion extends UpdateCompanion<Setting> {
   final Value<bool> notifSummary;
   final Value<bool> crashReportConsent;
   final Value<bool> kidGateEnabled;
+  final Value<String> timeZone;
+  final Value<DateTime?> updatedAt;
+  final Value<String> updatedAtTz;
   final Value<int> rowid;
   const SettingsCompanion({
     this.familyId = const Value.absent(),
@@ -5955,6 +6529,9 @@ class SettingsCompanion extends UpdateCompanion<Setting> {
     this.notifSummary = const Value.absent(),
     this.crashReportConsent = const Value.absent(),
     this.kidGateEnabled = const Value.absent(),
+    this.timeZone = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.updatedAtTz = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   SettingsCompanion.insert({
@@ -5967,6 +6544,9 @@ class SettingsCompanion extends UpdateCompanion<Setting> {
     this.notifSummary = const Value.absent(),
     this.crashReportConsent = const Value.absent(),
     this.kidGateEnabled = const Value.absent(),
+    this.timeZone = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.updatedAtTz = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : familyId = Value(familyId);
   static Insertable<Setting> custom({
@@ -5979,6 +6559,9 @@ class SettingsCompanion extends UpdateCompanion<Setting> {
     Expression<bool>? notifSummary,
     Expression<bool>? crashReportConsent,
     Expression<bool>? kidGateEnabled,
+    Expression<String>? timeZone,
+    Expression<DateTime>? updatedAt,
+    Expression<String>? updatedAtTz,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -5993,6 +6576,9 @@ class SettingsCompanion extends UpdateCompanion<Setting> {
       if (crashReportConsent != null)
         'crash_report_consent': crashReportConsent,
       if (kidGateEnabled != null) 'kid_gate_enabled': kidGateEnabled,
+      if (timeZone != null) 'time_zone': timeZone,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (updatedAtTz != null) 'updated_at_tz': updatedAtTz,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -6007,6 +6593,9 @@ class SettingsCompanion extends UpdateCompanion<Setting> {
     Value<bool>? notifSummary,
     Value<bool>? crashReportConsent,
     Value<bool>? kidGateEnabled,
+    Value<String>? timeZone,
+    Value<DateTime?>? updatedAt,
+    Value<String>? updatedAtTz,
     Value<int>? rowid,
   }) {
     return SettingsCompanion(
@@ -6020,6 +6609,9 @@ class SettingsCompanion extends UpdateCompanion<Setting> {
       notifSummary: notifSummary ?? this.notifSummary,
       crashReportConsent: crashReportConsent ?? this.crashReportConsent,
       kidGateEnabled: kidGateEnabled ?? this.kidGateEnabled,
+      timeZone: timeZone ?? this.timeZone,
+      updatedAt: updatedAt ?? this.updatedAt,
+      updatedAtTz: updatedAtTz ?? this.updatedAtTz,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -6056,6 +6648,15 @@ class SettingsCompanion extends UpdateCompanion<Setting> {
     if (kidGateEnabled.present) {
       map['kid_gate_enabled'] = Variable<bool>(kidGateEnabled.value);
     }
+    if (timeZone.present) {
+      map['time_zone'] = Variable<String>(timeZone.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (updatedAtTz.present) {
+      map['updated_at_tz'] = Variable<String>(updatedAtTz.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -6074,6 +6675,9 @@ class SettingsCompanion extends UpdateCompanion<Setting> {
           ..write('notifSummary: $notifSummary, ')
           ..write('crashReportConsent: $crashReportConsent, ')
           ..write('kidGateEnabled: $kidGateEnabled, ')
+          ..write('timeZone: $timeZone, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('updatedAtTz: $updatedAtTz, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -6132,6 +6736,18 @@ class $AppStateTable extends AppState
     type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _trialStartTzMeta = const VerificationMeta(
+    'trialStartTz',
+  );
+  @override
+  late final GeneratedColumn<String> trialStartTz = GeneratedColumn<String>(
+    'trial_start_tz',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('Europe/London'),
+  );
   static const VerificationMeta _activeChildIdMeta = const VerificationMeta(
     'activeChildId',
   );
@@ -6161,6 +6777,7 @@ class $AppStateTable extends AppState
     onboardingComplete,
     subscriptionStatus,
     trialStart,
+    trialStartTz,
     activeChildId,
     appMode,
   ];
@@ -6203,6 +6820,15 @@ class $AppStateTable extends AppState
         trialStart.isAcceptableOrUnknown(data['trial_start']!, _trialStartMeta),
       );
     }
+    if (data.containsKey('trial_start_tz')) {
+      context.handle(
+        _trialStartTzMeta,
+        trialStartTz.isAcceptableOrUnknown(
+          data['trial_start_tz']!,
+          _trialStartTzMeta,
+        ),
+      );
+    }
     if (data.containsKey('active_child_id')) {
       context.handle(
         _activeChildIdMeta,
@@ -6243,6 +6869,10 @@ class $AppStateTable extends AppState
         DriftSqlType.dateTime,
         data['${effectivePrefix}trial_start'],
       ),
+      trialStartTz: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}trial_start_tz'],
+      )!,
       activeChildId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}active_child_id'],
@@ -6265,6 +6895,7 @@ class AppStateData extends DataClass implements Insertable<AppStateData> {
   final bool onboardingComplete;
   final String subscriptionStatus;
   final DateTime? trialStart;
+  final String trialStartTz;
   final String? activeChildId;
   final String appMode;
   const AppStateData({
@@ -6272,6 +6903,7 @@ class AppStateData extends DataClass implements Insertable<AppStateData> {
     required this.onboardingComplete,
     required this.subscriptionStatus,
     this.trialStart,
+    required this.trialStartTz,
     this.activeChildId,
     required this.appMode,
   });
@@ -6284,6 +6916,7 @@ class AppStateData extends DataClass implements Insertable<AppStateData> {
     if (!nullToAbsent || trialStart != null) {
       map['trial_start'] = Variable<DateTime>(trialStart);
     }
+    map['trial_start_tz'] = Variable<String>(trialStartTz);
     if (!nullToAbsent || activeChildId != null) {
       map['active_child_id'] = Variable<String>(activeChildId);
     }
@@ -6299,6 +6932,7 @@ class AppStateData extends DataClass implements Insertable<AppStateData> {
       trialStart: trialStart == null && nullToAbsent
           ? const Value.absent()
           : Value(trialStart),
+      trialStartTz: Value(trialStartTz),
       activeChildId: activeChildId == null && nullToAbsent
           ? const Value.absent()
           : Value(activeChildId),
@@ -6318,6 +6952,7 @@ class AppStateData extends DataClass implements Insertable<AppStateData> {
         json['subscriptionStatus'],
       ),
       trialStart: serializer.fromJson<DateTime?>(json['trialStart']),
+      trialStartTz: serializer.fromJson<String>(json['trialStartTz']),
       activeChildId: serializer.fromJson<String?>(json['activeChildId']),
       appMode: serializer.fromJson<String>(json['appMode']),
     );
@@ -6330,6 +6965,7 @@ class AppStateData extends DataClass implements Insertable<AppStateData> {
       'onboardingComplete': serializer.toJson<bool>(onboardingComplete),
       'subscriptionStatus': serializer.toJson<String>(subscriptionStatus),
       'trialStart': serializer.toJson<DateTime?>(trialStart),
+      'trialStartTz': serializer.toJson<String>(trialStartTz),
       'activeChildId': serializer.toJson<String?>(activeChildId),
       'appMode': serializer.toJson<String>(appMode),
     };
@@ -6340,6 +6976,7 @@ class AppStateData extends DataClass implements Insertable<AppStateData> {
     bool? onboardingComplete,
     String? subscriptionStatus,
     Value<DateTime?> trialStart = const Value.absent(),
+    String? trialStartTz,
     Value<String?> activeChildId = const Value.absent(),
     String? appMode,
   }) => AppStateData(
@@ -6347,6 +6984,7 @@ class AppStateData extends DataClass implements Insertable<AppStateData> {
     onboardingComplete: onboardingComplete ?? this.onboardingComplete,
     subscriptionStatus: subscriptionStatus ?? this.subscriptionStatus,
     trialStart: trialStart.present ? trialStart.value : this.trialStart,
+    trialStartTz: trialStartTz ?? this.trialStartTz,
     activeChildId: activeChildId.present
         ? activeChildId.value
         : this.activeChildId,
@@ -6364,6 +7002,9 @@ class AppStateData extends DataClass implements Insertable<AppStateData> {
       trialStart: data.trialStart.present
           ? data.trialStart.value
           : this.trialStart,
+      trialStartTz: data.trialStartTz.present
+          ? data.trialStartTz.value
+          : this.trialStartTz,
       activeChildId: data.activeChildId.present
           ? data.activeChildId.value
           : this.activeChildId,
@@ -6378,6 +7019,7 @@ class AppStateData extends DataClass implements Insertable<AppStateData> {
           ..write('onboardingComplete: $onboardingComplete, ')
           ..write('subscriptionStatus: $subscriptionStatus, ')
           ..write('trialStart: $trialStart, ')
+          ..write('trialStartTz: $trialStartTz, ')
           ..write('activeChildId: $activeChildId, ')
           ..write('appMode: $appMode')
           ..write(')'))
@@ -6390,6 +7032,7 @@ class AppStateData extends DataClass implements Insertable<AppStateData> {
     onboardingComplete,
     subscriptionStatus,
     trialStart,
+    trialStartTz,
     activeChildId,
     appMode,
   );
@@ -6401,6 +7044,7 @@ class AppStateData extends DataClass implements Insertable<AppStateData> {
           other.onboardingComplete == this.onboardingComplete &&
           other.subscriptionStatus == this.subscriptionStatus &&
           other.trialStart == this.trialStart &&
+          other.trialStartTz == this.trialStartTz &&
           other.activeChildId == this.activeChildId &&
           other.appMode == this.appMode);
 }
@@ -6410,6 +7054,7 @@ class AppStateCompanion extends UpdateCompanion<AppStateData> {
   final Value<bool> onboardingComplete;
   final Value<String> subscriptionStatus;
   final Value<DateTime?> trialStart;
+  final Value<String> trialStartTz;
   final Value<String?> activeChildId;
   final Value<String> appMode;
   const AppStateCompanion({
@@ -6417,6 +7062,7 @@ class AppStateCompanion extends UpdateCompanion<AppStateData> {
     this.onboardingComplete = const Value.absent(),
     this.subscriptionStatus = const Value.absent(),
     this.trialStart = const Value.absent(),
+    this.trialStartTz = const Value.absent(),
     this.activeChildId = const Value.absent(),
     this.appMode = const Value.absent(),
   });
@@ -6425,6 +7071,7 @@ class AppStateCompanion extends UpdateCompanion<AppStateData> {
     this.onboardingComplete = const Value.absent(),
     this.subscriptionStatus = const Value.absent(),
     this.trialStart = const Value.absent(),
+    this.trialStartTz = const Value.absent(),
     this.activeChildId = const Value.absent(),
     this.appMode = const Value.absent(),
   });
@@ -6433,6 +7080,7 @@ class AppStateCompanion extends UpdateCompanion<AppStateData> {
     Expression<bool>? onboardingComplete,
     Expression<String>? subscriptionStatus,
     Expression<DateTime>? trialStart,
+    Expression<String>? trialStartTz,
     Expression<String>? activeChildId,
     Expression<String>? appMode,
   }) {
@@ -6441,6 +7089,7 @@ class AppStateCompanion extends UpdateCompanion<AppStateData> {
       if (onboardingComplete != null) 'onboarding_complete': onboardingComplete,
       if (subscriptionStatus != null) 'subscription_status': subscriptionStatus,
       if (trialStart != null) 'trial_start': trialStart,
+      if (trialStartTz != null) 'trial_start_tz': trialStartTz,
       if (activeChildId != null) 'active_child_id': activeChildId,
       if (appMode != null) 'app_mode': appMode,
     });
@@ -6451,6 +7100,7 @@ class AppStateCompanion extends UpdateCompanion<AppStateData> {
     Value<bool>? onboardingComplete,
     Value<String>? subscriptionStatus,
     Value<DateTime?>? trialStart,
+    Value<String>? trialStartTz,
     Value<String?>? activeChildId,
     Value<String>? appMode,
   }) {
@@ -6459,6 +7109,7 @@ class AppStateCompanion extends UpdateCompanion<AppStateData> {
       onboardingComplete: onboardingComplete ?? this.onboardingComplete,
       subscriptionStatus: subscriptionStatus ?? this.subscriptionStatus,
       trialStart: trialStart ?? this.trialStart,
+      trialStartTz: trialStartTz ?? this.trialStartTz,
       activeChildId: activeChildId ?? this.activeChildId,
       appMode: appMode ?? this.appMode,
     );
@@ -6479,6 +7130,9 @@ class AppStateCompanion extends UpdateCompanion<AppStateData> {
     if (trialStart.present) {
       map['trial_start'] = Variable<DateTime>(trialStart.value);
     }
+    if (trialStartTz.present) {
+      map['trial_start_tz'] = Variable<String>(trialStartTz.value);
+    }
     if (activeChildId.present) {
       map['active_child_id'] = Variable<String>(activeChildId.value);
     }
@@ -6495,6 +7149,7 @@ class AppStateCompanion extends UpdateCompanion<AppStateData> {
           ..write('onboardingComplete: $onboardingComplete, ')
           ..write('subscriptionStatus: $subscriptionStatus, ')
           ..write('trialStart: $trialStart, ')
+          ..write('trialStartTz: $trialStartTz, ')
           ..write('activeChildId: $activeChildId, ')
           ..write('appMode: $appMode')
           ..write(')'))
@@ -6550,6 +7205,9 @@ typedef $$FamiliesTableCreateCompanionBuilder = FamiliesCompanion Function({
   Value<int> payoutDay,
   Value<int> coinValuePencePerCoin,
   Value<String> pocketMoneyMode,
+  Value<String> timeZone,
+  Value<DateTime?> updatedAt,
+  Value<String> updatedAtTz,
   Value<int> rowid,
 });
 typedef $$FamiliesTableUpdateCompanionBuilder = FamiliesCompanion Function({
@@ -6558,6 +7216,9 @@ typedef $$FamiliesTableUpdateCompanionBuilder = FamiliesCompanion Function({
   Value<int> payoutDay,
   Value<int> coinValuePencePerCoin,
   Value<String> pocketMoneyMode,
+  Value<String> timeZone,
+  Value<DateTime?> updatedAt,
+  Value<String> updatedAtTz,
   Value<int> rowid,
 });
 
@@ -6786,6 +7447,21 @@ class $$FamiliesTableFilterComposer
 
   ColumnFilters<String> get pocketMoneyMode => $composableBuilder(
     column: $table.pocketMoneyMode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get timeZone => $composableBuilder(
+    column: $table.timeZone,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get updatedAtTz => $composableBuilder(
+    column: $table.updatedAtTz,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7073,6 +7749,21 @@ class $$FamiliesTableOrderingComposer
     column: $table.pocketMoneyMode,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get timeZone => $composableBuilder(
+    column: $table.timeZone,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get updatedAtTz => $composableBuilder(
+    column: $table.updatedAtTz,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$FamiliesTableAnnotationComposer
@@ -7100,6 +7791,17 @@ class $$FamiliesTableAnnotationComposer
 
   GeneratedColumn<String> get pocketMoneyMode => $composableBuilder(
     column: $table.pocketMoneyMode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get timeZone =>
+      $composableBuilder(column: $table.timeZone, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get updatedAtTz => $composableBuilder(
+    column: $table.updatedAtTz,
     builder: (column) => column,
   );
 
@@ -7399,6 +8101,9 @@ class $$FamiliesTableTableManager
                 Value<int> payoutDay = const Value.absent(),
                 Value<int> coinValuePencePerCoin = const Value.absent(),
                 Value<String> pocketMoneyMode = const Value.absent(),
+                Value<String> timeZone = const Value.absent(),
+                Value<DateTime?> updatedAt = const Value.absent(),
+                Value<String> updatedAtTz = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => FamiliesCompanion(
                 id: id,
@@ -7406,6 +8111,9 @@ class $$FamiliesTableTableManager
                 payoutDay: payoutDay,
                 coinValuePencePerCoin: coinValuePencePerCoin,
                 pocketMoneyMode: pocketMoneyMode,
+                timeZone: timeZone,
+                updatedAt: updatedAt,
+                updatedAtTz: updatedAtTz,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -7415,6 +8123,9 @@ class $$FamiliesTableTableManager
                 Value<int> payoutDay = const Value.absent(),
                 Value<int> coinValuePencePerCoin = const Value.absent(),
                 Value<String> pocketMoneyMode = const Value.absent(),
+                Value<String> timeZone = const Value.absent(),
+                Value<DateTime?> updatedAt = const Value.absent(),
+                Value<String> updatedAtTz = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => FamiliesCompanion.insert(
                 id: id,
@@ -7422,6 +8133,9 @@ class $$FamiliesTableTableManager
                 payoutDay: payoutDay,
                 coinValuePencePerCoin: coinValuePencePerCoin,
                 pocketMoneyMode: pocketMoneyMode,
+                timeZone: timeZone,
+                updatedAt: updatedAt,
+                updatedAtTz: updatedAtTz,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -9132,6 +9846,7 @@ typedef $$QuestsTableCreateCompanionBuilder = QuestsCompanion Function({
   Value<String> repeatRule,
   Value<String> days,
   Value<String?> dueLabel,
+  Value<String?> dueTimeLocal,
   Value<bool> needsApproval,
   Value<String?> assigneeChildId,
   Value<bool> active,
@@ -9146,6 +9861,7 @@ typedef $$QuestsTableUpdateCompanionBuilder = QuestsCompanion Function({
   Value<String> repeatRule,
   Value<String> days,
   Value<String?> dueLabel,
+  Value<String?> dueTimeLocal,
   Value<bool> needsApproval,
   Value<String?> assigneeChildId,
   Value<bool> active,
@@ -9235,6 +9951,11 @@ class $$QuestsTableFilterComposer
 
   ColumnFilters<String> get dueLabel => $composableBuilder(
     column: $table.dueLabel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dueTimeLocal => $composableBuilder(
+    column: $table.dueTimeLocal,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9346,6 +10067,11 @@ class $$QuestsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get dueTimeLocal => $composableBuilder(
+    column: $table.dueTimeLocal,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get needsApproval => $composableBuilder(
     column: $table.needsApproval,
     builder: (column) => ColumnOrderings(column),
@@ -9416,6 +10142,11 @@ class $$QuestsTableAnnotationComposer
 
   GeneratedColumn<String> get dueLabel =>
       $composableBuilder(column: $table.dueLabel, builder: (column) => column);
+
+  GeneratedColumn<String> get dueTimeLocal => $composableBuilder(
+    column: $table.dueTimeLocal,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<bool> get needsApproval => $composableBuilder(
     column: $table.needsApproval,
@@ -9515,6 +10246,7 @@ class $$QuestsTableTableManager
                 Value<String> repeatRule = const Value.absent(),
                 Value<String> days = const Value.absent(),
                 Value<String?> dueLabel = const Value.absent(),
+                Value<String?> dueTimeLocal = const Value.absent(),
                 Value<bool> needsApproval = const Value.absent(),
                 Value<String?> assigneeChildId = const Value.absent(),
                 Value<bool> active = const Value.absent(),
@@ -9528,6 +10260,7 @@ class $$QuestsTableTableManager
                 repeatRule: repeatRule,
                 days: days,
                 dueLabel: dueLabel,
+                dueTimeLocal: dueTimeLocal,
                 needsApproval: needsApproval,
                 assigneeChildId: assigneeChildId,
                 active: active,
@@ -9543,6 +10276,7 @@ class $$QuestsTableTableManager
                 Value<String> repeatRule = const Value.absent(),
                 Value<String> days = const Value.absent(),
                 Value<String?> dueLabel = const Value.absent(),
+                Value<String?> dueTimeLocal = const Value.absent(),
                 Value<bool> needsApproval = const Value.absent(),
                 Value<String?> assigneeChildId = const Value.absent(),
                 Value<bool> active = const Value.absent(),
@@ -9556,6 +10290,7 @@ class $$QuestsTableTableManager
                 repeatRule: repeatRule,
                 days: days,
                 dueLabel: dueLabel,
+                dueTimeLocal: dueTimeLocal,
                 needsApproval: needsApproval,
                 assigneeChildId: assigneeChildId,
                 active: active,
@@ -9660,7 +10395,9 @@ typedef $$QuestCompletionsTableCreateCompanionBuilder =
       Value<String> status,
       Value<int> coins,
       Value<DateTime> createdAt,
+      Value<String> createdAtTz,
       Value<DateTime?> decidedAt,
+      Value<String> decidedAtTz,
     });
 typedef $$QuestCompletionsTableUpdateCompanionBuilder =
     QuestCompletionsCompanion Function({
@@ -9671,7 +10408,9 @@ typedef $$QuestCompletionsTableUpdateCompanionBuilder =
       Value<String> status,
       Value<int> coins,
       Value<DateTime> createdAt,
+      Value<String> createdAtTz,
       Value<DateTime?> decidedAt,
+      Value<String> decidedAtTz,
     });
 
 final class $$QuestCompletionsTableReferences
@@ -9764,8 +10503,18 @@ class $$QuestCompletionsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get createdAtTz => $composableBuilder(
+    column: $table.createdAtTz,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<DateTime> get decidedAt => $composableBuilder(
     column: $table.decidedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get decidedAtTz => $composableBuilder(
+    column: $table.decidedAtTz,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9868,8 +10617,18 @@ class $$QuestCompletionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get createdAtTz => $composableBuilder(
+    column: $table.createdAtTz,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get decidedAt => $composableBuilder(
     column: $table.decidedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get decidedAtTz => $composableBuilder(
+    column: $table.decidedAtTz,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -9964,8 +10723,18 @@ class $$QuestCompletionsTableAnnotationComposer
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
+  GeneratedColumn<String> get createdAtTz => $composableBuilder(
+    column: $table.createdAtTz,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get decidedAt =>
       $composableBuilder(column: $table.decidedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get decidedAtTz => $composableBuilder(
+    column: $table.decidedAtTz,
+    builder: (column) => column,
+  );
 
   $$QuestsTableAnnotationComposer get questId {
     final $$QuestsTableAnnotationComposer composer = $composerBuilder(
@@ -10074,7 +10843,9 @@ class $$QuestCompletionsTableTableManager
                 Value<String> status = const Value.absent(),
                 Value<int> coins = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<String> createdAtTz = const Value.absent(),
                 Value<DateTime?> decidedAt = const Value.absent(),
+                Value<String> decidedAtTz = const Value.absent(),
               }) => QuestCompletionsCompanion(
                 id: id,
                 questId: questId,
@@ -10083,7 +10854,9 @@ class $$QuestCompletionsTableTableManager
                 status: status,
                 coins: coins,
                 createdAt: createdAt,
+                createdAtTz: createdAtTz,
                 decidedAt: decidedAt,
+                decidedAtTz: decidedAtTz,
               ),
           createCompanionCallback:
               ({
@@ -10094,7 +10867,9 @@ class $$QuestCompletionsTableTableManager
                 Value<String> status = const Value.absent(),
                 Value<int> coins = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<String> createdAtTz = const Value.absent(),
                 Value<DateTime?> decidedAt = const Value.absent(),
+                Value<String> decidedAtTz = const Value.absent(),
               }) => QuestCompletionsCompanion.insert(
                 id: id,
                 questId: questId,
@@ -10103,7 +10878,9 @@ class $$QuestCompletionsTableTableManager
                 status: status,
                 coins: coins,
                 createdAt: createdAt,
+                createdAtTz: createdAtTz,
                 decidedAt: decidedAt,
+                decidedAtTz: decidedAtTz,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -10202,6 +10979,7 @@ typedef $$LedgerEntriesTableCreateCompanionBuilder =
       required int amountPence,
       Value<String> note,
       Value<DateTime> date,
+      Value<String> dateTz,
     });
 typedef $$LedgerEntriesTableUpdateCompanionBuilder =
     LedgerEntriesCompanion Function({
@@ -10212,6 +10990,7 @@ typedef $$LedgerEntriesTableUpdateCompanionBuilder =
       Value<int> amountPence,
       Value<String> note,
       Value<DateTime> date,
+      Value<String> dateTz,
     });
 
 final class $$LedgerEntriesTableReferences
@@ -10288,6 +11067,11 @@ class $$LedgerEntriesTableFilterComposer
 
   ColumnFilters<DateTime> get date => $composableBuilder(
     column: $table.date,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dateTz => $composableBuilder(
+    column: $table.dateTz,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10372,6 +11156,11 @@ class $$LedgerEntriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get dateTz => $composableBuilder(
+    column: $table.dateTz,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$FamiliesTableOrderingComposer get familyId {
     final $$FamiliesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -10444,6 +11233,9 @@ class $$LedgerEntriesTableAnnotationComposer
 
   GeneratedColumn<DateTime> get date =>
       $composableBuilder(column: $table.date, builder: (column) => column);
+
+  GeneratedColumn<String> get dateTz =>
+      $composableBuilder(column: $table.dateTz, builder: (column) => column);
 
   $$FamiliesTableAnnotationComposer get familyId {
     final $$FamiliesTableAnnotationComposer composer = $composerBuilder(
@@ -10527,6 +11319,7 @@ class $$LedgerEntriesTableTableManager
                 Value<int> amountPence = const Value.absent(),
                 Value<String> note = const Value.absent(),
                 Value<DateTime> date = const Value.absent(),
+                Value<String> dateTz = const Value.absent(),
               }) => LedgerEntriesCompanion(
                 id: id,
                 familyId: familyId,
@@ -10535,6 +11328,7 @@ class $$LedgerEntriesTableTableManager
                 amountPence: amountPence,
                 note: note,
                 date: date,
+                dateTz: dateTz,
               ),
           createCompanionCallback:
               ({
@@ -10545,6 +11339,7 @@ class $$LedgerEntriesTableTableManager
                 required int amountPence,
                 Value<String> note = const Value.absent(),
                 Value<DateTime> date = const Value.absent(),
+                Value<String> dateTz = const Value.absent(),
               }) => LedgerEntriesCompanion.insert(
                 id: id,
                 familyId: familyId,
@@ -10553,6 +11348,7 @@ class $$LedgerEntriesTableTableManager
                 amountPence: amountPence,
                 note: note,
                 date: date,
+                dateTz: dateTz,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -11489,6 +12285,7 @@ typedef $$RewardRedemptionsTableCreateCompanionBuilder =
       required String familyId,
       Value<String> status,
       Value<DateTime> createdAt,
+      Value<String> createdAtTz,
     });
 typedef $$RewardRedemptionsTableUpdateCompanionBuilder =
     RewardRedemptionsCompanion Function({
@@ -11498,6 +12295,7 @@ typedef $$RewardRedemptionsTableUpdateCompanionBuilder =
       Value<String> familyId,
       Value<String> status,
       Value<DateTime> createdAt,
+      Value<String> createdAtTz,
     });
 
 final class $$RewardRedemptionsTableReferences
@@ -11586,6 +12384,11 @@ class $$RewardRedemptionsTableFilterComposer
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get createdAtTz => $composableBuilder(
+    column: $table.createdAtTz,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -11683,6 +12486,11 @@ class $$RewardRedemptionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get createdAtTz => $composableBuilder(
+    column: $table.createdAtTz,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$RewardsTableOrderingComposer get rewardId {
     final $$RewardsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -11770,6 +12578,11 @@ class $$RewardRedemptionsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<String> get createdAtTz => $composableBuilder(
+    column: $table.createdAtTz,
+    builder: (column) => column,
+  );
 
   $$RewardsTableAnnotationComposer get rewardId {
     final $$RewardsTableAnnotationComposer composer = $composerBuilder(
@@ -11880,6 +12693,7 @@ class $$RewardRedemptionsTableTableManager
                 Value<String> familyId = const Value.absent(),
                 Value<String> status = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<String> createdAtTz = const Value.absent(),
               }) => RewardRedemptionsCompanion(
                 id: id,
                 rewardId: rewardId,
@@ -11887,6 +12701,7 @@ class $$RewardRedemptionsTableTableManager
                 familyId: familyId,
                 status: status,
                 createdAt: createdAt,
+                createdAtTz: createdAtTz,
               ),
           createCompanionCallback:
               ({
@@ -11896,6 +12711,7 @@ class $$RewardRedemptionsTableTableManager
                 required String familyId,
                 Value<String> status = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<String> createdAtTz = const Value.absent(),
               }) => RewardRedemptionsCompanion.insert(
                 id: id,
                 rewardId: rewardId,
@@ -11903,6 +12719,7 @@ class $$RewardRedemptionsTableTableManager
                 familyId: familyId,
                 status: status,
                 createdAt: createdAt,
+                createdAtTz: createdAtTz,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -12276,6 +13093,7 @@ typedef $$EarnedBadgesTableCreateCompanionBuilder =
       required String childId,
       required String familyId,
       Value<DateTime> earnedAt,
+      Value<String> earnedAtTz,
     });
 typedef $$EarnedBadgesTableUpdateCompanionBuilder =
     EarnedBadgesCompanion Function({
@@ -12284,6 +13102,7 @@ typedef $$EarnedBadgesTableUpdateCompanionBuilder =
       Value<String> childId,
       Value<String> familyId,
       Value<DateTime> earnedAt,
+      Value<String> earnedAtTz,
     });
 
 final class $$EarnedBadgesTableReferences
@@ -12358,6 +13177,11 @@ class $$EarnedBadgesTableFilterComposer
 
   ColumnFilters<DateTime> get earnedAt => $composableBuilder(
     column: $table.earnedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get earnedAtTz => $composableBuilder(
+    column: $table.earnedAtTz,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -12450,6 +13274,11 @@ class $$EarnedBadgesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get earnedAtTz => $composableBuilder(
+    column: $table.earnedAtTz,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$BadgesTableOrderingComposer get badgeId {
     final $$BadgesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -12534,6 +13363,11 @@ class $$EarnedBadgesTableAnnotationComposer
 
   GeneratedColumn<DateTime> get earnedAt =>
       $composableBuilder(column: $table.earnedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get earnedAtTz => $composableBuilder(
+    column: $table.earnedAtTz,
+    builder: (column) => column,
+  );
 
   $$BadgesTableAnnotationComposer get badgeId {
     final $$BadgesTableAnnotationComposer composer = $composerBuilder(
@@ -12638,12 +13472,14 @@ class $$EarnedBadgesTableTableManager
                 Value<String> childId = const Value.absent(),
                 Value<String> familyId = const Value.absent(),
                 Value<DateTime> earnedAt = const Value.absent(),
+                Value<String> earnedAtTz = const Value.absent(),
               }) => EarnedBadgesCompanion(
                 id: id,
                 badgeId: badgeId,
                 childId: childId,
                 familyId: familyId,
                 earnedAt: earnedAt,
+                earnedAtTz: earnedAtTz,
               ),
           createCompanionCallback:
               ({
@@ -12652,12 +13488,14 @@ class $$EarnedBadgesTableTableManager
                 required String childId,
                 required String familyId,
                 Value<DateTime> earnedAt = const Value.absent(),
+                Value<String> earnedAtTz = const Value.absent(),
               }) => EarnedBadgesCompanion.insert(
                 id: id,
                 badgeId: badgeId,
                 childId: childId,
                 familyId: familyId,
                 earnedAt: earnedAt,
+                earnedAtTz: earnedAtTz,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -13068,6 +13906,9 @@ typedef $$SettingsTableCreateCompanionBuilder = SettingsCompanion Function({
   Value<bool> notifSummary,
   Value<bool> crashReportConsent,
   Value<bool> kidGateEnabled,
+  Value<String> timeZone,
+  Value<DateTime?> updatedAt,
+  Value<String> updatedAtTz,
   Value<int> rowid,
 });
 typedef $$SettingsTableUpdateCompanionBuilder = SettingsCompanion Function({
@@ -13080,6 +13921,9 @@ typedef $$SettingsTableUpdateCompanionBuilder = SettingsCompanion Function({
   Value<bool> notifSummary,
   Value<bool> crashReportConsent,
   Value<bool> kidGateEnabled,
+  Value<String> timeZone,
+  Value<DateTime?> updatedAt,
+  Value<String> updatedAtTz,
   Value<int> rowid,
 });
 
@@ -13151,6 +13995,21 @@ class $$SettingsTableFilterComposer
 
   ColumnFilters<bool> get kidGateEnabled => $composableBuilder(
     column: $table.kidGateEnabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get timeZone => $composableBuilder(
+    column: $table.timeZone,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get updatedAtTz => $composableBuilder(
+    column: $table.updatedAtTz,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -13227,6 +14086,21 @@ class $$SettingsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get timeZone => $composableBuilder(
+    column: $table.timeZone,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get updatedAtTz => $composableBuilder(
+    column: $table.updatedAtTz,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$FamiliesTableOrderingComposer get familyId {
     final $$FamiliesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -13298,6 +14172,17 @@ class $$SettingsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get timeZone =>
+      $composableBuilder(column: $table.timeZone, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get updatedAtTz => $composableBuilder(
+    column: $table.updatedAtTz,
+    builder: (column) => column,
+  );
+
   $$FamiliesTableAnnotationComposer get familyId {
     final $$FamiliesTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -13359,6 +14244,9 @@ class $$SettingsTableTableManager
                 Value<bool> notifSummary = const Value.absent(),
                 Value<bool> crashReportConsent = const Value.absent(),
                 Value<bool> kidGateEnabled = const Value.absent(),
+                Value<String> timeZone = const Value.absent(),
+                Value<DateTime?> updatedAt = const Value.absent(),
+                Value<String> updatedAtTz = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => SettingsCompanion(
                 familyId: familyId,
@@ -13370,6 +14258,9 @@ class $$SettingsTableTableManager
                 notifSummary: notifSummary,
                 crashReportConsent: crashReportConsent,
                 kidGateEnabled: kidGateEnabled,
+                timeZone: timeZone,
+                updatedAt: updatedAt,
+                updatedAtTz: updatedAtTz,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -13383,6 +14274,9 @@ class $$SettingsTableTableManager
                 Value<bool> notifSummary = const Value.absent(),
                 Value<bool> crashReportConsent = const Value.absent(),
                 Value<bool> kidGateEnabled = const Value.absent(),
+                Value<String> timeZone = const Value.absent(),
+                Value<DateTime?> updatedAt = const Value.absent(),
+                Value<String> updatedAtTz = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => SettingsCompanion.insert(
                 familyId: familyId,
@@ -13394,6 +14288,9 @@ class $$SettingsTableTableManager
                 notifSummary: notifSummary,
                 crashReportConsent: crashReportConsent,
                 kidGateEnabled: kidGateEnabled,
+                timeZone: timeZone,
+                updatedAt: updatedAt,
+                updatedAtTz: updatedAtTz,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -13466,6 +14363,7 @@ typedef $$AppStateTableCreateCompanionBuilder = AppStateCompanion Function({
   Value<bool> onboardingComplete,
   Value<String> subscriptionStatus,
   Value<DateTime?> trialStart,
+  Value<String> trialStartTz,
   Value<String?> activeChildId,
   Value<String> appMode,
 });
@@ -13474,6 +14372,7 @@ typedef $$AppStateTableUpdateCompanionBuilder = AppStateCompanion Function({
   Value<bool> onboardingComplete,
   Value<String> subscriptionStatus,
   Value<DateTime?> trialStart,
+  Value<String> trialStartTz,
   Value<String?> activeChildId,
   Value<String> appMode,
 });
@@ -13504,6 +14403,11 @@ class $$AppStateTableFilterComposer
 
   ColumnFilters<DateTime> get trialStart => $composableBuilder(
     column: $table.trialStart,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get trialStartTz => $composableBuilder(
+    column: $table.trialStartTz,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -13547,6 +14451,11 @@ class $$AppStateTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get trialStartTz => $composableBuilder(
+    column: $table.trialStartTz,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get activeChildId => $composableBuilder(
     column: $table.activeChildId,
     builder: (column) => ColumnOrderings(column),
@@ -13582,6 +14491,11 @@ class $$AppStateTableAnnotationComposer
 
   GeneratedColumn<DateTime> get trialStart => $composableBuilder(
     column: $table.trialStart,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get trialStartTz => $composableBuilder(
+    column: $table.trialStartTz,
     builder: (column) => column,
   );
 
@@ -13629,6 +14543,7 @@ class $$AppStateTableTableManager
                 Value<bool> onboardingComplete = const Value.absent(),
                 Value<String> subscriptionStatus = const Value.absent(),
                 Value<DateTime?> trialStart = const Value.absent(),
+                Value<String> trialStartTz = const Value.absent(),
                 Value<String?> activeChildId = const Value.absent(),
                 Value<String> appMode = const Value.absent(),
               }) => AppStateCompanion(
@@ -13636,6 +14551,7 @@ class $$AppStateTableTableManager
                 onboardingComplete: onboardingComplete,
                 subscriptionStatus: subscriptionStatus,
                 trialStart: trialStart,
+                trialStartTz: trialStartTz,
                 activeChildId: activeChildId,
                 appMode: appMode,
               ),
@@ -13645,6 +14561,7 @@ class $$AppStateTableTableManager
                 Value<bool> onboardingComplete = const Value.absent(),
                 Value<String> subscriptionStatus = const Value.absent(),
                 Value<DateTime?> trialStart = const Value.absent(),
+                Value<String> trialStartTz = const Value.absent(),
                 Value<String?> activeChildId = const Value.absent(),
                 Value<String> appMode = const Value.absent(),
               }) => AppStateCompanion.insert(
@@ -13652,6 +14569,7 @@ class $$AppStateTableTableManager
                 onboardingComplete: onboardingComplete,
                 subscriptionStatus: subscriptionStatus,
                 trialStart: trialStart,
+                trialStartTz: trialStartTz,
                 activeChildId: activeChildId,
                 appMode: appMode,
               ),

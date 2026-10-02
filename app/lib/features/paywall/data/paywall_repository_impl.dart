@@ -27,11 +27,13 @@ class PaywallRepositoryImpl implements PaywallRepository {
   }
 
   @override
-  Future<void> startTrial() {
-    return (_db.update(_db.appState)..where((a) => a.id.equals(1))).write(
+  Future<void> startTrial() async {
+    final zone = await _db.familyZoneId();
+    await (_db.update(_db.appState)..where((a) => a.id.equals(1))).write(
       AppStateCompanion(
         subscriptionStatus: const Value('trial'),
         trialStart: Value(DateTime.now().toUtc()),
+        trialStartTz: Value(zone),
       ),
     );
   }
