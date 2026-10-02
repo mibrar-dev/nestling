@@ -49,7 +49,11 @@ class PrivacyConsentBloc
     // in tap order on one event loop and the `watchItems` stream re-emits
     // after each, so the last tap wins and the stream reconciles; bloc
     // dedupes the identical state.
-    final previous = state.crashConsent;
+    //
+    // Revert target (P04-8): the *stored* value, re-read from `items` (which
+    // mirrors the database) — never `state.crashConsent`, which may be
+    // another tap's still-in-flight optimistic value.
+    final previous = _crashFrom(state.items);
     emit(state.copyWith(crashConsent: event.value));
     try {
       await _repository.setCrashConsent(consent: event.value);

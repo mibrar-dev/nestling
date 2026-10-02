@@ -8,3 +8,6 @@
 
 ## UPDATE (orchestrator, 12:03) — overrides item 2 above
 The ~16 px header offset is SHARED (P05 has the identical offset); a shared fix is in progress on main (branch shared/onboarding_header_and_seed). Do NOT move the back row / title locally in P04. Items 1 (missing bin icon) and 3 (row heights) are still P04's to fix.
+
+## UPDATE (13:42) — shared assets in progress
+`ic_trash.svg` / `NestIcons.trash`, the token-coloured privacy shield (dark mode) and the first-run settings row are being added on main by shared/shared_requests_batch1. Keep the reserved 40×40 peach tile + TODO for now; when main contains `NestIcons.trash` (it is merged into your branch before each build), use it with the design's red-ink colour. Fix everything else in your FIXES list in this iteration (row heights/alignment, review findings, bug findings).

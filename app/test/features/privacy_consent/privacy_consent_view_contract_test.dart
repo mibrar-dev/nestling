@@ -971,6 +971,35 @@ void main() {
   });
 
   group('P04 — control accessibility', () {
+    testWidgets('the compact nav has no title and keeps the 60px design bar', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/privacy');
+
+      final nav = find.byType(NestNavBar);
+      expect(nav, findsOneWidget);
+      expect(
+        tester.widget<NestNavBar>(nav).title,
+        isNull,
+        reason: 'the local empty-title workaround is gone (FIXES_2 F3)',
+      );
+      expect(
+        tester.getSize(nav).height,
+        60,
+        reason:
+            '.nav-bar.compact = min 52 + padding 4/12/12 around the 44 button',
+      );
+      expect(
+        find.descendant(of: nav, matching: find.byType(Text)),
+        findsNothing,
+        reason: 'a null title must render no empty Text node (screen readers)',
+      );
+      expect(find.bySemanticsLabel('Back'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
     testWidgets('the back chevron is a labelled 44px button', (tester) async {
       await setUpTestScope();
       await pumpAppRoute(tester, '/privacy');

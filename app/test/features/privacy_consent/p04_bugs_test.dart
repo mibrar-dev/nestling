@@ -1,12 +1,12 @@
-// P04 · Privacy & consent — adversarial bug proofs (Stage 6, iteration 2).
+// P04 · Privacy & consent — adversarial bug proofs (Stage 6, iteration 3).
 //
-// The iteration-1 proofs assert the CORRECT behaviour. Iterations 1-2 fixed
-// P04-1, P04-3, P04-5 and P04-6 (P04-3 by the shared compact-nav merge), so
-// those proofs are un-skipped and green. P04-2, P04-4 and P04-7 assert
-// shared-side fixes (asset / design-system artwork) outside RULES §1 and stay
-// `skip`-marked until the orchestrator lands them. P04-8 is new this
-// iteration: the optimistic toggle can revert to a value that was never
-// persisted when two rapid writes fail.
+// The proofs assert the CORRECT behaviour. Iterations 1-3 fixed P04-1, P04-3,
+// P04-5, P04-6 and P04-8 (P04-3 by the shared compact-nav merge), so those
+// proofs are un-skipped and green. P04-2 and P04-7 assert shared-side fixes
+// (asset / themed artwork) deferred to the orchestrator's in-flight shared
+// batch; P04-4 is a shared-component defect with an in-scope fix (review
+// iteration 3, finding 1); P04-9 is new this iteration (the first-run upsert
+// is not atomic and can drop the later of two overlapping writes).
 //
 // Run the proofs against the current tree with:
 //   flutter test --run-skipped test/features/privacy_consent/p04_bugs_test.dart
@@ -17,11 +17,12 @@
 //   P04-1 major   first-run crash-consent opt-in is silently dropped  [FIXED]
 //   P04-2 major   promise row 4 has no trash glyph (empty peach tile)  [shared]
 //   P04-3 major   compact nav bar 16 px short — header block sits high [FIXED]
-//   P04-4 major   1 px real dividers inflate the promise list          [shared]
+//   P04-4 major   1 px real dividers inflate the promise list     [open, in scope]
 //   P04-5 minor   rapid double-tap writes the same toggle value twice [FIXED]
 //   P04-6 major   failed OFF write still tells the parent "it stays off" [FIXED]
 //   P04-7 minor   dark mode renders the light-baked shield artwork    [shared]
-//   P04-8 minor   double-failed rapid toggle reverts to an unpersisted value
+//   P04-8 minor   double-failed rapid toggle reverts to unpersisted  [FIXED]
+//   P04-9 minor   overlapping first-run writes keep the earlier value [open]
 //
 // Checked and clean (passing proofs at the bottom): kid-mode guard, deep-link
 // back navigation, restart persistence (demo and first-run), first-run
@@ -40,6 +41,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:nestling/app/controllers.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
+import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/privacy_consent/data/privacy_consent_repository_impl.dart';
 import 'package:nestling/features/privacy_consent/domain/entities/consent_option.dart';
@@ -478,10 +480,40 @@ void main() {
 
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pump();
-        // P04-8: both catches revert to `state.crashConsent` at their start,
-        // so the last failure restores the first tap's optimistic ON.
+        // P04-8 FIXED (iteration 3): catches revert to `_crashFrom(items)`.
+      },
+    );
+  });
+
+  group('P04-9 — first-run upsert atomicity', () {
+    test(
+      '[P04-9] overlapping first-run writes keep the last value',
+      () async {
+        final db = AppDatabase.memory();
+        addTearDown(db.close);
+        await Seed.fresh(db);
+        final repository = PrivacyConsentRepositoryImpl(db: db);
+
+        // Two rapid taps ON → OFF, overlapping: both calls issue their
+        // UPDATE before either INSERT runs, so both see the empty `settings`
+        // table and `insertOrIgnore` keeps whichever insert lands first.
+        final on = repository.setCrashConsent(consent: true);
+        final off = repository.setCrashConsent(consent: false);
+        await Future.wait<void>(<Future<void>>[on, off]);
+
+        expect(
+          await repository.watchCrashConsent().first,
+          isFalse,
+          reason: 'the second (last) call must win',
+        );
+        expect(
+          (await db.select(db.settings).get()).length,
+          1,
+          reason: 'still exactly one settings row',
+        );
       },
       skip: true,
+      // P04-9: setCrashConsent is an UPDATE-then-INSERT pair, not a transaction.
     );
   });
 

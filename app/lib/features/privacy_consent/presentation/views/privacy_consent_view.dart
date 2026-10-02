@@ -35,11 +35,7 @@ class PrivacyConsentView extends StatelessWidget {
         children: <Widget>[
           const NestStatusBar(),
           NestNavBar(
-            // TODO(P04): shared NestNavBar bug - compact with null title nests
-            // Spacer (Expanded) inside Expanded and throws ParentDataWidget.
-            // Empty title renders the same back-only row until core is fixed.
             compact: true,
-            title: '',
             onBack: () {
               if (context.canPop()) {
                 context.pop();

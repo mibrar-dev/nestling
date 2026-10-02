@@ -36,10 +36,8 @@ Blocks: no — workaround in place; remove `title: ''` once fixed.
 **Status:** fixed by the shared merge (`shared/onboarding_header_and_seed`) —
 the compact branch returns `SizedBox.shrink()` for a null *or empty* title
 and resolves to 60 px tall (`min 52 + padding 4/12/12`). `[P04-3]` is
-un-skipped and green. Leftover for the next build stage: P04 still passes
-`title: ''` with the now-obsolete TODO comment at
-`views/privacy_consent_view.dart:38-42`. It renders identically, so nothing
-is broken; the workaround and its comment can go.
+un-skipped and green. Cleanup done in iteration 3: P04 passes no `title`
+(null) and the obsolete `TODO(P04)` is deleted.
 
 ---
 # Shared request — P04 settings row missing on a first run (BUG P04-1)

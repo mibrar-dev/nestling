@@ -572,6 +572,48 @@ void main() {
       },
     );
 
+    // P04-8: the revert target is the value STORED in `items` (which mirrors
+    // the database), never another tap's still-in-flight optimistic value.
+    // Here both writes fail while the stored consent is ON, so the switch must
+    // come back ON — reverting to the last optimistic value would have left it
+    // OFF and told the parent their opt-out had been saved.
+    test(
+      'a failed write reverts to the stored value, not an optimistic one',
+      () async {
+        final controller = StreamController<List<ConsentOption>>();
+        addTearDown(controller.close);
+        final repository = _RacyRepository(controller.stream, () {
+          throw Exception('read only');
+        });
+
+        final bloc = PrivacyConsentBloc(repository: repository);
+        addTearDown(bloc.close);
+        controller.add(_crashOn); // stored: ON
+        bloc.add(const PrivacyConsentLoadRequested());
+        await bloc.stream.firstWhere(
+          (s) => s.status == PrivacyConsentStatus.loaded,
+        );
+
+        bloc
+          ..add(const PrivacyConsentCrashToggled(value: false))
+          ..add(const PrivacyConsentCrashToggled(value: true));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        expect(repository.writes, <bool>[false, true]);
+        expect(
+          bloc.state.crashConsent,
+          isTrue,
+          reason: 'the stored consent is still ON — nothing was persisted',
+        );
+        expect(bloc.state.status, PrivacyConsentStatus.failure);
+        expect(
+          bloc.state.items,
+          _crashOn,
+          reason: 'the failed write must not rewrite the items mirror',
+        );
+      },
+    );
+
     test('a stream emission after a failure clears the error', () async {
       final controller = StreamController<List<ConsentOption>>();
       addTearDown(controller.close);
