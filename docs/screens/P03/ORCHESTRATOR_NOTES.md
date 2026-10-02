@@ -12,3 +12,8 @@
 1. Legal footer: keep "Privacy Notice" together (non-breaking space U+00A0 between the words) so it reads "By continuing you agree to our Terms and" / "Privacy Notice" exactly like the design.
 2. Subtitle copy: curly apostrophe "You’re" (U+2019) as in the design/HTML; it should break "Children never / need an email." at 390 width (check the subtitle text style size/letter-spacing vs the HTML — the app's line is slightly wider).
 3. The FILLED-state capture is still missing: in stage 5 type sarah@example.co.uk + an 18-character password into the fields on the simulator (tap field → type) and compare that capture with the design (enabled green button, dots, eye). Keep the empty launch state as is.
+
+## UPDATE (17:22) — iteration 5
+- The subtitle's early wrap is a SHARED typography bug (body text ~3% wider than the design on every screen); a shared fix (shared/body_text_width) is in progress and will be merged into your branch before your build. Do NOT tweak the subtitle's size/letter-spacing locally; re-measure after the merge.
+- The remaining mean diff is mostly the empty-vs-filled form state — that is expected; the filled state is covered by your widget test.
+- Focus this iteration on the FIXES_4 test/review/bug items so those stages go green.
