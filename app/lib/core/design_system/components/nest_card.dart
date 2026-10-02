@@ -60,6 +60,11 @@ class NestCard extends StatelessWidget {
       return Semantics(
         button: true,
         label: semanticLabel,
+        // The explicit label already carries the announcement (P08 §2):
+        // excluding the subtree keeps one node per card instead of
+        // `label + every descendant text`. Only when a label is set —
+        // without one the children must stay reachable.
+        excludeSemantics: semanticLabel != null,
         child: Material(
           color: Colors.transparent,
           borderRadius: NestRadii.allL,
@@ -84,6 +89,11 @@ class NestCard extends StatelessWidget {
     if (label == null) {
       return plain;
     }
-    return Semantics(label: label, container: true, child: plain);
+    return Semantics(
+      label: label,
+      container: true,
+      excludeSemantics: true,
+      child: plain,
+    );
   }
 }

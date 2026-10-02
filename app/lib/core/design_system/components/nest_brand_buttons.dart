@@ -167,10 +167,15 @@ class _BrandButton extends StatelessWidget {
                           const SizedBox(width: NestSpacing.s2),
                         ],
                         Flexible(
-                          child: Text(
-                            label,
-                            style: NestType.buttonLabel(color: foreground),
-                            textAlign: TextAlign.center,
+                          // One announcement per button (P03 §2): the outer
+                          // `Semantics(label:)` owns the label, so the inner
+                          // text must not merge a second copy.
+                          child: ExcludeSemantics(
+                            child: Text(
+                              label,
+                              style: NestType.buttonLabel(color: foreground),
+                              textAlign: TextAlign.center,
+                            ),
                           ),
                         ),
                       ],

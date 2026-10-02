@@ -77,7 +77,10 @@ class NestQuestCard extends StatelessWidget {
                           padding: const EdgeInsets.only(top: NestSpacing.gap2),
                           child: Wrap(
                             spacing: NestSpacing.gap6,
-                            runSpacing: NestSpacing.s1,
+                            // `.quest-meta { gap: 6px }` both axes (P08 §7);
+                            // was `s1` (4) — invisible at 390px, visible when
+                            // the meta wraps at 320px / 1.3x text.
+                            runSpacing: NestSpacing.gap6,
                             crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               if (metaText != null)
@@ -107,6 +110,12 @@ class NestQuestCard extends StatelessWidget {
       return Semantics(
         button: true,
         label: semanticLabel ?? title,
+        // One node per card (P08 §2): the label already announces
+        // title + meta, so descendants must not merge a second copy —
+        // unless the card carries a working check (`done != null`), whose
+        // own `Mark done`/`Done` node must stay reachable (shared
+        // display/overflow tests pin it).
+        excludeSemantics: checkState == null,
         child: card,
       );
     }
@@ -119,6 +128,8 @@ class NestKidQuestCard extends StatelessWidget {
     required this.title,
     super.key,
     this.icon,
+    this.tileBackground,
+    this.tileIconColor,
     this.coinAmount,
     this.metaChip,
     this.done = false,
@@ -129,6 +140,16 @@ class NestKidQuestCard extends StatelessWidget {
 
   final String title;
   final Widget? icon;
+
+  /// Icon-tile background override. Defaults to `surface2`; K03 passes the
+  /// per-quest tint (`skyTint` dishwasher, `lilacTint` reading,
+  /// `peachTint` tidy) from `design/html-source/screens/K03-kid-home.html`.
+  final Color? tileBackground;
+
+  /// Icon-tile glyph colour for the default `questCard` glyph (custom
+  /// [icon] widgets carry their own colour). Defaults to the theme ink,
+  /// matching the K03 design (ink icons on tinted tiles).
+  final Color? tileIconColor;
   final String? coinAmount;
 
   /// Custom meta content (e.g. the K03 "Waiting for Mum" chip), rendered
@@ -170,7 +191,7 @@ class NestKidQuestCard extends StatelessWidget {
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: tokens.surface2,
+                    color: tileBackground ?? tokens.surface2,
                     borderRadius: NestRadii.allM,
                   ),
                   alignment: Alignment.center,
@@ -179,7 +200,7 @@ class NestKidQuestCard extends StatelessWidget {
                       NestIcon(
                         NestIcons.questCard,
                         size: 28,
-                        color: tokens.ink,
+                        color: tileIconColor ?? tokens.ink,
                       ),
                 ),
                 Expanded(
@@ -215,6 +236,11 @@ class NestKidQuestCard extends StatelessWidget {
       return Semantics(
         button: true,
         label: semanticLabel ?? title,
+        // One node per card (P08 §2) — unless the check is functional
+        // (`onToggled != null`), whose own node must stay reachable.
+        // A display-only check (`onToggled == null`) is noise next to the
+        // explicit label, so it is excluded with the rest.
+        excludeSemantics: onToggled == null,
         child: card,
       );
     }

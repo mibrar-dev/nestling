@@ -113,6 +113,20 @@ abstract final class NestType {
   static TextStyle kidHero({Color? color}) =>
       _nunito(40, 44, FontWeight.w900, color: color);
 
+  /// K03 kid header name: Nunito 22/26 w900.
+  static TextStyle kidName({Color? color}) =>
+      _nunito(22, 26, FontWeight.w900, color: color);
+
+  /// K03 kid copy under the name: Nunito 15/20 w700. (K03 follows its HTML
+  /// at 15 px with the recorded exemption from DESIGN_SPEC §0.9's 17 px
+  /// kid minimum.)
+  static TextStyle kidCaption({Color? color}) =>
+      _nunito(15, 20, FontWeight.w700, color: color);
+
+  /// K03 status chip label ("4 of 6 done"): Nunito 15/15 w800.
+  static TextStyle kidChipLabel({Color? color}) =>
+      _nunito(15, 15, FontWeight.w800, color: color);
+
   /// Kid button label: Nunito 20/26 w900.
   static TextStyle buttonKid({Color? color}) =>
       _nunito(20, 26, FontWeight.w900, color: color);
@@ -127,11 +141,17 @@ abstract final class NestType {
 /// Reach it via `context.nestText`.
 @immutable
 class NestTextStyles {
-  const new({required this.ink, required this.ink2, required this.ink3});
+  const new({
+    required this.ink,
+    required this.ink2,
+    required this.ink3,
+    required this.leafInk,
+  });
 
   final Color ink;
   final Color ink2;
   final Color ink3;
+  final Color leafInk;
 
   TextStyle get display => NestType.display(color: ink);
   TextStyle get h1 => NestType.h1(color: ink);
@@ -151,4 +171,7 @@ class NestTextStyles {
   TextStyle get kidBody => NestType.kidBody(color: ink);
   TextStyle get kidTitle => NestType.kidTitle(color: ink);
   TextStyle get kidHero => NestType.kidHero(color: ink);
+  TextStyle get kidName => NestType.kidName(color: ink);
+  TextStyle get kidCaption => NestType.kidCaption(color: ink2);
+  TextStyle get kidChipLabel => NestType.kidChipLabel(color: leafInk);
 }

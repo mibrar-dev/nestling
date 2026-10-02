@@ -89,6 +89,19 @@ void main() {
         );
       }
     });
+
+    // P08 §10: the reduced-motion gap that hid the dashed placeholder —
+    // every style × stage must resolve a bundled still, not just Mochi.
+    test('every style resolves a bundled still per stage', () {
+      for (final style in PipStyle.values) {
+        for (var stage = 1; stage <= 4; stage++) {
+          expect(
+            PipAvatar.fallbackAsset(style, stage),
+            'assets/illustrations/pip_v2/${style.dir}/s${stage}_idle_1.svg',
+          );
+        }
+      }
+    });
   });
 
   group('PipAvatar', () {
@@ -184,20 +197,30 @@ void main() {
       }
     });
 
+    // P08 §10: loop the reduced-motion assertion over every style × stage
+    // and assert an SvgPicture renders (was Mochi-only).
     testWidgets('falls back to the static SVG under reduced motion', (
       tester,
     ) async {
-      await tester.pumpWidget(
-        _host(
-          const MediaQuery(
-            data: MediaQueryData(disableAnimations: true),
-            child: PipAvatar(style: PipStyle.mochi, stage: 4, size: 200),
-          ),
-        ),
-      );
-      await tester.pump();
-      expect(find.byType(SvgPicture), findsOneWidget);
-      expect(tester.takeException(), isNull);
+      for (final style in PipStyle.values) {
+        for (var stage = 1; stage <= 4; stage++) {
+          await tester.pumpWidget(
+            _host(
+              MediaQuery(
+                data: const MediaQueryData(disableAnimations: true),
+                child: PipAvatar(style: style, stage: stage, size: 200),
+              ),
+            ),
+          );
+          await tester.pump();
+          expect(
+            find.byType(SvgPicture),
+            findsWidgets,
+            reason: '${style.name} stage $stage drew no still art',
+          );
+          expect(tester.takeException(), isNull);
+        }
+      }
     });
 
     testWidgets('reports taps', (tester) async {
