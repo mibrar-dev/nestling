@@ -1,0 +1,7 @@
+# Orchestrator notes for P04 (mandatory)
+
+## QA of cmp_light_1 (7.52%) — targets for iteration 2
+1. BUG: "Delete everything anytime" row shows an EMPTY peach icon tile — the trash/bin icon is not rendering (wrong asset name or colour = background). It must show the red-ink bin glyph like the design, light + dark. Add a widget test that all four row icons find their SvgPicture/Icon.
+2. Header block is ~16 px HIGH: back chevron, title and subtitle must match the design (390×844 logical): chevron centre ≈ y 73, title cap top ≈ y 112, subtitle ≈ y 161, shield badge centre ≈ y 229 (measure from design/screens/light/P04-privacy.png ÷3 and the HTML).
+3. List rows: each row is ~1–2 px taller than the design so the list drifts; match row height and divider insets exactly from the HTML (row heights and the 1 px divider), so the "Optional: help improve" card top lands at ≈ y 528 and Continue at ≈ y 690.
+4. Owner rules: bottom panel surface runs to the screen edge (currently correct); perfect alignment.
