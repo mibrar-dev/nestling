@@ -14,32 +14,36 @@ class NestBottomCta extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.nest;
     final caption = this.caption;
-    return SafeArea(
-      top: false,
-      child: Container(
-        decoration: BoxDecoration(
-          color: tokens.surface,
-          border: Border(top: BorderSide(color: tokens.line)),
-        ),
-        padding: EdgeInsets.symmetric(
-          vertical: dense ? 14.0 : NestSpacing.s4,
-          horizontal: NestSpacing.padSide,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            child,
-            if (caption != null) const SizedBox(height: NestSpacing.s2),
-            if (caption != null)
-              Text(
-                caption,
-                style: NestType.caption(color: tokens.ink2),
-                textAlign: TextAlign.center,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-              ),
-          ],
+    // The surface runs to the physical screen edge (owner rule: no page
+    // colour strip under a bar); only the content is lifted above the inset.
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: tokens.surface,
+        border: Border(top: BorderSide(color: tokens.line)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            vertical: dense ? 14.0 : NestSpacing.s4,
+            horizontal: NestSpacing.padSide,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              child,
+              if (caption != null) const SizedBox(height: NestSpacing.s2),
+              if (caption != null)
+                Text(
+                  caption,
+                  style: NestType.caption(color: tokens.ink2),
+                  textAlign: TextAlign.center,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+            ],
+          ),
         ),
       ),
     );
