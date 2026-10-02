@@ -302,8 +302,10 @@ abstract final class Seed {
       'leo',
       'approved',
       5,
-      utc(10, 2, 7, 30),
-      utc(10, 2, 8, 15),
+      // Daily quest: approved this morning so it counts as done today
+      // (P08 "Leo 2 of 4" under the London-day period rule).
+      utc(10, 3, 6, 30),
+      utc(10, 3, 7, 15),
     );
     // Still to do.
     for (final q in <List<String>>[

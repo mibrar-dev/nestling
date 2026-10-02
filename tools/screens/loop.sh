@@ -74,7 +74,7 @@ for IT in $(seq "$START" "$MAX"); do
   git -C "$WT" add -A >/dev/null 2>&1; git -C "$WT" commit -q -m "$ID: wip before sync" >/dev/null 2>&1
   git -C "$WT" merge -q --no-edit main >/dev/null 2>&1 || { git -C "$WT" merge --abort >/dev/null 2>&1; ev SYNC_CONFLICT "main"; }
   stage build "$MUSE" 2_build.md "$IT" "$FIXES"
-  stage test  "$DEEP"  3_test.md   "$IT"
+  stage test  "$BUNNY" 3_test.md   "$IT"   # owner: Space Bunny max is fast at code
   stage review "$BUNNY" 4_review.md "$IT"
   if [ "$SIM" = "pool" ]; then acquire_sim; ev SIM_ACQUIRED "$HELD_SIM"; SIM_SAVE="$SIM"; SIM="$HELD_SIM"; fi
   stage ui    "$MUSE"  5_ui.md     "$IT"
