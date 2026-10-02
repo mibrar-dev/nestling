@@ -1,0 +1,1 @@
+# Simulator pool for tools/screens/loop.sh <ID> pool (NOT IN USE: owner asked to keep 3 parallel loops to avoid overheating)
