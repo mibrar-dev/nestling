@@ -13,7 +13,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
@@ -136,7 +135,6 @@ Future<PocketMoneyBloc> _pumpSetupView(
   required PocketMoneyRepository repository,
   required ThemeMode theme,
 }) async {
-  GoogleFonts.config.allowRuntimeFetching = false;
   final bloc = PocketMoneyBloc(repository: repository);
   await tester.pumpWidget(
     MaterialApp(

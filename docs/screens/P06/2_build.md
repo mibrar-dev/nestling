@@ -1,38 +1,44 @@
-# P06 Pocket money setup — build report (Stage 2, iteration 2)
+# P06 Pocket money setup — integration build (Stage 2 INTEGRATE, iteration 2)
 
-Route: `/pocket-money-setup` · feature `pocket_money` · parent mode · onboarding (P05 → P06 → P07).
-Plan: `docs/screens/P06/1_plan.md`. Fix list: `docs/screens/P06/FIXES_1.md` (loop-generated from the iteration-1 report — overflow, untriaged interaction failures, teardown hang; stages 3–6 did not run in iteration 1). No `ORCHESTRATOR_NOTES.md`. No Pip on this screen.
+Two parallel builders produced this state; integration only. Route `/pocket-money-setup` · feature `pocket_money` · parent mode.
 
-## Files changed (all inside the feature sandbox, RULES §1)
+## 2a — logic builder (`2a_build_logic.md`)
 
-Iteration-1 files (entity, repository + impl, bloc event/state, view, 3 test files) are committed in HEAD; iteration-2 delta is 3 files:
+- **Contract changes: none.** Public names unchanged per `1_plan.md` §2: `PocketMoneySetup` (+ `childById`), `PocketMoneyRepository.watchSetup/setMode/setPayoutDay/setWeeklyBasePence`, `PocketMoneyState.setup`, events `PocketMoneyModeChanged` / `PocketMoneyPayoutDayChanged` / `PocketMoneyWeeklyBaseStepped(childId, deltaPence)`, 50p step, 0..2000 clamp.
+- **Files changed: none** — existing repository impl, bloc, state/event and DI/routes already satisfied the plan. Verified: `watchSetup` = `families` truth + `settings` mirror + children by SQLite `rowid` (Maya then Leo); setters write both tables in one transaction with `updatedAt` UTC; bloc keeps ONE `emit.forEach` over `combineLatest2` with `_closeOnError`, guarded day re-tap, base read from `state.setup`.
+- Checks: analyze clean on the logic files; bloc + repository tests 20/20.
 
-- `app/lib/features/pocket_money/presentation/views/pocket_money_setup_view.dart` — `_WeeklyBaseRow` now reflows via `LayoutBuilder`: single line at row width ≥ 300, otherwise name-line + right-aligned stepper (`_BaseStepper` split out so one instance lives in whichever branch builds). Keeps the fixed 44px stepper buttons at every width/scale instead of overflowing.
-- `app/lib/features/pocket_money/presentation/bloc/pocket_money_bloc.dart` — load stream now `.transform(_closeOnError)` (error-then-close, same pattern as TodayBloc): a failed load's watchers no longer stay subscribed, Retry resubscribes cleanly. Added missing `dart:async` import.
-- `app/test/features/pocket_money/pocket_money_setup_view_test.dart` — `flagsCollection.isSelected` now compared to `Tristate.isTrue/isFalse` (`dart:ui` import; `isButton`/`isHeader` stay bool); stepper taps/asserts use `RegExp` labels; fake repository builds a FRESH stream per `watch…()` call; Leo-stepper tap scrolls the row into view first (`ensureVisible`); direct-pump helper no longer closes the bloc (see hang item).
+## 2b — UI builder (`2b_build_ui.md`)
 
-## What was done about each fix item
+- **Files changed:** `app/test/features/pocket_money/pocket_money_setup_view_test.dart` — deleted the `package:google_fonts/google_fonts.dart` import and the `GoogleFonts.config.allowRuntimeFetching = false;` call (package removed from `pubspec.yaml`; the orchestrator FONTS rule forbids both).
+- No view/widget source edits: the committed `pocket_money_setup_view.dart` already matched plan + design (status-bar reserve → compact nav → 20px-gutter scroll → dense `NestBottomCta` → home indicator; token-only option cards, settings card with full-bleed dividers, 44-tall day cells, Maya-then-Leo base rows with `<300px` reflow, coin-value row; CTA surface runs to the physical edge in both themes; HTML-verbatim copy).
+- Checks: analyze clean; view suite 26/26.
 
-1. **Weekly-base row overflow at 320dp + scale 1.3 (+26px).** Root cause (semantics-tree dump + probes): under the test fallback font the stepper value runs ~118px, so avatar + name + fixed stepper exceed 248px. Fix: width-threshold reflow (above). Verified: `light/dark 320dp at text scale 1.3` pass, full 2×3×2 matrix green.
-2. **Selection-flip / day-tap / selected-flags failures.** Two test-only causes: (a) `flagsCollection.isSelected` is `Tristate`, not `bool`, in this Flutter version (P01-style `isTrue` comparisons fail); (b) taps/assertions themselves worked. Fixed with `Tristate` comparisons. Verified passing.
-3. **Stepper-tap failures.** Two causes: (a) `NestStepper`'s inner `-`/`+` text merges into the button semantics label, so exact-String `bySemanticsLabel` finds nothing — fixed with `RegExp` matching (the finder docs' recommended approach); (b) Leo's row sits below the fold behind the fixed `NestBottomCta`, so the tap hit the caption text (hit-test warning proved it) — fixed with `ensureVisible` before tapping. Verified: £3.50 and £1.00 updates pass.
-4. **Retry-test stall (~10 min) / teardown hang.** Three stacked causes, all fixed: (a) fake reused one single-subscription error stream → `Bad state: Stream has already been listened to` on Retry — fixed with per-call stream factories; (b) failed load left `emit.forEach` subscribed forever (bloc `onEach` uses `cancelOnError: false` when `onError` is set) — fixed with `_closeOnError` so the failed load terminates; (c) `bloc.close()` still deadlocks under the FakeAsync clock with the never-closing `combineLatest` controller (bisected: identical sequence closes instantly in real async; P01-documented hazard) — the direct-pump helper no longer closes the bloc, with rationale comment (safe: fake repo owns no DB/timers; verified clean exit, no pending-timer complaints).
-5. **No skipped bug tests exist for P06** (no `*_bugs_test.dart`, no `skip:` in the new files) — nothing to un-skip.
+## Integration actions (this stage)
 
-## Analyze / format tails
+- No integration breakage: 2a's contract was unchanged, so 2b compiled against it with zero edits; the only uncommitted diff in the worktree was 2b's google_fonts removal, already merged onto the committed code cleanly.
+- Ran the stage checks only — `dart format .`, full-app `flutter analyze`, full-app `flutter test`.
+- No source changes made by the integrator.
 
-- `dart format .` → `Formatted 368 files (0 changed)`.
-- `flutter analyze` (full app) → `No issues found!`
-- Incidental analyzer fixes during iteration 2: `dart:async` import, `dart:ui show Tristate` import.
+## FIXES_1 items
 
-## Test tails
+| Item | Owner | Status |
+|---|---|---|
+| Weekly-base row overflow at 320dp × 1.3 (+26px) | 2b | DONE — `LayoutBuilder` reflow below 300px row width; 12-way light/dark × width × scale matrix green |
+| Selected-flag / day-tap failures | 2b | DONE — test-only (`Tristate.isTrue/isFalse`) |
+| Stepper-tap failures | 2b | DONE — test-only (`RegExp` semantics labels, `ensureVisible` for the below-fold Leo row) |
+| Retry test stall / teardown hang | 2a (logic half already carried `_closeOnError`) | DONE — fake-repo fresh streams per `watch…()`; direct-pump helper documents why it does not close the bloc under FakeAsync |
+| Skipped bug tests to un-skip | 2a | N/A — no `*bug*` files, no `skip:` in `app/test/features/pocket_money/` |
+| google_fonts removal (FONTS rule) | 2b | DONE — feature + tests contain no `google_fonts`/`GoogleFonts` |
 
-- `flutter test test/features/pocket_money` → `All tests passed!` (46/46: repo 9, bloc 11, view 26).
-- `flutter test` (full suite) → `All tests passed!` (+691, EXIT 0).
-- View-file run completes in ~seconds-to-minutes with no hang (previously stalled ~10 min at teardown).
+## Analyze / test tails
+
+- `dart format .` → `Formatted 369 files (0 changed) in 0.87 seconds.`
+- `flutter analyze` (full app) → `No issues found! (ran in 3.4s)`
+- `flutter test` (full suite) → `All tests passed!` (+696, EXIT 0, ~14s; previous stall gone)
 
 ## Scope compliance
 
-Only the 3 files above differ from HEAD; all inside `app/lib/features/pocket_money/**` + `app/test/features/pocket_money/**`. No shared-component edits (the day-chip `labelStyle` follow-up from 1_plan §7 remains parked — the 44-tall `FittedBox(scaleDown)` cells pass at every width/scale). `SHARED_REQUEST.md`: not filed. Probe/debug test files removed.
+No files modified by the integrator; only 2b's one test file differs from HEAD, inside `app/test/features/pocket_money/**`. No shared-code edits.
 
 VERDICT: PASS
