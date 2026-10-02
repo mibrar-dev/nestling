@@ -422,10 +422,15 @@ class PipNestFallback extends StatelessWidget {
     required this.stageW,
     super.key,
     this.pipAsset,
+    this.pip,
   });
 
   /// Growth stage. Selects the default pip art when [pipAsset] is null.
   final PipStage stage;
+
+  /// Custom Pip widget (e.g. the child's v2 `PipAvatar`) placed between the
+  /// nest's back and front rims instead of the v1 SVG.
+  final Widget? pip;
 
   /// Explicit pip art. Defaults to the stage's SVG.
   final String? pipAsset;
@@ -523,12 +528,14 @@ class PipNestFallback extends StatelessWidget {
             top: pipTop,
             width: pipH,
             height: pipH,
-            child: SvgPicture.asset(
-              pipAsset ?? stage.fallbackAsset,
-              width: pipH,
-              height: pipH,
-              placeholderBuilder: (_) => const SizedBox.shrink(),
-            ),
+            child:
+                pip ??
+                SvgPicture.asset(
+                  pipAsset ?? stage.fallbackAsset,
+                  width: pipH,
+                  height: pipH,
+                  placeholderBuilder: (_) => const SizedBox.shrink(),
+                ),
           ),
           Positioned(
             left: nestLeft,
