@@ -98,6 +98,9 @@ class KidHomeRepositoryImpl implements KidHomeRepository {
               ]))
             .get();
     final now = DateTime.now().toUtc();
+    // Writer's zone: the current family zone (validated, London fallback).
+    // History renders in this stored zone even after a family move.
+    final zone = await _db.familyZoneId();
     if (existing.isNotEmpty &&
         (existing.first.status == 'to_do' ||
             existing.first.status == 'not_yet')) {
@@ -107,6 +110,7 @@ class KidHomeRepositoryImpl implements KidHomeRepository {
         QuestCompletionsCompanion(
           status: const Value('done_pending'),
           createdAt: Value(now),
+          createdAtTz: Value(zone),
         ),
       );
       return;
@@ -121,6 +125,7 @@ class KidHomeRepositoryImpl implements KidHomeRepository {
             status: const Value('done_pending'),
             coins: Value(quest.coins),
             createdAt: Value(now),
+            createdAtTz: Value(zone),
           ),
         );
   }

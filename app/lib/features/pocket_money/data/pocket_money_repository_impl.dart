@@ -1,7 +1,8 @@
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_database.dart';
-import 'package:nestling/core/data/london_time.dart';
+import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/seed.dart';
+import 'package:nestling/core/data/stream_combine.dart';
 import 'package:nestling/features/pocket_money/domain/entities/owed_summary.dart';
 import 'package:nestling/features/pocket_money/domain/entities/pocket_money_entry.dart';
 import 'package:nestling/features/pocket_money/domain/pocket_money_repository.dart';
@@ -26,7 +27,17 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
 
   @override
   Stream<List<PocketMoneyEntry>> watchLedger(String childId) {
-    return _db.watchLedger(childId).map((rows) => rows.map(_toEntity).toList());
+    // History renders in each row's stored zone (named when the family
+    // moved); the stream re-emits when the family zone changes.
+    return combineLatest2(
+      _db.watchLedger(childId),
+      _db.watchFamilyZoneId(),
+    ).map((parts) {
+      final familyZone = normalizeZoneId(parts[1] as String);
+      return (parts[0] as List<LedgerEntry>)
+          .map((row) => _toEntity(row, familyZone))
+          .toList();
+    });
   }
 
   @override
@@ -60,8 +71,9 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
     required String childId,
     required int amountPence,
     required String note,
-  }) {
-    return _db
+  }) async {
+    final zone = await _db.familyZoneId();
+    await _db
         .into(_db.ledgerEntries)
         .insert(
           LedgerEntriesCompanion.insert(
@@ -71,6 +83,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
             amountPence: amountPence,
             note: Value(note),
             date: Value(DateTime.now().toUtc()),
+            dateTz: Value(zone),
           ),
         );
   }
@@ -80,8 +93,9 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
     required String childId,
     required int amountPence,
     required String note,
-  }) {
-    return _db
+  }) async {
+    final zone = await _db.familyZoneId();
+    await _db
         .into(_db.ledgerEntries)
         .insert(
           LedgerEntriesCompanion.insert(
@@ -91,6 +105,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
             amountPence: -amountPence.abs(),
             note: Value(note),
             date: Value(DateTime.now().toUtc()),
+            dateTz: Value(zone),
           ),
         );
   }
@@ -103,6 +118,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
     String? goalId,
   }) async {
     final now = DateTime.now().toUtc();
+    final zone = await _db.familyZoneId();
     await _db.transaction(() async {
       await _db
           .into(_db.ledgerEntries)
@@ -112,8 +128,9 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
               childId: childId,
               type: 'payout',
               amountPence: -amountPence.abs(),
-              note: Value('Paid · ${formatLondonDay(now)}'),
+              note: Value('Paid · ${formatDay(now, zone)}'),
               date: Value(now),
+              dateTz: Value(zone),
             ),
           );
       if (savingsMovePence > 0 && goalId != null) {
@@ -127,6 +144,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
                 amountPence: savingsMovePence.abs(),
                 note: const Value('Jar → savings goal'),
                 date: Value(now),
+                dateTz: Value(zone),
               ),
             );
         final goal = await (_db.select(
@@ -145,13 +163,13 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
     });
   }
 
-  PocketMoneyEntry _toEntity(LedgerEntry row) {
+  PocketMoneyEntry _toEntity(LedgerEntry row, String familyZone) {
     return PocketMoneyEntry(
       id: row.id,
       title: row.note.isEmpty ? _typeLabel(row.type) : row.note,
       detail:
-          '${_typeLabel(row.type)} · ${formatLondonDay(row.date)} '
-          '${formatLondonTime(row.date)}',
+          '${_typeLabel(row.type)} · ${formatDay(row.date, row.dateTz, familyZoneId: familyZone)} '
+          '${formatTime(row.date, row.dateTz, familyZoneId: familyZone)}',
       childId: row.childId,
       type: row.type,
       amountPence: row.amountPence,

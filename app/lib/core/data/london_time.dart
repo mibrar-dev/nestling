@@ -1,96 +1,65 @@
-// Nestling — Europe/London display helpers.
+// Nestling — Europe/London display helpers (legacy).
 //
-// All timestamps are stored UTC (see AppDatabase). These pure functions
-// convert to Europe/London for display, including BST (last Sunday of
-// March 01:00 UTC → last Sunday of October 01:00 UTC).
+// DEPRECATED: kept only so parallel screen branches still compile. New code
+// must use `family_time.dart` with the CURRENT `families.time_zone` (and
+// each row's stored `…_tz` zone for history). Every function below delegates
+// to `family_time` pinned to `'Europe/London'`, so behaviour for a
+// never-moved family is unchanged.
+
+import 'package:nestling/core/data/family_time.dart' as ft;
+
+/// London zone id these shims pin to.
+const String londonZoneId = ft.defaultFamilyZoneId;
 
 /// True when [utc] falls inside UK daylight saving (BST = UTC+1).
+@Deprecated('Use family_time.toFamilyZone + timezone data instead')
 bool isLondonSummerTime(DateTime utc) {
-  final year = utc.year;
-  final start = _lastSunday(year, 3).add(const Duration(hours: 1));
-  final end = _lastSunday(year, 10).add(const Duration(hours: 1));
-  return !utc.isBefore(start) && utc.isBefore(end);
+  final london = ft.toFamilyZone(utc, londonZoneId);
+  return london.timeZoneOffset == const Duration(hours: 1);
 }
 
 /// Convert a UTC instant to wall-clock Europe/London time.
+@Deprecated('Use family_time.toFamilyZone(utc, zoneId) instead')
 DateTime toLondon(DateTime utc) {
-  final instant = utc.toUtc();
-  return instant.add(Duration(hours: isLondonSummerTime(instant) ? 1 : 0));
+  final london = ft.toFamilyZone(utc, londonZoneId);
+  return DateTime(
+    london.year,
+    london.month,
+    london.day,
+    london.hour,
+    london.minute,
+    london.second,
+    london.millisecond,
+    london.microsecond,
+  );
 }
-
-DateTime _lastSunday(int year, int month) {
-  // Last day of [month], then walk back to Sunday.
-  final lastDay = DateTime.utc(year, month + 1, 0);
-  final back = lastDay.weekday % 7; // Sunday == 7 → 0
-  return DateTime.utc(year, month, lastDay.day - back);
-}
-
-const _weekdays = <String>['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const _months = <String>[
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
 
 /// `Sat 4 Oct` for a UTC instant.
-String formatLondonDay(DateTime utc) {
-  final local = toLondon(utc);
-  return '${_weekdays[local.weekday - 1]} ${local.day} '
-      '${_months[local.month - 1]}';
-}
+@Deprecated('Use family_time.formatDay(utc, zoneId) instead')
+String formatLondonDay(DateTime utc) => ft.formatDay(utc, londonZoneId);
 
 /// `8:12am` for a UTC instant.
-String formatLondonTime(DateTime utc) {
-  final local = toLondon(utc);
-  final suffix = local.hour < 12 ? 'am' : 'pm';
-  var hour = local.hour % 12;
-  if (hour == 0) hour = 12;
-  final minute = local.minute.toString().padLeft(2, '0');
-  return '$hour:$minute$suffix';
-}
+@Deprecated('Use family_time.formatTime(utc, zoneId) instead')
+String formatLondonTime(DateTime utc) => ft.formatTime(utc, londonZoneId);
 
 /// UTC instant of 00:00 Europe/London on the London day containing [utc].
-DateTime londonDayStartUtc(DateTime utc) {
-  final local = toLondon(utc);
-  final midnightAsUtc = DateTime.utc(local.year, local.month, local.day);
-  // London midnight is 23:00 UTC the previous day during BST.
-  final probe = midnightAsUtc.subtract(const Duration(hours: 1));
-  return isLondonSummerTime(probe) ? probe : midnightAsUtc;
-}
+@Deprecated('Use family_time.dayStartUtc(zoneId, now) instead')
+DateTime londonDayStartUtc(DateTime utc) =>
+    ft.dayStartUtc(londonZoneId, utc.toUtc());
 
 /// UTC instant of Monday 00:00 Europe/London for the week containing [utc].
-DateTime londonWeekStartUtc(DateTime utc) {
-  final local = toLondon(utc);
-  final monday = DateTime.utc(
-    local.year,
-    local.month,
-    local.day,
-  ).subtract(Duration(days: local.weekday - 1));
-  final probe = monday.subtract(const Duration(hours: 1));
-  return isLondonSummerTime(probe) ? probe : monday;
-}
+@Deprecated('Use family_time.weekStartUtc(zoneId, now) instead')
+DateTime londonWeekStartUtc(DateTime utc) =>
+    ft.weekStartUtc(londonZoneId, utc.toUtc());
 
 /// Whether a completion at [completedUtc] still counts for a quest with
 /// [repeatRule] at [nowUtc]: daily → same London day, weekly → same London
 /// week (Mon–Sun), once → always.
+@Deprecated(
+  'Use family_time.countsForCurrentPeriod(rule, completed, now, zoneId)',
+)
 bool countsForCurrentPeriod(
   String repeatRule,
   DateTime completedUtc,
   DateTime nowUtc,
-) {
-  final start = switch (repeatRule) {
-    'daily' => londonDayStartUtc(nowUtc),
-    'weekly' => londonWeekStartUtc(nowUtc),
-    _ => null,
-  };
-  return start == null || !completedUtc.toUtc().isBefore(start);
-}
+) => ft.countsForCurrentPeriod(repeatRule, completedUtc, nowUtc, londonZoneId);

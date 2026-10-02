@@ -15,7 +15,7 @@
 
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_database.dart';
-import 'package:nestling/core/data/london_time.dart';
+import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/pin_hash.dart';
 
 abstract final class Seed {
@@ -32,7 +32,7 @@ abstract final class Seed {
   static DateTime get anchorDay {
     final override = anchorOverride;
     if (override != null) return override;
-    final london = toLondon(DateTime.now().toUtc());
+    final london = toFamilyZone(DateTime.now().toUtc(), defaultFamilyZoneId);
     return DateTime.utc(london.year, london.month, london.day);
   }
 
@@ -62,6 +62,7 @@ abstract final class Seed {
             onboardingComplete: const Value(true),
             subscriptionStatus: const Value('active'),
             trialStart: Value(utc(9, 19, 8)),
+            trialStartTz: const Value(defaultFamilyZoneId),
             activeChildId: const Value('maya'),
             appMode: const Value('parent'),
           ),
@@ -148,8 +149,21 @@ abstract final class Seed {
             payoutDay: const Value(6),
             coinValuePencePerCoin: const Value(1),
             pocketMoneyMode: const Value('both'),
+            timeZone: const Value(defaultFamilyZoneId),
           ),
         );
+  }
+
+  /// Test/move fixture: switches the seeded family to Asia/Dubai WITHOUT
+  /// rewriting any stored instant or `…_tz` column — exactly what
+  /// `FamilyZoneService.confirmPendingMove` does. History keeps rendering in
+  /// its stored London zone; future periods follow Dubai.
+  static Future<void> movedToDubai(AppDatabase db) async {
+    await (db.update(db.families)..where((f) => f.id.equals(familyId))).write(
+      const FamiliesCompanion(timeZone: Value('Asia/Dubai')),
+    );
+    await (db.update(db.settings)..where((s) => s.familyId.equals(familyId)))
+        .write(const SettingsCompanion(timeZone: Value('Asia/Dubai')));
   }
 
   static Future<void> _members(AppDatabase db) async {
@@ -296,9 +310,11 @@ abstract final class Seed {
               status: Value(status),
               coins: Value(coins),
               createdAt: Value(created),
+              createdAtTz: const Value(defaultFamilyZoneId),
               decidedAt: decided == null
                   ? const Value.absent()
                   : Value(decided),
+              decidedAtTz: const Value(defaultFamilyZoneId),
             ),
           );
     }
@@ -371,6 +387,7 @@ abstract final class Seed {
               amountPence: pence,
               note: Value(note),
               date: Value(date),
+              dateTz: const Value(defaultFamilyZoneId),
             ),
           );
     }
@@ -504,6 +521,7 @@ abstract final class Seed {
               childId: child,
               familyId: familyId,
               earnedAt: Value(at),
+              earnedAtTz: const Value(defaultFamilyZoneId),
             ),
           );
     }
