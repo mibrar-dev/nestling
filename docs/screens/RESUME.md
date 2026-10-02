@@ -44,3 +44,7 @@ Owner wants a progress update every ~2 hours (session cron job; re-create it aft
 - Resumed: P08 at iteration 4, K03 at iteration 4, P02 at iteration 2 (MAX 6), via `tools/screens/finalize_iter.sh` + `START_IT`. Queue wave relaunched for P03…K03b (`docs/screens/_status/wave_main2.log`).
 - Owner rules added to tools/screens/stages/common.md: bars run to the screen edge in their own colour (no green/page strip), perfect alignment; test stage now on Space Bunny max; keep 3 parallel loops (Mac heat).
 - Recovery recipe: for each screen with a worktree, `bash tools/screens/finalize_iter.sh <ID> <last N>` then `START_IT=<N+1> nohup bash tools/screens/loop.sh <ID> <SIM> 6 &` (write docs/screens/_status/run/<ID>.{pid,sim,feature}), then `nohup bash tools/screens/run_wave.sh <remaining IDs> &`.
+
+## Owner rule (2026-10-02 08:20): orchestrator + QA only
+Claude delegates ALL implementation to OpenCode sub-agents with comprehensive briefs, including shared fixes:
+`bash tools/agents/shared_fix.sh <name> <task.md>` (branch shared/<name>, header docs/screens/_shared/HEADER.md) → review `docs/screens/_shared/<name>_REPORT.md`, diff, analyze, tests → merge → `git merge main` into running screen worktrees. Claude edits code only when an agent is stuck. Last direct edit: 633dfd2.
