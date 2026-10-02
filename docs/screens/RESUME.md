@@ -33,3 +33,9 @@ Launch every agent / loop / wave job with Bash `run_in_background: true` AND `ti
 - Running: pilot wave (P08, K03 — loops started 23:18, pid in docs/screens/_status/run), main wave for the other 27 (`tools/screens/run_wave.sh P02 … K03b`, log docs/screens/_status/wave_main.log).
 - After a restart: re-run `run_wave.sh` with the IDs that are not yet merged; a screen whose worktree has FIXES_<n>.md can resume with `START_IT=<n+1> bash tools/screens/loop.sh <ID> <SIM>`.
 - Orchestrator merges a screen only after READY + own check (scope of `git diff main...screen/<ID>`, analyze, full tests, cmp_*.png).
+
+## After screens (owner request, 2026-10-02) — do in this order once all 30 screens are merged
+1. App icon: the Nestling icon (design/assets brand icon, app/assets/brand/app_icon*.png) on iOS (all sizes, no alpha on the 1024 marketing icon) and Android (adaptive icon: foreground + background, monochrome for Android 13+ themed icons). Use flutter_launcher_icons; verify on both simulators/emulators.
+2. Splash: native splash (flutter_native_splash: paper colour + Nestling mark, light + dark, Android 12 splash API) handing off to an ANIMATED Flutter splash: Pip (child's style once known, Mochi on first launch) hatching/peeking out of the nest + logo, ≤1.6 s, skippable, respects Reduce Motion (static still). Record a simulator video for the owner.
+3. Production checklist (docs/PRODUCTION_CHECKLIST.md + artifact): what the app has, what's left, and what the owner must set up (Apple/Google accounts, bundle ids, signing, Supabase London, Resend, RevenueCat products, privacy policy/terms on getnestling.co.uk, App Store / Play listings + age ratings + Children's Code/kids category, Data Safety, ICO registration, support email, TestFlight/internal testing, crash reporting consent), cross-referenced with docs/SETUP_CHECKLIST.md.
+Owner wants a progress update every ~2 hours (session cron job; re-create it after a restart).
