@@ -3,9 +3,17 @@
 // Finding: `context.push` from top-level routes AND from shell-branch
 // locations works — the pushed screen renders and `pop` returns. The earlier
 // "silent no-op" was a probe artifact: the probe asserted
-// `routerDelegate.currentConfiguration`, which does not include imperative
-// (pushed) matches. `GoRouter.state.uri` (== what the Navigator renders) is
-// the truthful accessor after a push, so these tests assert that.
+// `routerDelegate.currentConfiguration.uri` (what `currentPath` reads), which
+// by design does not include imperative (pushed) matches. `pushedPath`
+// (`GoRouter.state.uri`, i.e. what the Navigator renders) is the truthful
+// accessor after a push, so these tests assert that.
+//
+// Every assertion here is a ROUTER LOCATION, never a view string. The old
+// version asserted placeholder titles (`find.text('P02 Value tour')`), which
+// only exist on the foundation's placeholder views (`AppBar(title: Text(
+// '<screen id> <name>'))`); it therefore broke on every screen branch that
+// replaced its placeholder — P02 first. Routes are shared and stable, screen
+// agents must not change them.
 //
 // P08 reaches P09 (`/quest-editor`) and P11 (`/approvals`) with `push` so the
 // OS back button returns to `/today`; P09/P11 must therefore return with
@@ -17,24 +25,11 @@ import 'package:go_router/go_router.dart';
 
 import '../test_scope.dart';
 
-/// The rendered location after imperative pushes. `currentPath` (which reads
-/// `routerDelegate.currentConfiguration`) lags pushed routes by design, so
-/// push tests read `GoRouter.state` instead.
-String pushedPath(WidgetTester tester) {
-  final context = tester.element(find.byType(Navigator).first);
-  return GoRouter.of(context).state.uri.path;
-}
-
-Future<void> expectPushPop(
-  WidgetTester tester,
-  String from,
-  String to, {
-  required String showsFrom,
-  required String showsTo,
-}) async {
+/// Pushes [to] from [from] and asserts the location contract: the app starts
+/// at [from], `push` puts [to] on top, and `pop` returns to [from].
+Future<void> expectPushPop(WidgetTester tester, String from, String to) async {
   await pumpAppRoute(tester, from);
-  expect(pushedPath(tester), from);
-  expect(find.text(showsFrom).evaluate().isNotEmpty, isTrue);
+  expect(currentPath(tester), from, reason: '$from mounts at its own path');
 
   final context = tester.element(find.byType(Navigator).first);
   // `push` completes on pop — never await it before popping.
@@ -42,15 +37,23 @@ Future<void> expectPushPop(
   GoRouter.of(context).push(to);
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 200));
-  expect(pushedPath(tester), to, reason: 'push($to) from $from navigates');
-  expect(find.text(showsTo).evaluate().isNotEmpty, isTrue);
-  expect(find.text(showsFrom).evaluate().isEmpty, isTrue);
+
+  expect(
+    pushedPath(tester),
+    to,
+    reason: 'push($to) from $from renders $to on top',
+  );
 
   GoRouter.of(context).pop();
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 200));
-  expect(pushedPath(tester), from, reason: 'pop returns to $from');
-  expect(find.text(showsFrom).evaluate().isNotEmpty, isTrue);
+
+  expect(pushedPath(tester), from, reason: 'pop from $to returns to $from');
+  expect(
+    currentPath(tester),
+    from,
+    reason: 'pop leaves the declarative configuration at $from',
+  );
 }
 
 void main() {
@@ -59,37 +62,19 @@ void main() {
       tester,
     ) async {
       await setUpTestScope();
-      await expectPushPop(
-        tester,
-        '/today',
-        '/quest-editor',
-        showsFrom: "Today's quests",
-        showsTo: 'P09 Quest editor',
-      );
+      await expectPushPop(tester, '/today', '/quest-editor');
       await disposeApp(tester);
     });
 
     testWidgets('push P11 approvals from /today, pop returns', (tester) async {
       await setUpTestScope();
-      await expectPushPop(
-        tester,
-        '/today',
-        '/approvals',
-        showsFrom: "Today's quests",
-        showsTo: 'P11 Approvals',
-      );
+      await expectPushPop(tester, '/today', '/approvals');
       await disposeApp(tester);
     });
 
     testWidgets('push /value-tour from /welcome, pop returns', (tester) async {
       await setUpTestScope();
-      await expectPushPop(
-        tester,
-        '/welcome',
-        '/value-tour',
-        showsFrom: 'Chores that feel like a game.',
-        showsTo: 'P02 Value tour',
-      );
+      await expectPushPop(tester, '/welcome', '/value-tour');
       await disposeApp(tester);
     });
 
@@ -97,13 +82,62 @@ void main() {
       tester,
     ) async {
       await setUpTestScope();
-      await expectPushPop(
-        tester,
-        '/add-children',
-        '/pocket-money-setup',
-        showsFrom: 'P05 Add children',
-        showsTo: 'P06 Pocket money setup',
+      await expectPushPop(tester, '/add-children', '/pocket-money-setup');
+      await disposeApp(tester);
+    });
+
+    testWidgets('push from a shell-branch route to a sibling branch', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await expectPushPop(tester, '/today', '/quests');
+      await disposeApp(tester);
+    });
+
+    testWidgets('nested pushes pop back one level at a time', (tester) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/today');
+      expect(currentPath(tester), '/today');
+
+      final context = tester.element(find.byType(Navigator).first);
+      // `push` completes on pop — never await it before popping.
+      // ignore: unawaited_futures
+      GoRouter.of(context).push('/quest-editor');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(pushedPath(tester), '/quest-editor');
+
+      // Same here: the future only completes on the pop below.
+      // ignore: unawaited_futures
+      GoRouter.of(context).push('/approvals');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(pushedPath(tester), '/approvals');
+
+      GoRouter.of(context).pop();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(pushedPath(tester), '/quest-editor', reason: 'one pop, one level');
+
+      GoRouter.of(context).pop();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(
+        pushedPath(tester),
+        '/today',
+        reason: 'second pop unwinds the stack',
       );
+      expect(currentPath(tester), '/today');
+      await disposeApp(tester);
+    });
+
+    testWidgets('the two location helpers agree when nothing is pushed', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/today');
+      expect(pushedPath(tester), currentPath(tester));
+      expect(pushedPath(tester), '/today');
       await disposeApp(tester);
     });
   });
