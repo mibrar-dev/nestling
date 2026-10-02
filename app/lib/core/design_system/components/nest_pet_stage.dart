@@ -26,7 +26,12 @@ class NestPetStage extends StatelessWidget {
     this.pipSize = 200,
     this.speech,
     this.semanticLabel,
+    this.pip,
   });
+
+  /// The child's own Pip (v2 `PipAvatar`, inNest: false) to seat in the
+  /// nest. When set, the v1 Rive rig is not used.
+  final Widget? pip;
 
   /// Explicit pip art for the SVG fallback. Defaults to the stage's SVG.
   final String? pipAsset;
@@ -53,7 +58,7 @@ class NestPetStage extends StatelessWidget {
         if (bubbleText != null)
           Padding(
             padding: const EdgeInsets.only(bottom: NestSpacing.s2),
-            child: _SpeechBubble(text: bubbleText),
+            child: NestSpeechBubble(text: bubbleText),
           ),
         Semantics(
           label: semanticLabel ?? bubbleText ?? 'Pip the mascot',
@@ -67,6 +72,16 @@ class NestPetStage extends StatelessWidget {
               }
               final nestW = pipH / 0.55;
               final stageW = nestW / 0.62;
+              final custom = pip;
+              if (custom != null) {
+                return PipNestFallback(
+                  stage: stage,
+                  pip: custom,
+                  pipH: pipH,
+                  nestW: nestW,
+                  stageW: stageW,
+                );
+              }
               return _PetScene(
                 pipAsset: pipAsset ?? stage.fallbackAsset,
                 stage: stage,
@@ -166,8 +181,9 @@ class _PetScene extends StatelessWidget {
   }
 }
 
-class _SpeechBubble extends StatelessWidget {
-  const new({required this.text});
+/// Pip's speech bubble (K03): max 260 wide, r18, 3px ink border, tail.
+class NestSpeechBubble extends StatelessWidget {
+  const new({required this.text, super.key});
 
   final String text;
 
