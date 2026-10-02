@@ -47,7 +47,11 @@ verdict() { # file -> PASS/FAIL
 
 ev LOOP_START "feature=$FEATURE route=$ROUTE sim=$SIM"
 FIXES=""
-for IT in $(seq 1 "$MAX"); do
+START="${START_IT:-1}"
+if [ "$START" -gt 1 ]; then
+  FIXES=" AND fix EVERY item in docs/screens/$ID/FIXES_$((START-1)).md (also un-skip and pass any skipped bug tests it references)"
+fi
+for IT in $(seq "$START" "$MAX"); do
   [ "$IT" -eq 1 ] && stage plan "$MUSE" 1_plan.md "$IT"
   # pick up shared fixes landed on main (orchestrator) before each build
   git -C "$WT" add -A >/dev/null 2>&1; git -C "$WT" commit -q -m "$ID: wip before sync" >/dev/null 2>&1

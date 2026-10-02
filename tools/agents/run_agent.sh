@@ -19,8 +19,8 @@ for i in 1 2 3 4 5; do
   if [ "$SID" != "-" ] && grep -qE "has expired|was not found|Session not found" "$LOG"; then
     ev RETRY "session_expired=$SID starting_fresh"; SID="-"; continue
   fi
-  if grep -qE "temporarily overloaded|ENOTFOUND|ECONNRESET|socket connection was closed|rate limit|usage limit|Invalid upload request" "$LOG"; then
-    ev RETRY "attempt=$i reason=$(grep -oE 'temporarily overloaded|ENOTFOUND|ECONNRESET|socket connection was closed|rate limit|usage limit|Invalid upload request' "$LOG" | head -1 | tr ' ' '_')"
+  if grep -qE "temporarily overloaded|ENOTFOUND|ECONNRESET|ETIMEDOUT|socket connection was closed|rate limit|usage limit|Invalid upload request|not valid JSON|Upstream|502 Bad Gateway|503 Service|504 Gateway|Internal Server Error|fetch failed" "$LOG"; then
+    ev RETRY "attempt=$i reason=$(grep -oE 'temporarily overloaded|ENOTFOUND|ECONNRESET|ETIMEDOUT|socket connection was closed|rate limit|usage limit|Invalid upload request|not valid JSON|Upstream|502 Bad Gateway|503 Service|504 Gateway|Internal Server Error|fetch failed' "$LOG" | head -1 | tr ' ' '_')"
     [ "$SID" = "-" ] && SID=$(opencode session list 2>/dev/null | grep "$TITLE" | head -1 | awk '{print $1}')
     [ -z "$SID" ] && SID="-"
     sleep 120; continue
