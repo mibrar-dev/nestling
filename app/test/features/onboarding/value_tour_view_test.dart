@@ -22,7 +22,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:nestling/app/app.dart';
 import 'package:nestling/app/controllers.dart';
 import 'package:nestling/core/data/app_session.dart';
@@ -116,7 +115,6 @@ Future<OnboardingBloc> _pumpTourView(
   required OnboardingRepository repository,
   required ThemeMode theme,
 }) async {
-  GoogleFonts.config.allowRuntimeFetching = false;
   tester.view.physicalSize = const Size(390 * 3, 844 * 3);
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
@@ -657,7 +655,6 @@ void main() {
       required double slotRatio,
       required double textScale,
     }) async {
-      GoogleFonts.config.allowRuntimeFetching = false;
       tester.view.physicalSize = const Size(390 * 3, 844 * 3);
       tester.view.devicePixelRatio = 3;
       addTearDown(tester.view.reset);
@@ -871,7 +868,6 @@ void main() {
     });
 
     testWidgets('reduced motion still advances via jump', (tester) async {
-      GoogleFonts.config.allowRuntimeFetching = false;
       final bloc = OnboardingBloc(
         repository: _FakeOnboardingRepository(
           Stream<List<OnboardingStep>>.value(const <OnboardingStep>[]),
@@ -986,9 +982,7 @@ void main() {
   });
 
   group('P02 value tour — BLoC states render the identical tour', () {
-    setUp(() {
-      GoogleFonts.config.allowRuntimeFetching = false;
-    });
+    setUp(() {});
 
     testWidgets('initial: tour renders before the load event', (tester) async {
       final bloc = await _pumpTourView(
@@ -1884,9 +1878,7 @@ void main() {
   });
 
   group('P02 value tour — static copy is data-independent', () {
-    setUp(() {
-      GoogleFonts.config.allowRuntimeFetching = false;
-    });
+    setUp(() {});
 
     testWidgets('late repository emissions never change the copy', (
       tester,
