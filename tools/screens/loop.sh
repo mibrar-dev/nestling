@@ -86,6 +86,9 @@ if [ "$START" -gt 1 ]; then
 fi
 for IT in $(seq "$START" "$MAX"); do
   [ "$IT" -eq 1 ] && stage plan "$MUSE" 1_plan.md "$IT"
+  if [ "${CHECKS_ONLY:-0}" = 1 ] && [ "$IT" -eq "$START" ]; then
+    : # resume after an interruption: the build of this iteration is already done
+  else
   # pick up shared fixes landed on main (orchestrator) before each build
   git -C "$WT" add -A >/dev/null 2>&1; git -C "$WT" commit -q -m "$ID: wip before sync" >/dev/null 2>&1
   git -C "$WT" merge -q --no-edit main >/dev/null 2>&1 || { git -C "$WT" merge --abort >/dev/null 2>&1; ev SYNC_CONFLICT "main"; }
@@ -95,6 +98,7 @@ for IT in $(seq "$START" "$MAX"); do
   wait $P1 $P2
   stage build "$BUNNY" 2_build.md "$IT" "$FIXES"
   checkpoint "after build"
+  fi
   # The four checks only read the code (test + bugs add their own test files),
   # so they run in parallel.
   stage test   "$BUNNY"  3_test.md   "$IT" & Q1=$!
