@@ -12,9 +12,12 @@ void main() {
       test('fallback art exists for ${style.name} stage $stage', () {
         final file = File(PipAvatar.fallbackAsset(style, stage));
         expect(file.existsSync(), isTrue, reason: file.path);
+        // A hidden group WITH content (not self-closing) is drawn by
+        // flutter_svg anyway — e.g. every eye variant stacked into a blob.
+        final hiddenWithContent = RegExp(r'<g\b[^>]*\bopacity="0"[^/>]*>');
         expect(
-          file.readAsStringSync(),
-          isNot(contains('opacity="0"')),
+          hiddenWithContent.hasMatch(file.readAsStringSync()),
+          isFalse,
           reason: 'hidden variant groups render in flutter_svg',
         );
       });
