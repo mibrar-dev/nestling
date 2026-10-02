@@ -21,7 +21,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
@@ -113,7 +112,6 @@ Future<OnboardingBloc> _pumpWelcomeView(
   required OnboardingRepository repository,
   required ThemeMode theme,
 }) async {
-  GoogleFonts.config.allowRuntimeFetching = false;
   final bloc = OnboardingBloc(repository: repository);
   addTearDown(bloc.close);
   await tester.pumpWidget(
@@ -328,10 +326,6 @@ void main() {
   });
 
   group('P01 welcome — BLoC states render the static brand screen', () {
-    setUp(() {
-      GoogleFonts.config.allowRuntimeFetching = false;
-    });
-
     testWidgets('initial: content renders before the load event', (
       tester,
     ) async {

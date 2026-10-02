@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:nestling/app/app.dart';
 import 'package:nestling/app/controllers.dart';
 import 'package:nestling/app/di.dart';
@@ -35,7 +34,6 @@ void main() {
 
   group('app shell', () {
     setUpAll(() async {
-      GoogleFonts.config.allowRuntimeFetching = false;
       // In-memory database: the file database needs path_provider, which
       // has no test implementation. Seed.demo marks onboarding complete so
       // the router keeps its default initial location.
