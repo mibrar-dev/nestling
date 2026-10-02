@@ -68,8 +68,20 @@ that is fixable inside the feature (RULES §1).
   `docs/screens/K03/ui/app_light_6.png`, `app_dark_6.png`; `compare.py` →
   `cmp_light_6.png`, `cmp_dark_6.png` (both runs warn "never stabilised",
   the known K03-BUG-7 cause; layout chrome is static).
-  - light mean diff: TBD — bands: TBD
-  - dark mean diff: TBD — bands: TBD
-  - dock surface to the edge / strip colour / dock top measured: TBD
+  - light mean diff 13.51% — bands: 0:2.99 · 1:4.85 · 2:10.83 · 3:13.18 ·
+    4:13.20 · 5:23.28 · 6:25.80 · 7:13.95
+  - dark mean diff 12.12% — bands: 0:3.04 · 1:4.47 · 2:8.91 · 3:9.71 ·
+    4:12.90 · 5:23.12 · 6:23.37 · 7:11.47
+  - dock top border measured at y≈713-715 both themes (design 719-721;
+    the 6px residual is the shared button shadow reserve — documented
+    minor residual); home strip is dock surface to the edge (light white,
+    dark navy; OS pill drawn over it, visible in captures); green horizon
+    band behind progress/cards; hearts stroked; dock icons match (light
+    white/dark/white, dark all dark).
+  - Band 7 residual vs the PNG is the rule-mandated strip-tone difference
+    (surface vs the PNG's green) plus pill pixels — not a defect under the
+    owner rule, which explicitly overrides the design here. Remaining
+    bands 5/6 are the accepted set: live counts copy, repo card
+    order/content, tile tint + title size (shared), mandated Pip art swap.
 
 VERDICT: PASS

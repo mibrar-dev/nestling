@@ -1,31 +1,33 @@
-# K03 Kid home — UI check (Stage 5, iteration 3)
+# K03 Kid home — UI check (Stage 5, iteration 4)
 
 Method (simulator E7D5555E-378A-49DF-AAEE-16677AF4B9DB, 390x844):
-- `bash tools/screens/shot.sh "$PWD/app" /kid-home "$PWD/docs/screens/K03/ui/app_light_3.png" <udid> light demo kid maya` -> `docs/screens/K03/ui/app_light_3.png` (1170x2532). Same with `dark` -> `app_dark_3.png`.
-- NOTE: absolute OUT paths used (`shot.sh` cds to `$APP_DIR`). Both runs again printed `WARNING — frame never stabilised in 25 s`, exit 1; frames are usable and theme-consistent.
-- `python3 tools/screens/compare.py design/screens/light/K03-kid-home.png docs/screens/K03/ui/app_light_3.png docs/screens/K03/ui/cmp_light_3.png` (and dark). Read both sheets. Logical px (PNG/3), tolerance ±2px.
-- Rules applied: PIP (`PipAvatar` Mochi/sunny/stage 3, slot kept), STATUS BAR (ignore), DATA OVER MOCKS + PERIODS ruling (in-period counts win; seed anchored to today), BOTTOM EDGE owner rule (bar surface must run to the physical edge — FAIL any coloured strip under a bar; overrides the design), ALIGNMENT owner rule (20px gutters, no visible misalignment), ORCHESTRATOR_NOTES (all mandatory items), `1_plan.md`, SPACING_SPEC.
+- `bash tools/screens/shot.sh "$PWD/app" /kid-home "$PWD/docs/screens/K03/ui/app_light_4.png" <udid> light demo kid maya` -> `docs/screens/K03/ui/app_light_4.png` (1170x2532). Same with `dark` -> `app_dark_4.png`.
+- NOTE: absolute OUT paths used (`shot.sh` cds to `$APP_DIR`). Both runs again printed `WARNING — frame never stabilised in 25 s`, exit 1; frames usable and theme-consistent.
+- `python3 tools/screens/compare.py design/screens/light/K03-kid-home.png docs/screens/K03/ui/app_light_4.png docs/screens/K03/ui/cmp_light_4.png` (and dark). Read both sheets. Logical px (PNG/3), tolerance ±2px.
+- Rules applied: PIP (`PipAvatar` Mochi/sunny/stage 3), STATUS BAR (ignore), DATA OVER MOCKS + PERIODS (in-period counts win; seed anchored to today), BOTTOM EDGE owner rule (bar surface to the physical edge — FAIL any coloured strip; overrides the design), ALIGNMENT owner rule (20px gutters, nothing visibly off), ORCHESTRATOR_NOTES (all items incl. the OWNER FEEDBACK reversal: meadow ENDS at dock top, dock surface fills to the edge), `1_plan.md`, SPACING_SPEC.
 
 Results:
-- light mean diff: 12.97% — bands: 0: 2.97% · 1: 4.85% · 2: 10.86% · 3: 13.18% · 4: 13.20% · 5: 23.28% · 6: 25.80% · 7: 9.64%
-- dark mean diff: 11.84% — bands: 0: 3.01% · 1: 4.47% · 2: 8.89% · 3: 9.71% · 4: 12.90% · 5: 23.12% · 6: 23.37% · 7: 9.25%
-- Band 7 recovered (26.5% → ~9.5%): dock top back at design height. Bands 2-6 remain elevated for accepted reasons (mandated PipAvatar art, 4-vs-3 counts + fill, Hoover/Done vs Reading/+10 sample order).
+- light mean diff: 13.37% — bands: 0: 2.98% · 1: 4.85% · 2: 10.84% · 3: 13.18% · 4: 13.20% · 5: 23.28% · 6: 25.80% · 7: 12.80%
+- dark mean diff: 12.13% — bands: 0: 3.01% · 1: 4.47% · 2: 8.97% · 3: 9.71% · 4: 12.90% · 5: 23.12% · 6: 23.37% · 7: 11.49%
+- Band 7 rose (~9.5% → ~12%) for the RIGHT reason: the home strip is now dock-surface (white/navy) while the outdated PNG still shows green there — that delta is required by the BOTTOM EDGE override. Bands 2-6 heat is dominated by accepted diffs (mandated PipAvatar art, 4-vs-3 counts + fill, Hoover/Done vs Reading/+10 sample order).
+
+Fixed since iter3 (verified):
+- F1 bottom edge (was must-FAIL): below-dock rows y810-842 are now dock surface — light WHITE (255,255,255), dark NAVY (31,28,46). No green strip in either theme. Meadow ends at the dock top; light green band still present behind the cards (x=10 green y562-699).
+- Dock top back at design height (light border rows 713-715 vs design 719-721, i.e. −6, see #3).
 
 Accepted / overridden (NOT defects):
-- A1 counts "4 done today" / "4 of 6 done" / ~66.7% fill vs PNG 3/50% — correct per DATA + PERIODS (seed anchored to today; all 4 completions in-period) + ORCHESTRATOR_NOTES #2.
-- A2 2nd card "Hoover the stairs" (approved → "Done" chip, partly visible above dock, same presentation as PNG's partly-visible "Reading") vs PNG sample order — repo alphabetical order wins per `1_plan.md` §(a).
-- A3 Pip drawing differs from v1 SVG — MANDATED `PipAvatar`; slot position kept (pet band aligns with design).
-- A4 status bar (real OS 03:44/03:45 only, no mock duplication) — IGNORED per rule; band 0 is this only.
-- A5 quest icon tiles `surface2` vs per-quest tints — SHARED_REQUEST #1, non-blocking. A6 card title ≈17/22 vs 18/24 — pre-declared shared token.
-- A7 no home-indicator pill visible in captures — expected: `NestHomeIndicator` reserves nothing now (OS draws it; `simctl screenshot` does not capture the OS indicator). Not verifiable here, not a defect.
+- A1 counts "4 done today" / "4 of 6 done" / ~66.7% vs PNG 3/50% — correct per DATA + PERIODS + notes #2.
+- A2 2nd card "Hoover the stairs" (approved → "Done") vs PNG "Reading" sample — repo alphabetical order wins per `1_plan.md` §(a); same peek-above-dock presentation as the PNG.
+- A3 Pip drawing vs v1 SVG — MANDATED `PipAvatar`; slot kept. A4 status bar (OS time only) — ignored. A5 tiles `surface2` vs tints — SHARED_REQUEST #1. A6 title ≈17/22 vs 18/24 — pre-declared token. A7 no OS pill in captures — expected (`simctl screenshot` never captures the OS indicator).
+- A8 band-7 white/navy-vs-green delta vs the PNG home strip — REQUIRED by the BOTTOM EDGE override, not a defect.
 
 Deviations (design value → app value + fix):
-1. Coloured strip under the dock to the screen edge (MUST-FAIL per BOTTOM EDGE rule, both themes). App light: GREEN (191,232,176) from y≈805 to y842 under the white dock; app dark: GREEN (30,74,58) under the navy dock. Rule: meadow must END at the dock's top edge; dock surface (light: white surface; dark: the dock's dark surface) must fill from the dock's top border to the physical edge, home-indicator area included. (The PNG shows green here too — the owner rule explicitly overrides the design on this point.) Fix: clip/end the meadow at the dock top; extend the dock container background through the bottom safe area to the screen edge. Do not edit code in this stage — for the iteration-4 builder.
-2. Dock top ≈6px high (minor, ALIGNMENT). Dock top border: design y≈719-721 vs app y≈713-715 (light). Fix: keep the ORCHESTRATOR_NOTES y≈720 target exactly (SafeArea/inset accounting) while applying fix #1.
-3. Upper-stack residuals (minor, knock-on of the same layout): hearts +12 (design y443-452 vs app y455-464, unchanged from iter2); progress bar +8 (541 vs 549-550); card-1 top +4 (559-561 vs 563-564); green band starts +38 (design y524 behind progress vs app y562 just below it). Fix: trim ≈8-12px from the pet-stage bottom/speech gaps per the mandated Pip slot (nest top ≈y300, Pip ≈152) so hearts/progress/cards/green-start land on design rows.
+1. Dark lower-content background missing the meadow tint (moderate, dark-only). Design dark x=10: (37,52,88) at y540 grading to teal (33,64,72) at y700 behind progress/cards. App dark x=10: flat navy (38,46,102) → (37,51,89) — no meadow visible, while light renders its green band correctly. Fix: check the dark meadow fills (dark `--kid-meadow`/`--horizon`, `hill-front` bake per SPACING §9.14) so the meadow shows behind the lower content in dark as it does in light. For the iteration-5 builder; do not touch in this stage.
+2. Upper-stack residuals (minor, unchanged from iter3): hearts +12 (443-452 vs 455-464); progress ≈+8 (541 vs 549-550); card-1 top +4 (559-561 vs 563-564); light green start +38 (524 vs 562). Fix: trim pet-stage bottom gap toward the mandated Pip slot (nest top ≈y300, Pip ≈152).
+3. Dock top −6px (minor, ALIGNMENT): light 713-715 vs 719-721. Fix: land the dock top exactly on y≈720 when owning the bottom inset.
 
-Otherwise correct: header row, bubble, hearts 4/5 stroked + caption, section title + chip, kid progress geometry, card geometry/chips/checks per status, dock buttons (glyphs, labels, colours both themes), 20px gutters with cards/bars edge-aligned, no overflow/ellipsis issues, coins-only, dark token flips correct.
+Otherwise correct: header row, bubble, hearts 4/5 stroked + caption, section title + chip, kid progress geometry, card geometry/chips/checks per status, dock buttons (glyphs, labels, colours both themes), 20px gutters edge-aligned, no overflow/ellipsis issues, coins-only, all other dark token flips correct.
 
-Iteration-4 fixes (local): #1 bottom-edge fill (both themes), #2 dock top to y≈720, #3 upper-stack trim. Shared/pre-declared: tile tint, title size.
+Iteration-5 fixes (local): #1 dark meadow behind lower content; #2 upper-stack trim; #3 dock top to y≈720. Shared/pre-declared: tile tint, title size.
 
 VERDICT: FAIL

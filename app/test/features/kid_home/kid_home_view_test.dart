@@ -26,6 +26,7 @@ import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_child.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_quest.dart';
 import 'package:nestling/features/kid_home/domain/kid_home_repository.dart';
+import 'package:nestling/features/kid_home/presentation/widgets/kid_status_chip.dart';
 
 import '../../test_scope.dart';
 
@@ -767,25 +768,117 @@ void main() {
       ('dark', ThemeMode.dark),
     ];
 
-    testWidgets('gutters align: header, cards and dock share the 20 px edge', (
+    testWidgets('gutters align on both edges and the dock matches the cards', (
       tester,
     ) async {
       await _pumpRoute(tester);
       await _revealCards(tester);
+      const gutter = NestSpacing.padSide;
+      const gap = NestSpacing.s3;
+      // Header: avatar on the left gutter, lock on the right one.
       expect(
         tester.getRect(find.byType(NestAvatar)).left,
-        closeTo(NestSpacing.padSide, 0.5),
+        closeTo(gutter, 0.5),
       );
+      expect(
+        tester.getRect(find.byType(NestLockButton)).right,
+        closeTo(NestDevice.width - gutter, 0.5),
+      );
+      // Quest cards, progress bar and section chip share the same edges.
+      final card = tester.getRect(find.byType(NestKidQuestCard).first);
+      expect(card.left, closeTo(gutter, 0.5));
+      expect(card.right, closeTo(NestDevice.width - gutter, 0.5));
+      expect(
+        tester.getRect(find.byType(NestProgress)).left,
+        closeTo(gutter, 0.5),
+      );
+      expect(
+        tester.getRect(find.byType(NestProgress)).right,
+        closeTo(NestDevice.width - gutter, 0.5),
+      );
+      expect(
+        tester
+            .getRect(
+              find.ancestor(
+                of: find.text('4 of 6 done'),
+                matching: find.byType(KidStatusChip),
+              ),
+            )
+            .right,
+        closeTo(NestDevice.width - gutter, 0.5),
+      );
+      // Dock: three equal buttons, outer edges on the card edges, 12 gaps.
+      final buttons = <Rect>[
+        for (var i = 0; i < 3; i++)
+          tester.getRect(find.byType(NestKidButton).at(i)),
+      ];
+      expect(buttons.first.left, closeTo(gutter, 0.5));
+      expect(buttons.last.right, closeTo(NestDevice.width - gutter, 0.5));
+      expect(buttons[1].left - buttons[0].right, closeTo(gap, 0.5));
+      expect(buttons[2].left - buttons[1].right, closeTo(gap, 0.5));
+      expect(buttons[0].width, closeTo(buttons[1].width, 0.5));
+      expect(buttons[1].width, closeTo(buttons[2].width, 0.5));
+      await disposeApp(tester);
+    });
+
+    testWidgets('the bar spans the full width to the edge and the buttons stay '
+        'above the inset', (tester) async {
+      tester.view.padding = const FakeViewPadding(bottom: 34 * 3);
+      await _pumpRoute(tester);
+      final bar = tester.getRect(_dockSurfaceFinder());
+      expect(bar.left, 0);
+      expect(bar.right, NestDevice.width);
+      expect(bar.bottom, NestDevice.height);
+      // The bar runs to the edge; its content does not slide under the OS
+      // home indicator.
+      expect(
+        tester.getRect(find.byType(NestKidButton).first).bottom,
+        lessThanOrEqualTo(NestDevice.height - 34),
+      );
+      await disposeApp(tester);
+    });
+
+    testWidgets('430px: the bar still runs to the edge with an inset', (
+      tester,
+    ) async {
+      tester.view.padding = const FakeViewPadding(bottom: 34 * 3);
+      await _pumpRoute(tester, width: 430);
+      final bar = tester.getRect(_dockSurfaceFinder());
+      expect(bar.left, 0);
+      expect(bar.right, 430);
+      expect(bar.bottom, NestDevice.height);
       expect(
         tester.getRect(find.byType(NestKidQuestCard).first).left,
         closeTo(NestSpacing.padSide, 0.5),
       );
-      expect(
-        tester.getRect(find.byType(NestKidButton).first).left,
-        closeTo(NestSpacing.padSide, 0.5),
-      );
       await disposeApp(tester);
     });
+
+    testWidgets(
+      'a top inset reserves the status bar and leaves the bar intact',
+      (tester) async {
+        // iPhone-like insets: 59 top, 34 bottom (physical px at 3x).
+        tester.view.viewPadding = const FakeViewPadding(
+          top: 59 * 3,
+          bottom: 34 * 3,
+        );
+        tester.view.padding = const FakeViewPadding(
+          top: 59 * 3,
+          bottom: 34 * 3,
+        );
+        await _pumpRoute(tester);
+        // STATUS BAR rule: the widget only reserves height; content starts
+        // below the OS inset.
+        expect(
+          tester.getRect(find.byType(NestAvatar)).top,
+          greaterThanOrEqualTo(59),
+        );
+        // BOTTOM EDGE rule is unaffected by the top inset.
+        expect(tester.getRect(_dockSurfaceFinder()).bottom, NestDevice.height);
+        expect(tester.takeException(), isNull);
+        await disposeApp(tester);
+      },
+    );
 
     for (final (themeName, theme) in themes) {
       testWidgets('$themeName: the dock owns the OS bottom inset', (

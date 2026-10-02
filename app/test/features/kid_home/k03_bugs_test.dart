@@ -1,4 +1,4 @@
-// K03 (kid home) adversarial test suite — Stage 6 bug hunt, iteration 3.
+// K03 (kid home) adversarial test suite — Stage 6 bug hunt, iteration 4.
 //
 // Iteration-1 proofs K03-BUG-1..6 all run un-skipped (fixed in iteration 2:
 // repo transaction/idempotency, success-driven celebration, actionNonce,
@@ -15,14 +15,16 @@
 // - K03-BUG-8/9 fixed mid-loop (per-quest celebrations, gate tap latch);
 //   proofs run un-skipped.
 //
-// Iteration-3 work:
+// Iteration-3/4 work:
 // - Owner alignment probe (20 px gutters shared by bar, cards, dock) — passes.
 // - Failure / empty-quests states use PipAvatar, never v1 `pip_stage_*.svg`
 //   — passes.
-// - K03-BUG-10 (skipped): the owner BOTTOM EDGE rule is violated — the dock
-//   surface does not reach the physical bottom edge, so meadow/sky shows as a
-//   coloured strip below the dock and around the home-indicator area.
-//   Proof: `flutter test --run-skipped --plain-name K03-BUG-10`.
+// - K03-BUG-10 (owner BOTTOM EDGE): fixed in iteration 4; the light and dark
+//   proofs run un-skipped and assert a surface-filled box reaches the
+//   physical bottom edge under the 34px inset.
+// - K03-BUG-11 (skipped): a silent no-op `completeQuest` (quest row gone)
+//   never resets the card latch, so the check is dead until the next status/
+//   token change. Proof: `flutter test --run-skipped --plain-name K03-BUG-11`.
 //
 // Run the skipped proofs with
 // `flutter test --run-skipped --plain-name "K03-BUG"` (BUG-7 needs its flag).
@@ -590,6 +592,10 @@ void main() {
       });
       await _pump(tester);
       expect(find.text('Hi Leo!'), findsOneWidget);
+      // Seed change e972b46: Leo's daily school-bag approval is on the story
+      // day, so the period rule still yields "Leo 2 of 4".
+      expect(find.text('2 done today'), findsOneWidget);
+      expect(find.text('2 of 4 done'), findsOneWidget);
       final avatars = tester
           .widgetList<PipAvatar>(find.byType(PipAvatar))
           .toList();
@@ -1040,6 +1046,70 @@ void main() {
       await disposeApp(tester);
     },
   );
+
+  testWidgets(
+    'K03-BUG-10 dark: the dock surface must also reach the edge in dark mode',
+    (tester) async {
+      tester.view.padding = const FakeViewPadding(bottom: 34);
+      tester.view.viewPadding = const FakeViewPadding(bottom: 34);
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetViewPadding);
+      await _pump(tester, theme: ThemeMode.dark);
+      const scheme = NestColors.dark;
+      final screenH =
+          tester.view.physicalSize.height / tester.view.devicePixelRatio;
+      final surfaceBoxes = find.byWidgetPredicate(
+        (w) =>
+            w is Container &&
+            w.decoration is BoxDecoration &&
+            (w.decoration! as BoxDecoration).color == scheme.surface,
+      );
+      final covering = surfaceBoxes.evaluate().where((element) {
+        final rect = tester.getRect(
+          find.byElementPredicate((e) => identical(e, element)),
+        );
+        return rect.left <= 0.5 &&
+            rect.right >= 389.5 &&
+            rect.bottom >= screenH - 0.5;
+      });
+      expect(
+        covering,
+        isNotEmpty,
+        reason: 'no meadow/sky strip below the dark dock either',
+      );
+      await disposeApp(tester);
+    },
+  );
+
+  testWidgets(
+    'K03-BUG-11: a silent no-op completion leaves the check latched',
+    (tester) async {
+      final repo = _SilentNoopRepository();
+      final semantics = tester.ensureSemantics();
+      await _useFakeRepository(repo);
+      await _pump(tester);
+      await _revealCards(tester);
+      final check = find.bySemanticsLabel('Mark done').first;
+      await tester.ensureVisible(check);
+      await tester.pump();
+      await tester.tap(check);
+      await _settle(tester);
+      // The write returned without an error and without a flip (quest row
+      // gone). No celebration, no SnackBar — and the check must be tappable
+      // again so the child can retry.
+      expect(find.text('K05 Quest complete'), findsNothing);
+      await tester.tap(check);
+      await _settle(tester);
+      expect(
+        repo.calls,
+        hasLength(2),
+        reason: 'a retry must reach the repository after a silent no-op',
+      );
+      semantics.dispose();
+      await disposeApp(tester);
+    },
+    skip: true,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -1177,6 +1247,37 @@ class _FailLoadRepository implements KidHomeRepository {
 
   @override
   Future<void> completeQuest(String childId, String questId) async {}
+}
+
+/// Healthy streams; `completeQuest` returns without an error and without
+/// flipping anything — the race where the quest row vanished between load
+/// and tap (`KidHomeRepositoryImpl.completeQuest` returns silently).
+class _SilentNoopRepository implements KidHomeRepository {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<List<KidQuest>> getItems() async => _items2;
+
+  @override
+  Stream<List<KidQuest>> watchItems() => Stream<List<KidQuest>>.value(_items2);
+
+  @override
+  Stream<List<KidChild>> watchProfiles() =>
+      Stream<List<KidChild>>.value(const <KidChild>[_maya]);
+
+  @override
+  Stream<KidChild?> watchActiveChild() => Stream<KidChild?>.value(_maya);
+
+  @override
+  List<String> stepsFor(String questId) => const <String>['Step one'];
+
+  @override
+  Future<bool> verifyPin(String childId, String pin) async => true;
+
+  @override
+  Future<void> completeQuest(String childId, String questId) async {
+    calls.add(questId);
+  }
 }
 
 void _load(KidHomeBloc bloc) => bloc.add(const KidHomeLoadRequested());
