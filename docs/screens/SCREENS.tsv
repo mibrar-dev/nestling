@@ -2,7 +2,7 @@ P01	welcome	Welcome	onboarding	/welcome	parent	fresh	maya
 P02	value-tour	Value tour	onboarding	/value-tour	parent	fresh	maya
 P03	create-account	Create account	auth	/create-account	parent	fresh	maya
 P04	privacy	Privacy & consent	privacy_consent	/privacy	parent	fresh	maya
-P05	add-children	Add children	family	/add-children	parent	fresh	maya
+P05	add-children	Add children	family	/add-children	parent	onboarding_kids	maya
 P06	pocket-money	Pocket money setup	pocket_money	/pocket-money-setup	parent	fresh	maya
 P07	paywall	Paywall	paywall	/paywall	parent	fresh	maya
 P08	today	Today (home)	today	/today	parent	demo	maya
