@@ -17,6 +17,7 @@ ev() { echo "$(date +%H:%M:%S) $1 $ID ${2:-}" >> "$EV"; echo "$1 ${2:-}" > "$ST/
 MUSE="opencode-go/muse-spark-1.3-contributor#xhigh"
 BUNNY="opencode-go/space-bunny-free#max"
 DEEP="opencode-go/deepseek-v4.1-flash#max"
+FLEDGE="opencode/fledge-alpha-free"   # owner: free, use alongside the others
 
 if [ ! -d "$WT" ]; then
   git -C "$MAIN" worktree add -q "$WT" -b "screen/$ID" main || git -C "$MAIN" worktree add -q "$WT" "screen/$ID"
@@ -85,7 +86,7 @@ for IT in $(seq "$START" "$MAX"); do
   git -C "$WT" merge -q --no-edit main >/dev/null 2>&1 || { git -C "$WT" merge --abort >/dev/null 2>&1; ev SYNC_CONFLICT "main"; }
   stage build "$MUSE" 2_build.md "$IT" "$FIXES"
   stage test  "$BUNNY" 3_test.md   "$IT"   # owner: Space Bunny max is fast at code
-  stage review "$BUNNY" 4_review.md "$IT"
+  stage review "$FLEDGE" 4_review.md "$IT"
   if [ "$SIM" = "pool" ]; then acquire_sim; ev SIM_ACQUIRED "$HELD_SIM"; SIM_SAVE="$SIM"; SIM="$HELD_SIM"; fi
   stage ui    "$MUSE"  5_ui.md     "$IT"
   if [ -n "$HELD_SIM" ]; then release_sim; SIM="$SIM_SAVE"; fi
