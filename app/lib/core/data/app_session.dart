@@ -58,10 +58,17 @@ class AppSession extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _write(AppStateCompanion companion) {
-    return (_db.update(
+  /// Upserts the single `app_state` row (id 1). A real first install has no
+  /// seeded row, so a plain UPDATE silently changed nothing (P01 BUG-4).
+  Future<void> _write(AppStateCompanion companion) async {
+    final updated = await (_db.update(
       _db.appState,
     )..where((a) => a.id.equals(1))).write(companion);
+    if (updated == 0) {
+      await _db
+          .into(_db.appState)
+          .insert(companion.copyWith(id: const Value(1)));
+    }
   }
 
   @override

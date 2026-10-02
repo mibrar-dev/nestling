@@ -219,6 +219,10 @@ class NestHomeIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The OS draws the real home indicator; the bottom inset belongs to
+    // SafeArea (NestBottomCta, tab bar or the screen). Reserving 34 here as
+    // well double-counted it (P01 BUG-2). Mock pill only for the gallery.
+    if (!NestStatusBar.showMockGlyphs) return const SizedBox.shrink();
     final tokens = context.nest;
     final pill = lightPill ? const Color(0xFFFFFFFF) : tokens.ink;
     return ExcludeSemantics(
