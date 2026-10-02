@@ -23,7 +23,10 @@ while [ ${#QUEUE[@]} -gt 0 ] || { for x in $MINE; do [ -e "$RUN_DIR/$x.pid" ] &&
     for i in "${!QUEUE[@]}"; do f=$(feature_of "${QUEUE[$i]}"); busy_feature "$f" || { pick=$i; break; }; done
     [ $pick -lt 0 ] && break
     id="${QUEUE[$pick]}"; QUEUE=("${QUEUE[@]:0:$pick}" "${QUEUE[@]:$((pick+1))}")
-    bash "$MAIN/tools/screens/loop.sh" "$id" "$sim" > "$MAIN/docs/screens/_status/$id.loop.log" 2>&1 &
+    # Resume point (written by the orchestrator): docs/screens/_status/resume/<ID> holds START_IT.
+    rs="$MAIN/docs/screens/_status/resume/$id"; st=1; mx=4
+    if [ -f "$rs" ]; then st=$(cat "$rs"); mx=6; rm -f "$rs"; fi
+    START_IT=$st bash "$MAIN/tools/screens/loop.sh" "$id" "$sim" "$mx" > "$MAIN/docs/screens/_status/$id.loop.log" 2>&1 &
     MINE="$MINE$id "; echo $! > "$RUN_DIR/$id.pid"; feature_of "$id" > "$RUN_DIR/$id.feature"; echo "$sim" > "$RUN_DIR/$id.sim"
   done
   sleep 20
