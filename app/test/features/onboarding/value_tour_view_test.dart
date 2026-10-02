@@ -15,7 +15,8 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
+import 'package:flutter/rendering.dart'
+    show RenderParagraph, RenderRepaintBoundary;
 import 'package:flutter/semantics.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -25,7 +26,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:nestling/app/app.dart';
 import 'package:nestling/app/controllers.dart';
 import 'package:nestling/core/data/app_session.dart';
-import 'package:nestling/core/data/london_time.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/core/design_system/motion/pip_avatar.dart' as v2;
@@ -40,26 +40,25 @@ import 'package:nestling/features/onboarding/presentation/widgets/value_tour_pre
 import '../../test_scope.dart';
 
 const String _step1Title = 'Set quests in seconds';
+// ORCHESTRATOR_NOTES 2 (mandatory): the design's exact punctuation —
+// curly double quotes (U+201C/201D) and an em dash, not straight quotes.
 const String _step1Body =
-    "Pick from 40+ ready-made jobs like 'Put the bins out' or make your own.";
+    'Pick from 40+ ready-made jobs like “Put the bins out” — or make '
+    'your own.';
 const String _step2Title = 'Pip grows as they help';
 const String _step3Title = 'Pocket money, sorted';
 const String _step3Body =
     'No bank card needed — we keep score, you pay your way.';
 const String _pipLabel = 'Pip the fledgling bird';
 
-/// Expected date chip: the next payout Saturday strictly after the pinned
-/// story day. Mirrors the view's derivation against `Seed.anchorDay`
-/// (Sat 3 Oct 2026 under the test clock → `Sat 10 Oct`); the weekday part is
-/// generically guarded by `p02_bugs_test.dart` P02-BUG-5.
-String _expectedPayoutChip() {
-  final anchor = Seed.anchorDay;
-  var ahead = (DateTime.saturday - anchor.weekday) % 7;
-  if (ahead == 0) {
-    ahead = DateTime.daysPerWeek;
-  }
-  return formatLondonDay(anchor.add(Duration(days: ahead)));
-}
+/// The card date chip is part of the illustration, not live data:
+/// ORCHESTRATOR_NOTES 1 (mandatory) pins the design's static `Sat 4 Oct`
+/// (`P02-value-tour.html:68` and `:115`) instead of a derived payout date.
+const String _dateChip = 'Sat 4 Oct';
+
+/// Seed variants the tour must render identically under (ORCHESTRATOR_NOTES
+/// 1: the tour is an illustration, so no seed may change a pixel of it).
+enum _Seed { demo, empty, fresh }
 
 /// Any SvgPicture still loading a v1 `pip_stage_*.svg` illustration.
 Finder get _v1PipFinder => find.byWidgetPredicate(
@@ -232,9 +231,8 @@ void main() {
       expect(find.text('9:41'), findsNothing);
       expect(find.byType(NestStatusBar), findsOneWidget);
       expect(find.text('Skip'), findsOneWidget);
-      expect(find.text("Today's quests"), findsOneWidget);
-      expect(find.text(_expectedPayoutChip()), findsWidgets);
-      expect(find.text('Sat 4 Oct'), findsNothing);
+      expect(find.text('Today’s quests'), findsOneWidget);
+      expect(find.text(_dateChip), findsWidgets);
       expect(find.text('Empty the dishwasher'), findsOneWidget);
       expect(find.text('Put the bins out'), findsOneWidget);
       expect(find.text('Reading – 20 minutes'), findsOneWidget);
@@ -262,7 +260,7 @@ void main() {
         textScale: 1,
       );
 
-      expect(find.text("Today's quests"), findsOneWidget);
+      expect(find.text('Today’s quests'), findsOneWidget);
       expect(find.text('Empty the dishwasher'), findsOneWidget);
       expect(find.text(_step1Title), findsOneWidget);
       expect(find.text(_step1Body), findsOneWidget);
@@ -340,6 +338,121 @@ void main() {
     },
   );
 
+  group('P02 value tour — the design’s copy, character by character', () {
+    // ORCHESTRATOR_NOTES 2 (mandatory): every page's copy must match
+    // P02-value-tour.html exactly. Page 1's block is in the HTML
+    // (`:128-129`, with &ldquo;/&rdquo;/&mdash;); pages 2–3 come from the same
+    // tour step list (DESIGN_SPEC §5 P02) and are pinned here so a copy edit
+    // has to be deliberate.
+    const steps = <(String, String)>[
+      (
+        'Set quests in seconds',
+        'Pick from 40+ ready-made jobs like “Put the bins out” — or make '
+            'your own.',
+      ),
+      (
+        'Pip grows as they help',
+        'Every finished quest feeds Pip the bird, from egg to songbird.',
+      ),
+      (
+        'Pocket money, sorted',
+        'No bank card needed — we keep score, you pay your way.',
+      ),
+    ];
+
+    for (var i = 0; i < steps.length; i++) {
+      testWidgets('step ${i + 1} title and body are the design’s', (
+        tester,
+      ) async {
+        await setUpTestScope();
+        await _pumpTour(
+          tester,
+          theme: ThemeMode.light,
+          surface: const Size(390, 844),
+          textScale: 1,
+        );
+        for (var advance = 0; advance < i; advance++) {
+          await _tapNext(tester);
+        }
+
+        expect(find.text(steps[i].$1), findsOneWidget, reason: 'title');
+        expect(find.text(steps[i].$2), findsOneWidget, reason: 'body');
+        expect(tester.takeException(), isNull);
+
+        await disposeApp(tester);
+      });
+    }
+
+    testWidgets('the repository’s step copy matches what the view renders', (
+      tester,
+    ) async {
+      // The view renders static copy and the route-level bloc feeds the
+      // repository's list, so the two must be the same strings: a loaded
+      // screen (or a future refactor that reads the bloc) must never show
+      // different punctuation than the pre-load frame.
+      await setUpTestScope();
+      final steps = await GetIt.instance<OnboardingRepository>().getItems();
+      expect(steps, hasLength(3));
+
+      await _pumpTour(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+      for (var i = 0; i < steps.length; i++) {
+        if (i > 0) {
+          await _tapNext(tester);
+        }
+        expect(find.text(steps[i].title), findsOneWidget, reason: 'title $i');
+        expect(find.text(steps[i].detail), findsOneWidget, reason: 'body $i');
+      }
+
+      // The repository carries the design's punctuation too, not the older
+      // straight-quote string (ORCHESTRATOR_NOTES 2).
+      const step1Detail =
+          'Pick from 40+ ready-made jobs like “Put the bins out” — or make '
+          'your own.';
+      expect(steps.map((step) => step.detail).toList(), const [
+        step1Detail,
+        'Every finished quest feeds Pip the bird, from egg to songbird.',
+        'No bank card needed — we keep score, you pay your way.',
+      ]);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the card heads use the design’s U+2019 apostrophes', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpTour(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      expect(find.text('Today’s quests'), findsOneWidget);
+      await _tapNext(tester);
+      expect(find.text('Pip’s nest'), findsOneWidget);
+      await _tapNext(tester);
+      expect(find.text('Maya’s jar'), findsOneWidget);
+
+      // The straight-apostrophe variants must not exist anywhere: the design
+      // uses &rsquo; throughout (`P02-value-tour.html:68, 99, 111`).
+      for (final straight in const [
+        "Today's quests",
+        "Pip's nest",
+        "Maya's jar",
+      ]) {
+        expect(find.text(straight), findsNothing, reason: 'no ASCII fallback');
+      }
+
+      await disposeApp(tester);
+    });
+  });
+
   group('P02 value tour — pager behaviour', () {
     testWidgets('Next advances one step at a time, then becomes Continue', (
       tester,
@@ -364,7 +477,38 @@ void main() {
       expect(find.text('Continue'), findsOneWidget);
       expect(find.byKey(const ValueKey('p02_continue')), findsOneWidget);
       expect(find.byKey(const ValueKey('p02_next')), findsNothing);
-      expect(find.text("Maya's jar"), findsOneWidget);
+      expect(find.text('Maya’s jar'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('two fast taps advance one step, never skip a page', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpTour(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      // Review 7: `_goTo` animates to an explicit target (not `nextPage`),
+      // so a second tap mid-flight retargets the same page instead of
+      // advancing from the current offset.
+      await tester.tap(find.byKey(const ValueKey('p02_next')));
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(find.byKey(const ValueKey('p02_next')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(_step2Title),
+        findsOneWidget,
+        reason: 'two taps in quick succession must land on step 2, not step 3',
+      );
+      expect(tester.widget<NestPagerDots>(find.byType(NestPagerDots)).index, 1);
+      expect(find.byKey(const ValueKey('p02_continue')), findsNothing);
       expect(tester.takeException(), isNull);
 
       await disposeApp(tester);
@@ -726,6 +870,66 @@ void main() {
       await disposeApp(tester);
     });
 
+    testWidgets('the illustration is byte-identical under every seed', (
+      tester,
+    ) async {
+      // ORCHESTRATOR_NOTES 1 (mandatory): the value tour is a MARKETING
+      // carousel shown before any family exists, so its cards carry the
+      // design's static copy — NOT the database. Proof: card 1 renders the
+      // same rows, subs, coin values, date chip and progress caption under
+      // Seed.demo (Maya 120 coins, 3 approvals, 12 quests), Seed.empty
+      // (onboarded parent, no children) and Seed.fresh (nothing at all).
+      final snapshots = <String>[];
+
+      for (final seed in const <_Seed>[_Seed.demo, _Seed.empty, _Seed.fresh]) {
+        final db = await setUpTestScope(seedDemo: seed == _Seed.demo);
+        if (seed == _Seed.empty) {
+          await Seed.empty(db);
+          await GetIt.instance<AppSession>().refresh();
+        } else if (seed == _Seed.fresh) {
+          await Seed.fresh(db);
+          await GetIt.instance<AppSession>().refresh();
+        }
+        await _pumpTour(
+          tester,
+          theme: ThemeMode.light,
+          surface: const Size(390, 844),
+          textScale: 1,
+        );
+
+        final card = _cardWith('Today’s quests');
+        final rows = tester
+            .widgetList<ValueTourPreviewRow>(
+              find.descendant(
+                of: card,
+                matching: find.byType(ValueTourPreviewRow),
+              ),
+            )
+            .map((row) => '${row.title} / ${row.subtitle} / ${row.coins}')
+            .join(' ; ');
+        final chip = tester
+            .widget<NestChip>(
+              find.descendant(of: card, matching: find.byType(NestChip)),
+            )
+            .label;
+        snapshots.add(
+          '$rows || chip=$chip || ${_progressIn(tester, card).fraction} || '
+          '${find.text('4 of 6 quests done today').evaluate().length}',
+        );
+
+        await disposeApp(tester);
+      }
+
+      expect(snapshots.toSet(), hasLength(1), reason: snapshots.join('\n'));
+      // …and that one snapshot is the design's copy, not the seed's.
+      final snapshot = snapshots.first;
+      expect(snapshot, contains('Empty the dishwasher / Maya · weekly / 15'));
+      expect(snapshot, contains('Put the bins out / Leo · once / 15'));
+      expect(snapshot, contains('Reading – 20 minutes / Maya · daily / 10'));
+      expect(snapshot, contains('Tidy your bedroom / Maya · weekly / 15'));
+      expect(snapshot, contains('chip=Sat 4 Oct'));
+    });
+
     testWidgets('Seed.empty (onboarded, no children): identical tour', (
       tester,
     ) async {
@@ -787,14 +991,14 @@ void main() {
         );
 
         final cardW = math.min(310, math.max(240, width - 80)).toDouble();
-        final rect = tester.getRect(_cardWith("Today's quests"));
+        final rect = tester.getRect(_cardWith('Today’s quests'));
         expect(rect.left, moreOrLessEquals(NestSpacing.padSide, epsilon: 0.01));
         expect(rect.width, moreOrLessEquals(cardW, epsilon: 0.01));
 
         // The next card starts one pitch later (cardW + the 12px design gap,
         // c2 left 342 = 20 + 310 + 12), clipped by the pager edge exactly
         // like the design's peek.
-        final peek = tester.getRect(_cardWith("Pip's nest"));
+        final peek = tester.getRect(_cardWith('Pip’s nest'));
         expect(
           peek.left,
           moreOrLessEquals(NestSpacing.padSide + cardW + 12, epsilon: 0.01),
@@ -805,7 +1009,7 @@ void main() {
       });
     }
 
-    testWidgets('card 1 previews the seeded quests, coins and progress', (
+    testWidgets('card 1 previews the design rows, coins and progress', (
       tester,
     ) async {
       await setUpTestScope();
@@ -816,12 +1020,16 @@ void main() {
         textScale: 1,
       );
 
-      final card = _cardWith("Today's quests");
+      final card = _cardWith('Today’s quests');
       Finder inCard(Finder matching) =>
           find.descendant(of: card, matching: matching);
 
-      expect(inCard(find.text('Maya · daily')), findsNWidgets(3));
-      expect(inCard(find.text('Maya · weekly')), findsOneWidget);
+      // ORCHESTRATOR_NOTES 1 (mandatory): the design's own illustration copy
+      // (P02-value-tour.html:72-88), not Seed.demo's assignee/repeat values.
+      expect(inCard(find.text('Maya · weekly')), findsNWidgets(2));
+      expect(inCard(find.text('Leo · once')), findsOneWidget);
+      expect(inCard(find.text('Maya · daily')), findsOneWidget);
+      expect(inCard(find.text(_dateChip)), findsOneWidget);
       expect(inCard(find.text('4 of 6 quests done today')), findsOneWidget);
 
       final pills = tester
@@ -852,7 +1060,7 @@ void main() {
       );
       await _tapNext(tester);
 
-      final card = _cardWith("Pip's nest");
+      final card = _cardWith('Pip’s nest');
       Finder inCard(Finder matching) =>
           find.descendant(of: card, matching: matching);
 
@@ -874,10 +1082,10 @@ void main() {
       await disposeApp(tester);
     });
 
-    testWidgets('card 3 ledger matches the seeded Maya balance', (
+    testWidgets('card 3 ledger shows the design’s static illustration', (
       tester,
     ) async {
-      final db = await setUpTestScope();
+      await setUpTestScope();
       await _pumpTour(
         tester,
         theme: ThemeMode.light,
@@ -887,33 +1095,63 @@ void main() {
       await _tapNext(tester);
       await _tapNext(tester);
 
-      // DATA OVER MOCKS: the expected strings come from the Drift rows, not
-      // from literals shared with the view.
-      final maya = (await db.select(db.children).get()).firstWhere(
-        (child) => child.id == 'maya',
-      );
-      final family = (await db.select(db.families).get()).single;
-      final basePence = maya.weeklyBasePence;
-      final bonusPence = maya.coins * family.coinValuePencePerCoin;
-
-      final card = _cardWith("Maya's jar");
+      // ORCHESTRATOR_NOTES 1 (mandatory): the jar card is an illustration, so
+      // the ledger is the design's static copy (P02-value-tour.html:113-119:
+      // £3.00 base + £1.20 quests = £4.20), not a live read of the family and
+      // child rows.
+      final card = _cardWith('Maya’s jar');
       Finder inCard(Finder matching) =>
           find.descendant(of: card, matching: matching);
 
       expect(inCard(find.text('coming on Saturday')), findsOneWidget);
       expect(inCard(find.text('Weekly base')), findsOneWidget);
-      expect(inCard(find.text(formatPounds(basePence / 100))), findsOneWidget);
-      expect(inCard(find.text('Quests (${maya.coins} coins)')), findsOneWidget);
-      expect(
-        inCard(find.text('+${formatPounds(bonusPence / 100)}')),
-        findsOneWidget,
-      );
+      expect(inCard(find.text('£3.00')), findsOneWidget);
+      expect(inCard(find.text('Quests (120 coins)')), findsOneWidget);
+      expect(inCard(find.text('+£1.20')), findsOneWidget);
       expect(inCard(find.text('Total')), findsOneWidget);
-      expect(
-        inCard(find.text(formatPounds((basePence + bonusPence) / 100))),
-        findsNWidgets(2),
-      );
+      expect(inCard(find.text('£4.20')), findsNWidgets(2));
+      expect(inCard(find.text(_dateChip)), findsOneWidget);
       expect(inCard(find.text('No bank card needed')), findsOneWidget);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('no preview title is truncated at 320dp × text scale 1.3', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpTour(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(320, 844),
+        textScale: 1.3,
+      );
+
+      // ORCHESTRATOR_NOTES 3 (mandatory), second half: at the narrowest width
+      // and the largest supported scale the design still has room, so no name
+      // may be cut ("Empty the dishwas…"). Font-agnostic: whether the row
+      // scales the title down or lets it wrap, the paragraph must not have
+      // exceeded its max lines.
+      for (final title in const <String>[
+        'Empty the dishwasher',
+        'Put the bins out',
+        'Reading – 20 minutes',
+        'Tidy your bedroom',
+      ]) {
+        final paragraph = tester.renderObject<RenderParagraph>(
+          find.text(title),
+        );
+        expect(
+          paragraph.didExceedMaxLines,
+          isFalse,
+          reason:
+              'ORCHESTRATOR_NOTES 3: "$title" must render in full at 320dp × '
+              '1.3, not ellipsise. Row metric: maxIntrinsic '
+              '${paragraph.getMaxIntrinsicWidth(double.infinity)} vs slot '
+              '${paragraph.size.width}.',
+        );
+      }
+      expect(tester.takeException(), isNull);
 
       await disposeApp(tester);
     });
@@ -979,7 +1217,125 @@ void main() {
     });
   });
 
+  group('P02 value tour — live configuration changes', () {
+    testWidgets('resize keeps the current step and the pager intact', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpTour(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+      await _tapNext(tester);
+      await _tapNext(tester);
+      expect(find.text(_step3Title), findsOneWidget);
+
+      // `didChangeDependencies` rebuilds the PageController whenever the
+      // viewport fraction changes (card-width clamp), seeded with the
+      // current page — a rotation must not reset the tour to step 1.
+      tester.view.physicalSize = const Size(320 * 3, 844 * 3);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text(_step3Title), findsOneWidget);
+      expect(tester.widget<NestPagerDots>(find.byType(NestPagerDots)).index, 2);
+      expect(find.byKey(const ValueKey('p02_continue')), findsOneWidget);
+
+      // …and the clamped card width still follows the new viewport (card 1 is
+      // disposed on page 3, so measure the card that is on screen).
+      final cardW = math.min(310, math.max(240, 320 - 80)).toDouble();
+      expect(
+        tester.getRect(_cardWith('Maya’s jar')).width,
+        moreOrLessEquals(cardW, epsilon: 0.01),
+      );
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('a live text-scale change grows the pager and keeps the step', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpTour(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+      await _tapNext(tester);
+      expect(
+        tester.getSize(find.byType(PageView)).height,
+        moreOrLessEquals(400, epsilon: 0.01),
+      );
+
+      // Accessibility settings can change under the app: the pager height is
+      // the clamped scale (1.0…1.3) times the 400dp design box.
+      tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(
+        tester.getSize(find.byType(PageView)).height,
+        moreOrLessEquals(400 * 1.3, epsilon: 0.01),
+      );
+      expect(find.text(_step2Title), findsOneWidget);
+      expect(tester.widget<NestPagerDots>(find.byType(NestPagerDots)).index, 1);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+  });
+
   group('P02 value tour — pager controls', () {
+    testWidgets('the dashed add-rows are labels, not controls', (tester) async {
+      await setUpTestScope();
+      await _pumpTour(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      // `.pv-add` rows are illustration text in the design (no button, no
+      // link): each announces as plain text, carries no tap action, and
+      // neither pages the pager nor navigates.
+      for (var step = 0; step < 3; step++) {
+        if (step > 0) {
+          await _tapNext(tester);
+        }
+        final label = const [
+          'New quest',
+          'Next stage: Songbird',
+          'No bank card needed',
+        ][step];
+
+        expect(find.text(label), findsOneWidget, reason: 'step ${step + 1}');
+        expect(
+          tester
+              .getSemantics(find.text(label))
+              .getSemanticsData()
+              .hasAction(SemanticsAction.tap),
+          isFalse,
+          reason: 'the design exposes this row as text, not a control',
+        );
+
+        await tester.tap(find.text(label), warnIfMissed: false);
+        await tester.pump(const Duration(milliseconds: 400));
+
+        expect(
+          tester.widget<NestPagerDots>(find.byType(NestPagerDots)).index,
+          step,
+          reason: 'tapping the add-row must not change the page',
+        );
+        expect(currentPath(tester), '/value-tour');
+      }
+
+      await disposeApp(tester);
+    });
+
     testWidgets('dots are non-interactive indicators', (tester) async {
       await setUpTestScope();
       await _pumpTour(
@@ -1161,7 +1517,7 @@ void main() {
         textScale: 1,
       );
 
-      final card = _cardWith("Today's quests");
+      final card = _cardWith('Today’s quests');
       final container = tester.widget<Container>(
         find.descendant(of: card, matching: find.byType(Container)).first,
       );
@@ -1313,7 +1669,7 @@ void main() {
           );
 
           final cardW = math.min(310, math.max(240, width - 80)).toDouble();
-          final card = tester.getRect(_cardWith("Today's quests"));
+          final card = tester.getRect(_cardWith('Today’s quests'));
           final cta = tester.getRect(find.byKey(const ValueKey('p02_next')));
           final skip = tester.getRect(find.byKey(const ValueKey('p02_skip')));
           final bar = tester.getRect(find.byType(NestBottomCta));
@@ -1365,7 +1721,7 @@ void main() {
         textScale: 1,
       );
 
-      final card = _cardWith("Today's quests");
+      final card = _cardWith('Today’s quests');
       final cardRect = tester.getRect(card);
       // The card pads its content by s4; every row of that content — head,
       // preview rows, progress bar, dashed add-row — starts on that one edge
@@ -1376,7 +1732,7 @@ void main() {
       expect(rows, findsNWidgets(4));
 
       for (final finder in <Finder>[
-        find.text("Today's quests"),
+        find.text('Today’s quests'),
         rows.first,
         find.descendant(of: card, matching: find.byType(NestProgress)),
         find.ancestor(

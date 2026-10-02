@@ -14,22 +14,20 @@ Blocks: no — P02 ships a feature-private `_TourNav` (60px spec bar: 4 top + 44
 right-aligned Skip built on the shared Material/InkWell action pattern with a 44-min tap target)
 behind a `TODO(P02)` comment and will adopt the shared fix when it lands.
 
-## 2. Compact preview-row variant (matches `.pv-row`)
+## 2. Compact preview-row variant — WITHDRAWN (solved locally)
 
-Need: a compact list-row variant at the P02 pager metrics — no vertical row padding, title 15/20
-w600 single-line ellipsis, subtitle 13/18 single-line ellipsis, internal gap 8, 36px tile (r12,
-icon 22) with the small coin pill — so a row measures 38dp like the design's `.pv-row`
-(`design/html-source/screens/P02-value-tour.html:29-33`, SPACING_SPEC §7). `NestListRow`
-(even `compact: true`) is 60dp: 20px of row padding plus 22px/18px title/subtitle lines, which
-overflows the spec-fixed 400dp pager and truncates every preview title on device
-(`docs/screens/P02/ui/app_light_1.png`, P02-BUG-1/BUG-2).
+The P02-only `ValueTourPreviewRow` now covers the `.pv-row` metrics
+permanently (38dp rows composed from shared `NestIcon`/`NestCoinPill`/tokens,
+plus a `FittedBox(scaleDown)` title slot so design names render in full at
+390dp under any font rendering — ORCHESTRATOR_NOTES 3). No shared change is
+needed for this screen anymore; keeping this note only as provenance. A
+shared compact-row variant remains desirable for the design system in general
+but nothing on P02 blocks on it.
 
-Files: `app/lib/core/design_system/components/nest_list_row.dart` (`compact` branch, ~lines 31-32).
+Files: none (was: `app/lib/core/design_system/components/nest_list_row.dart`).
 
-Blocks: no — P02 ships feature-private `ValueTourPreviewRow`
-(`app/lib/features/onboarding/presentation/widgets/value_tour_preview_row.dart`, P02-only, built
-from shared `NestIcon`/`NestCoinPill`/tokens at the `.pv-row` metrics) and will retire it for the
-shared variant when it lands.
+Blocks: no.
+Blocks: no.
 
 ## 3. Design tokens for the pager metrics
 

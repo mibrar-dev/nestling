@@ -5,8 +5,11 @@
 // then ruled that the tour is a MARKETING ILLUSTRATION: the design's static
 // copy is mandatory, not the database. That voided the BUG-4/BUG-5 "seed
 // match" proofs and created P02-BUG-8; it also confirmed P02-BUG-7 (no
-// truncation) and P02-BUG-9 (design typographic punctuation). Open proofs are
-// marked `skip: true` so `flutter test` stays green until the fixes land.
+// truncation) and P02-BUG-9 (design typographic punctuation).
+//
+// The iteration-3 build fixed BUG-7, BUG-8 and BUG-9, so Stage 3, iteration 3
+// un-skipped all three: this file now runs with ZERO skips and every proof is
+// an enforced regression.
 // Findings, repros and fixes: `docs/screens/P02/6_bugs.md`.
 //
 //   flutter test test/features/onboarding/p02_bugs_test.dart
@@ -15,11 +18,11 @@
 // fixed  P02-BUG-2  card-1 preview rows 60dp vs the design's 38dp → titles cut
 // fixed  P02-BUG-3  short screens (375x667 / 320x568) overflow or lose the copy
 // fixed  P02-BUG-6  system back from /value-tour did not return to /welcome
+// fixed  P02-BUG-7  titles truncated at 390dp (mandatory: render in full)
+// fixed  P02-BUG-8  card subs + date chips are the design's static copy
+// fixed  P02-BUG-9  curly quotes / em dash / curly apostrophes per the design
 // void   P02-BUG-4  "seed subs win" — reversed by ORCHESTRATOR_NOTES 1
 // void   P02-BUG-5  "derived date chip" — reversed by ORCHESTRATOR_NOTES 1
-// OPEN   P02-BUG-7  titles truncate at 390dp (mandatory: render in full)
-// OPEN   P02-BUG-8  card subs + date chips must be the design's static copy
-// OPEN   P02-BUG-9  curly quotes / em dash / curly apostrophes per the design
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -44,7 +47,9 @@ Future<void> _pumpTour(
 }
 
 Finder _cardOne() => find.ancestor(
-  of: find.text("Today's quests"),
+  // U+2019 apostrophe: ORCHESTRATOR_NOTES 2 (mandatory) requires the design's
+  // exact copy punctuation, so the finders must match it exactly.
+  of: find.text('Today’s quests'),
   matching: find.byType(NestCard),
 );
 
@@ -225,43 +230,41 @@ void main() {
     }
 
     await disposeApp(tester);
-  }, skip: true); // P02-BUG-8
+  });
 
-  testWidgets(
-    "P02-BUG-8b both card date chips are the design's 'Sat 4 Oct'",
-    (tester) async {
-      await setUpTestScope();
-      await _pumpTour(tester, surface: const Size(390, 844));
+  testWidgets("P02-BUG-8b both card date chips are the design's 'Sat 4 Oct'", (
+    tester,
+  ) async {
+    await setUpTestScope();
+    await _pumpTour(tester, surface: const Size(390, 844));
 
-      final cardOneChip = tester.widget<NestChip>(
-        find.descendant(of: _cardOne(), matching: find.byType(NestChip)),
-      );
-      expect(
-        cardOneChip.label,
-        'Sat 4 Oct',
-        reason:
-            'ORCHESTRATOR_NOTES 1 (mandatory): the design date "Sat 4 Oct" '
-            'is part of the illustration; the derived payout Saturday '
-            '(currently ${cardOneChip.label}) must go.',
-      );
+    final cardOneChip = tester.widget<NestChip>(
+      find.descendant(of: _cardOne(), matching: find.byType(NestChip)),
+    );
+    expect(
+      cardOneChip.label,
+      'Sat 4 Oct',
+      reason:
+          'ORCHESTRATOR_NOTES 1 (mandatory): the design date "Sat 4 Oct" '
+          'is part of the illustration; the derived payout Saturday '
+          '(currently ${cardOneChip.label}) must go.',
+    );
 
-      await tester.tap(find.byKey(const ValueKey('p02_next')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('p02_next')));
-      await tester.pumpAndSettle();
-      final jarCard = find.ancestor(
-        of: find.text('£4.20').first,
-        matching: find.byType(NestCard),
-      );
-      final jarChip = tester.widget<NestChip>(
-        find.descendant(of: jarCard, matching: find.byType(NestChip)),
-      );
-      expect(jarChip.label, 'Sat 4 Oct', reason: 'card 3 head chip');
+    await tester.tap(find.byKey(const ValueKey('p02_next')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('p02_next')));
+    await tester.pumpAndSettle();
+    final jarCard = find.ancestor(
+      of: find.text('£4.20').first,
+      matching: find.byType(NestCard),
+    );
+    final jarChip = tester.widget<NestChip>(
+      find.descendant(of: jarCard, matching: find.byType(NestChip)),
+    );
+    expect(jarChip.label, 'Sat 4 Oct', reason: 'card 3 head chip');
 
-      await disposeApp(tester);
-    },
-    skip: true, // P02-BUG-8
-  );
+    await disposeApp(tester);
+  });
 
   // ---------------------------------------------------------------------
   // P02-BUG-9 (MAJOR, OPEN) — ORCHESTRATOR_NOTES 2: copy typography must
@@ -295,7 +298,6 @@ void main() {
 
       await disposeApp(tester);
     },
-    skip: true, // P02-BUG-9
   );
 
   // ---------------------------------------------------------------------
@@ -327,44 +329,45 @@ void main() {
   });
 
   // ---------------------------------------------------------------------
-  // P02-BUG-7 (MAJOR, OPEN) — at the design width the longest card-1 title
-  // still ellipsises ("Empty the dishwas…") although the design shows it in
-  // full. Device evidence: ink ends x=234.3 vs the design's x=240.7, both
-  // themes (docs/screens/P02/ui/app_light_2.png, app_dark_2.png).
+  // P02-BUG-7 (MAJOR) — the longest card-1 title ellipsised at the design
+  // width ("Empty the dishwas…"); device evidence: ink ended x=234.3 vs the
+  // design's x=240.7, both themes (docs/screens/P02/ui/app_light_2.png).
+  // ORCHESTRATOR_NOTES 3 is mandatory: render the design's names in full.
+  // Fixed by the iteration-3 build (the title lays out unbounded inside a
+  // FittedBox(scaleDown), so the design width shows every name and no
+  // ellipsis can trip); the 320dp + scale 1.3 half of the note is pinned in
+  // `value_tour_view_test.dart` ("no preview title is truncated at 320dp ×
+  // 1.3").
   // ---------------------------------------------------------------------
-  testWidgets(
-    'P02-BUG-7 card-1 titles render in full at the design width',
-    (tester) async {
-      await setUpTestScope();
-      await _pumpTour(tester, surface: const Size(390, 844));
+  testWidgets('P02-BUG-7 card-1 titles render in full at the design width', (
+    tester,
+  ) async {
+    await setUpTestScope();
+    await _pumpTour(tester, surface: const Size(390, 844));
 
-      for (final title in const <String>[
-        'Empty the dishwasher',
-        'Put the bins out',
-        'Reading – 20 minutes',
-        'Tidy your bedroom',
-      ]) {
-        final paragraph = tester.renderObject<RenderParagraph>(
-          find.text(title),
-        );
-        expect(
-          paragraph.getMaxIntrinsicWidth(double.infinity),
-          lessThanOrEqualTo(paragraph.size.width + 0.5),
-          reason:
-              'ORCHESTRATOR_NOTES 3 (mandatory): the design shows "$title" in '
-              'full, but the screen renders the title with maxLines: 1 + '
-              "ellipsis into a slot that Flutter's Inter overruns by a few px "
-              '(on device row 1 reads "Empty the dishwas…"; the design slot '
-              'ends at x≈245 = pill 253 − 8px gap and the full text needs '
-              '≈246). Match the design title/badge widths (the badge must not '
-              'squeeze the title) and/or scale the title within its slot so '
-              'the design width shows every name in full; at 320dp + scale '
-              '1.3 wrap instead of ellipsising where there is room.',
-        );
-      }
+    for (final title in const <String>[
+      'Empty the dishwasher',
+      'Put the bins out',
+      'Reading – 20 minutes',
+      'Tidy your bedroom',
+    ]) {
+      final paragraph = tester.renderObject<RenderParagraph>(find.text(title));
+      expect(
+        paragraph.getMaxIntrinsicWidth(double.infinity),
+        lessThanOrEqualTo(paragraph.size.width + 0.5),
+        reason:
+            'ORCHESTRATOR_NOTES 3 (mandatory): the design shows "$title" in '
+            'full, but the screen renders the title with maxLines: 1 + '
+            "ellipsis into a slot that Flutter's Inter overruns by a few px "
+            '(on device row 1 reads "Empty the dishwas…"; the design slot '
+            'ends at x≈245 = pill 253 − 8px gap and the full text needs '
+            '≈246). Match the design title/badge widths (the badge must not '
+            'squeeze the title) and/or scale the title within its slot so '
+            'the design width shows every name in full; at 320dp + scale '
+            '1.3 wrap instead of ellipsising where there is room.',
+      );
+    }
 
-      await disposeApp(tester);
-    },
-    skip: true, // P02-BUG-7
-  );
+    await disposeApp(tester);
+  });
 }

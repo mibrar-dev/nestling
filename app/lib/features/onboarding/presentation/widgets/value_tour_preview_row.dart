@@ -12,9 +12,10 @@ import 'package:nestling/core/design_system/design_system.dart';
 /// requested in `docs/screens/P02/SHARED_REQUEST.md` once that lands.
 ///
 /// Metrics (HTML source, logical px): 36 tile, r12, icon 22; title 15/20
-/// w600 single-line ellipsis; sub 13/18 ink2 single-line ellipsis; internal
-/// gap 8; small coin pill; no vertical padding (row height = max(36, 20+18)
-/// = 38). Non-interactive preview (no `onTap`, no button semantics).
+/// w600 in a `FittedBox(scaleDown)` slot (renders in full at 390dp);
+/// sub 13/18 ink2 single-line ellipsis; internal gap 8; small coin pill; no
+/// vertical padding (row height = max(36, 20+18) = 38). Non-interactive
+/// preview (no `onTap`, no button semantics).
 class ValueTourPreviewRow extends StatelessWidget {
   const ValueTourPreviewRow({
     required this.title,
@@ -28,7 +29,8 @@ class ValueTourPreviewRow extends StatelessWidget {
   /// `.pv-name` content.
   final String title;
 
-  /// `.pv-sub` content (`'<child> · <repeat>'` from the seeded quest rows).
+  /// `.pv-sub` content (`'<child> · <repeat>'`, the design's static copy per
+  /// ORCHESTRATOR_NOTES 1).
   final String subtitle;
 
   /// Token icon asset for the 36dp tile.
@@ -78,13 +80,24 @@ class ValueTourPreviewRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Text(
-                title,
-                // `.pv-name` 15/20 w600 (bodySmallStrong is 15/22).
-                style: NestType.bodySmallStrong(color: tokens.ink)
-                    .copyWith(height: 20 / 15),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              // Font-agnostic fit (ORCHESTRATOR_NOTES 3): the title lays out
+              // unbounded and paints scaled to its slot, so the design's
+              // names render in full at 390dp even though Flutter's Inter
+              // draws the longest one a few px wider than the browser (same
+              // `FittedBox(scaleDown)` pattern as the head chips). At 390dp
+              // the scale is ~0.96 (sub-perceptual); available width, never
+              // clipping, decides — no ellipsis can trip.
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  title,
+                  // `.pv-name` 15/20 w600 (bodySmallStrong is 15/22).
+                  style: NestType.bodySmallStrong(color: tokens.ink)
+                      .copyWith(height: 20 / 15),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
               Text(
                 subtitle,

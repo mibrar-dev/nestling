@@ -1,111 +1,131 @@
-# P02 Value tour — test notes (Stage 3, iteration 2)
+# P02 Value tour — test notes (Stage 3, iteration 3)
 
 Route `/value-tour`, feature `onboarding`, parent mode. Tests live in
-`app/test/features/onboarding/` and use the in-memory Drift DB through
-`setUpTestScope()` (`Seed.demo` default, `Seed.empty`/`Seed.fresh`) plus the
-shared `disposeApp()` drain. No screen, bloc, route or design-system code was
-changed by this stage.
+`app/test/features/onboarding/`; the in-memory Drift DB comes from
+`setUpTestScope()` (`Seed.demo` / `Seed.empty` / `Seed.fresh`) and every
+router test ends with `disposeApp()`. No screen, bloc, route or design-system
+code was changed by this stage.
 
-Iteration 2 ran against the **iteration-2 build** (pager back to the spec
-400dp, `ValueTourPreviewRow`, unified scrollable, derived payout chip,
-`PopScope`, 60px `_TourNav`). All 108 pre-existing tests still pass unchanged
-— including the 9 un-skipped proofs in `p02_bugs_test.dart` — so the rebuild
-introduced no regression. This iteration adds the two **new owner rules**
-(BOTTOM EDGE, ALIGNMENT) as enforced tests.
+This iteration ran against the **iteration-3 build**, which implements the
+mandatory `docs/screens/P02/ORCHESTRATOR_NOTES.md` (the tour is a marketing
+*illustration*: design copy and data win over the database, punctuation is
+verbatim, no truncation) and the BOTTOM EDGE / ALIGNMENT owner rules. Those
+build fixes landed in the worktree *during* this stage (the
+`ValueTourPreviewRow` `FittedBox` at 09:31, the repository copy at 09:34), so
+each half was verified as it landed and every gate was re-run against the
+settled tree (no `lib/` write in the 2 minutes before the final run).
 
-## Tests added this stage
+## Tests added / changed this stage
 
-`app/test/features/onboarding/value_tour_view_test.dart` — 51 → **61 tests**
-(10 added). New shared helpers: `_pumpTourForPixels()` (pumps the real app
-inside a `RepaintBoundary`, optional OS bottom inset), `_pixelAt()` (samples
-painted RGBA bytes via `RenderRepaintBoundary.toImage()`), `_rgba()`.
+### `p02_bugs_test.dart` — **zero skips now (was 4)**
 
-### Owner rule — BOTTOM EDGE (4 tests, mandatory)
+The bugs stage had left `P02-BUG-7/8a/8b/9` as `skip: true`. All four are
+fixed by the iteration-3 build, so they are now **enforced, un-skipped
+regressions** and the file runs clean with no skips:
 
-The area below the bottom bar down to the physical screen edge must carry the
-**same surface colour as the bar**; a page-colour strip fails the screen in
-light and dark alike. The 34dp inset case is where a strip would appear, so it
-is the load-bearing case.
+- **BUG-8a** card-1 rows use the design's static copy (Maya · weekly, Leo ·
+  once, Maya · daily, Maya · weekly) — un-skipped, passes.
+- **BUG-8b** both card date chips are the design's static `Sat 4 Oct`
+  (the derived payout Saturday is gone) — un-skipped, passes.
+- **BUG-9** step-1 body and card heads use the design's punctuation (curly
+  quotes, em dash, U+2019) — un-skipped, passes.
+- **BUG-7** card-1 titles render in full at the design width — un-skipped,
+  passes: the title now lays out unbounded inside `FittedBox(scaleDown)`, so
+  no ellipsis can trip. The file header was updated to the true status table.
 
-- `light` / `dark`: **no page-colour strip under the CTA panel** — with a
-  34dp OS inset, asserts the `NestBottomCta` panel's rect ends exactly at the
-  physical bottom (844), then samples the actual painted pixel at y=843 and
-  requires it to equal the `surface` token byte-for-byte. The test also
-  asserts `paper != surface` so the probe provably discriminates and cannot
-  pass vacuously. This is a true painted-pixel check, not a token
-  re-statement: it fails if the Scaffold's paper shows through below the bar.
-- `light` / `dark`: **bar surface is flush with the edge, inset 0** — the
-  no-inset baseline, same pixel assertion.
+Two of these were initially red for a test-side reason, not a screen reason:
+`_cardOne()` still matched the old straight apostrophe (`Today's quests`)
+after the build switched the heads to U+2019, so the BUG-2 and BUG-8b
+finders matched nothing (`Bad state: No element`). The finder was corrected to
+`'Today’s quests'`; BUG-2 (38dp rows) then passed again unchanged. Header and
+BUG-7 comments now record the shipped contract.
 
-Result: the shared `NestBottomCta` (now a `DecoratedBox` wrapping the
-`SafeArea`, `nest_bottom_cta.dart:19-24`) runs the surface to the physical
-edge, so P02 passes in both themes with and without an inset.
+### `value_tour_view_test.dart` — 61 → **71 tests** (10 added)
 
-### Owner rule — ALIGNMENT (6 tests, mandatory)
+- **Every page's copy, character by character (4)** — notes item 2 is
+  mandatory for *all* pages, but only page 1's block exists in the HTML
+  (`:128-129`); pages 2–3 were previously unasserted. Three step tests pin
+  each title and body verbatim, and a fourth asserts the three card heads
+  use U+2019 **and** that no straight-apostrophe variant exists anywhere
+  (no silent ASCII fallback).
+- **The design's copy is byte-identical under every seed (1)** — the direct
+  proof of notes item 1. It renders card 1 under `Seed.demo` (Maya 120 coins,
+  3 approvals, 12 quests), `Seed.empty` (onboarded parent, no children) and
+  `Seed.fresh` (nothing), snapshots rows/subs/coins + chip + progress, and
+  requires all three snapshots to be **one identical string** which is the
+  design's copy. This replaces the iteration-2 "derived chip" test and would
+  catch any re-introduction of a database dependency in the illustration.
+- **No preview title is truncated at 320dp × text scale 1.3 (1)** — the second
+  half of notes item 3, which had no widget proof. Font-agnostic: whether the
+  row scales the title down or lets it wrap, `RenderParagraph
+  .didExceedMaxLines` must be false for all four names.
+- **Two fast taps advance one step, never skip a page (1)** — review 7's fix
+  (`animateToPage(target)` instead of `nextPage`) had no test. Two taps 50ms
+  apart must land on step 2, not step 3, with the CTA still `p02_next`.
+- **Live configuration changes (2)** — `didChangeDependencies` rebuilds the
+  `PageController` when the viewport fraction changes; neither path was
+  covered. A live resize (390 → 320 while on step 3) must keep the step, the
+  dots index, the `Continue` CTA and the clamped card width; a live
+  text-scale change (1.0 → 1.3) must grow the pager 400 → 520dp and keep the
+  step. Both were real risks (a controller disposed mid-flight) and both pass.
+- **The repository’s step copy matches what the view renders (1)** — the
+  build mirrored the design's punctuation into
+  `onboarding_repository_impl.dart` mid-stage, which makes pre-load/loaded
+  parity a real contract. The test reads the repository's three steps through
+  DI and requires each title and body to be the string the view actually
+  renders on that step, then pins all three details literally. Two tests in
+  `onboarding_bloc_test.dart` (which pinned the old straight-quote strings)
+  were realigned to the same source of truth.
+- **The dashed add-rows are labels, not controls (1)** — completes the tap
+  audit: each `.pv-add` row on all three cards announces as plain text, has
+  no `SemanticsAction.tap`, and neither pages nor navigates when tapped.
 
-- `light`/`dark` × **320/390/430dp**: **20px gutters on every edge** — the
-  step-copy title, the `Next` button and the tour card all start at
-  `NestSpacing.padSide` (20); the `Next` button and the `Skip` action both end
-  at `width - 20`; the CTA panel is full-bleed (0 … width) as the
-  bottom-edge rule requires; the card keeps the design's clipped peek
-  (`20 + min(310, max(240, w - 80))`, so its right edge is intentionally *not*
-  the gutter and is asserted against the clamp instead). `takeException()` is
-  null, so no misalignment is being traded for an overflow.
-- **card content shares one inner left edge** — head text, all 4
-  `ValueTourPreviewRow`s, the progress bar and the dashed add-row start on the
-  same `card.left + s4` edge. (Row *titles* sit further in behind their 36dp
-  icon tile, so the row container — not the title text — is the reference;
-  asserting on the title was a wrong-assertion bug in this stage's first
-  draft, caught and fixed before it could mask anything.)
+## Contract tests realigned to the mandatory notes
 
-## Existing coverage re-verified (not duplicated)
-
-- `onboarding_bloc_test.dart` (11 tests) still covers every event/state path of
-  the single-event bloc: initial; loading → loaded on Drift; live
-  multi-emission stream; empty stream; failure; plus repository
-  `watchItems`/`getItems` and `Seed.demo`/`empty`/`fresh` persistence.
-- `p02_bugs_test.dart` (9 proofs) covers P02-BUG-1a/b/c (pager 400dp, no copy
-  clipping, short screens), BUG-2 (38dp rows), BUG-3 (375×667 / 320×568
-  scroll cleanly), BUG-4 (seeded assignee/repeat), BUG-5 (chip weekday vs its
-  own date), BUG-6 (system back → `/welcome`).
-- `p01_bugs_test.dart` BUG-3b covers the kid-mode gate for `/value-tour`.
-- Contract file: 18-combo width × scale × theme matrix, light/dark copy,
-  5-state bloc matrix, `Seed.empty`/`Seed.fresh` routes, PipAvatar rule (4
-  avatars, mochi/sunny, stages [3,1,2,3]), pager geometry + card content,
-  pager controls, navigation (Skip/Continue/Next/dot/row), a11y (group + dots
-  labels, 44dp/52dp tap targets, no icon or kid controls, add-row labels),
-  dark tokens, data independence.
-- Tap-target rules: Skip ≥44, Next/Continue ≥52; no `NestKidButton`, so the
-  ≥56dp kid rule is vacuously satisfied on this parent screen.
+The iteration-2 build had followed the (now superseded) data-over-mocks
+reading, so the contract file pinned the wrong things. Realigned:
+`_expectedPayoutChip()` (derived payout Saturday) → the static `Sat 4 Oct`
+chip, with the `Sat 4 Oct findsNothing` assertion removed; step-1 body straight
+quotes → curly quotes + em dash; the three card heads → U+2019; card-1 subs
+(seed values) → the design's; the card-3 ledger test dropped its
+`formatPounds(…)`/Drift-derived expectations in favour of the design's static
+£3.00 / +£1.20 / £4.20. The now-unused `london_time.dart` import is gone
+(`flutter analyze` clean, no ignores, no weakened analysis options).
 
 ## Results (run by this stage, `app/`)
 
-- `dart format .` — 349 files, 0 changed on final pass.
+- `dart format .` — 354 files, 0 changed on final pass.
 - `flutter analyze` — `No issues found!`
-- `flutter test test/features/onboarding` — **119 passed, 0 failed, 0
-  skipped**.
-- `flutter test` (full suite) — **443 passed, 0 failed, 0 skipped**.
+- `flutter test test/features/onboarding` — **132 passed, 0 failed,
+  0 skipped**.
+- `flutter test` (full suite) — **562 passed, 0 failed, 0 skipped**
+  (was 547 passed + 4 skipped).
 
 ## Bugs found
 
-**None.** No screen code was patched.
+**None open.** All three mandatory-note findings from the bugs stage
+(BUG-7/8/9) are fixed in the screen and now enforced by un-skipped proofs, and
+the suite has zero skips for the first time. The red tests seen mid-stage were
+stale expectations (straight apostrophes and the old repository punctuation,
+both superseded by the notes) and three wrong assertions of my own
+(`snapshots.single` on a 3-element list; a resize assertion on a card the
+`PageView` had disposed; an add-row page-index assumption) — all corrected in
+the test layer; no screen code was touched.
 
-One wrong assertion in this stage's own first draft of the alignment test
-(comparing preview-row *title* text against the card's inner edge, which the
-36dp icon tile legitimately offsets) was corrected before the suite was run;
-it was a test bug, not a screen bug.
+Residual observations (non-blocking, no user impact, no failing test):
 
-Carried observations (unchanged, non-blocking, no user impact):
-
-- The route-level `BlocProvider<OnboardingBloc>`
-  (`app/lib/features/onboarding/onboarding_routes.dart:36-40`) is lazy and the
-  static tour never reads it, so the `OnboardingLoadRequested` added inside
-  `create` does not run on route entry — only on the first read. Pinned
-  deliberately by the "route provides a working bloc" test. P01's plan marks
-  the route "Do not change"; P01/P02 display none of `items`.
+- The lazy route-level `BlocProvider` (`onboarding_routes.dart:36-40`) still
+  only runs its load event on the first read; unchanged since iteration 1 and
+  pinned deliberately. Now that the repository copy is exercised, the parity
+  test above shows what a first read yields.
 - `SHARED_REQUEST.md` items 1–3 (compact nav-bar wide action, shared compact
-  preview-row variant, pager-metric tokens) remain open and non-blocking; P02
-  ships `_TourNav` and `ValueTourPreviewRow` behind `TODO(P02)` until they
-  land.
+  preview-row variant, pager-metric tokens) are still open and non-blocking.
+  Note 3 is now satisfied by a feature-private `FittedBox(scaleDown)` inside
+  `ValueTourPreviewRow`, which is one more reason for shared item 2 to land.
+  Residual trade-off for the orchestrator: at 320dp × 1.3 the title scales to
+  ≈0.74 rather than wrapping, so it renders smaller than the scaled design
+  size — legible and untruncated, but not the "wrap where there is room"
+  wording of the note.
+- Uncommitted build work in the worktree (process item, per the stage rules).
 
 VERDICT: PASS
