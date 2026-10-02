@@ -17,7 +17,7 @@ ev() { echo "$(date +%H:%M:%S) $1 $ID ${2:-}" >> "$EV"; echo "$1 ${2:-}" > "$ST/
 MUSE="opencode-go/muse-spark-1.3-contributor#xhigh"
 BUNNY="opencode-go/space-bunny-free#max"
 DEEP="opencode-go/deepseek-v4.1-flash#max"
-FLEDGE="opencode/fledge-alpha-free"   # owner: free, use alongside the others
+FLEDGE="opencode/fledge-alpha-free#max"   # owner: free, max reasoning, use alongside the others
 
 if [ ! -d "$WT" ]; then
   git -C "$MAIN" worktree add -q "$WT" -b "screen/$ID" main || git -C "$MAIN" worktree add -q "$WT" "screen/$ID"
@@ -50,6 +50,11 @@ stage() { # name model template iter fixes
     ev NUDGE "${name}_i${it} missing_report"
     STATUS_DIR="$ST" WORKDIR="$WT" "$MAIN/tools/agents/run_agent.sh" "${ID}_${name}_i${it}_nudge" "$model" "$nudge" "${sid:--}" "$title"
   fi
+}
+checkpoint() { # commit the worktree so a crash or stop loses at most one stage
+  git -C "$WT" add -A app docs/screens/$ID >/dev/null 2>&1
+  git -C "$WT" reset -q -- app/build >/dev/null 2>&1
+  git -C "$WT" commit -q -m "$ID: checkpoint $1 (iteration ${IT:-?})" >/dev/null 2>&1
 }
 verdict() { # file -> PASS/FAIL
   local f="$WT/docs/screens/$ID/$1"
@@ -84,13 +89,19 @@ for IT in $(seq "$START" "$MAX"); do
   # pick up shared fixes landed on main (orchestrator) before each build
   git -C "$WT" add -A >/dev/null 2>&1; git -C "$WT" commit -q -m "$ID: wip before sync" >/dev/null 2>&1
   git -C "$WT" merge -q --no-edit main >/dev/null 2>&1 || { git -C "$WT" merge --abort >/dev/null 2>&1; ev SYNC_CONFLICT "main"; }
-  stage build "$MUSE" 2_build.md "$IT" "$FIXES"
-  stage test  "$BUNNY" 3_test.md   "$IT"   # owner: Space Bunny max is fast at code
-  stage review "$FLEDGE" 4_review.md "$IT"
-  if [ "$SIM" = "pool" ]; then acquire_sim; ev SIM_ACQUIRED "$HELD_SIM"; SIM_SAVE="$SIM"; SIM="$HELD_SIM"; fi
-  stage ui    "$MUSE"  5_ui.md     "$IT"
-  if [ -n "$HELD_SIM" ]; then release_sim; SIM="$SIM_SAVE"; fi
-  stage bugs  "$DEEP"  6_bugs.md   "$IT"
+  # Smaller chunks in parallel (owner): logic + UI builders, then an integrator.
+  stage build_logic "$MUSE"   2a_build_logic.md "$IT" "$FIXES" & P1=$!
+  stage build_ui    "$FLEDGE" 2b_build_ui.md    "$IT" "$FIXES" & P2=$!
+  wait $P1 $P2
+  stage build "$BUNNY" 2_build.md "$IT" "$FIXES"
+  checkpoint "after build"
+  # The four checks only read the code (test + bugs add their own test files),
+  # so they run in parallel.
+  stage test   "$BUNNY"  3_test.md   "$IT" & Q1=$!
+  stage review "$FLEDGE" 4_review.md "$IT" & Q2=$!
+  stage ui     "$MUSE"   5_ui.md     "$IT" & Q3=$!
+  stage bugs   "$DEEP"   6_bugs.md   "$IT" & Q4=$!
+  wait $Q1 $Q2 $Q3 $Q4
   B=$(verdict 2_build.md); T=$(verdict 3_test.md); R=$(verdict 4_review.md); U=$(verdict 5_ui.md); G=$(verdict 6_bugs.md)
   echo "iter $IT build=$B test=$T review=$R ui=$U bugs=$G" >> "$WT/docs/screens/$ID/LOOP.md"
   git -C "$WT" add -A app docs/screens/$ID >/dev/null 2>&1
