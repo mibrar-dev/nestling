@@ -282,15 +282,10 @@ class PipAvatar extends StatefulWidget {
   /// Artboard drawn for [stage] when [inNest] is false.
   String get artboard => 'Stage$stage';
 
-  /// Static fallback for [style]/[stage]. Mochi ships the approved idle
-  /// pose per stage; styles whose art has not landed yet resolve to a
-  /// clearly-marked placeholder the owning animator replaces.
-  static String fallbackAsset(PipStyle style, int stage) {
-    if (style == PipStyle.mochi) {
-      return 'assets/illustrations/pip_v2/mochi/s${stage}_idle_1.svg';
-    }
-    return 'assets/illustrations/pip_v2/${style.dir}/placeholder.svg';
-  }
+  /// Static fallback for [style]/[stage]: the approved idle pose, recoloured
+  /// to the child's skin by [_PipSkinColorMapper].
+  static String fallbackAsset(PipStyle style, int stage) =>
+      'assets/illustrations/pip_v2/${style.dir}/s${stage}_idle_1.svg';
 
   /// Imperative handle, or `null` if there is no [PipAvatar] ancestor.
   static PipAvatarController? of(BuildContext context) =>
@@ -394,6 +389,7 @@ class _PipAvatarState extends State<PipAvatar> {
       behavior: HitTestBehavior.opaque,
       child: _PipAvatarBody(
         style: widget.style,
+        skin: widget.skin,
         stage: widget.stage,
         inNest: widget.inNest,
         reduceMotion: reduce,
@@ -411,6 +407,7 @@ class _PipAvatarState extends State<PipAvatar> {
 class _PipAvatarBody extends StatelessWidget {
   const _PipAvatarBody({
     required this.style,
+    required this.skin,
     required this.stage,
     required this.inNest,
     required this.reduceMotion,
@@ -419,6 +416,7 @@ class _PipAvatarBody extends StatelessWidget {
   });
 
   final PipStyle style;
+  final PipSkin skin;
   final int stage;
   final bool inNest;
   final bool reduceMotion;
@@ -431,14 +429,14 @@ class _PipAvatarBody extends StatelessWidget {
     // `_avatarLoaderOnce` initialises the native runtime, which must not
     // happen on this path.
     if (reduceMotion || !riveEnabled) {
-      return _PipAvatarSvgFallback(style: style, stage: stage);
+      return _PipAvatarSvgFallback(style: style, skin: skin, stage: stage);
     }
     return FutureBuilder<rive.FileLoader?>(
       future: _avatarLoaderOnce(style.riveAsset),
       builder: (context, snap) {
         final loader = snap.data;
         if (loader == null) {
-          return _PipAvatarSvgFallback(style: style, stage: stage);
+          return _PipAvatarSvgFallback(style: style, skin: skin, stage: stage);
         }
         return rive.RiveWidgetBuilder(
           fileLoader: loader,
@@ -450,10 +448,12 @@ class _PipAvatarBody extends StatelessWidget {
           builder: (context, state) => switch (state) {
             rive.RiveLoading() => _PipAvatarSvgFallback(
               style: style,
+              skin: skin,
               stage: stage,
             ),
             rive.RiveFailed() => _PipAvatarSvgFallback(
               style: style,
+              skin: skin,
               stage: stage,
             ),
             rive.RiveLoaded() => _bindLoaded(state),
@@ -472,17 +472,55 @@ class _PipAvatarBody extends StatelessWidget {
   }
 }
 
-/// Static fallback: the approved idle SVG for Mochi, or the style's
-/// placeholder until its art lands.
+/// Static fallback (reduced motion, tests, loading/failed Rive): the
+/// approved idle pose for the style, recoloured to the child's skin.
 class _PipAvatarSvgFallback extends StatelessWidget {
-  const _PipAvatarSvgFallback({required this.style, required this.stage});
+  const _PipAvatarSvgFallback({
+    required this.style,
+    required this.skin,
+    required this.stage,
+  });
 
   final PipStyle style;
+  final PipSkin skin;
   final int stage;
 
   @override
   Widget build(BuildContext context) => SvgPicture.asset(
     PipAvatar.fallbackAsset(style, stage),
+    colorMapper: _PipSkinColorMapper(skin),
     placeholderBuilder: (context) => const SizedBox.shrink(),
   );
+}
+
+/// Maps the art's sunny palette (body, shading, belly) to [skin]. All three
+/// styles are drawn in the same sunny palette, so one mapping covers them.
+class _PipSkinColorMapper extends ColorMapper {
+  const _PipSkinColorMapper(this.skin);
+
+  final PipSkin skin;
+
+  static const _body = Color(0xFFFFD93D);
+  static const _belly = Color(0xFFFFF1B8);
+  // ARGB ints: Color overrides ==, so it can't sit in a const set.
+  static const _shading = <int>{0xFFE8A800, 0xFFE9AE00, 0xFFF2A900, 0xFFF2B705};
+
+  @override
+  Color substitute(
+    String? id,
+    String elementName,
+    String attributeName,
+    Color color,
+  ) {
+    if (skin == PipSkin.sunny) return color;
+    final opaque = color.withValues(alpha: 1);
+    final mapped = opaque == _body
+        ? skin.body
+        : opaque == _belly
+        ? skin.belly
+        : _shading.contains(opaque.toARGB32())
+        ? skin.dark
+        : null;
+    return mapped == null ? color : mapped.withValues(alpha: color.a);
+  }
 }
