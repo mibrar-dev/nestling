@@ -12,14 +12,31 @@
 
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/london_time.dart';
 import 'package:nestling/core/data/pin_hash.dart';
 
 abstract final class Seed {
   static const String familyId = 'fam1';
 
-  // Sat 3 Oct 2026 (BST = UTC+1).
-  static DateTime utc(int month, int day, int hour, [int minute = 0]) =>
-      DateTime.utc(2026, month, day, hour, minute);
+  /// The demo story is written as if "today" were Sat 3 Oct 2026. Every seed
+  /// date is shifted so that story day lands on [anchorDay] (default: today
+  /// in Europe/London), so "done today" and "this week" stay meaningful on
+  /// any date. Tests pin [anchorOverride] to 2026-10-03 for determinism.
+  static DateTime? anchorOverride;
+
+  static final DateTime _storyDay = DateTime.utc(2026, 10, 3);
+
+  static DateTime get anchorDay {
+    final override = anchorOverride;
+    if (override != null) return override;
+    final london = toLondon(DateTime.now().toUtc());
+    return DateTime.utc(london.year, london.month, london.day);
+  }
+
+  static DateTime utc(int month, int day, int hour, [int minute = 0]) {
+    final story = DateTime.utc(2026, month, day, hour, minute);
+    return anchorDay.add(story.difference(_storyDay));
+  }
 
   static Future<void> demo(AppDatabase db) async {
     await db.clearAll();

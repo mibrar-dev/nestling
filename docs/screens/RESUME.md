@@ -27,3 +27,9 @@ Models (OpenCode Go): muse `opencode-go/muse-spark-1.3-contributor#xhigh`, bunny
 
 ## Orchestrator note
 Launch every agent / loop / wave job with Bash `run_in_background: true` AND `timeout: 7200000` (2 h max). The default background limit is 30 min and kills long agents (happened to the foundation run at 22:32). Waves longer than 2 h: run them in a detached process (`nohup … &`) and rely on the Monitor (tools/agents/watch.sh) for events.
+
+## Progress (2026-10-02 02:13)
+- MERGED to main: foundation (69a678d), P01 Welcome (d7374f5, 3 iterations).
+- Running: pilot wave (P08, K03 — loops started 23:18, pid in docs/screens/_status/run), main wave for the other 27 (`tools/screens/run_wave.sh P02 … K03b`, log docs/screens/_status/wave_main.log).
+- After a restart: re-run `run_wave.sh` with the IDs that are not yet merged; a screen whose worktree has FIXES_<n>.md can resume with `START_IT=<n+1> bash tools/screens/loop.sh <ID> <SIM>`.
+- Orchestrator merges a screen only after READY + own check (scope of `git diff main...screen/<ID>`, analyze, full tests, cmp_*.png).
