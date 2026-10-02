@@ -1,4 +1,8 @@
-# Shared request — P05 Add children nav bar
+# Shared request — P05 Add children nav bar — LANDED on main
+
+> Status (iteration 2): landed — `nest_nav_bar.dart` now returns
+> `SizedBox.shrink()` for a null/empty compact title and the bar is 60 px.
+> P05 dropped its `title: ''` + `TODO(P05)` workaround and passes no title.
 
 Need: `NestNavBar` in compact mode with no title crashes. When `title` is
 null the middle `Expanded` builds a `Spacer` (itself an `Expanded`) inside
@@ -36,7 +40,13 @@ Blocks: no — P05 uses `go` throughout (`go` to `/privacy`, `go` to
 ---
 
 # Shared request — P05 Add children `NestChip` stretches to the full row width
-# (BLOCKS the P05 UI gate)
+# (P05 UI gate was blocked; P05-local workaround landed in iteration 2)
+
+> Status (iteration 2): the shared component is unchanged, so P05 wraps each
+> chip in `IntrinsicWidth` (`add_child_form_card.dart`) — one row in
+> production (real Nunito), ≤2 rows under the wider test fallback font, no
+> overflow at 320/1.3. The component-level fix below is still open for every
+> other chip-row screen.
 
 Need: an **interactive `NestChip` inside a `Wrap` fills the whole run width**,
 so any multi-chip row collapses into one chip per line, centred, and the form
@@ -111,7 +121,10 @@ row. Every screen with a chip row hits this (today
 
 ---
 
-# Shared request — P05 compact `NestNavBar` is 44 px, the spec says 52 px
+# Shared request — P05 compact `NestNavBar` is 44 px, the spec says 52 px — LANDED on main
+
+> Status (iteration 2): landed — compact nav is now 60 px (header −16 px on
+> P03–P05). P05 consumes the component as-is.
 
 Need: `NestNavBar` compact sets `constraints: BoxConstraints(minHeight:
 NestDevice.tapParent)` (44), so the whole bar is 44 tall — measured on P05:

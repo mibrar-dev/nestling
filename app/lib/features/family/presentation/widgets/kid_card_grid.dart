@@ -3,7 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/family/domain/entities/family_child.dart';
 import 'package:nestling/features/family/family_routes.dart';
-import 'package:nestling/features/family/presentation/bloc/family_bloc.dart';
+import 'package:nestling/features/family/presentation/widgets/child_display.dart';
 
 /// P05 already-added children: a 2-up grid that hugs its content.
 ///
@@ -68,7 +68,8 @@ class _KidCard extends StatelessWidget {
               NestSpacing.gap10,
               NestSpacing.gap10,
             ),
-            child: Center(
+            child: Align(
+              alignment: Alignment.topCenter,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -99,6 +100,8 @@ class _KidCard extends StatelessWidget {
               ),
             ),
           ),
+          // Mirrors `.edit { top: 1px; right: 1px }` — NestSpacing has no
+          // 1 px step, so the design value stands with this note.
           Positioned(
             top: 1,
             right: 1,

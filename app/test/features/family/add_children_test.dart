@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
@@ -19,6 +20,7 @@ import 'package:nestling/features/family/presentation/bloc/family_event.dart';
 import 'package:nestling/features/family/presentation/bloc/family_state.dart';
 import 'package:nestling/features/family/presentation/views/add_children_view.dart';
 import 'package:nestling/features/family/presentation/widgets/add_child_form_card.dart';
+import 'package:nestling/features/family/presentation/widgets/child_display.dart';
 import 'package:nestling/features/family/presentation/widgets/kid_card_grid.dart';
 
 import '../../test_scope.dart';
@@ -98,6 +100,33 @@ Future<void> _pumpAddChildrenView(
   await tester.pump();
 }
 
+/// Pumps [AddChildrenView] over [bloc] under a minimal router, so the CTA's
+/// `go` calls resolve (no GetIt, no shared scope) while the repository stays
+/// under the test's control.
+Future<void> _pumpAppView(WidgetTester tester, FamilyBloc bloc) async {
+  final router = GoRouter(
+    initialLocation: '/add-children',
+    routes: <RouteBase>[
+      GoRoute(
+        path: '/add-children',
+        builder: (_, _) => BlocProvider<FamilyBloc>.value(
+          value: bloc,
+          child: const AddChildrenView(),
+        ),
+      ),
+      GoRoute(
+        path: '/pocket-money-setup',
+        builder: (_, _) => const Scaffold(body: Text('P06 placeholder')),
+      ),
+    ],
+  );
+  await tester.pumpWidget(
+    MaterialApp.router(routerConfig: router, theme: NestTheme.light()),
+  );
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 200));
+}
+
 /// The design tokens resolved under the currently pumped subtree.
 NestTokens _tokensOf(WidgetTester tester, Finder finder) =>
     Theme.of(tester.element(finder)).extension<NestTokens>()!;
@@ -113,20 +142,6 @@ Future<void> _resize(WidgetTester tester, double width, double scale) async {
 
 void main() {
   group('FamilyBloc roster', () {
-    blocTest<FamilyBloc, FamilyState>(
-      'children event emits the roster from the repository stream',
-      build: () {
-        final repo = _MockFamilyRepository();
-        when(repo.watchChildren).thenAnswer((_) => Stream.value(_kids));
-        return FamilyBloc(repository: repo);
-      },
-      act: (bloc) => bloc.add(const FamilyChildrenRequested()),
-      expect: () => const <FamilyState>[
-        FamilyState(status: FamilyStatus.loading),
-        FamilyState(status: FamilyStatus.loaded, children: _kids),
-      ],
-    );
-
     blocTest<FamilyBloc, FamilyState>(
       'load event emits members and children together',
       build: () {
@@ -254,7 +269,11 @@ void main() {
           draftAvatarColour: 'sky',
           saveInProgress: true,
         ),
-        FamilyState(draftAgeBand: '4-6', draftAvatarColour: 'sky'),
+        FamilyState(
+          draftAgeBand: '4-6',
+          draftAvatarColour: 'sky',
+          lastSavedNickname: 'Ollie',
+        ),
       ],
       verify: (bloc) {
         // The bloc under test owns the mock; fetch it back via closure.
@@ -434,26 +453,6 @@ void main() {
   });
 
   group('FamilyBloc roster streams', () {
-    blocTest<FamilyBloc, FamilyState>(
-      'the children event reports a stream failure',
-      build: () {
-        final repo = _MockFamilyRepository();
-        when(repo.watchChildren).thenAnswer(
-          (_) => Stream<List<FamilyChild>>.error(Exception('offline')),
-        );
-        return FamilyBloc(repository: repo);
-      },
-      act: (bloc) => bloc.add(const FamilyChildrenRequested()),
-      expect: () => [
-        const FamilyState(status: FamilyStatus.loading),
-        predicate<FamilyState>(
-          (s) =>
-              s.status == FamilyStatus.failure &&
-              (s.errorMessage ?? '').contains('offline'),
-        ),
-      ],
-    );
-
     test('a later roster emission replaces the cards', () async {
       final controller = StreamController<List<FamilyChild>>();
       final repo = _MockFamilyRepository();
@@ -497,7 +496,7 @@ void main() {
       act: (bloc) => bloc.add(FamilyAddChildRequested(onSaved: () {})),
       expect: () => [
         FamilyState(draftNickname: 'A' * 24, saveInProgress: true),
-        const FamilyState(),
+        FamilyState(lastSavedNickname: 'A' * 24),
       ],
     );
 
@@ -1040,39 +1039,41 @@ void main() {
   // Owner rule: the area under a bottom bar keeps the bar's surface colour.
   group('P05 bottom edge (owner rule)', () {
     for (final theme in <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
-      testWidgets('the CTA panel runs to the physical edge in $theme', (
-        tester,
-      ) async {
-        await setUpTestScope();
-        await pumpAppRoute(tester, '/add-children', theme: theme);
+      for (final width in <double>[320, 390, 430]) {
+        testWidgets('the CTA panel runs to the physical edge in $theme at '
+            '${width.toInt()}px', (tester) async {
+          await setUpTestScope();
+          await pumpAppRoute(tester, '/add-children', theme: theme);
+          await _resize(tester, width, 1);
 
-        final view = tester.view.physicalSize / tester.view.devicePixelRatio;
-        final cta = tester.getRect(find.byType(NestBottomCta));
-        // No strip below the bar: the panel's bottom edge is the screen edge.
-        expect(cta.bottom, view.height);
-        expect(cta.left, 0.0);
-        expect(cta.right, view.width);
+          final view = tester.view.physicalSize / tester.view.devicePixelRatio;
+          final cta = tester.getRect(find.byType(NestBottomCta));
+          // No strip below the bar: the panel's bottom edge is the screen edge.
+          expect(cta.bottom, view.height);
+          expect(cta.left, 0);
+          expect(cta.right, view.width);
 
-        final panel = tester.widget<DecoratedBox>(
-          find
-              .descendant(
-                of: find.byType(NestBottomCta),
-                matching: find.byType(DecoratedBox),
-              )
-              .first,
-        );
-        final colour = (panel.decoration as BoxDecoration).color!;
-        final tokens = _tokensOf(tester, find.byType(NestBottomCta));
-        final scaffold = tester.widget<Scaffold>(find.byType(Scaffold).first);
-        // The panel must carry the surface token, and it must differ from the
-        // page tint so a short bar would be visibly wrong, not invisible.
-        expect(colour, tokens.surface);
-        expect(scaffold.backgroundColor, tokens.paper);
-        expect(colour, isNot(tokens.paper));
+          final panel = tester.widget<DecoratedBox>(
+            find
+                .descendant(
+                  of: find.byType(NestBottomCta),
+                  matching: find.byType(DecoratedBox),
+                )
+                .first,
+          );
+          final colour = (panel.decoration as BoxDecoration).color!;
+          final tokens = _tokensOf(tester, find.byType(NestBottomCta));
+          final scaffold = tester.widget<Scaffold>(find.byType(Scaffold).first);
+          // The panel must carry the surface token, and it must differ from the
+          // page tint so a short bar would be visibly wrong, not invisible.
+          expect(colour, tokens.surface);
+          expect(scaffold.backgroundColor, tokens.paper);
+          expect(colour, isNot(tokens.paper));
 
-        expect(tester.takeException(), isNull);
-        await disposeApp(tester);
-      });
+          expect(tester.takeException(), isNull);
+          await disposeApp(tester);
+        });
+      }
     }
   });
 
@@ -1131,9 +1132,84 @@ void main() {
       expect(tester.takeException(), isNull);
       await disposeApp(tester);
     });
+
+    testWidgets('the failure panel Try again button is a 44+ target', (
+      tester,
+    ) async {
+      final repo = _MockFamilyRepository();
+      when(repo.watchItems).thenAnswer(
+        (_) => Stream<List<FamilyMember>>.error(Exception('offline')),
+      );
+      when(repo.watchChildren).thenAnswer((_) => Stream.value(_kids));
+      final bloc = FamilyBloc(repository: repo)
+        ..add(const FamilyLoadRequested());
+
+      await _pumpAddChildrenView(tester, bloc);
+      await tester.pump();
+
+      final retry = find.byType(NestButton);
+      expect(retry, findsOneWidget);
+      final size = tester.getSize(retry);
+      expect(size.width, greaterThanOrEqualTo(NestDevice.tapParent));
+      expect(size.height, greaterThanOrEqualTo(NestDevice.tapParent));
+      expect(tester.takeException(), isNull);
+    });
   });
 
   group('P05 semantics', () {
+    testWidgets('the whole form is interactive in dark mode', (tester) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/add-children', theme: ThemeMode.dark);
+
+      // Chips select in dark too (design: one row, 7–9 selected by default).
+      await tester.tap(find.text('13+'));
+      await tester.pump();
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is NestChip && w.label == '13+' && w.selected,
+        ),
+        findsOneWidget,
+      );
+
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('swatch-coin')),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('swatch-coin')));
+      await tester.pump();
+      expect(
+        tester
+            .widget<Semantics>(find.byKey(const Key('swatch-coin')))
+            .properties
+            .selected,
+        isTrue,
+      );
+
+      // The selection ring is the ink token (light in dark mode), exactly like
+      // the dark design's `box-shadow: 0 0 0 3px var(--ink)`.
+      final tokens = _tokensOf(tester, find.byType(NestBottomCta));
+      expect(tokens.isDark, isTrue);
+      final shadows = tester
+          .widgetList<Container>(
+            find.descendant(
+              of: find.byKey(const Key('swatch-coin')),
+              matching: find.byType(Container),
+            ),
+          )
+          .map((c) => c.decoration)
+          .whereType<BoxDecoration>()
+          .expand((d) => d.boxShadow ?? const <BoxShadow>[])
+          .toList();
+      expect(shadows, hasLength(1));
+      expect(shadows.single.color, tokens.ink);
+      expect(shadows.single.spreadRadius, NestSpacing.gap3);
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
     testWidgets('icon buttons are labelled and act on an accessibility tap', (
       tester,
     ) async {
@@ -1514,6 +1590,569 @@ void main() {
         expect(currentPath(tester), '/add-children');
       }
 
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+  });
+
+  // Orchestrator notes (mandatory, iteration 2): the UI check runs this screen
+  // with SEED=onboarding_kids, so the seeded pair must reach the grid from the
+  // database without a redirect, and the age chips must flow in a row.
+  group('P05 onboarding_kids seed (orchestrator-mandated UI state)', () {
+    Future<AppDatabase> seedOnboardingKids() async {
+      final db = await setUpTestScope(seedDemo: false);
+      await Seed.onboardingKids(db);
+      await GetIt.instance<AppSession>().refresh();
+      return db;
+    }
+
+    testWidgets('renders Maya and Leo from the database, still on P05', (
+      tester,
+    ) async {
+      await seedOnboardingKids();
+      await pumpAppRoute(tester, '/add-children');
+
+      // onboarding_complete = false must not bounce the funnel to /welcome:
+      // /add-children is in the router's onboarding allow-list.
+      expect(currentPath(tester), '/add-children');
+      expect(find.byType(KidCardGrid), findsOneWidget);
+      expect(find.text('Maya'), findsOneWidget);
+      expect(find.text('Age 7\u20139'), findsOneWidget);
+      expect(find.text('Leo'), findsOneWidget);
+      expect(find.text('Age 4\u20136'), findsOneWidget);
+      expect(find.text('Add a child'), findsOneWidget);
+      expect(find.text('Continue'), findsOneWidget);
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    testWidgets('each card takes its avatar colour from its own row', (
+      tester,
+    ) async {
+      await seedOnboardingKids();
+      await pumpAppRoute(tester, '/add-children');
+
+      NestAvatarColor colourOf(String nickname) => tester
+          .widget<NestAvatar>(
+            find.descendant(
+              of: find.ancestor(
+                of: find.text(nickname),
+                matching: find.byType(NestCard),
+              ),
+              matching: find.byType(NestAvatar),
+            ),
+          )
+          .color;
+
+      expect(colourOf('Maya'), NestAvatarColor.lilac);
+      expect(colourOf('Leo'), NestAvatarColor.peach);
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    testWidgets('saving from this seed appends to the roster and keeps both', (
+      tester,
+    ) async {
+      final db = await seedOnboardingKids();
+      await pumpAppRoute(tester, '/add-children');
+
+      await tester.enterText(find.byKey(const Key('nicknameField')), 'Ollie');
+      await tester.pump();
+      await tester.tap(find.text('Add another child'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      final rows = await db.select(db.children).get();
+      expect(
+        rows.map((r) => r.nickname),
+        containsAll(<String>['Maya', 'Leo', 'Ollie']),
+      );
+      expect(find.text('Ollie'), findsOneWidget);
+      expect(currentPath(tester), '/add-children');
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+  });
+
+  group('P05 age chip row (mandatory orchestrator item 1)', () {
+    testWidgets('chips hug their pills and flow left-aligned from the gutter', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/add-children');
+
+      // The form card's content left edge (card 20 + padding 14).
+      final contentLeft =
+          tester.getRect(find.byType(NestCard).last).left + NestSpacing.gap14;
+
+      final boxes = <String, Rect>{
+        for (final band in AddChildFormCard.ageBands)
+          band: tester.getRect(find.byKey(Key('ageChip-$band'))),
+      };
+
+      // No chip may claim the whole Wrap run (the P05-BUG-1 signature).
+      for (final entry in boxes.entries) {
+        expect(
+          entry.value.width,
+          lessThan(322),
+          reason: '${entry.key} hugs its pill, not the run',
+        );
+        expect(
+          entry.value.left,
+          greaterThanOrEqualTo(contentLeft),
+          reason: '${entry.key} stays inside the card gutter',
+        );
+      }
+
+      // Left-aligned like `.chip-row`: the first chip starts exactly on the
+      // content edge, never centred in the run.
+      final lefts = boxes.values.map((r) => r.left).toList();
+      expect(lefts.reduce((a, b) => a < b ? a : b), contentLeft);
+
+      // Chips that share a row are 8 px apart (design `.chip-row { gap: 8 }`).
+      final sorted = boxes.values.toList()
+        ..sort((a, b) => a.left.compareTo(b.left));
+      for (var i = 1; i < sorted.length; i++) {
+        if ((sorted[i].top - sorted[i - 1].top).abs() < 1) {
+          expect(
+            sorted[i].left - sorted[i - 1].right,
+            NestSpacing.s2,
+            reason: 'same-row gap is 8 px',
+          );
+        }
+      }
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    for (final (width, scale) in <(double, double)>[
+      (320, 1),
+      (320, 1.3),
+      (430, 1.3),
+    ]) {
+      testWidgets('no chip overflows the card at $width / $scale\u00d7', (
+        tester,
+      ) async {
+        await setUpTestScope();
+        await pumpAppRoute(tester, '/add-children');
+        await _resize(tester, width, scale);
+
+        final cardRight =
+            tester.getRect(find.byType(NestCard).last).right -
+            NestSpacing.gap14;
+        for (final band in AddChildFormCard.ageBands) {
+          final box = tester.getRect(find.byKey(Key('ageChip-$band')));
+          expect(
+            box.right,
+            lessThanOrEqualTo(cardRight + 0.01),
+            reason: 'chip $band inside the content box',
+          );
+          expect(
+            box.width,
+            lessThanOrEqualTo(cardRight - 20),
+            reason: 'chip $band is not run-wide',
+          );
+        }
+        expect(tester.takeException(), isNull);
+
+        await disposeApp(tester);
+      });
+    }
+  });
+
+  group('P05 BUG-5 conditional clear', () {
+    test('lastSavedNickname is recorded on save and kept by copyWith', () {
+      const none = FamilyState();
+      expect(none.lastSavedNickname, isNull);
+
+      final saved = none.copyWith(lastSavedNickname: 'Ollie');
+      expect(saved.lastSavedNickname, 'Ollie');
+      expect(saved.copyWith(draftAgeBand: '4-6').lastSavedNickname, 'Ollie');
+      expect(saved, isNot(none), reason: 'props include lastSavedNickname');
+    });
+
+    test('typing while the save is in flight keeps the newer draft', () async {
+      final gate = Completer<void>();
+      final repo = _MockFamilyRepository();
+      when(repo.watchItems).thenAnswer((_) => Stream.value(_members));
+      when(repo.watchChildren).thenAnswer((_) => Stream.value(_kids));
+      when(
+        () => repo.addChild(
+          nickname: any(named: 'nickname'),
+          ageBand: any(named: 'ageBand'),
+          avatarColour: any(named: 'avatarColour'),
+        ),
+      ).thenAnswer((_) => gate.future);
+      final bloc = FamilyBloc(repository: repo)
+        ..add(const FamilyDraftChanged(nickname: 'Ollie'))
+        ..add(FamilyAddChildRequested(onSaved: () {}));
+
+      await bloc.stream.firstWhere((s) => s.saveInProgress);
+      // The parent starts typing the next child while the insert runs.
+      bloc.add(const FamilyDraftChanged(nickname: 'Ada'));
+      await bloc.stream.firstWhere((s) => s.draftNickname == 'Ada');
+      gate.complete();
+      await bloc.stream.firstWhere((s) => !s.saveInProgress);
+
+      expect(
+        bloc.state.draftNickname,
+        'Ada',
+        reason: 'the newer draft belongs to the next child',
+      );
+      expect(bloc.state.lastSavedNickname, 'Ollie');
+      expect(bloc.state.nicknameError, isNull);
+
+      await bloc.close();
+    });
+
+    test('an untouched draft still clears after the save', () async {
+      final repo = _MockFamilyRepository();
+      when(
+        () => repo.addChild(
+          nickname: any(named: 'nickname'),
+          ageBand: any(named: 'ageBand'),
+          avatarColour: any(named: 'avatarColour'),
+        ),
+      ).thenAnswer((_) async {});
+      final bloc = FamilyBloc(repository: repo)
+        ..add(const FamilyDraftChanged(nickname: 'Ollie'))
+        ..add(FamilyAddChildRequested(onSaved: () {}));
+      await bloc.stream.firstWhere((s) => s.lastSavedNickname == 'Ollie');
+
+      expect(bloc.state.draftNickname, isEmpty);
+      expect(bloc.state.lastSavedNickname, 'Ollie');
+
+      await bloc.close();
+    });
+
+    testWidgets('the field keeps mid-save typing but clears a plain save', (
+      tester,
+    ) async {
+      final gate = Completer<void>();
+      final repo = _MockFamilyRepository();
+      when(repo.watchItems).thenAnswer((_) => Stream.value(_members));
+      when(repo.watchChildren).thenAnswer((_) => Stream.value(_kids));
+      when(
+        () => repo.addChild(
+          nickname: any(named: 'nickname'),
+          ageBand: any(named: 'ageBand'),
+          avatarColour: any(named: 'avatarColour'),
+        ),
+      ).thenAnswer((_) => gate.future);
+      final bloc = FamilyBloc(repository: repo)
+        ..add(const FamilyLoadRequested());
+
+      await _pumpAddChildrenView(tester, bloc);
+      await tester.enterText(find.byKey(const Key('nicknameField')), 'Ollie');
+      await tester.pump();
+      await tester.tap(find.text('Add another child'));
+      await tester.pump();
+      await tester.enterText(find.byKey(const Key('nicknameField')), 'Ada');
+      await tester.pump();
+      gate.complete();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(
+        tester.widget<TextField>(find.byType(TextField).first).controller?.text,
+        'Ada',
+      );
+
+      // Next child: a save with no mid-save typing clears the field again.
+      final second = Completer<void>();
+      when(
+        () => repo.addChild(
+          nickname: any(named: 'nickname'),
+          ageBand: any(named: 'ageBand'),
+          avatarColour: any(named: 'avatarColour'),
+        ),
+      ).thenAnswer((_) => second.future);
+      await tester.tap(find.text('Add another child'));
+      await tester.pump();
+      second.complete();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(
+        tester.widget<TextField>(find.byType(TextField).first).controller?.text,
+        isEmpty,
+      );
+
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('P05 BUG-2 guard interactions', () {
+    testWidgets('Continue during an in-flight save is inert, then works', (
+      tester,
+    ) async {
+      final gate = Completer<void>();
+      final repo = _MockFamilyRepository();
+      when(repo.watchItems).thenAnswer((_) => Stream.value(_members));
+      when(repo.watchChildren).thenAnswer((_) => Stream.value(_kids));
+      var calls = 0;
+      when(
+        () => repo.addChild(
+          nickname: any(named: 'nickname'),
+          ageBand: any(named: 'ageBand'),
+          avatarColour: any(named: 'avatarColour'),
+        ),
+      ).thenAnswer((_) {
+        calls++;
+        return gate.future;
+      });
+      final bloc = FamilyBloc(repository: repo)
+        ..add(const FamilyLoadRequested());
+
+      await _pumpAppView(tester, bloc);
+      await tester.enterText(find.byKey(const Key('nicknameField')), 'Ollie');
+      await tester.pump();
+      await tester.tap(find.text('Add another child'));
+      await tester.tap(find.text('Continue'));
+      await tester.pump();
+
+      // The guard drops the second request outright: one insert, no
+      // navigation, no inline error.
+      expect(calls, 1);
+      expect(currentPath(tester), '/add-children');
+      expect(find.text('Give them a nickname'), findsNothing);
+
+      gate.complete();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // The funnel stays usable once the save settles.
+      await tester.tap(find.text('Continue'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(currentPath(tester), '/pocket-money-setup');
+      expect(
+        calls,
+        1,
+        reason: 'the field cleared on save, so Continue only navigates',
+      );
+
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('tapping the selected chip keeps it selected', (tester) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/add-children');
+
+      for (var i = 0; i < 2; i++) {
+        await tester.tap(find.text('7\u20139'));
+        await tester.pump();
+        expect(
+          find.byWidgetPredicate(
+            (w) => w is NestChip && w.label == '7\u20139' && w.selected,
+          ),
+          findsOneWidget,
+        );
+      }
+      expect(currentPath(tester), '/add-children');
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    testWidgets('a successful add-another restores focus to the nickname', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/add-children');
+
+      await tester.enterText(find.byKey(const Key('nicknameField')), 'Ollie');
+      await tester.pump();
+      await tester.tap(find.text('Add another child'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      final field = tester.widget<TextField>(find.byType(TextField).first);
+      expect(
+        field.focusNode?.hasFocus,
+        isTrue,
+        reason: 'the next child can be typed straight away',
+      );
+      expect(field.controller?.text, isEmpty);
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+  });
+
+  group('P05 failure recovery', () {
+    testWidgets('Try again re-subscribes once and renders the roster', (
+      tester,
+    ) async {
+      final repo = _MockFamilyRepository();
+      var subscribes = 0;
+      when(repo.watchItems).thenAnswer((_) {
+        subscribes++;
+        return subscribes == 1
+            ? Stream<List<FamilyMember>>.error(Exception('offline'))
+            : Stream.value(_members);
+      });
+      when(repo.watchChildren).thenAnswer((_) => Stream.value(_kids));
+      final bloc = FamilyBloc(repository: repo)
+        ..add(const FamilyLoadRequested());
+
+      await _pumpAddChildrenView(tester, bloc);
+      await tester.pump();
+      expect(find.text('Exception: offline'), findsOneWidget);
+
+      await tester.tap(find.text('Try again'));
+      await tester.pump();
+      await tester.pump();
+      expect(subscribes, 2, reason: 'exactly one fresh subscription');
+      expect(find.text('Maya'), findsOneWidget);
+      expect(find.text('Try again'), findsNothing);
+
+      // A second recovery press is impossible: the panel is gone.
+      expect(find.text('Try again'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the roster and the form survive a late roster emission', (
+      tester,
+    ) async {
+      final controller = StreamController<List<FamilyChild>>();
+      final repo = _MockFamilyRepository();
+      when(repo.watchItems).thenAnswer((_) => Stream.value(_members));
+      when(repo.watchChildren).thenAnswer((_) => controller.stream);
+      final bloc = FamilyBloc(repository: repo)
+        ..add(const FamilyLoadRequested());
+
+      await _pumpAddChildrenView(tester, bloc);
+      controller.add(_kids);
+      await tester.pump();
+      expect(find.text('Maya'), findsOneWidget);
+
+      controller.add(const <FamilyChild>[]);
+      await tester.pump();
+      expect(
+        find.byType(KidCardGrid),
+        findsNothing,
+        reason: 'every child removed collapses the grid',
+      );
+      expect(find.text('Add a child'), findsOneWidget);
+
+      await controller.close();
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('P05 field robustness', () {
+    testWidgets('a 24-character nickname ellipsizes in the narrowest column', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/add-children');
+      await _resize(tester, 320, 1.3);
+
+      // 24 chars is the bloc's hard limit, so this is the widest card text the
+      // screen can ever show.
+      const longest = 'Bartholomew Woosencrat';
+      await tester.enterText(find.byKey(const Key('nicknameField')), longest);
+      await tester.pump();
+      await tester.tap(find.text('Add another child'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text(longest), findsOneWidget);
+      // Nickname order puts "Bartholomew…" first, so find its own card rather
+      // than assuming an index.
+      final card = find.ancestor(
+        of: find.text(longest),
+        matching: find.byType(NestCard),
+      );
+      final name = tester.getRect(find.text(longest));
+      expect(
+        tester.getRect(card).contains(name.topLeft),
+        isTrue,
+        reason: 'the ellipsised name stays inside its card',
+      );
+      expect(
+        tester.getRect(card).contains(name.bottomRight),
+        isTrue,
+        reason: 'the ellipsised name never overflows its column',
+      );
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    for (final (width, scale) in <(double, double)>[(320, 1.3), (390, 1.3)]) {
+      testWidgets('the inline error keeps the CTA on screen at $width / '
+          '$scale\u00d7', (tester) async {
+        await setUpTestScope();
+        await pumpAppRoute(tester, '/add-children');
+        await _resize(tester, width, scale);
+
+        await tester.tap(find.text('Add another child'));
+        await tester.pump();
+
+        expect(find.text('Give them a nickname'), findsOneWidget);
+        final cta = tester.getRect(find.byType(NestBottomCta));
+        final view = tester.view.physicalSize / tester.view.devicePixelRatio;
+        expect(cta.bottom, view.height, reason: 'owner bottom-edge rule');
+        expect(find.text('Continue'), findsOneWidget);
+        expect(find.text('Add another child'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+
+        await disposeApp(tester);
+      });
+    }
+
+    testWidgets('the field is not auto-focused on open (design ring is a mock '
+        'state)', (tester) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/add-children');
+
+      final field = tester.widget<TextField>(find.byType(TextField).first);
+      expect(field.focusNode?.hasFocus, isFalse);
+      expect(field.controller?.text, isEmpty);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the chip and swatch groups are labelled containers', (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/add-children');
+
+      expect(
+        find.byWidgetPredicate(
+          (w) =>
+              w is Semantics && w.container && w.properties.label == 'Age band',
+        ),
+        findsOneWidget,
+        reason: 'role=group for the age band (design role="group")',
+      );
+      expect(
+        find.byWidgetPredicate(
+          (w) =>
+              w is Semantics &&
+              w.container &&
+              w.properties.label == 'Avatar colour',
+        ),
+        findsOneWidget,
+      );
+      // The individual controls stay reachable inside the groups (the label is
+      // carried by both the semantics node and the rendered text).
+      expect(
+        find.bySemanticsLabel(RegExp('4\u20136')),
+        findsAtLeastNWidgets(1),
+      );
+      expect(
+        find.bySemanticsLabel('Avatar colour lilac'),
+        findsAtLeastNWidgets(1),
+      );
+
+      handle.dispose();
       expect(tester.takeException(), isNull);
       await disposeApp(tester);
     });

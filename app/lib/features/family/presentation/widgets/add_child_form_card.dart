@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:nestling/core/design_system/design_system.dart';
+import 'package:nestling/features/family/presentation/widgets/child_display.dart';
 
 /// P05 "Add a child" form card (HTML `.form-card`, padding 14).
 ///
@@ -67,18 +68,28 @@ class AddChildFormCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: NestSpacing.s1),
-          Wrap(
-            spacing: NestSpacing.s2,
-            runSpacing: NestSpacing.s2,
-            children: [
-              for (final band in ageBands)
-                NestChip(
-                  key: Key('ageChip-$band'),
-                  label: _displayBand(band),
-                  selected: draftAgeBand == band,
-                  onSelected: (_) => onAgeBandSelected(band),
-                ),
-            ],
+          Semantics(
+            label: 'Age band',
+            container: true,
+            child: Wrap(
+              spacing: NestSpacing.s2,
+              runSpacing: NestSpacing.s2,
+              children: [
+                for (final band in ageBands)
+                  // P05-BUG-1: interactive NestChip's factorless Center
+                  // claims the whole Wrap run, stacking one chip per row.
+                  // IntrinsicWidth shrinks each box to its pill (the 44-min
+                  // tap minimum survives) until the shared fix lands.
+                  IntrinsicWidth(
+                    child: NestChip(
+                      key: Key('ageChip-$band'),
+                      label: displayAgeBand(band),
+                      selected: draftAgeBand == band,
+                      onSelected: (_) => onAgeBandSelected(band),
+                    ),
+                  ),
+              ],
+            ),
           ),
           const SizedBox(height: NestSpacing.s2),
           Text(
@@ -113,8 +124,6 @@ class AddChildFormCard extends StatelessWidget {
       ),
     );
   }
-
-  static String _displayBand(String band) => band.replaceAll('-', '\u2013');
 }
 
 class _Swatch extends StatelessWidget {
@@ -145,22 +154,27 @@ class _Swatch extends StatelessWidget {
       label: 'Avatar colour $colour',
       selected: selected,
       button: true,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: NestDevice.tapParent,
-          height: NestDevice.tapParent,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: _fill(tokens),
-            boxShadow: selected
-                ? <BoxShadow>[
-                    BoxShadow(
-                      color: tokens.ink,
-                      spreadRadius: NestSpacing.gap3,
-                    ),
-                  ]
-                : null,
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: Container(
+            width: NestDevice.tapParent,
+            height: NestDevice.tapParent,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: _fill(tokens),
+              boxShadow: selected
+                  ? <BoxShadow>[
+                      BoxShadow(
+                        color: tokens.ink,
+                        spreadRadius: NestSpacing.gap3,
+                      ),
+                    ]
+                  : null,
+            ),
           ),
         ),
       ),

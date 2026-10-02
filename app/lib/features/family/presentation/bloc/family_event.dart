@@ -12,10 +12,6 @@ final class FamilyLoadRequested extends FamilyEvent {
   const new();
 }
 
-final class FamilyChildrenRequested extends FamilyEvent {
-  const new();
-}
-
 final class FamilyDraftChanged extends FamilyEvent {
   const new({this.nickname, this.ageBand, this.avatarColour});
 

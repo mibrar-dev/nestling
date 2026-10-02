@@ -18,6 +18,7 @@ final class FamilyState extends Equatable {
     this.draftAvatarColour = 'peach',
     this.nicknameError,
     this.saveInProgress = false,
+    this.lastSavedNickname,
     this.errorMessage,
   });
 
@@ -33,6 +34,11 @@ final class FamilyState extends Equatable {
   final String? nicknameError;
   final bool saveInProgress;
 
+  /// Nickname written by the most recent successful save. The view clears
+  /// its field only while the field still holds this value, so typing that
+  /// started mid-save is never wiped (P05-BUG-5).
+  final String? lastSavedNickname;
+
   final String? errorMessage;
 
   FamilyState copyWith({
@@ -44,6 +50,7 @@ final class FamilyState extends Equatable {
     String? draftAvatarColour,
     Object? nicknameError = _keepNicknameError,
     bool? saveInProgress,
+    String? lastSavedNickname,
     String? errorMessage,
   }) {
     return FamilyState(
@@ -57,6 +64,7 @@ final class FamilyState extends Equatable {
           ? this.nicknameError
           : nicknameError as String?,
       saveInProgress: saveInProgress ?? this.saveInProgress,
+      lastSavedNickname: lastSavedNickname ?? this.lastSavedNickname,
       errorMessage: errorMessage ?? this.errorMessage,
     );
   }
@@ -71,6 +79,7 @@ final class FamilyState extends Equatable {
     draftAvatarColour,
     nicknameError,
     saveInProgress,
+    lastSavedNickname,
     errorMessage,
   ];
 }

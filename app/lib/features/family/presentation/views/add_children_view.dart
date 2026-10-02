@@ -51,7 +51,9 @@ class _AddChildrenViewState extends State<AddChildrenView> {
       context.go(PocketMoneyRoutePaths.setup);
     }
 
-    if (_nicknameController.text.trim().isNotEmpty) {
+    // The bloc draft is the source of truth (every keystroke forwards here);
+    // the controller below is only the field's text surface.
+    if (context.read<FamilyBloc>().state.draftNickname.trim().isNotEmpty) {
       context.read<FamilyBloc>().add(FamilyAddChildRequested(onSaved: go));
     } else {
       go();
@@ -64,30 +66,31 @@ class _AddChildrenViewState extends State<AddChildrenView> {
     return Scaffold(
       backgroundColor: tokens.paper,
       body: BlocListener<FamilyBloc, FamilyState>(
-        // The bloc clears its nickname draft on a successful save; mirror it
-        // into the field so the two never disagree.
+        // P05-BUG-5: mirror the cleared draft into the field only while the
+        // field still holds the saved nickname — typing that started
+        // mid-save belongs to the next child and must survive.
         listenWhen: (previous, current) =>
             previous.saveInProgress &&
             !current.saveInProgress &&
             current.nicknameError == null,
-        listener: (context, _) => _nicknameController.clear(),
+        listener: (context, state) {
+          if (_nicknameController.text.trim() ==
+              (state.lastSavedNickname ?? '')) {
+            _nicknameController.clear();
+          }
+        },
         child: BlocBuilder<FamilyBloc, FamilyState>(
           builder: (context, state) {
             final loaded = state.status == FamilyStatus.loaded;
             return Column(
               children: [
                 const NestStatusBar(),
-                // TODO(P05): compact bar with title null crashes in
-                // NestNavBar (Spacer nested in Expanded); see
-                // docs/screens/P05/SHARED_REQUEST.md. An empty title renders
-                // the same back-chevron-only bar as the design.
-                // The onboarding funnel navigates with `go` (P01 precedent):
-                // `push` from a top-level route is a silent no-op in this
-                // router setup, and the funnel keeps a depth-1 stack so
-                // `pop` could not return to P04 anyway.
+                // The funnel navigates with `go` (P01 precedent): `push`
+                // from a top-level route is a silent no-op in this router
+                // setup, and the funnel keeps a depth-1 stack so `pop`
+                // could not return to P04 anyway.
                 NestNavBar(
                   compact: true,
-                  title: '',
                   onBack: () => context.go(PrivacyConsentRoutePaths.privacy),
                 ),
                 Expanded(
@@ -189,11 +192,14 @@ class _Body extends StatelessWidget {
             NestSpacing.s8,
           ),
           children: [
-            Text(
-              "Who's in your nest?",
-              style: NestType.h1(color: tokens.ink),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
+            Semantics(
+              header: true,
+              child: Text(
+                "Who's in your nest?",
+                style: NestType.h1(color: tokens.ink),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
             const SizedBox(height: NestSpacing.s2),
             Text(
