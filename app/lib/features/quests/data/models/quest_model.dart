@@ -13,6 +13,7 @@ class QuestModel extends Quest {
     required super.needsApproval,
     required super.assigneeChildId,
     required super.active,
+    super.dueTimeLocal,
   });
 
   factory QuestModel.fromJson(Map<String, dynamic> json) {
@@ -25,6 +26,7 @@ class QuestModel extends Quest {
       repeatRule: json['repeatRule'] as String,
       days: json['days'] as String,
       dueLabel: json['dueLabel'] as String?,
+      dueTimeLocal: json['dueTimeLocal'] as String?,
       needsApproval: json['needsApproval'] as bool,
       assigneeChildId: json['assigneeChildId'] as String?,
       active: json['active'] as bool,
@@ -41,6 +43,7 @@ class QuestModel extends Quest {
       'repeatRule': repeatRule,
       'days': days,
       'dueLabel': dueLabel,
+      'dueTimeLocal': dueTimeLocal,
       'needsApproval': needsApproval,
       'assigneeChildId': assigneeChildId,
       'active': active,

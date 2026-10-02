@@ -1,5 +1,5 @@
 import 'package:nestling/core/data/app_database.dart';
-import 'package:nestling/core/data/london_time.dart';
+import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/data/stream_combine.dart';
 import 'package:nestling/features/today/domain/entities/child_day_summary.dart';
@@ -30,15 +30,17 @@ class TodayRepositoryImpl implements TodayRepository {
 
   @override
   Stream<List<TodayItem>> watchItems() {
-    return combineLatest3(
+    return combineLatest4(
       _db.watchActiveQuests(Seed.familyId),
       _db.watchAllCompletions(Seed.familyId),
       _db.watchChildren(Seed.familyId),
+      _db.watchFamilyZoneId(),
     ).map((parts) {
       return rows(
         parts[0] as List<Quest>,
         parts[1] as List<QuestCompletion>,
         parts[2] as List<ChildrenData>,
+        zoneId: parts[3] as String,
       );
     });
   }
@@ -118,14 +120,16 @@ class TodayRepositoryImpl implements TodayRepository {
     // default to `once` (count forever) so a pending on a removed quest is
     // not silently dropped. NOTE: P11 must apply the same scoping or the
     // Review list will disagree with this count (SHARED_REQUEST §9).
-    return combineLatest2(
+    return combineLatest3(
       _db.watchAllCompletions(Seed.familyId),
       _db.watchActiveQuests(Seed.familyId),
+      _db.watchFamilyZoneId(),
     ).map((parts) {
       final rule = <String, String>{
         for (final q in parts[1] as List<Quest>) q.id: q.repeatRule,
       };
       final now = _clock();
+      final zoneId = normalizeZoneId(parts[2] as String);
       return (parts[0] as List<QuestCompletion>)
           .where(
             (c) =>
@@ -134,6 +138,7 @@ class TodayRepositoryImpl implements TodayRepository {
                   rule[c.questId] ?? 'once',
                   c.createdAt,
                   now,
+                  zoneId,
                 ),
           )
           .length;
@@ -143,28 +148,32 @@ class TodayRepositoryImpl implements TodayRepository {
   /// Pure row builder, shared with tests.
   ///
   /// Statuses follow the periods ruling: a completion only counts inside its
-  /// quest's current period (daily → London day, weekly → London week,
-  /// once → forever); otherwise the quest is `to_do` again. [now] is
-  /// computed once per call from the injected clock unless passed.
+  /// quest's current period (daily → family-zone day, weekly → family-zone
+  /// week, once → forever); otherwise the quest is `to_do` again. [now] is
+  /// computed once per call from the injected clock unless passed; [zoneId]
+  /// is the CURRENT family zone (history itself is untouched — only the
+  /// period boundary moves).
   List<TodayItem> rows(
     List<Quest> quests,
     List<QuestCompletion> completions,
     List<ChildrenData> kids, {
     DateTime? now,
+    String zoneId = defaultFamilyZoneId,
   }) {
     final at = now ?? _clock();
+    final zone = normalizeZoneId(zoneId);
     final out = <TodayItem>[];
     for (final kid in kids) {
       final mine = quests.where((q) => q.assigneeChildId == kid.id).toList()
         // Pending-first like the design, then alphabetical.
         ..sort((a, b) {
-          final ra = _rankOf(_statusOf(a, kid.id, completions, at));
-          final rb = _rankOf(_statusOf(b, kid.id, completions, at));
+          final ra = _rankOf(_statusOf(a, kid.id, completions, at, zone));
+          final rb = _rankOf(_statusOf(b, kid.id, completions, at, zone));
           if (ra != rb) return ra.compareTo(rb);
           return a.title.compareTo(b.title);
         });
       for (final quest in mine) {
-        final status = _statusOf(quest, kid.id, completions, at);
+        final status = _statusOf(quest, kid.id, completions, at, zone);
         out.add(
           TodayItem(
             id: '${quest.id}:${kid.id}',
@@ -188,6 +197,7 @@ class TodayRepositoryImpl implements TodayRepository {
     String childId,
     List<QuestCompletion> completions,
     DateTime now,
+    String zoneId,
   ) {
     QuestCompletion? latest;
     for (final c in completions) {
@@ -202,6 +212,7 @@ class TodayRepositoryImpl implements TodayRepository {
       quest.repeatRule,
       latest.createdAt,
       now,
+      zoneId,
     );
     return current ? latest.status : 'to_do';
   }
