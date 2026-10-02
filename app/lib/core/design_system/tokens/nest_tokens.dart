@@ -147,6 +147,7 @@ extension NestContext on BuildContext {
       ink: tokens.ink,
       ink2: tokens.ink2,
       ink3: tokens.ink3,
+      leafInk: tokens.leafInk,
     );
   }
 

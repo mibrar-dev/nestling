@@ -31,6 +31,7 @@ class NestKidButton extends StatefulWidget {
     this.borderRadius = NestRadii.l,
     this.fontSize = 20,
     this.contentPadding,
+    this.wrapLabel = true,
   });
 
   final String label;
@@ -57,6 +58,12 @@ class NestKidButton extends StatefulWidget {
   /// Inner padding override (base `0 24px`). K06 care uses `8px 4px`,
   /// K03 dock uses `0 6px`.
   final EdgeInsetsGeometry? contentPadding;
+
+  /// Whether the label may wrap. Defaults to true (spec base). Pass false
+  /// for narrow slots / large text scales (K03 dock "My jar" under fallback
+  /// fonts): the label stays on one line and scales down instead of
+  /// wrapping to two lines.
+  final bool wrapLabel;
 
   @override
   State<NestKidButton> createState() => _NestKidButtonState();
@@ -178,18 +185,14 @@ class _NestKidButtonState extends State<NestKidButton> {
                           ),
                         ],
                         Flexible(
-                          child: Text(
-                            widget.label,
-                            style: NestType.buttonKid(color: foreground)
-                                .copyWith(
-                                  fontSize: widget.fontSize,
-                                  height:
-                                      (widget.fontSize == 20
-                                          ? 26
-                                          : NestSpacing.s5) /
-                                      widget.fontSize,
-                                ),
-                            textAlign: TextAlign.center,
+                          // One announcement per button: the outer
+                          // `Semantics(label:)` owns the label, so the inner
+                          // text must not merge a second copy.
+                          child: ExcludeSemantics(
+                            child: _KidLabel(
+                              button: widget,
+                              foreground: foreground,
+                            ),
                           ),
                         ),
                       ],
@@ -202,5 +205,33 @@ class _NestKidButtonState extends State<NestKidButton> {
         ),
       ),
     );
+  }
+}
+
+/// Kid-button label: wraps by default; with [NestKidButton.wrapLabel]
+/// false it stays on one line and scales down (K03 dock at narrow
+/// widths / large text scales).
+class _KidLabel extends StatelessWidget {
+  const new({required this.button, required this.foreground});
+
+  final NestKidButton button;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = Text(
+      button.label,
+      style: NestType.buttonKid(color: foreground).copyWith(
+        fontSize: button.fontSize,
+        height: (button.fontSize == 20 ? 26 : NestSpacing.s5) / button.fontSize,
+      ),
+      textAlign: TextAlign.center,
+      softWrap: button.wrapLabel,
+      maxLines: button.wrapLabel ? null : 1,
+    );
+    if (button.wrapLabel) {
+      return label;
+    }
+    return FittedBox(fit: BoxFit.scaleDown, child: label);
   }
 }

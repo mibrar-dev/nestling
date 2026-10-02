@@ -212,10 +212,15 @@ class _NestButtonState extends State<NestButton> {
                           const SizedBox(width: NestSpacing.s2),
                         ],
                         Flexible(
-                          child: Text(
-                            widget.label,
-                            style: labelStyle,
-                            textAlign: TextAlign.center,
+                          // One announcement per button (P03 §4): the outer
+                          // `Semantics(label:)` owns the label, so the inner
+                          // text must not merge a second copy.
+                          child: ExcludeSemantics(
+                            child: Text(
+                              widget.label,
+                              style: labelStyle,
+                              textAlign: TextAlign.center,
+                            ),
                           ),
                         ),
                       ],

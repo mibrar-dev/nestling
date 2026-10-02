@@ -13,9 +13,31 @@ import 'package:nestling/core/design_system/tokens/typography.dart';
 /// bottom (tinted with the meadow token) — no rectangular colour blocks,
 /// so no visible seam.
 class KidScope extends StatelessWidget {
-  const new({required this.child, super.key});
+  const new({
+    required this.child,
+    super.key,
+    this.meadowHeight = _defaultMeadowHeight,
+    this.meadowBottom = 0,
+    this.meadowColor,
+  });
 
   final Widget child;
+
+  /// Meadow-hill height (K03 §6). Defaults to the shared 136 px bottom hill;
+  /// screens whose design shows a taller band behind content (K03 progress +
+  /// cards) pass a larger height instead of painting their own hill.
+  final double meadowHeight;
+
+  /// Distance of the hill's bottom edge above the scope bottom. Defaults to
+  /// 0 (pinned to the edge, per the bottom-edge owner rule).
+  final double meadowBottom;
+
+  /// Hill tone. Defaults to `kidMeadow`; K03's in-flow band measured
+  /// `kidHorizon` on both design PNGs.
+  final Color? meadowColor;
+
+  /// The shared bottom-hill height (`meadow_hill.svg` at 136 px).
+  static const double _defaultMeadowHeight = 136;
 
   @override
   Widget build(BuildContext context) {
@@ -47,12 +69,15 @@ class KidScope extends StatelessWidget {
           Positioned(
             left: 0,
             right: 0,
-            bottom: 0,
+            bottom: meadowBottom,
             child: SvgPicture.asset(
               nest_assets.NestlingIllustrations.meadowHill,
               fit: BoxFit.fill,
-              height: 136,
-              colorFilter: ColorFilter.mode(colors.kidMeadow, BlendMode.srcIn),
+              height: meadowHeight,
+              colorFilter: ColorFilter.mode(
+                meadowColor ?? colors.kidMeadow,
+                BlendMode.srcIn,
+              ),
               placeholderBuilder: (_) => const SizedBox.shrink(),
             ),
           ),
