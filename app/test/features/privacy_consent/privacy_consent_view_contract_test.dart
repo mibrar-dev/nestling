@@ -17,8 +17,10 @@
 // than it does on a device and must be scrolled into reach before tapping.
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -152,6 +154,22 @@ Future<void> _pumpPrivacy(
   tester.view.physicalSize = surface * 3;
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 200));
+}
+
+/// Reads a file from `design/html-source/`, walking up from the package root
+/// so the design-derived assertions work from any working directory.
+File _designFile(String name) {
+  var dir = Directory.current.absolute;
+  for (var depth = 0; depth < 5; depth++) {
+    final candidate = File('${dir.path}/design/html-source/$name');
+    if (candidate.existsSync()) return candidate;
+    final parent = dir.parent;
+    if (parent.path == dir.path) break;
+    dir = parent;
+  }
+  throw StateError(
+    'design/html-source/$name not found above ${Directory.current.path}',
+  );
 }
 
 /// Brings the crash toggle on-screen. See the note about test fonts above.
@@ -477,6 +495,36 @@ void main() {
   });
 
   group('P04 — short screen and alignment', () {
+    for (final width in const <int>[320, 390, 430]) {
+      testWidgets('$width.dp: the promise rows fill the list card edge', (
+        tester,
+      ) async {
+        await setUpTestScope();
+        await _pumpPrivacy(
+          tester,
+          theme: ThemeMode.light,
+          surface: Size(width.toDouble(), 844),
+          textScale: 1,
+        );
+
+        // `NestList`'s inner Column is `CrossAxisAlignment.center` and P04 now
+        // passes it a single Column child. If that child were narrower than the
+        // card, the rows would sit inset — a visible misalignment against the
+        // 20 px gutters (owner alignment rule).
+        final list = tester.getRect(find.byType(NestList));
+        for (final title in _titles) {
+          final row = find
+              .ancestor(of: find.text(title), matching: find.byType(Semantics))
+              .first;
+          final rect = tester.getRect(row);
+          expect(rect.left, list.left, reason: '$title left edge');
+          expect(rect.right, list.right, reason: '$title right edge');
+        }
+        expect(tester.takeException(), isNull);
+        await disposeApp(tester);
+      });
+    }
+
     testWidgets('320x568 scrolls the opt card into reach and taps', (
       tester,
     ) async {
@@ -846,6 +894,241 @@ void main() {
     }
   });
 
+  group('P04 — separator overlay (P04-4 contract)', () {
+    const rows = <String>[
+      'No ads or tracking — ever',
+      'Children only need a nickname',
+      'Data stored in the UK (London)',
+      'Delete everything anytime',
+    ];
+
+    /// The row's `Semantics(container: true)` node — the row boundary the
+    /// separator is painted on.
+    Finder rowOf(int index) => find
+        .ancestor(of: find.text(rows[index]), matching: find.byType(Semantics))
+        .first;
+
+    /// The separator is a SIBLING of the row content inside the row's Stack
+    /// (`Stack` sizes to its non-positioned child), so it is found through the
+    /// Stack, not through the row's own subtree.
+    Finder stackOf(int index) =>
+        find.ancestor(of: rowOf(index), matching: find.byType(Stack)).first;
+
+    Finder dividerOf(int index) =>
+        find.descendant(of: stackOf(index), matching: find.byType(Divider));
+
+    for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      testWidgets('${theme.name}: each row after the first paints one line', (
+        tester,
+      ) async {
+        await setUpTestScope();
+        await pumpAppRoute(tester, '/privacy', theme: theme);
+        final palette = theme == ThemeMode.light
+            ? NestColors.light
+            : NestColors.dark;
+
+        // Row 1 carries no separator; rows 2-4 carry exactly one each. A
+        // regression that stacked all three on one row would still satisfy a
+        // bare "3 dividers" count, so check the ownership per row.
+        expect(find.byType(NestList), findsOneWidget);
+        // Row 1 is the card's top edge: no Stack, no separator. Rows 2-4 each
+        // own exactly one line.
+        expect(
+          find.ancestor(of: rowOf(0), matching: find.byType(Stack)),
+          findsNothing,
+          reason: 'the first row is not wrapped, so it cannot paint a line',
+        );
+        for (var i = 1; i < rows.length; i++) {
+          expect(dividerOf(i), findsOneWidget, reason: 'row ${i + 1} boundary');
+        }
+
+        // Painted geometry: the line sits ON the row's top edge, inset 72 from
+        // the row's left edge, and runs to the row's right edge.
+        for (var i = 1; i < rows.length; i++) {
+          final row = rowOf(i);
+          final divider = dividerOf(i);
+          expect(
+            tester.getTopLeft(divider).dy,
+            tester.getTopLeft(row).dy,
+            reason: 'row ${i + 1}: the separator paints on the row boundary',
+          );
+          expect(
+            tester.getTopLeft(divider).dx - tester.getTopLeft(row).dx,
+            72,
+            reason: 'row ${i + 1}: 72px indent matches the design ::before',
+          );
+          expect(
+            tester.getSize(row).width -
+                (tester.getTopLeft(divider).dx - tester.getTopLeft(row).dx),
+            tester.getSize(divider).width,
+            reason: 'row ${i + 1}: the line runs to the row right edge',
+          );
+          expect(tester.getSize(divider).height, 1);
+
+          final line = tester.widget<Divider>(divider);
+          expect(line.color, palette.line, reason: 'row ${i + 1} tint');
+          expect(line.thickness, 1);
+          expect(line.height, 1);
+        }
+        expect(tester.takeException(), isNull);
+        await disposeApp(tester);
+      });
+    }
+
+    testWidgets('the separators add no layout height (list == row sum)', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/privacy');
+
+      final list = find.byType(NestList);
+      var rowSum = 0.0;
+      for (var i = 0; i < rows.length; i++) {
+        rowSum += tester.getSize(rowOf(i)).height;
+      }
+      expect(
+        tester.getSize(list).height,
+        rowSum,
+        reason: 'design overlays the separators; they must not push the list',
+      );
+      // Absolute row height depends on the bundled Inter face; under the
+      // block test font each row wraps, so only the identity above is
+      // meaningful here. The device measurement (4 x 56 = 224) is the UI
+      // check's job.
+      expect(rowSum, greaterThanOrEqualTo(4 * 56));
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    testWidgets('wrapping rows keep the separator on the boundary at 320/1.3', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpPrivacy(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(320, 844),
+        textScale: 1.3,
+      );
+
+      // Test fonts wrap every title, so the rows grow past 56 — the overlay
+      // must follow the new row tops rather than a cached 56 px offset.
+      var grown = false;
+      for (var i = 0; i < rows.length; i++) {
+        final row = rowOf(i);
+        final height = tester.getSize(row).height;
+        if (height > 56) grown = true;
+        if (i == 0) continue;
+        final divider = dividerOf(i);
+        expect(
+          tester.getTopLeft(divider).dy,
+          tester.getTopLeft(row).dy,
+          reason: 'row ${i + 1} at 320/1.3',
+        );
+      }
+      expect(grown, isTrue, reason: 'the harness should wrap at 320 + 1.3');
+
+      final list = find.byType(NestList);
+      var rowSum = 0.0;
+      for (var i = 0; i < rows.length; i++) {
+        rowSum += tester.getSize(rowOf(i)).height;
+      }
+      expect(tester.getSize(list).height, rowSum);
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    testWidgets('the overlay leaks no semantics node into the rows', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/privacy');
+      final handle = tester.ensureSemantics();
+
+      const subs = <String>[
+        'No analytics profiles, no ad SDKs, ever',
+        'No photos, no email, no chat, no location',
+        'Kept on UK servers, nothing leaves',
+        'One tap and your family data is gone',
+      ];
+
+      for (var i = 0; i < rows.length; i++) {
+        final node = tester.getSemantics(rowOf(i));
+        final data = node.getSemanticsData();
+        // One merged node per row: title + subtitle, nothing else. The Stack
+        // and its Positioned divider must not split or duplicate the row.
+        expect(
+          data.label,
+          '${rows[i]}\n${subs[i]}',
+          reason: 'row ${i + 1}: Flutter joins child labels with a newline',
+        );
+        expect(data.flagsCollection.isButton, isFalse);
+        // Display-only rows: the overlay must not make them tappable/focusable.
+        expect(data.hasAction(SemanticsAction.tap), isFalse);
+        expect(data.hasAction(SemanticsAction.longPress), isFalse);
+        expect(data.hasAction(SemanticsAction.focus), isFalse);
+      }
+      // The handle must be released inside the body: tearDown callbacks run
+      // after the end-of-test semantics verification.
+      await disposeApp(tester);
+      handle.dispose();
+    });
+    testWidgets('the overlay geometry is the design CSS rule, not a guess', (
+      tester,
+    ) async {
+      // The separator took four iterations to land (P04-4). Read the design's
+      // own rule and compare with what the screen paints:
+      //   .list-row + .list-row::before { top: 0; left: 72px; right: 0;
+      //                                  height: 1px; background: var(--line); }
+      // The `+` sibling selector is why only the rows after the first carry a
+      // line — three separators for four rows.
+      final css = _designFile('components.css').readAsStringSync();
+      final rule = RegExp(r'\.list-row \+ \.list-row::before\s*\{([^}]*)\}')
+          .firstMatch(css);
+      expect(rule, isNotNull, reason: 'the design rule moved — review P04');
+      final body = rule!.group(1)!;
+
+      int px(String property) {
+        final match = RegExp('$property:\\s*(\\d+)px').firstMatch(body);
+        expect(match, isNotNull, reason: '$property is gone from the rule');
+        return int.parse(match!.group(1)!);
+      }
+
+      final indent = px('left');
+      final thickness = px('height');
+      expect(RegExp(r'top:\s*0').hasMatch(body), isTrue);
+      expect(RegExp(r'right:\s*0').hasMatch(body), isTrue);
+      expect(body, contains('var(--line)'));
+
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/privacy');
+
+      // Rows after the first only.
+      expect(
+        find.ancestor(of: rowOf(0), matching: find.byType(Stack)),
+        findsNothing,
+      );
+      for (var i = 1; i < rows.length; i++) {
+        final positioned = tester.widget<Positioned>(
+          find
+              .ancestor(of: dividerOf(i), matching: find.byType(Positioned))
+              .first,
+        );
+        expect(positioned.top, 0, reason: 'design: top: 0');
+        expect(positioned.left!.round(), indent, reason: 'design: left');
+        expect(positioned.right, 0, reason: 'design: right: 0');
+        expect(positioned.height, thickness, reason: 'design: height');
+        expect(
+          tester.widget<Divider>(dividerOf(i)).color,
+          NestColors.light.line,
+          reason: 'design: background: var(--line)',
+        );
+      }
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+  });
+
   group('P04 — promise row geometry (SPACING_SPEC §9.3/§9.4)', () {
     testWidgets('four 40px tiles, tints in order, three 72px-indent dividers', (
       tester,
@@ -854,6 +1137,8 @@ void main() {
       await pumpAppRoute(tester, '/privacy');
 
       final list = find.byType(NestList);
+      // The separators are overlays painted by the rows, not layout-height
+      // dividers injected by NestList (P04-4): exactly three 1 px lines.
       expect(
         find.descendant(of: list, matching: find.byType(Divider)),
         findsNWidgets(3),
@@ -862,12 +1147,19 @@ void main() {
           in find
               .descendant(of: list, matching: find.byType(Divider))
               .evaluate()) {
-        expect(
-          tester
-              .widget<Divider>(find.byElementPredicate((e) => e == divider))
-              .indent,
-          72,
+        final dividerFinder = find.byElementPredicate((e) => e == divider);
+        final geometry = tester.widget<Positioned>(
+          find
+              .ancestor(of: dividerFinder, matching: find.byType(Positioned))
+              .first,
         );
+        expect(geometry.top, 0);
+        expect(geometry.left, 72);
+        expect(geometry.right, 0);
+        expect(geometry.height, 1);
+        final line = tester.widget<Divider>(dividerFinder);
+        expect(line.height, 1);
+        expect(line.thickness, 1);
       }
 
       final tints = <String, Color>{

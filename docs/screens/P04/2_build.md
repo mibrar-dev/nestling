@@ -1,105 +1,100 @@
-# P04 · Privacy consent — build notes (STAGE 2, iteration 3)
+# P04 · Privacy consent — build notes (STAGE 2, iteration 4)
 
 Feature `privacy_consent` · route `/privacy` · parent mode.
 Built per `docs/screens/P04/1_plan.md`, fixing every item in
-`docs/screens/P04/FIXES_2.md` that is fixable inside RULES §1, and
-un-skipping the bug proof the fix turns green. `ORCHESTRATOR_NOTES.md`
-(with its 12:03 UPDATE) is honoured: the header was not moved locally.
+`docs/screens/P04/FIXES_3.md` that is fixable inside RULES §1, and
+un-skipping the bug proofs the fixes turn green. `ORCHESTRATOR_NOTES.md`
+(with the 12:03 and 13:42 UPDATEs) is honoured: the trash glyph stays
+deferred to the shared batch, and "everything else" is fixed below.
 
 ## Files changed (all inside RULES §1)
 
 Production (`app/lib/features/privacy_consent/**`):
 
-- `presentation/bloc/privacy_consent_bloc.dart` — the failure revert now
-  restores the *stored* value (`_crashFrom(state.items)`, which mirrors the
-  database) instead of `state.crashConsent`, which may be another tap's
-  still-in-flight optimistic value (FIXES_2 finding 4 / P04-8). One line plus
-  an intent comment; event shape, optimistic emit and stream reconciliation
-  unchanged.
-- `presentation/views/privacy_consent_view.dart` — deleted the stale
-  `title: ''` workaround and its obsolete `TODO(P04)` (FIXES_2 finding 3);
-  the bar is now `NestNavBar(compact: true, onBack: …)` with a null title,
-  which the shared merge renders as `SizedBox.shrink()` in the same 60 px
-  bar. The `canPop` fallback to `/create-account` is kept.
+- `data/privacy_consent_repository_impl.dart` — the first-run upsert now
+  runs inside `_db.transaction` (FIXES_3 finding 2 / P04-9): the
+  UPDATE-then-conditional-INSERT pair is atomic, so two overlapping writes
+  serialise and the last one wins instead of the first INSERT winning.
+  Single-write behaviour is unchanged (UPDATE fast path, insert fallback
+  with table defaults, `watchSetting` re-emit).
+- `presentation/views/privacy_consent_view.dart` — the four `_PromiseRow`s
+  are now a single `Column` child of `NestList` (with `MainAxisSize.min`
+  for the unbounded scroll height), so shared `NestList` injects no real
+  dividers; `_PromiseRow` gained a `showDivider` flag (rows 2–4) that wraps
+  its content in a `Stack` with a zero-layout-height `Positioned(top: 0,
+  left: 72, right: 0, height: 1, Divider(height: 1, thickness: 1, line))`
+  overlay — the same reference point the design's `::before` uses
+  (FIXES_3 finding 1 / P04-4). Card chrome (surface, r16, shadow),
+  semantics, 56 px rows, 40/r12 tiles and copy are untouched.
 
 Tests (`app/test/features/privacy_consent/**`):
 
-- `p04_bugs_test.dart` — un-skipped `[P04-8]` (green); header index marks it
-  `[FIXED]`. `[P04-2]`, `[P04-4]`, `[P04-7]` stay skipped (shared-side, see
-  below), each annotated with its repro and the shared change that turns it
-  green.
+- `p04_bugs_test.dart` — un-skipped `[P04-4]` (list height == row-height
+  sum, now green) and `[P04-9]` (overlapping first-run writes keep the last
+  value, now green); header index marks both `[FIXED]` and the stale
+  iteration-3 comments updated. `[P04-2]` and `[P04-7]` stay skipped
+  (shared batch: trash asset, themed shield).
+- `privacy_consent_view_contract_test.dart` — the geometry test now asserts
+  the overlay structure: exactly three 1×1 `Divider`s, each inside a
+  `Positioned(top: 0, left: 72, right: 0, height: 1)`.
 
-Docs (`docs/screens/P04/**`): `SHARED_REQUEST.md` item 3 marked cleaned up
-(workaround deleted); new screenshots `ui/app_{light,dark}_3.png` +
-`ui/cmp_{light,dark}_3.png`.
+Docs (`docs/screens/P04/**`): new screenshots `ui/app_{light,dark}_4.png` +
+`ui/cmp_{light,dark}_4.png`. `SHARED_REQUEST.md` §6 stays filed for the
+shared component (every other `NestList` screen still inherits the drift).
 
-## What happened to each FIXES_2 item
+## What happened to each FIXES_3 item
 
-- Finding 1 (MAJOR, empty row-4 tile; orchestrator item 1) — NOT fixable in
-  scope: `app/assets/icons/` still contains no trash can on main (verified;
-  `ic_bin` is a wheelie bin, `ic_basket` a laundry basket), and RULES §1
-  keeps `app/assets/**` + `app/lib/core/**` off limits while plan §g orders
-  waiting for the asset with no stand-in. P04's side is ready: tile
-  reserved, `TODO(P04)` in place, `[P04-2]` proof + contract-test `findsNothing`
-  pin exact flip instructions (add `leadingAsset: NestIcons.trash`, un-skip,
-  flip to `findsOneWidget`). Filed as SHARED_REQUEST item 1 since iteration 1.
-- Finding 2 (MAJOR, +3 px divider drift; orchestrator item 3) — NOT fixable
-  in scope: the height comes from shared `NestList`'s real `Divider`s;
-  rebuilding the list locally would re-implement a design-system component
-  (and `NestCard.standard` is r24 vs the list's r16). Rows themselves are
-  exactly 56 px (40/r12 tiles, indent 72). Filed as SHARED_REQUEST item 6;
-  `[P04-4]` stays skipped and pins `NestList.height == sum(rows)`.
-- Finding 3 (MINOR, stale `title: ''`) — FIXED as described above; the bar
-  resolves identically (60 px, probes unchanged — see UI check).
-- Finding 4 (MINOR, revert-to-unpersisted) — FIXED as described above;
-  `[P04-8]` un-skipped and green. Existing error-path tests (mock OFF-write
-  failure, scripted `[P04-6]`) still pass unchanged: with static streams
-  `_crashFrom(items)` equals the old `previous`.
-- Finding 5 (MINOR, stale `2_build.md` sentences) — this note replaces
-  them: no −16 px offset claim (header is pixel-exact since the shared
-  merge), no "stays skipped" for `[P04-3]` (green), current suite tail below.
-- Finding 6 (MINOR, remaining skips) — `[P04-2]` ← item 1, `[P04-4]` ←
-  item 6, `[P04-7]` ← item 2. Kept skipped (red-by-design proofs of
-  core-owned defects); un-skipping any of them would break RULES §7 for the
-  whole app. This note, not "all tests pass", is where the open defects
-  live: findings 1–2 above plus the dark shield disc (SHARED_REQUEST §2).
+- Finding 1 (MAJOR, +3 px divider drift; orchestrator item 3, assigned to
+  P04) — FIXED as described above; `[P04-4]` un-skipped and green. The
+  shared `NestList` is untouched (still wrong for other screens — §6 stays
+  filed) but no longer blocks P04: list is exactly 4 × 56 = 224 px.
+- Finding 2 (MINOR, non-atomic upsert / P04-9) — FIXED via the transaction
+  (the review's preferred home; also shareable with P16's `_write` later);
+  `[P04-9]` un-skipped and green (5/5 deterministic), and the iteration-2
+  first-run double-tap guard still passes.
+- Finding 3 (MINOR, quoted test tail) — this note quotes the tool's real
+  strings verbatim below; "All other tests passed!" is what `flutter test`
+  prints when skips exist (0 failures, N skipped), not a failure.
+- P04-2 (MAJOR, empty row-4 tile) — NOT fixable in scope: `ic_trash.svg` /
+  `NestIcons.trash` still absent from this worktree (verified), deferred
+  to the shared batch by the 13:42 UPDATE. Tile reserved + `TODO(P04)` kept;
+  `[P04-2]` stays skipped with flip instructions.
+- P04-7 (MINOR, dark shield) — NOT fixable in scope (baked shared asset,
+  §2, in the shared batch). `[P04-7]` stays skipped.
 
 ## Analyze tail (app/)
 
 ```
 dart format --output=none --set-exit-if-changed lib/features/privacy_consent test/features/privacy_consent
-→ 16 files, 0 changed
-flutter analyze → No issues found! (ran in 3.7s)
+→ Formatted 17 files (0 changed)
+flutter analyze → No issues found! (ran in 3.6s)
 ```
 
 ## Test tail (app/, `flutter test`)
 
-```
-00:11 +585 ~3: All other tests passed!
-```
+P04 scope: `00:04 +107 ~2: All other tests passed!` — 107 passed,
+2 skipped (the shared-blocked `[P04-2]`/`[P04-7]` proofs), 0 failed,
+including the newly un-skipped `[P04-4]` and `[P04-9]`.
+Whole app: `00:22 +594 ~2: All other tests passed!` — 594 passed,
+2 skipped, 0 failed.
 
-585 passed, 3 skipped (the shared-blocked `[P04-2/4/7]` proofs), 0 failed.
-P04 scope: 98 passed + 3 skipped, including the newly un-skipped `[P04-8]`
-and the still-green `[P04-3]`.
-
-## UI check (iteration 3)
+## UI check (iteration 4)
 
 `shot.sh /privacy` light + dark (`SEED=fresh`, parent, iPhone 16e) +
 `compare.py` vs the design PNGs:
 
-- Light mean diff **4.49%** — bands: 0: 1.57% · 1: 6.02% · 2: 1.98% ·
-  3: 7.86% · 4: 7.31% · 5: 6.52% · 6: 0.40% · 7: 4.17%
-- Dark mean diff **5.61%** — bands: 0: 1.55% · 1: 8.50% · 2: 9.14% ·
-  3: 7.76% · 4: 7.12% · 5: 6.69% · 6: 0.39% · 7: 3.67%
+- Light mean diff **4.10%** (was 4.49%) — bands: 0: 1.59% · 1: 6.02% ·
+  2: 1.98% · 3: 7.94% · 4: 5.78% · 5: 4.19% · 6: 0.40% · 7: 4.84%
+- Dark mean diff **5.15%** (was 5.61%) — bands: 0: 1.56% · 1: 8.50% ·
+  2: 9.14% · 3: 7.87% · 4: 5.75% · 5: 4.44% · 6: 0.39% · 7: 3.55%
 
-Effectively identical to iteration 2 (null title renders the same bar), so
-no pixel regression from either fix. Header is pixel-exact (chevron 66–80,
-h1 113–138, subtitle 156–170, list top 289 — all Δ0 vs design). Residual
-drift is the three filed shared causes — empty row-4 tile (§1, bands 3–5),
-3 px divider rhythm (§6, bands 3–5, opt card 530 vs 527), light-baked dark
-shield disc (§2, dark band 2) — plus simulator font edges and the ignored
-status-bar clock. Gutters share 20 px and the CTA surface reaches the
-physical edge in both themes (tested); the strip difference vs the PNG is
-the intended OWNER-rule behaviour.
+Bands 4–5 drop in both themes as the 3 px recovery propagates past the
+list; the heat-map shows the same divider hairlines at the same indent,
+and the iteration-4 shot is otherwise identical (header Δ0, gutters 20 px,
+CTA surface to the physical edge both themes — the strip difference vs
+the PNG is the intended OWNER-rule behaviour). Remaining drift is the two
+filed shared causes — empty row-4 tile (§1) and light-baked dark shield
+disc (§2, dark band 2) — plus simulator font edges and the ignored
+status-bar clock.
 
 VERDICT: PASS

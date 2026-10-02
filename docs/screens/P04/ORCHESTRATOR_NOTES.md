@@ -11,3 +11,6 @@ The ~16 px header offset is SHARED (P05 has the identical offset); a shared fix 
 
 ## UPDATE (13:42) — shared assets in progress
 `ic_trash.svg` / `NestIcons.trash`, the token-coloured privacy shield (dark mode) and the first-run settings row are being added on main by shared/shared_requests_batch1. Keep the reserved 40×40 peach tile + TODO for now; when main contains `NestIcons.trash` (it is merged into your branch before each build), use it with the design's red-ink colour. Fix everything else in your FIXES list in this iteration (row heights/alignment, review findings, bug findings).
+
+## UPDATE (15:27) — iteration 5: the trash icon is on main
+cmp_light_4 = 4.10%; orchestrator confirms the ONLY visible deviation left is the blank row-4 tile. `NestIcons.trash` (`app/assets/icons/ic_trash.svg`) is now merged into your branch: render it in the peach tile with the design's rust/red-ink colour (design pixels #BA562E), remove the TODO, un-skip [P04-2]/[P04-7] as the review asks, and fix the review's two findings. Also check dark mode uses the new `NestPrivacyShield` (token-coloured circle) from main.

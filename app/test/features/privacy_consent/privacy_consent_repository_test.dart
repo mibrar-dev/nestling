@@ -215,5 +215,30 @@ void main() {
       );
       expect(await repository.watchCrashConsent().first, isA<bool>());
     });
+
+    // P04-9: the UPDATE-then-conditional-INSERT pair runs in one transaction,
+    // so overlapping writes serialise instead of the first INSERT winning.
+    for (final lastWins in const <bool>[false, true]) {
+      test(
+        'overlapping first-run writes settle on the last value ($lastWins)',
+        () async {
+          await Seed.fresh(db);
+
+          await Future.wait<void>(<Future<void>>[
+            repository.setCrashConsent(consent: true),
+            repository.setCrashConsent(consent: lastWins),
+          ]);
+
+          final rows = await db.select(db.settings).get();
+          expect(rows.length, 1);
+          expect(
+            rows.single.crashReportConsent,
+            lastWins,
+            reason: 'the second write is the one that must survive',
+          );
+          expect(await repository.watchCrashConsent().first, lastWins);
+        },
+      );
+    }
   });
 }

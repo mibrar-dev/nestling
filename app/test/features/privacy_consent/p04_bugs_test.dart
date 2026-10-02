@@ -1,12 +1,11 @@
-// P04 · Privacy & consent — adversarial bug proofs (Stage 6, iteration 3).
+// P04 · Privacy & consent — adversarial bug proofs (Stage 6, iteration 4).
 //
-// The proofs assert the CORRECT behaviour. Iterations 1-3 fixed P04-1, P04-3,
-// P04-5, P04-6 and P04-8 (P04-3 by the shared compact-nav merge), so those
-// proofs are un-skipped and green. P04-2 and P04-7 assert shared-side fixes
-// (asset / themed artwork) deferred to the orchestrator's in-flight shared
-// batch; P04-4 is a shared-component defect with an in-scope fix (review
-// iteration 3, finding 1); P04-9 is new this iteration (the first-run upsert
-// is not atomic and can drop the later of two overlapping writes).
+// The proofs assert the CORRECT behaviour. Iterations 1-4 fixed P04-1, P04-3,
+// P04-4, P04-5, P04-6, P04-8 and P04-9 (P04-3 by the shared compact-nav
+// merge), so those proofs are un-skipped and green. The shared batch (merge
+// ce89889) landed `NestIcons.trash` and `NestPrivacyShield`, so P04-2 and
+// P04-7 are now fixable in P04 scope (one wire-up each) and their proofs stay
+// `skip`-marked only until that wire-up happens.
 //
 // Run the proofs against the current tree with:
 //   flutter test --run-skipped test/features/privacy_consent/p04_bugs_test.dart
@@ -15,14 +14,14 @@
 //
 // Bug index:
 //   P04-1 major   first-run crash-consent opt-in is silently dropped  [FIXED]
-//   P04-2 major   promise row 4 has no trash glyph (empty peach tile)  [shared]
+//   P04-2 major   promise row 4 has no trash glyph (empty peach tile) [actionable]
 //   P04-3 major   compact nav bar 16 px short — header block sits high [FIXED]
-//   P04-4 major   1 px real dividers inflate the promise list     [open, in scope]
+//   P04-4 major   1 px real dividers inflate the promise list         [FIXED]
 //   P04-5 minor   rapid double-tap writes the same toggle value twice [FIXED]
 //   P04-6 major   failed OFF write still tells the parent "it stays off" [FIXED]
-//   P04-7 minor   dark mode renders the light-baked shield artwork    [shared]
+//   P04-7 major   dark mode renders the light-baked shield artwork  [actionable]
 //   P04-8 minor   double-failed rapid toggle reverts to unpersisted  [FIXED]
-//   P04-9 minor   overlapping first-run writes keep the earlier value [open]
+//   P04-9 minor   overlapping first-run writes keep the earlier value [FIXED]
 //
 // Checked and clean (passing proofs at the bottom): kid-mode guard, deep-link
 // back navigation, restart persistence (demo and first-run), first-run
@@ -32,7 +31,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -258,13 +256,22 @@ void main() {
       await pumpAppRoute(tester, '/privacy');
 
       final list = find.byType(NestList);
-      expect(
+      final icons = tester.widgetList<NestIcon>(
         find.descendant(of: list, matching: find.byType(NestIcon)),
-        findsNWidgets(4),
+      );
+      expect(
+        icons,
+        hasLength(4),
         reason:
             'row 4 "Delete everything anytime" must show the peach-ink '
             'trash glyph; the shared ic_trash.svg + NestIcons.trash are '
-            'still missing (SHARED_REQUEST §1)',
+            'in the worktree now (merge ce89889) and only the wire-up '
+            'is missing',
+      );
+      expect(
+        icons.map((icon) => icon.assetName),
+        contains(NestIcons.trash),
+        reason: 'row 4 must use the shared trash glyph, not a stand-in',
       );
       expect(
         find.descendant(of: list, matching: find.byType(SvgPicture)),
@@ -273,7 +280,7 @@ void main() {
       );
 
       await disposeApp(tester);
-      // P04-2: row 4 ships an empty peach tile (no trash asset).
+      // P04-2: row 4 ships an empty peach tile (trash asset not wired yet).
     }, skip: true);
   });
 
@@ -313,11 +320,9 @@ void main() {
 
       // The design draws the separators as absolutely-positioned 1px
       // ::before overlays, so the list height equals the sum of the row
-      // heights (4 × 56 = 224 with the product fonts). NestList adds real
-      // 1px Dividers, making the list 3px taller and shifting every later
-      // element down; measured on the simulator: tile tops 279/336/393/450
-      // (57 apart) vs the design's 295/351/407/463 (56 apart), opt card top
-      // 514 vs the design's 527.
+      // heights (4 × 56 = 224 with the product fonts). P04 paints the
+      // separators as zero-height Positioned overlays inside the rows
+      // instead of letting NestList inject real 1px Dividers.
       const titles = <String>[
         'No ads or tracking — ever',
         'Children only need a nickname',
@@ -344,8 +349,8 @@ void main() {
       );
 
       await disposeApp(tester);
-      // P04-4: real dividers add 3px to the list; the opt card lands at 514.
-    }, skip: true);
+      // P04-4 FIXED (iteration 4): overlay dividers add zero height.
+    });
   });
 
   group('P04-5 — rapid double tap', () {
@@ -410,40 +415,46 @@ void main() {
   });
 
   group('P04-7 — dark shield artwork', () {
-    testWidgets('[P04-7] the dark-mode shield does not bake light colours', (
-      tester,
-    ) async {
-      await setUpTestScope();
-      await pumpAppRoute(tester, '/privacy', theme: ThemeMode.dark);
+    testWidgets(
+      '[P04-7] dark mode renders the themed shield, not the baked asset',
+      (tester) async {
+        await setUpTestScope();
+        await pumpAppRoute(tester, '/privacy', theme: ThemeMode.dark);
 
-      final shield = tester
-          .widgetList<SvgPicture>(find.byType(SvgPicture))
-          .firstWhere(
-            (w) =>
-                w.bytesLoader is SvgAssetLoader &&
-                (w.bytesLoader as SvgAssetLoader).assetName.contains(
-                  'privacy_shield',
-                ),
-          );
-      final asset = (shield.bytesLoader as SvgAssetLoader).assetName;
-      final xml = await tester.runAsync(() => rootBundle.loadString(asset));
+        // `privacy_shield.svg` bakes the light sky tint (#E6EFFE) and a
+        // white shield body; the dark design needs #1A2A4A + #1F1C2E. The
+        // shared batch shipped `NestPrivacyShield` (token disc/body/heart)
+        // for exactly this screen; dark mode must stop rendering the baked
+        // SVG asset, whichever themed implementation replaces it.
+        final baked = tester
+            .widgetList<SvgPicture>(find.byType(SvgPicture))
+            .where(
+              (w) =>
+                  w.bytesLoader is SvgAssetLoader &&
+                  (w.bytesLoader as SvgAssetLoader).assetName ==
+                      NestlingIllustrations.privacyShield,
+            );
+        expect(
+          baked,
+          isEmpty,
+          reason:
+              'privacy_shield.svg bakes the light disc and a white body; '
+              'dark mode must use the token-coloured shield '
+              '(NestPrivacyShield) instead',
+        );
+        expect(
+          find.bySemanticsLabel(
+            'A shield with a leaf and a heart, protecting your family',
+          ),
+          findsOneWidget,
+          reason: 'the themed shield must keep the design alt text',
+        );
 
-      // `privacy_shield.svg` bakes the light sky tint (#E6EFFE) and a white
-      // shield body; the dark design uses #1A2A4A + #1F1C2E.
-      expect(
-        xml,
-        isNot(contains('#E6EFFE')),
-        reason: 'dark mode must not render the light-theme disc (#E6EFFE)',
-      );
-      expect(
-        xml,
-        isNot(contains('#FFFFFF')),
-        reason: 'the shield body must use the dark surface, not white',
-      );
-
-      await disposeApp(tester);
-      // P04-7: the same light-baked asset renders in both themes.
-    }, skip: true);
+        await disposeApp(tester);
+        // P04-7: the view still renders NestlingIllustrations.privacyShield.
+      },
+      skip: true,
+    );
   });
 
   group('P04-8 — failure revert vs stored value', () {
@@ -512,8 +523,7 @@ void main() {
           reason: 'still exactly one settings row',
         );
       },
-      skip: true,
-      // P04-9: setCrashConsent is an UPDATE-then-INSERT pair, not a transaction.
+      // P04-9 FIXED (iteration 4): the upsert runs in one transaction.
     );
   });
 

@@ -69,20 +69,27 @@ class PrivacyConsentRepositoryImpl implements PrivacyConsentRepository {
     // enable PRAGMA foreign_keys, so the row lands even while `families` is
     // still missing. The `watchSetting` stream re-emits and the bloc flips
     // the toggle with no optimistic bookkeeping needed here.
-    final changed =
-        await (_db.update(_db.settings)
-              ..where((s) => s.familyId.equals(Seed.familyId)))
-            .write(SettingsCompanion(crashReportConsent: Value(consent)));
-    if (changed == 0) {
-      await _db
-          .into(_db.settings)
-          .insert(
-            SettingsCompanion.insert(
-              familyId: Seed.familyId,
-              crashReportConsent: Value(consent),
-            ),
-            mode: InsertMode.insertOrIgnore,
-          );
-    }
+    //
+    // The pair runs in one transaction (P04-9): without it two overlapping
+    // calls both see the empty table and the first INSERT wins, dropping
+    // the parent's later tap. Serialised, the second call sees the
+    // committed row and its UPDATE wins — last write wins.
+    await _db.transaction(() async {
+      final changed =
+          await (_db.update(_db.settings)
+                ..where((s) => s.familyId.equals(Seed.familyId)))
+              .write(SettingsCompanion(crashReportConsent: Value(consent)));
+      if (changed == 0) {
+        await _db
+            .into(_db.settings)
+            .insert(
+              SettingsCompanion.insert(
+                familyId: Seed.familyId,
+                crashReportConsent: Value(consent),
+              ),
+              mode: InsertMode.insertOrIgnore,
+            );
+      }
+    });
   }
 }

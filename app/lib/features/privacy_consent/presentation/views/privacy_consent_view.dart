@@ -87,37 +87,52 @@ class PrivacyConsentView extends StatelessWidget {
                       const SizedBox(height: NestSpacing.s4),
                       // Not const: the rows read their titles from the shared
                       // `_promiseTitles` list (also used by the dialog).
+                      // One child (a Column) so shared NestList injects no
+                      // real Dividers: the design draws the separators as
+                      // 1 px overlays, and real Dividers would add 3 px to
+                      // the list (P04-4). Each row paints its own overlay
+                      // divider instead; the card chrome is unchanged.
                       NestList(
                         children: <Widget>[
-                          _PromiseRow(
-                            title: _promiseTitles[0],
-                            subtitle: 'No analytics profiles, no ad SDKs, ever',
-                            leadingAsset: NestIcons.noAds,
-                            tint: NestTileTint.leaf,
-                          ),
-                          _PromiseRow(
-                            title: _promiseTitles[1],
-                            subtitle:
-                                'No photos, no email, no chat, no location',
-                            leadingAsset: NestIcons.person,
-                            tint: NestTileTint.lilac,
-                          ),
-                          _PromiseRow(
-                            title: _promiseTitles[2],
-                            subtitle: 'Kept on UK servers, nothing leaves',
-                            leadingAsset: NestIcons.pinUk,
-                            tint: NestTileTint.sky,
-                          ),
-                          _PromiseRow(
-                            title: _promiseTitles[3],
-                            subtitle: 'One tap and your family data is gone',
-                            // TODO(P04): trash-can glyph pending
-                            // docs/screens/P04/SHARED_REQUEST.md
-                            // (ic_trash.svg + NestIcons.trash). The 40x40
-                            // peach tile is reserved; no stand-in icon is
-                            // used because ic_bin (cart) and ic_basket
-                            // (laundry) misrepresent the design.
-                            tint: NestTileTint.peach,
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              _PromiseRow(
+                                title: _promiseTitles[0],
+                                subtitle:
+                                    'No analytics profiles, no ad SDKs, ever',
+                                leadingAsset: NestIcons.noAds,
+                                tint: NestTileTint.leaf,
+                              ),
+                              _PromiseRow(
+                                title: _promiseTitles[1],
+                                subtitle:
+                                    'No photos, no email, no chat, no location',
+                                leadingAsset: NestIcons.person,
+                                tint: NestTileTint.lilac,
+                                showDivider: true,
+                              ),
+                              _PromiseRow(
+                                title: _promiseTitles[2],
+                                subtitle: 'Kept on UK servers, nothing leaves',
+                                leadingAsset: NestIcons.pinUk,
+                                tint: NestTileTint.sky,
+                                showDivider: true,
+                              ),
+                              _PromiseRow(
+                                title: _promiseTitles[3],
+                                subtitle:
+                                    'One tap and your family data is gone',
+                                // TODO(P04): trash-can glyph pending
+                                // docs/screens/P04/SHARED_REQUEST.md
+                                // (ic_trash.svg + NestIcons.trash). The 40x40
+                                // peach tile is reserved; no stand-in icon is
+                                // used because ic_bin (cart) and ic_basket
+                                // (laundry) misrepresent the design.
+                                tint: NestTileTint.peach,
+                                showDivider: true,
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -216,22 +231,30 @@ class PrivacyConsentView extends StatelessWidget {
 
 /// Feature-private promise row.
 ///
-/// Mirrors [NestListRow] geometry (40x40 tile, radius 12, divider indent 72
-/// from [NestList]) but P04 wins per SPACING_SPEC §9.3/§9.4: rows pad 7px
-/// vertically and title/sub wrap instead of ellipsizing. Rows are
-/// display-only (no `onTap`).
+/// Mirrors [NestListRow] geometry (40x40 tile, radius 12, divider indent 72)
+/// but P04 wins per SPACING_SPEC §9.3/§9.4: rows pad 7px vertically and
+/// title/sub wrap instead of ellipsizing. Rows are display-only (no `onTap`).
+///
+/// The separator is an overlay, not layout: with [showDivider] the content
+/// is wrapped in a [Stack] whose only extra child is a 1 px line
+/// positioned over the row's top boundary — the same reference point the
+/// design's `::before` (and shared `NestList`'s `indent: 72`) uses — so the
+/// line contributes zero height (P04-4). The row is passed without the flag
+/// for the first row of a list.
 class _PromiseRow extends StatelessWidget {
   const _PromiseRow({
     required this.title,
     required this.subtitle,
     required this.tint,
     this.leadingAsset,
+    this.showDivider = false,
   });
 
   final String title;
   final String subtitle;
   final NestTileTint tint;
   final String? leadingAsset;
+  final bool showDivider;
 
   @override
   Widget build(BuildContext context) {
@@ -245,7 +268,7 @@ class _PromiseRow extends StatelessWidget {
       NestTileTint.peach => (tokens.peachTint, tokens.aPeach),
     };
     final asset = leadingAsset;
-    return Semantics(
+    final content = Semantics(
       container: true,
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 56),
@@ -296,6 +319,23 @@ class _PromiseRow extends StatelessWidget {
           ),
         ),
       ),
+    );
+    if (!showDivider) return content;
+    // A Stack sizes to its non-positioned child, so this 1 px line paints
+    // over the row boundary without adding layout height. `left: 72`
+    // measured from the row's left edge is the same reference point the
+    // design's `::before` uses.
+    return Stack(
+      children: <Widget>[
+        content,
+        Positioned(
+          top: 0,
+          left: 72,
+          right: 0,
+          height: 1,
+          child: Divider(height: 1, thickness: 1, color: tokens.line),
+        ),
+      ],
     );
   }
 }
