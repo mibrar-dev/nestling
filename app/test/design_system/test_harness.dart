@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 
 Future<void> pumpNest(
@@ -10,7 +9,6 @@ Future<void> pumpNest(
   Size surface = const Size(390, 844),
   double textScale = 1.0,
 }) async {
-  GoogleFonts.config.allowRuntimeFetching = false;
   tester.view.physicalSize = surface * 3;
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
