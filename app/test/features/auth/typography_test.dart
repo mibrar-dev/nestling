@@ -323,6 +323,312 @@ void main() {
     });
   });
 
+  group('P03 balanced headings (BALANCED HEADINGS rule)', () {
+    // The finding itself lives in `p03_bugs_test.dart` (P03-BUG-24, red:
+    // P03 still renders a plain `Text` in a 240 dp `ConstrainedBox` where
+    // the design's `<h1 class="h1">` uses `text-wrap: balance`,
+    // components.css:29). What is here guards the *migration*: these hold
+    // today and must hold after the swap, so a fix that moves the design's
+    // break or its gutter fails here instead of on the device.
+    testWidgets('the balanced headline keeps the design break and gutter', (
+      tester,
+    ) async {
+      await _pump(tester);
+      final lines = _linesOf(
+        _paragraphOf(tester, find.text('Create your family account')),
+      );
+      expect(
+        lines.map((line) => line.text),
+        <String>['Create your', 'family account'],
+        reason:
+            'the design PNG breaks the h1 after "Create your" — the '
+            'component must not move the break',
+      );
+      lines.forEach(_expectDesignWidth);
+      expect(
+        lines.first
+            .global(
+              _paragraphOf(tester, find.text('Create your family account')),
+            )
+            .left,
+        closeTo(20, 0.6),
+        reason:
+            'the design left-aligns the h1 on the 20 px gutter; '
+            'NestBalancedText centres its narrowed box unless the call site '
+            'passes `textAlign: TextAlign.left`',
+      );
+      await disposeApp(tester);
+    });
+
+    testWidgets('the migration keeps the pixels at the design size', (
+      tester,
+    ) async {
+      // Builds the component the rule asks for, inside the cap the design
+      // needs, so the fix is known to be reachable: at 1.0
+      // `NestBalancedText` narrows the 240 dp box to 197.7 dp — the
+      // narrowest width that still holds "family account" — and neither the
+      // break nor the gutter moves. If this goes red the migration needs a
+      // different width, not a different component.
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: NestTheme.light(),
+          home: Scaffold(
+            body: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: NestSpacing.s5),
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 240),
+                  child: NestBalancedText(
+                    'Create your family account',
+                    // Colour is irrelevant to wrapping here; the screen
+                    // applies the design's `tokens.ink`.
+                    style: NestType.h1(),
+                    textAlign: TextAlign.left,
+                    maxLines: 3,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final paragraph = tester.renderObject<RenderParagraph>(
+        find.text('Create your family account'),
+      );
+      final lines = _linesOf(paragraph);
+      expect(
+        lines.map((line) => line.text),
+        <String>['Create your', 'family account'],
+        reason:
+            'inside the 240 dp cap the design break is already the '
+            'narrowest two-line break, so balancing cannot move it',
+      );
+      lines.forEach(_expectDesignWidth);
+      expect(
+        lines.first.global(paragraph).left,
+        closeTo(20, 0.6),
+        reason:
+            'the narrowed box must stay on the 20 dp gutter, which is why '
+            'the call site has to pass textAlign: TextAlign.left',
+      );
+      expect(
+        paragraph.size.width,
+        closeTo(197.7, 1),
+        reason:
+            'the component narrows the cap to the narrowest two-line '
+            'width; measured 197.68 dp',
+      );
+    });
+
+    // Shared defect, not a P03 one — see SHARED_REQUEST.md §10.
+    // `NestBalancedText.balancedWidthFor` binary-searches the narrowest
+    // width whose line count is `<= lineCount`, but the painter it measures
+    // through also applies `maxLines`. When the text needs more lines than
+    // `maxLines` allows (P03's h1 at text scale 1.3 needs 4, the cap and the
+    // call site allow 3), the count is clamped to 3 at *every* width, so the
+    // search converges to ~0 and the heading renders one glyph per line.
+    // This guard holds P03's current rendering; swapping in the component
+    // before the shared fix lands turns it red (240×0.1 dp, 132 tall).
+    testWidgets('the headline is not a per-glyph column at text scale 1.3', (
+      tester,
+    ) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await _pump(tester);
+
+      final finder = find.text('Create your family account');
+      final paragraph = tester.renderObject<RenderParagraph>(finder);
+      final lines = _linesOf(paragraph);
+      expect(
+        paragraph.size.width,
+        greaterThan(150),
+        reason:
+            'a balanced wrap must never collapse the box; a ~0 dp box '
+            'renders one glyph per line (SHARED_REQUEST §10)',
+      );
+      expect(
+        lines.every((line) => line.box.width > 100),
+        isTrue,
+        reason:
+            'every headline line must carry words, not single glyphs; '
+            'got ${lines.map((line) => line.text).toList()}',
+      );
+      // What the design-sized cap does today: three lines, the last one a
+      // single word. Recorded so a fix is not judged against a reference the
+      // design does not have.
+      expect(lines.map((line) => line.text), <String>[
+        'Create your',
+        'family',
+        'account',
+      ]);
+      await disposeApp(tester);
+    });
+
+    testWidgets('the body, caption and CTA keep plain Text', (tester) async {
+      await _pump(tester);
+      // "Never use it on .h2/.h3/.body/.caption": the subtitle, the helper,
+      // the note row and the CTA label are body/caption text and must stay
+      // outside the balancing component, so that fixing P03-BUG-24 cannot
+      // spread the component over the whole screen.
+      for (final text in <String>[
+        _subtitle,
+        'At least 8 characters',
+        'No child emails or photos \u2014 ever.',
+        'Create account',
+      ]) {
+        final finder = find.text(text);
+        expect(finder, findsOneWidget, reason: 'missing "$text"');
+        expect(
+          find.descendant(of: finder, matching: find.byType(NestBalancedText)),
+          findsNothing,
+          reason: '"$text" is body/caption text and must stay a plain Text',
+        );
+      }
+      await disposeApp(tester);
+    });
+  });
+
+  group('P03 shapes match the design PNG (UI checks measure shapes)', () {
+    // Visible background/border rects measured from
+    // `design/screens/light/P03-create-account.png` at 3x, divided by 3 —
+    // not where the text lands. A pill that collapsed to its text width, or a
+    // field that lost its fill, passes a text-only check and fails these.
+    testWidgets('the fields, brand pills and rules are the design shapes', (
+      tester,
+    ) async {
+      await _pump(tester);
+
+      Rect fieldTop(String key) => tester.getRect(
+        find.descendant(
+          of: find.byKey(ValueKey(key)),
+          matching: find.byType(TextField),
+        ),
+      );
+
+      final email = fieldTop('p03_email');
+      final password = fieldTop('p03_password');
+      final apple = tester.getRect(
+        find.byKey(const ValueKey('p03_apple')).first,
+      );
+      final google = tester.getRect(
+        find.byKey(const ValueKey('p03_google')).first,
+      );
+
+      // Every full-width shape spans the 350 px column between the gutters.
+      for (final entry in <String, Rect>{
+        'email field': email,
+        'password field': password,
+        'Apple button': apple,
+        'Google button': google,
+      }.entries) {
+        expect(
+          entry.value.left,
+          closeTo(20, 0.5),
+          reason: '${entry.key} starts on the 20 px gutter (ALIGNMENT rule)',
+        );
+        expect(
+          entry.value.width,
+          closeTo(350, 0.5),
+          reason: '${entry.key} is a 350 px full-column shape in the design',
+        );
+      }
+      expect(email.top, closeTo(443, 1), reason: 'design 443.00');
+      expect(email.height, closeTo(52, 0.5), reason: 'design 443..495');
+      expect(password.top, closeTo(535, 1), reason: 'design 535.00');
+      expect(password.height, closeTo(52, 0.5), reason: 'design 535..587');
+      expect(apple.top, closeTo(255, 1), reason: 'design 255.00');
+      expect(apple.height, closeTo(52, 0.5), reason: 'design 255..306.67');
+      expect(google.top, closeTo(319, 1), reason: 'design 319.00');
+      expect(google.height, closeTo(52, 0.5), reason: 'design 319.00..371.00');
+
+      // The "or" row's two rules: 1 px hairlines at the label's vertical
+      // centre, design y 395..396, x 20..176 and 214..370.
+      final rules =
+          <Rect>[
+              for (final element
+                  in find
+                      .byType(Divider)
+                      .evaluate()
+                      .where((e) => e.widget is Divider))
+                tester.getRect(find.byWidget(element.widget)),
+            ].where((r) => r.top > 380 && r.bottom < 420).toList()
+            ..sort((a, b) => a.left.compareTo(b.left));
+      expect(rules, hasLength(2), reason: 'the design draws exactly two rules');
+      for (final rule in rules) {
+        expect(rule.height, closeTo(1, 0.01), reason: 'a 1 px hairline');
+        expect(rule.top, closeTo(395, 1), reason: 'design 395.00..396.00');
+      }
+      // Design: left rule x 20..176, right rule x 214..370, so the 13 px
+      // label plus two 12 px gaps leaves 38 px between them.
+      expect(rules.first.left, closeTo(20, 0.5));
+      expect(rules.first.right, closeTo(176, 1));
+      expect(rules.last.left, closeTo(214, 1));
+      expect(rules.last.right, closeTo(370, 0.5));
+      expect(
+        rules[1].left - rules[0].right,
+        closeTo(38, 1),
+        reason: 'design 214 − 176 = 38',
+      );
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the CTA pill is the design shape inside the panel', (
+      tester,
+    ) async {
+      await _pump(tester);
+      final panel = tester.getRect(find.byType(NestBottomCta));
+      final button = tester.getRect(find.byKey(const ValueKey('p03_submit')));
+      // Design: x 20..370 (a 350 px pill), y 694..746, inside a panel that
+      // starts at 677 — 16 px below the panel top. (A scan near the pill's
+      // bottom row reads 29.33..360.67 because of the 26 px corner radius;
+      // the box is the full column.) The test surface has no 34 dp
+      // home-indicator inset, so the panel's own top differs from the
+      // device; the shape and the offsets are what this pins.
+      expect(button.left, closeTo(20, 0.5));
+      expect(button.width, closeTo(350, 0.5));
+      expect(button.height, closeTo(52, 0.5), reason: 'design 694..746');
+      expect(
+        button.top - panel.top,
+        closeTo(16, 0.5),
+        reason: 'the design leaves 16 px above the pill (694 − 678)',
+      );
+      await disposeApp(tester);
+    });
+  });
+
+  group('P03 adds no letter spacing (LETTER SPACING rule)', () {
+    testWidgets('every rendered run has zero tracking', (tester) async {
+      await _pump(tester);
+      // `NestType` styles default to 0 because the design CSS tracks nothing;
+      // the rule allows tracking only where a screen's CSS sets it, and
+      // P03's CSS sets none. Walks the paragraphs, so a `copyWith` that
+      // re-introduced Material tracking would be caught here.
+      final paragraphs = find.byType(RichText).evaluate();
+      expect(paragraphs, isNotEmpty);
+      final tracked = <String>[];
+      for (final element in paragraphs) {
+        final paragraph = element.widget as RichText;
+        paragraph.text.visitChildren((span) {
+          final style = span.style;
+          if (style != null && (style.letterSpacing ?? 0) != 0) {
+            tracked.add('"${span.toPlainText()}" ${style.letterSpacing}');
+          }
+          return true;
+        });
+      }
+      expect(
+        tracked,
+        isEmpty,
+        reason: "P03's CSS tracks nothing, so no run may carry tracking",
+      );
+      await disposeApp(tester);
+    });
+  });
+
   group('P03 layout sits on the design PNG bands', () {
     // Every band's top is the ink or box top measured at 3x from
     // `design/screens/light/P03-create-account.png` and divided by 3; the

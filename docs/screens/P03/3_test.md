@@ -1,4 +1,4 @@
-# P03 Create account — test notes (Stage 3, iteration 6)
+# P03 Create account — test notes (Stage 3, iteration 7)
 
 Route `/create-account` · feature `auth` · parent mode. Tests live in
 `app/test/features/auth/`; the in-memory Drift DB comes from
@@ -8,207 +8,200 @@ was touched by this stage.
 
 ## Verdict
 
-**One real bug is open**: P03-BUG-23 — the form block sits 2 dp below the
-design because `_OrRow` paints an 18 dp caption line box where the design's
-`.or-label` has no line-height. It is proved twice (a font-independent proof
-in the bugs file and the design's absolute bands with the design's own
-fonts), it is a screen-local one-line fix, and Stage 3 must not patch the
-screen — so `flutter test` is red by design: **157 green, 2 red (the same
-bug), 0 skipped**.
+**One finding is open**: P03-BUG-24 — the headline ignores the BALANCED
+HEADINGS rule. The design's `.h1` sets `text-wrap: balance`
+(`components.css:29`) and the HTML is `<h1 class="h1">`
+(`P03-create-account.html:36`), so the rule requires `NestBalancedText`; P03
+still renders a plain `Text` inside a hand-calibrated
+`ConstrainedBox(maxWidth: 240)`, which is exactly the pattern the rule
+replaces. It is **not** a pixel defect — the cap already reproduces the
+design's break — so this stage returns FAIL for rule compliance, not for a
+wrong frame.
 
-Everything the iteration-6 build claims is verified, and one of the two
-open items from iteration 5 is now closed with stronger evidence:
+While proving the migration feasible I found a **shared-component defect** that
+blocks it: with `maxLines` set, `NestBalancedText` collapses to a 0.1 dp box
+at text scale 1.3 and renders one glyph per line. Filed as
+`SHARED_REQUEST.md` §10 with measurements; P03's own guard for it is green
+today and turns red if the migration lands before the shared fix.
 
-- **BUG-16 (the missing danger border) — fixed, and the old proof was
-  weaker than it looked.** The proof read the `InputDecoration` the field is
-  handed, which is the painter's *input*, not its output. It now also reads
-  the raster: with the raster settled, the invalid field's top edge is two
-  rows of `c93a3a` (the design-system 2 dp danger border) over the 1 dp
-  `line` border the clean field wears. Worth recording: my first readings
-  showed `line` in the invalid state — the pixel probe had sampled before the
-  raster thread caught up, which looks exactly like a live bug and is not
-  one. `pixel_probe.dart` settles the raster for that reason and says so.
-- **BUG-22 (the overhang fallback double-fired)** — verified by its proof.
-- **BUG-17 (the subtitle's early wrap, shared §6)** — fixed, and now
-  provable *locally*: see the fonts section below.
+Everything else is green: **166 passed, 1 failed, 0 skipped** in the feature
+suite; `flutter analyze` → `No issues found!`.
 
-## The unlock: the design's own fonts in a widget test
+## What iteration 7 closed
 
-For iterations 1–5 the harness' fallback font made every line-break claim
-untestable, so P03's wrap points could only be measured on the simulator. The
-shared batch bundled the designs' Inter 4.001 / Nunito 3.602 builds, and a
-`FontLoader` (the technique `body_text_width_test.dart` already uses) puts
-them into the widget tree: `At least 8 characters` then measures 126.74 dp
-against the design PNG's 126.00 dp, and the real wraps appear.
+- **P03-BUG-23 (MINOR) — fixed.** The build gave `_OrRow`'s label the
+  design's own line box (`_orLabelLineBox = 15.7`, derived from the caption
+  token's own metrics). Both proofs are green again: the font-independent one
+  (`P03-BUG-23 the form block starts at the design band`) and the
+  design-fonts one (`the form bands are the design's`). With the design's
+  fonts loaded, the email field's top is 443.00 and the password field's
+  535.00 — the design PNG's exact bands.
+- **P03-BUG-16 / 22 / 17** stay green (danger border in the raster, the
+  overhang gate, the design's subtitle break with the bundled fonts).
+- **The skip is gone.** The bug-hunt stage left `P03-BUG-24` in
+  `p03_bugs_test.dart` marked `skip: true`. A skipped proof is not evidence and
+  skipping tests is forbidden, so Stage 3 removed the marker and extended the
+  proof (it now also pins `textAlign: TextAlign.left` and the painted gutter,
+  not just the widget type). It is the suite's only red.
 
-`typography_test.dart` (new, 9 tests) therefore pins what five iterations
-could not:
+## Orchestrator note for iteration 8 — one conflict to arbitrate
 
-| string | design break, now asserted | measured vs design ink |
-|---|---|---|
-| headline (Nunito 900 28/34) | `Create your` / `family account` | 158.56 / 157.33, 197.68 / 198.00 |
-| subtitle (Inter 400 16/24) | `You’re the grown-up in charge. Children never` / `need an email.` | 349.05 / 349.06 advance (1% pin) |
-| helper (Inter 400 13/18) | one line | 126.74 / 126.00 |
-| caption (13/20 links) | `By continuing you agree to our Terms and` / `Privacy Notice` | 258.15 / 261.00, 91.31 / 91.33 |
+`ORCHESTRATOR_NOTES.md`'s new UPDATE asks the build to render the h1 with
+`NestBalancedText` **and delete the hand-made `maxWidth` constant**, with the
+acceptance criterion "the lines must still match the design bands exactly —
+L1/L2 tops 112.67 / 146.00". Those two halves cannot both hold against the
+design PNG, and the numbers are:
 
-plus the line pitches (34 / 24 / 20), the 20 px gutter on the header pair,
-the caption's centring, no ellipsis at 390, no orphaned link at 320 / 430 /
-scale 1.3, and the same breaks in dark mode. The device agrees: on
-`ui/filled-light.png` the headline sits at 112.67/146.00 dp and the subtitle
-at 189.00/213.00 dp against the design's 112.67/146.00 and 188.67/212.67 —
-i.e. **BUG-17 is gone on the device too**, with the shared fonts and no local
-change.
+- The design's h1 box is the full 350 dp column (`.scroll { padding: 0 20px }`,
+  components.css:65; the screen HTML adds only `.head h1 { display: block }`).
+  In 350 dp, greedy *and* balanced both break after "family": line 1 is
+  `Create your family`, 251.2 dp of advance.
+- The design PNG breaks after **your**: line 1 ink 157.33 dp, line 2
+  `family account` 197.68 dp. A 350 dp box cannot produce that; any box in
+  [197.7, 251.2) can, which is exactly the range the deleted comment
+  documented. So the PNG's break is only reachable with a cap.
+- Both breaks are two lines with the same 34 dp pitch, so the orchestrator's
+  tops (112.67 / 146.00) pass either way — the criterion cannot tell them
+  apart; the ink width can.
+
+Decision needed, and the tests state both options:
+
+- **Keep the 240 dp cap** → the design PNG's break and ink widths are
+  reproduced (`the balanced headline keeps the design break and gutter` stays
+  green), and the balance component is a no-op that narrows the box to
+  197.68 dp without moving anything.
+- **Drop the cap** → the rule's letter is satisfied and the tops still match,
+  but line 1 grows from 158.56 dp to ~251 dp and no longer matches the design
+  PNG; `the balanced headline keeps the design break and gutter` goes red.
+
+This stage pins the design PNG (the stage brief's reference), so the green
+guard fails if the cap is dropped; that is deliberate, not an accident.
+
+Also checked: no `zz_`/`*probe*` scratch files remain in
+`app/test/features/auth/` (orchestrator item 2), and `flutter analyze` is
+clean.
 
 ## Tests added this stage
 
-- `typography_test.dart` (new) — **9 tests**: the four design breaks, the
-  three line pitches, gutter/centre alignment, no truncation, 320/430, text
-  scale 1.3, dark mode, and the design-band group (1 of its 1 test is the
-  red BUG-23 band proof).
-- `p03_bugs_test.dart` 29 → **30** (+1, red): P03-BUG-23; the BUG-16 proof
-  gained the painted-pixel assertions.
-- `create_account_view_test.dart` 37 → **38** (+1, green): *no coloured strip
-  is painted under the CTA bar* — the owner's BOTTOM EDGE rule as raster
-  pixels in both themes, in four columns outside the caption's own column,
-  from the submit button's last row to the physical edge. The existing proof
-  reads the bar's `BoxDecoration`; a shadow or a tint that lands after the
-  bar's box still fails this one.
-- `pixel_probe.dart` (new helper, no tests) — settled-raster column reader,
-  `hexOf`/`hexOfRow`, with a guard that the outermost repaint boundary still
-  sits at the view origin (a nesting change would otherwise shift every
-  reading silently).
-- Deleted `test/features/auth/_scratch_i6_test.dart`, left behind by the
-  build stage: it reported two `flutter analyze` infos.
+`typography_test.dart` 9 → **16** (+7, all green — the finding itself lives in
+the bugs file, per the house pattern):
+
+- **Shapes, not only text (new UI-check rule).** Every visible
+  background/border rect measured from the design PNG at 3× and pinned:
+  the two field boxes (x 20, width 350, tops 443 / 535, height 52), the Apple
+  and Google pills (tops 255 / 319, height 52), the "or" row's two 1 px
+  hairlines (y 395, x 20..176 and 214..370 — 38 px of gap for the 13 px label
+  and two 12 px gaps), and the CTA pill (x 20, width 350, height 52, 16 dp
+  below the panel top). A collapsed pill, a lost fill or a shifted rule now
+  fails here even if the text lands in the right place.
+- **BALANCED HEADINGS, migration guards.** `the balanced headline keeps the
+  design break and gutter` and `the migration keeps the pixels at the design
+  size` build the component the rule asks for inside the cap the design needs
+  and assert it reproduces `Create your` / `family account`, the design's ink
+  widths, the 20 dp gutter and the measured 197.68 dp narrowed box. `the body,
+  caption and CTA keep plain Text` asserts the subtitle, helper, note row and
+  CTA label stay outside the component ("never use it on
+  .h2/.h3/.body/.caption"), so a fix cannot spread it.
+- **Collapse guard.** `the headline is not a per-glyph column at text scale
+  1.3` asserts the rendered box stays wider than 150 dp and every line carries
+  words — green today, red if the component is swapped in before §10 lands.
+- **LETTER SPACING rule.** `every rendered run has zero tracking` walks every
+  `RichText` on the screen (including the rebuilt `_OrRow` style) and fails on
+  any non-zero `letterSpacing`.
+
+`p03_bugs_test.dart` 30 → **31** (+1, red): P03-BUG-24, un-skipped and
+extended. No other file changed.
 
 ## Bugs found
 
-### P03-BUG-23 (MINOR, OPEN) — the form block sits 2 dp below the design
+### P03-BUG-24 (MAJOR, mandatory rule — OPEN) — the headline ignores BALANCED HEADINGS
 
-`app/lib/features/auth/presentation/views/create_account_view.dart:280-299`
-(`_OrRow`).
+`app/lib/features/auth/presentation/views/create_account_view.dart:39` and
+`:103-111` — `static const double _headlineMaxWidth = 240;` wrapping
+`Text('Create your family account', style: NestType.h1(…), maxLines: 3)`.
 
-Repro: `docs/screens/P03/ui/filled-light.png` against
-`design/screens/light/P03-create-account.png` —
-`tools/screens/compare.py` → **mean 2.08% light, 2.05% dark** (the first
-apples-to-apples comparison of this screen: the design PNG is the FILLED
-state, the app correctly launches empty).
+Repro:
+`flutter test test/features/auth/p03_bugs_test.dart --plain-name "P03-BUG-24"`.
+`find.byType(NestBalancedText)` → 0 widgets.
 
-Band tops, design → app:
+No pixel difference at the design size: with the design's fonts the cap
+already yields `Create your` (158.56 dp) / `family account` (197.68 dp) on the
+20 dp gutter, matching the design PNG. The cost of the cap is that it is
+hand-calibrated ("any cap in [198, 252) breaks the design's wrap") and drifts
+silently when a type token changes — the reason the rule exists.
 
-| band | design | app | Δ |
-|---|---|---|---|
-| headline L1 / L2 | 112.67 / 146.00 | 112.67 / 146.00 | 0 |
-| subtitle L1 / L2 | 188.67 / 212.67 | 189.00 / 213.00 | +0.33 |
-| Apple / Google button | 255.00 / 319.00..371.00 | 255.00 / 319.00..371.00 | 0 |
-| "or" row | 392.67 | 393.67 | +1 |
-| Email label | 423.00 | 425.00 | +2 |
-| email field | 443.00 | 445.00 | +2 |
-| password label / field | 515.33 / 535.00 | 517.33 / 537.00 | +2 |
-| helper | 597.33 | 599.33 | +2 |
-| note row | 625.67 | 627.67 | +2 |
-| CTA panel top | 677.00 | 678.00 | +1 |
+Two things the migration must respect, both measured (design fonts loaded):
 
-Cause: `_OrRow` styles its label `NestType.caption`, whose line box is
-`--lh-caption` = 18 dp. The design's `.or-label` (`P03-create-account.html:27`)
-sets `font-size: 13px; font-weight: 600` and **no** line-height, so its row
-is 13 px × Inter's normal line height ≈ 15.7 dp. The 2.3 dp lands on every
-element below the row. Per the ALIGNMENT rule ("nothing a few px off"),
-that is a UI failure, so the verdict is FAIL.
+1. **`textAlign: TextAlign.left`.** The component centres its narrowed box by
+   default; the design left-aligns both lines on the gutter.
+2. **Keep the 240 dp cap.** Inside it the component narrows to 197.68 dp and
+   neither the break nor the ink moves. Dropping it moves the 390 dp break to
+   `Create your family` / `account`.
 
-Fix (build stage, one line, screen-local): style the label with the design's
-metrics instead of the caption token — e.g.
-`NestType.caption(color: tokens.ink2).copyWith(height: null, fontWeight: FontWeight.w600)`
-— then both proofs go green. Note `SHARED_REQUEST.md` §7 is the neighbouring
-case (the legal caption's 13/20), and §9 records the pattern for the
-orchestrator: any screen that uses the caption token for a label the design
-gives no line-height will be 2.3 dp tall.
+### Shared defect (filed, not a P03 bug) — `NestBalancedText` collapses when `maxLines` clips
 
-Proved twice, both red:
-- `p03_bugs_test.dart` — *P03-BUG-23 the form block starts at the design
-  band*: the or-label's line box must be < 17 dp (it is 18.0) and the
-  Google-bottom → email-field-top gap must be the design's 71.7 dp
-  (16 + 15.7 + 16 + 24). Font-independent by construction: `NestType.caption`
-  sets its height explicitly, so the row is 18 dp whatever family the harness
-  resolves.
-- `typography_test.dart` — *the form bands are the design's*, with the
-  design's fonts loaded and the design PNG's absolute bands: the Google
-  button's bottom is exact, the two field tops are 445.00 / 537.00 against
-  443.00 / 535.00. This is the same measurement as the device capture.
+`app/lib/core/design_system/components/nest_balanced_text.dart`
+(`balancedWidthFor`). The binary search asks for the narrowest width whose line
+count is `<= lineCount`, but it measures through the same `maxLines`-clamped
+painter. When the text needs more lines than `maxLines` allows, the count is
+clamped at every width, the predicate never fails, and the search converges to
+~0.
 
-### Ruled out (not defects)
+| text scale | plain `Text` | `NestBalancedText(maxLines: 3)` |
+|---|---|---|
+| 1.0 | 240.00 × 68.00 dp, `Create your` / `family account` | 197.68 × 68.00 dp, same two lines |
+| 1.3 | 240.00 × 132.00 dp, `Create your` / `family` / `account` | **0.10 × 132.00 dp, `C` / `r` / `eate your family account`** |
 
-- The CTA panel's top is 1 dp low (678 vs 677). Its content — the button at
-  694–746 and both caption lines at 759–792 — is exact, and the panel's
-  height is the 34 dp home-indicator inset; 1 dp there is rounding, not
-  misalignment. It is *not* in the band proof for that reason (the test
-  surface has no safe area, so its panel top is 712 dp).
-- The caption's first line's ink is 256.0 dp wide against the design's 261.0
-  (2.3% — the design's underline extents differ marginally). Rows and
-  centring are exact; the copy audit is byte-identical.
-- The design PNG paints `paper` below y=810 (a strip under the bar). The app
-  paints the bar's surface to y=844, which is the owner's BOTTOM EDGE rule
-  overriding the design — correct, and now proven in pixels.
-
-## Device evidence
-
-`docs/screens/P03/filled_shot.sh` (new, in this screen's notes directory
-because `tools/screens/**` is off-limits to screen agents) captures the
-**filled** state — ORCHESTRATOR_NOTES QA item 3, open since iteration 2.
-`idb ui text` cannot be used on this machine: its HID path needs
-`SimulatorKit.framework`, which this Xcode install does not ship
-(`/Applications/Xcode.app/Contents/Developer/Library/PrivateFrameworks/`
-does not exist). The script therefore generates a throwaway `flutter drive`
-target + driver, types the design's values through the fields' controllers
-and the bloc (never by tapping — a tap scrolls the form and the capture
-shows an interaction, not the design), writes
-`ui/filled-light.png` and `ui/filled-dark.png`, and deletes itself. It never
-runs an interactive `flutter run`.
-
-- `ui/filled-light.png`, `ui/filled-dark.png` — the design's own state:
-  `sarah@example.co.uk`, 18 dots, the eye toggle, the enabled green CTA,
-  headline / subtitle / helper / note row / two caption lines.
-- `ui/compare-filled-light.png` (2.08%), `ui/compare-filled-dark.png`
-  (2.05%). Bands: 0–3 under 1.3%, 4–7 (fields → CTA) 3.1–4.5% — the BUG-23
-  offset plus the enabled-vs-disabled button fill.
+`SHARED_REQUEST.md` §10: search on the unclamped count, or fall back to the
+full-width `Text` when the unclamped count already exceeds `maxLines`.
+**Blocks** the migration as specified (the proof requires `maxLines: 3`, which
+is also what bounds the heading at text scale 1.3); not blocking if the
+migration drops `maxLines`.
 
 ## Rules checked this iteration
 
-- **FONTS**: no `google_fonts` import or `GoogleFonts.*` call anywhere in
-  `lib/features/auth/` or `test/features/auth/` (the build stage removed the
-  last ones; `grep` confirms none).
-- **LETTER SPACING**: P03 adds no tracking; `NestType` styles are used
-  as-is, and the only `copyWith` calls are `height` and `color`.
-- **CHIP ROWS**: N/A — P03 has no `NestChip`.
-- **CHILD ORDER**: N/A — P03 renders no child list.
-- **COPY**: unchanged, all nine strings byte-identical to the HTML
+- **SIMULATORS**: none used. Stage 3 must never boot, install on, screenshot
+  or drive a simulator; the filled-state captures
+  (`ui/filled-light.png`, `ui/filled-dark.png`) are iteration-6 evidence and
+  were not re-taken. `docs/screens/P03/filled_shot.sh` is left in place for
+  stage 5, which owns simulator use.
+- **BALANCED HEADINGS**: the finding above; body/caption text verified to stay
+  outside the component.
+- **UI CHECK MEASURES SHAPES**: covered by the new shape-rect group.
+- **LETTER SPACING**: zero tracking verified across every rendered run.
+- **FONTS**: no `google_fonts` import or `GoogleFonts.*` call in
+  `lib/features/auth/` or `test/features/auth/`.
+- **CHIP ROWS**: N/A — P03 renders no `NestChip` (checked).
+- **TRIAL / PERIODS / CHILD ORDER / PIP / DATA OVER MOCKS**: N/A — P03 writes
+  no `subscription_status`, lists no children, shows no Pip, and its submit
+  path takes no numbers.
+- **BOTTOM EDGE / ALIGNMENT**: both keep their pixel proofs; alignment
+  produced P03-BUG-23 last iteration and is now green.
+- **COPY**: unchanged — all nine strings byte-identical to the HTML
   (`copy_audit_test.dart` 11/11).
-- **BOTTOM EDGE / ALIGNMENT**: both now have pixel proofs (see above);
-  ALIGNMENT produced P03-BUG-23.
-- **PIP / DATA OVER MOCKS / PERIODS**: N/A for this screen.
-- **PROCESS**: the build stage left `_scratch_i6_test.dart` in the feature's
-  test directory (deleted here — it reported two `flutter analyze` infos);
-  uncommitted work and merge order are not reported as findings.
+- **PROCESS**: not reported as findings. The only hygiene item was the
+  `skip: true` above, which I removed because the rules forbid skipping tests
+  and a skipped proof is not evidence.
 
 ## Results (`app/`)
 
-- `dart format --set-exit-if-changed .` → `Formatted 377 files (0 changed)`.
+- `dart format --set-exit-if-changed .` → `Formatted 394 files (0 changed)`.
 - `flutter analyze` → `No issues found!` — no ignores, no weakened options.
-- `flutter test test/features/auth` → **157 passed, 0 skipped, 2 failed**
-  (both the P03-BUG-23 proofs). Declared per file: `auth_bloc_test.dart` 20,
+- `flutter test test/features/auth` → **166 passed, 0 skipped, 1 failed** (the
+  P03-BUG-24 proof). Declared per file: `auth_bloc_test.dart` 20,
   `create_account_view_test.dart` 38, `copy_audit_test.dart` 11,
-  `p03_bugs_test.dart` 30, `seeded_submit_test.dart` 7,
-  `typography_test.dart` 9.
-- `flutter test` (full suite) → **851 passed, 0 skipped, 2 failed**.
+  `p03_bugs_test.dart` 31, `seeded_submit_test.dart` 7,
+  `typography_test.dart` 16, plus the looped matrix cases.
+- `flutter test` (full suite) → **1183 passed, 0 skipped, 1 failed**.
 
 ## For the next stage
 
-1. Fix `_OrRow`'s label style (one line, screen-local) → both BUG-23 proofs
-   go green and this stage can return PASS.
-2. `ORCHESTRATOR_NOTES` QA item 3 is satisfied by
-   `docs/screens/P03/filled_shot.sh`; the UI stage can compare
-   `ui/filled-*.png` against the design instead of the empty launch frame,
-   which is what the design actually shows.
-3. `SHARED_REQUEST.md` §7 (a 13/20 legal-caption token) is still the only
-   open shared item and is non-blocking.
+1. `SHARED_REQUEST §10` first: `NestBalancedText` must not collapse when
+   `maxLines` clips. P03's guard turns red without it.
+2. Then the P03-BUG-24 migration: `NestBalancedText(text, style: NestType.h1(
+   color: tokens.ink), textAlign: TextAlign.left, maxLines: 3)` inside the
+   existing 240 dp cap. The two typography guards must stay green.
+3. `SHARED_REQUEST §7` (a 13/20 legal-caption token) remains the only other
+   open shared item; non-blocking, pinned by `P03-BUG-12`.
 
 VERDICT: FAIL

@@ -153,3 +153,35 @@ replaces only the line box (`_OrRow._orLabelLineBox = 15.7`), so the second
 override stays screen-local too. If §7 is ever actioned, the useful shape is
 a "label whose CSS sets no line-height" variant alongside `legalCaption` —
 otherwise the next screen repeats this 2.3 dp.
+
+## 10. `NestBalancedText` collapses to a ~0 dp box when `maxLines` clips the
+## natural line count (blocks the P03 balanced-heading migration)
+
+Found by Stage 3, iteration 7, while proving the BALANCED HEADINGS migration
+feasible. `balancedWidthFor` binary-searches the narrowest width whose line
+count is `<= lineCount`, but it measures through the same `maxLines`-clamped
+painter it is searching in (`lineCountFor` forwards `maxLines`). When the text
+needs more lines than `maxLines` allows, the count is clamped at every width,
+so the predicate never turns false and the search converges to ~0.
+
+Measured with P03's h1 — `Create your family account`, Nunito 900 28/34, inside
+the 240 dp cap the design needs, `textAlign: TextAlign.left`:
+
+| text scale | plain `Text` | `NestBalancedText(maxLines: 3)` |
+|---|---|---|
+| 1.0 | 240.00 × 68.00 dp, `Create your` / `family account` | 197.68 × 68.00 dp, same two lines (correct) |
+| 1.3 | 240.00 × 132.00 dp, `Create your` / `family` / `account` | **0.10 × 132.00 dp, `C` / `r` / `eate your family account`** |
+
+Need: search on the *unclamped* line count (`lineCountFor(maxLines: null)`)
+and only narrow while that count equals the target; if the unclamped count
+already exceeds `maxLines`, fall back to the full-width `Text` (the greedy wrap
+is then the best available). A unit test on the component's two static
+helpers would pin both branches; P03's own guard is
+`test/features/auth/typography_test.dart` ("the headline is not a per-glyph
+column at text scale 1.3"), which is green today and turns red if the
+migration lands before this fix.
+Files: `app/lib/core/design_system/components/nest_balanced_text.dart`
+(`balancedWidthFor`, `build`). Blocks: **yes** for the P03-BUG-24 migration as
+specified (it must keep `maxLines: 3`, which the design's 3-line break at text
+scale 1.3 relies on); no if the migration drops `maxLines`, which would leave
+the heading unbounded.

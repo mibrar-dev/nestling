@@ -1,136 +1,145 @@
-# P03 Create account — bug hunt (Stage 6, iteration 6)
+# P03 Create account — bug hunt (Stage 6, iteration 7)
 
 Route `/create-account` · feature `auth` · parent mode · design
 `design/screens/{light,dark}/P03-create-account.png` + HTML source. Tree
-tested: the iteration-6 INTEGRATE checkpoint `520cd82` plus its
-`2_build.md` (PASS), `4_review.md` (PASS, iteration 6) and `5_ui.md`
-(PASS, iteration 6). **No screen code was changed by this stage** — only
-this report. `ORCHESTRATOR_NOTES.md`'s items and the standing rules (PIP —
-vacuous here, status bar, data-over-mocks, bottom edge, alignment, COPY,
-CHILD ORDER — N/A, FONTS, LETTER SPACING, CHIP ROWS — N/A) were applied.
+tested: the iteration-7 INTEGRATE checkpoint `5e70e1a` plus the work in
+progress. **No screen code was changed by this stage** — the bugs file
+gained the P03-BUG-24 proof and two stale-comment fixes, and this report was
+written. `ORCHESTRATOR_NOTES.md` and the standing rules (PIP — vacuous, status
+bar, data-over-mocks, bottom edge, alignment, COPY, CHILD ORDER — N/A, FONTS,
+LETTER SPACING, CHIP ROWS — N/A, BALANCED HEADINGS, TRIAL, SIMULATORS) were
+applied. **No simulator was used by this stage** (UI stage only).
 
-**Concurrency note (process, not a finding):** the iteration-6 **test stage
-was running in this same worktree while this stage worked** (it owns
-`app/test/features/auth/**`). I left its in-flight `zz_probe3_test.dart`
-alone and removed two stale probe leftovers (`zz_probe_test.dart`,
-`zz_probe2_test.dart`) that were breaking `flutter analyze`; they contained
-no test logic and appear in no report. The suite numbers below are the
-checkpoint's; stage 3 will publish the iteration-6 run.
+**Concurrency note (process, not a finding):** the iteration-7 **test stage
+is running in this worktree while this stage works** (process `254`/`284`
+family); its transient `zz_probe*_test.dart` files come and go in
+`test/features/auth/`. I left them alone; the numbers below are the auth
+suite as measured during this stage (166 passed / 1 skipped) and the build
+checkpoint's full-suite figure.
 
-## Ledger — nothing open on P03
+## Ledger
 
 | ID | Severity | Area | Status |
 |---|---|---|---|
-| P03-BUG-1…15 | — | iterations 1–4's bugs | **all fixed**; proofs green regression guards |
-| P03-BUG-16 | minor | invalid field painted no danger border | **fixed iteration 6** (Decision B: shared row wins) |
-| P03-BUG-17 | minor | subtitle broke after “Children” | **resolved shared-side** (bundled Inter/Nunito) |
-| P03-BUG-18…21 | — | overhang reachability, first-frame/stale measurement, live regions | **all fixed**; proofs green |
-| P03-BUG-22 | minor | overhang fallback double-fired in the button/link overlap | **fixed iteration 6** (gesture-entry gate) |
+| P03-BUG-1…23 | — | iterations 1–6's bugs (incl. BUG-23, the 2dp form offset) | **all fixed**; proofs green |
+| **P03-BUG-24** | **MAJOR (mandatory rule)** | the headline ignores the BALANCED HEADINGS rule and still uses a hand-calibrated `maxWidth: 240` cap | **open this stage**; proof `P03-BUG-24`, skip-marked |
 
-Only `SHARED_REQUEST.md` §7 remains open on the screen — the non-blocking
-`NestType.legalCaption` (13/20) token request; the current override is pinned
-by P03-BUG-12 and the geometry matches the design. No proof on this screen is
-skip-marked.
+## P03-BUG-24 (MAJOR, mandatory rule) — the headline is not rendered with `NestBalancedText`
 
-## Independent verification done this stage
+**Where** `create_account_view.dart:39` (`_headlineMaxWidth = 240`) and
+`:101-112`:
 
-- **P03-BUG-16 (danger border + announcement).** Both fields now pass
-  `errorText` to the shared field and the screen-owned rows are gone. My own
-  probe of the invalid state finds: the shared row is a labelled live region
-  (`emailLive=true, emailLabel="Enter a valid email address"`, same for the
-  password), the helper row is hidden (`At least 8 characters` → 0 nodes),
-  and the danger border comes from the field's `InputDecoration`
-  (`enabledBorder` switches on `errorText`, asserted by the green
-  `P03-BUG-16` proof). BUG-11's gutter message is preserved because the
-  shared row renders on the same 20dp gutter.
-- **P03-BUG-22 (overlap double-fire), plus BUG-18 preserved.** At the
-  harness-synthesised device geometry (390×844, `textScale 0.7`, because the
-  test font is ~2× wider than Inter) the measurements are: button
-  `y 740–792`, Terms target `y 785–829`, caption Stack `y 800–828`. A hit
-  test at the overlap point now yields **`terms=false, button=true`** (fixed);
-  a point in the gap above the Stack (`796`) and one on the bottom overhang
-  (`828`) still yield **`terms=true`** (BUG-18 intact).
-- **The `!hit` question is settled.** Probing an empty bar point outside the
-  caption Stack (100, 835) shows the bar chain in the hit path — the bar's
-  `RenderDecoratedBox` claims via its decoration (`RenderDecoratedBox`
-  overrides `hitTestSelf` with `_decoration.hitTest`), so `hit` is **true**
-  across the painted bar and an `if (!hit)` gate would indeed have starved
-  the overhang. The shipped gesture-entry gate
-  (`RenderPointerListener`/`RenderSemanticsGestureHandler` in
-  `entry.path`) is the correct form. This corrects my iteration-4/5 read.
-- **P03-BUG-17.** `body_text_width_test.dart` passes, including its two P03
-  pins (“P03 subtitle unwrapped advance matches the browser render”, “P03
-  subtitle wraps after ‘never’ in a 350 px column”), and the iteration-6 UI
-  capture shows the subtitle ink at x 21–368 / 22–128 — identical to the
-  design. Resolved with no local change.
-- **FONTS rule.** No `google_fonts` import or `GoogleFonts.*` call anywhere
-  in `lib/` or `test/`; Inter/Nunito are bundled assets in
-  `app/assets/fonts` with `pubspec.yaml` families; P03's tests carry none.
-- **LETTER SPACING rule.** No local tracking anywhere in the feature;
-  `NestType`'s zero default applies, and the design's P03 styles set no
-  tracking. **CHIP ROWS** N/A (no chips).
+```dart
+Semantics(
+  header: true,
+  child: ConstrainedBox(
+    constraints: const BoxConstraints(maxWidth: _headlineMaxWidth),
+    child: Text('Create your family account', style: NestType.h1(…), maxLines: 3),
+  ),
+),
+```
 
-## Checked — no bug found
+**The rule** (standing orchestrator rule, iteration 7 brief): “BALANCED
+HEADINGS (main, NestBalancedText): where the design CSS uses
+`text-wrap: balance` (.display, .h1, .kid-title, .kid-hero, plus any
+screen-local `.balance`), render the heading with `NestBalancedText`. It
+keeps the same copy, style and maxLines, and its lines break like the
+design (no one-word orphan line).” P03's headline is `<h1 class="h1">` and
+`.h1 { … text-wrap: balance; }` is in `components.css:29` — squarely in
+scope. The screen instead carries a hand-measured 240dp pixel cap, which is
+exactly the hand-tuned pattern the rule exists to replace: it drifts
+silently the next time a type token, the font build, or the copy changes
+(and it took a bespoke proof, `P03-BUG-7`, to pin it). The shared component
+landed with shared batch 3 and is already used by P07
+(`paywall_view.dart:406-416`).
 
-- **Kid-mode guard / deep links** — `APP_MODE=kid` + session kid mode →
-  `/parental-gate`; no history → `/value-tour`; back-pops when stacked; the
-  form renders on all three seeds.
-- **Restart / Drift persistence** — one owner row, no rename, password never
-  written.
-- **Rapid double taps** — the `isSubmitting` guard blocks a second submit;
-  all three buttons disable/spin together.
-- **Text scale 1.3 + width 320/390/430** — matrix clean; five consecutive
-  resizes keep both legal targets on their words; no overflow.
-- **Dark-mode contrast / bottom edge / alignment** — unchanged tokens; the
-  iteration-6 UI check passes with uniform `surface` to y=844 and 20px
-  gutters (compare 3.50% light / 3.00% dark, bands 1–3 at noise level).
-- **Copy** — the copy audit is green; subtitle U+2019, note U+2014 and the
-  single U+00A0 inside “Privacy Notice” all byte-exact.
-- **0/1/6 children, long UK names, £0.00/£999.99/9999 coins, empty lists,
-  money rounding, timezone/BST, CHILD ORDER** — N/A on this screen (static
-  form; no money/date logic; the members stream is never displayed; no
-  children listed).
-- **Async gaps / lifecycle** — controllers disposed, no timers, the
-  verification chain is bounded and re-armed per dependency change, `emit`
-  after close is a no-op; no pending-timer warnings.
+**Repro** `flutter test test/features/auth/p03_bugs_test.dart --run-skipped`
+→ `P03-BUG-24 the headline is rendered with NestBalancedText` fails on
+`find.byType(NestBalancedText)` (0 found). The proof also pins the two
+properties a careless migration would break: the copy/maxLines are unchanged
+(`text`, `maxLines == 3`) and the headline's rendered left edge stays on the
+20dp gutter (the design's two lines both start at ink x=22, so the migration
+must pass `textAlign: TextAlign.left|start` — `NestBalancedText`'s default is
+**centre**, which would visibly centre the heading).
 
-## Observations (not bugs, not blocking)
+**Suggested fix** (screen-local, one block):
 
-- **`formError` can be announced twice in principle.** The shared error row
-  is now a live region *and* the screen's `BlocListener` still calls
-  `SemanticsService.sendAnnouncement` for `formError`. This predates the
-  iteration-6 switch (the screen-owned row was a live region too) and the
-  live-region half cannot be observed in a widget test, so no proof is
-  filed. If the owner wants a single utterance, drop the `sendAnnouncement`
-  once the row announces, or scope it to messages with no visible row.
-- **Stale comment in `P03-BUG-22`'s proof tail** (“gates the overhang
-  fallback behind `!hit`”) — the implementation is the gesture-entry gate.
-  The concurrent test stage owns that file right now; flagged for its pass.
-- **Filled-state simulator capture** (ORCHESTRATOR_NOTES item 3) remains
-  host-blocked (no SimulatorKit/HID, no Simulator GUI); the filled state is
-  pinned by the widget test, as the UI stage records.
+```dart
+Semantics(
+  header: true,
+  child: NestBalancedText(
+    'Create your family account',
+    style: NestType.h1(color: tokens.ink),
+    textAlign: TextAlign.left,   // design is left-aligned on the gutter
+    maxLines: 3,
+  ),
+),
+```
 
-## Suite state
+then delete `_headlineMaxWidth` (and its comment). `NestBalancedText` keeps
+the line count the full width needs and shrinks to the narrowest width that
+still fits it, so with the bundled Nunito the break is the design's
+“Create your / family account”; `typography_test.dart` already pins that
+break with the design's real fonts, so the migration is covered on device
+metrics.
 
-- Checkpoint `520cd82` (build report, re-verified by the iteration-6 review):
-  `flutter test test/features/auth` → **147/147 green, 0 skipped**;
-  full suite **841 green**; `dart format` and `flutter analyze` clean.
-- A full-suite run during this stage (with the shared tests merged since)
-  → **845 passed, 0 failed**. The iteration-6 test stage is concurrently
-  adding its own tests; its transient probe files are excluded from the
-  checkpoint figures above.
+**Knock-on for `P03-BUG-7`'s proof** (heads-up for the fixer):
+`P03-BUG-7` asserts the headline `Text`'s width ≤ 260 (the old cap). After
+the migration the width is the dynamically balanced box (in the harness'
+wide fallback font that is ≈308 for the 3-line case), so that bound becomes
+obsolete — the BALANCED HEADINGS rule plus `typography_test.dart`'s real-font
+break proof supersede it. Retire or re-express `P03-BUG-7` as part of the
+migration rather than trying to satisfy both bounds.
+
+## Everything else verified
+
+- **P03-BUG-23 (the 2dp form offset) — fixed and green.** The `_OrRow`
+  label now takes family/size/tracking/colour from `NestType.caption` and
+  replaces only the line box (`_orLabelLineBox = 15.7`, the design's own
+  `.or-label` metric). Both proofs (the font-independent line-box/gap proof
+  and the `typography_test.dart` design-band proof) pass; measured band tops
+  now match the design within a rounding dp.
+- **Iterations 1–6's bugs** — BUG-16 (danger border + labelled live region
+  via the landed §8 row), BUG-17 (shared-resolved with the bundled fonts and
+  now locally pinned in `typography_test.dart`), BUG-18/19/20/21/22 (overhang
+  reachability, first-frame measurement, live regions, gesture-entry gate)
+  are all green regression guards; the feature suite has no other skip.
+- **FONTS** — no `google_fonts` import or `GoogleFonts.*` call anywhere in
+  `lib/` or `test/`; Inter/Nunito are bundled assets. **LETTER SPACING** —
+  no local tracking; the two caption line-height overrides remain
+  `NestSpacing.s5 / 13`, and the or-label's line box is the documented
+  single design-owned number. **CHIP ROWS / CHILD ORDER / PERIODS / TRIAL /
+  PIP / DATA OVER MOCKS** — N/A on this static parent-mode form (no
+  subscription writes; the demo seed is the active subscriber).
+- **Standing hunt list** — kid-mode guard (`/create-account` → gate), back
+  and deep links, restart persistence (one owner row, password never
+  written), double-tap guard, 320/390/430 × 1.0/1.3 matrix, dark-mode
+  contrast, bottom edge (surface to y=844, now a raster proof) and the 20px
+  gutters: all covered by green proofs or N/A as before.
+- **`_OrRow` style** — the only new literal in the feature (`15.7`) is the
+  design's own line box, named and documented; not a token violation to
+  file.
+- **`SHARED_REQUEST.md` §7** — the non-blocking `NestType.legalCaption`
+  13/20 token request remains the only open shared item; §9 now notes the
+  neighbouring “label whose CSS sets no line-height” case.
+
+## Suite state at hand-off
+
+- Auth suite during this stage: **166 passed, 1 skipped** (the skip is this
+  stage's `P03-BUG-24`; `--run-skipped` fails it for the reason above).
+- Build checkpoint: full suite **1176 passed, 0 failed, 0 skipped**;
+  `dart format` and `flutter analyze` clean.
+- The feature code analyzes clean; the only analyze noise seen in the tree
+  was the concurrently-running test stage's transient probe files, which are
+  its own work in progress and excluded here.
 
 ## Verdict
 
-No major bug remains — and no minor one either: iteration 6 closed the last
-two (P03-BUG-16 via the landed §8 shared live-region row, P03-BUG-22 via the
-gesture-entry gate) and BUG-17 was resolved shared-side by the bundled fonts.
-I re-verified both closures with independent hit-test and semantics probes,
-settled the `!hit` mechanism question in the shipped gate's favour, and
-confirmed the FONTS/letter-spacing rules are clean. Only the non-blocking
-shared §7 token request remains, owned by the orchestrator. The screen is
-converged: geometry within ~1–2dp of the design in both themes, exact copy,
-clean bottom edge and alignment, and no loose end in the bloc, persistence,
-guards or async paths.
+One MAJOR, mandatory-rule bug remains (P03-BUG-24: the headline must use
+`NestBalancedText` per the standing BALANCED HEADINGS rule; the 240dp cap is
+the hand-tuned pattern that rule replaces). The fix is one widget block plus
+deleting the cap, keeping `textAlign` left, and retiring the now-obsolete
+`P03-BUG-7` width bound. Everything else on the screen is closed and green;
+`SHARED_REQUEST.md` §7 is the only open shared item and is non-blocking.
 
-VERDICT: PASS
+VERDICT: FAIL

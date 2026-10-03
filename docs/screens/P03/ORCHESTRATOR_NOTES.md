@@ -20,3 +20,10 @@
 
 ## UPDATE (23:48) — shared batch 2 merged into your branch
 NestChip is 32 px (44 hit area), NestTextField has an error state (errorText → danger border + text below), NestPetStage has an explicit size mode, children order by created_at. Use them; remove local workarounds. google_fonts is gone: delete any GoogleFonts lines in your tests (analyze currently reports them).
+
+## UPDATE (07:52, orchestrator) — iteration 8: two items only, then this screen merges
+1. Render the h1 with `NestBalancedText` (main, core/design_system/components/nest_balanced_text.dart). Delete the hand-made `maxWidth` constant and line break.
+   - The lines must still match the design bands exactly. Headline L1/L2 tops 112.67 / 146.00, which the test stage already pins with the real fonts.
+   - Un-skip and pass P03-BUG-24.
+2. Delete `zz_probe8_test.dart` and any other zz_/probe scratch tests. `flutter analyze` must stay clean.
+Do NOT change anything else that passed. The UI check passed at 2.1%.

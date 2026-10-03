@@ -28,15 +28,30 @@
 //                ("…Children never" / "need an email.") and its 349.06 dp
 //                advance with the design's own metrics, while
 //                `body_text_width_test.dart` keeps pinning it shared-side.
-// P03-BUG-23 (MINOR, OPEN)  the "or" row paints an 18 dp `NestType.caption`
-//                line box where the design's `.or-label` sets no
-//                line-height (13 px/normal ≈15.7 dp), so the email label,
-//                both fields, the helper and the note row sit 2 dp below
-//                the design and the CTA panel 1 dp. Measured on the
-//                FILLED-state capture (`ui/filled-light.png`, mean 2.08% vs
-//                the design), proved twice below and at the design's
-//                absolute bands in `typography_test.dart`. Left red on
-//                purpose — Stage 3 does not patch the screen.
+// P03-BUG-23 (MINOR, fixed iteration 7)  the "or" row painted an 18 dp
+//                `NestType.caption` line box where the design's `.or-label`
+//                sets no line-height (13 px/normal ≈15.7 dp), so the email
+//                label, both fields, the helper and the note row sat 2 dp
+//                below the design and the CTA panel 1 dp. Fixed by styling
+//                the label with the design's own line box
+//                (`_orLabelLineBox = 15.7`, token-derived); both proofs
+//                green.
+// P03-BUG-24 (MAJOR, mandatory rule — OPEN)  the headline still renders with
+//                a hand-calibrated `ConstrainedBox(maxWidth: 240)` + `Text`
+//                instead of `NestBalancedText`. The design's `.h1` sets
+//                `text-wrap: balance` (components.css:29) and the standing
+//                BALANCED HEADINGS rule requires the component for `.h1`
+//                (copy, style, maxLines kept); the cap is exactly the
+//                hand-tuned pattern the rule replaces and drifts silently
+//                when a type token changes. Migration must keep the design's
+//                LEFT alignment (pass `textAlign: TextAlign.left`), not the
+//                component's centred default, and must KEEP the 240 dp cap:
+//                inside it the break is already the narrowest two-line break
+//                (197.7 dp), so the component is a no-op there, while
+//                dropping the cap would move the 390 dp break to "Create
+//                your family" / "account". Measured at text scale 1.3 the cap
+//                renders three lines ("Create your" / "family" / "account");
+//                balance cannot fix that, since it only ever narrows.
 // P03-BUG-18..21  all fixed (overhang reachability, first-frame/stale
 //                measurement, live regions, the empty-live-region
 //                regression).
@@ -1197,7 +1212,8 @@ void main() {
   );
 
   // -------------------------------------------------------------------
-  // P03-BUG-23 (MINOR, open) — the form block sits 2 dp below the design.
+  // P03-BUG-23 (MINOR, fixed iteration 7) — the form block sat 2 dp below
+  // the design.
   //
   //   Repro: `docs/screens/P03/ui/filled-light.png` against
   //   `design/screens/light/P03-create-account.png` — the design PNG is the
@@ -1267,7 +1283,71 @@ void main() {
     );
 
     await disposeApp(tester);
-    // Left red on purpose: the fix belongs to the screen (`_OrRow`'s label
-    // style) and Stage 3 must not patch it.
+  });
+
+  // -------------------------------------------------------------------
+  // P03-BUG-24 (MAJOR, mandatory BALANCED HEADINGS rule — OPEN) — the
+  // design's `.h1` sets `text-wrap: balance` (components.css:29) and the
+  // HTML is `<h1 class="h1">` (P03-create-account.html:36), so the
+  // headline must render with `NestBalancedText` (same copy, style and
+  // maxLines); the hand-calibrated `_headlineMaxWidth = 240` cap
+  // (create_account_view.dart:39) is the pattern the rule replaces.
+  //
+  // Nothing changes on screen at 390 — the cap already reproduces the
+  // design's "Create your" / "family account" — so this is a rule
+  // violation, not a pixel defect. Two things the swap must respect, both
+  // measured in `typography_test.dart` with the design's fonts:
+  //
+  //   * `textAlign: TextAlign.left`. The component centres its narrowed box
+  //     by default; the design left-aligns both headline lines on the 20 dp
+  //     gutter.
+  //   * keep the 240 dp cap. Inside it the break is already the narrowest
+  //     two-line break (197.7 dp), so `NestBalancedText` narrows to 197.68
+  //     and neither the break nor the ink moves. Dropping the cap would
+  //     break the design: at 350 dp the balanced break is "Create your
+  //     family" / "account".
+  //
+  // One shared caveat, measured in `typography_test.dart` and filed as
+  // SHARED_REQUEST §10: with `maxLines: 3` the component's binary search
+  // runs through a clamped painter, so at text scale 1.3 (where the text
+  // needs 4 lines) it converges to a 0.1 dp box and renders one glyph per
+  // line. `maxLines: 3` is what this proof requires, so the shared fix has
+  // to land first — or the migration drops `maxLines`.
+  //
+  // Left red on purpose (Stage 3 un-skipped it: a skipped proof is not
+  // evidence). The fix is the screen's.
+  // -------------------------------------------------------------------
+  testWidgets('P03-BUG-24 the headline is rendered with NestBalancedText', (
+    tester,
+  ) async {
+    await _pumpCreateAccount(tester);
+
+    final balanced = find.byType(NestBalancedText);
+    expect(
+      balanced,
+      findsOneWidget,
+      reason:
+          'the design h1 uses `text-wrap: balance`; the BALANCED HEADINGS '
+          'rule requires NestBalancedText instead of the hand-calibrated '
+          '`_headlineMaxWidth = 240` cap',
+    );
+    final headline = tester.widget<NestBalancedText>(balanced);
+    expect(headline.text, 'Create your family account');
+    expect(headline.maxLines, 3);
+    expect(
+      headline.textAlign,
+      TextAlign.left,
+      reason:
+          'the design headline is left-aligned on the 20dp gutter (ink x=20 '
+          'on both lines); the component default is centre, which would '
+          'move the block off the gutter',
+    );
+    expect(
+      tester.getTopLeft(find.text('Create your family account')).dx,
+      moreOrLessEquals(20, epsilon: 1),
+      reason: 'the painted headline must still start on the 20dp gutter',
+    );
+
+    await disposeApp(tester);
   });
 }
