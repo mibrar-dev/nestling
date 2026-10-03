@@ -1,0 +1,290 @@
+# Shared request — P10 geometry + semantics of three shared components
+
+Need: P10's remaining design drift and its accessibility defects live in
+`app/lib/core/design_system/`, which RULES §1 forbids a screen agent from
+editing. Measured against
+`design/html-source/screens/P10-quest-library.html` and
+`design/screens/light/P10-quest-library.png` (1170×2532 @3x) at 390×844.
+
+**Status after stage 2 (integrate, iteration 2), main @ `c1be080` + batch4:**
+
+| § | Item | Status |
+|---|---|---|
+| 1 | `NestSegmented` announces every option label twice (no `excludeSemantics`) | **OPEN — now the ONLY thing keeping P10's suite red** (3 tests, `+1921 −3`) |
+| 2 | `NestSegmented` 44/36 high vs `.segmented` 52/44 | **LANDED** on `shared/shared_batch4` — `BUG-P10-6` passes |
+| 3 | `NestTextField` cannot express the `.search` prefix slot | **LANDED** as `NestTextField.search` — `BUG-P10-5` passes |
+| 4 | `NestTabBar` content 34 px below the design | **LANDED** (surface to the edge + content at the design top) — `BUG-P10-7` passes |
+| 5 | `Semantics(excludeSemantics: true)` without `onTap` exposes no tap action | **P10 half LANDED** in `features/quests/**`; the shared `NestChip` half is **OPEN** (no P10 test is red on it) |
+| 6 | NEW (small): promote the per-frame push guard to `core/` | optional |
+
+Everything else is green: all 12 red tests the two halves handed over are
+fixed in-scope, and the 9 P10 lib/test files + the shared `today` navigation
+tests pass. §1 alone blocks the suite; a one-line change clears it.
+
+---
+
+## 1. `NestSegmented` still announces every option label twice — MAJOR · OPEN
+
+`nest_segmented.dart:53-58` wraps each option in
+
+```dart
+Semantics(
+  button: true,
+  selected: isSelected,
+  enabled: changed != null,
+  label: option.label,
+  onTap: …,                       // added by shared batch4
+  child: Material(… InkWell(onTap: …) …),
+)
+```
+
+The batch4 fix added the missing `onTap:` (so the node is actionable), but there
+is still **no `excludeSemantics: true`**, so the option's own
+`Text(option.label)` (`:80`) and the InkWell's inner `Semantics` both keep
+their own nodes. `find.bySemanticsLabel('Ideas')` therefore matches **2**
+elements on `/quests`, and a screen reader walks the label twice:
+
+```
+SemanticsNode#23  actions: tap  flags: isSelected, isButton  label: "Ideas"
+  └─SemanticsNode#24  actions: focus, tap  flags: isFocusable  label: "Ideas"
+```
+
+`NestChip` avoids exactly this (`nest_chip.dart:119-121`, "One node per chip:
+the label above owns the announcement").
+
+**Fix:** add `excludeSemantics: true` to the per-option `Semantics` (the
+`onTap` the batch added stays, so the node keeps its action).
+
+**Proofs (currently failing — the last 3 red tests in P10):**
+`quest_library_a11y_test.dart` →
+`P10 segmented control each option is one labelled, tappable button`,
+`P10 icon buttons every interactive node announces what it does`,
+`P10 dark mode the same semantics contract holds in dark` (all three fail only
+on the `'Ideas'` / `'Active (12)'` duplicate: `Found 2 widgets with a semantics
+label named "Ideas"`).
+
+Screen-side workarounds deliberately NOT taken: `ExcludeSemantics` around
+`NestSegmented` would delete the control's tap actions from the semantics tree
+(worse than the duplicate), re-implementing the control locally is forbidden,
+and softening the three proofs to `findsWidgets` would mask the defect. The
+`ExcludeSemantics` + `onTap` proof pattern to copy is `nest_chip.dart:119-121`.
+
+---
+
+## 5. `NestChip` exposes no `tap` action — MAJOR · shared half OPEN
+
+`nest_chip.dart:119-137` builds
+
+```dart
+Semantics(button: true, label: …, excludeSemantics: true, child: Material(…InkWell(onTap: …)))
+```
+
+`excludeSemantics: true` drops the subtree, and the `InkWell` is the **only**
+source of `SemanticsAction.tap` (it builds its own `Semantics(onTap:)` inside).
+The node announces `isButton` with the right label and **no action**, so
+VoiceOver's double-tap does nothing:
+
+```
+NestChip "All"   → label=All   actions=[]  isButton=true
+plain InkWell    → label=Plain actions=[tap, focus]
+```
+
+**Fix (design system):** keep the label node and add its own
+`onTap:` (the simplest, and what P10 did locally), or wrap the inner text in
+`ExcludeSemantics` and drop the outer flag.
+
+**P10 half (done in `features/quests/**`, for reference):**
+`quest_filter_chip.dart`, `quest_idea_row.dart` now pass
+`onTap:` **and** `container: true` on the `Semantics` node. The
+`container: true` is load-bearing — without it the `+ Add` annotations bubble
+into the row and the control loses its own addressable node, exactly as the
+iteration-1 measurement showed:
+
+```
+SemanticsNode#39  actions: tap  flags: isButton, isImage
+  label: "Make your bed\n5 coins · Ages 4+ · Bedroom\nAdd Make your bed"
+```
+
+After the fix:
+
+```
+SemanticsNode#…  Rect 257…358 × 254…298  actions: tap  flags: isButton
+  label: "Add Make your bed"
+```
+
+**Proofs (now passing):** `every visible chip is a tappable button with its own
+label`, `it is one tappable button named after the idea`,
+`every visible row names its own Add button`, plus P10's own
+`every P10 control is actionable from the semantics tree` in
+`quest_library_view_test.dart`.
+
+---
+
+## 6. (optional) Promote the per-frame push guard to `core/`
+
+`QuestPushOnce`
+(`features/quests/presentation/widgets/quest_push_once.dart`) is a copy of P08's
+private `_PushOnce`
+(`features/today/presentation/widgets/today_loaded_body.dart:238-269`), because
+a cross-feature import is not allowed by the feature contract. Two screens now
+carry the same 20-line widget; a `core/` version (e.g.
+`design_system/motion/push_once.dart`) would let both import it. Not blocking —
+P10 works around it.
+
+---
+
+## 8. MAJOR — `NestTextField.search` puts the aria-label on a wrapper, not on the input
+
+File: `app/lib/core/design_system/components/nest_text_field.dart:199-202`.
+
+```dart
+final semanticLabel = widget.semanticLabel;
+if (semanticLabel == null) return row;
+return Semantics(label: semanticLabel, textField: true, child: row);
+```
+
+The wrapper becomes its **own** semantics node that advertises
+`isTextField` but inherits no actions, while the real `TextField` below keeps
+its own node labelled only with its hint. Measured on `/quests` (design HTML:
+`<input type="search" placeholder="Search ideas" aria-label="Search quest ideas">`):
+
+```
+SemanticsNode#26  flags: isTextField            label: "Search quest ideas"   (no actions)
+SemanticsNode#28  actions: focus, tap           label: "Search ideas"        isTextField
+```
+
+So a screen reader that focuses the labelled node finds a text field it cannot
+type into, and the editable node announces the placeholder instead of the
+`aria-label`. This also breaks the new ACCESSIBILITY ACTIONS rule for the field.
+
+**Fix.** Put the name on the input, not beside it — e.g. give the `TextField` an
+`InputDecoration`/`Semantics` label (or wrap only the `TextField` in
+`Semantics(label: semanticLabel, container: false)` so it merges into the
+editable node). The wrapper must not advertise `textField: true` unless it also
+carries the actions.
+
+**Proof:** `quest_library_a11y_actions_test.dart` →
+`ACCESSIBILITY ACTIONS — search field setting the field value really filters the list`
+(`data.label` is `Search ideas`, expected `Search quest ideas`).
+
+---
+
+## 9. MINOR — CLOSED on main (`1db0f8a`) — `NestTextField.search` rendered 52 high where `.search` computes to 54
+
+File: `app/lib/core/design_system/components/nest_text_field.dart` (the `search`
+layout path).
+
+HTML (with the global `box-sizing: border-box` from `tokens.css:200`):
+
+```
+.search { min-height: 52px; padding: 4px 16px; border: 1px solid var(--line) }
+.search input { min-height: 44px }
+```
+
+`min-height` applies to the **border box**, but the content box is already
+`4 + 44 + 4 = 52`, so the element is `52 + 1 + 1 = 54` tall. Measured on the
+design PNG: the `--line` border occupies exactly device rows 519–521 and 678–680
+⇒ the box is **y 173.0 … 227.0 = 54**.
+
+Measured in the widget tree with the device insets injected: `173.0 … 225.0 =
+52`.
+
+Consequence: the `.chipscroll` row and every `.trow` below sit **2 px high**
+(chip 225 vs 227, card 289 vs 291). Within the UI VERDICT RULE's ±2 px, but it
+is a uniform 2 px shift of everything under the field, and the doc comment on
+`NestTextField.search` ("a 52-high flex row") states the wrong number.
+
+**Fix:** `height: 54` (or `minHeight` plus the 1 px borders) for the search
+variant, and correct the doc comment.
+
+**Proof:** `quest_library_design_geometry_test.dart` →
+`the search field sits on the design y` (currently green at the ±2 tolerance;
+it goes red if the field drops further or the drift grows).
+
+---
+
+## 10. MAJOR — CLOSED on main (`1db0f8a`) — `NestTextField.search` floated its hint to the top of the box
+
+ORCHESTRATOR_NOTES 12:17 items 1 + 3, measured and pinned by me. Landed with
+`1933e48`/`1db0f8a` ("Fix NestTextField.search: 54-high border box, centred
+hint/text"); the P10 pin is green and now guards the fix.
+
+File: `app/lib/core/design_system/components/nest_text_field.dart:167-193`.
+
+Measured in the widget tree at 390×844 with the 47/34 device insets and the
+bundled Inter face loaded (`quest_library_design_geometry_test.dart`):
+
+```
+FIELD     173.0 … 225.0   centre 199.0   (52 tall)
+ICON      187.0 … 211.0   centre 199.0   ← the magnifier IS centred
+TEXTFIELD 177.0 … 221.0   centre 199.0   (44 tall — the design's `input`)
+HINT      177.0 … 201.0   centre 189.0   ← 10 px high
+```
+
+Design (`design/screens/light/P10-quest-library.png`, ÷3): the `--line` ring
+spans **173 … 227**, so the field's centre is **y 200** and the design's hint
+ink is centred on it — the same y as the icon.
+
+**Cause.** The `SizedBox(height: 44)` around the `TextField` is a *tight*
+height, and `textAlignVertical: TextAlignVertical.center` only centres the text
+inside the editable's own box — which measures 24 (Inter 16 × the `height: 1.5`
+of `NestType.body`), i.e. the intrinsic line box, not the 44. The hint is
+therefore painted at the top of the 44 px slot instead of at 199.
+
+**Fix (shared).** Give the editable the 44 px box rather than a line box, e.g.
+`strutStyle`/`textHeightBehavior` on, or set the input's
+`InputDecoration.contentPadding` vertical to `(44 - 24) / 2 = 10`
+(combined with the existing `left: -4`), or wrap so the `TextField` fills the
+slot and let `TextAlignVertical.center` do its work. P10 must not wrap or
+re-pad the shared field locally, so it stays unfixed here — same rule as §1.
+
+**Proof (now green, in `quest_library_design_geometry_test.dart`):**
+`the hint is centred in the field, not floated to the top` — asserts the hint
+centre at 200 ±1 and within 1 px of the field centre. Tightened from 2 px to
+1 px in iteration 4 now that the shared fix has landed, so the fix is guarded
+rather than merely satisfied.
+
+**Verified after landing (iteration 4).** Field `173.0 … 227.0` (54 tall),
+magnifier centre 200.0, hint box `188.0 … 212.0` → centre **200.0** — the
+design's 200 exactly, and level with the icon. Everything below the field also
+came back onto the design y: chip row 227.0…271.0, cards 291/375/459/543/627/
+711, each 68 tall on an exact 84 px step (previously a uniform −2).
+
+**Note.** Once §9 (54 tall) lands, the field spans 173…227 and the expected
+centre is exactly 200 — the pin above already uses the design number, not the
+app's current 199, so the two fixes compose.
+
+---
+
+## 11. MINOR (stage 4, iteration 3) — `NestTextField.search` cannot react to the keyboard's Search key
+
+File: `app/lib/core/design_system/components/nest_text_field.dart:44-58` (the
+`NestTextField.search` constructor).
+
+P10 sets `textInputAction: TextInputAction.search`
+(`features/quests/presentation/widgets/quest_library_body.dart:146`), so iOS
+and Android paint a blue **Search** key. The search constructor exposes no
+`onSubmitted` / `onEditingComplete`, and `_buildSearch` (`:171-192`) forwards
+neither, so pressing it does nothing at all: the keyboard stays open and the
+list is unchanged (the filter already applied per keystroke via `onChanged`).
+
+Not a visual defect — the design's `<input type="search">` sits in no form, so
+its Enter key is equally inert — but it is an affordance that leads nowhere,
+and P10 cannot drop the action key either without editing `core/`.
+
+**Fix (shared):** add `final ValueChanged<String>? onSubmitted;` to
+`NestTextField`, forward it to the search `TextField`, and have P10 pass a
+callback that unfocuses (`FocusScope.of(context).unfocus()`). Until then the
+screen is correct as-is; `textInputAction` may simply be left off.
+
+---
+
+## 7. (informational) P08 paints `plate` lilac, P10 paints it sky
+
+`features/today/.../today_loaded_body.dart`'s `todayTintFor` gives the seed icon
+key `plate` a **lilac** tile, while P10's `questTileTintFor` gives it **sky** —
+the same title ("Lay the table") therefore changes colour between the today
+board and the quest library. P10 follows its own design sheet (`kQuestIdeaMeta`,
+`idea-table` = sky) and its test
+(`the same quest title keeps one tile tint across both tabs`), so the
+agreement has to come from P08. Raised for the orchestrator; no P10 edit.
