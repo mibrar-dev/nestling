@@ -20,6 +20,7 @@
 // static SVG via flutter_svg, and reduced motion uses the same path.
 
 import 'dart:ffi' as ffi;
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -414,6 +415,27 @@ class _PipBody extends StatelessWidget {
 /// in `tools/rive/gen_pip.py`; the per-stage contact fractions are measured
 /// from the brand SVGs with the baked ground shadow excluded
 /// (`art_bbox` in the generator: s1 206, s2 208, s3 213, s4 222).
+///
+/// Two layouts, selected by [explicitLayout]:
+///
+/// * Legacy (`false`, the default): [stageW] is the nominal scene width
+///   (`nestW / 0.62`), the nest sits at `(stageW − nestW) / 2` with a 6 px top
+///   pad, and the stage is `6 + nestH + 10` tall. Bit-for-bit the historical
+///   behaviour.
+/// * Explicit (`true`): [stageW] is the ACTUAL parent width and the nest/pip
+///   are centred in it. Pip is seated on the bowl's visible rim — the pip
+///   box bottom lands [rimOverlap] below the rim ([nestRimTopFraction] of
+///   the box) — and the stage is exactly tall enough for the design's slot
+///   (K03: 236). Decorative layers (glow, ground shadow) paint with
+///   [Clip.none]: they may bleed past the nest but never move it, and the
+///   layout never exceeds [stageW]. When the request is wider than the box,
+///   the caller scales `nestW`/`nestH`/`pipH` down uniformly first, so the
+///   scene never overflows.
+///
+/// The nest art (`nest.svg`, 240-space) fills its box ([BoxFit.fill], like
+/// the design's `<img>` stretch), so the visible bowl outline is always
+/// [visibleNestRatio] × box width, whatever the box height: a 236-wide box
+/// paints the design's 198 px outline.
 class PipNestFallback extends StatelessWidget {
   const PipNestFallback({
     required this.stage,
@@ -423,6 +445,8 @@ class PipNestFallback extends StatelessWidget {
     super.key,
     this.pipAsset,
     this.pip,
+    this.nestH,
+    this.explicitLayout = false,
   });
 
   /// Growth stage. Selects the default pip art when [pipAsset] is null.
@@ -440,11 +464,73 @@ class PipNestFallback extends StatelessWidget {
   final double nestW;
   final double stageW;
 
+  /// Explicit nest-box height (logical px). Null (default) keeps the legacy
+  /// square art (`nestH == nestW`). Explicit-size mode passes the design's
+  /// slot height (K03: 156 under a 236-wide box) so the slot — not the art —
+  /// sets the layout height while the bowl keeps its outline via [BoxFit.fill].
+  final double? nestH;
+
+  /// Selects the explicit rim-seated layout (see the class docs). False keeps
+  /// the legacy nominal-width layout bit-for-bit.
+  final bool explicitLayout;
+
   /// Nest back/front split, measured from the nest top in nest heights.
   static const double split = 0.55;
 
   /// Visible-contact placement, measured from the nest top in nest heights.
   static const double feet = 0.40;
+
+  /// Visible bowl outline per unit of nest-box width. The outer bowl is
+  /// rx 98 with a 3 px stroke = 202 wide in the 240-space `nest.svg`, so a
+  /// 236-wide box paints the design's 198 px outline (`198 / 236 ≈ 0.84`).
+  /// `NestPetStage.visibleNestWidth` converts through this ratio.
+  static const double visibleNestRatio = 202 / 240;
+
+  /// Top edge of the bowl's visible rim (outer stroke: 150 − 52 − 3 = 95),
+  /// as a fraction of the nest-box height (the art fills the box).
+  static const double nestRimTopFraction = 95 / 240;
+
+  /// Bottom edge of the bowl (outer stroke: 150 + 52 + 3 = 205), as a
+  /// fraction of the nest-box height. The painted ground shadow straddles
+  /// this line.
+  static const double nestBowlBottomFraction = 205 / 240;
+
+  /// How far the pip box bottom sits below the visible rim in explicit
+  /// mode: the design seats Pip ≈20 px inside the bowl (pip bottom ≈301,
+  /// rim ≈278 at 390×844).
+  static const double rimOverlap = 20;
+
+  /// Breathing room above the nest, kept from the legacy scene.
+  static const double _padTop = 6;
+
+  /// Shadow bleed below the nest, kept from the legacy scene.
+  static const double _bleed = 10;
+
+  /// Explicit-slot geometry shared by the SVG/avatar fallback, the Rive box
+  /// (`PipInNest`'s artboard is letterboxed into the same slot) and the
+  /// shared tests, so the paths can never drift apart.
+  ///
+  /// Returns in-stage offsets (stage top = 0): the nest top, the custom-pip
+  /// box top (its bottom lands exactly `rimOverlap` below the rim), the
+  /// v1-SVG box top (contact-seated, clamped to 0 so it never clips — the
+  /// clamp only ever touches transparent padding), and the stage height.
+  /// K03 (`nestH` 156, `pipH` 152, fledgling contact) lands nest top 70.25,
+  /// custom-pip top 0 and stage height 236.25.
+  static ({double nestTop, double pipTop, double pipTopSvg, double stageH})
+  explicitGeometry({
+    required double nestH,
+    required double pipH,
+    required double contactFrac,
+  }) {
+    final seat = nestRimTopFraction * nestH + rimOverlap;
+    final nestTop = math.max(_padTop, pipH - seat);
+    return (
+      nestTop: nestTop,
+      pipTop: nestTop + seat - pipH,
+      pipTopSvg: math.max(0, nestTop + feet * nestH - contactFrac * pipH),
+      stageH: nestTop + nestH + _bleed,
+    );
+  }
 
   /// Pip's visible contact point (feet, or shell/egg base for stages 1-2)
   /// inside its own 240-space SVG, as a fraction of 240.
@@ -458,23 +544,42 @@ class PipNestFallback extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = context.nest;
-    final nestH = nestW;
-    final feetFromNestTop = feet * nestH;
-    // Visible contact (not the SVG box bottom) lands at 58% nest height; the
-    // box bottom is transparent padding + Pip's baked shadow, so aligning the
-    // box (not the contact point) would float Pip above the nest.
-    const nestTop = 6.0;
-    const shadowBleed = 10.0;
-    final pipTop = nestTop + feetFromNestTop - contactInSvg(stage) * pipH;
+    final resolvedNestH = nestH ?? nestW;
+    final double nestTop;
+    final double pipTopUsed;
+    final double stageH;
+    final double shadowTop;
+    if (explicitLayout) {
+      final g = explicitGeometry(
+        nestH: resolvedNestH,
+        pipH: pipH,
+        contactFrac: contactInSvg(stage),
+      );
+      nestTop = g.nestTop;
+      // Custom `pip:` widgets (e.g. the child's v2 `PipAvatar`) seat by box;
+      // v1 SVGs seat by visible contact so the baked shadow stays buried.
+      // Both bottoms land within ±3 px of the rim + 20 px line.
+      pipTopUsed = pip == null ? g.pipTopSvg : g.pipTop;
+      stageH = g.stageH;
+      shadowTop = nestTop + nestBowlBottomFraction * resolvedNestH - 10.0;
+    } else {
+      nestTop = _padTop;
+      pipTopUsed = nestTop + feet * resolvedNestH - contactInSvg(stage) * pipH;
+      stageH = nestTop + resolvedNestH + _bleed;
+      shadowTop = nestTop + resolvedNestH - 10.0;
+    }
     final nestLeft = (stageW - nestW) / 2;
-    final stageH = nestTop + nestH + shadowBleed;
     final glowD = nestW * 1.04;
 
     Widget nestSvg() {
       return SvgPicture.asset(
         nest_assets.NestlingIllustrations.nest,
         width: nestW,
-        height: nestH,
+        // The design's `<img>` stretches the art into its box; fill keeps
+        // the visible outline at `visibleNestRatio × nestW` whatever the box
+        // height. Square boxes render exactly as before.
+        fit: BoxFit.fill,
+        height: resolvedNestH,
         placeholderBuilder: (_) => const SizedBox.shrink(),
       );
     }
@@ -483,11 +588,14 @@ class PipNestFallback extends StatelessWidget {
       width: stageW,
       height: stageH,
       child: Stack(
+        // Decorative bleed (glow, shadow) and pip overhang paint outside the
+        // stage instead of clipping or forcing the layout wider.
+        clipBehavior: Clip.none,
         children: [
           if (tokens.isDark)
             Positioned(
               left: nestLeft - (glowD - nestW) / 2,
-              top: nestTop + (nestH - glowD) / 2,
+              top: nestTop + (resolvedNestH - glowD) / 2,
               child: Container(
                 width: glowD,
                 height: glowD,
@@ -499,7 +607,7 @@ class PipNestFallback extends StatelessWidget {
             ),
           Positioned(
             left: nestLeft + nestW * 0.05,
-            top: nestTop + nestH - 10,
+            top: shadowTop,
             child: _GroundShadow(
               width: nestW * 0.9,
               color: tokens.groundShadow,
@@ -509,7 +617,7 @@ class PipNestFallback extends StatelessWidget {
             left: nestLeft,
             top: nestTop,
             width: nestW,
-            height: split * nestH,
+            height: split * resolvedNestH,
             child: ClipRect(
               // OverflowBox (not Align+SizedBox): Align loosens the child
               // constraints, so a fixed-size SizedBox gets clamped to the
@@ -517,7 +625,7 @@ class PipNestFallback extends StatelessWidget {
               // Explicit maxes keep the full-size art; alignment crops it.
               child: OverflowBox(
                 maxWidth: nestW,
-                maxHeight: nestH,
+                maxHeight: resolvedNestH,
                 alignment: Alignment.topCenter,
                 child: nestSvg(),
               ),
@@ -525,7 +633,7 @@ class PipNestFallback extends StatelessWidget {
           ),
           Positioned(
             left: (stageW - pipH) / 2,
-            top: pipTop,
+            top: pipTopUsed,
             width: pipH,
             height: pipH,
             child:
@@ -539,13 +647,13 @@ class PipNestFallback extends StatelessWidget {
           ),
           Positioned(
             left: nestLeft,
-            top: nestTop + split * nestH,
+            top: nestTop + split * resolvedNestH,
             width: nestW,
-            height: (1 - split) * nestH,
+            height: (1 - split) * resolvedNestH,
             child: ClipRect(
               child: OverflowBox(
                 maxWidth: nestW,
-                maxHeight: nestH,
+                maxHeight: resolvedNestH,
                 alignment: Alignment.bottomCenter,
                 child: nestSvg(),
               ),
@@ -609,6 +717,8 @@ class PipInNest extends StatefulWidget {
     this.pipH,
     this.nestW,
     this.stageW,
+    this.nestH,
+    this.explicitLayout = false,
   });
 
   /// Growth stage. Selects the visible rig and the default fallback art.
@@ -629,6 +739,11 @@ class PipInNest extends StatefulWidget {
   final double? pipH;
   final double? nestW;
   final double? stageW;
+
+  /// Explicit nest-box height and layout flag, forwarded to the fallback so
+  /// the Rive-missing frame matches the fallback scene exactly.
+  final double? nestH;
+  final bool explicitLayout;
 
   @override
   State<PipInNest> createState() => _PipInNestState();
@@ -708,6 +823,8 @@ class _PipInNestState extends State<PipInNest> {
         pipH: pipH,
         nestW: nestW,
         stageW: stageW,
+        nestH: widget.nestH,
+        explicitLayout: widget.explicitLayout,
       );
     }
     return _PipSvgFallback(stage: widget.stage);
