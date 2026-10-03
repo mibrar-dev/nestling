@@ -404,14 +404,16 @@ void _expectMinTapTargets(WidgetTester tester, String group) {
     case 'kid buttons':
       atLeast(find.byType(NestKidButton), 56, 56, 'NestKidButton');
     case 'chips and inputs':
-      // Interactive chips carry a 44 tap area; the static demo chip does not.
+      // Interactive chips lay out at the design's 32 px; the 44 tap minimum
+      // is an overlaid hit test, not layout (shared batch 2 — proven by the
+      // tap-outside tests in shared_batch2_test.dart, not by layout size).
       atLeast(
         find.byWidgetPredicate(
           (w) => w is NestChip && w.onSelected != null,
           description: 'interactive NestChip',
         ),
         44,
-        44,
+        32,
         'interactive NestChip',
       );
       atLeast(find.byType(NestSegmented<String>), 44, 44, 'NestSegmented');

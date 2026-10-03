@@ -1075,6 +1075,30 @@ class $ChildrenTable extends Children
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _createdAtTzMeta = const VerificationMeta(
+    'createdAtTz',
+  );
+  @override
+  late final GeneratedColumn<String> createdAtTz = GeneratedColumn<String>(
+    'created_at_tz',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('Europe/London'),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1093,6 +1117,8 @@ class $ChildrenTable extends Children
     happiness,
     happyDays,
     weeklyBasePence,
+    createdAt,
+    createdAtTz,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1217,6 +1243,21 @@ class $ChildrenTable extends Children
         ),
       );
     }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('created_at_tz')) {
+      context.handle(
+        _createdAtTzMeta,
+        createdAtTz.isAcceptableOrUnknown(
+          data['created_at_tz']!,
+          _createdAtTzMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -1290,6 +1331,14 @@ class $ChildrenTable extends Children
         DriftSqlType.int,
         data['${effectivePrefix}weekly_base_pence'],
       )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      createdAtTz: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}created_at_tz'],
+      )!,
     );
   }
 
@@ -1316,6 +1365,8 @@ class ChildrenData extends DataClass implements Insertable<ChildrenData> {
   final int happiness;
   final int happyDays;
   final int weeklyBasePence;
+  final DateTime createdAt;
+  final String createdAtTz;
   const ChildrenData({
     required this.id,
     required this.familyId,
@@ -1333,6 +1384,8 @@ class ChildrenData extends DataClass implements Insertable<ChildrenData> {
     required this.happiness,
     required this.happyDays,
     required this.weeklyBasePence,
+    required this.createdAt,
+    required this.createdAtTz,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1355,6 +1408,8 @@ class ChildrenData extends DataClass implements Insertable<ChildrenData> {
     map['happiness'] = Variable<int>(happiness);
     map['happy_days'] = Variable<int>(happyDays);
     map['weekly_base_pence'] = Variable<int>(weeklyBasePence);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['created_at_tz'] = Variable<String>(createdAtTz);
     return map;
   }
 
@@ -1378,6 +1433,8 @@ class ChildrenData extends DataClass implements Insertable<ChildrenData> {
       happiness: Value(happiness),
       happyDays: Value(happyDays),
       weeklyBasePence: Value(weeklyBasePence),
+      createdAt: Value(createdAt),
+      createdAtTz: Value(createdAtTz),
     );
   }
 
@@ -1403,6 +1460,8 @@ class ChildrenData extends DataClass implements Insertable<ChildrenData> {
       happiness: serializer.fromJson<int>(json['happiness']),
       happyDays: serializer.fromJson<int>(json['happyDays']),
       weeklyBasePence: serializer.fromJson<int>(json['weeklyBasePence']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      createdAtTz: serializer.fromJson<String>(json['createdAtTz']),
     );
   }
   @override
@@ -1425,6 +1484,8 @@ class ChildrenData extends DataClass implements Insertable<ChildrenData> {
       'happiness': serializer.toJson<int>(happiness),
       'happyDays': serializer.toJson<int>(happyDays),
       'weeklyBasePence': serializer.toJson<int>(weeklyBasePence),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'createdAtTz': serializer.toJson<String>(createdAtTz),
     };
   }
 
@@ -1445,6 +1506,8 @@ class ChildrenData extends DataClass implements Insertable<ChildrenData> {
     int? happiness,
     int? happyDays,
     int? weeklyBasePence,
+    DateTime? createdAt,
+    String? createdAtTz,
   }) => ChildrenData(
     id: id ?? this.id,
     familyId: familyId ?? this.familyId,
@@ -1462,6 +1525,8 @@ class ChildrenData extends DataClass implements Insertable<ChildrenData> {
     happiness: happiness ?? this.happiness,
     happyDays: happyDays ?? this.happyDays,
     weeklyBasePence: weeklyBasePence ?? this.weeklyBasePence,
+    createdAt: createdAt ?? this.createdAt,
+    createdAtTz: createdAtTz ?? this.createdAtTz,
   );
   ChildrenData copyWithCompanion(ChildrenCompanion data) {
     return ChildrenData(
@@ -1489,6 +1554,10 @@ class ChildrenData extends DataClass implements Insertable<ChildrenData> {
       weeklyBasePence: data.weeklyBasePence.present
           ? data.weeklyBasePence.value
           : this.weeklyBasePence,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      createdAtTz: data.createdAtTz.present
+          ? data.createdAtTz.value
+          : this.createdAtTz,
     );
   }
 
@@ -1510,7 +1579,9 @@ class ChildrenData extends DataClass implements Insertable<ChildrenData> {
           ..write('coins: $coins, ')
           ..write('happiness: $happiness, ')
           ..write('happyDays: $happyDays, ')
-          ..write('weeklyBasePence: $weeklyBasePence')
+          ..write('weeklyBasePence: $weeklyBasePence, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('createdAtTz: $createdAtTz')
           ..write(')'))
         .toString();
   }
@@ -1533,6 +1604,8 @@ class ChildrenData extends DataClass implements Insertable<ChildrenData> {
     happiness,
     happyDays,
     weeklyBasePence,
+    createdAt,
+    createdAtTz,
   );
   @override
   bool operator ==(Object other) =>
@@ -1553,7 +1626,9 @@ class ChildrenData extends DataClass implements Insertable<ChildrenData> {
           other.coins == this.coins &&
           other.happiness == this.happiness &&
           other.happyDays == this.happyDays &&
-          other.weeklyBasePence == this.weeklyBasePence);
+          other.weeklyBasePence == this.weeklyBasePence &&
+          other.createdAt == this.createdAt &&
+          other.createdAtTz == this.createdAtTz);
 }
 
 class ChildrenCompanion extends UpdateCompanion<ChildrenData> {
@@ -1573,6 +1648,8 @@ class ChildrenCompanion extends UpdateCompanion<ChildrenData> {
   final Value<int> happiness;
   final Value<int> happyDays;
   final Value<int> weeklyBasePence;
+  final Value<DateTime> createdAt;
+  final Value<String> createdAtTz;
   final Value<int> rowid;
   const ChildrenCompanion({
     this.id = const Value.absent(),
@@ -1591,6 +1668,8 @@ class ChildrenCompanion extends UpdateCompanion<ChildrenData> {
     this.happiness = const Value.absent(),
     this.happyDays = const Value.absent(),
     this.weeklyBasePence = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.createdAtTz = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   ChildrenCompanion.insert({
@@ -1610,6 +1689,8 @@ class ChildrenCompanion extends UpdateCompanion<ChildrenData> {
     this.happiness = const Value.absent(),
     this.happyDays = const Value.absent(),
     this.weeklyBasePence = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.createdAtTz = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        familyId = Value(familyId),
@@ -1631,6 +1712,8 @@ class ChildrenCompanion extends UpdateCompanion<ChildrenData> {
     Expression<int>? happiness,
     Expression<int>? happyDays,
     Expression<int>? weeklyBasePence,
+    Expression<DateTime>? createdAt,
+    Expression<String>? createdAtTz,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1650,6 +1733,8 @@ class ChildrenCompanion extends UpdateCompanion<ChildrenData> {
       if (happiness != null) 'happiness': happiness,
       if (happyDays != null) 'happy_days': happyDays,
       if (weeklyBasePence != null) 'weekly_base_pence': weeklyBasePence,
+      if (createdAt != null) 'created_at': createdAt,
+      if (createdAtTz != null) 'created_at_tz': createdAtTz,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1671,6 +1756,8 @@ class ChildrenCompanion extends UpdateCompanion<ChildrenData> {
     Value<int>? happiness,
     Value<int>? happyDays,
     Value<int>? weeklyBasePence,
+    Value<DateTime>? createdAt,
+    Value<String>? createdAtTz,
     Value<int>? rowid,
   }) {
     return ChildrenCompanion(
@@ -1690,6 +1777,8 @@ class ChildrenCompanion extends UpdateCompanion<ChildrenData> {
       happiness: happiness ?? this.happiness,
       happyDays: happyDays ?? this.happyDays,
       weeklyBasePence: weeklyBasePence ?? this.weeklyBasePence,
+      createdAt: createdAt ?? this.createdAt,
+      createdAtTz: createdAtTz ?? this.createdAtTz,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1745,6 +1834,12 @@ class ChildrenCompanion extends UpdateCompanion<ChildrenData> {
     if (weeklyBasePence.present) {
       map['weekly_base_pence'] = Variable<int>(weeklyBasePence.value);
     }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (createdAtTz.present) {
+      map['created_at_tz'] = Variable<String>(createdAtTz.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1770,6 +1865,8 @@ class ChildrenCompanion extends UpdateCompanion<ChildrenData> {
           ..write('happiness: $happiness, ')
           ..write('happyDays: $happyDays, ')
           ..write('weeklyBasePence: $weeklyBasePence, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('createdAtTz: $createdAtTz, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -8751,6 +8848,8 @@ typedef $$ChildrenTableCreateCompanionBuilder = ChildrenCompanion Function({
   Value<int> happiness,
   Value<int> happyDays,
   Value<int> weeklyBasePence,
+  Value<DateTime> createdAt,
+  Value<String> createdAtTz,
   Value<int> rowid,
 });
 typedef $$ChildrenTableUpdateCompanionBuilder = ChildrenCompanion Function({
@@ -8770,6 +8869,8 @@ typedef $$ChildrenTableUpdateCompanionBuilder = ChildrenCompanion Function({
   Value<int> happiness,
   Value<int> happyDays,
   Value<int> weeklyBasePence,
+  Value<DateTime> createdAt,
+  Value<String> createdAtTz,
   Value<int> rowid,
 });
 
@@ -8989,6 +9090,16 @@ class $$ChildrenTableFilterComposer
 
   ColumnFilters<int> get weeklyBasePence => $composableBuilder(
     column: $table.weeklyBasePence,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get createdAtTz => $composableBuilder(
+    column: $table.createdAtTz,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9250,6 +9361,16 @@ class $$ChildrenTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get createdAtTz => $composableBuilder(
+    column: $table.createdAtTz,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$FamiliesTableOrderingComposer get familyId {
     final $$FamiliesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -9333,6 +9454,14 @@ class $$ChildrenTableAnnotationComposer
 
   GeneratedColumn<int> get weeklyBasePence => $composableBuilder(
     column: $table.weeklyBasePence,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<String> get createdAtTz => $composableBuilder(
+    column: $table.createdAtTz,
     builder: (column) => column,
   );
 
@@ -9563,6 +9692,8 @@ class $$ChildrenTableTableManager
                 Value<int> happiness = const Value.absent(),
                 Value<int> happyDays = const Value.absent(),
                 Value<int> weeklyBasePence = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<String> createdAtTz = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ChildrenCompanion(
                 id: id,
@@ -9581,6 +9712,8 @@ class $$ChildrenTableTableManager
                 happiness: happiness,
                 happyDays: happyDays,
                 weeklyBasePence: weeklyBasePence,
+                createdAt: createdAt,
+                createdAtTz: createdAtTz,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -9601,6 +9734,8 @@ class $$ChildrenTableTableManager
                 Value<int> happiness = const Value.absent(),
                 Value<int> happyDays = const Value.absent(),
                 Value<int> weeklyBasePence = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<String> createdAtTz = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ChildrenCompanion.insert(
                 id: id,
@@ -9619,6 +9754,8 @@ class $$ChildrenTableTableManager
                 happiness: happiness,
                 happyDays: happyDays,
                 weeklyBasePence: weeklyBasePence,
+                createdAt: createdAt,
+                createdAtTz: createdAtTz,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/data/stream_combine.dart';
 import 'package:nestling/features/family/domain/entities/family_child.dart';
@@ -70,6 +71,12 @@ class FamilyRepositoryImpl implements FamilyRepository {
             ageBand: Value(ageBand),
             avatarColour: Value(avatarColour),
             weeklyBasePence: Value(weeklyBasePence),
+            // Explicit creation marker (CHILD ORDER ruling): roster order is
+            // creation order, so a newly added child sorts last. `now`, not
+            // the column default, so the instant is also exact on databases
+            // migrated to v3 (whose `ADD COLUMN` placeholder default is 0).
+            createdAt: Value(DateTime.now().toUtc()),
+            createdAtTz: const Value(defaultFamilyZoneId),
           ),
         );
   }
