@@ -247,6 +247,29 @@ app's current 199, so the two fixes compose.
 
 ---
 
+## 11. MINOR (stage 4, iteration 3) — `NestTextField.search` cannot react to the keyboard's Search key
+
+File: `app/lib/core/design_system/components/nest_text_field.dart:44-58` (the
+`NestTextField.search` constructor).
+
+P10 sets `textInputAction: TextInputAction.search`
+(`features/quests/presentation/widgets/quest_library_body.dart:146`), so iOS
+and Android paint a blue **Search** key. The search constructor exposes no
+`onSubmitted` / `onEditingComplete`, and `_buildSearch` (`:171-192`) forwards
+neither, so pressing it does nothing at all: the keyboard stays open and the
+list is unchanged (the filter already applied per keystroke via `onChanged`).
+
+Not a visual defect — the design's `<input type="search">` sits in no form, so
+its Enter key is equally inert — but it is an affordance that leads nowhere,
+and P10 cannot drop the action key either without editing `core/`.
+
+**Fix (shared):** add `final ValueChanged<String>? onSubmitted;` to
+`NestTextField`, forward it to the search `TextField`, and have P10 pass a
+callback that unfocuses (`FocusScope.of(context).unfocus()`). Until then the
+screen is correct as-is; `textInputAction` may simply be left off.
+
+---
+
 ## 7. (informational) P08 paints `plate` lilac, P10 paints it sky
 
 `features/today/.../today_loaded_body.dart`'s `todayTintFor` gives the seed icon

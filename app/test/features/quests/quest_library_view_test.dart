@@ -349,22 +349,113 @@ void main() {
       tester,
     ) async {
       for (final width in widths) {
+        for (final scale in scales) {
+          await setUpTestScope();
+          await _pumpAt(
+            tester,
+            QuestsRoutePaths.library,
+            width: width,
+            textScale: scale,
+          );
+          await tester.tap(find.text('Active (12)'));
+          await tester.pumpAndSettle();
+
+          expect(tester.takeException(), isNull, reason: 'w$width s$scale');
+          expect(find.byType(QuestIdeaRow), findsWidgets, reason: 'w$width');
+
+          final row = tester.getRect(
+            find.byKey(const ValueKey<String>('quest-active-q-dishwasher')),
+          );
+          expect(row.left, NestSpacing.padSide, reason: 'w$width');
+          expect(row.width, width - 2 * NestSpacing.padSide, reason: 'w$width');
+
+          await disposeApp(tester);
+        }
+      }
+    });
+  });
+
+  group('P10 shell navigation', () {
+    // Every tap on P10 lands somewhere: the two in-screen controls (covered in
+    // quest_library_states_test.dart) and the four parent tab-bar items, which
+    // `ParentShell` owns.
+    const tabs = <String, String>{
+      'Today': '/today',
+      'Money': '/money',
+      'Family': '/child-profile',
+      'Quests': QuestsRoutePaths.library,
+    };
+
+    for (final entry in tabs.entries) {
+      testWidgets('the `${entry.key}` tab goes to ${entry.value}', (
+        tester,
+      ) async {
         await setUpTestScope();
-        await _pumpAt(tester, QuestsRoutePaths.library, width: width);
-        await tester.tap(find.text('Active (12)'));
+        await pumpAppRoute(tester, QuestsRoutePaths.library);
+
+        await tester.tap(_tab(entry.key));
         await tester.pumpAndSettle();
 
-        expect(tester.takeException(), isNull, reason: 'w$width');
-        expect(find.byType(QuestIdeaRow), findsWidgets, reason: 'w$width');
-
-        final row = tester.getRect(
-          find.byKey(const ValueKey<String>('quest-active-q-dishwasher')),
-        );
-        expect(row.left, NestSpacing.padSide, reason: 'w$width');
-        expect(row.width, width - 2 * NestSpacing.padSide, reason: 'w$width');
+        expect(currentPath(tester), entry.value);
 
         await disposeApp(tester);
+      });
+    }
+
+    testWidgets('the four tabs round-trip back to the quest library', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, QuestsRoutePaths.library);
+
+      for (final entry in tabs.entries) {
+        await tester.tap(_tab(entry.key));
+        await tester.pumpAndSettle();
+        expect(currentPath(tester), entry.value, reason: '${entry.key} tab');
       }
+
+      expect(currentPath(tester), QuestsRoutePaths.library);
+      // Back on the library, the screen is intact: title, tabs and rows.
+      expect(find.text('Active (12)'), findsOneWidget);
+      expect(find.byType(QuestIdeaRow), findsWidgets);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('a tab tap does not disturb the quest filters', (tester) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, QuestsRoutePaths.library);
+
+      await tester.tap(find.text('Kitchen'));
+      await tester.pump();
+      expect(find.text('Make your bed'), findsNothing);
+
+      await tester.tap(_tab('Today'));
+      await tester.pumpAndSettle();
+      await tester.tap(_tab('Quests'));
+      await tester.pumpAndSettle();
+
+      // The filter state is local to the body, so it survives the round-trip
+      // (BUG-P10-12 is about the *text* of the field, not the category).
+      expect(find.text('Make your bed'), findsNothing);
+      expect(find.text('Lay the table'), findsOneWidget);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('`/quests` is parent-only: kid mode lands on the gate', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+
+      await pumpAppRoute(tester, QuestsRoutePaths.library);
+
+      // P10 is a parent screen (brief: "mode parent"), so the 56 px kid tap
+      // floor never applies here; the router must keep it out of kid mode.
+      expect(currentPath(tester), '/parental-gate');
+
+      await disposeApp(tester);
     });
   });
 
@@ -515,6 +606,12 @@ void main() {
     });
   });
 }
+
+/// The `NestTabBar` item labelled [label].
+///
+/// Scoped to the bar: the library's own heading is also labelled `Quests`.
+Finder _tab(String label) =>
+    find.descendant(of: find.byType(NestTabBar), matching: find.text(label));
 
 /// [pumpAppRoute] with a width, a text scale and a theme.
 Future<void> _pumpAt(
