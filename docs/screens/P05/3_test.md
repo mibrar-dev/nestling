@@ -1,94 +1,128 @@
-# P05 · Add children — test notes (STAGE 3, iteration 7)
+# P05 · Add children — test notes (STAGE 3, iteration 8)
 
 Route `/add-children`, feature `family`, parent mode. Changes are confined to
-`app/test/features/family/add_children_test.dart` and these notes — no product
-code touched.
+`app/test/features/family/add_children_test.dart` plus these notes — no product
+code touched, no simulator used (SIMULATORS rule: stage 5 only).
 
-Suite green (`+986 ~1` full, **+124 ~1** in `test/features/family/`, 0 failures,
-the one mandated skip). Per the orchestrator's 04:31 decision, **P05-BUG-11 is
-not a P05 finding while the shared fix is pending**, and every P05-owned test
-passes — so this stage is a PASS.
+Suite green: **+1160 passing, 0 failures, 0 skips** full app,
+**+135** in `test/features/family/`. `flutter analyze` → No issues found,
+`dart format` clean.
 
-## Orchestrator decision 04:31 — what this stage did
+The two new mandatory components landed and the build stage wired both in:
+`NestChipWrap` in `add_child_form_card.dart` and `NestBalancedText` for the
+`.h1` in `add_children_view.dart`. **P05-BUG-11 is closed** — its proofs are
+un-skipped and pass, and the feature dir now has no `skip:` at all (previous
+iterations' single skip is gone).
 
-The decision keeps both owner rules (32-px visual chips **and** a 44-px tap
-target), rejects the bug report's options 1 and 2, and makes the fix
-`NestChipWrap` from `shared/chip_wrap_hit_area`: swap the age-chip `Wrap` for it,
-restore the ≥44 tap-target assertion in both axes, and un-skip P05-BUG-11.
+## Tests added (5)
 
-`NestChipWrap` is **not in this worktree yet** (`main` is at `e3ae2b2` and
-carries it; this branch is at `6ba0cb8` and the loop merges main before each
-build — a process item, not a finding). So the "until then" branch applies: the
-skip stays with its `shared/chip_wrap_hit_area` reference, and the tap-target
-assertion stays at "width ≥ 44, height == 32". The exact check for the next
-build: `grep -rn NestChipWrap app/lib/core/design_system/` — empty means wait.
+### BALANCED HEADINGS rule — 2 tests, group *P05 balanced headings*
+The rule is mandatory and structural: `.h1` has `text-wrap: balance`
+(`components.css:29`), so the heading renders through `NestBalancedText` with
+the same copy, style and `maxLines` — and `.h2/.h3/.body/.caption` never do.
+Nothing pinned either half, so both are now guarded:
 
-What I added instead was the part of the swap that would otherwise be verified
-by hand later:
+1. **the h1 is balanced, with its copy, style and maxLines kept** — exactly one
+   `NestBalancedText` on the screen (the `.h3` "Add a child" and the caption are
+   *not* balanced, and a stray extra node would balance the wrong string), the
+   copy is `Who’s in your nest?` with U+2019, `style == NestType.h1(color:
+   tokens.ink)`, `maxLines == 3`, `overflow == ellipsis`, `textAlign == left`,
+   and the plain `Text` inside it is the only node painting that string.
+2. **the h1 never overflows across the matrix (width, scale, theme)** — all 12
+   combinations of 320/390/430 × scale 1.0/1.3 × light/dark: the rendered height
+   stays within 3 line boxes (`fontSize × height` × the matrix scale) and no
+   ellipsis appears, so the heading is balanced rather than clipped.
 
-1. **No ancestor of the chip row is tight around its ±6 px** — the
-   precondition `NestChipWrap` depends on (its hit test only widens if every
-   ancestor forwards the position). Asserts the form card's `Column` **and** the
-   `NestCard` both reach ≥6 px beyond the row, with the overhang derived from
-   tokens (`(44 − 32) / 2 == 6`). This passes today and must still pass after the
-   swap.
-2. **The gaps around the chip row are the design values** — 4 px above
-   (`.chip-row { margin-top: 4px }`) and 8 px below (`.lbl { margin-top: 8px }`).
+### CHIP ROWS + "measure shapes, not text" — 3 tests, group *P05 chip tap area*
+3. **the chip row is a NestChipWrap (CHIP ROWS rule)** — the behavioural ±5 px
+   taps already pass, but they only exercise the block's two outer edges. A
+   structural guard stops a refactor back to `Wrap`/`Row` from silently
+   reintroducing the clipping: exactly **two** `NestChipWrap` rows (age chips and
+   the avatar swatches — the build wrapped both), every chip and swatch sits
+   inside one, and no plain `Wrap`/`Row` sits between the wrap and any item.
+4. **the widened swatch row target stops before label and caption** — the swatch
+   row is now a `NestChipWrap` too, so its hit area overhangs the 44-px discs.
+   Pinned: 4 px below `.lbl` (`margin-top: 4px`), 6 px above the caption
+   (`gap6`), and a tap at the "Avatar colour" label centre or the caption centre
+   selects **nothing** while the draft default (peach) stands. A tap 5 px above
+   the row also selects nothing — measured, not assumed: `NestChipWrap` forwards
+   its widened hit test to the nearest **`NestChip`**, so it never reaches
+   already-44-px swatch boxes. That is correct (the discs meet the ≥44 rule on
+   their own) and is the exact behaviour a UI check would want. Tapping the disc
+   dead centre selects it and single-selects.
+5. **the swatch fill is a 44-px disc with the design row geometry** — the
+   swatch-side answer to "P05 passed a UI check with chips whose pills had
+   collapsed to text width". For all five colours the **painted** `DecoratedBox`
+   rect equals the whole 44×44 box (a solid disc, not a dot inside a target),
+   `.swatches { gap: 8px }` holds between them, the row starts on the card
+   content edge and sits 4 px under "Avatar colour". Measuring the paint (not the
+   tap box) is what makes this non-vacuous: a collapsed fill would fail it.
 
-   The note says the Column "already gives at least 6 px above and below the
-   row"; it gives **4 above** (the design's own value) and 8 below. Not a problem
-   for the swap — reachability depends on the ancestors' boxes (test 1), not on
-   clear space — but worth recording: the 2 px of top overhang lands on the
-   inert "Age band" label, so no control can be stolen, and test 3 in the group
-   below proves a tap on that strip changes nothing.
+## Existing mandatory proof, re-verified
 
-So the remaining swap is exactly: replace `Wrap` → `NestChipWrap`, flip the
-tap-target assertion to `atLeast44` in both axes, un-skip `[P05-BUG-11]`, and
-flip the two assertions in `[P05-BUG-11] the vertical overlay is clipped…` to
-`isTrue`. Nothing else is outstanding.
+`[P05-BUG-11] the 44-px tap target reaches 6 px above and below the run` (and its
+sibling in `p05_bugs_test.dart`) now pass un-skipped: taps 5 px above the first
+run and 5 px below the last select their chip, and a tap 7 px below — outside
+the 44-px target — changes nothing, so the widened hit test has not swallowed
+the card. The 32-px layout assertion in *P05 tap targets* stays, with the reason
+spelling out that the 44 px is overlaid and that the functional proof is the
+±5 px test: with the overlay, the ≥44 rule can only be proven by taps, and
+`SPACING_SPEC` §10.6 wants "keep visual size".
 
 ## Results
 
 ```
-dart format .        clean (381 files, 0 changed)
+dart format .        clean (391 files, 0 changed)
 flutter analyze      No issues found!
-flutter test         00:31 +986 ~1: All tests passed!
-  test/features/family/   124 tests (+1 skipped), 0 failures
+flutter test         00:22 +1160: All tests passed!
+  test/features/family/   135 tests, 0 failures, 0 skips
 ```
 
-The skip is the mandated `[P05-BUG-11]` proof in `p05_bugs_test.dart:501`,
-carrying the `shared/chip_wrap_hit_area` reference and runnable with
-`flutter test --run-skipped test/features/family/p05_bugs_test.dart`. My green
-characterisation test for the same behaviour stays in the passing suite, so the
-clipping is visible either way. Every app-pumping test ends with
-`disposeApp(tester)`.
+No skips remain in the feature: the previous iteration's single mandated
+`skip: true` (P05-BUG-11) is gone now the shared fix has landed. Coverage is
+unchanged and green for the rest of the matrix — bloc event/state paths, light +
+dark, 320/390/430 × scale 1.0/1.3, `Seed.demo`/`empty`/`fresh`/`onboarding_kids`,
+loading/error/retry, every tap → route, semantics labels, tap targets, form-card
+rhythm vs the HTML, copy character-exact, child order, bottom edge and
+alignment. Every app-pumping test ends with `disposeApp(tester)`.
 
 ## Bugs found
 
 **None.** No P05-owned test failed and no defect was found in the screen.
 
-Carried, explicitly not a P05 finding: **P05-BUG-11** — the age-chip rows expose
-a 32-px-tall touch target today (the shared chip's overlaid 44-px hit area is
-clipped by the chip `Wrap`'s own bounds), which violates the parent-mode ≥44
-rule. Per the 04:31 decision it is owned by `shared/chip_wrap_hit_area` and
-explicitly "NOT a P05 finding while the shared fix is pending"; the swap is
-gated on the main merge.
+Two things I measured and deliberately did **not** file as bugs:
+
+* The swatch row's 5-px overhang is inert (test 4). A shared-component nuance,
+  not a P05 defect — recorded as a follow-up note in `SHARED_REQUEST.md` so the
+  component docs mention that the widening targets `NestChip` children.
+* The gap above the chip row is 4 px, not the ≥6 px the iteration-7 note
+  assumed. Reachability depends on the ancestors' boxes, not on clear space, and
+  no ancestor is tight (proven by *P05 chip row hit-area preconditions*), so the
+  44-px target is fully reachable anyway.
+
+`SHARED_REQUEST.md` is updated: the P05-BUG-11 entry is marked **RESOLVED** with
+the landed proofs named, and the durable `createdAt` CHILD ORDER request stays
+open (it lands with the schema v3 core ordering, already on main).
 
 ## Rules re-audited
 
-* **FONTS** — `google_fonts` is gone from `pubspec.yaml`; no import or
-  `GoogleFonts.*` call exists in `app/lib` or `app/test`, so nothing to delete.
-* **LETTER SPACING** — pinned by a sweep test that fails if any `Text` on the
-  screen carries positive tracking.
-* **CHILD ORDER** — Maya-first group, including the rename proof that keeps the
-  ruling green after the durable `createdAt` ordering lands.
-* **COPY** — code-unit assertions (curly apostrophe, em dash, en dashes, UK
-  `colour`).
-* **BOTTOM EDGE / ALIGNMENT** — CTA-to-edge and 20-px gutters at 320/390/430 in
-  light and dark.
-* **PIP** — no Pip slot on this screen (avatar initials only), so N/A.
-* Matrix coverage unchanged and green: bloc paths, light/dark, 320/390/430 ×
-  scale 1.0/1.3, `Seed.demo`/`empty`/`fresh`/`onboarding_kids`, loading/error/
-  retry, every tap → route, semantics labels, tap targets.
+* **FONTS** — `google_fonts` appears nowhere in `app/lib` or `app/test`.
+* **LETTER SPACING** — pinned by the sweep test that fails on any positive
+  tracking; `NestBalancedText` brings the h1's `NestType.h1` style through
+  unchanged, so it adds none.
+* **CHIP ROWS** — both interactive rows are `NestChipWrap` (test 3).
+* **BALANCED HEADINGS** — the h1 is balanced, nothing else is (tests 1–2).
+* **UI CHECK MEASURES SHAPES** — the pill background (text + 14 px a side, 32
+  high, painted rect == chip box) and now the swatch disc (44×44 painted) are
+  measured as backgrounds, not text positions.
+* **CHILD ORDER** — Maya-first group, including the rename proof that stays green
+  after the durable `createdAt` ordering lands.
+* **COPY** — code-unit assertions (U+2019 in the balanced heading, em dash, en
+  dashes, UK `colour`).
+* **BOTTOM EDGE / ALIGNMENT** — CTA-to-edge and 20-px gutters at every width in
+  both themes.
+* **PIP** — no Pip slot on this screen (avatar discs + initials), so N/A.
+* **TRIAL / PERIODS** — P05 writes no `subscription_status` and has no quests.
+* **SIMULATORS** — none used by this stage.
 
 VERDICT: PASS

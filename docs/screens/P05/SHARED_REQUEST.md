@@ -315,7 +315,18 @@ design-exact and pinned; the residual is this shared effect.
 ---
 
 # Shared request — P05 `NestChip`'s overlaid 44-px target is unreachable inside
-# the chip `Wrap` (P05-BUG-11, open — effective target is 32×pill)
+# the chip `Wrap` (P05-BUG-11 — RESOLVED on main by `NestChipWrap`; see the
+# follow-up note at the end of this entry)
+
+> Status (iteration 8): **LANDED.** The orchestrator's decision kept both owner
+> rules (32-px visual chip **and** a 44-px tap target) and shipped
+> `NestChipWrap` (branch `shared/chip_wrap_hit_area`) on main. P05 now uses it
+> for the age-chip row, the `[P05-BUG-11]` proofs are un-skipped and pass, and a
+> tap 5 px above / below the run selects the chip. One P05-side prerequisite also
+> had to hold and is now proven by test: no ancestor of the row may be tight
+> around its ±6 px — which is why the group's `Semantics` heading node sits
+> *outside* the row (a tight `RenderSemanticsAnnotations` box re-clips the
+> widened hit test). Close this entry; the residual nuance below is optional.
 
 Need: the shared batch-2 chip keeps the design's 32-px visual and widens the
 hit test with `_ExpandedHitBox` (44×44). Measured on P05 today, the vertical
@@ -355,9 +366,18 @@ shared row/capsule primitive ends up owning the tap area).
 Blocks: no for the build — the screen builds and every gap is design-exact. It
 does block an accessibility pass: parent-mode tap targets must be ≥44.
 
-Proofs: `app/test/features/family/add_children_test.dart`, group *P05 chip tap
-area* — "[P05-BUG-11] the vertical overlay is clipped by the chip Wrap", which
-asserts today's reachable 32 px and flips to `isTrue` when the fix lands; the
-bugs-stage proof of the same defect is in `p05_bugs_test.dart` with the id in
-its name and carries `skip: true` (run it with
-`flutter test --run-skipped test/features/family/p05_bugs_test.dart`).
+Proofs (landed): `app/test/features/family/add_children_test.dart`, group *P05
+chip tap area* — "[P05-BUG-11] the 44-px tap target reaches 6 px above and
+below the run" (taps ±5 px select, +7 px does not), plus *the chip row is a
+NestChipWrap* as the structural guard. The bugs-stage proof of the original
+defect is in `p05_bugs_test.dart` with the id in its name and is now un-skipped
+and passing.
+
+Follow-up nuance (not a P05 bug, no action needed for this screen): the widened
+hit test forwards to the nearest **`NestChip`**, so wrapping a row of
+already-44-px items changes nothing — measured on P05's swatch row, a tap 5 px
+above the row still selects nothing, because the 4-px strip belongs to the
+"Avatar colour" label. That is correct (the 44-px discs already meet the ≥44
+rule) and pinned by *the widened swatch row target stops before label and
+caption*. Worth a line in the component docs so the next screen does not expect
+an overhang for non-`NestChip` children.

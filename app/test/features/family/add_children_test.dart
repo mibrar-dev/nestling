@@ -1887,6 +1887,97 @@ void main() {
     });
   });
 
+  group('P05 balanced headings (BALANCED HEADINGS rule)', () {
+    // `.h1 { text-wrap: balance }` in components.css is the only balanced
+    // class P05 uses: `<h1 class="h1">` at line 46, and the `.h3` "Add a
+    // child" / `.body` / `.caption` runs that are NOT balanced. The rule keeps
+    // copy, style and maxLines and only changes where the lines break — so the
+    // guard pins both halves: the h1 goes through `NestBalancedText`, and no
+    // other text on the screen does (a stray one would balance the wrong
+    // string, and `.h2/.h3/.body/.caption` are explicitly banned).
+    testWidgets('the h1 is balanced, with its copy, style and maxLines kept', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/add-children');
+
+      final tokens = _tokensOf(tester, find.byType(NestBalancedText));
+      final balanced = tester.widgetList<NestBalancedText>(
+        find.byType(NestBalancedText),
+      );
+
+      expect(
+        balanced,
+        hasLength(1),
+        reason: 'only the .h1 is balanced on P05 (.h3/.body/.caption are not)',
+      );
+      final h1 = balanced.single;
+      expect(h1.text, 'Who\u2019s in your nest?', reason: 'copy is unchanged');
+      expect(h1.style, NestType.h1(color: tokens.ink), reason: 'style is kept');
+      expect(h1.maxLines, 3, reason: 'maxLines is kept');
+      expect(h1.overflow, TextOverflow.ellipsis, reason: 'overflow is kept');
+      expect(h1.textAlign, TextAlign.left, reason: '.h1 is left-aligned');
+
+      // A plain `Text` must never shadow the balanced one: the heading is the
+      // only node that paints the h1 string.
+      expect(
+        find.descendant(
+          of: find.byType(NestBalancedText),
+          matching: find.text('Who\u2019s in your nest?'),
+        ),
+        findsOneWidget,
+      );
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    testWidgets(
+      'the h1 never overflows across the matrix (width, scale, theme)',
+      (tester) async {
+        for (final theme in [ThemeMode.light, ThemeMode.dark]) {
+          for (final width in [320.0, 390.0, 430.0]) {
+            for (final scale in [1.0, 1.3]) {
+              await setUpTestScope();
+              await _resize(tester, width, scale);
+              await pumpAppRoute(tester, '/add-children', theme: theme);
+
+              final finder = find.text('Who\u2019s in your nest?');
+              expect(finder, findsOneWidget);
+              final rendered = tester.getRect(finder);
+              // `NestType.h1` stores `height` as a ratio (34 / 28), so the line
+              // box is fontSize x height, and the matrix scale multiplies it.
+              final style = NestType.h1(
+                color: _tokensOf(tester, find.byType(NestBalancedText)).ink,
+              );
+              final lineBox =
+                  style.fontSize! *
+                  style.height! *
+                  MediaQuery.textScalerOf(tester.element(finder)).scale(1);
+              expect(
+                rendered.height,
+                lessThanOrEqualTo(lineBox * 3 + 0.5),
+                reason:
+                    '$theme $width @${scale}x: maxLines 3 respected, no overflow '
+                    'strip',
+              );
+              // `maxLines: 3` is the design's ceiling and the copy is short, so an
+              // ellipsis here would mean the heading was clipped rather than
+              // balanced.
+              expect(
+                find.textContaining('\u2026'),
+                findsNothing,
+                reason: '$theme $width @${scale}x: the h1 is not ellipsised',
+              );
+              expect(tester.takeException(), isNull);
+              await disposeApp(tester);
+            }
+          }
+        }
+      },
+    );
+  });
+
   group('P05 child order is the order added (CHILD ORDER ruling)', () {
     /// Reading order of the rendered cards: row by row, left to right.
     List<String> renderedOrder(WidgetTester tester, List<String> names) {
@@ -2447,6 +2538,205 @@ void main() {
       expect(tester.takeException(), isNull);
       await disposeApp(tester);
     });
+
+    testWidgets('the chip row is a NestChipWrap (CHIP ROWS rule)', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/add-children');
+
+      // The rule is structural: every interactive row of `NestChip` uses
+      // `NestChipWrap`, never `Wrap`/`Row`, because only it forwards the 44-px
+      // target past the 32-px run's bounds. Asserting the widget type stops a
+      // refactor from silently reintroducing the P05-BUG-11 clipping while the
+      // behaviour above still passes (a one-line row has no edge taps to miss).
+      // P05 has two interactive rows: the age chips and the avatar swatches.
+      final rows = tester.widgetList<NestChipWrap>(find.byType(NestChipWrap));
+      expect(rows, hasLength(2), reason: 'age chips + avatar swatches');
+
+      final items = <Finder>[
+        for (final band in AddChildFormCard.ageBands)
+          find.byKey(Key('ageChip-$band')),
+        for (final colour in AddChildFormCard.swatchColours)
+          find.byKey(Key('swatch-$colour')),
+      ];
+      for (final item in items) {
+        expect(
+          find.ancestor(of: item, matching: find.byType(NestChipWrap)),
+          findsOneWidget,
+          reason: '$item sits inside a NestChipWrap',
+        );
+        // Nothing tight or greedy between the wrap and the item: no plain
+        // Wrap/Row may re-own the row geometry.
+        for (final plain in [find.byType(Wrap), find.byType(Row)]) {
+          expect(
+            find.ancestor(of: item, matching: plain),
+            findsNothing,
+            reason: '$item has no plain Wrap/Row between it and the chip row',
+          );
+        }
+      }
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    testWidgets('the widened swatch row target stops before label and caption', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/add-children');
+
+      // The swatch row is a `NestChipWrap` too, so its 44-px targets overhang
+      // the row by 6 px on every side. With only 4 px above
+      // (`.swatches { margin-top: 4px }`) and 6 px below, the guard is that the
+      // TEXT on either side is out of reach — the empty gap belongs to the
+      // swatches; the label and the caption belong to nothing.
+      Rect swatchRect(String colour) =>
+          tester.getRect(find.byKey(Key('swatch-$colour')));
+      bool isSelected(String colour) => tester
+          .widget<Semantics>(find.byKey(Key('swatch-$colour')))
+          .properties
+          .selected!;
+
+      final row = swatchRect('lilac');
+      final label = tester.getRect(find.text('Avatar colour'));
+      final caption = tester.getRect(
+        find.text('We only ask for an age range so quests suit them.'),
+      );
+      expect(
+        row.top - label.bottom,
+        NestSpacing.s1,
+        reason: '.swatches { margin-top: 4px }',
+      );
+      expect(
+        caption.top - row.bottom,
+        NestSpacing.gap6,
+        reason: 'the caption sits 6 px below the row',
+      );
+
+      await tester.tapAt(Offset(row.center.dx, label.center.dy));
+      await tester.pump();
+      expect(isSelected('lilac'), isFalse, reason: 'the label selects nothing');
+      expect(isSelected('peach'), isTrue, reason: 'the draft default stands');
+
+      await tester.tapAt(Offset(row.center.dx, caption.center.dy));
+      await tester.pump();
+      expect(
+        isSelected('lilac'),
+        isFalse,
+        reason: 'the caption selects nothing',
+      );
+      expect(isSelected('peach'), isTrue);
+
+      // 5 px above the row selects nothing, unlike the age chips — and both are
+      // correct. `NestChipWrap` forwards its widened hit test to the NEAREST
+      // CHIP, so the overhang reaches the chips' 32-px run but not these 44-px
+      // swatch boxes, which already meet the ≥44 rule on their own. The 4-px
+      // strip belongs to the "Avatar colour" label, and the label is inert.
+      await tester.tapAt(Offset(row.center.dx, row.top - 5));
+      await tester.pump();
+      expect(
+        isSelected('lilac'),
+        isFalse,
+        reason: 'the 44-px swatch boxes are the target; no overhang is needed',
+      );
+      expect(isSelected('peach'), isTrue);
+
+      // The disc itself, tapped dead centre, selects — and single-selects.
+      await tester.tapAt(row.center);
+      await tester.pump();
+      expect(isSelected('lilac'), isTrue, reason: 'the 44-px disc is tappable');
+      expect(isSelected('peach'), isFalse);
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    // Same UI-check rule for the swatches: measure the PAINTED fill, not the tap
+    // box. `.sw { width: 44px; height: 44px; border-radius: 50% }` — the design
+    // draws a solid 44-px disc (there is no inner dot), so the visible circle
+    // has to fill its whole 44-px box and the selected ring must be a shadow
+    // around it, never a shrunken fill.
+    testWidgets(
+      'the swatch fill is a 44-px disc with the design row geometry',
+      (tester) async {
+        await setUpTestScope();
+        await pumpAppRoute(tester, '/add-children');
+
+        final tokens = _tokensOf(tester, find.byKey(const Key('swatch-peach')));
+        expect(
+          AddChildFormCard.swatchColours,
+          hasLength(5),
+          reason: '`.sw` × 5',
+        );
+
+        Rect? prev;
+        final rowLeft = tester
+            .getRect(find.byKey(const Key('swatch-lilac')))
+            .left;
+        for (final colour in AddChildFormCard.swatchColours) {
+          final swatch = tester.getRect(find.byKey(Key('swatch-$colour')));
+          final painted = tester.getRect(
+            find
+                .descendant(
+                  of: find.byKey(Key('swatch-$colour')),
+                  matching: find.byType(DecoratedBox),
+                )
+                .first,
+          );
+
+          expect(
+            painted,
+            swatch,
+            reason: '$colour: the painted disc fills the 44-px box',
+          );
+          expect(swatch.width, NestDevice.tapParent, reason: '$colour width');
+          expect(swatch.height, NestDevice.tapParent, reason: '$colour height');
+
+          if (prev != null) {
+            expect(
+              swatch.left - prev.right,
+              closeTo(NestSpacing.s2, 0.5),
+              reason: '.swatches { gap: 8px } after $colour',
+            );
+          } else {
+            expect(
+              swatch.left,
+              rowLeft,
+              reason: 'the row starts on the card content edge',
+            );
+            // `.swatches { margin-top: 4px }`, 4 px under the `.lbl` baseline box.
+            expect(
+              swatch.top - tester.getRect(find.text('Avatar colour')).bottom,
+              NestSpacing.s1,
+              reason: 'swatch row 4 px below its label',
+            );
+          }
+          prev = swatch;
+        }
+
+        // The selection ring is a `boxShadow` on the same 44-px fill, so the
+        // default draft swatch must not paint a smaller disc than the others.
+        final defaultFill = tester.getRect(
+          find
+              .descendant(
+                of: find.byKey(const Key('swatch-peach')),
+                matching: find.byType(DecoratedBox),
+              )
+              .first,
+        );
+        expect(defaultFill.width, NestDevice.tapParent);
+        expect(
+          _tokensOf(tester, find.byKey(const Key('swatch-peach'))).ink,
+          tokens.ink,
+          reason: 'the theme is consistent across the row',
+        );
+
+        expect(tester.takeException(), isNull);
+        await disposeApp(tester);
+      },
+    );
 
     testWidgets('the whole form is free of added letter spacing', (
       tester,
