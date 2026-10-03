@@ -73,3 +73,83 @@ Files (outside RULES §1, deliberate): `app/test/features/today/today_view_test.
 Blocks: no — but **the orchestrator should know**: if P08's loop is running,
 these two files are the only place its branch and this one touch the same
 lines, and a merge conflict there is a textual conflict, not a design one.
+
+## 4. `NestIcons` glyphs for bed / dishwasher / hoover / bin do not match the P09 design (BLOCKS P09 UI check)
+
+Need: the P09 icon picker (`.ic`, 6 × 44×44 tiles) draws its glyphs from the
+shared `NestIcons` set, but four of them are visibly different objects from
+the design's inline SVGs (`design/html-source/screens/P09-quest-editor.html`
+and both `design/screens/*/P09-quest-editor.png`), in light and dark:
+
+- `NestIcons.bed` = lidded chest/box; design Bed = flat mattress/bed-frame
+  side view.
+- `NestIcons.dishwasher` = dishwasher/oven with racks; design Dishes =
+  handled basket.
+- `NestIcons.hoover` = hook/whistle-like loop; design Hoover = canister
+  vacuum with hose + wheels (this is the *selected* tile — most visible).
+- `NestIcons.bin` = rimmed trash bin; design Bins = small handled case/clasp.
+- (`NestIcons.book`, `NestIcons.paw` match; tile geometry — 44×44, r14,
+  1.5 border, selected leaf/tint — is already correct.)
+
+Whole-tile MAE vs the design (0–255): bed 4.5, dishwasher 19.9, hoover
+20.5, bin 17.3, book 4.1, paw 1.9. Measured in `docs/screens/P09/5_ui.md
+(stage 5, iteration 1): layout is pixel-perfect (uniform shift 0, every
+edge ≤ ±2 px, gutters 20, paper to the physical edge), so the glyphs are
+the *only* blocker and the UI check verdict is FAIL until they match.
+
+P09's mapping (`app/lib/features/quests/presentation/views/quest_editor_view.dart:230-240`)
+is already semantically right (bed→bed, dishwasher→dishwasher,
+hoover→hoover, book→book, bins→bin, paw→paw) — no better in-DS alternative
+exists, and re-drawing glyphs inside `quests/` would fork the design
+system, so the screen takes no workaround.
+
+Files: `app/lib/core/design_system/**` wherever `NestIcons.bed`,
+`.dishwasher`, `.hoover`, `.bin` are drawn (design reference: 24 px,
+2 px stroke, round caps, Lucide-style — the exact paths are in the P09
+HTML source, lines 30–35).
+Blocks: **yes for the UI verdict** — P09 cannot PASS stage 5 until the DS
+glyphs match; no P09 code change is needed on top (screenshots just need
+re-taking after the merge-back).
+
+## 5. `NestStepper` draws its minus as U+002D, both designs print U+2212 (advisory)
+
+Need: `app/lib/core/design_system/components/nest_stepper.dart:32` passes
+`label: '-'` (HYPHEN-MINUS, U+002D) to `_StepBtn`. Both designs that show a
+stepper print `&minus;` — `design/html-source/screens/P09-quest-editor.html`
+(`aria-label="Decrease reward">−</button>`, bytes `e2 88 92`) and the P06
+source — so the Reward card's `−` is rendered ~3 px short and 1–2 px high
+against the PNG.
+
+The repo has already ruled on this exact class: **P06-BUG-12** ("the stepper
+minus is the design's U+2212, never U+002D") was fixed with a screen-local
+`P06WeeklyStepper` + `kP06StepperMinusGlyph = '−'` and two regression tests
+(`p06_bugs_test.dart:870`, `p06_weekly_stepper_widget_test.dart:34`), and
+`money_ledger_view_test.dart:352` audits the app's copy for ASCII hyphens
+precisely because "the design uses U+2014/U+2212". P09 cannot take that
+workaround without forking the component (`--tap` sizing, `NestType.money`
+value, the shared 44 px buttons), so the glyph is recorded here and pinned
+by `quest_editor_copy_test.dart` (its `kGlyphs` list excludes the minus
+until this lands).
+
+Files: `app/lib/core/design_system/components/nest_stepper.dart`
+Blocks: **no** — a 1-character copy deviation in a shared control; P09 lands
+either way. Fixing the component fixes P06's fork at the same time.
+
+## 6. `NestTextField` default variant leaves a ~3 px text inset (advisory, ORCHESTRATOR_NOTES 17:57 item 2)
+
+Need: the orchestrator's QA of `cmp_light_1` measured the Quest name
+value starting at x ≈ 40 where the design has x ≈ 37. Measured in a P09
+widget test: the input box is exactly the design's `20 / 156 / 350 / 52`,
+but its `EditableText` starts at x **40** — 20 px in from the box edge,
+where `components.css:131` asks for `border 1px` + `padding 0 16px` = 17.
+Cause is shared: the default variant sets
+`contentPadding: EdgeInsets.symmetric(horizontal: NestSpacing.s4, vertical: 14)`
+(`nest_text_field.dart:303`) on top of Material's built-in ~4 px text inset.
+The same file already has the fix pattern — the search variant cancels it
+with `contentPadding: EdgeInsets.only(left: -4, …)`
+(`nest_text_field.dart:199`, "Cancels the editable's built-in 4 px text
+inset").
+
+Files: `app/lib/core/design_system/components/nest_text_field.dart`
+Blocks: **no** — 3 px of glyph inset inside a 52 px field; the element rects
+are exact and stage 5 measured every edge within ±2 px.
