@@ -41,10 +41,15 @@ class _QuestEditorViewState extends State<QuestEditorView> {
         : GetIt.instance<QuestsRepository>().getQuest(questId);
   }
 
+  /// `?id=<questId>` is the editor's own contract (`QuestsEditorQuery`).
+  /// P08 Today pushes `?questId=<questId>` (`today_loaded_body.dart:700`,
+  /// written before this screen existed), so that spelling is accepted as an
+  /// alias: without it a tap on a quest row would open a blank NEW quest
+  /// instead of editing the row. Same query contract, two accepted keys.
   static String? _questIdOf(BuildContext context) {
-    return GoRouterState.of(context)
-        .uri
-        .queryParameters[QuestsEditorQuery.questId];
+    final parameters = GoRouterState.of(context).uri.queryParameters;
+    return parameters[QuestsEditorQuery.questId] ??
+        parameters[QuestsEditorQuery.legacyQuestId];
   }
 
   void _cancel() {
@@ -125,6 +130,7 @@ class _SheetGrabber extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
+      key: const ValueKey<String>('quest-editor-grabber'),
       width: NestSpacing.s10,
       height: NestSpacing.gap5,
       child: DecoratedBox(
@@ -550,22 +556,28 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
         ),
     ];
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const gap = NestSpacing.s2;
-        final needed =
-            NestDevice.tapParent * _questIcons.length +
-            gap * (_questIcons.length - 1);
-        if (constraints.maxWidth >= needed) {
-          return Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: tiles,
-          );
-        }
-        // 320-wide surfaces cannot hold 6 tiles on one line — wrap instead
-        // of overflowing (plan §5).
-        return Wrap(spacing: gap, runSpacing: gap, children: tiles);
-      },
+    return Semantics(
+      // `.icons role="radiogroup" aria-label="Quest icon"` — one announced
+      // group around the six tiles; the tiles keep their own nodes.
+      container: true,
+      label: 'Quest icon',
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const gap = NestSpacing.s2;
+          final needed =
+              NestDevice.tapParent * _questIcons.length +
+              gap * (_questIcons.length - 1);
+          if (constraints.maxWidth >= needed) {
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: tiles,
+            );
+          }
+          // 320-wide surfaces cannot hold 6 tiles on one line — wrap instead
+          // of overflowing (plan §5).
+          return Wrap(spacing: gap, runSpacing: gap, children: tiles);
+        },
+      ),
     );
   }
 
@@ -745,10 +757,18 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
             ),
           ),
           const SizedBox(width: NestSpacing.s3),
-          NestToggle(
-            value: _needsApproval,
-            semanticLabel: 'Needs my approval',
-            onChanged: (value) => setState(() => _needsApproval = value),
+          // The design hangs the 51x31 track flush to the card's content edge
+          // and only its hit area into the padding; `NestToggle` centres the
+          // track inside its 59x44 box instead, so it is shifted back onto the
+          // measured design rect (x 303 -> 354, y 620.5 -> 651.5). See
+          // `QuestEditorMetrics.toggleTrackOffset`.
+          Transform.translate(
+            offset: QuestEditorMetrics.toggleTrackOffset,
+            child: NestToggle(
+              value: _needsApproval,
+              semanticLabel: 'Needs my approval',
+              onChanged: (value) => setState(() => _needsApproval = value),
+            ),
           ),
         ],
       ),

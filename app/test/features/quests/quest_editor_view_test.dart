@@ -314,6 +314,22 @@ void main() {
       await disposeApp(tester);
     });
 
+    testWidgets("?questId= (P08 Today's spelling) also pre-fills edit mode", (
+      tester,
+    ) async {
+      // P08 Today pushes `?questId=<id>` (`today_loaded_body.dart:700`), so the
+      // row it opens must land in edit mode, not on a blank NEW quest.
+      await pumpAppRoute(
+        tester,
+        '${QuestsRoutePaths.editor}?${QuestsEditorQuery.legacyQuestId}=q-hoover',
+      );
+      expect(find.text('Edit quest'), findsOneWidget);
+      expect(find.text('Delete quest'), findsOneWidget);
+      expect(find.text('Hoover the stairs'), findsOneWidget);
+      expect(find.text('New quest'), findsNothing);
+      await disposeApp(tester);
+    });
+
     testWidgets('an edited quest updates in place', (tester) async {
       await pumpAppRoute(tester, '${QuestsRoutePaths.editor}?id=q-hoover');
       await tester.enterText(
@@ -590,8 +606,19 @@ void main() {
       expect(approval.width, 350);
 
       final toggle = rectOf(find.byType(NestToggle));
-      expect(toggle.right, 354); // content right edge of the card
+      // `.toggle` is a 51x31 track with the CSS `::before` hit area 4 px wider
+      // on each side, and the PNG puts the TRACK flush to the card's content
+      // edge (x 303 -> 354). `NestToggle` centres the track inside its 59x44
+      // box, so the view shifts the whole control by
+      // `QuestEditorMetrics.toggleTrackOffset`: the box overhangs to 358 and
+      // the painted track lands flush at 354.
+      expect(toggle.right, 358);
       expect(toggle.height, NestDevice.tapParent);
+      expect(
+        toggle.right - 4,
+        354,
+        reason: 'painted track flush with the card content edge',
+      );
 
       final due = rectOf(find.byType(NestCard).at(2));
       expect(due.top - approval.bottom, 12); // [684]

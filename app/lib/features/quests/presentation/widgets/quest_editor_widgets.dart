@@ -31,6 +31,22 @@ abstract final class QuestEditorMetrics {
   /// `.due { min-height: 56px }` — the due row is taller than the 44px
   /// tap minimum (matches `.list-row`'s 56 minimum).
   static const double dueRowMinHeight = 56;
+
+  /// `.toggle::before { left: -4px; right: -4px; top: -7px; bottom: -7px }`
+  /// — the CSS hangs the hit area symmetrically around the 51x31 track, so
+  /// the *track* stays flush with the row's content edge (measured on the
+  /// P09 PNG: x 303 -> 354, y 620.5 -> 651.5) while only the hit area
+  /// overhangs into the card padding.
+  ///
+  /// [NestToggle] is the opposite: a 59x44 box (the same 51+8 / 31+13 hit
+  /// area) that centres the 51x31 track inside it, so the painted switch
+  /// lands 4 px short of the content edge and 2 px low (the app's switch row
+  /// is the component's 44 high, the design's is its 40 high text block).
+  /// The editor translates the toggle by this offset to put the visible
+  /// track back on the design's rect; the 44 px tap target only moves into
+  /// the card's own 16 px padding, which is where the CSS `::before`
+  /// overhang sits anyway.
+  static const Offset toggleTrackOffset = Offset(4, -2);
 }
 
 /// `.switchrow .tt` — 16/22 w600. The scale's [NestType.bodyStrong] is

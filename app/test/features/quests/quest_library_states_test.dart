@@ -483,7 +483,7 @@ void main() {
       await disposeApp(tester);
     });
 
-    testWidgets('an Active row opens the editor with no query', (tester) async {
+    testWidgets('an Active row opens the editor in edit mode', (tester) async {
       await setUpTestScope();
       await pumpAppRoute(tester, QuestsRoutePaths.library);
 
@@ -491,12 +491,20 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      await tester.tap(find.byType(QuestIdeaRow).first);
+      final rowFinder = find.byType(QuestIdeaRow).first;
+      final row = tester.widget<QuestIdeaRow>(rowFinder);
+      final questId = (row.key! as ValueKey<String>).value
+          .split('quest-active-')
+          .last;
+      await tester.tap(rowFinder);
       await tester.pumpAndSettle();
 
+      // P09 reads `?id=` (its query contract), so the row carries its own id
+      // and the editor opens pre-filled on that quest.
       final uri = _pushedUri(tester);
       expect(uri.path, QuestsRoutePaths.editor);
-      expect(uri.query, isEmpty, reason: 'P09 reads ?idea, not ?id');
+      expect(uri.queryParameters[QuestsEditorQuery.questId], questId);
+      expect(find.text('Edit quest'), findsOneWidget);
 
       await disposeApp(tester);
     });

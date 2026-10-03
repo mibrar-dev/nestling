@@ -26,6 +26,13 @@ abstract final class QuestsRoutePaths {
 /// `Quest not found` + a back link to the library).
 abstract final class QuestsEditorQuery {
   static const String questId = 'id';
+
+  /// Alias accepted for the same meaning: P08 Today pushes
+  /// `/quest-editor?questId=<id>` (`today_loaded_body.dart:700`), written
+  /// before this screen existed, and that file is another feature's. Reading
+  /// both keys keeps every call site working without a cross-feature edit;
+  /// `?id=` stays the documented contract for new callers.
+  static const String legacyQuestId = 'questId';
 }
 
 final GoRoute questEditorRoute = GoRoute(

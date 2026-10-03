@@ -28,6 +28,7 @@ import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
+import 'package:nestling/features/quests/presentation/views/quest_editor_view.dart';
 import 'package:nestling/features/today/data/today_repository_impl.dart';
 import 'package:nestling/features/today/domain/entities/child_day_summary.dart';
 import 'package:nestling/features/today/domain/entities/today_item.dart';
@@ -42,6 +43,13 @@ import '../../test_scope.dart';
 /// via `currentConfiguration` after a `push`, so read the page URI).
 Uri currentUri(WidgetTester tester, Finder anchor) =>
     GoRouter.of(tester.element(anchor)).state.uri;
+
+/// The same location read from the router instead of a widget: the pushed
+/// screen may replace its placeholder view at any time, so these proofs assert
+/// the route (the durable contract), never a view title
+/// (`docs/screens/_shared/router_push_test_fix_REPORT.md` §4).
+GoRouter _pushedRouter(WidgetTester tester) =>
+    GoRouter.of(tester.element(find.byType(Navigator).first));
 
 class _MockTodayRepository extends Mock implements TodayRepository;
 
@@ -542,7 +550,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
 
       expect(
-        find.text('P09 Quest editor', skipOffstage: false),
+        find.byType(QuestEditorView, skipOffstage: false),
         findsOneWidget,
         reason: 'a double-tap must not stack two editor pages',
       );
@@ -694,18 +702,11 @@ void main() {
       await tester.tap(find.bySemanticsLabel('New quest'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
-      expect(
-        find.text('P09 Quest editor', skipOffstage: false),
-        findsOneWidget,
-      );
+      expect(pushedPath(tester), '/quest-editor');
 
       // The pushed page navigates home with `go` (P09/P11 may; §4 asks them
       // to pop, but the guard must not depend on another screen's contract).
-      GoRouter.of(
-        tester.element(
-          find.text('P09 Quest editor', skipOffstage: false).first,
-        ),
-      ).go('/today');
+      _pushedRouter(tester).go('/today');
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 700));
 
@@ -715,7 +716,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(
-        find.text('P09 Quest editor', skipOffstage: false),
+        find.byType(QuestEditorView, skipOffstage: false),
         findsOneWidget,
         reason: 'the pushed page is gone, so the button must not stay latched',
       );
