@@ -1,12 +1,14 @@
 export 'package:nestling/core/design_system/assets/nestling_assets.dart';
 export 'package:nestling/core/design_system/components/nest_avatar.dart';
 export 'package:nestling/core/design_system/components/nest_badge_count.dart';
+export 'package:nestling/core/design_system/components/nest_balanced_text.dart';
 export 'package:nestling/core/design_system/components/nest_bottom_cta.dart';
 export 'package:nestling/core/design_system/components/nest_bottom_sheet.dart';
 export 'package:nestling/core/design_system/components/nest_brand_buttons.dart';
 export 'package:nestling/core/design_system/components/nest_button.dart';
 export 'package:nestling/core/design_system/components/nest_card.dart';
 export 'package:nestling/core/design_system/components/nest_chip.dart';
+export 'package:nestling/core/design_system/components/nest_chip_wrap.dart';
 export 'package:nestling/core/design_system/components/nest_chrome.dart';
 export 'package:nestling/core/design_system/components/nest_coin_pill.dart';
 export 'package:nestling/core/design_system/components/nest_day_picker.dart';

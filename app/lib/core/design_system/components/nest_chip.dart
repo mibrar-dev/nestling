@@ -15,6 +15,9 @@ import 'package:nestling/core/design_system/tokens/typography.dart';
 /// changing layout (`SPACING_SPEC` §10.6: "keep visual size", tap area
 /// overlaid) — so chip rows stay 32 tall and a `Wrap` still sees the pill's
 /// intrinsic width.
+///
+/// chips in a row: use NestChipWrap — a plain `Wrap`/`Row` is exactly
+/// 32 px high per run and clips the 44 px hit area above/below the row.
 class NestChip extends StatelessWidget {
   const new({
     required this.label,
@@ -23,6 +26,13 @@ class NestChip extends StatelessWidget {
     this.onSelected,
     this.leading,
   });
+
+  /// Hit slop around the 32 px pill to reach the 44 px minimum tap target.
+  ///
+  /// `(44 - 32) / 2`. Shared with `NestChipWrap`, which expands its own
+  /// hit test by this amount so edge runs stay tappable — do not duplicate
+  /// the number elsewhere.
+  static const double hitSlop = (NestDevice.tapParent - NestSpacing.s8) / 2;
 
   final String label;
   final bool selected;
@@ -73,21 +83,23 @@ class NestChip extends StatelessWidget {
     );
 
     const visualPadding = EdgeInsets.symmetric(horizontal: NestSpacing.gap14);
-    // The decorated pill is exactly 32 high. `DecoratedBox` sizes to its
-    // child and paints the 1.5 border inside the box — unlike `Container`,
+    // The decorated pill is exactly 32 high and text width + 28 wide
+    // (`.chip`: height 32, padding `0 14px`, `SPACING_SPEC` §6). The padding
+    // sits INSIDE the `DecoratedBox` so the background and the 1.5 px border
+    // paint the full pill, not just the text. `DecoratedBox` sizes to its
+    // child and paints the border inside the box — unlike `Container`,
     // which folds a `BoxDecoration` border into its size (that was the old
     // 35 px pill: 32 content + the border on each side). Every box below
     // shrink-wraps (no `Center`/`Align`: those take the full run width and
-    // would force one chip per `Wrap` row).
+    // would force one chip per `Wrap` row). There is deliberately no
+    // `minWidth: 44` on the pill itself: CSS sets no min-width on `.chip`,
+    // so a pill narrower than 44 stays narrow visually and the 44 px minimum
+    // tap area comes from [_ExpandedHitBox] (interactive branch), which
+    // widens the hit test without changing layout.
     Widget pill() {
-      return ConstrainedBox(
-        // Narrow pills (e.g. `13+`) keep a 44 minimum width, matching the
-        // day-chip minimum in `SPACING_SPEC` §6.
-        constraints: const BoxConstraints(minWidth: NestDevice.tapParent),
-        child: Padding(
-          padding: visualPadding,
-          child: DecoratedBox(decoration: decoration, child: content),
-        ),
+      return DecoratedBox(
+        decoration: decoration,
+        child: Padding(padding: visualPadding, child: content),
       );
     }
 
