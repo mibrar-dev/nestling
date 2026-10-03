@@ -71,6 +71,16 @@ void expectRectNear(Rect actual, Rect design) {
   expect(actual.bottom, closeTo(design.bottom, tolerance), reason: 'bottom');
 }
 
+/// Every [TextSpan] in a rich line, however deeply nested.
+List<TextSpan> _flatten(InlineSpan span) {
+  if (span is! TextSpan) return const <TextSpan>[];
+  return <TextSpan>[
+    span,
+    for (final child in span.children ?? const <InlineSpan>[])
+      ..._flatten(child),
+  ];
+}
+
 void main() {
   setUpAll(_loadBundledFonts);
 
@@ -181,6 +191,94 @@ void main() {
       expect(avatar.width, closeTo(44, 0.01));
       expect(avatar.height, closeTo(44, 0.01));
       expect(avatar.left, closeTo(34, tolerance));
+      await disposeApp(tester);
+    });
+
+    // ORCHESTRATOR_NOTES (iteration 2) items 2 and 3: the row's amount is a
+    // `<span class="money">` INSIDE the 13 px `.caption` line — 13 px bold
+    // tabular `--ink-2`, inline after the middle dot — not the separate 18 px
+    // number the page-level (unused) `.child .am` rule suggests.
+    //
+    // Measured off `P13-payout.png` ÷3 in row 1 (440…516):
+    //   `.who` = name 22 + caption 18 = 40, centred in the 48 px content box
+    //   (14 pad) → name line box 458…480, caption line box 480…498.
+    //   Design ink: name #1E1B3A, caption AND amount both #4A4668 (= --ink-2).
+    testWidgets('the row amount is inline 13 px bold ink-2, and the text '
+        'sits where the design centres it', (tester) async {
+      await _pumpPayout(tester);
+
+      final line = tester
+          .widgetList<RichText>(find.byType(RichText))
+          .firstWhere(
+            (rich) => rich.text.toPlainText() == 'Weekly + quests · £4.20',
+          );
+      expect(line.text.toPlainText(), 'Weekly + quests · £4.20');
+
+      TextSpan spanWith(String text) =>
+          _flatten(line.text).firstWhere((span) => span.text == text);
+      final captionSpan = spanWith('Weekly + quests · ');
+      final amountSpan = spanWith('£4.20');
+      expect(captionSpan.style!.fontSize, 13, reason: '.caption is 13/18');
+      expect(amountSpan.text, '£4.20', reason: 'DATA OVER MOCKS: owed');
+      expect(
+        amountSpan.style!.fontSize,
+        13,
+        reason: 'the amount is part of the 13 px caption line',
+      );
+      expect(amountSpan.style!.fontWeight, FontWeight.w700);
+      expect(
+        amountSpan.style!.color,
+        NestTheme.light().extension<NestTokens>()!.ink2,
+        reason: ".money sets no colour — it inherits the caption's --ink-2",
+      );
+      expect(
+        amountSpan.style!.fontFeatures,
+        contains(const FontFeature.tabularFigures()),
+        reason: '.money { font-variant-numeric: tabular-nums }',
+      );
+
+      // Text position, ±1 px of the design (name 458…480, subtitle 480…498).
+      final name = tester.getRect(_text('Maya'));
+      expect(name.top, closeTo(458, 1), reason: 'name line box');
+      expect(name.height, closeTo(22, 0.01));
+      final subtitle = tester.getRect(find.text('Weekly + quests · £4.20'));
+      expect(subtitle.top, closeTo(480, 1), reason: 'caption line box');
+      expect(subtitle.height, closeTo(18, 0.01));
+
+      // Leo's block is the same, one row down (526…602).
+      final leoName = tester.getRect(_text('Leo'));
+      expect(leoName.top, closeTo(544, 1));
+      final leoSubtitle = tester.getRect(find.text('Weekly + quests · £2.10'));
+      expect(leoSubtitle.top, closeTo(566, 1));
+
+      await disposeApp(tester);
+    });
+
+    // ORCHESTRATOR_NOTES item 1: `.scrim { position: absolute; inset: 0 }`
+    // covers (0,0) → (390,844) — the status-bar reserve, the "Pocket money"
+    // title and the summary card all render dimmed, and the whole band above
+    // the sheet is the dismiss target.
+    testWidgets('the scrim barrier covers the whole screen from (0,0)', (
+      tester,
+    ) async {
+      await _pumpPayout(tester);
+
+      final scrim = find.byWidgetPredicate((widget) {
+        final color = NestTheme.light().extension<NestTokens>()!.scrim;
+        if (widget is ColoredBox) return widget.color == color;
+        if (widget is DecoratedBox) {
+          final decoration = widget.decoration;
+          return decoration is BoxDecoration && decoration.color == color;
+        }
+        return false;
+      });
+      expect(scrim, findsOneWidget);
+      expect(
+        tester.getRect(scrim),
+        const Rect.fromLTRB(0, 0, 390, 844),
+        reason: 'design inset: 0 — no bright band above the sheet',
+      );
+
       await disposeApp(tester);
     });
   });

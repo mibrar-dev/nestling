@@ -54,7 +54,9 @@ class _PayoutGrabber extends StatelessWidget {
       child: Center(
         child: Container(
           width: NestSpacing.s10,
-          height: PayoutCheck.grabberHeight,
+          // `.pay::before { height: 5px }` — the same token the shared
+          // `NestBottomSheet` grabber uses (review finding 8).
+          height: NestSpacing.gap5,
           decoration: BoxDecoration(
             color: context.nest.line,
             borderRadius: NestRadii.allPill,
@@ -109,6 +111,7 @@ class PayoutSheet extends StatelessWidget {
     required this.onToggled,
     required this.onSaveChanged,
     required this.onSubmit,
+    this.busy = false,
     super.key,
   });
 
@@ -117,6 +120,11 @@ class PayoutSheet extends StatelessWidget {
   /// Child ids whose cash the parent ticked as handed over.
   final Set<String> ticked;
   final bool saveOn;
+
+  /// A payout write is in flight: the CTA is disabled and spins, so a second
+  /// tap inside the Drift round-trip window cannot dispatch the same payout
+  /// twice (P13-BUG-01 / review finding 2).
+  final bool busy;
 
   /// Flips one child's ticked state. A `.check` button is a toggle, so the
   /// sheet never needs to know the new value.
@@ -155,11 +163,16 @@ class PayoutSheet extends StatelessWidget {
     final title = payoutSheetTitle(data.payoutDay);
     final saveRowChild = saveChild;
     final canSubmit =
-        ticked.isNotEmpty && ticked.any((id) => owedFor(id).totalPence > 0);
+        !busy &&
+        ticked.isNotEmpty &&
+        ticked.any((id) => owedFor(id).totalPence > 0);
 
     return Semantics(
+      // `role="dialog" aria-modal="true" aria-label="Saturday payout"`. The
+      // label is NOT repeated here: the header text below is the single
+      // announcement (review finding 9 — a container label plus a header
+      // child announced "Saturday payout" twice on entry).
       container: true,
-      label: title,
       explicitChildNodes: true,
       child: Container(
         decoration: BoxDecoration(
@@ -218,16 +231,19 @@ class PayoutSheet extends StatelessWidget {
                 const SizedBox(height: NestSpacing.gap10),
                 PayoutSaveRow(
                   child: saveRowChild,
+                  goalTitle: data.goalFor(saveRowChild.id)?.title,
                   value: saveOn,
                   onChanged: onSaveChanged,
                 ),
               ],
               const SizedBox(height: NestSpacing.gap14),
               // `.pay .btn-primary { min-height: 52px }` — the shared
-              // `NestButton` default.
+              // `NestButton` default. `loading` disables it while the write is
+              // in flight (P13-BUG-01) without changing the pill geometry.
               NestButton(
                 label: 'Mark as paid & start the celebration',
                 onPressed: canSubmit ? onSubmit : null,
+                loading: busy,
               ),
               const SizedBox(height: NestSpacing.s2),
               Text(
@@ -345,12 +361,18 @@ class PayoutChildRow extends StatelessWidget {
                       ),
                       TextSpan(
                         text: moneyPounds(owedPence),
-                        // `.child .am`: `.money` + 18 px w800, tabular.
-                        style: NestType.money(color: tokens.ink).copyWith(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          height: 22 / 18,
-                        ),
+                        // `.child .who .caption` holds a `<span class="money">`:
+                        // 13 px bold tabular, `--ink-2`, INLINE after the
+                        // middle dot. The page rule `.child .am { font-size:
+                        // 18px }` belongs to markup this screen never emits,
+                        // and the design PNG agrees — the rendered digits are
+                        // 9.4 px tall (a 13 px cap) in the caption's
+                        // `--ink-2`, not 18 px in `--ink`. Rendering it as a
+                        // separate 18 px number also made the `.who` block
+                        // 44 tall instead of 40, which pushed the name and the
+                        // subtitle 2 px above the design's centred position.
+                        style: NestType.money(color: tokens.ink2)
+                            .copyWith(fontSize: 13, height: 18 / 13),
                       ),
                     ],
                   ),
@@ -375,12 +397,38 @@ class PayoutSaveRow extends StatelessWidget {
     required this.child,
     required this.value,
     required this.onChanged,
+    this.goalTitle,
     super.key,
   });
 
   final MoneyChild child;
   final bool value;
   final ValueChanged<bool> onChanged;
+
+  /// The child's savings-goal title from the database (Maya: "Lego Friends
+  /// set"). Null in hand-built fixtures with no goal row.
+  final String? goalTitle;
+
+  /// `.saverow .t` copy.
+  ///
+  /// The design string (`P13-payout.html:29`) is verbatim on the seeded path:
+  /// a goal whose title names the Lego set keeps "… to her Lego fund", because
+  /// character-for-character copy is the rule and the UI check compares it.
+  /// Any other goal (DATA OVER MOCKS: the database decides) falls back to a
+  /// neutral, data-driven sentence instead of hard-coding the design's
+  /// "Lego fund" / gendered pronoun for an arbitrary family — review finding
+  /// 7, whose failure mode was "Move £1.00 of Leo's to her Lego fund".
+  static String label(String name, String? goalTitle) {
+    final amount = moneyPounds(PayoutSheet.savingsMovePence);
+    final title = goalTitle?.trim() ?? '';
+    if (title.isEmpty) {
+      return "Move $amount of $name's money to savings";
+    }
+    if (title.toLowerCase().contains('lego')) {
+      return "Move $amount of $name's to her Lego fund";
+    }
+    return "Move $amount of $name's money to their $title fund";
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -397,11 +445,7 @@ class PayoutSaveRow extends StatelessWidget {
         children: <Widget>[
           Expanded(
             child: Text(
-              // The design string verbatim (`P13-payout.html:29`) with only
-              // `{nick}` interpolated — ASCII 0x27 apostrophe. The £1.00 is
-              // fixed by the design, not by the goal.
-              "Move ${moneyPounds(PayoutSheet.savingsMovePence)} of $name's"
-              ' to her Lego fund',
+              label(name, goalTitle),
               // `.saverow .t`: Inter 15/22 w600 — `bodySmallStrong` exactly.
               style: NestType.bodySmallStrong(color: tokens.ink),
             ),
@@ -446,9 +490,6 @@ class PayoutCheck extends StatelessWidget {
   /// `.check { border-radius: 14px; border: 2px solid }`.
   static const double radius = 14;
   static const double borderWidth = 2;
-
-  /// `.pay::before` pill height.
-  static const double grabberHeight = 5;
 
   @override
   Widget build(BuildContext context) {

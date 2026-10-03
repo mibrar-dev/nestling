@@ -100,5 +100,59 @@ void main() {
       // Maya is untouched by Leo's payout.
       expect((await repository.owed('maya')).totalPence, 420);
     });
+
+    test('a zero amount writes nothing (review #3)', () async {
+      final before = await rowsFor('maya');
+
+      // A ticked child who owes £0.00 must not leave a `Paid … £0.00` row.
+      await repository.recordPayout(
+        childId: 'maya',
+        amountPence: 0,
+        savingsMovePence: 100,
+        goalId: 'goal-lego',
+      );
+
+      final after = await rowsFor('maya');
+      expect(after, hasLength(before.length));
+      expect(await goalSaved('goal-lego'), 1550);
+      expect((await repository.owed('maya')).totalPence, 420);
+    });
+
+    test(
+      'the savings move is clamped to the amount paid (P13-BUG-02)',
+      () async {
+        final movedBefore = (await rowsFor('maya'))
+            .where((row) => row.type == 'savings_move')
+            .fold<int>(0, (sum, row) => sum + row.amountPence);
+
+        await repository.recordPayout(
+          childId: 'maya',
+          amountPence: 50,
+          savingsMovePence: 100,
+          goalId: 'goal-lego',
+        );
+
+        final maya = await rowsFor('maya');
+        final paid = maya
+            .firstWhere((row) => row.type == 'payout' && row.amountPence == -50)
+            .amountPence
+            .abs();
+        final moved =
+            maya
+                .where((row) => row.type == 'savings_move')
+                .fold<int>(0, (sum, row) => sum + row.amountPence) -
+            movedBefore;
+
+        expect(paid, 50);
+        expect(
+          moved,
+          lessThanOrEqualTo(paid),
+          reason: 'the move must never exceed the money actually paid',
+        );
+        expect(moved, 50);
+        // The goal moves exactly what the ledger moved — no conjured pence.
+        expect(await goalSaved('goal-lego'), 1550 + moved);
+      },
+    );
   });
 }

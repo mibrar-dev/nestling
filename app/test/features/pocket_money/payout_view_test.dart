@@ -13,9 +13,13 @@
 
 import 'dart:ui' show CheckedState, Tristate;
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get_it/get_it.dart';
+import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/pocket_money/domain/entities/money_child.dart';
@@ -33,6 +37,10 @@ const String kCaptionCopy =
     'Nestling.';
 const String kSaveCopy = "Move £1.00 of Maya's to her Lego fund";
 const String kSaveLabel = "Move one pound of Maya's money to savings";
+
+/// `.scrim` in the light theme — the dim layer the view must paint at
+/// `inset: 0`.
+final Color kScrimColor = NestTheme.light().extension<NestTokens>()!.scrim;
 
 Future<void> _settle(WidgetTester tester) async {
   await tester.pump();
@@ -491,6 +499,173 @@ void main() {
       final second = tester.widget<PayoutChildRow>(rows.at(1));
       expect(first.child, const MoneyChild(id: 'maya', nickname: 'Maya'));
       expect(second.child, const MoneyChild(id: 'leo', nickname: 'Leo'));
+
+      await disposeApp(tester);
+    });
+  });
+
+  // Regression guards for the iteration-1 review + bug hunt. Each of these
+  // failed before the iteration-2 fixes; the reproducers also live (unskipped)
+  // in `p13_bugs_test.dart`, so a future regression fails loudly in both
+  // files.
+  group('P13 payout — iteration-1 regressions', () {
+    testWidgets('the scrim is inset 0 and a tap over the title dismisses', (
+      tester,
+    ) async {
+      await _pumpPayout(tester, fromLedger: true);
+
+      // `.scrim { position: absolute; inset: 0 }` (components.css:164) — the
+      // status-bar reserve, the "Pocket money" title and the summary card are
+      // all dimmed, exactly like the design PNGs.
+      final scrim = find.byWidgetPredicate((widget) {
+        if (widget is ColoredBox) return widget.color == kScrimColor;
+        if (widget is DecoratedBox) {
+          final decoration = widget.decoration;
+          return decoration is BoxDecoration && decoration.color == kScrimColor;
+        }
+        return false;
+      });
+      expect(scrim, findsOneWidget);
+      final rect = tester.getRect(scrim);
+      expect(rect.top, 0, reason: 'the scrim starts at the top of the screen');
+      expect(rect.bottom, 844, reason: 'and runs to the bottom edge');
+
+      // The title band is inside the scrim in the design, so tapping it
+      // dismisses the sheet (the iteration-1 app left the top 169 px dead).
+      await tester.tapAt(const Offset(195, 60));
+      await _settle(tester);
+      expect(currentPath(tester), '/money');
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the dimmed ledger is out of the semantics tree', (
+      tester,
+    ) async {
+      await _pumpPayout(tester);
+      final handle = tester.ensureSemantics();
+
+      expect(find.bySemanticsLabel('Saturday payout'), findsWidgets);
+      // Behind the modal: not focusable, so a screen reader cannot land there.
+      expect(find.bySemanticsLabel('Pocket money'), findsNothing);
+      expect(
+        find.bySemanticsLabel('Maya is owed £4.20 · Leo is owed £2.10'),
+        findsNothing,
+      );
+      // …but the dismiss surface is announced and operable.
+      final dismiss = _node(tester, 'Close payout');
+      expect(
+        dismiss.getSemanticsData().hasAction(SemanticsAction.tap),
+        isTrue,
+        reason: 'every interactive element is operable by VoiceOver',
+      );
+
+      handle.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('a second tap in the same frame writes one payout', (
+      tester,
+    ) async {
+      final db = await setUpTestScope();
+      tester.view.physicalSize = const Size(390 * 3, 844 * 3);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      await pumpAppRoute(tester, '/money');
+      await _settle(tester);
+      await _pushPayout(tester);
+
+      final seededIds = (await db.select(db.ledgerEntries).get())
+          .map((row) => row.id)
+          .toSet();
+
+      // No gate needed: the guard is synchronous, so the second tap lands
+      // inside the same write window as the first.
+      final cta = find.widgetWithText(NestButton, kCtaCopy);
+      await tester.tap(cta);
+      await tester.tap(cta);
+      await _pumpPastWrite(tester);
+
+      final written = (await db.select(db.ledgerEntries).get())
+          .where((row) => !seededIds.contains(row.id))
+          .toList();
+      final goal = await (db.select(
+        db.savingsGoals,
+      )..where((g) => g.id.equals('goal-lego'))).getSingle();
+
+      expect(written.where((row) => row.type == 'payout').length, 1);
+      expect(written.where((row) => row.type == 'savings_move').length, 1);
+      expect(goal.savedPence, 1650, reason: '1550 + one £1.00 move, not two');
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('a ticked child who owes nothing is not written', (
+      tester,
+    ) async {
+      final db = await setUpTestScope();
+      tester.view.physicalSize = const Size(390 * 3, 844 * 3);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      await pumpAppRoute(tester, '/money');
+      await _settle(tester);
+      await _pushPayout(tester);
+
+      // Pay Maya (£4.20) only — Leo stays unticked.
+      await tester.tap(find.widgetWithText(NestButton, kCtaCopy));
+      await _pumpPastWrite(tester);
+      expect(currentPath(tester), '/money');
+
+      // Re-open: Maya is at £0.00 and Leo (£2.10) is ticked by default. Tick
+      // Maya as well — the mixed case that used to write a "Paid · £0.00"
+      // row for her (and moved £1.00 that was never paid).
+      final seededIds = (await db.select(db.ledgerEntries).get())
+          .map((row) => row.id)
+          .toSet();
+      await _pushPayout(tester);
+      expect(find.text('Weekly + quests · £0.00'), findsWidgets);
+      await tester.tap(find.bySemanticsLabel('Maya paid in cash'));
+      await _settle(tester);
+      await tester.tap(find.widgetWithText(NestButton, kCtaCopy));
+      await _pumpPastWrite(tester);
+
+      final written = (await db.select(db.ledgerEntries).get())
+          .where((row) => !seededIds.contains(row.id))
+          .toList();
+      expect(
+        written.where((row) => row.type == 'payout').map((r) => r.childId),
+        <String>['leo'],
+        reason: 'nothing was handed over for Maya, so no row is written',
+      );
+      expect(written.where((row) => row.type == 'savings_move'), isEmpty);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the saverow copy follows the database goal', (tester) async {
+      final db = await setUpTestScope();
+      await db.transaction(() async {
+        await (db.update(db.savingsGoals)
+              ..where((g) => g.id.equals('goal-lego')))
+            .write(const SavingsGoalsCompanion(title: Value('Bike')));
+      });
+      await GetIt.instance<AppSession>().refresh();
+      tester.view.physicalSize = const Size(390 * 3, 844 * 3);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      await pumpAppRoute(tester, '/payout');
+      await _settle(tester);
+
+      // DATA OVER MOCKS: the design's "… to her Lego fund" is verbatim for the
+      // seeded Lego goal; any other goal gets a neutral, data-driven sentence
+      // instead of the design's noun and pronoun.
+      expect(find.text(kSaveCopy), findsNothing);
+      expect(
+        find.text("Move £1.00 of Maya's money to their Bike fund"),
+        findsOne,
+      );
 
       await disposeApp(tester);
     });

@@ -44,78 +44,110 @@ class _PayoutViewState extends State<PayoutView> {
   /// write failure.
   final Set<String> _submitted = <String>{};
 
+  /// The last write-failure message this view actually surfaced. A retry after
+  /// that visible failure re-arms the CTA (P13-BUG-01 keeps the double-tap
+  /// guard for a genuinely in-flight write; a *failed* attempt must stay
+  /// retryable, or the button would be dead for the rest of the visit).
+  String? _lastFailure;
+
+  @override
+  void initState() {
+    super.initState();
+    // A route that is pumped onto an ALREADY loaded bloc (deep link, tests
+    // that pre-load) has no future emission to prime from — seed here, before
+    // the first build. `build` stays pure (review finding 5).
+    final bloc = context.read<PocketMoneyBloc>();
+    if (bloc.state.status == PocketMoneyStatus.loaded) {
+      _prime(bloc.state.data);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = context.nest;
     return Scaffold(
       backgroundColor: tokens.paper,
       body: BlocListener<PocketMoneyBloc, PocketMoneyState>(
-        // A rejected write keeps `status: loaded` and only sets
-        // `errorMessage`, so it surfaces as a toast and the sheet stays.
+        // Priming: the first `loaded` emission seeds the ticked set. It runs
+        // in the listener (never in `build`) so no State is mutated during the
+        // build phase (review finding 5).
         listenWhen: (previous, current) =>
-            _submitted.isNotEmpty &&
-            current.status == PocketMoneyStatus.loaded &&
-            previous.errorMessage != current.errorMessage &&
-            current.errorMessage != null,
-        listener: (context, state) {
-          setState(_submitted.clear);
-          showNestToast(context, state.errorMessage!);
-        },
+            !_primed && current.status == PocketMoneyStatus.loaded,
+        listener: (context, state) => setState(() => _prime(state.data)),
         child: BlocListener<PocketMoneyBloc, PocketMoneyState>(
-          // The confirmation: the ledger stream re-emits once the payout row
-          // landed, which is the only proof the write happened (P12
-          // finding-6 pattern — never announce on the tap itself).
+          // A rejected write keeps `status: loaded` and only sets
+          // `errorMessage`, so it surfaces as a toast and the sheet stays.
           listenWhen: (previous, current) =>
               _submitted.isNotEmpty &&
               current.status == PocketMoneyStatus.loaded &&
-              current.errorMessage == null &&
-              _payoutLanded(previous.data, current.data),
+              previous.errorMessage != current.errorMessage &&
+              current.errorMessage != null,
           listener: (context, state) {
-            setState(_submitted.clear);
-            showNestToast(context, _payoutToast);
-            _goBack();
+            setState(() {
+              _submitted.clear();
+              _lastFailure = state.errorMessage;
+            });
+            showNestToast(context, state.errorMessage!);
           },
-          child: BlocBuilder<PocketMoneyBloc, PocketMoneyState>(
-            buildWhen: (previous, current) =>
-                previous.status != current.status ||
-                previous.data != current.data ||
-                previous.errorMessage != current.errorMessage,
-            builder: (context, state) {
-              switch (state.status) {
-                case PocketMoneyStatus.initial:
-                case PocketMoneyStatus.loading:
-                  return Center(
-                    child: CircularProgressIndicator(color: tokens.leaf),
-                  );
-                case PocketMoneyStatus.failure:
-                  return _FailureBody(message: state.errorMessage);
-                case PocketMoneyStatus.loaded:
-                  final data = state.data;
-                  if (data == null || data.children.isEmpty) {
-                    return const _EmptyBody();
-                  }
-                  _prime(data);
-                  return Stack(
-                    children: <Widget>[
-                      Positioned.fill(
-                        child: _DimmedLedger(data: data, onDismiss: _goBack),
-                      ),
-                      Align(
-                        alignment: Alignment.bottomCenter,
-                        child: PayoutSheet(
-                          data: data,
-                          ticked: _ticked,
-                          saveOn: _saveOn,
-                          onToggled: _toggle,
-                          onSaveChanged: (value) =>
-                              setState(() => _saveOn = value),
-                          onSubmit: () => _submit(data),
-                        ),
-                      ),
-                    ],
-                  );
-              }
+          child: BlocListener<PocketMoneyBloc, PocketMoneyState>(
+            // The confirmation: the ledger stream re-emits once the payout row
+            // landed, which is the only proof the write happened (P12
+            // finding-6 pattern — never announce on the tap itself).
+            listenWhen: (previous, current) =>
+                _submitted.isNotEmpty &&
+                current.status == PocketMoneyStatus.loaded &&
+                current.errorMessage == null &&
+                _payoutLanded(previous.data, current.data),
+            listener: (context, state) {
+              setState(() {
+                _submitted.clear();
+                _lastFailure = null;
+              });
+              showNestToast(context, _payoutToast);
+              _goBack();
             },
+            child: BlocBuilder<PocketMoneyBloc, PocketMoneyState>(
+              buildWhen: (previous, current) =>
+                  previous.status != current.status ||
+                  previous.data != current.data ||
+                  previous.errorMessage != current.errorMessage,
+              builder: (context, state) {
+                switch (state.status) {
+                  case PocketMoneyStatus.initial:
+                  case PocketMoneyStatus.loading:
+                    return Center(
+                      child: CircularProgressIndicator(color: tokens.leaf),
+                    );
+                  case PocketMoneyStatus.failure:
+                    return _FailureBody(message: state.errorMessage);
+                  case PocketMoneyStatus.loaded:
+                    final data = state.data;
+                    if (data == null || data.children.isEmpty) {
+                      return const _EmptyBody();
+                    }
+                    return Stack(
+                      children: <Widget>[
+                        Positioned.fill(
+                          child: _DimmedLedger(data: data, onDismiss: _goBack),
+                        ),
+                        Align(
+                          alignment: Alignment.bottomCenter,
+                          child: PayoutSheet(
+                            data: data,
+                            ticked: _ticked,
+                            saveOn: _saveOn,
+                            busy: _submitted.isNotEmpty,
+                            onToggled: _toggle,
+                            onSaveChanged: (value) =>
+                                setState(() => _saveOn = value),
+                            onSubmit: () => _submit(data),
+                          ),
+                        ),
+                      ],
+                    );
+                }
+              },
+            ),
           ),
         ),
       ),
@@ -126,8 +158,9 @@ class _PayoutViewState extends State<PayoutView> {
   /// creation order that actually has money owed (the design shows Maya
   /// ticked). With nothing owed — a family that was just paid — the set stays
   /// empty and the CTA is disabled.
-  void _prime(MoneyLedgerData data) {
+  void _prime(MoneyLedgerData? data) {
     if (_primed) return;
+    if (data == null) return;
     _primed = true;
     String? first;
     for (final child in data.children) {
@@ -159,24 +192,53 @@ class _PayoutViewState extends State<PayoutView> {
     });
   }
 
-  /// One `PocketMoneyPayoutSubmitted` per ticked child. The £1.00 savings
-  /// move belongs to the goal-bearing child alone, and only when that child
-  /// is actually being paid (an unticked child's money never moved out).
+  /// One `PocketMoneyPayoutSubmitted` per ticked child **that owes money**.
+  /// The £1.00 savings move belongs to the goal-bearing child alone, only
+  /// when that child is actually being paid (an unticked child's money never
+  /// moved out), and never more than the amount handed over.
+  ///
+  /// Three guards, all from the iteration-1 review / bug hunt:
+  /// * re-entrancy — a second tap while the first write is still in flight
+  ///   must not dispatch again (P13-BUG-01: two `payout` rows, the goal
+  ///   credited twice). The guard re-arms only after a failure the parent
+  ///   actually saw, so retrying stays possible;
+  /// * a ticked child who owes £0.00 is skipped — no "Paid · £0.00" row for
+  ///   money that never moved (review finding 3);
+  /// * the savings move is clamped to the money paid, so a £0.50 payout can
+  ///   never conjure £1.00 in the jar (P13-BUG-02).
   void _submit(MoneyLedgerData data) {
+    if (_submitted.isNotEmpty) {
+      final error = context.read<PocketMoneyBloc>().state.errorMessage;
+      if (error == null || error != _lastFailure) return;
+      _submitted.clear();
+    }
     final bloc = context.read<PocketMoneyBloc>();
     final saveChildId = payoutSaveChildId(data);
-    for (final childId in _ticked) {
-      final movesSavings = _saveOn && childId == saveChildId;
+    final paying = <String, int>{
+      for (final childId in _ticked)
+        if (_owedOf(data, childId) > 0) childId: _owedOf(data, childId),
+    };
+    if (paying.isEmpty) return;
+    for (final entry in paying.entries) {
+      final movesSavings = _saveOn && entry.key == saveChildId;
+      final move = movesSavings
+          ? (PayoutSheet.savingsMovePence < entry.value
+                ? PayoutSheet.savingsMovePence
+                : entry.value)
+          : 0;
       bloc.add(
         PocketMoneyPayoutSubmitted(
-          childId,
-          _owedOf(data, childId),
-          movesSavings ? PayoutSheet.savingsMovePence : 0,
-          movesSavings ? data.goalFor(childId)?.id : null,
+          entry.key,
+          entry.value,
+          move,
+          move > 0 ? data.goalFor(entry.key)?.id : null,
         ),
       );
     }
-    setState(() => _submitted.addAll(_ticked));
+    setState(() {
+      _lastFailure = null;
+      _submitted.addAll(paying.keys);
+    });
   }
 
   /// True when every child whose payout is in flight now owes nothing AND
@@ -202,8 +264,15 @@ class _PayoutViewState extends State<PayoutView> {
 }
 
 /// The P12 ledger dimmed behind the scrim: status-bar reserve, title and the
-/// "is owed" summary card. `ExcludeSemantics` — it is not actionable and a
-/// modal sheet must not leave a focus trap behind itself.
+/// "is owed" summary card.
+///
+/// The design stacks one `inset: 0` scrim OVER the whole backdrop
+/// (`P13-payout.html:19-21`, `components.css:164` — `z-index: 20`, below the
+/// `.pay` sheet's 30), so the status-bar reserve, the title and the summary
+/// card all render dimmed and a tap anywhere above the sheet dismisses it.
+/// The chrome is `ExcludeSemantics` — it is not actionable and a modal sheet
+/// must not leave a focus trap behind itself; the scrim keeps its own
+/// labelled dismiss node (review findings 1, 6 and 9, P13-BUG-03/05).
 class _DimmedLedger extends StatelessWidget {
   const _DimmedLedger({required this.data, required this.onDismiss});
 
@@ -213,52 +282,68 @@ class _DimmedLedger extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = context.nest;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Stack(
       children: <Widget>[
-        const NestStatusBar(),
-        Padding(
-          // `.bg-fake .ptitle { padding-top: 8px }` inside a 20 px gutter.
-          padding: const EdgeInsets.fromLTRB(
-            NestSpacing.padSide,
-            NestSpacing.s2,
-            NestSpacing.padSide,
-            0,
+        ExcludeSemantics(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              const NestStatusBar(),
+              Padding(
+                // `.bg-fake .ptitle { padding-top: 8px }` inside a 20 px
+                // gutter.
+                padding: const EdgeInsets.fromLTRB(
+                  NestSpacing.padSide,
+                  NestSpacing.s2,
+                  NestSpacing.padSide,
+                  0,
+                ),
+                child: Semantics(
+                  header: true,
+                  child: Text(
+                    'Pocket money',
+                    style: NestType.h1(color: tokens.ink),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  NestSpacing.padSide,
+                  NestSpacing.s3,
+                  NestSpacing.padSide,
+                  0,
+                ),
+                child: NestCard(
+                  child: Text(
+                    _summary(data),
+                    style: NestType.caption(color: tokens.ink2),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+              // `.bg-fake` then `<div style="flex:1">` — the ledger body is
+              // not painted here, only reserved.
+              const Spacer(),
+            ],
           ),
+        ),
+        // `.scrim { position: absolute; inset: 0; z-index: 20 }` — full
+        // bleed, and tapping it dismisses the sheet (back to `/money`).
+        Positioned.fill(
           child: Semantics(
-            header: true,
-            child: Text(
-              'Pocket money',
-              style: NestType.h1(color: tokens.ink),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            NestSpacing.padSide,
-            NestSpacing.s3,
-            NestSpacing.padSide,
-            0,
-          ),
-          child: NestCard(
-            child: Text(
-              _summary(data),
-              style: NestType.caption(color: tokens.ink2),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ),
-        // `.scrim { position: absolute; inset: 0 }` — tapping it dismisses
-        // the sheet and returns to `/money`.
-        Expanded(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
+            button: true,
+            label: 'Close payout',
             onTap: onDismiss,
-            child: ColoredBox(color: tokens.scrim),
+            excludeSemantics: true,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onDismiss,
+              child: ColoredBox(color: tokens.scrim),
+            ),
           ),
         ),
       ],
@@ -324,7 +409,9 @@ class _EmptyBody extends StatelessWidget {
   }
 }
 
-/// Load failure: message + the only legal retry.
+/// Load failure: message + the only legal retry. Keeps the same
+/// `NestStatusBar()` reserve as every other body on this route, so the two
+/// states agree about the chrome (review finding 10).
 class _FailureBody extends StatelessWidget {
   const _FailureBody({required this.message});
 
@@ -333,31 +420,41 @@ class _FailureBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = context.nest;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: NestSpacing.padSide),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Text(
-              message ?? 'Something went wrong',
-              style: NestType.bodySmall(color: tokens.ink2),
-              textAlign: TextAlign.center,
-              maxLines: 5,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: NestSpacing.s4),
-            NestButton(
-              label: 'Try again',
-              variant: NestButtonVariant.secondary,
-              fullWidth: false,
-              onPressed: () => context.read<PocketMoneyBloc>().add(
-                const PocketMoneyLoadRequested(),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        const NestStatusBar(),
+        Expanded(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: NestSpacing.padSide,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    message ?? 'Something went wrong',
+                    style: NestType.bodySmall(color: tokens.ink2),
+                    textAlign: TextAlign.center,
+                    maxLines: 5,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: NestSpacing.s4),
+                  NestButton(
+                    label: 'Try again',
+                    variant: NestButtonVariant.secondary,
+                    fullWidth: false,
+                    onPressed: () => context.read<PocketMoneyBloc>().add(
+                      const PocketMoneyLoadRequested(),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 }

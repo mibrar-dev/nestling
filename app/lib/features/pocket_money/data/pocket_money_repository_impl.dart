@@ -334,6 +334,16 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
     int savingsMovePence = 0,
     String? goalId,
   }) async {
+    // Nothing was handed over, nothing is recorded: a ticked child who owes
+    // £0.00 must not leave a `Paid … £0.00` row in the ledger (review #3).
+    if (amountPence <= 0) return;
+    // The savings move can never exceed the money actually paid: £1.00
+    // against a £0.50 payout would conjure 50p the jar never held
+    // (P13-BUG-02). The view clamps with `min(100, owed)`; this is the
+    // backstop for any caller that does not.
+    final movePence = savingsMovePence > 0 && goalId != null
+        ? savingsMovePence.clamp(0, amountPence)
+        : 0;
     final now = DateTime.now().toUtc();
     final zone = await _db.familyZoneId();
     await _db.transaction(() async {
@@ -350,7 +360,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
               dateTz: Value(zone),
             ),
           );
-      if (savingsMovePence > 0 && goalId != null) {
+      if (movePence > 0 && goalId != null) {
         await _db
             .into(_db.ledgerEntries)
             .insert(
@@ -358,7 +368,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
                 familyId: Seed.familyId,
                 childId: childId,
                 type: 'savings_move',
-                amountPence: savingsMovePence.abs(),
+                amountPence: movePence,
                 note: const Value('Jar → savings goal'),
                 date: Value(now),
                 dateTz: Value(zone),
@@ -372,7 +382,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
             _db.savingsGoals,
           )..where((g) => g.id.equals(goalId))).write(
             SavingsGoalsCompanion(
-              savedPence: Value(goal.savedPence + savingsMovePence.abs()),
+              savedPence: Value(goal.savedPence + movePence),
             ),
           );
         }

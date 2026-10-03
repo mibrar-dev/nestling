@@ -1,135 +1,139 @@
-# 2b — Build, UI chunk (iteration 1) — P13 Payout
+# 2b — Build, UI chunk (iteration 2) — P13 Payout
 
-## What I built
+Every UI item in `FIXES_1.md` (3 test findings + 10 review findings + 5 bug
+findings) and all three `ORCHESTRATOR_NOTES.md` items are implemented. No
+simulator was booted (stage rule); geometry is pinned by real-font widget
+tests instead.
 
-| File | State |
+## Files changed (UI chunk only)
+
+| File | Change |
 |---|---|
-| `app/lib/features/pocket_money/presentation/widgets/payout_sheet.dart` | **new** — `.pay` sheet: grabber, `<Weekday> payout` title, sub, `PayoutChildRow`, `PayoutSaveRow`, `PayoutCheck`, CTA, caption, plus the feature-local `payoutWeekdayLabel`/`payoutSaveChildId` helpers |
-| `app/lib/features/pocket_money/presentation/views/payout_view.dart` | **rewritten** — full-screen route (deleted the `const new` placeholder): dimmed P12 ledger + scrim + bottom sheet, loading/failure/empty states, submit → stream proof → toast → dismiss |
-| `app/test/features/pocket_money/payout_view_test.dart` | **new** — 18 tests: copy, semantics actions, the write, navigation, states, 320 px / text-scale 1.3 / dark |
-| `app/test/features/pocket_money/payout_widget_geometry_test.dart` | **new** — 7 real-font geometry tests pinning the design rects |
-| `app/test/features/pocket_money/money_ledger_states_test.dart` | **1 line** (see the note below) |
+| `app/lib/features/pocket_money/presentation/views/payout_view.dart` | scrim `inset: 0` + `ExcludeSemantics` + labelled dismiss, `_FailureBody` status-bar reserve, priming out of `build`, submit guards (re-entrancy / zero-owed skip / clamped savings move) |
+| `app/lib/features/pocket_money/presentation/widgets/payout_sheet.dart` | `busy` CTA, single sheet-title announcement, grabber on `NestSpacing.gap5`, **row amount inline 13 px bold ink-2**, data-driven `.saverow` copy, `PayoutCheck.grabberHeight` deleted |
+| `app/test/features/pocket_money/payout_view_test.dart` | +5 regression tests (`P13 payout — iteration-1 regressions`) |
+| `app/test/features/pocket_money/payout_widget_geometry_test.dart` | +2 real-font tests: amount style + row text y (±1), scrim barrier `(0,0,390,844)` |
+| `app/test/features/pocket_money/p13_bugs_test.dart` | **all 5 skipped reproducers un-skipped** (`skip: false`, reasons rewritten as "fixed") |
 
-`flutter analyze lib/features/pocket_money test/features/pocket_money` → **No
-issues found**. `flutter test test/features/pocket_money` → **354 pass,
-1 pre-existing skip, 0 fail**. `dart format` clean.
+Gates: `flutter analyze lib/features/pocket_money test/features/pocket_money`
+→ **No issues found**; `dart format --set-exit-if-changed` → 0 changed;
+`flutter test test/features/pocket_money` → **423 passed / 1 pre-existing skip
+(P12-BUG-04) / 0 failed** (was 366 + 6 skipped). No simulator, no whole-app
+`flutter test`, no `flutter clean`, no `google_fonts`.
 
-## Design geometry — measured design vs app
+## ORCHESTRATOR_NOTES (mandatory — all three)
 
-Measured off `design/screens/light/P13-payout.png` (÷3) by pixel-scanning the
-PNG for the card fills, then rendered at 390×844 with the real bundled fonts
-and measured with `tester.getRect`. **Zero drift on every element.**
+1. **Scrim covers the whole screen.** `_DimmedLedger` is now a `Stack`: the
+   P12 chrome column, then a full-bleed `Positioned.fill` scrim layer
+   (`GestureDetector` → `_goBack`) between the ledger and the `.pay` sheet —
+   design `components.css:164` (`inset: 0; z-index: 20`) with the sheet's 30
+   above it. The status-bar reserve, the "Pocket money" title and the summary
+   card all render dimmed, and a tap at `(195, 60)` now dismisses. Measured
+   rect `(0, 0, 390, 844)`; the 152–169 px bright band the UI stage measured
+   is gone. Pinned by the new geometry test **and** by a view test.
+2. **Row amounts are part of the subtitle line.** P13's markup puts
+   `<span class="money">` **inside** the `.caption` line
+   (`P13-payout.html:25`), so `.money` only adds `tabular-nums` +
+   `font-weight: 700` — the page rule `.child .am { font-size: 18px }` is
+   never applied by this screen's HTML. The amount is now
+   `NestType.money(ink2).copyWith(fontSize: 13, height: 18/13)`: **13 px bold
+   tabular `--ink-2`, inline** after `Weekly + quests · ` (U+00B7). Pixel
+   proof from `design/screens/light/P13-payout.png` ÷3, row 1: the caption
+   glyphs and the amount glyphs are both `(74,70,104)` = `--ink-2`
+   (`colors.dart:276`), and the amount's ink is 9.4 px tall — a 13 px cap, not
+   an 18 px one. (The old 18 px ink rendering was neither.)
+3. **Row text y.** `.who` = name 22 + caption 18 = **40** (was 44), centred in
+   the 48 px content box by `.child { align-items: center }`, so the block
+   starts 4 px below the padding instead of 2: name line box **458…480**,
+   subtitle **480…498** (design ink: name `463.3…477.7`, digits
+   `484.3…493.7`). Pinned at **±1 px** for both rows (Leo 544 / 566). This
+   also retires the UI stage's "Leo ≈ 2 px high" deviation, which was the
+   18 px amount's extra 2 px of line height pushing the block up. Row height
+   stays 76 — the 48×48 `.check` drives it, not the text.
 
-| Element | Design | App | Δ |
-|---|---|---|---|
-| screen title `Pocket money` | 20, 55 · 350×34 | 20, 55 · 350×34 | 0 |
-| dimmed summary card | 20, 101 · 350×50 | 20, 101 · 350×50 | 0 |
-| `.pay` sheet top / height | 343 · 501 | 343 · 501 | 0 |
-| sheet title box | 372 · h30 | 372 · h30 | 0 |
-| `.sub` box | 406 · h20 | 406 · h20 | 0 |
-| child row 1 (Maya) | 20, 440 · 350×76 | 20, 440 · 350×76 | 0 |
-| child row 2 (Leo) | 20, 526 · 350×76 | 20, 526 · 350×76 | 0 |
-| `.saverow` | 20, 612 · 350×72 | 20, 612 · 350×72 | 0 |
-| CTA pill | 20, 698 · 350×52 | 20, 698 · 350×52 | 0 |
-| footer caption | 758 · h36 | 758 · h36 | 0 |
-| `.check` | 308, 454 · 48×48 | 308, 454 · 48×48 | 0 |
-| `.avatar.s44` | 34, 456 · 44×44 | 34, 456 · 44×44 | 0 |
+## FIXES_1.md — what I fixed
 
-Two findings that came out of measuring rather than reading, and that are now
-documented in the widget header so nobody "fixes" them later:
+### From 4_review.md (code review, iteration 1)
 
-- **The 48×48 `.check` is what makes a `.child` row 76 px tall**, not the text.
-  The avatar is 44 and `.who` is `22 + 18` = 40, so a padding-only row would
-  render 72 and push every card below it 4 px up. The check is kept exactly
-  48 px (no `Semantics`/`GestureDetector` padding around it) and pinned by a
-  test. In the PNG the check top is `440 + 14` (flush), not centred, which is
-  the same fact seen from the other side.
-- **The dark PNG confirms the tick glyph is `--surface`, not `--onLeaf`** —
-  sampled `#1F1C2E` on the `#3CC98A` fill at `1F1C2E` = dark `--surface`. The
-  unticked state paints the glyph in `tokens.surface` on a `tokens.surface`
-  fill (the token-only spelling of the CSS's `color: transparent`), and the
-  glyph stays mounted in both states so the rect can never change between
-  ticks.
+| # | Sev | Fix |
+|---|---|---|
+| 1 | major | Scrim is its own `Positioned.fill` layer over the whole ledger (`inset: 0`); the misleading `Expanded` comment and the doc comment that claimed a behaviour the code did not have are both gone. |
+| 2 | major | `_submit` is non-reentrant and the sheet's CTA is `loading:` (disabled, DS spinner, label kept so the pill geometry does not move) while a write is in flight. |
+| 3 | major | `_submit` skips a ticked child who owes `0` — no `Paid · £0.00` ledger row for money that never moved. Regression test: pay Maya, re-open, tick Maya beside Leo, submit → only `leo:-210` is written. |
+| 4 | major | `zz_probe_test.dart` was already deleted by the bug stage; its probes are now real assertions (the double-submit and zero-owed tests above). `flutter analyze` is clean. |
+| 5 | minor | `_prime` no longer mutates `State` inside the `BlocBuilder`: it runs in a dedicated `BlocListener` on the first `loaded` emission, plus `initState` for the route-pumped-onto-an-already-loaded-bloc case (deep link / pre-loaded bloc). `build` is pure. |
+| 6 | minor | The dimmed chrome is `ExcludeSemantics`-wrapped (plan §e and the code's own comment are now true). |
+| 7 | minor | `.saverow` copy is data-driven: verbatim design string while the goal names the Lego set (the seeded `goal-lego`), and a neutral sentence (`Move £1.00 of {nick}'s money to their {goal} fund`) for any other goal, instead of hard-coding "her Lego fund" for an arbitrary family. No SHARED_REQUEST needed — no cross-screen/core change. |
+| 8 | minor | `PayoutCheck.grabberHeight` deleted; the pill is `NestSpacing.gap5` like `NestBottomSheet`'s. |
+| 9 | minor | The sheet's `Semantics` container keeps `container`/`explicitChildNodes` but drops `label:` (the title was announced twice); the scrim now carries `Semantics(button: true, label: 'Close payout', onTap: onDismiss)` so a screen-reader user can dismiss it (with `onTap:` passed, per the brief's `excludeSemantics` rule). |
+| 10 | minor | `_FailureBody` mounts the same `NestStatusBar()` reserve as the other two bodies. |
 
-## Owner rules applied
+### From 6_bugs.md (`p13_bugs_test.dart`)
 
-- **Bottom edge** — the sheet paints `tokens.paper` with a 50 px bottom pad
-  (`home-h + 16`) and is bottom-anchored, so the paper owns the last pixel
-  row. Measured `sheet.bottom == 844.0` exactly; no coloured strip in either
-  theme (dark PNG also has paper to `y=2531`).
-- **Alignment** — 20 px gutters everywhere: title, both child rows, saverow,
-  CTA and the sheet all report `left = 20`, `right = 370`.
-- **Child order** — rows and the saverow iterate `data.children`, i.e.
-  creation order (Maya, then Leo). A test asserts the `PayoutChildRow` order
-  and the vertical positions, so alphabetical ordering cannot creep back in.
-- **Copy** — every string compared against
-  `design/html-source/screens/P13-payout.html` character-for-character: ASCII
-  `0x27` in `you've` / `Maya's`, U+00B7 (`kMoneyDot`) separators, U+2014 em
-  dash in the success toast, `&` not `&amp;`. The saverow is the design
-  string with only `{nick}` interpolated — the goal title is **not**
-  interpolated (`her Lego fund`, not `her Lego Friends set fund`).
-- **Tokens only** — no literal colour or size anywhere; the two size
-  overrides the CSS needs (`.pay h2` 24/30 w900, `.nm` 16/22) are
-  `copyWith` at the call site, and the `.child`/`.saverow` radius-16 cards are
-  built from `surface` + `cardShadow` + `NestRadii.allM` because `NestCard`
-  is fixed at `--r-l`.
-- **DS components not re-implemented** — `NestStatusBar`, `NestCard`,
-  `NestButton`, `NestToggle`, `NestAvatar`, `NestIcon`, `NestEmptyState`,
-  `NestToast`, `CircularProgressIndicator` are all shared. `PayoutCheck` is
-  feature-local because no DS component matches a 48×48 / r14 / 2 px check
-  (the shared one is the kid's 56 px ring), which the plan also states.
-- **No `google_fonts`**, no Material letter-spacing added.
-- **`NestBalancedText` deliberately NOT used on the sheet title** — the brief
-  scopes it to `.display`/`.h1`/`.kid-title`/`.kid-hero` and forbids it on
-  `.h2`, and `.pay h2` sets no `text-wrap: balance`.
-- **Semantics** — every control carries `hasAction(SemanticsAction.tap)`;
-  the checks and the toggle are asserted both by `getSemanticsData()` and by
-  `performAction` changing the real state/DB. The `excludeSemantics: true`
-  wrappers all pass `onTap:`.
+| # | Sev | Fix |
+|---|---|---|
+| P13-BUG-01 | major | Re-entrancy guard + busy CTA. The guard **re-arms after a failure the parent actually saw** (`_lastFailure`), so a retry can never be met with a dead button. Repro un-skipped: 1 payout row, 1 `savings_move`, goal 1650. |
+| P13-BUG-02 | major | `savingsMovePence = min(£1.00, owed)`, and 0 whenever the move is not paid. Repro un-skipped: at 50 p owed the ledger moves ≤ the payout and the goal moves exactly what the ledger moved. |
+| P13-BUG-03 | major | Scrim `inset: 0` (see ORCHESTRATOR item 1). Repro un-skipped. |
+| P13-BUG-04 | minor | The view records the message it surfaced (`_lastFailure`) and re-arms the submit for a retry. Repro un-skipped and green (stable over 3 runs). Root cause is logic-side and the logic builder closed it in the same iteration — the bloc now clears the stale `errorMessage` before the write, so the repeat failure is a state change again; my `_lastFailure` re-arm is the view-side belt to that braces, and it also covers the case where the emission is suppressed. |
+| P13-BUG-05 | minor | `ExcludeSemantics` on the dimmed chrome (see finding 6). Repro un-skipped. |
 
-## Decisions worth flagging
+### From 5_ui.md
 
-1. **Default tick** — plan §b says `{data.children.first.id}`; §d says the
-   default tick only applies to children with `owed > 0`. I implemented §d
-   (first child in creation order with money owed, empty when nobody owes
-   anything), which reproduces the design (Maya ticked, Leo not) *and* §d's
-   just-paid case with one rule. The CTA is additionally disabled when no
-   ticked child owes anything, so a £0 payout can never be submitted.
-2. **`_goBack()` instead of `context.pop()`** — `/payout` is normally pushed
-   on `/money`, but `shot.sh` launches it as `INITIAL_ROUTE`, where `pop()`
-   throws `GoError("There is nothing to pop")` (this actually crashed a test
-   before I guarded it). The scrim tap and the post-write dismissal both use
-   `canPop() ? pop() : go('/money')`, the same pattern as `PaywallView` /
-   `CreateAccountView`.
-3. **Sheet scroll** — the `.pay` column sits in a `SingleChildScrollView`
-   inside the `maxHeight: 88 %` container, so 320×568 and text scale 1.3
-   scroll instead of overflowing (both covered).
-4. **One out-of-boundary line, deliberately** — `money_ledger_states_test.dart`
-   is a P12 file, so outside my chunk. Its "Payout time pushes /payout" test
-   called `tester.pageBack()`, which used to find a back button because the
-   placeholder `PayoutView` had an `AppBar`. The real P13 sheet has no app bar
-   (the design has none), so that one line is now
-   `await tester.binding.handlePopRoute()` — same assertion, same intent
-   (P12's own navigation contract), mechanics only. Without it the feature
-   suite is red, and I was not going to leave it that way or skip it.
+Deviation 1 = BUG-03 (fixed). Deviation 2 (Leo ≈ 2 px high) = ORCHESTRATOR
+item 3 (fixed and pinned at ±1).
+
+### From 3_test.md
+
+`SHARED_REQUEST.md` (`pumpAppRoute` has no `size` parameter) needs no action
+from me — it is `test/test_scope.dart`, outside the UI chunk's paths, and the
+request itself says it blocks nothing (P13's 320/390/430 and 320×568 probes
+pump `NestlingApp` directly and are real). The `HARNESS TRAP` comments stand.
+
+## Owner rules re-checked
+
+- **Bottom edge** — unchanged mechanism (bottom-anchored sheet, `paper`,
+  `homeH + s4` bottom pad, `sheet.bottom == 844.0`), re-verified by
+  `payout_responsive_test.dart`'s rendered-pixel probe in both themes.
+- **Alignment** — 20 px gutters on the title, both rows, the saverow, the CTA
+  and the check column; pinned by rect assertions (unchanged, all green).
+- **Child order** — creation order everywhere; unchanged.
+- **Copy** — every string re-compared with `P13-payout.html`: ASCII 0x27 in
+  `you've` / `Maya's`, U+00B7, `&`, U+2014 in the toast. The new saverow
+  fallback is the only string this screen ever builds itself, and it is
+  clearly documented at the call site.
+- **Tokens only** — the sheet's grabber is now on `NestSpacing`; no literal
+  colour or size was added. The amount's 13/18 is the `.caption` metric read
+  through `NestType.money(...).copyWith` at the call site (the shared styles
+  stay untouched, per the letter-spacing/spacing precedent).
+- **DS not re-implemented** — `NestStatusBar`, `NestCard`, `NestButton`
+  (`loading:`), `NestToggle`, `NestAvatar`, `NestIcon`, `NestEmptyState`,
+  `NestToast` all shared. `PayoutCheck` stays feature-local (48×48/r14/2 px
+  has no DS equivalent).
+- **Accessibility** — every control still exposes `hasAction(tap)`; both
+  `excludeSemantics: true` wrappers pass `onTap:`; the new scrim node does too;
+  the new regression test asserts the scrim's `hasAction(tap)` and that the
+  dimmed title/summary are gone from the semantics tree.
+- **No `google_fonts`**, no Material tracking, no analysis_options changes.
 
 ## Contract with the logic builder
 
-`2a_build_logic.md` reports **no CONTRACT CHANGES**, and the view codes against
-`PocketMoneyPayoutSubmitted(childId, amountPence, savingsMovePence, goalId)`
-exactly as the plan specifies. The savings rule implemented here matches §b:
-the 100 p move goes to the first goal-bearing child **and only when that
-child is ticked**; every other child gets `(0, null)`. Two tests write to the
-real DB and assert the rows (`-420`/`-210` payouts, one `+100` savings_move on
-`maya`, and zero `savings_move` rows when the toggle is off).
+Re-read `2a_build_logic.md` after their edits landed: **no CONTRACT CHANGES**
+(`PocketMoneyPayoutSubmitted` shape unchanged; their hardening is a per-child
+in-flight set in the bloc, a clear-before-write on the error path, and
+`amount > 0` / `move ≤ paid` in `recordPayout`). My view-side guards are
+complementary, not contradictory: the bloc drops duplicate events and the
+repository refuses a non-positive payout, the view never sends one and never
+re-enters. The full feature suite (423 tests) passes with both layers in
+place.
 
 ## LEFT FOR NEXT ITERATION
 
-- `shot.sh` light + dark and `compare.py` band review — deliberately not run
-  here (this stage must never touch a simulator); the geometry is already
-  pinned by the widget tests above, so 5_ui should be a confirmation pass.
-- The `_EmptyBody` copy (`No payouts yet`, `Add a child`) has no design PNG to
-  check against — it follows plan §d and mirrors P12's empty body.
+- `shot.sh` light + dark and `compare.py` — stage 5's job (this stage must not
+  touch a simulator). The scrim, the amount metrics and the row text y are
+  pinned numerically here, so 5_ui should confirm rather than hunt.
+- `_EmptyBody` copy (`No payouts yet` / `Add a child`) still has no design PNG
+  to check against; unchanged from iteration 1.
 - Nothing in plan §a, §c, §d, §e or §f is outstanding for the UI chunk.
 
 VERDICT: PASS

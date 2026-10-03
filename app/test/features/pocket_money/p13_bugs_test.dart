@@ -1,9 +1,9 @@
 // P13 · Payout (parent) — Stage 6 adversarial bug tests (iteration 1).
 //
 // Five findings this iteration — three major (P13-BUG-01/02/03) and two
-// minor (P13-BUG-04/05). Every failing reproducer is a `skip:` test carrying
-// its bug id so the suite stays green; each one was run unskipped during the
-// hunt and fails on the current build exactly as the reason lines say.
+// minor (P13-BUG-04/05). Iteration 2 fixed all five in the UI layer, so every
+// reproducer below is now an ACTIVE test carrying its bug id: a regression
+// re-fails here rather than hiding behind a `skip:`.
 //
 // The "attacks that hold" group at the bottom is NOT skipped: it documents
 // the adversarial probes that passed (real 320 dp × 1.3 and 320×568 layouts,
@@ -346,12 +346,12 @@ void main() {
       gated.releaseAll();
       await disposeApp(tester);
     },
-    // P13-BUG-01 — major, open: the view has no re-entrancy guard; a second
-    // tap before the ledger stream proves the first write dispatches the
-    // same PocketMoneyPayoutSubmitted again. Repro measured: 2 payout rows
-    // (−420 each), 2 savings_move rows (100 each), goal 1750 instead of
-    // 1650.
-    skip: true, // P13-BUG-01 — open (major)
+    // P13-BUG-01 — FIXED (iteration 2): `_submit` is non-reentrant and the
+    // sheet's CTA is `loading` while a write is in flight, so the second tap
+    // is dropped. The guard re-arms only after a failure the parent actually
+    // saw, so retrying stays possible. Same-frame regression assertion also
+    // lives in `payout_view_test.dart`.
+    skip: false, // P13-BUG-01 — fixed (major)
   );
 
   // -- P13-BUG-02 ---------------------------------------------------------
@@ -414,12 +414,11 @@ void main() {
 
       await disposeApp(tester);
     },
-    // P13-BUG-02 — major, open: `PayoutSheet.savingsMovePence` is the
-    // design-fixed 100 p and `_submit` never clamps it to the child's owed
-    // amount. At 50p owed: payout −50, savings_move +100, goal 1550 → 1650
-    // (+£1.00 conjured). Same root when a £0.00 child is ticked next to a
-    // paying sibling: a −0 payout row plus a £1.00 move.
-    skip: true, // P13-BUG-02 — open (major)
+    // P13-BUG-02 — FIXED (iteration 2): `_submit` clamps the move to the
+    // money actually paid (`min(100 p, owed)`) and skips a ticked child who
+    // owes nothing, so neither a £0.50 payout nor a £0.00 sibling can conjure
+    // money in the jar. The goal is credited exactly what the ledger moved.
+    skip: false, // P13-BUG-02 — fixed (major)
   );
 
   // -- P13-BUG-03 ---------------------------------------------------------
@@ -466,12 +465,11 @@ void main() {
 
       await disposeApp(tester);
     },
-    // P13-BUG-03 — major, open: `_DimmedLedger` puts the scrim inside the
-    // `Expanded` below the summary card (measured Rect 0,169,390,844)
-    // instead of `Positioned.fill`/inset 0, so the top 169 px (status bar
-    // reserve + title + card) is undimmed and not tappable. The design PNGs
-    // dim the whole backdrop; 1_plan.md §a spells out Positioned.fill.
-    skip: true, // P13-BUG-03 — open (major)
+    // P13-BUG-03 — FIXED (iteration 2): the scrim is its own `Positioned.fill`
+    // layer between the dimmed ledger and the sheet (design `inset: 0`,
+    // `components.css:164`), so the status-bar reserve, title and summary card
+    // are dimmed and a tap over the title dismisses the sheet.
+    skip: false, // P13-BUG-03 — fixed (major)
   );
 
   // -- P13-BUG-04 ---------------------------------------------------------
@@ -521,13 +519,12 @@ void main() {
 
       await tester.pumpWidget(Container());
     },
-    // P13-BUG-04 — minor, open: the error path emits the same
-    // `errorMessage`, which `copyWith` makes an equal state, so Bloc skips
-    // the emission; the view only toasts on a changed message and
-    // `_submitted` stays armed. Fix: give the view a direct retry path
-    // (toast on tap / clear the message before re-requesting) or include a
-    // monotonically increasing attempt in the state.
-    skip: true, // P13-BUG-04 — open (minor)
+    // P13-BUG-04 — FIXED (iteration 2): the view records the message it
+    // surfaced (`_lastFailure`) and re-arms the submit for a retry after a
+    // failure the parent actually saw, so the button is never left dead. The
+    // retry's identical failure is a state change again in this rig, so the
+    // toast fires (measured 1 SnackBar, stable over repeated runs).
+    skip: false, // P13-BUG-04 — fixed (minor)
   );
 
   // -- P13-BUG-05 ---------------------------------------------------------
@@ -562,12 +559,11 @@ void main() {
       handle.dispose();
       await disposeApp(tester);
     },
-    // P13-BUG-05 — minor, open: `_DimmedLedger`'s doc comment says
-    // `ExcludeSemantics` (and 1_plan.md §e requires it) but the build
-    // method never wraps the column, so the background is announced behind
-    // the modal. Fix: wrap the non-sheet subtree in `ExcludeSemantics`
-    // (keep the scrim's dismiss outside it).
-    skip: true, // P13-BUG-05 — open (minor)
+    // P13-BUG-05 — FIXED (iteration 2): the dimmed chrome is wrapped in
+    // `ExcludeSemantics` (the doc comment is now true), and the scrim keeps
+    // its own labelled dismiss node outside it — `'Close payout'`, with a
+    // real tap action.
+    skip: false, // P13-BUG-05 — fixed (minor)
   );
 
   // -- attacks that hold --------------------------------------------------
