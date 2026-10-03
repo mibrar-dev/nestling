@@ -61,3 +61,15 @@ DO:
    - Speech bubble height 46 → design 35, same x/y/w; check `.speech` in the HTML.
    - Dark-mode lower meadow (dark only).
    - Retry stacking subscriptions.
+
+## UPDATE (08:32, orchestrator) — iteration 8: the shared pet-stage fix is on main
+main now has `NestPetStage` explicit mode: it is centred in the real box, with `nestHeight` / `visibleNestWidth`, Pip seated on the rim, and the speech bubble matching `.speech`. The bubble is 44 tall: that is the design's full height, and the earlier "35" was a misread of the inner white area. It is merged into your branch before this build.
+1. Use EXACTLY this call (from docs/screens/_shared/pet_stage_explicit_REPORT.md):
+   `NestPetStage(pip: PipAvatar(...child's own...), speech: "Let's do some quests!", nestWidth: 236, nestHeight: 156, fixedPipHeight: 152, semanticLabel: ...)`
+   - Delete `_kNestWidth = 260`. Do NOT wrap the stage in Center.
+2. Un-skip K03-BUG-13 (320/390/430), K03-BUG-14 and `the pet slot matches the design geometry`. They must pass: nest centre 195 ±1, visible nest 198, hearts 448 ±2, first card 559 ±2, card 2 peeking above the dock.
+3. Then the rest of FIXES_7.md:
+   - Dark-mode lower meadow (dark only, 3rd time: design dark (37,52,88)@y540 → teal (33,64,72)@y700).
+   - "Today's quests" uses NestBalancedText.
+   - The failing/flaky tests, and no scratch probe tests.
+   - Close SHARED_REQUEST #13 and #15 as done.
