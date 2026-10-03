@@ -48,3 +48,34 @@ pill + the four literals.
    balanced H1 break (design: "How does pocket money" / "work in your
    house?"; a greedy break can orphan a word). Recorded as a finding in
    `docs/screens/P06/3_test.md` (iteration 4).
+
+## Iteration 6 — `NestStepper` glyph pair (the U+2212 fix landed locally)
+
+4. **`NestStepper` must render U+2212 for decrease, and expose a glyph
+   override.**
+   `design/html-source/screens/P06-pocket-money.html:73,82` pairs `&minus;`
+   (U+2212) with a U+002B `+` inside every `.stepper button`, so the two
+   signs share weight and width.
+   `app/lib/core/design_system/components/nest_stepper.dart:32` hard-codes
+   `label: '-'` (U+002D) and the constructor has no glyph parameters, so a
+   screen cannot correct it without forking the component.
+   Need: render `'\u2212'` by default (keeping the existing semantics labels),
+   and/or add `decreaseGlyph`/`increaseGlyph` params defaulting to U+2212 /
+   U+002B.
+   Files: `app/lib/core/design_system/components/nest_stepper.dart`.
+   Blocks: **no** — P06 ships `presentation/widgets/p06_weekly_stepper.dart`
+   this iteration: token-for-token identical to `NestStepper` (44 dp circles,
+   1 px `line` border on `surface`, Inter 20 w700 glyphs, `s3` gaps, 64 dp
+   `NestType.money` value, same `Semantics`/`Opacity` contract) except the
+   two glyph strings. It is marked for deletion in one edit once the override
+   lands; `test/features/pocket_money/p06_weekly_stepper_widget_test.dart`
+   pins the behaviour (glyph is U+2212 and never `[0x2D]`, `+` is U+002B,
+   both 44 dp, callbacks fire, disabled = 0.45 opacity).
+
+5. **`NestChip` needs the P06 day-cell variant (open since iteration 3).**
+   `_DayPill` in `pocket_money_setup_view.dart` still re-renders
+   `.chip.day` (32 high, `padding: 0`, 13 px w600 centred label, no
+   horizontal padding, fills its grid cell) from tokens because `NestChip`
+   has no equivalent. Unchanged by this iteration — 5_ui's day-glyph
+   deviation is resolved by `_DayPill` rendering the 13 px `fieldLabel`
+   directly (no `FittedBox`), so the remaining ask is de-duplication only.

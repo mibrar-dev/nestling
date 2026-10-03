@@ -831,7 +831,6 @@ void main() {
 
         await disposeApp(tester);
       },
-      skip: true,
     );
 
     testWidgets(
@@ -857,7 +856,6 @@ void main() {
 
         await disposeApp(tester);
       },
-      skip: true,
     );
   });
 

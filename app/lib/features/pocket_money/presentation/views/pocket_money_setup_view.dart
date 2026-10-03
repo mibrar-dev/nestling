@@ -9,6 +9,7 @@ import 'package:nestling/features/pocket_money/domain/entities/pocket_money_setu
 import 'package:nestling/features/pocket_money/presentation/bloc/pocket_money_bloc.dart';
 import 'package:nestling/features/pocket_money/presentation/bloc/pocket_money_event.dart';
 import 'package:nestling/features/pocket_money/presentation/bloc/pocket_money_state.dart';
+import 'package:nestling/features/pocket_money/presentation/widgets/p06_weekly_stepper.dart';
 
 /// P06 Pocket money setup — parent-mode onboarding step at
 /// `/pocket-money-setup` (P05 → P06 → P07).
@@ -556,7 +557,12 @@ class _DayCell extends StatelessWidget {
       key: cellKey,
       button: true,
       selected: selected,
-      label: label,
+      // review #4: the HTML groups the strip with
+      // `role="group" aria-label="Payout day"`. Iteration 5 dropped that
+      // wrapper (it re-clamped NestChipWrap's hit slop) and left the cells
+      // announcing as bare "Mon", "Tue", … — so the section name rides in
+      // each cell's label instead, with no extra widget in the chain.
+      label: 'Payout day: $label',
       excludeSemantics: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -616,12 +622,13 @@ class _DayPill extends StatelessWidget {
 }
 
 /// One per-child weekly-base row in insertion order: 32px avatar + name +
-/// stepper. The stepper buttons carry the HTML aria-labels verbatim.
+/// stepper ([P06WeeklyStepper], whose `−`/`+` are the design's glyphs).
+/// The stepper buttons carry the HTML aria-labels verbatim.
 ///
 /// Narrow screens reflow to two lines (name line, then the stepper
 /// right-aligned): the fixed 44px stepper buttons plus a wide value string
 /// cannot share one 248px line with the avatar and the name at large text
-/// scales, and the shared `NestStepper` cannot shrink its buttons.
+/// scales, and the stepper cannot shrink its buttons.
 class _WeeklyBaseRow extends StatelessWidget {
   const _WeeklyBaseRow({required this.child});
 
@@ -700,9 +707,10 @@ class _WeeklyBaseRow extends StatelessWidget {
   }
 }
 
-/// The weekly-base stepper with the HTML aria-labels verbatim. Split out so
-/// the row can place one instance in either the single-line or the wrapped
-/// layout (only one branch builds at a time).
+/// The weekly-base stepper with the HTML aria-labels verbatim and the
+/// design's `&minus;`/`+` glyph pair. Split out so the row can place one
+/// instance in either the single-line or the wrapped layout (only one branch
+/// builds at a time).
 class _BaseStepper extends StatelessWidget {
   const _BaseStepper({required this.child});
 
@@ -710,7 +718,7 @@ class _BaseStepper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return NestStepper(
+    return P06WeeklyStepper(
       valueText: '£${(child.weeklyBasePence / 100).toStringAsFixed(2)}',
       onDecrease: () => context.read<PocketMoneyBloc>().add(
         PocketMoneyWeeklyBaseStepped(child.id, -PocketMoneySetupView.stepPence),

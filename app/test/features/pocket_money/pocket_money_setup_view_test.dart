@@ -1076,9 +1076,11 @@ void main() {
           (
             // The pill is 32dp; the ≥44dp tap band comes from NestChipWrap
             // hit-sloation as verified by the ±5px tap test.
-            label: PocketMoneySetupView.dayLabels[day - 1],
+            // review #4: each cell carries the HTML's group name
+            // (`role="group" aria-label="Payout day"`) in its own label.
+            label: 'Payout day: ${PocketMoneySetupView.dayLabels[day - 1]}',
             finder: find.bySemanticsLabel(
-              PocketMoneySetupView.dayLabels[day - 1],
+              'Payout day: ${PocketMoneySetupView.dayLabels[day - 1]}',
             ),
             minHeight: NestSpacing.s8,
           ),
@@ -1123,12 +1125,19 @@ void main() {
         );
       }
       // Uniqueness: the day's Mon..Sun labels must not also match a longer
-      // label (e.g. 'Mon' inside the 'Payout day' group label).
+      // label (e.g. 'Mon' inside the 'Payout day' group label). review #4
+      // moved the group name into each chip's own label, so the anchored
+      // pattern is now 'Payout day: <day>' and nothing else ends that way.
       for (final day in PocketMoneySetupView.dayLabels) {
         expect(
-          find.bySemanticsLabel(RegExp('^$day\$')),
+          find.bySemanticsLabel(RegExp('^Payout day: $day\$')),
           findsOneWidget,
-          reason: 'each day chip is announced exactly once',
+          reason: 'each day chip is announced exactly once, grouped',
+        );
+        expect(
+          find.bySemanticsLabel(RegExp('^$day\$')),
+          findsNothing,
+          reason: 'the bare "$day" label must not survive',
         );
       }
 
@@ -2320,8 +2329,11 @@ void main() {
           final context = tester.element(balanced);
           final available = width - 2 * NestSpacing.padSide;
 
-          // Balancing must not cost an extra line, and the painted box must
-          // stay inside the 20 px gutters at every width and scale.
+          // Balancing narrows the painted box; it must not change the line
+          // count the full gutter already needs. (Comparing against a
+          // "would fit on one line" hypothetical was wrong: under the test
+          // font the heading legitimately needs several lines at 320 dp, and
+          // comparing to a 4x-wide box asserted nothing about balancing.)
           final lines = NestBalancedText.lineCountFor(
             text: heading,
             style: widget.style,
@@ -2329,19 +2341,22 @@ void main() {
             textDirection: Directionality.of(context),
             textScaler: MediaQuery.textScalerOf(context),
           );
-          final onOneLine = NestBalancedText.lineCountFor(
-            text: heading,
-            style: widget.style,
-            maxWidth: available * 4,
-            textDirection: Directionality.of(context),
-            textScaler: MediaQuery.textScalerOf(context),
-          );
-          expect(
-            lines,
-            onOneLine,
-            reason: 'balancing must not add a line at ${width}dp / $scale',
-          );
+          expect(lines, greaterThanOrEqualTo(1));
           final rect = tester.getRect(find.text(heading));
+          final lineHeight =
+              widget.style.fontSize! *
+              widget.style.height! *
+              MediaQuery.textScalerOf(context).scale(1);
+          // The painted paragraph must be exactly the line count the full
+          // gutter needs (measured in whole lines: Flutter's rounded line
+          // boxes can leave up to ~1 px per paragraph).
+          expect(
+            (rect.height / lineHeight).round(),
+            lines,
+            reason:
+                'the painted heading is ${rect.height / lineHeight} '
+                'lines at ${width}dp / $scale, gutter needs $lines',
+          );
           expect(
             rect.left,
             moreOrLessEquals(NestSpacing.padSide, epsilon: 0.01),
