@@ -119,6 +119,28 @@ List<File> _featureSources() {
   return files;
 }
 
+/// Every Dart file of the feature, production **and** tests.
+List<File> _featureAndTestSources() {
+  final roots = <String>[
+    '${Directory.current.path}/lib/features/privacy_consent',
+    '${Directory.current.path}/test/features/privacy_consent',
+  ];
+  final files = <File>[];
+  for (final root in roots) {
+    final dir = Directory(root);
+    expect(
+      dir.existsSync(),
+      isTrue,
+      reason: '$root not found above ${Directory.current.path}',
+    );
+    for (final entity in dir.listSync(recursive: true)) {
+      if (entity is File && entity.path.endsWith('.dart')) files.add(entity);
+    }
+  }
+  files.sort((a, b) => a.path.compareTo(b.path));
+  return files;
+}
+
 void main() {
   group('P04 — contrast of every painted colour pair', () {
     for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
@@ -282,6 +304,64 @@ void main() {
 
       await disposeApp(tester);
       handle.dispose();
+    });
+  });
+
+  group('P04 — bundled fonts (orchestrator FONTS rule)', () {
+    test('no feature source or test touches google_fonts', () {
+      // Inter/Nunito are bundled assets now; `google_fonts` was removed from
+      // the app. A stray import or `GoogleFonts.*` call would not fail at
+      // compile time until the package returns, so pin the rule here.
+      final offenders = <String>[];
+      final sources = _featureAndTestSources();
+      expect(sources.length, greaterThanOrEqualTo(10));
+      for (final file in sources) {
+        // Skip this file: it names the banned API in order to search for it.
+        if (file.path.endsWith('privacy_consent_a11y_test.dart')) continue;
+        final lines = file.readAsLinesSync();
+        for (var i = 0; i < lines.length; i++) {
+          final line = lines[i];
+          if (line.contains('google_fonts') || line.contains('GoogleFonts')) {
+            offenders.add('${file.path}:${i + 1}  ${line.trim()}');
+          }
+        }
+      }
+      expect(
+        offenders,
+        isEmpty,
+        reason:
+            'fonts are bundled assets (pubspec `fonts:`); the feature must not '
+            'import google_fonts or call GoogleFonts.*',
+      );
+    });
+
+    test('the type scale resolves to the bundled families', () {
+      expect(NestType.body().fontFamily, 'Inter');
+      expect(NestType.bodyStrong().fontFamily, 'Inter');
+      expect(NestType.caption().fontFamily, 'Inter');
+      expect(NestType.h1().fontFamily, 'Nunito');
+      expect(NestType.h3().fontFamily, 'Nunito');
+    });
+
+    test('every bundled font asset in pubspec exists on disk', () {
+      // A renamed or missing TTF only surfaces at runtime on a device; this
+      // turns it into a test failure the moment it happens.
+      final pubspec = File('${Directory.current.path}/pubspec.yaml');
+      expect(pubspec.existsSync(), isTrue);
+      final assets = RegExp(r'asset:\s*(assets/fonts/\S+)')
+          .allMatches(pubspec.readAsStringSync())
+          .map((m) => m.group(1)!)
+          .toList();
+      expect(assets, isNotEmpty, reason: 'pubspec declares no bundled fonts');
+      for (final asset in assets) {
+        final file = File('${Directory.current.path}/$asset');
+        expect(
+          file.existsSync(),
+          isTrue,
+          reason: 'pubspec references a font asset that is not on disk',
+        );
+        expect(file.lengthSync(), greaterThan(1024));
+      }
     });
   });
 

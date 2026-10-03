@@ -1,11 +1,12 @@
-// P04 · Privacy & consent — adversarial bug proofs (Stage 6, iteration 4,
-// maintained in iteration 5).
+// P04 · Privacy & consent — adversarial bug proofs (Stage 6, iteration 7).
 //
-// The proofs assert the CORRECT behaviour. All nine are fixed, so every
-// proof is un-skipped and green; the two shared-batch wire-ups (P04-2 trash
-// glyph, P04-7 themed shield) landed in iteration 5.
+// The proofs assert the CORRECT behaviour. Iterations 1-5 fixed P04-1 … P04-9
+// (P04-2 trash glyph and P04-7 themed shield landed in iteration 5), so those
+// proofs are un-skipped and green. P04-10 is new this iteration: the bundled
+// Inter build plus the theme's inherited 0.3px letter-spacing wraps the
+// opt-card title to two lines and makes the card 22px taller than the design.
 //
-// Run the proofs against the current tree with:
+// Run the skipped proof against the current tree with:
 //   flutter test --run-skipped test/features/privacy_consent/p04_bugs_test.dart
 //
 // Findings, severity, repro and suggested fixes: docs/screens/P04/6_bugs.md.
@@ -20,6 +21,7 @@
 //   P04-7 major   dark mode renders the light-baked shield artwork   [FIXED]
 //   P04-8 minor   double-failed rapid toggle reverts to unpersisted  [FIXED]
 //   P04-9 minor   overlapping first-run writes keep the earlier value [FIXED]
+//   P04-10 major  opt-card title wraps to two lines (bundled fonts)   [open]
 //
 // Checked and clean (passing proofs at the bottom): kid-mode guard, deep-link
 // back navigation, restart persistence (demo and first-run), first-run
@@ -29,6 +31,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -520,6 +523,47 @@ void main() {
       },
       // P04-9 FIXED (iteration 4): the upsert runs in one transaction.
     );
+  });
+
+  group('P04-10 — opt-card title wrap (bundled fonts)', () {
+    testWidgets('[P04-10] the opt-card title stays on one 22px line', (
+      tester,
+    ) async {
+      // The app renders with the bundled Inter faces; load them so the
+      // test measures the same metrics as the device (the default test
+      // font does not reproduce the wrap).
+      final inter = FontLoader('Inter')
+        ..addFont(rootBundle.load('assets/fonts/Inter-Regular.ttf'))
+        ..addFont(rootBundle.load('assets/fonts/Inter-Medium.ttf'))
+        ..addFont(rootBundle.load('assets/fonts/Inter-SemiBold.ttf'))
+        ..addFont(rootBundle.load('assets/fonts/Inter-Bold.ttf'));
+      await inter.load();
+
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/privacy');
+
+      final title = find.text('Optional: help improve Nestling');
+      expect(
+        tester.getSize(title).height,
+        22,
+        reason:
+            'the design keeps the title on one 16/22 line; the bundled '
+            'Inter plus the inherited 0.3px letter-spacing needs 250.2px '
+            'in the 247px column and wraps to two',
+      );
+
+      final card = find
+          .ancestor(of: title, matching: find.byType(NestCard))
+          .first;
+      expect(
+        tester.getSize(card).height,
+        94,
+        reason: '13 + (22 + 2 + 44) + 13 when the title is one line',
+      );
+
+      await disposeApp(tester);
+      // P04-10: title h=44, card h=116 — 22px taller than the design.
+    }, skip: true);
   });
 
   // -------------------------------------------------------------------------

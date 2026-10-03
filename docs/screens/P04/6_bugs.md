@@ -1,157 +1,120 @@
-# P04 · Privacy consent — bug hunt (Stage 6, iteration 4)
+# P04 · Privacy consent — bug hunt (Stage 6, iteration 7)
 
 Route `/privacy` · feature `privacy_consent` · parent mode · seeds `demo` and
-first-run. **No screen code was changed.** Re-hunted the iteration-4 tree
-after the shared batch 1 merge (`ce89889`: `ic_trash.svg` + `NestIcons.trash`,
-`NestPrivacyShield`, migration-guaranteed settings row, shared `NestList`
-overlay dividers) and the iteration-4 build (transactional upsert, local
-separator overlay).
+first-run. **No screen code was changed.** Re-hunted the iteration-7 tree
+after the font-bundling merge (`1b2109e`, main `bbc7b55`/`a4691f9`:
+google_fonts removed, Inter/Nunito bundled) and shared batch 2 (`0bafd2a`).
 
-`app/test/features/privacy_consent/p04_bugs_test.dart` has **16 proofs:
-14 green + 2 skipped** (P04-2, P04-7 — both now one-line wire-ups). Run the
-skipped ones with:
+`app/test/features/privacy_consent/p04_bugs_test.dart`: **17 proofs —
+16 green + 1 skipped** (the new P04-10). Nine of the ten findings are fixed
+and pinned; the tenth is new this iteration. Run the skipped proof with:
 
 ```
 flutter test --run-skipped test/features/privacy_consent/p04_bugs_test.dart
-→ 14 passed, 2 failed (P04-2, P04-7, by design)
+→ 16 passed, 1 failed (P04-10, by design)
 ```
 
-Method: read the merged shared changes and the two build rewrites; re-ran
-every proof; measured `ui/app_{light,dark}_4.png` against the design PNGs with
-pixel probes; re-checked the guards, copy, semantics and concurrency edges.
-**No new product bug was found.** The two open defects are unchanged in
-nature but are now fully actionable inside RULES §1 — the deferral
-precondition in the orchestrator's 13:42 UPDATE is satisfied. `VERDICT: FAIL`.
+A regression **did** slip through this iteration's font change: the opt-card
+title now wraps to two lines. `VERDICT: FAIL`.
 
-## Iteration state
+## New finding
 
-| Id | Sev | Finding | Status |
+### P04-10 — the opt-card title wraps to two lines after the font bundling; card 22 px taller than the design — MAJOR
+
+- **Symptom (visible in `ui/app_light_7.png` / `ui/app_dark_7.png`):**
+  "Optional: help improve **Nestling**" breaks after "improve"; the title is
+  2 × 22 px instead of one 16/22 line, and the opt card runs 531→643 instead
+  of the design's 531→621 — 22 px taller than both the design and the
+  iteration-6 shot (which was one line). Both themes, `SEED=fresh`, parent.
+- **Objective regression:** `compare.py` mean diff rose from iteration 6 to
+  iteration 7 — light 4.08 %→**4.45 %** (band 5 4.19→**6.82** %, band 6
+  0.40→0.82 %), dark 3.98 %→**4.43 %** (band 5 4.44→**7.79** %, band 6
+  0.39→0.80 %). Bands 5–6 are exactly the opt-card region.
+- **Root cause (measured, not guessed):** the design's `.opt-title` has **no
+  letter-spacing**, but the app's `NestType` styles are `inherit: true` and
+  omit `letterSpacing`, so the Scaffold's Material `DefaultTextStyle`
+  (`bodyMedium`, `letterSpacing: 0.3`) leaks in. With the newly bundled Inter
+  (which matches the design's own static build), the title needs
+  **250.2 px** in P04's **247 px** text column:
+  - widget style alone (bundled Inter): `TextPainter` width **242.5 px**;
+  - merged with the Scaffold default (`letterSpacing: 0.3` over 30 glyphs):
+    **250.2 px** → wraps.
+  The design avoids this because its text column is **255 px** (its toggle
+  occupies 51 px; `NestToggle` reserves `minWidth: 59`), and its font has no
+  tracking. Before the bundling, the runtime-downloaded Inter was ~9 px
+  narrower and the string fitted at 247 (iteration-6 shot: one line, 241.7 px).
+- **Repro (test):** `--run-skipped … --plain-name '[P04-10]'` — the proof
+  loads the bundled `assets/fonts/Inter-*.ttf` via `FontLoader('Inter')`,
+  pumps `/privacy`, and measures the rendered title: expected height `22`,
+  actual `44.0`; the follow-up assertion pins the card at the design's `94`
+  (currently 116). Deterministic — the same measurement the device makes.
+- **Failing test:** `[P04-10] the opt-card title stays on one 22px line`.
+- **Fix (shared; either option clears P04 — filed as SHARED_REQUEST §7):**
+  1. **Core typography (preferred):** default `letterSpacing: 0` in
+     `NestType._inter/_nunito` (or zero the textTheme in `NestTheme`) so
+     Material's 0.3 px tracking stops leaking into design styles app-wide;
+     the design sets no tracking except `.display`/`.status-time`
+     (-0.01 em).
+  2. **Core component:** `NestToggle` `minWidth: 59` → the design's 51
+     (the track still clears the 44 px tap target), restoring the design's
+     255 px text column.
+  A P04-local `letterSpacing: 0` on this one Text would clear the screen but
+  leaves the leak on every other screen; prefer the shared fix.
+
+## Disposition — iterations 1–5 findings (all fixed and green)
+
+| Id | Sev | Finding | Status / proof |
 |---|---|---|---|
-| P04-1 | major | first-run opt-in silently dropped | **FIXED** (it. 2; migration now also guarantees the row) |
-| P04-2 | major | row 4 empty peach tile | **OPEN — actionable now**: `NestIcons.trash` is in the tree; the view still has the `TODO(P04)` and no `leadingAsset` |
-| P04-3 | major | compact nav 16 px short | **FIXED** (shared merge, it. 2) |
-| P04-4 | major | dividers inflate the list by 3 px | **FIXED** (it. 4, local overlay; shared `NestList` also fixed). Device probes below are Δ0 |
-| P04-5 | minor | double-tap wrote the same value twice | **FIXED** (it. 2) |
-| P04-6 | major | failed OFF write claimed "it stays off" | **FIXED** (it. 2) |
-| P04-7 | **major** | dark mode renders the light-baked shield | **OPEN — actionable now**: `NestPrivacyShield` is in the tree and exported; the view still renders `privacy_shield.svg` |
-| P04-8 | minor | failed toggle reverted to an unpersisted value | **FIXED** (it. 3) |
-| P04-9 | minor | overlapping first-run writes kept the earlier value | **FIXED** (it. 4, transaction; proof deterministic) |
+| P04-1 | major | first-run opt-in silently dropped | **FIXED** (it. 2, transactional upsert; migration also guarantees the row) |
+| P04-2 | major | row 4 empty peach tile | **FIXED** (it. 5, `NestIcons.trash`; shot probe: 1005 ink pixels at 463–503) |
+| P04-3 | major | compact nav 16 px short | **FIXED** (shared merge; chevron 73, h1 107) |
+| P04-4 | major | dividers inflate the list 3 px | **FIXED** (it. 4; shared `NestList` overlay, four direct children; tiles 295/351/407/463) |
+| P04-5 | minor | double-tap wrote the same value twice | **FIXED** (it. 2, optimistic emit) |
+| P04-6 | major | failed OFF write claimed "it stays off" | **FIXED** (it. 2, state-aware caption) |
+| P04-7 | major | dark shield rendered light | **FIXED** (it. 5, `NestPrivacyShield`; disc `#1A2A4A`, body `#1F1C2E` = design) |
+| P04-8 | minor | failed toggle reverted to an unpersisted value | **FIXED** (it. 3, revert to `_crashFrom(items)`) |
+| P04-9 | minor | overlapping first-run writes kept the earlier value | **FIXED** (it. 4, transaction; deterministic proof green) |
 
-## Open defects (both one-line wire-ups, next build)
+## Verified this iteration
 
-### P04-2 — row 4 must use `NestIcons.trash` — MAJOR
-
-- **State:** `ic_trash.svg` and `NestIcons.trash` landed in `ce89889`; the
-  iteration-4 device shot still shows **0 glyph pixels** inside the peach
-  tile (x 32–72, y 463–502.7, colour run continuous `#FFEDE4`). The view
-  (`privacy_consent_view.dart:122-134`) still carries the stale
-  `TODO(P04)`: "ic_trash.svg + NestIcons.trash … missing". The design tile
-  is `tokens.peachTint` + `tokens.aPeach` (`#FFEDE4` / `#B44A1F`), exactly
-  what `NestTileTint.peach` + `NestIcon(NestIcons.trash)` produce.
-- **Proof:** `[P04-2]` now asserts **four** `NestIcon`s, that their asset
-  names **contain `NestIcons.trash`**, and four drawn `SvgPicture`s. It
-  fails only on the missing wire-up.
-- **Fix (one line + cleanup):**
-  1. `leadingAsset: NestIcons.trash` on the row-4 `_PromiseRow`; delete the
-     `TODO(P04)` block.
-  2. `privacy_consent_view_contract_test.dart` — "rows 1-3 render their own
-     tinted glyph; row 4 is the gap" asserts `findsNothing` for row 4; flip
-     it to `findsOneWidget` with `assetName == NestIcons.trash` and
-     `color == NestColors.light.aPeach`, and extend the light/dark tint loop
-     to four rows.
-  3. Drop `skip: true` from `[P04-2]` (the proof needs no other change).
-
-### P04-7 — dark mode must use `NestPrivacyShield` — MAJOR
-
-- **State:** the shared batch shipped
-  `app/lib/core/design_system/components/nest_privacy_shield.dart`
-  (token disc `skyTint`, body `surface`, heart `leaf`, stroke `ink`; exported
-  from the design-system barrel; covered by `shared_batch1_test.dart`). It
-  has **no consumer**, and the view still renders the baked
-  `privacy_shield.svg` (`privacy_consent_view.dart:74-86`). Device probes on
-  `ui/app_dark_4.png`: disc `#E6EFFE` vs design `#1A2A4A`; body `#FFFFFF` vs
-  `#1F1C2E`. Dark band 2 (9.14 %) is the worst band in the dark sheet and is
-  entirely this disc.
-- **Proof:** `[P04-7]` was rewritten to be fix-agnostic — in dark mode no
-  `SvgPicture` may load `NestlingIllustrations.privacyShield`, and the
-  `image` node keeps the design alt text. It fails on the current view and
-  passes with any themed implementation, including the shared component.
-- **Fix:**
-  1. Replace the `Center(Semantics(… SvgPicture …))` block with
-     `NestPrivacyShield(size: 84, semanticLabel: 'A shield with a leaf and a
-     heart, protecting your family')` — the component emits `image: true`
-     with that label itself, so drop the manual wrapper.
-  2. **Companion test the review did not list:**
-     `privacy_consent_view_contract_test.dart:1239` ("the shield illustration
-     is 84x84 and labelled") finds an `SvgPicture` **descendant** of the
-     semantics label — it will fail after the component swap. Change it to
-     assert `find.byType(NestPrivacyShield)` with size 84 and the same label
-     (the copy test's `find.bySemanticsLabel(shieldAlt)` stays green).
-  3. Drop `skip: true` from `[P04-7]`.
-
-### Cleanup carried from review iteration 4 (not product bugs)
-
-- Review finding 3: revert the promise rows to four direct `NestList`
-  children and delete the local `showDivider`/`Stack` mechanism — the shared
-  `NestList` now paints the identical overlay, so the feature layer should
-  not keep its own copy (design-system duplication, currently pixel-exact).
-- Review finding 4: replace the one mechanism-pinning assertion
-  (`find.byType(Stack)` on row 1) with the result check (`dividerOf(0)`
-  finds nothing).
-- Review finding 5: the `2_build.md` test-tail quote. Documentation only.
-
-## Verified this iteration (no new bugs)
-
-- **P04-4 on device:** `ui/app_light_4.png` tile tops **295 / 351 / 407 /
-  463** exactly match the design (all four rows probed); opt card corner probe 531.7 vs
-  531.3; Continue 675 vs 674–675; no double separator (one overlay per row
-  2–4, first row none). The shared `NestList` overlay and P04's single-Column
-  structure do not combine into double lines.
-- **P04-9:** the transactional upsert proof is un-skipped and green;
-  concurrent first-run `true`/`false` writes settle on the second value with
-  exactly one row. `Seed.fresh` still deletes the migration-inserted row, so
-  the insert path remains genuinely exercised.
-- **Migration guarantee:** `beforeOpen` now inserts `fam1` family + settings,
-  so a real first launch no longer depends on P04's fallback (the fallback
-  still covers `SEED=fresh` and any deleted row).
-- **All other proofs green:** P04-1/3/4/5/6/8 and the guards — kid-mode
-  redirect, deep-link back, restart persistence (demo + first-run), first-run
-  double-tap last-write-wins, async gap after leaving, single dialog on a
-  double tap. Copy rule still locked by the HTML-source test; typography
-  characters exact.
-- **N/A / unchanged:** children/long names/coins/£ values, timezone, money
-  rounding (no such data on P04); Pip rule (no Pip); 320 px / scale 1.3
-  matrix; dark contrast on token pairs; 20 px gutters; CTA surface to the
-  physical edge.
-
-## Mandatory notes status
-
-| Item | Status |
-|---|---|
-| 1 — row-4 bin glyph + all-four-glyph test | **Unmet but fully actionable**: asset + `NestIcons.trash` in the worktree; appendix fix above. Item defers to the wire-up now, not to the orchestrator |
-| 2 — header 16 px offset | **Met** (probes Δ0) |
-| 3 — row heights/dividers → opt card ≈528 | **Met** (device probes Δ0; shared `NestList` also fixed) |
-| 4 — bottom edge + alignment | **Met** (both themes; gutters 20 px) |
-| COPY / CHILD ORDER | Copy met (tested); child order N/A |
+- **FONTS rule:** `grep -rn "google_fonts|GoogleFonts" app/lib app/test
+  app/pubspec.yaml` → **no matches**; every P04 test file is clean (the
+  iteration-7 build removed the last four call sites).
+- **Identity/pixel probes on `ui/app_{light,dark}_7.png`:** row-4 rust glyph
+  present; dark disc/body exactly the design's; light disc `#E6EFFE`; tile
+  tops 295/463 and opt-card top 531.7 vs design 531.3; bottom CTA surface to
+  the physical edge both themes (`#FFFFFF` / `#1F1C2E` at y 838); h1 gutter
+  x≈20.
+- **Guards re-run green:** kid-mode redirect to `/parental-gate`, deep-link
+  back to `/create-account`, restart persistence (demo + first-run),
+  first-run double-tap last-write-wins, async-gap after leaving, single
+  dialog on a double tap.
+- **Unchanged / N/A:** 320 px × scale 1.3 matrix, dark token contrast
+  (a11y tests), copy locked to the HTML source, child-order rule (no
+  children), timezone/money (no dates or money on P04).
+- **Process note (not a finding):** at hand-off this worktree also contains
+  another stage's untracked `zz_probe_test.dart` (self-declared temporary)
+  which is the only source of `flutter analyze` infos; the P04 feature files
+  themselves are analyzer-clean.
 
 ## Suite state at hand-off
 
-- `dart format --set-exit-if-changed .` → 362 files, 0 changed.
-- `flutter analyze` → No issues found.
-- `flutter test test/features/privacy_consent/` → **118 passed, 2 skipped,
-  0 failed** (the two actionable wire-up proofs).
-- `flutter test` (whole app) → **645 passed, 2 skipped, 0 failed**.
-- `--run-skipped` on the bug file → 14 passed, **2 failed** (P04-2, P04-7),
-  each with its repro above.
+- `flutter test test/features/privacy_consent/` → **159 passed, 1 skipped,
+  0 failed** (the skip is P04-10).
+- `flutter test test/features/privacy_consent/p04_bugs_test.dart` → 16
+  passed, 1 skipped.
+- `--run-skipped` on the bug file → **1 failed** (P04-10: title 44 vs 22).
+- Feature sources: `dart format` clean, `flutter analyze` clean (the
+  app-wide analyzer infos belong to the other stage's temp probe above).
 
 ## Verdict
 
-Seven of nine findings are fixed and pinned; no new defect surfaced. But two
-majors remain visibly open on the screen — the empty row-4 tile (P04-2) and
-the light-baked dark shield (P04-7). Both were blocked on the shared batch;
-the batch has landed and both fixes are now one-line wire-ups with their
-companion test updates spelled out above. Until they land, the screen has a
-visible blank tile on its main content and the worst band in the dark sheet
-is still the light disc.
+Nine of ten findings are fixed and pinned, and the two shared-batch wire-ups
+from iteration 5 (trash glyph, themed shield) are verified on the iteration-7
+shots. But the font bundling regressed the opt card: its title wraps to two
+lines and the card is 22 px taller than the design, lifting the compare bands
+5–6 and making this screen visibly different from both the design and its own
+iteration-6 state. The fix is shared (typography tracking or `NestToggle`
+width) and is filed with measurements.
 
 VERDICT: FAIL

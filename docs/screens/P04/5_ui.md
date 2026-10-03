@@ -1,44 +1,45 @@
-# P04 · Privacy consent — UI check (STAGE 5, iteration 5)
+# P04 · Privacy consent — UI check (STAGE 5, iteration 7)
 
 Route `/privacy` · SEED=fresh · parent mode · child maya · simulator 604697A9-11DA-462F-9837-396E9CA2493A.
-Shots: `docs/screens/P04/ui/app_light_5.png`, `docs/screens/P04/ui/app_dark_5.png`
+Shots: `docs/screens/P04/ui/app_light_7.png`, `docs/screens/P04/ui/app_dark_7.png`
 (absolute OUT path — relative OUT breaks because `shot.sh` `cd`s to `app/` before copying).
-Compares: `docs/screens/P04/ui/cmp_light_5.png`, `docs/screens/P04/ui/cmp_dark_5.png`.
-Mandatory context: `docs/screens/P04/ORCHESTRATOR_NOTES.md` (items 1–4 + 12:03 + 13:42 updates).
+Compares: `docs/screens/P04/ui/cmp_light_7.png`, `docs/screens/P04/ui/cmp_dark_7.png`.
+Mandatory context: `docs/screens/P04/ORCHESTRATOR_NOTES.md`.
 
 ## Mean diff
 
-- Light: **4.08%** (was 4.10%) — bands: 0 (0–105) 1.58% · 1 (105–211) 6.02% ·
-  2 (211–316) 1.98% · 3 (316–422) 7.94% · 4 (422–527) 5.62% · 5 (527–633) 4.19% ·
-  6 (633–738) 0.40% · 7 (738–844) 4.84%
-- Dark: **3.98%** (was 5.17%) — bands: 0 (0–105) 1.59% · 1 (105–211) 6.29% ·
-  2 (211–316) 1.94% · 3 (316–422) 7.87% · 4 (422–527) 5.57% · 5 (527–633) 4.44% ·
-  6 (633–738) 0.39% · 7 (738–844) 3.67%
+- Light: **4.45%** (was 4.08%) — bands: 0 (0–105) 1.58% · 1 (105–211) 6.02% ·
+  2 (211–316) 1.91% · 3 (316–422) 7.77% · 4 (422–527) 5.46% · 5 (527–633) 6.82% ·
+  6 (633–738) 0.82% · 7 (738–844) 5.12%
+- Dark: **4.43%** (was 3.98%) — bands: 0 (0–105) 1.60% · 1 (105–211) 6.29% ·
+  2 (211–316) 1.87% · 3 (316–422) 7.72% · 4 (422–527) 5.42% · 5 (527–633) 7.79% ·
+  6 (633–738) 0.80% · 7 (738–844) 3.91%
 
-## Fixed since iteration 4
+Band 5 jumped vs iteration 5 (4.19→6.82 light, 4.44→7.79 dark): one new regression below.
 
-- Row-4 trash glyph renders: `#BA562E` at tile centre in both design and app (was blank
-  `#FFEDE4`). ORCHESTRATOR_NOTES item 1 closed.
-- Dark shield disc now `#1A2A4A` in both (was `#E6EFFE` in app) — themed shield wired.
-  Dark band 2 dropped 9.14%→1.94%. Item 2 closed.
+## Verified matching (no action)
 
-## Verified matching (pixel-probed, logical px)
-
-- Row-4 glyph `#BA562E`/`#BA562E`; dark disc `#1A2A4A`/`#1A2A4A`; light disc `#E7EFFC`/`#E7EFFC`.
-- Chevron top 66/66; H1 cap top 113/113; opt-card top 500/500; list-card top 287/287.
-- Toggle knob left edge x=295 both; track 51×31 both; CTA fill `#17804F` both, same y.
-- Copy character-exact (curly ’, em dashes); order exact; 20 px gutters; tiles 40/r12;
-  divider indent 72; toggle OFF; footnote link underlined sky, centred.
-- Surface-to-edge bottom panel both themes (OWNER rule — design PNG strip overridden by
-  design, app correct). No Pip → PIP rule N/A. No overflow/clipping/ellipsis.
+- Header (chevron/H1/sub at design y), 84 px shield both themes (dark disc correct),
+  all 4 promise rows with trash glyph rendering, toggle OFF 51×31, primary `Continue`,
+  footnote link, 20 px gutters, surface-to-edge bottom panel both themes.
+- Copy character-exact; no overflow/clipping/ellipsis elsewhere. No Pip → PIP rule N/A.
+- Status-bar clock and home-indicator pill ignored per STATUS BAR rule / prior iterations.
 
 ## Deviations
 
-None. Residual band energy (1/3 ≈ 6–8%, 7 ≈ 4–5%) is fully accounted for: glyph-level
-font-raster doubling on Nunito/Inter strokes (all measured edges within ±2 px), the
-ignored OS status-bar clock (`9:41` vs live time), the home-indicator pill position, and
-the intentional OWNER bottom-edge override. No element-level deviation remains.
+1. Opt-card title wraps to two lines (both themes) — REGRESSION vs iteration 5, which was
+   single-line and PASS.
+   Design value: `Optional: help improve Nestling` on ONE line (ink rows y≈545–559 only).
+   App value: `Optional: help improve` / `Nestling` on TWO lines (ink runs y≈545–559 AND
+   y≈568–578), pushing the sub-copy and toggle geometry down ~22 px within the card.
+   This is exactly what band 5 measures. A designer would reject the wrap.
+   Fix (build stage, P04 scope — no code edited here): the opt-card text column lost width
+   somewhere in the iteration-7 build (toggle hit-box, row gap, or card padding change —
+   iteration 5 fit the same 16/22 Inter-600 string on one line). Restore the text-column
+   width so the title fits on one line at 390 dp; keep the 44 px toggle tap target and
+   16 h / 13 v card padding unchanged. Re-verify at text scale 1.0 that it stays one line.
 
-No code edited in this stage (UI check is read-only).
+No other element-level deviation. Residual bands 1/3/7 are the known font-raster doubling,
+OS clock, home-indicator pill, and OWNER bottom-edge override.
 
-VERDICT: PASS
+VERDICT: FAIL

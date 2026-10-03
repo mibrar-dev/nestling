@@ -115,3 +115,36 @@ every `NestList` screen. P04's bug proof is `[P04-4]` in
 **Status (iteration 5): shared `NestList` now paints the identical overlay
 itself, and P04 consumes it with four direct row children (local overlay
 deleted). Resolved for P04.**
+
+---
+# Shared request — P04 opt-card title wraps after the font bundling (core typography / NestToggle)
+Need: with the bundled Inter faces, the theme's inherited `letterSpacing:
+0.3` makes "Optional: help improve Nestling" **250.2px** wide in P04's
+247px opt-card text column, so it wraps to two lines and the card is 22px
+taller than the design (design one line, card 531–621; app iteration 7
+531–643, both themes). Measured in a widget test with `FontLoader('Inter')`
+loading the bundled faces:
+- intrinsic width with the widget's own style: 242.5px;
+- merged with the Scaffold `DefaultTextStyle` (Material bodyMedium,
+  `letterSpacing: 0.3`): **250.2px**;
+- P04 column: 247px (design: 255px — the design's toggle occupies 51px,
+  `NestToggle` reserves `minWidth: 59`).
+The design CSS sets no letter-spacing on `.opt-title`/body (only `.display`
+and `.status-time` use -0.01em), so 0.3px is a Material default leaking
+through `inherit: true`, not design tracking.
+Either fix clears P04:
+1. **Core typography (preferred):** `NestType._inter/_nunito` default
+   `letterSpacing: letterSpacing ?? 0` (or zero it in `NestTheme`'s
+   textTheme) so the design's "no tracking" applies app-wide.
+2. **Core component:** `NestToggle` `minWidth: 59` → the design's 51 (the
+   track still clears the 44px tap target); P04's column matches the
+   design's 255px and the title fits even with the leak.
+Blast radius: (1) every text on every screen; (2) every `NestToggle` screen.
+P04's proof is `[P04-10]` in
+`app/test/features/privacy_consent/p04_bugs_test.dart` (fails now: title
+height 44 vs 22, card 116 vs 94).
+Files: `app/lib/core/design_system/tokens/typography.dart` (or
+`theme/nest_theme.dart`) and/or
+`app/lib/core/design_system/components/nest_toggle.dart`.
+Blocks: yes for P04's PASS this iteration; a P04-local `letterSpacing: 0` on
+the opt-card title would clear this screen but leave the leak everywhere else.
