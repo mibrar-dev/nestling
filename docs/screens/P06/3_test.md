@@ -1,133 +1,127 @@
-# P06 Pocket money setup — Stage 3 TEST (iteration 6)
+# P06 Pocket money setup — Stage 3 TEST (iteration 7)
 
 Route `/pocket-money-setup` · feature `pocket_money` · parent mode · in-memory
 Drift DB (`Seed.demo` / `Seed.empty` / `Seed.onboardingKids`), real router +
 DI + themes, real bundled fonts where the layout is font-sensitive.
 
-The iteration-6 build needed **no view change** (the shared
-`NestBalancedText` ellipsis fix arrived via main, commit `9ba19ab`); the UI
-builder added the real-font geometry guard and the stepper-glyph proofs. This
-stage re-verifies all of it, extends the real-font guard to the full matrix,
-and adds the geometry test the orchestrator's newest note asks for — which
-exposes one real defect.
+The iteration-7 build closed the two mandatory note items (09:30 coin-value
+alignment, 09:42 semantics tap actions) plus review findings #1–#8, and the new
+**ACCESSIBILITY ACTIONS** rule arrived with it. This stage verifies all of that,
+adds the rule's missing coverage (the screen's own stepper buttons), and pins
+P06-BUG-13's regression.
 
-## Tests added (16 new; 132 → 148 in my three files)
+## Tests added (6 new; 148 → 154 in my three files)
 
-### `pocket_money_setup_view_test.dart` (+16, now 87)
+### `pocket_money_setup_view_test.dart` (+6, now 97) — group "semantics actions reach the database"
 
-New group **"real-font matrix"** (13 tests) — the iteration-5 regressions (a
-one-line ellipsized H1, a hyphen instead of U+2212) were only visible with the
-real faces, and the geometry guard pins 390×844 at scale 1.0 only. With
-`FontLoader` (Inter + Nunito, same recipe as
-`privacy_consent_geometry_test.dart`), for light/dark × 320/390/430 × 1.0/1.3:
-- the H1's `RenderParagraph.didExceedMaxLines` is **false** (the exact failure
-  mode of the iteration-5 regression),
-- all seven day pills paint the 32 px band on one shared top edge, with 6 px
-  gaps, inside the card's 16 px padded rect,
-- the CTA caption, `10 coins = 10p` (from 390 up) and `£3.00` do not ellipsize,
-- the CTA panel still ends at y = 844 (bottom-edge owner rule),
-- `takeException()` is null in all twelve combinations.
-Plus an anchor cross-check at 390/1.0: H1 at y 107 with a 68 px height (two
-34 px lines), option cards at y 191/263/335, each 64 tall — the design's ÷3
-values, measured independently of the geometry guard's file.
+The rule: *every* interactive element must expose `SemanticsAction.tap`, and
+`performAction(tap)` must change the real state or DB. 2b covered the three
+option cards and the seven day cells (hasAction + performAction moving the
+selection). The screen's **four stepper buttons** are P06-owned too
+(`P06WeeklyStepper`, feature-private), and they had no action-level coverage
+anywhere, so:
 
-New group **"coin-value trailing alignment (ORCHESTRATOR_NOTES 09:30)"**
-(3 tests) — the note's one remaining item, stated in the note's own terms:
-the trailing value's right edge must equal the card's content right edge
-(x ≈ 354 at 390 — the same edge as the `+` buttons and the Sun chip) within
-±1 px. Light, dark, and 430.
+| Test | What it pins |
+|---|---|
+| `all four stepper buttons expose a tap action` | each of Maya's/Leo's `+`/`−` announces `hasAction(tap)`, `isButton` and enabled — `_StepBtn` declares no `excludeSemantics`, so the `InkWell`'s action merges up |
+| `performAction(tap) on "More weekly pocket money for Maya" writes the child row` | the action moves `children.weekly_base_pence` 300 → **350** in the database (not just the painted row), and `£3.50` appears |
+| `performAction(tap) on "Less weekly pocket money for Leo" writes the child row` | the decrease path: 150 → **100** |
+| `performAction(tap) on an option card writes mode to BOTH mirrored rows` | the accessibility path keeps `families` **and** its `settings` write-mirror in step, exactly like a finger tap |
+| `performAction(tap) on a day cell writes the payout day` | day 6 → **7** in the database |
 
-Helpers: `_loadBundledFontsForMatrix()` (FontLoader) and
-`paragraphOf(tester, text)` (the tree's own `RenderParagraph`, so
-`didExceedMaxLines` is read from the painted node — the standalone
-`TextPainter` route is unreliable here, as recorded in iteration 2).
+Plus one assertion added to the existing real-font matrix sweep: **`Coin value`
+must never ellipsize** at any of the twelve width × scale × theme combinations
+— the exact P06-BUG-13 failure mode ("Coin val…" at 320 × 1.3) when the row
+split 50/50. The label now wraps and the trailing value (the one text
+`1_plan.md` §5 sanctions for ellipsis) takes the shortfall.
+
+### Method note — the trap that cost this stage an hour (worth keeping)
+
+**Never `await` a Drift future directly inside a `testWidgets` body.**
+`AppDatabase`'s watch streams deliver on the real isolate event loop, which the
+widget test's `FakeAsync` clock never pumps, so the `await` blocks until the
+framework's **10-minute** timeout — the test reports "did not complete", not a
+useful failure. Read through `await tester.runAsync(() => repository.watchSetup().first)`
+instead.
+
+This is not hypothetical: the sibling `p06_bugs_test.dart` hit exactly that
+failure during this stage (its `performAction(tap) … writes the DB` test hung
+for 10 minutes and cascaded into 10 downstream failures and a ~10-minute file
+run). I diagnosed it, reproduced it in isolation, and confirmed the BUGS stage's
+own fix (10:34) resolves it — the file is green again. Recorded here because the
+same trap is one copy-paste away in any feature test.
+
+A second, smaller trap: `find.semantics.byLabel(String)` matches the label
+**exactly**, and the stepper/day nodes are merged, so it finds nothing
+(`Bad state: No element`); `find.semantics.byLabel(RegExp(...))` is the robust
+form for merged nodes.
 
 ## Results
 
 - `dart format --set-exit-if-changed` on my three files → clean (0 changed).
-- `flutter analyze lib` + my three files → **No issues found!** (4.3s);
-  full-app analyze also clean at the end of the stage.
-- `flutter test` (full app) → **+1381: All tests passed!**, exit 0 — measured
-  *before* the coin-alignment group was added; with it, see below.
-- `flutter test test/features/pocket_money/pocket_money_setup_view_test.dart`
-  → **+87 −3**: the three new coin-alignment tests fail (the defect below);
-  every pre-existing test in the file is green.
-- `flutter test test/features/pocket_money/pocket_money_setup_bloc_test.dart`
-  → **+30**, `pocket_money_setup_repository_test.dart` → **+15**,
-  `pocket_money_setup_view_geometry_test.dart` → **+6**,
-  `p06_weekly_stepper_widget_test.dart` → **+5**, `p06_bugs_test.dart` → **+27**.
-- No `skip:` in my files, no `google_fonts`/`GoogleFonts`, no simulator used
-  (only the UI stage may drive one). Scope: `app/test/features/pocket_money/**`
-  + `docs/screens/P06/**`; `app/lib/` untouched.
+- `flutter analyze` (full app) → **No issues found!** (2.8s).
+- `flutter test test/features/pocket_money/` → **+184: All tests passed!**
+- `flutter test` (full app) → **+1526: All tests passed!**, exit 0, ~30s.
+- Per file: bloc **+30**, repository **+15**, view **+97**, view-geometry
+  **+6**, stepper-widget **+5**, bugs **+31**.
+- Zero `skip:` anywhere in the feature, no `google_fonts`/`GoogleFonts`, no
+  simulator used (only the UI stage may drive one). Scope:
+  `app/test/features/pocket_money/**` + `docs/screens/P06/**`; `app/lib/`
+  untouched.
 
 ## Bugs found
 
-### P06-BUG-13 (MAJOR, mandatory note) — the coin value is not right-aligned
+**None.** Every iteration-7 fix is covered by a passing test, and I found no
+defect in the rewritten view, the coin-row layout change or the semantics
+work.
 
-- **File:line** — `app/lib/features/pocket_money/presentation/views/pocket_money_setup_view.dart`,
-  `_CoinValueRow` (the trailing element): the value sits in a
-  `Flexible(child: Text('10 coins = ${10 * coinValuePencePerCoin}p',
-  softWrap: false, overflow: ellipsis))`. A **loose** `Flexible` gives the
-  child its intrinsic width, so the text ends wherever it ends instead of
-  trailing to the row's right edge; the design wants a trailing,
-  right-aligned element (`Spacer`/`Expanded` + `TextAlign.end`).
-- **Repro (real fonts, 390×844, `Seed.onboardingKids`)** — the three new
-  geometry tests fail with
-  `Expected: 354.0 (±1.0) Actual: <321.869140625>` in light and dark, and the
-  same at 430. My measurement lands within 0.2 px of the orchestrator's QA
-  note ("in the app it ends at x ≈ 322").
-- **Everything else on that row is already correct**, which is what makes the
-  value the single outlier: in the same test the `Sun` chip's right edge and
-  Maya's `+` button's right edge both land on 354 ±1 (they pass), and the
-  40 px coin tile keeps its place (asserted). So the card's 16 px inset, the
-  day strip and the stepper column are all aligned — only the value floats.
-- **Rule violated** — owner ALIGNMENT ("nothing a few px off"): a 32 px gap
-  between the value and the card's content edge, where the design shows the
-  value flush with the `+` column.
-- **Not patched** (Stage 3 rule). The fix is the note's own prescription:
-  replace the loose `Flexible` with a trailing right-aligned element and keep
-  `TextAlign.end`. The three tests stay red until that lands, which is the
-  signal the loop needs; their names quote the note and the failure message
-  carries the target and the measured value, so the assertion cannot be
-  mistaken for a bad test.
+### Verified fixed this iteration
 
-### Confirmed fixed this iteration (no action needed)
+- **ORCHESTRATOR 09:30 / review #1 (P06-BUG-13's cause)** — the three
+  coin-alignment geometry tests I left red last iteration are now **green** in
+  light, dark and at 430: the value's right edge equals the card content edge
+  (`card.right − s4`, i.e. 354 at 390) within ±1 px, sharing that edge with the
+  `+` buttons and the Sun pill.
+- **P06-BUG-13** (the label truncating at 320 × 1.3 while the value took the
+  room) — regression-pinned in all twelve real-font combinations by the new
+  matrix assertion.
+- **ORCHESTRATOR 09:42 / review #2** — all three option cards and all seven day
+  cells expose `SemanticsAction.tap` (2b's tests) **and** now the four stepper
+  buttons do too (my tests), with `performAction` proven to write the database
+  for a stepper, an option card and a day cell.
+- **review #6** — the option cards announce `checked` +
+  `inMutuallyExclusiveGroup` (the HTML's `role="radiogroup"` of `role="radio"`),
+  pinned in my view test.
+- **review #4** — `watchSetup` now uses the canonical
+  `AppDatabase.watchChildren` (insertion order preserved; the repository's
+  insertion-order tests, including the `Anna` case, stay green).
+- **review #5 / #8** — `_FailureBody` takes its message from the builder (so it
+  no longer defeats `buildWhen`) and the radio dot diameter is a private
+  constant instead of `NestSpacing.gap10`.
+- **review #3 (shared)** — *not* a P06 finding per the 09:42 note and not
+  failed here: the tap action on `NestButton`/`NestChip` (the Back chevron and
+  the Continue CTA) is being fixed on `shared/semantics_tap`. My tests
+  deliberately do not assert it for those two controls; everything P06 owns is
+  covered.
 
-- **The iteration-5 H1 regression** ("How does pocket mone…" on one line) is
-  gone: with the real faces the heading paints two 34 px lines at y 107–175
-  and `didExceedMaxLines` is false in all twelve matrix combinations. That is
-  the shared `shared/balanced_text_ellipsis` fix (main `9ba19ab`), and P06
-  still uses `NestBalancedText` with no local `maxLines`/overflow override, as
-  the note requires.
-- **P06-BUG-01/02/03/05/06/07/08/09/11/12** all remain green in
-  `p06_bugs_test.dart` (27 tests, zero skips), including the stepper's U+2212
-  minus pinned by code unit in `p06_weekly_stepper_widget_test.dart`.
-- The day cells announce `Payout day: <day>` (review #4) — already pinned in
-  my own view test and still passing.
+## Coverage that did not change
 
-## Measurement worth recording (not a defect)
+Bloc/repo contract from iterations 3–5 (request-tracking accumulation, the
+2000p/0p clamps, the pending-day guard, `clearErrorMessage`, `withChildBase`,
+`ArgumentError` past the `assert`, mirrored `families`/`settings` writes,
+insertion order) is unchanged and still green; the real-font matrix, the
+day-row 32 px band geometry, the balanced-H1 guards, the bottom-edge pixel probe
+and the 20 px alignment group all still pass.
 
-At **320 dp** the coin row's trailing value ellipsizes (`10 coins = 1…`):
-the `Flexible` shrinks to whatever is left after the tile, the label and the
-gap. `1_plan.md` §5 sanctions exactly this fallback ("the `10 coins` text must
-ellipsis, never push the tile"), so the sweep asserts the ellipsis **is**
-present at 320 and **absent** from 390 up, and additionally pins that the tile
-and the label do not move when it happens. If the orchestrator wants the full
-string at 320 as well, that is a design decision (the row would need to wrap),
-not a regression.
+## Open items for the orchestrator (not screen defects)
 
-## Cross-stage notes
+- **SHARED_REQUEST 4/5** — `NestStepper` U+2212 override (retire
+  `p06_weekly_stepper.dart`) and the `NestChip` day variant (retire
+  `_DayPill`): shared-code asks, neither blocking.
+- **review #7** — the screen-authored empty-state copy
+  `Add children to set weekly amounts.` has been awaiting ratification for four
+  iterations; it renders only under `Seed.empty`/`Seed.fresh`.
+- **Coin value at 320 dp** ellipsizes by design (`1_plan.md` §5); the sweep now
+  asserts that fallback is present at 320 and absent from 390 up.
 
-- `ORCHESTRATOR_NOTES` items from 04:05, 07:22 and 07:58 all hold and are
-  covered by tests: shoot seed `onboarding_kids` with DB-sourced amounts in
-  insertion order, chips inside the 16 px inset with 32 px pills and even
-  gaps, `letterSpacing` 0 everywhere, the gold coin tile, 64 px option cards,
-  `NestChipWrap` ±5 px taps, and the payout-card y targets (pinned by the
-  geometry guard at 390 plus my matrix sweep).
-- `SHARED_REQUEST` items 4 (`NestStepper` U+2212 override) and 5 (`NestChip`
-  day variant → retire `_DayPill`) remain open shared-code asks; neither
-  blocks the screen.
-- Review #5 (the screen-authored empty-state copy `Add children to set weekly
-  amounts.`) is still awaiting the orchestrator's ratification.
-
-VERDICT: FAIL
+VERDICT: PASS

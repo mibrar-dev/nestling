@@ -1,11 +1,12 @@
-// P06 Pocket money setup — Stage 6 adversarial bug tests (iteration 6).
+// P06 Pocket money setup — Stage 6 adversarial bug tests (iteration 7).
 //
-// Every finding from iterations 2–5 is fixed and runs UNskipped as a
-// regression guard, including the two iteration-5 findings: P06-BUG-11 (the
-// balanced H1 collapsed to one ellipsized line — fixed by main's
-// shared/balanced_text_ellipsis) and P06-BUG-12 (stepper minus U+2212 — fixed
-// by P06WeeklyStepper). One new minor finding, P06-BUG-13 (the "Coin value"
-// label ellipsizes at 320dp × text scale 1.3), is kept skipped with its id.
+// Every finding from iterations 2–6 is fixed and runs UNskipped as a
+// regression guard: the rapid-tap/day chains, the pill geometry, the inline
+// write error, P06-BUG-11 (balanced H1), P06-BUG-12 (stepper minus U+2212)
+// and P06-BUG-13 (coin-label truncation at 320 × 1.3). Iteration 7 adds the
+// ACCESSIBILITY ACTIONS guards (every feature-owned control exposes
+// SemanticsAction.tap and performAction(tap) writes the DB) and the coin-row
+// right-alignment guard.
 //
 // The group at the bottom ("attacks that hold") is NOT skipped: it documents
 // the adversarial probes that passed (kid-mode guard, restart persistence,
@@ -19,6 +20,7 @@ import 'dart:ui' show Tristate;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
+import 'package:flutter/semantics.dart' show SemanticsAction;
 import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -923,6 +925,142 @@ void main() {
     );
   });
 
+  // -- iteration-7 accessibility actions + coin row -------------------------
+
+  group('P06 iteration-7: semantics actions and coin-row alignment', () {
+    testWidgets('every feature-owned control exposes SemanticsAction.tap', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/pocket-money-setup');
+
+      final finders = <Finder>[
+        for (final key in <String>[
+          'p06_option_weekly',
+          'p06_option_per_quest',
+          'p06_option_both',
+        ])
+          find.byKey(ValueKey<String>(key)),
+        for (var day = 1; day <= 7; day++)
+          find.byKey(ValueKey<String>('p06_day_$day')),
+        for (final label in <String>[
+          'Less weekly pocket money for Maya',
+          'More weekly pocket money for Maya',
+          'Less weekly pocket money for Leo',
+          'More weekly pocket money for Leo',
+        ])
+          find.bySemanticsLabel(RegExp(label)),
+      ];
+      for (final finder in finders) {
+        final data = tester.getSemantics(finder).getSemanticsData();
+        expect(
+          data.hasAction(SemanticsAction.tap),
+          isTrue,
+          reason:
+              'a VoiceOver/TalkBack user must be able to activate '
+              '${data.label}',
+        );
+      }
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('performAction(tap) on the feature controls writes the DB', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/pocket-money-setup');
+      final repository = GetIt.instance<PocketMoneyRepository>();
+
+      void dispatch(Finder finder) {
+        final node = tester.getSemantics(finder);
+        expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+        node.owner!.performAction(node.id, SemanticsAction.tap);
+      }
+
+      Future<void> settle() async {
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 250));
+      }
+
+      // Money style: "Earn per quest" → the card announces selected.
+      dispatch(find.byKey(const ValueKey('p06_option_per_quest')));
+      await settle();
+      expect(
+        tester
+            .getSemantics(find.byKey(const ValueKey('p06_option_per_quest')))
+            .getSemanticsData()
+            .flagsCollection
+            .isSelected,
+        Tristate.isTrue,
+      );
+
+      // Payout day: Sun → the cell announces selected.
+      dispatch(find.byKey(const ValueKey('p06_day_7')));
+      await settle();
+      expect(
+        tester
+            .getSemantics(find.byKey(const ValueKey('p06_day_7')))
+            .getSemanticsData()
+            .flagsCollection
+            .isSelected,
+        Tristate.isTrue,
+      );
+
+      // Weekly base: Maya + → the value renders £3.50.
+      dispatch(
+        find.bySemanticsLabel(RegExp('More weekly pocket money for Maya')),
+      );
+      await settle();
+      expect(find.text('£3.50'), findsOneWidget);
+
+      // Database truth, read outside the fake test clock (awaiting a fresh
+      // Drift stream inside the widget clock hangs — learned this iteration).
+      await tester.runAsync(() async {
+        final setup = await repository.watchSetup().first;
+        expect(setup.mode, 'per_quest');
+        expect(setup.payoutDay, 7);
+        expect(setup.childById('maya')!.weeklyBasePence, 350);
+      });
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the coin value is right-aligned to the card content edge', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      for (final scenario in <({int width, double scale})>[
+        (width: 390, scale: 1),
+        (width: 320, scale: 1),
+        (width: 320, scale: 1.3),
+        (width: 430, scale: 1),
+      ]) {
+        tester.platformDispatcher.textScaleFactorTestValue = scenario.scale;
+        await pumpAppRoute(tester, '/pocket-money-setup');
+        tester.view.physicalSize = Size(scenario.width * 3, 844 * 3);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+
+        final card = tester.getRect(find.byType(NestCard));
+        final value = tester.getRect(find.text('10 coins = 10p'));
+        expect(
+          value.right,
+          moreOrLessEquals(card.right - NestSpacing.s4, epsilon: 1),
+          reason:
+              'coin value right edge at ${scenario.width}dp '
+              '× ${scenario.scale}',
+        );
+        expect(tester.takeException(), isNull);
+
+        await disposeApp(tester);
+      }
+    });
+  });
+
   // -- attacks that hold --------------------------------------------------
 
   group('P06 attacks that hold', () {
@@ -1025,6 +1163,24 @@ void main() {
 
         expect(find.text('Maya'), findsOneWidget);
         expect(find.text('Maximilian-Alexander'), findsOneWidget);
+
+        // Canonical insertion order end-to-end (`watchChildren` now orders by
+        // createdAt, rowid): Maya → Leo → the four added after the seed.
+        final order = <String>[
+          'Maya',
+          'Leo',
+          'Maximilian-Alexander',
+          'Noah',
+          'Ava',
+          'Ethan',
+        ];
+        for (var i = 1; i < order.length; i++) {
+          expect(
+            tester.getTopLeft(find.text(order[i - 1])).dy,
+            lessThan(tester.getTopLeft(find.text(order[i])).dy),
+            reason: '${order[i - 1]} must sit above ${order[i]}',
+          );
+        }
         expect(tester.takeException(), isNull);
 
         await disposeApp(tester);

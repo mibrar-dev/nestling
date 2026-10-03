@@ -1276,7 +1276,7 @@ void main() {
       expect(isSelected(find.byKey(const ValueKey('p06_option_both'))), isTrue);
       tester.semantics.performAction(
         find.semantics.byLabel(
-          'Earn per quest, Coins turn into pence at payout',
+          RegExp('Earn per quest, Coins turn into pence at payout'),
         ),
         SemanticsAction.tap,
       );
@@ -2855,6 +2855,15 @@ void main() {
               );
             }
             expect(paragraphOf(tester, '£3.00').didExceedMaxLines, isFalse);
+            // P06-BUG-13: when the row was split 50/50 the *label* truncated
+            // to "Coin val…" at 320x1.3. The label wraps (two lines) and the
+            // value — the one text the plan sanctions for ellipsis — takes the
+            // shortfall, so the label must never ellipsize.
+            expect(
+              paragraphOf(tester, 'Coin value').didExceedMaxLines,
+              isFalse,
+              reason: '"Coin value" must never truncate (${width}dp / $scale)',
+            );
 
             // Bottom edge: the panel runs to the physical edge in both themes.
             expect(
@@ -3013,4 +3022,223 @@ void main() {
       });
     },
   );
+
+  // -------------------------------------------------------------------------
+  // ACCESSIBILITY ACTIONS (orchestrator rule) — the screen's remaining
+  // feature-owned controls. 2b covered the three option cards and the seven
+  // day cells (hasAction + performAction moving the selection); the four
+  // stepper buttons are P06-owned too (`P06WeeklyStepper`), so they get the
+  // same treatment here, one step further: the ACTION must reach the DATABASE.
+  //
+  // NOTE on the API: dispatch through `tester.semantics.performAction(finder,
+  // action)`. Calling `node.owner!.performAction(node.id, action)` directly
+  // bypasses the test framework's action plumbing, and the dropped future
+  // never settles under the widget-test FakeAsync clock — that is what hangs
+  // `p06_bugs_test.dart`'s "performAction(tap) … writes the DB" (see
+  // docs/screens/P06/3_test.md, iteration 7).
+  // -------------------------------------------------------------------------
+  group('P06 setup — semantics actions reach the database', () {
+    final steppers = <({String label, String matcher, int before, int after})>[
+      (
+        label: 'More weekly pocket money for Maya',
+        matcher: 'More weekly pocket money for Maya',
+        before: 300,
+        after: 350,
+      ),
+      (
+        label: 'Less weekly pocket money for Maya',
+        matcher: 'Less weekly pocket money for Maya',
+        before: 300,
+        after: 250,
+      ),
+      (
+        label: 'More weekly pocket money for Leo',
+        matcher: 'More weekly pocket money for Leo',
+        before: 150,
+        after: 200,
+      ),
+      (
+        label: 'Less weekly pocket money for Leo',
+        matcher: 'Less weekly pocket money for Leo',
+        before: 150,
+        after: 100,
+      ),
+    ];
+
+    testWidgets('all four stepper buttons expose a tap action', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await setUpTestScope();
+      await _pumpSetup(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      expect(steppers.length, 4);
+      for (final stepper in steppers) {
+        final finder = find.bySemanticsLabel(RegExp(stepper.matcher));
+        expect(finder, findsOneWidget);
+        final data = tester.getSemantics(finder).getSemanticsData();
+        expect(
+          data.hasAction(SemanticsAction.tap),
+          isTrue,
+          reason:
+              '"${stepper.label}" must announce a tap action; P06 owns this '
+              'widget (P06WeeklyStepper), so it is in scope for this rule',
+        );
+        expect(data.flagsCollection.isButton, isTrue);
+        expect(data.flagsCollection.isEnabled, Tristate.isTrue);
+      }
+
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+
+    for (final stepper
+        in <({String label, String matcher, int before, int after})>[
+          (
+            label: 'More weekly pocket money for Maya',
+            matcher: 'More weekly pocket money for Maya',
+            before: 300,
+            after: 350,
+          ),
+          (
+            label: 'Less weekly pocket money for Leo',
+            matcher: 'Less weekly pocket money for Leo',
+            before: 150,
+            after: 100,
+          ),
+        ]) {
+      testWidgets('performAction(tap) on "${stepper.label}" writes the child '
+          'row', (tester) async {
+        final semantics = tester.ensureSemantics();
+        await setUpTestScope();
+        await _pumpSetup(
+          tester,
+          theme: ThemeMode.light,
+          surface: const Size(390, 844),
+          textScale: 1,
+        );
+        final repository = GetIt.instance<PocketMoneyRepository>();
+        final childId = stepper.matcher.endsWith('Maya') ? 'maya' : 'leo';
+        // Drift delivers on the real isolate event loop, which the widget
+        // test's FakeAsync clock never pumps: read it through `runAsync` or
+        // the await below blocks until the framework's 10-minute timeout.
+        Future<int> baseInDb() async {
+          final setup = await tester.runAsync(
+            () => repository.watchSetup().first,
+          );
+          return setup!.childById(childId)!.weeklyBasePence;
+        }
+
+        expect(await baseInDb(), stepper.before);
+
+        tester.semantics.performAction(
+          find.semantics.byLabel(RegExp(stepper.matcher)),
+          SemanticsAction.tap,
+        );
+        await _settle(tester);
+
+        // The database moved...
+        expect(
+          await baseInDb(),
+          stepper.after,
+          reason:
+              'the semantics action must reach the repository, not just '
+              'repaint the row',
+        );
+        // ...and the screen shows it.
+        expect(
+          find.text('£${(stepper.after / 100).toStringAsFixed(2)}'),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+
+        semantics.dispose();
+        await disposeApp(tester);
+      });
+    }
+
+    testWidgets('performAction(tap) on an option card writes mode to BOTH '
+        'mirrored rows', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await setUpTestScope();
+      await _pumpSetup(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+      tester.semantics.performAction(
+        find.semantics.byLabel(
+          RegExp('Earn per quest, Coins turn into pence at payout'),
+        ),
+        SemanticsAction.tap,
+      );
+      await _settle(tester);
+
+      final repository = GetIt.instance<PocketMoneyRepository>();
+      final mode = await tester.runAsync(
+        () async => (await repository.watchSetup().first).mode,
+      );
+      expect(mode, 'per_quest');
+      // `families` is the source of truth and `settings` its write-mirror: the
+      // accessibility path must keep both in step, exactly like a finger tap.
+      final rows = await tester.runAsync(() async {
+        final database = GetIt.instance<AppDatabase>();
+        return (
+          families: await (database.select(
+            database.families,
+          )..where((f) => f.id.equals(Seed.familyId))).getSingle(),
+          settings: await (database.select(
+            database.settings,
+          )..where((s) => s.familyId.equals(Seed.familyId))).getSingle(),
+        );
+      });
+      expect(rows!.families.pocketMoneyMode, 'per_quest');
+      expect(rows.settings.pocketMoneyMode, 'per_quest');
+      expect(tester.takeException(), isNull);
+
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('performAction(tap) on a day cell writes the payout day', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await setUpTestScope();
+      await _pumpSetup(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+      final repository = GetIt.instance<PocketMoneyRepository>();
+      expect(
+        await tester.runAsync(
+          () async => (await repository.watchSetup().first).payoutDay,
+        ),
+        6,
+      );
+
+      tester.semantics.performAction(
+        find.semantics.byLabel(RegExp('Payout day: Sun')),
+        SemanticsAction.tap,
+      );
+      await _settle(tester);
+
+      expect(
+        await tester.runAsync(
+          () async => (await repository.watchSetup().first).payoutDay,
+        ),
+        7,
+      );
+      expect(tester.takeException(), isNull);
+
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+  });
 }
