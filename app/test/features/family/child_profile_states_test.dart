@@ -339,5 +339,28 @@ void main() {
 
       await disposeApp(tester);
     });
+
+    // Iteration 2: the route now dispatches `FamilyChildSelected` for a
+    // `?childId=` BEFORE the first load. With no children there is nothing to
+    // select, so the request must be dropped and the empty state must still
+    // render — never a crash, never a blank screen.
+    testWidgets('a deep link with no children still shows the empty state', (
+      tester,
+    ) async {
+      final db = await setUpTestScope(seedDemo: false);
+      await Seed.empty(db);
+
+      await _pumpAt(tester, '/child-profile?childId=leo');
+
+      expect(find.text('No children yet'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.widgetWithText(NestButton, 'Add a child'));
+      await tester.pumpAndSettle();
+      expect(pushedPath(tester), '/add-children');
+
+      await disposeApp(tester);
+    });
   });
 }

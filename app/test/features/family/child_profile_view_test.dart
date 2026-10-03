@@ -14,13 +14,17 @@
 // Fonts are the bundled Inter/Nunito (`FontLoader`), so the measurements are
 // the ones a device renders.
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
+import 'package:flutter/rendering.dart';
 
 import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:nestling/app/app.dart';
+import 'package:nestling/app/controllers.dart';
+import 'package:nestling/core/data/app_database.dart' hide Quest;
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 import 'package:nestling/features/family/domain/entities/child_profile.dart';
@@ -68,6 +72,35 @@ Future<void> _loadBundledFonts() async {
 
 ChildProfile _profile(WidgetTester tester) =>
     tester.widget<ChildProfileBody>(find.byType(ChildProfileBody)).profile;
+
+/// The demo Maya profile, for the mocked-repository tests (the rows never
+/// read the roster).
+ChildProfile _mayaProfileFixture() => const ChildProfile(
+  child: FamilyChild(
+    id: 'maya',
+    nickname: 'Maya',
+    ageBand: '7-9',
+    ageYears: 9,
+    avatarColour: 'lilac',
+    pinSet: true,
+    pipStyle: 'mochi',
+    pipSkin: 'sunny',
+    pipAccessory: 'none',
+    pipStage: 3,
+    pipTotalCoins: 175,
+    coins: 120,
+    happiness: 4,
+    happyDays: 4,
+    weeklyBasePence: 300,
+    activeQuests: 6,
+    doneQuests: 4,
+  ),
+  questsThisWeek: 4,
+  dailyActive: 4,
+  weeklyActive: 2,
+  onceActive: 0,
+  owedPence: 420,
+);
 
 /// Lets real-async Drift work (the remove write and the stream re-emit)
 /// complete inside a widget test, where plain `pump` only advances the fake
@@ -380,6 +413,48 @@ void main() {
       await disposeApp(tester);
     });
 
+    // The route dispatches `FamilyChildSelected` BEFORE `FamilyLoadRequested`
+    // (`family_routes.dart:38-48`) and the repository records the request
+    // synchronously, so the requested child wins on the very FIRST emission.
+    // A late persist would flash the wrong child's profile for a frame — and
+    // a frame is enough to show a parent someone else's name and Pip.
+    testWidgets('the requested child is never preceded by the active one', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      tester.view.physicalSize = const Size(390 * 3, 844 * 3);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      GetIt.instance<ThemeModeController>().selectMode(ThemeMode.light);
+
+      await tester.pumpWidget(
+        const NestlingApp(initialRoute: '/child-profile?childId=leo'),
+      );
+
+      var sawMaya = false;
+      var sawLeo = false;
+      for (var frame = 0; frame < 12 && !sawLeo; frame++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        // `runAsync` lets the real-async Drift writes land between frames.
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pump();
+        sawMaya = sawMaya || find.text('Maya').evaluate().isNotEmpty;
+        sawLeo = sawLeo || find.text('Leo').evaluate().isNotEmpty;
+      }
+
+      expect(sawLeo, isTrue, reason: 'Leo must arrive');
+      expect(
+        sawMaya,
+        isFalse,
+        reason: 'Maya must never be rendered, not even for one frame',
+      );
+      expect(_profile(tester).child.id, 'leo');
+
+      await disposeApp(tester);
+    });
+
     testWidgets('an unknown childId still falls back to the roster', (
       tester,
     ) async {
@@ -390,6 +465,54 @@ void main() {
       // ORDER ruling) is shown.
       expect(find.text('Maya'), findsOneWidget);
       expect(find.byKey(const Key('p15-hero')), findsOneWidget);
+
+      await disposeApp(tester);
+    });
+
+    // ── BUG P15-BUG-9 (failing repro — do not "fix" the test) ─────────────
+    // The iteration-2 fix dispatches `FamilyChildSelected` from the ROUTE's
+    // `BlocProvider(create:)` (`family_routes.dart:38-48`), which runs once per
+    // route instance. The Family branch lives in a `StatefulShellRoute
+    // .indexedStack`, so after leaving `/child-profile` the route stays
+    // MOUNTED: coming back with a different `?childId=` re-uses the same page
+    // key, the builder never runs again, no selection is dispatched — and the
+    // screen keeps showing the PREVIOUS child. Stage 6's
+    // `p15_bugs_test.dart` (P15-BUG-9a/b) reports the same defect.
+    testWidgets('BUG P15-BUG-9: a SECOND deep link must switch the profile', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/today');
+
+      await tester.tap(find.text('Leo'));
+      await tester.pumpAndSettle();
+      await _flushDrift(tester);
+      await tester.pumpAndSettle();
+      expect(_profile(tester).child.id, 'leo');
+
+      // Back to Today, then Maya's card: same route, different child.
+      await tester.tap(
+        find.descendant(
+          of: find.byType(NestTabBar),
+          matching: find.text('Today'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Maya'));
+      await tester.pumpAndSettle();
+      await _flushDrift(tester);
+      await tester.pumpAndSettle();
+
+      expect(pushedPath(tester), '/child-profile');
+      expect(
+        _profile(tester).child.id,
+        'maya',
+        reason: 'the ?childId= on this entry point asked for Maya',
+      );
+      expect(
+        find.text('Age 7\u20139 \u00B7 Pip is a Fledgling'),
+        findsOneWidget,
+      );
 
       await disposeApp(tester);
     });
@@ -560,6 +683,167 @@ void main() {
       expect(find.text('Try again'), findsNothing);
 
       verify(() => repo.removeChild('maya')).called(1);
+
+      await disposeApp(tester);
+    });
+
+    // P15-BUG-3, the user-visible half (stage 6 proved the bloc half): a
+    // SECOND identical failure must raise the toast again. Equatable would
+    // suppress a duplicate state, so the listener never fires twice — which
+    // is why the bloc now clears the message before re-raising it.
+    testWidgets('a repeated identical remove failure toasts again', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      final repo = _MockFamilyRepository();
+      when(repo.watchItems).thenAnswer(
+        (_) => Stream<List<FamilyMember>>.value(const <FamilyMember>[_me]),
+      );
+      when(repo.watchChildren).thenAnswer((_) => Stream.value(<FamilyChild>[]));
+      when(
+        repo.watchProfile,
+      ).thenAnswer((_) => Stream<ChildProfile?>.value(_mayaProfileFixture()));
+      when(() => repo.removeChild(any())).thenThrow(Exception('offline'));
+      await _useRepository(repo);
+
+      await pumpAppRoute(tester, '/child-profile');
+
+      for (var attempt = 1; attempt <= 2; attempt++) {
+        await tester.tap(find.byKey(const Key('p15-remove')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(NestButton, 'Remove'));
+        await tester.pumpAndSettle();
+        await _flushDrift(tester);
+
+        expect(
+          find.byType(NestToast),
+          findsOneWidget,
+          reason: 'failure $attempt must raise its own toast',
+        );
+        expect(find.textContaining('offline'), findsOneWidget);
+        // Still the loaded screen, never the failure panel.
+        expect(find.text('Try again'), findsNothing);
+        expect(find.text('Maya'), findsOneWidget);
+
+        // Let the 3 s snackbar retire before the next tap: it floats over
+        // the bottom of the column and would swallow the tap (the danger row
+        // is the last thing in the scroll, by design).
+        if (attempt < 2) {
+          await tester.pumpAndSettle(const Duration(seconds: 4));
+          expect(find.byType(NestToast), findsNothing);
+        }
+      }
+      verify(() => repo.removeChild('maya')).called(2);
+
+      await disposeApp(tester);
+    });
+  });
+
+  // Review findings 5 + 6, closed in iteration 2.
+  group('P15 hero', () {
+    testWidgets('the name is announced as a heading', (tester) async {
+      final handle = tester.ensureSemantics();
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/child-profile');
+
+      // Every other screen's title flags itself (`add_children_view.dart:196`,
+      // `today_loaded_body.dart:375`, `money_ledger_view.dart:207`).
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is Semantics && w.properties.header == true,
+        ),
+        findsOneWidget,
+        reason: "the child's name is this route's page title",
+      );
+      // The heading node announces the name itself, not just the initial.
+      final node = tester.getSemantics(find.text('Maya'));
+      expect(node.getSemanticsData().flagsCollection.isHeader, isTrue);
+
+      handle.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('a long nickname wraps and grows the hero, never truncates', (
+      tester,
+    ) async {
+      final db = await setUpTestScope();
+      await (db.update(db.children)..where((c) => c.id.equals('maya'))).write(
+        const ChildrenCompanion(nickname: Value('Bartholomew-Winston-Okonkwo')),
+      );
+
+      await pumpAppRoute(tester, '/child-profile');
+
+      // `.hero h1` carries no `nowrap` and `components.css:43` gives bare h1
+      // `overflow-wrap: anywhere`, so the design WRAPS (review finding 6)
+      // instead of truncating: the card grows to hold the extra line.
+      final name = tester.widget<Text>(
+        find.text('Bartholomew-Winston-Okonkwo'),
+      );
+      expect(name.maxLines, greaterThan(1));
+      final render = tester.renderObject<RenderParagraph>(
+        find.descendant(
+          of: find.text('Bartholomew-Winston-Okonkwo'),
+          matching: find.byType(RichText),
+        ),
+      );
+      expect(
+        render.size.height,
+        greaterThan(render.preferredLineHeight),
+        reason: 'the name really is on a second line',
+      );
+      expect(render.didExceedMaxLines, isFalse);
+      expect(
+        tester.getRect(find.byKey(const Key('p15-hero'))).height,
+        greaterThan(164),
+        reason: 'the card grows to hold the second line',
+      );
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the design name still renders on one line at 390', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/child-profile');
+
+      // The 164 px hero band in `child_profile_view_test.dart`'s geometry
+      // proofs only holds while the name is one line.
+      expect(tester.getRect(find.byKey(const Key('p15-hero'))).height, 164);
+      expect(find.text('Maya'), findsOneWidget);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('a very long nickname still fits at 320 · scale 1.3', (
+      tester,
+    ) async {
+      final db = await setUpTestScope();
+      await (db.update(db.children)..where((c) => c.id.equals('maya'))).write(
+        const ChildrenCompanion(nickname: Value('Bartholomew-Winston-Okonkwo')),
+      );
+      tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      await pumpAppRoute(tester, '/child-profile');
+      tester.view.physicalSize = const Size(320 * 3, 844 * 3);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(tester.takeException(), isNull);
+      // Capped at three lines, so the stats band below is never swallowed.
+      final render = tester.renderObject<RenderParagraph>(
+        find.descendant(
+          of: find.text('Bartholomew-Winston-Okonkwo'),
+          matching: find.byType(RichText),
+        ),
+      );
+      expect(
+        render.size.height,
+        lessThanOrEqualTo(3 * render.preferredLineHeight + 0.5),
+        reason: 'three lines at most, so the stats band below survives',
+      );
 
       await disposeApp(tester);
     });
