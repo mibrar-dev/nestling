@@ -1,11 +1,16 @@
-// P07 · Paywall — adversarial bug proofs (Stage 6, iteration 4).
+// P07 · Paywall — adversarial bug proofs (Stage 6, iteration 4 + shared_batch3).
 //
 // Iteration 1 found P07-BUG-1..9; iteration 2 added P07-BUG-10..12;
-// iteration 3 added P07-BUG-13. All of 1–13 are now unskipped and green
-// (iterations 2–4 built the fixes; BUG-13's centring fix landed in
-// iteration 4). P07-BUG-8/9 remain shared items filed in
-// `docs/screens/P07/SHARED_REQUEST.md`; those two proofs stay `skip: true`
-// until the shared fix lands.
+// iteration 3 added P07-BUG-13. All of 1–13 are now unskipped and green:
+// 1–7 and 10–13 were fixed in iterations 2–4, and the shared batch landed
+// 8 (trial expiry) and 9 (kid-mode guard order), so those two proofs are
+// unskipped here too.
+//
+// NOTE (shared_batch3): benefit 4 is no longer static copy — it names the
+// family's co-parent from the database ("Co-parent sharing, so <Name> sees
+// the same", fallback "... so everyone sees the same" when there is none).
+// `Seed.fresh` ships no members, so fresh-seed pumps expect the fallback;
+// `Seed.demo` ships James (see `paywall_coparent_test.dart`).
 //
 // Every open bug test is `skip`-marked with its id in the test name so the
 // suite stays green while the defect is unfixed; when the fix lands, remove
@@ -105,6 +110,11 @@ class _FlakyRepository implements PaywallRepository {
 
   @override
   Future<void> activate() async {}
+
+  // Shared_batch3 co-parent name: benefit 4 reads the database through
+  // the repository, so every fake reports "none".
+  @override
+  Future<String?> readCoParentName() => Future<String?>.value();
 }
 
 /// A few frames: enough for a tap, a Drift write and a go_router transition,
@@ -171,11 +181,19 @@ void main() {
       expect(avatars.single.skin, v2.PipSkin.sunny);
       expect(avatars.single.stage, 4);
 
-      // Title + benefits + plan card.
+      // Title + benefits + plan card. Benefit 4 is database-driven
+      // (shared_batch3): `Seed.fresh` has no co-parent, so the fallback
+      // renders here; `Seed.demo` renders James (pinned in
+      // `paywall_coparent_test.dart`).
       expect(find.text(_title), findsOneWidget);
-      for (final benefit in _benefits) {
+      for (final benefit in _benefits.take(3)) {
         expect(find.text(benefit), findsOneWidget, reason: benefit);
       }
+      expect(
+        find.text('Co-parent sharing, so everyone sees the same'),
+        findsOneWidget,
+        reason: 'fresh seed has no co-parent → fallback',
+      );
       expect(find.text(_planTitle), findsOneWidget);
       expect(find.text(_planSub), findsOneWidget);
       expect(find.text(_planTag), findsOneWidget);
@@ -406,7 +424,6 @@ void main() {
   group('P07-BUG-8 — the 14-day trial never expires (major, shared)', () {
     testWidgets(
       '[P07-BUG-8] a trial started 15 days ago must not keep giving access',
-      skip: true,
       (tester) async {
         final db = await setUpTestScope(seedDemo: false);
         await Seed.fresh(db);
@@ -441,7 +458,6 @@ void main() {
   group('P07-BUG-9 — kid-mode guard order during onboarding (minor, shared)', () {
     testWidgets(
       '[P07-BUG-9] a kid-mode deep link to /paywall lands on the parental gate',
-      skip: true,
       (tester) async {
         final db = await setUpTestScope(seedDemo: false);
         await Seed.fresh(db);

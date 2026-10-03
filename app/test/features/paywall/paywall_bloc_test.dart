@@ -116,6 +116,10 @@ class _FakePaywallRepository implements PaywallRepository {
     activateCalls++;
     if (failRestore) throw Exception('offline');
   }
+
+  // Shared_batch3 co-parent name (see p07_bugs_test.dart): fakes report none.
+  @override
+  Future<String?> readCoParentName() => Future<String?>.value();
 }
 
 void main() {
@@ -176,6 +180,26 @@ void main() {
         'still here',
       );
     });
+
+    test(
+      'copyWith replaces the co-parent name, clearing it on a fresh load',
+      () {
+        const loaded = PaywallState(
+          status: PaywallStatus.loaded,
+          coParentName: 'James',
+        );
+        expect(
+          loaded
+              .copyWith(status: PaywallStatus.loading, clearCoParent: true)
+              .coParentName,
+          isNull,
+        );
+        expect(
+          const PaywallState().copyWith(coParentName: 'Aisha').coParentName,
+          'Aisha',
+        );
+      },
+    );
   });
 
   group('PaywallBloc', () {
@@ -210,6 +234,15 @@ void main() {
               _planTitle,
             ),
       ],
+    );
+
+    blocTest<PaywallBloc, PaywallState>(
+      'the load carries the co-parent name from the database',
+      // `setUpTestScope` seeds `Seed.demo`, whose second parent is James.
+      setUp: setUpTestScope,
+      build: () => PaywallBloc(repository: GetIt.instance<PaywallRepository>()),
+      act: (bloc) => bloc.add(const PaywallLoadRequested()),
+      verify: (bloc) => expect(bloc.state.coParentName, 'James'),
     );
 
     blocTest<PaywallBloc, PaywallState>(

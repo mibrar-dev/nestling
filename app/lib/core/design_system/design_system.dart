@@ -1,6 +1,7 @@
 export 'package:nestling/core/design_system/assets/nestling_assets.dart';
 export 'package:nestling/core/design_system/components/nest_avatar.dart';
 export 'package:nestling/core/design_system/components/nest_badge_count.dart';
+export 'package:nestling/core/design_system/components/nest_balanced_text.dart';
 export 'package:nestling/core/design_system/components/nest_bottom_cta.dart';
 export 'package:nestling/core/design_system/components/nest_bottom_sheet.dart';
 export 'package:nestling/core/design_system/components/nest_brand_buttons.dart';
