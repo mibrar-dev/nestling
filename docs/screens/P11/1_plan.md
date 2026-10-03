@@ -101,13 +101,17 @@ Scaffold (paper bg)
               loading: approveAllBusy)
 ```
 
-Semantics: each card wrapped in `Semantics(container: true,
-label: '$childName, $questTitle, $dayLabel $timeLabel, $coins coins')` with
-`excludeSemantics: true` (one announcement per card; buttons inside stay
-reachable as separate tappable nodes — do NOT exclude the button subtree:
-build the label on the Column via MergeSemantics? NO — MergeSemantics would
-merge buttons. Use a plain `Semantics(label:, container: true)` WITHOUT
-excludeSemantics so children remain independently focusable).
+Semantics (ACCESSIBILITY ACTIONS compliant): the non-interactive `.hd` block
+(avatar + name + time) is wrapped in `Semantics(container: true,
+excludeSemantics: true, label: '$childName, $questTitle, $dayLabel $timeLabel,
+$coins coins')` — one announcement for the row content. The wrapper contains NO
+interactive elements (the two buttons sit OUTSIDE it in the card Column), so no
+`onTap` is required on it, and each button keeps its own focusable/tappable node
+with a real `SemanticsAction.tap` (NestButton). Never wrap the whole card
+(including buttons) in `excludeSemantics` — that would hide the buttons'
+tap actions. Tests must assert `hasAction(SemanticsAction.tap)` for back,
+Not yet, Approve, Approve-all and Try-again, and that `performAction(tap)`
+changes the real DB/state.
 Loading: `Center(CircularProgressIndicator(color: tokens.leaf))` (today pattern).
 Failure: centered `Text(errorMessage)` + `NestButton.secondary('Try again')`
 → adds `ApprovalsLoadRequested`.
@@ -120,6 +124,17 @@ design — error path only.
 Letter-spacing: add NOTHING (design CSS sets none; NestType defaults 0).
 No `text-wrap: balance` anywhere in P11 CSS → no `NestBalancedText`.
 No chip rows → no `NestChipWrap`. No `google_fonts` anywhere.
+
+Expected-y positions (logical px, from CSS box model — UI check must verify
+each within ±2 px; a uniform vertical shift is a FAIL):
+status-bar 0–47 · nav compact 47–107 (4 + 44 + 12) · helper banner top 107,
+height 64 (12 + 2×20 + 12) → 107–171 · gap 16 → card 1 top 187, height 138
+(16 + 44 + 14 + 48 + 16) → 187–325 · gap 16 → card 2 top 341 → 341–479 ·
+gap 16 → card 3 top 495 → 495–633 · scroll bottom padding 16 ·
+bottom-cta (surface to physical edge): 16 + 52 + 16 = 84 + safe-area inset.
+NOTE: card height 138 EXCLUDES the design's `.qn` quote row (omitted per §0 —
+no data source), so design-PNG card bottoms will differ by exactly the quote
+block (~10 + 24); tops and all other rects must still match ±2 px.
 
 ## 2. BLoC + repository
 

@@ -52,6 +52,7 @@ class ApprovalsRepositoryImpl implements ApprovalsRepository {
           avatarColour: kid?.avatarColour ?? 'lilac',
           coins: c.coins,
           createdAt: c.createdAt,
+          createdAtTz: c.createdAtTz,
         );
       }).toList();
     });

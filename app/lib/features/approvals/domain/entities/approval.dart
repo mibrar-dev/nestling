@@ -16,6 +16,7 @@ class Approval extends Equatable {
     required this.avatarColour,
     required this.coins,
     required this.createdAt,
+    required this.createdAtTz,
   });
 
   final String id;
@@ -32,6 +33,10 @@ class Approval extends Equatable {
   final int coins;
   final DateTime createdAt;
 
+  /// IANA zone id in force when the completion was written (render history
+  /// in this zone; see `family_time.dart`).
+  final String createdAtTz;
+
   @override
   List<Object?> get props => <Object?>[
     id,
@@ -45,5 +50,6 @@ class Approval extends Equatable {
     avatarColour,
     coins,
     createdAt,
+    createdAtTz,
   ];
 }

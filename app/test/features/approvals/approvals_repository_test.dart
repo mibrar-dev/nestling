@@ -1,0 +1,229 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/seed.dart';
+import 'package:nestling/features/approvals/data/approvals_repository_impl.dart';
+import 'package:nestling/features/approvals/data/models/approval_model.dart';
+import 'package:nestling/features/approvals/domain/entities/approval.dart';
+
+import '../../test_scope.dart';
+
+Future<List<LedgerEntry>> questBonusRows(AppDatabase db) async {
+  final rows = await db.select(db.ledgerEntries).get();
+  return rows.where((r) => r.type == 'quest_bonus').toList();
+}
+
+void main() {
+  group('ApprovalsRepository watchItems', () {
+    test('demo seed emits exactly 3 pendings, oldest-first', () async {
+      final db = await setUpTestScope();
+      final impl = ApprovalsRepositoryImpl(db: db);
+      final items = await impl.watchItems().first;
+
+      expect(items, hasLength(3));
+      // watchPendingApprovals orders createdAt ASC (oldest first); the
+      // newest-first display sort lives in the bloc, not here.
+      expect(
+        items.map((i) => i.questTitle).toList(),
+        orderedEquals(<String>[
+          'Make your bed',
+          'Lay the table',
+          'Empty the dishwasher',
+        ]),
+      );
+      expect(
+        items.map((i) => i.childName).toList(),
+        orderedEquals(<String>['Leo', 'Maya', 'Maya']),
+      );
+      expect(
+        items.map((i) => i.coins).toList(),
+        orderedEquals(<int>[5, 10, 15]),
+      );
+      // Creation order within the seed (insertion ids ascend with time here
+      // except the two Maya rows, which were inserted newest-first).
+      expect(
+        items.map((i) => i.completionId).toList(),
+        orderedEquals(<int>[3, 2, 1]),
+      );
+      for (final item in items) {
+        expect(item.createdAtTz, 'Europe/London');
+      }
+      // Same instants the seed wrote (drift may return them in the local
+      // zone, so compare normalised to UTC).
+      expect(
+        items.map((i) => i.createdAt.toUtc()).toList(),
+        orderedEquals(<DateTime>[
+          Seed.utc(10, 3, 6, 58),
+          Seed.utc(10, 3, 7, 5),
+          Seed.utc(10, 3, 7, 12),
+        ]),
+      );
+      expect(items.first.childId, 'leo');
+      expect(items.first.avatarColour, 'peach');
+      expect(items.last.childId, 'maya');
+      expect(items.last.avatarColour, 'lilac');
+    });
+
+    test('getItems matches the first watch emission', () async {
+      final db = await setUpTestScope();
+      final impl = ApprovalsRepositoryImpl(db: db);
+      expect(await impl.getItems(), await impl.watchItems().first);
+    });
+
+    test('empty seed has no pending approvals', () async {
+      final db = await setUpTestScope(seedDemo: false);
+      final impl = ApprovalsRepositoryImpl(db: db);
+      expect(await impl.getItems(), isEmpty);
+    });
+  });
+
+  group('ApprovalsRepository approve', () {
+    test('removes the row from pending and writes a quest_bonus row', () async {
+      final db = await setUpTestScope();
+      final impl = ApprovalsRepositoryImpl(db: db);
+      final before = await questBonusRows(db);
+
+      final items = await impl.getItems();
+      final dishwasher = items.firstWhere(
+        (i) => i.questTitle == 'Empty the dishwasher',
+      );
+      await impl.approve(dishwasher.completionId);
+
+      final after = await impl.getItems();
+      expect(after, hasLength(2));
+      expect(
+        after.map((i) => i.questTitle),
+        isNot(contains('Empty the dishwasher')),
+      );
+
+      final bonus = await questBonusRows(db);
+      expect(bonus, hasLength(before.length + 1));
+      final mine = bonus.firstWhere(
+        (r) =>
+            r.childId == 'maya' &&
+            r.amountPence == 15 &&
+            r.note == 'Empty the dishwasher',
+      );
+      expect(mine.amountPence, dishwasher.coins);
+
+      final row = await (db.select(
+        db.questCompletions,
+      )..where((c) => c.id.equals(dishwasher.completionId))).getSingle();
+      expect(row.status, 'approved');
+      expect(row.decidedAt, isNotNull);
+    });
+
+    test('approving an unknown id is a no-op', () async {
+      final db = await setUpTestScope();
+      final impl = ApprovalsRepositoryImpl(db: db);
+      final bonusBefore = await questBonusRows(db);
+      await impl.approve(999999);
+      expect(await impl.getItems(), hasLength(3));
+      expect(await questBonusRows(db), hasLength(bonusBefore.length));
+    });
+  });
+
+  group('ApprovalsRepository markNotYet', () {
+    test(
+      'removes from pending with not_yet and writes NO ledger row',
+      () async {
+        final db = await setUpTestScope();
+        final impl = ApprovalsRepositoryImpl(db: db);
+        final ledgerBefore = await db.select(db.ledgerEntries).get();
+
+        final items = await impl.getItems();
+        final bed = items.firstWhere((i) => i.questTitle == 'Make your bed');
+        await impl.markNotYet(bed.completionId);
+
+        final after = await impl.getItems();
+        expect(after, hasLength(2));
+        expect(
+          after.map((i) => i.questTitle),
+          isNot(contains('Make your bed')),
+        );
+
+        final row = await (db.select(
+          db.questCompletions,
+        )..where((c) => c.id.equals(bed.completionId))).getSingle();
+        expect(row.status, 'not_yet');
+        expect(row.decidedAt, isNotNull);
+
+        final ledgerAfter = await db.select(db.ledgerEntries).get();
+        expect(ledgerAfter, hasLength(ledgerBefore.length));
+      },
+    );
+  });
+
+  group('ApprovalsRepository approveAll', () {
+    test(
+      'drains all 3 pendings; ledger gains 3 bonus rows totalling 30p',
+      () async {
+        final db = await setUpTestScope();
+        final impl = ApprovalsRepositoryImpl(db: db);
+        final bonusBefore = await questBonusRows(db);
+
+        await impl.approveAll();
+
+        expect(await impl.getItems(), isEmpty);
+        final bonusAfter = await questBonusRows(db);
+        final mine = bonusAfter.sublist(bonusBefore.length);
+        expect(mine, hasLength(3));
+        expect(mine.fold<int>(0, (sum, r) => sum + r.amountPence), 30);
+      },
+    );
+  });
+
+  group('ApprovalModel', () {
+    test('round-trips createdAtTz', () {
+      final item = ApprovalModel(
+        id: '1',
+        title: 'Empty the dishwasher',
+        detail: 'Maya · Today 8:12am',
+        completionId: 1,
+        questId: 'q-dishwasher',
+        questTitle: 'Empty the dishwasher',
+        childId: 'maya',
+        childName: 'Maya',
+        avatarColour: 'lilac',
+        coins: 15,
+        createdAt: DateTime.utc(2026, 10, 3, 7, 12),
+        createdAtTz: 'Europe/London',
+      );
+      final back = ApprovalModel.fromJson(item.toJson());
+      expect(back, item);
+      expect(back.createdAtTz, 'Europe/London');
+      expect(item.toJson()['createdAtTz'], 'Europe/London');
+    });
+
+    test('createdAtTz is part of equality', () {
+      final a = Approval(
+        id: '1',
+        title: 'T',
+        detail: 'd',
+        completionId: 1,
+        questId: 'q',
+        questTitle: 'T',
+        childId: 'maya',
+        childName: 'Maya',
+        avatarColour: 'lilac',
+        coins: 5,
+        createdAt: DateTime.utc(2026, 10, 3, 6, 58),
+        createdAtTz: 'Europe/London',
+      );
+      final b = Approval(
+        id: '1',
+        title: 'T',
+        detail: 'd',
+        completionId: 1,
+        questId: 'q',
+        questTitle: 'T',
+        childId: 'maya',
+        childName: 'Maya',
+        avatarColour: 'lilac',
+        coins: 5,
+        createdAt: DateTime.utc(2026, 10, 3, 6, 58),
+        createdAtTz: 'Asia/Dubai',
+      );
+      expect(a, isNot(b));
+    });
+  });
+}
