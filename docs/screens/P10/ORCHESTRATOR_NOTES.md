@@ -16,3 +16,8 @@ SHARED_REQUEST §1–§4 are being fixed on branch shared/shared_batch4: search 
 - Until main has these, do not hack them locally, and they are not P10 findings.
 - Fix the P10-local items: row text left-aligned, plus the review/test findings that are local.
 - After the merge, delete the hidden anchor.
+
+## UPDATE (12:17, orchestrator QA of cmp_light_2, 3.33%)
+1. The search hint "Search ideas" is NOT vertically centred: its text centre is at y ≈ 189, but the design's is at y ≈ 200 (the field is 173–226, so centre ≈ 200). The icon is centred correctly. Centre the hint/input text vertically in the 52 px field: check NestTextField search contentPadding / isDense / textAlignVertical. If the cause is in shared NestTextField, write SHARED_REQUEST.md.
+2. Chip row centre: design 250, app 247 (−3). List rows −2. Bring them within ±1 after fix 1.
+3. Pin the hint text centre (200 ±1) in the geometry test.

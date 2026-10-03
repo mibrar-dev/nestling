@@ -133,6 +133,76 @@ P10 works around it.
 
 ---
 
+## 8. MAJOR — `NestTextField.search` puts the aria-label on a wrapper, not on the input
+
+File: `app/lib/core/design_system/components/nest_text_field.dart:199-202`.
+
+```dart
+final semanticLabel = widget.semanticLabel;
+if (semanticLabel == null) return row;
+return Semantics(label: semanticLabel, textField: true, child: row);
+```
+
+The wrapper becomes its **own** semantics node that advertises
+`isTextField` but inherits no actions, while the real `TextField` below keeps
+its own node labelled only with its hint. Measured on `/quests` (design HTML:
+`<input type="search" placeholder="Search ideas" aria-label="Search quest ideas">`):
+
+```
+SemanticsNode#26  flags: isTextField            label: "Search quest ideas"   (no actions)
+SemanticsNode#28  actions: focus, tap           label: "Search ideas"        isTextField
+```
+
+So a screen reader that focuses the labelled node finds a text field it cannot
+type into, and the editable node announces the placeholder instead of the
+`aria-label`. This also breaks the new ACCESSIBILITY ACTIONS rule for the field.
+
+**Fix.** Put the name on the input, not beside it — e.g. give the `TextField` an
+`InputDecoration`/`Semantics` label (or wrap only the `TextField` in
+`Semantics(label: semanticLabel, container: false)` so it merges into the
+editable node). The wrapper must not advertise `textField: true` unless it also
+carries the actions.
+
+**Proof:** `quest_library_a11y_actions_test.dart` →
+`ACCESSIBILITY ACTIONS — search field setting the field value really filters the list`
+(`data.label` is `Search ideas`, expected `Search quest ideas`).
+
+---
+
+## 9. MINOR — `NestTextField.search` renders 52 high where `.search` computes to 54
+
+File: `app/lib/core/design_system/components/nest_text_field.dart` (the `search`
+layout path).
+
+HTML (with the global `box-sizing: border-box` from `tokens.css:200`):
+
+```
+.search { min-height: 52px; padding: 4px 16px; border: 1px solid var(--line) }
+.search input { min-height: 44px }
+```
+
+`min-height` applies to the **border box**, but the content box is already
+`4 + 44 + 4 = 52`, so the element is `52 + 1 + 1 = 54` tall. Measured on the
+design PNG: the `--line` border occupies exactly device rows 519–521 and 678–680
+⇒ the box is **y 173.0 … 227.0 = 54**.
+
+Measured in the widget tree with the device insets injected: `173.0 … 225.0 =
+52`.
+
+Consequence: the `.chipscroll` row and every `.trow` below sit **2 px high**
+(chip 225 vs 227, card 289 vs 291). Within the UI VERDICT RULE's ±2 px, but it
+is a uniform 2 px shift of everything under the field, and the doc comment on
+`NestTextField.search` ("a 52-high flex row") states the wrong number.
+
+**Fix:** `height: 54` (or `minHeight` plus the 1 px borders) for the search
+variant, and correct the doc comment.
+
+**Proof:** `quest_library_design_geometry_test.dart` →
+`the search field sits on the design y` (currently green at the ±2 tolerance;
+it goes red if the field drops further or the drift grows).
+
+---
+
 ## 7. (informational) P08 paints `plate` lilac, P10 paints it sky
 
 `features/today/.../today_loaded_body.dart`'s `todayTintFor` gives the seed icon

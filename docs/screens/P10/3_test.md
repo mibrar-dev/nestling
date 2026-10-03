@@ -1,240 +1,272 @@
 # P10 · Quest library (`/quests`) — Stage 3 TEST (iteration 2)
 
 Route `/quests` · feature `quests` · parent mode · in-memory Drift DB with
-`Seed.demo()` (12 active quests) and an empty stream for the no-quest path ·
-tests pinned to Sat 3 Oct 2026 by `test/flutter_test_config.dart`.
-Tree tested: iteration-1 build checkpoint `de831ed` on `screen/P10`
-(`flutter analyze` clean, no `lib/` change made by this stage).
+`Seed.demo()` (12 active quests) · tests pinned to Sat 3 Oct 2026 by
+`test/flutter_test_config.dart`.
+Tree tested: `caeefe1` "P10: checkpoint after build (iteration 2)" on
+`screen/P10`.
 
 **No screen code was changed.** Every finding below is a failing proof in
 `app/test/features/quests/`, left in place.
 
 ---
 
-## 1. Tests added / extended
+## 0. What this iteration added, and why
 
-| File | Tests | Result | What it covers |
-|---|---:|---|---|
-| `quests_bloc_test.dart` (extended) | 15 | 15 ✓ | `blocTest` for every event/state path — initial, loading→loaded, loaded-empty, stream error→failure, second watch emission without a new event (RULES §4), retry after failure; plus `QuestsLoadRequested` payload/equality, `QuestsState` defaults, every `QuestsStatus`, `copyWith` field-by-field (incl. "null means keep", so `errorMessage` cannot be cleared), equality/`hashCode`/`props`. |
-| `quest_library_view_test.dart` (extended) | 23 | 23 ✓ | + **responsive matrix**: widths 320/390/430 × light/dark × text scale 1.0/1.3 (12 cases) asserting no overflow/exception, the 20 px gutter on every full-bleed element, `.trow` 68 high at 1.0 and growing at 1.3, the 44 px parent tap-target floor on the segmented control / search field / `+ Add`, and the `+ Add` pill pinned to the card's inner edge; + the shell clamping text scale above 1.3; + the Active tab across all three widths. |
-| `quest_idea_meta_test.dart` (**new**) | 16 | 14 ✓ / 2 ✗ | Plan §f item 1: every `QuestsRepository.ideas()` id has metadata and vice versa; meta lines character-for-character (middot U+00B7, never `•` or ` - `); categories ⊆ chip row; `Kindness` is reachable-but-empty by design; min ages, icon assets and tile tints in design order; `Quest.detail` is never used for an idea row; every icon asset is a real bundled 24×24 SVG (`rootBundle`); the Active-tab icon map is total over the seed keys; **every seeded quest gets a tinted tile** (✗ BUG-P10-11); **the same quest keeps one tint across both tabs** (✗ BUG-P10-11). |
-| `quest_library_filter_test.dart` (**new**) | 20 | 20 ✓ | Plan §f item 2, the pure `filterQuestIdeas`: identity defaults, unmodifiable result, source never mutated; case-insensitive substring, whitespace trim, no-match → empty (never null), empty list; per-category template sets, `Kindness` → empty, unknown category → empty, metadata-less templates dropped by a category; the two filters combine with **AND**; result order is stable. |
-| `quest_library_states_test.dart` (**new**) | 19 | 19 ✓ | Plan §d: the loading spinner (leaf colour, centred, nothing from the body behind it) and loading→loaded; the failure block (whole `Exception: …` message in ink, centred, `Try again`, dark variant) and that `Try again` really re-requests and reaches `loaded`; **both empty states** (`No ideas found` for a no-match query and for the `Kindness` chip, centred, no CTA; `No active quests` / `Add one from Ideas.` with 0 actives); clearing the query / returning to `All` restores the list; tab switching never changes the route; the `Active (N)` label follows a live DB insert (DATA OVER MOCKS); `+ Add` pushes `/quest-editor?idea=<its own id>` per row, an Active row pushes with no query, back returns to `/quests` with the filters intact. |
-| `quest_library_a11y_test.dart` (**new**) | 20 | 12 ✓ / 8 ✗ | The semantics contract for every P10-owned control: each segmented option is **one** labelled tappable button with the right `selected` state; every visible chip is a labelled tappable button whose selection moves; `+ Add` is its own node named after the idea; an Active row is a tappable button whose label keeps the meta line; the search field is a labelled text field with a ≥44 px height and is reachable; row icons carry no label; the route anchor stays out of the a11y tree; 44 px tap targets; taps 1 px inside the pill's top and bottom edges land; the whole contract again in dark. **8 fail → BUG-P10-9 / BUG-P10-10.** |
-| `p10_bugs_test.dart` (bug stage's file) | 9 | 0 ✓ / 9 ✗ | **Un-skipped.** The bug hunt left every group behind `skip:` so the suite stayed green; the loop forbids skipping tests, so the markers are gone and each proof now runs. All nine fail → BUG-P10-1…8. |
+Iteration 1 closed the coverage gaps from `4_review.md`. Iteration 2 was driven
+by two new orchestrator rules that landed in the brief:
 
-Untouched from iteration 1: `quest_library_widget_test.dart` (16 ✓) and
-`quests_repository_test.dart` (10 ✓).
+- **ACCESSIBILITY ACTIONS** — *every* interactive element must be operable by
+  VoiceOver/TalkBack; where a control sits inside
+  `Semantics(excludeSemantics: true)` the node itself must carry `onTap:`;
+  tests must assert `hasAction(SemanticsAction.tap)` **and that
+  `performAction(SemanticsAction.tap)` changes the real state or DB.**
+- **UI VERDICT RULE** — every element within ±2 px of the design, with the
+  measured y of the title, the first control and each card top reported
+  design-versus-app.
 
-Totals for `test/features/quests/`: **148 tests** (was 41), **129 pass /
-19 fail**.
+So this stage added two suites:
+
+| File | Tests | Result |
+|---|---:|---|
+| `quest_library_a11y_actions_test.dart` (**new**) | 11 | 10 ✓ / 1 ✗ |
+| `quest_library_design_geometry_test.dart` (**new**) | 9 | 9 ✓ |
+| `p10_bugs_test.dart` (edited) | 10 | 9 ✓ / 1 ✗ |
+
+and un-skipped the one proof the iteration-2 bug hunt had left behind
+(`BUG-P10-12`).
 
 ---
 
-## 2. Results
+## 1. `performAction` proofs — ACCESSIBILITY ACTIONS
 
-```
-$ dart format --set-exit-if-changed .
-Formatted 415 files (0 changed) in 0.93 seconds.
+`quest_library_a11y_actions_test.dart` fires the real
+`SemanticsAction` through `SemanticsOwner.performAction(node.id, …)` — the same
+call VoiceOver's and TalkBack's double-tap make — and then checks the effect on
+real state or the route. It asserts the node advertises the action first, so a
+control that only *looks* tappable fails here instead of silently doing nothing.
 
-$ flutter analyze
-Analyzing app...
-No issues found! (ran in 2.5s)
+| Control | Proof | Result |
+|---|---|---|
+| Chip `Kitchen` | tap → list narrows to `Lay the table` + `Empty the dishwasher`, `Kitchen` becomes `selected`, `All` unselects | ✓ |
+| Chip `All` | tap → list restores | ✓ |
+| Chip `Kindness` | tap → `No ideas found` | ✓ |
+| Chips `All`/`Bedroom`/`Kitchen` | each advertises and handles `tap` | ✓ |
+| Segmented `Active (12)` | tap → `+ Add` gone, seeded rows shown, **route unchanged** | ✓ |
+| Segmented `Ideas` | tap → `+ Add` back | ✓ |
+| `+ Add` on the first row | tap → pushes `/quest-editor?idea=…`; back returns to `/quests` | ✓ |
+| `+ Add` on three rows | tap → each pushes its own template id | ✓ |
+| `+ Add` | tap does **not** write to the DB (`Active (12)` unchanged) | ✓ |
+| Active row | tap → pushes the editor | ✓ |
+| Search field | `setText('pet')` → list narrows to `Feed the pet` | ✓ |
+| Search field | the editable node must carry the design's `aria-label` | ✗ **BUG-P10-13** |
 
-$ flutter test              # whole app
-+1471 -19: Some tests failed.
+This is the positive counterpart to iteration 1's `hasAction(tap)` assertions:
+the new `onTap:` wiring that `2b` added to `quest_filter_chip.dart`,
+`quest_idea_row.dart` and the shared `NestSegmented` is proven end-to-end, not
+just by flag.
 
-$ flutter test test/features/quests/
-+129 -19: Some tests failed.
-```
+---
 
-All 19 failures are in P10 and are the bug proofs listed in §3. **No other
-feature's tests broke** (P08's `today_view_test.dart` navigation anchors still
-pass against `_QuestLibraryRouteAnchor`), and no test was skipped.
+## 2. Design geometry — UI VERDICT RULE
 
-Two test-authoring traps worth recording for the next iteration:
+`quest_library_design_geometry_test.dart` pins items 1–6 of
+`ORCHESTRATOR_NOTES.md` against values read off
+`design/screens/light/P10-quest-library.png` by scanning for the exact token
+colours. It injects `FakeViewPadding(top: 47, bottom: 34)` — the insets a real
+390×844 phone reports — so widget y values line up with the design's absolute y
+(the body starts at 0 otherwise, because `NestStatusBar` only reserves height).
+Inter + Nunito are loaded through `FontLoader`, so text metrics are real.
 
-- `disposeApp(tester)` is required after **any** test that pumps the app or a
-  bloc over a real Drift repository. Without it the run hangs at
-  "A Timer is still pending" rather than failing cleanly. With a mocked
-  repository the same drain is still needed in the tear-down **after**
-  `bloc.close()` (tear-downs run last-registered-first).
-- `StreamController.close()` must not be awaited in a tear-down registered
-  before `bloc.close()`: `close()` only completes once the bloc's
-  `emit.forEach` subscription has been dropped, so awaiting deadlocks.
+**All 9 pass at the rule's ±2 px tolerance.** Measured, design → app:
+
+| Element | Design y | App y | Δ |
+|---|---|---|---|
+| `.ptitle` ink band | 61.0 … 86.7 | 55.0 … 89.0 (line box; ink 61.0 … 86.7) | **0** |
+| Segmented track | 105.0 … 157.0 (52) | 105.0 … 157.0 (52) | **0** |
+| Segmented thumb | 109.0 … 153.0 (44) | 109.0 … 153.0 (44) | **0** |
+| `.search` field box | 173.0 … 227.0 (**54**) | 173.0 … 225.0 (**52**) | top 0, **height −2** |
+| Search magnifier box | x 36, 24×24 | x 37, 24×24 | **+1** |
+| Search hint | field x + 50 (PNG ≈ +53.7) | field x + 51 | **+1** |
+| Chip row (`.chipscroll`) | 227.0 … 271.0 | 225.0 … 269.0 | **−2** |
+| Chip pill `All` | 227.0 … 271.0 (44) | 225.0 … 269.0 (44) | **−2** |
+| **Card 1 top** | **291.0** | **289.0** | **−2** |
+| Card 2 / 3 / 4 tops | 375 / 459 / 543 | 373 / 457 / 541 | **−2** each |
+| Card height | 68 | 68 | 0 |
+| Card step | 84 (68 + 16) | 84 | 0 |
+| Tab-bar surface top | 726.0 | 726.0 (118 high → 844) | **0** |
+| Tab icon box | 736 … 760 | 737 … 761 | **+1** |
+| Tab label box | 764 … 778 | 765 … 779 | **+1** |
+| Tab-bar surface bottom | 810 (design strip) | **844** | ✓ OWNER BOTTOM-EDGE RULE |
+
+Reading of the table: the vertical cascade the orchestrator measured in
+iteration 1 (items 3–4, everything 8–10 px high) is gone — items 1–5 are all
+now within the rule's ±2 px, and item 5 is exact while the bar still fills to the
+physical edge. The one systematic residual is a **2 px** offset: `NestTextField.search`
+renders 52 high where `.search` computes to 54, which lifts the chip row and
+every card by 2. That is at the rule's tolerance and is filed as
+`SHARED_REQUEST.md` §9 (minor) rather than as a P10 finding, since the component
+is shared.
+
+Also pinned: the list scrolls under the tab bar (item 6) and the dark-mode y
+values are identical to light.
 
 ---
 
 ## 3. Bugs found
 
-`BUG-P10-1…8` are the bug hunt's, confirmed still open by the now-un-skipped
-proofs in `p10_bugs_test.dart`. The rest are new.
+### BUG-P10-12 — MAJOR (now un-skipped, confirmed) — the applied search filter goes invisible after a tab round-trip
 
-### BUG-P10-9 — MAJOR — every P10 chip / `+ Add` / Active row is invisible to assistive tech
+`app/test/features/quests/p10_bugs_test.dart:310-357` — the iteration-2 bug
+hunt added this proof and left it behind `skip:`. Removed (the loop forbids
+skipping tests); it **fails**.
 
-**Files**
+**Repro.** `/quests` → type `pet` in the search field → the list narrows to
+`Feed the pet` → tap `Active (12)` → tap `Ideas`. The search field is now
+**empty** while 9 of the 10 ideas stay hidden, so the list looks broken with no
+visible cause.
 
-- `app/lib/features/quests/presentation/widgets/quest_filter_chip.dart:29-33`
-- `app/lib/features/quests/presentation/widgets/quest_idea_row.dart:145-149` (`+ Add`)
-- `app/lib/features/quests/presentation/widgets/quest_idea_row.dart:123-128` (Active row)
+**Cause.** The BUG-P10-3 fix moved the search field out of the tree on the
+Active tab, which disposes the `TextField`'s own text state, while `_query` in
+`_QuestLibraryBodyState` (`quest_library_body.dart`) survives.
 
-**Cause.** `Semantics(button: true, label: …, excludeSemantics: true, child:
-Material(… InkWell(onTap: …)))`. `excludeSemantics: true` drops the subtree,
-and `InkWell` is the only source of `SemanticsAction.tap` (it builds its own
-`Semantics(onTap: …)` inside). The node announces `isButton` with the right
-label and **no `tap` action**, so VoiceOver/TalkBack double-tap does nothing.
-Worse on the real tree: the `Semantics` has `container: false`, so on an Ideas
-row the `+ Add` node merges into the row's node and the control has **no node
-of its own** at all.
+**Fix-agnostic assertion.** Either hoist a `TextEditingController` so the field
+keeps showing the applied query, or clear `_query` when the field leaves the
+tree.
 
-**Repro (tests).** `flutter test test/features/quests/quest_library_a11y_test.dart`
+### BUG-P10-13 — MAJOR — the search field's accessible name is its hint, not the design's `aria-label`
 
-```
-"every visible chip is a tappable button with its own label"   → hasAction(tap) is false
-"it is one tappable button named after the idea"               → find.bySemanticsLabel('Add Make your bed') found 0
-"a row is one tappable button naming the quest and its meta"   → hasAction(tap) is false
-```
+**File** `app/lib/core/design_system/components/nest_text_field.dart:199-202`
+(shared; `SHARED_REQUEST.md` §8).
 
-**Independent measurement** (`debugDumpSemanticsTree()` on `/quests`):
+**Cause.** `NestTextField.search` wraps its row in
+`Semantics(label: semanticLabel, textField: true, child: row)`. That wrapper
+becomes its **own** node advertising `isTextField` but carrying no actions,
+while the real `TextField` keeps a separate node labelled only with its hint.
+P10 passes `semanticLabel: 'Search quest ideas'` (the design's
+`aria-label`), so it lands on the wrong node.
 
-```
-SemanticsNode#33  flags: isButton, isImage
-  label: "Make your bed\n5 coins · Ages 4+ · Bedroom\nAdd Make your bed"
-  (no `actions:` line, i.e. no tap action)
-```
-
-Isolated controls, against a plain `InkWell` reference:
+Measured with `debugDumpSemanticsTree()` on `/quests`:
 
 ```
-QuestFilterChip "All"              → label=All       actions=[]          isButton=true
-QuestAddButton  "Add Make your bed"→ label=Add …     actions=[]          isButton=true
-NestChip         "All"             → label=All       actions=[]          isButton=true
-plain InkWell    "Plain"           → label=Plain     actions=[tap,focus] isButton=false
+SemanticsNode#26  flags: isTextField   label: "Search quest ideas"   (no actions)
+SemanticsNode#28  actions: focus, tap  label: "Search ideas"        isTextField
 ```
 
-**Fix (P10's own files).** Move the `Semantics` *inside* the `InkWell` — the
-pattern P08 already uses for its avatar button
-(`app/lib/features/today/presentation/widgets/today_loaded_body.dart:424-437`).
-Give the Active row's label both lines (`'$title. $meta'`), which also closes
-review finding 8. Same root cause exists in the shared `NestChip`
-(`app/lib/core/design_system/components/nest_chip.dart:119-137`), so
-`SHARED_REQUEST.md` §5 asks for the design-system fix too.
+**Impact.** A screen reader that focuses the labelled node finds a text field it
+cannot type into; the editable node announces the placeholder instead of the
+`aria-label`. This is exactly what the new ACCESSIBILITY ACTIONS rule forbids.
 
-### BUG-P10-10 — MAJOR — the segmented control announces every option twice
-
-**File** `app/lib/core/design_system/components/nest_segmented.dart:51-55`
-(shared; surfaced by P10, used by P09/P12/P16 as well).
-
-**Cause.** The per-option `Semantics(button: true, label: option.label, …)` has
-no `excludeSemantics: true`, so the option's own `Text(option.label)`
-(`:73`) merges into the same node and Flutter concatenates them.
-
-**Repro (test).** `P10 segmented control each option is one labelled, tappable
-button` — `find.bySemanticsLabel('Ideas')` finds **0** widgets. The node's
-label is:
+**Repro (test).** `ACCESSIBILITY ACTIONS — search field setting the field value
+really filters the list`:
 
 ```
-"Active (12)\nActive (12)"   and   "Ideas\nIdeas"
+Expected: 'Search quest ideas'
+  Actual: 'Search ideas'
 ```
 
-`NestChip` documents and avoids exactly this (`nest_chip.dart:119-121`).
+**Fix.** Put the name on the input (merge into the editable node) rather than
+beside it, and stop the wrapper advertising `textField: true` unless it carries
+the actions.
 
-**Fix.** Shared — `SHARED_REQUEST.md` §1. `excludeSemantics: true` on the
-option's `Semantics`.
+### Open, already tracked (unchanged this iteration)
 
-### BUG-P10-11 — MINOR — "Lay the table" changes tile colour between the tabs
+**BUG-P10-1 … 11** — all eleven iteration-1 findings are fixed by the build stage
+except **BUG-P10-10**, the shared `NestSegmented` double-label defect
+(`SHARED_REQUEST.md` §1), which is the **only** remaining blocker for P10 and is
+explicitly a shared item per `ORCHESTRATOR_NOTES.md` (10:00).
 
-**File** `app/lib/features/quests/presentation/widgets/quest_idea_meta.dart`
-(`questTileTintFor`, `default:` at `:195`).
-
-**Cause.** The seed's `quests.icon` key `plate` (used by `q-table`,
-"Lay the table") has no case in `questTileTintFor`, so it falls through to
-`NestTileTint.neutral` (surface-2). The same quest on the **Ideas** tab comes
-from `kQuestIdeaMeta['idea-table']`, which is `NestTileTint.sky`. `sofa`
-(`q-living`, "Tidy the living room") is also unmapped.
-
-**Repro (tests).**
+**BUG-P10-10 — MAJOR** — `nest_segmented.dart:51-58`. The per-option `Semantics`
+has `onTap:` (batch 4) but no `excludeSemantics: true`, so the option's inner
+`Text` and the `InkWell`'s node each keep the same label. Three P10 tests are red
+on it:
 
 ```
-every seeded quest gets a tinted tile, never the grey default
-  → icon key `plate` renders an untinted tile
-the same quest title keeps one tile tint across both tabs
-  → `plate` (Active) vs `idea-table` (Ideas): neutral vs sky
+find.bySemanticsLabel('Active (12)') → Found 2 widgets   (outer + inner)
 ```
 
-Measured tile colours: Ideas `Lay the table` = `skyTint`
-`rgb(0.902, 0.937, 0.996)`; Active `q-table` = `surface2`
-`rgb(0.953, 0.933, 0.898)` — same title, same `ic_table.svg`, different pill.
-
-**Fix.** Add `case 'plate': return NestTileTint.sky;` (P08's `todayTintFor`
-uses lilac there, so the two screens also disagree — worth settling in the
-same pass) and a `case 'sofa':` so no seeded quest falls through to neutral.
-The doc comment on `questTileTintFor` claims "Same mapping P08 uses"; it is
-currently false for `plate`, `bag`, `shirt`, `sofa` and the default.
+Measured: `SemanticsNode#21 label "Active (12)" actions: tap` and
+`SemanticsNode#22 label "Active (12)" actions: focus, tap` — a screen reader
+walks the same option twice on every segmented control in the app.
 
 ---
 
-## 4. Mandatory ORCHESTRATOR_NOTES items — where each one now stands
+## 4. Results
 
-`ORCHESTRATOR_NOTES.md` exists, so every item is mandatory. Status after this
-stage (no screen code touched, so each is pinned by a test rather than fixed):
+```
+$ dart format --set-exit-if-changed .
+Formatted 437 files (0 changed) in 1.23 seconds.
 
-| Item | Status |
+$ flutter analyze
+Analyzing app...
+No issues found! (ran in 3.5s)
+
+$ flutter test
++1940 -5: Some tests failed.
+
+$ flutter test test/features/quests/
++169 -5: Some tests failed.
+```
+
+The 5 failures in `test/features/quests/` are the two bugs above plus the three
+`NestSegmented` proofs. Per file:
+
+| File | Result |
 |---|---|
-| 1 · idea-row text left-aligned at card x+64 | pinned by `p10_bugs_test.dart` BUG-P10-2 (**failing**) — review finding 1 |
-| 2 · search icon slot / hint x / field height | pinned by BUG-P10-5 (**failing**) + `SHARED_REQUEST.md` §3 |
-| 3 · segmented track 52/44 | pinned by BUG-P10-6 (**failing**) + `SHARED_REQUEST.md` §2 |
-| 4 · chips row / first card y | follows items 2–3; asserted in BUG-P10-6's 16/0/16 chain (**failing**) |
-| 5 · tab-bar content 34 px low | pinned by BUG-P10-7 (**failing**) + `SHARED_REQUEST.md` §4 |
-| 6 · the 6th card peeks under the bar | already satisfied (the list scrolls under the shell's bar; `5_ui.md` confirmed) |
-| 7 · real-font (FontLoader) geometry test at 390×844 | **done** — `p10_bugs_test.dart` loads Inter + Nunito through `FontLoader` in `setUpAll` and pins items 1–5 |
+| `quest_library_view_test.dart` | 27/27 |
+| `quest_library_states_test.dart` | 19/19 |
+| `quest_library_filter_test.dart` | 20/20 |
+| `quests_bloc_test.dart` | 16/16 |
+| `quest_idea_meta_test.dart` | 16/16 |
+| `quest_library_widget_test.dart` | 16/16 |
+| `quests_repository_test.dart` | 10/10 |
+| `quest_library_design_geometry_test.dart` (new) | 9/9 |
+| `p10_bugs_test.dart` | 9/10 (BUG-P10-12) |
+| `quest_library_a11y_actions_test.dart` (new) | 10/11 (BUG-P10-13) |
+| `quest_library_a11y_test.dart` | 17/20 (NestSegmented ×3) |
 
-`SHARED_REQUEST.md` (new) carries the measured numbers for items 2, 3 and 5
-plus the two semantics items, so `1_plan.md` §g "SHARED_REQUEST: None" is now
-out of date.
+Whole app: **1945 tests, 5 failed**, every failure in P10. No other feature's
+tests broke. No test is skipped anywhere in `test/features/quests/`;
+`p10_bugs_test.dart` has no `skip:` marker left.
 
----
-
-## 5. Review-finding test gaps closed
-
-From `4_review.md` finding 9 (all were missing):
-
-- failure branch + `Try again` retry → `quest_library_states_test.dart`
-- both empty states (`Kindness`/no-match, and Active with 0 quests) → same file
-- direct `filterQuestIdeas` unit test (the AND combination) →
-  `quest_library_filter_test.dart`
-- plan §f item 1 (all 10 repo ids + copy char-for-char + categories ⊆ chips) →
-  `quest_idea_meta_test.dart`
-
----
-
-## 6. Owner rules checked by the new tests
-
-- **No skipped tests** — the bug hunt's `skip:` markers are gone.
-- **`google_fonts`** — 0 occurrences in `lib/features/quests` and
-  `test/features/quests`; no `GoogleFonts.*` call.
-- **CHIP ROWS / tap targets** — every chip, the `+ Add` pill, the segmented
-  control and the search field are asserted ≥ 44 px (parent mode) in the
-  responsive matrix; taps 1 px inside a pill's top and bottom edges are proven
-  to land. The `.chipscroll` row scrolls and its pills are already 44 high, so
-  `NestChipWrap`'s 6 px slop is not needed — P10 does not use `NestChip`.
-- **UI CHECK MEASURES SHAPES** — the matrix asserts card, pill, field and
-  segmented *rects* (x/y/w/h), not text positions.
-- **ALIGNMENT** — the 20 px gutter is asserted for the title, segmented,
-  search, chips and every card at 320/390/430, in both themes.
-- **COPY** — the 10 `.trow .mt` lines are asserted character-for-character,
-  including that the separator is U+00B7 and never `•` or ` - `.
-- **DATA OVER MOCKS** — `Active (12)` comes from the stream and is re-checked
-  after a live insert (`Active (13)`).
-- **Simulators** — none booted, installed on, screenshotted or driven by this
-  stage.
+Housekeeping note (not a finding): the review stage is running concurrently and
+leaves `test/features/quests/zzz_review_probe*_test.dart` scratch files, each
+headed "TEMPORARY review probe - deleted after the run". While they are present
+they are unformatted and account for all 47 `flutter analyze` issues; the
+`dart format` / `analyze` / `test` figures above come from a run with them set
+aside (one was restored immediately afterwards so the review stage keeps
+working). They must not be committed.
 
 ---
 
-## 7. Verdict
+## 5. Owner rules checked
 
-19 proofs fail, covering 11 distinct defects (8 from the bug hunt + 3 new,
-one of which needs a shared fix). No screen code was patched, as instructed.
-The verdict cannot be PASS until the failing proofs are green.
+- **No skipped tests** — the `BUG-P10-12` marker removed; `grep 'skip:'` over
+  `test/features/quests/` returns nothing but a comment.
+- **ACCESSIBILITY ACTIONS** — `hasAction(SemanticsAction.tap)` **and**
+  `performAction(...)` with a real state/route/DB effect for the chips, the
+  segmented control, `+ Add`, the Active row and the search field. One control
+  fails (BUG-P10-13).
+- **UI VERDICT RULE** — measured design-vs-app y for the title, every control and
+  every card top, in §2 above; all within ±2 px, one systematic −2 px filed as
+  `SHARED_REQUEST.md` §9.
+- **BOTTOM-EDGE** — the tab-bar surface reaches 844 in light and dark, asserted
+  directly.
+- **google_fonts** — 0 occurrences in `lib/features/quests` and
+  `test/features/quests`.
+- **CHIP ROWS / tap targets** — ≥44 px (parent) asserted for every chip, `+ Add`,
+  the segmented control and the search field.
+- **COPY** — meta lines character-for-character (U+00B7 middot), plus the search
+  field's accessible name, which is what BUG-P10-13 is about.
+- **Simulators** — none booted, installed on, screenshotted or driven.
+
+---
+
+## 6. Verdict
+
+Five proofs fail. Two are defects this stage surfaced (BUG-P10-12 confirmed after
+un-skipping, BUG-P10-13 new); three are the shared `NestSegmented` defect the
+orchestrator has already classified as a shared item. No screen code was
+patched, as instructed, so the verdict cannot be PASS.
 
 VERDICT: FAIL

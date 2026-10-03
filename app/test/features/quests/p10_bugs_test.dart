@@ -3,7 +3,8 @@
 // Every proof here fails on the iteration-1 tree (`de831ed`). Stage 3
 // (TEST, iteration 2) removed the per-group `skip:` markers that the bug hunt
 // had left in place — the loop forbids skipping tests — so each proof runs and
-// each bug stays visible in `flutter test` until its fix lands. The geometry
+// each bug stays visible in `flutter test` until its fix lands. BUG-P10-12 was
+// added later and skipped; stage 3 iteration 2 removed that marker too. The geometry
 // proofs run with the bundled Inter/Nunito faces loaded through `FontLoader`
 // (the notes' "real-font geometry test") and pin items 1–5 of
 // `ORCHESTRATOR_NOTES.md` at 390×844.
@@ -15,6 +16,9 @@
 //   BUG-P10-5  major  search prefix icon is 48×48 at x+0; design is 24 at x+16
 //   BUG-P10-6  major  segmented track 44/36 high; design .segmented is 52/44
 //   BUG-P10-7  major  tab-bar content sits 34 px low; design bar top is y=726
+//   BUG-P10-8  major  view resolved ideas through the service locator
+//   BUG-P10-12 major  the applied search filter is invisible after a tab
+//                     round-trip (field blank, rows still filtered) — OPEN
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show FontLoader, rootBundle;
@@ -304,4 +308,51 @@ void main() {
       await disposeApp(tester);
     });
   });
+
+  group(
+    'BUG-P10-12 — the applied search filter goes invisible after a tab trip',
+    () {
+      testWidgets('returning to Ideas can show a query that hides rows', (
+        tester,
+      ) async {
+        await setUpTestScope();
+        await pumpAppRoute(tester, QuestsRoutePaths.library);
+
+        await tester.enterText(find.byType(TextField), 'pet');
+        await tester.pump();
+        expect(find.byType(QuestIdeaRow), findsOneWidget);
+
+        // The fix for BUG-P10-3 lifts the search field out of the tree on the
+        // Active tab, which disposes the `TextField`'s own text state, while
+        // `_query` in `_QuestLibraryBodyState` survives.
+        await tester.tap(find.text('Active (12)'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Ideas'));
+        await tester.pumpAndSettle();
+
+        final fieldText = tester
+            .widget<EditableText>(find.byType(EditableText))
+            .controller
+            .text;
+
+        // Fix-agnostic: either the field keeps showing the applied query
+        // (hoist a TextEditingController) or the list is unfiltered again
+        // (clear `_query` when the field leaves the tree). Today the field is
+        // empty while 9 of the 10 ideas stay hidden.
+        if (fieldText.isEmpty) {
+          expect(
+            find.text('Make your bed'),
+            findsOneWidget,
+            reason: 'an empty search field must not hide the idea list',
+          );
+        } else {
+          expect(fieldText, 'pet');
+          expect(find.text('Feed the pet'), findsOneWidget);
+          expect(find.text('Make your bed'), findsNothing);
+        }
+
+        await disposeApp(tester);
+      });
+    },
+  );
 }

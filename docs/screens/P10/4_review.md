@@ -1,241 +1,349 @@
-# P10 · Quest library (`/quests`) — Stage 4 QA code review (iteration 1)
+# P10 · Quest library (`/quests`) — Stage 4 QA code review (iteration 2)
 
-Scope: `git diff main...HEAD` (branch `screen/P10`) = 6 `presentation/` files +
-4 new `test/features/quests/` files. No code edited during this stage.
+Scope: `git diff main...HEAD` (branch `screen/P10`) = 9 `presentation/` files
++ 9 `test/features/quests/` files. No code edited during this stage (temporary
+measurement probes were written, run and deleted).
 
 Reviewed against: `docs/ARCHITECTURE.md`, `docs/screens/RULES.md`,
 `docs/DESIGN_SPEC.md` §5 P10, `docs/design/SPACING_SPEC.md`,
 `design/html-source/screens/P10-quest-library.html`,
-`design/screens/light|dark/P10-quest-library.png`,
-`app/lib/core/design_system/`, `1_plan.md`,
-`ORCHESTRATOR_NOTES.md` (mandatory — all 7 items accounted for below).
+`design/screens/light|dark/P10-quest-library.png` (measured pixel-by-pixel),
+`app/lib/core/design_system/`, `1_plan.md`, `ORCHESTRATOR_NOTES.md`
+(mandatory — all 6 items accounted for below).
 
-## What is solid (no action)
+## Verification I ran myself (no simulator)
 
-- **Rule compliance (RULES §1)**: only
-  `app/lib/features/quests/presentation/**`,
-  `app/test/features/quests/**` and `docs/screens/P10/**` are touched. No
-  `core/`, no `app/`, no other feature, no `tools/screens/`.
-- **No hard-coded design values**: the diff adds no literal colour
-  (`Colors.transparent` only, matching `NestChip`'s own transparent border),
-  no `fontSize`, no `letterSpacing` — the LETTER-SPACING rule is respected
-  (`NestType` defaults to 0; no Material tracking re-added).
-- **No `google_fonts` / `GoogleFonts`** anywhere in the feature or its tests.
-- **Design system reused, not re-implemented**: `NestSegmented`,
-  `NestTextField`, `NestButton`, `NestEmptyState`, `NestIcon`, `NestRadii`,
-  `NestSpacing`, `NestTileTint`, `tokens.cardShadow`. `.trow` is *not*
-  `NestListRow` (that is `.list-row`: `12/10/16/10`, r-12 tile, shadow on the
-  list, not the row) so a feature-private row is correct; `QuestFilterChip`
-  is correctly 44-high per SPACING_SPEC §9.5 rather than `NestChip`'s 32.
-- **Copy** matches the HTML character-for-character (middot U+00B7 in the
-  meta lines, `+ Add`, `Search ideas`, `Search quest ideas`, chip labels,
-  `Active ({count})` from the stream).
-- **DATA OVER MOCKS**: `Active (12)` is built from `state.items.length`
-  (`quest_library_body.dart:80`), never a literal.
-- **Streams**: the bloc keeps `emit.forEach` (RULES §4); nothing is disposed
-  by P10; no `Timer`/`AnimationController`; no rebuild storm (10 rows, one
-  `setState` per keystroke over a `const` list).
-- **Children's Code**: parent screen, no analytics/ads/telemetry, no child
-  data beyond quest rows from the family-scoped query.
-- **Owner's ALIGNMENT/BOTTOM-EDGE rules**: 20 px gutters on title, segmented,
-  search and every row; the chip row bleeds by design; the view paints
-  nothing below the content (the shell's tab bar runs to the edge — 5_ui
-  confirmed).
-- **Verification I ran myself** (no simulator): `dart format
-  --set-exit-if-changed` clean on all 10 committed Dart files; `flutter
-  analyze` reports **0 issues in the committed P10 files**; `flutter test`
-  on the 4 committed test files → **41 tests pass**.
+- `dart format --output=none --set-exit-if-changed` → **31 files, 0 changed**.
+- `flutter analyze` → **No issues found**.
+- `flutter test` on the nine **committed** test files →
+  **150 pass, 4 fail** (findings 1 and 2).
+- Design PNG measured directly from `design/screens/light/P10-quest-library.png`
+  by scanning for the exact token colours (`--line`, `--surface-2`, `--leaf`,
+  `--leaf-tint`, `--surface`, `--ink`, `--ink-2`, `--ink-3`, `--paper`, the five
+  tile tints), and the app measured at 390×844 with the 47/34 device insets
+  injected — the table is under "Measured geometry" below.
+- `git diff main...HEAD --name-only` filtered against RULES §1 → **no path
+  outside `features/quests/{presentation,domain,data}`, `test/features/quests`,
+  `docs/screens/P10`**.
+
+---
+
+## Measured geometry — design vs app (UI VERDICT RULE)
+
+Design values read off the light PNG (÷3); app values from a 390×844 surface
+with `top:47, bottom:34` insets. All x gutters measured exactly 20.0…370.0 in
+both.
+
+| Element | Design y | App y | Δ |
+|---|---|---|---|
+| Screen title `Quests` (box) | 55 … 89 | 55 … 89 | 0 |
+| `.segmented` track | 105 … 157 (52) | 105 … 157 (52) | 0 |
+| `.segmented` selected pill | 109 … 153 (44) | 109 … 153 (44) | 0 |
+| **`.search` field (border box)** | **173 … 227 (54)** | **173 … 225 (52)** | **−2 (bottom edge)** |
+| **chip row (`All` pill)** | **227 … 271 (44)** | **225 … 269 (44)** | **−2** |
+| **card 1** | **291 … 359 (68)** | **289 … 357 (68)** | **−2** |
+| **card 2** | **375 … 443** | **373 … 441** | **−2** |
+| **card 3** | **459 … 527** | **457 … 525** | **−2** |
+| **card 4** | **543 … 611** | **541 … 609** | **−2** |
+| **card 5** | **627 … 695** | **625 … 693** | **−2** |
+| **card 6** | **711 … 726 (clipped by the bar)** | **709 … 777** | **−2** |
+| card step | 84 | 84 | 0 |
+| `.trow` title text x | 84 (ink 85.3) | 84 | 0 |
+| `+ Add` pill | x 287 … 358, y 303 … 347 | x 286.4 … 358, y 301 … 345 | −0.6 / −2 |
+| `.search` magnifier | box x 37 … 61 | x 37 … 61 | 0 |
+| placeholder left | field x + 50 | field x + 51 | 1 |
+| tab bar surface | top 726, ends 810 (owner rule: app must reach 844) | 726 … 844 | correct |
+| tab icon box | ≈ 737 … 761 | 737 … 761 | 0 |
+| tab label | ink 768 … 778 (box ≈ 764 … 778) | 765 … 779 | +1 |
+
+**Reading:** everything above the search field is pixel-exact. Everything from
+the search field down is a **uniform 2 px upward shift**, caused by one box
+model error in the shared search row (finding 4). No misalignment, no gutter
+drift, no coloured strip under the bar (the tab-bar surface runs 726 → 844 in
+both themes), so the OWNER BOTTOM-EDGE and ALIGNMENT rules hold.
 
 ---
 
 ## Findings
 
-### 1. MAJOR — `.trow` text block is centred; design is left-aligned
-`app/lib/features/quests/presentation/widgets/quest_idea_row.dart:71-93`
-(the `Expanded > Column`).
+### 1. BLOCKER — the committed suite is red: `NestSegmented` announces every option label twice
 
-`Column`'s `crossAxisAlignment` defaults to `CrossAxisAlignment.center`, so
-the title and the meta line are centred inside the flexible column instead of
-starting at the tile gap. `.trow .main{flex:1;min-width:0}` with block-level
-`.nm`/`.mt` is start-aligned: both lines must start at card x + 12 (pad) +
-40 (tile) + 12 (gap) = **+64 from the card's left edge** (20 + 64 = 84 dp
-absolute on a 390 screen).
+`app/test/features/quests/quest_library_a11y_test.dart:49,121,196` (three
+tests) vs `app/lib/core/design_system/components/nest_segmented.dart:53-59`.
 
-Evidence: `design/screens/light/P10-quest-library.png` has `Make your bed`
-starting at x ≈ 84 dp; `docs/screens/P10/ui/app_light_1.png` has it at
-x ≈ 121 dp on every row, both themes. Independently measured by stage 5
-(`5_ui.md` deviation 1) and pinned by ORCHESTRATOR_NOTES item 1.
+```
+P10 segmented control each option is one labelled, tappable button   [E]
+P10 icon buttons every interactive node announces what it does        [E]
+P10 dark mode the same semantics contract holds in dark               [E]
+  Expected: exactly one matching candidate
+    Actual: Found 2 widgets with a semantics label named "Active (12)" / "Ideas"
+```
 
-**Fix**: add `crossAxisAlignment: CrossAxisAlignment.start` to that `Column`
-(keep `maxLines: 1` + ellipsis). Add a geometry assertion so it cannot
-regress: in `quest_library_widget_test.dart`, assert
-`tester.getTopLeft(find.text('Make your bed')).dx == rect.left + 64`
-(the "UI CHECK MEASURES SHAPES" rule — the existing tests check the card, the
-fill and the type, but never the text x).
+The semantics tree I dumped confirms it — two nodes per option:
 
-### 2. MAJOR — the view resolves its data through the global service locator, with a silent-empty fallback
-`app/lib/features/quests/presentation/views/quest_library_view.dart:69`
-and `:85-92` (`_ideaTemplates()`).
+```
+#21 label="Active (12)" actions=[tap]
+  └#22 label="Active (12)" actions=[tap, focus]
+#23 label="Ideas"       actions=[tap]
+  └#24 label="Ideas"       actions=[tap, focus]
+```
 
-`QuestLibraryView` is the **only** view in the app that touches
-`GetIt.instance`: `grep -rn GetIt app/lib/features/*/presentation` hits
-`quests` and nothing else. Every other feature keeps `get_it` in
-`<feature>_di.dart` + `<feature>_routes.dart` and lets the bloc own all
-repository access (ARCHITECTURE: "BLoC for state, get_it for DI"; per-feature
-contract — `presentation/` = bloc + views + widgets).
+`nest_segmented.dart:53` wraps each option in `Semantics(button:, selected:,
+label:, onTap:)` with **no `excludeSemantics: true`**, so the option's own
+`Text(option.label)` (`:80`) stays in the tree and a screen reader walks the
+label twice. RULES §7.1 requires `flutter test` → all pass, so this branch
+cannot land as-is.
 
-Two defects in one method:
-- **Silent degradation**: `isRegistered` → `const <Quest>[]` renders the
-  "No ideas found" empty state. A DI-ordering mistake or a partially built
-  scope produces a wrong-looking screen instead of a loud failure.
-- **Per-build lookup**: `_ideaTemplates()` runs on every `BlocBuilder` build
-  (every stream emission and every status transition) inside the builder.
+**Fix (one line, shared — `core/`, which RULES §1 forbids P10 from editing):
+add `excludeSemantics: true` to the per-option `Semantics` at
+`nest_segmented.dart:53`**; the `onTap` batch4 added stays, so the node keeps
+its action (the pattern to copy is `nest_chip.dart:119-137`). Already filed as
+`SHARED_REQUEST.md` §1 — it needs the orchestrator to land it on `main`.
 
-**Fix**: make the bloc the only holder of the repository and put the
-templates in `QuestsState` — `QuestsState(status, items, ideas,
-errorMessage)` populated in `_onLoadRequested` from
-`_repository.ideas()`, `QuestLibraryBody(items: state.items, ideas:
-state.ideas)`. All of that is inside `features/quests/presentation/**`
-(allowed by RULES §1) and matches how every other feature loads data. Delete
-the `get_it` import from the view.
+P10 must **not** work around it: wrapping the control in `ExcludeSemantics`
+would delete its tap actions, re-implementing it locally is forbidden, and
+softening the three proofs to `findsWidgets` would mask the defect.
 
-### 3. MAJOR — search field geometry: the prefix icon slot is 48 px wide, so the icon is oversized and the hint starts ~10–14 px right of the design
-`app/lib/features/quests/presentation/widgets/quest_library_body.dart:98`.
+### 2. MAJOR — the applied search filter goes invisible after a tab round-trip (reproduced)
 
-`.search` is `display:flex; gap:10px; padding:4px 16px; min-height:52px` with
-a 24 px icon: icon at field x = 16, hint text at field x = 16 + 24 + 10 =
-**50** (absolute ≈ 70–73 on a 390 screen). `NestTextField` forwards the widget
-to Material's `InputDecoration.prefixIcon`, whose default
-`prefixIconConstraints` floor the slot at 48 px, so the 24 px `NestIcon` sits
-centred in 48 and the hint starts at 16 + 48 = 64 (absolute ≈ 84) — the drift
-stage 5 measured and ORCHESTRATOR_NOTES item 2 demands be closed.
+`app/lib/features/quests/presentation/widgets/quest_library_body.dart:38`
+(`String _query`), `:118-131` (the search field is only built while
+`filtersOn`, i.e. on the Ideas tab).
 
-**Fix (needs a shared change — file `docs/screens/P10/SHARED_REQUEST.md`, do
-not hack `core/`)**: expose `prefixIconConstraints` on `NestTextField` (pass
-it through to `InputDecoration`), then in P10 pass
-`prefixIconConstraints: const BoxConstraints(minWidth: 34, minHeight: 44)`
-together with a 24 px `NestIcon` so the icon starts at field x = 16 and the
-hint at x = 50. Material centres the child inside the slot, so pin the result
-with the geometry test requested by ORCHESTRATOR_NOTES (item 6: a
-real-font `FontLoader` test) rather than trusting the arithmetic. If the
-shared change cannot land this iteration, keep the TODO and add the pinning
-test so the drift cannot regress silently.
+Reproduced on the committed code (type `pet` → tap `Active (12)` → tap
+`Ideas`):
 
-### 4. MINOR — mandatory ORCHESTRATOR_NOTES items 3 and 5 need a SHARED_REQUEST that does not exist yet
-`docs/screens/P10/SHARED_REQUEST.md` (missing).
+```
+rows after typing:            1
+field text after round-trip:  ""
+rows after round-trip:        1
+"Make your bed" present:      false
+```
 
-Items 3 (`NestSegmented` track 44 vs `.segmented` 48 = 4 pad + 40 button) and
-5 (`NestTabBar` content 34 px lower than the design, surface must still run
-to the edge) are both **shared-component** geometry. Neither can be fixed in
-`features/quests/**`. `1_plan.md` §g says "SHARED_REQUEST: None", which is now
-out of date. File one request carrying the measured numbers from
-ORCHESTRATOR_NOTES (design y 109–155 vs app 108–148; design tab icon centre
-y ≈ 749 / label ≈ 772 vs app ≈ 783 / 806) so the orchestrator can batch it,
-and update §g.
+Because the search field is lifted out of the tree on the Active tab, its
+`EditableText` state is discarded, while `_query` in
+`_QuestLibraryBodyState` survives. The parent comes back to an **empty search
+box with 9 of 10 ideas missing** and no way to tell why — to un-filter they
+must type something and delete it again. (`_category` survives the same way but
+stays *visible*, because the chip row returns with its selection, so the
+invisible half of the filter is the text query only.)
 
-### 5. MINOR — hidden `_QuestLibraryRouteAnchor` ships test scaffolding in the product tree
-`quest_library_view.dart:74-78` + `:95-122`.
+**Fix (in scope, `quest_library_body.dart`):** own a `TextEditingController`
+in the state and pass it to `NestTextField.search(controller: …)`, syncing
+`_query` in `onChanged` — the field then always shows the query that is
+actually applied, which is also what the design implies (the filters persist
+across a tab switch). Dispose the controller in `dispose()`. The alternative —
+clearing `_query` in the segmented `onChanged` when leaving Ideas — also
+removes the dead end but silently throws the parent's filter away; prefer the
+controller.
 
-A zero-opacity `Text('P10 Quest library')` exists only so P08's stale
-assertions (`app/test/features/today/today_view_test.dart:286-289`, `:335`,
-which are outside RULES §1 and cannot be edited here) keep passing. It is
-fully documented and paints nothing, so runtime risk is nil — but it puts a
-fake node in the shipped tree, and any future `find.text('P10 Quest
-library')` anywhere in the app will "pass" against an invisible widget.
+The working-tree `p10_bugs_test.dart` now runs this proof un-skipped and fails,
+which is the correct expectation until the fix lands.
 
-**Fix**: file the shared request (same file as finding 4) asking the
-orchestrator to move those two assertions to the documented
-`pushedPath(tester)` helper (`app/test/test_scope.dart`), then delete
-`_QuestLibraryRouteAnchor` **and** the `Stack(fit: StackFit.passthrough)`
-wrapper at `:30-80`, which exists only to host it. Keep the `TODO(P10)`
-until then.
+### 3. MAJOR — `Try again` leaks a live database watcher on every tap
 
-### 6. MINOR — `.chipscroll`'s right-edge fade mask is missing
-`quest_category_chips.dart:31-40`.
+`app/lib/features/quests/presentation/bloc/quests_bloc.dart:23`
+(`await emit.forEach<List<Quest>>(_repository.watchItems(), …)`), reached from
+`app/lib/features/quests/presentation/views/quest_library_view.dart:44-51`.
 
-The CSS is
-`mask-image: linear-gradient(to right, var(--ink) calc(100% - 24px), transparent 100%)`;
-the design PNG shows `Pets` fading out at the right edge. The load-bearing
-`padding: 0 20px 4px` is implemented; the fade is not. **Fix**: wrap the
-scroll view in a `ShaderMask` with that exact gradient (`BlendMode.dstIn`),
-or record it as an accepted deviation in the stage notes.
+`QuestsBloc` is the only bloc in the app that subscribes with a bare
+`emit.forEach`. Drift `watch()` streams never close, so when the stream errors
+the handler's `onError` fires but the subscription stays open; the `Try again`
+button then starts a **second** concurrent `emit.forEach` while the first is
+still alive. Measured with a fake repository:
 
-### 7. MINOR — `NestBalancedText` used where the design sets no `text-wrap: balance`
-`quest_library_body.dart:61`.
+```
+subscriptions after 1st load: 1
+status after error:          QuestsStatus.failure
+subscriptions after retry:   2      ← the failed one is still subscribed
+subscriptions after 2nd retry: 3
+```
 
-The BALANCED HEADINGS rule scopes `NestBalancedText` to `.display`, `.h1`,
-`.kid-title`, `.kid-hero` and screen-local `.balance`. `.ptitle` is a
-screen-local style (`font-family/weight/size/line-height/padding-top` only)
-with no `text-wrap`, and it is not `.h1`. Today it is inert — one word with
-`maxLines: 1` short-circuits to a plain `Text` inside
-`NestBalancedText.build` (`nest_balanced_text.dart:123`) — but it adds a
-`LayoutBuilder` + a `TextPainter` pass per rebuild and reads as if the CSS had
-a balance rule it does not have. **Fix**: use a plain `Text('Quests', style:
-NestType.h1(color: tokens.ink), maxLines: 1)` (keep the style assertions in
-`quest_library_view_test.dart:53-61`, which pass either way).
+Every other multi-stream bloc carries the exact guard for this, with a comment
+naming the leak: `today_bloc.dart:80`, `family_bloc.dart:110`,
+`pocket_money_bloc.dart:174` (`_closeOnError` — "otherwise the failed load's
+watchers stay subscribed and every 'Try again' leaks another full set").
+P10 duplicates none of it.
 
-### 8. MINOR — Active-row semantics drop the meta line
-`quest_idea_row.dart:122-128`.
+**Fix (in scope, `quests_bloc.dart`):** terminate the stream on the first
+error before handing it to `emit.forEach`, e.g.
 
-`Semantics(button: true, label: title, excludeSemantics: true)` hides the
-`Daily · 5 coins` subtitle, so a screen-reader user activating a quest hears
-only its name. **Fix**: `label: '$title. $meta'` (or drop
-`excludeSemantics: true` and let both texts merge).
+```dart
+final _closeOnError = StreamTransformer<List<Quest>, List<Quest>>.fromHandlers(
+  handleError: (error, stackTrace, sink) => sink..addError(error, stackTrace)..close(),
+);
+…
+await emit.forEach(_repository.watchItems().transform(_closeOnError), …);
+```
 
-### 9. MINOR — test gaps against `1_plan.md` §d/§f
-`app/test/features/quests/`
+so `emit.forEach` completes, cancels the watcher and lets the retry start
+clean. (A `StreamSubscription` field cancelled before re-subscribing works
+too.) Add a bloc test asserting the subscription count is 1 after two
+retries.
 
-- no test for the **failure** branch and its `Try again` retry
-  (`quest_library_view.dart:41-65`); the bloc-level failure/retry *is*
-  covered (`quests_bloc_test.dart:67`, `:132`), the view's `Try again`
-  button is not.
-- no view test for the two **empty states** the plan requires:
-  `Kindness` → "No ideas found" (`quest_library_body.dart:139-149`) and
-  Active + `Seed.empty()` → "No active quests" (`:120-126`).
-- plan §f item 2 asked for a direct unit test of the pure
-  `filterQuestIdeas` (query/category AND, `Kindness` → empty, empty query +
-  `All` → 10); it is only covered indirectly through the view, which cannot
-  prove the AND-combination.
-**Fix**: three small tests in the existing files; no production change.
+### 4. MAJOR — 2 px design drift: everything below the search field sits 2 px high
 
-### 10. MINOR — the Active tab lists quests title-sorted, interleaving children
-`app/test/features/quests/quests_repository_test.dart:26-49`
-(`'demo seed actives arrive title-sorted'`).
+`app/lib/core/design_system/components/nest_text_field.dart:151-155` (shared),
+reached from `app/lib/features/quests/presentation/widgets/quest_library_body.dart:124`.
 
-The new test codifies `AppDatabase.watchActiveQuests`'s
-`orderBy([(q) => OrderingTerm(expression: q.title)])`, so Maya's, Leo's and
-"Anyone" quests interleave alphabetically. The CHILD ORDER ruling wants
-children in the order they were added. The order itself lives in
-`core/data/app_database.dart:447` (shared, not editable here), so this is a
-question for the orchestrator, not a P10 edit — but P10 should not *pin*
-alphabetical order in a test before that ruling is confirmed. **Fix**:
-raise it in the same SHARED_REQUEST (finding 4) and, if the ruling changes
-the order, update this test at the same time.
+`NestTextField.search` builds `minHeight: 52` + `vertical: NestSpacing.gap3` (3)
++ `border: 1` = **52 total**, and its doc comment claims "the row measures
+exactly 52". The design is `box-sizing: border-box` globally
+(`tokens.css:200`), so `.search { min-height:52px; padding:4px 16px;
+border:1px }` with a 44-high input computes to 4 + 44 + 4 + 2 = **54**, which
+is what the PNG shows (the `--line` ring spans y 173 … 227). Result: the chip
+row and all ten cards are 2 px above the design (table above) — exactly on the
+UI VERDICT RULE's ±2 px boundary, and a uniform shift of every element below
+the field, which the rule explicitly calls a failure mode.
 
-### 11. MINOR — `initialTab` is read once and never re-read
-`quest_library_body.dart:37` — `late QuestLibraryTab _tab = widget.initialTab;`
-caches the value on first access, so a parent that changes `initialTab` is
-ignored (no caller does today). **Fix**: either drop the parameter (the
-design always opens on Ideas) or handle it in `didUpdateWidget`.
+**Fix (shared — file in `SHARED_REQUEST.md`, do not hack locally):** make the
+search row 54 tall — either `padding: EdgeInsets.symmetric(vertical:
+NestSpacing.s4)` with `minHeight: 54`, or keep the 3 px padding and raise the
+constraint to 54. Both keep the content centred exactly as the design paints
+it. P10 must not wrap or re-pad the shared field locally.
+
+### 5. MINOR — the search field's accessible name lands on an inert node
+
+`app/lib/core/design_system/components/nest_text_field.dart:201`
+(`return Semantics(label: semanticLabel, textField: true, child: row);`),
+supplied by P10 at `quest_library_body.dart:126`.
+
+The wrapper has no `container`, no `excludeSemantics` and no action, so the
+tree carries two text-field nodes:
+
+```
+#26 label="Search quest ideas"  isTextField=true  actions=[]      ← inert
+#28 label="Search ideas"        isTextField=true  actions=[tap, focus]
+```
+
+VoiceOver therefore announces the field as **"Search ideas"** (its hint), not
+the design's `aria-label="Search quest ideas"` (`P10-quest-library.html:19`),
+and the node that carries the intended label cannot be focused or typed into.
+The field is still operable, so this is not a blocker, but the accessible name
+is wrong and there is a phantom text field in the tree.
+
+**Fix (shared):** merge the label onto the `TextField` itself — either
+`ExcludeSemantics` the hint and put `label` on a `container: true` wrapper
+that owns `SemanticsAction.setText`, or move the label into
+`InputDecoration.labelText`/`semanticCounterText` so one node carries it. Add
+to the existing `SHARED_REQUEST.md` §3.
+
+### 6. MINOR — the row title rebuilds `bodyStrong` by hand
+
+`app/lib/features/quests/presentation/widgets/quest_idea_row.dart:83-84`:
+`NestType.body(color: tokens.ink).copyWith(fontWeight: FontWeight.w700, height:
+22 / 16)`. `NestType.bodyStrong(color)` is already Inter 16/24 w700 and is what
+`NestQuestCard` (`nest_quest_card.dart:74-76`) and `NestListRow`
+(`nest_list_row.dart:83-86`) use for the same 22/16 override.
+
+**Fix:** `NestType.bodyStrong(color: tokens.ink).copyWith(height: 22 / 16)` —
+same pixels, one less duplicated weight literal to drift.
+
+### 7. MINOR — the two empty states do not share the 20 px gutter
+
+`app/lib/features/quests/presentation/widgets/quest_library_body.dart:159-167`
+returns `const <Widget>[NestEmptyState(...)]` with **no** `_gutter`, while the
+Ideas empty state (`:183-192`) wraps the same widget in `_gutter(...)`.
+`NestEmptyState` adds its own 16 px, so the Active empty state starts 16 px
+from the screen edge and the Ideas one 36 px — the OWNER ALIGNMENT rule asks
+for one consistent 20 px gutter on a screen.
+
+**Fix:** wrap the Active `NestEmptyState` in `_gutter(...)` like its sibling.
+
+### 8. MINOR — the icon-tile edge is a bare `40` where a token exists
+
+`app/lib/features/quests/presentation/widgets/quest_idea_row.dart:60-61`
+(`width: 40, height: 40`). `NestSpacing.s10 == 40`, and the shared
+`NestListRow` carries the same literal, so this is app-wide rather than
+P10-specific — but the "tokens only" rule is what the design system is for.
+Either use `NestSpacing.s10` or (better) ask the orchestrator for a
+`NestTile` size token next to `NestDevice`, since `.icon-tile` is a component
+dimension, not a spacing step. Add to `SHARED_REQUEST.md` §6/§7.
 
 ---
 
-## Advisory (not a finding — process, per the loop's rules)
+## What is verified clean (no action)
 
-`app/test/features/quests/` currently holds untracked scratch files written by
-another stage while this review ran: `_scratch_test.dart`,
-`p10_bugs_test.dart`, `zz_probe_test.dart`, `zz_probe2_test.dart`,
-`zz_probe3_test.dart`. They are unformatted and produce all 33 `flutter
-analyze` infos in the package. Uncommitted work is the loop's business, but
-`zz_probe*`/`_scratch*` must not be committed — they would break RULES §7.1
-(`dart format` clean, `flutter analyze` → no issues) for the whole repo.
+- **RULES §1**: no path outside `features/quests/presentation/**`,
+  `test/features/quests/**`, `docs/screens/P10/**` in `git diff main...HEAD`.
+- **Architecture (iteration-1 findings 2, 5 closed)**: `QuestLibraryView` no
+  longer touches `GetIt`; `ideas()` is read once in `_onLoadRequested` and
+  travels in `QuestsState`; the hidden `_QuestLibraryRouteAnchor` and its
+  `Stack` wrapper are gone. DI, routes, the repository and the schema are
+  untouched.
+- **Design-system reuse**: `NestSegmented`, `NestTextField.search`,
+  `NestButton`, `NestEmptyState`, `NestIcon`, `NestRadii`, `NestSpacing`,
+  `NestTileTint`, `tokens.cardShadow`. `.trow` is correctly *not* `NestCard`
+  (r-m 16, per `.trow`) and `QuestFilterChip` is correctly 44-high per
+  SPACING_SPEC §9.5 rather than `NestChip`'s 32 — and the chip row is a
+  scrolling `SingleChildScrollView`, so `NestChipWrap` (a `Wrap`) is the wrong
+  container here; the whole pill is already the 44 px target.
+- **Tokens only**: no literal colour (`Colors.transparent` only, as
+  `NestChip` does), no `fontSize`, no `letterSpacing` (LETTER-SPACING rule
+  respected), no `google_fonts`/`GoogleFonts` anywhere in the feature or tests.
+- **Copy**: character-for-character against the HTML — `Quests`,
+  `Active ({n})`/`Ideas`, `Search ideas`, `Search quest ideas`, the seven chip
+  labels in design order, `+ Add`, `Add {title}` aria-labels, and all ten meta
+  strings with U+00B7 middot and spaces (`5 coins · Ages 4+ · Bedroom` …).
+  UK spelling throughout; no US spellings in copy.
+- **DATA OVER MOCKS**: the segmented count is `widget.items.length`; no literal
+  `12` in the view. **CHILD ORDER**: `QuestsRepository` creation order, not
+  alphabetical (the repo test asserts Maya's 6 → Leo's 4 → Anyone's 2).
+- **Copy `+ Add` semantics / tap targets**: the semantics tree shows one node
+  per chip (`All`…`Kindness`, all `actions=[tap]`), one node per `+ Add`
+  (`label="Add Make your bed"`, `actions=[tap]`, `container: true` so it does
+  not bubble into the row), and one node per Active row carrying
+  `"<title>. <meta>"` with `tap` — iteration-1 findings 8 and the
+  `Semantics`/`onTap` rule are satisfied.
+- **Iteration-1 finding 1 closed**: row text is start-aligned at card x + 64
+  (measured 84.0 absolute; pinned by
+  `quest_library_view_test.dart:400`).
+- **Iteration-1 finding 6 closed**: `.chipscroll`'s right-edge fade is a
+  `ShaderMask(dstIn)` over the viewport, exactly as the CSS mask.
+- **Iteration-1 finding 7 closed**: `.ptitle` has no `text-wrap: balance`
+  (`components.css` puts balance on `.h1`/`.display`, and the HTML renders
+  `class="ptitle"` only), so the plain `Text` is correct — no
+  `NestBalancedText`, no stray `LayoutBuilder` per rebuild.
+- **Performance / lifetime**: no `Timer`, no `AnimationController`,
+  `DISABLE_ANIMATIONS` irrelevant here; 10 rows rebuilt per keystroke over a
+  `const` list; `QuestPushOnce` schedules only a post-frame callback (no
+  controller to dispose, and a disposed state is never `setState`d); the
+  bloc's watcher is cancelled on `bloc.close()` (verified: `hasListener`
+  false afterwards).
+- **Children's Code**: parent screen — no analytics, ads, telemetry or child
+  data beyond the family-scoped quest rows.
+- **Design system is honest about its own limits**: `SHARED_REQUEST.md`
+  §1/§5/§6/§7 are accurate and still open; nothing in this diff contradicts
+  them.
+
+## Advisory (process, not findings)
+
+The working tree — not `git diff main...HEAD` — currently adds
+`test/features/quests/quest_library_a11y_actions_test.dart` and
+`quest_library_design_geometry_test.dart` (untracked) and modifies
+`p10_bugs_test.dart`. Two things the next stage should know, since the loop
+commits the worktree:
+
+1. `quest_library_a11y_actions_test.dart`'s search case asserts
+   `hasAction(SemanticsAction.setText)` on the `TextField`. I checked the
+   framework baseline: a **plain** `MaterialApp` + `TextField` in this Flutter
+   build exposes `tap, focus` and **no** `setText`, so that assertion can never
+   pass here and will sit red for a reason unrelated to P10. Assert on the
+   label + `tap`/`focus` (or drive the field with `tester.enterText`) instead.
+2. The new geometry test pins `field.height` at `54 ± 2`, which **passes at 52**
+   and so locks finding 4's 2 px shift into the suite as "correct". Once the
+   shared box model lands, tighten it to ±1 or exact so the drift cannot come
+   back.
 
 ## Verdict
 
-Two design-fidelity majors (1, 3), one architecture major (2). Findings 1 and
-3 are the two ORCHESTRATOR_NOTES items that live in P10's own code; finding 2
-breaks the one app-wide DI convention the feature contract defines. All three
-are small, local fixes except the shared half of 3, which needs
-`SHARED_REQUEST.md` (finding 4).
+The iteration-1 architecture and accessibility findings are genuinely closed,
+and the screen is token-clean, copy-exact and well aligned. What remains is
+one blocker (three committed tests red on a shared one-line defect) and three
+majors: an invisible filter after a tab round-trip that I reproduced on the
+committed code, a retry path that leaks a database watcher per tap, and a 2 px
+uniform drift of the whole lower half of the screen from a shared box model.
+Findings 2 and 3 are fixable inside `features/quests/**`; 1 and 4 need the
+orchestrator to land `SHARED_REQUEST.md` §1 and a new search-field item.
 
 VERDICT: FAIL
