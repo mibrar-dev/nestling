@@ -5,6 +5,7 @@ import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/data/stream_combine.dart';
 import 'package:nestling/features/pocket_money/domain/entities/owed_summary.dart';
 import 'package:nestling/features/pocket_money/domain/entities/pocket_money_entry.dart';
+import 'package:nestling/features/pocket_money/domain/entities/pocket_money_setup.dart';
 import 'package:nestling/features/pocket_money/domain/pocket_money_repository.dart';
 
 /// Drift-backed [PocketMoneyRepository].
@@ -46,6 +47,127 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
   @override
   Stream<OwedSummary> watchOwed(String childId) {
     return _db.watchLedger(childId).map((rows) => summarise(childId, rows));
+  }
+
+  // -- P06 setup -------------------------------------------------------------
+
+  @override
+  Stream<PocketMoneySetup> watchSetup() {
+    // `families` is the source of truth. The `settings` row is its
+    // write-mirror (kept equal by the setters below so P16 never diverges),
+    // written in the same transaction — so it is deliberately NOT subscribed:
+    // a second subscription would re-emit an identical setup on every
+    // mirror write (review #9).
+    // Roster order is the canonical CHILD ORDER query (creation order,
+    // Maya before Leo — never alphabetical), not a local raw query
+    // (review #4).
+    return combineLatest2(_watchFamily(), _db.watchChildren(Seed.familyId)).map(
+      (parts) {
+        final family = parts[0] as Family?;
+        final children = parts[1] as List<ChildrenData>;
+        return PocketMoneySetup(
+          mode: family?.pocketMoneyMode ?? 'both',
+          payoutDay: family?.payoutDay ?? 6,
+          coinValuePencePerCoin: family?.coinValuePencePerCoin ?? 1,
+          children: children
+              .map(
+                (row) => PocketMoneySetupChild(
+                  id: row.id,
+                  nickname: row.nickname,
+                  avatarColour: row.avatarColour,
+                  weeklyBasePence: row.weeklyBasePence,
+                ),
+              )
+              .toList(),
+        );
+      },
+    );
+  }
+
+  /// The `families` row for the demo family (null until the first launch
+  /// bootstrap in `beforeOpen` inserts it).
+  Stream<Family?> _watchFamily() {
+    return (_db.select(
+      _db.families,
+    )..where((f) => f.id.equals(Seed.familyId))).watchSingleOrNull();
+  }
+
+  @override
+  Future<void> setMode(String mode) async {
+    assert(
+      mode == 'weekly' || mode == 'per_quest' || mode == 'both',
+      'P06 mode must be weekly | per_quest | both, got $mode',
+    );
+    // The assert above is stripped in release/profile builds, so enforce
+    // the invariant there too (review #12). In debug the assert still fires
+    // first, which the validation tests pin.
+    if (mode != 'weekly' && mode != 'per_quest' && mode != 'both') {
+      throw ArgumentError.value(
+        mode,
+        'mode',
+        'P06 mode must be weekly | per_quest | both',
+      );
+    }
+    final now = DateTime.now().toUtc();
+    final zone = await _db.familyZoneId();
+    await _db.transaction(() async {
+      await (_db.update(
+        _db.families,
+      )..where((f) => f.id.equals(Seed.familyId))).write(
+        FamiliesCompanion(
+          pocketMoneyMode: Value(mode),
+          updatedAt: Value(now),
+          updatedAtTz: Value(zone),
+        ),
+      );
+      await (_db.update(
+        _db.settings,
+      )..where((s) => s.familyId.equals(Seed.familyId))).write(
+        SettingsCompanion(
+          pocketMoneyMode: Value(mode),
+          updatedAt: Value(now),
+          updatedAtTz: Value(zone),
+        ),
+      );
+    });
+  }
+
+  @override
+  Future<void> setPayoutDay(int day) async {
+    assert(day >= 1 && day <= 7, 'P06 payout day must be 1..7, got $day');
+    // See setMode: the assert is debug-only, so enforce in release too.
+    if (day < 1 || day > 7) {
+      throw ArgumentError.value(day, 'day', 'P06 payout day must be 1..7');
+    }
+    final now = DateTime.now().toUtc();
+    final zone = await _db.familyZoneId();
+    await _db.transaction(() async {
+      await (_db.update(
+        _db.families,
+      )..where((f) => f.id.equals(Seed.familyId))).write(
+        FamiliesCompanion(
+          payoutDay: Value(day),
+          updatedAt: Value(now),
+          updatedAtTz: Value(zone),
+        ),
+      );
+      await (_db.update(
+        _db.settings,
+      )..where((s) => s.familyId.equals(Seed.familyId))).write(
+        SettingsCompanion(
+          payoutDay: Value(day),
+          updatedAt: Value(now),
+          updatedAtTz: Value(zone),
+        ),
+      );
+    });
+  }
+
+  @override
+  Future<void> setWeeklyBasePence(String childId, int pence) async {
+    await (_db.update(_db.children)..where((c) => c.id.equals(childId))).write(
+      ChildrenCompanion(weeklyBasePence: Value(pence.clamp(0, 2000))),
+    );
   }
 
   /// Pure owed math, shared with tests: entries arrive newest-first; only
