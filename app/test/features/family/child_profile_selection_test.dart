@@ -337,6 +337,50 @@ void main() {
       expect(profile.owedPence, 420);
       expect(profile.questsThisWeek, 0);
     });
+
+    // The DEFAULT clock (no `clock:` argument) is what the app runs with, and
+    // this is the assertion that keeps P15-BUG-8 dead: it must be the seed
+    // anchor, never the wall clock. The suite pins the anchor to Sat 3 Oct
+    // 2026 (`test/flutter_test_config.dart`), so on any later real date — this
+    // stage runs on Sun 4 Oct 2026 — a wall-clock default would put the two
+    // `daily` completions out of period and turn the demo tile from 4 to 2.
+    // Differential, so it holds on the anchor date too.
+    test('the default clock is the seed anchor, not the wall clock', () async {
+      final db = await _demoDb();
+      final anchor = Seed.anchorDay.toUtc();
+
+      final byDefault = (await FamilyRepositoryImpl(db: db)
+          .watchProfile()
+          .first)!;
+      final byAnchor = (await FamilyRepositoryImpl(
+        db: db,
+        clock: () => anchor,
+      ).watchProfile().first)!;
+      final byWallClock = (await FamilyRepositoryImpl(
+        db: db,
+        clock: () => DateTime.now().toUtc(),
+      ).watchProfile().first)!;
+
+      expect(
+        byDefault.questsThisWeek,
+        byAnchor.questsThisWeek,
+        reason: 'no clock argument ⇒ the seed anchor, like TodayRepositoryImpl',
+      );
+      expect(byDefault.questsThisWeek, 4, reason: 'the demo tile number');
+
+      // …and a clock far enough ahead really does change the answer, so the
+      // comparison above is not vacuous.
+      final byFuture = (await FamilyRepositoryImpl(
+        db: db,
+        clock: () => anchor.add(const Duration(days: 40)),
+      ).watchProfile().first)!;
+      expect(byFuture.questsThisWeek, 0);
+
+      // Nothing else in the profile depends on the clock.
+      expect(byDefault.owedPence, byAnchor.owedPence);
+      expect(byDefault.child.id, 'maya');
+      expect(byWallClock.child.id, 'maya');
+    });
   });
 
   group('P15-BUG-6/7 · the remove cascade branches', () {

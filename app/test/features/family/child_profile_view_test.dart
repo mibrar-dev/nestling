@@ -728,6 +728,56 @@ void main() {
 
       await disposeApp(tester);
     });
+
+    // The guard must be inert, not a silent skip: with no router there is no
+    // query to read, so nothing may be selected. And the moment a router IS
+    // above the context the very same widget follows the route again (the
+    // BUG-9 repro above) — the guard is a null check, not a "give up on the
+    // deep link" switch.
+    testWidgets('the router-less guard selects nothing and keeps the view', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      final repo = _MockFamilyRepository();
+      when(repo.watchItems).thenAnswer(
+        (_) => Stream<List<FamilyMember>>.value(const <FamilyMember>[_me]),
+      );
+      when(repo.watchChildren).thenAnswer((_) => Stream.value(<FamilyChild>[]));
+      when(
+        repo.watchProfile,
+      ).thenAnswer((_) => Stream<ChildProfile?>.value(_mayaProfileFixture()));
+      when(() => repo.selectChild(any())).thenAnswer((_) async {});
+      await _useRepository(repo);
+
+      final bloc = GetIt.instance<FamilyBloc>()
+        ..add(const FamilyLoadRequested());
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: NestTheme.light(),
+          home: BlocProvider<FamilyBloc>.value(
+            value: bloc,
+            child: const ChildProfileView(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      verifyNever(() => repo.selectChild(any()));
+      expect(find.text('Maya'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+
+      // …and with a router above it the same view dispatches again. Twice on a
+      // cold entry is expected and harmless (the route's `create` and this
+      // view both dispatch the same id; `selectChild` is idempotent and
+      // membership-gated) — the sibling test pins that upper bound.
+      await pumpAppRoute(tester, '/child-profile?childId=leo');
+      await tester.pumpAndSettle();
+      verify(() => repo.selectChild('leo')).called(greaterThanOrEqualTo(1));
+
+      await disposeApp(tester);
+    });
   });
 
   group('P15 remove flow', () {

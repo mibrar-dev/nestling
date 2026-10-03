@@ -278,8 +278,14 @@ void main() {
       final repo = FamilyRepositoryImpl(db: db);
       expect((await repo.watchProfile().first)!.questsThisWeek, 4);
 
+      // Fixtures are stamped in the repository's own frame of reference: its
+      // DEFAULT clock is the seed anchor (P15-BUG-8), so `DateTime.now()`
+      // would tie this test to the day the suite happens to run — the very
+      // time bomb the anchor clock removed.
+      final story = Seed.anchorDay.toUtc();
+
       // An in-period approval counts…
-      await _completeQuest(db, repeat: 'daily', at: DateTime.now().toUtc());
+      await _completeQuest(db, repeat: 'daily', at: story);
       expect((await repo.watchProfile().first)!.questsThisWeek, 5);
 
       // …a completion from an earlier period does not (daily → the current
@@ -287,7 +293,7 @@ void main() {
       await _completeQuest(
         db,
         repeat: 'daily',
-        at: DateTime.now().toUtc().subtract(const Duration(days: 3)),
+        at: story.subtract(const Duration(days: 3)),
       );
       expect((await repo.watchProfile().first)!.questsThisWeek, 5);
     });
@@ -300,7 +306,7 @@ void main() {
       await _completeQuest(
         db,
         repeat: 'daily',
-        at: DateTime.now().toUtc(),
+        at: Seed.anchorDay.toUtc(),
         status: 'not_yet',
       );
 

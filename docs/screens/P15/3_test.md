@@ -1,14 +1,14 @@
-# P15 · Child profile — Stage 3 TEST (iteration 3)
+# P15 · Child profile — Stage 3 TEST (iteration 4)
 
 Route `/child-profile` · feature `family` · parent mode · light+dark designs.
-Tree: branch `screen/P15` at `422e41e8` ("P15: checkpoint after build
-(iteration 3)"), `main` merged through `b2a8b8f`.
+Tree: branch `screen/P15` at `686bd69` ("P15: checkpoint after build
+(iteration 4)").
 
 Inputs re-read: `docs/screens/RULES.md`, `docs/ARCHITECTURE.md`,
 `docs/DESIGN_SPEC.md` §5 P15, `docs/design/SPACING_SPEC.md`, `1_plan.md`,
-`2_build.md` (iteration 3), `2a_build_logic.md`, `2b_build_ui.md`,
-`3_test.md` (iterations 1–2), `4_review.md`, `5_ui.md`, `6_bugs.md`,
-`FIXES_1.md`, `FIXES_2.md`, `SHARED_REQUEST.md` and
+`2_build.md` (iteration 4), `2a_build_logic.md`, `2b_build_ui.md`,
+`3_test.md` (iterations 1–3), `4_review.md`, `5_ui.md`, `6_bugs.md`,
+`FIXES_1.md`, `FIXES_2.md`, `FIXES_3.md`, `SHARED_REQUEST.md` and
 **`ORCHESTRATOR_NOTES.md`** (unchanged since 18:13; all four items still
 mandatory and re-verified below).
 
@@ -16,76 +16,63 @@ mandatory and re-verified below).
 must not). No `flutter clean`. No production file was touched: this stage's
 diff is `app/test/features/family/**` plus `docs/screens/P15/**`.
 
----
-
-## 1. Iteration 2 → 3: the red proof is green
-
-The iteration-2 repro stays exactly as written and now passes —
-`child_profile_view_test.dart` → *BUG P15-BUG-9: a SECOND deep link must switch
-the profile*: `/today` → Leo → Today → Maya now really lands on Maya. The
-whole feature suite is green apart from the one new repro in §4.
-
-What iteration 3 changed, and where it is now proved:
-
-| Iteration-3 change | New proof (this stage) |
-|---|---|
-| `_ChildProfileRoute.didUpdateWidget` + `ChildProfileView.didChangeDependencies` follow the live `?childId=` (P15-BUG-9) | the repro above, plus three lifecycle tests: no re-dispatch on rebuilds/re-entry, a stale `?childId=` cannot resurrect a removed child, dropping the query keeps the chosen child |
-| `watchProfile` claims the ledger slot synchronously; only the newest run re-subscribes (review 3) | two real-DB tests: a cascading remove leaves one live subscription (a later ledger write still reaches the profile), and emptying/refilling the family re-subscribes cleanly |
-| cross-feature `moneyPounds` import → the barrel's `formatPounds` (per-feature boundary, `ARCHITECTURE.md:75`) | a copy test pinning the exact rendering across magnitudes, zero, and negative balances, with no float noise |
-| `ProfileRow` literals → `NestSpacing` tokens | the tile/padding test now also asserts the tokens equal the design's numbers and the padding is exactly `12/10/16/10` |
-| repoint query repeats the roster ordering (review 4/5, `SHARED_REQUEST.md` §5) | a three-child test where the answer is only correct if the order is *createdAt, rowid* |
-| `kDebugMode`-gated `debugPrint` (review 5) | not observable from a widget test — code-hygiene only, no proof possible |
+> **Context for this iteration: the real date rolled from Sat 3 Oct to Sun 4 Oct
+> 2026 during the loop.** The suite still pins the seed story day
+> (`test/flutter_test_config.dart` → `Seed.anchorOverride = 2026-10-03`), and
+> P15's own feature suite is green **on the new date** — 283/283, no test
+> touched. §3 shows what the rollover did to features that do *not* have P15's
+> injectable clock, which is why one of this stage's new tests exists.
 
 ---
 
-## 2. Tests added this iteration (7 new + 1 strengthened)
+## 1. Iteration 3 → 4: the red proof is green
 
-### `child_profile_view_test.dart` — +5
+The iteration-3 repro is unchanged and now passes —
+`child_profile_view_test.dart` → *BUG P15-BUG-10: the view mounts without a
+GoRouter*: 2b's `if (GoRouter.maybeOf(context) == null) return;` guard
+(`child_profile_view.dart:61`) lets the view build outside a
+`RouteBase.builder` while keeping the `GoRouterState.of` dependency that makes
+the P15-BUG-9 live re-selection work. Both behaviours are proved below, so the
+guard cannot be "fixed" by disabling the deep link.
 
-* **the selection lifecycle** (the new P15-BUG-9 machinery):
-  * *the same id is not re-dispatched on rebuilds or re-entry* — with a mock
-    repository counting `selectChild`: a cold entry with `?childId=leo`
-    dispatches at most twice (route + view, documented as idempotent), and a
-    **theme flip, a text-scale change and a Today→Family round-trip add
-    zero** calls. This is the guard that keeps `didChangeDependencies` from
-    turning every rebuild into a write;
-  * *a stale `?childId=` cannot resurrect a removed child* — deep-link to Leo,
-    delete him through the UI, then re-enter the same stale URL: the screen
-    falls through to Maya (ADDED order) and stays there;
-  * *dropping the query keeps the child the deep link chose* — the Family tab
-    root has no `?childId=`; the persisted selection wins, no reset, no crash.
-* **the route still guards** — *kid mode still sends the profile to the
-  parental gate*: `/child-profile?childId=leo` in kid mode redirects to
-  `/parental-gate` and never builds the view (the shell's parent-only
-  redirect, `router.dart:85-109`, must survive the new stateful wrapper).
+---
 
-### `child_profile_selection_test.dart` — +3
+## 2. Tests added this iteration (2 new) and 3 hardened
 
-* *a cascading remove leaves one live subscription for the new child* — one
-  transaction across five tables lands several base emissions while the
-  handler awaits `cancel()`; after it the profile has switched to Leo with
-  **his** money (210p, not Maya's leftovers) and a fresh `quest_bonus` row
-  for Leo still reaches the profile (owed 460p). That is the observable proof
-  the subscription was neither orphaned nor duplicated.
-* *emptying and refilling the family re-subscribes cleanly* — the
-  `selected == null` branch emits null, and a newly added child comes back
-  with an empty ledger and zero quests (no stale rows from the deleted ones).
-* *with three children the repoint picks the FIRST added survivor* — Maya, Leo,
-  Robin (roster order asserted); remove Maya ⇒ `leo`, not `robin`; remove the
-  never-selected Robin ⇒ the selection does not move.
+### `child_profile_view_test.dart` — +1: the guard is inert, not a silent skip
 
-### `child_profile_copy_test.dart` — +1
+*the router-less guard selects nothing and keeps the view* — with a mock
+repository counting `selectChild`: a route-less mount calls it **never**
+(`verifyNever`) and still shows Maya; the same widget, with a router above it,
+dispatches again (`?childId=leo`). This is the pair that pins the guard's two
+halves — a bare pump must not select anything, and a routed pump must still
+follow the route. Without this, a `return` placed too early (or the guard
+removed and the crash "fixed" another way) would pass the bare-mount proof
+while silently killing the deep link.
 
-* *the `formatPounds` swap keeps the ledger's exact rendering* — £29.99 /
-  £0.01 / £0.09 / £9.99 / £1000.00 / £2500.00, negative balances rendered as
-  magnitudes (never `-£`, matching the ledger), and a regex sweep over eight
-  magnitudes proving two decimals with no float artefacts.
+The double dispatch on a cold entry (route `create` + this view) is expected
+and idempotent; the sibling test *the same id is not re-dispatched on rebuilds
+or re-entry* already pins the upper bound (≤ 2 per entry, 0 afterwards).
 
-### `child_profile_row_test.dart` — 1 strengthened
+### `child_profile_selection_test.dart` — +1: the default clock, on the new date
 
-* the tile test now also pins `NestSpacing.s10 == 40`, `s3 == 12`, `s4 == 16`,
-  `gap10 == 10` and the rendered padding `EdgeInsets.fromLTRB(12, 10, 16, 10)`
-  — i.e. the token refactor did not move the design's geometry.
+*the default clock is the seed anchor, not the wall clock* — the differential
+proof that keeps P15-BUG-8 dead: with **no** `clock:` argument (what the app
+runs) `questsThisWeek` must equal the answer produced by the anchor clock and
+must be the demo tile's **4**; a clock 40 days ahead really does produce 0, so
+the comparison is not vacuous; and nothing else in the profile moves. This test
+only became load-bearing overnight: on Sun 4 Oct a wall-clock default would
+put the two `daily` completions out of period and turn the tile from 4 to 2.
+
+### `child_profile_bloc_test.dart` — 2 tests hardened (fixtures re-stamped)
+
+The PERIODS fixtures in *questsThisWeek follows the PERIODS ruling* and
+*rejected completions never count* were stamped with `DateTime.now()` while
+the repository reads its **anchor** clock — a latent date dependency of
+exactly the kind this stage exists to kill. They are now stamped
+`Seed.anchorDay.toUtc()` (and anchor − 3 days for the out-of-period case), so
+they are independent of the day the suite runs in both directions. Same
+assertions, same numbers (4 → 5 → 5), no expectation weakened.
 
 ---
 
@@ -93,139 +80,124 @@ What iteration 3 changed, and where it is now proved:
 
 ```
 $ dart format .
-Formatted 496 files (0 changed) in 3.62 seconds.
+Formatted 496 files (0 changed) in 1.99 seconds.
 
 $ flutter analyze
 Analyzing app...
-No issues found! (ran in 5.4s)
+No issues found! (ran in 8.4s)
 
 $ flutter test test/features/family
-00:11 +280 -1: Some tests failed.        # the one red is P15-BUG-10
+00:13 +283: All tests passed!
 
 $ flutter test
-01:26 +2561 ~1 -2: Some tests failed.
+01:09 +2530 ~1 -35: Some tests failed.
 ```
 
 | File | Result |
 |---|---|
-| `child_profile_view_test.dart` | **+29 −1** (red = P15-BUG-10) |
-| `child_profile_selection_test.dart` | +20 |
-| `child_profile_row_test.dart` | +15 |
-| `child_profile_copy_test.dart` | +21 |
+| `child_profile_view_test.dart` | +31 |
+| `child_profile_selection_test.dart` | +21 |
 | `child_profile_bloc_test.dart` | +23 |
-| `child_profile_states_test.dart` | +12 |
+| `child_profile_copy_test.dart` | +21 |
 | `child_profile_theme_size_test.dart` | +17 |
+| `child_profile_row_test.dart` | +15 |
+| `child_profile_states_test.dart` | +12 |
 | `p15_bugs_test.dart` (stage 6) | +8, no skips |
 | `add_children_test.dart` / `p05_bugs_test.dart` / `p05_view_metrics_test.dart` | +119 / +12 / +4 |
-| **family total** | **+280 −1** |
+| **family total** | **+283, 0 fail, 0 skip** |
 
+**P15's own suite is fully green, with no failing and no skipped test in it.**
 Nothing was skipped, deleted or weakened; no `analysis_options.yaml` change;
-no `google_fonts`; `grep -rn "skip" test/features/family/` returns no
-markers.
+no `google_fonts`; `grep -rn "skip" test/features/family/` returns prose only.
 
-### The other suite failure is not P15's
+### The 35 suite failures are all outside P15
+
+| Feature | Failures | Why it cannot be P15 |
+|---|---|---|
+| `test/core/family_time_test.dart` | 1 | shared core; the known `SHARED_REQUEST.md` §6 blocker (2nd iteration), now escalated with a verified diff |
+| `test/features/kid_home/**` | 28 | e.g. *"Found 0 widgets with text `4 of 6 done`"* — the date rollover: `kid_home_repository_impl.dart:70,158` still uses `DateTime.now().toUtc()`, the P15-BUG-8 twin |
+| `test/features/today/p08_bugs_test.dart` | 2 | *"a daily completion from the previous London day is to do"* — same rollover class in a period-scoped proof |
+| `test/features/approvals/**` | 4 | the seeded pending approvals are dated to the pinned story day |
+
+Evidence that none of it is mine:
 
 ```
-test/core/family_time_test.dart › seed + repository zone plumbing
-    › kid_home completions are stamped with the family zone
-    Bad state: Too many elements
+$ git diff main...HEAD --stat | grep -E "app/(lib|test)" | grep -v features/family
+ app/test/features/today/today_view_test.dart       |    6 +-      # the recorded placeholder→hero anchor swap
+
+$ grep -rln "family_repository_impl\|features/family/data" lib/
+lib/features/family/family_di.dart                  # nothing else imports it
 ```
 
-Evidence that it is outside this screen (and that I did not touch it):
+The branch's only app-code change outside `features/family/**` is the six-line
+test anchor recorded in `SHARED_REQUEST.md` §4, and
+`FamilyRepositoryImpl` is imported by exactly one file — the family DI. None of
+the failing features can reach P15's code. All of them are outside this
+screen's RULES §1 editable set, so they are recorded here and **not** counted
+as P15 findings.
 
-```
-$ git diff main...HEAD --stat -- app/test/core app/lib/core     → (empty)
-$ git diff main HEAD --stat -- app/test/core/family_time_test.dart \
-      app/lib/core/data/seed.dart                                 → (empty)
-```
-
-Both files are byte-identical to `main`; the branch edits no `core/**` file at
-all. The cause is the shared demo seed pre-creating a `to_do` completion for
-`q-plants`, which that pre-existing test predates — `2_build.md` §"The one
-blocking failure" and `SHARED_REQUEST.md` §6 carry the diagnosis and the
-one-line fix intent. RULES §1 forbids this screen from editing
-`app/test/core/**`, so it is recorded here, **not** patched and **not**
-counted as a P15 finding. The single `~` skip is `p12_bugs_test.dart`
-(feature `pocket_money`, pre-existing).
+**Worth the orchestrator's attention (not a P15 finding):** the date rollover
+took out ~34 tests in three features that still evaluate periods against the
+wall clock. P15's own suite is immune *because* iteration 2 gave
+`FamilyRepositoryImpl` the injectable clock — the same one-line pattern
+`TodayRepositoryImpl` already has and `KidHomeRepositoryImpl` does not. That
+belongs on `main` for the other features.
 
 ---
 
-## 4. Bug found
+## 4. Bugs found
 
-### P15-BUG-10 — minor — the view can no longer be mounted on its own
+**None.** No new test exposed a defect in the screen this iteration. The
+iteration-3 finding (P15-BUG-10, minor) is fixed and its proof is green; no
+other bug was found in the 283-test suite, and every bug this stage has
+recorded in iterations 1–3 (P15-BUG-1…9) is closed with its repro still in
+place:
 
-`app/lib/features/family/presentation/views/child_profile_view.dart:57` (the
-`didChangeDependencies` added in iteration 3):
-
-```dart
-final requested = GoRouterState.of(context).uri.queryParameters['childId'];
-```
-
-`GoRouterState.of` **asserts** when there is no router ancestor, and
-`didChangeDependencies` runs on every mount. So `ChildProfileView` throws
-
-```
-GoError: There is no GoRouterState above the current context.
-This method should only be called under the sub tree of a RouteBase.builder.
-```
-
-whenever it is mounted outside a `RouteBase.builder` — a bare `MaterialApp`
-pump in a widget test, a preview/storybook harness, or the design-system
-gallery if it ever shows a feature view. Inside the app nothing is broken
-(the only builder is `childProfileRoute`), so this is a fragility introduced
-by the P15-BUG-9 fix, not a regression a parent can see. Classified **minor**
-for that reason; it is still a trap, because the view used to be
-self-contained.
-
-**Proof.** `child_profile_view_test.dart` → *BUG P15-BUG-10: the view mounts
-without a GoRouter* (red: `GoError` where `null` is expected). The same test
-also asserts the screen still shows Maya once it builds, so a fix cannot
-cheat by rendering nothing.
-
-**Fix direction (P15-local, one line).** Read the router optionally while
-keeping the dependency registration:
-
-```dart
-final requested = GoRouter.maybeOf(context)?.state.uri.queryParameters['childId'];
-```
-
-`GoRouter.of`/`maybeOf` look the router up through the inherited widget, so
-`maybeOf` still re-fires `didChangeDependencies` on a router-state change —
-the P15-BUG-9 behaviour survives — while a router-less mount simply skips the
-selection, which is what a route-less screen wants anyway.
+| Bug | Repro test (still in the suite) | State |
+|---|---|---|
+| P15-BUG-1 major · `?childId=` ignored | *BUG: `?childId=leo` must show Leo* + *BUG: tapping Leo on Today…* | ✅ green |
+| P15-BUG-2 minor · failure reported twice | `child_profile_states_test.dart` · *BUG P15-BUG-2* | ✅ green |
+| P15-BUG-3 minor · dead message after recovery | `child_profile_bloc_test.dart` · *BUG P15-BUG-3* | ✅ green |
+| P15-BUG-4 minor · "Pip is a Egg" | `child_profile_copy_test.dart` · *BUG P15-BUG-4* | ✅ green |
+| P15-BUG-5 major · subtitles ellipsised | `child_profile_theme_size_test.dart` · *no list-row paragraph is ellipsised at 390* | ✅ green |
+| P15-BUG-6/7 major · orphan rows / stale `active_child_id` | `p15_bugs_test.dart` + `child_profile_selection_test.dart` cascade group | ✅ green |
+| P15-BUG-8 major · wall-clock periods | `p15_bugs_test.dart` + *the default clock is the seed anchor* | ✅ green (and load-bearing today) |
+| P15-BUG-9 major · second deep link ignored | *BUG P15-BUG-9: a SECOND deep link must switch the profile* | ✅ green |
+| P15-BUG-10 minor · `GoError` on a route-less mount | *BUG P15-BUG-10: the view mounts without a GoRouter* | ✅ green |
 
 ---
 
 ## 5. Re-verified (no findings)
 
-* **`Seed.demo()` / `Seed.empty()`**, with and without a `?childId=`; every
-  empty/loading/failure branch; the retry; the remove flow and its toast
-  (including a repeated identical failure).
-* **Light + dark, 320/390/430, text scale 1.0/1.3**: 20 px gutters, the
-  stat grid `1fr 1fr 1fr` + 10 gap, token-only surfaces and type, the five
-  design bands unmoved, no overflow anywhere, the danger card reachable by
-  scrolling, the scaler clamped at 1.3.
-* **Copy**: character-exact against the HTML source (U+2013 / U+00B7 / U+203A /
-  U+00A3) including the new `formatPounds` path; no ASCII `-` in the age
-  band; `NestType` tracking untouched; no hard-coded colours.
-* **Accessibility**: every control exposes `SemanticsAction.tap`; the hero
-  name is a heading; every `isImage` node is labelled in both themes;
-  `performAction(tap)` drives the real navigation, modal and DB write; tap
-  targets ≥ 56 rows / ≥ 44 the rest.
-* **Design ellipsis**: at the design's 390 × scale 1.0 nothing in the rows is
-  cut, and the column is the CSS arithmetic (`row − 12 − 16 − 40 − 24 −
-  trail`); the remaining cuts at 320 and at scale 1.3 are the design's own
-  `nowrap` + `ellipsis` fallback where the string cannot fit — recorded, not
-  a finding.
+* **Every event/state path**: load, draft, add-child, remove-child, child-selected;
+  `initial`/`loading`/`loaded`/`failure`; the `clearErrorMessage` sequence.
+* **Every state of the screen**: demo, `Seed.empty()` (with and without a
+  `?childId=`), loading, failure + retry, the remove flow and its toast
+  (including a repeated identical failure), the empty-state CTA.
+* **Every navigation**: PIN push, quests `go`, money `go`, `/add-children`,
+  the Today → child deep links (first and second), and the kid-mode parental
+  gate still swallowing `/child-profile`.
+* **Light + dark, 320/390/430, scale 1.0/1.3**: 20 px gutters, token-only
+  surfaces and type, the five design bands unmoved, no overflow, the scaler
+  clamped at 1.3, and the design's own ellipsis fallback where the text
+  genuinely cannot fit (recorded, not a finding).
+* **Copy** character-exact against the HTML source (U+2013 / U+00B7 / U+203A /
+  U+00A3), including the `formatPounds` path; **accessibility**: every control
+  exposes `SemanticsAction.tap`, the hero name is a heading, every `isImage`
+  node is labelled in both themes, tap targets ≥ 56 rows / ≥ 44 the rest.
+* **P15's demo numbers are unchanged and date-independent** on the new date:
+  4 quests this week, 120 coins, 4 happy days, 6 active · 4 daily / 2 weekly,
+  £3.00 a week · Owed £4.20 (DATA OVER MOCKS; the design's mocked "18" and
+  "3 daily, 3 weekly" stay ignored).
 
-## 6. ORCHESTRATOR_NOTES.md — all four items, re-verified in code and tests
+## 6. ORCHESTRATOR_NOTES.md — all four items, re-verified
 
-1. **Subtitles in full; the trail takes only its intrinsic width** — nothing
-   is cut at 390 × 1.0, the trail is its intrinsic 70.71 px and the PIN row's
-   column is exactly 187.29 px (`child_profile_row_test.dart`), and the
-   `2_build.md` citation in `child_profile_theme_size_test.dart` is green.
-2. **Row icons** — `NestIcons.quests` is proven to be the design's circled
-   check (read off disk) and the Pocket-money tile is the untinted
+1. **Subtitles in full; the trail at intrinsic width** — nothing cut at
+   390 × 1.0, the trail is its intrinsic 70.71 px, the PIN row's column is
+   exactly 187.29 px (`child_profile_row_test.dart`), and the citation in
+   `child_profile_theme_size_test.dart` is green.
+2. **Row icons** — `NestIcons.quests` proven to be the design's circled check
+   (read off disk); the Pocket-money tile is the untinted
    `assets/illustrations/coin.svg`; both glyphs are 24 px boxes centred in
    their 40 px tiles.
 3. **Pronoun "their"** — unchanged, per the note.
@@ -235,12 +207,13 @@ selection, which is what a route-less screen wants anyway.
 
 ## 7. Verdict
 
-`dart format` clean, `flutter analyze` **No issues found**, P15's own feature
-suite **280 tests, 1 red**, and the full suite **2561 pass / 1 skip / 2
-fail** — one failure is the shared core test this screen may not edit, the
-other is a new **minor** bug this stage found (P15-BUG-10: `ChildProfileView`
-throws `GoError` when mounted outside a `RouteBase.builder`, a fragility
-introduced by the iteration-3 deep-link fix). The brief's PASS bar is "all
-tests pass and no bugs were found".
+`dart format` clean, `flutter analyze` **No issues found**, **P15's own feature
+suite 283/283 green with no failing and no skipped test**, every bug recorded
+in iterations 1–3 closed with its repro still in place, and **no new bug found
+this iteration**. The full suite is still red on 35 tests that all belong to
+other features (34 of them the date-rollover wall-clock class, one the known
+shared `family_time_test.dart` blocker) — outside this screen's RULES §1 set,
+recorded in §3, not counted against P15. The brief's PASS bar — "all tests pass
+and no bugs were found" — is met for this screen.
 
-VERDICT: FAIL
+VERDICT: PASS

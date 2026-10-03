@@ -1,11 +1,13 @@
-// P15 · Child profile — Stage 6 bug proofs (iteration 3).
+// P15 · Child profile — Stage 6 bug proofs (iteration 4).
 //
-// All eight proofs below are GREEN on the iteration-3 checkpoint (`422e41e`)
+// All eight proofs below are GREEN on the iteration-4 checkpoint (`686bd69`)
 // and run as regression guards; the build un-skipped each one as its fix
-// landed. Iteration 3's adversarial pass found no new P15 bugs (probes:
-// repeat/re-entrant `?childId=` switching, removed-child deep links, £0.00 /
-// £999.99 money, 320 × 1.3 with a long name — all green; the review's three
-// minors are tracked in `4_review.md`).
+// landed. Iteration 4's adversarial pass found no new P15 bugs, and the live
+// date rollover (real today = Sun 4 Oct 2026, seed anchor pinned to Sat 3 Oct)
+// re-verified the injectable-clock fix end to end. P15-BUG-10 (router-less
+// mount, found by the UI builder) is fixed and independently verified by the
+// stage's probes; the review's three iteration-3 minors are tracked in
+// `4_review.md`.
 //
 //   P15-BUG-1  major  `/child-profile?childId=` ignored — FIXED iteration 2
 //                      (`FamilyChildSelected` + `FamilyRepository.selectChild`)
