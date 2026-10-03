@@ -30,7 +30,8 @@ while [ ${#QUEUE[@]} -gt 0 ] || { for x in $MINE; do [ -e "$RUN_DIR/$x.pid" ] &&
     rs="$MAIN/docs/screens/_status/resume/$id"; st=1; mx=4
     co=0
     if [ -f "$rs" ]; then st=$(cat "$rs"); case "$st" in *c) co=1; st=${st%c};; esac; mx=$(( st > 5 ? st + 1 : 6 )); rm -f "$rs"; fi
-    CHECKS_ONLY=$co START_IT=$st bash "$MAIN/tools/screens/loop.sh" "$id" "$sim" "$mx" > "$MAIN/docs/screens/_status/$id.loop.log" 2>&1 &
+    # nohup: a loop must survive its scheduler (and that scheduler's screen session) ending.
+    CHECKS_ONLY=$co START_IT=$st nohup bash "$MAIN/tools/screens/loop.sh" "$id" "$sim" "$mx" > "$MAIN/docs/screens/_status/$id.loop.log" 2>&1 &
     MINE="$MINE$id "; echo $! > "$RUN_DIR/$id.pid"; feature_of "$id" > "$RUN_DIR/$id.feature"; echo "$sim" > "$RUN_DIR/$id.sim"
   done
   rm -rf "$RUN_DIR/.lock"
