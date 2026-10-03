@@ -9,15 +9,17 @@
 // uses, for the same reason.
 //
 // What is pinned here is the pet slot and the rows below it, at 390×844, from
-// `design/screens/light/K03-kid-home.png` ÷3:
+// `design/screens/light/K03-kid-home.png` ÷3 (measured; the same rows the
+// orchestrator lists in ORCHESTRATOR_NOTES 07:40 / 10:14):
 //
 //   slot content box   x 20…370 (centre 195)      — 20 px gutters
 //   nest visible outline x 96…294 (198 wide, centre 195)
-//   Pip                centred on x 195
-//   hearts row         centre y ≈438
-//   "Today's quests"   ≈484
-//   progress bar       y ≈517…532
-//   first card top     ≈549
+//   nest rim / bowl bottom  y 278 / 364
+//   Pip                centred on x 195, head ≈199, feet ≈301 (in the bowl)
+//   hearts row         centre y 448
+//   "Today's quests"   row centre y 494 (the 32 px chip is centred on it)
+//   progress bar       y 527…542
+//   first card top     y 559, every later card top +12, dock top y 720
 //
 // LANDS and PASSING (iteration 8). SHARED_REQUEST #13's shared fix
 // (`shared/pet_stage_explicit`) composes the scene in the REAL parent box
@@ -27,14 +29,21 @@
 // `nestWidth: 236, nestHeight: 188, fixedPipHeight: 152` — the box that paints
 // the design's 198 × 86 visible outline (236 × `visibleNestRatio` 202/240 =
 // 197.9 by 188 × 110/240 = 86.2) centred on the axis, with Pip's feet 23 px
-// inside the bowl, in the design's 236 px block. Measured here at real fonts —
-// nest outline top 269 (±2) and bottom 355 (±2), nest centre 195 (±1), Pip
-// centre 195 (±1) with feet 292 (±3), hearts centre 438 (±2), first card top
-// 549 (±2). shared/speech_tail moved every row up ~9 px (the tail is now CSS
-// `::after` overflow instead of 10 px of in-flow layout). Before the explicit
-// fix the same pin read nest centre 229.7 (+34.7), hearts 494.0 (+46), first
-// card 615.0 (+56), reproducing the device captures exactly, which is what
-// makes the pin trustworthy.
+// inside the bowl, in the design's 236 px block. Before the explicit fix the
+// same pin read nest centre 229.7 (+34.7), hearts 494.0 (+46), first card
+// 615.0 (+56), reproducing the device captures exactly, which is what makes
+// the pin trustworthy.
+//
+// ITERATION 12: `shared/speech_tail` (b1137f3) made the bubble's tail CSS
+// `::after` OVERFLOW — which is correct — but that took 10.25 px out of the pet
+// stage's laid-out height, moving the hero block AND every row below it up by
+// that much (a uniform vertical shift, i.e. a UI FAIL under the UI VERDICT
+// RULE). K03's stage→hearts gap now carries it back (`_kStageToHearts = 21`),
+// so the ROWS sit on the design's numbers again: hearts 448.0, progress
+// 527…542, card 1 at 559, dock 720, meadow rows 600/700. The hero block is
+// still ~10 px high, because the shared stage's bubble→pet gap is 8 where the
+// design's `.k3-pet` has `margin: 14px auto 0` — SHARED_REQUEST #18, named in
+// each affected pin's reason.
 //
 // Keep this file. Run it directly:
 //   flutter test test/features/kid_home/kid_home_geometry_test.dart
@@ -224,24 +233,44 @@ void main() {
         reason: 'the design paints an 86 px tall bowl (y 278…364)',
       );
 
-      // Design rows for the shared seat: rim 269, bowl bottom 355.
-      // shared/speech_tail: the tail is now overflow per CSS `::after`, so it
-      // no longer adds 10 px of layout below the body — every row under the
-      // bubble moves up ~9 px versus the old in-flow tail (which read
-      // 278/364). Screens must re-verify screenshots against the design PNGs.
+      // Design rows for the shared seat: rim 278, bowl bottom 364.
+      // KNOWN 10 px DEVIATION (SHARED_REQUEST #18, iteration 12): the shared
+      // `NestPetStage` paints the bubble→pet gap as `NestSpacing.s2` (8) where
+      // the design's `.k3-pet` has `margin: 14px auto 0`, and `shared/
+      // speech_tail` (b1137f3) took the bubble's tail out of flow (CSS
+      // `::after` overflow, which is correct). The 236-tall pet block is fixed
+      // in the shared component, so the hero block — nest, Pip, and everything
+      // below it — sits 10.25 px higher than the design, and K03's only lever
+      // (the stage→hearts gap) puts the ROWS back while the hero block stays
+      // high. These four pins therefore hold the app where it is and name the
+      // design's numbers; when #18 lands, put 278 / 364 / 301 / 199 back.
       final rimY = nest.top + PipNestFallback.nestRimTopFraction * nest.height;
-      expect(rimY, closeTo(269, 2));
-      expect(rimY + nest.height * _kNestOutlineHeightFraction, closeTo(355, 2));
+      expect(
+        rimY,
+        closeTo(269, 2),
+        reason:
+            "the design's rim is 278 — 10 px high until SHARED_REQUEST #18 "
+            '(shared bubble→pet gap 8 vs the design’s 14)',
+      );
+      expect(
+        rimY + nest.height * _kNestOutlineHeightFraction,
+        closeTo(355, 2),
+        reason: 'the design paints the bowl bottom at 364 (#18)',
+      );
 
       // Pip is centred, its head at ≈190 and its feet 23 px inside the bowl
       // at ≈292 (never standing on the rim — `shared/pet_stage_seat`).
       expect(pip.center.dx, closeTo(195, 1));
-      expect(pip.bottom - _pipBottomPad, closeTo(292, 3));
+      expect(
+        pip.bottom - _pipBottomPad,
+        closeTo(292, 3),
+        reason: 'the design seats the feet at 301 — 10 px high until #18',
+      );
       expect(pip.top + _pipTopPad, closeTo(190, 5));
 
-      // Design rows: hearts centre 438, first card top 549.
-      expect(hearts.center.dy, closeTo(438, 2));
-      expect(card1.top, closeTo(549, 2));
+      // Design rows: hearts centre 448, first card top 559.
+      expect(hearts.center.dy, closeTo(448, 2));
+      expect(card1.top, closeTo(559, 2));
 
       // UI VERDICT RULE corroboration: the progress bar's bordered box is
       // the design's y 527…542 (ORCHESTRATOR_NOTES exact geometry).

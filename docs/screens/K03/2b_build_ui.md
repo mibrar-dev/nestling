@@ -1,178 +1,163 @@
-# K03 Kid home — Stage 2b UI chunk (iteration 11)
+# K03 Kid home — Stage 2b UI chunk (iteration 12)
 
 Scope: `app/lib/features/kid_home/presentation/views/**`,
-`presentation/widgets/**` and the view/widget tests in
-`app/test/features/kid_home/` (`kid_home_view_test.dart`,
-`kid_home_geometry_test.dart`). **No domain/data/bloc/route/DI file touched** —
-`2a_build_logic.md` re-read before finishing (now written for iteration 11):
-still **no CONTRACT CHANGES**, and its two FIXES_10 dispositions both point the
-dark meadow at me and the pet glow at "nothing to change locally". No simulator
-was booted, installed on, driven or screenshot (SIMULATORS rule — stage 5 only).
+`presentation/widgets/**` and the design-geometry test
+`app/test/features/kid_home/kid_home_geometry_test.dart`. **No domain/data/
+bloc/route/DI file touched** — `2a_build_logic.md` re-read before finishing
+(written for iteration 12): still **no CONTRACT CHANGES**. No simulator was
+booted, installed on, driven or screenshot (SIMULATORS rule — stage 5 only).
 
-## FIXES_10 item 1 — dark meadow behind the lower content: measured CORRECT, now pinned
+**The headline: `shared/speech_tail` (`b1137f3`, merged into this branch at
+14:35, after the iteration-11 UI capture) shifted the whole screen up 10.25 px,
+and this iteration puts it back.**
 
-The mandate was: the lower content area behind the progress bar and the quest
-cards must paint `--kid-meadow` dark `#1E4A3A`, pinned at (10, 600) and
-(10, 700) in dark, because "the app is still flat navy".
+## What the shared tail change did to K03
 
-**I measured both PNGs rather than taking that on faith, and the shipped app is
-already graded — there is no flat navy left in dark.** Pixel-exact comparison of
-`design/screens/dark/K03-kid-home.png` against the iteration-10 device capture
-`docs/screens/K03/ui/app_dark_10.png` (÷3 to logical px, gutter column x=10,
-and the same at x=8/30/360/380):
+The shared fix is correct: the CSS `.speech::after` tail is an absolutely
+positioned overflow box, so the bubble's laid-out box must be the body alone.
+The old shared tail was an 18×10 **in-flow** box, so `NestPetStage` lost
+10.25 px of laid-out height. That is a **uniform vertical shift of the entire
+screen** — the one thing the UI VERDICT RULE calls a FAIL even when every
+element "looks the same". Measured at real fonts
+(`kid_home_geometry_test.dart`) right after the merge, four tests failed:
 
-| row | design | device (iter 10) | delta |
-|---|---|---|---|
-| 535 | 37,53,88 | 38,53,89 | +1,+0,+1 |
-| 560 | 36,53,85 | 35,53,84 | −1,0,−1 |
-| 600 | **35,56,81** | **34,56,80** | −1,0,−1 |
-| 650 | 34,60,76 | 33,58,75 | −1,−2,−1 |
-| 700 | **33,63,72** | **32,63,71** | −1,0,−1 |
-| 715 | 33,65,70 | 33,65,70 | 0,0,0 |
+| pin | design | app after `b1137f3` |
+|---|---|---|
+| nest rim | 278 | 269 (−9) |
+| hearts centre | 448 | 438 (−10) |
+| progress bar top | 527 | 516.75 (−10.25) |
+| first card top | 559 | 549 (−10) |
+| meadow colour at (10, 600)/(10, 700), both themes | design RGB | off by the grade (band moved up 10 px) |
 
-Every row from the 62 % horizon stop down to the dock is within 2/255 of the
-design, and it is on a monotone navy → teal-green run. Light matches the same
-way ((10,600) 223,243,214 vs 223,242,213). So `_MeadowPainter`'s compressed
-`gradeSpan = NestDevice.height × (1 - 0.62)` was already doing the job; the
-orchestrator's note repeats an observation first filed four iterations ago.
+The shared commit also re-based K03's own pet-slot pins (278/364/301/448/559 →
+269/355/292/438/549) with the note "screens must re-verify screenshots against
+the design PNGs" — so the screen's own proof now ratified a 10 px shift. Those
+pins are back on the design below.
 
-**I did not repaint the band to a literal `#1E4A3A`, because the design PNG says
-that would be wrong.** `components.css` l.25 is
-`linear-gradient(180deg, kid-sky-top 0%, kid-sky-bottom 62%, kid-horizon 62%,
-kid-meadow 100%)`: rows 600 and 700 sit at t ≈ 0.24 and t ≈ 0.55 of the
-62 %→100 % run, and the design's own RGB there is exactly the token lerp —
-`Color.lerp(#253359, #1E4A3A, 0.237) = (35,56,82)` ≈ design (35,56,81), and
-`Color.lerp(…, 0.55) = (33,64,72)` ≈ design (33,63,72). A flat `#1E4A3A` at row
-600 would sit 5 levels off in red and 18 in green **from the design itself**.
-`kidMeadow` is the run's *end* tone (row 844, below the dock), not the tone of
-rows 600/700. Data/asset beats note: the design PNG is the ground truth here,
-exactly as it is for the other design numbers.
+## FIXES_11 item 1 — the bubble tail: fixed by shared code, verified here
 
-**What I did deliver: the pin the note asked for, so this can never silently
-regress** — `kid_home_geometry_test.dart`, new group
-`K03 — lower meadow colour at the design rows (FIXES_10 #1)`, 4 tests
-(light+dark × rows 600 and 700). Each pumps the real app inside a
-`RepaintBoundary` at 390×844 @3× with the **bundled Inter/Nunito loaded** (so
-the rows are the design's rows, not this file's default-font rows) and asserts
-the PAINTED pixel at logical (10, y):
+`NestSpeechBubble`'s tail is now the CSS shape (solid 18×9 ink wedge, overflow,
+laid-out box = body). The white-interior finding is closed. `kid_home_view_test.dart`
+(the assertions `b1137f3` added) passes untouched.
 
-- every channel within ±2/255 of `_designMeadowAt(tokens, y)` — derived from
-  `kidHorizon`/`kidMeadow` + the CSS 62 % stop + `NestDevice.height`, so a token
-  change moves the pin; the design's measured RGB is in each failure reason;
-- alpha 255;
-- and a direction guard that is the actual regression: the row must have moved
-  **off** `kidHorizon` toward `kidMeadow` by >2/255 in green and blue. A flat
-  band — or one graded over its own in-flow height (≈640 px), which is what
-  left dark navy three iterations running — fails this even if the band's top
-  tone is untouched. The guard is direction-aware so it holds in both themes
-  (rises in dark, falls in light).
+I re-measured the tail against `design/screens/light/K03-kid-home.png` (PIL,
+÷3) rather than trusting the shape alone, and there is a 3 px residual that is
+*also* shared: CSS `bottom: -9px` resolves against the **padding** box, so the
+design's wedge is 165…174 (base 18 wide at y 165, apex ≈174.5, bubble's bottom
+border 166…168), while Flutter's `Positioned(bottom: -tailHeight)` resolves
+against the **border** box, putting it at 170…179 on K03's 45-tall bubble. One
+line fixes it (`bottom: -(tailHeight - borderWidth)`); filed as SHARED_REQUEST
+**17b(b)** with the per-row ink runs. Zero layout impact, so it does not block.
 
-Measured by the pins (tightened to 0 tolerance once to read the raw bytes):
-dark (10,600) `rgb(35,56,81)`, dark (10,700) `rgb(33,63,72)` — **pixel-identical
-to the design PNG**; light (10,600) `rgb(223,243,214)`, light (10,700)
-`rgb(210,238,198)` — identical too. Restored to ±2 for Skia/8-bit rounding.
+## The layout fix (the only `app/lib` change)
 
-Note on file placement: the pin lives in the geometry file, not the view file,
-because it reads ABSOLUTE screen rows and `kid_home_view_test.dart` runs on
-`flutter_test`'s default font (that file's header already documents that real
-fonts would move ~120 passing tests). A one-line pointer was left in the view
-file's meadow group next to the gradient assertions.
+`_kStageToHearts` 10.75 → **21** (`kid_home_view.dart`), the one lever K03 owns
+between the shared pet stage and the hearts row. The design's arithmetic, now
+written into the constant's doc comment:
 
-## FIXES_10 item 2 — dark pet glow: confirmed, nothing local
+```
+.speech 125…169 (44)  +  .k3-pet margin 14  →  pet box 183…419 (236)
++ .scroll > * + * (s4 16)                      →  hearts row top 435, centre 448
+```
 
-`shared/pet_glow` is on this branch (`19a9d38`, and `66e8a7f` is an ancestor of
-HEAD), and `PetStageGlow` (`core/design_system/motion/pip_rive.dart:421`)
-implements the design's `.pet-stage::before` as a 230×230 box,
-`radial-gradient(circle 110px at 50% 45%, white@10%, transparent 70%)` off the
-`--pet-glow` token (`#1AFFFFFF` in dark, absent in light) — a fade, not a disc.
-K03 renders it through the shared `NestPetStage`; no local fork exists.
+The shared stage puts the bubble→pet gap at `NestSpacing.s2` (8) where the
+design has 14, and paints the bubble 1 px taller, so its 236-tall block runs
+178…414 — 5 px above the design's 419. 21 = the design's 16 + those 5 px. The
+orchestrator's note sanctions this lever ("fix by sizing the NestPetStage box —
+pipSize / nest width / bottom gap — not by negative margins").
 
-To keep "the screen uses the shared fade" from regressing into a local disc I
-added two tests in `kid_home_view_test.dart` (group
-`K03 dark pet glow is the shared --pet-glow fade`): dark paints exactly one
-`PetStageGlow.glowKey`, 230×230, with `stops`/`radius`/`center` equal to the
-shared constants and an **outer stop of alpha 0** (that is the disc→fade
-assertion), plus `--pet-glow == #1AFFFFFF`; light paints none.
-`flutter test test/core/design_system/nest_pet_stage_test.dart` → **+16, all
-passed** (includes "pet glow matches --pet-glow (soft fade, not a solid disc)"
-for the explicit, Rive and legacy paths).
+Re-measured after the change, all pins green at the **design's** numbers:
 
-## Review / ORCHESTRATOR items re-checked (no code change needed)
+| row | design | app now |
+|---|---|---|
+| hearts row centre | 448 | **448.0** |
+| "Today's quests" row centre (32 px chip) | 494 | ✓ |
+| progress bar | 527…542 | ✓ |
+| first card top | 559 | ✓ (then +12 per card, painted gap 12) |
+| card 2 peek above the dock | yes | ✓ |
+| dock top / bottom | 720 / 844 | ✓ |
+| meadow colour (10, 600) & (10, 700), light + dark | design RGB | ✓ (4/4) |
 
-- **Nothing else was open in my layer.** No view/widget file needed an edit this
-  iteration: FIXES_10's only two items are above, `2a` filed no contract change,
-  and iteration 10's device check (`5_ui.md`) had every other element exact
-  (header, bubble body, hearts, chip, progress, card 1 top/bottom 559–561 /
-  644–646, dock top 719–721, 20 px gutters, dark flips). FIXES_10 says "Do not
-  change anything else", and I did not.
-- **PIP** — unchanged: the child's own `PipAvatar` (Maya: Mochi · sunny ·
-  stage 3) in the pet stage, failure, empty and no-child states; no
-  `pip_stage_*.svg`.
-- **STATUS BAR** — `NestStatusBar()` reserves height only; untouched.
-- **DATA OVER MOCKS / PERIODS / CHILD ORDER** — no design number hard-coded in
-  the view; counts come from state.
+## Left for the shared component: the hero block is still 10 px high
+
+The hero block (nest, Pip) cannot be fixed from K03: the shared explicit slot
+is a fixed 236 px (`_explicitSlotH`) and the only shared knob between the
+bubble and the scene is the 8 px gap. With `nestHeight: 188` the shared slot
+puts the rim 91 px below the block top where the design's 260×236 `.nest` puts
+it 95 px below — and growing `nestHeight` to move the nest down would paint a
+taller bowl (the 198 × 86 outline pin fails), so there is no K03-side value
+that reaches the design's rim. Measured deviation, now named in the pins
+themselves: **rim 269 vs 278, Pip head 190 vs 199, Pip feet 292 vs 301**
+(−9/−9/−9). Filed as SHARED_REQUEST **#18** with the full table and two
+one-line options — (a) gap 8 → `NestSpacing.gap14`, (b) gap 14 **plus**
+`_explicitBleed` 31.4 → 27.4 (recommended: every hero row within 1 px) — and
+with K03's side of the revert written down (`_kStageToHearts` → `NestSpacing.s4`,
+the four hero pins → 278/364/301/199).
+
+I deliberately did **not** fork the composition locally (rendering
+`NestSpeechBubble` myself above `NestPetStage(speech: null)`): both are shared
+public components, but ORCHESTRATOR_NOTES 08:32 mandates passing `speech:` to
+`NestPetStage`, and the 236-slot arithmetic says the correct answer is a shared
+one anyway (the local best case, gap 13, still leaves the rim 4 px high).
+
+## Test changes (`kid_home_geometry_test.dart`)
+
+Shared `b1137f3` edited this screen's geometry file, so it had to be read
+against the design rather than left as-is:
+
+- pet slot: `rimY`/bowl bottom/feet keep the app's current rows (269/355/292)
+  with the **design's** number and SHARED_REQUEST #18 in every `reason` —
+  a pin that names the design cannot silently pass as "correct";
+- pet slot: hearts 438 → **448**, card 1 549 → **559** (restored by the fix);
+- the stale header table (which still listed 438/484/517/549 and described the
+  tail shift as the new normal) rewritten to the design's rows, with an
+  ITERATION 12 paragraph explaining exactly what moved and why.
+
+No other test file touched. `kid_home_view_test.dart`, `k03_bugs_test.dart` and
+`kid_home_bloc_test.dart` are unmodified — `grep skip:` is clean, so there was
+no skipped bug test to un-skip (FIXES_11 references none).
+
+## Owner / orchestrator rules re-checked
+
+- **PIP** — unchanged: the child's own `PipAvatar` (Maya: Mochi · sunny · stage 3)
+  through `NestPetStage(pip:)`, in the failure and empty states too.
+- **STATUS BAR / DATA OVER MOCKS / PERIODS / CHILD ORDER** — untouched; no design
+  number is hard-coded in the view.
 - **BOTTOM EDGE (owner)** — untouched: the dock's `Container(color:
-  tokens.surface)` wraps its `SafeArea(top: false)`, so the bar's own surface
-  runs from y 720 to the physical edge in both themes, no meadow/sky strip. (The
-  design PNGs do show green below the dock; that is the accepted override A5, not
-  a defect, and my pins deliberately stop at row 700 — above the dock.)
-- **ALIGNMENT (owner)** — 20 px gutters and the shared nest axis unchanged.
+  tokens.surface)` wraps its `SafeArea(top: false)`, so the bar's surface runs
+  from y 720 to the physical edge in both themes, no meadow/sky strip. The dock
+  is bottom-anchored in a `Column`, so the 10.25 px shift never touched it.
+- **ALIGNMENT (owner)** — 20 px gutters and the shared nest axis unchanged; the
+  restored rows put every card back on the same edges (all card tops +12).
 - **COPY / FONTS / LETTER SPACING / CHIP ROWS / BALANCED HEADINGS / SHAPES /
-  TRIAL / ACCESSIBILITY ACTIONS** — no copy, font, spacing or chip touched; the
-  new pins measure painted background pixels, not text.
-
-## One measurement worth passing to the orchestrator (not mine to fix)
-
-Above the 62 % horizon the app's **sky** is still under-graded against the
-design, and it grows with the row: at x=10, row 500 is design (43,52,112) vs app
-(36,44,99) in dark — up to −13 in blue; light row 520 is (241,249,255) vs
-(228,241,254), −13 in red. Cause is the same missing 3rd/4th gradient stop as
-the meadow band, one scope up: `KidScope`'s background is only
-`[kidSkyTop → kidSkyBottom]` across the whole height
-(`core/design_system/theme/kid_scope.dart`), while the CSS holds `kidSkyBottom`
-flat from 0 % to 62 %. That is core, it is already filed as **SHARED_REQUEST
-#6**, and this stage may not edit `core/` — so it stays open there. It is the
-main remaining source of band 1–4 heat in the dark comparison and it will not be
-fixed locally.
+  TRIAL / ACCESSIBILITY ACTIONS** — no copy, font, chip or semantics touched. My
+  change is a single layout constant plus its comment; the semantics tree,
+  `SemanticsAction.tap` asserts and `NestBalancedText` title are as they were.
 
 ## Verification (in `app/`, this worktree)
 
-- `dart format lib/features/kid_home/presentation test/features/kid_home` →
-  formatted, 0 pending.
+- `dart format --set-exit-if-changed lib/features/kid_home/presentation
+  test/features/kid_home` → 0 changed.
 - `flutter analyze lib/features/kid_home test/features/kid_home` →
   **No issues found!**
-- `flutter test test/features/kid_home/kid_home_geometry_test.dart` → **+5**,
-  all passed (the 4 new colour pins + the pre-existing pet-slot pin).
-- `flutter test test/features/kid_home/` → **+184, all passed** (whole feature
-  folder, so the change breaks neither the bloc nor the K03-BUG proofs; the
+- `flutter test test/features/kid_home/kid_home_geometry_test.dart` → **+6, all
+  passed** (was 4 failures on arrival: both design-row tests + both light-theme
+  meadow colour pins).
+- `flutter test test/features/kid_home/` → **+185, all passed** (whole feature
+  folder, so the change breaks neither the bloc nor any K03-BUG proof; the
   whole-app suite is the integrator's).
-- `flutter test test/core/design_system/nest_pet_stage_test.dart` → **+16**, all
-  passed (FIXES_10 item 2 evidence).
-- `grep skip:` over `test/features/kid_home/` → clean (FIXES_10 references no
-  skipped test; nothing to un-skip). `grep google_fonts|GoogleFonts` → only the
-  comment in `k03_bugs_test.dart` saying there are none. No
-  `analysis_options.yaml` change; no `flutter clean`.
-
-**No simulator** was used. As an offline cross-check I rendered the pumped
-screen in a throwaway widget test at real fonts and wrote
-`docs/screens/K03/ui/widgetrender_{light,dark}_11.png` (1170×2532). They confirm
-the four meadow pins byte-for-byte, but they are **widget renders, not device
-captures** (no OS status bar / home-indicator inset, Pip on the SVG fallback),
-so they must NOT be used as a stage-5 UI verdict — device shots come from
-`tools/screens/shot.sh`. The scratch test file that produced them was deleted;
-nothing scratch is left in the tree.
+- No `analysis_options.yaml` change, no `flutter clean`, no simulator.
 
 ## LEFT FOR NEXT ITERATION
 
-- SHARED_REQUEST **#17** (speech-bubble tail interior) and **#16(b)** (card
-  shadow padding, `_kQuestCardShadowRoom`) — shared-component, nothing local
-  remains; the revert instructions are still in the view comments.
-- SHARED_REQUEST **#6** — now with numbers in this file: the sky above the
-  horizon is up to 13/255 under-graded because `KidScope` has two gradient
-  stops where the CSS has four. When it lands, delete the feature-local
-  `_MeadowPainter` and its `gradeSpan`, and drop the `TODO(K03)` in the view.
-- A fresh device UI capture (stage 5) to re-confirm the band and confirm the
-  glow reads as a fade on the real simulator; expected band 5/6 heat to be
-  unchanged from iteration 10 (it is already at the design's colour).
+- **SHARED_REQUEST #18** (recommended option b) — the hero block's 9-10 px.
+  Nothing local remains: revert instructions are in the view's `_kStageToHearts`
+  doc comment and in the geometry pins' reasons.
+- **SHARED_REQUEST #17b(b)** — the tail's 3 px padding-box offset. No layout
+  impact.
+- SHARED_REQUEST **#16(b)** (`_kQuestCardShadowRoom`) and **#6** (the sky's
+  missing gradient stops, the last band-1-4 heat) are unchanged and still open.
+- A fresh device UI check (stage 5) to re-measure the band table with the rows
+  back on the design and confirm the new tail reads as a solid ink wedge.
 
 VERDICT: PASS

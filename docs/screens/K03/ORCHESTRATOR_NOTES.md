@@ -90,3 +90,6 @@ The pet block is now right in light mode.
 1. DARK MEADOW (K03-local, 4th time): the lower content area behind the quest cards must use `--kid-meadow` dark `#1E4A3A` (light `#BFE8B0`, already correct). In the design, dark goes from navy at ≈ y 523 (sheet y 607) to teal-green behind the progress bar and the cards. The app is still flat navy. Use the token (add `kidMeadow` to tokens if missing: SHARED_REQUEST only if it is truly absent), and pin the colour at (10, 600) and (10, 700) in dark.
 2. The dark pet glow (a hard lilac disc) is SHARED. Branch shared/pet_glow is fixing it; not a K03 finding.
 3. Quest order and "4 done today" come from the DB (not findings).
+
+## UPDATE (14:37) — iteration 12: verification only
+The only failure (the speech-bubble tail) was fixed on main by shared/speech_tail, which also updated kid_home_geometry_test.dart and kid_home_view_test.dart for the new tail. After the merge, do NOT change view code. If the merge conflicts in those two test files, keep main's tail assertions and keep your meadow assertions. Then re-verify. Nothing else to change.

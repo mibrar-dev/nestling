@@ -83,18 +83,34 @@ const double _kPipSlotSize = 152;
 
 /// Scroll gap between the pet stage and the hearts row.
 ///
-/// `.scroll > * + *` is `--s4` (16) in the HTML, but the shared pet stage
-/// paints the bubble's 9 px tail and the design's `.k3-pet` 14 px top margin
-/// inside its own block, so 16 here would push every row below the design down
-/// by the same amount. Measured at real fonts
-/// (`kid_home_geometry_test.dart`), 10.75 lands the hearts row centre on
-/// 447.75 — the design's y 448 — and every row below it keeps the design's
-/// `s4` rhythm. The orchestrator's last-pass note sanctions this lever ("fix
-/// by sizing the NestPetStage box — pipSize / nest width / bottom gap — not by
-/// negative margins"); the shared component owns the box now (exactly the
-/// design's 236 px slot for `nestHeight: 188`), the gap is the only lever
-/// left.
-const double _kStageToHearts = 10.75;
+/// `.scroll > * + *` is `--s4` (16) in the HTML, and the design's arithmetic
+/// adds up exactly: speech bubble top 125 + 44 bubble + 14 (`.k3-pet`'s
+/// `margin: 14px auto 0`) → the 236-tall pet box at 183…419, then 16 → the
+/// hearts row at 435, centre 448.
+///
+/// The app gets the pet block from the shared `NestPetStage`, which owns its
+/// own bubble→pet gap (`NestSpacing.s2` = 8, where the design has 14) and
+/// paints the bubble 1 px taller than the design's 44. So the shared block
+/// starts at 178 and ends at 414 — 5 px above the design's 419 — and this gap
+/// is the only lever K03 has to put the rows below back on the design.
+/// Measured at real fonts (`kid_home_geometry_test.dart`), 21 lands the hearts
+/// centre on 447.75 — the design's y 448 — with the title row 494, the
+/// progress bar 527…542, card 1 at 559 and the 12 px card rhythm all on the
+/// design's rows. The orchestrator's note sanctions this lever ("fix by sizing
+/// the NestPetStage box — pipSize / nest width / bottom gap — not by negative
+/// margins"); the shared component owns the box (exactly the design's 236 px
+/// slot for `nestHeight: 188`), so the gap carries the difference.
+///
+/// It was 10.75 until `shared/speech_tail` (b1137f3) made the bubble's tail
+/// CSS `::after` OVERFLOW instead of a 10.25 px in-flow box: the bubble now
+/// lays out 10.25 px shorter, which moved the pet block and every row below it
+/// up by the same amount, so the gap took it back.
+///
+/// REVERT to `NestSpacing.s4` (16) when SHARED_REQUEST #18 lands (the shared
+/// stage's bubble→pet gap becomes the design's 14): the block then starts at
+/// 183 and ends on the design's 419, and this constant goes back to the
+/// design's own `s4` like every other gap on the screen.
+const double _kStageToHearts = 21;
 
 /// Shadow room that `NestKidQuestCard` puts UNDER its own painted card
 /// (`core/design_system/components/nest_quest_card.dart:168`,

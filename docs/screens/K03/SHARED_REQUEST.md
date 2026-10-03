@@ -301,3 +301,79 @@ No schema/DI/token changes needed. No new assets needed (all icons +
     fill reach the tail's tip (or size the tail to the design's 9 px drop)
     so the centre column matches; keep `NestSpeechBubble`'s public API —
     K03 only passes `text`. Blocks: no (cosmetic, 10 px, no layout impact).
+17b. PARTLY LANDED (`shared/speech_tail`, `b1137f3`, merged 14:35 before the
+    iteration-12 build): the tail is now the CSS shape — a solid 18×9 ink
+    triangle as overflow, top flush with the bubble's outer bottom edge, and
+    the bubble's laid-out box is the body alone. That closes the white-interior
+    finding above. **But it has two consequences for K03, both measured below.**
+
+    (a) LAYOUT REGRESSION, 10.25 px — the old tail was an 18×10 IN-FLOW box, so
+    taking it out of flow made the shared pet stage 10.25 px shorter and moved
+    the hero block *and every row below it* up by that much. On a design whose
+    rows are pinned in pixels this is a uniform vertical shift of the whole
+    screen — a UI FAIL under the UI VERDICT RULE, even though every element
+    "looks the same". K03 has put the rows back with its one lever
+    (`_kStageToHearts` 10.75 → 21, `kid_home_view.dart`), but that lever is
+    BELOW the stage, so the hero block itself (nest, Pip) still sits 10 px
+    high. Item 18 is the shared half of the fix.
+
+    (b) The tail is 3 px lower than the design (small, no layout). CSS
+    `bottom: -9px` on `.speech::after` resolves against the PADDING box, so the
+    triangle's top edge is the padding-box bottom (3 px above the border-box
+    bottom) and its apex lands 6 px below the border box; Flutter's
+    `Positioned(bottom: -tailHeight)` resolves against the border box, so the
+    top is 3 px lower and the apex 9 px below. Measured on
+    `design/screens/light/K03-kid-home.png` (÷3, ink runs per row): base row
+    y 165 (18 wide), 169 → x 190…199, 170 → 191…198, 171 → 192…197,
+    172 → 193…196, 173 → 194…195, apex ≈174.5 — the design's ink wedge is
+    165…174 with the bubble's bottom border at 166…168. One-line fix:
+    `bottom: -(NestSpeechBubble.tailHeight - context.nestKid.borderWidth)`
+    (−6 instead of −9) puts the wedge on 164…173, within ~1.5 px of the design.
+    Files: `app/lib/core/design_system/components/nest_pet_stage.dart`
+    (`NestSpeechBubble`'s `Positioned(bottom: …)`).
+    Blocks: no (3 px, overflow only, zero layout impact).
+18. OPEN (iteration 12, measured): **the shared pet stage's speech→pet gap is
+    8 px where the design has 14**, which is why K03's hero block sits 10 px
+    high and needed a magic 21 px stage→hearts gap to put the rows below back.
+    Arithmetic from `design/screens/light/K03-kid-home.png` (÷3) against the app
+    measured at real fonts (`kid_home_geometry_test.dart`):
+
+    | row | design | app now | delta |
+    |---|---|---|---|
+    | `.speech` border box | 125…169 (44 tall) | 125…170 (45) | +1 |
+    | `.k3-pet` box (`.k3-stage` flex column) | 183…419 (`margin: 14px auto 0`) | 178…414 (gap 8) | −5 |
+    | visible nest rim | 278 (= pet top + 95) | 269 (= block top + 91) | −9 |
+    | Pip head / feet | 199 / 301 | 190 / 292 | −9 |
+    | hearts centre | 448 | 448 (after `_kStageToHearts` 21) | 0 |
+    | section row / progress / card 1 / dock top | 494 / 527…542 / 559 / 720 | 494 / 527…542 / 559 / 720 | 0 |
+
+    The shared 236-tall explicit slot is fixed (`_explicitSlotH`), so the only
+    shared knob is the gap the stage puts between its bubble and the scene:
+    `Padding(padding: EdgeInsets.only(bottom: NestSpacing.s2))` in
+    `NestPetStage.build`. Two options, both one-liners:
+
+    - **(a) minimal** — gap `NestSpacing.s2` → `NestSpacing.gap14` (the design's
+      `.k3-pet { margin: 14px auto 0 }`; `NestSpacing.gap14` already exists).
+      Block 184…420, rim 275, feet 298, head 196 — hero within 3 px — and K03
+      would then set `_kStageToHearts` 21 → 15 to keep the rows below.
+    - **(b) exact (recommended)** — gap 14 **and** `_explicitBleed` 31.4 → 27.4
+      in `PipNestFallback` (`nestTop = _explicitSlotH - nestH - _explicitBleed`),
+      so the rim sits 95 px below the block top, the design's own offset (the
+      design's 260×236 `.nest` puts the rim at 95/240). Rim 279, feet 302,
+      head 200 — every hero row within 1 px — and K03 sets `_kStageToHearts`
+      21 → 15. (Option (c), for full exactness: also make the bubble the
+      design's 44 tall — Nunito's natural line box is 23 in Flutter where the
+      browser's `normal` gives 22 — and the rim lands on 278 with
+      `_kStageToHearts` back to the design's `NestSpacing.s4` 16.)
+
+    K03's side of the revert is written into the view: when (b) lands, set
+    `_kStageToHearts = NestSpacing.s4` and the four hero pins in
+    `kid_home_geometry_test.dart` back to 278 / 364 / 301 / 199. Until then K03
+    keeps `_kStageToHearts = 21` (rows below exact) and pins the hero block
+    where the shared component puts it, with the design's number in each
+    reason.
+    Files: `app/lib/core/design_system/components/nest_pet_stage.dart` (the
+    bubble's bottom padding), `app/lib/core/design_system/motion/pip_rive.dart`
+    (`_explicitBleed`, already the subject of open request #16(a)).
+    Blocks: **yes for the hero block** (the UI VERDICT RULE's ±2 px: nest rim,
+    Pip head and Pip feet are 9-10 px off), no for the rest of the screen.
