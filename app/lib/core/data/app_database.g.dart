@@ -2810,6 +2810,17 @@ class $QuestCompletionsTable extends QuestCompletions
     requiredDuringInsert: false,
     defaultValue: const Constant('Europe/London'),
   );
+  static const VerificationMeta _kidNoteMeta = const VerificationMeta(
+    'kidNote',
+  );
+  @override
+  late final GeneratedColumn<String> kidNote = GeneratedColumn<String>(
+    'kid_note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -2822,6 +2833,7 @@ class $QuestCompletionsTable extends QuestCompletions
     createdAtTz,
     decidedAt,
     decidedAtTz,
+    kidNote,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -2904,6 +2916,12 @@ class $QuestCompletionsTable extends QuestCompletions
         ),
       );
     }
+    if (data.containsKey('kid_note')) {
+      context.handle(
+        _kidNoteMeta,
+        kidNote.isAcceptableOrUnknown(data['kid_note']!, _kidNoteMeta),
+      );
+    }
     return context;
   }
 
@@ -2953,6 +2971,10 @@ class $QuestCompletionsTable extends QuestCompletions
         DriftSqlType.string,
         data['${effectivePrefix}decided_at_tz'],
       )!,
+      kidNote: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kid_note'],
+      ),
     );
   }
 
@@ -2973,6 +2995,7 @@ class QuestCompletion extends DataClass implements Insertable<QuestCompletion> {
   final String createdAtTz;
   final DateTime? decidedAt;
   final String decidedAtTz;
+  final String? kidNote;
   const QuestCompletion({
     required this.id,
     required this.questId,
@@ -2984,6 +3007,7 @@ class QuestCompletion extends DataClass implements Insertable<QuestCompletion> {
     required this.createdAtTz,
     this.decidedAt,
     required this.decidedAtTz,
+    this.kidNote,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -3000,6 +3024,9 @@ class QuestCompletion extends DataClass implements Insertable<QuestCompletion> {
       map['decided_at'] = Variable<DateTime>(decidedAt);
     }
     map['decided_at_tz'] = Variable<String>(decidedAtTz);
+    if (!nullToAbsent || kidNote != null) {
+      map['kid_note'] = Variable<String>(kidNote);
+    }
     return map;
   }
 
@@ -3017,6 +3044,9 @@ class QuestCompletion extends DataClass implements Insertable<QuestCompletion> {
           ? const Value.absent()
           : Value(decidedAt),
       decidedAtTz: Value(decidedAtTz),
+      kidNote: kidNote == null && nullToAbsent
+          ? const Value.absent()
+          : Value(kidNote),
     );
   }
 
@@ -3036,6 +3066,7 @@ class QuestCompletion extends DataClass implements Insertable<QuestCompletion> {
       createdAtTz: serializer.fromJson<String>(json['createdAtTz']),
       decidedAt: serializer.fromJson<DateTime?>(json['decidedAt']),
       decidedAtTz: serializer.fromJson<String>(json['decidedAtTz']),
+      kidNote: serializer.fromJson<String?>(json['kidNote']),
     );
   }
   @override
@@ -3052,6 +3083,7 @@ class QuestCompletion extends DataClass implements Insertable<QuestCompletion> {
       'createdAtTz': serializer.toJson<String>(createdAtTz),
       'decidedAt': serializer.toJson<DateTime?>(decidedAt),
       'decidedAtTz': serializer.toJson<String>(decidedAtTz),
+      'kidNote': serializer.toJson<String?>(kidNote),
     };
   }
 
@@ -3066,6 +3098,7 @@ class QuestCompletion extends DataClass implements Insertable<QuestCompletion> {
     String? createdAtTz,
     Value<DateTime?> decidedAt = const Value.absent(),
     String? decidedAtTz,
+    Value<String?> kidNote = const Value.absent(),
   }) => QuestCompletion(
     id: id ?? this.id,
     questId: questId ?? this.questId,
@@ -3077,6 +3110,7 @@ class QuestCompletion extends DataClass implements Insertable<QuestCompletion> {
     createdAtTz: createdAtTz ?? this.createdAtTz,
     decidedAt: decidedAt.present ? decidedAt.value : this.decidedAt,
     decidedAtTz: decidedAtTz ?? this.decidedAtTz,
+    kidNote: kidNote.present ? kidNote.value : this.kidNote,
   );
   QuestCompletion copyWithCompanion(QuestCompletionsCompanion data) {
     return QuestCompletion(
@@ -3094,6 +3128,7 @@ class QuestCompletion extends DataClass implements Insertable<QuestCompletion> {
       decidedAtTz: data.decidedAtTz.present
           ? data.decidedAtTz.value
           : this.decidedAtTz,
+      kidNote: data.kidNote.present ? data.kidNote.value : this.kidNote,
     );
   }
 
@@ -3109,7 +3144,8 @@ class QuestCompletion extends DataClass implements Insertable<QuestCompletion> {
           ..write('createdAt: $createdAt, ')
           ..write('createdAtTz: $createdAtTz, ')
           ..write('decidedAt: $decidedAt, ')
-          ..write('decidedAtTz: $decidedAtTz')
+          ..write('decidedAtTz: $decidedAtTz, ')
+          ..write('kidNote: $kidNote')
           ..write(')'))
         .toString();
   }
@@ -3126,6 +3162,7 @@ class QuestCompletion extends DataClass implements Insertable<QuestCompletion> {
     createdAtTz,
     decidedAt,
     decidedAtTz,
+    kidNote,
   );
   @override
   bool operator ==(Object other) =>
@@ -3140,7 +3177,8 @@ class QuestCompletion extends DataClass implements Insertable<QuestCompletion> {
           other.createdAt == this.createdAt &&
           other.createdAtTz == this.createdAtTz &&
           other.decidedAt == this.decidedAt &&
-          other.decidedAtTz == this.decidedAtTz);
+          other.decidedAtTz == this.decidedAtTz &&
+          other.kidNote == this.kidNote);
 }
 
 class QuestCompletionsCompanion extends UpdateCompanion<QuestCompletion> {
@@ -3154,6 +3192,7 @@ class QuestCompletionsCompanion extends UpdateCompanion<QuestCompletion> {
   final Value<String> createdAtTz;
   final Value<DateTime?> decidedAt;
   final Value<String> decidedAtTz;
+  final Value<String?> kidNote;
   const QuestCompletionsCompanion({
     this.id = const Value.absent(),
     this.questId = const Value.absent(),
@@ -3165,6 +3204,7 @@ class QuestCompletionsCompanion extends UpdateCompanion<QuestCompletion> {
     this.createdAtTz = const Value.absent(),
     this.decidedAt = const Value.absent(),
     this.decidedAtTz = const Value.absent(),
+    this.kidNote = const Value.absent(),
   });
   QuestCompletionsCompanion.insert({
     this.id = const Value.absent(),
@@ -3177,6 +3217,7 @@ class QuestCompletionsCompanion extends UpdateCompanion<QuestCompletion> {
     this.createdAtTz = const Value.absent(),
     this.decidedAt = const Value.absent(),
     this.decidedAtTz = const Value.absent(),
+    this.kidNote = const Value.absent(),
   }) : questId = Value(questId),
        childId = Value(childId),
        familyId = Value(familyId);
@@ -3191,6 +3232,7 @@ class QuestCompletionsCompanion extends UpdateCompanion<QuestCompletion> {
     Expression<String>? createdAtTz,
     Expression<DateTime>? decidedAt,
     Expression<String>? decidedAtTz,
+    Expression<String>? kidNote,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -3203,6 +3245,7 @@ class QuestCompletionsCompanion extends UpdateCompanion<QuestCompletion> {
       if (createdAtTz != null) 'created_at_tz': createdAtTz,
       if (decidedAt != null) 'decided_at': decidedAt,
       if (decidedAtTz != null) 'decided_at_tz': decidedAtTz,
+      if (kidNote != null) 'kid_note': kidNote,
     });
   }
 
@@ -3217,6 +3260,7 @@ class QuestCompletionsCompanion extends UpdateCompanion<QuestCompletion> {
     Value<String>? createdAtTz,
     Value<DateTime?>? decidedAt,
     Value<String>? decidedAtTz,
+    Value<String?>? kidNote,
   }) {
     return QuestCompletionsCompanion(
       id: id ?? this.id,
@@ -3229,6 +3273,7 @@ class QuestCompletionsCompanion extends UpdateCompanion<QuestCompletion> {
       createdAtTz: createdAtTz ?? this.createdAtTz,
       decidedAt: decidedAt ?? this.decidedAt,
       decidedAtTz: decidedAtTz ?? this.decidedAtTz,
+      kidNote: kidNote ?? this.kidNote,
     );
   }
 
@@ -3265,6 +3310,9 @@ class QuestCompletionsCompanion extends UpdateCompanion<QuestCompletion> {
     if (decidedAtTz.present) {
       map['decided_at_tz'] = Variable<String>(decidedAtTz.value);
     }
+    if (kidNote.present) {
+      map['kid_note'] = Variable<String>(kidNote.value);
+    }
     return map;
   }
 
@@ -3280,7 +3328,8 @@ class QuestCompletionsCompanion extends UpdateCompanion<QuestCompletion> {
           ..write('createdAt: $createdAt, ')
           ..write('createdAtTz: $createdAtTz, ')
           ..write('decidedAt: $decidedAt, ')
-          ..write('decidedAtTz: $decidedAtTz')
+          ..write('decidedAtTz: $decidedAtTz, ')
+          ..write('kidNote: $kidNote')
           ..write(')'))
         .toString();
   }
@@ -10775,6 +10824,7 @@ typedef $$QuestCompletionsTableCreateCompanionBuilder =
       Value<String> createdAtTz,
       Value<DateTime?> decidedAt,
       Value<String> decidedAtTz,
+      Value<String?> kidNote,
     });
 typedef $$QuestCompletionsTableUpdateCompanionBuilder =
     QuestCompletionsCompanion Function({
@@ -10788,6 +10838,7 @@ typedef $$QuestCompletionsTableUpdateCompanionBuilder =
       Value<String> createdAtTz,
       Value<DateTime?> decidedAt,
       Value<String> decidedAtTz,
+      Value<String?> kidNote,
     });
 
 final class $$QuestCompletionsTableReferences
@@ -10892,6 +10943,11 @@ class $$QuestCompletionsTableFilterComposer
 
   ColumnFilters<String> get decidedAtTz => $composableBuilder(
     column: $table.decidedAtTz,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get kidNote => $composableBuilder(
+    column: $table.kidNote,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -11009,6 +11065,11 @@ class $$QuestCompletionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get kidNote => $composableBuilder(
+    column: $table.kidNote,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$QuestsTableOrderingComposer get questId {
     final $$QuestsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -11112,6 +11173,9 @@ class $$QuestCompletionsTableAnnotationComposer
     column: $table.decidedAtTz,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get kidNote =>
+      $composableBuilder(column: $table.kidNote, builder: (column) => column);
 
   $$QuestsTableAnnotationComposer get questId {
     final $$QuestsTableAnnotationComposer composer = $composerBuilder(
@@ -11223,6 +11287,7 @@ class $$QuestCompletionsTableTableManager
                 Value<String> createdAtTz = const Value.absent(),
                 Value<DateTime?> decidedAt = const Value.absent(),
                 Value<String> decidedAtTz = const Value.absent(),
+                Value<String?> kidNote = const Value.absent(),
               }) => QuestCompletionsCompanion(
                 id: id,
                 questId: questId,
@@ -11234,6 +11299,7 @@ class $$QuestCompletionsTableTableManager
                 createdAtTz: createdAtTz,
                 decidedAt: decidedAt,
                 decidedAtTz: decidedAtTz,
+                kidNote: kidNote,
               ),
           createCompanionCallback:
               ({
@@ -11247,6 +11313,7 @@ class $$QuestCompletionsTableTableManager
                 Value<String> createdAtTz = const Value.absent(),
                 Value<DateTime?> decidedAt = const Value.absent(),
                 Value<String> decidedAtTz = const Value.absent(),
+                Value<String?> kidNote = const Value.absent(),
               }) => QuestCompletionsCompanion.insert(
                 id: id,
                 questId: questId,
@@ -11258,6 +11325,7 @@ class $$QuestCompletionsTableTableManager
                 createdAtTz: createdAtTz,
                 decidedAt: decidedAt,
                 decidedAtTz: decidedAtTz,
+                kidNote: kidNote,
               ),
           withReferenceMapper: (p0) => p0
               .map(

@@ -21,12 +21,15 @@ import 'package:sqlite3/sqlite3.dart' as sqlite;
 /// `beforeOpen` touches (the v3 → v5 open also runs the v4 and v5 steps).
 /// `rewards` is included in its exact pre-v5 shape: real v3 databases always
 /// have it, and the v5 step needs the table to exist.
+/// `quest_completions` is a PK-only stub: real v3 databases always have it,
+/// and the v6 step needs the table to exist.
 const List<String> _v3Ddl = <String>[
   'CREATE TABLE families (id TEXT NOT NULL PRIMARY KEY)',
   'CREATE TABLE settings (family_id TEXT NOT NULL PRIMARY KEY)',
   'CREATE TABLE app_state (id INTEGER NOT NULL PRIMARY KEY)',
   "CREATE TABLE quests (id TEXT NOT NULL PRIMARY KEY, family_id TEXT NOT NULL, title TEXT NOT NULL, icon TEXT NOT NULL DEFAULT 'star', coins INTEGER NOT NULL DEFAULT 10, repeat_rule TEXT NOT NULL DEFAULT 'once', days TEXT NOT NULL DEFAULT '', due_label TEXT NULL, needs_approval INTEGER NOT NULL DEFAULT 1, assignee_child_id TEXT NULL, active INTEGER NOT NULL DEFAULT 1, due_time_local TEXT NULL)",
   "CREATE TABLE rewards (id TEXT NOT NULL PRIMARY KEY, family_id TEXT NOT NULL, title TEXT NOT NULL, icon TEXT NOT NULL DEFAULT 'gift', coin_price INTEGER NOT NULL, needs_ok INTEGER NOT NULL DEFAULT 1)",
+  'CREATE TABLE quest_completions (id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT)',
 ];
 
 /// Seed insertion order (the display order — never alphabetical).
