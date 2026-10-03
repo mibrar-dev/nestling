@@ -985,7 +985,13 @@ void main() {
         await pumpAppRoute(tester, '/add-children');
         await _resize(tester, width, 1);
 
-        final head = tester.getRect(find.text('Who\u2019s in your nest?'));
+        // The heading BAND is the `NestBalancedText` box, not the `Text`'s
+        // own box: `.h1` is `text-wrap: balance` (components.css) and
+        // `NestBalancedText` shrinks its box to the balanced break width (CSS
+        // keeps the block full width and only re-breaks the lines), so the
+        // rendered text is narrower by design while the band still fills the
+        // 20 px gutters like every other band on the screen.
+        final head = tester.getRect(find.byType(NestBalancedText));
         final grid = tester.getRect(find.byType(KidCardGrid));
         final formCard = tester.getRect(find.byType(NestCard).last);
         final addAnother = tester.getRect(
@@ -1121,7 +1127,10 @@ void main() {
       for (final band in AddChildFormCard.ageBands) {
         // Design geometry (`.chip { height: 32px }`) with the ≥44×44 tap area
         // overlaid (SPACING_SPEC §10.6) — so the layout box is 32 high and the
-        // tap target extends beyond it invisibly.
+        // tap target extends beyond it invisibly. The FUNCTIONAL 44-px proof
+        // (taps 5 px above and below the run select the chip) is the
+        // `[P05-BUG-11]` test further down; a 32-high layout box here is the
+        // design, not a tap-target regression.
         final size = tester.getSize(find.byKey(Key('ageChip-$band')));
         expect(
           size.width,
@@ -2204,13 +2213,16 @@ void main() {
     });
   });
 
-  group('P05 chip row prerequisites for the shared hit-area fix', () {
+  group('P05 chip row hit-area preconditions (shared fix landed)', () {
     // Orchestrator decision 04:31 — keep both owner rules (32-px visual chip,
-    // 44-px tap target). The fix is `NestChipWrap` on shared/chip_wrap_hit_area
-    // (not yet on main as of this stage), and it only widens the hit test if no
-    // ancestor between the chips and the card is tight. These tests pin that
-    // precondition and the gaps the swap relies on, so the swap is a one-line
-    // change with nothing left to verify by hand.
+    // 44-px tap target). `NestChipWrap` (shared `shared/chip_wrap_hit_area`) is
+    // on main and both chip rows use it, but it can only widen the hit test if
+    // no render box between the chips and the card is tight around the row.
+    // The trap is a `Semantics` container ON the row: its render object is
+    // `RenderSemanticsAnnotations`, a `RenderProxyBox` whose `hitTest` stops at
+    // `size.contains(position)`, i.e. exactly the 32-px run — so the group's
+    // labelled node now sits on the row's own `.lbl` heading instead. These
+    // tests pin that precondition and the gaps the row relies on.
     testWidgets('no ancestor of the chip row is tight around its ±6 px', (
       tester,
     ) async {
@@ -2266,74 +2278,130 @@ void main() {
       // gives at least 6 px above and below": it gives 4 above (the design's
       // own value) and 8 below. That is not a problem for `NestChipWrap` —
       // reachability depends on the ancestors' boxes (asserted above), not on
-      // clear space — but the 2 px of top overhang lands on the inert
-      // "Age band" label, so no control can be stolen.
+      // clear space — so 2 px of the top overhang lands on the bottom of the
+      // "Age band" heading, and the heading itself stays inert (proven in the
+      // group below).
       expect(row.top - ageLabel.bottom, NestSpacing.s1);
       expect(colourLabel.top - chipsRowBottom(tester), NestSpacing.s2);
-      // What the 2 px of top overhang lands on is inert: "a tap on the label
-      // strip belongs to no control" is proven in the group below.
 
       expect(tester.takeException(), isNull);
       await disposeApp(tester);
     });
   });
 
-  group('P05 chip tap area (shared batch 2: 32-px pill, 44-px overlay)', () {
-    // P05-BUG-11 (open, filed by the bugs stage, proof skipped in
-    // p05_bugs_test.dart): `_ExpandedHitBox` widens the chip's hit test to
-    // 44×44, but only hits that reach it count — and the chip `Wrap`'s own box
-    // is exactly the 32-px run, so Flutter stops the hit test there and the
-    // ±6 px overlay is unreachable at the block's edges. Measured on the first
-    // row (the production-relevant one-row case): reachable = the pill itself.
+  group('P05 chip tap area (32-px pill, 44-px target)', () {
+    // P05-BUG-11 (fixed): `_ExpandedHitBox` widens the chip's hit test to 44×44,
+    // and `NestChipWrap` (shared `shared/chip_wrap_hit_area`) now forwards that
+    // 44-px target 6 px beyond the 32-px run on all four sides, so the vertical
+    // target is reachable at the edges of the block (SPACING_SPEC §10.6: a
+    // 44-min tap area around the 32-px visual, "keep visual size").
     testWidgets(
-      '[P05-BUG-11] the vertical overlay is clipped by the chip Wrap (32-px '
-      'effective target)',
+      '[P05-BUG-11] the 44-px tap target reaches 6 px above and below the run',
       (tester) async {
         await setUpTestScope();
         await pumpAppRoute(tester, '/add-children');
 
-        final pill = tester.getRect(find.byKey(const Key('ageChip-4-6')));
+        final first = tester.getRect(find.byKey(const Key('ageChip-4-6')));
+        final last = tester.getRect(find.byKey(const Key('ageChip-13+')));
         bool isSelected(String band) =>
             tester.widget<NestChip>(find.byKey(Key('ageChip-$band'))).selected;
 
-        // Inside the pill: reachable.
-        await tester.tapAt(pill.center);
-        await tester.pump();
-        expect(isSelected('4-6'), isTrue);
-
-        // Move the selection away first, so "did this tap land?" is
-        // unambiguous (chips are single-select: re-tapping one keeps it).
-        final other = tester.getRect(find.byKey(const Key('ageChip-7-9')));
-        await tester.tapAt(other.center);
-        await tester.pump();
-        expect(isSelected('7-9'), isTrue);
-        expect(isSelected('4-6'), isFalse);
-
-        // 3 px above the pill is inside the 44-px target by design, but it is
-        // also above the Wrap's own top edge, so the tap is dropped. Flip to
-        // `isTrue` when the shared fix lands (branch shared/chip_wrap_hit_area,
-        // NestChipWrap — SPACING_SPEC §10.6 wants a 44-min target around the
-        // 32-px visual).
-        await tester.tapAt(Offset(pill.center.dx, pill.top - 3));
+        // The block's two outer edges (what production renders as a single
+        // run): the first run's top and the last run's bottom. The test font is
+        // wider than Nunito, so the chips wrap to two runs here — the proof has
+        // to use the block edges, because a point INSIDE the row is legitimately
+        // handed to the nearest chip (documented by `NestChipWrap`).
+        await tester.tapAt(Offset(first.center.dx, first.top - 5));
         await tester.pump();
         expect(
           isSelected('4-6'),
-          isFalse,
-          reason: 'P05-BUG-11: clipped by the Wrap — becomes true when fixed',
+          isTrue,
+          reason: 'tap 5 px above the first run is inside the 44-px target',
         );
-        expect(isSelected('7-9'), isTrue, reason: 'the tap changed nothing');
 
-        // The bottom edge is left to the bugs-stage proof
-        // (`p05_bugs_test.dart`, P05-BUG-11, skipped): in this test font the
-        // chips wrap to two rows, so 5 px below row 1 sits inside row 2's
-        // stretched target as well and the assertion would be ambiguous.
-        // Production renders one row, where the point is outside the Wrap just
-        // like the top edge.
+        await tester.tapAt(Offset(last.center.dx, last.bottom + 5));
+        await tester.pump();
+        expect(
+          isSelected('13+'),
+          isTrue,
+          reason: 'tap 5 px below the last run is inside the 44-px target',
+        );
+
+        // 7 px is outside the 44-px target, so a tap there belongs to nothing
+        // and must not move the selection — the guard that stops the widened
+        // hit test from swallowing the whole card.
+        await tester.tapAt(Offset(last.center.dx, last.bottom + 7));
+        await tester.pump();
+        expect(isSelected('13+'), isTrue, reason: 'the tap changed nothing');
+        expect(isSelected('4-6'), isFalse);
 
         expect(tester.takeException(), isNull);
         await disposeApp(tester);
       },
     );
+
+    // FIXES_7 item 1: a UI check measures the pill's BACKGROUND rect, not just
+    // where the text lands. `.chip { height: 32px; padding: 0 14px }`
+    // (components.css) — the pill is its text plus 14 px on each side, and the
+    // 1.5 px border paints inside that box.
+    testWidgets('the chip pill background is text + 14 px a side, 32 high', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/add-children');
+
+      for (final band in AddChildFormCard.ageBands) {
+        final pill = tester.getRect(find.byKey(Key('ageChip-$band')));
+        final text = tester.getRect(find.text(displayAgeBand(band)));
+        final paint = tester.getRect(
+          find
+              .descendant(
+                of: find.byKey(Key('ageChip-$band')),
+                matching: find.byType(DecoratedBox),
+              )
+              .first,
+        );
+
+        expect(
+          pill.width,
+          text.width + NestSpacing.gap14 * 2,
+          reason: '$band: `.chip { padding: 0 14px }`, never text width alone',
+        );
+        expect(pill.height, NestSpacing.s8, reason: '$band height');
+        // The visible background/border rect IS the chip box: the padding sits
+        // inside the `DecoratedBox`, so the fill is not narrower than the chip.
+        expect(
+          paint,
+          pill,
+          reason: '$band: the painted pill fills the chip box',
+        );
+      }
+
+      // `.chip-row { gap: 8px }` — 8 px between chips in a run, and a wrapped run
+      // starts back on the row's left edge (`flex-wrap`, left-aligned).
+      Rect? prev;
+      final rowLeft = tester.getRect(find.byKey(const Key('ageChip-4-6'))).left;
+      for (final band in AddChildFormCard.ageBands) {
+        final rect = tester.getRect(find.byKey(Key('ageChip-$band')));
+        if (prev != null && rect.left > prev.right) {
+          expect(
+            rect.left - prev.right,
+            closeTo(NestSpacing.s2, 0.5),
+            reason: '$band: 8 px gap after the previous chip',
+          );
+        } else if (prev != null) {
+          expect(
+            rect.left,
+            closeTo(rowLeft, 0.5),
+            reason: '$band: wrapped row',
+          );
+        }
+        prev = rect;
+      }
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
 
     testWidgets('the pill itself is the design size and selects on tap', (
       tester,
@@ -2356,9 +2424,22 @@ void main() {
       expect(isSelected('13+'), isTrue);
       expect(isSelected('7-9'), isFalse, reason: 'selection is single');
 
-      // The "Age band" label strip above the block belongs to no control.
+      // The "Age band" heading belongs to no control. The 44-px tap target
+      // reaches 6 px above the run (`.chip-row { margin-top: 4px }` plus
+      // `hitSlop`), so the tap has to be on the word itself, further up.
       final label = tester.getRect(find.text('Age band'));
-      await tester.tapAt(Offset(pill.center.dx, label.bottom - 2));
+      final row = tester.getRect(find.byKey(const Key('ageChip-4-6')));
+      expect(
+        row.top - label.bottom,
+        NestSpacing.s1,
+        reason: '.chip-row { margin-top: 4px }',
+      );
+      expect(
+        row.top - label.bottom,
+        lessThan(NestChip.hitSlop + NestSpacing.s1),
+        reason: 'the widened tap target stops inside the label box',
+      );
+      await tester.tapAt(Offset(row.center.dx, label.center.dy));
       await tester.pump();
       expect(isSelected('13+'), isTrue, reason: 'the tap changed nothing');
       expect(isSelected('7-9'), isFalse);

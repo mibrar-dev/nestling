@@ -61,55 +61,72 @@ class AddChildFormCard extends StatelessWidget {
             onChanged: onNicknameChanged,
           ),
           const SizedBox(height: NestSpacing.s2),
-          Text(
-            'Age band',
-            style: NestType.fieldLabel(color: tokens.ink2),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          // The design's `role="group" aria-label` (P05-add-children.html)
+          // becomes this labelled node. It sits on the row's own `.lbl`
+          // heading and deliberately does NOT wrap the chips: a `Semantics`
+          // render box is tight around its child (RenderBox.hitTest stops at
+          // `size.contains`), so wrapping the row would clip the 44-px tap
+          // target's 6 px above/below the 32-px run — P05-BUG-11. The card
+          // `Column` hit-tests its children without a bounds check, so
+          // `NestChipWrap` (which widens its own hit test) receives the tap.
+          Semantics(
+            container: true,
+            label: 'Age band',
+            excludeSemantics: true,
+            child: Text(
+              'Age band',
+              style: NestType.fieldLabel(color: tokens.ink2),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
           const SizedBox(height: NestSpacing.s1),
-          Semantics(
-            label: 'Age band',
-            container: true,
-            child: Wrap(
-              spacing: NestSpacing.s2,
-              runSpacing: NestSpacing.s2,
-              children: [
-                // The shared NestChip shrink-wraps by construction (its old
-                // greedy Center is gone), so the Wrap lays one row directly.
-                for (final band in ageBands)
-                  NestChip(
-                    key: Key('ageChip-$band'),
-                    label: displayAgeBand(band),
-                    selected: draftAgeBand == band,
-                    onSelected: (_) => onAgeBandSelected(band),
-                  ),
-              ],
-            ),
+          // `NestChipWrap`, not `Wrap`: the pill is 32 high in the flow
+          // (`SPACING_SPEC` §6/§10.6) and the wrap is what keeps the 44-px tap
+          // target reachable 6 px above and below the run (P05-BUG-11).
+          NestChipWrap(
+            spacing: NestSpacing.s2,
+            runSpacing: NestSpacing.s2,
+            children: [
+              // The shared NestChip shrink-wraps by construction (its old
+              // greedy Center is gone), so the row lays out in one run.
+              for (final band in ageBands)
+                NestChip(
+                  key: Key('ageChip-$band'),
+                  label: displayAgeBand(band),
+                  selected: draftAgeBand == band,
+                  onSelected: (_) => onAgeBandSelected(band),
+                ),
+            ],
           ),
           const SizedBox(height: NestSpacing.s2),
-          Text(
-            'Avatar colour',
-            style: NestType.fieldLabel(color: tokens.ink2),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          // Same rule as the "Age band" heading above.
+          Semantics(
+            container: true,
+            label: 'Avatar colour',
+            excludeSemantics: true,
+            child: Text(
+              'Avatar colour',
+              style: NestType.fieldLabel(color: tokens.ink2),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
           const SizedBox(height: NestSpacing.s1),
-          Semantics(
-            label: 'Avatar colour',
-            container: true,
-            child: Wrap(
-              spacing: NestSpacing.s2,
-              runSpacing: NestSpacing.s2,
-              children: [
-                for (final colour in swatchColours)
-                  _Swatch(
-                    colour: colour,
-                    selected: draftAvatarColour == colour,
-                    onTap: () => onAvatarColourSelected(colour),
-                  ),
-              ],
-            ),
+          // Swatches are interactive items too, so the row uses
+          // `NestChipWrap` as well (owner rule). Their own boxes are already
+          // 44×44 (`.sw`), so this only widens the hit test: no layout change.
+          NestChipWrap(
+            spacing: NestSpacing.s2,
+            runSpacing: NestSpacing.s2,
+            children: [
+              for (final colour in swatchColours)
+                _Swatch(
+                  colour: colour,
+                  selected: draftAvatarColour == colour,
+                  onTap: () => onAvatarColourSelected(colour),
+                ),
+            ],
           ),
           const SizedBox(height: NestSpacing.gap6),
           Text(

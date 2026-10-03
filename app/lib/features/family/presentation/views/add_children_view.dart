@@ -194,9 +194,14 @@ class _Body extends StatelessWidget {
           children: [
             Semantics(
               header: true,
-              child: Text(
+              // `.h1 { text-wrap: balance }` in components.css, so the
+              // heading renders through `NestBalancedText` (same copy, style
+              // and maxLines; the break moves earlier so no line orphans a
+              // single word).
+              child: NestBalancedText(
                 'Who\u2019s in your nest?',
                 style: NestType.h1(color: tokens.ink),
+                textAlign: TextAlign.left,
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
               ),

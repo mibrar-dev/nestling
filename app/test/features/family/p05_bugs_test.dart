@@ -1,11 +1,7 @@
 // P05 · Add children — bug proofs.
 //
-// P05-BUG-1…10 are fixed; their proofs run un-skipped as regressions.
-// P05-BUG-11 (the overlaid chip tap area is clipped by the chip `Wrap`) is
-// open and carries `skip: true` with the id in the name so `flutter test`
-// stays green; the fix stage removes the skip. Run it with
-// `flutter test --run-skipped test/features/family/p05_bugs_test.dart`.
-// Full reports: `docs/screens/P05/6_bugs.md`.
+// P05-BUG-1…11 are fixed; their proofs run un-skipped as regressions, with the
+// bug id in the test name. Full reports: `docs/screens/P05/6_bugs.md`.
 
 import 'dart:async';
 
@@ -486,42 +482,42 @@ void main() {
     });
   });
 
-  // P05-BUG-11 — the shared NestChip's overlaid 44-px hit area is
-  // unreachable in P05's chip `Wrap`: the run is exactly the 32-px pill and
-  // Flutter hit testing stops at the Wrap's bounds, so the effective tap
-  // target is 44×32. SPACING_SPEC §10.6 requires a 44-min tap area around
-  // the 32 visual; the tap-target test now asserts the 32 layout, so nothing
-  // currently proves the 44-high target.
-  group('P05-BUG-11 age-chip tap target is 32 high, not 44 (major)', () {
+  // P05-BUG-11 - the shared NestChip's overlaid 44-px hit area used to be
+  // unreachable at the edges of P05's chip row: the run was exactly the 32-px
+  // pill and Flutter's hit test stopped at the Wrap's own bounds, so the
+  // effective tap target was 44x32. Fixed by the shared NestChipWrap (branch
+  // shared/chip_wrap_hit_area, merged into main) plus keeping the group's
+  // Semantics node off the row: a Semantics render box is tight around its
+  // child, so it clipped the widened hit test again. SPACING_SPEC 10.6 wants a
+  // 44-min tap area around the 32-px visual.
+  group('P05-BUG-11 age-chip tap target reaches the full 44 px (major)', () {
     testWidgets(
       '[P05-BUG-11] the overlaid tap area above/below the chip selects it',
-      // P05-BUG-11 is a shared finding, not a P05 one: fix pending on branch
-      // shared/chip_wrap_hit_area (NestChipWrap). NOT a P05 finding while the
-      // shared fix is pending — un-skip when NestChipWrap merges (it must pass).
-      skip: true,
       (tester) async {
         await setUpTestScope();
         await pumpAppRoute(tester, '/add-children');
 
-        NestChip chip4() =>
-            tester.widget<NestChip>(find.byKey(const Key('ageChip-4-6')));
-        final pill = tester.getRect(find.byKey(const Key('ageChip-4-6')));
+        NestChip chip(String band) =>
+            tester.widget<NestChip>(find.byKey(Key('ageChip-$band')));
+        final first = tester.getRect(find.byKey(const Key('ageChip-4-6')));
+        final last = tester.getRect(find.byKey(const Key('ageChip-13+')));
 
-        // The overlaid 44-px area extends 6 px above and below the 32-px pill.
-        await tester.tapAt(Offset(pill.center.dx, pill.top - 5));
+        // The two outer edges of the block. The test font is wider than
+        // Nunito, so the chips wrap to two runs here; a point inside the row
+        // belongs to the NEAREST chip by NestChipWrap's rule, so only the
+        // block edges give an unambiguous proof.
+        await tester.tapAt(Offset(first.center.dx, first.top - 5));
         await tester.pump();
         expect(
-          chip4().selected,
+          chip('4-6').selected,
           isTrue,
           reason: 'tap 5 px above the pill is inside the 44-px target',
         );
 
-        await tester.tap(find.byKey(const Key('ageChip-7-9')));
-        await tester.pump();
-        await tester.tapAt(Offset(pill.center.dx, pill.bottom + 5));
+        await tester.tapAt(Offset(last.center.dx, last.bottom + 5));
         await tester.pump();
         expect(
-          chip4().selected,
+          chip('13+').selected,
           isTrue,
           reason: 'tap 5 px below the pill is inside the 44-px target',
         );
