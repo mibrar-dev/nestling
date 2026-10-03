@@ -32,11 +32,17 @@ for i in 1 2 3 4 5; do
     sleep 30
     sz=$(wc -c < "$LOG" 2>/dev/null | tr -d ' ')
     if [ "$sz" = "$last" ]; then idle=$((idle+30)); else idle=0; last=$sz; fi
+    # A run that has printed NOTHING for 5 min is a dead session resume: kill it
+    # early and retry in a FRESH session (new title) instead of the same one.
+    if [ "${sz:-0}" = 0 ] && [ $idle -ge 300 ]; then
+      kill $OC 2>/dev/null; pkill -P $OC 2>/dev/null; FRESH=1; break
+    fi
     if [ $idle -ge $IDLE_MAX ]; then
       pkill -P $OC 2>/dev/null; kill $OC 2>/dev/null; echo "Error: idle watchdog killed the agent after ${idle}s" >> "$LOG"; break
     fi
   done
   wait $OC; rc=$?
+  if [ "${FRESH:-0}" = 1 ]; then FRESH=0; ev RETRY "attempt=$i reason=empty_session_fresh"; SID="-"; TITLE="$TITLE (fresh $(date +%H%M))"; continue; fi
   # Reap flutter_tester processes this agent orphaned in its worktree (killed
   # test runs leave them parented to launchd, eating memory and CPU).
   WD="$(pwd)"; for tp in $(pgrep -f flutter_tester); do
