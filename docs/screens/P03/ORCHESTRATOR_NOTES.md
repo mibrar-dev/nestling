@@ -17,3 +17,6 @@
 - The subtitle's early wrap is a SHARED typography bug (body text ~3% wider than the design on every screen); a shared fix (shared/body_text_width) is in progress and will be merged into your branch before your build. Do NOT tweak the subtitle's size/letter-spacing locally; re-measure after the merge.
 - The remaining mean diff is mostly the empty-vs-filled form state — that is expected; the filled state is covered by your widget test.
 - Focus this iteration on the FIXES_4 test/review/bug items so those stages go green.
+
+## UPDATE (23:48) — shared batch 2 merged into your branch
+NestChip is 32 px (44 hit area), NestTextField has an error state (errorText → danger border + text below), NestPetStage has an explicit size mode, children order by created_at. Use them; remove local workarounds. google_fonts is gone: delete any GoogleFonts lines in your tests (analyze currently reports them).
