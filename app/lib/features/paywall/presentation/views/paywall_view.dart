@@ -403,14 +403,15 @@ class _PaywallTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // `h1 balance` in the design: `NestBalancedText` keeps the two-line
+    // minimum and picks the narrowest width that still fits it, so the
+    // break lands after "Nestling" instead of orphaning "days".
     return Semantics(
       header: true,
-      child: Text(
+      child: NestBalancedText(
         'Try Nestling free for 14 days',
         style: NestType.h1(color: context.nest.ink),
-        textAlign: TextAlign.center,
         maxLines: 3,
-        overflow: TextOverflow.ellipsis,
       ),
     );
   }
@@ -418,62 +419,93 @@ class _PaywallTitle extends StatelessWidget {
 
 /// The four `.benefit` rows: 24px leaf-tint tick + Inter 15/24 text.
 /// (Closest token `bodySmall` is 15/22, so the 15/24 line box is explicit.)
+/// The last row names the family's co-parent from the database
+/// (shared_batch3): "Co-parent sharing, so `Name` sees the same" when the
+/// family has one (`Seed.demo` ships James), "… so everyone sees the same"
+/// otherwise.
 class _BenefitList extends StatelessWidget {
   const _BenefitList();
 
-  static const List<String> _benefits = <String>[
+  static const List<String> _staticBenefits = <String>[
     'Unlimited children & quests',
     'Pip’s full evolution & seasonal outfits',
     'Pocket money ledger & payout day',
-    'Co-parent sharing, so James sees the same',
   ];
 
   @override
   Widget build(BuildContext context) {
-    final tokens = context.nest;
     return Column(
       spacing: NestSpacing.gap10,
       children: <Widget>[
-        for (final benefit in _benefits)
-          Semantics(
-            label: benefit,
-            container: true,
-            excludeSemantics: true,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              spacing: NestSpacing.gap10,
-              children: <Widget>[
-                Transform.translate(
-                  offset: const Offset(0, -1),
-                  child: ExcludeSemantics(
-                    child: Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: tokens.leafTint,
-                      ),
-                      alignment: Alignment.center,
-                      child: NestIcon(
-                        NestIcons.check,
-                        size: 16,
-                        color: tokens.leafInk,
-                      ),
-                    ),
-                  ),
+        for (final benefit in _staticBenefits) _BenefitRow(text: benefit),
+        const _CoParentBenefitRow(),
+      ],
+    );
+  }
+}
+
+class _CoParentBenefitRow extends StatelessWidget {
+  const _CoParentBenefitRow();
+
+  @override
+  Widget build(BuildContext context) {
+    // Benefit 4 comes through the bloc (one-shot `readCoParentName` at
+    // load): the family's co-parent, or the fallback when there is none.
+    final name = context.select<PaywallBloc, String?>(
+      (bloc) => bloc.state.coParentName,
+    );
+    final text = name == null || name.isEmpty
+        ? 'Co-parent sharing, so everyone sees the same'
+        : 'Co-parent sharing, so $name sees the same';
+    return _BenefitRow(text: text);
+  }
+}
+
+class _BenefitRow extends StatelessWidget {
+  const _BenefitRow({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.nest;
+    return Semantics(
+      label: text,
+      container: true,
+      excludeSemantics: true,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: NestSpacing.gap10,
+        children: <Widget>[
+          Transform.translate(
+            offset: const Offset(0, -1),
+            child: ExcludeSemantics(
+              child: Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: tokens.leafTint,
                 ),
-                Expanded(
-                  child: Text(
-                    benefit,
-                    style: NestType.bodySmall(color: tokens.ink)
-                        .copyWith(height: 24 / 15),
-                    softWrap: true,
-                  ),
+                alignment: Alignment.center,
+                child: NestIcon(
+                  NestIcons.check,
+                  size: 16,
+                  color: tokens.leafInk,
                 ),
-              ],
+              ),
             ),
           ),
-      ],
+          Expanded(
+            child: Text(
+              text,
+              style: NestType.bodySmall(color: tokens.ink)
+                  .copyWith(height: 24 / 15),
+              softWrap: true,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

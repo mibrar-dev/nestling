@@ -17,7 +17,23 @@ class PaywallBloc extends Bloc<PaywallEvent, PaywallState> {
     PaywallLoadRequested event,
     Emitter<PaywallState> emit,
   ) async {
-    emit(state.copyWith(status: PaywallStatus.loading, clearError: true));
+    // Benefit 4 names the family's co-parent from the database
+    // (shared_batch3). One-shot at load, like the plan list: fail-closed to
+    // the "everyone" fallback when the read itself fails.
+    String? coParentName;
+    try {
+      coParentName = await _repository.readCoParentName();
+    } on Object {
+      coParentName = null;
+    }
+    emit(
+      state.copyWith(
+        status: PaywallStatus.loading,
+        coParentName: coParentName,
+        clearCoParent: true,
+        clearError: true,
+      ),
+    );
     await emit.forEach<List<PaywallPlan>>(
       _repository.watchItems(),
       onData: (items) => state.copyWith(

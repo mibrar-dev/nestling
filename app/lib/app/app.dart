@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
@@ -27,17 +29,37 @@ class NestlingApp extends StatefulWidget {
   State<NestlingApp> createState() => _NestlingAppState();
 }
 
-class _NestlingAppState extends State<NestlingApp> {
+class _NestlingAppState extends State<NestlingApp> with WidgetsBindingObserver {
   late final GoRouter _router;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _router = buildAppRouter(
       GetIt.instance<AppModeController>(),
       session: GetIt.instance<AppSession>(),
       initialLocation: widget.initialRoute,
     );
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Trial expiry at resume (shared_batch3): a trial that aged out while
+    // the app was backgrounded persists as 'expired', and the session
+    // notification re-evaluates the router guard.
+    if (state == AppLifecycleState.resumed) {
+      final getIt = GetIt.instance;
+      if (getIt.isRegistered<AppSession>()) {
+        unawaited(getIt<AppSession>().checkTrialExpiry());
+      }
+    }
   }
 
   @override
