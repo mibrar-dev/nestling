@@ -27,9 +27,20 @@ class PaywallRepositoryImpl implements PaywallRepository {
   }
 
   @override
+  Future<SubscriptionStatus> readSubscription() async {
+    final row = await (_db.select(
+      _db.appState,
+    )..where((a) => a.id.equals(1))).getSingleOrNull();
+    return SubscriptionStatus(
+      status: row?.subscriptionStatus ?? 'trial',
+      trialStart: row?.trialStart,
+    );
+  }
+
+  @override
   Future<void> startTrial() async {
     final zone = await _db.familyZoneId();
-    await (_db.update(_db.appState)..where((a) => a.id.equals(1))).write(
+    await _upsert(
       AppStateCompanion(
         subscriptionStatus: const Value('trial'),
         trialStart: Value(DateTime.now().toUtc()),
@@ -40,18 +51,38 @@ class PaywallRepositoryImpl implements PaywallRepository {
 
   @override
   Future<void> activate() {
-    return (_db.update(_db.appState)..where((a) => a.id.equals(1))).write(
+    return _upsert(
       const AppStateCompanion(subscriptionStatus: Value('active')),
     );
   }
 
+  /// Upserts the single `app_state` row (id 1). A plain UPDATE silently
+  /// changes nothing when the row is missing (P01 BUG-4 class) — the same
+  /// pattern as `AppSession._write`.
+  Future<void> _upsert(AppStateCompanion companion) async {
+    final updated = await (_db.update(
+      _db.appState,
+    )..where((a) => a.id.equals(1))).write(companion);
+    if (updated == 0) {
+      await _db
+          .into(_db.appState)
+          .insert(companion.copyWith(id: const Value(1)));
+    }
+  }
+
+  /// The single annual plan (P07). `detail` carries every design string for
+  /// the card — sub (no stray full stop, per `P07-paywall.html:86`), caption
+  /// (with the article “the”, per `:105`) and tag (per `:87`) — joined with
+  /// an em dash so no wrong punctuation variant can leak to a consumer. The
+  /// view renders the three strings statically per `1_plan.md` §d.
   static const List<PaywallPlan> _plans = <PaywallPlan>[
     PaywallPlan(
       id: 'annual',
       title: 'Annual — £29.99/year',
       detail:
-          'Just £2.50 a month, billed yearly. '
-          '£29.99/year after 14-day trial. Cancel anytime in Settings.',
+          'Just £2.50 a month, billed yearly — '
+          '£29.99/year after the 14-day trial. Cancel anytime in Settings. '
+          'One price, the whole family.',
     ),
   ];
 }
