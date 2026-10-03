@@ -14,10 +14,10 @@
 //   slot content box   x 20…370 (centre 195)      — 20 px gutters
 //   nest visible outline x 96…294 (198 wide, centre 195)
 //   Pip                centred on x 195
-//   hearts row         centre y ≈448
-//   "Today's quests"   ≈494
-//   progress bar       y ≈527…542
-//   first card top     ≈559
+//   hearts row         centre y ≈438
+//   "Today's quests"   ≈484
+//   progress bar       y ≈517…532
+//   first card top     ≈549
 //
 // LANDS and PASSING (iteration 8). SHARED_REQUEST #13's shared fix
 // (`shared/pet_stage_explicit`) composes the scene in the REAL parent box
@@ -28,11 +28,13 @@
 // the design's 198 × 86 visible outline (236 × `visibleNestRatio` 202/240 =
 // 197.9 by 188 × 110/240 = 86.2) centred on the axis, with Pip's feet 23 px
 // inside the bowl, in the design's 236 px block. Measured here at real fonts —
-// nest outline top 278 (±2) and bottom 364 (±2), nest centre 195 (±1), Pip
-// centre 195 (±1) with feet 301 (±3), hearts centre 448 (±2), first card top
-// 559 (±2). Before the explicit fix the same pin read nest centre 229.7
-// (+34.7), hearts 494.0 (+46), first card 615.0 (+56), reproducing the device
-// captures exactly, which is what makes the pin trustworthy.
+// nest outline top 269 (±2) and bottom 355 (±2), nest centre 195 (±1), Pip
+// centre 195 (±1) with feet 292 (±3), hearts centre 438 (±2), first card top
+// 549 (±2). shared/speech_tail moved every row up ~9 px (the tail is now CSS
+// `::after` overflow instead of 10 px of in-flow layout). Before the explicit
+// fix the same pin read nest centre 229.7 (+34.7), hearts 494.0 (+46), first
+// card 615.0 (+56), reproducing the device captures exactly, which is what
+// makes the pin trustworthy.
 //
 // Keep this file. Run it directly:
 //   flutter test test/features/kid_home/kid_home_geometry_test.dart
@@ -121,20 +123,24 @@ void main() {
         reason: 'the design paints an 86 px tall bowl (y 278…364)',
       );
 
-      // Design rows for the shared seat: rim 278, bowl bottom 364.
+      // Design rows for the shared seat: rim 269, bowl bottom 355.
+      // shared/speech_tail: the tail is now overflow per CSS `::after`, so it
+      // no longer adds 10 px of layout below the body — every row under the
+      // bubble moves up ~9 px versus the old in-flow tail (which read
+      // 278/364). Screens must re-verify screenshots against the design PNGs.
       final rimY = nest.top + PipNestFallback.nestRimTopFraction * nest.height;
-      expect(rimY, closeTo(278, 2));
-      expect(rimY + nest.height * _kNestOutlineHeightFraction, closeTo(364, 2));
+      expect(rimY, closeTo(269, 2));
+      expect(rimY + nest.height * _kNestOutlineHeightFraction, closeTo(355, 2));
 
-      // Pip is centred, its head at ≈199 and its feet 23 px inside the bowl
-      // at ≈301 (never standing on the rim — `shared/pet_stage_seat`).
+      // Pip is centred, its head at ≈190 and its feet 23 px inside the bowl
+      // at ≈292 (never standing on the rim — `shared/pet_stage_seat`).
       expect(pip.center.dx, closeTo(195, 1));
-      expect(pip.bottom - _pipBottomPad, closeTo(301, 3));
-      expect(pip.top + _pipTopPad, closeTo(199, 5));
+      expect(pip.bottom - _pipBottomPad, closeTo(292, 3));
+      expect(pip.top + _pipTopPad, closeTo(190, 5));
 
-      // Design rows: hearts centre 448, first card top 559.
-      expect(hearts.center.dy, closeTo(448, 2));
-      expect(card1.top, closeTo(559, 2));
+      // Design rows: hearts centre 438, first card top 549.
+      expect(hearts.center.dy, closeTo(438, 2));
+      expect(card1.top, closeTo(549, 2));
 
       await disposeApp(tester);
     });

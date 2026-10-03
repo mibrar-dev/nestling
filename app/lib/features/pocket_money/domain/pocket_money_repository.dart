@@ -1,3 +1,4 @@
+import 'package:nestling/features/pocket_money/domain/entities/money_ledger_data.dart';
 import 'package:nestling/features/pocket_money/domain/entities/owed_summary.dart';
 import 'package:nestling/features/pocket_money/domain/entities/pocket_money_entry.dart';
 import 'package:nestling/features/pocket_money/domain/entities/pocket_money_setup.dart';
@@ -11,6 +12,11 @@ abstract class PocketMoneyRepository {
 
   /// Ledger for one child, newest first.
   Stream<List<PocketMoneyEntry>> watchLedger(String childId);
+
+  /// Everything the P12 ledger renders in one emission (children, all
+  /// entries, oweds, goals, payout day, zone, plus the P06 setup carried
+  /// alongside so one bloc serves every pocket-money route from one stream).
+  Stream<MoneyLedgerData> watchLedgerData();
 
   /// Base + quest bonuses since the last payout.
   Future<OwedSummary> owed(String childId);
