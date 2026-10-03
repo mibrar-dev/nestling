@@ -1,15 +1,10 @@
-// P06 Pocket money setup — Stage 6 adversarial bug tests (iteration 4).
+// P06 Pocket money setup — Stage 6 adversarial bug tests (iteration 5).
 //
-// Iteration 2's seven bug proofs and iteration 3's P06-BUG-08/09 are all
-// fixed; they run UNskipped as regression guards. Iteration 4 adds guards for
-// the ORCHESTRATOR_NOTES items (seed `onboarding_kids`, chip row inside the
-// 16px inset, NestChipWrap ±5px taps, gold coin tile, HTML option-card line
-// heights).
-//
-// Every test that PROVES an OPEN bug is marked `skip: true` (the test name
-// carries the `P06-BUG-nn` id) so the default suite stays green; delete the
-// skip to watch it fail. The superseded P06-BUG-04 (≥44px day cells) was
-// deleted in iteration 5 per ORCHESTRATOR_NOTES item 2.
+// Iterations 2–4 bug proofs run UNskipped as regression guards. Iteration 5
+// adds the orchestrator's real-font geometry checks and two new findings:
+// P06-BUG-11 (the balanced H1 collapses to one ellipsized line) and
+// P06-BUG-12 (the stepper minus is a hyphen, not the design's U+2212).
+// Both are skipped with their ids; delete the skip to watch them fail.
 //
 // The group at the bottom ("attacks that hold") is NOT skipped: it documents
 // the adversarial probes that passed (kid-mode guard, restart persistence,
@@ -22,6 +17,8 @@ import 'dart:ui' show Tristate;
 
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
+import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -210,6 +207,31 @@ Future<PocketMoneyBloc> _pumpSetupView(
   );
   await tester.pump();
   return bloc;
+}
+
+/// The visible day pill for [day] (1 = Mon): its painted `DecoratedBox`.
+Finder _dayPill(int day) => find
+    .descendant(
+      of: find.byKey(ValueKey('p06_day_$day')),
+      matching: find.byType(DecoratedBox),
+    )
+    .first;
+
+/// Loads the bundled Inter/Nunito faces so the widget tree reproduces the
+/// design's own metrics (same pattern as
+/// `test/features/privacy_consent/privacy_consent_geometry_test.dart`).
+Future<void> _loadBundledFonts() async {
+  final inter = FontLoader('Inter')
+    ..addFont(rootBundle.load('assets/fonts/Inter-Regular.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-Medium.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-SemiBold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-Bold.ttf'));
+  final nunito = FontLoader('Nunito')
+    ..addFont(rootBundle.load('assets/fonts/Nunito-Bold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Nunito-ExtraBold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Nunito-Black.ttf'));
+  await inter.load();
+  await nunito.load();
 }
 
 void main() {
@@ -733,6 +755,110 @@ void main() {
 
       await disposeApp(tester);
     });
+  });
+
+  // -- iteration-5 geometry (real Inter/Nunito metrics) --------------------
+
+  group('P06 iteration-5 geometry at 390×844 (real fonts)', () {
+    setUpAll(_loadBundledFonts);
+
+    testWidgets("the payout card keeps the design's 270 height and gap chain", (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/pocket-money-setup');
+
+      final card = tester.getRect(find.byType(NestCard));
+      final label = tester.getRect(find.text('Payout day'));
+      final pill1 = tester.getRect(_dayPill(1));
+      final weekly = tester.getRect(find.text('Weekly base'));
+      final maya = tester.getRect(find.text('Maya'));
+      final leo = tester.getRect(find.text('Leo'));
+      final coin = tester.getRect(find.text('Coin value'));
+
+      // ORCHESTRATOR_NOTES (07:22) design geometry: card 415–684 (270); the
+      // HTML gaps are label→row 6, row→divider→label 8+1+8, label→row 2,
+      // rows 44, divider 8+1+8, card bottom padding 12.
+      expect(card.height, moreOrLessEquals(270, epsilon: 1));
+      expect(pill1.top - label.bottom, moreOrLessEquals(6, epsilon: 0.5));
+      expect(pill1.height, moreOrLessEquals(32, epsilon: 0.5));
+      expect(weekly.top - pill1.bottom, moreOrLessEquals(17, epsilon: 0.5));
+      expect(maya.top - weekly.bottom, moreOrLessEquals(13, epsilon: 0.5));
+      expect(leo.top - maya.bottom, moreOrLessEquals(22, epsilon: 0.5));
+      expect(coin.top - leo.bottom, moreOrLessEquals(39, epsilon: 0.5));
+      expect(card.bottom - coin.bottom, moreOrLessEquals(23, epsilon: 0.5));
+      expect(tester.takeException(), isNull);
+
+      // ORCHESTRATOR_NOTES (07:58) targets, anchored to the title's bottom so
+      // they hold while BUG-11 keeps the title collapsed: chip-row centre 555,
+      // Weekly base 597, Maya 630, Leo 674, Coin value 735 (sheet space,
+      // design H1 bottom 175 → 296 / 329 / 359 / 403 / 464 logical offsets).
+      final h1 = tester.getRect(
+        find.text('How does pocket money work in your house?'),
+      );
+      expect(pill1.center.dy - h1.bottom, moreOrLessEquals(296, epsilon: 1));
+      expect(weekly.top - h1.bottom, moreOrLessEquals(329, epsilon: 1));
+      expect(maya.top - h1.bottom, moreOrLessEquals(359, epsilon: 1));
+      expect(leo.top - h1.bottom, moreOrLessEquals(403, epsilon: 1));
+      expect(coin.top - h1.bottom, moreOrLessEquals(464, epsilon: 1));
+
+      await disposeApp(tester);
+    });
+
+    testWidgets(
+      "P06-BUG-11: the H1 must wrap to the design's two lines, not one "
+      'ellipsized line',
+      (tester) async {
+        await setUpTestScope();
+        await pumpAppRoute(tester, '/pocket-money-setup');
+
+        final h1 = tester.renderObject<RenderParagraph>(
+          find.descendant(
+            of: find.text('How does pocket money work in your house?'),
+            matching: find.byType(RichText),
+          ),
+        );
+        // Design (`P06-pocket-money.png` ÷3): H1 107–175 = two 34 px lines.
+        // Today `NestBalancedText`'s ellipsis + null maxLines collapses the
+        // paragraph to 350×34 with an ellipsis (didExceedMaxLines = true).
+        expect(h1.size.height, greaterThanOrEqualTo(60));
+        expect(h1.didExceedMaxLines, isFalse);
+
+        // The collapsed H1 drags the whole card 34 px above the design.
+        final card = tester.getRect(find.byType(NestCard));
+        expect(card.top, moreOrLessEquals(415, epsilon: 1));
+        expect(tester.takeException(), isNull);
+
+        await disposeApp(tester);
+      },
+      skip: true,
+    );
+
+    testWidgets(
+      "P06-BUG-12: the stepper minus must be the design's U+2212 (&minus;)",
+      (tester) async {
+        await setUpTestScope();
+        await pumpAppRoute(tester, '/pocket-money-setup');
+
+        final minus = tester.widget<Text>(
+          find
+              .descendant(
+                of: find.bySemanticsLabel(
+                  RegExp('Less weekly pocket money for Maya'),
+                ),
+                matching: find.byType(Text),
+              )
+              .first,
+        );
+        // The design HTML uses `&minus;` (U+2212), a full-width bar like
+        // the `+`; the shared NestStepper renders a hyphen (U+002D).
+        expect(minus.data, '\u2212');
+        expect(tester.takeException(), isNull);
+
+        await disposeApp(tester);
+      },
+      skip: true,
+    );
   });
 
   // -- attacks that hold --------------------------------------------------

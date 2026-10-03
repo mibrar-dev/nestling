@@ -24,3 +24,8 @@ Seed, chips and coin icon are now right. What is left is vertical drift INSIDE t
 Fix the two spacings so every element lands within ±1 px. Add a geometry test with real fonts (FontLoader, as app/test/features/privacy_consent/privacy_consent_geometry_test.dart does) that pins these y values at 390×844.
 - Stepper glyphs: the design's minus is "−" (U+2212), drawn as a full-width bar like the "+". The app renders a short hyphen "-". Use the same icon/glyph source for − and + so they match in weight and width; check the HTML for the exact glyph.
 - Also fix every item the test and review stages listed in FIXES_4.md.
+
+## UPDATE (07:58, orchestrator QA of cmp_light_5, 6.11% — REGRESSION)
+1. The title truncates to one line, "How does pocket mone…". This is a SHARED NestBalancedText bug: ellipsis with no maxLines means a single line. shared/balanced_text_ellipsis fixes it on main, and main is merged into your branch before the next build. Keep using NestBalancedText; do not work around it. After the merge the title must be 2 lines, as in the design, with the rest of the screen back at the iteration-4 positions.
+2. The stepper minus is STILL a short hyphen "-". Use "−" (U+2212), or the same icon set as "+", so both glyphs have equal visual weight and width. Add a test that the minus button's glyph is not U+002D.
+3. The payout card targets from the 07:22 note still apply, measured from the title's bottom once it is two lines again: chip row centre 555, "Weekly base" 597, Maya 630, Leo 674, Coin value 735 (all ±1).

@@ -7,6 +7,7 @@
 // accessibility contract (radiogroup labels, selected flags, stepper labels,
 // 44dp parent tap targets).
 
+import 'dart:async';
 import 'dart:ui' show Tristate;
 
 import 'package:drift/drift.dart' show Value;
@@ -367,6 +368,110 @@ Finder _coinTile() => find
       ),
     )
     .first;
+
+/// Live-stream repository for the `buildWhen` contract: both halves of the
+/// bloc's combined stream are broadcast controllers, so a test can push a
+/// ledger-only emission (which must NOT rebuild the setup form) and then a
+/// real setup change (which must).
+class _PushRepository implements PocketMoneyRepository {
+  final StreamController<List<PocketMoneyEntry>> _items =
+      StreamController<List<PocketMoneyEntry>>.broadcast();
+  final StreamController<PocketMoneySetup> _setup =
+      StreamController<PocketMoneySetup>.broadcast();
+
+  PocketMoneySetup current = const PocketMoneySetup(
+    mode: 'both',
+    payoutDay: 6,
+    coinValuePencePerCoin: 1,
+    children: <PocketMoneySetupChild>[
+      PocketMoneySetupChild(
+        id: 'maya',
+        nickname: 'Maya',
+        avatarColour: 'lilac',
+        weeklyBasePence: 300,
+      ),
+      PocketMoneySetupChild(
+        id: 'leo',
+        nickname: 'Leo',
+        avatarColour: 'peach',
+        weeklyBasePence: 150,
+      ),
+    ],
+  );
+
+  void pushLedger(List<PocketMoneyEntry> entries) => _items.add(entries);
+
+  void pushSetup(PocketMoneySetup setup) {
+    current = setup;
+    _setup.add(setup);
+  }
+
+  @override
+  Future<List<PocketMoneyEntry>> getItems() => watchItems().first;
+
+  @override
+  Stream<List<PocketMoneyEntry>> watchItems() => _items.stream;
+
+  @override
+  Stream<List<PocketMoneyEntry>> watchLedger(String childId) => _items.stream;
+
+  @override
+  Future<OwedSummary> owed(String childId) => watchOwed(childId).first;
+
+  @override
+  Stream<OwedSummary> watchOwed(String childId) => Stream<OwedSummary>.value(
+    OwedSummary(childId: childId, totalPence: 0, basePence: 0, questsPence: 0),
+  );
+
+  @override
+  Future<void> addMoney({
+    required String childId,
+    required int amountPence,
+    required String note,
+  }) async {}
+
+  @override
+  Future<void> recordSpending({
+    required String childId,
+    required int amountPence,
+    required String note,
+  }) async {}
+
+  @override
+  Future<void> recordPayout({
+    required String childId,
+    required int amountPence,
+    int savingsMovePence = 0,
+    String? goalId,
+  }) async {}
+
+  @override
+  Stream<PocketMoneySetup> watchSetup() => _setup.stream;
+
+  @override
+  Future<void> setMode(String mode) async => pushSetup(
+    PocketMoneySetup(
+      mode: mode,
+      payoutDay: current.payoutDay,
+      coinValuePencePerCoin: current.coinValuePencePerCoin,
+      children: current.children,
+    ),
+  );
+
+  @override
+  Future<void> setPayoutDay(int day) async => pushSetup(
+    PocketMoneySetup(
+      mode: current.mode,
+      payoutDay: day,
+      coinValuePencePerCoin: current.coinValuePencePerCoin,
+      children: current.children,
+    ),
+  );
+
+  @override
+  Future<void> setWeeklyBasePence(String childId, int pence) async =>
+      pushSetup(current.withChildBase(childId, pence));
+}
 
 void main() {
   group('P06 setup — copy and theming', () {
@@ -2137,6 +2242,345 @@ void main() {
       );
 
       await disposeApp(tester);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Iteration 5 — the iteration-4 review fixes: the balanced H1 (BUG-10 /
+  // review #3), the day row back at the design's 32 px band (review #1), the
+  // `.amount-name` type (review #5), the token-coloured spinner (review #6)
+  // and `buildWhen` (review #14).
+  // -------------------------------------------------------------------------
+  group('P06 setup — iteration 5 contract', () {
+    const heading = 'How does pocket money work in your house?';
+
+    testWidgets('the H1 renders through NestBalancedText (P06-BUG-10)', (
+      tester,
+    ) async {
+      for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+        await setUpTestScope();
+        await _pumpSetup(
+          tester,
+          theme: theme,
+          surface: const Size(390, 844),
+          textScale: 1,
+        );
+
+        // BALANCED HEADINGS rule: a `.h1` (components.css declares
+        // `text-wrap: balance`) must render through the shared component.
+        final balanced = find.ancestor(
+          of: find.text(heading),
+          matching: find.byType(NestBalancedText),
+        );
+        expect(balanced, findsOneWidget);
+        final widget = tester.widget<NestBalancedText>(balanced);
+        // Same copy, same style, and it is still ONE Text node (the
+        // component promises semantics/find.text/ellipsis behave as before).
+        expect(widget.text, heading);
+        expect(find.text(heading), findsOneWidget);
+        expect(widget.style.fontSize, NestType.h1().fontSize);
+        expect(widget.style.fontWeight, FontWeight.w900);
+        // Owner ALIGNMENT rule: the heading stays on the 20 px gutter, so it
+        // must be left-aligned inside its narrowed box, not centred.
+        expect(widget.textAlign, TextAlign.left);
+        final rect = tester.getRect(find.text(heading));
+        expect(rect.left, moreOrLessEquals(NestSpacing.padSide, epsilon: 0.01));
+        expect(
+          rect.right,
+          lessThanOrEqualTo(390 - NestSpacing.padSide + 0.01),
+          reason: 'balancing narrows the box but must never leave the gutter',
+        );
+        // The semantics header survives the swap.
+        final data = tester.getSemantics(find.text(heading)).getSemanticsData();
+        expect(data.flagsCollection.isHeader, isTrue);
+        expect(tester.takeException(), isNull);
+
+        await disposeApp(tester);
+      }
+    });
+
+    testWidgets('the balanced H1 holds its gutter at every measured width and '
+        'scale', (tester) async {
+      for (final width in const <int>[320, 390, 430]) {
+        for (final scale in const <double>[1, 1.3]) {
+          await setUpTestScope();
+          await _pumpSetup(
+            tester,
+            theme: ThemeMode.light,
+            surface: Size(width.toDouble(), 844),
+            textScale: scale,
+          );
+
+          final balanced = find.ancestor(
+            of: find.text(heading),
+            matching: find.byType(NestBalancedText),
+          );
+          expect(balanced, findsOneWidget);
+          final widget = tester.widget<NestBalancedText>(balanced);
+          final context = tester.element(balanced);
+          final available = width - 2 * NestSpacing.padSide;
+
+          // Balancing must not cost an extra line, and the painted box must
+          // stay inside the 20 px gutters at every width and scale.
+          final lines = NestBalancedText.lineCountFor(
+            text: heading,
+            style: widget.style,
+            maxWidth: available,
+            textDirection: Directionality.of(context),
+            textScaler: MediaQuery.textScalerOf(context),
+          );
+          final onOneLine = NestBalancedText.lineCountFor(
+            text: heading,
+            style: widget.style,
+            maxWidth: available * 4,
+            textDirection: Directionality.of(context),
+            textScaler: MediaQuery.textScalerOf(context),
+          );
+          expect(
+            lines,
+            onOneLine,
+            reason: 'balancing must not add a line at ${width}dp / $scale',
+          );
+          final rect = tester.getRect(find.text(heading));
+          expect(
+            rect.left,
+            moreOrLessEquals(NestSpacing.padSide, epsilon: 0.01),
+          );
+          expect(rect.width, lessThanOrEqualTo(available + 0.01));
+          expect(rect.height, greaterThan(0));
+          expect(tester.takeException(), isNull);
+
+          await disposeApp(tester);
+        }
+      }
+    });
+
+    testWidgets('the day row paints the design 32px band with the pills flush '
+        "at the label's baseline (review #1)", (tester) async {
+      for (final width in const <int>[320, 390, 430]) {
+        await setUpTestScope();
+        await _pumpSetup(
+          tester,
+          theme: ThemeMode.light,
+          surface: Size(width.toDouble(), 844),
+          textScale: 1,
+        );
+
+        // `.day-row { margin-top: 6px }` — the pill strip starts 6 px below
+        // the 'Payout day' label, and the cells paint the chip's own 32 px
+        // (the ≥44 dp target now comes from NestChipWrap's hit slop, so a
+        // 44-tall cell box would centre every pill 6 px low).
+        final labelRect = tester.getRect(find.text('Payout day'));
+        final cellRect = tester.getRect(
+          find.byKey(const ValueKey('p06_day_1')),
+        );
+        expect(
+          cellRect.top - labelRect.bottom,
+          moreOrLessEquals(NestSpacing.gap6, epsilon: 0.01),
+        );
+        expect(cellRect.height, NestSpacing.s8);
+
+        // All seven pills share one 32 px band with even 6 px gaps.
+        final pills = <Rect>[
+          for (var day = 1; day <= 7; day++) tester.getRect(dayPill(day)),
+        ];
+        for (final pill in pills) {
+          expect(pill.height, NestSpacing.s8);
+          expect(pill.top, moreOrLessEquals(pills.first.top, epsilon: 0.01));
+        }
+        for (var i = 1; i < pills.length; i++) {
+          expect(
+            pills[i].left - pills[i - 1].right,
+            moreOrLessEquals(NestSpacing.gap6, epsilon: 0.01),
+            reason: 'even gaps between pills at ${width}dp',
+          );
+        }
+        expect(tester.takeException(), isNull);
+
+        await disposeApp(tester);
+      }
+    });
+
+    testWidgets(
+      'the settings card stays flush above the CTA panel (review #1)',
+      (tester) async {
+        for (final theme in const <ThemeMode>[
+          ThemeMode.light,
+          ThemeMode.dark,
+        ]) {
+          await setUpTestScope();
+          await _pumpSetup(
+            tester,
+            theme: theme,
+            surface: const Size(390, 844),
+            textScale: 1,
+          );
+
+          final cta = tester.getRect(find.byType(NestBottomCta));
+          // Scrolled to the end, the whole card — the coin row included —
+          // sits ABOVE the fixed bottom panel: nothing stays permanently
+          // hidden behind it (the panel is a sibling in the page column).
+          await tester.drag(
+            find.byType(Scrollable).first,
+            const Offset(0, -600),
+          );
+          await _settle(tester);
+          final card = tester.getRect(_settingsCard());
+          expect(
+            card.bottom,
+            lessThanOrEqualTo(cta.top + 0.01),
+            reason:
+                'the card must not stay under the fixed bottom panel '
+                '(card bottom ${card.bottom} vs panel top ${cta.top})',
+          );
+          expect(
+            tester.getRect(find.text('Coin value')).bottom,
+            lessThanOrEqualTo(cta.top + 0.01),
+          );
+          // The design card is 270 tall (HTML `.set-card` padding 16/16/12);
+          // the widget-test fallback font is wider than Inter, so the value
+          // is bounded rather than exact.
+          expect(card.height, greaterThan(200));
+          expect(card.height, lessThan(400));
+          expect(tester.takeException(), isNull);
+
+          await disposeApp(tester);
+        }
+      },
+    );
+
+    testWidgets('names and the coin-value label use `.amount-name` '
+        '(review #5)', (tester) async {
+      await setUpTestScope();
+      await _pumpSetup(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      // `.amount-name { font-size: 16px; font-weight: 600; line-height: 22px }`
+      for (final copy in const <String>['Maya', 'Leo', 'Coin value']) {
+        final style = tester.widget<Text>(find.text(copy)).style!;
+        expect(style.fontSize, 16, reason: '"$copy" is an .amount-name');
+        expect(style.fontWeight, FontWeight.w600, reason: '"$copy"');
+        expect(style.height, moreOrLessEquals(22 / 16, epsilon: 0.001));
+      }
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the loading spinner is token-coloured, not the Material '
+        'default (review #6)', (tester) async {
+      await setUpTestScope();
+      final bloc = await _pumpSetupView(
+        tester,
+        repository: _FakePocketMoneyRepository(),
+        theme: ThemeMode.light,
+      );
+      bloc.add(const PocketMoneyLoadRequested());
+      await _settle(tester);
+
+      final spinner = tester.widget<CircularProgressIndicator>(
+        find.byType(CircularProgressIndicator),
+      );
+      final tokens = tester
+          .element(find.byType(CircularProgressIndicator))
+          .nest;
+      expect(spinner.color, tokens.leaf);
+      expect(
+        spinner.color,
+        isNot(const Color(0xFF2196F3)),
+        reason: 'the Material default blue must never reach this screen',
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    });
+
+    testWidgets('a ledger-only emission does not rebuild the setup form '
+        '(review #14)', (tester) async {
+      await setUpTestScope();
+      final repository = _PushRepository();
+      final bloc = await _pumpSetupView(
+        tester,
+        repository: repository,
+        theme: ThemeMode.light,
+      );
+      bloc.add(const PocketMoneyLoadRequested());
+      // Broadcast controllers do not buffer: seed them after the bloc has
+      // subscribed (the handler subscribes on its first await).
+      await tester.pump();
+      await tester.pump();
+      repository
+        ..pushSetup(_demoSetup)
+        ..pushLedger(const <PocketMoneyEntry>[]);
+      await _settle(tester);
+      expect(find.text('Both'), findsOneWidget);
+
+      final before = tester.widget(
+        find.byKey(const ValueKey('p06_option_both')),
+      );
+      repository.pushLedger(<PocketMoneyEntry>[
+        PocketMoneyEntry(
+          id: 99,
+          title: 'Put the bins out',
+          detail: 'Quest bonus · Fri 2 Oct',
+          childId: 'maya',
+          type: 'quest_bonus',
+          amountPence: 12,
+          note: 'Put the bins out',
+          date: DateTime.utc(2026, 10, 2, 20),
+        ),
+      ]);
+      await _settle(tester);
+
+      // Same setup, new ledger: `buildWhen` keeps the form untouched…
+      expect(
+        tester.widget(find.byKey(const ValueKey('p06_option_both'))),
+        same(before),
+        reason: 'a ledger tick must not rebuild the whole setup form',
+      );
+      // …while the bloc still carries the new rows for /money and /payout.
+      expect(bloc.state.items.length, 1);
+      expect(bloc.state.setup?.childById('maya')?.weeklyBasePence, 300);
+
+      // A real setup change still rebuilds (the filter is not "never").
+      repository.pushSetup(
+        const PocketMoneySetup(
+          mode: 'weekly',
+          payoutDay: 6,
+          coinValuePencePerCoin: 1,
+          children: <PocketMoneySetupChild>[
+            PocketMoneySetupChild(
+              id: 'maya',
+              nickname: 'Maya',
+              avatarColour: 'lilac',
+              weeklyBasePence: 300,
+            ),
+            PocketMoneySetupChild(
+              id: 'leo',
+              nickname: 'Leo',
+              avatarColour: 'peach',
+              weeklyBasePence: 150,
+            ),
+          ],
+        ),
+      );
+      await _settle(tester);
+      expect(
+        tester.widget(find.byKey(const ValueKey('p06_option_both'))),
+        isNot(same(before)),
+      );
+      final weekly = tester
+          .getSemantics(find.byKey(const ValueKey('p06_option_weekly')))
+          .getSemanticsData();
+      expect(weekly.flagsCollection.isSelected, Tristate.isTrue);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
     });
   });
 }
