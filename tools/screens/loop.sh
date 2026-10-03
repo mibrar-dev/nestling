@@ -49,6 +49,18 @@ stage() { # name model template iter fixes
     sid=$(opencode session list 2>/dev/null | grep -F "$title" | head -1 | awk '{print $1}')
     ev NUDGE "${name}_i${it} missing_report"
     STATUS_DIR="$ST" WORKDIR="$WT" "$MAIN/tools/agents/run_agent.sh" "${ID}_${name}_i${it}_nudge" "$model" "$nudge" "${sid:--}" "$title"
+    # Some models answer in chat instead of writing the file: save their final
+    # answer (text after the last "> build" marker) as the report.
+    if [ ! -f "$out" ] || [ "$out" -ot "$mark" ]; then
+      for lg in "$ST/${ID}_${name}_i${it}_nudge.log" "$ST/${ID}_${name}_i${it}.log"; do
+        [ -f "$lg" ] || continue
+        sed 's/\x1b\[[0-9;]*m//g' "$lg" | awk '/^> build/{buf=""; next} {buf=buf $0 "\n"} END{printf "%s", buf}' > "$out.tmp"
+        if grep -qE "^VERDICT: (PASS|FAIL)" "$out.tmp"; then
+          { echo "<!-- saved from the agent's final answer by loop.sh -->"; cat "$out.tmp"; } > "$out"; rm -f "$out.tmp"; ev REPORT_FROM_LOG "${name}_i${it}"; break
+        fi
+        rm -f "$out.tmp"
+      done
+    fi
   fi
 }
 checkpoint() { # commit the worktree so a crash or stop loses at most one stage
