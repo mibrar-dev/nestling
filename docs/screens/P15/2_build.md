@@ -1,70 +1,52 @@
-# P15 · Child profile — Stage 2 INTEGRATE (iteration 3)
+# P15 · Child profile — Stage 2 INTEGRATE (iteration 4)
 
 Route `/child-profile` · parent mode · feature `family` · light+dark designs.
 Inputs re-read: `docs/screens/RULES.md`, `docs/ARCHITECTURE.md`,
 `docs/DESIGN_SPEC.md` §5 P15, `docs/design/SPACING_SPEC.md`, `1_plan.md`,
-`ORCHESTRATOR_NOTES.md` (exists — all 4 items mandatory, unchanged since 18:13),
-`FIXES_1.md`, `FIXES_2.md`, `SHARED_REQUEST.md`, `2a_build_logic.md`,
-`2b_build_ui.md`.
-`main` was merged before this stage (`b2a8b8f`); the uncommitted tree and the
-merge order are loop bookkeeping, not findings.
+`ORCHESTRATOR_NOTES.md` (exists — 4 mandatory items, unchanged), `FIXES_3.md`,
+`SHARED_REQUEST.md`, `2a_build_logic.md`, `2b_build_ui.md`.
 No simulator was booted, installed on, driven or screenshotted (stage 2 must not).
 
 ## Outcome in one line
 
-**P15's own work is complete and green (272/272, analyze clean, format clean),
-but the full-suite gate fails on a pre-existing shared/core test that P15 may
-not edit — so this stage cannot PASS. Filed as `SHARED_REQUEST.md` §6.**
+**P15 is complete and green (family 281/281, format clean, analyze clean). The
+full-suite gate is still red on the same shared/core test as iteration 3, which
+`main` still has not fixed — so this stage cannot PASS. Second iteration on the
+same blocker; escalated in `SHARED_REQUEST.md` §6 with a verified patch.**
 
 ## Summary of 2a (logic) + 2b (UI)
 
-Again a clean parallel split, and again **CONTRACT CHANGES: none** from both
-halves — so there was nothing to reconcile, no mismatched state/event, no
-renamed member, no import to rewire. 2a's closing line is "Nothing in the logic
-layer is unfinished".
+`FIXES_3.md` was a short list and the split held cleanly. **CONTRACT CHANGES:
+none** from both halves again — nothing to reconcile, no state/event mismatch,
+no renamed member, no import to rewire.
 
-**2a — logic** (`bloc/`, `data/`, `family_routes.dart`):
+**2a — logic**: deliberately **zero code changes**. It triaged every `FIXES_3`
+item and confirmed items 1–5 were already closed, re-verified the
+`child_profile_selection_test.dart` expectation as correct (2 is right at +1 day
+under PERIODS — London week Mon 29 Sep–Sun 4 Oct), confirmed §6 is already
+filed, and triaged the one new bug to the UI layer. Its honest report:
+`test/features/family/` → 280 pass, **1 fail**, solely the BUG-10 view proof in
+the UI builder's own file.
 
-- **P15-BUG-9 (major)**: a *second* `?childId=` was ignored on the live branch
-  page. `BlocProvider.create` runs once per provider element and go_router keys
-  the page by matched path, so a later `/child-profile?childId=…` re-rendered
-  the page without re-running it. 2a added a private stateful
-  `_ChildProfileRoute` wrapper that re-dispatches `FamilyChildSelected` in
-  `didUpdateWidget` when the query id changes; the create-time dispatch stays
-  so first entry is still selection-before-load. Both skipped proofs
-  (BUG-9a/9b) un-skipped and green.
-- **Review 3 (minor)**: `watchProfile` could double-subscribe the ledger when a
-  multi-table transaction emitted several base events in one `await`. The
-  handler now claims the slot synchronously and only the newest run may
-  (re)subscribe — an older run can no longer orphan a listener.
-- **Review 4/5/8 (minor)**: repoint query cites the shared roster ordering;
-  new `SHARED_REQUEST.md` §5 asks for a one-shot
-  `childrenInCreationOrder(familyId)`; the two P15 `debugPrint` lines are
-  `kDebugMode`-gated; §2 wording refreshed.
-- Un-skipped the last `p15_bugs_test.dart` markers.
-
-**2b — UI** (`views/`, `widgets/`, `child_profile_view_test.dart`):
-
-- **P15-BUG-9 (major, view half)**: `ChildProfileView` is now stateful and
-  re-dispatches on the router state via `didChangeDependencies` — the same
-  mechanism 2a put in the route wrapper, one layer lower, on the widget that
-  actually reads the route. Both halves agree; the proofs are green.
-- **Cross-feature import removed** (minor): `child_profile_copy.dart` no longer
-  imports `moneyPounds` from `pocket_money/presentation/`, which broke the
-  per-feature boundary (`ARCHITECTURE.md:75`). It now uses the design-system
-  barrel's `formatPounds`; rendered copy (`£3.00 a week · Owed £4.20`) is
-  unchanged.
-- `ProfileRow` bare geometry (`12/10/16/10`, `40`) → `NestSpacing` tokens.
-- `SHARED_REQUEST.md` numbering corrected; §2 corrected to the code's actual
-  `leading: (fg) => …` builder form.
+**2b — UI**: closed **P15-BUG-10** (minor) — the iteration-3 BUG-9 fix called
+`GoRouterState.of(context)` in `didChangeDependencies`, which *asserts* when no
+router is above the context, so `ChildProfileView` threw
+`GoError: There is no GoRouterState above the current context` in any bare
+`MaterialApp` pump (widget test, preview harness, design gallery). Fixed with
+the two-line guard `if (GoRouter.maybeOf(context) == null) return;` before the
+`GoRouterState.of` read — off-router mounts build unharmed, and because
+`GoRouterState.of` is the dependency that re-fires on a live location change,
+BUG-9's live re-selection keeps working. The BUG-10 proof was kept as the repro
+(it wraps a bare `MaterialApp` in `NestTheme.light()`, since `context.nest` is
+the one thing a route-less mount legitimately still needs).
 
 ## Mandatory ORCHESTRATOR_NOTES items — still satisfied
 
-Both items 2b fixed in iteration 2 are intact (verified in the code, not just
-the notes): item 1 — `ProfileRow` keeps the trail outside the flex distribution
-so subtitles render in full; item 2 — Quests uses `NestIcons.quests`,
-Pocket money the coloured `coin.svg` via a bare `SvgPicture`. Items 3 ("their")
-and 4 (DB quest counts) remain deliberate orchestrator rulings, not findings.
+Items 1–2 intact in code (verified, not taken on trust): `ProfileRow` keeps the
+trailing outside the flex distribution so all three subtitles render in full;
+Quests uses `NestIcons.quests`, Pocket money the coloured `coin.svg` via a bare
+`SvgPicture`. Items 3 ("their") and 4 (DB quest counts) remain deliberate
+orchestrator rulings, not findings.
 
 ## FIXES
 
@@ -72,92 +54,97 @@ and 4 (DB quest counts) remain deliberate orchestrator rulings, not findings.
 |---|---|---|---|
 | 1 | Contract reconciliation between the halves | — | none needed — both reported CONTRACT CHANGES: none |
 | 2 | Compile errors / import breaks | — | none |
-| 3 | Placeholder-anchor fixes from iteration 1 (`add_children_test.dart` ×4, `today_view_test.dart` ×1) | — | verified still green; `today_view_test.dart` swap recorded in `SHARED_REQUEST.md` §4 for ratification |
-| 4 | `p15_bugs_test.dart` skips hiding proofs | 2a | done — every P15 skip removed; `grep -rn "skip" test/features/family/` returns only comments |
-| 5 | 2b's hand-back: `child_profile_selection_test.dart` *"an explicit clock decides which period counts"* — 2b believed the expectation was wrong (would need `2` at +1 day, `0` at +8 days) and left it "for the test stage" | `app/test/features/family/child_profile_selection_test.dart:286` | **verified — already correct and green, no change needed** |
-| 6 | **`test/core/family_time_test.dart` › *kid_home completions are stamped with the family zone* → `Bad state: Too many elements`** | shared core, **not editable by P15 (RULES §1)** | **left — filed `SHARED_REQUEST.md` §6** |
+| 3 | Placeholder anchors from iteration 1 (`add_children_test.dart` ×4, `today_view_test.dart` ×1) | — | verified still green |
+| 4 | No `skip:` hiding P15 proofs | 2a/2b | confirmed — `grep -rn "skip" test/features/family/` returns only prose |
+| 5 | `child_profile_selection_test.dart` clock expectation | — | verified correct upstream; ran it green, no change |
+| 6 | **P15-BUG-10** — `GoError` on a router-less `ChildProfileView` mount | `child_profile_view.dart` | **done by 2b** (`GoRouter.maybeOf` guard); repro kept as the proof |
+| 7 | **`test/core/family_time_test.dart` › *kid_home completions are stamped with the family zone* → `Bad state: Too many elements`** | shared core, **not editable by P15 (RULES §1)** | **left — 2nd iteration; `SHARED_REQUEST.md` §6 escalated** |
 
-On #5: the test asserts `4` at the Sat 3 Oct anchor, `2` at +1 day (Sun 4 Oct)
-and `0` at +2 days (Mon 5 Oct). That is exactly right under the PERIODS ruling
-— the London week runs Mon 29 Sep–Sun 4 Oct, so Sunday's two dailies drop out
-while the two weeklies still count, and Monday opens a new week. Ran it by name:
-`00:01 +1: All tests passed!` 2b's flag came from the review's stale note, not
-from a live red, so nothing was changed.
+### On #7 — still un-actioned, and now fully diagnosed
 
-## The one blocking failure — detail
+Checked again this iteration, from the other direction:
+`git diff $(git merge-base main HEAD) main -- app/test/core/family_time_test.dart`
+is **empty** — `main` has not touched that file since our merge base (its last
+commit is still `eed280d`), so the red is not waiting on a merge and no amount
+of re-merging will clear it.
+
+I did not assume the iteration-3 root cause; I **probed it** with a throwaway
+test replicating the test's exact sequence (then deleted it):
 
 ```
-test/core/family_time_test.dart:319
-  seed + repository zone plumbing › kid_home completions are stamped with the family zone
-  Bad state: Too many elements
+q-plants repeatRule = daily
+seeded rows  = 1  to_do        2026-10-03T07:00:00Z  Europe/London
+leg1 q-reading (London)      rows = 1  Europe/London
+leg2 q-plants  (after move)  rows = 2  -> .single THROWS
+   [ to_do       Europe/London 2026-10-03T07:00:00Z,
+     done_pending Asia/Dubai  2026-10-03T23:59:54Z ]
 ```
 
-**It is not a P15 regression and not caused by this merge.** Proof:
+The seed's row is London-stamped 07:00Z on the 3rd; once the family zone moves
+to Dubai (UTC+4) and the wall clock is past ~20:00Z, Dubai's "today" is already
+the 4th, so `countsForCurrentPeriod('daily', …)` is false, `inPeriod` is empty,
+and `completeQuest` takes its **insert** branch instead of flipping in place.
 
-- `git diff main HEAD -- app/test/core/family_time_test.dart app/lib/core/data/seed.dart`
-  → **empty**. Both files are byte-identical to `main`.
-- `git diff --name-only main...HEAD` → this branch touches **no**
-  `lib/core/**` and **no** `test/core/**` file. Every changed file is under
-  `app/lib/features/family/**`, `app/test/features/family/**`, the one
-  recorded `today_view_test.dart` anchor, or `docs/screens/P15/**`.
+Two consequences worth the maintainer's attention, both now in §6:
 
-Cause: the shared demo seed now pre-creates a `to_do` completion row for
-`q-plants` (`seed.dart:392`), which this test predates. It then calls
-`completeQuest('leo','q-plants')` and asserts `leoRows.single`;
-`completeQuest` *flips* an in-period `to_do` row in place but *inserts* a new
-one when `inPeriod` is empty, and after `Seed.movedToDubai` the seeded row no
-longer satisfies `countsForCurrentPeriod(...)` under `Asia/Dubai` — so two
-rows exist. The London leg (`q-reading`) still flips in place and passes,
-which is why only the Dubai leg is red.
+- **The test is wall-clock flaky, not deterministically broken.** It passes when
+  the suite runs early in the UTC day and fails in the evening. Re-running to
+  see it go green is not a fix, and CI timing will make it look intermittent.
+- **The behaviour under test is correct** — the row `completeQuest` just wrote
+  really is stamped `Asia/Dubai`, which is precisely what the test wants to
+  prove. Only the row-*selection* assumption (`.single`) is stale. So the fix
+  must not loosen the zone expectation.
 
-I did **not** edit it: `app/test/core/**` is shared (RULES §1) and the fix
-belongs on `main`, where every other screen loop is hitting the same red. The
-full diagnosis and a concrete one-line-intent fix are in
-`SHARED_REQUEST.md` §6.
+I also verified the proposed fix on both legs: ordering by `createdAt`
+descending and asserting on `first` returns `Asia/Dubai` for the Dubai leg and
+`Europe/London` for the London leg, so both existing expectations survive. §6
+now carries a ready-to-apply diff, plus an optional shared follow-up
+(`completeQuest` hardcodes `DateTime.now().toUtc()`, so no test can pin the
+instant it stamps — the same injectable-clock seam P15-BUG-8 gave
+`FamilyRepositoryImpl`).
 
 ## Verification (run in `app/`, no simulator)
 
 ```
 $ dart format .
-Formatted 496 files (0 changed) in 2.09 seconds.
+Formatted 496 files (0 changed) in 1.37 seconds.
 
 $ flutter analyze
 Analyzing app...
-No issues found! (ran in 4.5s)
+No issues found! (ran in 3.2s)
 
 $ flutter test
-03:22 +2553 ~1 -1: Some tests failed.
+01:07 +2562 ~1 -1: Some tests failed.
 Failing tests:
   app/test/core/family_time_test.dart: seed + repository zone plumbing
       kid_home completions are stamped with the family zone
 
 $ flutter test test/features/family
-00:39 +272: All tests passed!
+00:08 +281: All tests passed!
+
+$ flutter test test/core/family_time_test.dart      # re-checked after the date rolled
+01:00 +21 -1: Some tests failed.   (same single test)
 ```
 
-Format clean. Analyze clean. Full suite **2553 pass / 1 skip / 1 fail** — the
-skip is `p12_bugs_test.dart:320` (feature `pocket_money`, pre-existing,
-unrelated), the fail is the core test above. **P15's own feature suite is
-272/272.** No test was skipped, deleted, reworded or weakened to reach this
-point; no `analysis_options.yaml` change; no `google_fonts` anywhere. Nothing
-in this stage was edited except this note and `SHARED_REQUEST.md` §6 — I made
-**no source change**, because there was no P15 breakage to fix.
+Format clean. Analyze clean. Full suite **2562 pass / 1 skip / 1 fail** — skip
+is `p12_bugs_test.dart:320` (pre-existing, `pocket_money`), fail is the core
+test above. **P15's own feature suite is 281/281**, including the BUG-10 proof.
+No test was skipped, deleted, reworded or weakened; no `analysis_options.yaml`
+change; no `google_fonts`. The probe file was deleted and the tree re-verified
+clean (format/analyze) afterwards. No source change was needed this stage.
 
 ## Left for the next stage
 
-1. **Unblock `main`** — `SHARED_REQUEST.md` §6 needs the shared fix in
-   `test/core/family_time_test.dart`. Until then the full-suite gate stays red
-   for every screen loop, and P15 must not attempt the edit itself. Nothing
-   else is outstanding from 2a or 2b.
-2. **UI stage (5_ui)** — re-shoot `/child-profile` light + dark on udid
-   `E7D5555E-378A-49DF-AAEE-16677AF4B9DB`, `compare.py` against
-   `design/screens/{light,dark}/P15-child-profile.png`. Band geometry is
-   unchanged (hero 47/164, stats 227/82, Pip 325/116, list 457/180, danger
-   653/80), whose iteration-2 `5_ui` measured every edge within ±2 px. Per the
-   UI VERDICT RULE, report measured y for the title, the first control and
-   each card top, design vs app. The one new thing to confirm: switching a
-   child via `?childId=` (the BUG-9 fix) re-renders the body **without any
-   vertical shift**.
+1. **Escalation — `SHARED_REQUEST.md` §6, now iteration 2 un-actioned.** This
+   is the only thing between P15 and a green full-suite gate, and it is not fix-
+   able from this worktree. It needs a shared edit on `main`; §6 has a verified
+   diff ready to apply. Nothing else is outstanding from 2a or 2b.
+2. **UI stage (5_ui)** — iteration 3's `5_ui` already PASSed with band geometry
+   within ±2 px, and 2b reports no visual delta this iteration (the change
+   surface was router-less mount robustness only). Re-shoot is cheap insurance:
+   `/child-profile` light + dark on udid `E7D5555E-378A-49DF-AAEE-16677AF4B9DB`,
+   `compare.py` against both design PNGs, reporting measured y for the title,
+   the first control and each card top.
 3. `child_profile_row.dart` stays until `SHARED_REQUEST.md` §1 lands on
    `main`; then delete it and return to `NestListRow` (plus §2b's
    `leadingWidget` for the coin illustration). Open shared asks: §1 (row flex),

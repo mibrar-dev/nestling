@@ -54,6 +54,12 @@ class _ChildProfileViewState extends State<ChildProfileView> {
     // the deep link instead of keeping the previous child. `selectChild` is
     // idempotent and membership-gated in the repository, so a duplicate
     // first-dispatch is harmless.
+    // P15-BUG-10: a route-less mount (a bare `MaterialApp` test, a preview
+    // harness, the design gallery) has no GoRouterState ancestor, so guard
+    // the read with `GoRouter.maybeOf` before depending on it. The
+    // `GoRouterState.of` dependency keeps this firing on a live location
+    // change — the P15-BUG-9 re-dispatch still works inside the app.
+    if (GoRouter.maybeOf(context) == null) return;
     final requested = GoRouterState.of(context).uri.queryParameters['childId'];
     if (requested != null && requested != _seenChildId) {
       _seenChildId = requested;

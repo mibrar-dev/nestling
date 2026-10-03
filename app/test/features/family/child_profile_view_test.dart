@@ -707,6 +707,9 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
+          // The design tokens on the theme (this is what `context.nest` reads)
+          // but deliberately no router: that is exactly the P15-BUG-10 stance.
+          theme: NestTheme.light(),
           home: BlocProvider<FamilyBloc>.value(
             value: bloc,
             child: const ChildProfileView(),

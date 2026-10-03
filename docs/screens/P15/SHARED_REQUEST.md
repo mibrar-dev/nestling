@@ -174,14 +174,73 @@ seeded row no longer satisfies `countsForCurrentPeriod(...)` under
 `Bad state: Too many elements` is that second row. The first leg (`q-reading`,
 London) still flips in place and passes, which is why only the Dubai leg is red.
 
-Suggested fix (shared, one line of intent): scope the assertion to the row the
-test itself produced instead of assuming uniqueness — e.g. order the query by
-`createdAt` descending and assert on `first` (the row `completeQuest` just
-wrote, whose `createdAtTz` is the zone under test), or filter on
-`status == 'done_pending'`. Same for the `q-reading` leg at line 313, which is
-one seed change away from breaking the same way. Please do not paper over it
-by loosening the zone expectation — the stamping behaviour under test is
-correct; only the test's row-selection assumption is stale.
+### VERIFIED root cause (probed directly, not reasoned)
+
+A throwaway probe replicating the test's exact sequence against the demo seed
+printed:
+
+```
+q-plants repeatRule = daily
+seeded rows  = 1  status=[to_do]        at=2026-10-03T07:00:00Z  tz=Europe/London
+leg1 q-reading (London)      rows = 1   tz=[Europe/London]
+leg2 q-plants  (after move)  rows = 2   -> .single THROWS
+   [ to_do      Europe/London 2026-10-03T07:00:00Z,
+     done_pending Asia/Dubai  2026-10-03T23:59:54Z ]
+```
+
+So: the seed's `q-plants` row is stamped `Europe/London` at 07:00Z on the 3rd.
+Once `Seed.movedToDubai` flips the family zone to `Asia/Dubai` (UTC+4) and the
+real wall clock is past ~20:00Z, "today in Dubai" is already the **4th** while
+the seeded row is the **3rd**, so `countsForCurrentPeriod('daily', …)` is false,
+`inPeriod` is empty, and `completeQuest` takes its **insert** branch instead of
+flipping in place. `q-plants` therefore has two rows and `.single` throws.
+
+**This makes the test wall-clock dependent (flaky, not deterministically
+broken).** It passes when the suite runs early enough in the UTC day that Dubai
+has not yet crossed midnight, and fails in the evening. Do not "fix" it by
+re-running and observing green, and do not loosen the zone expectation — the
+stamping behaviour under test is *correct*: the newly written row really is
+stamped `Asia/Dubai`, which is exactly what the test wants to prove.
+
+### Ready-to-apply fix (verified on both legs)
+
+Assert on the row the call itself produced — the newest — instead of assuming
+uniqueness. Probed against the same sequence, this returns `Asia/Dubai` for
+leg 2 and `Europe/London` for leg 1, i.e. both existing expectations still hold:
+
+```diff
+-      final rows = await (db.select(
+-        db.questCompletions,
+-      )..where((c) => c.questId.equals('q-reading'))).get();
+-      expect(rows.single.createdAtTz, london);
++      final rows = await (db.select(db.questCompletions)
++            ..where((c) => c.questId.equals('q-reading'))
++            ..orderBy([(c) => OrderingTerm(
++              expression: c.createdAt, mode: OrderingMode.desc)]))
++          .get();
++      expect(rows.first.createdAtTz, london);
+       await Seed.movedToDubai(db);
+       await repo.completeQuest('leo', 'q-plants');
+-      final leoRows = await (db.select(
+-        db.questCompletions,
+-      )..where((c) => c.questId.equals('q-plants'))).get();
+-      expect(leoRows.single.createdAtTz, dubai);
++      final leoRows = await (db.select(db.questCompletions)
++            ..where((c) => c.questId.equals('q-plants'))
++            ..orderBy([(c) => OrderingTerm(
++              expression: c.createdAt, mode: OrderingMode.desc)]))
++          .get();
++      expect(leoRows.first.createdAtTz, dubai);
+```
+
+(`OrderingTerm`/`OrderingMode` need `package:drift/drift.dart`.)
+
+Worth considering alongside it, as a shared change rather than a test edit:
+`KidHomeRepositoryImpl.completeQuest` hardcodes `DateTime.now().toUtc()`
+internally, so no test can pin the instant it stamps. The repo already has the
+injectable-`clock` shape (`FamilyRepositoryImpl`, P15-BUG-8); giving
+`completeQuest` the same seam would make this whole class of test deterministic.
+That is optional — the diff above is enough to unblock every loop.
 
 Blocks: **yes** — the full-suite gate for every screen loop, P15 included.
 The P15 loop must not attempt this fix; it needs the shared edit on `main`.
