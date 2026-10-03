@@ -1,8 +1,10 @@
 # Shared request — P13 `pumpAppRoute` surface size is hard-coded
 
-> **Two requests on this page.** #1 is from iteration 1 and is still open.
-> #2 was filed in iteration 2 and is **breaking `flutter test` for every
-> screen loop** — see the bottom of the file.
+> **Three requests on this page.** #1 is from iteration 1, still open and
+> non-blocking. #2 was filed in iteration 2 about a single test.
+> **#3 (iteration 4) supersedes #2: the same clock-vs-calendar defect now
+> fails 35 tests across 5 features, and it will fail again every midnight.**
+> Fix #3 and #2 resolves itself.
 
 ## #1 — `pumpAppRoute` surface size is hard-coded
 
@@ -107,3 +109,80 @@ may not edit them.
 Blocks: **yes for the repo-wide gate** — `flutter test` is red for every screen
 loop until this is fixed, even though no screen is at fault. P13's own suite
 (`flutter test test/features/pocket_money`) is green.
+
+---
+
+## #3 — the pinned seed date now drifts from the wall clock: 35 tests fail (SUPERSEDES #2)
+
+**Found by:** P13 stage 3, iteration 4. **This is #2's root cause, but the
+blast radius is 35 tests across 5 features instead of 1.** Fixing the one test
+named in #2 will not make the gate green.
+
+## Current state (iteration 4, 4 Oct 2026)
+
+`test/flutter_test_config.dart:9` pins the whole suite to a fixed calendar day:
+
+```dart
+Seed.anchorOverride = DateTime.utc(2026, 10, 3);
+```
+
+Every seeded completion is therefore stamped **3 Oct 2026**, while the period
+rule (`countsForCurrentPeriod`) — the orchestrator's own mandatory PERIODS
+ruling — evaluates against the **real** `DateTime.now()`. The moment the real
+clock passes midnight in the family's zone the two disagree, and every
+period-sensitive test in the repo reclassifies its seeded rows as out-of-period.
+
+Measured during this stage: `UTC 2026-10-03 23:22`, `London 2026-10-04 00:22`.
+
+## Failures (stable across 4 consecutive full runs; zero in `pocket_money`)
+
+| File | Failures |
+|---|---|
+| `features/kid_home/kid_home_view_test.dart` | 20 — `Expected "4 of 6 done", Found 0 widgets` |
+| `features/kid_home/k03_bugs_test.dart` | 8 — a completion finds `0` in-period rows |
+| `features/approvals/approvals_view_states_test.dart` | 3 |
+| `features/today/p08_bugs_test.dart` | 2 — `P08-B11` gets `approved`, expected `to_do` |
+| `features/approvals/approvals_view_test.dart` | 1 |
+| `core/family_time_test.dart` | 1 — #2 above |
+
+`p08_bugs_test.dart:414` states its own cause in the assertion message:
+*"yesterday's daily completion is outside **today's** London day"*. The fixture
+is relative to the real clock; the seed anchor is a fixed date. They cannot both
+hold.
+
+## Why this is not a one-day blip
+
+This recurs **every midnight** and in **every timezone** whose day differs from
+UTC at the moment of the run. #2 (Dubai, 20:00 UTC) was the first visible
+symptom of the same defect. Nothing about it is specific to P13.
+
+## Suggested fix
+
+The durable fix is to stop mixing a fixed calendar date with a live clock:
+
+1. **Inject the clock.** Make `countsForCurrentPeriod` / the repository layer
+   take a `now` parameter (defaulting to `DateTime.now()`), and have
+   `test/flutter_test_config.dart` pass `Seed.anchorDay`. Then tests are
+   deterministic forever and the pin stops being a calendar date that expires.
+2. **Or** derive the pin from the anchor instead of hard-coding it —
+   `Seed.anchorOverride = Seed.anchorDay` — so the fixture and the rule always
+   agree, whatever day it runs.
+3. **Or** as a stop-gap: bump the pinned date whenever the real day rolls over.
+   This is the option that keeps breaking, and it needs a human every midnight.
+
+Option 1 or 2 repairs #2 and #3 together.
+
+Files: `app/test/flutter_test_config.dart`, `app/lib/core/data/london_time.dart`,
+`app/lib/core/data/seed.dart`, and the date fixtures in the five feature test
+files above.
+
+Blocks: **yes for the repo-wide gate** — 35 failures, every screen loop, and it
+recurs daily. P13's own suite (`flutter test test/features/pocket_money`) is
+green at +461.
+
+## Note on the 23:55 exemption
+
+`ORCHESTRATOR_NOTES.md` (23:55) exempts the `family_time_test` failure **"if it
+is the ONLY failing test in the full suite"**. It is not — there are 35, and they
+appeared after that note was written. The condition is not met, so I have not
+treated the gate as green.

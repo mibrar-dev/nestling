@@ -1,14 +1,16 @@
-// P13 · Payout (parent) — Stage 6 adversarial bug tests (iteration 1→3).
+// P13 · Payout (parent) — Stage 6 adversarial bug tests (iteration 1→4).
 //
 // Iteration 1 found five defects (3 major, 2 minor); iteration 2 fixed all
 // five and the fixers promoted their reproducers from `skip:` to ACTIVE
 // regression tests. This file's iteration-2 re-audit found one new minor:
 // P13-BUG-06 (the design copy's gendered "her" leaked onto a goal-bearing
-// Leo when the goal title contained "Lego"). Iteration 3 fixed it by gating
-// the design string on the exact seeded shape (goal child Maya AND title
-// "Lego Friends set") and using the neutral data-driven sentence otherwise —
-// so every reproducer here is now an ACTIVE regression test and a re-break
-// fails the suite.
+// Leo when the goal title contained "Lego"). Iterations 3–4 fixed it, and the
+// orchestrator (23:25) then mandated the final copy: NO seed-id branches in
+// product code, ONE ungendered data-driven sentence for every goal child —
+// "Move £1.00 of {name}'s to their {goal title} fund" (or "… money to
+// savings" with no goal). The design's "her Lego fund" is intentionally NOT
+// used on any path, so every reproducer here is an ACTIVE regression test and
+// a re-break fails the suite.
 //
 // The "attacks that hold" group is NOT skipped: it documents the adversarial
 // probes that passed (same-frame double tap on the real repo, a ticked £0
@@ -62,10 +64,34 @@ Future<void> _settle(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 200));
 }
 
-/// Past a repository write: the watch stream needs a round trip.
-Future<void> _pumpPastWrite(WidgetTester tester) async {
-  for (var i = 0; i < 8; i++) {
-    await tester.pump(const Duration(milliseconds: 120));
+/// Past a repository write and its ledger-stream round trip.
+///
+/// A fixed number of fake-time pumps is **not** a synchronisation point. The
+/// Drift write and the `watchLedgerData` re-emission are real async work, so
+/// on a loaded machine the row can land *after* the budget and the assertion
+/// then reads an empty result. That was observed as an intermittent
+/// `P13-BUG-01` failure in a full-suite run (~1 run in 4) that never
+/// reproduced in isolation or when this file ran on its own.
+///
+/// Pass [db] and [seeded] to wait for the row itself. `recordPayout` writes
+/// the payout, the savings move and the goal bump in ONE transaction, so the
+/// first new row appearing is a sound barrier for all three.
+Future<void> _pumpPastWrite(
+  WidgetTester tester, {
+  AppDatabase? db,
+  Set<int>? seeded,
+}) async {
+  const attempts = 60;
+  for (var i = 0; i < attempts; i++) {
+    await tester.pump(const Duration(milliseconds: 50));
+    if (db == null || seeded == null) {
+      // No ledger to watch (navigation-only assertions): a few frames is
+      // enough, and the original budget is kept for those callers.
+      if (i >= 15) break;
+      continue;
+    }
+    final fresh = _newRows(await db.select(db.ledgerEntries).get(), seeded);
+    if (fresh.isNotEmpty) break;
   }
   await _settle(tester);
 }
@@ -320,7 +346,7 @@ void main() {
       final attempted = gated.payoutCalls;
 
       gated.releaseAll();
-      await _pumpPastWrite(tester);
+      await _pumpPastWrite(tester, db: db, seeded: seeded);
 
       final written = _newRows(await db.select(db.ledgerEntries).get(), seeded);
       final goal = await (db.select(
@@ -385,13 +411,15 @@ void main() {
       });
       await GetIt.instance<AppSession>().refresh();
 
+      final scenario = _rowIds(await db.select(db.ledgerEntries).get());
+
       await _openPayoutFromLedger(tester);
       expect(find.text('Weekly + quests · £0.50'), findsOneWidget);
 
       // Maya (£0.50) is ticked and the saverow is ON by default: no extra
       // action needed. "Mark as paid" pays 50p — and moves £1.00.
       await tester.tap(find.widgetWithText(NestButton, kCta));
-      await _pumpPastWrite(tester);
+      await _pumpPastWrite(tester, db: db, seeded: scenario);
 
       final written = await db.select(db.ledgerEntries).get();
       final paid = written
@@ -624,7 +652,7 @@ void main() {
       final cta = find.widgetWithText(NestButton, kCta);
       await tester.tap(cta);
       await tester.tap(cta);
-      await _pumpPastWrite(tester);
+      await _pumpPastWrite(tester, db: db, seeded: seeded);
 
       final written = _newRows(await db.select(db.ledgerEntries).get(), seeded);
       final goal = await (db.select(
@@ -645,9 +673,10 @@ void main() {
       final db = await setUpTestScope();
 
       // Visit 1: pay Maya only (default tick; Leo stays unticked).
+      final visit1 = _rowIds(await db.select(db.ledgerEntries).get());
       await _openPayoutFromLedger(tester);
       await tester.tap(find.widgetWithText(NestButton, kCta));
-      await _pumpPastWrite(tester);
+      await _pumpPastWrite(tester, db: db, seeded: visit1);
       expect(pushedPath(tester), '/money');
 
       // Visit 2: Maya £0 (unticked by the prime), Leo £2.10 (ticked).
@@ -659,7 +688,7 @@ void main() {
 
       final before = _rowIds(await db.select(db.ledgerEntries).get());
       await tester.tap(find.widgetWithText(NestButton, kCta));
-      await _pumpPastWrite(tester);
+      await _pumpPastWrite(tester, db: db, seeded: before);
 
       final written = _newRows(await db.select(db.ledgerEntries).get(), before);
       final goal = await (db.select(
@@ -692,7 +721,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 80));
       expect(gated.payoutCalls, 1);
       gated.releaseAll();
-      await _pumpPastWrite(tester);
+      await _pumpPastWrite(tester, db: db, seeded: seeded);
 
       final written = _newRows(await db.select(db.ledgerEntries).get(), seeded);
       final goal = await (db.select(
@@ -764,7 +793,7 @@ void main() {
       await tester.scrollUntilVisible(cta, 120);
       await _settle(tester);
       await tester.tap(cta);
-      await _pumpPastWrite(tester);
+      await _pumpPastWrite(tester, db: db, seeded: seeded);
 
       final written = _newRows(await db.select(db.ledgerEntries).get(), seeded);
       expect(written.where((r) => r.type == 'payout').length, 1);
@@ -809,7 +838,7 @@ void main() {
       await tester.tap(find.bySemanticsLabel('Leo paid in cash'));
       await tester.pump(const Duration(milliseconds: 50));
       await tester.tap(find.widgetWithText(NestButton, kCta));
-      await _pumpPastWrite(tester);
+      await _pumpPastWrite(tester, db: db, seeded: seeded);
 
       final written = _newRows(await db.select(db.ledgerEntries).get(), seeded);
       final goal = await (db.select(
@@ -906,7 +935,7 @@ void main() {
 
       await tester.tap(find.widgetWithText(NestButton, kCta));
       await tester.binding.handlePopRoute();
-      await _pumpPastWrite(tester);
+      await _pumpPastWrite(tester, db: db, seeded: seeded);
 
       final written = _newRows(await db.select(db.ledgerEntries).get(), seeded);
       expect(written.where((r) => r.type == 'payout').length, 1);
