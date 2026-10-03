@@ -14,7 +14,7 @@ import 'package:nestling/core/design_system/tokens/typography.dart';
 /// replaces the helper, matching Material's error-wins behaviour.
 ///
 /// The `.search` geometry (P10 quest library) lives in
-/// [NestTextField.search]: a 52-high flex row — 16 px side padding, a 24 px
+/// [NestTextField.search]: a 54-high flex row — 16 px side padding, a 24 px
 /// icon, a 10 px gap, then the input — so the glyph sits at field x+16 and
 /// the hint at x+50. Do not fake it with `prefixIcon`: Material's default
 /// `prefixIconConstraints` floor that slot at 48 px and push the hint to
@@ -40,7 +40,9 @@ class NestTextField extends StatefulWidget {
        semanticLabel = null;
 
   /// Search slot matching `.search` in `design/html-source/...`: `flex,
-  /// gap:10px, padding:4px 16px, min-height:52px` with a 24 px icon.
+  /// gap:10px, padding:4px 16px, min-height:52px` with a 24 px icon, rendered
+  /// as a 54-high border box (`box-sizing: border-box`: 4 + 44 + 4 content
+  /// plus 1 px borders).
   ///
   /// Layout is a plain [Row] (no [InputDecoration] prefix slot), so the
   /// icon keeps its 24 px size at field x+16 and [hintText] starts at x+50.
@@ -142,15 +144,19 @@ class _NestTextFieldState extends State<NestTextField> {
   ///   decoration carries `left: -4` and the rendered hint starts exactly
   ///   at the design's gap edge (16 + 24 + 10 = x+50).
   ///
-  /// Box model: the design is `border-box`, so 52 px is the TOTAL including
-  /// the 1 px border: 3 + 44 + 3 + 2 × 1. The vertical padding is 3 px, not
-  /// the CSS 4 px — the content (centred icon and text) paints identically,
-  /// and the row measures exactly 52.
+  /// The hint (painted by the decorator, not the editable) ignores
+  /// [TextAlignVertical]: with a tight 44 px slot and no vertical padding
+  /// it sits at the top of the slot. The decoration therefore also carries
+  /// 10 px vertical padding — (44 − 24) / 2 around the 24 px Inter 16/24
+  /// line box — so the hint and the typed text both centre in the slot.
+  ///
+  /// Box model: the design is `border-box`, so 54 px is the TOTAL including
+  /// the 1 px border: 4 + 44 + 4 + 2 × 1.
   Widget _buildSearch(BuildContext context, NestTokens tokens, FocusNode node) {
     final row = Container(
-      constraints: const BoxConstraints(minHeight: 52),
+      constraints: const BoxConstraints(minHeight: 54),
       padding: const EdgeInsets.symmetric(
-        vertical: NestSpacing.gap3,
+        vertical: NestSpacing.s1,
         horizontal: NestSpacing.s4,
       ),
       decoration: BoxDecoration(
@@ -187,8 +193,14 @@ class _NestTextFieldState extends State<NestTextField> {
                   focusedErrorBorder: InputBorder.none,
                   isDense: true,
                   // Cancels the editable's built-in 4 px text inset (see
-                  // above) so the hint starts at the gap edge.
-                  contentPadding: const EdgeInsets.only(left: -4),
+                  // above) so the hint starts at the gap edge; the 10 px
+                  // vertical padding centres the 24 px hint/ink line box in
+                  // the 44 px slot ((44 - 24) / 2).
+                  contentPadding: const EdgeInsets.only(
+                    left: -4,
+                    top: NestSpacing.gap10,
+                    bottom: NestSpacing.gap10,
+                  ),
                 ),
               ),
             ),
