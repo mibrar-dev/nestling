@@ -2013,6 +2013,30 @@ class $QuestsTable extends Quests with TableInfo<$QuestsTable, Quest> {
     ),
     defaultValue: const Constant(true),
   );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _createdAtTzMeta = const VerificationMeta(
+    'createdAtTz',
+  );
+  @override
+  late final GeneratedColumn<String> createdAtTz = GeneratedColumn<String>(
+    'created_at_tz',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('Europe/London'),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -2027,6 +2051,8 @@ class $QuestsTable extends Quests with TableInfo<$QuestsTable, Quest> {
     needsApproval,
     assigneeChildId,
     active,
+    createdAt,
+    createdAtTz,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -2124,6 +2150,21 @@ class $QuestsTable extends Quests with TableInfo<$QuestsTable, Quest> {
         active.isAcceptableOrUnknown(data['active']!, _activeMeta),
       );
     }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('created_at_tz')) {
+      context.handle(
+        _createdAtTzMeta,
+        createdAtTz.isAcceptableOrUnknown(
+          data['created_at_tz']!,
+          _createdAtTzMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -2181,6 +2222,14 @@ class $QuestsTable extends Quests with TableInfo<$QuestsTable, Quest> {
         DriftSqlType.bool,
         data['${effectivePrefix}active'],
       )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      createdAtTz: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}created_at_tz'],
+      )!,
     );
   }
 
@@ -2203,6 +2252,8 @@ class Quest extends DataClass implements Insertable<Quest> {
   final bool needsApproval;
   final String? assigneeChildId;
   final bool active;
+  final DateTime createdAt;
+  final String createdAtTz;
   const Quest({
     required this.id,
     required this.familyId,
@@ -2216,6 +2267,8 @@ class Quest extends DataClass implements Insertable<Quest> {
     required this.needsApproval,
     this.assigneeChildId,
     required this.active,
+    required this.createdAt,
+    required this.createdAtTz,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -2238,6 +2291,8 @@ class Quest extends DataClass implements Insertable<Quest> {
       map['assignee_child_id'] = Variable<String>(assigneeChildId);
     }
     map['active'] = Variable<bool>(active);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['created_at_tz'] = Variable<String>(createdAtTz);
     return map;
   }
 
@@ -2261,6 +2316,8 @@ class Quest extends DataClass implements Insertable<Quest> {
           ? const Value.absent()
           : Value(assigneeChildId),
       active: Value(active),
+      createdAt: Value(createdAt),
+      createdAtTz: Value(createdAtTz),
     );
   }
 
@@ -2282,6 +2339,8 @@ class Quest extends DataClass implements Insertable<Quest> {
       needsApproval: serializer.fromJson<bool>(json['needsApproval']),
       assigneeChildId: serializer.fromJson<String?>(json['assigneeChildId']),
       active: serializer.fromJson<bool>(json['active']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      createdAtTz: serializer.fromJson<String>(json['createdAtTz']),
     );
   }
   @override
@@ -2300,6 +2359,8 @@ class Quest extends DataClass implements Insertable<Quest> {
       'needsApproval': serializer.toJson<bool>(needsApproval),
       'assigneeChildId': serializer.toJson<String?>(assigneeChildId),
       'active': serializer.toJson<bool>(active),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'createdAtTz': serializer.toJson<String>(createdAtTz),
     };
   }
 
@@ -2316,6 +2377,8 @@ class Quest extends DataClass implements Insertable<Quest> {
     bool? needsApproval,
     Value<String?> assigneeChildId = const Value.absent(),
     bool? active,
+    DateTime? createdAt,
+    String? createdAtTz,
   }) => Quest(
     id: id ?? this.id,
     familyId: familyId ?? this.familyId,
@@ -2331,6 +2394,8 @@ class Quest extends DataClass implements Insertable<Quest> {
         ? assigneeChildId.value
         : this.assigneeChildId,
     active: active ?? this.active,
+    createdAt: createdAt ?? this.createdAt,
+    createdAtTz: createdAtTz ?? this.createdAtTz,
   );
   Quest copyWithCompanion(QuestsCompanion data) {
     return Quest(
@@ -2354,6 +2419,10 @@ class Quest extends DataClass implements Insertable<Quest> {
           ? data.assigneeChildId.value
           : this.assigneeChildId,
       active: data.active.present ? data.active.value : this.active,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      createdAtTz: data.createdAtTz.present
+          ? data.createdAtTz.value
+          : this.createdAtTz,
     );
   }
 
@@ -2371,7 +2440,9 @@ class Quest extends DataClass implements Insertable<Quest> {
           ..write('dueTimeLocal: $dueTimeLocal, ')
           ..write('needsApproval: $needsApproval, ')
           ..write('assigneeChildId: $assigneeChildId, ')
-          ..write('active: $active')
+          ..write('active: $active, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('createdAtTz: $createdAtTz')
           ..write(')'))
         .toString();
   }
@@ -2390,6 +2461,8 @@ class Quest extends DataClass implements Insertable<Quest> {
     needsApproval,
     assigneeChildId,
     active,
+    createdAt,
+    createdAtTz,
   );
   @override
   bool operator ==(Object other) =>
@@ -2406,7 +2479,9 @@ class Quest extends DataClass implements Insertable<Quest> {
           other.dueTimeLocal == this.dueTimeLocal &&
           other.needsApproval == this.needsApproval &&
           other.assigneeChildId == this.assigneeChildId &&
-          other.active == this.active);
+          other.active == this.active &&
+          other.createdAt == this.createdAt &&
+          other.createdAtTz == this.createdAtTz);
 }
 
 class QuestsCompanion extends UpdateCompanion<Quest> {
@@ -2422,6 +2497,8 @@ class QuestsCompanion extends UpdateCompanion<Quest> {
   final Value<bool> needsApproval;
   final Value<String?> assigneeChildId;
   final Value<bool> active;
+  final Value<DateTime> createdAt;
+  final Value<String> createdAtTz;
   final Value<int> rowid;
   const QuestsCompanion({
     this.id = const Value.absent(),
@@ -2436,6 +2513,8 @@ class QuestsCompanion extends UpdateCompanion<Quest> {
     this.needsApproval = const Value.absent(),
     this.assigneeChildId = const Value.absent(),
     this.active = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.createdAtTz = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   QuestsCompanion.insert({
@@ -2451,6 +2530,8 @@ class QuestsCompanion extends UpdateCompanion<Quest> {
     this.needsApproval = const Value.absent(),
     this.assigneeChildId = const Value.absent(),
     this.active = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.createdAtTz = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        familyId = Value(familyId),
@@ -2468,6 +2549,8 @@ class QuestsCompanion extends UpdateCompanion<Quest> {
     Expression<bool>? needsApproval,
     Expression<String>? assigneeChildId,
     Expression<bool>? active,
+    Expression<DateTime>? createdAt,
+    Expression<String>? createdAtTz,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -2483,6 +2566,8 @@ class QuestsCompanion extends UpdateCompanion<Quest> {
       if (needsApproval != null) 'needs_approval': needsApproval,
       if (assigneeChildId != null) 'assignee_child_id': assigneeChildId,
       if (active != null) 'active': active,
+      if (createdAt != null) 'created_at': createdAt,
+      if (createdAtTz != null) 'created_at_tz': createdAtTz,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -2500,6 +2585,8 @@ class QuestsCompanion extends UpdateCompanion<Quest> {
     Value<bool>? needsApproval,
     Value<String?>? assigneeChildId,
     Value<bool>? active,
+    Value<DateTime>? createdAt,
+    Value<String>? createdAtTz,
     Value<int>? rowid,
   }) {
     return QuestsCompanion(
@@ -2515,6 +2602,8 @@ class QuestsCompanion extends UpdateCompanion<Quest> {
       needsApproval: needsApproval ?? this.needsApproval,
       assigneeChildId: assigneeChildId ?? this.assigneeChildId,
       active: active ?? this.active,
+      createdAt: createdAt ?? this.createdAt,
+      createdAtTz: createdAtTz ?? this.createdAtTz,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -2558,6 +2647,12 @@ class QuestsCompanion extends UpdateCompanion<Quest> {
     if (active.present) {
       map['active'] = Variable<bool>(active.value);
     }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (createdAtTz.present) {
+      map['created_at_tz'] = Variable<String>(createdAtTz.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -2579,6 +2674,8 @@ class QuestsCompanion extends UpdateCompanion<Quest> {
           ..write('needsApproval: $needsApproval, ')
           ..write('assigneeChildId: $assigneeChildId, ')
           ..write('active: $active, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('createdAtTz: $createdAtTz, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -4172,6 +4269,30 @@ class $RewardsTable extends Rewards with TableInfo<$RewardsTable, Reward> {
     ),
     defaultValue: const Constant(true),
   );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _createdAtTzMeta = const VerificationMeta(
+    'createdAtTz',
+  );
+  @override
+  late final GeneratedColumn<String> createdAtTz = GeneratedColumn<String>(
+    'created_at_tz',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('Europe/London'),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -4180,6 +4301,8 @@ class $RewardsTable extends Rewards with TableInfo<$RewardsTable, Reward> {
     icon,
     coinPrice,
     needsOk,
+    createdAt,
+    createdAtTz,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -4234,6 +4357,21 @@ class $RewardsTable extends Rewards with TableInfo<$RewardsTable, Reward> {
         needsOk.isAcceptableOrUnknown(data['needs_ok']!, _needsOkMeta),
       );
     }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('created_at_tz')) {
+      context.handle(
+        _createdAtTzMeta,
+        createdAtTz.isAcceptableOrUnknown(
+          data['created_at_tz']!,
+          _createdAtTzMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -4267,6 +4405,14 @@ class $RewardsTable extends Rewards with TableInfo<$RewardsTable, Reward> {
         DriftSqlType.bool,
         data['${effectivePrefix}needs_ok'],
       )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      createdAtTz: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}created_at_tz'],
+      )!,
     );
   }
 
@@ -4283,6 +4429,8 @@ class Reward extends DataClass implements Insertable<Reward> {
   final String icon;
   final int coinPrice;
   final bool needsOk;
+  final DateTime createdAt;
+  final String createdAtTz;
   const Reward({
     required this.id,
     required this.familyId,
@@ -4290,6 +4438,8 @@ class Reward extends DataClass implements Insertable<Reward> {
     required this.icon,
     required this.coinPrice,
     required this.needsOk,
+    required this.createdAt,
+    required this.createdAtTz,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -4300,6 +4450,8 @@ class Reward extends DataClass implements Insertable<Reward> {
     map['icon'] = Variable<String>(icon);
     map['coin_price'] = Variable<int>(coinPrice);
     map['needs_ok'] = Variable<bool>(needsOk);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['created_at_tz'] = Variable<String>(createdAtTz);
     return map;
   }
 
@@ -4311,6 +4463,8 @@ class Reward extends DataClass implements Insertable<Reward> {
       icon: Value(icon),
       coinPrice: Value(coinPrice),
       needsOk: Value(needsOk),
+      createdAt: Value(createdAt),
+      createdAtTz: Value(createdAtTz),
     );
   }
 
@@ -4326,6 +4480,8 @@ class Reward extends DataClass implements Insertable<Reward> {
       icon: serializer.fromJson<String>(json['icon']),
       coinPrice: serializer.fromJson<int>(json['coinPrice']),
       needsOk: serializer.fromJson<bool>(json['needsOk']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      createdAtTz: serializer.fromJson<String>(json['createdAtTz']),
     );
   }
   @override
@@ -4338,6 +4494,8 @@ class Reward extends DataClass implements Insertable<Reward> {
       'icon': serializer.toJson<String>(icon),
       'coinPrice': serializer.toJson<int>(coinPrice),
       'needsOk': serializer.toJson<bool>(needsOk),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'createdAtTz': serializer.toJson<String>(createdAtTz),
     };
   }
 
@@ -4348,6 +4506,8 @@ class Reward extends DataClass implements Insertable<Reward> {
     String? icon,
     int? coinPrice,
     bool? needsOk,
+    DateTime? createdAt,
+    String? createdAtTz,
   }) => Reward(
     id: id ?? this.id,
     familyId: familyId ?? this.familyId,
@@ -4355,6 +4515,8 @@ class Reward extends DataClass implements Insertable<Reward> {
     icon: icon ?? this.icon,
     coinPrice: coinPrice ?? this.coinPrice,
     needsOk: needsOk ?? this.needsOk,
+    createdAt: createdAt ?? this.createdAt,
+    createdAtTz: createdAtTz ?? this.createdAtTz,
   );
   Reward copyWithCompanion(RewardsCompanion data) {
     return Reward(
@@ -4364,6 +4526,10 @@ class Reward extends DataClass implements Insertable<Reward> {
       icon: data.icon.present ? data.icon.value : this.icon,
       coinPrice: data.coinPrice.present ? data.coinPrice.value : this.coinPrice,
       needsOk: data.needsOk.present ? data.needsOk.value : this.needsOk,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      createdAtTz: data.createdAtTz.present
+          ? data.createdAtTz.value
+          : this.createdAtTz,
     );
   }
 
@@ -4375,14 +4541,24 @@ class Reward extends DataClass implements Insertable<Reward> {
           ..write('title: $title, ')
           ..write('icon: $icon, ')
           ..write('coinPrice: $coinPrice, ')
-          ..write('needsOk: $needsOk')
+          ..write('needsOk: $needsOk, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('createdAtTz: $createdAtTz')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, familyId, title, icon, coinPrice, needsOk);
+  int get hashCode => Object.hash(
+    id,
+    familyId,
+    title,
+    icon,
+    coinPrice,
+    needsOk,
+    createdAt,
+    createdAtTz,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -4392,7 +4568,9 @@ class Reward extends DataClass implements Insertable<Reward> {
           other.title == this.title &&
           other.icon == this.icon &&
           other.coinPrice == this.coinPrice &&
-          other.needsOk == this.needsOk);
+          other.needsOk == this.needsOk &&
+          other.createdAt == this.createdAt &&
+          other.createdAtTz == this.createdAtTz);
 }
 
 class RewardsCompanion extends UpdateCompanion<Reward> {
@@ -4402,6 +4580,8 @@ class RewardsCompanion extends UpdateCompanion<Reward> {
   final Value<String> icon;
   final Value<int> coinPrice;
   final Value<bool> needsOk;
+  final Value<DateTime> createdAt;
+  final Value<String> createdAtTz;
   final Value<int> rowid;
   const RewardsCompanion({
     this.id = const Value.absent(),
@@ -4410,6 +4590,8 @@ class RewardsCompanion extends UpdateCompanion<Reward> {
     this.icon = const Value.absent(),
     this.coinPrice = const Value.absent(),
     this.needsOk = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.createdAtTz = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   RewardsCompanion.insert({
@@ -4419,6 +4601,8 @@ class RewardsCompanion extends UpdateCompanion<Reward> {
     this.icon = const Value.absent(),
     required int coinPrice,
     this.needsOk = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.createdAtTz = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        familyId = Value(familyId),
@@ -4431,6 +4615,8 @@ class RewardsCompanion extends UpdateCompanion<Reward> {
     Expression<String>? icon,
     Expression<int>? coinPrice,
     Expression<bool>? needsOk,
+    Expression<DateTime>? createdAt,
+    Expression<String>? createdAtTz,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -4440,6 +4626,8 @@ class RewardsCompanion extends UpdateCompanion<Reward> {
       if (icon != null) 'icon': icon,
       if (coinPrice != null) 'coin_price': coinPrice,
       if (needsOk != null) 'needs_ok': needsOk,
+      if (createdAt != null) 'created_at': createdAt,
+      if (createdAtTz != null) 'created_at_tz': createdAtTz,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -4451,6 +4639,8 @@ class RewardsCompanion extends UpdateCompanion<Reward> {
     Value<String>? icon,
     Value<int>? coinPrice,
     Value<bool>? needsOk,
+    Value<DateTime>? createdAt,
+    Value<String>? createdAtTz,
     Value<int>? rowid,
   }) {
     return RewardsCompanion(
@@ -4460,6 +4650,8 @@ class RewardsCompanion extends UpdateCompanion<Reward> {
       icon: icon ?? this.icon,
       coinPrice: coinPrice ?? this.coinPrice,
       needsOk: needsOk ?? this.needsOk,
+      createdAt: createdAt ?? this.createdAt,
+      createdAtTz: createdAtTz ?? this.createdAtTz,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -4485,6 +4677,12 @@ class RewardsCompanion extends UpdateCompanion<Reward> {
     if (needsOk.present) {
       map['needs_ok'] = Variable<bool>(needsOk.value);
     }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (createdAtTz.present) {
+      map['created_at_tz'] = Variable<String>(createdAtTz.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -4500,6 +4698,8 @@ class RewardsCompanion extends UpdateCompanion<Reward> {
           ..write('icon: $icon, ')
           ..write('coinPrice: $coinPrice, ')
           ..write('needsOk: $needsOk, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('createdAtTz: $createdAtTz, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -9987,6 +10187,8 @@ typedef $$QuestsTableCreateCompanionBuilder = QuestsCompanion Function({
   Value<bool> needsApproval,
   Value<String?> assigneeChildId,
   Value<bool> active,
+  Value<DateTime> createdAt,
+  Value<String> createdAtTz,
   Value<int> rowid,
 });
 typedef $$QuestsTableUpdateCompanionBuilder = QuestsCompanion Function({
@@ -10002,6 +10204,8 @@ typedef $$QuestsTableUpdateCompanionBuilder = QuestsCompanion Function({
   Value<bool> needsApproval,
   Value<String?> assigneeChildId,
   Value<bool> active,
+  Value<DateTime> createdAt,
+  Value<String> createdAtTz,
   Value<int> rowid,
 });
 
@@ -10108,6 +10312,16 @@ class $$QuestsTableFilterComposer
 
   ColumnFilters<bool> get active => $composableBuilder(
     column: $table.active,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get createdAtTz => $composableBuilder(
+    column: $table.createdAtTz,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10224,6 +10438,16 @@ class $$QuestsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get createdAtTz => $composableBuilder(
+    column: $table.createdAtTz,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$FamiliesTableOrderingComposer get familyId {
     final $$FamiliesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -10297,6 +10521,14 @@ class $$QuestsTableAnnotationComposer
 
   GeneratedColumn<bool> get active =>
       $composableBuilder(column: $table.active, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<String> get createdAtTz => $composableBuilder(
+    column: $table.createdAtTz,
+    builder: (column) => column,
+  );
 
   $$FamiliesTableAnnotationComposer get familyId {
     final $$FamiliesTableAnnotationComposer composer = $composerBuilder(
@@ -10387,6 +10619,8 @@ class $$QuestsTableTableManager
                 Value<bool> needsApproval = const Value.absent(),
                 Value<String?> assigneeChildId = const Value.absent(),
                 Value<bool> active = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<String> createdAtTz = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => QuestsCompanion(
                 id: id,
@@ -10401,6 +10635,8 @@ class $$QuestsTableTableManager
                 needsApproval: needsApproval,
                 assigneeChildId: assigneeChildId,
                 active: active,
+                createdAt: createdAt,
+                createdAtTz: createdAtTz,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -10417,6 +10653,8 @@ class $$QuestsTableTableManager
                 Value<bool> needsApproval = const Value.absent(),
                 Value<String?> assigneeChildId = const Value.absent(),
                 Value<bool> active = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<String> createdAtTz = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => QuestsCompanion.insert(
                 id: id,
@@ -10431,6 +10669,8 @@ class $$QuestsTableTableManager
                 needsApproval: needsApproval,
                 assigneeChildId: assigneeChildId,
                 active: active,
+                createdAt: createdAt,
+                createdAtTz: createdAtTz,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -11992,6 +12232,8 @@ typedef $$RewardsTableCreateCompanionBuilder = RewardsCompanion Function({
   Value<String> icon,
   required int coinPrice,
   Value<bool> needsOk,
+  Value<DateTime> createdAt,
+  Value<String> createdAtTz,
   Value<int> rowid,
 });
 typedef $$RewardsTableUpdateCompanionBuilder = RewardsCompanion Function({
@@ -12001,6 +12243,8 @@ typedef $$RewardsTableUpdateCompanionBuilder = RewardsCompanion Function({
   Value<String> icon,
   Value<int> coinPrice,
   Value<bool> needsOk,
+  Value<DateTime> createdAt,
+  Value<String> createdAtTz,
   Value<int> rowid,
 });
 
@@ -12078,6 +12322,16 @@ class $$RewardsTableFilterComposer
 
   ColumnFilters<bool> get needsOk => $composableBuilder(
     column: $table.needsOk,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get createdAtTz => $composableBuilder(
+    column: $table.createdAtTz,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -12164,6 +12418,16 @@ class $$RewardsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get createdAtTz => $composableBuilder(
+    column: $table.createdAtTz,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$FamiliesTableOrderingComposer get familyId {
     final $$FamiliesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -12211,6 +12475,14 @@ class $$RewardsTableAnnotationComposer
 
   GeneratedColumn<bool> get needsOk =>
       $composableBuilder(column: $table.needsOk, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<String> get createdAtTz => $composableBuilder(
+    column: $table.createdAtTz,
+    builder: (column) => column,
+  );
 
   $$FamiliesTableAnnotationComposer get familyId {
     final $$FamiliesTableAnnotationComposer composer = $composerBuilder(
@@ -12296,6 +12568,8 @@ class $$RewardsTableTableManager
                 Value<String> icon = const Value.absent(),
                 Value<int> coinPrice = const Value.absent(),
                 Value<bool> needsOk = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<String> createdAtTz = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => RewardsCompanion(
                 id: id,
@@ -12304,6 +12578,8 @@ class $$RewardsTableTableManager
                 icon: icon,
                 coinPrice: coinPrice,
                 needsOk: needsOk,
+                createdAt: createdAt,
+                createdAtTz: createdAtTz,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -12314,6 +12590,8 @@ class $$RewardsTableTableManager
                 Value<String> icon = const Value.absent(),
                 required int coinPrice,
                 Value<bool> needsOk = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<String> createdAtTz = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => RewardsCompanion.insert(
                 id: id,
@@ -12322,6 +12600,8 @@ class $$RewardsTableTableManager
                 icon: icon,
                 coinPrice: coinPrice,
                 needsOk: needsOk,
+                createdAt: createdAt,
+                createdAtTz: createdAtTz,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

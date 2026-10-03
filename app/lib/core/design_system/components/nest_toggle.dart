@@ -28,6 +28,7 @@ class NestToggle extends StatelessWidget {
       label: semanticLabel,
       toggled: value,
       enabled: changed != null,
+      onTap: changed == null ? null : () => changed(!value),
       child: Opacity(
         opacity: changed == null ? 0.45 : 1,
         child: GestureDetector(

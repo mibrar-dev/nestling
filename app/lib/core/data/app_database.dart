@@ -118,6 +118,12 @@ class Quests extends Table {
   // Null = "Anyone".
   TextColumn get assigneeChildId => text().nullable()();
   BoolColumn get active => boolean().withDefault(const Constant(true))();
+  // Creation instant (UTC) + the zone in force then (schema v4). The Active
+  // list is creation order everywhere (orchestrator ruling for P10 §5):
+  // `watchActiveQuests` sorts by this, then `id`.
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  TextColumn get createdAtTz =>
+      text().withDefault(const Constant('Europe/London'))();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -175,6 +181,12 @@ class Rewards extends Table {
   TextColumn get icon => text().withDefault(const Constant('gift'))();
   IntColumn get coinPrice => integer()();
   BoolColumn get needsOk => boolean().withDefault(const Constant(true))();
+  // Creation instant (UTC) + the zone in force then (schema v5). The reward
+  // list is creation order everywhere (owner rule "listed in the order they
+  // were added"): `watchRewardsInCreationOrder` sorts by this, then `id`.
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  TextColumn get createdAtTz =>
+      text().withDefault(const Constant('Europe/London'))();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -318,7 +330,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 5;
 
   /// v1 → v2: every event instant gains a `…_tz` zone column, `families`
   /// (+ `settings` mirror) gains `time_zone`, and `quests` gains the
@@ -331,6 +343,14 @@ class AppDatabase extends _$AppDatabase {
   /// `CURRENT_TIMESTAMP`, so the backfill below staggers them one second
   /// apart in `rowid` order — the insertion order — and roster order is
   /// creation order from then on.
+  ///
+  /// v3 → v4: `quests` gains `created_at` (+ `created_at_tz`, London
+  /// default) with the same rowid-order backfill, so the Active list is
+  /// creation order on migrated databases too.
+  ///
+  /// v4 → v5: `rewards` gains `created_at` (+ `created_at_tz`, London
+  /// default) with the same rowid-order backfill, so the reward list is
+  /// creation order on migrated databases too.
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onUpgrade: (m, from, to) async {
@@ -370,6 +390,40 @@ class AppDatabase extends _$AppDatabase {
           'UPDATE children SET created_at = '
           "strftime('%s', 'now') + rowid - "
           '(SELECT MIN(rowid) FROM children)',
+        );
+      }
+      if (from < 4) {
+        // `quests.created_at` (+ `created_at_tz`, London default) — same
+        // `ADD COLUMN` trick as v3: constant 0 placeholder, then one second
+        // apart in `rowid` (insertion = seed) order, oldest first. The demo
+        // seed inserts quests in display order, so migrated databases keep
+        // the Active list in the order the quests were added.
+        await m.database.customStatement(
+          'ALTER TABLE quests ADD COLUMN created_at INTEGER NOT NULL '
+          'DEFAULT 0',
+        );
+        await m.addColumn(quests, quests.createdAtTz);
+        await m.database.customStatement(
+          'UPDATE quests SET created_at = '
+          "strftime('%s', 'now') + rowid - "
+          '(SELECT MIN(rowid) FROM quests)',
+        );
+      }
+      if (from < 5) {
+        // `rewards.created_at` (+ `created_at_tz`, London default) — same
+        // `ADD COLUMN` trick as v3/v4: constant 0 placeholder, then one
+        // second apart in `rowid` (insertion = seed) order, oldest first.
+        // The demo seed inserts rewards in display order, so migrated
+        // databases keep the reward list in the order it was added.
+        await m.database.customStatement(
+          'ALTER TABLE rewards ADD COLUMN created_at INTEGER NOT NULL '
+          'DEFAULT 0',
+        );
+        await m.addColumn(rewards, rewards.createdAtTz);
+        await m.database.customStatement(
+          'UPDATE rewards SET created_at = '
+          "strftime('%s', 'now') + rowid - "
+          '(SELECT MIN(rowid) FROM rewards)',
         );
       }
     },
@@ -441,10 +495,16 @@ class AppDatabase extends _$AppDatabase {
         .watch();
   }
 
+  /// Active quests in creation order (orchestrator ruling for P10 §5):
+  /// oldest first — the order they were added — never alphabetical. Ties
+  /// (same-second inserts) fall back to `id`, which is deterministic.
   Stream<List<Quest>> watchActiveQuests(String familyId) {
     return (select(quests)
           ..where((q) => q.familyId.equals(familyId) & q.active.equals(true))
-          ..orderBy([(q) => OrderingTerm(expression: q.title)]))
+          ..orderBy([
+            (q) => OrderingTerm(expression: q.createdAt),
+            (q) => OrderingTerm(expression: q.id),
+          ]))
         .watch();
   }
 
@@ -477,10 +537,29 @@ class AppDatabase extends _$AppDatabase {
         .watch();
   }
 
+  /// Rewards in price order (cheapest first). Kept for backward
+  /// compatibility; the P14 reward list must use
+  /// [watchRewardsInCreationOrder] instead (owner rule "listed in the order
+  /// they were added").
   Stream<List<Reward>> watchRewards(String familyId) {
     return (select(rewards)
           ..where((r) => r.familyId.equals(familyId))
           ..orderBy([(r) => OrderingTerm(expression: r.coinPrice)]))
+        .watch();
+  }
+
+  /// Rewards in creation order (owner rule "listed in the order they were
+  /// added"): oldest first — the order they were added — never by price or
+  /// title. Ties (same-second inserts) fall back to `id`, which is
+  /// deterministic. This is the canonical query for the P14 reward list
+  /// (and the K08 shop).
+  Stream<List<Reward>> watchRewardsInCreationOrder(String familyId) {
+    return (select(rewards)
+          ..where((r) => r.familyId.equals(familyId))
+          ..orderBy([
+            (r) => OrderingTerm(expression: r.createdAt),
+            (r) => OrderingTerm(expression: r.id),
+          ]))
         .watch();
   }
 

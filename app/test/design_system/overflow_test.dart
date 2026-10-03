@@ -448,8 +448,9 @@ void _expectMinTapTargets(WidgetTester tester, String group) {
 
 /// Owner simulator-QA regressions (dark-mode round).
 ///
-/// * segmented thumb: 44px container, 36px thumb, sh-1 visible in light,
-///   1px line border and no shadow in dark;
+/// * segmented thumb: 52px track, 44px buttons (`.segmented`: 4px padding
+///   around buttons whose min-height:44px beats height:40px), sh-1 visible
+///   in light, 1px line border and no shadow in dark;
 /// * parent quest check: 28px visual ring with a 44px hit area;
 /// * icon tiles: 40x40, radius 12, 24px icon centred;
 /// * keypad: 8px grid padding, 1px line border and no shadow in dark;
@@ -470,8 +471,8 @@ void ownerQaRegressions() {
           ),
           mode: mode,
         );
-        expect(tester.getSize(find.byType(NestSegmented<String>)).height, 44);
-        expect(tester.getSize(find.byType(InkWell).first).height, 36);
+        expect(tester.getSize(find.byType(NestSegmented<String>)).height, 52);
+        expect(tester.getSize(find.byType(InkWell).first).height, 44);
         final thumb = find
             .descendant(
               of: find.byType(NestSegmented<String>),

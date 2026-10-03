@@ -7,6 +7,16 @@ import 'package:nestling/features/family/domain/entities/family_child.dart';
 import 'package:nestling/features/family/domain/entities/family_member.dart';
 import 'package:nestling/features/family/domain/family_repository.dart';
 
+/// Monotonic band → representative age: the top of each closed band, 13 for
+/// the open-ended band, schema default 7 for anything unexpected.
+int _ageYearsForBand(String ageBand) => switch (ageBand) {
+  '4-6' => 6,
+  '7-9' => 9,
+  '10-12' => 12,
+  '13+' => 13,
+  _ => 7,
+};
+
 /// Drift-backed [FamilyRepository].
 class FamilyRepositoryImpl implements FamilyRepository {
   new({required this._db});
@@ -27,6 +37,11 @@ class FamilyRepositoryImpl implements FamilyRepository {
   @override
   Stream<List<FamilyChild>> watchChildren() {
     return combineLatest3(
+      // CHILD ORDER ruling: creation order via the shared helper
+      // (`createdAt`, then `rowid` for same-second ties) — never
+      // alphabetical. (Pre-schema-v3 this feature carried its own
+      // `rowid`-only query; the durable column has landed, so the interim
+      // query is retired.)
       _db.watchChildren(Seed.familyId),
       _db.watchActiveQuests(Seed.familyId),
       _db.watchAllCompletions(Seed.familyId),
@@ -69,6 +84,9 @@ class FamilyRepositoryImpl implements FamilyRepository {
             familyId: Seed.familyId,
             nickname: nickname,
             ageBand: Value(ageBand),
+            // P05-BUG-6: the schema default (7) used to stand whatever band
+            // was picked, so every new child sorted as a 7-year-old.
+            ageYears: Value(_ageYearsForBand(ageBand)),
             avatarColour: Value(avatarColour),
             weeklyBasePence: Value(weeklyBasePence),
             // Explicit creation marker (CHILD ORDER ruling): roster order is

@@ -1,5 +1,7 @@
+import 'package:nestling/features/pocket_money/domain/entities/money_ledger_data.dart';
 import 'package:nestling/features/pocket_money/domain/entities/owed_summary.dart';
 import 'package:nestling/features/pocket_money/domain/entities/pocket_money_entry.dart';
+import 'package:nestling/features/pocket_money/domain/entities/pocket_money_setup.dart';
 
 /// Money ledger + payout (P06 setup, P12 ledger, P13 payout), backed by
 /// Drift. The ledger is the single source of money truth; `owed()` derives
@@ -10,6 +12,11 @@ abstract class PocketMoneyRepository {
 
   /// Ledger for one child, newest first.
   Stream<List<PocketMoneyEntry>> watchLedger(String childId);
+
+  /// Everything the P12 ledger renders in one emission (children, all
+  /// entries, oweds, goals, payout day, zone, plus the P06 setup carried
+  /// alongside so one bloc serves every pocket-money route from one stream).
+  Stream<MoneyLedgerData> watchLedgerData();
 
   /// Base + quest bonuses since the last payout.
   Future<OwedSummary> owed(String childId);
@@ -34,4 +41,21 @@ abstract class PocketMoneyRepository {
     int savingsMovePence = 0,
     String? goalId,
   });
+
+  // -- P06 setup (onboarding) ------------------------------------------------
+
+  /// Family money style + payout day + coin value + per-child weekly base.
+  /// Children arrive in insertion order (Maya, then Leo).
+  Stream<PocketMoneySetup> watchSetup();
+
+  /// One of `weekly | per_quest | both`. Writes `families` AND the
+  /// `settings` mirror in one transaction.
+  Future<void> setMode(String mode);
+
+  /// 1 = Mon … 7 = Sun. Writes `families` AND the `settings` mirror.
+  Future<void> setPayoutDay(int day);
+
+  /// Weekly base for one child, clamped to 0..2000 pence. Writes the
+  /// `children` row (the single copy — no mirror table carries it).
+  Future<void> setWeeklyBasePence(String childId, int pence);
 }

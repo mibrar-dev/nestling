@@ -19,10 +19,12 @@ import 'package:nestling/core/design_system/tokens/spacing.dart';
 ///
 /// Explicit-size mode: pass [nestWidth] (or [visibleNestWidth]) and
 /// optionally [fixedPipHeight]/[nestHeight] to request the design's exact
-/// slot — e.g. K03's 236-wide nest (which paints the design's 198 px visible
-/// outline) with its ≈152-tall Pip in a 236-tall block — without forking the
+/// slot — e.g. K03's 236-wide × 188-tall nest (which paints the design's
+/// 198 × 86 visible outline) with its 152-tall PipAvatar (feet 23 px inside
+/// the bowl) in a 236-tall block — without forking the
 /// scene. The nest art fills its box, so the visible bowl outline is always
-/// `nestWidth × PipNestFallback.visibleNestRatio` (≈0.84): [nestWidth] sets
+/// `nestWidth × PipNestFallback.visibleNestRatio` (≈0.84) by
+/// `nestHeight × 110/240`: [nestWidth] sets
 /// the BOX, [visibleNestWidth] sets the OUTLINE directly (they are mutually
 /// exclusive). The scene lays out against the ACTUAL parent width: the nest
 /// stays centred, decor never shifts it, and a request wider than the box
@@ -72,11 +74,10 @@ class NestPetStage extends StatelessWidget {
   final double? nestWidth;
 
   /// Explicit nest-box height (logical px). The art fills the box, so the
-  /// bowl outline stays `nestWidth × visibleNestRatio` whatever the height;
-  /// the height only sets how much of the square art (bowl + shadow bleed)
-  /// the box holds, and hence the block height. K03 passes 156 under its
-  /// 236-wide box for the design's 236-tall slot. Null (default) keeps the
-  /// legacy square art (`nestH == nestW`).
+  /// bowl outline is `nestWidth × visibleNestRatio` by
+  /// `nestHeight × 110/240` (outer bowl 95…205/240); K03 passes 188 under
+  /// its 236-wide box for the design's 198 × 86 outline in a 236-tall slot.
+  /// Null (default) keeps the legacy square art (`nestH == nestW`).
   final double? nestHeight;
 
   /// Visible nest outline width (logical px), converted to the box via
@@ -215,7 +216,6 @@ class _PetScene extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = context.nest;
     final reduce = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     if (reduce || !riveEnabled) return _svgStage();
     if (explicitLayout) {
@@ -229,26 +229,13 @@ class _PetScene extends StatelessWidget {
         pipH: pipH,
         contactFrac: PipNestFallback.contactInSvg(stage),
       );
-      final glowD = nestW * 1.04;
       return SizedBox(
         width: stageW,
         height: g.stageH,
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            if (tokens.isDark)
-              Positioned(
-                left: stageW / 2 - glowD / 2,
-                top: g.nestTop + (nestH - glowD) / 2,
-                child: Container(
-                  width: glowD,
-                  height: glowD,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Color(0x1AFFFFFF),
-                  ),
-                ),
-              ),
+            PetStageGlow(stageW: stageW, stageH: g.stageH),
             Positioned.fill(
               child: PipInNest(
                 stage: stage,
@@ -273,28 +260,13 @@ class _PetScene extends StatelessWidget {
     const sceneW = 350.0;
     const sceneH = 260.0;
     final riveH = stageW * sceneH / sceneW;
-    // Nest centre in scene space: x 75..275, bowl mid ~y 139.
-    const nestCx = 175.0;
-    const nestCy = 139.0;
-    final glowD = stageW * 200 / sceneW * 1.04;
     return SizedBox(
       width: stageW,
       height: riveH,
       child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          if (tokens.isDark)
-            Positioned(
-              left: stageW * nestCx / sceneW - glowD / 2,
-              top: riveH * nestCy / sceneH - glowD / 2,
-              child: Container(
-                width: glowD,
-                height: glowD,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Color(0x1AFFFFFF),
-                ),
-              ),
-            ),
+          PetStageGlow(stageW: stageW, stageH: riveH),
           Positioned.fill(
             child: PipInNest(
               stage: stage,
@@ -338,11 +310,19 @@ class NestSpeechBubble extends StatelessWidget {
 
   final String text;
 
+  /// `.speech::after` geometry (`components.css:192`): the tail is a solid
+  /// ink triangle this wide at its base and this tall, centred under the
+  /// bubble with its top edge flush with the bubble's outer bottom edge.
+  /// It is overflow (painted outside the layout box, as in CSS), so the
+  /// bubble's laid-out height is the body alone.
+  static const double tailWidth = 18;
+  static const double tailHeight = 9;
+
   @override
   Widget build(BuildContext context) {
     final tokens = context.nest;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+    return Stack(
+      clipBehavior: Clip.none,
       children: [
         Container(
           constraints: const BoxConstraints(maxWidth: 260),
@@ -375,12 +355,19 @@ class NestSpeechBubble extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
         ),
-        CustomPaint(
-          painter: _TailPainter(
-            inkColor: tokens.ink,
-            fillColor: tokens.surface,
+        // `.speech::after`: `bottom:-9px` — the tail hangs 9 px below the
+        // bubble as overflow. Positioned children do not size the Stack, so
+        // the laid-out height stays the body alone and nothing below moves.
+        Positioned(
+          bottom: -tailHeight,
+          left: 0,
+          right: 0,
+          child: Center(
+            child: CustomPaint(
+              painter: _TailPainter(inkColor: tokens.ink),
+              size: const Size(tailWidth, tailHeight),
+            ),
           ),
-          size: const Size(18, 10),
         ),
       ],
     );
@@ -388,10 +375,9 @@ class NestSpeechBubble extends StatelessWidget {
 }
 
 class _TailPainter extends CustomPainter {
-  const new({required this.inkColor, required this.fillColor});
+  const new({required this.inkColor});
 
   final Color inkColor;
-  final Color fillColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -399,24 +385,14 @@ class _TailPainter extends CustomPainter {
     canvas.drawPath(
       Path()
         ..moveTo(0, 0)
-        ..lineTo(18, 0)
-        ..lineTo(9, 10)
+        ..lineTo(NestSpeechBubble.tailWidth, 0)
+        ..lineTo(NestSpeechBubble.tailWidth / 2, NestSpeechBubble.tailHeight)
         ..close(),
       inkPaint,
-    );
-    final fillPaint = Paint()..color = fillColor;
-    canvas.drawPath(
-      Path()
-        ..moveTo(3.5, 0)
-        ..lineTo(14.5, 0)
-        ..lineTo(9, 6.5)
-        ..close(),
-      fillPaint,
     );
   }
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) =>
-      oldDelegate is _TailPainter &&
-      (oldDelegate.inkColor != inkColor || oldDelegate.fillColor != fillColor);
+      oldDelegate is _TailPainter && oldDelegate.inkColor != inkColor;
 }
