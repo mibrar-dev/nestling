@@ -20,6 +20,7 @@ final class PaywallState extends Equatable {
     this.errorMessage,
     this.action = PaywallAction.idle,
     this.request = PaywallRequest.none,
+    this.coParentName,
   });
 
   final PaywallStatus status;
@@ -28,13 +29,19 @@ final class PaywallState extends Equatable {
   final PaywallAction action;
   final PaywallRequest request;
 
+  /// Display name of the family's co-parent for benefit 4, read one-shot
+  /// at load (shared_batch3). Null → the "everyone sees the same" fallback.
+  final String? coParentName;
+
   PaywallState copyWith({
     PaywallStatus? status,
     List<PaywallPlan>? items,
     String? errorMessage,
     PaywallAction? action,
     PaywallRequest? request,
+    String? coParentName,
     bool clearError = false,
+    bool clearCoParent = false,
   }) {
     return PaywallState(
       status: status ?? this.status,
@@ -42,6 +49,11 @@ final class PaywallState extends Equatable {
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       action: action ?? this.action,
       request: request ?? this.request,
+      // Like [clearError]: a fresh load replaces the name (possibly with
+      // null) instead of keeping a stale one across a retry.
+      coParentName: clearCoParent
+          ? coParentName
+          : (coParentName ?? this.coParentName),
     );
   }
 
@@ -52,5 +64,6 @@ final class PaywallState extends Equatable {
     errorMessage,
     action,
     request,
+    coParentName,
   ];
 }

@@ -163,6 +163,10 @@ class _FakePaywallRepository implements PaywallRepository {
   Future<void> activate() async {
     activateCalls++;
   }
+
+  // Shared_batch3 co-parent name (see p07_bugs_test.dart): fakes report none.
+  @override
+  Future<String?> readCoParentName() => Future<String?>.value();
 }
 
 /// Replaces the DI `PaywallBloc` factory so the whole app (router, session,
@@ -1669,10 +1673,17 @@ void main() {
     testWidgets('demo, empty and fresh render the identical paywall', (
       tester,
     ) async {
-      // DATA OVER MOCKS: P07 is marketing copy for a family that does not
-      // exist yet, so no seed may change a pixel of it — and the seeded
-      // children (Maya, Leo) must never leak onto the screen.
+      // DATA OVER MOCKS + shared_batch3: every string below is identical
+      // across seeds EXCEPT benefit 4, which names the family's co-parent
+      // from the database — `Seed.demo` ships James, `empty`/`fresh` ship
+      // no co-parent and render the "everyone" fallback. The seeded
+      // children (Maya, Leo) must never leak onto the screen either way.
       final snapshots = <String>[];
+      const coparentBySeed = <String, String>{
+        'demo': 'Co-parent sharing, so James sees the same',
+        'empty': 'Co-parent sharing, so everyone sees the same',
+        'fresh': 'Co-parent sharing, so everyone sees the same',
+      };
 
       for (final seed in const <String>['demo', 'empty', 'fresh']) {
         await _pumpPaywallWithSeed(tester, switch (seed) {
@@ -1688,14 +1699,36 @@ void main() {
               if (!_legalLinks.contains(text)) text,
           ].join(' | '),
         );
+
+        // The seed's own co-parent line renders, and only that one.
+        expect(
+          find.text(coparentBySeed[seed]!),
+          findsOneWidget,
+          reason: '$seed benefit 4',
+        );
+        expect(
+          find.text(
+            seed == 'demo' ? coparentBySeed['fresh']! : coparentBySeed['demo']!,
+          ),
+          findsNothing,
+          reason: '$seed must not render the other variant',
+        );
         await disposeApp(tester);
       }
 
-      expect(snapshots.toSet(), hasLength(1), reason: snapshots.join('\n\n'));
+      // Identical once the database-driven line is normalised.
+      final normalised = snapshots
+          .map(
+            (s) => s
+                .replaceAll(coparentBySeed['demo']!, 'COPARENT')
+                .replaceAll(coparentBySeed['fresh']!, 'COPARENT'),
+          )
+          .toSet();
+      expect(normalised, hasLength(1), reason: snapshots.join('\n\n'));
       final snapshot = snapshots.first;
       for (final expected in <String>[
         _title,
-        ..._benefits,
+        ..._benefits.take(3),
         _planTitle,
         _planSub,
         _planTag,
@@ -1706,8 +1739,8 @@ void main() {
       ]) {
         expect(snapshot, contains(expected), reason: expected);
       }
-      // 'James' is the design's co-parent name, not a seeded child.
-      expect(snapshot, contains('James'));
+      // 'James' is the demo seed's co-parent name, not a seeded child.
+      expect(snapshots.first, contains('James'));
       expect(snapshot, isNot(contains('Maya')));
       expect(snapshot, isNot(contains('Leo')));
     });

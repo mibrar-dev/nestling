@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/features/paywall/domain/entities/paywall_plan.dart';
 import 'package:nestling/features/paywall/domain/entities/subscription_status.dart';
 import 'package:nestling/features/paywall/domain/paywall_repository.dart';
@@ -54,6 +55,22 @@ class PaywallRepositoryImpl implements PaywallRepository {
     return _upsert(
       const AppStateCompanion(subscriptionStatus: Value('active')),
     );
+  }
+
+  /// The second parent member (`members.role = 'co-parent'`, insertion
+  /// order) for the P07 benefit line. `Seed.demo` ships James; `fresh` and
+  /// `empty` ship no co-parent (null → the "everyone" fallback).
+  @override
+  Future<String?> readCoParentName() async {
+    final query = _db.select(_db.members)
+      ..where(
+        (m) => m.familyId.equals(Seed.familyId) & m.role.equals('co-parent'),
+      )
+      ..orderBy([
+        (m) => OrderingTerm(expression: const CustomExpression<int>('rowid')),
+      ]);
+    final rows = await query.get();
+    return rows.isEmpty ? null : rows.first.name;
   }
 
   /// Upserts the single `app_state` row (id 1). A plain UPDATE silently

@@ -19,4 +19,12 @@ abstract class PaywallRepository {
 
   Future<void> startTrial();
   Future<void> activate();
+
+  /// Display name of the family's co-parent (the second parent member), or
+  /// null when the family has none. The P07 benefit line renders
+  /// "Co-parent sharing, so `Name` sees the same" / "... so everyone sees
+  /// the same" from this (shared_batch3: the database is the source of
+  /// truth). The bloc reads it one-shot at load; the Drift implementation
+  /// queries `members`.
+  Future<String?> readCoParentName() => Future<String?>.value();
 }
