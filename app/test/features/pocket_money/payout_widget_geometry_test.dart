@@ -160,7 +160,9 @@ void main() {
       await _pumpPayout(tester);
 
       expectRectNear(
-        tester.getRect(_cardOwning("Move £1.00 of Maya's to her Lego fund")),
+        tester.getRect(
+          _cardOwning("Move £1.00 of Maya's to their Lego Friends set fund"),
+        ),
         designSaveRow,
       );
       await disposeApp(tester);

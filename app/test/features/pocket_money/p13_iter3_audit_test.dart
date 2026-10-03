@@ -3,14 +3,11 @@
 // Iteration 3 changed three pieces of product behaviour, so this file attacks
 // exactly those, plus the gaps they left:
 //
-//   A. `PayoutSaveRow.label` now gates the design's verbatim sentence on the
-//      exact seeded shape (`childId == 'maya' && title == 'Lego Friends set'`).
-//      That gate is new product logic and the iteration-2 finding (P13-BUG-06 /
-//      P13-I2-01, "Move £1.00 of Leo's to her Lego fund") lives or dies on it,
-//      so it is pinned as a matrix rather than left implicit.
-//   B. The seeded path must still render `P13-payout.html:29` byte-for-byte —
-//      the gate keys on a demo-seed id, so a seed change must fail loudly here
-//      rather than silently shipping neutral copy on the design path.
+//   A. `PayoutSaveRow.label` is ONE data-driven, ungendered sentence for
+//      every goal child (orchestrator mandate, 23:25). No seed-id gate, no
+//      pronoun from a goal title.  Pinned as a matrix.
+//   B. The seeded path renders that same sentence with the seeded goal title
+//      "Lego Friends set"; the design's "her Lego fund" must appear nowhere.
 //   C. The summary caption flipped `TextAlign.center` → `TextAlign.start`
 //      (overriding `1_plan.md` §(a)). `.caption` sets no `text-align`
 //      (`components.css:34`); only `.cap` is centred, and `.cap` is applied only
@@ -41,7 +38,10 @@ import '../../test_scope.dart';
 const String kCta = 'Mark as paid & start the celebration';
 
 /// `P13-payout.html:29`, verbatim: ASCII 0x27 apostrophes.
-const String kDesignSaveCopy = "Move £1.00 of Maya's to her Lego fund";
+/// Orchestrator-mandated copy, seeded shape:
+/// `$amount` = £1.00, `<goalTitle>` = seeded "Lego Friends set".
+const String kSeededSaveCopy =
+    "Move £1.00 of Maya's to their Lego Friends set fund";
 
 Future<void> _loadBundledFonts() async {
   final inter = FontLoader('Inter')
@@ -87,126 +87,102 @@ Future<void> _pumpPayout(
 
 void main() {
   // =========================================================================
-  // A. The `label()` gate — new product logic from iteration 3
+  // A. The ungendered label — one sentence for every goal-bearing child
   // =========================================================================
-  group('P13 iteration 3 — PayoutSaveRow.label gate', () {
-    // Pure matrix, no widget needed: this is the whole of the fix.
-    test('the exact seeded shape still yields the design string', () {
+  group('P13 iteration 4 — PayoutSaveRow.label is ungendered everywhere', () {
+    // Pure matrix, no widget needed.
+    test('the seeded shape renders the mandated ungendered sentence', () {
       expect(
-        PayoutSaveRow.label('Maya', 'Lego Friends set', childId: 'maya'),
-        kDesignSaveCopy,
+        PayoutSaveRow.label('Maya', 'Lego Friends set'),
+        kSeededSaveCopy,
         reason:
-            'DATA OVER MOCKS + COPY: the seeded path must be byte-identical '
-            "to P13-payout.html:29, ASCII 0x27 in \"Maya's\"",
+            "mandated copy: child name + ' to their ' + goal title, ASCII 0x27",
       );
     });
 
-    test('a goal-bearing Leo never gets the design string (P13-BUG-06)', () {
+    test('a goal-bearing Leo never gets the design pronoun (P13-BUG-06)', () {
       for (final title in <String>[
         'Lego City',
         'Lego Friends set',
         'Lego Star Wars',
       ]) {
-        final copy = PayoutSaveRow.label('Leo', title, childId: 'leo');
-        expect(
-          copy,
-          isNot(contains(' her ')),
-          reason:
-              'P13-BUG-06: "$copy" — Leo is a boy in the seed and there is no '
-              'gender column, so the design pronoun must never be applied',
-        );
-        expect(copy, contains('Leo'), reason: 'the child is still named');
-        expect(copy, contains(title), reason: 'the goal title is data-driven');
+        final copy = PayoutSaveRow.label('Leo', title);
+        expect(copy, isNot(contains(' her ')));
+        expect(copy, "Move £1.00 of Leo's to their $title fund");
       }
     });
 
     test('no nickname may ever be given the design pronoun by a wide goal', () {
-      // The old bug keyed on the TITLE containing "lego" regardless of owner.
-      // A title like "Lego" plus any child must be pronoun-free.
-      for (final child in <(String, String)>[
-        ('leo', 'leo'),
-        ('maya-2', 'maya'),
-        ('leo', 'maya'),
-      ]) {
-        final copy = PayoutSaveRow.label('Alex', 'Lego', childId: child.$2);
+      for (final childId in <String>['leo', 'maya-2', 'maya']) {
+        final copy = PayoutSaveRow.label('Alex', 'Lego');
         expect(
           copy,
           isNot(contains(' her ')),
-          reason: 'childId "${child.$2}" with title "Lego" produced "$copy"',
+          reason: 'childId "$childId" with title "Lego" produced "$copy"',
         );
+        expect(copy, "Move £1.00 of Alex's to their Lego fund");
       }
     });
 
-    test('a Maya goal that is not the seeded one falls back neutrally', () {
-      final copy = PayoutSaveRow.label('Maya', 'New bike', childId: 'maya');
+    test('a non-seeded Maya goal uses the same data-driven sentence', () {
+      final copy = PayoutSaveRow.label('Maya', 'New bike');
       expect(copy, isNot(contains(' her ')));
-      expect(copy, contains('New bike'));
+      expect(copy, "Move £1.00 of Maya's to their New bike fund");
     });
 
-    test('a title differing only by case falls back neutrally', () {
-      // The gate is an exact match on purpose — a case-insensitive match
-      // would smuggle the gendered string back in for arbitrary goals.
-      final copy = PayoutSaveRow.label(
-        'Maya',
-        'lego friends set',
-        childId: 'maya',
-      );
+    test('a title differing only by case is still used verbatim', () {
+      // No gate on the title at all: 'lego friends set' renders as-is,
+      // ungendered either way.
+      final copy = PayoutSaveRow.label('Maya', 'lego friends set');
       expect(copy, isNot(contains(' her ')));
+      expect(copy, "Move £1.00 of Maya's to their lego friends set fund");
     });
 
     test('no goal at all reads as plain savings', () {
       expect(
-        PayoutSaveRow.label('Maya', null, childId: 'maya'),
+        PayoutSaveRow.label('Maya', null),
         "Move £1.00 of Maya's money to savings",
       );
       expect(
-        PayoutSaveRow.label('Maya', '   ', childId: 'maya'),
+        PayoutSaveRow.label('Maya', '   '),
         "Move £1.00 of Maya's money to savings",
         reason: 'a whitespace-only title is no title',
       );
     });
 
-    test('every shape is pronoun-free except the seeded one', () {
-      const shapes = <(String, String, String?)>[
-        ('maya', 'Lego Friends set', null),
-        ('maya', 'Lego Friends set', 'maya'),
-        ('leo', 'Lego Friends set', 'leo'),
-        ('leo', 'Lego City', 'leo'),
-        ('maya', 'Bike', 'maya'),
-        ('leo', '', 'leo'),
+    test('every shape is pronoun-free', () {
+      const shapes = <(String, String?)>[
+        ('maya', 'Lego Friends set'),
+        ('leo', 'Lego Friends set'),
+        ('leo', 'Lego City'),
+        ('maya', 'Bike'),
+        ('leo', ''),
+        ('maya', null),
       ];
-      var gendered = 0;
       for (final shape in shapes) {
-        final copy = PayoutSaveRow.label(shape.$1, shape.$2, childId: shape.$3);
-        if (copy.contains(' her ')) gendered++;
+        final copy = PayoutSaveRow.label(shape.$1, shape.$2);
+        expect(
+          copy.contains(' her '),
+          isFalse,
+          reason: '"$copy" for (${shape.$1}, "${shape.$2}")',
+        );
       }
-      expect(
-        gendered,
-        1,
-        reason:
-            'exactly one shape — (maya, "Lego Friends set", id maya) — may '
-            'use the design sentence; measured $gendered',
-      );
     });
   });
 
   // =========================================================================
   // B. The seeded path, end to end, byte-for-byte
   // =========================================================================
-  group('P13 iteration 3 — the seeded saverow', () {
-    testWidgets('Seed.demo still renders the design sentence exactly', (
+  group('P13 iteration 4 — the seeded saverow', () {
+    testWidgets('Seed.demo renders the mandated ungendered sentence exactly', (
       tester,
     ) async {
       await _pumpPayout(tester);
 
-      expect(find.text(kDesignSaveCopy), findsOneWidget);
-      expect(
-        find.textContaining("£1.00 of Maya's money to"),
-        findsNothing,
-        reason:
-            'if the id gate ever fails, the design copy silently becomes the '
-            'neutral fallback — this is the tripwire for that',
-      );
+      expect(find.text(kSeededSaveCopy), findsOneWidget);
+      // The design's feminine copy never renders — the orchestrator rule is
+      // that "her Lego fund" is NOT a finding for any child.
+      expect(find.textContaining(' her '), findsNothing);
       expect(tester.takeException(), isNull);
 
       await disposeApp(tester);
@@ -241,7 +217,7 @@ void main() {
         reason: 'a centred line would start near the middle of a 390 surface',
       );
 
-      final text = tester.widget<Text>(find.text(kDesignSaveCopy));
+      final text = tester.widget<Text>(find.text(kSeededSaveCopy));
       expect(text.textAlign, isNull);
       await disposeApp(tester);
     });

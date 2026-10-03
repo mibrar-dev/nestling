@@ -580,7 +580,7 @@ void main() {
     (tester) async {
       final db = await setUpTestScope();
       // Move the only goal to Leo: he becomes the `.saverow` child, so the
-      // design string's fixed "her Lego fund" describes him.
+      // the mandated copy interpolates Leo's seeded goal title.
       await (db.update(db.savingsGoals)..where((g) => g.id.equals('goal-lego')))
           .write(const SavingsGoalsCompanion(childId: Value('leo')));
       await GetIt.instance<AppSession>().refresh();
@@ -592,11 +592,9 @@ void main() {
           .whereType<String>()
           .firstWhere((s) => s.startsWith('Move £1.00 of Leo'));
 
-      // Measured today: "Move £1.00 of Leo's to her Lego fund" — the fix for
-      // review finding 7 keys the design string on the goal TITLE containing
-      // "lego" (`PayoutSaveRow.label`), so a male goal child with a Lego goal
-      // still gets the design's feminine pronoun. There is no gender column,
-      // so the only data-safe phrasing is the neutral fallback.
+      // Historically the fix keyed off the goal TITLE ("lego"), so a male
+      // goal child with a Lego goal got the design's feminine pronoun. The
+      // mandated copy is a single ungendered sentence for every child.
       expect(
         copy.contains('to her'),
         isFalse,
@@ -607,11 +605,9 @@ void main() {
 
       await disposeApp(tester);
     },
-    // P13-BUG-06 — FIXED (iteration 3): `PayoutSaveRow.label` renders the
-    // design string only for the exact seeded shape (goal child Maya AND goal
-    // title "Lego Friends set"); every other shape — a goal-bearing Leo with
-    // a Lego goal included — gets the neutral data-driven sentence, never the
-    // design's gendered "her Lego fund".
+    // P13-BUG-06 — FIXED (iteration 3/4): `PayoutSaveRow.label` renders ONE
+    // data-driven, ungendered sentence for every goal-bearing child — no
+    // seed-id gate, no pronoun from a title (orchestrator mandate, 23:25).
     skip: false, // P13-BUG-06 — fixed (minor)
   );
 
@@ -1047,7 +1043,7 @@ void main() {
           .whereType<String>()
           .firstWhere((s) => s.startsWith('Move £1.00 of Maya'));
 
-      expect(copy, "Move £1.00 of Maya's money to their Holiday fund");
+      expect(copy, "Move £1.00 of Maya's to their Holiday fund");
       expect(copy.contains('her '), isFalse);
       expect(tester.takeException(), isNull);
 

@@ -391,7 +391,8 @@ class PayoutChildRow extends StatelessWidget {
   }
 }
 
-/// `.saverow` — "Move £1.00 of Maya's to her Lego fund" + `NestToggle`.
+/// `.saverow` — "Move £1.00 of Maya's to their Lego Friends set fund" +
+/// `NestToggle`.
 class PayoutSaveRow extends StatelessWidget {
   const PayoutSaveRow({
     required this.child,
@@ -406,35 +407,26 @@ class PayoutSaveRow extends StatelessWidget {
   final ValueChanged<bool> onChanged;
 
   /// The child's savings-goal title from the database (Maya: "Lego Friends
-  /// set"). Null in hand-built fixtures with no goal row.
+  /// set"). Null in hand-built fixtures with no goal row. Interpolated
+  /// verbatim — DATA OVER MOCKS decides the exact noun.
   final String? goalTitle;
 
   /// `.saverow .t` copy.
   ///
-  /// The design string (`P13-payout.html:29`) is verbatim on the seeded path:
-  /// a goal whose title names the Lego set keeps "… to her Lego fund", because
-  /// character-for-character copy is the rule and the UI check compares it.
-  /// Any other goal (DATA OVER MOCKS: the database decides) falls back to a
-  /// neutral, data-driven sentence instead of hard-coding the design's
-  /// "Lego fund" / gendered pronoun for an arbitrary family — review finding
-  /// 7, whose failure mode was "Move £1.00 of Leo's to her Lego fund".
-  static String label(String name, String? goalTitle, {String? childId}) {
+  /// Orchestrator decision (23:25) — after P13-I2-01 / P13-BUG-06, there is
+  /// ONE ungendered, data-driven sentence for every goal-bearing child: the
+  /// child is named, then the database's own goal title is interpolated
+  /// verbatim. The design's "… to her Lego fund" hard-codes a feminine
+  /// pronoun and must never leak into product code branching on seed ids
+  /// (there is no gender column in the database to derive it from). A
+  /// whitespace-only or missing title reads as plain savings.
+  static String label(String name, String? goalTitle) {
     final amount = moneyPounds(PayoutSheet.savingsMovePence);
     final title = goalTitle?.trim() ?? '';
     if (title.isEmpty) {
       return "Move $amount of $name's money to savings";
     }
-    // The design string is verbatim only for the exact seeded shape — the
-    // demo family's goal is `goal-lego` ("Lego Friends set") owned by Maya.
-    // That string is Maya's copy: a gendered "her Lego fund" can only be said
-    // about the seeded child, and there is no gender column to derive it from.
-    // For any other shape (P13-BUG-06 / P13-I2-01: a goal-bearing Leo with a
-    // Lego goal) the sheet falls back to the neutral data-driven sentence —
-    // never borrowing the design's pronoun.
-    if (childId == 'maya' && title == 'Lego Friends set') {
-      return "Move $amount of $name's to her Lego fund";
-    }
-    return "Move $amount of $name's money to their $title fund";
+    return "Move $amount of $name's to their $title fund";
   }
 
   @override
@@ -452,7 +444,7 @@ class PayoutSaveRow extends StatelessWidget {
         children: <Widget>[
           Expanded(
             child: Text(
-              label(name, goalTitle, childId: child.id),
+              label(name, goalTitle),
               // `.saverow .t`: Inter 15/22 w600 — `bodySmallStrong` exactly.
               style: NestType.bodySmallStrong(color: tokens.ink),
             ),

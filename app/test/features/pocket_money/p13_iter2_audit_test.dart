@@ -263,11 +263,11 @@ void main() {
       );
 
       expect(
-        find.text("Move £1.00 of Maya's to her Lego fund"),
+        find.text("Move £1.00 of Maya's to their Lego Friends set fund"),
         findsOneWidget,
         reason:
-            'P13-payout.html:29 verbatim, ASCII 0x27 apostrophe, '
-            '£ from the DB',
+            'orchestrator-mandated ungendered sentence, goal title verbatim, '
+            'ASCII 0x27 apostrophe',
       );
       await disposeApp(tester);
     });
@@ -288,10 +288,12 @@ void main() {
         ]),
       );
 
-      // DATA OVER MOCKS: the goal title decides the wording, and the design
-      // string ("...to her Lego fund") is specific to the seeded Lego goal.
-      expect(find.textContaining("Move £1.00 of Maya's"), findsOneWidget);
-      expect(find.textContaining('New bike'), findsOneWidget);
+      // DATA OVER MOCKS: the single ungendered sentence carries whatever the
+      // database calls this goal — verbatim 'New bike' in the noun slot.
+      expect(
+        find.text("Move £1.00 of Maya's to their New bike fund"),
+        findsOneWidget,
+      );
       expect(
         find.textContaining(' her '),
         findsNothing,
@@ -302,13 +304,12 @@ void main() {
       await disposeApp(tester);
     });
 
-    // P13-I2-01 — the "Lego" special case keys the pronoun off the GOAL TITLE,
-    // not off the child, so a Lego goal belonging to a boy renders "...to HER
-    // Lego fund". The database has no gender/pronoun column at all
-    // (`Children` in app_database.dart:65-85), so the app can never get this
-    // right — it is unresolvable from the data the screen is given.
+    // P13-I2-01 — the old bug keyed the pronoun off the GOAL TITLE, so a
+    // Lego goal belonging to a boy rendered "...to HER Lego fund". The
+    // database has no gender/pronoun column at all, neither branching on seed
+    // ids may a pronoun be derived: ONE ungendered sentence (23:25 mandate).
     testWidgets(
-      'P13-I2-01: a Lego goal for Leo renders the feminine "her Lego fund"',
+      'P13-I2-01: a Lego goal for Leo uses the ungendered sentence',
       (tester) async {
         await _pumpWith(
           tester,
@@ -332,16 +333,15 @@ void main() {
 
         expect(
           row.data,
-          isNot(contains(' her ')),
+          "Move £1.00 of Leo's to their Lego City fund",
           reason:
-              'P13-I2-01: Leo is a boy in the demo seed, but the copy says '
-              '"her" because PayoutSaveRow.label() only checks that the goal '
-              'TITLE contains "lego". No gender column exists to do better.',
+              'P13-I2-01: ONE ungendered sentence for every goal child '
+              '(orchestrator mandate, 23:25); the seed id keyed gate is gone',
         );
+        expect(row.data, isNot(contains(' her ')));
         await disposeApp(tester);
       },
-      skip: false, // P13-I2-01 — fixed (minor): design string gated on the
-      // exact seeded shape (Maya + "Lego Friends set"), neutral otherwise
+      skip: false, // P13-I2-01 — fixed (minor)
     );
   });
 

@@ -43,7 +43,9 @@ import '../../test_scope.dart';
 
 const String kCta = 'Mark as paid & start the celebration';
 const String kSubCopy = "Tick once you've handed over the cash";
-const String kSaveCopy = "Move £1.00 of Maya's to her Lego fund";
+
+/// Orchestrator-mandated copy (23:25), ungendered for every goal child.
+const String kSaveCopy = "Move £1.00 of Maya's to their Lego Friends set fund";
 const String kCaption =
     'Your children will see a payout celebration next time they open Nestling.';
 

@@ -35,7 +35,10 @@ const String kCtaCopy = 'Mark as paid & start the celebration';
 const String kCaptionCopy =
     'Your children will see a payout celebration next time they open '
     'Nestling.';
-const String kSaveCopy = "Move £1.00 of Maya's to her Lego fund";
+
+/// Orchestrator-mandated copy (23:25): same ungendered sentence for every
+/// goal child, seeded goal title verbatim.
+const String kSaveCopy = "Move £1.00 of Maya's to their Lego Friends set fund";
 const String kSaveLabel = "Move one pound of Maya's money to savings";
 
 /// `.scrim` in the light theme — the dim layer the view must paint at
@@ -658,14 +661,11 @@ void main() {
       await pumpAppRoute(tester, '/payout');
       await _settle(tester);
 
-      // DATA OVER MOCKS: the design's "… to her Lego fund" is verbatim for the
-      // seeded Lego goal; any other goal gets a neutral, data-driven sentence
+      // DATA OVER MOCKS: one ungendered, data-driven sentence; the goal
+      // title from the database is interpolated verbatim.
       // instead of the design's noun and pronoun.
       expect(find.text(kSaveCopy), findsNothing);
-      expect(
-        find.text("Move £1.00 of Maya's money to their Bike fund"),
-        findsOne,
-      );
+      expect(find.text("Move £1.00 of Maya's to their Bike fund"), findsOne);
 
       await disposeApp(tester);
     });

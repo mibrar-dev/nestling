@@ -11,3 +11,6 @@ PRONOUN / NO SEED IDS IN PRODUCT CODE (orchestrator decision, same as P15's "the
 - Use ONE data-driven, ungendered sentence for every child: "Move $amount of $name's to their $goalTitle fund", e.g. "Move £1.00 of Maya's to their Lego Friends set fund". With no goal: "Move $amount of $name's money to savings".
 - It may wrap to two lines like the design. Keep the row geometry (toggle track at the design rect).
 - Update the copy tests: this is the intended copy, so the design's "her Lego fund" is NOT a finding.
+
+## UPDATE (23:55) — known red test on main, NOT your finding
+`test/core/family_time_test.dart` › 'kid_home completions are stamped with the family zone' fails since the date rolled to 4 Oct. It is a date-dependent test bug on main, being fixed by shared/family_time_test_fix. If it is the ONLY failing test in the full suite, treat the gate as green for this screen.
