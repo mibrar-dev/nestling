@@ -1,12 +1,14 @@
-// Shared: NestPetStage explicit-size mode centres the nest in the REAL box
-// and matches K03's design geometry (SHARED_REQUEST #13/#15).
+// Shared: NestPetStage explicit-size mode seats Pip IN the bowl and matches
+// K03's design geometry (pet_stage_seat follow-up to pet_stage_explicit).
 //
-// K03's call (see the report): `nestWidth: 236, nestHeight: 156,
-// fixedPipHeight: 152` — a 236-wide nest box painting the design's 198 px
-// visible outline (`236 × 202/240`), seated ≈20 px deep on the rim, in a
-// 236-tall block. These tests pin that contract at 320/390/430 with the
-// K03 parameters, plus the `.speech` bubble height and the Rive/reduced
-// motion fallback paths.
+// K03's call (see the report): `nestWidth: 236, nestHeight: 188,
+// fixedPipHeight: 152` — a 236×188 nest box painting the design's 198×86
+// visible outline (`236 × 202/240` by `188 × 110/240`), PipAvatar feet ≈23 px
+// below the rim (box ≈44 px below; feet 21.2 px above the box bottom), in a
+// 236-tall block. These tests pin that contract at 320/390/430 with the K03
+// parameters, the absolute K03 pins (nest 278, Pip 301, hearts 448) in a
+// header+speech harness, plus the `.speech` bubble height and the
+// Rive/reduced-motion fallback paths.
 //
 // Found no placeholder texts here: every assertion measures rects of the
 // shared scene (never screen copy).
@@ -16,13 +18,21 @@ import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nestling/core/design_system/design_system.dart';
+import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 
 import '../../design_system/test_harness.dart';
 
-/// K03's design slot (see docs/screens/_shared/pet_stage_explicit_REPORT.md).
+/// K03's design slot (see docs/screens/_shared/pet_stage_seat_REPORT.md).
 const double _kNestWidth = 236;
-const double _kNestHeight = 156;
+const double _kNestHeight = 188;
 const double _kPipHeight = 152;
+
+/// v2 PipAvatar geometry in a 152-tall box (240-space s3_idle_1.svg):
+/// tuft top 44.5 → head 28.2 below the box top; feet bottom 206.5 → feet
+/// 21.2 above the box bottom (33.5/240 × 152). The design seats feet 23 px
+/// below the rim (301 vs 278), so the box lands ≈44 px below it.
+const double _pipTopPad = 44.5 / 240 * _kPipHeight;
+const double _pipBottomPad = 33.5 / 240 * _kPipHeight;
 
 const ValueKey<String> _pipProbeKey = ValueKey('petStageExplicitPipProbe');
 
@@ -77,6 +87,56 @@ Future<void> _pumpSlot(
   );
 }
 
+/// K03 harness: status (47) + header (78) + speech (62) put the pet slot top
+/// at 187; the 236 block + 10.75 gap put hearts centre at ≈448, exactly like
+/// `/kid-home` at 390×844 (real fonts for the 44 px bubble).
+Future<void> _pumpK03Harness(
+  WidgetTester tester, {
+  bool riveEnabled = false,
+  bool disableAnimations = false,
+}) async {
+  final pet = NestPetStage(
+    riveEnabled: riveEnabled,
+    nestWidth: _kNestWidth,
+    nestHeight: _kNestHeight,
+    fixedPipHeight: _kPipHeight,
+    speech: "Let's do some quests!",
+    pip: const PipAvatar(style: PipStyle.mochi, stage: 3, riveEnabled: false),
+  );
+  final column = Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      const SizedBox(height: 125),
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: pet),
+      const SizedBox(height: 10.75),
+      const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 20),
+        child: Row(
+          children: [
+            NestHeart(filled: true),
+            SizedBox(width: 8),
+            NestHeart(filled: true),
+            SizedBox(width: 8),
+            NestHeart(filled: true),
+            SizedBox(width: 8),
+            NestHeart(filled: true),
+            SizedBox(width: 8),
+            NestHeart(filled: false),
+          ],
+        ),
+      ),
+    ],
+  );
+  final boxed = disableAnimations
+      ? MediaQuery(
+          data: const MediaQueryData(disableAnimations: true),
+          child: column,
+        )
+      : column;
+  await pumpNest(tester, boxed);
+  expect(tester.takeException(), isNull, reason: 'overflow in K03 harness');
+}
+
 Future<void> _loadNunito() async {
   final nunito = FontLoader('Nunito')
     ..addFont(rootBundle.load('assets/fonts/Nunito-ExtraBold.ttf'));
@@ -87,7 +147,7 @@ void main() {
   setUpAll(_loadNunito);
 
   group('NestPetStage explicit size centres the design slot', () {
-    testWidgets('visible outline 198 wide, centred on 195 at 390', (
+    testWidgets('visible outline 198×86, centred on 195 at 390', (
       tester,
     ) async {
       await _pumpSlot(tester, 350, pip: const SizedBox(key: _pipProbeKey));
@@ -97,11 +157,11 @@ void main() {
 
       final nest = tester.getRect(_nestPicture());
       expect(nest.width, closeTo(_kNestWidth, 0.5));
+      expect(nest.height, closeTo(_kNestHeight, 0.5));
       expect(nest.center.dx, closeTo(195, 1));
-      // The art fills its box, so the visible bowl outline is always
-      // `nestW × visibleNestRatio` — the box the test just measured.
-      final visible = nest.width * PipNestFallback.visibleNestRatio;
-      expect(visible, closeTo(198, 2));
+      // The art fills its box: outline 202/240 wide by 110/240 tall.
+      expect(nest.width * PipNestFallback.visibleNestRatio, closeTo(198, 2));
+      expect(nest.height * 110 / 240, closeTo(86, 2));
 
       final pip = tester.getRect(find.byKey(_pipProbeKey));
       expect(pip.center.dx, closeTo(195, 1));
@@ -137,9 +197,10 @@ void main() {
       final slot = tester.getRect(find.byType(PipNestFallback));
       expect(slot.width, closeTo(200, 0.5));
       expect(slot.center.dx, closeTo(195, 1));
-      // Uniform scale: nest/pip/rim/seat all × (200/236); only the 6/10 px
-      // breathing constants stay absolute, so the height is the shared
-      // helper's value (single source with the layout), not the linear one.
+      // Width/pip/rim/seat scale × (200/236); the 31.4/44.2 px explicit
+      // constants stay absolute, so the height is the shared helper's value
+      // (single source with the layout), not the linear one. The slot stays
+      // 236 tall (fixed explicit block, no overflow) with a narrower nest.
       final nest = tester.getRect(_nestPicture());
       expect(nest.width, closeTo(200, 0.5));
       expect(nest.center.dx, closeTo(slot.center.dx, 1));
@@ -160,15 +221,20 @@ void main() {
       expect(slot.height, closeTo(236, 2));
     });
 
-    testWidgets('custom pip bottom overlaps the rim by 20', (tester) async {
-      await _pumpSlot(tester, 350, pip: const SizedBox(key: _pipProbeKey));
+    testWidgets('PipAvatar feet sit 23 px inside the bowl', (tester) async {
+      await _pumpK03Harness(tester);
       final nest = tester.getRect(_nestPicture());
-      final pip = tester.getRect(find.byKey(_pipProbeKey));
+      final pip = tester.getRect(find.byType(PipAvatar));
+      expect(pip.center.dx, closeTo(195, 1));
       final rimY = nest.top + PipNestFallback.nestRimTopFraction * nest.height;
-      expect(pip.bottom - rimY, closeTo(20, 1));
+      // Box ≈44 px below the rim; feet 21.2 above the box bottom ≈23 inside.
+      expect(pip.bottom - rimY, closeTo(44.2, 2));
+      expect(pip.bottom - _pipBottomPad - rimY, closeTo(23, 3));
     });
 
-    testWidgets('v1 SVG pip seats on the same rim line', (tester) async {
+    testWidgets('v1 SVG pip seats its contact on the same feet line', (
+      tester,
+    ) async {
       await _pumpSlot(tester, 350);
       final slot = tester.getRect(find.byType(PipNestFallback));
       expect(slot.height, closeTo(236, 2));
@@ -178,15 +244,17 @@ void main() {
         of: find.byType(PipNestFallback),
         matching: find.byType(SvgPicture),
       );
-      // Tree order: nest back, Pip, nest front. The v1 box seats by visible
-      // contact (feet at svg-y 213/240 for the default fledgling stage, on
-      // the contact line ≈1 px below the rim); its bottom — the baked-shadow
-      // tip the front rim would bite — lands with the custom-pip bottom.
+      // Tree order: nest back, Pip, nest front. The v1 box seats its contact
+      // (feet 213/240 fledgling) ≈23 px below the rim, inside the bowl like
+      // the avatar; its box lands ≈40 px below (17.1 padding to contact).
       final pipBox = tester.getRect(layers.at(1));
       expect(pipBox.height, closeTo(_kPipHeight, 0.5));
       expect(pipBox.center.dx, closeTo(195, 1));
       final rimY = nest.top + PipNestFallback.nestRimTopFraction * nest.height;
-      expect(pipBox.bottom - rimY, closeTo(20, 3));
+      expect(pipBox.bottom - rimY, closeTo(40, 3));
+      final contactFrac = PipNestFallback.contactInSvg(PipStage.fledgling);
+      final contactY = pipBox.top + contactFrac * pipBox.height - rimY;
+      expect(contactY, closeTo(23, 3));
     });
 
     testWidgets('visibleNestWidth: 198 gives the same box', (tester) async {
@@ -235,6 +303,49 @@ void main() {
     });
   });
 
+  group('K03 harness pins the design rows (390×844, real fonts)', () {
+    testWidgets('nest 278, Pip 301, hearts 448 (Rive-disabled)', (
+      tester,
+    ) async {
+      await _pumpK03Harness(tester);
+      final nest = tester.getRect(_nestPicture());
+      expect(nest.width * PipNestFallback.visibleNestRatio, closeTo(198, 2));
+      expect(nest.height * 110 / 240, closeTo(86, 2));
+      expect(nest.center.dx, closeTo(195, 1));
+      final rimY = nest.top + PipNestFallback.nestRimTopFraction * nest.height;
+      // Outline 278→364 (86 tall).
+      expect(rimY, closeTo(278, 2));
+      expect(rimY + nest.height * 110 / 240, closeTo(364, 2));
+
+      final pip = tester.getRect(find.byType(PipAvatar));
+      expect(pip.center.dx, closeTo(195, 1));
+      // Feet 301 (box − 21.2), head 199 (box + 28.2).
+      expect(pip.bottom - _pipBottomPad, closeTo(301, 3));
+      expect(pip.top + _pipTopPad, closeTo(199, 5));
+
+      final row = tester.getRect(find.byType(Row).first);
+      expect(row.center.dy, closeTo(448, 2));
+    });
+
+    testWidgets('nest 278, Pip 301, hearts 448 (Reduce Motion)', (
+      tester,
+    ) async {
+      await _pumpK03Harness(tester, riveEnabled: true, disableAnimations: true);
+      await tester.pump();
+      expect(find.byType(PipNestFallback), findsOneWidget);
+      final nest = tester.getRect(_nestPicture());
+      final rimY = nest.top + PipNestFallback.nestRimTopFraction * nest.height;
+      expect(rimY, closeTo(278, 2));
+      expect(rimY + nest.height * 110 / 240, closeTo(364, 2));
+      final pip = tester.getRect(find.byType(PipAvatar));
+      expect(pip.center.dx, closeTo(195, 1));
+      expect(pip.bottom - _pipBottomPad, closeTo(301, 3));
+      expect(pip.top + _pipTopPad, closeTo(199, 5));
+      final row = tester.getRect(find.byType(Row).first);
+      expect(row.center.dy, closeTo(448, 2));
+    });
+  });
+
   group('NestSpeechBubble matches .speech', () {
     testWidgets('body height is the design 44 at real fonts', (tester) async {
       await pumpNest(
@@ -255,7 +366,7 @@ void main() {
       expect(body, findsOneWidget);
       // `.speech`: 8 px padding + ≈22 px natural Nunito line + 8 px padding
       // + 2 × 3 px border ≈ 44 — the design PNG measures 44, not 35 (see the
-      // report: the 35 was the inner-white height misread as the body).
+      // explicit report: the 35 was the inner-white height misread as body).
       expect(tester.getSize(body).height, closeTo(44, 2));
     });
   });
