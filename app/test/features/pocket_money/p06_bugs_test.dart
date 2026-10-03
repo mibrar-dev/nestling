@@ -32,6 +32,7 @@ import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/pocket_money/data/pocket_money_repository_impl.dart';
+import 'package:nestling/features/pocket_money/domain/entities/money_ledger_data.dart';
 import 'package:nestling/features/pocket_money/domain/entities/owed_summary.dart';
 import 'package:nestling/features/pocket_money/domain/entities/pocket_money_entry.dart';
 import 'package:nestling/features/pocket_money/domain/entities/pocket_money_setup.dart';
@@ -128,6 +129,12 @@ class _RecordingPocketMoneyRepository implements PocketMoneyRepository {
 
   @override
   Stream<List<PocketMoneyEntry>> watchLedger(String childId) => _itemsStream;
+
+  // P12: same setup × items combine the bloc always consumed (no goals —
+  // fakes own no savings table).
+  @override
+  Stream<MoneyLedgerData> watchLedgerData() =>
+      ledgerDataFallback(watchSetup(), watchItems());
 
   @override
   Future<OwedSummary> owed(String childId) async => OwedSummary(
