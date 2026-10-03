@@ -33,8 +33,10 @@ class NestPagerDots extends StatelessWidget {
               Semantics(
                 button: tapHandler != null,
                 selected: i == index,
+                enabled: tapHandler != null,
                 label: tapHandler == null ? null : 'Go to page ${i + 1}',
                 excludeSemantics: true,
+                onTap: tapHandler == null ? null : () => tapHandler(i),
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: tapHandler == null ? null : () => tapHandler(i),

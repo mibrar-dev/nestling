@@ -107,15 +107,19 @@ class NestQuestCard extends StatelessWidget {
       ),
     );
     if (onTap != null) {
+      final tap = onTap;
       return Semantics(
         button: true,
+        enabled: true,
         label: semanticLabel ?? title,
         // One node per card (P08 §2): the label already announces
         // title + meta, so descendants must not merge a second copy —
         // unless the card carries a working check (`done != null`), whose
         // own `Mark done`/`Done` node must stay reachable (shared
-        // display/overflow tests pin it).
+        // display/overflow tests pin it). `onTap` mirrors the InkWell:
+        // `excludeSemantics` drops the descendant tap action.
         excludeSemantics: checkState == null,
+        onTap: tap,
         child: card,
       );
     }
@@ -233,14 +237,18 @@ class NestKidQuestCard extends StatelessWidget {
       ),
     );
     if (onTap != null) {
+      final tap = onTap;
       return Semantics(
         button: true,
+        enabled: true,
         label: semanticLabel ?? title,
         // One node per card (P08 §2) — unless the check is functional
         // (`onToggled != null`), whose own node must stay reachable.
         // A display-only check (`onToggled == null`) is noise next to the
-        // explicit label, so it is excluded with the rest.
+        // explicit label, so it is excluded with the rest. `onTap`
+        // mirrors the InkWell: `excludeSemantics` drops the tap action.
         excludeSemantics: onToggled == null,
+        onTap: tap,
         child: card,
       );
     }
@@ -266,7 +274,9 @@ class _ParentCheck extends StatelessWidget {
     return Semantics(
       button: true,
       selected: done,
+      enabled: toggled != null,
       label: done ? 'Done' : 'Mark done',
+      onTap: toggled == null ? null : () => toggled(!done),
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: toggled == null ? null : () => toggled(!done),
@@ -341,7 +351,9 @@ class _QuestCheck extends StatelessWidget {
     return Semantics(
       button: true,
       selected: done,
+      enabled: toggled != null,
       label: done ? 'Done' : 'Mark done',
+      onTap: toggled == null ? null : () => toggled(!done),
       child: tappable,
     );
   }
