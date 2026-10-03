@@ -159,6 +159,7 @@ class _Key extends StatelessWidget {
     return Semantics(
       button: true,
       label: isDelete ? deleteSemanticLabel : 'Digit $digit',
+      onTap: onTap,
       child: Material(
         color: Colors.transparent,
         shape: const CircleBorder(),

@@ -119,10 +119,15 @@ class NestChip extends StatelessWidget {
       child: Semantics(
         button: true,
         selected: selected,
+        enabled: true,
         label: label,
         // One node per chip: the label above owns the announcement and the
-        // subtree below contributes no second copy.
+        // subtree below contributes no second copy. `onTap` mirrors the
+        // InkWell below: `excludeSemantics` drops every descendant action,
+        // so without this the node says "button" but cannot be activated
+        // (WCAG 2.1 AA SC 4.1.2 / 2.1.1).
         excludeSemantics: true,
+        onTap: () => callback(!selected),
         // Shrink-wrap (P05): every box below sizes to the pill, so the `Wrap`
         // sees the intrinsic width and lays chips out in one row.
         child: Material(

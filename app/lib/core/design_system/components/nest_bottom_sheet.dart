@@ -91,6 +91,7 @@ class _CloseButton extends StatelessWidget {
     return Semantics(
       button: true,
       label: 'Close',
+      onTap: onClose,
       child: Material(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(NestSpacing.s3),

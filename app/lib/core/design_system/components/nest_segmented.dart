@@ -51,7 +51,9 @@ class NestSegmented<T> extends StatelessWidget {
             child: Semantics(
               button: true,
               selected: isSelected,
+              enabled: changed != null,
               label: option.label,
+              onTap: changed == null ? null : () => changed(option.value),
               child: Material(
                 color: Colors.transparent,
                 borderRadius: NestRadii.allPill,

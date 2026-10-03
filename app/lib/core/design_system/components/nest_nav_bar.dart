@@ -156,6 +156,7 @@ class _NavBackButton extends StatelessWidget {
     return Semantics(
       button: true,
       label: semanticLabel,
+      onTap: onBack,
       child: Material(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(NestSpacing.s3),
@@ -185,6 +186,8 @@ class _NavActionButton extends StatelessWidget {
     return Semantics(
       button: true,
       label: label,
+      enabled: onTap != null,
+      onTap: onTap,
       child: ConstrainedBox(
         constraints: const BoxConstraints(
           minHeight: NestDevice.tapParent,

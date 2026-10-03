@@ -124,6 +124,7 @@ class _NestKidButtonState extends State<NestKidButton> {
       button: true,
       label: widget.semanticLabel ?? widget.label,
       enabled: enabled,
+      onTap: enabled ? widget.onPressed : null,
       child: Opacity(
         opacity: enabled ? 1 : 0.45,
         child: Padding(

@@ -105,7 +105,14 @@ class NestListRow extends StatelessWidget {
       child: content,
     );
     if (onTap != null) {
-      return Semantics(button: true, label: semanticLabel ?? title, child: row);
+      final tap = onTap;
+      return Semantics(
+        button: true,
+        enabled: true,
+        label: semanticLabel ?? title,
+        onTap: tap,
+        child: row,
+      );
     }
     return row;
   }
