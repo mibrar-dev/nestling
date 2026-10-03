@@ -118,6 +118,12 @@ class Quests extends Table {
   // Null = "Anyone".
   TextColumn get assigneeChildId => text().nullable()();
   BoolColumn get active => boolean().withDefault(const Constant(true))();
+  // Creation instant (UTC) + the zone in force then (schema v4). The Active
+  // list is creation order everywhere (orchestrator ruling for P10 §5):
+  // `watchActiveQuests` sorts by this, then `id`.
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  TextColumn get createdAtTz =>
+      text().withDefault(const Constant('Europe/London'))();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -318,7 +324,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   /// v1 → v2: every event instant gains a `…_tz` zone column, `families`
   /// (+ `settings` mirror) gains `time_zone`, and `quests` gains the
@@ -331,6 +337,10 @@ class AppDatabase extends _$AppDatabase {
   /// `CURRENT_TIMESTAMP`, so the backfill below staggers them one second
   /// apart in `rowid` order — the insertion order — and roster order is
   /// creation order from then on.
+  ///
+  /// v3 → v4: `quests` gains `created_at` (+ `created_at_tz`, London
+  /// default) with the same rowid-order backfill, so the Active list is
+  /// creation order on migrated databases too.
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onUpgrade: (m, from, to) async {
@@ -370,6 +380,23 @@ class AppDatabase extends _$AppDatabase {
           'UPDATE children SET created_at = '
           "strftime('%s', 'now') + rowid - "
           '(SELECT MIN(rowid) FROM children)',
+        );
+      }
+      if (from < 4) {
+        // `quests.created_at` (+ `created_at_tz`, London default) — same
+        // `ADD COLUMN` trick as v3: constant 0 placeholder, then one second
+        // apart in `rowid` (insertion = seed) order, oldest first. The demo
+        // seed inserts quests in display order, so migrated databases keep
+        // the Active list in the order the quests were added.
+        await m.database.customStatement(
+          'ALTER TABLE quests ADD COLUMN created_at INTEGER NOT NULL '
+          'DEFAULT 0',
+        );
+        await m.addColumn(quests, quests.createdAtTz);
+        await m.database.customStatement(
+          'UPDATE quests SET created_at = '
+          "strftime('%s', 'now') + rowid - "
+          '(SELECT MIN(rowid) FROM quests)',
         );
       }
     },
@@ -441,10 +468,16 @@ class AppDatabase extends _$AppDatabase {
         .watch();
   }
 
+  /// Active quests in creation order (orchestrator ruling for P10 §5):
+  /// oldest first — the order they were added — never alphabetical. Ties
+  /// (same-second inserts) fall back to `id`, which is deterministic.
   Stream<List<Quest>> watchActiveQuests(String familyId) {
     return (select(quests)
           ..where((q) => q.familyId.equals(familyId) & q.active.equals(true))
-          ..orderBy([(q) => OrderingTerm(expression: q.title)]))
+          ..orderBy([
+            (q) => OrderingTerm(expression: q.createdAt),
+            (q) => OrderingTerm(expression: q.id),
+          ]))
         .watch();
   }
 

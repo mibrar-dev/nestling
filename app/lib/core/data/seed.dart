@@ -243,6 +243,11 @@ abstract final class Seed {
   }
 
   static Future<void> _questsDemo(AppDatabase db) async {
+    // Creation order is the Active-list order (orchestrator ruling for P10
+    // §5): each quest is stamped one second after the previous, so
+    // `watchActiveQuests` (created_at, then id) renders the seed in the
+    // order below — never alphabetical.
+    var order = 0;
     Future<void> quest(
       String id,
       String title,
@@ -264,6 +269,8 @@ abstract final class Seed {
               assigneeChildId: assignee == null
                   ? const Value.absent()
                   : Value(assignee),
+              createdAt: Value(utc(9, 19, 8).add(Duration(seconds: order++))),
+              createdAtTz: const Value(defaultFamilyZoneId),
             ),
           );
     }

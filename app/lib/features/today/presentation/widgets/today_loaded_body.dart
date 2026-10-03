@@ -427,6 +427,7 @@ class _Greeting extends StatelessWidget {
                       button: true,
                       label: "$parentName's profile",
                       excludeSemantics: true,
+                      onTap: () => context.go(SettingsRoutePaths.settings),
                       child: Center(
                         child: NestAvatar(
                           initial: initial,
@@ -653,6 +654,7 @@ class _SectionHeader extends StatelessWidget {
             button: true,
             label: 'See all quests',
             excludeSemantics: true,
+            onTap: () => context.go(QuestsRoutePaths.library),
             child: Padding(
               padding: const EdgeInsets.symmetric(
                 vertical: NestSpacing.s3,

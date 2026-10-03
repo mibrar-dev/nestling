@@ -28,31 +28,46 @@ class NestTabBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = context.nest;
+    // Owner rule: the bar's SURFACE runs to the physical bottom edge while
+    // its CONTENT keeps the design position. The 84 px content block
+    // (`padding: 8px 4px 24px` around the tab row) sits on top; `SafeArea`
+    // pads the OS home inset below it in the same surface colour, so at
+    // 390×844 with a 34 px inset the block spans y 726–810 (icon centre
+    // 748, label centre ≈ 772) and the surface fills to y 844. With no
+    // inset the bar is exactly the 84 px block.
     return Semantics(
       label: semanticLabel,
       child: Container(
-        height: NestDevice.tabH,
-        decoration: BoxDecoration(
-          color: tokens.surface,
-          border: Border(top: BorderSide(color: tokens.line)),
-        ),
-        padding: const EdgeInsets.only(
-          top: NestSpacing.s2,
-          left: NestSpacing.s1,
-          right: NestSpacing.s1,
-          bottom: NestSpacing.s6,
-        ),
-        child: Row(
-          children: <Widget>[
-            for (var i = 0; i < items.length; i++)
-              Expanded(
-                child: _Tab(
-                  item: items[i],
-                  active: i == currentIndex,
-                  onTap: () => onTap(i),
-                ),
-              ),
-          ],
+        decoration: BoxDecoration(color: tokens.surface),
+        child: SafeArea(
+          top: false,
+          left: false,
+          right: false,
+          child: Container(
+            height: NestDevice.tabH,
+            decoration: BoxDecoration(
+              color: tokens.surface,
+              border: Border(top: BorderSide(color: tokens.line)),
+            ),
+            padding: const EdgeInsets.only(
+              top: NestSpacing.s2,
+              left: NestSpacing.s1,
+              right: NestSpacing.s1,
+              bottom: NestSpacing.s6,
+            ),
+            child: Row(
+              children: <Widget>[
+                for (var i = 0; i < items.length; i++)
+                  Expanded(
+                    child: _Tab(
+                      item: items[i],
+                      active: i == currentIndex,
+                      onTap: () => onTap(i),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );
