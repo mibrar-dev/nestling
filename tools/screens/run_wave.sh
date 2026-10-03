@@ -15,7 +15,10 @@ while [ ${#QUEUE[@]} -gt 0 ] || { for x in $MINE; do [ -e "$RUN_DIR/$x.pid" ] &&
   # reap finished loops
   for p in "$RUN_DIR"/*.pid; do [ -e "$p" ] || continue
     if ! kill -0 "$(cat "$p")" 2>/dev/null; then b="${p%.pid}"; rm -f "$p" "$b.feature" "$b.sim"; fi; done
-  # start new loops on free simulators
+  # start new loops on free simulators (one scheduler at a time: several waves share RUN_DIR)
+  until mkdir "$RUN_DIR/.lock" 2>/dev/null; do
+    lo=$(cat "$RUN_DIR/.lock/pid" 2>/dev/null); [ -n "$lo" ] && ! kill -0 "$lo" 2>/dev/null && rm -rf "$RUN_DIR/.lock"; sleep 2
+  done; echo $$ > "$RUN_DIR/.lock/pid"
   for sim in "${SIMS[@]}"; do
     grep -lx "$sim" "$RUN_DIR"/*.sim >/dev/null 2>&1 && continue
     [ ${#QUEUE[@]} -eq 0 ] && break
@@ -30,6 +33,7 @@ while [ ${#QUEUE[@]} -gt 0 ] || { for x in $MINE; do [ -e "$RUN_DIR/$x.pid" ] &&
     CHECKS_ONLY=$co START_IT=$st bash "$MAIN/tools/screens/loop.sh" "$id" "$sim" "$mx" > "$MAIN/docs/screens/_status/$id.loop.log" 2>&1 &
     MINE="$MINE$id "; echo $! > "$RUN_DIR/$id.pid"; feature_of "$id" > "$RUN_DIR/$id.feature"; echo "$sim" > "$RUN_DIR/$id.sim"
   done
+  rm -rf "$RUN_DIR/.lock"
   sleep 20
 done
 echo "wave done: $*"

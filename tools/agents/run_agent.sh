@@ -8,7 +8,15 @@ LOG="$ST/$NAME.log"; EV="$ST/events.log"
 ev() { echo "$(date +%H:%M:%S) $1 $NAME ${2:-}" >> "$EV"; echo "$1" > "$ST/$NAME.status"; }
 cd "${WORKDIR:-$ROOT}"
 [ -s "$BRIEF" ] || { ev FAILED "empty_or_missing_brief=$BRIEF"; exit 2; }
-ev START "model=$MODEL"
+# Rate-limit cooldown shared by all agents: a model that rate-limited in the
+# last 30 min is skipped in favour of Space Bunny (file: _status/cooldown/<model>).
+CD="$ST/cooldown"; mkdir -p "$CD"; CDF="$CD/$(echo "$MODEL" | tr '/#' '__')"
+if [ "$MODEL" != "opencode-go/space-bunny-free#max" ] && [ -f "$CDF" ] && [ $(( $(date +%s) - $(cat "$CDF") )) -lt 1800 ]; then
+  ORIG="$MODEL"; MODEL="opencode-go/space-bunny-free#max"; SID="-"
+  ev START "model=$MODEL cooldown_from=$ORIG"
+else
+  ev START "model=$MODEL"
+fi
 for i in 1 2 3 4 5; do
   if [ "$SID" != "-" ]; then
     opencode run --auto -s "$SID" -m "$MODEL" "$(cat "$BRIEF")" < /dev/null > "$LOG" 2>&1 &
@@ -48,7 +56,7 @@ for i in 1 2 3 4 5; do
     [ -z "$SID" ] && SID="-"
     # Free models rate-limit hard: after two rate limits, fall back to Space Bunny (same session title, fresh session).
     if tail -40 "$LOG" | grep -qiE "rate limit|usage limit"; then
-      RL=$(( ${RL:-0} + 1 ))
+      RL=$(( ${RL:-0} + 1 )); date +%s > "$CD/$(echo "$MODEL" | tr '/#' '__')"
       if [ "$RL" -ge 2 ] && [ "$MODEL" != "opencode-go/space-bunny-free#max" ]; then
         ev RETRY "fallback_model=space-bunny from=$MODEL"; MODEL="opencode-go/space-bunny-free#max"; SID="-"
       fi
