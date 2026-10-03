@@ -129,6 +129,17 @@ class PrivacyConsentView extends StatelessWidget {
                                         .copyWith(
                                           fontWeight: FontWeight.w600,
                                           height: 22 / 16,
+                                          // P04-10: the design sets no
+                                          // tracking, but Material's
+                                          // DefaultTextStyle leaks
+                                          // letterSpacing 0.3 through
+                                          // `inherit: true`; with the bundled
+                                          // Inter the title then needs
+                                          // 250.2px in this 247px column and
+                                          // wraps. Zero it here until the
+                                          // shared typography fix lands
+                                          // (SHARED_REQUEST §7).
+                                          letterSpacing: 0,
                                         ),
                                     softWrap: true,
                                   ),

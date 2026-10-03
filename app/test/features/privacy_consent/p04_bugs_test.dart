@@ -1,13 +1,12 @@
-// P04 · Privacy & consent — adversarial bug proofs (Stage 6, iteration 7).
+// P04 · Privacy & consent — adversarial bug proofs (Stage 6, iteration 7;
+// maintained in iteration 8).
 //
 // The proofs assert the CORRECT behaviour. Iterations 1-5 fixed P04-1 … P04-9
 // (P04-2 trash glyph and P04-7 themed shield landed in iteration 5), so those
-// proofs are un-skipped and green. P04-10 is new this iteration: the bundled
-// Inter build plus the theme's inherited 0.3px letter-spacing wraps the
-// opt-card title to two lines and makes the card 22px taller than the design.
-//
-// Run the skipped proof against the current tree with:
-//   flutter test --run-skipped test/features/privacy_consent/p04_bugs_test.dart
+// proofs are un-skipped and green. P04-10 (new in iteration 7) is fixed in
+// iteration 8: the view zeroes the opt-card title's letterSpacing so the
+// bundled Inter build keeps it on one 22px line (SHARED_REQUEST §7 tracks the
+// shared typography fix for every other screen).
 //
 // Findings, severity, repro and suggested fixes: docs/screens/P04/6_bugs.md.
 //
@@ -21,7 +20,7 @@
 //   P04-7 major   dark mode renders the light-baked shield artwork   [FIXED]
 //   P04-8 minor   double-failed rapid toggle reverts to unpersisted  [FIXED]
 //   P04-9 minor   overlapping first-run writes keep the earlier value [FIXED]
-//   P04-10 major  opt-card title wraps to two lines (bundled fonts)   [open]
+//   P04-10 major  opt-card title wraps to two lines (bundled fonts)   [FIXED]
 //
 // Checked and clean (passing proofs at the bottom): kid-mode guard, deep-link
 // back navigation, restart persistence (demo and first-run), first-run
@@ -562,8 +561,10 @@ void main() {
       );
 
       await disposeApp(tester);
-      // P04-10: title h=44, card h=116 — 22px taller than the design.
-    }, skip: true);
+      // P04-10 FIXED (iteration 8): the view zeroes the title's
+      // letterSpacing (local half of SHARED_REQUEST §7), so the bundled
+      // Inter keeps the title on one 22px line and the card at 94.
+    });
   });
 
   // -------------------------------------------------------------------------

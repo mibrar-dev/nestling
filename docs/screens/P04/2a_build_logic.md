@@ -1,4 +1,4 @@
-# P04 · Privacy consent — STAGE 2a logic build (iteration 7)
+# P04 · Privacy consent — STAGE 2a logic build (iteration 8)
 
 Scope: non-UI layer only — `domain/**`, `data/**`, `presentation/bloc/**`,
 DI/route registration, and `bloc`/`repository` unit tests. No edits to
@@ -18,7 +18,7 @@ than the plan's original no-optimistic-emit sketch. No shape change.
 
 ## Files changed
 
-None. The logic layer already implements the plan and every FIXES_6 item in
+None. The logic layer already implements the plan and every FIXES_7 item in
 its scope (verified, not re-edited):
 
 - `app/lib/features/privacy_consent/data/privacy_consent_repository_impl.dart`
@@ -31,24 +31,27 @@ its scope (verified, not re-edited):
 - `app/test/features/privacy_consent/privacy_consent_{bloc,repository}_test.dart`
   — unchanged, no `google_fonts` imports, no skips.
 
-## FIXES_6 items — logic-layer triage
+## FIXES_7 items — logic-layer triage
 
-| Id | FIXES_6 status | Layer | Action this stage |
+| Id | FIXES_7 status | Layer | Action this stage |
 |---|---|---|---|
 | P04-1 first-run opt-in dropped | FIXED (it. 2) | data (mine) | Verified: upsert + migration guarantee; repo tests green |
-| P04-2 row-4 empty tile (`NestIcons.trash`) | OPEN, one-line wire-up | VIEW (UI builder) | Not mine — and already landed in this tree (`privacy_consent_view.dart:104-109` wires `NestIcons.trash`; bug proof header says FIXED it. 5, no `skip`) |
-| P04-5 double-tap same value | FIXED (it. 2) | bloc (mine) | Verified: optimistic emit + serialised writes; bloc tests green |
-| P04-6 failed OFF claimed "stays off" | FIXED (it. 2) | bloc+view | Bloc half verified (failure keeps prior items/consent); caption half is UI builder's |
-| P04-7 dark shield (`NestPrivacyShield`) | OPEN, one-line wire-up | VIEW (UI builder) | Not mine — and already landed in this tree (`privacy_consent_view.dart:73-77` renders `NestPrivacyShield`; bug proof un-skipped, no `skip`) |
+| P04-2 row-4 empty tile | FIXED (it. 5) | VIEW | Not mine; verified landed |
+| P04-3 compact nav short | FIXED (shared) | shared | Not mine |
+| P04-4 dividers inflate list | FIXED (it. 4) | VIEW | Not mine; verified landed |
+| P04-5 double-tap same value | FIXED (it. 2) | bloc (mine) | Verified: optimistic emit; bloc tests green |
+| P04-6 failed OFF claimed "stays off" | FIXED (it. 2) | bloc+view | Bloc half verified (failure keeps prior items/consent) |
+| P04-7 dark shield | FIXED (it. 5) | VIEW | Not mine; verified landed |
 | P04-8 revert to unpersisted value | FIXED (it. 3) | bloc (mine) | Verified: revert target `_crashFrom(items)`; tests green |
 | P04-9 overlapping writes keep earlier | FIXED (it. 4) | data (mine) | Verified: single transaction; deterministic proofs green |
-| Cleanup: review findings 3/4 (local divider Stack) | cleanup | VIEW (UI builder) | Not mine — already landed (four direct `NestList` children, shared overlay) |
+| P04-10 opt-card title wraps (NEW, MAJOR) | OPEN — shared fix | SHARED (core) | Not mine. FIXES_7 prescribes either core-typography `letterSpacing: 0` (preferred) or `NestToggle` minWidth 59→51, filed as SHARED_REQUEST §7. RULES §1 forbids editing `app/lib/core/**`, so I must not apply it. No logic-layer change could fix it: the title width is pure view typography, and the toggle value/layout contract is unchanged. |
 
-Skipped-bug-tests check: `p04_bugs_test.dart` in this tree carries **zero**
-`skip:` markers (P04-2/P04-7 already un-skipped, headers read FIXED it. 5).
-That file is outside my file-name scope (`bloc`/`cubit`/`repository`/`data`)
-and imports the view, so I did not edit it; the UI builder owns its view
-assertions.
+Skipped-bug-tests check: `p04_bugs_test.dart:566` carries `skip: true` on
+`[P04-10]` only — that file is outside my file-name scope
+(`bloc`/`cubit`/`repository`/`data`) and its proof pumps the view against a
+shared-typography fix I am forbidden to make. Un-skipping it is the
+integrator's job once the shared fix lands on main; I did not touch the file
+to avoid parallel conflicts with the UI builder.
 
 ## Verification (logic scope only)
 
@@ -56,14 +59,13 @@ assertions.
 - `flutter test test/features/privacy_consent/privacy_consent_bloc_test.dart
   test/features/privacy_consent/privacy_consent_repository_test.dart` → 33 passed.
 - `grep google_fonts|GoogleFonts` over `domain/`, `data/`, `bloc/`, and both
-  owned test files → no matches. (The `google_fonts` import still present in
-  `p04_bugs_test.dart:36` is outside my scope — flagged for the UI builder /
-  integrator, not edited here to avoid parallel conflicts.)
+  owned test files → no matches (only string literals inside the a11y guard
+  test, which asserts their absence).
 
 ## LEFT FOR NEXT ITERATION
 
-Nothing in the logic layer. All remaining FIXES_6 work (P04-2/P04-7 companion
-test flips if not yet done, `google_fonts` removal in `p04_bugs_test.dart` and
-view tests) belongs to the UI builder / integrator.
+Nothing in the logic layer. P04-10 awaits the shared typography/`NestToggle`
+fix on main (orchestrator-owned); un-skipping its proof belongs to the
+integrator after the merge.
 
 VERDICT: PASS

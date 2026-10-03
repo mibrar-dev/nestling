@@ -1,116 +1,117 @@
-# P04 · Privacy consent — build notes (STAGE 2 INTEGRATE, iteration 7)
+# P04 · Privacy consent — build notes (STAGE 2 INTEGRATE, iteration 8)
 
 Feature `privacy_consent` · route `/privacy` · parent mode.
 Two builders worked in parallel on this iteration: `2a_build_logic.md` (domain,
 data, bloc, DI/routes + bloc/repository tests) and `2b_build_ui.md` (views +
-view/widget tests). This file is the integration pass — its only job was to
-make the combined result compile and pass.
+view/widget tests). This file is the integration pass: its only job was to make
+the combined result compile and pass, and to confirm the one new fix on device.
 
-## Verdict up front: nothing to integrate
+## Integration result: clean, zero repair work
 
-Both halves landed **no production changes**. `git diff` over
-`app/lib/features/privacy_consent/**` is empty — the whole feature (domain,
-data, bloc, views) is exactly the tree that iteration 6 verified and that
-iterations 5–6 gated green. So there was no seam to repair:
+**No integration breakage existed, so I changed no code.** The two halves did
+not overlap except on `p04_bugs_test.dart`, and there with no conflicting
+hunks (2a explicitly left it alone; 2b owns it).
 
-- **No contract seam.** 2a reports `CONTRACT CHANGES: none`; the public names
-  (`PrivacyConsentLoadRequested`, `PrivacyConsentCrashToggled(value)`,
-  `PrivacyConsentState(status/items/crashConsent/errorMessage)`,
-  `PrivacyConsentRepository`, `registerPrivacyConsent`,
-  `PrivacyConsentRoutePaths.privacy`) are unchanged, so the view coded by 2b
-  and the bloc coded by 2a type-check against each other as-is.
-- **No import/member seam.** The only breakage introduced by the `1b2109e`
-  main merge (`google_fonts` removed, Inter/Nunito bundled) lived in the test
-  layer; 2b removed the `google_fonts` import and every
-  `GoogleFonts.config.allowRuntimeFetching = false` call from the four
-  affected P04 test files, exactly as the FONTS orchestrator rule prescribes.
-  I verified the removal is complete app-wide, not just in P04:
-  `grep -rln "google_fonts\|GoogleFonts" app/lib app/test` → no matches.
-- **No failing test.** No mismatched BLoC states/events, no renamed members,
-  no test that the merge of the halves turned red. I made **no code change at
-  all** this stage — the smallest possible change set, verified rather than
-  rewritten.
-
-The only overlapping edit surface between the two builders was
-`p04_bugs_test.dart` (2a flagged it as outside its file-name scope and left
-it; 2b removed the `google_fonts` import from it). That file is view-pumping
-and imports the view, so 2b's call was the right one and it is the only place
-the halves touched the same file — with no conflicting hunks.
+- **No contract seam.** 2a reports `CONTRACT CHANGES: none` — `PrivacyConsentLoadRequested`,
+  `PrivacyConsentCrashToggled(value)`, `PrivacyConsentState(status/items/crashConsent/errorMessage)`,
+  `PrivacyConsentRepository`, `registerPrivacyConsent` and
+  `PrivacyConsentRoutePaths.privacy` are unchanged. The one new fix is pure
+  view typography (a `letterSpacing: 0` in a `copyWith`), so nothing in the
+  bloc/data layer had to adapt.
+- **No import/member seam.** No compile errors, no renamed members, no test
+  turned red by combining the halves.
+- **Skipped-proof seam, closed.** 2a correctly refused to touch
+  `p04_bugs_test.dart` (outside its file-name scope, and the proof pumps the
+  view) but flagged that un-skipping `[P04-10]` is the integrator's job once
+  the fix lands. 2b landed the fix and un-skipped it. Verified here:
+  `grep "skip: true" test/features/privacy_consent` → no matches, and the
+  runner prints `All tests passed!` (not `All other tests passed!`), so there
+  are **zero skips app-wide** and nothing can hide behind one.
 
 ## Summary of 2a (logic)
 
-No files changed. Verified in place and green: transactional upsert
+No files changed — verified in place and green: transactional upsert
 (`data/privacy_consent_repository_impl.dart`), optimistic toggle +
 state-aware failure + revert-to-stored (`presentation/bloc/privacy_consent_bloc.dart`),
-and the stable DI/route contract. 2a's own check: `flutter analyze
-lib/features/privacy_consent` → No issues found; bloc + repository tests → 33
-passed.
+stable DI/route contract. 2a's checks: `flutter analyze lib/features/privacy_consent`
+→ No issues found; bloc + repository tests → 33 passed.
+
+Its one triage call worth recording: **P04-10 is not fixable in the logic
+layer** — the title width is pure view typography and the toggle's
+value/layout contract is unchanged. Correct; nothing was forced.
 
 ## Summary of 2b (UI)
 
-The real work of the iteration: the `1b2109e` merge left **16 compile errors**
-across 4 P04 test files (unresolvable `package:google_fonts/google_fonts.dart`
-imports), i.e. the feature suite did not build. 2b deleted the import and the
-`GoogleFonts.config` calls from `privacy_consent_view_test.dart`,
-`privacy_consent_view_contract_test.dart`, `privacy_consent_copy_test.dart` and
-`p04_bugs_test.dart` — deletions only, no test logic, assertion or copy
-changed. No view/layout change was needed: `privacy_consent_view.dart`
-already implements `1_plan.md`, both designs and every owner rule. 2b's own
-check: `flutter analyze` over the feature → No issues found; the 4 rebuilt test
-files → `00:03 +87: All tests passed!`.
+Fixed **P04-10**, the one new finding in FIXES_7 (MAJOR): the opt-card title
+`Optional: help improve Nestling` wrapped to two lines and the card ran 22 px
+taller than the design (531→643 vs 531→621).
 
-## FIXES_6 items — all done, none left
+- **Root cause, measured:** the design's `.opt-title` has no tracking, but
+  `NestType` styles are `inherit: true` with no `letterSpacing`, so Material's
+  `DefaultTextStyle` (`bodyMedium`, 0.3 px) leaks in. With the newly bundled
+  Inter the title needs 250.2 px in P04's 247 px text column → wrap. Card went
+  94 px → 116 px.
+- **Why local, not shared:** the prescribed shared fix (core `NestType`
+  default `letterSpacing: 0`, or `NestToggle` `minWidth` 59→51) lives in
+  `app/lib/core/**`, which RULES §1 forbids a screen agent from editing. 2b
+  applied the RULES-legal half: `letterSpacing: 0` on that one `Text` — the
+  design's own value — and recorded the shared half in SHARED_REQUEST §7 as
+  still open for core. Title back to one 22 px line, card back to the design's
+  94 px; toggle tap target, card padding and row gap untouched.
+- Un-skipped `[P04-10]` and refreshed the file header/index.
 
-`FIXES_6.md` embeds the stage-6 bug hunt written against the **iteration-4**
-tree; every item it lists had already landed in iterations 5–6. Re-verified
-line by line on the integrated tree:
+Files changed by 2b (all inside RULES §1):
+`presentation/views/privacy_consent_view.dart` (one style property + comment),
+`test/features/privacy_consent/p04_bugs_test.dart`, `docs/screens/P04/SHARED_REQUEST.md` (§7 status).
 
-| Id | Item | State | Evidence on this tree |
+## FIXES_7 items — all done, none left
+
+| Id | Item | State | Evidence on the integrated tree |
 |---|---|---|---|
 | P04-1 | first-run opt-in silently dropped | **DONE** (it. 2) | transactional upsert; `[P04-1]` green |
-| P04-2 | row 4 empty peach tile | **DONE** (it. 5) | `privacy_consent_view.dart` row 4 `leadingAsset: NestIcons.trash`; no `TODO(P04)` anywhere; contract test asserts the asset + `aPeach` ink; `[P04-2]` green |
-| P04-3 | compact nav 16 px short | **DONE** (shared merge, it. 2) | `[P04-3]` green (60 px bar) |
-| P04-4 | dividers inflated the list by 3 px | **DONE** (it. 4 + shared `NestList`) | four direct `NestList` children; `[P04-4]` green |
+| P04-2 | row 4 empty peach tile | **DONE** (it. 5) | `NestIcons.trash` wired, no `TODO(P04)`; `[P04-2]` green |
+| P04-3 | compact nav 16 px short | **DONE** (shared merge) | `[P04-3]` green (60 px bar) |
+| P04-4 | dividers inflate the list 3 px | **DONE** (it. 4) | four direct `NestList` children, shared overlay; `[P04-4]` green |
 | P04-5 | double-tap wrote the same value twice | **DONE** (it. 2) | optimistic emit; `[P04-5]` green |
 | P04-6 | failed OFF claimed "it stays off" | **DONE** (it. 2) | state-aware caption; `[P04-6]` green |
-| P04-7 | dark mode rendered the light-baked shield | **DONE** (it. 5) | `NestPrivacyShield(semanticLabel: …)`; no `flutter_svg`/baked asset left in the view; `[P04-7]` green |
+| P04-7 | dark mode rendered the light-baked shield | **DONE** (it. 5) | `NestPrivacyShield`; `[P04-7]` green |
 | P04-8 | failed toggle reverted to an unpersisted value | **DONE** (it. 3) | revert to `_crashFrom(items)`; `[P04-8]` green |
 | P04-9 | overlapping first-run writes kept the earlier value | **DONE** (it. 4) | single transaction; `[P04-9]` green |
-| review finding 3 | delete the local divider `showDivider`/`Stack` | **DONE** (it. 5) | not present in the view; shared `NestList` owns the overlay |
-| review finding 4 | `dividerOf(0)` result check instead of `byType(Stack)` | **DONE** (it. 5) | present at both sites; remaining `byType(Stack)` uses measure the shared overlay's geometry |
-| review finding 5 | quote the real test tail | **DONE** (it. 6) | quoted verbatim below |
+| **P04-10** | **opt-card title wraps, card 22 px tall (NEW, MAJOR)** | **DONE (it. 8)** | local `letterSpacing: 0`; `[P04-10]` un-skipped + green; **device-confirmed below** |
+| UI check §deviation 1 | (same defect as P04-10) | **DONE** | ink rows now identical to the design (probe below) |
 
-**Left for later iterations:** nothing in P04 scope. Zero bug proofs remain
-skipped (`grep "skip: true"` over the P04 tests → no matches), so
-`--run-skipped` is now a no-op and nothing can hide behind a skip.
+**Left for later iterations — outside P04 scope, not P04's to fix:** the
+app-wide `letterSpacing: 0.3` leak into design text on every other screen,
+tracked as SHARED_REQUEST §7 (shared half). When core fixes it, the view's
+local `letterSpacing: 0` becomes a harmless no-op that can be deleted.
 
-ORCHESTRATOR_NOTES items 1–4 remain met (four tinted row glyphs in both
-themes; header offsets Δ0; row heights/dividers Δ0; bottom-edge CTA surface
-plus 20 px gutters). COPY still locked against
-`design/html-source/screens/P04-privacy.html`; CHILD ORDER N/A; PIP N/A.
+ORCHESTRATOR_NOTES items 1–4 remain met. FONTS rule: the only remaining
+`google_fonts`/`GoogleFonts` hits app-wide are the **string literals inside
+`privacy_consent_a11y_test.dart`, which is the guard test that asserts their
+absence** — correct, not a violation. COPY still locked to the HTML source;
+CHILD ORDER / PIP N/A.
 
 ## Gates (app/, integrator run)
 
 ```
 dart format .
-→ Formatted 372 files (0 changed) in 1.38 seconds.
+→ Formatted 374 files (0 changed) in 1.19 seconds.
+  (dart format --output=none --set-exit-if-changed
+     lib/features/privacy_consent test/features/privacy_consent → 19 files, 0 changed)
 
 flutter analyze
 → Analyzing app...
-→ No issues found! (ran in 4.4s)
+→ No issues found! (ran in 4.8s)
 
 flutter test test/features/privacy_consent
-→ 00:05 +156: All tests passed!        (156 passed, 0 skipped, 0 failed)
+→ 00:05 +160: All tests passed!        (160 passed, 0 skipped, 0 failed)
 
 flutter test                            (whole app)
-→ 00:16 +806: All tests passed!        (806 passed, 0 skipped, 0 failed)
+→ 00:26 +824: All tests passed!        (824 passed, 0 skipped, 0 failed)
 ```
 
-`All tests passed!` (not `All other tests passed!`) is itself the proof that
-**zero tests are skipped** app-wide.
-
-Bug-proof proof, run explicitly (`p04_bugs_test.dart`, expanded reporter) —
-all nine adversarial proofs green:
+Bug-proof file, run explicitly (expanded reporter) — all ten adversarial
+proofs green, none skipped:
 
 ```
 [P04-1] first run: the toggle tap is actually stored
@@ -122,22 +123,54 @@ all nine adversarial proofs green:
 [P04-7] dark mode renders the themed shield, not the baked asset
 [P04-8] a double-failed rapid toggle reverts to the stored value
 [P04-9] overlapping first-run writes keep the last value
-→ 00:02 +16: All tests passed!
+[P04-10] the opt-card title stays on one 22px line
+→ 00:02 +17: All tests passed!
 ```
+
+## Device verification of P04-10 (2b handed the re-shoot to the integrator)
+
+`shot.sh /privacy` light + dark (`SEED=fresh`, parent, iPhone 16e,
+`604697A9-11DA-462F-9837-396E9CA2493A`) → `ui/app_{light,dark}_8.png`, then
+`compare.py` vs the design PNGs.
+
+| | iteration 7 (wrapped) | **iteration 8 (fixed)** | iteration 6 baseline |
+|---|---|---|---|
+| Light mean diff | 4.45 % | **3.79 %** | 4.08 % |
+| Light band 5 (527–633, the opt card) | 6.82 % | **2.60 %** | 4.19 % |
+| Light band 6 (633–738) | 0.82 % | **0.40 %** | 0.40 % |
+| Dark mean diff | 4.43 % | **3.76 %** | 3.98 % |
+| Dark band 5 | 7.79 % | **2.88 %** | 4.44 % |
+| Dark band 6 | 0.80 % | **0.39 %** | 0.39 % |
+
+Bands 5–6 are not merely back to the iteration-6 baseline — they are
+**better** than it, because the bundled Inter matches the design's own static
+build more closely than the runtime-downloaded face did. Both themes are now
+the best this screen has measured.
+
+Ink-row probe of the opt card (dark pixels, x 20–370 dp) — the geometry the
+bug hunt measured, before and after:
+
+```
+it7 shot  light (wrapped)   545.0-560.0  567.0-582.0  591.0-604.7  613.3-619.7
+it8 shot  light (FIXED)     545.0-560.0        569.0-582.7  591.3-604.7
+design   light (target)     545.0-560.0        569.0-582.7  591.0-604.7
+```
+
+The iteration-7 shot had a **fourth** ink run (the wrapped "Nestling" line at
+567–582, plus the 613–620 line it pushed down). The iteration-8 shot has
+three runs whose bounds match the design to within 0.3 dp — the title is one
+line again. Dark mode agrees (it8 ink extent 545.0–587.3 / 591.0–604.7 vs
+design 544.7–587.7 / 591.0–604.7; it7 ran on to 626.7).
+
+Owner rules re-confirmed on the new shots: bottom CTA surface runs to the
+physical edge in both themes; 20 px gutters; h1, chevron, shield, trash glyph
+and copy unchanged. Status-bar clock and home-indicator pill ignored per the
+STATUS BAR rule. No overflow or clipping anywhere on the screen.
 
 ## Files changed by the integrator
 
-None (code). `docs/screens/P04/2_build.md` (this file) is the only write, per
-the stage brief.
-
-## Hand-off note for STAGE 5 (UI)
-
-No simulator shot was taken this stage. Two reasons: the integrator brief
-scopes the job to compile + pass, and `git diff` shows **zero** production
-pixel-affecting changes, so the tree renders identically to the iteration-6
-shot. Caveat worth carrying forward: `ui/app_{light,dark}_6.png` predates the
-`1b2109e` main merge, which bundled the real Inter/Nunito builds (the
-`google_fonts` removal), so **STAGE 5 must re-shoot and re-measure** rather
-than reuse the iteration-4/6 diff numbers.
+None (code). `docs/screens/P04/2_build.md` (this file) plus the four
+iteration-8 screenshots/compares under `docs/screens/P04/ui/` are the only
+writes.
 
 VERDICT: PASS

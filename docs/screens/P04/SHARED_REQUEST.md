@@ -148,3 +148,9 @@ Files: `app/lib/core/design_system/tokens/typography.dart` (or
 `app/lib/core/design_system/components/nest_toggle.dart`.
 Blocks: yes for P04's PASS this iteration; a P04-local `letterSpacing: 0` on
 the opt-card title would clear this screen but leave the leak everywhere else.
+**Status (iteration 8): P04 cleared locally** — the view zeroes the opt-card
+title's `letterSpacing` (`privacy_consent_view.dart`), so the title is one
+22px line and the card is back at the design's 94px; `[P04-10]` un-skipped
+and green. **The shared half stays open**: the Material 0.3px tracking still
+leaks into design text on every other screen until `NestType`/`NestTheme`
+(or `NestToggle` width) is fixed in core.
