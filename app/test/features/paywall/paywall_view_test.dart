@@ -511,6 +511,101 @@ void main() {
       await disposeApp(tester);
     });
 
+    testWidgets('no text on P07 adds letter spacing', (tester) async {
+      // LETTER SPACING (main fd92d95): the design CSS carries no tracking, so
+      // `NestType` defaults to 0 and no call site may put Material's back.
+      // Material's tracking made Inter paint 1–2% wider than the design, which
+      // is what pushed benefit 4 onto a second line before the merge.
+      await setUpTestScope();
+      await _pumpPaywall(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+      );
+      await _scrollToEnd(tester);
+
+      final tracked = <String>[];
+      var inspected = 0;
+      for (final element in find.byType(RichText).evaluate()) {
+        final render = element.renderObject;
+        if (render is RenderParagraph) {
+          inspected++;
+          final spacing = render.text.style?.letterSpacing ?? 0;
+          if (spacing != 0) {
+            tracked.add('${render.text.toPlainText()} → $spacing');
+          }
+        }
+      }
+
+      expect(
+        inspected,
+        greaterThan(10),
+        reason: 'the sweep must actually see the screen’s text',
+      );
+      expect(tracked, isEmpty, reason: 'tracking added on P07: $tracked');
+    });
+
+    testWidgets('benefit 4 is painted in full, at the design’s 15px', (
+      tester,
+    ) async {
+      // ORCHESTRATOR_NOTES iteration-4 item 1: re-measure benefit 4 and do NOT
+      // shrink the text or edit the copy. The "one line on device" claim is a
+      // device measurement (2b's shot) — the widget-test font is ~2× wider than
+      // the bundled Inter (see P02-BUG-7), so here the honest, font-independent
+      // contract is asserted instead: the full string is painted, never
+      // ellipsised, never shrunk off the 15px token, and its box sits on the
+      // design's 24px line grid.
+      await setUpTestScope();
+      await _pumpPaywall(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+      );
+
+      final paragraph = tester.renderObject<RenderParagraph>(
+        find.text('Co-parent sharing, so James sees the same'),
+      );
+
+      expect(
+        paragraph.text.style?.fontSize,
+        15,
+        reason: 'the design’s `.benefit-txt` size, not a fitted size',
+      );
+      expect(
+        paragraph.didExceedMaxLines,
+        isFalse,
+        reason: 'the copy must wrap, never truncate',
+      );
+      expect(
+        paragraph.size.height % 24,
+        0,
+        reason: 'the box must sit on the design’s 24px line grid',
+      );
+      expect(paragraph.size.height, greaterThanOrEqualTo(24));
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the title carries no inserted hard break', (tester) async {
+      // ORCHESTRATOR_NOTES iteration-4 item 3: the "days" orphan
+      // (`text-wrap: balance` has no Flutter equivalent) is accepted, and a
+      // hard `\n` must NOT be inserted — it would break the exact-copy pins
+      // and the h1's single paragraph node.
+      await setUpTestScope();
+      await _pumpPaywall(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+      );
+
+      final paragraph = tester.renderObject<RenderParagraph>(find.text(_title));
+      expect(paragraph.text.toPlainText(), isNot(contains('\n')));
+      expect(paragraph.text.toPlainText(), _title);
+
+      await disposeApp(tester);
+    });
+
     testWidgets('typography matches the design’s type scale', (tester) async {
       await setUpTestScope();
       await _pumpPaywall(
@@ -810,6 +905,45 @@ void main() {
       ];
       expect(lefts[0], moreOrLessEquals(lefts[1], epsilon: 0.01));
       expect(lefts[1], moreOrLessEquals(lefts[2], epsilon: 0.01));
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the legal row centres both glyph families in one 44px band', (
+      tester,
+    ) async {
+      // ORCHESTRATOR_NOTES iteration-4 item 2: the `·` separators must sit in
+      // the same 44px centred box as the links. Stage 6's [P07-BUG-13] proof
+      // pins the baseline relation; this pins the box itself — the target is
+      // exactly 44 tall and the two glyph families share one centre.
+      await setUpTestScope();
+      await _pumpPaywall(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+      );
+
+      final link = tester.getRect(
+        find.ancestor(of: find.text('Terms'), matching: find.byType(InkWell)),
+      );
+      expect(
+        link.height,
+        moreOrLessEquals(NestDevice.tapParent, epsilon: 0.01),
+        reason: 'the design’s `.legal-row .link` is a 44px target',
+      );
+
+      final linkCentre = tester.getRect(find.text('Terms')).center.dy;
+      final dotCentre = tester.getRect(find.text(_middot).first).center.dy;
+      expect(
+        dotCentre,
+        moreOrLessEquals(linkCentre, epsilon: 0.5),
+        reason: 'separator and label share one vertical centre',
+      );
+      expect(
+        linkCentre - link.top,
+        moreOrLessEquals(link.height / 2, epsilon: 0.5),
+        reason: 'both are centred in the band, not top-aligned',
+      );
 
       await disposeApp(tester);
     });

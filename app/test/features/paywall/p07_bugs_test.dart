@@ -1,11 +1,11 @@
-// P07 · Paywall — adversarial bug proofs (Stage 6, iteration 3).
+// P07 · Paywall — adversarial bug proofs (Stage 6, iteration 4).
 //
-// Iteration 1 found P07-BUG-1..9; iteration 2 added P07-BUG-10..12; all of
-// 1–12 are now unskipped and green (iteration 3 built the fixes). Iteration 3
-// added P07-BUG-13 (the legal-link labels are top-aligned, not centred) —
-// the one open proof, `skip: true` until the fix lands. P07-BUG-8/9 remain
-// shared items filed in `docs/screens/P07/SHARED_REQUEST.md`; their proofs
-// stay `skip: true` until the shared fix lands.
+// Iteration 1 found P07-BUG-1..9; iteration 2 added P07-BUG-10..12;
+// iteration 3 added P07-BUG-13. All of 1–13 are now unskipped and green
+// (iterations 2–4 built the fixes; BUG-13's centring fix landed in
+// iteration 4). P07-BUG-8/9 remain shared items filed in
+// `docs/screens/P07/SHARED_REQUEST.md`; those two proofs stay `skip: true`
+// until the shared fix lands.
 //
 // Every open bug test is `skip`-marked with its id in the test name so the
 // suite stays green while the defect is unfixed; when the fix lands, remove
