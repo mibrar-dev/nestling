@@ -19,9 +19,11 @@ abstract class QuestsRepository {
   /// re-emits on every `families` change (BUG-P09-1).
   Stream<int> watchCoinValuePencePerCoin();
 
-  /// Coins must be 1..100 (plan §1-5). Out-of-range values throw
-  /// [ArgumentError] and write nothing (BUG-P09-4: last line of defence so
-  /// a corrupt stored value can never be persisted again).
+  /// Coins must be 1..100 (plan §1-5). Out-of-range values throw before
+  /// touching Drift — `AssertionError` in debug (asserts are enabled under
+  /// `flutter test`), `ArgumentError` in release — so a corrupt stored
+  /// value can never be persisted again (BUG-P09-4; see
+  /// `QuestsRepositoryImpl._checkCoins`).
   Future<void> createQuest(Quest quest);
 
   /// Same 1..100 coins contract as [createQuest].

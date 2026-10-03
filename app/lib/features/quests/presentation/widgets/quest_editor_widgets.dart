@@ -32,21 +32,14 @@ abstract final class QuestEditorMetrics {
   /// tap minimum (matches `.list-row`'s 56 minimum).
   static const double dueRowMinHeight = 56;
 
-  /// `.toggle::before { left: -4px; right: -4px; top: -7px; bottom: -7px }`
-  /// — the CSS hangs the hit area symmetrically around the 51x31 track, so
-  /// the *track* stays flush with the row's content edge (measured on the
-  /// P09 PNG: x 303 -> 354, y 620.5 -> 651.5) while only the hit area
-  /// overhangs into the card padding.
-  ///
-  /// [NestToggle] is the opposite: a 59x44 box (the same 51+8 / 31+13 hit
-  /// area) that centres the 51x31 track inside it, so the painted switch
-  /// lands 4 px short of the content edge and 2 px low (the app's switch row
-  /// is the component's 44 high, the design's is its 40 high text block).
-  /// The editor translates the toggle by this offset to put the visible
-  /// track back on the design's rect; the 44 px tap target only moves into
-  /// the card's own 16 px padding, which is where the CSS `::before`
-  /// overhang sits anyway.
-  static const Offset toggleTrackOffset = Offset(4, -2);
+  /// The approval card is 600→672 (72) with 16 px internal padding, so the
+  /// content row starts at 616. `NestToggle`'s laid-out box IS the 51×31
+  /// track (batch5), and that track is vertically centred in the row's 40 —
+  /// card-local top = 16 + (40−31)/2 = 20.5, i.e. 620.5 globally, the
+  /// design rect measured on the P09 PNG. The toggle is overlaid at this
+  /// exact position (BUG-P09-9: the old `toggleTrackOffset` compensation is
+  /// deleted — the batch5 widget already aligns by layout).
+  static const double approvalTrackTopInCard = 20.5;
 }
 
 /// `.switchrow .tt` — 16/22 w600. The scale's [NestType.bodyStrong] is

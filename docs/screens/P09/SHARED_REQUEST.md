@@ -16,7 +16,7 @@ workaround. `quest_editor_view_geometry_test.dart` pins the track at
 `(20, 480, 350, 52)` and the three tab centres at 79.7 / 195 / 310.3, so a
 regression fails the screen's own suite. Nothing further is requested.
 
-## 2. `NestToggle` paints its track centred in its hit box — compensated in P09, advisory
+## 2. `NestToggle` 51×31 track — RESOLVED on main (shared/shared_batch5)
 
 Need: `.toggle` in `design/html-source/components.css` is a **51x31** track with
 an absolutely positioned `::before { left/right: -4px; top/bottom: -7px }`
@@ -74,7 +74,7 @@ Blocks: no — but **the orchestrator should know**: if P08's loop is running,
 these two files are the only place its branch and this one touch the same
 lines, and a merge conflict there is a textual conflict, not a design one.
 
-## 4. `NestIcons` glyphs for bed / dishwasher / hoover / bin do not match the P09 design (BLOCKS P09 UI check)
+## 4. `NestIcons` quest glyphs — RESOLVED on main (shared/shared_batch5)
 
 Need: the P09 icon picker (`.ic`, 6 × 44×44 tiles) draws its glyphs from the
 shared `NestIcons` set, but four of them are visibly different objects from
@@ -174,7 +174,7 @@ icon names from `docs/screens/_shared/shared_batch5_REPORT.md` and
 `toggleTrackOffset` goes away with it. Iter-2 stage-5 tile MAEs for the
 record: bed 4.5 / dishes 17.5 / hoover 20.5 / book 4.1 / bins 17.3 / paw 1.9.
 
-## 5. `NestStepper` draws its minus as U+002D, both designs print U+2212 (advisory)
+## 5. `NestStepper` U+2212 minus — RESOLVED on main (shared/shared_batch5)
 
 Need: `app/lib/core/design_system/components/nest_stepper.dart:32` passes
 `label: '-'` (HYPHEN-MINUS, U+002D) to `_StepBtn`. Both designs that show a
@@ -203,7 +203,7 @@ Files: `app/lib/core/design_system/components/nest_stepper.dart`
 Blocks: **no** — a 1-character copy deviation in a shared control; P09 lands
 either way. Fixing the component fixes P06's fork at the same time.
 
-## 6. `NestTextField` default variant leaves a ~3 px text inset (advisory, ORCHESTRATOR_NOTES 17:57 item 2)
+## 6. `NestTextField` 12 px content padding — RESOLVED on main (shared/shared_batch5)
 
 Need: the orchestrator's QA of `cmp_light_1` measured the Quest name
 value starting at x ≈ 40 where the design has x ≈ 37. Measured in a P09
@@ -242,3 +242,49 @@ are exact and stage 5 measured every edge within ±2 px.
   toggle box, so the card is 68 not 72 and the due card rides 4 px high.
   Fix in `quests/` (restore `s4`); filed here for traceability, needs no
   shared change.
+
+## 7. BLOCKING (shared, NOT P09) — `test/core/family_time_test.dart` is a wall-clock time bomb
+
+Need: the repo gate is red on a **shared** core test, and no screen agent may
+fix it (RULES §1 forbids `app/test/core/**` and `app/lib/features/kid_home/**`).
+
+```
+app/test/core/family_time_test.dart
+  seed + repository zone plumbing › kid_home completions are stamped with the family zone
+  Bad state: Too many elements  (dart:core List.single)  at line 319
+```
+
+Cause (measured, not guessed). `Seed.demo()` stamps a `to_do` completion for
+`q-plants` / `leo` at `2026-10-03T06:00Z`, and `q-plants` repeats **daily**
+(`seed.dart`'s `quest()` default). After `Seed.movedToDubai(db)` the family zone
+is `Asia/Dubai`, and `KidHomeRepositoryImpl.completeQuest` only **updates** the
+existing row while it is still in the current period — otherwise it inserts a
+row for the new period (K03-BUG-4). `ft.countsForCurrentPeriod` in the demo's
+own terms:
+
+| now | `countsForCurrentPeriod('daily', 2026-10-03T06:00Z, now, 'Asia/Dubai')` | `completeQuest` | rows for `q-plants` | `.single` |
+|---|---|---|---|---|
+| 2026-10-03 19:00Z (iterations 1–3 ran here) | `true` | update | 1 | passes |
+| 2026-10-03 22:17Z (**now** = 02:17 on 4 Oct in Dubai) | `false` | **insert** | 2 | **throws** |
+
+So the test is red for as long as the machine clock is on a *different Dubai
+day* than the seeded story day — it went red at 2026-10-03 20:00Z (Dubai
+midnight) and the same trap then arms for the London half of the test at
+2026-10-03 23:00Z (London midnight). It is not P09: `git diff main --
+app/test/core app/lib/core app/lib/features/kid_home` is **empty**, so `main`
+is red in exactly the same way right now, and P09's own 2611 tests pass.
+
+Fix (core owner's call, any one line is enough):
+- pin `now` in that test (e.g. a `Clock`/`nowOverride` in `family_time`, the
+  same trick `test/flutter_test_config.dart` uses for `Seed.anchorOverride`); or
+- assert the newest row (`rows.last.createdAtTz`, and `.where(status ==
+  'done_pending')`) instead of `.single`, which is what the K03-BUG-4 "a new
+  period starts a fresh row" contract actually promises; or
+- move the story-day stamp so the seeded `to_do` row lands inside every zone
+  under test.
+
+Files: `app/test/core/family_time_test.dart` (+ optionally
+`app/lib/core/data/family_time.dart` for a pinnable clock).
+Blocks: **yes** — `flutter test` cannot be green for any screen until this
+lands. P09 itself is green: `flutter analyze` clean, `test/features/quests`
+394/394, and the whole suite's only failure is this one.

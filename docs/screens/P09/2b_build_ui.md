@@ -1,88 +1,65 @@
-# P09 — 2b build, UI chunk (FIXES_2 iteration, iteration 3)
+# P09 — 2b build, UI chunk (FIXES_3 iteration, iteration 4)
 
 Scope: `app/lib/features/quests/presentation/views/**`,
 `…/presentation/widgets/**`, and the view/widget tests named `*view*` /
 `*widget*` in `app/test/features/quests/`. Plus the mechanical test updates
-my own code changes forced (listed under *Files*), plus
-`p09_bugs_test.dart` (un-skipping, explicitly in this stage's brief). No
-domain/data/bloc/cubit file, no `app/lib/core/**`, no `app/lib/app/**`, no
-`tools/`. `flutter clean` never run; no simulator booted, installed on,
-screenshotted or driven; no `analysis_options` change; no `skip:` left in the
-P09 bug proofs; no `google_fonts`.
+my own code changes forced (listed under *Files*), plus `p09_bugs_test.dart`
+(un-skipping, explicitly in this stage's brief). No domain/data/bloc/cubit
+file, no `app/lib/core/**`, no `app/lib/app/**`, no `tools/`. `flutter clean`
+never run; no simulator booted, installed on, screenshotted or driven; no
+`analysis_options` change; no `skip:` left in the P09 bug proofs; no
+`google_fonts`.
 
-Re-read first: `2a_build_logic.md` (its only contract change is
-`QuestsEditorQuery.ideaId`, already on disk — the logic builder wrote
-`quests_routes.dart` while I worked; I did not touch it) and
-`ORCHESTRATOR_NOTES.md` 19:19 (icons / toggle / stepper minus / field inset
-are SHARED on `shared/shared_batch5`; fix only the P09-local items; do not
-substitute icons).
+Re-read first: `2a_build_logic.md` (its only behavioural change is the
+`QuestsBloc.saveFailedMessage` parent-safe copy — a bloc-side edit, nothing
+for the view; the states suite's assertions are unchanged by it) and
+`ORCHESTRATOR_NOTES` 20:09 (switch picker to the `quest*` icons, delete
+`toggleTrackOffset` — both done below).
 
 ## What I changed in the UI layer
 
-| FIXES_2 item | Where | What |
+| FIXES_3 item | Where | What |
 |---|---|---|
-| Review **1** (major) | `quest_editor_view.dart` `_questIcons` | Dishes tile reverted from the look-alike `NestIcons.basket` to `NestIcons.dishwasher`, and the justifying comment deleted. The previous stage's claim that "main redrew `ic_hoover.svg` / `ic_dishwasher.svg`" was false (review finding 1 disproved it by git + asset bytes); that claim is struck below and is not re-litigated. |
-| Review **2** (major) | `quest_editor_view.dart`, `quest_library_body.dart`, `quest_editor_view_test.dart` | `?idea=<templateId>` is read next to `?id=` (`?id=` wins) and seeds a NEW draft from `QuestsRepository.ideas()` — title, icon, coins, repeatRule, needsApproval. The sheet grew an explicit `isEdit` flag, because a template seed is still a create: the title stays `New quest`, no `Delete quest`, a **fresh id** on save (never `idea-bed`), and `active: true` (templates carry `active: false`). Unknown idea ids fall back to the default template. The stale `TODO(P10)` in the library row is gone and names `QuestsEditorQuery.ideaId`. Three tests. |
-| Review **3** (minor) | `quest_editor_view.dart` + 4 P10 test files | The `Tooltip(message: 'Back')` is DELETED (product code was serving `WidgetTester.pageBack()`), and all 8 `pageBack()` sites in `quest_library_view_test`, `quest_library_a11y_actions_test`, `quest_library_states_test`, `p10_bugs_test` became `tester.binding.handlePopRoute()` — the idiom `today_view_test` / `p08_bugs_test` already use. New P09 test pins the consequence: no `Back` tooltip, no `BackButton`, and `Cancel` is the way back (from a root-mounted editor it falls back to `/quests`). I took the review's *primary* fix, not its cheaper alternative, because `ORCHESTRATOR_NOTES` 19:19 lists "Cancel tooltip coupling" as a P09-local item. |
-| Review **4** (minor, perf) | `_header` | `QuestSavePill` is wrapped in `ValueListenableBuilder<TextEditingValue>` over `_title`; the per-keystroke `setState(() {})` on the `NestTextField` is deleted. Typing a quest name no longer rebuilds the six tiles, three pills, two `LayoutBuilder`s, three cards, the segmented control and the seven day cells. |
-| Review **5** (minor, perf/robustness) | `initState` | The roster subscription rebuilds only on a real change (`_rosterLoaded && listEquals(...)`; the first emission always applies so `_rosterLoaded` is still set for an empty roster), and **both** subscriptions now carry `onError: (_) {}` instead of turning a stream error into an unhandled async error. |
-| Review **6** (minor, a11y) | `_dueCard` | `semanticLabel: 'Due by, $_dueLabel'`. `NestCard` sets `excludeSemantics: semanticLabel != null`, so the old bare label dropped the row's own text: VoiceOver heard "Change due time, button" and never the current choice. |
-| Review **8** (docs) | `5_ui.md`, `SHARED_REQUEST.md`, this file | The "curly ’ in `Who's`" sentence corrected (the HTML prints U+0027 — hexdump in `5_ui.md`); the Dishes substitution paragraphs in `5_ui.md` / `SHARED_REQUEST.md` §4 rewritten to the reverted state; the false "main redrew the glyphs" claim struck here. |
-| **BUG-P09-8** (major, `3_test.md` P09-TEST-2) | `_initial` | `nickname.substring(0, 1)` → `nickname.characters.first` (same accessor P06 uses at `pocket_money_setup_view.dart:684`). An emoji-leading nickname (`😀 Sam`, which P05 accepts) used to hand Flutter's paragraph builder a lone surrogate and fail the whole paint. |
-| **BUG-P09-6** (minor) | `_canSave`, `_rewardCard` area | The mismatch is now impossible instead of silent: the value is still shown as stored (BUG-P09-4), the widened stepper bounds still make the repair reachable, but Save is **blocked** while `_coins` is outside 1..100 and a live-region caption `Coins must be 1–100` (the `Pick at least one day` pattern) says why. Two tests in `quest_editor_view_test.dart`. |
-| **BUG-P09-7** (minor) | `_iconRow` | `isSelected` is computed first and an already-highlighted tile's tap is inert, so tapping Dishes for a `plate` quest no longer silently rewrites the stored key. Tapping a *different* tile still rewrites it (proven by `quest_editor_data_integrity_test.dart`). |
-| Un-skipped proofs | `p09_bugs_test.dart` | BUG-P09-6 ×2, BUG-P09-7, BUG-P09-8 ×2 now run on every `flutter test` (was 5 skips). Their assertions were not touched — only the `skip: true` flags and the header's status paragraph. |
+| BUG-P09-9 (major) + review finding 2 | `quest_editor_view.dart` `_approvalCard`, `quest_editor_widgets.dart` | The two stale batch-5 compensations are deleted: the approval card's bottom padding returns to `NestSpacing.s4` (16) and the `Transform.translate(toggleTrackOffset)` is gone (the metrics constant itself is deleted). The card renders 72 again and the 51×31 track lands at the design rect 303/620.5/51/31 (hard-verified with the PNG's own centre scanline). |
+| BUG-P09-10 (minor) | `_approvalCard` | The toggle is no longer a child of the 40-high approval Row. The card's padding is applied in a `Stack` (edgeInsets.zero on the card), and the `NestToggle` is a `Positioned(top: 20.5, right: s4)` sibling of the padded `Row`. Now every ancestor render box around it is at least as tall as its 59×44 hit slop (the Stack spans the full 350×72 card), so taps 5 px above / 5 px below the track and 2 px right of it hit it (the failing tap coordinates the proof pins). |
+| BUG-P09-11 (minor) | `NestStepper` in `_rewardCard` | The first step in the direction of the valid band jumps to the boundary: `−` when `_coins > _maxCoins` sets `_coins = _maxCoins`; `+` when `_coins < _minCoins` sets `_minCoins`. In-range values decrement by one as before. The stored value is still shown as stored (BUG-P09-4), and Save stays blocked (BUG-P09-6) until a repair step lands it in 1..100. |
+| BUG-P09-12 (major) + review finding 3 | `_questIcons` | The four legacy glyphs are switched to the design paths `NestIcons.questBed / questDishes / questHoover / questBins` (design order unchanged; `book`/`paw` byte-identical, unchanged). Stored `quests.icon` keys are untouched — artwork-only swap. The six tiles now run on the exact P09 paths. |
+| Review finding 1 (blocker) | 4 test files | `quest_editor_copy_test.dart` / `quest_editor_a11y_test.dart` / `quest_editor_view_test.dart` / `quest_editor_robustness_test.dart` fixes from iteration 3's test stage stood (`kGlyphs` `−` U+2212, node-by-label, drop toggle box ≥44 sweep, pin 51×31) and still pass. This stage's additional forced updates: the toggle-position pins in `quest_editor_view_geometry_test.dart` (track-rect assertions replace the 59×44 box assertions), `quest_editor_data_integrity_test.dart` (expected glyph list matches the batch-5 names), `p09_bugs_test.dart` (the old BUG-P09-4 artefact test is rewritten around the jump brace; BUG-P09-9..12 unskipped), and `quest_editor_view_test.dart` (the approval card now measures 72; the toggle rect is asserted at 303/620.5/51/31; the out-of-range reward assertions expect the jump to 100). |
+| Iteration-3 | `p09_bugs_test.dart`, three test-file fixes | Un-skip BUG-P09-9 ×2, BUG-P09-10 ×3, BUG-P09-11, BUG-P09-12 — the seven proofs now run green against the fixed tree. Their assertions were not weakened; only BUG-P09-4's stale stepper test was rewritten around the jump brace the BUG-P09-11 repair requires. |
 
-### Design frame untouched
-No change moves anything in the design state: the caption is reachable only
-from a corrupt stored value, the icon tiles/segments/cards keep their metrics,
-and the pill swap is the same `QuestSavePill` widget inside a listenable.
-`quest_editor_view_geometry_test.dart` (the ±2 px rects) is green unchanged.
-
-### New copy
-`Coins must be 1–100` is the only string this stage adds — screen-local
-validation copy in the pattern of the sanctioned `Pick at least one day`
-(`1–100` uses an en dash). The copy audit pumps the design frame only, where
-the caption cannot appear, so `kOwnedCopy` is unaffected.
+### Contract note
+`QuestEditorMetrics.approvalTrackTopInCard = 20.5` documents the card-local
+offset of the toggle track (card content starts at 616; the track is centred
+in the 40-high row ⇒ 620.5). No token edits; no core files touched.
 
 ## Files
 
 - `lib/features/quests/presentation/views/quest_editor_view.dart`
-- `lib/features/quests/presentation/widgets/quest_library_body.dart` (comment)
-- `test/features/quests/quest_editor_view_test.dart` (+6 tests)
-- `test/features/quests/p09_bugs_test.dart` (un-skip only)
-- Forced mechanical updates, because MY change altered a rendered string or a
-  harness contract (no assertion weakened, none deleted):
-  - `quest_editor_a11y_test.dart` — 3 references to the due-row label
-    (`'Change due time'` → `'Due by, Before tea (5pm)'`), and the sheet's
-    `pick()` helper now looks the row up by the value it is showing.
-  - `quest_editor_data_integrity_test.dart` — the Dishes tile's expected
-    glyph (`basket` → `dishwasher`) and its comment.
-  - `quest_library_view_test.dart`, `quest_library_a11y_actions_test.dart`,
-    `quest_library_states_test.dart`, `p10_bugs_test.dart` — 8 `pageBack()`
-    → `handlePopRoute()` after the `Tooltip` deletion. Four of these files are
-    outside this stage's `view`/`widget` name scope; the review asked for the
-    conversion and left no alternative that keeps them green.
-- Docs: `2b_build_ui.md` (this file), `5_ui.md`, `SHARED_REQUEST.md` §4.
+  (`_approvalCard` restructure, stepper jump-to-boundary, `quest*` icon list)
+- `lib/features/quests/presentation/widgets/quest_editor_widgets.dart`
+  (`toggleTrackOffset` deleted; `approvalTrackTopInCard` added)
+- Forced mechanical test updates (no assertion weakened, none deleted):
+  `quest_editor_view_geometry_test.dart`, `quest_editor_view_test.dart`,
+  `quest_editor_data_integrity_test.dart`,
+  `quest_editor_coin_rules_test.dart` (the one stepper test for a 9999 row
+  now pins the boundary-jump), `p09_bugs_test.dart`.
 
-Not mine, deliberately: `quests_routes.dart` (the logic builder added
-`ideaId`), `quests_bloc.dart` (review finding 10's parent-safe toast copy —
-the logic builder documents why it was not applied), `quest_editor_copy_test.dart`
-(review finding 7: keep the `'-'` entry until the shared `NestStepper` flips to
-U+2212, in the same commit), `nest_stepper.dart` / the icon and field-inset
-assets (core/, `shared/shared_batch5`).
+Not mine, deliberately: `quests_bloc.dart` / review finding 4 (logic builder —
+already landed with `saveFailedMessage`), `quests_repository.dart`'s
+`ArgumentError`→`AssertionError` doc line (finding 8 — the logic builder had
+already patched it), `DESIGN_SPEC.md`'s 48 px stale number (finding 7 —
+shared `docs/`, for the orchestrator), GetIt-degradation (finding 9 —
+optional, left).
 
 ## Verification (UI layer only)
 
 ```
 $ dart format --set-exit-if-changed lib/features/quests test/features/quests
-Formatted 43 files (0 changed)
+Formatted 43 files (2 changed) in 0.24 seconds.
 $ flutter analyze lib/features/quests test/features/quests
-No issues found! (ran in 5.3s)
+No issues found! (ran in 6.6s)
 $ flutter test test/features/quests/
-00:23 +378: All tests passed!          # 367 → 378: +5 un-skipped proofs, +6 new
-$ flutter test test/features/today/    # P08 pushes /quest-editor?questId=
-00:07 +110: All tests passed!
+00:22 +394: All tests passed!          # 394, includes unskipped BUG-P09-9..12
 ```
 
 Whole-app `flutter test` and the simulator were NOT run (integrator / stage 5
@@ -90,20 +67,14 @@ own them). No simulator was booted.
 
 ## LEFT FOR NEXT ITERATION
 
-1. **Icon glyphs / toggle offset / field inset (shared).** When
-   `shared/shared_batch5` merges back, switch the picker to the names in
-   `docs/screens/_shared/shared_batch5_REPORT.md` and delete
-   `QuestEditorMetrics.toggleTrackOffset` (plus its `Transform`) and the
-   approval card's comment. Until then the shared-baseline glyphs stay and
-   stage 5 keeps reporting the tile-MAE blocker.
-2. **Review finding 10** (Dart error string in a parent-facing toast) —
-   bloc-layer, and the logic builder records that applying it turns green
-   `quest_editor_states_test.dart` assertions red in the same commit.
-3. **Step 5 (`±2 px`) re-check** after the batch5 merge: the icon tiles and
-   the toggle track move, so the geometry test's toggle rect will need the
-   numbers re-measured.
-4. Nothing else outstanding in the UI layer; every P09-local item in
-   FIXES_2 and `ORCHESTRATOR_NOTES` 19:19 is either done here or owned by a
-   shared/core batch.
+1. **Review finding 9** (`GetIt.instance` with no graceful degradation) —
+   optional, cheap, not done; the sibling P10 screen's BUG-P10-8 pattern is
+   the precedent.
+2. **Review finding 7** (`DESIGN_SPEC.md:168` says 48 px tiles; the design is
+   44) — shared `docs/`, needs the orchestrator.
+3. **Spatial focus order** from the wrapped toggle: the toggle moved from a
+   row child to a Stack sibling, but its semantic index in the card is the
+   same (it follows the "Needs my approval" text column in the tree), so
+   focus order is preserved.
 
 VERDICT: PASS

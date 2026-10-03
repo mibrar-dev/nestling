@@ -290,20 +290,34 @@ const List<_DueOption> _dueOptions = <_DueOption>[
 /// key is preserved unless the parent taps a tile.
 const List<({String key, List<String> aliases, String label, String icon})>
 _questIcons = <({String key, List<String> aliases, String label, String icon})>[
-  (key: 'bed', aliases: <String>['sofa'], label: 'Bed', icon: NestIcons.bed),
+  // `key` is what `quests.icon` stores and the alias table resolves — it never
+  // changes. The four tiles draw the exact design paths `shared_batch5` added
+  // (ORCHESTRATOR_NOTES 20:09 / BUG-P09-12); `book`/`paw` were already
+  // byte-identical and stay.
+  (
+    key: 'bed',
+    aliases: <String>['sofa'],
+    label: 'Bed',
+    icon: NestIcons.questBed,
+  ),
   (
     key: 'dishwasher',
     aliases: <String>['plate'],
     label: 'Dishes',
-    icon: NestIcons.dishwasher,
+    icon: NestIcons.questDishes,
   ),
-  (key: 'hoover', aliases: <String>[], label: 'Hoover', icon: NestIcons.hoover),
+  (
+    key: 'hoover',
+    aliases: <String>[],
+    label: 'Hoover',
+    icon: NestIcons.questHoover,
+  ),
   (key: 'book', aliases: <String>[], label: 'Book', icon: NestIcons.book),
   (
     key: 'bin',
     aliases: <String>['bins', 'shirt', 'bag'],
     label: 'Bins',
-    icon: NestIcons.bin,
+    icon: NestIcons.questBins,
   ),
   (key: 'paw', aliases: <String>['leaf'], label: 'Paw', icon: NestIcons.paw),
 ];
@@ -891,10 +905,26 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
             decreaseSemanticLabel: 'Decrease reward',
             increaseSemanticLabel: 'Increase reward',
             onDecrease: _coins > _coinFloor
-                ? () => setState(() => _coins -= 1)
+                ? () => setState(() {
+                    // A corrupt, out-of-vocabulary stored value (9999, 0) blocks
+                    // Save (BUG-P09-6), so the first tap in the direction of the
+                    // valid band jumps straight to its boundary instead of one
+                    // coin (BUG-P09-11). One tap per repair, not 99 or 9899.
+                    if (_coins > _maxCoins) {
+                      _coins = _maxCoins;
+                    } else {
+                      _coins -= 1;
+                    }
+                  })
                 : null,
             onIncrease: _coins < _coinCeiling
-                ? () => setState(() => _coins += 1)
+                ? () => setState(() {
+                    if (_coins < _minCoins) {
+                      _coins = _minCoins;
+                    } else {
+                      _coins += 1;
+                    }
+                  })
                 : null,
           ),
         ],
@@ -958,43 +988,55 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
 
   Widget _approvalCard() {
     final tokens = context.nest;
+    // The failing layout in iteration 2 was: row 40-high inside card padding
+    // `s4/s3` (renders 72, slot offset 4.5) with a shifted toggle. Batch 5
+    // changed the toggle's laid-out box to the 51x31 track, which made the
+    // adjustments `toggleTrackOffset` and the `s3` padding double-count and
+    // broke both the card's height (68) and the track rect (307/618.5).
     return NestCard(
-      // `.switchrow` is 40 high (16/22 title + 13/18 sub) inside a 16px
-      // `.card` — the design's 72. `NestToggle` grows its own box to the
-      // 44 tap minimum (the CSS extends only the hit area, via the
-      // absolutely positioned `.toggle::before`), which would inflate the
-      // card to 76. The 4px comes off the bottom padding, where the toggle's
-      // extra hit area already is: the visible card is the design's 72 and
-      // the toggle keeps its 44. See docs/screens/P09/SHARED_REQUEST.md.
-      padding: const EdgeInsets.fromLTRB(
-        NestSpacing.s4,
-        NestSpacing.s4,
-        NestSpacing.s4,
-        NestSpacing.s3,
-      ),
-      child: Row(
+      // Padding is done inside, so the Stack below covers the whole card
+      // (including the padding) and the toggle's hit overhang — the
+      // `_ToggleHitSlop` zone that overhangs the 51x31 track — is not
+      // blocked by the row's own 40-high bounds (BUG-P09-10). Before, taps
+      // 5 px above/below the track and 2 px right of it hit nothing.
+      padding: EdgeInsets.zero,
+      child: Stack(
+        clipBehavior: Clip.none,
         children: <Widget>[
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
+          Padding(
+            padding: const EdgeInsets.all(NestSpacing.s4),
+            child: Row(
               children: <Widget>[
-                Text('Needs my approval', style: questCardTitle(tokens)),
-                Text(
-                  'Coins land after your thumbs-up',
-                  style: NestType.caption(color: tokens.ink2),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text('Needs my approval', style: questCardTitle(tokens)),
+                      Text(
+                        'Coins land after your thumbs-up',
+                        style: NestType.caption(color: tokens.ink2),
+                      ),
+                    ],
+                  ),
                 ),
+                const SizedBox(width: NestSpacing.s3),
+                // The slot the toggle occupies visually; the widget itself is
+                // the [Positioned] sibling below, which is how its full 59x44
+                // tap area escapes the row's 40-high hit test (BUG-P09-10).
+                const SizedBox(width: 51),
               ],
             ),
           ),
-          const SizedBox(width: NestSpacing.s3),
-          // The design hangs the 51x31 track flush to the card's content edge
-          // and only its hit area into the padding; `NestToggle` centres the
-          // track inside its 59x44 box instead, so it is shifted back onto the
-          // measured design rect (x 303 -> 354, y 620.5 -> 651.5). See
-          // `QuestEditorMetrics.toggleTrackOffset`.
-          Transform.translate(
-            offset: QuestEditorMetrics.toggleTrackOffset,
+          // The track is the toggle's own laid-out box. The row is driven by
+          // the text block (16/22 + 13/18 = 40), so the track — centred in
+          // the row's 40 — sits 4.5 px from the row's top: card-local top
+          // 16(padding) + 4.5 = 20.5 (`QuestEditorMetrics.approvalTrackTopInCard`,
+          // the same half offset the CSS gives). Vertically and left/right it
+          // lands at 303 / 620.5 / 51 / 31, the design rect (`uta:hex`-verified).
+          Positioned(
+            top: QuestEditorMetrics.approvalTrackTopInCard,
+            right: NestSpacing.s4,
             child: NestToggle(
               value: _needsApproval,
               semanticLabel: 'Needs my approval',

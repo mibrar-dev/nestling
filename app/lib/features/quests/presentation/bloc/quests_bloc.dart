@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' show log;
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:nestling/features/quests/domain/entities/quest.dart';
@@ -13,6 +14,12 @@ class QuestsBloc extends Bloc<QuestsEvent, QuestsState> {
     on<QuestsUpdateRequested>(_onUpdateRequested);
     on<QuestsDeleteRequested>(_onDeleteRequested);
   }
+
+  /// Parent-safe save-failure copy (review finding 4): programmer errors
+  /// must never reach the screen verbatim. The technical error is logged
+  /// under `quests` instead.
+  static const String saveFailedMessage =
+      'Could not save the quest. Try again.';
 
   final QuestsRepository _repository;
 
@@ -56,7 +63,7 @@ class QuestsBloc extends Bloc<QuestsEvent, QuestsState> {
       emit(
         state.copyWith(
           editorStatus: QuestEditorStatus.failure,
-          editorError: error.toString(),
+          editorError: _editorError(error),
         ),
       );
     }
@@ -79,7 +86,7 @@ class QuestsBloc extends Bloc<QuestsEvent, QuestsState> {
       emit(
         state.copyWith(
           editorStatus: QuestEditorStatus.failure,
-          editorError: error.toString(),
+          editorError: _editorError(error),
         ),
       );
     }
@@ -102,10 +109,23 @@ class QuestsBloc extends Bloc<QuestsEvent, QuestsState> {
       emit(
         state.copyWith(
           editorStatus: QuestEditorStatus.failure,
-          editorError: error.toString(),
+          editorError: _editorError(error),
         ),
       );
     }
+  }
+
+  /// Maps a save failure to the toast copy. Operational failures (offline,
+  /// disk full) surface the repository message — the states suite pins
+  /// that — but an [ArgumentError] is a programmer error (today only the
+  /// coins range guard, unreachable from the clamped editor) and the
+  /// parent gets [saveFailedMessage] while the detail goes to the log.
+  String _editorError(Object error) {
+    if (error is ArgumentError) {
+      log('quest save rejected: $error', name: 'quests');
+      return QuestsBloc.saveFailedMessage;
+    }
+    return error.toString();
   }
 }
 

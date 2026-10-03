@@ -74,7 +74,8 @@ One test per legacy icon key (`sofa`→Bed, `plate`→Dishes, `bins`/`shirt`/`ba
 exactly one tile is selected — a radiogroup with two highlighted tiles is
 worse than none. Plus: the stored key survives a save without a tap; a tap on a
 *different* tile rewrites it; the six tiles' `label` and `icon` match the
-design's order and glyphs (`NestIcons.basket` for Dishes, per 2b's
+design's order and glyphs (`NestIcons.dishwasher` for Dishes today —
+`questDishes` once the finding-3 icon switch lands — per 2b's
 ORCHESTRATOR_NOTES 17:57 item 1 answer).
 
 Assignee: a dangling `assigneeChildId` (no FK column, so the id really can

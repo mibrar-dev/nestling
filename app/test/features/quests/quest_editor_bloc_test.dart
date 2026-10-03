@@ -174,10 +174,12 @@ void main() {
       expect: () => <Object?>[
         const QuestsState(editorStatus: QuestEditorStatus.saving),
         predicate<QuestsState>(
-          // The parent is told what the write refused, and why.
+          // Review finding 4: a programmer error never reaches the parent
+          // verbatim — the toast carries the parent-safe copy instead.
           (s) =>
               s.editorStatus == QuestEditorStatus.failure &&
-              (s.editorError ?? '').contains('Quest coins must be 1..100'),
+              (s.editorError ?? '') == QuestsBloc.saveFailedMessage &&
+              !(s.editorError ?? '').contains('Invalid argument'),
         ),
       ],
     );

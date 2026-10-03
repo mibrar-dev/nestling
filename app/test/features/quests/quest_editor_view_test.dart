@@ -606,25 +606,23 @@ void main() {
         NestSpacing.s4 +
             rectOf(find.text('Needs my approval')).height +
             rectOf(find.text('Coins land after your thumbs-up')).height +
-            NestSpacing.s3,
+            NestSpacing.s4,
       );
       expect(approval.left, NestSpacing.padSide);
       expect(approval.width, 350);
 
       final toggle = rectOf(find.byType(NestToggle));
-      // `.toggle` is a 51x31 track with the CSS `::before` hit area 4 px wider
-      // on each side, and the PNG puts the TRACK flush to the card's content
-      // edge (x 303 -> 354). `NestToggle` centres the track inside its 59x44
-      // box, so the view shifts the whole control by
-      // `QuestEditorMetrics.toggleTrackOffset`: the box overhangs to 358 and
-      // the painted track lands flush at 354.
-      expect(toggle.right, 358);
-      expect(toggle.height, NestDevice.tapParent);
+      // Batch5 laid-out box: the 51x31 track IS the widget box, landed flush
+      // to the content edge (right edge 354), vertically centred in the row's
+      // 40 via the overlaid Positioned offset ((40-31)/2).
+      expect(toggle.right, 354);
+      expect(toggle.width, 51);
+      expect(toggle.height, 31);
       expect(
-        toggle.right - 4,
-        354,
-        reason: 'painted track flush with the card content edge',
-      );
+        toggle.center.dy,
+        approval.top + 36,
+      ); // centre of the 40-row at 636
+      expect(toggle.top, closeTo(approval.top + 20.5, 0.51));
 
       final due = rectOf(find.byType(NestCard).at(2));
       expect(due.top - approval.bottom, 12); // [684]
@@ -970,13 +968,13 @@ void main() {
       expect(find.text('Coins must be 1–100'), findsOneWidget);
       expect(_savePill(tester).onPressed, isNull);
 
-      // A step that stays out of range keeps the block: nothing is written
-      // until the parent walks the value back in.
+      // One "repair" step lands on the band boundary: the caption clears and
+      // Save comes back (BUG-P09-11).
       await tester.tap(find.byKey(const ValueKey<String>('decrease')));
       await tester.pump();
-      expect(find.text('9998'), findsOneWidget);
-      expect(find.text('Coins must be 1–100'), findsOneWidget);
-      expect(_savePill(tester).onPressed, isNull);
+      expect(find.text('100'), findsOneWidget);
+      expect(find.text('Coins must be 1–100'), findsNothing);
+      expect(_savePill(tester).onPressed, isNotNull);
 
       await disposeApp(tester);
     });

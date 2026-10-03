@@ -44,10 +44,11 @@
 //                     while painting the avatar
 //                     → `_initial` takes the first grapheme (`characters`)
 //
-// Iteration-3 proofs (BUG-P09-9..12), `skip: true` until their fix lands.
-// BUG-P09-9 and BUG-P09-12 are independently tracked by 4_review.md §2/§3 and
-// ORCHESTRATOR_NOTES 20:09; the proofs here pin the exact rects/glyphs so the
-// loop can unskip them with the fix.
+// Iteration-3 proofs (BUG-P09-9..12) are UNSKIPPED as of iteration 4 — the
+// fixes landed in `quest_editor_view.dart` (Stack-overlaid toggle, uniform
+// padding, boundary-jump stepper, `quest*` icons) and all proofs now run on
+// every `flutter test`. BUG-P09-9 and BUG-P09-12 were independently tracked
+// by 4_review.md §2/§3 and ORCHESTRATOR_NOTES 20:09.
 //
 //   BUG-P09-9  major  batch 5's `NestToggle` (track is now the layout box)
 //                     left P09's two compensations stale: the approval card
@@ -223,7 +224,7 @@ void main() {
 
   // -- BUG-P09-4 -----------------------------------------------------------
   group('BUG-P09-4 — out-of-range stored coins cannot be restored', () {
-    testWidgets('a 9999-coin quest drops to 9998 with no way back', (
+    testWidgets('a 9999-coin quest steps back to the band boundary', (
       tester,
     ) async {
       final db = await setUpTestScope();
@@ -243,14 +244,14 @@ void main() {
       await pumpAppRoute(tester, '${QuestsRoutePaths.editor}?id=q-9999');
       expect(find.text('9999'), findsOneWidget);
 
+      // BUG-P09-11 became a fix in iteration 4: the first `−` on an
+      // out-of-vocabulary value jumps to the valid band's edge. The in-range
+      // stepper behaviour (one coin at a time) is covered separately.
       await tester.tap(find.byKey(const ValueKey<String>('decrease')));
       await tester.pump();
-      expect(find.text('9998'), findsOneWidget);
+      expect(find.text('100'), findsOneWidget);
 
-      // The stepper clamps only its buttons: 9998 is not < 100, so `+` is
-      // dead and the stored 9999 can never be restored. The editor has no
-      // representation for a coin value outside its 1..100 design range —
-      // it neither clamps stored data nor offers a way back.
+      // Stepper then behaves like a normal 1..100 stepper inside the band.
       final stepper = tester.widget<NestStepper>(find.byType(NestStepper));
       expect(stepper.onIncrease, isNotNull);
       await disposeApp(tester);
@@ -455,7 +456,7 @@ void main() {
       expect(approval.height, 72);
       expect(tester.getRect(find.byType(NestCard).at(2)).top, 684);
       await disposeApp(tester);
-    }, skip: true);
+    });
 
     testWidgets('the toggle track is the design rect 303/620.5/51/31', (
       tester,
@@ -471,7 +472,7 @@ void main() {
       expect(track.width, 51);
       expect(track.height, 31);
       await disposeApp(tester);
-    }, skip: true);
+    });
   });
 
   group('BUG-P09-10 — the 59x44 hit slop is clipped by the approval Row', () {
@@ -490,15 +491,15 @@ void main() {
 
     testWidgets('5 px above the track flips the toggle', (tester) async {
       await tapAndExpectFlip(tester, const Offset(328.5, 615.5));
-    }, skip: true);
+    });
 
     testWidgets('5 px below the track flips the toggle', (tester) async {
       await tapAndExpectFlip(tester, const Offset(328.5, 656.5));
-    }, skip: true);
+    });
 
     testWidgets('2 px right of the track flips the toggle', (tester) async {
       await tapAndExpectFlip(tester, const Offset(356, 635.5));
-    }, skip: true);
+    });
   });
 
   group('BUG-P09-11 — an out-of-range reward has no practical repair', () {
@@ -532,7 +533,7 @@ void main() {
       expect(find.text('Coins must be 1–100'), findsNothing);
       expect(_savePill(tester).onPressed, isNotNull);
       await disposeApp(tester);
-    }, skip: true);
+    });
   });
 
   group('BUG-P09-12 — four icon tiles still draw the legacy glyphs', () {
@@ -551,7 +552,7 @@ void main() {
       expect(_iconTile(tester, 'bin').icon, NestIcons.questBins);
       expect(_iconTile(tester, 'paw').icon, NestIcons.paw);
       await disposeApp(tester);
-    }, skip: true);
+    });
   });
 
   // -- attacks that hold ----------------------------------------------------

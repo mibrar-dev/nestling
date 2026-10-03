@@ -184,17 +184,19 @@ void main() {
       await disposeApp(tester);
     });
 
-    testWidgets('`−` walks a 9999-coin quest back one coin at a time', (
+    testWidgets('`−` on an out-of-range stored value jumps to the boundary', (
       tester,
     ) async {
       final db = await setUpTestScope();
       await _plantQuest(db, id: 'q-huge', coins: 9999);
       await pumpAppRoute(tester, '${QuestsRoutePaths.editor}?id=q-huge');
 
+      // One *repair* step, not 9899 individual decrements (BUG-P09-11): the
+      // first `−` lands on the valid band at `_maxCoins`.
       await tester.tap(_decrease());
       await tester.pump();
-      expect(find.text('9998'), findsOneWidget);
-      expect(find.text('= 9998p at payout'), findsOneWidget);
+      expect(find.text('100'), findsOneWidget);
+      expect(find.text('= 100p at payout'), findsOneWidget);
       await disposeApp(tester);
     });
 

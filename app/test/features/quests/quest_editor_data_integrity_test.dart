@@ -225,11 +225,11 @@ void main() {
         'Paw',
       ]);
       expect(tiles.map((tile) => tile.icon).toList(), <String>[
-        NestIcons.bed,
-        NestIcons.dishwasher,
-        NestIcons.hoover,
+        NestIcons.questBed,
+        NestIcons.questDishes,
+        NestIcons.questHoover,
         NestIcons.book,
-        NestIcons.bin,
+        NestIcons.questBins,
         NestIcons.paw,
       ]);
       expect(tiles.elementAt(2).selected, isTrue, reason: 'Hoover is default');

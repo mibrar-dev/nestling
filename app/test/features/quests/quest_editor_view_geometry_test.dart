@@ -324,32 +324,17 @@ void main() {
         find.text('Coins land after your thumbs-up'),
         const Rect.fromLTWH(36, 640, 198.9, 18),
       );
-      final toggleBox = tester.getRect(find.byType(NestToggle));
-      expect(toggleBox.width, 59, reason: 'toggle hit box is 51 + 8');
-      expect(toggleBox.height, NestDevice.tapParent);
-      // `.toggle::before` overhangs the 51 px track by 4 px on each side, so
-      // the hit box ends 4 px past the card's content edge (358) and
-      // `NestToggle`'s track — centred inside that box and shifted back by
-      // `toggleTrackOffset` — lands on the design's x 303 -> 354,
-      // y 620.5 -> 651.5.
-      expect(
-        toggleBox.right,
-        358,
-        reason: 'hit box 4 px past the content edge',
-      );
-      expect(toggleBox.top, 614, reason: 'hit box 2 px above the design track');
-      final track = Rect.fromLTWH(
-        toggleBox.left + 4,
-        toggleBox.top + 6.5,
-        51,
-        31,
-      );
+      // `NestToggle`'s laid-out box is the 51x31 track itself (shared
+      // batch5), so it paints flush to the content edge at the design rect.
+      final track = tester.getRect(find.byType(NestToggle));
       expect(track.left, closeTo(303, _tolerance), reason: 'toggle track left');
       expect(
         track.right,
         closeTo(354, _tolerance),
         reason: 'toggle track right',
       );
+      expect(track.width, 51, reason: 'track is 51 wide');
+      expect(track.height, 31, reason: 'track is 31 high');
       expect(track.top, closeTo(620.5, _tolerance), reason: 'toggle track top');
       expect(
         track.bottom,
