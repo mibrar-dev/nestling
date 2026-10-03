@@ -245,6 +245,8 @@ class NestSpeechBubble extends StatelessWidget {
               fontSize: 16,
               height: 24 / 16,
               fontWeight: FontWeight.w800,
+              // `.speech` sets no letter-spacing: browser default 0.
+              letterSpacing: 0,
               color: tokens.ink,
             ),
             textAlign: TextAlign.center,
