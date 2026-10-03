@@ -417,7 +417,10 @@ void _expectMinTapTargets(WidgetTester tester, String group) {
         'interactive NestChip',
       );
       atLeast(find.byType(NestSegmented<String>), 44, 44, 'NestSegmented');
-      atLeast(find.byType(NestToggle), 44, 44, 'NestToggle');
+      // Shared batch 5: the toggle lays out at the design's 51x31 track; the
+      // 59x44 tap minimum is an overlaid hit test, not layout (like NestChip
+      // above — proven by tap-outside tests in shared_batch5_test.dart).
+      atLeast(find.byType(NestToggle), 51, 31, 'NestToggle');
       atLeast(find.byType(NestTextField), 44, 44, 'NestTextField');
       atLeast(find.byType(NestDayPicker), 44, 44, 'NestDayPicker');
     case 'cards and lists':

@@ -115,8 +115,9 @@ void main() {
           );
 
           // Fixed shapes survive the sweep.
+          // Shared batch 5: 51×31 track (44 hit area via hit slop, not layout).
           final toggle = tester.getRect(find.byType(NestToggle).first);
-          expect(toggle.height, NestDevice.tapParent);
+          expect(toggle.size, const Size(51, 31));
           final edit = tester.getRect(
             find.bySemanticsLabel(demoEditLabels['r-screen']!),
           );
@@ -181,8 +182,9 @@ void main() {
           reason: 'the stepper keeps its 44 px targets at $width px / $scale',
         );
         expect(
-          tester.getRect(find.byType(NestToggle).last).height,
-          NestDevice.tapParent,
+          tester.getRect(find.byType(NestToggle).last).size,
+          const Size(51, 31),
+          reason: 'shared batch 5: 51x31 track, 44 hit via slop',
         );
         expect(
           tester.takeException(),

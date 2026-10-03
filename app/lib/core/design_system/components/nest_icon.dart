@@ -33,6 +33,10 @@ abstract final class NestIcons {
   static const String hoover = assets.NestlingIcons.hoover;
   static const String bin = assets.NestlingIcons.bin;
   static const String basket = assets.NestlingIcons.basket;
+  static const String questBed = assets.NestlingIcons.questBed;
+  static const String questDishes = assets.NestlingIcons.questDishes;
+  static const String questHoover = assets.NestlingIcons.questHoover;
+  static const String questBins = assets.NestlingIcons.questBins;
   static const String book = assets.NestlingIcons.book;
   static const String bookOpen = assets.NestlingIcons.bookOpen;
   static const String paw = assets.NestlingIcons.paw;
