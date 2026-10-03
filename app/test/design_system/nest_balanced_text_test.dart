@@ -16,8 +16,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 
 import '../test_scope.dart';
+import 'test_harness.dart';
 
 const String _title = 'Try Nestling free for 14 days';
+const String _p06Title = 'How does pocket money work in your house?';
 
 /// Loads the bundled faces so metrics match a device run (same set as the
 /// P04 geometry test).
@@ -189,6 +191,127 @@ void main() {
       expect(lines.first, 'Try Nestling');
 
       await disposeApp(tester);
+    });
+  });
+
+  group('P06 heading without maxLines (real Inter/Nunito)', () {
+    TextStyle h1Style() => NestType.h1();
+
+    int countAt(double width, {int? maxLines}) => NestBalancedText.lineCountFor(
+      text: _p06Title,
+      style: h1Style(),
+      maxWidth: width,
+      textDirection: TextDirection.ltr,
+      textScaler: TextScaler.noScaling,
+      maxLines: maxLines,
+    );
+
+    test('lineCountFor needs two lines at 350 with no cap', () {
+      expect(countAt(350), 2);
+    });
+
+    test('lineCountFor needs two lines at 390 with no cap', () {
+      expect(countAt(390), 2);
+    });
+
+    test('lineCountFor needs three lines at 320 with no cap', () {
+      // 320 px is narrower so the same heading wraps once more —
+      // the point is it wraps instead of collapsing to one ellipsis line.
+      expect(countAt(320), 3);
+    });
+
+    test('uncapped headings default to clip, not ellipsis', () {
+      expect(
+        NestBalancedText(_p06Title, style: h1Style()).overflow,
+        TextOverflow.clip,
+      );
+    });
+
+    Future<RenderParagraph> pumpUncapped(
+      WidgetTester tester,
+      double width,
+    ) async {
+      await pumpNest(
+        tester,
+        SizedBox(
+          width: width,
+          child: NestBalancedText(_p06Title, style: h1Style()),
+        ),
+      );
+      return tester.renderObject<RenderParagraph>(find.text(_p06Title));
+    }
+
+    testWidgets('at 350 lays out in two lines with no ellipsis', (
+      tester,
+    ) async {
+      final paragraph = await pumpUncapped(tester, 350);
+      expect(paragraph.didExceedMaxLines, isFalse);
+      expect(paragraph.text.toPlainText(), isNot(contains('…')));
+      expect(
+        tester.widget<Text>(find.text(_p06Title)).overflow,
+        TextOverflow.clip,
+      );
+      final width = tester.getSize(find.text(_p06Title)).width;
+      final painter = TextPainter(
+        text: TextSpan(text: _p06Title, style: paragraph.text.style),
+        textDirection: TextDirection.ltr,
+        textScaler: TextScaler.noScaling,
+      )..layout(maxWidth: width);
+      expect(painter.computeLineMetrics(), hasLength(2));
+    });
+
+    testWidgets('at 390 lays out in two lines with no ellipsis', (
+      tester,
+    ) async {
+      final paragraph = await pumpUncapped(tester, 390);
+      expect(paragraph.didExceedMaxLines, isFalse);
+      expect(paragraph.text.toPlainText(), isNot(contains('…')));
+      final width = tester.getSize(find.text(_p06Title)).width;
+      final painter = TextPainter(
+        text: TextSpan(text: _p06Title, style: paragraph.text.style),
+        textDirection: TextDirection.ltr,
+        textScaler: TextScaler.noScaling,
+      )..layout(maxWidth: width);
+      expect(painter.computeLineMetrics(), hasLength(2));
+    });
+
+    testWidgets('at 320 lays out in three lines with no ellipsis', (
+      tester,
+    ) async {
+      final paragraph = await pumpUncapped(tester, 320);
+      expect(paragraph.didExceedMaxLines, isFalse);
+      expect(paragraph.text.toPlainText(), isNot(contains('…')));
+      final width = tester.getSize(find.text(_p06Title)).width;
+      final painter = TextPainter(
+        text: TextSpan(text: _p06Title, style: paragraph.text.style),
+        textDirection: TextDirection.ltr,
+        textScaler: TextScaler.noScaling,
+      )..layout(maxWidth: width);
+      expect(painter.computeLineMetrics(), hasLength(3));
+    });
+
+    testWidgets('maxLines 1 still ellipsizes a long heading', (tester) async {
+      await pumpNest(
+        tester,
+        SizedBox(
+          width: 350,
+          child: NestBalancedText(
+            _p06Title,
+            style: h1Style(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      );
+      final paragraph = tester.renderObject<RenderParagraph>(
+        find.text(_p06Title),
+      );
+      expect(paragraph.didExceedMaxLines, isTrue);
+      expect(
+        tester.widget<Text>(find.text(_p06Title)).overflow,
+        TextOverflow.ellipsis,
+      );
+      expect(countAt(350, maxLines: 1), 1);
     });
   });
 }
