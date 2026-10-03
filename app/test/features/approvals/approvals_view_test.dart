@@ -11,8 +11,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get_it/get_it.dart';
+import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/approvals/domain/approvals_repository.dart';
 import 'package:nestling/features/approvals/domain/entities/approval.dart';
@@ -320,6 +323,176 @@ void main() {
       await disposeApp(tester);
     });
   });
+
+  // Owner brief, "ACCESSIBILITY ACTIONS": every interactive element must be
+  // operable by VoiceOver/TalkBack, and `performAction(tap)` must drive the
+  // real state — not just be present on the node.
+  group('P11 semantics tap actions', () {
+    testWidgets('back, both row buttons and the CTA all expose tap', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await pump(tester);
+
+      bool taps(Finder finder) => tester
+          .getSemantics(finder)
+          .getSemanticsData()
+          .hasAction(SemanticsAction.tap);
+
+      expect(taps(find.bySemanticsLabel('Back to Today')), isTrue);
+      final card = _cardFor('Maya · Empty the dishwasher');
+      expect(
+        taps(
+          find.descendant(of: card, matching: find.bySemanticsLabel('Not yet')),
+        ),
+        isTrue,
+      );
+      expect(
+        taps(
+          find.descendant(of: card, matching: find.bySemanticsLabel('Approve')),
+        ),
+        isTrue,
+      );
+      expect(taps(find.bySemanticsLabel('Approve all (3)')), isTrue);
+      semantics.dispose();
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('performAction(tap) on a card Approve drops that card', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await pump(tester);
+      expect(find.text('Maya · Empty the dishwasher'), findsOneWidget);
+
+      tester.semantics.performAction(
+        // `.first` = the top card's own button (each card repeats the label).
+        find.semantics.byLabel('Approve').first,
+        SemanticsAction.tap,
+      );
+      await tester.pump();
+      await _settle(tester);
+
+      // Real state, not just the action flag: the row leaves the seeded inbox
+      // and both counters follow the database.
+      expect(find.text('Maya · Empty the dishwasher'), findsNothing);
+      expect(find.text('Waiting for you (2)'), findsOneWidget);
+      expect(find.text('Approve all (2)'), findsOneWidget);
+      semantics.dispose();
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('performAction(tap) on "Not yet" drops the card', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await pump(tester);
+      final coinsBefore = await _questBonusTotal(tester);
+
+      tester.semantics.performAction(
+        find.semantics.byLabel('Not yet').first,
+        SemanticsAction.tap,
+      );
+      await tester.pump();
+      await _settle(tester);
+
+      expect(find.text('Maya · Empty the dishwasher'), findsNothing);
+      expect(find.text('Waiting for you (2)'), findsOneWidget);
+      // The kind note moves no money (the seeded `quest_bonus` total is the
+      // wallet before the inbox was drained, so it must not change).
+      expect(await _questBonusTotal(tester), coinsBefore);
+      semantics.dispose();
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('performAction(tap) on the back chevron goes to /today', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await pump(tester);
+      expect(pushedPath(tester), '/approvals');
+
+      tester.semantics.performAction(
+        find.semantics.byLabel('Back to Today'),
+        SemanticsAction.tap,
+      );
+      await tester.pump();
+      await _settle(tester);
+
+      expect(pushedPath(tester), '/today');
+      semantics.dispose();
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('Try again exposes tap and re-runs the load', (tester) async {
+      // The failure branch has no design, so it is driven with a stub whose
+      // first stream is an error and whose retry succeeds.
+      var attempts = 0;
+      final repository = _FlakyApprovalsRepository(
+        onWatch: () => attempts++ == 0
+            ? Stream<List<Approval>>.error(StateError('boom'))
+            : Stream<List<Approval>>.value(_StubApprovalsRepository._items),
+      );
+      final semantics = tester.ensureSemantics();
+      final bloc = ApprovalsBloc(repository: repository)
+        ..add(const ApprovalsLoadRequested());
+      tester.view.physicalSize = const Size(390 * 3, 844 * 3);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: NestTheme.light(),
+          home: BlocProvider<ApprovalsBloc>.value(
+            value: bloc,
+            child: const ApprovalsView(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await _settle(tester);
+
+      expect(find.text('All caught up'), findsNothing);
+      final retry = find.byKey(const ValueKey<String>('p11_try_again'));
+      expect(retry, findsOneWidget);
+      expect(
+        tester
+            .getSemantics(retry)
+            .getSemanticsData()
+            .hasAction(SemanticsAction.tap),
+        isTrue,
+      );
+
+      tester.semantics.performAction(
+        find.semantics.byLabel('Try again'),
+        SemanticsAction.tap,
+      );
+      await tester.pump();
+      await _settle(tester);
+
+      // The retry really re-subscribes: the inbox renders from the stream.
+      expect(attempts, 2);
+      expect(find.text('Maya · Empty the dishwasher'), findsOneWidget);
+      expect(find.text('All caught up'), findsNothing);
+      semantics.dispose();
+
+      await disposeApp(tester);
+    });
+  });
+}
+
+/// Total pence in every `quest_bonus` ledger row — the money side-effect of an
+/// approval, so "Not yet moves no coins" is checked against the database and
+/// not against the absence of a UI change.
+Future<int> _questBonusTotal(WidgetTester tester) async {
+  final db = GetIt.instance<AppDatabase>();
+  final rows = await (db.select(
+    db.ledgerEntries,
+  )..where((row) => row.type.equals('quest_bonus'))).get();
+  return rows.fold<int>(0, (sum, row) => sum + row.amountPence);
 }
 
 /// One pending row, one child — enough to keep the CTA on screen.
@@ -359,4 +532,29 @@ class _StubApprovalsRepository implements ApprovalsRepository {
 
   @override
   Future<void> approveAll() => approveAllGate.future;
+}
+
+/// Fails the first `watchItems()` (the bloc's `failure` branch) and serves
+/// real rows on the retry, so "Try again" can be proven end to end without a
+/// second database.
+class _FlakyApprovalsRepository implements ApprovalsRepository {
+  _FlakyApprovalsRepository({required this.onWatch});
+
+  /// Called on every `watchItems()` — used to count subscriptions.
+  final Stream<List<Approval>> Function() onWatch;
+
+  @override
+  Future<List<Approval>> getItems() async => _StubApprovalsRepository._items;
+
+  @override
+  Stream<List<Approval>> watchItems() => onWatch();
+
+  @override
+  Future<void> approve(int completionId) async {}
+
+  @override
+  Future<void> markNotYet(int completionId) async {}
+
+  @override
+  Future<void> approveAll() async {}
 }

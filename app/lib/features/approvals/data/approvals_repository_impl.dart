@@ -111,9 +111,19 @@ class ApprovalsRepositoryImpl implements ApprovalsRepository {
 
   @override
   Future<void> approveAll() async {
-    final pending = await watchItems().first;
-    for (final approval in pending) {
-      await approve(approval.completionId);
+    // One-shot select, NOT `watchItems().first`: a query stream never
+    // delivers its first event under `testWidgets` fake async, so driving
+    // "Approve all" through the bloc hung forever in widget tests (P11 2b
+    // finding). Same predicate as `watchPendingApprovals`.
+    final pending =
+        await (_db.select(_db.questCompletions)..where(
+              (c) =>
+                  c.familyId.equals(Seed.familyId) &
+                  c.status.equals('done_pending'),
+            ))
+            .get();
+    for (final row in pending) {
+      await approve(row.id);
     }
   }
 }

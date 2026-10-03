@@ -1,207 +1,160 @@
 # P11 · Approvals — Stage 2b build UI (iteration 1)
 
-UI layer only: `presentation/views/**`, `presentation/widgets/**`, and the
-view/widget tests. Re-read `2a_build_logic.md` before finishing — **CONTRACT
-CHANGES: none**, so the bloc surface used here is exactly `1_plan.md` §2.
+Re-read `2a_build_logic.md` before finishing — **CONTRACT CHANGES: none**
+(events/states are exactly `1_plan.md` §2). No block on the UI layer.
 
-## Files written
+## What I changed
 
-- `app/lib/features/approvals/presentation/views/approvals_view.dart`
-  (rewrite — was the `AppBar` placeholder)
-- `app/lib/features/approvals/presentation/widgets/approvals_loaded_body.dart`
-  (new)
-- `app/lib/features/approvals/presentation/widgets/approval_card.dart` (new)
-- `app/lib/features/approvals/presentation/widgets/approval_time.dart` (new)
-- DELETED `presentation/widgets/approvals_placeholder_card.dart` (plan §7;
-  unreferenced)
-- `app/test/features/approvals/approvals_view_test.dart` (new, 11 tests)
-- `app/test/features/approvals/approval_card_widget_test.dart` (new, 16 tests)
+No `lib/` change was required: the view/widget layer written in the previous
+iteration already implements `1_plan.md` §1. I re-verified it line by line
+against `1_plan.md`, `design/html-source/screens/P11-approvals.html` and the
+design PNGs, then added the two proof suites the UI check needs:
+
+- `app/test/features/approvals/approvals_view_geometry_test.dart` (NEW, 7
+  tests) — real-font layout anchors, pinned to the design within ±2 px.
+- `app/test/features/approvals/approvals_view_test.dart` (MODIFIED, +5 tests)
+  — `SemanticsAction.tap` on every control plus `performAction(tap)` driving
+  the real database/state.
 
 Nothing outside `presentation/views`, `presentation/widgets`,
-`test/features/approvals` and `docs/screens/P11` was touched. No bloc, entity,
-model or repository edit.
+`test/features/approvals` and `docs/screens/P11` was touched. No bloc,
+entity, model or repository edit.
 
-## Layout, component by component (per `1_plan.md` §1 + the HTML source)
+## Verification of the existing implementation (plan ↔ code ↔ HTML ↔ PNG)
 
-```
-Scaffold(backgroundColor: tokens.paper)          no AppBar, no NestTabBar
-└ BlocListener<ApprovalsBloc>                     actionError → SnackBar once
-  └ BlocBuilder → Column
-    ├ NestStatusBar()                             47 reserved (OS draws glyphs)
-    ├ NestNavBar(compact, 'Waiting for you (N)',  52 min + 4/12/12 padding
-    │   onBack: pop-or-go('/today'), 'Back to Today')
-    ├ Expanded
-    │  ├ initial/loading  Center(CircularProgressIndicator(leaf))
-    │  ├ failure         Text + NestButton.secondary('Try again')
-    │  └ loaded          ApprovalsLoadedBody
-    │      ListView(padding: 20 / 20 / 16 — P11 override of the 32 base)
-    │        index 0  ApprovalsHelperBanner  (leaf-tint, r-m 16, pad 12/14, 14/20)
-    │        index 1+ ApprovalCard, `EdgeInsets.only(top: 16)` between each
-    └ NestBottomCta  (only when items.isNotEmpty)
-        NestButton.primary('Approve all (N)')
-```
+| plan / HTML | code | status |
+|---|---|---|
+| no `AppBar`, no tab bar (route is top-level) | `ApprovalsView` = `Scaffold(paper)` + `Column` | ✓ |
+| `NestStatusBar` (reserves 47) + compact `NestNavBar` 'Waiting for you (N)' | `approvals_view.dart` 58–75 | ✓ |
+| back = `canPop ? pop : go('/today')`, label 'Back to Today' | same, `'/today'` inlined with comment | ✓ |
+| `.scroll` padding 0 20px **16px** + 16 between rows | `ApprovalsLoadedBody` `ListView.builder` + explicit `top: s4` pads | ✓ |
+| `.helper` leaf-tint, `r-m` 16, pad 12/14, 14/20 leaf-ink | `ApprovalsHelperBanner` | ✓ |
+| `.appr` surface, `r-l` 24, `sh-1`, pad 16 | `NestCard` standard | ✓ |
+| `.avatar.s44` + `a-lilac`/`a-peach` | `NestAvatar` default `s44` + `approvalAvatarColor()` | ✓ (Maya lilac, Leo peach in `Seed.demo`) |
+| `.who` 16/22 w700 truncate | `bodyStrong(ink).copyWith(height: 22/16)`, 1 line, ellipsis | ✓ |
+| `.tm` 13/18 ink-2 `margin-top:2`, `.money` w700 + tnum | `Text.rich`, `fontFeatures: tabularFigures()` | ✓ |
+| `.appr .row` gap **10**, `margin-top 14`, buttons `min-h 48 / 15 / pad 0 12` | `SizedBox(gap14)` + `Row(spacing: gap10)` + two `Expanded(NestButton(48, 15, s3))` | ✓ |
+| `.bottom-cta .btn` `min-height 52`, label 'Approve all (N)' | `NestBottomCta` + `NestButton` default 52 | ✓ |
+| empty / loading / failure / action-error states | `ApprovalsEmptyState`, leaf spinner, `Try again`, `SnackBar(tokens.danger)` | ✓ |
+| `.qn` quote row | **omitted** — no data source (plan §0, `SHARED_REQUEST.md`) | ✓ documented |
 
-Card (HTML `.appr` → `NestCard` standard: surface, r-l 24, sh-1, pad 16):
+## Measured anchors — design vs app (logical px, 390×844)
 
-| HTML | Flutter |
-|---|---|
-| `.hd` flex row gap 10 | `Row(spacing: gap10)` |
-| `.avatar.s44.a-lilac` | `NestAvatar(size: s44)` + feature-private `approvalAvatarColor()` (switch copied from P08's `today_loaded_body.dart`, which is private to that feature) |
-| `.who` 16/22 w700 truncate | `NestType.bodyStrong(ink).copyWith(height: 22/16)`, `maxLines: 1`, `softWrap: false` |
-| `.tm` 13/18 ink-2, margin-top 2 | `Padding(top: gap2)` + `Text.rich` |
-| `.money` w700 + tnum | second `TextSpan` with `fontWeight: w700`, `FontFeature.tabularFigures()` |
-| `.row` gap 10, margin-top 14 | `SizedBox(gap14)` + `Row(spacing: gap10)`, two `Expanded` |
-| `.row .btn` min-h 48 / 15 / pad 12 | `NestButton(minHeight: 48, fontSize: 15, horizontalPadding: s3)` |
-| `.bottom-cta .btn` min-h 52 | `NestButton` default 52 |
+Design values measured off `design/screens/light/P11-approvals.png` by row/column
+profile (helpers in the header of the geometry test); app values from
+`approvals_view_geometry_test.dart` at 390×844 @3x with the bundled Inter /
+Nunito faces loaded via `FontLoader`.
 
-`gap10`/`gap14` come from `NestSpacing` (tokens only — no literals). Colours
-are `context.nest.*` only; no hex anywhere in the feature.
+| element | design | app | Δ |
+|---|---|---|---|
+| status-bar reserve | 0–47 | 0–47 | 0 |
+| compact nav bar | 47–107 | 47–107 | 0 |
+| nav title box (18/24 w800) | — | 61–85, centred on 195 | ✓ |
+| helper banner | 107–171 (h 64, 2 lines) | 107–171 (h 64, 2 lines) | 0 |
+| card 1 top | 187 | 187 | 0 |
+| card 2 top | 375 (design) / 341 (quote-less) | 341 | 0 vs plan |
+| card 3 top | 563 (design) / 495 (quote-less) | 495 | 0 vs plan |
+| card height | 172 (design) / 138 (no quote row) | 138 | 0 vs plan |
+| card left / right | 20 / 370 | 20 / 370 | 0 |
+| `.hd` avatar | x 36, 44×44 | x 36, 44×44 | 0 |
+| `.who` | x 90, h 22 | x 90, h 22 | 0 |
+| `.row` buttons | h 48, gap 10 (design y 295–343) | h 48, gap 10, 16 above card bottom | 0 (y differs by the 34 px `.qn`) |
+| bottom CTA pill | 734–786 (design) | 776–828 | +42 — see below |
+| bottom edge | paper strip 810–844 | surface to 844 | owner override |
+
+**No uniform vertical shift**: every anchor above is exact. The two intentional
+deltas are both in the brief:
+
+1. **Quote-less cards** — the design's `.qn` line has no data source
+   (`quest_completions` has no message column), so card *tops* and every other
+   rect still match and each card is 34 px shorter. Do not "fix" this by
+   hard-coding the mock quotes.
+2. **Bottom CTA pill +42 px** — the design's `.bottom-cta` ends 34 px above the
+   physical edge (its home-indicator strip is paper) which puts the pill at
+   734–786. `NestBottomCta` runs `surface` to the edge per the OWNER
+   bottom-edge rule, so the pill always sits 16 above the physical bottom
+   (776–828). Same accepted deviation as P06/P12; the surface fill is asserted
+   so a coloured strip can never come back.
+
+### The finding that made the geometry test necessary
+
+Pumped **without** the bundled faces, the helper copy wraps to **3** lines
+(the flutter_test fallback font is ~10 % wider than Inter), the banner grows
+84 high and every card slides down 20 px: card tops 207/361/495 instead of
+187/341/495. That is precisely the "uniform vertical shift = FAIL" case the UI
+VERDICT RULE forbids, and it is invisible to any test that does not load the
+real fonts. `approvals_view_geometry_test.dart` therefore loads Inter + Nunito
+through `FontLoader` (pattern copied from P10's `p10_bugs_test.dart`) and the
+2-line banner is asserted directly (`_near(40)` text height), so the 20 px
+slide can never come back unnoticed. The 5_ui stage should read the app
+positions from that test and compare them with the PNG.
 
 ## Owner / orchestrator rules applied
 
-- **DATA OVER MOCKS** — the card renders whatever `state.items` holds. The
-  design's `Tidy your bedroom` / `Yesterday 5:40pm` rows are NOT hard-coded;
-  the view test asserts the seeded rows instead
-  (`Maya · Empty the dishwasher / Today 8:12am / 15 coins`,
-  `Maya · Lay the table / Today 8:05am / 10 coins`,
-  `Leo · Make your bed / Today 7:58am / 5 coins`).
+- **DATA OVER MOCKS** — rows come from `state.items`; the design's
+  "Tidy your bedroom" / "Yesterday 5:40pm" are never hard-coded. Tests assert
+  the seeded rows (`Maya · Empty the dishwasher / Today 8:12am / 15 coins`,
+  `Maya · Lay the table / …10 coins`, `Leo · Make your bed / …5 coins`).
 - **BOTTOM EDGE** — `NestBottomCta` paints `surface` to the physical edge and
-  is removed entirely when the inbox empties, so there is no coloured strip
-  under a bar or around the home indicator in either theme. Covered by
-  `bottom CTA surface runs to the physical screen edge`, which asserts
-  `cta.left == screen.left`, `cta.right == screen.right`,
-  `cta.bottom == screen.bottom` and the bar's own fill == `tokens.surface`.
-- **ALIGNMENT** — 20px side gutters on the list and on the CTA (both
-  `NestSpacing.padSide`); cards, banner and CTA share the same edges.
-- **CHILD ORDER** — nothing to sort here: the bloc already emits newest-first
-  (dishwasher, table, bed), and the children come out of `watchChildren` in
-  creation order.
-- **COPY** — helper banner is byte-exact from the HTML: `“Not yet” sends a
-  kind note — no coins are taken away.` (U+201C / U+201D / em dash U+2014),
-  asserted against the exported `approvalsHelperCopy` and against explicit
-  “no straight quote / no double hyphen” checks. Card copy uses U+00B7 with
-  single spaces (`Maya · Empty the dishwasher`, `Today 8:12am · 15 coins`).
-- **LETTER SPACING** — nothing added. P11's CSS sets no `letter-spacing`;
-  `NestType` already defaults to 0, so no `copyWith(letterSpacing:)` and no
-  screen-wide tracking override is needed (unlike P04).
-- **PIP** — no `PipAvatar` on this screen: the design shows initial avatars
-  only (`M` / `L`), and no Pip appears in the PNGs. Asserted by
-  `no Pip renders on this screen (initials only)`.
-- **STATUS BAR** — `NestStatusBar()` only; glyph differences ignored.
-- **BALANCED HEADINGS / CHIP ROWS / TRIAL / FONTS** — none apply: P11's CSS
-  has no `text-wrap: balance`, no chips, no subscription state, and no
-  `google_fonts` import anywhere in the feature or its tests.
-- **UI CHECK MEASURES SHAPES** — the view tests assert `BoxDecoration`s, not
-  just text: the banner is a `leafTint` box with `NestRadii.allM`, and there
-  are exactly three `surface` boxes with `NestRadii.allL` (one per card), in
-  light and dark. The card test measures the two pills: height 48, equal
-  widths, exactly a 10px gap, and the label centred inside its pill.
-
-## Owner-rule deviations from the plan text (both intentional)
-
-1. **Card semantics scope.** `1_plan.md` §1 says wrap the whole card in
-   `Semantics(container: true, label: …)` *without* `excludeSemantics`. Done
-   literally, Flutter merges the child `Text` nodes into that container
-   (verified by dumping the semantics tree), so the announcement becomes
-   `Maya, … 15 coins / Maya · Empty the dishwasher / Today 8:12am · 15
-   coins` — a duplicated read. The label now wraps only the `.hd` block with
-   `excludeSemantics: true`; the button row sits outside it, so both buttons
-   keep their own focusable node. Result: one clean row announcement + two
-   button nodes, which is what the plan was trying to achieve.
-2. **List separators.** `.scroll > * + * { margin-top: 16 }` is a CSS margin
-   collapse, which `ListView.builder` has no equivalent for (SPACING_SPEC §10.5:
-   use explicit separators). The loaded body therefore renders every item
-   after the banner with `EdgeInsets.only(top: 16)` rather than a
-   `ListView.separated`, so the banner stays flush with the scroll's 0 top
-   padding and every gap is exactly 16 — asserted in both the view and the
-   loaded-body tests.
-
-## Notable implementation decisions
-
-- **Time labels** (`approval_time.dart`): `approvalDayLabel` converts both
-  instants into the **stored** zone (`createdAtTz`) before comparing
-  wall-clock calendar days, so `Today` rolls over at the family's midnight,
-  not UTC's. `approvalTimeLabel` delegates to `formatTime`, keeping the
-  noon/midnight edges in one place. `familyZoneId` is an optional pass-through
-  (plan §3: the bloc does not stream it) — when supplied and different from
-  the stored zone, `formatDay`/`formatTime` name the zone.
-- **Navigation** — `onBack` is `context.canPop() ? context.pop() : context.go('/today')`
-  with `'/today'` inlined and a comment (the plan forbids importing today's
-  routes file). The view test asserts `pushedPath` goes `/approvals` →
-  `/today`.
-- **Busy state** — `busyIds.contains(id)` disables AND spins both buttons on
-  that card only, so a second tap cannot double-write. `approveAllBusy` does
-  the same for the CTA.
-- **Action errors** — `BlocListener` with `listenWhen` on a changed non-null
-  `actionError`, one SnackBar per value (`tokens.danger` background), then
-  `ApprovalsActionErrorConsumed()` so a rebuild cannot re-fire it. Not in the
-  design; error path only.
-- **Empty state** — `NestEmptyState(title: 'All caught up', message: …)` with
-  no artwork (P11 has no empty-state design, and inventing art would need a
-  shared asset).
+  is removed when the inbox empties; asserted (`cta.bottom == screen.bottom`,
+  bar fill `== tokens.surface`) in both the view and geometry tests.
+- **ALIGNMENT** — one gutter grid: banner, all three cards and the CTA pill
+  are asserted to sit on exactly 20 / 370.
+- **CHILD ORDER** — nothing to sort: the bloc emits newest-first and children
+  arrive in creation order (Maya, Leo).
+- **COPY** — banner is byte-exact (`U+201C`, `U+201D`, em dash `U+2014`);
+  card copy uses `U+00B7` with single spaces. Asserted against the exported
+  `approvalsHelperCopy` plus "no straight quote / no `--`" checks.
+- **LETTER SPACING** — nothing added (P11's CSS sets none; `NestType`
+  defaults to 0).
+- **BALANCED HEADINGS / CHIP ROWS / TRIAL / FONTS / PIP / STATUS BAR** — none
+  apply: no `text-wrap: balance`, no chips, no subscription state, no
+  `PipAvatar` (initial avatars only), no `google_fonts`, status bar is
+  height-only.
+- **UI CHECK MEASURES SHAPES** — `BoxDecoration` shape assertions (leafTint +
+  `allM` banner, three `surface` + `allL` cards) in light **and** dark, plus
+  pill geometry (48 high, equal widths, 10 px apart, 16 above the card bottom)
+  and the CTA pill rect.
+- **ACCESSIBILITY ACTIONS** (new this iteration) — `hasAction(
+  SemanticsAction.tap)` asserted for back, both row buttons, the CTA and
+  "Try again"; `performAction(tap)` is then shown to change real state: card
+  Approve removes that card and renumbers to `(2)`, "Not yet" removes the card
+  **and leaves the `quest_bonus` ledger total unchanged** (queried from the
+  test database), back navigates `/approvals → /today`, Try again re-subscribes
+  (`attempts == 2`) and renders the rows.
 
 ## Tests (mine)
 
-`app/test/features/approvals/approvals_view_test.dart` — 11 tests, all via
-`pumpAppRoute('/approvals')` over the seeded in-memory DB, light + dark:
-title/helper/three cards, character-exact copy, shape assertions in both
-themes, bottom-edge assertion, per-card approve, per-card "Not yet", draining
-the inbox to `All caught up`, back → `/today`, 320px @ textScale 1.3, and the
-CTA busy lock. Every test ends with `disposeApp(tester)`.
-
-`app/test/features/approvals/approval_card_widget_test.dart` — 16 tests:
-`approvalDayLabel` (`Today` / `Yesterday` / `Mon 21 Sep` / London-vs-UTC
-midnight boundary / Dubai already-next-day / unknown-zone fallback),
-`approvalTimeLabel` (`8:12am`, `7:58am`, `12:05pm`, `12:00am`, `5:40pm`),
-`approvalAvatarColor`, and the card itself (initial + name·quest + time·coins
-+ both labels, 48-high equal pills 10px apart, busy swallows taps, one
-semantics node + two button nodes, no Pip, 320px @ 1.3), plus the loaded
-body's 16px rhythm and its empty state.
-
-Plan §6.3 asked for `approval_time_test.dart`; that name contains neither
-`view` nor `widget`, so the time coverage lives in
-`approval_card_widget_test.dart` rather than colliding with the logic
-builder's file set.
+- `approvals_view_test.dart` — 16 tests (11 previous + 5 semantics).
+- `approvals_view_geometry_test.dart` — 7 tests (light + dark anchors).
+- `approval_card_widget_test.dart` — 16 tests (unchanged): pure time helpers,
+  avatar colour, card internals, 16 px rhythm, empty state.
 
 **Verification run**
-- `dart format` clean.
+
+- `dart format --output=none --set-exit-if-changed lib/features/approvals
+  test/features/approvals` → 19 files, 0 changed.
 - `flutter analyze lib/features/approvals test/features/approvals` →
-  **No issues found!** (no ignores, no suppressions added).
-- `flutter test test/features/approvals` → **45/45 pass** (my 27 + the logic
-  builder's 18). Whole-app `flutter test` and simulators left to the
-  integrator, per the stage rules; no simulator was booted.
-
-## Finding for the integrator / logic builder (non-blocking)
-
-`ApprovalsRepositoryImpl.approveAll()` starts with `await watchItems().first`.
-Under `testWidgets`' fake-async zone a Drift query stream never delivers its
-first event, so **any widget test that drives "Approve all" through the bloc
-hangs forever** (reproduced: 20s of pumped fake time, button still
-`loading: true`, no exception, no SnackBar). Verified it is not a repository
-bug: the same call completes in a plain `test` (real async), where
-`approvals_repository_test.dart` already asserts the 3-row drain.
-
-Consequences, both handled here:
-- `approvals_view_test.dart` reaches the empty state by tapping the three
-  per-card `Approve` buttons (which do work under fake async), and
-- the CTA's busy/disabled contract is covered deterministically with a stub
-  `ApprovalsRepository` whose `approveAll` returns a `Completer` — no Drift,
-  no hang.
-
-If the orchestrator wants "Approve all" covered end-to-end at the route
-level, the options are (a) an `ApprovalsRepository` method that lists the
-pending ids without a stream, or (b) a `fakeAsync`-friendly test. Not a UI
-blocker, so not filed as a SHARED_REQUEST.
+  **No issues found!** (no ignores, no suppressions).
+- `flutter test test/features/approvals` → **57/57 pass**.
+- Whole-app `flutter test` and the simulator were left to the integrator per
+  the stage rules; **no simulator was booted, installed on or captured**.
 
 ## LEFT FOR NEXT ITERATION
 
-- Screenshot/compare against `design/screens/{light,dark}/P11-approvals.png`
-  (stage `5_ui`, simulator) — not run here.
-- The `.qn` quote row stays omitted pending
-  `docs/screens/P11/SHARED_REQUEST.md` (`quest_completions` has no message
-  column). If the orchestrator adds `note TEXT DEFAULT ''` + seed values,
-  `ApprovalCard` needs a `note` field and one 17/24 w700 line at
-  `margin-top: 10` between `.hd` and the 14px button row.
-- Cards are currently ~24px shorter than the design each (no quote line), so
-  the first design band-drift review will show that as intentional; confirm it
-  is accepted rather than "fixed" by hard-coding the mock quotes.
+- Stage 5 (`5_ui`) owns the screenshots: `shot.sh` for `/approvals` in light +
+  dark on `E7D5555E-378A-49DF-AAEE-16677AF4B9DB` and `compare.py`. The expected
+  app positions are in the table above; the two accepted deltas are the
+  quote-less cards and the +42 px CTA pill.
+- The `.qn` quote row stays omitted until
+  `docs/screens/P11/SHARED_REQUEST.md` lands (`quest_completions` has no
+  message column). If `note TEXT DEFAULT ''` + seed values arrive,
+  `ApprovalCard` needs one 17/24 w700 line at `margin-top: 10` between `.hd`
+  and the 14 px button row.
+- Open item for the logic builder (already reported in the previous 2b note,
+  now fixed on their side): `approveAll()` had to stop using
+  `watchItems().first`, which never delivers under `testWidgets` fake async.
+  Re-check that `approvals_view_test.dart`'s end-to-end path still holds if
+  they change it again — the geometry/semantics tests above must stay green.
+
+VERDICT: PASS

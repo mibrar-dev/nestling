@@ -70,6 +70,23 @@ toggles `approveAllBusy`; consume clears), model round-trip + equality.
   Full-app `flutter test` and simulators left to the integrator per stage
   rules.
 
+## ITERATION 2 (2b finding fix)
+
+- `ApprovalsRepositoryImpl.approveAll()` no longer starts with
+  `await watchItems().first`: a Drift query stream never delivers its first
+  event under `testWidgets` fake async, so driving “Approve all” through the
+  bloc hung forever in widget tests. It now runs the same predicate
+  (`familyId + done_pending`) as a one-shot `select().get()` — a plain
+  future, which completes under fake async exactly like the per-card
+  approve path does.
+- Deliberately NOT a new repository method: the UI builder hand-writes
+  `_StubApprovalsRepository implements ApprovalsRepository`, so any
+  interface addition would break their view tests. Public names unchanged —
+  CONTRACT CHANGES still none.
+- Verified: `flutter analyze lib/features/approvals
+  test/features/approvals` → No issues found; `flutter test
+  test/features/approvals/` → 45/45 pass (18 logic + 27 UI).
+
 ## LEFT FOR NEXT ITERATION
 
 Nothing in the logic layer. UI layer (view, `approvals_loaded_body`,
