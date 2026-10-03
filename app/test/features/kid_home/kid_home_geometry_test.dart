@@ -37,9 +37,14 @@
 // Keep this file. Run it directly:
 //   flutter test test/features/kid_home/kid_home_geometry_test.dart
 
+import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get_it/get_it.dart';
+import 'package:nestling/app/app.dart';
+import 'package:nestling/app/controllers.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 
@@ -84,6 +89,65 @@ const double _pipBottomPad = 33.5 / 240 * 152;
 /// The bowl's painted outline height as a fraction of the nest box height
 /// (`nest.svg` 240-space: outer bowl 150 ± 52 plus its 3 px stroke = 110).
 const double _kNestOutlineHeightFraction = 110 / 240;
+
+/// RepaintBoundary the meadow colour probe reads painted pixels through
+/// (FIXES_10 #1). Same pattern as the P06 bottom-edge probe
+/// (`test/features/pocket_money/pocket_money_setup_view_test.dart`).
+const Key _pixelProbe = ValueKey<String>('k03_meadow_probe');
+
+/// `pumpAppRoute` for `/kid-home` inside [_pixelProbe], so the PAINTED screen
+/// surface can be sampled at absolute logical coordinates.
+Future<void> _pumpForPixels(
+  WidgetTester tester, {
+  required ThemeMode theme,
+}) async {
+  tester.view.physicalSize = const Size(390 * 3, 844 * 3);
+  tester.view.devicePixelRatio = 3;
+  addTearDown(tester.view.reset);
+  GetIt.instance<ThemeModeController>().selectMode(theme);
+  await tester.pumpWidget(
+    const RepaintBoundary(
+      key: _pixelProbe,
+      child: NestlingApp(initialRoute: '/kid-home'),
+    ),
+  );
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 200));
+}
+
+/// Painted RGBA bytes at logical (x, y) of the app surface.
+Future<List<int>> _pixelAt(WidgetTester tester, double x, double y) async {
+  final boundary = tester.renderObject<RenderRepaintBoundary>(
+    find.byKey(_pixelProbe),
+  );
+  late List<int> pixel;
+  await tester.runAsync(() async {
+    final image = await boundary.toImage();
+    final rgba = (await image.toByteData())!;
+    final offset = (y.round() * image.width + x.round()) * 4;
+    pixel = <int>[
+      rgba.getUint8(offset),
+      rgba.getUint8(offset + 1),
+      rgba.getUint8(offset + 2),
+      rgba.getUint8(offset + 3),
+    ];
+  });
+  return pixel;
+}
+
+/// The KID screen gradient's colour at absolute row [y].
+///
+/// `design/html-source/components.css` l.25 paints the KID screen as
+/// `linear-gradient(180deg, kid-sky-top 0%, kid-sky-bottom 62%, kid-horizon
+/// 62%, kid-meadow 100%)`, so every row below the 62 % horizon stop is the
+/// `kidHorizon → kidMeadow` grade at `t = (y / 844 - 0.62) / 0.38` — the run
+/// `_MeadowPainter.gradeSpan` reproduces in flow. Derived from the tokens (and
+/// `NestDevice.height`), never from a literal colour.
+Color _designMeadowAt(NestTokens tokens, double y) {
+  const horizonStop = 0.62;
+  final t = ((y / NestDevice.height) - horizonStop) / (1 - horizonStop);
+  return Color.lerp(tokens.kidHorizon, tokens.kidMeadow, t.clamp(0.0, 1.0))!;
+}
 
 void main() {
   setUpAll(loadBundledFonts);
@@ -138,5 +202,99 @@ void main() {
 
       await disposeApp(tester);
     });
+  });
+
+  // FIXES_10 #1 (ORCHESTRATOR_NOTES 10:52, dark meadow, "4th time"): the lower
+  // content area behind the progress bar and the quest cards must paint the
+  // design's `kid-horizon → kid-meadow` grade — NOT flat navy. Pinned here at
+  // the two absolute rows the orchestrator named, (10, 600) and (10, 700), in
+  // BOTH themes (light was already right; the pin keeps it there).
+  //
+  // The numbers are read from the design PNGs with PIL (÷3 for logical px):
+  //   dark  (10,600) rgb(35,56,81)   (10,700) rgb(33,63,72)
+  //   light (10,600) rgb(223,243,214) (10,700) rgb(210,238,198)
+  // which is exactly the CSS lerp of the two tokens at those rows (t ≈ 0.24 and
+  // t ≈ 0.55 of the 62 %→100 % run) — NOT a flat `--kid-meadow` #1E4A3A, which
+  // is what the bottom of the run looks like (row 844, below the dock). A
+  // literal #1E4A3A at row 600 would sit 17-31 levels off the design in
+  // red/green, so the assertion is the token grade at the design's row and the
+  // design's own RGB goes in the reason.
+  group('K03 — lower meadow colour at the design rows (FIXES_10 #1)', () {
+    const themes = <(String, ThemeMode)>[
+      ('light', ThemeMode.light),
+      ('dark', ThemeMode.dark),
+    ];
+    const designRows = <(double, String)>[
+      (600, 'light rgb(223,243,214) · dark rgb(35,56,81)'),
+      (700, 'light rgb(210,238,198) · dark rgb(33,63,72)'),
+    ];
+    for (final (themeName, theme) in themes) {
+      for (final (y, designRgb) in designRows) {
+        testWidgets(
+          '$themeName: (10, $y) is the graded meadow, not flat navy',
+          (tester) async {
+            await setUpTestScope();
+            await _pumpForPixels(tester, theme: theme);
+            final tokens = Theme.of(tester.element(find.byType(NestProgress)))
+                .extension<NestTokens>()!;
+            final sampled = await _pixelAt(tester, 10, y);
+            final expected = _designMeadowAt(tokens, y);
+            final got = 'rgb(${sampled[0]},${sampled[1]},${sampled[2]})';
+            final why = 'design $designRgb = the CSS grade at row $y';
+            expect(sampled[3], 255, reason: 'the meadow at (10, $y) is opaque');
+            // ±2/255: the design PNG's own row is within 1 level of the token
+            // grade (8-bit rounding of the CSS lerp), plus Skia rounding.
+            for (final (channel, value, byte) in <(String, double, int)>[
+              ('red', expected.r, sampled[0]),
+              ('green', expected.g, sampled[1]),
+              ('blue', expected.b, sampled[2]),
+            ]) {
+              expect(
+                byte,
+                closeTo(value * 255, 2),
+                reason:
+                    '$channel at (10, $y) must follow the '
+                    'kid-horizon→kid-meadow grade; got $got ($why)',
+              );
+            }
+            final horizonG = (tokens.kidHorizon.g * 255).round();
+            final horizonB = (tokens.kidHorizon.b * 255).round();
+            // The regression this pins: flat navy. Below the 62 % horizon stop
+            // green must RISE and blue must FALL away from `kidHorizon`, so a
+            // band that stopped grading (or graded over its own in-flow height)
+            // fails here even though the band's top tone is unchanged.
+            // The regression this pins: flat navy / a band that stopped grading
+            // (or graded over its own in-flow height instead of the design's
+            // 321 px run). Below the 62 % horizon stop the row must have moved
+            // OFF `kidHorizon` in the direction `kidMeadow` lies, by more than
+            // 2/255 — a tone check that holds in both themes, where the grade
+            // rises (dark: navy → teal) or falls (light: pale → green).
+            int moved(int from, int to, int at) {
+              final direction = to > from ? 1 : -1;
+              return direction * (at - from);
+            }
+
+            final meadowG = (tokens.kidMeadow.g * 255).round();
+            final meadowB = (tokens.kidMeadow.b * 255).round();
+            expect(
+              moved(horizonG, meadowG, sampled[1]),
+              greaterThan(2),
+              reason:
+                  'a flat horizon row keeps kid-horizon green ($horizonG) '
+                  'instead of grading toward kid-meadow green ($meadowG); '
+                  'got $got',
+            );
+            expect(
+              moved(horizonB, meadowB, sampled[2]),
+              greaterThan(2),
+              reason:
+                  'the grade must also move blue off kid-horizon blue '
+                  '($horizonB) toward kid-meadow blue ($meadowB); got $got',
+            );
+            await disposeApp(tester);
+          },
+        );
+      }
+    }
   });
 }

@@ -644,6 +644,55 @@ void main() {
     }
   });
 
+  // FIXES_10 #2 (ORCHESTRATOR_NOTES 10:52 #2): the dark pet glow is SHARED
+  // (`shared/pet_glow`, in this branch via 19a9d38) and K03 must not fork it —
+  // this pins that K03's pet stage really paints the shared `--pet-glow` radial
+  // fade (a soft 230 px circle that reaches transparent at 70 % of its ray) in
+  // dark, and paints none at all in light. The detailed geometry assertions
+  // live in `test/core/design_system/nest_pet_stage_test.dart`; here we only
+  // prove the screen uses the shared widget instead of its own disc.
+  group('K03 dark pet glow is the shared --pet-glow fade', () {
+    testWidgets('dark: one soft 230 px --pet-glow fade behind Pip', (
+      tester,
+    ) async {
+      await _pumpRoute(tester, theme: ThemeMode.dark);
+      final tokens = Theme.of(tester.element(find.byType(NestPetStage)))
+          .extension<NestTokens>()!;
+      final glow = find.byKey(PetStageGlow.glowKey);
+      expect(glow, findsOneWidget, reason: 'the shared glow, once');
+      final box = tester.getRect(glow);
+      expect(box.width, closeTo(PetStageGlow.size, 0.5));
+      expect(box.height, closeTo(PetStageGlow.size, 0.5));
+      final decoration =
+          tester.widget<DecoratedBox>(glow).decoration as BoxDecoration;
+      final radial = decoration.gradient! as RadialGradient;
+      // `radial-gradient(circle 110px at 50% 45%, white@10%, transparent 70%)`
+      // — a fade, so the far stop must be fully transparent: a solid disc (the
+      // bug shared/pet_glow fixed) would keep alpha at the outer stop.
+      expect(radial.stops, PetStageGlow.stops);
+      expect(radial.radius, closeTo(PetStageGlow.radius, 1e-9));
+      expect(radial.center, PetStageGlow.center);
+      expect(
+        radial.colors.last.a,
+        0,
+        reason: 'the fade ends transparent — not a hard lilac disc',
+      );
+      expect(tokens.petGlow, isNotNull, reason: 'dark mode defines --pet-glow');
+      expect(
+        tokens.petGlow,
+        const Color(0x1AFFFFFF),
+        reason: 'the token is white@10%',
+      );
+      await disposeApp(tester);
+    });
+
+    testWidgets('light: no glow (--pet-glow is none)', (tester) async {
+      await _pumpRoute(tester);
+      expect(find.byKey(PetStageGlow.glowKey), findsNothing);
+      await disposeApp(tester);
+    });
+  });
+
   group('K03 typography (NestType, zero tracking)', () {
     // The K03 CSS sets no `letter-spacing` anywhere, and main fd92d95 made
     // NestType default to 0, so every string on this screen must render in a
@@ -814,6 +863,13 @@ void main() {
         expect(sampled.b, closeTo(expected.b, 0.03));
         await disposeApp(tester);
       });
+
+      // The PAINTED dark-meadow colour at the two absolute rows the
+      // orchestrator named — (10, 600) and (10, 700) — is pinned in
+      // `kid_home_geometry_test.dart`: those are ABSOLUTE screen rows, so the
+      // pin is only meaningful at the design's real font metrics (on this
+      // file's default font the content sits a few px lower and the pin would
+      // read the wrong rows). The gradient itself is pinned here, above.
     }
   });
 

@@ -1,4 +1,4 @@
-# K03 Kid home — Stage 2a logic chunk (iteration 10)
+# K03 Kid home — Stage 2a logic chunk (iteration 11)
 
 Scope: non-UI layer of `kid_home` only. No edits to
 `presentation/views/**` or `presentation/widgets/**`. No state/event shape
@@ -7,24 +7,21 @@ changes this iteration — **no CONTRACT CHANGES**.
 ## Files changed
 
 None in `app/` this iteration — the logic layer is complete and green, and
-FIXES_9 contains nothing actionable in it (see below). This file is the
+FIXES_10 contains nothing actionable in it (see below). This file is the
 only write.
 
-## FIXES_9 items in my layer
+## FIXES_10 items in my layer
 
-FIXES_9 holds only the Stage-5 UI check, whose two deviations are both
-explicitly shared-component with a do-not-touch-locally instruction:
+FIXES_10 holds only two post-merge polish items, both visual and both
+outside the non-UI layer:
 
-- Deviation 1 (Pip seat + nest proportions) belongs to branch
-  `shared/pet_stage_seat`; the loop "must not adjust the pet block or the
-  `NestPetStage` call". Not my layer (core + views call).
-- Deviation 2 (bubble tail +10 px) is shared `NestSpeechBubble` cosmetic.
-  Not my layer.
+1. Dark meadow behind the lower content — views-side paint work, UI
+   builder's.
+2. Dark pet-glow confirmation — explicitly "nothing to change locally".
 
-The new ACCESSIBILITY ACTIONS rule is views-side Semantics work, noted in
-5_ui as "covered by the test stage". No skipped test references my layer:
-`grep skip:` over the feature's test files is clean, and every K03-BUG
-proof (1–15) runs un-skipped and green. Nothing to un-skip, nothing to fix.
+No skipped test references my layer (`grep skip:` clean in the bloc
+suite; every K03-BUG proof runs un-skipped). Nothing to un-skip, nothing
+to fix.
 
 ## Verification
 
@@ -32,11 +29,11 @@ proof (1–15) runs un-skipped and green. Nothing to un-skip, nothing to fix.
   `kid_home_bloc_test.dart` — 0 changed.
 - `flutter analyze` on the same scope — No issues found.
 - `flutter test test/features/kid_home/kid_home_bloc_test.dart` — 31/31.
-- Full-suite run and simulator are the integrator's.
+- No `google_fonts` in my files; no letter-spacing touches; period/copy
+  logic untouched. Full-suite run and simulator are the integrator's.
 
 ## LEFT FOR NEXT ITERATION
 
-- Nothing open in my layer. Awaiting shared `pet_stage_seat` /
-  SHARED_REQUEST #13/#16 outcomes; no logic change will be needed for them.
+- Nothing open in my layer.
 
 VERDICT: PASS
