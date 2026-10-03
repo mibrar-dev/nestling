@@ -25,3 +25,6 @@ Keep the owner's bottom-edge rule. Re-run the UI check numbers afterwards.
 - Remaining real deviation: every element below the nest is ~12 px LOW (hearts row, "Today's quests" title, progress bar, first card). Cause: the pet-stage block is taller than the design's. Target (390×844, logical px): hearts row top ≈ y 443, section title cap-height top ≈ y 490, progress bar ≈ y 520, first card top ≈ y 560, dock top ≈ y 720. Fix by sizing the NestPetStage box (pipSize / nest width / bottom gap) — not by negative margins.
 - Not defects: the v2 Pip art (intentional), "4 done today / 4 of 6" (database value).
 - Measure your own result with tools/screens/compare.py band table; bands 3–5 must drop clearly.
+
+## UPDATE (23:48) — shared batch 2 merged into your branch
+NestChip is 32 px (44 hit area), NestTextField has an error state (errorText → danger border + text below), NestPetStage has an explicit size mode, children order by created_at. Use them; remove local workarounds. google_fonts is gone: delete any GoogleFonts lines in your tests (analyze currently reports them).

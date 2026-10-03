@@ -57,7 +57,19 @@
     cards but the screen correctly renders every active quest (6 under
     the demo seed, repo alphabetical order per DATA OVER MOCKS) — not a
     defect, recorded so future compares don't flag the extra cards.
-11. Need (orchestrator CHILD ORDER ruling, iteration 5; proof added by
+11. Need (review finding 1, iteration 6): `NestPetStage` accepts only a
+    `pipSize` cap (`pipH = min(maxW*0.62*0.55, pipSize)`), so on a 390 px
+    screen the slot is fixed at a ~119 px Pip on a ~217 px nest with no
+    API path to the design's 260×236 slot (would need maxW ≈ 446).
+    Measured: nest 182 vs 198 wide, Pip band 25 px shorter than design
+    (positions met: Pip top y=197, rim ≈286-292). Request: a target-size
+    API — `nestWidth:` / `pipHeight:` / `stageWidth:` that the scene
+    honors instead of deriving from `maxW`. Until it lands, K03 keeps
+    the shared `NestPetStage(pip:, speech:, pipSize: 152)` composition
+    per the mandatory migration note (positions carry over; art swap is
+    accepted). Files: `app/lib/core/design_system/components/nest_pet_stage.dart`.
+    Blocks: no.
+12. Need (orchestrator CHILD ORDER ruling, iteration 5; proof added by
     Stage 6 iter-5 — K03-BUG-12): children must be listed in insertion order
     (Maya, then Leo), never alphabetically. `KidHomeRepository.watchProfiles`
     passes through shared `watchChildren`, which orders by nickname in

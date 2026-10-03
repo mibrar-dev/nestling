@@ -404,6 +404,8 @@ class _KidHomeBody extends StatelessWidget {
                           Text(
                             'Hi $nickname!',
                             // Screen-exact `.k3-name`: Nunito 22/26 w900 ink.
+                            // TODO(K03): move to NestType.kidName once the
+                            // shared style lands (SHARED_REQUEST #7).
                             style: GoogleFonts.nunito(
                               fontSize: 22,
                               height: 26 / 22,
@@ -416,6 +418,8 @@ class _KidHomeBody extends StatelessWidget {
                           Text(
                             '$done done today',
                             // Screen-exact `.k3-sub`: Nunito 15/20 w700 ink2.
+                            // TODO(K03): move to NestType.kidCaption once the
+                            // shared style lands (SHARED_REQUEST #7).
                             style: GoogleFonts.nunito(
                               fontSize: 15,
                               height: 20 / 15,
@@ -465,6 +469,9 @@ class _KidHomeBody extends StatelessWidget {
                                   child: Text(
                                     'Pip is happy today',
                                     // Screen-exact `.kcap`: Nunito 15/20 w700.
+                                    // TODO(K03): move to NestType.kidCaption
+                                    // once the shared style lands
+                                    // (SHARED_REQUEST #7).
                                     style: GoogleFonts.nunito(
                                       fontSize: 15,
                                       height: 20 / 15,
@@ -560,12 +567,16 @@ class _KidHomeBody extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // Dock bottom air is `s1`, not the HTML `gap10`: the 34 px
+                    // OS inset below already belongs to this surface (owner
+                    // rule), so 3+12+72+4+34 lands the dock top exactly on
+                    // the design y≈720 (UI dev 3).
                     Padding(
                       padding: const EdgeInsets.fromLTRB(
                         NestSpacing.padSide,
                         NestSpacing.s3,
                         NestSpacing.padSide,
-                        NestSpacing.gap10,
+                        NestSpacing.s1,
                       ),
                       child: Row(
                         spacing: NestSpacing.s3,

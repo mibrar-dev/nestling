@@ -10,6 +10,8 @@ import 'package:nestling/core/design_system/tokens/spacing.dart';
 /// Nunito 800 15/15. `NestChip` is parent-mode Inter 14, so K03 needs this
 /// feature-private chip. Used for the section "X of Y done" chip and the
 /// card meta chips ("Waiting for Mum", "Done").
+// TODO(K03): move the label to NestType.kidChipLabel once the shared style
+// lands (SHARED_REQUEST #7).
 class KidStatusChip extends StatelessWidget {
   const new({required this.label, super.key});
 
