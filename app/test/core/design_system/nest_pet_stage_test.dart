@@ -381,10 +381,17 @@ void main() {
         matching: find.byType(Container),
       );
       expect(body, findsOneWidget);
-      // `.speech`: 8 px padding + ≈22 px natural Nunito line + 8 px padding
-      // + 2 × 3 px border ≈ 44 — the design PNG measures 44, not 35 (see the
-      // explicit report: the 35 was the inner-white height misread as body).
-      expect(tester.getSize(body).height, closeTo(44, 2));
+      // `.speech`: 3 px border + 8 px padding + 22 px browser-normal Nunito
+      // line + 8 px padding + 3 px border = 44. The force-strut in
+      // `NestSpeechBubble` pins the laid-out line to 22 (the `Text` widget
+      // otherwise rounds it to 23, giving 45); `style.height` stays null so
+      // the K03 typography pin keeps passing. Tight tolerance on purpose:
+      // ±2 would pass both 44 and the old 45 (`shared/pet_bubble_gap`).
+      expect(tester.getSize(body).height, closeTo(44, 0.25));
+      // The pin, not a fixed line-height: the style still carries the
+      // browser `normal` (null), the strut does the constraining.
+      final label = tester.widget<Text>(find.text("Let's do some quests!"));
+      expect(label.style!.height, isNull);
     });
 
     /// The bubble body: the r18 3 px ink Container inside the Stack.
@@ -699,6 +706,86 @@ void main() {
       );
       expect(tester.takeException(), isNull);
       expect(glows(), findsNothing);
+    });
+  });
+
+  group('bubbleGap (shared/pet_bubble_gap)', () {
+    // K03's design slot: the bubble top at 125, the 44 px body, then
+    // `.k3-pet { margin: 14px auto 0 }`, then the 236-tall pet box.
+    Future<void> pumpBubbleTop(
+      WidgetTester tester, {
+      required double bubbleGap,
+    }) async {
+      await pumpNest(
+        tester,
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 125),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: NestPetStage(
+                riveEnabled: false,
+                nestWidth: _kNestWidth,
+                nestHeight: _kNestHeight,
+                fixedPipHeight: _kPipHeight,
+                bubbleGap: bubbleGap,
+                speech: "Let's do some quests!",
+                pip: const SizedBox(key: _pipProbeKey),
+              ),
+            ),
+          ],
+        ),
+      );
+      expect(tester.takeException(), isNull, reason: 'overflow at 390×844');
+    }
+
+    testWidgets('bubbleGap 14 puts the K03 pet box at 183…419', (tester) async {
+      await pumpBubbleTop(tester, bubbleGap: 14);
+      final bubble = tester.getRect(find.byType(NestSpeechBubble));
+      expect(bubble.top, closeTo(125, 0.5));
+      expect(bubble.height, closeTo(44, 0.25));
+      final slot = tester.getRect(find.byType(PipNestFallback));
+      expect(slot.top, closeTo(183, 0.5));
+      expect(slot.bottom, closeTo(419, 0.5));
+      expect(slot.height, closeTo(236, 0.5));
+    });
+
+    testWidgets('default gap is unchanged (s2, 8) for other callers', (
+      tester,
+    ) async {
+      // The constructor default, so gallery + legacy callers render exactly
+      // as before without passing anything.
+      expect(const NestPetStage(riveEnabled: false).bubbleGap, NestSpacing.s2);
+      await pumpBubbleTop(tester, bubbleGap: NestSpacing.s2);
+      final bubble = tester.getRect(find.byType(NestSpeechBubble));
+      final slot = tester.getRect(find.byType(PipNestFallback));
+      expect(slot.top - bubble.bottom, closeTo(NestSpacing.s2, 0.5));
+      // Same pump without the argument lays out identically.
+      await pumpNest(
+        tester,
+        const Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(height: 125),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: NestPetStage(
+                riveEnabled: false,
+                nestWidth: _kNestWidth,
+                nestHeight: _kNestHeight,
+                fixedPipHeight: _kPipHeight,
+                speech: "Let's do some quests!",
+                pip: SizedBox(key: _pipProbeKey),
+              ),
+            ),
+          ],
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      final defaultSlot = tester.getRect(find.byType(PipNestFallback));
+      expect(defaultSlot.top, closeTo(slot.top, 0.01));
+      expect(defaultSlot.bottom, closeTo(slot.bottom, 0.01));
     });
   });
 }
