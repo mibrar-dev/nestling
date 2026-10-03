@@ -1,0 +1,1408 @@
+// P04 Privacy & consent — second widget-contract pass (STAGE 3).
+//
+// Complements `privacy_consent_view_test.dart`:
+//   * every bloc state driven through the REAL app (router + DI), so the
+//     route-scoped bloc, the failure caption and the "Continue always works"
+//     rule are exercised as shipped;
+//   * every tap destination (back with and without history, Continue, the
+//     toggle, the notice dialog and both of its dismiss paths);
+//   * the crash-toggle lifecycle (ON -> OFF) asserted against the Drift row
+//     and against the `toggled` accessibility flag;
+//   * 320x568 short-screen scrolling, 320/430 gutter alignment, dialog
+//     overflow at text scale 1.3 and the back/notice control labels.
+//
+// Note on fonts: widget tests run without the bundled Inter/Nunito faces
+// (asset fonts do not load in the test harness), so the block test font
+// renders every glyph at full em width. The opt card therefore sits lower
+// than it does on a device and must be scrolled into reach before tapping.
+
+import 'dart:async';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:get_it/get_it.dart';
+import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/design_system/design_system.dart';
+import 'package:nestling/core/design_system/motion/pip_avatar.dart';
+import 'package:nestling/features/privacy_consent/data/privacy_consent_repository_impl.dart';
+import 'package:nestling/features/privacy_consent/domain/entities/consent_option.dart';
+import 'package:nestling/features/privacy_consent/domain/privacy_consent_repository.dart';
+import 'package:nestling/features/privacy_consent/presentation/bloc/privacy_consent_bloc.dart';
+import 'package:nestling/features/privacy_consent/presentation/bloc/privacy_consent_event.dart';
+import 'package:nestling/features/privacy_consent/presentation/bloc/privacy_consent_state.dart';
+import 'package:nestling/features/privacy_consent/presentation/views/privacy_consent_view.dart';
+
+import '../../test_scope.dart';
+
+const List<String> _titles = <String>[
+  'No ads or tracking — ever',
+  'Children only need a nickname',
+  'Data stored in the UK (London)',
+  'Delete everything anytime',
+];
+
+Finder get _toggle => find.byKey(const ValueKey('p04_crash_toggle'));
+Finder get _continue => find.byKey(const ValueKey('p04_continue'));
+Finder get _notice => find.byKey(const ValueKey('p04_privacy_notice'));
+Finder get _toggleLabel =>
+    find.bySemanticsLabel('Share anonymous crash reports');
+Finder get _failureCaption => find.text(
+  'Oops — your choice wasn’t saved. Continue anyway; it stays off.',
+);
+
+/// Any v1 `pip_stage_*.svg` illustration (banned from product screens).
+Finder get _v1PipFinder => find.byWidgetPredicate(
+  (widget) =>
+      widget is SvgPicture &&
+      widget.bytesLoader is SvgAssetLoader &&
+      (widget.bytesLoader as SvgAssetLoader).assetName.contains('pip_stage'),
+);
+
+/// Repository with a caller-controlled items stream, for the states the Drift
+/// repository cannot reach (pending load, empty list, stream error).
+class _FakePrivacyConsentRepository implements PrivacyConsentRepository {
+  _FakePrivacyConsentRepository(this._items);
+
+  final Stream<List<ConsentOption>> _items;
+
+  @override
+  Future<List<ConsentOption>> getItems() => _items.first;
+
+  @override
+  Stream<List<ConsentOption>> watchItems() => _items;
+
+  @override
+  Stream<bool> watchCrashConsent() => Stream<bool>.value(false);
+
+  @override
+  Future<void> setCrashConsent({required bool consent}) async {}
+}
+
+/// Records every consent write the view asks the repository to perform.
+class _RecordingPrivacyConsentRepository implements PrivacyConsentRepository {
+  final List<bool> writes = <bool>[];
+
+  @override
+  Future<List<ConsentOption>> getItems() => watchItems().first;
+
+  @override
+  Stream<List<ConsentOption>> watchItems() =>
+      Stream<List<ConsentOption>>.value(const <ConsentOption>[
+        ConsentOption(
+          id: ConsentOptionIds.crash,
+          title: 'c',
+          detail: 'd',
+          enabled: false,
+        ),
+      ]);
+
+  @override
+  Stream<bool> watchCrashConsent() => Stream<bool>.value(false);
+
+  @override
+  Future<void> setCrashConsent({required bool consent}) async {
+    writes.add(consent);
+  }
+}
+
+/// Repository with a scripted items stream and a scripted write path, for the
+/// optimistic-emit and write-failure contracts (P04-5, P04-6).
+class _ScriptedPrivacyConsentRepository implements PrivacyConsentRepository {
+  _ScriptedPrivacyConsentRepository({required this.items, this.onWrite});
+
+  final Stream<List<ConsentOption>> items;
+  final Future<void> Function({required bool consent})? onWrite;
+  final List<bool> writes = <bool>[];
+
+  @override
+  Future<List<ConsentOption>> getItems() => items.first;
+
+  @override
+  Stream<List<ConsentOption>> watchItems() => items;
+
+  @override
+  Stream<bool> watchCrashConsent() => Stream<bool>.value(false);
+
+  @override
+  Future<void> setCrashConsent({required bool consent}) {
+    writes.add(consent);
+    return onWrite?.call(consent: consent) ?? Future<void>.value();
+  }
+}
+
+/// Swaps the DI repository so the real app drives the route-scoped bloc from
+/// a caller-controlled stream.
+Future<void> _useRepository(PrivacyConsentRepository repository) async {
+  await GetIt.instance.unregister<PrivacyConsentRepository>();
+  GetIt.instance.registerSingleton<PrivacyConsentRepository>(repository);
+}
+
+Future<void> _pumpPrivacy(
+  WidgetTester tester, {
+  required ThemeMode theme,
+  required Size surface,
+  required double textScale,
+}) async {
+  tester.platformDispatcher.textScaleFactorTestValue = textScale;
+  addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+  await pumpAppRoute(tester, '/privacy', theme: theme);
+  tester.view.physicalSize = surface * 3;
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 200));
+}
+
+/// Reads a file from `design/html-source/`, walking up from the package root
+/// so the design-derived assertions work from any working directory.
+File _designFile(String name) {
+  var dir = Directory.current.absolute;
+  for (var depth = 0; depth < 5; depth++) {
+    final candidate = File('${dir.path}/design/html-source/$name');
+    if (candidate.existsSync()) return candidate;
+    final parent = dir.parent;
+    if (parent.path == dir.path) break;
+    dir = parent;
+  }
+  throw StateError(
+    'design/html-source/$name not found above ${Directory.current.path}',
+  );
+}
+
+/// Brings the crash toggle on-screen. See the note about test fonts above.
+Future<void> _scrollToToggle(WidgetTester tester) async {
+  await tester.ensureVisible(_toggle);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _tapToggle(WidgetTester tester) async {
+  await _scrollToToggle(tester);
+  await tester.tap(_toggle);
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 500));
+}
+
+/// `SemanticsFlags.isToggled` is a tristate: `none` and `false` both read as
+/// "not switched on" here.
+bool _isToggled(WidgetTester tester) =>
+    tester
+        .getSemantics(_toggleLabel)
+        .getSemanticsData()
+        .flagsCollection
+        .isToggled
+        .toBoolOrNull() ??
+    false;
+
+/// Reads the stored crash consent. Drift resolves queries on a background
+/// isolate, so inside a widget test the read has to go through
+/// `tester.runAsync`
+/// (a plain `await` would deadlock the fake-async zone).
+Future<bool> _consentInDb(
+  WidgetTester tester,
+  PrivacyConsentRepositoryImpl repository,
+) {
+  return tester
+      .runAsync(() => repository.watchCrashConsent().first)
+      .then((value) => value ?? false);
+}
+
+void main() {
+  group('P04 — states through the real app router', () {
+    testWidgets('an empty items list still renders the whole static screen', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      final controller = StreamController<List<ConsentOption>>();
+      addTearDown(controller.close);
+      await _useRepository(_FakePrivacyConsentRepository(controller.stream));
+      await pumpAppRoute(tester, '/privacy');
+      controller.add(const <ConsentOption>[]);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(currentPath(tester), '/privacy');
+      expect(find.text('Your family’s privacy'), findsOneWidget);
+      for (final title in _titles) {
+        expect(find.text(title), findsOneWidget);
+      }
+      expect(find.text('Continue'), findsOneWidget);
+      expect(_failureCaption, findsNothing);
+      // Loaded with zero rows: still no consent, but the opt-in is live.
+      expect(tester.widget<NestToggle>(_toggle).value, isFalse);
+      expect(tester.widget<NestToggle>(_toggle).onChanged, isNotNull);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('failure: caption shows and Continue still reaches P05', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _useRepository(
+        _FakePrivacyConsentRepository(
+          Stream<List<ConsentOption>>.error(Exception('offline')),
+        ),
+      );
+      await pumpAppRoute(tester, '/privacy');
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(_failureCaption, findsOneWidget);
+      expect(tester.widget<NestToggle>(_toggle).onChanged, isNull);
+      expect(find.text('Continue'), findsOneWidget);
+
+      await tester.tap(_continue);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(currentPath(tester), '/add-children');
+      await disposeApp(tester);
+    });
+
+    testWidgets('first run (no seed): the screen renders with consent off', (
+      tester,
+    ) async {
+      // Seed.fresh-equivalent scope — no family row, no settings row.
+      await setUpTestScope(seedDemo: false);
+      await pumpAppRoute(tester, '/privacy');
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(currentPath(tester), '/privacy');
+      expect(find.text('Your family’s privacy'), findsOneWidget);
+      for (final title in _titles) {
+        expect(find.text(title), findsOneWidget);
+      }
+      expect(find.text('Continue'), findsOneWidget);
+      expect(tester.widget<NestToggle>(_toggle).value, isFalse);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('still loading: content renders, toggle disabled, CTA works', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _useRepository(
+        _FakePrivacyConsentRepository(
+          const Stream<List<ConsentOption>>.empty(),
+        ),
+      );
+      await pumpAppRoute(tester, '/privacy');
+
+      expect(
+        tester.widget<NestToggle>(_toggle).onChanged,
+        isNull,
+        reason: 'no items yet — the opt-in must not be tappable',
+      );
+      expect(find.text('Your family’s privacy'), findsOneWidget);
+      expect(_failureCaption, findsNothing);
+
+      await tester.tap(_continue);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(currentPath(tester), '/add-children');
+      await disposeApp(tester);
+    });
+  });
+
+  group('P04 — tap destinations', () {
+    testWidgets('back with no history goes to /create-account', (tester) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/privacy');
+      expect(currentPath(tester), '/privacy');
+
+      await tester.tap(find.bySemanticsLabel('Back'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(currentPath(tester), '/create-account');
+      expect(find.text('Your family’s privacy'), findsNothing);
+      await disposeApp(tester);
+    });
+
+    testWidgets('the toggle stays on /privacy', (tester) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/privacy');
+
+      await _tapToggle(tester);
+
+      expect(currentPath(tester), '/privacy');
+      expect(find.text('Your family’s privacy'), findsOneWidget);
+      await disposeApp(tester);
+    });
+
+    testWidgets('the notice dialog returns to /privacy after Close', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/privacy');
+
+      await tester.tap(_notice);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Privacy Notice'), findsOneWidget);
+
+      await tester.tap(find.text('Close'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Privacy Notice'), findsNothing);
+      expect(currentPath(tester), '/privacy');
+      await disposeApp(tester);
+    });
+  });
+
+  group('P04 — crash toggle lifecycle', () {
+    testWidgets('ON then OFF round-trips through Drift and semantics', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/privacy');
+      final repository = PrivacyConsentRepositoryImpl(
+        db: GetIt.instance<AppDatabase>(),
+      );
+
+      expect(await _consentInDb(tester, repository), isFalse);
+      expect(_isToggled(tester), isFalse);
+
+      await _tapToggle(tester);
+
+      expect(tester.widget<NestToggle>(_toggle).value, isTrue);
+      expect(await _consentInDb(tester, repository), isTrue);
+      expect(
+        _isToggled(tester),
+        isTrue,
+        reason: 'the switch must announce its state to assistive tech',
+      );
+
+      await _tapToggle(tester);
+
+      expect(tester.widget<NestToggle>(_toggle).value, isFalse);
+      expect(await _consentInDb(tester, repository), isFalse);
+      expect(_isToggled(tester), isFalse);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the toggle is announced and enabled once loaded', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/privacy');
+
+      final data = tester.getSemantics(_toggleLabel).getSemanticsData();
+      expect(data.flagsCollection.isEnabled.toBoolOrNull(), isTrue);
+      expect(data.flagsCollection.isToggled.toBoolOrNull(), isFalse);
+      expect(data.label, 'Share anonymous crash reports');
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('dark: the toggle writes through and no Pip appears', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/privacy', theme: ThemeMode.dark);
+
+      expect(find.byType(PipAvatar), findsNothing);
+      expect(_v1PipFinder, findsNothing);
+
+      await _tapToggle(tester);
+
+      expect(tester.widget<NestToggle>(_toggle).value, isTrue);
+      expect(
+        await _consentInDb(
+          tester,
+          PrivacyConsentRepositoryImpl(db: GetIt.instance<AppDatabase>()),
+        ),
+        isTrue,
+      );
+      expect(find.text('Your family’s privacy'), findsOneWidget);
+      expect(find.text('Continue'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+  });
+
+  group('P04 — notice dialog stress', () {
+    testWidgets('320dp at text scale 1.3: no overflow, both dismiss paths', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpPrivacy(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(320, 844),
+        textScale: 1.3,
+      );
+
+      await tester.tap(_notice);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Privacy Notice'), findsOneWidget);
+      expect(find.text('Close'), findsOneWidget);
+      expect(
+        tester.getSize(find.byType(NestButton).last).height,
+        greaterThanOrEqualTo(NestDevice.tapParent),
+        reason: 'the dialog action keeps the parent tap target',
+      );
+      expect(
+        tester.getSize(find.byType(NestButton).last).width,
+        greaterThanOrEqualTo(NestDevice.tapParent),
+      );
+      expect(tester.takeException(), isNull);
+
+      await tester.tapAt(const Offset(8, 8));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Privacy Notice'), findsNothing);
+      expect(currentPath(tester), '/privacy');
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the dialog restates all four promises', (tester) async {
+      await setUpTestScope();
+      await _pumpPrivacy(
+        tester,
+        theme: ThemeMode.dark,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      await tester.tap(_notice);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // One centred line per promise (row copy + dialog line each).
+      for (final title in _titles) {
+        expect(find.text(title), findsNWidgets(2));
+      }
+
+      await disposeApp(tester);
+    });
+  });
+
+  group('P04 — short screen and alignment', () {
+    for (final width in const <int>[320, 390, 430]) {
+      testWidgets('$width.dp: the promise rows fill the list card edge', (
+        tester,
+      ) async {
+        await setUpTestScope();
+        await _pumpPrivacy(
+          tester,
+          theme: ThemeMode.light,
+          surface: Size(width.toDouble(), 844),
+          textScale: 1,
+        );
+
+        // `NestList`'s inner Column is `CrossAxisAlignment.center` and P04 now
+        // passes it a single Column child. If that child were narrower than the
+        // card, the rows would sit inset — a visible misalignment against the
+        // 20 px gutters (owner alignment rule).
+        final list = tester.getRect(find.byType(NestList));
+        for (final title in _titles) {
+          final row = find
+              .ancestor(of: find.text(title), matching: find.byType(Semantics))
+              .first;
+          final rect = tester.getRect(row);
+          expect(rect.left, list.left, reason: '$title left edge');
+          expect(rect.right, list.right, reason: '$title right edge');
+        }
+        expect(tester.takeException(), isNull);
+        await disposeApp(tester);
+      });
+    }
+
+    testWidgets('320x568 scrolls the opt card into reach and taps', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpPrivacy(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(320, 568),
+        textScale: 1.3,
+      );
+
+      expect(find.text('Your family’s privacy'), findsOneWidget);
+      expect(find.byType(NestBottomCta), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await _tapToggle(tester);
+
+      expect(find.text('Optional: help improve Nestling'), findsOneWidget);
+      expect(tester.widget<NestToggle>(_toggle).value, isTrue);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    for (final width in const <int>[320, 430]) {
+      testWidgets('$width.dp: content, cards and CTA share the 20px gutters', (
+        tester,
+      ) async {
+        await setUpTestScope();
+        await _pumpPrivacy(
+          tester,
+          theme: ThemeMode.light,
+          surface: Size(width.toDouble(), 844),
+          textScale: 1,
+        );
+
+        expect(
+          tester.getTopLeft(find.text('Your family’s privacy')).dx,
+          NestSpacing.padSide,
+        );
+
+        final list = find
+            .ancestor(
+              of: find.text('No ads or tracking — ever'),
+              matching: find.byType(NestList),
+            )
+            .first;
+        expect(tester.getTopLeft(list).dx, NestSpacing.padSide);
+        expect(tester.getTopRight(list).dx, width - NestSpacing.padSide);
+
+        final optCard = find
+            .ancestor(
+              of: find.text('Optional: help improve Nestling'),
+              matching: find.byType(NestCard),
+            )
+            .first;
+        expect(tester.getTopLeft(optCard).dx, NestSpacing.padSide);
+        expect(tester.getTopRight(optCard).dx, width - NestSpacing.padSide);
+
+        expect(tester.getTopLeft(_continue).dx, NestSpacing.padSide);
+        expect(tester.getTopRight(_continue).dx, width - NestSpacing.padSide);
+        expect(tester.takeException(), isNull);
+
+        await disposeApp(tester);
+      });
+    }
+  });
+
+  group('P04 — optimistic switch and failure caption (P04-5, P04-6)', () {
+    testWidgets('the switch answers on the next frame, before Drift replies', (
+      tester,
+    ) async {
+      final repository = _ScriptedPrivacyConsentRepository(
+        items: Stream<List<ConsentOption>>.value(const <ConsentOption>[
+          ConsentOption(
+            id: ConsentOptionIds.crash,
+            title: 'c',
+            detail: 'd',
+            enabled: false,
+          ),
+        ]),
+        // The write stays in flight for 400 fake ms, so the frame rendered
+        // right after the tap lands before the database has answered.
+        onWrite: ({required consent}) =>
+            Future<void>.delayed(const Duration(milliseconds: 400)),
+      );
+      final bloc = PrivacyConsentBloc(repository: repository);
+      addTearDown(bloc.close);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: NestTheme.light(),
+          home: BlocProvider<PrivacyConsentBloc>.value(
+            value: bloc,
+            child: const PrivacyConsentView(),
+          ),
+        ),
+      );
+      bloc.add(const PrivacyConsentLoadRequested());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _scrollToToggle(tester);
+      await tester.tap(_toggle);
+      await tester.pump();
+
+      expect(
+        tester.widget<NestToggle>(_toggle).value,
+        isTrue,
+        reason: 'the switch must not wait for the database round-trip',
+      );
+      expect(repository.writes, <bool>[true]);
+      expect(bloc.state.crashConsent, isTrue);
+      expect(tester.takeException(), isNull);
+
+      // Let the in-flight write finish so the bloc closes cleanly.
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    });
+
+    testWidgets('a failed OFF write says crash reports are still on', (
+      tester,
+    ) async {
+      final repository = _ScriptedPrivacyConsentRepository(
+        items: Stream<List<ConsentOption>>.value(const <ConsentOption>[
+          ConsentOption(
+            id: ConsentOptionIds.crash,
+            title: 'c',
+            detail: 'd',
+            enabled: true,
+          ),
+        ]),
+        onWrite: ({required consent}) =>
+            Future<void>.error(Exception('read only')),
+      );
+      final bloc = PrivacyConsentBloc(repository: repository);
+      addTearDown(bloc.close);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: NestTheme.light(),
+          home: BlocProvider<PrivacyConsentBloc>.value(
+            value: bloc,
+            child: const PrivacyConsentView(),
+          ),
+        ),
+      );
+      bloc.add(const PrivacyConsentLoadRequested());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _scrollToToggle(tester);
+      await tester.tap(_toggle);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(
+        tester.widget<NestToggle>(_toggle).value,
+        isTrue,
+        reason: 'the failed write reverts to the stored opt-in',
+      );
+      expect(find.textContaining('it stays off'), findsNothing);
+      expect(
+        find.textContaining('Crash reports are still on.'),
+        findsOneWidget,
+      );
+      expect(bloc.state.status, PrivacyConsentStatus.failure);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    });
+
+    testWidgets('a failed ON write says the choice stays off', (tester) async {
+      final repository = _ScriptedPrivacyConsentRepository(
+        items: Stream<List<ConsentOption>>.value(const <ConsentOption>[
+          ConsentOption(
+            id: ConsentOptionIds.crash,
+            title: 'c',
+            detail: 'd',
+            enabled: false,
+          ),
+        ]),
+        onWrite: ({required consent}) =>
+            Future<void>.error(Exception('disk full')),
+      );
+      final bloc = PrivacyConsentBloc(repository: repository);
+      addTearDown(bloc.close);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: NestTheme.light(),
+          home: BlocProvider<PrivacyConsentBloc>.value(
+            value: bloc,
+            child: const PrivacyConsentView(),
+          ),
+        ),
+      );
+      bloc.add(const PrivacyConsentLoadRequested());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _scrollToToggle(tester);
+      await tester.tap(_toggle);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(tester.widget<NestToggle>(_toggle).value, isFalse);
+      expect(
+        find.textContaining(
+          'Oops — your choice wasn’t saved. Continue anyway; it stays off.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('still on'), findsNothing);
+      expect(bloc.state.errorMessage, contains('disk full'));
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    });
+
+    testWidgets('the failure state keeps Continue and the screen usable', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _useRepository(
+        _FakePrivacyConsentRepository(
+          Stream<List<ConsentOption>>.error(Exception('offline')),
+        ),
+      );
+      await pumpAppRoute(tester, '/privacy');
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(_failureCaption, findsOneWidget);
+      expect(
+        tester.getSize(_continue).height,
+        greaterThanOrEqualTo(NestDevice.tapParent),
+      );
+      await tester.tap(_continue);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(currentPath(tester), '/add-children');
+
+      await disposeApp(tester);
+    });
+  });
+
+  group('P04 — promise row glyphs (orchestrator note item 1)', () {
+    // The orchestrator asked for "a widget test that all four row icons find
+    // their SvgPicture/Icon". All four rows render the shared line glyph in
+    // their tile ink — asset AND tint are asserted, so a wrong-asset or
+    // invisible-glyph regression cannot slip through.
+    testWidgets('all four rows render their own tinted glyph', (tester) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/privacy');
+
+      final expected = <String, ({String asset, Color ink})>{
+        'No ads or tracking — ever': (
+          asset: NestIcons.noAds,
+          ink: NestColors.light.leafInk,
+        ),
+        'Children only need a nickname': (
+          asset: NestIcons.person,
+          ink: NestColors.light.lilac,
+        ),
+        'Data stored in the UK (London)': (
+          asset: NestIcons.pinUk,
+          ink: NestColors.light.sky,
+        ),
+        'Delete everything anytime': (
+          asset: NestIcons.trash,
+          ink: NestColors.light.aPeach,
+        ),
+      };
+
+      for (final entry in expected.entries) {
+        final row = find
+            .ancestor(
+              of: find.text(entry.key),
+              matching: find.byType(Semantics),
+            )
+            .first;
+        final icon = find.descendant(of: row, matching: find.byType(NestIcon));
+        expect(icon, findsOneWidget, reason: entry.key);
+
+        final widget = tester.widget<NestIcon>(icon);
+        expect(widget.assetName, entry.value.asset, reason: entry.key);
+        expect(widget.size, 24, reason: entry.key);
+        expect(widget.color, entry.value.ink, reason: entry.key);
+
+        // The glyph is really painted, not an empty tile: one SVG per row.
+        final picture = find.descendant(
+          of: row,
+          matching: find.byType(SvgPicture),
+        );
+        expect(picture, findsOneWidget, reason: entry.key);
+        final svg = tester.widget<SvgPicture>(picture);
+        expect(
+          (svg.bytesLoader as SvgAssetLoader).assetName,
+          entry.value.asset,
+        );
+        expect(
+          svg.colorFilter,
+          isNotNull,
+          reason: '${entry.key}: the glyph must be tinted, never default black',
+        );
+        expect(svg.width, 24);
+        expect(svg.height, 24);
+      }
+
+      // Row 4 uses the shared trash glyph in peach ink (SHARED_REQUEST §1).
+      final deleteRow = find
+          .ancestor(
+            of: find.text('Delete everything anytime'),
+            matching: find.byType(Semantics),
+          )
+          .first;
+      final deleteTile = find
+          .descendant(of: deleteRow, matching: find.byType(Container))
+          .first;
+      final decoration =
+          tester.widget<Container>(deleteTile).decoration! as BoxDecoration;
+      expect(decoration.color, NestColors.light.peachTint);
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      testWidgets('${theme.name}: the four shipped glyphs are tinted', (
+        tester,
+      ) async {
+        await setUpTestScope();
+        await pumpAppRoute(tester, '/privacy', theme: theme);
+        final icons = find.descendant(
+          of: find.byType(NestList),
+          matching: find.byType(NestIcon),
+        );
+        expect(icons, findsNWidgets(4));
+
+        final palette = theme == ThemeMode.light
+            ? NestColors.light
+            : NestColors.dark;
+        final inks = <Color>[
+          palette.leafInk,
+          palette.lilac,
+          palette.sky,
+          palette.aPeach,
+        ];
+        for (final icon in icons.evaluate()) {
+          final widget = tester.widget<NestIcon>(
+            find.byElementPredicate((e) => e == icon),
+          );
+          expect(
+            inks,
+            contains(widget.color),
+            reason:
+                '${widget.assetName} must use its tile ink in ${theme.name}',
+          );
+        }
+        expect(tester.takeException(), isNull);
+        await disposeApp(tester);
+      });
+    }
+  });
+
+  group('P04 — separator overlay (P04-4 contract)', () {
+    const rows = <String>[
+      'No ads or tracking — ever',
+      'Children only need a nickname',
+      'Data stored in the UK (London)',
+      'Delete everything anytime',
+    ];
+
+    /// The row's `Semantics(container: true)` node — the row boundary the
+    /// separator is painted on.
+    Finder rowOf(int index) => find
+        .ancestor(of: find.text(rows[index]), matching: find.byType(Semantics))
+        .first;
+
+    /// The separator over row `index`'s top boundary, painted by shared
+    /// `NestList` as a 1 px colour-filled `Container` inside a `Positioned`.
+    /// Row 1 carries none, so `dividerOf(0)` finds nothing.
+    Finder dividerOf(int index) => find.descendant(
+      of: find.ancestor(of: rowOf(index), matching: find.byType(Stack)),
+      matching: find.byWidgetPredicate(
+        (widget) => widget is Container && widget.color != null,
+      ),
+    );
+
+    for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      testWidgets('${theme.name}: each row after the first paints one line', (
+        tester,
+      ) async {
+        await setUpTestScope();
+        await pumpAppRoute(tester, '/privacy', theme: theme);
+        final palette = theme == ThemeMode.light
+            ? NestColors.light
+            : NestColors.dark;
+
+        // Row 1 carries no separator; rows 2-4 carry exactly one each. A
+        // regression that stacked all three on one row would still satisfy a
+        // bare "3 dividers" count, so check the ownership per row.
+        expect(find.byType(NestList), findsOneWidget);
+        // Row 1 is the card's top edge: it paints no separator. Rows 2-4
+        // each own exactly one line.
+        expect(
+          dividerOf(0),
+          findsNothing,
+          reason: "the first row is the card's top edge",
+        );
+        for (var i = 1; i < rows.length; i++) {
+          expect(dividerOf(i), findsOneWidget, reason: 'row ${i + 1} boundary');
+        }
+
+        // Painted geometry: the line sits ON the row's top edge, inset 72 from
+        // the row's left edge, and runs to the row's right edge.
+        for (var i = 1; i < rows.length; i++) {
+          final row = rowOf(i);
+          final divider = dividerOf(i);
+          expect(
+            tester.getTopLeft(divider).dy,
+            tester.getTopLeft(row).dy,
+            reason: 'row ${i + 1}: the separator paints on the row boundary',
+          );
+          expect(
+            tester.getTopLeft(divider).dx - tester.getTopLeft(row).dx,
+            72,
+            reason: 'row ${i + 1}: 72px indent matches the design ::before',
+          );
+          expect(
+            tester.getSize(row).width -
+                (tester.getTopLeft(divider).dx - tester.getTopLeft(row).dx),
+            tester.getSize(divider).width,
+            reason: 'row ${i + 1}: the line runs to the row right edge',
+          );
+          expect(tester.getSize(divider).height, 1);
+
+          final line = tester.widget<Container>(divider);
+          expect(line.color, palette.line, reason: 'row ${i + 1} tint');
+        }
+        expect(tester.takeException(), isNull);
+        await disposeApp(tester);
+      });
+    }
+
+    testWidgets('the separators add no layout height (list == row sum)', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/privacy');
+
+      final list = find.byType(NestList);
+      var rowSum = 0.0;
+      for (var i = 0; i < rows.length; i++) {
+        rowSum += tester.getSize(rowOf(i)).height;
+      }
+      expect(
+        tester.getSize(list).height,
+        rowSum,
+        reason: 'design overlays the separators; they must not push the list',
+      );
+      // Absolute row height depends on the bundled Inter face; under the
+      // block test font each row wraps, so only the identity above is
+      // meaningful here. The device measurement (4 x 56 = 224) is the UI
+      // check's job.
+      expect(rowSum, greaterThanOrEqualTo(4 * 56));
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    testWidgets('wrapping rows keep the separator on the boundary at 320/1.3', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpPrivacy(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(320, 844),
+        textScale: 1.3,
+      );
+
+      // Test fonts wrap every title, so the rows grow past 56 — the overlay
+      // must follow the new row tops rather than a cached 56 px offset.
+      var grown = false;
+      for (var i = 0; i < rows.length; i++) {
+        final row = rowOf(i);
+        final height = tester.getSize(row).height;
+        if (height > 56) grown = true;
+        if (i == 0) continue;
+        final divider = dividerOf(i);
+        expect(
+          tester.getTopLeft(divider).dy,
+          tester.getTopLeft(row).dy,
+          reason: 'row ${i + 1} at 320/1.3',
+        );
+      }
+      expect(grown, isTrue, reason: 'the harness should wrap at 320 + 1.3');
+
+      final list = find.byType(NestList);
+      var rowSum = 0.0;
+      for (var i = 0; i < rows.length; i++) {
+        rowSum += tester.getSize(rowOf(i)).height;
+      }
+      expect(tester.getSize(list).height, rowSum);
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    testWidgets('the overlay leaks no semantics node into the rows', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/privacy');
+      final handle = tester.ensureSemantics();
+
+      const subs = <String>[
+        'No analytics profiles, no ad SDKs, ever',
+        'No photos, no email, no chat, no location',
+        'Kept on UK servers, nothing leaves',
+        'One tap and your family data is gone',
+      ];
+
+      for (var i = 0; i < rows.length; i++) {
+        final node = tester.getSemantics(rowOf(i));
+        final data = node.getSemanticsData();
+        // One merged node per row: title + subtitle, nothing else. The Stack
+        // and its Positioned divider must not split or duplicate the row.
+        expect(
+          data.label,
+          '${rows[i]}\n${subs[i]}',
+          reason: 'row ${i + 1}: Flutter joins child labels with a newline',
+        );
+        expect(data.flagsCollection.isButton, isFalse);
+        // Display-only rows: the overlay must not make them tappable/focusable.
+        expect(data.hasAction(SemanticsAction.tap), isFalse);
+        expect(data.hasAction(SemanticsAction.longPress), isFalse);
+        expect(data.hasAction(SemanticsAction.focus), isFalse);
+      }
+      // The handle must be released inside the body: tearDown callbacks run
+      // after the end-of-test semantics verification.
+      await disposeApp(tester);
+      handle.dispose();
+    });
+    testWidgets('the overlay geometry is the design CSS rule, not a guess', (
+      tester,
+    ) async {
+      // The separator took four iterations to land (P04-4). Read the design's
+      // own rule and compare with what the screen paints:
+      //   .list-row + .list-row::before { top: 0; left: 72px; right: 0;
+      //                                  height: 1px; background: var(--line); }
+      // The `+` sibling selector is why only the rows after the first carry a
+      // line — three separators for four rows.
+      final css = _designFile('components.css').readAsStringSync();
+      final rule = RegExp(r'\.list-row \+ \.list-row::before\s*\{([^}]*)\}')
+          .firstMatch(css);
+      expect(rule, isNotNull, reason: 'the design rule moved — review P04');
+      final body = rule!.group(1)!;
+
+      int px(String property) {
+        final match = RegExp('$property:\\s*(\\d+)px').firstMatch(body);
+        expect(match, isNotNull, reason: '$property is gone from the rule');
+        return int.parse(match!.group(1)!);
+      }
+
+      final indent = px('left');
+      final thickness = px('height');
+      expect(RegExp(r'top:\s*0').hasMatch(body), isTrue);
+      expect(RegExp(r'right:\s*0').hasMatch(body), isTrue);
+      expect(body, contains('var(--line)'));
+
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/privacy');
+
+      // Rows after the first only.
+      expect(
+        dividerOf(0),
+        findsNothing,
+        reason: "the first row is the card's top edge",
+      );
+      for (var i = 1; i < rows.length; i++) {
+        final positioned = tester.widget<Positioned>(
+          find
+              .ancestor(of: dividerOf(i), matching: find.byType(Positioned))
+              .first,
+        );
+        expect(positioned.top, 0, reason: 'design: top: 0');
+        expect(positioned.left!.round(), indent, reason: 'design: left');
+        expect(positioned.right, 0, reason: 'design: right: 0');
+        expect(
+          tester.getSize(dividerOf(i)).height,
+          thickness,
+          reason: 'design: height',
+        );
+        expect(
+          tester.widget<Container>(dividerOf(i)).color,
+          NestColors.light.line,
+          reason: 'design: background: var(--line)',
+        );
+      }
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+  });
+
+  group('P04 — promise row geometry (SPACING_SPEC §9.3/§9.4)', () {
+    testWidgets('four 40px tiles, tints in order, three overlay dividers', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/privacy');
+
+      final tints = <String, Color>{
+        'No ads or tracking — ever': NestColors.light.leafTint,
+        'Children only need a nickname': NestColors.light.lilacTint,
+        'Data stored in the UK (London)': NestColors.light.skyTint,
+        'Delete everything anytime': NestColors.light.peachTint,
+      };
+
+      final list = find.byType(NestList);
+      // The separators are zero-height overlays painted by shared NestList,
+      // not layout-height dividers (P04-4): exactly three 1 px lines.
+      expect(
+        find.descendant(
+          of: list,
+          matching: find.byWidgetPredicate(
+            (widget) => widget is Container && widget.color != null,
+          ),
+        ),
+        findsNWidgets(3),
+      );
+      for (var i = 1; i < 4; i++) {
+        final row = find
+            .ancestor(
+              of: find.text(tints.keys.elementAt(i)),
+              matching: find.byType(Semantics),
+            )
+            .first;
+        final line = find.descendant(
+          of: find.ancestor(of: row, matching: find.byType(Stack)),
+          matching: find.byWidgetPredicate(
+            (widget) => widget is Container && widget.color != null,
+          ),
+        );
+        expect(line, findsOneWidget, reason: 'row ${i + 1} separator');
+        final geometry = tester.widget<Positioned>(
+          find.ancestor(of: line, matching: find.byType(Positioned)).first,
+        );
+        expect(geometry.top, 0);
+        expect(geometry.left, 72);
+        expect(geometry.right, 0);
+        expect(tester.getSize(line).height, 1);
+        expect(tester.widget<Container>(line).color, NestColors.light.line);
+      }
+
+      for (final entry in tints.entries) {
+        final row = find
+            .ancestor(
+              of: find.text(entry.key),
+              matching: find.byType(Semantics),
+            )
+            .first;
+        final tile = find
+            .descendant(of: row, matching: find.byType(Container))
+            .first;
+        final size = tester.getSize(tile);
+        expect(size.width, 40, reason: '${entry.key} tile');
+        expect(size.height, 40, reason: '${entry.key} tile');
+
+        final decoration =
+            tester.widget<Container>(tile).decoration! as BoxDecoration;
+        expect(decoration.color, entry.value, reason: '${entry.key} tint');
+        expect(
+          decoration.borderRadius,
+          BorderRadius.circular(NestSpacing.s3),
+          reason: '40px tiles use radius 12',
+        );
+        // P04 rows pad 7px vertically (design wins over NestListRow's 10px).
+        expect(tester.getSize(row).height, greaterThanOrEqualTo(56));
+      }
+
+      // All four rows carry their line icon; row 4 uses the shared trash
+      // glyph (SHARED_REQUEST §1, landed) in peach ink.
+      final icons = find.descendant(of: list, matching: find.byType(NestIcon));
+      expect(icons, findsNWidgets(4));
+      final deleteRow = find
+          .ancestor(
+            of: find.text('Delete everything anytime'),
+            matching: find.byType(Semantics),
+          )
+          .first;
+      final deleteIcon = find.descendant(
+        of: deleteRow,
+        matching: find.byType(NestIcon),
+      );
+      expect(deleteIcon, findsOneWidget);
+      expect(tester.widget<NestIcon>(deleteIcon).assetName, NestIcons.trash);
+      expect(
+        tester.widget<NestIcon>(deleteIcon).color,
+        NestColors.light.aPeach,
+      );
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    testWidgets('titles and subtitles wrap instead of ellipsising', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpPrivacy(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(320, 844),
+        textScale: 1,
+      );
+
+      for (final title in _titles) {
+        final widget = tester.widget<Text>(find.text(title));
+        expect(widget.softWrap, isTrue, reason: title);
+        expect(widget.maxLines, isNull, reason: '$title must not clamp lines');
+      }
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the shield is 84x84 and labelled', (tester) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/privacy');
+
+      // The shared token-coloured component (SHARED_REQUEST §2), not the
+      // light-baked SVG asset.
+      final shield = find.byType(NestPrivacyShield);
+      expect(shield, findsOneWidget);
+      expect(tester.widget<NestPrivacyShield>(shield).size, 84);
+      expect(
+        tester.widget<NestPrivacyShield>(shield).semanticLabel,
+        'A shield with a leaf and a heart, protecting your family',
+      );
+      expect(
+        find.bySemanticsLabel(
+          'A shield with a leaf and a heart, protecting your family',
+        ),
+        findsOneWidget,
+      );
+
+      await disposeApp(tester);
+    });
+  });
+
+  group('P04 — control accessibility', () {
+    testWidgets('the compact nav has no title and keeps the 60px design bar', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/privacy');
+
+      final nav = find.byType(NestNavBar);
+      expect(nav, findsOneWidget);
+      expect(
+        tester.widget<NestNavBar>(nav).title,
+        isNull,
+        reason: 'the local empty-title workaround is gone (FIXES_2 F3)',
+      );
+      expect(
+        tester.getSize(nav).height,
+        60,
+        reason:
+            '.nav-bar.compact = min 52 + padding 4/12/12 around the 44 button',
+      );
+      expect(
+        find.descendant(of: nav, matching: find.byType(Text)),
+        findsNothing,
+        reason: 'a null title must render no empty Text node (screen readers)',
+      );
+      expect(find.bySemanticsLabel('Back'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+    testWidgets('the back chevron is a labelled 44px button', (tester) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/privacy');
+
+      final back = find.bySemanticsLabel('Back');
+      expect(back, findsOneWidget);
+      expect(
+        tester.getSize(back).height,
+        greaterThanOrEqualTo(NestDevice.tapParent),
+      );
+      expect(
+        tester.getSize(back).width,
+        greaterThanOrEqualTo(NestDevice.tapParent),
+      );
+      expect(
+        tester.getSemantics(back).getSemanticsData().flagsCollection.isButton,
+        isTrue,
+      );
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the notice link is a labelled button with a 44px target', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/privacy');
+
+      final link = find.bySemanticsLabel('Read the full Privacy Notice');
+      expect(link, findsWidgets);
+      final data = tester.getSemantics(link.first).getSemanticsData();
+      expect(data.flagsCollection.isButton, isTrue);
+      expect(data.label, 'Read the full Privacy Notice');
+
+      final target = find
+          .ancestor(of: _notice, matching: find.byType(ConstrainedBox))
+          .first;
+      expect(
+        tester.getSize(target).height,
+        greaterThanOrEqualTo(NestDevice.tapParent),
+      );
+      expect(
+        tester.getSize(target).width,
+        greaterThanOrEqualTo(NestDevice.tapParent),
+      );
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('promise rows are read as text, not as buttons', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/privacy');
+
+      for (final title in _titles) {
+        final row = find.ancestor(
+          of: find.text(title),
+          matching: find.byType(Semantics),
+        );
+        final data = tester.getSemantics(row.first).getSemanticsData();
+        expect(
+          data.flagsCollection.isButton,
+          isFalse,
+          reason: '"$title" is display-only',
+        );
+      }
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+  });
+
+  // Guards against a regression where the view stops wiring the toggle to the
+  // bloc: the tap must reach the repository as a `PrivacyConsentCrashToggled`
+  // write (the bloc's own contract is covered in the bloc test).
+  testWidgets('the toggle dispatches PrivacyConsentCrashToggled', (
+    tester,
+  ) async {
+    final repository = _RecordingPrivacyConsentRepository();
+    final bloc = PrivacyConsentBloc(repository: repository);
+    addTearDown(bloc.close);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: NestTheme.light(),
+        home: BlocProvider<PrivacyConsentBloc>.value(
+          value: bloc,
+          child: const PrivacyConsentView(),
+        ),
+      ),
+    );
+    bloc.add(const PrivacyConsentLoadRequested());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(repository.writes, isEmpty);
+
+    await _tapToggle(tester);
+    expect(repository.writes, <bool>[true]);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+}

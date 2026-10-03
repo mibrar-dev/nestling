@@ -69,5 +69,10 @@ Future<String?> applyLaunchFlags() async {
   }
 
   await session.refresh();
+  // Trial expiry (shared_batch3): an elapsed 14-day trial persists as
+  // 'expired' at launch so the router's paywall redirect fires. Never
+  // touches an 'active' subscriber. `refresh()` already enforces this;
+  // the explicit call keeps the launch contract visible.
+  await session.checkTrialExpiry();
   return LaunchFlags.initialRoute.isEmpty ? null : LaunchFlags.initialRoute;
 }
