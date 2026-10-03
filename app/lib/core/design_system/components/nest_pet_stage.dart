@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:nestling/core/design_system/motion/pip_rive.dart';
 import 'package:nestling/core/design_system/tokens/nest_tokens.dart';
@@ -13,10 +15,18 @@ import 'package:nestling/core/design_system/tokens/spacing.dart';
 /// file; the SVG fallback stacks them here with the same split and feet
 /// fractions, so the two paths can never drift apart.
 /// [pipSize] caps the Pip height; in narrow
-/// parents the whole stage scales down instead of overflowing. Pass
-/// [nestWidth] (and optionally [fixedPipHeight]) to request the design's
-/// exact slot instead — e.g. K03's 260-wide nest with its ≈152-tall Pip —
-/// without forking the scene. The ground
+/// parents the whole stage scales down instead of overflowing.
+///
+/// Explicit-size mode: pass [nestWidth] (or [visibleNestWidth]) and
+/// optionally [fixedPipHeight]/[nestHeight] to request the design's exact
+/// slot — e.g. K03's 236-wide nest (which paints the design's 198 px visible
+/// outline) with its ≈152-tall Pip in a 236-tall block — without forking the
+/// scene. The nest art fills its box, so the visible bowl outline is always
+/// `nestWidth × PipNestFallback.visibleNestRatio` (≈0.84): [nestWidth] sets
+/// the BOX, [visibleNestWidth] sets the OUTLINE directly (they are mutually
+/// exclusive). The scene lays out against the ACTUAL parent width: the nest
+/// stays centred, decor never shifts it, and a request wider than the box
+/// scales down uniformly instead of overflowing. The ground
 /// shadow is a soft blurred ellipse directly under the nest, never a pill.
 class NestPetStage extends StatelessWidget {
   const new({
@@ -28,6 +38,8 @@ class NestPetStage extends StatelessWidget {
     this.pipSize = 200,
     this.nestWidth,
     this.fixedPipHeight,
+    this.nestHeight,
+    this.visibleNestWidth,
     this.speech,
     this.semanticLabel,
     this.pip,
@@ -51,12 +63,27 @@ class NestPetStage extends StatelessWidget {
 
   final double pipSize;
 
-  /// Explicit nest width (logical px). When set, the stage stops deriving
+  /// Explicit nest-box width (logical px). When set, the stage stops deriving
   /// its size from the parent width: the nest renders exactly [nestWidth]
   /// wide and Pip scales to the design ratio ([pipPerNestWidth]) unless
   /// [fixedPipHeight] overrides it. Null (default) keeps the legacy
-  /// max-width-derived sizing capped by [pipSize].
+  /// max-width-derived sizing capped by [pipSize]. Mutually exclusive with
+  /// [visibleNestWidth].
   final double? nestWidth;
+
+  /// Explicit nest-box height (logical px). The art fills the box, so the
+  /// bowl outline stays `nestWidth × visibleNestRatio` whatever the height;
+  /// the height only sets how much of the square art (bowl + shadow bleed)
+  /// the box holds, and hence the block height. K03 passes 156 under its
+  /// 236-wide box for the design's 236-tall slot. Null (default) keeps the
+  /// legacy square art (`nestH == nestW`).
+  final double? nestHeight;
+
+  /// Visible nest outline width (logical px), converted to the box via
+  /// `PipNestFallback.visibleNestRatio`. Clearer than [nestWidth] when the
+  /// design specs the outline (K03: 198 → a ≈236 box). Mutually exclusive
+  /// with [nestWidth].
+  final double? visibleNestWidth;
 
   /// Explicit Pip height (logical px). Implies explicit sizing like
   /// [nestWidth]; the nest derives as `fixedPipHeight / split` unless
@@ -89,11 +116,38 @@ class NestPetStage extends StatelessWidget {
               final maxW = constraints.maxWidth;
               final double pipH;
               final double nestW;
-              if (nestWidth != null || fixedPipHeight != null) {
-                // Explicit-size mode (K03): the design's slot, not a cap.
-                final fixedH = fixedPipHeight;
-                nestW = nestWidth ?? fixedH! / PipNestFallback.split;
-                pipH = fixedH ?? nestW * pipPerNestWidth;
+              final double nestH;
+              final double stageW;
+              final bool explicit;
+              if (nestWidth != null ||
+                  fixedPipHeight != null ||
+                  nestHeight != null ||
+                  visibleNestWidth != null) {
+                // Explicit-size mode (K03): the design's slot, laid out
+                // against the ACTUAL box. The nest is always centred in what
+                // the widget gets; a request wider than the box scales the
+                // whole scene down uniformly instead of overflowing (the
+                // guard the legacy path already had).
+                assert(
+                  nestWidth == null || visibleNestWidth == null,
+                  'Pass nestWidth or visibleNestWidth, not both.',
+                );
+                final reqNestW = visibleNestWidth != null
+                    ? visibleNestWidth! / PipNestFallback.visibleNestRatio
+                    : (nestWidth ??
+                          (fixedPipHeight != null
+                              ? fixedPipHeight! / PipNestFallback.split
+                              : nestHeight!));
+                final reqPipH = fixedPipHeight ?? reqNestW * pipPerNestWidth;
+                final reqNestH = nestHeight ?? reqNestW;
+                final need = math.max(reqNestW, reqPipH);
+                final slotW = maxW.isFinite ? maxW : need;
+                final s = slotW < need ? slotW / need : 1.0;
+                nestW = reqNestW * s;
+                nestH = reqNestH * s;
+                pipH = reqPipH * s;
+                stageW = slotW;
+                explicit = true;
               } else {
                 var derived = maxW.isFinite ? maxW * 0.62 * 0.55 : pipSize;
                 if (derived > pipSize) {
@@ -101,8 +155,10 @@ class NestPetStage extends StatelessWidget {
                 }
                 pipH = derived;
                 nestW = pipH / 0.55;
+                nestH = nestW;
+                stageW = nestW / 0.62;
+                explicit = false;
               }
-              final stageW = nestW / 0.62;
               final custom = pip;
               if (custom != null) {
                 return PipNestFallback(
@@ -110,7 +166,9 @@ class NestPetStage extends StatelessWidget {
                   pip: custom,
                   pipH: pipH,
                   nestW: nestW,
+                  nestH: nestH,
                   stageW: stageW,
+                  explicitLayout: explicit,
                 );
               }
               return _PetScene(
@@ -120,7 +178,9 @@ class NestPetStage extends StatelessWidget {
                 riveEnabled: riveEnabled,
                 pipH: pipH,
                 nestW: nestW,
+                nestH: nestH,
                 stageW: stageW,
+                explicitLayout: explicit,
               );
             },
           ),
@@ -138,7 +198,9 @@ class _PetScene extends StatelessWidget {
     required this.riveEnabled,
     required this.pipH,
     required this.nestW,
+    required this.nestH,
     required this.stageW,
+    this.explicitLayout = false,
   });
 
   final String pipAsset;
@@ -147,13 +209,62 @@ class _PetScene extends StatelessWidget {
   final bool riveEnabled;
   final double pipH;
   final double nestW;
+  final double nestH;
   final double stageW;
+  final bool explicitLayout;
 
   @override
   Widget build(BuildContext context) {
     final tokens = context.nest;
     final reduce = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     if (reduce || !riveEnabled) return _svgStage();
+    if (explicitLayout) {
+      // Rive path, explicit slot: the box matches the fallback scene
+      // ([PipNestFallback.explicitGeometry]) so both paths occupy the same
+      // slot; the fixed-aspect artboard letterboxes inside it. The fallback
+      // the artboard degrades to is the same scene, so the two can never
+      // drift apart.
+      final g = PipNestFallback.explicitGeometry(
+        nestH: nestH,
+        pipH: pipH,
+        contactFrac: PipNestFallback.contactInSvg(stage),
+      );
+      final glowD = nestW * 1.04;
+      return SizedBox(
+        width: stageW,
+        height: g.stageH,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            if (tokens.isDark)
+              Positioned(
+                left: stageW / 2 - glowD / 2,
+                top: g.nestTop + (nestH - glowD) / 2,
+                child: Container(
+                  width: glowD,
+                  height: glowD,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color(0x1AFFFFFF),
+                  ),
+                ),
+              ),
+            Positioned.fill(
+              child: PipInNest(
+                stage: stage,
+                mood: mood,
+                pipAsset: pipAsset,
+                pipH: pipH,
+                nestW: nestW,
+                nestH: nestH,
+                stageW: stageW,
+                explicitLayout: true,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     // Rive path: the PipStage artboard (350x260) already composes ground
     // shadow + nest back + Pip + nest front rim in one file. The fallback
     // the artboard degrades to is the same scene ([PipNestFallback]), so
@@ -207,12 +318,21 @@ class _PetScene extends StatelessWidget {
       pipAsset: pipAsset,
       pipH: pipH,
       nestW: nestW,
+      nestH: nestH,
       stageW: stageW,
+      explicitLayout: explicitLayout,
     );
   }
 }
 
 /// Pip's speech bubble (K03): max 260 wide, r18, 3px ink border, tail.
+///
+/// Matches `.speech` in `design/html-source/components.css` exactly:
+/// `padding: 8px 14px`, Nunito 800 16 px with the browser-default
+/// line-height (`normal`, ≈22 px in Nunito — so ≈44 px tall with border),
+/// 3 px ink border, radius 18, tail `::after` (9 px triangle). Every screen
+/// that shows a bubble (K03, K03b, K04, K05, K07, K10) uses the same
+/// `.speech`, so there is a single default and no size parameter.
 class NestSpeechBubble extends StatelessWidget {
   const new({required this.text, super.key});
 
@@ -240,10 +360,13 @@ class NestSpeechBubble extends StatelessWidget {
           ),
           child: Text(
             text,
+            // `.speech` sets no line-height, so the browser uses `normal`
+            // (the font's natural height, ≈22 px in Nunito): omitting
+            // `height` is Flutter's equivalent. A fixed 24/16 rendered the
+            // bubble 46 px tall instead of the design's ≈44.
             style: TextStyle(
               fontFamily: 'Nunito',
               fontSize: 16,
-              height: 24 / 16,
               fontWeight: FontWeight.w800,
               // `.speech` sets no letter-spacing: browser default 0.
               letterSpacing: 0,
