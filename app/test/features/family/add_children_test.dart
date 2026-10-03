@@ -2237,8 +2237,9 @@ void main() {
 
         // 3 px above the pill is inside the 44-px target by design, but it is
         // also above the Wrap's own top edge, so the tap is dropped. Flip to
-        // `isTrue` when the shared fix lands (SPACING_SPEC §10.6 wants a
-        // 44-min target around the 32-px visual).
+        // `isTrue` when the shared fix lands (branch shared/chip_wrap_hit_area,
+        // NestChipWrap — SPACING_SPEC §10.6 wants a 44-min target around the
+        // 32-px visual).
         await tester.tapAt(Offset(pill.center.dx, pill.top - 3));
         await tester.pump();
         expect(

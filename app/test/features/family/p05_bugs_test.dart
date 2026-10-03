@@ -495,6 +495,9 @@ void main() {
   group('P05-BUG-11 age-chip tap target is 32 high, not 44 (major)', () {
     testWidgets(
       '[P05-BUG-11] the overlaid tap area above/below the chip selects it',
+      // P05-BUG-11 is a shared finding, not a P05 one: fix pending on branch
+      // shared/chip_wrap_hit_area (NestChipWrap). NOT a P05 finding while the
+      // shared fix is pending — un-skip when NestChipWrap merges (it must pass).
       skip: true,
       (tester) async {
         await setUpTestScope();

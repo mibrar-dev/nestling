@@ -1,64 +1,45 @@
-# P05 · Add children — UI build (STAGE 2b, iteration 6)
+# P05 · Add children — UI build (STAGE 2b, iteration 7)
 
 Scope: `features/family/presentation/views/**`,
 `presentation/widgets/**`, widget/view tests in
-`app/test/features/family/**` (names containing `view`/`widget`).
-No `domain/`, `data/`, `bloc/` files touched.
+`app/test/features/family/**`. No `domain/`, `data/`, `bloc/` files touched.
 
 ## CONTRACT
 
-`2a_build_logic.md` reports NO contract changes: `FamilyBloc` events/states
-are exactly what `add_children_view.dart` already consumes
-(`FamilyLoadRequested`, `FamilyDraftChanged`, `FamilyAddChildRequested`,
-`children`, `draftNickname`/`draftAgeBand`/`draftAvatarColour`,
-`nicknameError`, `saveInProgress`, `lastSavedNickname`, `status`).
-No UI rework required on that front.
+`2a_build_logic.md` (iteration 7) — NO contract changes. Event/state API
+unchanged; no UI rework required.
 
-## FIXES_5.md dispositions
+## FIXES_6.md dispositions
 
-1. **Chip row 44 px in flow (the one remaining defect)** — shared
-   `NestChip` batch-2 fix has landed on main (32 px pill in the flow,
-   ≥44×44 tap area overlaid per `SPACING_SPEC` §10.6). Rel-verified:
-   - Local workaround already removed in `add_child_form_card.dart`
-     (no `IntrinsicWidth`; the `Wrap` lays chips in one row directly).
-   - Flipped `add_children_test.dart` expectation
-     `the chip row height is the design value plus the 44-px tap box` →
-     `... is the design value (32 px, shared fix landed)`: asserts
-     `chip.height == NestSpacing.s8` (32). This removes the +12 px shift of
-     the swatch row, its label, and the helper caption that FIXES_5 §1
-     recorded (band5 drift 10.8–11.1%).
-   - Tap-target test updated: age chips now assert the design geometry
-     (≥44 wide, 32 high) with the overlay hit area documented, instead of
-     the old 44-in-flow box.
-   - `the failure panel Try again button is a 44+ target` passes again
-     once the two stale expectations above are corrected (it was collateral
-     of their in-test state, passes identically in isolation and group).
-2. [Pass, kept] Child order Maya-then-Leo verified green via
-   `p05_bugs_test.dart` + bloc tests (durable `createdAt` ordering landed
-   on main; P05 consumes the shared helper).
-3. [Pass, kept] Copy character-exact vs HTML; no overflow at 300+ widths
-   and text scale 1.3 (pinned by existing group tests).
-4. [Pass, kept] Owner rules: bottom bar to the physical edge both modes,
-   20 px gutters, dark tokens; `flutter analyze lib/features/family` → no
-   issues; no `google_fonts`/`GoogleFonts` anywhere.
+1. **P05-BUG-11 (chip tap target 32×pill; overlay clipped by the chip
+   `Wrap`)** — orchestrator decision 04:31: keep BOTH owner rules (32 px
+   visual + 44 px tap target); shared fix pending on branch
+   `shared/chip_wrap_hit_area` (`NestChipWrap`). Per instructions:
+   - `NestChipWrap` is NOT yet merged into this branch (`grep` finds it only
+     in the shared branch / docs), so the age-chip `Wrap` in
+     `add_child_form_card.dart` stays, and the tap-target test keeps the
+     iteration-6 form (width ≥ 44, height == 32) until the component lands.
+   - `[P05-BUG-11]` proof stays skipped with comments referencing
+     `shared/chip_wrap_hit_area` in both `p05_bugs_test.dart` and
+     `add_children_test.dart`; the green characterisation test ("vertical
+     overlay is clipped by the chip Wrap") remains as the visible record.
+   - When `NestChipWrap` merges: swap the age-chip `Wrap` for it, restore
+     `atLeast44(chip)` (both dims) in the tap-target test, un-skip the proof.
+2. Standing skip (P05-BUG-11) — kept, with the mandated branch reference in
+   the skip comment.
+3. FONTS / LETTER SPACING / CHILD ORDER / COPY / BOTTOM EDGE / ALIGNMENT /
+   PIP — re-verified green via the suite (letter-spacing sweep test, Maya-
+   first group, CTA-edge, copy code-unit asserts).
 
-## Shared with logic builder (LEFT FOR INTEGRATOR)
+## Verified
 
-- `kid_card_grid.dart` comment refreshed "rowid-ordered" →
-  "creation-ordered (createdAt, rowid)" — done, one-liner.
-- Child-order `SHARED_REQUEST.md` entry: orchestrator closes it once the
-  UI gate confirms Maya-first on a merged build.
-
-## Verification
-
-- `flutter test test/features/family` → **119 passed** (was 116 + 3 red
-  chip-geometry pins from the pre-fix component; now 119 green).
-- `flutter analyze lib/features/family` → No issues found!
+- `flutter test test/features/family` → **122 passed, 1 skipped**, 0 failed.
+- `flutter analyze lib/features/family test/features/family` → no issues.
 
 ## LEFT FOR NEXT ITERATION
 
-- UI gate (integrator): re-run `tools/screens/shot.sh` light/dark vs the
-  design PNGs — expect band5 drift (swatches + caption shift) to collapse
-  now that the chip row is 32 px; confirm Maya-first from the database.
+- When main contains `NestChipWrap`: replace the age-chip `Wrap` in
+  `add_child_form_card.dart`, restore `atLeast44` (w+h) on age chips,
+  un-skip `[P05-BUG-11]`, re-run shot.sh + compare.
 
 VERDICT: PASS
