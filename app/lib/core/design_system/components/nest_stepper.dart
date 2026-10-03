@@ -29,7 +29,9 @@ class NestStepper extends StatelessWidget {
       children: [
         _StepBtn(
           key: const ValueKey('decrease'),
-          label: '-',
+          // U+2212 MINUS SIGN (the design's `&minus;`), never U+002D
+          // HYPHEN-MINUS: equal weight with `+`, same icon family.
+          label: '−',
           semanticLabel: decreaseSemanticLabel,
           onPressed: onDecrease,
         ),
