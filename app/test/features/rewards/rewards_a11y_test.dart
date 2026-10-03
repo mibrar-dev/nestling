@@ -14,6 +14,7 @@
 // exposes the inner InkWell as a SECOND, unnamed node. See `3_test.md`
 // §"Findings" — it is pre-existing on /today and lives in core/, not in P14.
 
+import 'dart:async' show unawaited;
 import 'dart:ui' show Tristate;
 
 import 'package:flutter/material.dart';
@@ -229,8 +230,7 @@ void main() {
 
       final context = tester.element(find.byType(Navigator).first);
       // The push future completes on the pop below — never await it here.
-      // ignore: unawaited_futures
-      GoRouter.of(context).push('/rewards');
+      unawaited(GoRouter.of(context).push('/rewards'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
       expect(pushedPath(tester), '/rewards');
@@ -261,8 +261,7 @@ void main() {
       await pumpAppRoute(tester, '/today');
       final context = tester.element(find.byType(Navigator).first);
       // The push future completes on the pop below — never await it here.
-      // ignore: unawaited_futures
-      GoRouter.of(context).push('/rewards');
+      unawaited(GoRouter.of(context).push('/rewards'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 

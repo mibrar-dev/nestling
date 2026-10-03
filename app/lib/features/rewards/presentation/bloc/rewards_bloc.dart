@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:nestling/features/rewards/domain/entities/reward.dart';
 import 'package:nestling/features/rewards/domain/rewards_repository.dart';
@@ -31,24 +33,24 @@ class RewardsBloc extends Bloc<RewardsEvent, RewardsState> {
     );
   }
 
-  // Write handlers below never emit on success: the `watchItems` stream
-  // re-emits after every write and the load subscription delivers the new
-  // list. Errors surface as `failure` with the message; the next
-  // `RewardsLoadRequested` resubscribes from scratch.
+  // Write handlers never emit on success: the `watchItems` stream re-emits
+  // after every write and the load subscription delivers the new list. They
+  // never emit `failure` either (review finding 1 / P14-B03): a failed write
+  // must not replace the loaded list with a full-screen error. The only
+  // source of the full-screen `failure` state — what `Try again` is for —
+  // is the stream's own error in [_onLoadRequested]. A write failure is
+  // reported to whoever asked through the event's [result] channel; callers
+  // without one (legacy fire-and-forget adds) observe no change, and the
+  // list stays as it was.
   Future<void> _onNeedsOkChanged(
     RewardsNeedsOkChanged event,
     Emitter<RewardsState> emit,
   ) async {
     try {
       await _repository.setNeedsOk(id: event.id, needsOk: event.needsOk);
+      event.result?.complete();
     } on Object catch (error) {
-      if (emit.isDone) return;
-      emit(
-        state.copyWith(
-          status: RewardsStatus.failure,
-          errorMessage: error.toString(),
-        ),
-      );
+      _completeError(event.result, error);
     }
   }
 
@@ -67,14 +69,9 @@ class RewardsBloc extends Bloc<RewardsEvent, RewardsState> {
           needsOk: event.needsOk,
         ),
       );
+      event.result?.complete();
     } on Object catch (error) {
-      if (emit.isDone) return;
-      emit(
-        state.copyWith(
-          status: RewardsStatus.failure,
-          errorMessage: error.toString(),
-        ),
-      );
+      _completeError(event.result, error);
     }
   }
 
@@ -84,14 +81,9 @@ class RewardsBloc extends Bloc<RewardsEvent, RewardsState> {
   ) async {
     try {
       await _repository.updateReward(event.reward);
+      event.result?.complete();
     } on Object catch (error) {
-      if (emit.isDone) return;
-      emit(
-        state.copyWith(
-          status: RewardsStatus.failure,
-          errorMessage: error.toString(),
-        ),
-      );
+      _completeError(event.result, error);
     }
   }
 
@@ -101,14 +93,17 @@ class RewardsBloc extends Bloc<RewardsEvent, RewardsState> {
   ) async {
     try {
       await _repository.deleteReward(event.id);
+      event.result?.complete();
     } on Object catch (error) {
-      if (emit.isDone) return;
-      emit(
-        state.copyWith(
-          status: RewardsStatus.failure,
-          errorMessage: error.toString(),
-        ),
-      );
+      _completeError(event.result, error);
     }
   }
+}
+
+/// Completes a write-event result channel with its error. A settled channel
+/// is left alone; a missing channel means a legacy fire-and-forget caller,
+/// which observes nothing (the list is unchanged either way).
+void _completeError(Completer<void>? result, Object error) {
+  if (result == null || result.isCompleted) return;
+  result.completeError(error);
 }

@@ -161,76 +161,64 @@ void main() {
 
       await disposeApp(tester);
     },
-    // P14-B01: major — showNestBottomSheet ignores MediaQuery.viewInsets, so
-    // on iOS the keyboard covers Save/Cancel/Delete. Open.
-    skip: true,
   );
 
-  testWidgets(
-    '[P14-B02] the empty state is centred in the scroll area',
-    (tester) async {
-      await setUpTestScope();
-      final database = GetIt.instance<db.AppDatabase>();
-      await database.delete(database.rewards).go();
-      await pumpAppRoute(tester, '/rewards');
+  testWidgets('[P14-B02] the empty state is centred in the scroll area', (
+    tester,
+  ) async {
+    await setUpTestScope();
+    final database = GetIt.instance<db.AppDatabase>();
+    await database.delete(database.rewards).go();
+    await pumpAppRoute(tester, '/rewards');
 
-      final rect = tester.getRect(find.byType(NestEmptyState));
-      expect(
-        rect.center.dy,
-        closeTo(_contentCentre, 60),
-        reason:
-            'plan §4 centres the empty state in the scroll; measured centre '
-            '${rect.center.dy} vs viewport centre $_contentCentre',
-      );
+    final rect = tester.getRect(find.byType(NestEmptyState));
+    expect(
+      rect.center.dy,
+      closeTo(_contentCentre, 60),
+      reason:
+          'plan §4 centres the empty state in the scroll; measured centre '
+          '${rect.center.dy} vs viewport centre $_contentCentre',
+    );
 
-      await disposeApp(tester);
-    },
-    // P14-B02: minor — _RewardsScroll is a ListView, so the inner Center
-    // shrink-wraps and the empty state is pinned under the nav bar. Open.
-    skip: true,
-  );
+    await disposeApp(tester);
+  });
 
-  testWidgets(
-    '[P14-B02] the failure surface is centred in the scroll area',
-    (tester) async {
-      final repository = _MockRewardsRepository();
-      when(repository.watchItems)
-          .thenAnswer((_) => Stream<List<Reward>>.error(StateError('boom')));
-      when(repository.watchRequests).thenAnswer((_) => const Stream.empty());
-      when(repository.getItems).thenAnswer((_) async => <Reward>[]);
-      when(
-        () => repository.setNeedsOk(
-          id: any(named: 'id'),
-          needsOk: any(named: 'needsOk'),
-        ),
-      ).thenAnswer((_) async {});
-      when(() => repository.createReward(any())).thenAnswer((_) async {});
-      when(() => repository.updateReward(any())).thenAnswer((_) async {});
-      when(() => repository.deleteReward(any())).thenAnswer((_) async {});
+  testWidgets('[P14-B02] the failure surface is centred in the scroll area', (
+    tester,
+  ) async {
+    final repository = _MockRewardsRepository();
+    when(repository.watchItems)
+        .thenAnswer((_) => Stream<List<Reward>>.error(StateError('boom')));
+    when(repository.watchRequests).thenAnswer((_) => const Stream.empty());
+    when(repository.getItems).thenAnswer((_) async => <Reward>[]);
+    when(
+      () => repository.setNeedsOk(
+        id: any(named: 'id'),
+        needsOk: any(named: 'needsOk'),
+      ),
+    ).thenAnswer((_) async {});
+    when(() => repository.createReward(any())).thenAnswer((_) async {});
+    when(() => repository.updateReward(any())).thenAnswer((_) async {});
+    when(() => repository.deleteReward(any())).thenAnswer((_) async {});
 
-      final bloc = RewardsBloc(repository: repository)
-        ..add(const RewardsLoadRequested());
-      await _pumpViewWithFailingWrites(tester, bloc);
+    final bloc = RewardsBloc(repository: repository)
+      ..add(const RewardsLoadRequested());
+    await _pumpViewWithFailingWrites(tester, bloc);
 
-      final message = tester.getRect(find.textContaining('boom'));
-      final button = tester.getRect(
-        find.byKey(const ValueKey('p14_try_again')),
-      );
-      final surfaceCentre = (message.top + button.bottom) / 2;
-      expect(
-        surfaceCentre,
-        closeTo(_contentCentre, 80),
-        reason:
-            'plan §4 centres the failure message; measured centre '
-            '$surfaceCentre vs viewport centre $_contentCentre',
-      );
+    final message = tester.getRect(find.text('Something went wrong'));
+    final button = tester.getRect(find.byKey(const ValueKey('p14_try_again')));
+    final surfaceCentre = (message.top + button.bottom) / 2;
+    expect(
+      surfaceCentre,
+      closeTo(_contentCentre, 80),
+      reason:
+          'plan §4 centres the failure message; measured centre '
+          '$surfaceCentre vs viewport centre $_contentCentre',
+    );
 
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump();
-    },
-    // P14-B02: minor — same top-aligned root cause as the empty state. Open.
-    skip: true,
-  );
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
 
   testWidgets(
     '[P14-B03] a sheet write failure keeps the sheet open with an inline error',
@@ -297,10 +285,6 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       await tester.pump();
     },
-    // P14-B03: minor — RewardEditorSheet closes on Save before the write
-    // result is known; the failure surfaces on the list and the input is
-    // lost. Open (plan §4 wants an inline caption above Save).
-    skip: true,
   );
 
   testWidgets(
@@ -322,7 +306,7 @@ void main() {
           );
 
       await pumpAppRoute(tester, '/rewards');
-      // `Trip to the park café` (150 coins) is the last card — bring it on
+      // `Trip to the park café` (150 coins) is below the fold — bring it on
       // screen before tapping its edit button.
       final editCafe = find.bySemanticsLabel('Edit Trip to the park cafe');
       await tester.ensureVisible(editCafe);
@@ -349,9 +333,8 @@ void main() {
       handle.dispose();
       await disposeApp(tester);
     },
-    // P14-B04: minor, latent — P14's delete does not clean up (or block on)
-    // the reward's redemption rows; foreign keys are off. Open.
-    skip: true,
+    // P14-B04 fixed: `deleteReward` removes the reward's redemption rows in
+    // the same transaction. Live proof.
   );
 
   testWidgets(
@@ -381,10 +364,8 @@ void main() {
 
       await disposeApp(tester);
     },
-    // P14-B05: major — the repository still calls `watchRewards` (coinPrice
-    // ASC) instead of `watchRewardsInCreationOrder`. Open; the shared query +
-    // seed fix arrive with the next main merge.
-    skip: true,
+    // P14-B05 fixed: the repository serves `watchRewardsInCreationOrder`.
+    // Live proof.
   );
 
   // -------------------------------------------------------------------------

@@ -157,7 +157,7 @@ class _EditButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = context.nest;
-    const size = 44.0;
+    const size = NestDevice.tapParent;
     return Semantics(
       button: true,
       enabled: true,

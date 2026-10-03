@@ -1,7 +1,10 @@
 // P14 Rewards manager — bloc state machine for the parent reward shop.
 //
-// The bloc serves /rewards from one stream: `watchItems` (price order).
-// Every P14 tap is write-through — the stream re-emits and the state follows.
+// The bloc serves /rewards from one stream: `watchItems` (creation order,
+// oldest first — ORCHESTRATOR_NOTES 12:27). Every P14 tap is write-through —
+// the stream re-emits and the state follows. Write failures never touch the
+// state: they complete the event's `result` channel (review finding 1), so a
+// failed write cannot replace the loaded list.
 
 import 'dart:async';
 
@@ -17,10 +20,10 @@ import 'package:nestling/features/rewards/presentation/bloc/rewards_state.dart';
 
 import '../../test_scope.dart';
 
-/// `Seed.demo`'s six rewards. Titles/prices are the spec; the ORDER is not
-/// baked in here — ORCHESTRATOR_NOTES (12:27) rules that the list is creation
-/// order, which the data layer owns, so the order assertions compare against
-/// the repository's own stream.
+/// `Seed.demo`'s six rewards in CREATION order (the P14 list order): the seed
+/// stamps each row one second after the previous. Titles/prices/`needsOk` are
+/// the spec. "Baking together" is `needsOk: false` (the design shows its
+/// toggle OFF); every other row is ON.
 const List<String> _demoIds = <String>[
   'r-screen',
   'r-film',
@@ -46,6 +49,15 @@ const Map<String, int> _demoPrices = <String, int>{
   'r-baking': 100,
   'r-cafe': 150,
   'r-dinner': 90,
+};
+
+const Map<String, bool> _demoNeedsOk = <String, bool>{
+  'r-screen': true,
+  'r-film': true,
+  'r-bedtime': true,
+  'r-baking': false,
+  'r-cafe': true,
+  'r-dinner': true,
 };
 
 /// Fails every write and the first `watchItems` subscription, so the bloc's
@@ -139,8 +151,8 @@ void main() {
   group('RewardsEvent', () {
     test('carries its fields in props', () {
       expect(
-        const RewardsNeedsOkChanged(id: 'r-baking', needsOk: false).props,
-        <Object?>['r-baking', false],
+        const RewardsNeedsOkChanged(id: 'r-screen', needsOk: false).props,
+        <Object?>['r-screen', false],
       );
       expect(
         const RewardsCreateRequested(
@@ -155,11 +167,25 @@ void main() {
         'r-cafe',
       ]);
     });
+
+    test('result is a channel outside props', () {
+      final event = RewardsDeleteRequested(
+        id: 'r-cafe',
+        result: Completer<void>(),
+      );
+      expect(event.props, <Object?>['r-cafe']);
+      expect(event.result, isA<Completer<void>>());
+      expect(
+        const RewardsDeleteRequested(id: 'r-cafe'),
+        const RewardsDeleteRequested(id: 'r-cafe'),
+        reason: 'equality is value-only, with or without a channel',
+      );
+    });
   });
 
   group('RewardsBloc — P14 load', () {
     blocTest<RewardsBloc, RewardsState>(
-      'load emits loading then the 6 demo rewards in database order',
+      'load emits loading then the 6 demo rows in creation order',
       setUp: setUpTestScope,
       build: () => RewardsBloc(repository: GetIt.instance<RewardsRepository>()),
       act: (bloc) => bloc.add(const RewardsLoadRequested()),
@@ -169,16 +195,14 @@ void main() {
           'status',
           RewardsStatus.loading,
         ),
-        // The six seeded rows, titles and prices exactly as the seed writes
-        // them; `needsOk` is per-row data (ORCHESTRATOR_NOTES 12:27) and is
-        // checked against the database in `verify` below rather than pinned
-        // to a constant here.
+        // Creation order, not price: r-film (80) before r-bedtime (60),
+        // r-dinner (90) last (ORCHESTRATOR_NOTES 12:27, P14-B05).
         isA<RewardsState>()
             .having((state) => state.status, 'status', RewardsStatus.loaded)
             .having(
-              (state) => state.items.map((item) => item.id).toSet().toList(),
+              (state) => state.items.map((item) => item.id).toList(),
               'ids',
-              _demoIds.toSet(),
+              _demoIds,
             )
             .having(
               (state) => <String, String>{
@@ -193,6 +217,13 @@ void main() {
               },
               'prices',
               _demoPrices,
+            )
+            .having(
+              (state) => <String, bool>{
+                for (final item in state.items) item.id: item.needsOk,
+              },
+              'needsOk',
+              _demoNeedsOk,
             ),
       ],
       verify: (bloc) async {
@@ -203,16 +234,6 @@ void main() {
             .toList();
         final stateOrder = bloc.state.items.map((item) => item.id).toList();
         expect(stateOrder, databaseOrder);
-        // And each row's toggle state is the row's own value.
-        for (final item in bloc.state.items) {
-          expect(
-            item.needsOk,
-            (await repository.watchItems().first)
-                .firstWhere((row) => row.id == item.id)
-                .needsOk,
-            reason: '${item.id} needsOk',
-          );
-        }
       },
     );
   });
@@ -227,7 +248,7 @@ void main() {
         await bloc.stream.firstWhere(
           (state) => state.status == RewardsStatus.loaded,
         );
-        bloc.add(const RewardsNeedsOkChanged(id: 'r-baking', needsOk: false));
+        bloc.add(const RewardsNeedsOkChanged(id: 'r-screen', needsOk: false));
       },
       expect: () => <Matcher>[
         isA<RewardsState>().having(
@@ -239,18 +260,18 @@ void main() {
             .having((state) => state.status, 'status', RewardsStatus.loaded)
             .having(
               (state) => state.items
-                  .firstWhere((item) => item.id == 'r-baking')
+                  .firstWhere((item) => item.id == 'r-screen')
                   .needsOk,
-              'baking before',
+              'screen before',
               isTrue,
             ),
         isA<RewardsState>()
             .having((state) => state.status, 'status', RewardsStatus.loaded)
             .having(
               (state) => state.items
-                  .firstWhere((item) => item.id == 'r-baking')
+                  .firstWhere((item) => item.id == 'r-screen')
                   .needsOk,
-              'baking after',
+              'screen after',
               isFalse,
             ),
       ],
@@ -258,21 +279,25 @@ void main() {
         final repository = GetIt.instance<RewardsRepository>();
         final items = await repository.watchItems().first;
         expect(
-          items.firstWhere((item) => item.id == 'r-baking').needsOk,
+          items.firstWhere((item) => item.id == 'r-screen').needsOk,
           isFalse,
         );
-        // The other five rows are untouched.
+        // Every other row keeps its seeded value (baking stays OFF).
         expect(
-          items
-              .where((item) => item.id != 'r-baking')
-              .every((item) => item.needsOk),
-          isTrue,
+          <String, bool>{
+            for (final item in items.where((item) => item.id != 'r-screen'))
+              item.id: item.needsOk,
+          },
+          <String, bool>{
+            for (final id in _demoIds.where((id) => id != 'r-screen'))
+              id: _demoNeedsOk[id]!,
+          },
         );
       },
     );
 
     blocTest<RewardsBloc, RewardsState>(
-      'new reward appears in price order with its needsOk value',
+      'a successful write completes its result channel',
       setUp: setUpTestScope,
       build: () => RewardsBloc(repository: GetIt.instance<RewardsRepository>()),
       act: (bloc) async {
@@ -280,14 +305,18 @@ void main() {
         await bloc.stream.firstWhere(
           (state) => state.status == RewardsStatus.loaded,
         );
+        final result = Completer<void>();
+        final completed = expectLater(result.future, completes);
         bloc.add(
-          const RewardsCreateRequested(
+          RewardsCreateRequested(
             title: 'Museum trip',
             coinPrice: 70,
-            needsOk: false,
+            needsOk: true,
             icon: 'gift',
+            result: result,
           ),
         );
+        await completed;
       },
       expect: () => <Matcher>[
         isA<RewardsState>().having(
@@ -300,29 +329,21 @@ void main() {
             .having((state) => state.items.length, 'length', 6),
         isA<RewardsState>()
             .having((state) => state.status, 'status', RewardsStatus.loaded)
-            .having((state) => state.items.length, 'length', 7)
-            .having(
-              (state) => state.items
-                  .map((item) => item.title)
-                  .toSet()
-                  .difference(<String>{'Museum trip'}),
-              'other titles unchanged',
-              _demoTitles.values.toSet(),
-            ),
+            .having((state) => state.items.length, 'length', 7),
       ],
       verify: (_) async {
         final repository = GetIt.instance<RewardsRepository>();
         final items = await repository.watchItems().first;
         final created = items.firstWhere((item) => item.title == 'Museum trip');
         expect(created.coinPrice, 70);
-        expect(created.needsOk, isFalse);
-        expect(created.icon, 'gift');
         expect(created.id, startsWith('reward-'));
+        // Creation order: a row added now sorts last.
+        expect(items.last.title, 'Museum trip');
       },
     );
 
     blocTest<RewardsBloc, RewardsState>(
-      'update rewrites the row and it moves with its new price',
+      'update rewrites the row and keeps its creation slot',
       setUp: setUpTestScope,
       build: () => RewardsBloc(repository: GetIt.instance<RewardsRepository>()),
       act: (bloc) async {
@@ -357,15 +378,15 @@ void main() {
         ),
         isA<RewardsState>()
             .having((state) => state.status, 'status', RewardsStatus.loaded)
-            .having((state) => state.items.last.id, 'last id', 'r-screen')
+            .having((state) => state.items.first.id, 'first id', 'r-screen')
             .having(
-              (state) => state.items.last.title,
-              'last title',
+              (state) => state.items.first.title,
+              'first title',
               '45 min extra screen time',
             )
             .having(
-              (state) => state.items.last.needsOk,
-              'last needsOk',
+              (state) => state.items.first.needsOk,
+              'first needsOk',
               isFalse,
             ),
       ],
@@ -373,8 +394,8 @@ void main() {
         final repository = GetIt.instance<RewardsRepository>();
         final items = await repository.watchItems().first;
         expect(items.length, 6);
-        expect(items.last.id, 'r-screen');
-        expect(items.last.coinPrice, 200);
+        expect(items.first.id, 'r-screen');
+        expect(items.first.coinPrice, 200);
       },
     );
 
@@ -415,83 +436,152 @@ void main() {
     );
   });
 
-  group('RewardsBloc — failure paths', () {
+  group('RewardsBloc — write failures complete the result, never the state', () {
     blocTest<RewardsBloc, RewardsState>(
-      'a throwing toggle write lands in failure with the error message',
+      'a throwing toggle completes its result with the error, emitting nothing',
       build: () => RewardsBloc(repository: _FailingRewardsRepository()),
-      act: (bloc) =>
-          bloc.add(const RewardsNeedsOkChanged(id: 'r-baking', needsOk: false)),
-      expect: () => <Matcher>[
-        isA<RewardsState>()
-            .having((state) => state.status, 'status', RewardsStatus.failure)
-            .having(
-              (state) => state.errorMessage,
-              'errorMessage',
+      act: (bloc) async {
+        final result = Completer<void>();
+        final failed = expectLater(
+          result.future,
+          throwsA(
+            isA<Exception>().having(
+              (e) => '$e',
+              'text',
               contains('disk is full'),
             ),
-      ],
-    );
-
-    blocTest<RewardsBloc, RewardsState>(
-      'a throwing create lands in failure too',
-      build: () => RewardsBloc(repository: _FailingRewardsRepository()),
-      act: (bloc) => bloc.add(
-        const RewardsCreateRequested(
-          title: 'Museum trip',
-          coinPrice: 70,
-          needsOk: true,
-          icon: 'gift',
-        ),
-      ),
-      expect: () => <Matcher>[
-        isA<RewardsState>()
-            .having((state) => state.status, 'status', RewardsStatus.failure)
-            .having(
-              (state) => state.errorMessage,
-              'errorMessage',
-              contains('disk is full'),
-            ),
-      ],
-    );
-
-    blocTest<RewardsBloc, RewardsState>(
-      'a throwing update lands in failure too',
-      build: () => RewardsBloc(repository: _FailingRewardsRepository()),
-      act: (bloc) => bloc.add(
-        const RewardsUpdateRequested(
-          reward: Reward(
-            id: 'r-screen',
-            title: 'Screen time',
-            detail: '50 coins',
-            icon: 'tv',
-            coinPrice: 50,
-            needsOk: true,
           ),
-        ),
-      ),
-      expect: () => <Matcher>[
-        isA<RewardsState>()
-            .having((state) => state.status, 'status', RewardsStatus.failure)
-            .having(
-              (state) => state.errorMessage,
-              'errorMessage',
-              contains('disk is full'),
-            ),
-      ],
+        );
+        bloc.add(
+          RewardsNeedsOkChanged(id: 'r-screen', needsOk: false, result: result),
+        );
+        await failed;
+      },
+      expect: () => <Matcher>[],
     );
 
     blocTest<RewardsBloc, RewardsState>(
-      'a throwing delete lands in failure too',
+      'a throwing create completes its result with the error, emitting nothing',
       build: () => RewardsBloc(repository: _FailingRewardsRepository()),
-      act: (bloc) => bloc.add(const RewardsDeleteRequested(id: 'r-cafe')),
+      act: (bloc) async {
+        final result = Completer<void>();
+        final failed = expectLater(
+          result.future,
+          throwsA(
+            isA<Exception>().having(
+              (e) => '$e',
+              'text',
+              contains('disk is full'),
+            ),
+          ),
+        );
+        bloc.add(
+          RewardsCreateRequested(
+            title: 'Museum trip',
+            coinPrice: 70,
+            needsOk: true,
+            icon: 'gift',
+            result: result,
+          ),
+        );
+        await failed;
+      },
+      expect: () => <Matcher>[],
+    );
+
+    blocTest<RewardsBloc, RewardsState>(
+      'a throwing update completes its result with the error, emitting nothing',
+      build: () => RewardsBloc(repository: _FailingRewardsRepository()),
+      act: (bloc) async {
+        final result = Completer<void>();
+        final failed = expectLater(
+          result.future,
+          throwsA(
+            isA<Exception>().having(
+              (e) => '$e',
+              'text',
+              contains('disk is full'),
+            ),
+          ),
+        );
+        bloc.add(
+          RewardsUpdateRequested(
+            reward: const Reward(
+              id: 'r-screen',
+              title: 'Screen time',
+              detail: '50 coins',
+              icon: 'tv',
+              coinPrice: 50,
+              needsOk: true,
+            ),
+            result: result,
+          ),
+        );
+        await failed;
+      },
+      expect: () => <Matcher>[],
+    );
+
+    blocTest<RewardsBloc, RewardsState>(
+      'a throwing delete completes its result with the error, emitting nothing',
+      build: () => RewardsBloc(repository: _FailingRewardsRepository()),
+      act: (bloc) async {
+        final result = Completer<void>();
+        final failed = expectLater(
+          result.future,
+          throwsA(
+            isA<Exception>().having(
+              (e) => '$e',
+              'text',
+              contains('disk is full'),
+            ),
+          ),
+        );
+        bloc.add(RewardsDeleteRequested(id: 'r-cafe', result: result));
+        await failed;
+      },
+      expect: () => <Matcher>[],
+    );
+
+    blocTest<RewardsBloc, RewardsState>(
+      'a failed write without a result still emits nothing: the list stays',
+      build: () => RewardsBloc(repository: _FailingRewardsRepository()),
+      act: (bloc) async {
+        bloc.add(const RewardsLoadRequested());
+        await bloc.stream.firstWhere(
+          (state) => state.status == RewardsStatus.failure,
+        );
+        bloc.add(const RewardsLoadRequested());
+        await bloc.stream.firstWhere(
+          (state) => state.status == RewardsStatus.loaded,
+        );
+        // Fire-and-forget with no result channel: the write throws, but with
+        // nobody listening the bloc must not replace the loaded list — the
+        // only observable outcome is silence.
+        bloc.add(const RewardsNeedsOkChanged(id: 'r-screen', needsOk: false));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      },
       expect: () => <Matcher>[
+        isA<RewardsState>().having(
+          (state) => state.status,
+          'status',
+          RewardsStatus.loading,
+        ),
         isA<RewardsState>()
             .having((state) => state.status, 'status', RewardsStatus.failure)
             .having(
               (state) => state.errorMessage,
               'errorMessage',
-              contains('disk is full'),
+              contains('stream is down'),
             ),
+        isA<RewardsState>().having(
+          (state) => state.status,
+          'status',
+          RewardsStatus.loading,
+        ),
+        isA<RewardsState>()
+            .having((state) => state.status, 'status', RewardsStatus.loaded)
+            .having((state) => state.items, 'items', isEmpty),
       ],
     );
 

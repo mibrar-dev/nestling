@@ -134,7 +134,10 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
-      expect(find.text('Bad state: boom'), findsOneWidget);
+      // Static copy only — the raw `Bad state: boom` exception never reaches
+      // user-facing text (stage 4, finding 2; `paywall_view.dart` precedent).
+      expect(find.text('Something went wrong'), findsOneWidget);
+      expect(find.textContaining('boom'), findsNothing);
       expect(find.byKey(const ValueKey('p14_try_again')), findsOneWidget);
       expect(find.byType(RewardCard), findsNothing);
       expect(tester.takeException(), isNull);
@@ -143,7 +146,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
-      expect(find.text('Bad state: boom'), findsNothing);
+      expect(find.text('Something went wrong'), findsNothing);
       expect(find.text('No rewards yet'), findsOneWidget);
       expect(attempt, 2, reason: 'Try again resubscribes to watchItems');
     });

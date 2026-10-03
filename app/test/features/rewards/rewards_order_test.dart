@@ -8,14 +8,13 @@
 // Two layers, deliberately:
 //
 //   * GREEN — the screen renders the DATABASE order verbatim. This holds
-//     whatever the query is (price today, creation order after the merge) and
-//     is what the screen actually owns: it must not re-sort. It would fail if
-//     the view ever added `.sort()` or reversed the list.
-//   * SKIPPED — the rendered order equals `Seed.demo()`'s insertion order.
-//     This is the orchestrator's mandatory behaviour and it does NOT hold
-//     until the shared seed/query change lands on main. Run it with
-//     `flutter test test/features/rewards/rewards_order_test.dart
-//     --run-skipped`; remove the `skip` once the merge is in.
+//     whatever the query is and is what the screen actually owns: it must
+//     not re-sort. It would fail if the view ever added `.sort()` or
+//     reversed the list.
+//   * GREEN — the rendered order equals `Seed.demo()`'s insertion order.
+//     This is the orchestrator's mandatory behaviour (ORCHESTRATOR_NOTES
+//     12:27, P14-B05); the shared seed/query change has landed on main, so
+//     the repository serves creation order and this test is live.
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nestling/core/design_system/design_system.dart';
@@ -49,31 +48,27 @@ void main() {
     await disposeApp(tester);
   });
 
-  testWidgets(
-    '[P14-ORDER] the rendered list is in Seed.demo creation order',
-    (tester) async {
-      // ORCHESTRATOR_NOTES 12:27: creation order, not price order. Blocked on
-      // main's `rewards.created_at` + `watchRewardsInCreationOrder` landing in
-      // this branch (P14-B05 in 6_bugs.md). Remove this skip when it does.
-      await pumpRewardsApp(tester);
+  testWidgets('[P14-ORDER] the rendered list is in Seed.demo creation order', (
+    tester,
+  ) async {
+    // ORCHESTRATOR_NOTES 12:27: creation order, not price order. The shared
+    // `rewards.created_at` + `watchRewardsInCreationOrder` change has landed
+    // (P14-B05 fixed in the repository), so this proof is live.
+    await pumpRewardsApp(tester);
 
-      final rendered = tester
-          .widgetList<RewardCard>(find.byType(RewardCard))
-          .map((card) => card.reward.id)
-          .toList();
+    final rendered = tester
+        .widgetList<RewardCard>(find.byType(RewardCard))
+        .map((card) => card.reward.id)
+        .toList();
 
-      expect(
-        rendered,
-        seedInsertionOrder,
-        reason: 'r-film(80) before r-bedtime(60): creation, not price',
-      );
+    expect(
+      rendered,
+      seedInsertionOrder,
+      reason: 'r-film(80) before r-bedtime(60): creation, not price',
+    );
 
-      await disposeApp(tester);
-    },
-    // Blocked on main: rewards.created_at + watchRewardsInCreationOrder
-    // (ORCHESTRATOR_NOTES 12:27, P14-B05). `flutter test ... --run-skipped`.
-    skip: true,
-  );
+    await disposeApp(tester);
+  });
 
   testWidgets('the toggle state of each row is its database value', (
     tester,

@@ -98,4 +98,29 @@ abstract final class RewardCopy {
       'Add something coins can buy — a film night, extra screen time, a trip out.';
   static const String tryAgain = 'Try again';
   static const String loadError = 'Something went wrong';
+
+  // Editor sheet copy. The sheet has no design reference (the HTML and both
+  // PNGs are the list screen), so these are the builder's own strings — kept
+  // here with the rest of the screen copy so the whole file can be diffed
+  // against the HTML in one place (stage 4, finding 5).
+  static const String nameLabel = 'Name';
+  static const String priceLabel = 'Price in coins';
+  static const String decreasePrice = 'Decrease price';
+  static const String increasePrice = 'Increase price';
+
+  /// `= 50 p at payout` — the stepper's helper line.
+  static String payoutHint(int coins) => '= $coins p at payout';
+
+  /// Inline caption above Save when the write fails (plan §4): the friendly
+  /// sentence first, then the technical detail. The raw exception never
+  /// reaches the full-screen failure surface (`loadError`).
+  static String saveError(Object error) => 'Could not save the reward: $error';
+
+  /// Inline caption above the Delete button when the delete write fails.
+  static String deleteError(Object error) =>
+      'Could not delete the reward: $error';
+
+  /// Toast for a failed write that has no surface of its own (a `Needs my OK`
+  /// flip). Same wording as the reviewed `kid_home_view.dart` action failure.
+  static const String actionFailed = 'Hmm, that did not work. Try again.';
 }

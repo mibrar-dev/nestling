@@ -1,10 +1,12 @@
 // P14 Rewards manager — repository contract against the Drift database.
 //
-// Covers the P14 slice only: `watchItems` price order, `setNeedsOk` and the
-// create/update/delete round-trip. The K08/parent-approval slice
+// Covers the P14 slice only: `watchItems` creation order (ORCHESTRATOR_NOTES
+// 12:27), `setNeedsOk` and the create/update/delete round-trip, including
+// the redemption cascade on delete (P14-B04). The K08/parent-approval slice
 // (`watchRequests`, `approveRedemption`, `denyRedemption`) is out of scope
 // for P14 and keeps its existing implementation untouched.
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nestling/core/data/app_database.dart' hide Reward;
 import 'package:nestling/core/data/seed.dart';
@@ -66,6 +68,47 @@ void main() {
         // hands the stream over untouched.
         final raw = await db.select(db.rewards).get();
         expect(items.length, raw.length);
+      },
+    );
+
+    test(
+      'watchItems lists creation order, not price order (P14-B05)',
+      () async {
+        // Owner rule (ORCHESTRATOR_NOTES 12:27): the order rewards were added.
+        // The seed stamps each row one second after the previous, so this is
+        // r-film (80) before r-bedtime (60) and r-dinner (90) last.
+        final items = await repository.watchItems().first;
+
+        expect(items.map((item) => item.id).toList(), <String>[
+          'r-screen',
+          'r-film',
+          'r-bedtime',
+          'r-baking',
+          'r-cafe',
+          'r-dinner',
+        ]);
+      },
+    );
+
+    test(
+      'the seeded toggle state has Baking together OFF, the rest ON',
+      () async {
+        final items = await repository.getItems();
+
+        expect(
+          <String, bool>{for (final item in items) item.id: item.needsOk},
+          <String, bool>{
+            'r-screen': true,
+            'r-film': true,
+            'r-bedtime': true,
+            'r-baking': false,
+            'r-cafe': true,
+            'r-dinner': true,
+          },
+          reason:
+              'the design shows Baking together OFF; the view must not '
+              'hard-code this — it reads needsOk from the row',
+        );
       },
     );
 
@@ -198,5 +241,41 @@ void main() {
       expect(items.length, 5);
       expect(items.any((item) => item.id == 'r-cafe'), isFalse);
     });
+
+    test(
+      "deleteReward cleans up the reward's redemption rows (P14-B04)",
+      () async {
+        Future<void> request(String rewardId) {
+          // Exactly what K08's `requestReward` writes for a `needsOk` reward.
+          return db
+              .into(db.rewardRedemptions)
+              .insert(
+                RewardRedemptionsCompanion.insert(
+                  rewardId: rewardId,
+                  childId: 'maya',
+                  familyId: Seed.familyId,
+                  status: const Value('requested'),
+                ),
+              );
+        }
+
+        await request('r-cafe');
+        await request('r-screen');
+
+        await repository.deleteReward('r-cafe');
+
+        final remaining = await db.select(db.rewardRedemptions).get();
+        expect(
+          remaining.where((row) => row.rewardId == 'r-cafe'),
+          isEmpty,
+          reason: 'no orphaned request may survive its reward',
+        );
+        expect(
+          remaining.where((row) => row.rewardId == 'r-screen'),
+          hasLength(1),
+          reason: 'other rewards keep their requests',
+        );
+      },
+    );
   });
 }
