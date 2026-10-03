@@ -38,7 +38,7 @@
 //   390, +69.7 px at 320 (nest overflowed its slot by 59.7 px) and +14.7 px at
 //   430. `shared/pet_stage_explicit` (SHARED_REQUEST #13) lays the scene out
 //   against the real content box and centres it there; K03 passes the
-//   design's own box (236×156, Pip 152). All three width proofs now run.
+//   design's own box (236×188, Pip 152). All three width proofs now run.
 // - K03-BUG-14 (FIXED, iteration 8): the same mode rendered a SQUARE nest, so
 //   the pet block was 276 px vs the design's 236 px and the lower stack
 //   shifted down; `nestHeight` makes the box height expressible. Proof runs;
@@ -1195,7 +1195,7 @@ void main() {
   /// Fix (shared, `shared/pet_stage_explicit`): explicit mode lays the scene
   /// out against `constraints.maxWidth` and centres nest + Pip in it, scaling
   /// the whole scene down instead of overflowing; K03 passes the design's own
-  /// box (`nestWidth: 236, nestHeight: 156, fixedPipHeight: 152`), which paints
+  /// box (`nestWidth: 236, nestHeight: 188, fixedPipHeight: 152`), which paints
   /// the 198 px visible outline the report asks for.
   /// Repro: `flutter test --plain-name K03-BUG-13`.
   /// Measured (light, 390×844, no insets): nest and Pip both on the slot axis
@@ -1233,8 +1233,10 @@ void main() {
   /// Design: `.k3-pet` is a 236 px slot.
   /// Fix (shared, SHARED_REQUEST #13): `nestHeight` makes the box height
   /// expressible (the art fills the box, so the visible outline stays
-  /// `nestWidth × 0.84`); K03 passes `nestHeight: 156` under its 236-wide box,
-  /// and `kid_home_geometry_test.dart` pins the rows below at real fonts.
+  /// `nestWidth × 0.84`); K03 passes `nestHeight: 188` under its 236-wide box
+  /// (`shared/pet_stage_seat` raised it from 156 so the bowl keeps the design's
+  /// proportions and Pip sits inside it), and `kid_home_geometry_test.dart`
+  /// pins the rows below at real fonts.
   /// Repro: `flutter test --plain-name K03-BUG-14`.
   testWidgets('K03-BUG-14: the pet block keeps the design 236 px slot height', (
     tester,

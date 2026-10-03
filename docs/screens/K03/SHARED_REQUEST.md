@@ -286,3 +286,18 @@ No schema/DI/token changes needed. No new assets needed (all icons +
     the column** — one constant, one call site, nothing else moves. A
     `shadowPadding:` parameter is the cleanest shape for it (K03 would then
     pass `shadowPadding: EdgeInsets.zero`).
+17. OPEN (iteration 10, `5_ui` deviation 2): the speech-bubble tail's white
+    interior is ~10 px shorter than the design's. Measured on
+    `design/screens/light/K03-kid-home.png` vs `ui/app_light_9.png` at the
+    tail's centre column x 195: design white y 152→174 (23 px), app white
+    y 152→164 (13 px). Body is identical (44 tall, same x/w, 36 vs 37 by
+    rounding), so nothing downstream moves — it is purely the painted tail.
+    Cause: `NestSpeechBubble`'s `_TailPainter` fills an inner triangle only
+    6.5 px deep inside an 18×10 tail box
+    (`app/lib/core/design_system/components/nest_pet_stage.dart`, the
+    `Size(18, 10)` CustomPaint and its inner path), while `.speech::after`
+    in `design/html-source/components.css` l.192 is a 9 px ink wedge whose
+    interior reads white for its full drop. Request: make the tail's inner
+    fill reach the tail's tip (or size the tail to the design's 9 px drop)
+    so the centre column matches; keep `NestSpeechBubble`'s public API —
+    K03 only passes `text`. Blocks: no (cosmetic, 10 px, no layout impact).

@@ -1,173 +1,176 @@
-# K03 Kid home — build notes (Stage 2 INTEGRATE, iteration 9)
+# K03 Kid home — build notes (Stage 2 INTEGRATE, iteration 10)
 
 Two builders worked in parallel on `kid_home`. This stage is the integrator: it
-confirmed the merged tree compiles and passes, verified the delivered work
-rather than trusting the reports, and checked the screen against the new
-ACCESSIBILITY ACTIONS rule.
+confirmed the merged tree compiles and passes, verified the delivered work, and
+checked one cross-screen consequence the builders were not looking at.
 
 **Gate: PASS** — `dart format .` clean · `flutter analyze` → *No issues found!* ·
-`flutter test` → *`+1544: All tests passed!`*
+`flutter test` → *`+1579: All tests passed!`*
 
-Still **zero skipped tests** (third iteration running). The shared batch
-`shared/semantics_tap` landed before this build
-(`191be8f`, "every interactive design-system component exposes
-`SemanticsAction.tap`"), which is what the new orchestrator rule needed.
+Still **zero skipped tests** (fourth iteration running).
 
 ## 1. The halves as delivered
 
 ### 2a — logic (`2a_build_logic.md`)
 
-No code changes this pass, and that is the correct outcome: `ORCHESTRATOR_NOTES`
-UPDATE 09:52 said *"Only fix the non-pet items in FIXES_8.md this pass"*, and
-the logic layer had none. 2a filed **SHARED_REQUEST #16** with the two shared
-causes — the `BoxFit.fill` nest stretch and the shared card's 6 px shadow
-padding — each with exact numbers and an explicit "no K03-side fix exists"
-statement. `kid_home_bloc_test.dart` 31/31; no state/event shape changes, so
-**no contract changes** for the UI half.
+No code changes, and that is correct: FIXES_9 holds only the Stage-5 UI check,
+whose two deviations are both shared-component with do-not-touch-locally
+instructions. 2a verified `grep skip:` clean, confirmed K03-BUG-1…15 all run
+un-skipped, and reported 31/31 on the bloc suite. No contract changes, so
+nothing for the UI half to consume.
 
 ### 2b — UI (`2b_build_ui.md`)
 
-Two FIXES_8 items closed in the view plus one new shape proof:
+`shared/pet_stage_seat` (`7ef13cc`) is on main, so 2b adopted it — **one
+number changed**: `_kNestBoxHeight: 156 → 188`, keeping `nestWidth: 236` and
+`fixedPipHeight: 152`. I verified the resulting call is byte-for-byte the
+mandated one: `nestW=236, nestH=188, pipH=152`, `stage.nestWidth=236,
+nestHeight=188`. The pet block stays the design's 236 px slot
+(16.6 + 188 + 31.4), so nothing below it moved and `_kStageToHearts` stayed at
+10.75 — no second lever needed.
 
-- **Card rhythm (finding 2)** — re-measured the design to confirm the 12 px
-  target (`.k3-quests { gap: 12px }`, card 1 ink 559…646, card 2 top 659), then
-  compensated for the shared card's 6 px `kidShadow` reserve by taking it out
-  of the column spacing: `spacing: NestSpacing.s3 - _kQuestCardShadowRoom`.
-  Card 1 does not move (the reserve is *under* it), card 2's top returns to
-  **659** and its peek above the dock to **60 px**.
-- **`844` hard-coded (finding 5)** — `gradeSpan` is now
-  `NestDevice.height * (1 - 0.62)`; numerically identical (320.7 px), so the
-  dark meadow is untouched. Same substitution in the view test.
-- **New shape proof** — `_questCardPainted(i)` measures the all-side-ink
-  bordered container *inside* the card. The old assertion measured the widget
-  rect, which includes the reserve, so it read 12 and stayed green while the
-  painted rects sat 18 apart. This is exactly the trap the UI CHECK MEASURES
-  SHAPES rule warns about, found and fixed in the test itself.
+Two review findings closed as well:
 
-The pet-block findings (1 and 3) and the meadow painter (4) were left alone,
-as instructed.
+- **Finding 2** — `_kQuestCardShadowRoom` was the one bare `6` left in the
+  view; it is now `NestSpacing.gap6`, same value, same revert rule. That was
+  the judgement call I flagged at the end of iteration 9, now resolved.
+- **Finding 4** — the geometry pin measured the `SvgPicture` **box**, so a
+  drift in `PipNestFallback.visibleNestRatio` would have passed silently. The
+  pin now asserts the painted outline (`width × ratio ≈ 198`,
+  `height × 110/240 ≈ 86`) plus rim 278 / bottom 364 / Pip's feet 301. 2b
+  deliberately did **not** switch the call to `visibleNestWidth: 198` as the
+  finding suggested, because `ORCHESTRATOR_NOTES` 10:14 mandates keeping
+  `nestWidth: 236` and the two are equivalent by construction — and met the
+  finding's intent on the assertion side, which is where the drift could occur.
+  That is the right call: it satisfies the intent without violating the
+  mandate.
+
+`kid_home_view_test.dart`'s explicit-size pin moved with the geometry
+(`236×188`, `fallback.nestH == 188`); that was the single test the value
+change broke. FIXES_9 deviation 2 (speech-bubble tail) was filed as new
+**SHARED_REQUEST #17** with measured numbers, correctly not worked around.
 
 ## 2. Integration work done here
 
-No breakage: the tree arrived green and stayed green. Two things I checked
-rather than assumed, because neither builder was asked to.
+No breakage — the tree arrived green and stayed green. Two things I checked
+that neither half was asked to.
 
-### The halves disagreed on finding 2 — resolved against the orchestrator
+### Stale geometry comments in `k03_bugs_test.dart`
 
-2a filed the card rhythm as a shared cause and wrote *"No local compensation
-(would double-correct once core lands)"*. 2b compensated locally anyway, with a
-documented revert rule (delete the constant, put `NestSpacing.s3` back).
+2b updated the view, `kid_home_view_test.dart` and `kid_home_geometry_test.dart`
+for the 156 → 188 change, but **`k03_bugs_test.dart` still documented
+`nestHeight: 156` in three places** (the BUG-13 fix note, the BUG-13 box, and
+the BUG-14 fix note). A reader would have concluded the shipped call was 156.
+Corrected to 188, with the BUG-14 note recording that
+`shared/pet_stage_seat` raised it from 156. This is the same class of defect I
+fixed in iteration 8, recurring because the value changed in a file the UI
+builder did not own. `grep -rn 156` over the feature now returns only the two
+deliberate history references.
 
-`ORCHESTRATOR_NOTES` UPDATE 09:52 settles it: the card rhythm is a **non-pet**
-item and this pass was told to fix the non-pet items. 2b's read matches the
-instruction; 2a's was the more conservative one. Both are defensible, so I
-changed nothing — but the divergence is recorded here so the next reviewer does
-not read the local subtraction as an unrequested workaround. The risk is
-genuinely bounded: one constant plus one subtraction, and SHARED_REQUEST #16(b)
-carries the revert rule. A `shadowPadding` parameter on the shared card would
-let K03 pass `EdgeInsets.zero` instead of compensating at all.
+### Quest order now diverges from the app-wide convention — needs a ruling
 
-### ACCESSIBILITY ACTIONS rule — compliant, but unpinned
+A shared batch landed this iteration: `72ac38d Merge shared/shared_batch4: …
+**quests in creation order (schema v4)**`. K03's repository re-sorts quests by
+title locally (`kid_home_repository_impl.dart:73`,
+`..sort((a, b) => a.title.compareTo(b.title))`), so **K03 is now the only screen
+that orders quests alphabetically**.
 
-The new rule requires every interactive element to expose
-`SemanticsAction.tap`, and forbids `Semantics(excludeSemantics: true)` around a
-control without `onTap:`. I verified both halves empirically with a throwaway
-probe (run, then deleted):
+I verified the rendered order rather than inferring it (throwaway probe, run
+then deleted): K03 paints
 
-| node | `hasAction(tap)` | label |
-|---|---|---|
-| `NestLockButton` | **true** | `Grown-ups` |
-| quest card 1 | **true** | `Empty the dishwasher, Waiting for Mum's thumbs-up` |
-| dock buttons 1–3 | **true** | `Pip` / `Shop` / `My jar` |
-| `NestPetStage` | false | (correct — not interactive) |
-| `KidStatusChip` | false | (correct — display-only) |
+```
+Empty the dishwasher · Hoover the stairs · Lay the table ·
+Put the bins out · Reading – 20 minutes · Tidy your bedroom
+```
 
-12 tap-capable nodes in the tree, and `performAction`-equivalent tapping of
-dock #2 really navigated to `/reward-shop`. The two `excludeSemantics: true`
-wrappers in the view (the greeting column, the hearts row) are **both
-non-interactive**, so the rule's conditional clause is not triggered.
+whereas the seed inserts Maya's quests as dishwasher → reading → bins → tidy →
+hoover, and the shared convention is now that creation order.
 
-**Gap worth naming:** K03 has **zero** `hasAction(SemanticsAction.tap)`
-assertions in its tests. The behaviour is correct, but nothing pins it — a
-future change that drops an `onTap` would go unnoticed. That is the next test
-stage's file to write, not something to bolt on mid-integration, so I left it.
+Two facts that make this worth a ruling rather than a shrug:
 
-## 3. FIXES_8 items
+1. The design's K03 PNG shows card 2 as **"Reading – 20 minutes"** — which
+   matches *creation* order, not alphabetical (alphabetical puts "Hoover the
+   stairs" second). So the new shared convention would actually agree with the
+   design where K03's current order disagrees.
+2. `1_plan.md` §(a) is explicit and unchanged: *"in repo order (alphabetical —
+   visual order differs from PNG sample order; data order wins, do NOT
+   re-sort)"*.
+
+**I changed nothing.** No orchestrator rule covers quest order (the CHILD
+ORDER ruling is about children, and both child proofs still pass), and
+`1_plan.md` forbids re-sorting — so this is an orchestrator decision, not an
+integration fix. It is recorded here rather than buried because it is a
+cross-screen consistency question with a design-favourable answer for one
+option.
+
+## 3. FIXES_9 items
+
+FIXES_9 holds only the Stage-5 UI check, two deviations:
 
 | # | Item | Status |
 |---|---|---|
-| 1 | [major] nest stretched to 66 % vertical scale, ~26 px low | **LEFT (shared)** — `BoxFit.fill` + the mandated 236×156 call; the arithmetic is closed. SHARED_REQUEST #16(a). `ORCHESTRATOR_NOTES` 09:52 forbids local adjustment while `shared/pet_stage_seat` lands |
-| 2 | [minor] card rhythm 18 px vs the design's 12 px | **DONE** (2b) — compensated, painted-rect proof added. See §2 for the 2a/2b divergence |
-| 3 | [minor] geometry pin measures the box, not the painted outline | **LEFT (pet-gated)** — the suggested fix is a `NestPetStage` call change (`visibleNestWidth: 198`) plus a `kid_home_geometry_test.dart` edit; 09:52 says not to change the call until the shared branch's report allows it |
-| 4 | [minor] feature-local meadow band | **CARRIED, deliberately** — the review itself says keep the local band and the `TODO` (within 1 level of both PNGs); blocker is SHARED_REQUEST #6's two missing `KidScope` gradient stops |
-| 5 | [minor] `844` hard-coded twice | **DONE** (2b) — `NestDevice.height` in the painter and the test |
-| 6 | [minor] `switchMapStream` in `domain/` | **CARRIED** — shared/architecture, SHARED_REQUEST #14 |
+| 1 | Pip seat + nest proportions (squashed 198×72 nest, 41 px low, Pip on the rim) | **DONE** — `shared/pet_stage_seat` landed; 2b adopted it (one number) and extended the real-font pins. 2b also re-measured the *design* side with PIL rather than trusting the note (ink rows 276–278 / 300–302 at the centre column), confirming the fix lands on the design's own rows |
+| 2 | speech-bubble tail interior ~10 px short | **LEFT (shared)** — `_TailPainter` lives in `core/design_system/components/nest_pet_stage.dart`; filed as SHARED_REQUEST #17 with measured numbers (design white y 152→174 vs app 152→164) and a no-API-change request. Cosmetic: body identical, nothing downstream moves |
 
-From `5_ui.md`: the speech-bubble tail (10 px low) is **accepted and
-recorded**, not worked around — `NestSpeechBubble` takes only `text`, the tail
-is painted inside the shared component, and it has no layout effect (bubble
-body 36 vs 37 px, x/w identical, every row below exact).
+`5_ui` recorded everything else as exact or an accepted override, so no other
+UI item was open.
 
-### Housekeeping from the review's stage-5 note
+### Skipped tests
 
-`ui/app_dark_8b.png` (the bright-mint non-K03 render) is **gone** — no
-untracked files remain in `docs/screens/K03/ui/`.
+**None.** `+1579` with no `~N`; `grep -rn "skip:"` over the feature's tests is
+clean. K03-BUG-1…15 all run un-skipped, and the real-font geometry pin passes.
 
 ## 4. Verification (in `app/`, this stage)
 
 ```
 $ dart format .
-Formatted 408 files (0 changed) in 1.08 seconds.
+Formatted 412 files (0 changed) in 0.98 seconds.
 
 $ flutter analyze
 Analyzing app...
-No issues found! (ran in 2.9s)
+No issues found! (ran in 3.7s)
 
 $ flutter test test/features/kid_home
-00:04 +162: All tests passed!
+00:05 +175: All tests passed!
 
 $ flutter test
-00:49 +1544: All tests passed!
+00:27 +1579: All tests passed!
 ```
 
 - RULES §1 respected: only `app/lib/features/kid_home/**`,
-  `app/test/features/kid_home/**`, `docs/screens/K03/**`. This stage itself
-  changed **no code** — only this note (the a11y probe was run and deleted).
+  `app/test/features/kid_home/**`, `docs/screens/K03/**`. This stage changed
+  **comments only** in `k03_bugs_test.dart` plus this note (both probes were
+  run and deleted). No product code touched.
 - No simulator booted, installed on or captured (SIMULATORS rule: only the
   UI-check stage may, and only `BC440E48-B3A3-43BC-971B-0EF5DB621874`).
-- No `google_fonts`/`GoogleFonts`, no `// ignore:` suppression, no
-  `skip:` marker anywhere in the feature.
+- No `google_fonts`/`GoogleFonts`, no `// ignore:` suppression, no `skip:`
+  marker in the feature.
 - `analysis_options.yaml` untouched; no test weakened to get green.
 
 ## 5. Handover
 
-Nothing outstanding in K03's scope. Carried for other owners:
+Nothing in K03's scope is outstanding. Carried for other owners:
 
-- **SHARED_REQUEST #16(a)** — `PipNestFallback` art-box/aspect independence;
-  `BoxFit.fill` into the 236×156 stage squashes the bowl to 0.661 vertical and
-  drops its widest row 26 px. Waiting on `shared/pet_stage_seat`. K03's
-  `NestPetStage` call stays byte-identical to the mandate until that report
-  says otherwise.
-- **SHARED_REQUEST #16(b)** — shared `NestKidQuestCard` needs a `shadowPadding`
-  parameter so K03 can drop the local `_kQuestCardShadowRoom` compensation.
+- **SHARED_REQUEST #17** — `NestSpeechBubble`'s tail interior; shared component,
+  cosmetic, blocks nothing.
 - **SHARED_REQUEST #6** — the two missing `KidScope` gradient stops (flat 62 %
   horizon line, horizon→meadow grade) that block deleting `_MeadowPainter`.
+- **SHARED_REQUEST #16(b)** — a `shadowPadding` parameter on the shared quest
+  card; when it lands, delete `_kQuestCardShadowRoom` and put `NestSpacing.s3`
+  straight back in the quest column.
 - **SHARED_REQUEST #14** — `switchMapStream` belongs in
   `core/data/stream_combine.dart`; adoption is mechanical.
-- **New test gap** — no `hasAction(SemanticsAction.tap)` assertion pins any K03
-  control yet. Behaviour verified correct this iteration; the test stage should
-  pin it, including that `performAction(tap)` changes real state.
+- **New test gap (unchanged)** — no `hasAction(SemanticsAction.tap)` assertion
+  pins any K03 control yet. Behaviour was verified correct in iteration 9
+  (lock, quest card and all three dock buttons all expose it); the test stage
+  should pin it, including that `performAction(tap)` changes real state.
+- **Orchestrator ruling wanted** — quest order: keep K03's documented
+  alphabetical sort, or adopt the app-wide creation order that the design's
+  card 2 actually agrees with (§2).
 
-One judgement call flagged for the next reviewer: the view writes the reserve as
-a bare `_kQuestCardShadowRoom = 6` and subtracts it, while the companion test
-uses the `NestSpacing.gap6` token that already exists. The constant is
-documented and matches the file's pattern for design-cited numbers, so I left
-it — but it sits close enough to a token that a reviewer may reasonably want
-`NestSpacing.gap6` there instead.
-
-Next real step is the UI check: with card 2's top border and peek both moved,
-stage 5 should re-measure card 2 (expect top **659**, peek **60 px**) and the
-band-6 heat should drop. The painted 198 px nest outline still needs a capture
-once `shared/pet_stage_seat` lands.
+Next real step is the UI check: the pet block changed shape this iteration, so
+stage 5 should confirm on device that the nest sits at 278…364 with Pip inside
+the bowl, and bands 2–3 should drop. The bubble tail is cosmetic and will not
+move any row.
 
 VERDICT: PASS

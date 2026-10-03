@@ -70,26 +70,30 @@ PipAccessory _pipAccessory(String raw) {
 /// * `_kNestBoxWidth` is the nest BOX; `PipNestFallback.visibleNestRatio`
 ///   (202/240) makes it paint the design's 198 px visible outline
 ///   (x 96…294, centre 195) at any box height.
-/// * `_kNestBoxHeight` sets the block height (with the shared 10 px shadow
-///   bleed: `.k3-pet` is the design's 236 px slot).
-/// * `_kPipSlotSize` is the design's ≈152 px Pip.
+/// * `_kNestBoxHeight` is the box height, so the bowl outline is
+///   `nestHeight × 110/240`: 188 paints the design's 86 px tall outline
+///   (y 278…364), which needs a 236-tall block. Landed by
+///   `shared/pet_stage_seat` — `docs/screens/_shared/pet_stage_seat_REPORT.md`
+///   ("Replace `nestHeight: 156` with 188") and `ORCHESTRATOR_NOTES` 10:14.
+/// * `_kPipSlotSize` is the design's ≈152 px Pip; its feet then land ≈23 px
+///   inside the bowl (design y 301).
 const double _kNestBoxWidth = 236;
-const double _kNestBoxHeight = 156;
+const double _kNestBoxHeight = 188;
 const double _kPipSlotSize = 152;
 
 /// Scroll gap between the pet stage and the hearts row.
 ///
 /// `.scroll > * + *` is `--s4` (16) in the HTML, but the shared pet stage
-/// spends 18 px between the speech bubble's tail and the pet block where
-/// `.k3-pet` sets `margin: 14px auto 0`, and its block is 236.25 — the
-/// design's 236 px slot plus the shared 10 px ground-shadow bleed — for
-/// 5.25 px more in total (measured at real fonts, see
-/// `kid_home_geometry_test.dart`). This is the design's 16 with that
-/// overshoot taken back, so the hearts row sits on the design's y 448 and
-/// every row below it keeps the design's `s4` rhythm. The orchestrator's
-/// last-pass note sanctions this lever ("fix by sizing the NestPetStage box —
-/// pipSize / nest width / bottom gap — not by negative margins"); the shared
-/// component owns the box now, the gap is the only lever left.
+/// paints the bubble's 9 px tail and the design's `.k3-pet` 14 px top margin
+/// inside its own block, so 16 here would push every row below the design down
+/// by the same amount. Measured at real fonts
+/// (`kid_home_geometry_test.dart`), 10.75 lands the hearts row centre on
+/// 447.75 — the design's y 448 — and every row below it keeps the design's
+/// `s4` rhythm. The orchestrator's last-pass note sanctions this lever ("fix
+/// by sizing the NestPetStage box — pipSize / nest width / bottom gap — not by
+/// negative margins"); the shared component owns the box now (exactly the
+/// design's 236 px slot for `nestHeight: 188`), the gap is the only lever
+/// left.
 const double _kStageToHearts = 10.75;
 
 /// Shadow room that `NestKidQuestCard` puts UNDER its own painted card
@@ -107,7 +111,10 @@ const double _kStageToHearts = 10.75;
 /// REMOVE this subtraction when SHARED_REQUEST #16(b) lands (drop the
 /// in-card padding, or add a `shadowPadding` parameter) — the column then
 /// goes straight back to `NestSpacing.s3` and nothing else moves.
-const double _kQuestCardShadowRoom = 6;
+///
+/// The value is `NestSpacing.gap6`, the token for that 6 px, so the view and
+/// `kid_home_view_test.dart` name the same reserve the same way.
+const double _kQuestCardShadowRoom = NestSpacing.gap6;
 
 /// Display name for the pet-stage semantics label (design alt text).
 String _pipStageName(int stage) {

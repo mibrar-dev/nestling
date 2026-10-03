@@ -500,7 +500,7 @@ void main() {
     // `NestPetStage` explicit size mode (SHARED_REQUEST #11, then #13), never
     // a feature-local scene fork. Sizes only: centring is K03-BUG-13's proof
     // and the absolute rows are `kid_home_geometry_test.dart` (real fonts).
-    testWidgets('the nest box is 236×156 and the Pip exactly 152 tall', (
+    testWidgets('the nest box is 236×188 and the Pip exactly 152 tall', (
       tester,
     ) async {
       await _pumpRoute(tester);
@@ -514,15 +514,18 @@ void main() {
       );
       expect(
         stage.nestHeight,
-        156,
-        reason: '.k3-pet is a 236 px slot; 156 + 70.25 + 10 shadow bleed',
+        188,
+        reason:
+            '.k3-pet is a 236 px slot; 188 paints the design 86 px tall bowl '
+            '(188 × 110/240) and 16.6 + 188 + 31.4 keeps the slot at 236 '
+            '(docs/screens/_shared/pet_stage_seat_REPORT.md)',
       );
       expect(stage.fixedPipHeight, 152, reason: '.k3-pet .pip is 152 px tall');
       final fallback = tester.widget<PipNestFallback>(
         find.byType(PipNestFallback),
       );
       expect(fallback.nestW, 236);
-      expect(fallback.nestH, 156);
+      expect(fallback.nestH, 188);
       expect(fallback.pipH, 152);
       expect(
         fallback.explicitLayout,
@@ -538,9 +541,11 @@ void main() {
       expect(_nestSvgFinder(), findsNWidgets(2));
       final nest = tester.getRect(_nestSvgFinder().first);
       expect(nest.width, closeTo(236, 0.5));
-      expect(nest.height, closeTo(156, 0.5));
-      // The design's visible outline, through the shared ratio.
+      expect(nest.height, closeTo(188, 0.5));
+      // The design's visible outline, through the shared ratios: 198 wide and
+      // 86 tall (y 278…364), which is what seats Pip's feet inside the bowl.
       expect(nest.width * PipNestFallback.visibleNestRatio, closeTo(198, 2));
+      expect(nest.height * 110 / 240, closeTo(86, 2));
       await disposeApp(tester);
     });
 

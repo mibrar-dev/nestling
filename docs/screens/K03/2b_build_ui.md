@@ -1,167 +1,132 @@
-# K03 Kid home — Stage 2b UI chunk (iteration 9)
+# K03 Kid home — Stage 2b UI chunk (iteration 10)
 
 Scope: `app/lib/features/kid_home/presentation/views/**`,
-`presentation/widgets/**`, and the view/widget tests
-(`test/features/kid_home/kid_home_view_test.dart`). No `domain/`, `data/`,
-`bloc/` file touched. No simulator booted, no `flutter clean`, no whole-app
-`flutter test` (integrator's job).
+`presentation/widgets/**` and the view/widget tests in
+`app/test/features/kid_home/` (`kid_home_view_test.dart`,
+`kid_home_geometry_test.dart`). **No domain/data/bloc/route/DI file touched.**
+`2a_build_logic.md` re-read before finishing: **no CONTRACT CHANGES**, nothing
+in it touches the view layer. No simulator was booted, installed on, driven or
+screenshot (SIMULATORS rule — stage 5 only).
 
-Contract re-read: `2a_build_logic.md`'s two additive events
-(`KidHomeDataReceived`, `KidHomeStreamFailed`) are bloc-internal — the views
-still never send them, so no view code had to change for the logic builder's
-chunk.
+## The one mandated change: adopt the shared pet-seat fix
 
-## FIXES_8 items in my layer — all non-pet items closed
+`shared/pet_stage_seat` (7ef13cc) is on main, so
+`docs/screens/_shared/pet_stage_seat_REPORT.md` and
+`ORCHESTRATOR_NOTES` (10:14) apply: **one number changed** —
+`kid_home_view.dart` `_kNestBoxHeight: 156 → 188`, keeping `nestWidth: 236`
+and `fixedPipHeight: 152` (the report states `visibleNestWidth: 198` ≡
+`nestWidth: 236`, so the call is byte-for-byte the mandated one). The block
+stays the design's 236 px slot (16.6 + 188 + 31.4), so nothing below the pet
+block moved — `_kStageToHearts` stays 10.75 and no other lever was needed.
 
-### FIXES_8 finding 2 + 5_ui deviation 1 (quest-card rhythm) — FIXED
+Measured at real fonts after the change (`kid_home_geometry_test.dart`):
 
-The design's `.k3-quests { gap: 12px }`
-(`design/html-source/screens/K03-kid-home.html:30`) is the gap between
-**painted** cards, and I re-measured it on the design PNG to be sure:
+| pin | design | measured | tolerance |
+|---|---|---|---|
+| nest outline top (rim) | 278 | 278 | ±2 |
+| nest outline bottom | 364 | 364 | ±2 |
+| visible nest width | 198 | 198 | ±2 |
+| visible nest height | 86 | 86 | ±2 |
+| nest / Pip centre x | 195 | 195 | ±1 |
+| Pip feet (inside bowl) | 301 | 301 | ±3 |
+| Pip head | 199 | 199 | ±5 |
+| hearts row centre | 448 | **447.75** | ±2 |
+| first card top | 559 | 559 | ±2 |
 
-```
-full-width ink rows, design/screens/light/K03-kid-home.png ÷3
-card 1  559…561 (top)   644…646 (bottom)
-card 2  659…661 (top)        → painted gap 646.5 → 658.5 = 12.0 px
-dock    719…721
-```
+Independent check of the *design* side (I read `design/screens/light/
+K03-kid-home.png` with PIL rather than trusting the note): ink rows at the
+centre column run 276–278 then 300–302, i.e. the front rim at ≈278 and Pip's
+feet at ≈301; the bowl's widest row is 196–198 px (x 97…292). The app now
+lands on those rows, so FIXES_9 deviation 1 (squashed 198×72 nest 41 px low,
+Pip standing on the rim) is closed in the app by the shared fix.
 
-The shared `NestKidQuestCard` wraps its painted card in
-`EdgeInsets.only(bottom: 6)` (`core/.../nest_quest_card.dart:168`) for
-`kidShadow` room, so a `NestSpacing.s3` column painted the rects 18 px apart
-(card 2 top 665, +6 per card, and card 2's peek above the dock 54 px instead
-of the design's 60).
+## Review findings closed in my layer
 
-Fix in the view (`kid_home_view.dart`): the quest column now reads
-`spacing: NestSpacing.s3 - _kQuestCardShadowRoom`, with
-`_kQuestCardShadowRoom = 6` a single documented constant. Card 1 does not
-move (the reserve is *under* it, so `progress → card 1` stays 16 and card 1's
-painted rows stay 559/646); card 2's top border lands back on **659** and its
-peek on **719 − 659 = 60**, i.e. both the design rows again.
+- **Finding 2 (minor)** — `_kQuestCardShadowRoom` was the one bare `6` in the
+  view; it now reads `const double _kQuestCardShadowRoom = NestSpacing.gap6;`
+  (same value, same revert rule for SHARED_REQUEST #16(b), now named the same
+  way in the view and in `kid_home_view_test.dart`).
+- **Finding 4 (minor)** — the geometry pin measured the `SvgPicture` BOX, so a
+  drift in `PipNestFallback.visibleNestRatio` would have passed silently. The
+  pin now asserts the PAINTED outline (`nest.width × visibleNestRatio ≈ 198`,
+  `nest.height × 110/240 ≈ 86`) plus rim 278 / bottom 364 and Pip's feet 301.
+  I did **not** switch the call to `visibleNestWidth: 198` as the finding
+  suggested, because `ORCHESTRATOR_NOTES` (10:14) mandates keeping
+  `nestWidth: 236` and the two are equivalent by construction
+  (`pet_stage_seat_REPORT.md`); the intent of the finding is met on the
+  assertion side, which is where it can actually drift.
 
-The review asked for no local compensation (double-correction risk). I
-compensated anyway because the owner ALIGNMENT rule makes a visible 6 px
-drift a UI failure and stage 5 measured it as one; the risk is bounded to one
-constant plus one subtraction, and the revert rule is written into both the
-constant's doc comment and `SHARED_REQUEST.md` #16(b) (delete the constant,
-put `NestSpacing.s3` back — nothing else moves; a `shadowPadding` parameter
-would let K03 pass `EdgeInsets.zero` instead).
+## FIXES_9 items
 
-### FIXES_8 finding 5 (`844` hard-coded) — FIXED
+| item | disposition |
+|---|---|
+| Deviation 1 — Pip seat + nest proportions (shared `NestPetStage`) | **Fixed** by adopting the shared call above; pins added |
+| Deviation 2 — speech-bubble tail ~10 px short | **Not locally fixable**: `_TailPainter` lives in `core/design_system/components/nest_pet_stage.dart`, which this stage may not edit. Filed as new **SHARED_REQUEST #17** with the measured numbers (centre column x195: design white y 152→174, app y 152→164; `.speech::after` is a 9 px ink wedge, the painter's inner fill only 6.5 px deep in an 18×10 box) and a no-API-change request. Blocks: no. |
 
-`_MeadowPainter.gradeSpan` is now `NestDevice.height * (1 - 0.62)` (was
-`844 - 0.62 * 844`), and the two surrounding comments plus the band's
-placement comment speak of "the design height" instead of repeating the
-literal. Same substitution in the view test's
-`designRun` / `intoRun` re-derivation. Numerically identical
-(320.7 px), so the dark meadow that three iterations chased is untouched.
+No other FIXES_9 / FIXES_8 UI item was open: 5_ui recorded everything else as
+exact (header, bubble body, hearts, chips, progress, cards per status, dock,
+bottom edge, 20 px gutters, dark flips) or as an accepted override.
 
-### FIXES_8 finding 4 (feature-local meadow band) — deliberately KEPT
+## Tests updated (both in my file set, both re-run)
 
-Review finding 4 itself says "keep the local band, keep the `TODO`" (it is
-within 1 level of both design PNGs and the blocker is the two missing
-`KidScope` gradient stops). `_MeadowPainter` and its `TODO(K03)` are
-unchanged, and `#6` stays open. Pet-block-independent.
+- `kid_home_view_test.dart` — the explicit-size pin moved with the shared
+  geometry: `236×188` box (prop **and** rendered `SvgPicture` rect), the
+  painted outline 198×86, `fallback.nestH == 188`, `pipH`/`fixedPipHeight`
+  still 152, gutters and the 320/390/430 centring proofs unchanged. This was
+  the one test that broke on the value change (`the nest box is 236×156…`).
+- `kid_home_geometry_test.dart` — real-font pin extended as in the table
+  above; header comment rewritten to the new numbers. Values re-derived by
+  measuring, not guessed (temporarily tightened to 0.05 to read 447.75, then
+  restored to ±2).
 
-### FIXES_8 findings 1 + 3 — NOT MINE THIS PASS (per the orchestrator)
+## Rules re-checked in this chunk
 
-* Finding 1 (nest squashed to 66 % of the design's vertical scale) is the
-  shared `PipNestFallback`/`BoxFit.fill` issue behind
-  `shared/pet_stage_seat`, and `ORCHESTRATOR_NOTES` UPDATE 09:52 says "Do
-  NOT adjust the pet block locally and do not change the `NestPetStage`
-  call". The `NestPetStage` call is byte-identical to the mandated one
-  (`nestWidth: 236, nestHeight: 156, fixedPipHeight: 152`).
-* Finding 3's suggested fix *is* a `NestPetStage` call change
-  (`visibleNestWidth: 198`) plus an edit to `kid_home_geometry_test.dart`,
-  which is not a `view`/`widget` test file and belongs to the other builder.
-  Same instruction applies, so both are left for the shared branch / the next
-  UI pass.
+- **PIP** — the child's own `PipAvatar` (Maya: Mochi · sunny · stage 3) in the
+  pet stage, failure, empty and no-child states; no `pip_stage_*.svg`.
+- **STATUS BAR** — `NestStatusBar()` only reserves height; unchanged.
+- **DATA OVER MOCKS / PERIODS** — counts come from state/DB; no design number
+  hard-coded anywhere in the view.
+- **BOTTOM EDGE (owner)** — untouched and still correct: the dock's
+  `Container(color: tokens.surface)` wraps its `SafeArea(top: false)`, so the
+  bar's own surface runs from y 720 to the physical edge in both themes, with
+  the home indicator inside it and no meadow/sky strip.
+- **ALIGNMENT (owner)** — 20 px gutters on header, pet slot, section, cards
+  and dock unchanged; the nest stays on the slot axis at 320/390/430.
+- **COPY / FONTS / LETTER SPACING / CHIP ROWS / BALANCED HEADINGS /
+  SHAPES / TRIAL / CHILD ORDER** — no copy, font, spacing or chip changed;
+  `NestBalancedText` still renders the only `.kid-title`; the new pins measure
+  painted background/border geometry, not text positions.
+- **ACCESSIBILITY ACTIONS** — untouched: every control keeps its shared
+  `SemanticsAction.tap`; the pet block's semantics node is the shared
+  `Semantics(image: true, label: 'Pip the Fledgling, stage 3 of 4')` and stays
+  display-only.
 
-### FIXES_8 finding 6 — not in my layer (`domain/`, SHARED_REQUEST #14).
+## Verification (in `app/`, this worktree)
 
-### 5_ui deviation 2 (speech-bubble tail 10 px low) — ACCEPTED, shared-owned
-
-`NestSpeechBubble` lives inside
-`core/design_system/components/nest_pet_stage.dart` and takes only `text`;
-the tail is painted inside it and is reached from K03 through
-`NestPetStage(speech:)`. Fixing it means editing the pet block or the shared
-component — both forbidden this pass. It has no layout effect (bubble body
-36 vs 37 px, x/w identical, every row below exact), so it is recorded, not
-worked around.
-
-### Skipped proofs
-
-`grep -rn "skip:" app/test/features/kid_home/` → **zero matches**. Nothing to
-un-skip; BUG-13/14/15 and the geometry pin all run and pass.
-
-## Shape proof added (UI CHECK MEASURES SHAPES, NOT ONLY TEXT)
-
-The old gap assertion was the reason this drifted: it measured the
-**widget** rect of `NestKidQuestCard`, which *includes* the 6 px reserve, so
-it read 12 and stayed green while the painted rects sat 18 apart. The view
-test now measures the painted card surface:
-
-* `_questCardPainted(i)` — the all-side-ink-bordered `Container` inside the
-  card (same predicate style as the existing `_dockSurfaceFinder` /
-  `_questTile` helpers), so it returns the rect the design's
-  `.quest-card` rows describe.
-* "blocks stack in order with the specified gaps" asserts
-  `painted[1].top − painted[0].bottom == NestSpacing.s3` (12), that the
-  6 px reserve stays *inside* card 1's own widget rect, and that the widget
-  rects never overlap.
-
-Card 1's rows, the progress bar, the dock and the bottom edge are untouched
-by this change (the reserve sits below the card, and the dock is a sibling of
-the scroll view), so the landmarks iteration 8 pinned exactly still hold.
-
-## Gates run (in `app/`)
-
-| gate | command | result |
-|---|---|---|
-| format | `dart format --set-exit-if-changed --output=none lib/features/kid_home test/features/kid_home` | ✅ `0 changed` |
-| analyze | `flutter analyze lib/features/kid_home test/features/kid_home` | ✅ `No issues found!` |
-| view tests | `flutter test test/features/kid_home/kid_home_view_test.dart` | ✅ **`+77: All tests passed!`** |
-| neighbours (read-only) | `flutter test …/kid_home_geometry_test.dart …/k03_bugs_test.dart` | ✅ **`+54: All tests passed!`** |
-
-No simulator used (stage 5 only), so the numbers above are widget-layout
-measurements, not capture measurements.
-
-## Owner rules re-checked on this chunk
-
-* **ALIGNMENT** — the only visible misalignment left in the UI stack (the
-  +6 card rhythm) is closed on the painted rects; gutters, dock and card
-  edges untouched.
-* **BOTTOM EDGE** — untouched; the dock's own surface still runs to the
-  physical edge (both themes), the meadow still stops at the dock's top
-  border.
-* **PIP** — untouched; still the active child's own `PipAvatar` from the DB
-  row, no v1 stage SVG.
-* **BALANCED HEADINGS** — "Today's quests" is still `NestBalancedText`, and
-  still the only balanced text on the screen.
-* **COPY / FONTS / LETTER SPACING** — not one string changed;
-  `grep` finds no `google_fonts`/`GoogleFonts` and no `letterSpacing` in the
-  feature or its tests.
-* **DESIGN SYSTEM** — no hex, no `Colors.*` beyond the pre-existing
-  `Colors.transparent`, no new component, no local fork. The one new number
-  is `_kQuestCardShadowRoom`, a design-cited constant in the file's existing
-  pattern, documented with its revert rule.
-* **CHILD ORDER / PERIODS / TRIAL / DATA OVER MOCKS** — untouched (data
-  layer; quest order and "4 of 6" come from the seed).
+- `dart format lib/features/kid_home/presentation test/features/kid_home` →
+  formatted, 0 pending.
+- `flutter analyze lib/features/kid_home test/features/kid_home` →
+  **No issues found!**
+- `flutter test test/features/kid_home/kid_home_view_test.dart
+  test/features/kid_home/kid_home_geometry_test.dart` → **+85, all passed**.
+- `flutter test test/features/kid_home/` → **+175, all passed** (the whole
+  feature folder, to prove the change breaks neither the bloc nor the bug
+  proofs; the whole-app suite is the integrator's).
+- `grep skip:` and `grep google_fonts` over the feature → clean (the only hit
+  is a comment saying there are none). No `analysis_options.yaml` change.
 
 ## LEFT FOR NEXT ITERATION
 
-1. **Nest aspect (FIXES_8 finding 1)** — waits on `shared/pet_stage_seat` /
-   SHARED_REQUEST #16(a). K03's call stays as mandated; do not touch it
-   locally.
-2. **`visibleNestWidth: 198` pin (FIXES_8 finding 3)** — same gate: it needs
-   the shared report to allow a `NestPetStage` call change, plus an edit in
-   `kid_home_geometry_test.dart` (not my file this iteration).
-3. **Speech-bubble tail (5_ui deviation 2)** — shared `NestSpeechBubble`.
-4. **`_MeadowPainter` removal** — blocked on SHARED_REQUEST #6's two missing
-   `KidScope` gradient stops (the flat 62 % horizon line and the
-   horizon→meadow grade).
-5. Stage 5 should re-measure card 2's top border (expect **659**) and its
-   peek above the dock (expect **60 px**) on both captures; the band table's
-   band-6 heat should drop with it.
+- SHARED_REQUEST **#17** (bubble tail interior) — shared-component, needs a
+  core branch; nothing local remains.
+- SHARED_REQUEST **#6** (screen-background gradient stops for `KidScope`) —
+  the feature-local `_MeadowPainter` stays until it lands; `TODO(K03)` in the
+  view records it.
+- SHARED_REQUEST **#16(b)** (card shadow padding) — when it lands, delete
+  `_kQuestCardShadowRoom` and put `NestSpacing.s3` straight back in the quest
+  column.
+- A fresh UI capture is the only way to confirm the new pet block on device
+  (stage 5); expect the pet band (2/3) heat to drop with the nest now at
+  278…364 and Pip seated in the bowl.
 
 VERDICT: PASS
