@@ -5,13 +5,14 @@ import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/approvals/presentation/bloc/approvals_bloc.dart';
 import 'package:nestling/features/approvals/presentation/bloc/approvals_event.dart';
 import 'package:nestling/features/approvals/presentation/bloc/approvals_state.dart';
+import 'package:nestling/features/approvals/presentation/widgets/approvals_bottom_cta.dart';
 import 'package:nestling/features/approvals/presentation/widgets/approvals_loaded_body.dart';
 
 /// P11 · Approvals, route `/approvals`.
 ///
 /// Pushed top-level (outside the tab shell), so this view owns its own
 /// chrome: `NestStatusBar` + compact `NestNavBar` + the scroll body +
-/// `NestBottomCta`. No `AppBar`, no `NestTabBar`.
+/// `ApprovalsBottomCta`. No `AppBar`, no `NestTabBar`.
 ///
 /// The count in the title and in "Approve all (N)" is the live
 /// `state.items.length` — DATA OVER MOCKS: the designs hard-code `(3)`, the
@@ -74,12 +75,13 @@ class ApprovalsView extends StatelessWidget {
                   backSemanticLabel: 'Back to Today',
                 ),
                 Expanded(child: _body(context, state)),
-                // `NestBottomCta` paints `surface` to the physical screen edge
-                // (owner bottom-edge rule) and disappears with the inbox: an
-                // "Approve all (0)" bar over the empty state would be a lie.
+                // `ApprovalsBottomCta` paints `surface` to the physical screen
+                // edge (owner bottom-edge rule) with the pill at the design's
+                // y, and disappears with the inbox: an "Approve all (0)" bar
+                // over the empty state would be a lie.
                 if (state.status == ApprovalsStatus.loaded &&
                     state.items.isNotEmpty)
-                  NestBottomCta(
+                  ApprovalsBottomCta(
                     child: NestButton(
                       key: const ValueKey<String>('p11_approve_all'),
                       label: 'Approve all (${state.items.length})',

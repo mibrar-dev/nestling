@@ -101,6 +101,15 @@ final _sortedLoaded = ApprovalsState(
 
 const _loading = ApprovalsState(status: ApprovalsStatus.loading);
 
+/// A card mid-decision: `busyIds` says the card is busy, `busyActions` says
+/// WHICH button the parent pressed (BUG-P11-4 — the state must remember the
+/// decision, not just that the card is locked).
+ApprovalsState _busy(int id, ApprovalsDecision action) =>
+    _sortedLoaded.copyWith(
+      busyIds: <int>{id},
+      busyActions: <int, ApprovalsDecision>{id: action},
+    );
+
 /// Adds [event] only once the inbox has loaded, so the emission sequence has
 /// no race between the stream's first delivery and the action.
 Future<void> addAfterLoaded(ApprovalsBloc bloc, ApprovalsEvent event) async {
@@ -155,13 +164,21 @@ void main() {
         ..add(const ApprovalsApproveRequested(completionId: 2));
 
       expect((await both).busyIds, <int>{1, 2});
+      expect((await both).busyActions, <int, ApprovalsDecision>{
+        1: ApprovalsDecision.approve,
+        2: ApprovalsDecision.approve,
+      });
       expect(calls, <int>[1, 2], reason: 'neither write may swallow the other');
 
       final one = bloc.stream.firstWhere((s) => s.busyIds.length == 1);
       gateOne.complete();
-      expect((await one).busyIds, <int>{
+      final survivor = await one;
+      expect(survivor.busyIds, <int>{
         2,
       }, reason: 'only the finished write clears');
+      expect(survivor.busyActions, <int, ApprovalsDecision>{
+        2: ApprovalsDecision.approve,
+      });
 
       final none = bloc.stream.firstWhere((s) => s.busyIds.isEmpty);
       gateTwo.complete();
@@ -206,8 +223,8 @@ void main() {
         final resorted = await fourRows;
         expect(resorted.items, <Approval>[_newest, _dishwasher, _table, _bed]);
         expect(
-          resorted.busyIds,
-          <int>{1},
+          resorted.busyActions,
+          <int, ApprovalsDecision>{1: ApprovalsDecision.approve},
           reason:
               'the sort in onData rebuilds the state from the current one — a '
               'stream emission must not re-enable a button mid-write',
@@ -348,7 +365,7 @@ void main() {
       expect: () => [
         _loading,
         _sortedLoaded,
-        _sortedLoaded.copyWith(busyIds: const <int>{2}),
+        _busy(2, ApprovalsDecision.notYet),
         allOf(
           _withActionError('note failed'),
           predicate<ApprovalsState>((s) => s.busyIds.contains(2)),

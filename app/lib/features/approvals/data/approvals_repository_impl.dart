@@ -53,6 +53,7 @@ class ApprovalsRepositoryImpl implements ApprovalsRepository {
           coins: c.coins,
           createdAt: c.createdAt,
           createdAtTz: c.createdAtTz,
+          kidNote: c.kidNote,
         );
       }).toList();
     });
@@ -60,22 +61,31 @@ class ApprovalsRepositoryImpl implements ApprovalsRepository {
 
   @override
   Future<void> approve(int completionId) async {
-    final completion = await (_db.select(
-      _db.questCompletions,
-    )..where((c) => c.id.equals(completionId))).getSingleOrNull();
-    if (completion == null || completion.status != 'done_pending') return;
+    // Compare-and-set inside ONE transaction (BUG-P11-1): the decision claim
+    // (`status = 'approved' WHERE status = 'done_pending'`) and the credit
+    // are atomic, so two concurrent/racing calls credit exactly once — the
+    // loser updates 0 rows and returns before touching the ledger. Same
+    // shape as `completeQuest` (K03-BUG-1 precedent).
     final now = DateTime.now().toUtc();
     final zone = await _db.familyZoneId();
     await _db.transaction(() async {
-      await (_db.update(
+      final claimed =
+          await (_db.update(_db.questCompletions)..where(
+                (c) =>
+                    c.id.equals(completionId) & c.status.equals('done_pending'),
+              ))
+              .write(
+                QuestCompletionsCompanion(
+                  status: const Value('approved'),
+                  decidedAt: Value(now),
+                  decidedAtTz: Value(zone),
+                ),
+              );
+      // Someone already decided (or the row never existed): no-op, no coins.
+      if (claimed == 0) return;
+      final completion = await (_db.select(
         _db.questCompletions,
-      )..where((c) => c.id.equals(completionId))).write(
-        QuestCompletionsCompanion(
-          status: const Value('approved'),
-          decidedAt: Value(now),
-          decidedAtTz: Value(zone),
-        ),
-      );
+      )..where((c) => c.id.equals(completionId))).getSingle();
       final quest = await (_db.select(
         _db.quests,
       )..where((q) => q.id.equals(completion.questId))).getSingleOrNull();
@@ -97,16 +107,21 @@ class ApprovalsRepositoryImpl implements ApprovalsRepository {
 
   @override
   Future<void> markNotYet(int completionId) async {
+    // Guarded write (BUG-P11-2): a stale/concurrent "Not yet" must never
+    // overwrite a decision that was already made — the single UPDATE only
+    // matches `done_pending` rows, so racing an approval is a no-op and the
+    // ledger stays consistent with the status.
     final zone = await _db.familyZoneId();
-    await (_db.update(
-      _db.questCompletions,
-    )..where((c) => c.id.equals(completionId))).write(
-      QuestCompletionsCompanion(
-        status: const Value('not_yet'),
-        decidedAt: Value(DateTime.now().toUtc()),
-        decidedAtTz: Value(zone),
-      ),
-    );
+    await (_db.update(_db.questCompletions)..where(
+          (c) => c.id.equals(completionId) & c.status.equals('done_pending'),
+        ))
+        .write(
+          QuestCompletionsCompanion(
+            status: const Value('not_yet'),
+            decidedAt: Value(DateTime.now().toUtc()),
+            decidedAtTz: Value(zone),
+          ),
+        );
   }
 
   @override

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -75,6 +77,7 @@ Future<void> addAfterLoaded(ApprovalsBloc bloc, ApprovalsEvent event) async {
 
 void main() {
   late MockApprovalsRepository repo;
+  late Completer<void> writeGate;
 
   setUp(() {
     repo = MockApprovalsRepository();
@@ -135,7 +138,77 @@ void main() {
       expect: () => [
         const ApprovalsState(status: ApprovalsStatus.loading),
         _sortedLoaded,
-        _sortedLoaded.copyWith(busyIds: const <int>{1}),
+        _sortedLoaded.copyWith(
+          busyIds: const <int>{1},
+          busyActions: const <int, ApprovalsDecision>{
+            1: ApprovalsDecision.approve,
+          },
+        ),
+        _sortedLoaded,
+      ],
+      verify: (_) {
+        verify(() => repo.approve(1)).called(1);
+      },
+    );
+
+    blocTest<ApprovalsBloc, ApprovalsState>(
+      'a second approve for a busy id is absorbed (BUG-P11-1)',
+      build: () {
+        writeGate = Completer<void>();
+        when(() => repo.approve(any())).thenAnswer((_) => writeGate.future);
+        return ApprovalsBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const ApprovalsLoadRequested());
+        await bloc.stream.firstWhere((s) => s.status == ApprovalsStatus.loaded);
+        // First decision in flight (write held open); the repeat lands
+        // while busy and must be dropped, not dispatched.
+        bloc.add(const ApprovalsApproveRequested(completionId: 1));
+        await bloc.stream.firstWhere((s) => s.busyIds.contains(1));
+        bloc.add(const ApprovalsApproveRequested(completionId: 1));
+        writeGate.complete();
+      },
+      expect: () => [
+        const ApprovalsState(status: ApprovalsStatus.loading),
+        _sortedLoaded,
+        _sortedLoaded.copyWith(
+          busyIds: const <int>{1},
+          busyActions: const <int, ApprovalsDecision>{
+            1: ApprovalsDecision.approve,
+          },
+        ),
+        _sortedLoaded,
+      ],
+      verify: (_) {
+        verify(() => repo.approve(1)).called(1);
+      },
+    );
+
+    blocTest<ApprovalsBloc, ApprovalsState>(
+      'a repeat tap after the write finished is absorbed (BUG-P11-1)',
+      build: () {
+        when(() => repo.approve(any())).thenAnswer((_) async {});
+        return ApprovalsBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const ApprovalsLoadRequested());
+        await bloc.stream.firstWhere((s) => s.status == ApprovalsStatus.loaded);
+        bloc.add(const ApprovalsApproveRequested(completionId: 1));
+        await bloc.stream.firstWhere((s) => s.busyIds.contains(1));
+        await bloc.stream.firstWhere((s) => s.busyIds.isEmpty);
+        // The write finished but the static stream still shows the card:
+        // the repeat is one decision already made, not a retry.
+        bloc.add(const ApprovalsApproveRequested(completionId: 1));
+      },
+      expect: () => [
+        const ApprovalsState(status: ApprovalsStatus.loading),
+        _sortedLoaded,
+        _sortedLoaded.copyWith(
+          busyIds: const <int>{1},
+          busyActions: const <int, ApprovalsDecision>{
+            1: ApprovalsDecision.approve,
+          },
+        ),
         _sortedLoaded,
       ],
       verify: (_) {
@@ -156,7 +229,12 @@ void main() {
       expect: () => [
         const ApprovalsState(status: ApprovalsStatus.loading),
         _sortedLoaded,
-        _sortedLoaded.copyWith(busyIds: const <int>{1}),
+        _sortedLoaded.copyWith(
+          busyIds: const <int>{1},
+          busyActions: const <int, ApprovalsDecision>{
+            1: ApprovalsDecision.approve,
+          },
+        ),
         predicate<ApprovalsState>(
           (s) =>
               s.status == ApprovalsStatus.loaded &&
@@ -183,7 +261,12 @@ void main() {
       expect: () => [
         const ApprovalsState(status: ApprovalsStatus.loading),
         _sortedLoaded,
-        _sortedLoaded.copyWith(busyIds: const <int>{3}),
+        _sortedLoaded.copyWith(
+          busyIds: const <int>{3},
+          busyActions: const <int, ApprovalsDecision>{
+            3: ApprovalsDecision.notYet,
+          },
+        ),
         _sortedLoaded,
       ],
       verify: (_) {
@@ -200,6 +283,32 @@ void main() {
         return ApprovalsBloc(repository: repo);
       },
       act: (bloc) => addAfterLoaded(bloc, const ApprovalsApproveAllRequested()),
+      expect: () => [
+        const ApprovalsState(status: ApprovalsStatus.loading),
+        _sortedLoaded,
+        _sortedLoaded.copyWith(approveAllBusy: true),
+        _sortedLoaded,
+      ],
+      verify: (_) {
+        verify(repo.approveAll).called(1);
+      },
+    );
+
+    blocTest<ApprovalsBloc, ApprovalsState>(
+      'a second approve-all while busy is absorbed (BUG-P11-1)',
+      build: () {
+        writeGate = Completer<void>();
+        when(repo.approveAll).thenAnswer((_) => writeGate.future);
+        return ApprovalsBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const ApprovalsLoadRequested());
+        await bloc.stream.firstWhere((s) => s.status == ApprovalsStatus.loaded);
+        bloc.add(const ApprovalsApproveAllRequested());
+        await bloc.stream.firstWhere((s) => s.approveAllBusy);
+        bloc.add(const ApprovalsApproveAllRequested());
+        writeGate.complete();
+      },
       expect: () => [
         const ApprovalsState(status: ApprovalsStatus.loading),
         _sortedLoaded,
@@ -255,7 +364,12 @@ void main() {
       expect: () => [
         const ApprovalsState(status: ApprovalsStatus.loading),
         _sortedLoaded,
-        _sortedLoaded.copyWith(busyIds: const <int>{1}),
+        _sortedLoaded.copyWith(
+          busyIds: const <int>{1},
+          busyActions: const <int, ApprovalsDecision>{
+            1: ApprovalsDecision.approve,
+          },
+        ),
         predicate<ApprovalsState>(
           (s) =>
               s.busyIds.contains(1) &&

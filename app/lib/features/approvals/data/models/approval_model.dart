@@ -14,6 +14,7 @@ class ApprovalModel extends Approval {
     required super.coins,
     required super.createdAt,
     required super.createdAtTz,
+    super.kidNote,
   });
 
   factory ApprovalModel.fromJson(Map<String, dynamic> json) {
@@ -30,6 +31,7 @@ class ApprovalModel extends Approval {
       coins: json['coins'] as int,
       createdAt: DateTime.parse(json['createdAt'] as String),
       createdAtTz: json['createdAtTz'] as String,
+      kidNote: json['kidNote'] as String?,
     );
   }
 
@@ -47,6 +49,7 @@ class ApprovalModel extends Approval {
       'coins': coins,
       'createdAt': createdAt.toIso8601String(),
       'createdAtTz': createdAtTz,
+      'kidNote': kidNote,
     };
   }
 }

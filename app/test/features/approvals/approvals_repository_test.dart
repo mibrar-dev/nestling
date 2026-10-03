@@ -61,6 +61,10 @@ void main() {
       expect(items.first.avatarColour, 'peach');
       expect(items.last.childId, 'maya');
       expect(items.last.avatarColour, 'lilac');
+      // Seeded child notes (schema v6; q-table has none → NULL).
+      expect(items[0].kidNote, 'I did the pillows too.');
+      expect(items[1].kidNote, isNull);
+      expect(items[2].kidNote, 'I stacked everything neatly!');
     });
 
     test('getItems matches the first watch emission', () async {
@@ -173,7 +177,7 @@ void main() {
   });
 
   group('ApprovalModel', () {
-    test('round-trips createdAtTz', () {
+    test('round-trips createdAtTz and kidNote', () {
       final item = ApprovalModel(
         id: '1',
         title: 'Empty the dishwasher',
@@ -187,11 +191,33 @@ void main() {
         coins: 15,
         createdAt: DateTime.utc(2026, 10, 3, 7, 12),
         createdAtTz: 'Europe/London',
+        kidNote: 'I stacked everything neatly!',
       );
       final back = ApprovalModel.fromJson(item.toJson());
       expect(back, item);
       expect(back.createdAtTz, 'Europe/London');
       expect(item.toJson()['createdAtTz'], 'Europe/London');
+      expect(back.kidNote, 'I stacked everything neatly!');
+    });
+
+    test('kidNote defaults to null and survives missing JSON keys', () {
+      final item = ApprovalModel(
+        id: '2',
+        title: 'Lay the table',
+        detail: 'Maya · Today 8:05am',
+        completionId: 2,
+        questId: 'q-table',
+        questTitle: 'Lay the table',
+        childId: 'maya',
+        childName: 'Maya',
+        avatarColour: 'lilac',
+        coins: 10,
+        createdAt: DateTime.utc(2026, 10, 3, 7, 5),
+        createdAtTz: 'Europe/London',
+      );
+      expect(item.kidNote, isNull);
+      final json = item.toJson()..remove('kidNote');
+      expect(ApprovalModel.fromJson(json), item);
     });
 
     test('createdAtTz is part of equality', () {

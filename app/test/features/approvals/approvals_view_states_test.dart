@@ -24,6 +24,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
+import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
@@ -37,6 +38,7 @@ import 'package:nestling/features/approvals/domain/entities/approval.dart';
 import 'package:nestling/features/approvals/presentation/bloc/approvals_bloc.dart';
 import 'package:nestling/features/approvals/presentation/views/approvals_view.dart';
 import 'package:nestling/features/approvals/presentation/widgets/approval_card.dart';
+import 'package:nestling/features/approvals/presentation/widgets/approvals_bottom_cta.dart';
 import 'package:nestling/features/approvals/presentation/widgets/approvals_loaded_body.dart';
 
 import '../../test_scope.dart';
@@ -46,17 +48,24 @@ Finder _cardFor(String whoLine) =>
     find.ancestor(of: find.text(whoLine), matching: find.byType(ApprovalCard));
 
 /// Taps one of the two row buttons on the card whose `.who` line is [whoLine].
+///
+/// `ensureVisible` first: the seeded inbox is taller than the scroll viewport
+/// once the child's quote is rendered (ORCHESTRATOR_NOTES item 1), and a
+/// lazily built row whose centre sits below the clip would swallow the tap.
+/// (This file runs on the test fallback font; the geometry test loads the
+/// bundled faces and pins the design's real positions.)
 Future<void> _tapRowButton(
   WidgetTester tester,
   String whoLine,
   String label,
 ) async {
-  await tester.tap(
-    find.descendant(
-      of: _cardFor(whoLine),
-      matching: find.widgetWithText(NestButton, label),
-    ),
+  final button = find.descendant(
+    of: _cardFor(whoLine),
+    matching: find.widgetWithText(NestButton, label),
   );
+  await tester.ensureVisible(button);
+  await tester.pump();
+  await tester.tap(button);
   await tester.pump();
   await _settle(tester);
 }
@@ -236,7 +245,30 @@ SemanticsData _data(WidgetTester tester, Finder finder) =>
 ApprovalsBloc _blocOf(WidgetTester tester) =>
     tester.element(find.byType(ApprovalsView)).read<ApprovalsBloc>();
 
+/// Loads the bundled Inter/Nunito faces the app ships.
+///
+/// Without them `flutter_test` falls back to a font ~10 % wider: the helper
+/// banner wraps to three lines (84 instead of 64) and every child quote wraps
+/// to two lines, which slides the stack down ~92 px and pushes the LAST card's
+/// button row underneath the bottom CTA — a tap then misses its target and the
+/// write test fails for a reason that has nothing to do with the screen. The
+/// geometry test documents the same trap and pins the real-font anchors.
+Future<void> _loadBundledFonts() async {
+  final inter = FontLoader('Inter')
+    ..addFont(rootBundle.load('assets/fonts/Inter-Regular.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-Medium.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-SemiBold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-Bold.ttf'));
+  final nunito = FontLoader('Nunito')
+    ..addFont(rootBundle.load('assets/fonts/Nunito-Bold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Nunito-ExtraBold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Nunito-Black.ttf'));
+  await inter.load();
+  await nunito.load();
+}
+
 void main() {
+  setUpAll(_loadBundledFonts);
   setUp(() async {
     await setUpTestScope();
   });
@@ -257,7 +289,7 @@ void main() {
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
       expect(find.byType(ApprovalsHelperBanner), findsNothing);
       expect(find.byType(ApprovalCard), findsNothing);
-      expect(find.byType(NestBottomCta), findsNothing);
+      expect(find.byType(ApprovalsBottomCta), findsNothing);
       expect(find.text('All caught up'), findsNothing);
       expect(find.text('Try again'), findsNothing);
       // The count is `state.items.length`, so it is 0 until the first emission.
@@ -295,7 +327,7 @@ void main() {
       // The helper explains buttons that are not there, so it must not render.
       expect(find.byType(ApprovalsHelperBanner), findsNothing);
       expect(find.byType(ApprovalCard), findsNothing);
-      expect(find.byType(NestBottomCta), findsNothing);
+      expect(find.byType(ApprovalsBottomCta), findsNothing);
       expect(find.text('Approve all (0)'), findsNothing);
       expect(tester.takeException(), isNull);
 
@@ -317,7 +349,7 @@ void main() {
       expect(find.text('Waiting for you (0)'), findsOneWidget);
       // The empty state is not a scroll view — nothing to scroll.
       expect(find.byType(ListView), findsNothing);
-      expect(find.byType(NestBottomCta), findsNothing);
+      expect(find.byType(ApprovalsBottomCta), findsNothing);
       final empty = tester.getRect(find.byType(NestEmptyState));
       expect(empty.height, lessThan(844));
       expect(tester.takeException(), isNull);
@@ -354,7 +386,7 @@ void main() {
       // No inbox chrome behind the error.
       expect(find.byType(ApprovalCard), findsNothing);
       expect(find.byType(ApprovalsHelperBanner), findsNothing);
-      expect(find.byType(NestBottomCta), findsNothing);
+      expect(find.byType(ApprovalsBottomCta), findsNothing);
       expect(find.text('All caught up'), findsNothing);
       expect(tester.takeException(), isNull);
       semantics.dispose();
@@ -461,7 +493,7 @@ void main() {
       expect(written.fold<int>(0, (sum, row) => sum + row.amountPence), 30);
       // The landing state, not an error: empty copy, no CTA, no cards.
       expect(find.text('All caught up'), findsOneWidget);
-      expect(find.byType(NestBottomCta), findsNothing);
+      expect(find.byType(ApprovalsBottomCta), findsNothing);
       expect(find.byType(ApprovalCard), findsNothing);
       expect(find.text('Waiting for you (0)'), findsOneWidget);
 
@@ -526,16 +558,24 @@ void main() {
       // `busyIds` is a set, and bloc runs the two handlers concurrently: both
       // cards spin at once while neither has finished.
       expect(repository.approveCalls, 2);
-      for (final key in const <String>[
-        'p11_approve_1',
-        'p11_approve_2',
-        'p11_not_yet_1',
-        'p11_not_yet_2',
-      ]) {
+      for (final key in const <String>['p11_approve_1', 'p11_approve_2']) {
+        final button = tester.widget<NestButton>(
+          find.byKey(ValueKey<String>(key)),
+        );
+        expect(button.loading, isTrue, reason: key);
+        expect(button.onPressed, isNull, reason: key);
+      }
+      // BUG-P11-4: the decision the parent did NOT make must not go busy —
+      // only the tapped pill spins.
+      for (final key in const <String>['p11_not_yet_1', 'p11_not_yet_2']) {
+        final button = tester.widget<NestButton>(
+          find.byKey(ValueKey<String>(key)),
+        );
+        expect(button.loading, isFalse, reason: key);
         expect(
-          tester.widget<NestButton>(find.byKey(ValueKey<String>(key))).loading,
-          isTrue,
-          reason: key,
+          button.onPressed,
+          isNull,
+          reason: '$key stays inert while the card is busy',
         );
       }
       // The third card is untouched and still actionable.
@@ -769,12 +809,12 @@ void main() {
 
         // BOTTOM EDGE (owner rule) in dark too: no page strip under the bar.
         final screen = tester.getRect(find.byType(Scaffold).first);
-        final cta = tester.getRect(find.byType(NestBottomCta));
+        final cta = tester.getRect(find.byType(ApprovalsBottomCta));
         expect(cta.bottom, screen.bottom);
         final bar = tester.widget<DecoratedBox>(
           find
               .descendant(
-                of: find.byType(NestBottomCta),
+                of: find.byType(ApprovalsBottomCta),
                 matching: find.byType(DecoratedBox),
               )
               .first,
@@ -987,69 +1027,62 @@ void main() {
       await disposeApp(tester);
     });
 
-    testWidgets("a busy card disables only that card's two buttons", (
-      tester,
-    ) async {
-      final semantics = tester.ensureSemantics();
-      // The real seeded rows, read on the real event loop: `watchItems()`
-      // (and therefore `getItems()`) never delivers inside the fake-async
-      // `testWidgets` zone without `runAsync`.
-      final items =
-          await tester.runAsync(
-            () => GetIt.instance<ApprovalsRepository>().getItems(),
-          ) ??
-          <Approval>[];
-      expect(items, hasLength(3));
-
-      final tokens = NestTheme.light().extension<NestTokens>()!;
-      tester.view.physicalSize = const Size(390 * 3, 844 * 3);
-      tester.view.devicePixelRatio = 3;
-      addTearDown(tester.view.reset);
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: NestTheme.light(),
-          home: Scaffold(
-            backgroundColor: tokens.paper,
-            body: ApprovalsLoadedBody(
-              items: items,
-              // The dishwasher (completionId 1) has a write in flight.
-              busyIds: const <int>{1},
-              onNotYet: (_) {},
-              onApprove: (_) {},
-            ),
-          ),
-        ),
-      );
-      await tester.pump();
-
-      for (final key in const <String>['p11_not_yet_1', 'p11_approve_1']) {
-        final button = tester.widget<NestButton>(
-          find.byKey(ValueKey<String>(key)),
+    testWidgets(
+      "only the tapped pill spins; the busy card's other pill is inert",
+      (tester) async {
+        final semantics = tester.ensureSemantics();
+        // Driven through the real screen with a gated write so the busy state
+        // lasts long enough to inspect: `ApprovalCard` remembers WHICH button
+        // was pressed (BUG-P11-4), which a hand-built `busyIds` list cannot
+        // express.
+        final repository = _GatedWritesRepository(
+          GetIt.instance<ApprovalsRepository>(),
         );
-        expect(button.loading, isTrue, reason: key);
-        expect(button.onPressed, isNull, reason: key);
-        final data = _data(tester, find.byKey(ValueKey<String>(key)));
+        await _useRepository(repository);
+        await pump(tester);
+
+        await tester.tap(find.byKey(const ValueKey<String>('p11_approve_1')));
+        await tester.pump();
+
+        // The tapped pill: loading, disabled, no tap action, announced as
+        // disabled (RULES §8).
+        final approve = find.byKey(const ValueKey<String>('p11_approve_1'));
+        expect(tester.widget<NestButton>(approve).loading, isTrue);
+        expect(tester.widget<NestButton>(approve).onPressed, isNull);
         expect(
-          data.flagsCollection.isEnabled.toBoolOrNull(),
+          _data(tester, approve).flagsCollection.isEnabled.toBoolOrNull(),
           isFalse,
-          reason: key,
         );
+        expect(_data(tester, approve).hasAction(SemanticsAction.tap), isFalse);
+
+        // BUG-P11-4: the decision the parent did not make must NOT spin, and
+        // it must not be tappable either while its card is locked.
+        final notYet = find.byKey(const ValueKey<String>('p11_not_yet_1'));
+        expect(tester.widget<NestButton>(notYet).loading, isFalse);
+        expect(tester.widget<NestButton>(notYet).onPressed, isNull);
         expect(
-          data.hasAction(SemanticsAction.tap),
+          _data(tester, notYet).hasAction(SemanticsAction.tap),
           isFalse,
           reason: 'a disabled control passes no tap action (RULES §8)',
         );
-      }
-      for (final key in const <String>['p11_not_yet_2', 'p11_approve_2']) {
-        final button = tester.widget<NestButton>(
-          find.byKey(ValueKey<String>(key)),
-        );
-        expect(button.loading, isFalse, reason: key);
-        expect(button.onPressed, isNotNull, reason: key);
-        expect(_hasTap(tester, find.byKey(ValueKey<String>(key))), isTrue);
-      }
-      semantics.dispose();
-    });
+
+        // The other cards stay fully live.
+        for (final key in const <String>['p11_not_yet_2', 'p11_approve_2']) {
+          final button = tester.widget<NestButton>(
+            find.byKey(ValueKey<String>(key)),
+          );
+          expect(button.loading, isFalse, reason: key);
+          expect(button.onPressed, isNotNull, reason: key);
+          expect(_hasTap(tester, find.byKey(ValueKey<String>(key))), isTrue);
+        }
+
+        repository.openGate();
+        await _settle(tester);
+        semantics.dispose();
+
+        await disposeApp(tester);
+      },
+    );
   });
 
   group('P11 approvals — copy', () {

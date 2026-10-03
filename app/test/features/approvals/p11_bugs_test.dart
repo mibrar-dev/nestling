@@ -92,7 +92,6 @@ void main() {
               'found ${rows.length} (duplicate money)',
         );
       },
-      skip: true, // BUG-P11-1,
     );
 
     // Same race through `approveAll()`, which re-selects the pending set
@@ -115,7 +114,7 @@ void main() {
         _seedBonusPence + 30,
         reason: 'each pending completion credits its own coins exactly once',
       );
-    }, skip: true); // BUG-P11-1
+    });
 
     // Real-database reachability: two taps on the bottom CTA before a frame
     // renders both reach `_onApproveAll` (bloc 9's default event transformer
@@ -142,7 +141,7 @@ void main() {
       );
 
       await disposeApp(tester);
-    }, skip: true); // BUG-P11-1
+    });
 
     // The same reachability for a single card, proven at the bloc boundary
     // with a counting stub (the repository is proven above).
@@ -173,7 +172,7 @@ void main() {
       );
 
       await disposeApp(tester);
-    }, skip: true); // BUG-P11-1
+    });
   });
 
   group('BUG-P11-2 — "Not yet" overwrites an approved decision', () {
@@ -201,7 +200,7 @@ void main() {
             '(status is ${row.status}); the bonus row is still there '
             '(${rows.length})',
       );
-    }, skip: true); // BUG-P11-2
+    });
 
     // Real-screen reachability: tapping Approve and then Not yet before a
     // frame renders (both buttons are still enabled) leaves the completion
@@ -240,7 +239,7 @@ void main() {
       );
 
       await disposeApp(tester);
-    }, skip: true); // BUG-P11-2
+    });
   });
 
   group('BUG-P11-3 — BST spring-forward mislabels Yesterday as Today', () {
@@ -260,7 +259,7 @@ void main() {
         ),
         'Yesterday',
       );
-    }, skip: true); // BUG-P11-3
+    });
 
     test('a completion from two days back renders as Yesterday', () {
       expect(
@@ -272,7 +271,7 @@ void main() {
         ),
         'Sat 28 Mar',
       );
-    }, skip: true); // BUG-P11-3
+    });
   });
 
   group('BUG-P11-4 — both card buttons show the spinner', () {
@@ -306,7 +305,7 @@ void main() {
       repo.release();
       await _settle(tester);
       await disposeApp(tester);
-    }, skip: true); // BUG-P11-4
+    });
   });
 }
 

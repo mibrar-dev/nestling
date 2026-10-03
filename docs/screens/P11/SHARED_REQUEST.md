@@ -1,4 +1,11 @@
-# Shared request — P11 quote rows have no data source
+# Shared request — P11 quote rows have no data source — RESOLVED (schema v6)
+
+> Update (iteration 2): landed on main as `shared/completion_note` —
+> `quest_completions.kid_note TEXT NULL` (schema v6) + seed notes for the two
+> pending rows (dishwasher/table-NULL/bed). P11's `Approval` entity/model/
+> repository now carry `kidNote` (NULL = no quote line). Rendering the quote
+> line is UI-builder work (their iteration 2). Original request kept below
+> for history.
 
 Need: the P11 design's `.qn` quote lines (“I stacked everything neatly!”
 etc.) have no backing column — `quest_completions` carries no child
@@ -46,6 +53,20 @@ confirmation so `main` carries it.
 
 # Shared request — `NestBottomCta` sits ~8 px low vs the P11 design
 
+> Update (iteration 2, UI builder): **worked around locally; the shared change
+> is still wanted.** Screens cannot edit `core/` (RULES §1), so P11 now uses a
+> P11-private `ApprovalsBottomCta`
+> (`app/lib/features/approvals/presentation/widgets/approvals_bottom_cta.dart`)
+> — same surface fill, same 1 px top `line`, same 20 px gutters, same 16 px
+> above the pill, but `bottom: MediaQuery.padding.bottom + 24`. Measured after
+> the change: at the design's 34 px home inset the panel top is **717** (the
+> `--line` pixel sits exactly where the design draws it) and the pill is
+> **734–786, centre 760** — the design's rects, with the surface still running
+> to the physical edge (OWNER rule); at the zero-inset test surface the pill is
+> 768–820. Both are pinned in `approvals_view_geometry_test.dart`. When the
+> shared component adopts the 24 px pad, P11 can go back to `NestBottomCta`
+> (one import, one class name).
+
 Need: `ORCHESTRATOR_NOTES.md` (15:31) item 3 — match the P11 "Approve all"
 button to the design. The cause is the shared component
 (`app/lib/core/design_system/components/nest_bottom_cta.dart`): SafeArea +
@@ -58,9 +79,11 @@ Measured numbers (all logical px, 390×844):
 
 | | panel top | button (x, y, w×h) | button centre y | surface to edge |
 |---|---|---|---|---|
-| design PNG | ≈718 | 20–370, 734–786, 350×52 | 760 | design: to 810 + paper home strip; OWNER rule replaces the strip with surface |
-| app (simulator, 34 px home inset) | ≈726 | 21–369, 742–793, 349×52 | ≈768 (+8) | surface to 844 ✓ |
-| app (widget test, zero inset) | 760 | 20–370, 776–828 | 802 | surface to 844 ✓ |
+| design PNG | 717 (1 px `--line`, surface below) | 20–370, 734–786, 350×52 | 760 | design: to 810 + paper home strip; OWNER rule replaces the strip with surface |
+| app before (simulator, 34 px home inset) | ≈726 | 21–369, 742–793, 349×52 | ≈768 (+8) | surface to 844 ✓ |
+| app before (widget test, zero inset) | 760 | 20–370, 776–828 | 802 | surface to 844 ✓ |
+| app now (simulator, 34 px inset) | **717** | **20–370, 734–786** | **760** | surface to 844 ✓ |
+| app now (widget test, zero inset) | 752 | 20–370, 768–820 | 794 | surface to 844 ✓ |
 
 Requested behaviour (per the note): button top 16 px under the panel top and
 the panel surface still runs to the physical edge — i.e. at the simulator's
@@ -69,11 +92,12 @@ below it (34 home + 24). Concretely: keep the top pad 16 and use a bottom pad
 of `safeArea.bottom + 24` instead of `safeArea.bottom + 16` (at zero inset the
 button then sits 24 px above the edge: 768–820).
 
-Files: `app/lib/core/design_system/components/nest_bottom_cta.dart` (shared);
-P11's `app/test/features/approvals/approvals_view_geometry_test.dart`
-currently pins the old zero-inset position (`screen.bottom - button.bottom ==
-16`, button 776–828) and must be updated in the same change or the deviation
-stays green.
+Note for whoever changes the shared component: `SafeArea` resolves
+`max(inset, minimum)`, so `minimum: EdgeInsets.only(bottom: 24)` does NOT add
+the 24 on top of the inset — read `MediaQuery.paddingOf(context).bottom`
+directly, as `ApprovalsBottomCta` does.
 
-Blocks: no — P11 ships; the −8 px UI delta stays until the shared change
-lands.
+Files: `app/lib/core/design_system/components/nest_bottom_cta.dart` (shared).
+
+Blocks: no — P11 ships on the local panel above; the shared change only
+unblocks every other `NestBottomCta` screen.

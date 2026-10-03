@@ -31,10 +31,15 @@ String approvalDayLabel({
   final stored = normalizeZoneId(storedZoneId);
   final created = toFamilyZone(createdAtUtc, stored);
   final now = toFamilyZone(nowUtc, stored);
-  // Wall-clock dates only: two `DateTime(y, m, d)` values built the same way
-  // differ by whole days, which keeps the test correct across a DST change.
-  final createdDay = DateTime(created.year, created.month, created.day);
-  final today = DateTime(now.year, now.month, now.day);
+  // Calendar-date arithmetic in UTC, never in the host's local zone
+  // (BUG-P11-3): `DateTime(y, m, d)` builds LOCAL midnight, so on a host in
+  // Europe/London the spring-forward day (29 Mar 2026, 01:00 GMT → 02:00 BST)
+  // makes 29→30 Mar span 23 h — `inDays` truncates it to 0 and yesterday's
+  // completion is labelled "Today" (and two days back, 47 h, becomes
+  // "Yesterday"). `DateTime.utc` on the same three fields has no offset at
+  // all, so the difference is always whole days in any host zone.
+  final createdDay = DateTime.utc(created.year, created.month, created.day);
+  final today = DateTime.utc(now.year, now.month, now.day);
   final daysApart = today.difference(createdDay).inDays;
   if (daysApart == 0) return 'Today';
   if (daysApart == 1) return 'Yesterday';

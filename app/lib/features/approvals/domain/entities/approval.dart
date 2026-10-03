@@ -17,6 +17,7 @@ class Approval extends Equatable {
     required this.coins,
     required this.createdAt,
     required this.createdAtTz,
+    this.kidNote,
   });
 
   final String id;
@@ -37,6 +38,11 @@ class Approval extends Equatable {
   /// in this zone; see `family_time.dart`).
   final String createdAtTz;
 
+  /// The child's note on the completion (`quest_completions.kid_note`,
+  /// schema v6; stored WITHOUT surrounding quotes — P11 adds them at render
+  /// time). NULL (default) = no quote line and no gap.
+  final String? kidNote;
+
   @override
   List<Object?> get props => <Object?>[
     id,
@@ -51,5 +57,6 @@ class Approval extends Equatable {
     coins,
     createdAt,
     createdAtTz,
+    kidNote,
   ];
 }

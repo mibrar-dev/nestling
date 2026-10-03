@@ -23,6 +23,7 @@ import 'package:nestling/features/approvals/presentation/bloc/approvals_bloc.dar
 import 'package:nestling/features/approvals/presentation/bloc/approvals_event.dart';
 import 'package:nestling/features/approvals/presentation/views/approvals_view.dart';
 import 'package:nestling/features/approvals/presentation/widgets/approval_card.dart';
+import 'package:nestling/features/approvals/presentation/widgets/approvals_bottom_cta.dart';
 import 'package:nestling/features/approvals/presentation/widgets/approvals_loaded_body.dart';
 
 import '../../test_scope.dart';
@@ -181,9 +182,9 @@ void main() {
       tester,
     ) async {
       await pump(tester);
-      final tokens = tester.element(find.byType(NestBottomCta)).nest;
+      final tokens = tester.element(find.byType(ApprovalsBottomCta)).nest;
 
-      final cta = tester.getRect(find.byType(NestBottomCta));
+      final cta = tester.getRect(find.byType(ApprovalsBottomCta));
       final screen = tester.getRect(find.byType(Scaffold).first);
       expect(cta.left, screen.left);
       expect(cta.right, screen.right);
@@ -192,7 +193,7 @@ void main() {
       final bar = tester.widget<DecoratedBox>(
         find
             .descendant(
-              of: find.byType(NestBottomCta),
+              of: find.byType(ApprovalsBottomCta),
               matching: find.byType(DecoratedBox),
             )
             .first,
@@ -247,7 +248,7 @@ void main() {
       // No "Approve all (0)" bar over the empty state — the CTA goes with the
       // inbox (owner bottom-edge rule: no bar, so no coloured strip either).
       expect(find.text('Approve all (0)'), findsNothing);
-      expect(find.byType(NestBottomCta), findsNothing);
+      expect(find.byType(ApprovalsBottomCta), findsNothing);
 
       await disposeApp(tester);
     });

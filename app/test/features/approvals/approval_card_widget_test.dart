@@ -10,6 +10,7 @@
 // keep the parallel logic builder's file set untouched.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/approvals/domain/entities/approval.dart';
@@ -25,6 +26,7 @@ Approval _approval({
   int coins = 15,
   DateTime? createdAt,
   String zone = 'Europe/London',
+  String? kidNote,
 }) {
   return Approval(
     id: '$id',
@@ -39,6 +41,7 @@ Approval _approval({
     coins: coins,
     createdAt: createdAt ?? DateTime.utc(2026, 10, 3, 7, 12),
     createdAtTz: zone,
+    kidNote: kidNote,
   );
 }
 
@@ -63,7 +66,26 @@ Future<void> _pump(
   await tester.pump();
 }
 
+/// Loads the bundled Inter/Nunito faces, so card heights and line boxes here
+/// are the ones the device renders. Without them `flutter_test` falls back to a
+/// font ~10 % wider and the child's quote wraps to two lines, which would make
+/// this card 220 instead of 172 and hide every off-by-34 regression.
+Future<void> _loadBundledFonts() async {
+  final inter = FontLoader('Inter')
+    ..addFont(rootBundle.load('assets/fonts/Inter-Regular.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-Medium.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-SemiBold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-Bold.ttf'));
+  final nunito = FontLoader('Nunito')
+    ..addFont(rootBundle.load('assets/fonts/Nunito-Bold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Nunito-ExtraBold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Nunito-Black.ttf'));
+  await inter.load();
+  await nunito.load();
+}
+
 void main() {
+  setUpAll(_loadBundledFonts);
   group('approvalTime labels', () {
     // 3 Oct 2026 is a Saturday; the seed anchors its story to this date.
     test('same London day → Today', () {
@@ -284,27 +306,134 @@ void main() {
       expect(pillRect.width, closeTo(secondary.width, 0.01));
     });
 
-    testWidgets('busy disables both buttons and swallows taps', (tester) async {
-      var taps = 0;
+    testWidgets(
+      'a busy card swallows taps and spins nothing it was not told to',
+      (tester) async {
+        var taps = 0;
+        await _pump(
+          tester,
+          ApprovalCard(
+            approval: _approval(),
+            nowUtc: DateTime.utc(2026, 10, 3, 18),
+            busy: true,
+            onNotYet: () => taps++,
+            onApprove: () => taps++,
+          ),
+        );
+
+        // `busy` without a press inside this widget's lifetime: BOTH pills are
+        // disabled (a second decision must not queue), and neither spins — a
+        // spinner belongs to the button the parent actually pressed
+        // (BUG-P11-4). The end-to-end version of that contract, where one pill
+        // does spin, lives in `approvals_view_states_test.dart`.
+        for (final button in tester.widgetList<NestButton>(
+          find.byType(NestButton),
+        )) {
+          expect(button.onPressed, isNull);
+          expect(button.loading, isFalse);
+        }
+        await tester.tap(find.text('Approve'));
+        await tester.tap(find.text('Not yet'));
+        expect(taps, 0);
+      },
+    );
+
+    testWidgets('only the pressed pill spins while the card is busy', (
+      tester,
+    ) async {
+      var approved = 0;
+      var busy = false;
+      // `_pending` lives in the card's State and is set by the press itself, so
+      // the host flips `busy` from the callback instead of rebuilding the card
+      // — otherwise the widget is new and has nothing to attribute a spinner to.
       await _pump(
         tester,
-        ApprovalCard(
-          approval: _approval(),
-          nowUtc: DateTime.utc(2026, 10, 3, 18),
-          busy: true,
-          onNotYet: () => taps++,
-          onApprove: () => taps++,
+        StatefulBuilder(
+          builder: (context, setState) => ApprovalCard(
+            approval: _approval(),
+            nowUtc: DateTime.utc(2026, 10, 3, 18),
+            busy: busy,
+            onNotYet: () {},
+            onApprove: () {
+              approved++;
+              setState(() => busy = true);
+            },
+          ),
         ),
       );
 
-      for (final button in tester.widgetList<NestButton>(
-        find.byType(NestButton),
-      )) {
-        expect(button.loading, isTrue);
-        expect(button.onPressed, isNull);
-      }
       await tester.tap(find.text('Approve'));
-      expect(taps, 0);
+      await tester.pump();
+
+      expect(approved, 1);
+      final buttons = tester.widgetList<NestButton>(find.byType(NestButton));
+      expect(buttons, hasLength(2));
+      expect(buttons.first.loading, isFalse, reason: 'Not yet was not pressed');
+      expect(buttons.last.loading, isTrue, reason: 'Approve was pressed');
+      expect(buttons.first.onPressed, isNull, reason: 'the card is locked');
+      expect(buttons.last.onPressed, isNull, reason: 'the card is locked');
+    });
+
+    testWidgets('the child note renders as one quoted line, x 36, Inter 17/24', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        ApprovalCard(
+          approval: _approval(kidNote: 'I stacked everything neatly!'),
+          nowUtc: DateTime.utc(2026, 10, 3, 18),
+          onNotYet: () {},
+          onApprove: () {},
+        ),
+      );
+
+      // U+201C … U+201D around the RAW stored note (the seed keeps no quotes).
+      const quoted = '“I stacked everything neatly!”';
+      final quote = find.text(quoted);
+      expect(quote, findsOneWidget);
+      final card = tester.getRect(find.byType(ApprovalCard));
+      // `.qn` is a SIBLING of `.hd` in the HTML, so it starts at the card's
+      // padding edge (20 + 16 = 36) — not under `.who` (90). The design PNG
+      // agrees: the quote's ink begins at x 37.3, level with the avatar.
+      expect(
+        tester.getRect(quote).left,
+        closeTo(card.left + NestSpacing.s4, 0.01),
+      );
+      final text = tester.widget<Text>(quote);
+      expect(text.style?.fontFamily, 'Inter');
+      expect(text.style?.fontSize, 17);
+      expect(text.style?.height, closeTo(24 / 17, 0.001));
+      expect(text.style?.fontWeight, FontWeight.w700);
+      expect(text.style?.letterSpacing, 0, reason: 'the CSS sets no tracking');
+      // 16 + 44 + 10 + 24 + 14 + 48 + 16 = 172 with the quote, 138 without.
+      expect(card.height, closeTo(172, 0.01));
+    });
+
+    testWidgets('a NULL (or blank) note renders no line and no gap', (
+      tester,
+    ) async {
+      for (final note in <String?>[null, '   ']) {
+        await _pump(
+          tester,
+          ApprovalCard(
+            approval: _approval(kidNote: note),
+            nowUtc: DateTime.utc(2026, 10, 3, 18),
+            onNotYet: () {},
+            onApprove: () {},
+          ),
+        );
+
+        expect(find.textContaining('“'), findsNothing, reason: 'note: $note');
+        final card = tester.getRect(find.byType(ApprovalCard));
+        // 16 + 44 + 14 + 48 + 16 = 138, and the row sits 14 px under `.hd`.
+        expect(card.height, closeTo(138, 0.01));
+        expect(
+          tester
+              .getRect(find.byKey(const ValueKey<String>('p11_not_yet_1')))
+              .top,
+          closeTo(card.top + 74, 0.01),
+        );
+      }
     });
 
     testWidgets('each card is one semantics node with a summary label', (
