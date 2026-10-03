@@ -1,0 +1,1 @@
+CONTINUE: the orchestrator app quit and your run was cut. Your work is on disk (uncommitted). Check git status/diff, finish every item of the task, write docs/screens/_shared/shared_batch2_REPORT.md and commit.
