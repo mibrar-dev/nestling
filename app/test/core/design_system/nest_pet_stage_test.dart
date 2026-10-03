@@ -6,9 +6,11 @@
 // visible outline (`236 × 202/240` by `188 × 110/240`), PipAvatar feet ≈23 px
 // below the rim (box ≈44 px below; feet 21.2 px above the box bottom), in a
 // 236-tall block. These tests pin that contract at 320/390/430 with the K03
-// parameters, the absolute K03 pins (nest 278, Pip 301, hearts 448) in a
+// parameters, the absolute K03 pins (nest 269, Pip 292, hearts 438) in a
 // header+speech harness, plus the `.speech` bubble height and the
-// Rive/reduced-motion fallback paths.
+// Rive/reduced-motion fallback paths. The pins sit ~9 px above the
+// pre-speech_tail values (278/301/448): the tail is now overflow per CSS
+// `::after`, so it no longer adds 10 px of layout below the body.
 //
 // Found no placeholder texts here: every assertion measures rects of the
 // shared scene (never screen copy).
@@ -19,6 +21,7 @@
 // light — shared by the explicit + legacy Rive boxes and the SVG fallback.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -35,7 +38,8 @@ const double _kPipHeight = 152;
 /// v2 PipAvatar geometry in a 152-tall box (240-space s3_idle_1.svg):
 /// tuft top 44.5 → head 28.2 below the box top; feet bottom 206.5 → feet
 /// 21.2 above the box bottom (33.5/240 × 152). The design seats feet 23 px
-/// below the rim (301 vs 278), so the box lands ≈44 px below it.
+/// below the rim (292 vs 269 in this harness), so the box lands ≈44 px
+/// below it.
 const double _pipTopPad = 44.5 / 240 * _kPipHeight;
 const double _pipBottomPad = 33.5 / 240 * _kPipHeight;
 
@@ -94,9 +98,11 @@ Future<void> _pumpSlot(
   );
 }
 
-/// K03 harness: status (47) + header (78) + speech (62) put the pet slot top
-/// at 187; the 236 block + 10.75 gap put hearts centre at ≈448, exactly like
-/// `/kid-home` at 390×844 (real fonts for the 44 px bubble).
+/// K03 harness: status (47) + header (78) + speech (52) put the pet slot top
+/// at 177; the 236 block + 10.75 gap put hearts centre at ≈438, exactly like
+/// `/kid-home` at 390×844 (real fonts for the 44 px bubble). Speech is 52 =
+/// the 44 px body plus the 8 px stage gap: the 9 px tail is overflow per CSS
+/// `::after` (shared/speech_tail), so it adds no layout.
 Future<void> _pumpK03Harness(
   WidgetTester tester, {
   bool riveEnabled = false,
@@ -311,7 +317,11 @@ void main() {
   });
 
   group('K03 harness pins the design rows (390×844, real fonts)', () {
-    testWidgets('nest 278, Pip 301, hearts 448 (Rive-disabled)', (
+    // shared/speech_tail: the tail is now overflow (CSS `::after`), so it no
+    // longer adds 10 px of layout below the body. Every row under the bubble
+    // moves up ~9 px versus the old in-flow tail (rim 269, feet 292, hearts
+    // 438). The body itself is unchanged (still ≈44).
+    testWidgets('nest 269, Pip 292, hearts 438 (Rive-disabled)', (
       tester,
     ) async {
       await _pumpK03Harness(tester);
@@ -320,21 +330,21 @@ void main() {
       expect(nest.height * 110 / 240, closeTo(86, 2));
       expect(nest.center.dx, closeTo(195, 1));
       final rimY = nest.top + PipNestFallback.nestRimTopFraction * nest.height;
-      // Outline 278→364 (86 tall).
-      expect(rimY, closeTo(278, 2));
-      expect(rimY + nest.height * 110 / 240, closeTo(364, 2));
+      // Outline 269→355 (86 tall).
+      expect(rimY, closeTo(269, 2));
+      expect(rimY + nest.height * 110 / 240, closeTo(355, 2));
 
       final pip = tester.getRect(find.byType(PipAvatar));
       expect(pip.center.dx, closeTo(195, 1));
-      // Feet 301 (box − 21.2), head 199 (box + 28.2).
-      expect(pip.bottom - _pipBottomPad, closeTo(301, 3));
-      expect(pip.top + _pipTopPad, closeTo(199, 5));
+      // Feet 292 (box − 21.2), head 190 (box + 28.2).
+      expect(pip.bottom - _pipBottomPad, closeTo(292, 3));
+      expect(pip.top + _pipTopPad, closeTo(190, 5));
 
       final row = tester.getRect(find.byType(Row).first);
-      expect(row.center.dy, closeTo(448, 2));
+      expect(row.center.dy, closeTo(438, 2));
     });
 
-    testWidgets('nest 278, Pip 301, hearts 448 (Reduce Motion)', (
+    testWidgets('nest 269, Pip 292, hearts 438 (Reduce Motion)', (
       tester,
     ) async {
       await _pumpK03Harness(tester, riveEnabled: true, disableAnimations: true);
@@ -342,14 +352,14 @@ void main() {
       expect(find.byType(PipNestFallback), findsOneWidget);
       final nest = tester.getRect(_nestPicture());
       final rimY = nest.top + PipNestFallback.nestRimTopFraction * nest.height;
-      expect(rimY, closeTo(278, 2));
-      expect(rimY + nest.height * 110 / 240, closeTo(364, 2));
+      expect(rimY, closeTo(269, 2));
+      expect(rimY + nest.height * 110 / 240, closeTo(355, 2));
       final pip = tester.getRect(find.byType(PipAvatar));
       expect(pip.center.dx, closeTo(195, 1));
-      expect(pip.bottom - _pipBottomPad, closeTo(301, 3));
-      expect(pip.top + _pipTopPad, closeTo(199, 5));
+      expect(pip.bottom - _pipBottomPad, closeTo(292, 3));
+      expect(pip.top + _pipTopPad, closeTo(190, 5));
       final row = tester.getRect(find.byType(Row).first);
-      expect(row.center.dy, closeTo(448, 2));
+      expect(row.center.dy, closeTo(438, 2));
     });
   });
 
@@ -375,6 +385,174 @@ void main() {
       // + 2 × 3 px border ≈ 44 — the design PNG measures 44, not 35 (see the
       // explicit report: the 35 was the inner-white height misread as body).
       expect(tester.getSize(body).height, closeTo(44, 2));
+    });
+
+    /// The bubble body: the r18 3 px ink Container inside the Stack.
+    Finder bubbleBody() => find.descendant(
+      of: find.byType(NestSpeechBubble),
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is Container &&
+            (widget.decoration as BoxDecoration?)?.borderRadius ==
+                BorderRadius.circular(18),
+      ),
+    );
+
+    /// The tail paint: the single CustomPaint inside the bubble.
+    Finder bubbleTail() => find.descendant(
+      of: find.byType(NestSpeechBubble),
+      matching: find.byType(CustomPaint),
+    );
+
+    const tailProbe = ValueKey<String>('speechTailProbe');
+
+    Future<void> pumpBubble(
+      WidgetTester tester, {
+      ThemeMode mode = ThemeMode.light,
+    }) async {
+      // The probe carries its own paper background (the Scaffold paints
+      // paper outside the boundary, which would read back transparent), so
+      // "1 px below the tip" samples the page background faithfully.
+      await pumpNest(
+        tester,
+        RepaintBoundary(
+          key: tailProbe,
+          child: Builder(
+            builder: (context) => Container(
+              color: context.nest.paper,
+              alignment: Alignment.center,
+              child: const NestSpeechBubble(text: "Let's do some quests!"),
+            ),
+          ),
+        ),
+        mode: mode,
+      );
+      expect(tester.takeException(), isNull);
+    }
+
+    /// Opaque RGBA bytes of [color] at 8-bit precision.
+    List<int> rgba(Color color) => <int>[
+      (color.r * 255).round(),
+      (color.g * 255).round(),
+      (color.b * 255).round(),
+      255,
+    ];
+
+    /// One logical pixel of the probe frame at boundary-local [at].
+    Future<List<int>> pixelAt(
+      WidgetTester tester,
+      RenderRepaintBoundary boundary,
+      Offset at,
+    ) async {
+      late List<int> out;
+      await tester.runAsync(() async {
+        final image = await boundary.toImage();
+        final data = await image.toByteData();
+        final x = at.dx.round().clamp(0, image.width - 1);
+        final y = at.dy.round().clamp(0, image.height - 1);
+        final offset = (y * image.width + x) * 4;
+        out = <int>[
+          data!.getUint8(offset),
+          data.getUint8(offset + 1),
+          data.getUint8(offset + 2),
+          data.getUint8(offset + 3),
+        ];
+        image.dispose();
+      });
+      return out;
+    }
+
+    Future<void> settleRaster(WidgetTester tester) async {
+      await tester.pumpAndSettle();
+      for (var turn = 0; turn < 3; turn++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        );
+        await tester.pump();
+      }
+    }
+
+    for (final entry in const <(String, ThemeMode)>[
+      ('light', ThemeMode.light),
+      ('dark', ThemeMode.dark),
+    ]) {
+      final name = entry.$1;
+      final mode = entry.$2;
+      testWidgets('$name: tail is 18x9, centred, flush with the body', (
+        tester,
+      ) async {
+        await pumpBubble(tester, mode: mode);
+        final body = bubbleBody();
+        final tail = bubbleTail();
+        expect(body, findsOneWidget);
+        expect(tail, findsOneWidget);
+        final bodyRect = tester.getRect(body);
+        final tailRect = tester.getRect(tail);
+        final bubbleRect = tester.getRect(find.byType(NestSpeechBubble));
+        // `.speech::after`: `border:9px solid transparent` with
+        // `border-top-color:ink; border-bottom:0` = 18 wide x 9 tall.
+        expect(tailRect.width, closeTo(18, 0.5));
+        expect(tailRect.height, closeTo(9, 0.5));
+        expect(tester.widget<CustomPaint>(tail).size, const Size(18, 9));
+        // Centred horizontally on the bubble, top edge flush with the
+        // bubble's outer bottom edge (the Container's border-box bottom).
+        expect(tailRect.center.dx, closeTo(bodyRect.center.dx, 0.5));
+        expect(tailRect.center.dx, closeTo(bubbleRect.center.dx, 0.5));
+        expect(tailRect.top, closeTo(bodyRect.bottom, 0.5));
+        expect(tailRect.top, closeTo(bubbleRect.bottom, 0.5));
+        // Solid ink: the shared painter carries the ink token and no
+        // surface fill (the old inner white triangle is gone).
+        final tokens = Theme.of(tester.element(find.byType(NestSpeechBubble)))
+            .extension<NestTokens>()!;
+        final painter = tester.widget<CustomPaint>(tail).painter;
+        expect((painter! as dynamic).inkColor, tokens.ink);
+      });
+
+      testWidgets(
+        '$name: tail centre paints ink, 1px below tip paints background',
+        (tester) async {
+          await pumpBubble(tester, mode: mode);
+          await settleRaster(tester);
+          final tailRect = tester.getRect(bubbleTail());
+          final boundary = tester.renderObject<RenderRepaintBoundary>(
+            find.byKey(tailProbe),
+          );
+          final tokens = Theme.of(tester.element(find.byType(NestSpeechBubble)))
+              .extension<NestTokens>()!;
+          final centreLocal = boundary.globalToLocal(tailRect.center);
+          final belowLocal = boundary.globalToLocal(
+            tailRect.bottomCenter + const Offset(0, 1),
+          );
+          expect(
+            await pixelAt(tester, boundary, centreLocal),
+            rgba(tokens.ink),
+            reason: 'the tail is solid ink (no surface fill)',
+          );
+          expect(
+            await pixelAt(tester, boundary, belowLocal),
+            rgba(tokens.paper),
+            reason: '1 px below the tip is the page background',
+          );
+        },
+      );
+    }
+
+    testWidgets('laid-out height excludes the tail overflow', (tester) async {
+      await pumpBubble(tester);
+      final bodyRect = tester.getRect(bubbleBody());
+      final tailRect = tester.getRect(bubbleTail());
+      final bubbleRect = tester.getRect(find.byType(NestSpeechBubble));
+      // The Stack sizes to the body alone (Positioned tail is overflow, as
+      // `::after` is in CSS): the bubble's laid-out box equals the body box.
+      expect(bubbleRect.width, closeTo(bodyRect.width, 0.5));
+      expect(bubbleRect.height, closeTo(bodyRect.height, 0.5));
+      expect(
+        tester.getSize(find.byType(NestSpeechBubble)),
+        tester.getSize(bubbleBody()),
+      );
+      // The painted tail still hangs 9 px below the body for the eye.
+      expect(tailRect.top, closeTo(bubbleRect.bottom, 0.5));
+      expect(tailRect.bottom, closeTo(bubbleRect.bottom + 9, 0.5));
     });
   });
 

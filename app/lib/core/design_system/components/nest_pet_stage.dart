@@ -310,11 +310,19 @@ class NestSpeechBubble extends StatelessWidget {
 
   final String text;
 
+  /// `.speech::after` geometry (`components.css:192`): the tail is a solid
+  /// ink triangle this wide at its base and this tall, centred under the
+  /// bubble with its top edge flush with the bubble's outer bottom edge.
+  /// It is overflow (painted outside the layout box, as in CSS), so the
+  /// bubble's laid-out height is the body alone.
+  static const double tailWidth = 18;
+  static const double tailHeight = 9;
+
   @override
   Widget build(BuildContext context) {
     final tokens = context.nest;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+    return Stack(
+      clipBehavior: Clip.none,
       children: [
         Container(
           constraints: const BoxConstraints(maxWidth: 260),
@@ -347,12 +355,19 @@ class NestSpeechBubble extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
         ),
-        CustomPaint(
-          painter: _TailPainter(
-            inkColor: tokens.ink,
-            fillColor: tokens.surface,
+        // `.speech::after`: `bottom:-9px` — the tail hangs 9 px below the
+        // bubble as overflow. Positioned children do not size the Stack, so
+        // the laid-out height stays the body alone and nothing below moves.
+        Positioned(
+          bottom: -tailHeight,
+          left: 0,
+          right: 0,
+          child: Center(
+            child: CustomPaint(
+              painter: _TailPainter(inkColor: tokens.ink),
+              size: const Size(tailWidth, tailHeight),
+            ),
           ),
-          size: const Size(18, 10),
         ),
       ],
     );
@@ -360,10 +375,9 @@ class NestSpeechBubble extends StatelessWidget {
 }
 
 class _TailPainter extends CustomPainter {
-  const new({required this.inkColor, required this.fillColor});
+  const new({required this.inkColor});
 
   final Color inkColor;
-  final Color fillColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -371,24 +385,14 @@ class _TailPainter extends CustomPainter {
     canvas.drawPath(
       Path()
         ..moveTo(0, 0)
-        ..lineTo(18, 0)
-        ..lineTo(9, 10)
+        ..lineTo(NestSpeechBubble.tailWidth, 0)
+        ..lineTo(NestSpeechBubble.tailWidth / 2, NestSpeechBubble.tailHeight)
         ..close(),
       inkPaint,
-    );
-    final fillPaint = Paint()..color = fillColor;
-    canvas.drawPath(
-      Path()
-        ..moveTo(3.5, 0)
-        ..lineTo(14.5, 0)
-        ..lineTo(9, 6.5)
-        ..close(),
-      fillPaint,
     );
   }
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) =>
-      oldDelegate is _TailPainter &&
-      (oldDelegate.inkColor != inkColor || oldDelegate.fillColor != fillColor);
+      oldDelegate is _TailPainter && oldDelegate.inkColor != inkColor;
 }

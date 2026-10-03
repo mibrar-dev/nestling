@@ -1,9 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:nestling/core/data/stream_combine.dart';
-import 'package:nestling/features/pocket_money/domain/entities/pocket_money_entry.dart';
-import 'package:nestling/features/pocket_money/domain/entities/pocket_money_setup.dart';
+import 'package:nestling/features/pocket_money/domain/entities/money_ledger_data.dart';
 import 'package:nestling/features/pocket_money/domain/pocket_money_repository.dart';
 import 'package:nestling/features/pocket_money/presentation/bloc/pocket_money_event.dart';
 import 'package:nestling/features/pocket_money/presentation/bloc/pocket_money_state.dart';
@@ -14,6 +12,9 @@ class PocketMoneyBloc extends Bloc<PocketMoneyEvent, PocketMoneyState> {
     on<PocketMoneyModeChanged>(_onModeChanged);
     on<PocketMoneyPayoutDayChanged>(_onPayoutDayChanged);
     on<PocketMoneyWeeklyBaseStepped>(_onWeeklyBaseStepped);
+    on<PocketMoneyChildSelected>(_onChildSelected);
+    on<PocketMoneyAddMoneySubmitted>(_onAddMoneySubmitted);
+    on<PocketMoneySpendingSubmitted>(_onSpendingSubmitted);
   }
 
   final PocketMoneyRepository _repository;
@@ -39,36 +40,49 @@ class PocketMoneyBloc extends Bloc<PocketMoneyEvent, PocketMoneyState> {
     Emitter<PocketMoneyState> emit,
   ) async {
     emit(state.copyWith(status: PocketMoneyStatus.loading));
-    // ONE emit.forEach: the two streams are combined first (two sequential
-    // forEach calls would never reach the second).
-    await emit.forEach<List<dynamic>>(
-      combineLatest2(
-        _repository.watchItems(),
-        _repository.watchSetup(),
-      ).transform(_closeOnError),
-      onData: (parts) {
+    // ONE emit.forEach: `watchLedgerData` already carries the P06 setup
+    // inside every emission, so the same bloc serves `/money`,
+    // `/pocket-money-setup` and `/payout` from this single subscription
+    // (two sequential forEach calls would never reach the second).
+    await emit.forEach<MoneyLedgerData>(
+      _repository.watchLedgerData().transform(_closeOnError),
+      onData: (data) {
         // The stream has caught up: forget confirmed step requests and clear
         // any stale write error (P06-BUG-01, P06-BUG-06). The unconfirmed day
         // request is dropped only once the stream confirms it — an unrelated
         // re-emission still reporting the old day must not swallow a
-        // correction tap (P06-BUG-09).
-        final setup = parts[1] as PocketMoneySetup;
-        if (setup.payoutDay == _pendingDay) _pendingDay = null;
-        for (final child in setup.children) {
-          if (_requestedBase[child.id] == child.weeklyBasePence) {
-            _requestedBase.remove(child.id);
+        // correction tap (P06-BUG-09). The setup arrives inside `data`
+        // (fakes without a savings table carry it via the shared test
+        // fallback); a previous emission is kept only when the new one has
+        // none (hand-built fixtures).
+        final setup = data.setup ?? state.setup;
+        if (setup != null) {
+          if (setup.payoutDay == _pendingDay) _pendingDay = null;
+          for (final child in setup.children) {
+            if (_requestedBase[child.id] == child.weeklyBasePence) {
+              _requestedBase.remove(child.id);
+            }
           }
         }
+        // Keep the current selection while it still exists; otherwise fall
+        // back to the first child in creation order (Maya, then Leo).
+        final current = state.selectedChildId;
+        final resolved = current != null && data.childById(current) != null
+            ? current
+            : data.firstChildId;
         return state.copyWith(
           status: PocketMoneyStatus.loaded,
-          items: parts[0] as List<PocketMoneyEntry>,
+          data: data,
           setup: setup,
+          selectedChildId: resolved,
+          clearSelectedChildId: resolved == null,
+          items: data.entriesFor(resolved),
           clearErrorMessage: true,
         );
       },
       onError: (error, _) => state.copyWith(
         status: PocketMoneyStatus.failure,
-        errorMessage: error.toString(),
+        errorMessage: _loadErrorMessage(error),
       ),
     );
   }
@@ -164,7 +178,73 @@ class PocketMoneyBloc extends Bloc<PocketMoneyEvent, PocketMoneyState> {
       ),
     );
   }
+
+  void _onChildSelected(
+    PocketMoneyChildSelected event,
+    Emitter<PocketMoneyState> emit,
+  ) {
+    // Synchronous re-filter: no stream work, no reload. Unknown ids (or a
+    // tap before the first load) are a no-op — same guard spirit as the
+    // stepper's P06-BUG-07.
+    final data = state.data;
+    if (data == null || data.childById(event.childId) == null) return;
+    if (state.selectedChildId == event.childId) return;
+    emit(
+      state.copyWith(
+        selectedChildId: event.childId,
+        items: data.entriesFor(event.childId),
+      ),
+    );
+  }
+
+  Future<void> _onAddMoneySubmitted(
+    PocketMoneyAddMoneySubmitted event,
+    Emitter<PocketMoneyState> emit,
+  ) async {
+    // Write-through: the `watchLedgerData` stream re-emits with the new
+    // `gift` row. Nothing optimistic — the sheet already validated.
+    // A failed submit keeps the loaded ledger and surfaces the message for
+    // the view's `NestToast` (unlike the P06 setup writes, which take the
+    // whole state to `failure`).
+    try {
+      await _repository.addMoney(
+        childId: event.childId,
+        amountPence: event.amountPence,
+        note: event.note,
+      );
+    } on Object catch (error) {
+      if (emit.isDone) return;
+      emit(state.copyWith(errorMessage: _submitErrorMessage(error)));
+    }
+  }
+
+  Future<void> _onSpendingSubmitted(
+    PocketMoneySpendingSubmitted event,
+    Emitter<PocketMoneyState> emit,
+  ) async {
+    try {
+      await _repository.recordSpending(
+        childId: event.childId,
+        amountPence: event.amountPence,
+        note: event.note,
+      );
+    } on Object catch (error) {
+      if (emit.isDone) return;
+      emit(state.copyWith(errorMessage: _submitErrorMessage(error)));
+    }
+  }
 }
+
+/// Parent-facing failure copy (review finding 7): a friendly lead sentence
+/// a parent can act on, with the raw cause retained after the colon so
+/// diagnostics — and the pinned `contains(...)` test expectations — still
+/// match. Only the P12 paths use these; the P06 setup writes keep their
+/// inherited inline-error format.
+String _loadErrorMessage(Object error) =>
+    'We couldn\u2019t load your ledger: $error';
+
+String _submitErrorMessage(Object error) =>
+    'We couldn\u2019t save that: $error';
 
 /// Errors are terminal: forward the first error, then close — otherwise the
 /// failed load's watchers stay subscribed and every "Try again" leaks
@@ -172,7 +252,7 @@ class PocketMoneyBloc extends Bloc<PocketMoneyEvent, PocketMoneyState> {
 /// complete and cancel, so the bloc can close cleanly and Retry resubscribes
 /// from scratch.
 final _closeOnError =
-    StreamTransformer<List<dynamic>, List<dynamic>>.fromHandlers(
+    StreamTransformer<MoneyLedgerData, MoneyLedgerData>.fromHandlers(
       handleError: (error, stackTrace, sink) {
         sink
           ..addError(error, stackTrace)

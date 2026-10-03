@@ -12,6 +12,7 @@ class PocketMoneyEntry extends Equatable {
     required this.amountPence,
     required this.note,
     required this.date,
+    this.dateTz = 'Europe/London',
   });
 
   final int id;
@@ -25,6 +26,12 @@ class PocketMoneyEntry extends Equatable {
   final String note;
   final DateTime date;
 
+  /// IANA zone id in force when the row was written. The view renders
+  /// payout/weekly-base labels with `formatDay(date, dateTz)` so history
+  /// stays zone-correct when the family moves. Defaults to London so older
+  /// constructions (P06 fakes) keep compiling.
+  final String dateTz;
+
   @override
   List<Object?> get props => <Object?>[
     id,
@@ -35,5 +42,6 @@ class PocketMoneyEntry extends Equatable {
     amountPence,
     note,
     date,
+    dateTz,
   ];
 }
