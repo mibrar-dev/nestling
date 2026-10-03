@@ -15,6 +15,10 @@ import 'package:nestling/features/family/presentation/bloc/family_state.dart';
 
 class _MockFamilyRepository extends Mock implements FamilyRepository;
 
+/// `FamilyAddChildRequested.onSaved` needs a callback; the profile path does
+/// not care which one, and a top-level tear-off is a compile-time constant.
+void _noop() {}
+
 const _maya = FamilyChild(
   id: 'maya',
   nickname: 'Maya',
@@ -87,6 +91,47 @@ Future<void> _setActiveChild(AppDatabase db, String? childId) {
   return (db.update(db.appState)..where((a) => a.id.equals(1))).write(
     AppStateCompanion(activeChildId: Value<String?>(childId)),
   );
+}
+
+/// Polls [condition] for up to two seconds — Drift's `watch()` streams land
+/// on the next event-loop turn, so a write is not visible synchronously.
+Future<void> _waitFor(bool Function() condition) async {
+  for (var i = 0; i < 200 && !condition(); i++) {
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+}
+
+/// Appends one Maya completion on a quest with the given repeat rule, dated
+/// [at]. Used to prove the PERIODS ruling from the orchestrator: a quest
+/// counts only for its own current period.
+Future<void> _completeQuest(
+  AppDatabase db, {
+  required String repeat,
+  required DateTime at,
+  String status = 'approved',
+}) async {
+  final questId =
+      await (db.select(db.quests)
+            ..where(
+              (q) =>
+                  q.assigneeChildId.equals('maya') &
+                  q.repeatRule.equals(repeat) &
+                  q.active.equals(true),
+            )
+            ..limit(1))
+          .map((q) => q.id)
+          .getSingle();
+  await db
+      .into(db.questCompletions)
+      .insert(
+        QuestCompletionsCompanion.insert(
+          questId: questId,
+          childId: 'maya',
+          familyId: Seed.familyId,
+          status: Value(status),
+          createdAt: Value(at),
+        ),
+      );
 }
 
 void main() {
@@ -178,6 +223,57 @@ void main() {
 
       expect(await repo.watchProfile().first, isNull);
     });
+
+    test('follows an activeChildId switch mid-stream', () async {
+      final db = await _demoDb();
+      final repo = FamilyRepositoryImpl(db: db);
+      final seen = <String?>[];
+      final sub = repo.watchProfile().listen((p) => seen.add(p?.child.id));
+
+      await _waitFor(() => seen.contains('maya'));
+      await _setActiveChild(db, 'leo');
+      await _waitFor(() => seen.contains('leo'));
+
+      // Maya (active) → Leo without re-subscribing: the selection follows
+      // `app_state` and the ledger subscription switches with it.
+      expect(seen, <String?>['maya', 'leo']);
+
+      await sub.cancel();
+    });
+
+    test('questsThisWeek follows the PERIODS ruling', () async {
+      final db = await _demoDb();
+      final repo = FamilyRepositoryImpl(db: db);
+      expect((await repo.watchProfile().first)!.questsThisWeek, 4);
+
+      // An in-period approval counts…
+      await _completeQuest(db, repeat: 'daily', at: DateTime.now().toUtc());
+      expect((await repo.watchProfile().first)!.questsThisWeek, 5);
+
+      // …a completion from an earlier period does not (daily → the current
+      // Europe/London day, weekly → the current London week).
+      await _completeQuest(
+        db,
+        repeat: 'daily',
+        at: DateTime.now().toUtc().subtract(const Duration(days: 3)),
+      );
+      expect((await repo.watchProfile().first)!.questsThisWeek, 5);
+    });
+
+    test('rejected completions never count', () async {
+      final db = await _demoDb();
+      final repo = FamilyRepositoryImpl(db: db);
+      final before = (await repo.watchProfile().first)!.questsThisWeek;
+
+      await _completeQuest(
+        db,
+        repeat: 'daily',
+        at: DateTime.now().toUtc(),
+        status: 'not_yet',
+      );
+
+      expect((await repo.watchProfile().first)!.questsThisWeek, before);
+    });
   });
 
   group('FamilyBloc profile (mock repository)', () {
@@ -262,6 +358,172 @@ void main() {
           children: _kids,
           profile: _mayaProfile,
           errorMessage: 'Exception: offline',
+        ),
+      ],
+    );
+
+    // P15's own stream, not the P05 roster: `watchProfile` is a separate
+    // combine branch (`family_bloc.dart:33-37`), so it can fail on its own.
+    blocTest<FamilyBloc, FamilyState>(
+      'an error on the profile stream alone is still a failure',
+      build: () {
+        final repo = _MockFamilyRepository();
+        when(repo.watchItems).thenAnswer((_) => Stream.value(_members));
+        when(repo.watchChildren).thenAnswer((_) => Stream.value(_kids));
+        when(repo.watchProfile).thenAnswer(
+          (_) => Stream<ChildProfile?>.error(Exception('profile offline')),
+        );
+        return FamilyBloc(repository: repo);
+      },
+      act: (bloc) => bloc.add(const FamilyLoadRequested()),
+      expect: () => [
+        const FamilyState(status: FamilyStatus.loading),
+        predicate<FamilyState>(
+          (s) =>
+              s.status == FamilyStatus.failure &&
+              (s.errorMessage ?? '').contains('profile offline'),
+        ),
+      ],
+    );
+
+    blocTest<FamilyBloc, FamilyState>(
+      'a second load after a failure recovers (Try again)',
+      build: () {
+        final repo = _MockFamilyRepository();
+        when(repo.watchItems).thenAnswer((_) => Stream.value(_members));
+        when(repo.watchChildren).thenAnswer((_) => Stream.value(_kids));
+        var attempts = 0;
+        when(repo.watchProfile).thenAnswer((_) {
+          attempts++;
+          return attempts == 1
+              ? Stream<ChildProfile?>.error(Exception('offline'))
+              : Stream<ChildProfile?>.value(_mayaProfile);
+        });
+        return FamilyBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const FamilyLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        bloc.add(const FamilyLoadRequested());
+      },
+      wait: const Duration(milliseconds: 100),
+      expect: () => [
+        predicate<FamilyState>((s) => s.status == FamilyStatus.loading),
+        predicate<FamilyState>(
+          (s) =>
+              s.status == FamilyStatus.failure &&
+              (s.errorMessage ?? '').contains('offline'),
+        ),
+        predicate<FamilyState>((s) => s.status == FamilyStatus.loading),
+        // The retry really recovers: loaded, with the profile back. The
+        // stale `errorMessage` it drags along is BUG P15-BUG-3, asserted
+        // separately so this test proves recovery, not message hygiene.
+        predicate<FamilyState>(
+          (s) => s.status == FamilyStatus.loaded && s.profile == _mayaProfile,
+        ),
+      ],
+    );
+
+    // ── BUG P15-BUG-3 (failing repro — do not "fix" the test) ──────────────
+    // P12 hit exactly this and fixed it: its `copyWith` has a
+    // `clearErrorMessage` flag because "copyWith cannot express null
+    // otherwise", and the load path passes it on EVERY emission
+    // (`pocket_money_state.dart:48-58`, `pocket_money_bloc.dart:81-86`,
+    // "P06-BUG-06"). `FamilyState.copyWith` has no such flag
+    // (`family_state.dart:71-95`: `errorMessage ?? this.errorMessage`) and
+    // `_onLoadRequested.onData` never clears it, so a recovered `loaded`
+    // state still carries the dead failure message. Consequence in the view:
+    // `ChildProfileView`'s listener only toasts when `errorMessage` CHANGES
+    // (`child_profile_view.dart:41-44`), so the same failure happening a
+    // second time is silent.
+    blocTest<FamilyBloc, FamilyState>(
+      'BUG P15-BUG-3: a recovered load drops the dead failure message',
+      build: () {
+        final repo = _MockFamilyRepository();
+        when(repo.watchItems).thenAnswer((_) => Stream.value(_members));
+        when(repo.watchChildren).thenAnswer((_) => Stream.value(_kids));
+        var attempts = 0;
+        when(repo.watchProfile).thenAnswer((_) {
+          attempts++;
+          return attempts == 1
+              ? Stream<ChildProfile?>.error(Exception('offline'))
+              : Stream<ChildProfile?>.value(_mayaProfile);
+        });
+        return FamilyBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const FamilyLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        bloc.add(const FamilyLoadRequested());
+      },
+      wait: const Duration(milliseconds: 100),
+      expect: () => [
+        isA<FamilyState>(),
+        isA<FamilyState>(),
+        isA<FamilyState>(),
+        const FamilyState(
+          status: FamilyStatus.loaded,
+          items: _members,
+          children: _kids,
+          profile: _mayaProfile,
+        ),
+      ],
+    );
+
+    // P05 and P15 share ONE bloc (`ARCHITECTURE`), so the P05 form events run
+    // against the P15 profile. They must not disturb it.
+    blocTest<FamilyBloc, FamilyState>(
+      'draft edits and a save leave the loaded profile untouched',
+      build: () {
+        final repo = _MockFamilyRepository();
+        when(repo.watchItems).thenAnswer((_) => Stream.value(_members));
+        when(repo.watchChildren).thenAnswer((_) => Stream.value(_kids));
+        when(repo.watchProfile).thenAnswer((_) => Stream.value(_mayaProfile));
+        when(
+          () => repo.addChild(
+            nickname: any(named: 'nickname'),
+            ageBand: any(named: 'ageBand'),
+            avatarColour: any(named: 'avatarColour'),
+          ),
+        ).thenAnswer((_) async {});
+        return FamilyBloc(repository: repo);
+      },
+      seed: () => const FamilyState(
+        status: FamilyStatus.loaded,
+        items: _members,
+        children: _kids,
+        profile: _mayaProfile,
+      ),
+      act: (bloc) async {
+        bloc.add(const FamilyDraftChanged(nickname: 'Ollie'));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        bloc.add(const FamilyAddChildRequested(onSaved: _noop));
+      },
+      wait: const Duration(milliseconds: 60),
+      expect: () => const <FamilyState>[
+        FamilyState(
+          status: FamilyStatus.loaded,
+          items: _members,
+          children: _kids,
+          profile: _mayaProfile,
+          draftNickname: 'Ollie',
+        ),
+        FamilyState(
+          status: FamilyStatus.loaded,
+          items: _members,
+          children: _kids,
+          profile: _mayaProfile,
+          draftNickname: 'Ollie',
+          saveInProgress: true,
+        ),
+        // The draft clears itself after a save, but the P15 profile — which
+        // only the load stream owns — is carried through untouched.
+        FamilyState(
+          status: FamilyStatus.loaded,
+          items: _members,
+          children: _kids,
+          profile: _mayaProfile,
+          lastSavedNickname: 'Ollie',
         ),
       ],
     );

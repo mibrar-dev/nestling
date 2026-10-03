@@ -269,6 +269,104 @@ void main() {
       handle.dispose();
       await disposeApp(tester);
     });
+
+    testWidgets('performAction(tap) on the PIN row pushes the PIN screen', (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/child-profile');
+
+      tester.semantics.performAction(
+        find.semantics.byLabel('Kid PIN'),
+        SemanticsAction.tap,
+      );
+      await tester.pumpAndSettle();
+      expect(pushedPath(tester), '/kid-pin');
+
+      handle.dispose();
+      await disposeApp(tester);
+    });
+  });
+
+  // ── BUG P15-BUG-1 (failing repro — do not "fix" the test) ──────────────
+  // `/child-profile` is entered with a `?childId=` deep link from Today
+  // (`today_loaded_body.dart:557`: `context.go('…/child-profile?childId=' …)`)
+  // and P08's own test asserts that URI. P15 ignores it: `watchProfile`
+  // resolves the selection from `app_state.activeChildId`
+  // (`family_repository_impl.dart:156-167`), which only the `CHILD` launch
+  // flag ever writes (`app/launch.dart:58`). So a parent who taps LEO on
+  // Today lands on MAYA's profile. `childProfileRoute`
+  // (`family_routes.dart:31`) never reads `state.uri`, and the fix belongs
+  // inside this feature: read the query parameter in the route (or select on
+  // it in the repository), keeping `activeChildId` as the fallback.
+  group('P15 honours the ?childId deep link from Today (BUG P15-BUG-1)', () {
+    testWidgets('BUG: ?childId=leo must show Leo, not the active child', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      // The demo seed's `activeChildId` is 'maya' (Seed.demo), so this test
+      // can only pass if the query parameter is honoured.
+      await pumpAppRoute(tester, '/child-profile?childId=leo');
+
+      expect(
+        find.text('Leo'),
+        findsOneWidget,
+        reason: 'the deep link asked for Leo',
+      );
+      expect(find.text('Maya'), findsNothing);
+      expect(_profile(tester).child.id, 'leo');
+
+      await disposeApp(tester);
+    });
+
+    testWidgets("BUG: tapping Leo on Today must land on Leo's profile", (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/today');
+
+      await tester.tap(find.text('Leo'));
+      await tester.pumpAndSettle();
+
+      expect(pushedPath(tester), '/child-profile');
+      expect(
+        find.text('Age 4\u20136 \u00B7 Pip is a Hatchling'),
+        findsOneWidget,
+      );
+      final pip = tester.widget<PipAvatar>(find.byType(PipAvatar));
+      expect(pip.style, PipStyle.bolt, reason: "Leo's own Pip, not Maya's");
+      expect(pip.stage, 2);
+      expect(find.text('Remove Leo from family'), findsOneWidget);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('a deep link that agrees with the active child works', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/child-profile?childId=maya');
+
+      expect(find.text('Maya'), findsOneWidget);
+      expect(_profile(tester).child.id, 'maya');
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('an unknown childId still falls back to the roster', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/child-profile?childId=nobody');
+
+      // No crash, no blank screen: the first child in ADDED order (CHILD
+      // ORDER ruling) is shown.
+      expect(find.text('Maya'), findsOneWidget);
+      expect(find.byKey(const Key('p15-hero')), findsOneWidget);
+
+      await disposeApp(tester);
+    });
   });
 
   group('P15 remove flow', () {
