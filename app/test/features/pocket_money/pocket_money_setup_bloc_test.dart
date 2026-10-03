@@ -403,14 +403,15 @@ void main() {
   group('PocketMoneyBloc — failure and guard paths', () {
     late _RecordingRepository repository;
 
-    // KNOWN DEFECT (P06-BUG-01, pinned by the skipped proof in
-    // `p06_bugs_test.dart` and written up in `docs/screens/P06/6_bugs.md`):
-    // `_onWeeklyBaseStepped` computes `current + delta` from `state.setup`,
-    // which only refreshes when the watch stream re-emits. Two step events
-    // dispatched in ONE event-loop turn (a fast double tap on `+`) therefore
-    // read the same stale base and write the same absolute value twice —
-    // £3.00 +50p +50p lands on 350p, not 400p. Do not "fix" the assertions
-    // below to accept the lost update; fix the bloc.
+    // FIXED (iteration 3) — was P06-BUG-01: `_onWeeklyBaseStepped` used to
+    // compute `current + delta` from `state.setup` and write it absolute, so
+    // two step events in one turn read the same stale base and the second
+    // tap was lost. The handler now confirms each successful write in state
+    // (`withChildBase`) so the next event reads the new base; the stream
+    // emission converges to the same value. Was P06-BUG-07: unknown ids used
+    // to fall back to `?? 0` and still call the repository — now a no-op.
+    // Proofs: `p06_bugs_test.dart` P06-BUG-01/02/06/07 (un-skipped) + the
+    // regression tests below.
     setUp(() {
       repository = _RecordingRepository();
     });
@@ -558,7 +559,7 @@ void main() {
     );
 
     blocTest<PocketMoneyBloc, PocketMoneyState>(
-      'stepping a child that is not in the setup is a silent no-op',
+      'stepping a child that is not in the setup writes nothing (P06-BUG-07)',
       build: () {
         repository = _RecordingRepository(throwOnWrite: false);
         return PocketMoneyBloc(repository: repository);
@@ -582,13 +583,121 @@ void main() {
         ),
       ],
       verify: (_) {
-        expect(
-          repository.weeklyBaseWrites,
-          <(String, int)>[('nobody', 50)],
-          reason:
-              'the handler reads 0 for an unknown child and still calls '
-              'the repository, which updates no row — no error, no emission',
+        // Unknown ids return before any repository call (used to write
+        // `0 + delta` for the phantom id).
+        expect(repository.weeklyBaseWrites, isEmpty);
+      },
+    );
+
+    blocTest<PocketMoneyBloc, PocketMoneyState>(
+      'two quick steps accumulate instead of losing one (P06-BUG-01)',
+      build: () {
+        repository = _RecordingRepository(throwOnWrite: false);
+        return PocketMoneyBloc(repository: repository);
+      },
+      act: (bloc) async {
+        bloc.add(const PocketMoneyLoadRequested());
+        await bloc.stream.firstWhere((state) => state.setup != null);
+        // Same event-loop turn: the second event must build on the first
+        // event's requested 350p, not the stale emitted 300p.
+        bloc
+          ..add(const PocketMoneyWeeklyBaseStepped('maya', 50))
+          ..add(const PocketMoneyWeeklyBaseStepped('maya', 50));
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      },
+      expect: () => <Matcher>[
+        isA<PocketMoneyState>().having(
+          (state) => state.status,
+          'status',
+          PocketMoneyStatus.loading,
+        ),
+        isA<PocketMoneyState>()
+            .having((state) => state.status, 'status', PocketMoneyStatus.loaded)
+            .having(
+              (state) => state.setup?.childById('maya')?.weeklyBasePence,
+              'maya base',
+              300,
+            ),
+        // Each successful write is confirmed in state without waiting for
+        // the watch stream (the stream emission converges to the same value
+        // and is deduped).
+        isA<PocketMoneyState>()
+            .having((state) => state.status, 'status', PocketMoneyStatus.loaded)
+            .having(
+              (state) => state.setup?.childById('maya')?.weeklyBasePence,
+              'maya base',
+              350,
+            ),
+        isA<PocketMoneyState>()
+            .having((state) => state.status, 'status', PocketMoneyStatus.loaded)
+            .having(
+              (state) => state.setup?.childById('maya')?.weeklyBasePence,
+              'maya base',
+              400,
+            ),
+      ],
+      verify: (_) {
+        expect(repository.weeklyBaseWrites, <(String, int)>[
+          ('maya', 350),
+          ('maya', 400),
+        ]);
+      },
+    );
+
+    blocTest<PocketMoneyBloc, PocketMoneyState>(
+      'a fast Sun→Sat correction is not dropped (P06-BUG-02)',
+      build: () {
+        repository = _RecordingRepository(throwOnWrite: false);
+        return PocketMoneyBloc(repository: repository);
+      },
+      act: (bloc) async {
+        bloc.add(const PocketMoneyLoadRequested());
+        await bloc.stream.firstWhere((state) => state.setup != null);
+        bloc
+          ..add(const PocketMoneyPayoutDayChanged(7))
+          ..add(const PocketMoneyPayoutDayChanged(6));
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      },
+      expect: () => <Matcher>[
+        isA<PocketMoneyState>().having(
+          (state) => state.status,
+          'status',
+          PocketMoneyStatus.loading,
+        ),
+        isA<PocketMoneyState>().having(
+          (state) => state.status,
+          'status',
+          PocketMoneyStatus.loaded,
+        ),
+      ],
+      verify: (_) {
+        // The no-op guard compares against the last requested day, so the
+        // correction reaches the repository (used to be dropped: [7]).
+        expect(repository.payoutDayWrites, <int>[7, 6]);
+      },
+    );
+
+    blocTest<PocketMoneyBloc, PocketMoneyState>(
+      'errorMessage clears when the setup re-emits after a failure '
+      '(P06-BUG-06)',
+      build: () {
+        repository = _RecordingRepository(failFirstSetupStream: true);
+        return PocketMoneyBloc(repository: repository);
+      },
+      act: (bloc) async {
+        bloc.add(const PocketMoneyLoadRequested());
+        await bloc.stream.firstWhere(
+          (state) => state.status == PocketMoneyStatus.failure,
         );
+        bloc.add(const PocketMoneyLoadRequested());
+        await bloc.stream.firstWhere(
+          (state) => state.status == PocketMoneyStatus.loaded,
+        );
+      },
+      verify: (bloc) {
+        expect(bloc.state.status, PocketMoneyStatus.loaded);
+        expect(bloc.state.setup, _demoSetup);
+        expect(bloc.state.errorMessage, isNull);
       },
     );
   });

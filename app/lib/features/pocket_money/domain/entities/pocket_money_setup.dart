@@ -54,6 +54,29 @@ class PocketMoneySetup extends Equatable {
     return null;
   }
 
+  /// Copy with one child's weekly base replaced (insertion order kept).
+  /// Used by the bloc to confirm a stepper write without waiting for the
+  /// watch stream to re-emit (P06-BUG-01).
+  PocketMoneySetup withChildBase(String id, int weeklyBasePence) {
+    return PocketMoneySetup(
+      mode: mode,
+      payoutDay: payoutDay,
+      coinValuePencePerCoin: coinValuePencePerCoin,
+      children: <PocketMoneySetupChild>[
+        for (final child in children)
+          if (child.id == id)
+            PocketMoneySetupChild(
+              id: child.id,
+              nickname: child.nickname,
+              avatarColour: child.avatarColour,
+              weeklyBasePence: weeklyBasePence,
+            )
+          else
+            child,
+      ],
+    );
+  }
+
   @override
   List<Object?> get props => <Object?>[
     mode,

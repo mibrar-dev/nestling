@@ -25,12 +25,18 @@ final class PocketMoneyState extends Equatable {
     List<PocketMoneyEntry>? items,
     PocketMoneySetup? setup,
     String? errorMessage,
+
+    /// Set to drop a stale message (copyWith cannot express null otherwise).
+    /// The load path passes this on every emission (P06-BUG-06).
+    bool clearErrorMessage = false,
   }) {
     return PocketMoneyState(
       status: status ?? this.status,
       items: items ?? this.items,
       setup: setup ?? this.setup,
-      errorMessage: errorMessage ?? this.errorMessage,
+      errorMessage: clearErrorMessage
+          ? null
+          : (errorMessage ?? this.errorMessage),
     );
   }
 

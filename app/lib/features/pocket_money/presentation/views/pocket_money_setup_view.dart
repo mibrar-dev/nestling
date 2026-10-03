@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -55,7 +57,19 @@ class PocketMoneySetupView extends StatelessWidget {
                     }
                     return _SetupScroll(child: _LoadedBody(setup: setup));
                   case PocketMoneyStatus.failure:
-                    return const _SetupScroll(child: _FailureBody());
+                    // A failed write keeps the loaded form visible with an
+                    // inline error (P06-BUG-05); only a load failure (no
+                    // usable setup at all) replaces the screen with _FailureBody.
+                    final setup = state.setup;
+                    if (setup == null) {
+                      return const _SetupScroll(child: _FailureBody());
+                    }
+                    return _SetupScroll(
+                      child: _LoadedBody(
+                        setup: setup,
+                        errorMessage: state.errorMessage,
+                      ),
+                    );
                   case PocketMoneyStatus.loaded:
                     final setup = state.setup;
                     if (setup == null) {
@@ -183,17 +197,31 @@ class _FailureBody extends StatelessWidget {
 }
 
 class _LoadedBody extends StatelessWidget {
-  const _LoadedBody({required this.setup});
+  const _LoadedBody({required this.setup, this.errorMessage});
 
   final PocketMoneySetup setup;
 
+  /// Non-null while the last write failed: the form stays put and the
+  /// message rides along inline instead of blanking the screen.
+  final String? errorMessage;
+
   @override
   Widget build(BuildContext context) {
+    final tokens = context.nest;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         const _SetupTitle(),
         const SizedBox(height: NestSpacing.s4),
+        if (errorMessage != null) ...<Widget>[
+          Text(
+            errorMessage!,
+            style: NestType.caption(color: tokens.danger),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: NestSpacing.s2),
+        ],
         _ModeOptions(mode: setup.mode),
         const SizedBox(height: NestSpacing.s4),
         _SettingsCard(setup: setup),
@@ -359,8 +387,8 @@ class _RadioDot extends StatelessWidget {
       alignment: Alignment.center,
       child: selected
           ? Container(
-              width: 10,
-              height: 10,
+              width: NestSpacing.gap10,
+              height: NestSpacing.gap10,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: tokens.leaf,
@@ -394,17 +422,21 @@ class _SettingsCard extends StatelessWidget {
               NestSpacing.s4,
               0,
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  'Payout day',
-                  style: NestType.fieldLabel(color: tokens.ink2),
-                ),
-                const SizedBox(height: NestSpacing.gap6),
-                _DayRow(payoutDay: setup.payoutDay),
-              ],
+            child: Text(
+              'Payout day',
+              style: NestType.fieldLabel(color: tokens.ink2),
             ),
+          ),
+          const SizedBox(height: NestSpacing.gap6),
+          // The day row rides on a narrower inset than the other sections:
+          // 7 × (≥44×44 cell) + 6 gaps need ~344px, which the card's 16px
+          // inset (content 318 at 390 / 248 at 320) cannot give. Breaking
+          // the row out keeps all seven cells visible at 390 and lets each
+          // cell meet the ≥44dp parent target (P06-BUG-04); at 320 the row
+          // scrolls horizontally, P10-chip-row style.
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: NestSpacing.gap2),
+            child: _DayRow(payoutDay: setup.payoutDay),
           ),
           Container(
             height: 1,
@@ -454,10 +486,11 @@ class _SettingsCard extends StatelessWidget {
   }
 }
 
-/// 7 single-select day cells (Mon = 1 … Sun = 7). Each cell is an [Expanded]
-/// 44-tall tap target; the pill itself is a static [NestChip] scaled down to
-/// fit (see SHARED_REQUEST — the 14px chip + 28px padding cannot fit 7-across
-/// at full size, so visuals shrink while the tap box stays 44 tall).
+/// 7 single-select day cells (Mon = 1 … Sun = 7). Each cell paints the
+/// `.chip.day` pill (full-cell width, 32 high, 13px centred label, no
+/// horizontal padding) and keeps a ≥44×44 tap box (P06-BUG-04). Cells
+/// share the available width evenly; below the width that gives a 44px
+/// cell the row becomes horizontally scrollable.
 class _DayRow extends StatelessWidget {
   const _DayRow({required this.payoutDay});
 
@@ -468,21 +501,62 @@ class _DayRow extends StatelessWidget {
     return Semantics(
       container: true,
       label: 'Payout day',
-      child: Row(
-        spacing: NestSpacing.gap6,
-        children: <Widget>[
-          for (var i = 0; i < PocketMoneySetupView.dayLabels.length; i++)
-            Expanded(
-              child: _DayCell(
-                cellKey: ValueKey<String>('p06_day_${i + 1}'),
-                label: PocketMoneySetupView.dayLabels[i],
-                selected: payoutDay == i + 1,
-                onTap: () => context.read<PocketMoneyBloc>().add(
-                  PocketMoneyPayoutDayChanged(i + 1),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const gaps = 6 * NestSpacing.gap6; // 6 inter-cell gaps
+          final cellWidth = math.max(
+            NestDevice.tapParent,
+            (constraints.maxWidth - gaps) / 7,
+          );
+          final row = Row(
+            mainAxisSize: MainAxisSize.min,
+            spacing: NestSpacing.gap6,
+            children: <Widget>[
+              for (var i = 0; i < PocketMoneySetupView.dayLabels.length; i++)
+                _DayCell(
+                  cellKey: ValueKey<String>('p06_day_${i + 1}'),
+                  label: PocketMoneySetupView.dayLabels[i],
+                  cellWidth: cellWidth,
+                  selected: payoutDay == i + 1,
+                  onTap: () => context.read<PocketMoneyBloc>().add(
+                    PocketMoneyPayoutDayChanged(i + 1),
+                  ),
                 ),
+            ],
+          );
+          final overflows = 7 * cellWidth + gaps > constraints.maxWidth + 0.5;
+          if (!overflows) {
+            return SizedBox(
+              width: constraints.maxWidth,
+              child: Row(
+                spacing: NestSpacing.gap6,
+                children: <Widget>[
+                  for (
+                    var i = 0;
+                    i < PocketMoneySetupView.dayLabels.length;
+                    i++
+                  )
+                    Expanded(
+                      child: _DayCell(
+                        cellKey: ValueKey<String>('p06_day_${i + 1}'),
+                        label: PocketMoneySetupView.dayLabels[i],
+                        cellWidth: null,
+                        selected: payoutDay == i + 1,
+                        onTap: () => context.read<PocketMoneyBloc>().add(
+                          PocketMoneyPayoutDayChanged(i + 1),
+                        ),
+                      ),
+                    ),
+                ],
               ),
-            ),
-        ],
+            );
+          }
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            clipBehavior: Clip.hardEdge,
+            child: row,
+          );
+        },
       ),
     );
   }
@@ -492,12 +566,16 @@ class _DayCell extends StatelessWidget {
   const _DayCell({
     required this.cellKey,
     required this.label,
+    required this.cellWidth,
     required this.selected,
     required this.onTap,
   });
 
   final ValueKey<String> cellKey;
   final String label;
+
+  /// Fixed width in the scroll branch; null in the fill branch (Expanded).
+  final double? cellWidth;
   final bool selected;
   final VoidCallback onTap;
 
@@ -513,12 +591,50 @@ class _DayCell extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: SizedBox(
+          width: cellWidth,
           height: NestDevice.tapParent,
-          child: Center(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: NestChip(label: label, selected: selected),
+          child: Center(child: _DayPill(label: label, selected: selected)),
+        ),
+      ),
+    );
+  }
+}
+
+/// The P06 `.chip.day`: the shared `NestChip` has no 13px/padding-0 day
+/// variant, so this renders it from tokens directly (TODO(P06): retire it
+/// when `NestChip` grows a day mode — see SHARED_REQUEST.md). Unselected:
+/// surface-2 pill, ink label; selected: leafTint pill, leaf border, leafInk
+/// label. No horizontal padding, 32 high, fills the grid cell.
+class _DayPill extends StatelessWidget {
+  const _DayPill({required this.label, required this.selected});
+
+  final String label;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.nest;
+    return SizedBox(
+      width: double.infinity,
+      height: NestSpacing.s8,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: selected ? tokens.leafTint : tokens.surface2,
+          borderRadius: NestRadii.allPill,
+          border: Border.all(
+            color: selected ? tokens.leaf : Colors.transparent,
+            width: 1.5,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: NestType.fieldLabel(
+              color: selected ? tokens.leafInk : tokens.ink,
             ),
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ),
@@ -648,8 +764,8 @@ class _CoinValueRow extends StatelessWidget {
       child: Row(
         children: <Widget>[
           Container(
-            width: 40,
-            height: 40,
+            width: NestSpacing.s10,
+            height: NestSpacing.s10,
             decoration: BoxDecoration(
               color: tokens.coinTint,
               borderRadius: BorderRadius.circular(NestRadii.m),

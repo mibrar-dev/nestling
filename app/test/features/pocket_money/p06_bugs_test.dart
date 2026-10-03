@@ -1,9 +1,15 @@
 // P06 Pocket money setup — Stage 6 adversarial bug tests (iteration 2).
 //
-// Every test that PROVES a bug is marked `skip: true` (the test name carries
-// the `P06-BUG-nn` id) so the default suite stays green; delete the skip (or
-// run the copy without skips) to watch the test fail. Each skipped test is the
-// executable repro for the matching entry in `docs/screens/P06/6_bugs.md`.
+// Every test that PROVES an OPEN bug is marked `skip: true` (the test name
+// carries the `P06-BUG-nn` id) so the default suite stays green; delete the
+// skip (or run the copy without skips) to watch the test fail. Each skipped
+// test is the executable repro for the matching entry in
+// `docs/screens/P06/6_bugs.md`.
+//
+// FIXED in iteration 3: P06-BUG-01/02/06/07 (logic chunk) and
+// P06-BUG-04/05 (UI chunk) are un-skipped below and must stay green.
+// Still skipped: P06-BUG-03 (day-pill paint size, needs the shared
+// `NestChip` compact mode — see `docs/screens/P06/SHARED_REQUEST.md`).
 //
 // The group at the bottom ("attacks that hold") is NOT skipped: it documents
 // the adversarial probes that passed (kid-mode guard, restart persistence,
@@ -192,10 +198,10 @@ void main() {
 
       final setup = await repository.watchSetup().first;
       // Two taps on "+" must move £3.00 → £3.50 → £4.00.
+      // FIXED (iteration 3, logic chunk): un-skipped, must stay green.
       expect(setup.childById('maya')!.weeklyBasePence, 400);
       await bloc.close();
     },
-    skip: true,
   );
 
   // -- P06-BUG-02 ---------------------------------------------------------
@@ -216,10 +222,10 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 300));
 
       final setup = await repository.watchSetup().first;
+      // FIXED (iteration 3, logic chunk): un-skipped, must stay green.
       expect(setup.payoutDay, 6);
       await bloc.close();
     },
-    skip: true,
   );
 
   // -- P06-BUG-03 ---------------------------------------------------------
@@ -261,7 +267,9 @@ void main() {
     expect(cell.height, greaterThanOrEqualTo(NestDevice.tapParent));
 
     await disposeApp(tester);
-  }, skip: true);
+  });
+  // FIXED (iteration 3, UI chunk): cell width is clamped to ≥44 and the
+  // row breaks out of the card inset (see _DayRow); must stay green.
 
   // -- P06-BUG-05 ---------------------------------------------------------
 
@@ -288,7 +296,9 @@ void main() {
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
-  }, skip: true);
+  });
+  // FIXED (iteration 3, UI chunk): the failure branch keeps the loaded
+  // form and shows an inline error caption when setup is still valid.
 
   // -- P06-BUG-06 ---------------------------------------------------------
 
@@ -351,7 +361,7 @@ void main() {
     await bloc.close();
     await setupController.close();
     await itemsController.close();
-  }, skip: true);
+  });
 
   // -- P06-BUG-07 ---------------------------------------------------------
 
@@ -366,10 +376,10 @@ void main() {
       bloc.add(const PocketMoneyWeeklyBaseStepped('ghost', 50));
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
+      // FIXED (iteration 3, logic chunk): un-skipped, must stay green.
       expect(repository.baseWrites, isEmpty);
       await bloc.close();
     },
-    skip: true,
   );
 
   // -- attacks that hold --------------------------------------------------

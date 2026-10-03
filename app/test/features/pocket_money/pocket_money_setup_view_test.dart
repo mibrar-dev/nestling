@@ -680,7 +680,8 @@ void main() {
         final size = tester.getSize(find.byKey(key));
         expect(size.height, greaterThanOrEqualTo(44));
       }
-      // Day cells keep the 44dp tap height while the pill scales down.
+      // Day cells keep a 44dp-high tap box; width is ≥44 at 390 (breakout
+      // row) and pinned by the scroll branch below that.
       for (var day = 1; day <= 7; day++) {
         final size = tester.getSize(find.byKey(ValueKey('p06_day_$day')));
         expect(size.height, 44);
@@ -1027,10 +1028,12 @@ void main() {
 
           // Inside the settings card every row starts on one inner edge
           // (the card pads its content by s4; the dividers stay full-bleed).
+          // The day row is the one exception: it breaks out of the card's
+          // 16px inset down to a gap2 inset so each of its 7 cells can be
+          // ≥ 44dp wide at 390 (P06-BUG-04).
           final inner = card.left + NestSpacing.s4;
           for (final finder in <Finder>[
             find.text('Payout day'),
-            find.byKey(const ValueKey('p06_day_1')),
             find.text('Weekly base'),
             _coinTile(),
             _mayaAvatar(),
@@ -1041,6 +1044,11 @@ void main() {
               reason: 'every settings row must start on the same inner edge',
             );
           }
+          expect(
+            tester.getTopLeft(find.byKey(const ValueKey('p06_day_1'))).dx,
+            moreOrLessEquals(card.left + NestSpacing.gap2, epsilon: 0.01),
+            reason: 'the day row breaks out of the 16px card inset to gap2',
+          );
           // The names sit one avatar in (s32 avatar + s3 gap), and the coin
           // value one tile in — the same rhythm on both rows.
           expect(

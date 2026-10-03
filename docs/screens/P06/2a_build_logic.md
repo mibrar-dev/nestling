@@ -1,76 +1,93 @@
-# P06 Pocket money setup — logic build (Stage 2a, iteration 2)
+# P06 Pocket money setup — logic build (Stage 2a, iteration 3)
 
 ## CONTRACT CHANGES
 
-None. Public names are exactly per `1_plan.md` §2 and unchanged for the UI
-builder: `PocketMoneySetup` / `PocketMoneySetupChild.childById`,
-`PocketMoneyRepository.watchSetup/setMode/setPayoutDay/setWeeklyBasePence`,
-`PocketMoneyState.setup`, events `PocketMoneyModeChanged(mode)`,
-`PocketMoneyPayoutDayChanged(day)`,
-`PocketMoneyWeeklyBaseStepped(childId, deltaPence)`. Step stays 50p; the
-repository clamps base to 0..2000.
+No event/state shape changes — the UI builder's contract is untouched
+(`PocketMoneyModeChanged(mode)`, `PocketMoneyPayoutDayChanged(day)`,
+`PocketMoneyWeeklyBaseStepped(childId, deltaPence)`, `PocketMoneyState.setup`;
+step stays 50p; repository clamps 0..2000). Additive only, all inside the
+feature sandbox:
 
-## Files changed (logic layer only)
+- `PocketMoneySetup.withChildBase(id, pence)` (new pure helper, insertion
+  order kept) — used for the post-write confirmation emit.
+- `PocketMoneyState.copyWith(..., {clearErrorMessage = false})` (new optional
+  flag; default preserves old behavior) — the load path passes it on every
+  emission so a stale `errorMessage` cannot survive recovery (P06-BUG-06).
+- Private bloc fields only (`_pendingDay`, `_requestedBase`); no DI/route
+  changes.
 
-None — verified, no edits needed. Existing implementation already matches
-`1_plan.md` §2 and the FIXES_1 logic items:
+## Files changed (logic layer only — no views/widgets touched)
 
-- `app/lib/features/pocket_money/domain/entities/pocket_money_setup.dart`
-- `app/lib/features/pocket_money/domain/pocket_money_repository.dart`
-- `app/lib/features/pocket_money/data/pocket_money_repository_impl.dart`
 - `app/lib/features/pocket_money/presentation/bloc/pocket_money_bloc.dart`
-- `app/lib/features/pocket_money/presentation/bloc/pocket_money_event.dart`
-- `app/lib/features/pocket_money/presentation/bloc/pocket_money_state.dart`
-- DI/routes (`pocket_money_di.dart`, `pocket_money_routes.dart`, barrel)
-  unchanged and correct; no new registration needed.
-- No views/widgets touched (UI builder owns those).
-- No test files touched (bloc + repository tests already cover the contract).
+  - `_onWeeklyBaseStepped`: unknown child id returns before any repository
+    call (P06-BUG-07; also covers pre-load, when there is nothing to step);
+    each request builds on the previous *request* via `_requestedBase`,
+    recorded synchronously before the first await, so overlapping rapid taps
+    accumulate instead of losing updates (P06-BUG-01 — an instrumented probe
+    proved the two handlers overlap while a Drift write is in flight; the
+    first optimistic-only attempt still lost one tap, the request tracking
+    fixed it: writes 350 then 400, DB 400); request forgotten on write
+    failure; successful write confirmed in state via `withChildBase`
+    (stream emission converges and dedups; clamped no-ops emit equal state
+    and stay silent).
+  - `_onPayoutDayChanged`: no-op guard compares against the last *requested*
+    day (`_pendingDay ?? setup`), so a fast Sun→Sat correction is not dropped
+    (P06-BUG-02); pending cleared on every load emission, rolled back if its
+    own write throws.
+  - Load `onData`: clears `_pendingDay`, reconciles `_requestedBase` against
+    confirmed values, and clears `errorMessage` (P06-BUG-02/06).
+  - Write-error behavior unchanged (`failure` + message — pinned by the three
+    existing throwing-write tests); BUG-05's user-visible half (failure body
+    replacing a valid form) needs the view branch gated on `setup == null`,
+    which is the UI chunk's file.
+- `app/lib/features/pocket_money/domain/entities/pocket_money_setup.dart` —
+  added `withChildBase`.
+- `app/lib/features/pocket_money/presentation/bloc/pocket_money_state.dart` —
+  added `clearErrorMessage` flag.
+- `app/test/features/pocket_money/pocket_money_setup_bloc_test.dart` —
+  unknown-child test now expects zero repository calls; replaced the
+  KNOWN-DEFECT comment with the fix note; added 3 regression tests
+  (double-step accumulates, Sun→Sat not dropped, message clears on recovery).
+- `app/test/features/pocket_money/p06_bugs_test.dart` — un-skipped the 4
+  logic-layer proofs P06-BUG-01/02/06/07 (all pass); header comment updated;
+  BUG-03/04/05 left skipped (view layer — UI chunk owns them). No fake
+  changes needed (repository interface unchanged, so all three feature fakes
+  still compile).
 
-## Items done (FIXES_1, logic-layer only)
+## Items done (FIXES_2, logic-layer only)
 
-- `watchSetup` combines `families` row (truth) + `settings` mirror +
-  children ordered by SQLite `rowid` (Maya, then Leo — never
-  `AppDatabase.watchChildren`/nickname order). Verified by repository test
-  "insertion order, not alphabetical".
-- Setters write `families` AND `settings` (+ `updatedAt` UTC) in one
-  transaction; `setMode` asserts `weekly|per_quest|both`, `setPayoutDay`
-  asserts 1..7, `setWeeklyBasePence` clamps 0..2000. Verified by
-  mirror-write + clamp + assert tests.
-- Bloc uses ONE `emit.forEach` over
-  `combineLatest2(watchItems, watchSetup)` with `_closeOnError`
-  (error-then-close, TodayBloc pattern) so a failed load terminates and
-  Retry resubscribes cleanly; day re-tap guarded (`if day == current
-  return`); step reads current base from `state.setup`. Verified by bloc
-  tests (mode/day/step re-emit, no-op re-tap, clamp at 0 and 2000).
-- No skipped bug tests for P06: no `*bug*` files, no `skip:` in
-  `app/test/features/pocket_money/`. Nothing to un-skip.
-- No `google_fonts`/`GoogleFonts.*` in the logic layer or its tests
-  (`bloc`, `repository` files clean).
+- P06-BUG-01 (MAJOR): fixed + un-skipped proof passes (real repo: £3.00 → £4.00).
+- P06-BUG-02 (minor): fixed + un-skipped proof passes (ends Saturday).
+- P06-BUG-06 (minor): fixed via `clearErrorMessage` on load emissions +
+  post-write confirm; un-skipped proof passes.
+- P06-BUG-07 (minor): fixed (early return) + un-skipped proof passes
+  (`baseWrites` empty); pinned bloc test updated to the fixed behavior.
+- Review #3 (stale message): same fix as BUG-06. Review #4 (`assert` →
+  `ArgumentError`): NOT changed — `1_plan.md` §2 mandates asserts and two
+  test groups pin `AssertionError`; release-hardening is an orchestrator call.
+- No skipped tests remain in my layer; no `google_fonts`/`GoogleFonts.*` in
+  the logic layer or its tests.
 
 ## Checks run (stage-allowed only)
 
-- `flutter analyze lib/features/pocket_money
+- `dart format lib/features/pocket_money
   test/features/pocket_money/pocket_money_setup_bloc_test.dart
-  test/features/pocket_money/pocket_money_setup_repository_test.dart` →
+  test/features/pocket_money/p06_bugs_test.dart` → clean.
+- `flutter analyze lib/features/pocket_money` + the three test files →
   `No issues found!`
-- `flutter test
-  test/features/pocket_money/pocket_money_setup_repository_test.dart
-  test/features/pocket_money/pocket_money_setup_bloc_test.dart` →
-  `All tests passed!` (20/20: repo 9, bloc 11).
+- `flutter test .../pocket_money_setup_bloc_test.dart
+  .../pocket_money_setup_repository_test.dart` → `All tests passed!` (34/34).
+- `flutter test .../p06_bugs_test.dart` → `All tests passed!`
+  (+12 ~3: the 4 un-skipped proofs + 8 attacks-that-hold green; the 3 skips
+  are BUG-03/04/05, view layer).
 - Full-app `flutter test` and simulator NOT run (integrator owns them).
-
-## Note for UI builder / integrator (not my layer, not edited)
-
-- `app/test/features/pocket_money/pocket_money_setup_view_test.dart` still
-  imports `package:google_fonts/google_fonts.dart` and calls
-  `GoogleFonts.config.allowRuntimeFetching = false`. The orchestrator FONTS
-  rule forbids this; that file is owned by the UI builder (its name has no
-  `bloc`/`cubit`/`repository`/`data`), so I left it untouched — UI builder
-  should delete those lines (use `setUpTestScope`, bundled Inter/Nunito).
 
 ## LEFT FOR NEXT ITERATION
 
-Nothing in the logic layer. All `1_plan.md` §2 + FIXES_1 logic items are
-implemented and green.
+Nothing in the logic layer. Handoff to the UI chunk / integrator:
+BUG-03 (day-pill paint size — needs the shared `NestChip` compact/`labelStyle`
+follow-up from `1_plan.md` §7), BUG-04 (day-cell width — view layout),
+BUG-05 (gate the view failure branch on `setup == null` so a failed *write*
+keeps the form and only a failed *load* shows `_FailureBody`).
 
 VERDICT: PASS
