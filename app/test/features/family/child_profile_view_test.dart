@@ -17,20 +17,24 @@
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-
 import 'package:flutter/services.dart' show FontLoader, rootBundle;
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:nestling/app/app.dart';
 import 'package:nestling/app/controllers.dart';
 import 'package:nestling/core/data/app_database.dart' hide Quest;
+import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 import 'package:nestling/features/family/domain/entities/child_profile.dart';
 import 'package:nestling/features/family/domain/entities/family_child.dart';
 import 'package:nestling/features/family/domain/entities/family_member.dart';
 import 'package:nestling/features/family/domain/family_repository.dart';
+import 'package:nestling/features/family/presentation/bloc/family_bloc.dart';
+import 'package:nestling/features/family/presentation/bloc/family_event.dart';
+import 'package:nestling/features/family/presentation/views/child_profile_view.dart';
 import 'package:nestling/features/family/presentation/widgets/child_profile_body.dart';
 
 import '../../test_scope.dart';
@@ -469,15 +473,16 @@ void main() {
       await disposeApp(tester);
     });
 
-    // ── BUG P15-BUG-9 (failing repro — do not "fix" the test) ─────────────
-    // The iteration-2 fix dispatches `FamilyChildSelected` from the ROUTE's
-    // `BlocProvider(create:)` (`family_routes.dart:38-48`), which runs once per
-    // route instance. The Family branch lives in a `StatefulShellRoute
-    // .indexedStack`, so after leaving `/child-profile` the route stays
-    // MOUNTED: coming back with a different `?childId=` re-uses the same page
-    // key, the builder never runs again, no selection is dispatched — and the
-    // screen keeps showing the PREVIOUS child. Stage 6's
-    // `p15_bugs_test.dart` (P15-BUG-9a/b) reports the same defect.
+    // ── P15-BUG-9 (fixed in iteration 3) ─────────────────────────────────
+    // The iteration-2 fix dispatched `FamilyChildSelected` from the ROUTE's
+    // `BlocProvider(create:)`, which runs once per route instance. The Family
+    // branch lives in a `StatefulShellRoute.indexedStack`, so the page stays
+    // MOUNTED: a second `?childId=` re-used the same page key, the builder
+    // never ran again, no selection was dispatched — and the screen kept
+    // showing the PREVIOUS child. Iteration 3 gave the route two followers:
+    // `_ChildProfileRoute.didUpdateWidget` (the `requested` id changed) and
+    // `ChildProfileView.didChangeDependencies` (the router state it reads
+    // changed). The test below is the iteration-2 repro, now green.
     testWidgets('BUG P15-BUG-9: a SECOND deep link must switch the profile', (
       tester,
     ) async {
@@ -513,6 +518,210 @@ void main() {
         find.text('Age 7\u20139 \u00B7 Pip is a Fledgling'),
         findsOneWidget,
       );
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the same id is not re-dispatched on rebuilds or re-entry', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      final repo = _MockFamilyRepository();
+      when(repo.watchItems).thenAnswer(
+        (_) => Stream<List<FamilyMember>>.value(const <FamilyMember>[_me]),
+      );
+      when(repo.watchChildren).thenAnswer((_) => Stream.value(<FamilyChild>[]));
+      when(
+        repo.watchProfile,
+      ).thenAnswer((_) => Stream<ChildProfile?>.value(_mayaProfileFixture()));
+      final selects = <String>[];
+      when(() => repo.selectChild(any())).thenAnswer((invocation) async {
+        selects.add(invocation.positionalArguments.first as String);
+      });
+      await _useRepository(repo);
+
+      await pumpAppRoute(tester, '/child-profile?childId=leo');
+      final onEntry = selects.length;
+      expect(
+        selects,
+        everyElement('leo'),
+        reason: 'only the requested id is ever persisted',
+      );
+      // At most twice on a cold entry: the route dispatches it, and the view
+      // sees the same value once (documented as idempotent, not churn).
+      expect(onEntry, lessThanOrEqualTo(2));
+
+      // `didChangeDependencies` re-fires on ANY inherited change — a theme
+      // flip, a text-scale change, a MediaQuery update. The `_seenChildId`
+      // guard must swallow all of it.
+      GetIt.instance<ThemeModeController>().selectMode(ThemeMode.dark);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(selects.length, onEntry, reason: 'a rebuild must not re-select');
+
+      // Re-entering the SAME deep link (Today tab → Family tab) must not
+      // dispatch again either: the value did not change.
+      await tester.tap(
+        find.descendant(
+          of: find.byType(NestTabBar),
+          matching: find.text('Today'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byType(NestTabBar),
+          matching: find.text('Family'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(selects.length, onEntry, reason: 'no churn on re-entry');
+      expect(find.text('Maya'), findsOneWidget);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('a stale ?childId= cannot resurrect a removed child', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      // Deep-link straight to Leo, then delete him through the UI. The URL
+      // still carries `?childId=leo`, which must not bring him back.
+      await pumpAppRoute(tester, '/child-profile?childId=leo');
+      await _flushDrift(tester);
+      await tester.pumpAndSettle();
+      expect(_profile(tester).child.id, 'leo');
+
+      await tester.tap(find.byKey(const Key('p15-remove')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(NestButton, 'Remove'));
+      await tester.pumpAndSettle();
+      await _flushDrift(tester);
+      await tester.pumpAndSettle();
+
+      // The selection falls through to the roster's first child (CHILD
+      // ORDER) — never back to the deleted one.
+      expect(_profile(tester).child.id, 'maya');
+      expect(find.text('Remove Maya from family'), findsOneWidget);
+
+      // Re-enter the very same stale URL: no crash, no Leo.
+      await tester.tap(
+        find.descendant(
+          of: find.byType(NestTabBar),
+          matching: find.text('Today'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Maya'));
+      await tester.pumpAndSettle();
+      await _flushDrift(tester);
+      await tester.pumpAndSettle();
+      expect(_profile(tester).child.id, 'maya');
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('dropping the query keeps the child the deep link chose', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/child-profile?childId=leo');
+      await _flushDrift(tester);
+      await tester.pumpAndSettle();
+      expect(_profile(tester).child.id, 'leo');
+
+      // The Family tab root carries no `?childId=`; the persisted selection
+      // is Leo, so the screen keeps him (no reset, no crash).
+      await tester.tap(
+        find.descendant(
+          of: find.byType(NestTabBar),
+          matching: find.text('Today'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byType(NestTabBar),
+          matching: find.text('Family'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(_profile(tester).child.id, 'leo');
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+  });
+
+  group('P15 route plumbing (iteration 3)', () {
+    testWidgets('kid mode still sends the profile to the parental gate', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+      final session = GetIt.instance<AppSession>();
+      await session.setAppMode('kid');
+      await session.refresh();
+
+      // The stateful wrapper + stateful view must not bypass the shell's
+      // parent-only redirect (`router.dart:85-109`).
+      await pumpAppRoute(tester, '/child-profile?childId=leo');
+      expect(currentPath(tester), '/parental-gate');
+      expect(find.byType(ChildProfileView), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    // ── P15-BUG-10 (failing repro — do not "fix" the test) ───────────────
+    // Iteration 3 gave `ChildProfileView` a router dependency so it could
+    // follow the live `?childId=`:
+    //
+    //   GoRouterState.of(context).uri.queryParameters['childId']
+    //
+    // `GoRouterState.of` ASSERTS when there is no router ancestor, so the
+    // view can no longer be mounted on its own — it throws
+    // `GoError: There is no GoRouterState above the current context` in any
+    // bare `MaterialApp` pump (a widget test, a preview harness, the design
+    // gallery). The screen itself is unaffected (the app always builds it
+    // inside `childProfileRoute`), so this is a fragility, not a regression —
+    // and `GoRouter.maybeOf(context)?.state.uri` keeps the dependency
+    // registration while making the read optional.
+    testWidgets('BUG P15-BUG-10: the view mounts without a GoRouter', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      // The app's own bloc factory; deliberately NOT closed — its
+      // `emit.forEach` holds the repository streams open, exactly as in the
+      // app (the `today_view_test.dart` convention).
+      final bloc = GetIt.instance<FamilyBloc>()
+        ..add(const FamilyLoadRequested());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: BlocProvider<FamilyBloc>.value(
+            value: bloc,
+            child: const ChildProfileView(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'a view must not require a router ancestor to build',
+      );
+      expect(find.text('Maya'), findsOneWidget);
 
       await disposeApp(tester);
     });

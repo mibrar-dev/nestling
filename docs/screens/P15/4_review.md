@@ -1,349 +1,160 @@
-# P15 · Child profile — Stage 4 QA code review (iteration 2)
+# P15 · Child profile — Stage 4 QA code review (iteration 3)
 
-Scope: `git diff main...HEAD` on branch `screen/P15` (52 files, +7166/−49 —
-code under `app/lib/features/family/**` + `app/test/features/family/**`, notes
-and UI captures under `docs/screens/P15/`). `main` is at the merge-base
-(`e0470fa`), so the shared `NestListRow` fix this screen is waiting on has not
-landed yet. **No code was edited by this stage; no simulator was booted,
-installed on, screenshotted or driven (stage-4 policy).**
+Scope: `git diff main...HEAD` on branch `screen/P15` (59 files, +9436/−51;
+merge-base = current `main` at `7afc8ad`). The reviewable surface is small now:
+all feature code under `app/lib/features/family/**` (+5 lib files vs
+iteration-2 checkpoint `31a44b8`), tests under `app/test/features/family/**`,
+docs under `docs/screens/P15/`. The rest of the lib-adjacent diff
+(`nest_toggle.dart`, `nest_stepper.dart`, `nest_text_field.dart`,
+`nestling_assets.dart`, four new quest SVGs, `test/core` adjustments) is the
+`main` shared_batch5 merge — reviewed as input, not as P15 output. **No code
+edited by this stage; no simulator booted, installed on, driven, or
+screenshotted (stage-4 policy); no `flutter clean`.**
 
-Inputs read: `docs/screens/RULES.md`, `docs/ARCHITECTURE.md`,
-`docs/DESIGN_SPEC.md` §5 P15, `docs/design/SPACING_SPEC.md`,
-`design/html-source/screens/P15-child-profile.html` (+ `components.css`),
-`app/lib/core/design_system/**`, `app/lib/app/router.dart`,
-`1_plan.md`, `5_ui.md` (iteration 2), `6_bugs.md` (iteration 2),
-`SHARED_REQUEST.md`, `ORCHESTRATOR_NOTES.md` (all four items checked below).
+Iteration-2 review (`4_review.md`, written 18:15 in the previous round) found
+one major (P15-BUG-9) and seven minors. All eight are audited below.
 
 ## Gates (run in `app/`)
 
 ```
 $ dart format --output=none --set-exit-if-changed lib/features/family \
-    test/features/family/{child_profile_bloc,child_profile_copy,child_profile_states,\
-child_profile_theme_size,child_profile_view,p15_bugs,add_children}_test.dart
-Formatted 28 files (0 changed)
+    $(git ls-files test/features/family | grep '\.dart$')
+Formatted 32 files (0 changed)
 
 $ flutter analyze lib test/features/family
-No issues found! (ran in 6.1s)
+No issues found in P15-tracked files. (8 info-level lints, all in two
+untracked in-flight scratch files: p15_probe4_test.dart — combinators_ordering,
+document_ignores. The committed tree is clean.)
 
-$ flutter test test/features/family/child_profile_bloc_test.dart \
-    child_profile_copy_test.dart child_profile_states_test.dart \
-    child_profile_theme_size_test.dart child_profile_view_test.dart \
-    p15_bugs_test.dart add_children_test.dart p05_bugs_test.dart
-00:13 +233 ~2: All tests passed!      # the two ~ are the concurrent bugs stage's
-                                      # P15-BUG-9 proofs, uncommitted
-$ flutter test test/features/family test/features/today
-00:21 +362 ~2 -1                     # the -1 is the concurrent test stage's
-                                      # in-flight child_profile_selection_test.dart
-                                      # (wrong expectation: see 4_review note)
+$ flutter test $(git ls-files test/features/family) test/features/today
+00:17 +382: All tests passed!          # iteration-2 bug proofs un-skipped,
+                                      # P15-BUG-9a/9b and the second-deep-link
+                                      # widget test now green
+$ grep -rn "skip:" $(git ls-files test/features/family)
+(no skips in tracked tests)
+
+$ flutter test test/core/family_time_test.dart
+00:03 +21 -1: one shared test red — “seed + repository zone plumbing ›
+kid_home completions are stamped with the family zone”: `leoRows.single`
+→ “Too many elements”. Files byte-identical to main (git diff empty), so
+this is a shared -main- seed/test drift, not a P15 regression.
+docs/screens/P15/SHARED_REQUEST.md §6 records it and correctly tells the
+loop not to fix it here.
 ```
 
-`analysis_options.yaml` untouched; no `ignore:`, no `skip:` in the committed
-tests; no `google_fonts`/`GoogleFonts.*` anywhere in the diff; `disposeApp(tester)`
-closes every pump in the new view tests (RULES §7).
+## Iteration-2 findings — disposition
 
-## What holds up
+| # | Finding | Iteration-3 disposition |
+|---|---|---|
+| 1 | **MAJOR** — `?childId=` ignored on the live branch page | **FIXED + pinned.** `_ChildProfileRoute` (StatefulWidget) re-dispatches `FamilyChildSelected` in `didUpdateWidget` when the query changes (`family_routes.dart:66-92`); `ChildProfileView` re-dispatches from `didChangeDependencies` via `GoRouterState.of(context)` (`child_profile_view.dart:39-62`); `selectChild` is idempotent and membership-gated (`family_repository_impl.dart:339-361`). Proofs: `p15_bugs_test.dart` P15-BUG-9a/9b un-skipped and green; `child_profile_view_test.dart:482` second-deep-link repro now green; `child_profile_selection_test.dart` covers overlap/unknown/last-wins and the cascade re-subscription. |
+| 2 | MINOR — cross-feature `moneyPounds` import | **FIXED.** `child_profile_copy.dart:104-114` formats with the design-system barrel's `formatPounds(pence.abs()/100)`; output is provably identical to the old `moneyPounds` (same `£`+`toStringAsFixed(2)`, same sign-free `abs()`), so copy is byte-identical. |
+| 3 | MINOR — `watchProfile` re-entrancy / orphaned ledger listeners | **FIXED.** Both branches of the base-stream listener now claim `ledgerSub = null` synchronously, await the previous cancel, and gate the continuation on `identical(latestParts, parts)` so only the newest run subscribes/clears (`family_repository_impl.dart:135-172`); `_selectedOf` single-sources the resolve step (`:184-191`). Two targeted tests (`child_profile_selection_test.dart:445`, `:488`) prove a live single subscription and a clean re-subscribe after addChild. |
+| 4 | MINOR — duplicated roster order in `removeChild` | **Documented + requested.** `removeChild`'s repoint query cites the shared source and points at `SHARED_REQUEST.md` §5 (new one-shot `childrenInCreationOrder`) so both sites stay in sync by contract. Acceptable. |
+| 5 | MINOR — `debugPrint` of child-scoped error ships to release logs | **FIXED.** Both call sites are gated `if (kDebugMode)` (`family_bloc.dart:130`, `:155`). |
+| 6 | MINOR — `size: 84` bare literal | Carried consciously; `SHARED_REQUEST.md` §3 still owns the token (`NestPip.rowSlot = 84`). Code comment updated to cite the request. Acceptable. |
+| 7 | MINOR — screen-local `ProfileRow` duplicates `NestListRow` + bare geometry | **Partially fixed.** Padding, tile width/height now use `NestSpacing.s3/s4/s10/gap10` (`child_profile_row.dart:99-111`); `minHeight: 56` stays a bare literal with a justification comment (off-grid, `NestDevice.tapKid` is parent-inappropriate… see finding 3 below). The duplication itself remains, explicitly temporary pending `SHARED_REQUEST.md` §1 on `main` (which would make the geometry tests swap-neutral). Accepted. |
+| 8 | MINOR — `SHARED_REQUEST.md` duplicate `## 3.` and stale §2 text | **FIXED.** Renumbered to §1–§6, §2 now says `leading: (fg) => …` (the builder form P15 actually ships), §5 (roster query) and §6 (shared red test) added. Honest, complete. |
 
-- **ARCHITECTURE** — feature-first intact. `ChildProfile` is an Equatable
-  entity; `family_repository.dart` gained only abstract methods
-  (`watchProfile`, `selectChild`); one `FamilyBloc` extended (no second bloc,
-  `Status initial/loading/loaded/failure` unchanged); DI untouched
-  (`family_di.dart` still `registerLazySingleton` + `registerFactory`); routes
-  in `<feature>_routes.dart`. No file outside RULES §1 except
-  `app/test/features/today/today_view_test.dart` (recorded in
-  `SHARED_REQUEST.md` §"Cross-feature test anchor").
-- **Design system** — tokens only for colour (`tokens.surface/ink/ink2/ink3`,
-  `NestTileTint`, `avatarColourFor`); every type style is a `NestType.x()` plus
-  a `copyWith` that reproduces the CSS exactly (`.hero h1` 24/30, `.stat .v`
-  22/26 via `kidName`, `.stat .l` 12/16 w600, `.piprow` head 17/24 w800,
-  `.hero .sub` 14/20). No letter-spacing reintroduced. `NestCard`, `NestList`,
-  `NestProgress`, `NestAvatar`, `NestButton`, `NestModal`, `NestEmptyState`,
-  `NestStatusBar`, `NestToast`, `showNestToast` all reused; the only raw
-  `SvgPicture.asset` is the coloured `NestlingIllustrations.coin`, which
-  `nest_icon.dart:81-83` explicitly documents as the illustration path.
-- **Owner rules** — PIP: `_PipCard` renders the child's own Pip from the DB row
-  (`mochi·sunny·none·3` for Maya, proven in `child_profile_view_test.dart`),
-  never `pip_stage_*.svg`; the no-children empty state uses
-  `PipAvatar(mochi, stage: 1)`. COPY: `Age 7–9 · Pip is a Fledgling`,
-  `Pip · Fledgling`, `175 of 250 · 70%`, `Change ›` (U+203A), `£3.00 a week ·
-  Owed £4.20` are asserted with the exact code points. DATA OVER MOCKS: `4`
-  (not the PNG's `18`) and `6 active · 4 daily, 2 weekly`. CHILD ORDER:
-  creation order via the shared `watchChildren` helper and
-  `_selectProfileChild`'s first-in-order fallback. TRIAL: no
-  `subscription_status` write anywhere. `subscription_status` untouched.
-  BOTTOM EDGE / ALIGNMENT / CHIP ROWS: not this screen's surface (tab bar is
-  the shared `ParentShell`; no chips).
-- **ORCHESTRATOR_NOTES.md** — item 1 fixed and *proved*, not eyeballed:
-  `child_profile_theme_size_test.dart:362-405` asserts
-  `RenderParagraph.didExceedMaxLines == false` for all nine row paragraphs and
-  that the trailing keeps its intrinsic width. Item 2 fixed with existing
-  assets: `assets/icons/ic_quests.svg` is byte-for-byte the design's
-  `<circle r9/> + check` and `NestlingIllustrations.coin` is the design's
-  `coin.svg` (I diffed both against `design/html-source/`). Item 3 pronoun kept
-  per the ruling — not a finding. Item 4 DB counts — not findings.
-- **Iteration-1 findings closed** — 1 (deep link) *partially*, see finding 1;
-  2 (`active_child_id` after removal) closed (`family_repository_impl.dart:395-413`
-  repoints to the first remaining child in creation order, or NULL);
-  3 (wall-clock period maths) closed (`_clock` defaults to
-  `Seed.anchorOverride ?? DateTime.now().toUtc()`, `family_repository_impl.dart:27-39`,
-  the `TodayRepositoryImpl` pattern); 4 (listener scoped to the non-destructive
-  path) closed (`child_profile_view.dart:50-55`); 5 (`Semantics(header: true)`)
-  closed (`child_profile_body.dart:122-124`); 6 (hero wrap) closed (`maxLines: 3`,
-  grows like the CSS); 8 (pronoun) ruled not a finding; 10 (loading/failure/
-  toast view proofs) closed by `child_profile_states_test.dart` + the
-  remove-failure view test.
-- **Accessibility** — every control asserts `hasAction(SemanticsAction.tap)`
-  *and* that `performAction(tap)` drives the real effect (navigation,
-  dialog); the Pip node is `Semantics(image: true, label: …)` + `ExcludeSemantics`;
-  `ProfileRow` forwards `onTap:` on its `Semantics(button: true)` node; the
-  confirm dialog's bloc is read before `showNestModal` (the dialog is a sibling
-  route and cannot resolve the provider) — a real trap, correctly avoided.
-- **Performance** — `ChildProfileBody` is stateless over an immutable entity,
-  so bloc emissions (DB-driven, not per-frame) rebuild it; no `setState`, no
-  timers, no stream subscriptions in the view layer beyond bloc.
+## What holds up (re-audited, iteration-3 tree)
+
+- **ARCHITECTURE** — feature-first intact. `ChildProfile` entity unchanged; `family_repository.dart` gained only abstract methods; one BLoC per feature; DI (`family_di.dart`) and routes unchanged in shape; `presentation/widgets` imports are feature-private again (iteration-2's pocket_money import gone). The only cross-feature reads are route path constants from sibling `*_routes.dart` files and the sibling domain constant `PipProfile.evolveAtCoins` — the usual sanctioned edges.
+- **RULES §1 file scope** — every P15 source edit is inside `app/lib/features/family/**`, `app/test/features/family/**`, or `docs/screens/P15/**`. The `today_view_test.dart` anchor swap (iteration 1) is recorded in `SHARED_REQUEST.md` §4. No `lib/core/**`, `lib/app/**`, another feature's directory, or `tools/screens/**` touched. `SHARED_REQUEST.md` exists and is complete.
+- **Design system reuse** — tokens only for colour/spacing; `NestType` variants with `copyWith`; `NestCard`, `NestList` (+ its overlay dividers), `NestProgress` (base, not kid), `NestAvatar`, `NestButton`, `NestModal`, `NestEmptyState`, `NestStatusBar`, `showNestToast`, `NestIcon`, `PipAvatar` all reused. Zero `Color(0x…)`/`Colors.*`/raw hex in new files. The one justified escape hatch (`SvgPicture.asset(NestlingIllustrations.coin)`) mirrors `nest_icon.dart:78-83`'s documented illustration rule and `pocket_money`'s own usage.
+- **DESIGN_SPEC §5 P15** — every element present and at the right geometry (hero card, 3-up stats, Pip card with "Evolves at 250 total coins"/70%/"175 of 250 · 70%", three list rows, danger "Remove Maya from family"); UK spelling throughout ("Evolves", "Owed", "No children yet"); copy byte-compared to the HTML source (U+2013, U+00B7, U+203A, U+00A3 asserted in tests). DB-driven numbers, CHILD ORDER, the `their` pronoun ruling, Pip from the child's own row (Mochi·sunny·stage 3 for Maya, Bolt·sky·stage 2 for Leo), status-bar reserve only — all per the orchestrator rules.
+- **Accessibility** — every control proves `hasAction(SemanticsAction.tap)` **and** that a semantics-driven tap changes real state/DB or navigation; hero name carries `Semantics(header: true)`; the Pip avatar is `Semantics(image: true, label: …)` over `ExcludeSemantics`; every `Semantics(excludeSemantics: true)`-style wrapper in the row forwards `onTap`.
+- **Performance** — no rebuild storms: bloc emissions are DB-stream-driven, `ChildProfileBody` is stateless over an immutable entity, subtitles/avatars/tiles are `const` or keyed narrowly; the redundant double-dispatch (finding 1 below) costs one extra `selectChild` write, not a rebuild loop.
+- **Error handling** — load-failure renders in place + `Try again` re-adds `FamilyLoadRequested` (the stream was closed by `_closeOnError`, so retry really re-subscribes — proven in `child_profile_states_test.dart`); remove failure keeps the screen `loaded` and toasts; a *repeated* identical remove failure toasts again (iteration-3 test at `child_profile_view_test.dart:833` green); unknown/removed child ids fall back instead of throwing; `_clearOnError` prunes orphans correctly.
+- **Children's Code** — parent-mode only; kid-mode redirect lives in the shared router; no analytics/ads; no child personal data in release logs anymore (finding 5 closed); the PIN subtitle's "their" reflects owner policy (no gender field).
+- **Tests** — no `google_fonts`, no skips, no ignored lints in tracked files; `disposeApp(tester)` terminates every widget test (Drift timer drain, RULES §7); geometry is asserted as rects against the design at 390×844 in light *and* dark themes plus at 320/430 × 1.0/1.3, with `IntrinsicHeight` and fractional stat widths carrying the narrow-width cases; copy is asserted with exact code points; the remove flow, deep link, empty state, failure/toast paths are all covered.
 
 ## Findings
 
-### 1. MAJOR — `?childId=` is only honoured on the route page's FIRST build; a later deep link silently keeps the previous child (cross-stage: bugs stage P15-BUG-9)
+### 1. MINOR — `FamilyChildSelected` is dispatched twice on every child switch
 
-`app/lib/features/family/family_routes.dart:34-53`
+`app/lib/features/family/family_routes.dart:52-58` (`_ChildProfileRoute`) **and**
+`app/lib/features/family/presentation/views/child_profile_view.dart:45-62`
+(`_ChildProfileViewState.didChangeDependencies`).
 
-```dart
-return BlocProvider<FamilyBloc>(
-  create: (_) {
-    final bloc = GetIt.instance<FamilyBloc>();
-    if (requested != null) bloc.add(FamilyChildSelected(childId: requested));
-    bloc.add(const FamilyLoadRequested());
-    return bloc;
-  },
-  child: const ChildProfileView(),
-);
-```
+Both fire on the same in-place page update: `didUpdateWidget` sees the new
+`requested` value, and `didChangeDependencies` sees the router-state registry
+notify (the template the two stages were given — wrapper OR view-state —
+shipped as both). The view test acknowledges this explicitly
+(`child_profile_view_test.dart:546-548` — "At most twice on a cold entry: the
+route dispatches it, and the view sees the same value once"). `selectChild` is
+idempotent and membership-gated, so the effect is one redundant transaction and
+one duplicate `app_state` emission per switch, never wrong output.
 
-The selection is dispatched from `BlocProvider.create`, which runs **once per
-provider element's `initState`**. `childProfileRoute` is the Family branch of a
-`StatefulShellRoute.indexedStack` (`app/lib/app/router.dart:137-139`), and the
-branch page stays alive once the tab has been visited. The chain for a second
-deep link:
+It is bounded and tested, so it does not block PASS — but it is exactly the
+kind of belt-and-braces that drifts (e.g. if a future repo change makes
+`selectChild` non-idempotent, the app shows two toasts of the same failure
+event or an extra app_state write).
 
-1. go_router keys a page by its **matched path only** —
-   `go_router-18.0.2/lib/src/match.dart:231`: `pageKey:
-   ValueKey<String>(newMatchedPath)` — the query string is not part of it, so
-   `/child-profile?childId=leo` reuses the live page.
-2. `NavigatorState` matches the key and calls
-   `matchingEntry.route._updateSettings(nextPage)`
-   (`flutter/lib/src/widgets/navigator.dart:4331`), which rebuilds the route
-   content from the **new** page child
-   (`flutter/lib/src/material/page.dart:275-277`, `buildContent => _page.child`)
-   — so the route builder *does* re-run and hands over a new `BlocProvider`
-   widget.
-3. Flutter **updates** that element (same runtimeType, no key) rather than
-   recreating it, and provider only calls `create` once per element
-   (`provider-6.1.5+1/lib/src/inherited_provider.dart:739-749`,
-   `if (!_didInitValue) { _didInitValue = true; _value = delegate.create!(…) }`).
+**Fix:** pick one follower. The wrapper is the cheaper one
+(`didUpdateWidget` is exactly the "page re-used with a new query" signal), so
+delete `_ChildProfileViewState`'s `didChangeDependencies` override, or vice
+versa; then tighten the test to `expect(onEntry, 1)` instead of
+`lessThanOrEqualTo(2)`.
 
-Net effect: no `FamilyChildSelected`, `_pendingSelection` and
-`app_state.active_child_id` keep the old child, and the screen shows the
-**wrong child's** name, age/Pip line, Pip avatar, PIN state, coins, quest counts
-and owed pocket money — plus a "Remove <other child> from family" button.
+### 2. MINOR — stale comment: `child_profile_view.dart:76-78` says BUG P15-BUG-3 "stays with the logic builder"
 
-User paths: (1) open the Family tab, then Today → tap a kid card; (2) P05 →
-Edit the pencil on a child other than the one currently selected; (3) any
-re-entry into P15 with a different `childId`. The committed suite cannot see it:
-every deep-link test (`child_profile_view_test.dart`, `p15_bugs_test.dart`
-P15-BUG-1a/1b) pumps a **fresh** app, so the branch page is always created, not
-updated. The bugs stage's skipped proofs `P15-BUG-9a/b`
-(`app/test/features/family/p15_bugs_test.dart:280-344`, in flight) reproduce it
-at the widget level and agree with this analysis.
+The text reads *"A repeated IDENTICAL remove failure is still swallowed here …
+clearing `errorMessage` needs a new bloc event, so BUG P15-BUG-3 stays with the
+logic builder."* BUG P15-BUG-3 was closed in iteration 2
+(`family_bloc.dart:132-138` — the clear-then-raise sequence;
+`family_state.dart:72-76` — the `clearErrorMessage` flag), and its widget proof
+(`child_profile_view_test.dart:833`) is green. The listener-scope note is
+correct; the "stays with the logic builder" half describes a defect that no
+longer exists and will mislead the next stage's bug hunt. Same class of
+staleness at `family_event.dart:44-48` ("Dispatched before the first load, so
+the profile stream already follows the requested child" — only true for the
+create-time dispatch now, not the didUpdateWidget/didChangeDependencies one).
 
-**Fix (in feature scope, no shared change):** react to the *route*, not to the
-provider's creation. Either
+**Fix:** rewrite both as the iteration-3 behaviour — BUG-3 is closed via
+clear-then-raise; the create path dispatches the first selection, the two
+followers dispatch *subsequent* query changes.
 
-```dart
-// child_profile_view.dart → a small StatefulWidget around the current body
-@override
-void didChangeDependencies() {
-  super.didChangeDependencies();
-  final id = GoRouterState.of(context).uri.queryParameters['childId'];
-  if (id != null && id != _seen) {
-    _seen = id;
-    context.read<FamilyBloc>().add(FamilyChildSelected(childId: id));
-  }
-}
-```
+### 3. MINOR — `child_profile_row.dart:91` comment names the wrong token owner
 
-(go_router's documented pattern — `GoRouterState.of` registers a dependency on
-`GoRouterStateRegistryScope`, `go_router-18.0.2/lib/src/state.dart:129-144`, so
-it re-fires on the in-place update), or, as the bugs stage suggests, a stateful
-wrapper between the `BlocProvider` and the view reacting to the new `requested`
-value in `didUpdateWidget`. `selectChild` is idempotent and membership-gated
-(`family_repository_impl.dart:339-361`), so re-dispatching is safe; keep the
-`FamilyLoadRequested` dispatch in `create`. A keyed `pageBuilder`
-(`MaterialPage(key: ValueKey('p15-$requested'))`) also works but replaces the
-page (transition animation inside the tab, brief loading flash) — worse UX.
-Then un-skip `P15-BUG-9a/b` and add the "second deep link" case to
-`child_profile_view_test.dart`.
+The comment says the 56 px row meter "matches `NestSpacing.tapKid`" — but
+`tapKid` lives on `NestDevice` (`core/design_system/tokens/spacing.dart:82`),
+not `NestSpacing`. A copy-pasting builder reading the comment will import the
+wrong owner. Same stale-owner risk at the kid-floor justification.
 
-### 2. MINOR — cross-feature *presentation* import breaks the per-feature contract
+**Fix:** change the comment to `NestDevice.tapKid`.
 
-`app/lib/features/family/presentation/widgets/child_profile_copy.dart:25`
-(`import '…/features/pocket_money/presentation/widgets/money_pounds.dart'`),
-used at `:110-111`.
+### 4. NOTE (not a finding) — `flutter test test/core/family_time_test.dart` is red
 
-`docs/ARCHITECTURE.md:75` defines `presentation/widgets/` as
-"feature-private widgets". P15 is the first file in the app to import another
-feature's presentation widget, so the two features now fail to compile
-independently and the money format can drift (P12 changing `moneyPounds`
-silently changes P15's copy).
-
-**Fix:** use the shared formatter that is already in the design-system barrel —
-`formatPounds` (`core/design_system/components/nest_money.dart:5`, exported at
-`design_system.dart:25`) — e.g.
-`String _pounds(int pence) => formatPounds(pence.abs() / 100)` (`.abs()`
-preserves `moneyPounds`'s sign-free rendering), or, if pence-exact formatting
-is preferred, keep a local 3-line helper and add a `SHARED_REQUEST.md` entry
-promoting `moneyPounds` into the design system. Reading the sibling feature's
-*domain* constant (`PipProfile.evolveAtCoins`, `child_profile_body.dart:38`)
-and the route path constants are fine — those are the normal cross-feature edges.
-
-### 3. MINOR — `watchProfile`'s async listener can subscribe twice and orphan a ledger stream
-
-`app/lib/features/family/data/family_repository_impl.dart:135-164`
-
-```dart
-).listen((parts) async {
-  …
-  if (ledgerChildId != selected.id) {
-    await ledgerSub?.cancel();
-    ledgerChildId = selected.id;
-    latestLedger = null;
-    ledgerSub = _db.watchLedger(selected.id).listen((rows) { … });
-    return;
-  }
-  tryEmit();
-}, onError: controller.addError);
-```
-
-`combineLatest4` re-emits **once per source event**
-(`core/data/stream_combine.dart:44-47`), and the `removeChild` transaction
-(`:372-414`) writes `quest_completions`, `ledger_entries`, `quests`,
-`children` and `app_state` in one commit — so four emissions land while the
-first body is still suspended at its `await` (`await` on `null` still yields).
-Two bodies can therefore both pass the `ledgerChildId != selected.id` test and
-both subscribe: the second assignment overwrites `ledgerSub`, so
-`controller.onCancel` (`:166-169`) can only cancel the last one. The orphan is a
-live Drift listener on a query the store keeps cached
-(`drift-2.35.1/lib/src/runtime/executor/stream_queries.dart:96-117`), so nothing
-crashes and no wrong-child rows are rendered — the leak is one listener (and one
-`_QueryStreamListener`) per extra emission of a multi-table transaction, i.e. per
-removal, accumulating for the app's lifetime.
-
-**Fix:** re-check after the await and cancel what you are about to replace, or
-serialise the handler (store the latest snapshot in `pending` and re-run from a
-single `Future` chain / `scheduleMicrotask`), e.g.
-
-```dart
-if (ledgerChildId != selected.id) {
-  final previous = ledgerSub;
-  ledgerSub = null;                      // claim the slot synchronously
-  await previous?.cancel();
-  if (_selection != selected.id) return; // superseded while awaiting
-  ledgerChildId = selected.id; latestLedger = null;
-  ledgerSub = _db.watchLedger(selected.id).listen(…);
-}
-```
-
-### 4. MINOR — `removeChild` re-implements the roster order without citing the shared query
-
-`app/lib/features/family/data/family_repository_impl.dart:399-409` repeats
-`orderBy([createdAt, CustomExpression<int>('rowid')])` — the CHILD ORDER
-ruling that lives in `app/lib/core/data/app_database.dart:496-508`
-(`watchChildren`). The two copies are the *only* definition of roster order,
-and they can diverge (e.g. if the shared tie-break changes, `removeChild` picks
-a different "next child" than the roster the screen renders).
-
-**Fix:** cite `app_database.dart:499` in the comment (as `watchChildren`'s own
-comment cites it), and add a `SHARED_REQUEST.md` line asking for a one-shot
-`AppDatabase.childrenInCreationOrder(familyId)` so both call sites share one
-query. No behaviour change today.
-
-### 5. MINOR — `debugPrint` of a child-scoped error ships to release logs
-
-`app/lib/features/family/presentation/bloc/family_bloc.dart:130`
-(`debugPrint('P15 removeChild failed: $error')`) and `:152`
-(`'P15 selectChild failed: $error'`). `debugPrint` is not compiled out in
-release; a Drift exception string can contain the failing statement, i.e. a
-child id, and the Children's Code rule ("no child data in places a child or
-third party can reach") argues for keeping it debug-only.
-
-**Fix (in scope):** `debugPrint` → `assert`-guarded logging, or gate both on
-`kDebugMode`. If a shared solution is wanted (P05's `_onAddChildRequested`
-prints the same way on `main`), add it to `SHARED_REQUEST.md` as a repo-wide
-`NestLog` that no-ops outside debug.
-
-### 6. MINOR — bare `size: 84` in the Pip slot (carried, already requested)
-
-`app/lib/features/family/presentation/widgets/child_profile_body.dart:286`.
-Carried from iteration-1 finding 7: `.piprow img { 84px }` is off the 4 pt grid
-and has no token, and `core/design_system/**` is off-limits under RULES §1. The
-value is correct and the comment cites `SHARED_REQUEST.md` §3. No action beyond
-landing that request (`NestPip.rowSlot = 84`) and swapping the literal.
-
-### 7. MINOR — screen-local `ProfileRow` uses bare geometry where tokens exist, and duplicates `NestListRow`
-
-`app/lib/features/family/presentation/widgets/child_profile_row.dart:96`
-(`fromLTRB(12, 10, 16, 10)`), `:101-102` (`width/height: 40`), `:153`
-(`minHeight: 56`). `NestSpacing.s3` (12), `s4` (16), `s10` (40) and `gap10` (10)
-all exist, so "tokens only, never hard-code sizes" is bent; `56` has no token
-and is fine with its comment.
-
-The larger point is duplication: this file re-implements the shared
-`NestListRow` row because of `SHARED_REQUEST.md` §1 (`Flexible` trailing starves
-`.list-main`). It is byte-equivalent to `core/design_system/components/nest_list_row.dart`
-today (same 12/10/16/10 padding, same radius-12 tile per owner QA, same
-`Semantics(button:, onTap:)` contract, same `NestList` dividers), which is why
-the geometry tests are swap-neutral. But two copies of a row will drift the
-moment either side changes something (radius, `compact`, focus, keyboard).
-
-**Fix:** keep the file (SHARED_REQUEST §1 still blocks the real fix) and land §1
-on `main`; then delete `child_profile_row.dart` and go back to `NestListRow`.
-While it lives, use the `NestSpacing` tokens for 12/16/40/10 so the two copies
-stay textually comparable.
-
-### 8. MINOR — `SHARED_REQUEST.md` has two `## 3.` sections, and §2's update describes code that isn't there
-
-`docs/screens/P15/SHARED_REQUEST.md:102` (`## 3. NestPip.rowSlot = 84`) and
-`:114` (`## 3. Cross-feature test anchor…`). The second should be `## 4`.
-Separately `:60-61` says "P15 now passes `leadingAsset: NestIcons.quests`",
-while the shipped code passes the builder
-`leading: (fg) => NestIcon(NestIcons.quests, color: fg)`
-(`child_profile_body.dart:398`) because `ProfileRow` has no `leadingAsset`.
-Doc-only, but it is the document the orchestrator reads to ratify cross-feature
-work. Fix the numbering and the wording.
+One shared, `main`-shipped drift: `Seed.demo` now seeds a `to_do` row for
+`q-plants`/`leo` (`lib/core/data/seed.dart:392`), so the Dubai leg of the
+zone-plumbing test inserts a second row and `leoRows.single` throws. Files are
+byte-identical to `main`; P15 cannot fix it under RULES §1. `SHARED_REQUEST.md`
+§6 documents it and routes the one-line fix to the orchestrator. Every other
+P15 suite is green (`+382 All tests passed!` on tracked family tests + today).
+Flagging so the full-suite gate is not assumed green at the P15 stage boundary.
 
 ## Notes for the next stages (not findings)
 
-- **Concurrent stages' in-flight work is not in this diff** (PROCESS ITEMS rule):
-  `child_profile_view_test.dart`, `child_profile_states_test.dart`,
-  `p15_bugs_test.dart` and `6_bugs.md` are modified-but-uncommitted and
-  `child_profile_selection_test.dart` / `child_profile_row_test.dart` are
-  untracked — all written after `.start_review` (19:20:59). One of them,
-  `child_profile_selection_test.dart` → *"an explicit clock decides which period
-  counts"*, is red (`Expected: <0> Actual: <2>`); its expectation is wrong, not
-  the code: 2026-10-04 is a Sunday, still inside the London week that began
-  Mon 29 Sep, so the two weekly completions correctly keep counting under the
-  PERIODS ruling while the dailies fall out. Fix the expectation (assert 2 at
-  +1 day, 0 at +8 days) — worth telling that stage.
-- **Bottom edge / tab bar** belong to the shared `ParentShell` + `NestTabBar`
-  (`app/lib/app/router.dart:25-46`); `5_ui.md` iteration 2 measured the
-  below-tab area as bar surface in light and dark. Not P15's to edit.
-- **`IntrinsicHeight`** on the three stat tiles (`child_profile_body.dart:183`)
-  reproduces the CSS grid's equal-height behaviour at the cost of one extra
-  layout pass. Negligible for three children; recorded so it stays deliberate.
-- **Copy caveat already sanctioned**: `On · Maya knows their code` deviates from
-  the PNG's "her" by owner decision (ORCHESTRATOR_NOTES item 3).
-- 5_ui owes nothing further this iteration; after the finding-1 fix the UI stage
-  should re-check that switching children re-renders the whole body without a
-  vertical shift (the hero/stats/list geometry is already pinned by rect
-  assertions in `child_profile_view_test.dart`).
+- PROCESS ITEMS observed and excluded: `app/test/features/family/p15_probe4_test.dart`
+  and `probe_test.dart` (untracked scratch), and the modified `.brief_*.md`/UI
+  captures. The only tracked file-set the review could grade on is what `git
+  diff main...HEAD` yields; that diff contains no skipped tests, no weakened
+  lints, no new hard-coded colours or sizes.
+- The UI check (5_ui) for iteration 3 is in flight (new `app_*_3.png`/`cmp_*_3.png`
+  untracked). Per the UI verdict rule it must re-measure every band at ±2 px on
+  the iteration-3 tree before it can PASS; nothing in this code diff moves
+  geometry (the BUG-9 fix changes *which* child's data renders, not where), so
+  a green geometry check is expected.
+- The `removeChild` roster-order duplication, the `size: 84` literal, and the
+  `ProfileRow`/`NestListRow` duplication are all documented in
+  `SHARED_REQUEST.md` as owned-by-main work (§5, §3, §1). When the orchestrator
+  merges those shared changes back, P15's diff *shrinks*: delete
+  `child_profile_row.dart`, import `NestSpacing.tapKid`'s CSS equivalence from
+  the design system, and drop the local `orderBy` replica — the tests already
+  constrain both replacements to no-ops.
+- Watch item for the bugs stage: iteration-3 added a second dispatch channel
+  (finding 1). The bugs stage's in-flight `probe_test.dart`/`p15_probe4_test.dart`
+  are exactly the right place to confirm `selectChild` fires at most twice per
+  switch and never across a theme/text-scale rebuild — but they must not be
+  committed; the assertion already lives in `child_profile_view_test.dart:546-560`.
 
-VERDICT: FAIL
+VERDICT: PASS

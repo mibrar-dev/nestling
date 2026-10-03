@@ -245,6 +245,35 @@ void main() {
       );
     });
 
+    // Iteration 3 swapped the cross-feature `moneyPounds` import for the
+    // design-system barrel's `formatPounds` (the per-feature boundary in
+    // `ARCHITECTURE.md:75`). The rendered copy must stay byte-identical, and
+    // the pence → pounds division must never leak float noise (`29.99`, never
+    // `29.98999…`).
+    test("the formatPounds swap keeps the ledger's exact rendering", () {
+      const pound = '\u00A3';
+      String row(int weekly, int owed) => profileMoneySubtitle(weekly, owed);
+
+      expect(row(2999, 1234), '${pound}29.99 a week $_dot Owed ${pound}12.34');
+      expect(row(1, 1), '${pound}0.01 a week $_dot Owed ${pound}0.01');
+      expect(row(9, 99), '${pound}0.09 a week $_dot Owed ${pound}0.99');
+      expect(row(999, 999), '${pound}9.99 a week $_dot Owed ${pound}9.99');
+      expect(
+        row(100000, 250000),
+        '${pound}1000.00 a week $_dot Owed ${pound}2500.00',
+      );
+      // Sign-free, exactly like the ledger's `moneyPounds`: a negative
+      // balance (a refund row) reads as a plain amount, never `-£`.
+      expect(
+        row(-500, -50),
+        '${pound}5.00 a week $_dot Owed ${pound}0.50',
+        reason: 'the ledger renders magnitudes',
+      );
+      for (final pence in <int>[0, 7, 70, 105, 1010, 2999, 12345, 99999]) {
+        expect(row(pence, pence), matches(RegExp(r'^£\d+\.\d{2} a week')));
+      }
+    });
+
     test('the trailing chevron is U+203A, not U+00BB', () {
       expect(profilePinTrailing(), 'Change $_chevron');
       expect(profilePinTrailing(), isNot(contains('\u00BB')));

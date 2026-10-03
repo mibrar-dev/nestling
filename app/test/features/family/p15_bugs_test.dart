@@ -1,9 +1,11 @@
-// P15 · Child profile — Stage 6 bug proofs (iteration 2).
+// P15 · Child profile — Stage 6 bug proofs (iteration 3).
 //
-// Iteration 1's six proofs below are GREEN on the iteration-2 checkpoint
-// (`31a44b8`) and run as regression guards (the build un-skipped them once the
-// fixes landed). Iteration 2's adversarial pass found one NEW major bug,
-// P15-BUG-9, fixed in iteration 3 — its two proofs below are un-skipped too.
+// All eight proofs below are GREEN on the iteration-3 checkpoint (`422e41e`)
+// and run as regression guards; the build un-skipped each one as its fix
+// landed. Iteration 3's adversarial pass found no new P15 bugs (probes:
+// repeat/re-entrant `?childId=` switching, removed-child deep links, £0.00 /
+// £999.99 money, 320 × 1.3 with a long name — all green; the review's three
+// minors are tracked in `4_review.md`).
 //
 //   P15-BUG-1  major  `/child-profile?childId=` ignored — FIXED iteration 2
 //                      (`FamilyChildSelected` + `FamilyRepository.selectChild`)

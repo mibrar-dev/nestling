@@ -152,6 +152,27 @@ void main() {
     testWidgets('the tile is 40 px with the tint colours', (tester) async {
       await _pumpRow(tester, tint: NestTileTint.sky);
 
+      // Iteration 3 moved the literals to tokens (`NestSpacing.s10` = 40);
+      // the rendered geometry must be unchanged — the design's numbers, not
+      // the tokens', are what the UI check measures.
+      expect(NestSpacing.s10, 40);
+      expect(NestSpacing.s3, 12);
+      expect(NestSpacing.s4, 16);
+      expect(NestSpacing.gap10, 10);
+      final padding = tester.widget<Padding>(
+        find
+            .descendant(
+              of: find.byKey(const Key('probe-row')),
+              matching: find.byType(Padding),
+            )
+            .first,
+      );
+      expect(
+        padding.padding,
+        // `.list-row { padding: 10px 16px 10px 12px }`
+        const EdgeInsets.fromLTRB(12, 10, 16, 10),
+      );
+
       final tile = tester.getRect(
         find
             .descendant(

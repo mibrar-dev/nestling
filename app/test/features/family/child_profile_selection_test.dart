@@ -103,6 +103,14 @@ Future<String?> _activeChildId(AppDatabase db) async {
   return row.activeChildId;
 }
 
+/// Polls [condition] for up to two seconds — Drift's `watch()` streams land
+/// on the next event-loop turn, so a write is not visible synchronously.
+Future<void> _waitFor(bool Function() condition) async {
+  for (var i = 0; i < 200 && !condition(); i++) {
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+}
+
 /// Adds a quest with no assignee — the family-wide "Anyone" kind, which a
 /// child's removal must NOT delete (`family_repository_impl.removeChild`
 /// deletes `q.assigneeChildId.equals(childId)` only).
@@ -387,6 +395,46 @@ void main() {
       expect(await repo.watchProfile().first, isNull);
     });
 
+    // Review finding 4 / `SHARED_REQUEST.md` §5: the repoint query repeats
+    // the roster's ordering (createdAt, then rowid). With only two children
+    // any ordering gives the same answer — a third child is what makes it
+    // observable, and CHILD ORDER is "the order they were added", never
+    // alphabetical or newest-first.
+    test(
+      'with three children the repoint picks the FIRST added survivor',
+      () async {
+        final db = await _demoDb();
+        final repo = FamilyRepositoryImpl(db: db);
+        await repo.addChild(
+          nickname: 'Robin',
+          ageBand: '10-12',
+          avatarColour: 'leaf',
+        );
+        final roster = await repo.watchChildren().first;
+        expect(roster.map((c) => c.nickname), <String>[
+          'Maya',
+          'Leo',
+          'Robin',
+        ], reason: 'added order');
+        expect(await _activeChildId(db), 'maya');
+
+        await repo.removeChild('maya');
+
+        expect(
+          await _activeChildId(db),
+          'leo',
+          reason: 'Leo was added before Robin, whatever their names sort like',
+        );
+        expect((await repo.watchProfile().first)!.child.nickname, 'Leo');
+
+        // …and removing the NEWEST child (who was never selected) must not
+        // disturb the selection at all.
+        await repo.removeChild('robin');
+        expect(await _activeChildId(db), 'leo');
+        expect((await repo.watchProfile().first)!.child.id, 'leo');
+      },
+    );
+
     test(
       'removing a child who is NOT selected leaves the selection alone',
       () async {
@@ -419,6 +467,97 @@ void main() {
         db.questCompletions,
       )..where((c) => c.childId.equals('maya'))).get();
       expect(completions, isNotEmpty);
+    });
+  });
+
+  group('review finding 3 · the ledger subscription is claimed once', () {
+    // `watchProfile` keeps ONE Drift subscription per selected child
+    // (`ledgerSub`) and hands it over when the selection changes. A cascading
+    // remove writes five tables in one transaction, so several base emissions
+    // land while the handler is awaiting `cancel()` — iteration 3 made the
+    // handler claim the slot SYNCHRONOUSLY and let only the newest run
+    // (`identical(latestParts, parts)`) re-subscribe, so an older run can no
+    // longer orphan or duplicate the listener.
+    //
+    // The observable contract: after the burst the stream is still driven by a
+    // LIVE ledger subscription for the new selection — a later ledger write
+    // still produces a correct emission.
+    test('a cascading remove leaves one live subscription for the new child', () async {
+      final db = await _demoDb();
+      final repo = FamilyRepositoryImpl(db: db);
+      final seen = <(String?, int)>[];
+      final sub = repo.watchProfile().listen(
+        (p) => seen.add((p?.child.id, p?.owedPence ?? -1)),
+      );
+
+      await _waitFor(() => seen.any((s) => s.$1 == 'maya'));
+      expect(seen.last, ('maya', 420));
+
+      // One transaction across children/completions/ledger/quests/… .
+      await repo.removeChild('maya');
+      await _waitFor(() => seen.any((s) => s.$1 == 'leo'));
+
+      expect(
+        seen.where((s) => s.$1 == 'leo').last.$2,
+        210,
+        reason: "Leo's own ledger, not Maya's leftovers",
+      );
+
+      // The proof the subscription survived the burst: a `quest_bonus` row for
+      // Leo must reach the profile.
+      await db
+          .into(db.ledgerEntries)
+          .insert(
+            LedgerEntriesCompanion.insert(
+              familyId: Seed.familyId,
+              childId: 'leo',
+              type: 'quest_bonus',
+              amountPence: 250,
+            ),
+          );
+      await _waitFor(() => seen.any((s) => s.$1 == 'leo' && s.$2 == 460));
+
+      expect(seen.last, (
+        'leo',
+        460,
+      ), reason: 'owed = 210 (seeded) + 250 (the new bonus row)');
+
+      await sub.cancel();
+    });
+
+    test('emptying and refilling the family re-subscribes cleanly', () async {
+      final db = await _demoDb();
+      final repo = FamilyRepositoryImpl(db: db);
+      final seen = <String?>[];
+      final sub = repo.watchProfile().listen((p) => seen.add(p?.child.id));
+
+      await _waitFor(() => seen.contains('maya'));
+
+      // The `selected == null` branch: cancel, clear the slot, emit null.
+      await repo.removeChild('maya');
+      await repo.removeChild('leo');
+      await _waitFor(() => seen.contains(null));
+      expect(seen.last, isNull);
+
+      // …and the stream must come back when a child is added.
+      await repo.addChild(
+        nickname: 'Robin',
+        ageBand: '7-9',
+        avatarColour: 'leaf',
+      );
+      await _waitFor(() => seen.any((id) => id != null && id != 'maya'));
+
+      final revived = seen.last!;
+      expect(revived, isNot('maya'));
+      expect(revived, isNot('leo'));
+      final profile = (await repo.watchProfile().first)!;
+      expect(profile.child.id, revived);
+      // A fresh child has an empty ledger: owed 0, no quests yet.
+      expect(profile.owedPence, 0);
+      expect(profile.dailyActive, 0);
+      expect(profile.questsThisWeek, 0);
+
+      await sub.cancel();
     });
   });
 
