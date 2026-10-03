@@ -5,13 +5,12 @@
 // pins every string the screen owns, its code points, and — by set equality —
 // that the screen invents no copy of its own.
 //
-// Known deviation (found by this file, recorded in `3_test.md` §Bugs as
-// P09-BUG-1): the shared `NestStepper` draws its minus as U+002D, while both
-// designs that show a stepper print U+2212 (`&minus;` in the HTML). It is a
-// shared-component defect, not P09's code, and P06 already carries the same
-// finding (P06-BUG-12) with a screen-local `P06WeeklyStepper`. The glyph is
-// therefore excluded from [kOwnedCopy] below until the component is fixed;
-// every other design string is asserted character for character.
+// Iteration 1 recorded P09-TEST-1 in this file: the shared `NestStepper` drew
+// its minus as U+002D while both designs that show a stepper print U+2212
+// (`&minus;` in the HTML). `shared/shared_batch5` fixed the component (the
+// third item of `2_build.md` section 3), so the audit now carries the real
+// glyph in [kGlyphs] -- the design's copy is asserted character for character,
+// minus included.
 
 import 'dart:ui' show Tristate;
 
@@ -35,6 +34,7 @@ const Set<String> kScreenLocalCopy = <String>{
   'Something went wrong', // §4 (unreachable fallback)
   'Try again', // §4
   'Pick at least one day', // §2 validation caption
+  'Coins must be 1\u{2013}100', // BUG-P09-6's repair caption (en dash)
   'Before school (8:30am)', // due sheet rows — no P09 frame
   'Before tea (5pm)', // the sheet row carries no chevron
   'Before bed (7:30pm)',
@@ -82,7 +82,7 @@ const List<String> kGlyphs = <String>[
   'S',
   'S', // the design's .dayrow
   '+',
-  '-', // .stepper buttons
+  '−', // .stepper buttons — U+2212, the design's glyph (shared batch5 fixed §5)
 ];
 
 /// Everything P09 is allowed to paint anywhere on the screen: the design's
@@ -259,8 +259,20 @@ void main() {
       }
       // The switch carries the same wording the design's checkbox aria-label
       // uses, so the card's title and its control are distinguishable.
-      final toggle = tester.getSemantics(find.byType(NestToggle));
-      expect(toggle.label, 'Needs my approval');
+      // Addressed by label, not by widget: `shared_batch5` wrapped the track
+      // in `_ToggleHitSlop`, so `getSemantics(find.byType(NestToggle))` now
+      // resolves to the slop wrapper, which owns no label.
+      // The card's title is a text node with the same label; the switch is
+      // the one that reports `toggled`.
+      final toggle = find.semantics
+          .byPredicate(
+            (node) =>
+                node.label == 'Needs my approval' &&
+                node.getSemanticsData().flagsCollection.isToggled !=
+                    Tristate.none,
+          )
+          .evaluate()
+          .single;
       expect(
         toggle.getSemanticsData().flagsCollection.isToggled,
         Tristate.isTrue,

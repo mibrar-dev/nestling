@@ -43,12 +43,33 @@
 //                     so the editor threw "string is not well-formed UTF-16"
 //                     while painting the avatar
 //                     → `_initial` takes the first grapheme (`characters`)
+//
+// Iteration-3 proofs (BUG-P09-9..12), `skip: true` until their fix lands.
+// BUG-P09-9 and BUG-P09-12 are independently tracked by 4_review.md §2/§3 and
+// ORCHESTRATOR_NOTES 20:09; the proofs here pin the exact rects/glyphs so the
+// loop can unskip them with the fix.
+//
+//   BUG-P09-9  major  batch 5's `NestToggle` (track is now the layout box)
+//                     left P09's two compensations stale: the approval card
+//                     renders 68 vs design 72 (due card 680 vs 684) and the
+//                     track paints 4 px right / 2 px up
+//   BUG-P09-10 minor  the shared 59x44 hit slop is clipped by the 40-high
+//                     approval Row: the toggle's effective tap target is
+//                     ~51x40, so taps 5 px above/below or 2 px right of the
+//                     track miss (the design's `::before` reaches 59x44)
+//   BUG-P09-11 minor  an out-of-range reward has no practical repair: a
+//                     9999-coin row needs 9899 `-` taps before Save unblocks
+//   BUG-P09-12 major  four of the six icon tiles still draw the legacy
+//                     glyphs; the mandatory 20:09 note (batch-5 report) says
+//                     switch to questBed / questDishes / questHoover /
+//                     questBins (Book and Paw are unchanged)
 
 import 'dart:math' as math;
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
+import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:nestling/app/controllers.dart';
@@ -86,8 +107,28 @@ double _contrast(Color a, Color b) {
   return (hi + 0.05) / (lo + 0.05);
 }
 
+/// Loads the bundled Inter/Nunito faces so geometry proofs measure the real
+/// text metrics (same technique as `quest_editor_view_geometry_test.dart`).
+Future<void> _loadBundledFonts() async {
+  final inter = FontLoader('Inter')
+    ..addFont(rootBundle.load('assets/fonts/Inter-Regular.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-Medium.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-SemiBold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-Bold.ttf'));
+  final nunito = FontLoader('Nunito')
+    ..addFont(rootBundle.load('assets/fonts/Nunito-Bold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Nunito-ExtraBold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Nunito-Black.ttf'));
+  await inter.load();
+  await nunito.load();
+}
+
 /// The `QuestsRepository` singleton for the current test scope.
 QuestsRepository get _repo => GetIt.instance<QuestsRepository>();
+
+/// The header Save pill.
+QuestSavePill _savePill(WidgetTester tester) =>
+    tester.widget<QuestSavePill>(find.byType(QuestSavePill));
 
 /// The semantics node that announces [label] as a button.
 SemanticsNode _button(WidgetTester tester, String label) => find.semantics
@@ -102,6 +143,7 @@ QuestIconTile _iconTile(WidgetTester tester, String key) => tester
     .widget<QuestIconTile>(find.byKey(ValueKey<String>('quest-icon-$key')));
 
 void main() {
+  setUpAll(_loadBundledFonts);
   setUp(setUpTestScope);
 
   // -- BUG-P09-1 -----------------------------------------------------------
@@ -396,6 +438,120 @@ void main() {
       );
       await disposeApp(tester);
     });
+  });
+
+  // -- iteration 3 proofs ---------------------------------------------------
+  group('BUG-P09-9 — the approval block misses the design after batch 5', () {
+    testWidgets('the approval card is 72 high and the due card starts at 684', (
+      tester,
+    ) async {
+      await pumpAppRoute(tester, QuestsRoutePaths.editor);
+
+      // Batch 5 made the 51x31 track the toggle's layout box, so the card's
+      // old bottom-padding shave (16 -> 12, sized for the old 44-high box)
+      // now makes the card 68: everything below it sits 4 px high.
+      final approval = tester.getRect(find.byType(NestCard).at(1));
+      expect(approval.top, 600);
+      expect(approval.height, 72);
+      expect(tester.getRect(find.byType(NestCard).at(2)).top, 684);
+      await disposeApp(tester);
+    }, skip: true);
+
+    testWidgets('the toggle track is the design rect 303/620.5/51/31', (
+      tester,
+    ) async {
+      await pumpAppRoute(tester, QuestsRoutePaths.editor);
+
+      // `QuestEditorMetrics.toggleTrackOffset` (4, -2) compensated the OLD
+      // 59x44 component; with the track as the layout box it now pushes the
+      // track 4 px past the content edge and 2 px up.
+      final track = tester.getRect(find.byType(NestToggle));
+      expect(track.left, 303);
+      expect(track.top, 620.5);
+      expect(track.width, 51);
+      expect(track.height, 31);
+      await disposeApp(tester);
+    }, skip: true);
+  });
+
+  group('BUG-P09-10 — the 59x44 hit slop is clipped by the approval Row', () {
+    /// Pumps fresh (value starts ON), taps [at], and expects the flip.
+    Future<void> tapAndExpectFlip(WidgetTester tester, Offset at) async {
+      await pumpAppRoute(tester, QuestsRoutePaths.editor);
+      await tester.tapAt(at);
+      await tester.pump();
+      expect(
+        tester.widget<NestToggle>(find.byType(NestToggle)).value,
+        isFalse,
+        reason: 'a tap at $at is inside the design ::before area (59x44)',
+      );
+      await disposeApp(tester);
+    }
+
+    testWidgets('5 px above the track flips the toggle', (tester) async {
+      await tapAndExpectFlip(tester, const Offset(328.5, 615.5));
+    }, skip: true);
+
+    testWidgets('5 px below the track flips the toggle', (tester) async {
+      await tapAndExpectFlip(tester, const Offset(328.5, 656.5));
+    }, skip: true);
+
+    testWidgets('2 px right of the track flips the toggle', (tester) async {
+      await tapAndExpectFlip(tester, const Offset(356, 635.5));
+    }, skip: true);
+  });
+
+  group('BUG-P09-11 — an out-of-range reward has no practical repair', () {
+    testWidgets('one step must bring 9999 into the 1..100 range', (
+      tester,
+    ) async {
+      final db = await setUpTestScope();
+      await db
+          .into(db.quests)
+          .insert(
+            QuestsCompanion.insert(
+              id: 'q-9999',
+              familyId: Seed.familyId,
+              title: 'Mega quest',
+              coins: const Value(9999),
+              repeatRule: const Value('weekly'),
+              days: const Value('6'),
+              assigneeChildId: const Value('maya'),
+            ),
+          );
+      await pumpAppRoute(tester, '${QuestsRoutePaths.editor}?id=q-9999');
+      expect(find.text('Coins must be 1–100'), findsOneWidget);
+      expect(_savePill(tester).onPressed, isNull);
+
+      await tester.tap(find.byKey(const ValueKey<String>('decrease')));
+      await tester.pump();
+
+      // 9999 -> 9998 still blocks Save: the parent would need 9899 taps to
+      // repair the row. A corrupt row must be repairable in one step (or the
+      // screen must offer a one-tap fix), not only by counting down.
+      expect(find.text('Coins must be 1–100'), findsNothing);
+      expect(_savePill(tester).onPressed, isNotNull);
+      await disposeApp(tester);
+    }, skip: true);
+  });
+
+  group('BUG-P09-12 — four icon tiles still draw the legacy glyphs', () {
+    testWidgets('the six tiles draw the design glyphs in design order', (
+      tester,
+    ) async {
+      await pumpAppRoute(tester, QuestsRoutePaths.editor);
+
+      // ORCHESTRATOR_NOTES 20:09 + shared batch 5: the exact design paths
+      // landed as questBed / questDishes / questHoover / questBins; Book and
+      // Paw are byte-identical to the design and stay unchanged.
+      expect(_iconTile(tester, 'bed').icon, NestIcons.questBed);
+      expect(_iconTile(tester, 'dishwasher').icon, NestIcons.questDishes);
+      expect(_iconTile(tester, 'hoover').icon, NestIcons.questHoover);
+      expect(_iconTile(tester, 'book').icon, NestIcons.book);
+      expect(_iconTile(tester, 'bin').icon, NestIcons.questBins);
+      expect(_iconTile(tester, 'paw').icon, NestIcons.paw);
+      await disposeApp(tester);
+    }, skip: true);
   });
 
   // -- attacks that hold ----------------------------------------------------

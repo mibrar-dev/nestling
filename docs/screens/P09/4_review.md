@@ -1,413 +1,468 @@
-# P09 — stage 4 · QA code review (iteration 2)
+# P09 — stage 4 · QA code review (iteration 3)
 
-Scope reviewed: `git diff main...HEAD` on branch `screen/P09` (57 files,
-+8293/−70) against `docs/ARCHITECTURE.md`, `docs/screens/RULES.md`,
-`docs/DESIGN_SPEC.md` §5 P09 (line 168), `docs/design/SPACING_SPEC.md`, the
-design system in `app/lib/core/design_system/`, the HTML source
-`design/html-source/screens/P09-quest-editor.html`, the design PNGs, and every
-mandatory item in `docs/screens/P09/ORCHESTRATOR_NOTES.md`.
+Scope reviewed: `git diff main...HEAD` on branch `screen/P09` against
+`docs/ARCHITECTURE.md`, `docs/screens/RULES.md`, `docs/DESIGN_SPEC.md` §5 P09
+(line 168), `docs/design/SPACING_SPEC.md`, the design system in
+`app/lib/core/design_system/`, the HTML source
+`design/html-source/screens/P09-quest-editor.html`, both design PNGs, and every
+mandatory item in `docs/screens/P09/ORCHESTRATOR_NOTES.md` (17:14, 17:57,
+19:19, 20:09).
 
-No code was edited. Nothing except this file was written. No simulator was
-booted, installed on, screenshotted or driven; `flutter clean` was never run.
+`git merge-base main HEAD` = `7afc8ad` = `main`. **The branch is not behind
+main** — batch 5 (`shared/shared_batch5`) is merged in and its changes are on
+disk at HEAD. That matters for findings 1–3: nothing here is a merge-order or
+process artefact, the screen simply has not absorbed the shared change that
+landed under it.
 
-Because another stage is writing in this worktree at the same time (see
-"Process note" at the end), every check below was run against an **isolated
-`git archive HEAD` export** (`…/opencode/p09-head`) so its in-flight,
-uncommitted files could not colour the result:
+No code was edited. Only this file was written. No simulator was booted,
+installed on, screenshotted or driven; `flutter clean` was never run.
+
+Because the loop may be writing in this worktree, every gate was run against an
+isolated `git archive HEAD` export
+(`/…/opencode/p09-clean`, and a second scratch copy `/…/opencode/p09-r3` used to
+measure candidate fixes):
 
 ```
-$ cd …/opencode/p09-head/app && flutter analyze
+$ cd …/opencode/p09-clean/app && flutter analyze
 No issues found! (ran in 6.8s)
 
+$ flutter test                       # full suite at HEAD
+02:32 +2583 ~1 -10: Some tests failed.        # the ~1 skip is main's P12-BUG-05
+
 $ flutter test test/features/quests/
-00:19 +335: All tests passed!
-
-$ flutter test test/features/today/
-00:08 +110: All tests passed!
-
-$ flutter test
-02:46 +2530 ~1: All tests passed!        # the ~1 skip is main's P12-BUG-05
+00:23 +368 -10: Some tests failed.
 ```
 
-`git diff --stat -- app/lib/core app/lib/app app/test/core tools` is empty;
-`analysis_options.yaml` and `pubspec.yaml` are untouched; no `skip:` and no
-`// ignore:` anywhere in the diff; no `google_fonts` / `GoogleFonts`.
+All 10 failures are in P09's own test files. Nothing outside
+`features/quests/**` regressed (`test/features/today/` is green).
+
+`git diff --stat -- app/lib/core app/lib/app tools` is empty;
+`analysis_options.yaml` and `pubspec.yaml` are untouched; no `skip:`, no
+`// ignore:`, no `google_fonts`/`GoogleFonts`, no `print`/`debugPrint`, no
+`TODO(` left anywhere in the diff.
 
 ## Verdict summary
 
-**Two major findings — both actionable inside this worktree, one of them a
-violation of a mandatory orchestrator instruction. VERDICT: FAIL.**
+**One blocker and two majors. The blocker is the `flutter test` done-criteria
+gate (RULES §7.1) — 10 of this screen's own tests are red at HEAD. Both majors
+are the same missed hand-off: the shared batch-5 change landed on `main` and
+`ORCHESTRATOR_NOTES.md` (20:09) explicitly instructed this branch to absorb it,
+but neither the icon switch nor the removal of the two now-stale compensations
+was done. VERDICT: FAIL.**
 
-The screen is otherwise a careful, faithful transcription of the design: no
-hard-coded colours, sizes or fonts; shared components reused rather than
-re-implemented; every screen-local tappable carries `onTap:` on its own
-`Semantics` node; streams and controllers disposed; the geometry test pins the
-design's absolute rects with the bundled real fonts, and my own pixel probe of
-the design PNG confirms those numbers are real (see "What was checked").
+The screen is otherwise a careful, faithful build: no hard-coded colours,
+sizes or fonts; shared components reused rather than re-implemented; copy
+matches the HTML character for character; every screen-local tappable carries
+`onTap:` on its own `Semantics` node; streams and controllers disposed; the
+per-keystroke rebuild storm is gone; and the geometry test pins the design's
+absolute rects against the bundled real fonts.
 
 ---
 
 ## Findings
 
-### 1. MAJOR — the Dishes tile draws a look-alike glyph, which the mandatory ORCHESTRATOR_NOTES item 1 forbids
+### 1. BLOCKER — the `flutter test` gate is red: 10 failures, all in `test/features/quests/`
 
-**Where:** `app/lib/features/quests/presentation/views/quest_editor_view.dart:257-280`
-(`_questIcons`, line 269 `icon: NestIcons.basket`).
+**Where:** `quest_editor_copy_test.dart:85`, `quest_editor_copy_test.dart:262`,
+`quest_editor_a11y_test.dart:479-491`, `quest_editor_view_test.dart:612-625`,
+`quest_editor_view_test.dart:778-782`, `quest_editor_robustness_test.dart:256-281`,
+`quest_editor_view_geometry_test.dart:327-358`,
+`quest_editor_data_integrity_test.dart:170`.
 
-**Why it is wrong.** `ORCHESTRATOR_NOTES.md` (17:57, item 1) is mandatory and
-says: *"If a glyph is missing from `app/assets/icons`, write `SHARED_REQUEST.md`
-with the exact names and SVG source (from design/html-source) rather than
-substituting a look-alike."* Three independent records in this worktree agree
-with the rule and against the code:
+**Why it is a blocker.** `docs/screens/RULES.md` §7.1 makes
+"`flutter test` → all pass" a hard done-criteria gate, and the failures are
+behavioural, not cosmetic. Four independent causes:
 
-* `SHARED_REQUEST.md` §4 **CORRECTION**: *"`ic_basket.svg` … this look-alike
-  substitution must be REVERTED, not kept: the exact design glyph is missing
-  from `app/assets/icons`, so the DS must gain it."*
-* `5_ui.md` (iteration 2, deviation 1, the item's own blocker):
-  *"The substitution violates the mandatory orchestrator instruction … and must
-  be replaced with the exact design glyph, not kept."*
-* `2b_build_ui.md:114-121` argues for keeping it on the premise that *"`ic_hoover.svg`
-  … has since been redrawn in the DS"*. That premise is **false**. I verified it
-  against git and bytes: `git log --all -- app/assets/icons` last touches
-  `ic_*.svg` in `7eaa1f7` / `f912ef0` (pre-branch), and the working assets are
-  still `ic_hoover.svg` = rounded canister `rect x=3 y=10.8 w=11.8 h=8.2 rx=3.4`
-  + dot wheels (design: `rect x=3 y=8 w=13 h=8 rx=2` + leg lines) and
-  `ic_dishwasher.svg` = appliance with rack line and two control dots (design:
-  plain basket `M4 11h16v9…` + one arch handle `M8 11V7a4 4 0 0 1 8 0v4`).
-  So the basket is not "the closest available match to a redrawn DS" — it is a
-  third, wrong object, chosen to look closer to the design than the glyph that
-  the mapping is actually named after.
+**(a) The copy audit still pins the glyph batch 5 removed (3 failures).**
+`quest_editor_copy_test.dart:85` reads `'-', // .stepper buttons` (U+002D).
+Iteration 2's finding 7 said, in writing, to *"flip the hyphen entry in the same
+commit that fixes `NestStepper`"* and *"do not delete the entry without
+replacing it"*. `nest_stepper.dart:30-32` is now `label: '−'` (U+2212, with a
+comment saying so). Result:
 
-The request the rule asks for is already filed correctly (§4, with the four
-verbatim design SVGs), so nothing blocks the fix.
-
-**Fix.** Revert line 269 to the semantically correct glyph the mapping is named
-for and delete the justifying comment at 262-268:
-
-```dart
-(key: 'dishwasher', aliases: <String>['plate'], label: 'Dishes',
- icon: NestIcons.dishwasher),
+```
+quest_editor_copy_test.dart:189  Expected: empty   Actual: Set:['−']  unlisted copy on screen
+quest_editor_copy_test.dart:302  Expected: empty   Actual: Set:['−']
+quest_editor_copy_test.dart      Expected: contains '-'
 ```
 
-Keep `SHARED_REQUEST.md` §4 as the request for the exact path; when the DS
-gains it, swap the constant in and delete the note. **Do not** re-justify the
-basket with the "main redrew the glyphs" claim — delete
-`2b_build_ui.md:105-121` or strike the claim, so the next iteration does not
-re-open it.
+so `the screen invents no copy beyond the design`,
+`every design string is on screen, character for character` and
+`the stepper announces Decrease reward / Increase reward` all fail. **Fix:**
+`quest_editor_copy_test.dart:85` → `'−', // .stepper buttons (U+2212, per §5)`.
 
-*(Not a P09 defect, for the record: Bed, Hoover and Bins also miss the design
-glyphs — `ic_bed.svg` adds a headboard arc, `ic_bin.svg` is a wheelie bin — and
-`core/` is off-limits to a screen agent. That part is correctly filed as
-§4 and correctly blocks only the stage-5 verdict.)*
+**(b) Three tests read the toggle's semantics through the wrong node
+(3 failures).** `NestToggle` now puts its `Semantics` *below* the new
+`_ToggleHitSlop` hit-test proxy (`nest_toggle.dart:36-44`), so
+`tester.getSemantics(find.byType(NestToggle))` walks **up** from the proxy and
+returns the ancestor node — label `''`, `hasAction(tap)` false:
+
+```
+quest_editor_a11y_test.dart:480   Expected: 'Needs my approval'   Actual: ''
+quest_editor_view_test.dart:779   Expected: true                  Actual: <false>
+quest_editor_copy_test.dart:263   Expected: 'Needs my approval'   Actual: ''
+```
+
+This is a **test** problem, not an a11y regression: the `Semantics` node is
+still in the tree, still labelled and still actionable, and
+`shared_batch5_REPORT.md` says exactly this ("the outer hit-slop render carries
+no semantics (the `NestChip` pattern)") and fixed P14's tests the same way.
+**Fix:** address the node by label, e.g.
+`tester.getSemantics(find.bySemanticsLabel('Needs my approval'))`, in
+`quest_editor_a11y_test.dart:479/491`, `quest_editor_view_test.dart:778/782`
+and `quest_editor_copy_test.dart:262`.
+
+**(c) Two tests assert the toggle's old 59×44 box (3 failures).**
+`quest_editor_robustness_test.dart:268` (`Expected >= 44, Actual 31`) and
+`quest_editor_view_test.dart:620` (`Expected 44, Actual 31`) sweep
+`getRect(find.byType(NestToggle))` as if it were the hit box. The box is now
+the 51×31 track by design. **Fix:** drop the toggle from the ≥44 sweep, pin
+`size == Size(51, 31)` instead, and keep a live proof that a tap **4 px** left
+of / **7 px** above the track still flips it (the `::before` overhang), which is
+how P14's `rewards_a11y_test.dart` handles it.
+
+**(d) `quest_editor_data_integrity_test.dart:170`** pins the tile list as
+`NestIcons.bed / dishwasher / hoover / book / bin / paw` — the pre-batch-5 list.
+It passes today and must be updated **in the same commit as finding 2 below**,
+or it will fail the moment the picker is switched.
+
+*(Cause (a) and cause (b)/(c) survive finding 2: in the scratch copy, applying
+finding 2's fix took the suite from 10 failures to 9, of which these 6 remain.)*
 
 ---
 
-### 2. MAJOR — `?idea=` is still a dead query key: "+ Add" on an Ideas row opens a blank new quest
+### 2. MAJOR — the approval card and its toggle now miss the design by 4 px / 2 px, because both batch-5 compensations are still in place
 
-**Where:** `app/lib/features/quests/presentation/widgets/quest_library_body.dart:241-245`
-and the contract in `app/lib/features/quests/quests_routes.dart:19-36`.
+**Where:** `quest_editor_view.dart:969-974` (card bottom padding
+`NestSpacing.s3`) and `quest_editor_view.dart:996-997`
+(`Transform.translate(offset: QuestEditorMetrics.toggleTrackOffset)`);
+`quest_editor_widgets.dart:35-49` (`toggleTrackOffset = Offset(4, -2)`).
 
-**Why it is wrong.** P10's Ideas tab pushes
-`/quest-editor?idea=<id>`; `QuestEditorView` reads only `?id=` and `?questId=`
-(`quest_editor_view.dart:56-60`), so the tap lands on the editor pre-filled with
-the **default template** — `Hoover the stairs`, the hoover tile, 15 coins,
-Weekly + Saturday — rather than the idea the parent chose. Saving then creates a
-quest unrelated to the row that was tapped. That is a wrong-result write on a
-parent-facing screen, not a cosmetic gap.
+**Why it is wrong.** Both lines exist only to compensate for the *old*
+`NestToggle`, which was a 59×44 box with the 51×31 track centred inside it.
+Batch 5 made the track the widget's own box (`nest_toggle.dart:12-16,52-53`)
+and moved the 59×44 area into a non-layouting hit slop. `ORCHESTRATOR_NOTES.md`
+(20:09) is explicit: *"delete the `toggleTrackOffset` Transform.translate, as
+in `docs/screens/_shared/shared_batch5_REPORT.md` lines ~87-90 and ~209"* — and
+that report's own follow-up list names this branch's two compensations. The
+compensations now **double-count**:
 
-Iteration 1 filed this as a minor (finding 12); the deferral has now expired.
-The stale comment still says *"TODO(P10): P09 does not read a `?idea=` yet"* —
-P09 exists, this diff even changed the **sibling** row three lines above
-(`quest_library_body.dart:202`, now `?id=`), so the file contradicts itself and
-the ownership has fallen between two screens. Both files are inside
-`features/quests/**`, i.e. inside RULES §1, and the data is already available:
-`QuestsRepository.ideas()` (`data/quests_repository_impl.dart:47`) returns the
-templates with title, icon and suggested coins.
+* the card's bottom padding was shaved 16→12 to absorb the toggle's 44-high
+  box; with a 31-high track the row is driven by the 40-high text block, so the
+  card renders **68** where the design is **72**;
+* the `Transform` now pushes the track **4 px past the content edge** and
+  **2 px up**.
+
+Measured, HEAD vs design (÷3, bundled Inter, light):
+
+| element | design (PNG) | app at HEAD | Δ |
+|---|---|---|---|
+| `.card` approval | 20 / 600 / 350 / **72** | 20 / 600 / 350 / **68** | **−4 h** |
+| `.toggle` track | **303** / **620.5** / 51 / 31 | **307** / **618.5** / 51 / 31 | **+4 x, −2 y** |
+
+Design figures are my own pixel probe of
+`design/screens/light/P09-quest-editor.png`, not the builders' table: at
+`x = 300 px` the white card runs `y 1800 → 2016` px = logical `600.0 → 672.0`;
+at `y = 1900 px` the leaf-green track runs `x 909 → 1061` px = logical
+`303.0 → 353.7` and the card's white ends at `x 1110` = logical `370.0`, so the
+track's right edge is flush with the content edge `370 − 16 = 354`. The
+green-column centre at `x = 310` is `636.5`, giving a 31-high track centred on
+`636` ⇒ `620.5 → 651.5`. Both deltas are outside the owner's ±2 px rule, so
+stage 5 must fail this as it stands.
+
+**Fix (two lines, and I verified both in the scratch export).** Delete
+`quest_editor_view.dart:996-997` and restore the bottom padding:
+
+```dart
+padding: const EdgeInsets.fromLTRB(
+  NestSpacing.s4,   // 16 — unchanged
+  NestSpacing.s4,   // 16 — was s3, the compensation for the old 44-high box
+  NestSpacing.s4,
+),
+```
+
+With only those two edits the probe returns
+`card = Rect.fromLTRB(20, 600, 370, 672)` (height **72**) and
+`toggle = Rect.fromLTRB(303, 620.5, 354, 651.5)` — the design rects exactly,
+with the 44 px tap target still reaching 59×44 through the shared hit slop.
+Then delete `QuestEditorMetrics.toggleTrackOffset`
+(`quest_editor_widgets.dart:35-49`) and its now-false comment block at
+`quest_editor_view.dart:991-995`, and update
+`quest_editor_view_geometry_test.dart:327-358` / `quest_editor_view_test.dart:612-625`
+to assert the track itself at `303 / 620.5 / 51 / 31` (the header table's
+`.toggle track 303 / 620.5 / 51 / 31` row is already correct and needs no edit).
+
+---
+
+### 3. MAJOR — mandatory orchestrator item 20:09 not done: four of the six icon tiles still draw the wrong glyph
+
+**Where:** `quest_editor_view.dart:293` (`NestIcons.bed`), `:298`
+(`NestIcons.dishwasher`), `:300` (`NestIcons.hoover`), `:306`
+(`NestIcons.bin`).
+
+**Why it is wrong.** `ORCHESTRATOR_NOTES.md` 17:57 item 1 (still binding) bans
+look-alike substitutions: *"If a glyph is missing from `app/assets/icons`, write
+`SHARED_REQUEST.md` … rather than substituting a look-alike."* Batch 5 answered
+that request — `ic_quest_{bed,dishes,hoover,bins}.svg` and
+`NestIcons.questBed / questDishes / questHoover / questBins` are on `main`
+(`nestling_assets.dart:119-137`, `nest_icon.dart:36-39`) and carry the design's
+exact paths (`M4 11h16v9…`, `M3 18v-8a2 2 0 0 1 2-2h14…`, the canister with
+`M7 16v3M11 16v3` legs, the case with the `M10 12h4` clasp). The 20:09 note
+orders the switch. It has not happened, so four tiles still draw glyphs that
+**no** P09 frame contains:
+
+| tile | design | still painted | delta |
+|---|---|---|---|
+| Bed | flat frame, no headboard | `ic_bed.svg` has a headboard arc | wrong object |
+| Dishes | handled basket | `ic_dishwasher.svg` appliance with rack line + 2 control dots | wrong object (P08 item 2 of iteration 2) |
+| Hoover | angular canister + hose + 2 legs | `ic_hoover.svg` rounded canister + dot wheels | wrong object |
+| Bins | handled case + clasp | `ic_bin.svg` wheelie bin | wrong object |
+
+Iteration 2's own UI note measured whole-tile MAE at **4.5 / 17.5 / 20.5 /
+17.3** for these four tiles; the fix is now one constant each, so stage 5 can
+expect those to collapse to raster residue.
 
 **Fix.**
 
-1. `quests_routes.dart` — add to `QuestsEditorQuery`:
-   `static const String ideaId = 'idea';` with the doc comment the other two keys
-   carry.
-2. `quest_editor_view.dart` — read it next to `_questIdOf`; when there is no
-   `?id=` but there is an `?idea=`, seed the sheet from
-   `GetIt.instance<QuestsRepository>().ideas()` (title, `icon`, `coins`,
-   `repeatRule`, `needsApproval`) instead of `_defaultTitle` / `_defaultIcon` /
-   `15` — i.e. pass an `initialQuest` built from the template with a fresh id,
-   and keep the mode so no `QuestsUpdateRequested` is dispatched (the template
-   is not a row).
-3. `quest_library_body.dart:242` — delete the `TODO(P10)` comment (the key is
-   read) and update it to name `QuestsEditorQuery.ideaId`.
-4. Test: add to `quest_editor_view_test.dart` — `/quest-editor?idea=idea-bed`
-   shows `Make your bed`, 5 coins, `= 5p at payout`, the Bed tile selected, and
-   saving persists a **new** row (not an update of `idea-bed`).
+```dart
+(key: 'bed',       aliases: <String>['sofa'], label: 'Bed',    icon: NestIcons.questBed),
+(key: 'dishwasher',aliases: <String>['plate'],label: 'Dishes', icon: NestIcons.questDishes),
+(key: 'hoover',    aliases: <String>[],       label: 'Hoover', icon: NestIcons.questHoover),
+(key: 'book',      …),                                                  // unchanged
+(key: 'bin',       aliases: <String>['bins','shirt','bag'], label: 'Bins', icon: NestIcons.questBins),
+(key: 'paw',       …),                                                  // unchanged
+```
 
-P10's existing assertions (`quest_library_a11y_actions_test.dart:236,263`) pin
-the push side and need no change.
+The stored `key` values (`bed`/`dishwasher`/`hoover`/`bin`) must **not** change —
+they are what `quests.icon` holds in the database and what the alias table
+resolves — so this is an artwork swap only, and
+`quest_editor_data_integrity_test.dart:170` must move to the same list in the
+same commit (finding 1d). The stale comment at
+`quest_editor_view.dart:281-290` needs no edit beyond confirming it still
+describes the aliases.
 
 ---
 
-### 3. MINOR — `Tooltip(message: 'Back')` on Cancel is product code serving a test harness
+### 4. MINOR — a parent-facing toast can still carry a Dart error string
 
-`quest_editor_view.dart:645-648`.
+**Where:** `quests_bloc.dart:55-61, 78-84, 101-107` →
+`quest_editor_view.dart:153-154` (`showNestToast(context, error)`).
 
-Carried from iteration 1 (finding 3). The P09 design has no AppBar, so the
-tooltip was added to satisfy `WidgetTester.pageBack()`, which resolves
-`find.byTooltip('Back')`, for seven P10 tests. VoiceOver impact is smaller than
-iteration 1 assumed (`excludeSemantics: true` on the `Semantics` node drops the
-tooltip from the announcement, and the 25-label set-equality test passes), but
-the coupling is still real: a future library back button on screen together
-with a non-offstage editor makes `pageBack()` find two and throw.
+Carried from iteration 2 (finding 10). `editorError: error.toString()` means a
+bypassed guard would put `Invalid argument (coins): 9999: Quest coins must be
+1..100` in front of a parent. `_save` clamps and `_canSave` blocks, so it is
+unreachable today.
 
-**Fix.** Delete the `Tooltip` and convert the P10 sites to
-`await tester.binding.handlePopRoute()` — the idiom `today_view_test.dart` and
-`p08_bugs_test.dart` already use. Those files are `quest_library_*_test.dart` /
-`p10_bugs_test.dart`, so this needs the same "another file of the feature"
-authorisation the iteration-1 builders already used for `quest_library_*`.
-Cheaper alternative: keep the tooltip and add one P09 test pinning exactly one
-`find.byTooltip('Back')`.
+**Fix.** Map to parent-safe copy at the bloc boundary
+(`'Could not save the quest. Try again.'`) and log `error`.
 
 ---
 
-### 4. MINOR (perf) — every keystroke rebuilds the whole sheet
+### 5. MINOR — `SHARED_REQUEST.md` still describes four landed shared batches as open
 
-`quest_editor_view.dart:595` — `onChanged: (_) => setState(() {})`.
+**Where:** `docs/screens/P09/SHARED_REQUEST.md` §2 (line 19), §4 (line 77,
+"**BLOCKS P09 UI check**"), §5 (line 177), §6 (line 206).
 
-The only reason it exists is to recompute `_canSave`, so typing a 20-character
-quest name rebuilds the six icon tiles, three person pills, the two
-`LayoutBuilder`s, three cards, the segmented control and the seven day cells per
-character. Carried from iteration 1 (finding 8), deliberately deferred.
+All four were answered by `shared/shared_batch5` — the SVGs exist on `main`
+(verified: `app/assets/icons/ic_quest_{bed,dishes,hoover,bins}.svg`),
+`NestToggle` is 51×31, `NestStepper` is U+2212, `NestTextField`'s default
+horizontal padding is 12. §4's "BLOCKS" banner is now false and is exactly what
+told findings 2 and 3 to wait instead of adapting.
 
-**Fix.** Wrap only `QuestSavePill` in
-`ValueListenableBuilder<TextEditingValue>` over `_title` and compute `_canSave`
-from `value.text` plus the day set; drop the `setState` from `onChanged`.
-
----
-
-### 5. MINOR (perf/robustness) — roster subscription rebuilds unconditionally; coin-value stream has no `onError`
-
-`quest_editor_view.dart:394-412`.
-
-`_childrenSubscription` calls `setState` on **every** `watchChildren()`
-emission, even when the list is unchanged (the coin-value listener two lines
-below correctly compares first — `pence == _pencePerCoin`). Any `children` table
-write anywhere rebuilds the form. Neither subscription has an `onError`, so a
-stream error becomes an unhandled async error and `_pencePerCoin` silently
-stays at 1.
-
-**Fix.** Guard the roster with the same value check (`listEquals(children, _children)`),
-and add `onError: (_) {}` (or set a documented fallback) to both subscriptions.
+**Fix.** Retitle §2/§4/§5/§6 `— RESOLVED on main (shared/shared_batch5)` in the
+style of §1, and note the P09-side follow-ups each still owes (this file is
+inside RULES §1, so no request is needed).
 
 ---
 
-### 6. MINOR (a11y) — the Due-by row announces no value
+### 6. MINOR — two stage notes still name `NestIcons.basket` as the design glyph for Dishes
 
-`quest_editor_view.dart:903-907` with `app/lib/core/design_system/components/nest_card.dart:63-70`.
+`docs/screens/P09/3_test.md:74` and `docs/screens/P09/FIXES_2.md:77`: *"design's
+order and glyphs (`NestIcons.basket` for Dishes, per 2b's …)"*. The basket was
+the banned look-alike, reverted in iteration 2; `2b_build_ui.md` and `5_ui.md`
+were corrected (finding 8 is otherwise closed — the false "main redrew the
+glyphs" claim is gone and the apostrophe sentence is now right).
 
-`NestCard` sets `excludeSemantics: semanticLabel != null`, so passing
-`semanticLabel: 'Change due time'` **drops** the row's own text from the
-accessibility tree: a VoiceOver/TalkBack user hears "Change due time, button"
-and never learns that the current due time is "Before tea (5pm)". Every other
-value on this screen (coin count, approval title) is announced.
-
-**Fix.** Put the value in the label and let the builder track it:
-`semanticLabel: 'Due by, $_dueLabel'` (the sheet still announces each option's
-own label). One line; the rebuild on change already happens via `setState`.
+**Fix.** Correct both lines to `NestIcons.dishwasher` / `questDishes`.
 
 ---
 
-### 7. MINOR (test) — the copy audit pins the glyph the design does not print
+### 7. MINOR — `DESIGN_SPEC.md` §5 P09 is stale on the tile size (carry, no change here)
 
-`app/test/features/quests/quest_editor_copy_test.dart:85` — `'-', // .stepper buttons`.
-
-`kGlyphs` is used for the "the screen invents no copy" set equality, so the test
-currently **requires** the ASCII hyphen inside a shared control whose design
-character is U+2212. `3_test.md` (P09-TEST-1) and `SHARED_REQUEST.md` §5 both
-record it; the risk is that the pinning test makes the later fix look like a
-test failure.
-
-**Fix.** Nothing now, but keep the entry and the §5 note in the same commit that
-flips `nest_stepper.dart` to `'−'` (as §5 already instructs). Do not delete the
-entry without replacing it.
+`docs/DESIGN_SPEC.md:168` says *"Icon picker row (6 SVG icons in **48px**
+tiles, one selected)"*. The CSS is `.ic{width:44px;height:44px}` and my probe of
+the PNG confirms 44 (border strokes at `x = 20, 81, 142, 204, 265, 326`,
+`20 + i·61.2`, last tile ending at 369.67). `app/lib/core/**` and `docs/**` are
+off-limits to a screen agent, so this is for the orchestrator's doc pass; the
+code's 44 is correct.
 
 ---
 
-### 8. MINOR (docs) — two stage notes contradict the sources and will send the next builder after the wrong thing
+### 8. MINOR — the interface doc promises `[ArgumentError]`, but debug builds throw `AssertionError`
 
-* `5_ui.md:56`: *"Copy … matching the HTML source character-for-character (curly
-  ’ in `Who's`)"*. The HTML prints a **straight** apostrophe — `hexdump` of
-  `design/html-source/screens/P09-quest-editor.html` line 37 is
-  `61 73 73 3d 22 6c 62 6c 22 3e 57 68 6f 27 73` → `Who's`, U+0027 — and the
-  code (`quest_editor_view.dart:601`) is correct. Iteration 1's finding 13 fixed
-  the same sentence in `2b_build_ui.md`; the UI note reintroduced it.
-* `2b_build_ui.md:105-121` claims two DS glyphs were redrawn on `main` after the
-  merge. Disproved by git and by the asset bytes (see finding 1).
-* `5_ui.md:56` also says the icons are "the design order" while the same
-  document's deviation 1 reports 4 of 6 glyph MAEs 4.5–20.5 — accurate, but the
-  two sentences sit close enough to be read as "icons are done".
+`quests_repository.dart:22-24` (*"Out-of-range values throw `[ArgumentError]`"*)
+vs `quests_repository_impl.dart:98-107`, where the `assert` precedes the
+`ArgumentError` — so in debug (and in every `flutter test`) the `ArgumentError`
+is unreachable, and `quests_repository_test.dart:416/434` asserts
+`isA<AssertionError>()`. The behaviour is intentional and documented in the
+impl; only the contract comment is untrue in debug.
 
-**Fix.** Correct the apostrophe sentence; strike the redraw claim in
-`2b_build_ui.md`; keep the rest (the measured numbers are good).
+**Fix.** One line in `quests_repository.dart`: *"throws `AssertionError` in
+debug, `ArgumentError` in release (see `QuestsRepositoryImpl._checkCoins`)"*.
 
 ---
 
-### 9. MINOR (process, carried) — two P08 test files are edited outside RULES §1
+### 9. MINOR — the view resolves its repositories through `GetIt.instance` with no graceful degradation
 
-`app/test/features/today/today_view_test.dart`, `app/test/features/today/p08_bugs_test.dart`
-(+22/−5 lines in this diff: `pushedPath` / `_pushedUri` / `find.byType(QuestEditorView,
-skipOffstage: false)` replacing the `find.text('P09 Quest editor')` placeholder anchor).
+`quest_editor_view.dart:54`, `:75`, `:431-432`. If the locator has no
+registration, `didChangeDependencies`/`initState` throw during build and the
+screen becomes an error widget. The sibling P10 screen took the opposite
+decision for the same class of failure (`p10_bugs_test.dart` "BUG-P10-8 — the
+view silently degrades when its DI lookup fails"), and the same view already
+handles a *missing row* (`Quest not found`) and a *failed stream* (`onError`),
+so the asymmetry is visible.
 
-Deliberate and pre-authorised — `SHARED_REQUEST.md` §3 cites
-`docs/screens/_shared/router_push_test_fix_REPORT.md` §4/§5 and
-`shared_batch4.md` item 4. No P08 assertion was weakened or deleted, and
-`flutter test test/features/today/` is green (110 pass) against the new anchor.
-
-**Fix.** none here — the orchestrator must land these two files with the P09
-merge.
-
----
-
-### 10. MINOR — a parent-facing toast can carry a Dart error string
-
-`quests_bloc.dart:55-61, 78-84, 101-107` + `quest_editor_view.dart:113-121`.
-
-`editorError: error.toString()` reaches `showNestToast`. Unreachable from the
-editor today (the view clamps before writing, `quest_editor_view.dart:478`), but
-if the guard is ever bypassed the parent sees
-`Invalid argument (coins): 9999: Quest coins must be 1..100` in a toast on a
-parent screen.
-
-**Fix.** Map the failure to parent-safe copy at the bloc boundary
-(`'Could not save the quest. Try again.'`) and log `error` — the same treatment
-a `Children's Code`-adjacent app would want for any unhandled failure.
+**Fix (cheap, optional).** Wrap the two lookups in a `hasRegistration` check:
+a missing repository yields the load-failure panel (`_QuestLoadFailure`) with
+`Try again`, and `initState` skips the two subscriptions. Do **not** rewire the
+bloc away from `QuestsBloc` — `buildWhen` and `editorStatus` are correct and
+out of scope.
 
 ---
 
 ## What was checked and found correct
 
-* **Design geometry, verified independently (not from the builders' tables).**
-  I measured `design/screens/light/P09-quest-editor.png` directly (÷3): the
-  Save pill is `296 / 80 / 74 / 44`; the six `.ic` tiles have their border
-  strokes at x = 20, 81, 142, 204, 265, 326 — i.e. `20 + i·61.2`, each **44** wide
-  (pitch 61 = `space-between` over 350); gutters are exactly 20 on both sides
-  (last tile ends 369.67). That confirms two things at once: the code's
-  `NestDevice.tapParent` tiles and `space-between` row are right, and
-  `DESIGN_SPEC.md` §5 P09's prose "6 SVG icons in **48px** tiles" is stale — the
-  PNG and the CSS (`.ic{width:44px;height:44px}`) are both 44. Every figure in
-  `quest_editor_view_geometry_test.dart`'s header table (grabber 175/59/40/5,
-  input 20/156/350/52, segmented 20/480/350/52, approval card 20/600/350/72,
-  due card 20/684/350/88, paper at y 843) matches the HTML/CSS arithmetic, and
-  the suite pins them with the bundled Inter/Nunito `FontLoader`.
-* **Design system, no hard-coding.** No colour literal in the diff (`Colors.transparent`
-  only); every colour through `context.nest`; every gap through `NestSpacing` /
-  `NestDevice` / `NestRadii`; every text style through `NestType`. The six
+* **RULES §1 file scope.** `git diff --stat main...HEAD -- app/` touches only
+  `lib/features/quests/{presentation,domain,data}` + `quests_routes.dart` and
+  `test/features/quests/**`, plus two pre-authorised P08 test files
+  (`test/features/today/{today_view_test,p08_bugs_test}.dart`, +68/−25) whose
+  only change is swapping a `find.text('P09 Quest editor')` placeholder anchor for
+  `pushedPath`/`_pushedUri` + `find.byType(QuestEditorView, skipOffstage: false)`
+  — `SHARED_REQUEST.md` §3 cites `router_push_test_fix_REPORT.md` §4/§5 for it
+  and `test/features/today/` is green (110 pass). Nothing in
+  `app/lib/core/**`, `app/lib/app/**` or `tools/**` is touched.
+* **Architecture.** Feature-first intact; `domain/` still only entities + the
+  abstract repository; one bloc per feature with three editor events added
+  (`QuestsCreateRequested` / `UpdateRequested` / `DeleteRequested`); routes and
+  query contract centralised in `quests_routes.dart` (`QuestsEditorQuery` with
+  `questId` / `legacyQuestId` / `ideaId` and doc comments); `/quest-editor` →
+  `QuestEditorView` + `QuestsBloc` exactly as `ARCHITECTURE.md`'s route table
+  says. `editorStatus`/`editorError` stay orthogonal to `status`, so
+  `emit.forEach` on `watchItems()` is untouched and **no reload event was
+  introduced** — the watch-stream contract in RULES §4.1 holds. The one
+  cross-feature read (`FamilyRepository.watchChildren()`) is read-only, is
+  unsubscribed in `dispose`, and has an in-feature precedent for a feature repo
+  reading the `families` row (`today_repository_impl.dart:110`). No new folder,
+  no use-case class, all imports `package:nestling/…`.
+* **Design system, no hard-coding.** No colour literal in the whole diff
+  (`Colors.transparent` ×3 only — always on a `Material` whose colour comes from
+  tokens); every gap through `NestSpacing`/`NestDevice`/`NestRadii`; every style
+  through `NestType`; no `letterSpacing` anywhere (P09's CSS sets none, so the
+  `main fd92d95` rule needs no call-site override); no `NestBalancedText` (no
+  `text-wrap: balance` heading in P09's CSS — correct to omit); no
+  `NestChip` row, so `NestChipWrap` is correctly absent. Shared components
+  reused, none re-implemented: `NestStatusBar`, `NestTextField`, `NestCard`,
+  `NestStepper`, `NestSegmented`, `NestDayPicker`, `NestToggle`, `NestAvatar`,
+  `NestIcon`, `NestButton`, `NestModal`, `NestBottomSheet`, `NestToast`. The six
   screen-local numbers (`iconTileRadius` 14, `hairline` 1.5, `savePadding` 18,
   `saveMinWidth` 64, `cancelPadding` 6, `dueRowMinHeight` 56) live in
-  `QuestEditorMetrics` with their CSS source quoted — the `NestPager` precedent.
-  Shared components reused, none re-implemented: `NestTextField`, `NestCard`,
-  `NestStepper`, `NestSegmented`, `NestDayPicker`, `NestToggle`, `NestAvatar`,
-  `NestIcon`, `NestButton`, `NestModal`, `NestBottomSheet`, `NestToast`,
-  `NestStatusBar`. The `.person` padding arithmetic checks out against the CSS
-  (`4+1.5` left, `12+2+1.5` right = CSS `4`/`14` + the 1.5 hairline that
-  `Material.shape` paints outside the child). No `letter-spacing` anywhere (P09's
-  CSS sets none), no `text-wrap: balance` heading (none in the CSS, so
-  `NestBalancedText` is correctly absent), no `NestChip` row (so `NestChipWrap` is
-  correctly absent), no Pip on this screen.
+  `QuestEditorMetrics` with their CSS quoted — the `NestPager` precedent. The
+  `.person` padding arithmetic still reconciles with the CSS
+  (`4+1.5` left, `12+2+1.5` right = CSS `4`/`14` + the hairline that
+  `Material.shape` paints outside the child).
 * **Copy, character by character against the HTML.** `Cancel`, `New quest`,
-  `Save`, `Quest name`, `Hoover the stairs`, `Icon`, `Who's it for?`
-  (U+0027, confirmed by hexdump of both files), `Anyone`, `Reward`,
-  `= 15p at payout`, `Repeats`, `Once`/`Daily`/`Weekly`, `M T W T F S S`,
+  `Save`, `Quest name`, `Icon`, `Who's it for?` (U+0027 — hexdump of both the
+  HTML and the view), `M`, `Maya`, `L`, `Leo`, `Anyone`, `Reward`,
+  `= 15p at payout`, `15`, `Repeats`, `Once`/`Daily`/`Weekly`, `M T W T F S S`,
   `Needs my approval`, `Coins land after your thumbs-up` (U+002D, asserted
-  against `’`/`–`), `Due by`, `Before tea (5pm) ›` (U+203A, bytes `e2 80 ba`).
-  Every other visible string (`Edit quest`, `Delete quest`, the confirm modal,
-  `Quest not found`, `Pick at least one day`, the three due-sheet rows) is
-  screen-local and enumerated in `quest_editor_copy_test.dart`'s
-  `kScreenLocalCopy` with the plan section that sanctions it. UK spelling
-  throughout ("colours" in comments, no US spellings in copy).
-* **Icon order and labels.** `Bed, Dishes, Hoover, Book, Bins, Paw` matches the
-  HTML's six `aria-label`s and their order, with Hoover (3rd) selected — the
-  design's `aria-checked="true"` is also on the 3rd.
-* **Architecture.** Feature-first intact: only `presentation/**`, the feature's
-  own `domain/` + `data/` and its `quests_routes.dart` changed; one bloc per
-  feature with three editor events added; `editorStatus` kept orthogonal to
-  `status` so `emit.forEach` on `watchItems()` is untouched and no reload event
-  was introduced; `/quest-editor` maps to `QuestEditorView` + `QuestsBloc` exactly
-  as `ARCHITECTURE.md`'s route table says. The one cross-feature read the editor
-  adds (`FamilyRepository.watchChildren()`) is read-only and plan-sanctioned, and
-  `QuestsRepository.watchCoinValuePencePerCoin()` follows an existing precedent
-  for a feature repo reading the `families` row
-  (`today_repository_impl.dart:110 watchPayoutDay`, same
-  `watchSingleOrNull().map(... ?? default)` shape) — so the coins-rate read is
-  not a layering violation, just a slightly odd home for it.
+  against `’`/`–`), `Due by`, `Before tea (5pm) ›` (U+203A). Every non-design
+  string is enumerated in `kScreenLocalCopy` with the plan section that sanctions
+  it. UK spelling throughout.
+* **Iteration-2 findings that are now closed.** Finding 2 (`?idea=` is live:
+  `QuestsEditorQuery.ideaId`, `_ideaTemplateOf`, a CREATE with a fresh id, the
+  alias table covers all 10 template icons so every `+ Add` seeds a selected
+  tile, stale `TODO(P10)` comments deleted) — closed, with the test the review
+  asked for. Finding 3 (`Tooltip('Back')` deleted; the P10 sites use
+  `handlePopRoute()`; a test now pins exactly one `byTooltip('Back')` absence) —
+  closed. Finding 4 (the `ValueListenableBuilder<TextEditingValue>` over `_title`
+  means a keystroke rebuilds only `QuestSavePill`) — closed.
+  Finding 5 (`listEquals` guard on the roster, `onError` on **both**
+  subscriptions) — closed. Finding 6 (`semanticLabel: 'Due by, $_dueLabel'`, so
+  the value is announced and the card still exposes `onTap`) — closed.
+  Finding 9 (the P08 test edits must travel on the merge) — still true.
 * **Accessibility.** Every screen-local tappable passes `onTap:` on its own
-  `Semantics` node alongside the `InkWell`, with `excludeSemantics: true` on the
-  same node: `QuestCancelButton`, `QuestSavePill`, `QuestIconTile`,
-  `QuestPersonPill`, `QuestDueOptionRow`, plus the due `NestCard`
-  (`semanticLabel` + `onTap`). `QuestSavePill` reports `enabled: false` and drops
-  the action when disabled — now also while a write is in flight. `Semantics(header: true)`
-  on the screen title and the three group labels; the icon row is a `container`
-  named `Quest icon`, matching the HTML's `role="radiogroup" aria-label`. The
-  25-label set-equality test and the "every control node exposes tap or reports
-  disabled" sweep both pass. Tap targets: Cancel 44, Save 44 (min), tiles 44,
-  pills 48, day cells 44, stepper 44, toggle hit box 44, due row 56, sheet rows
-  44, Delete 52.
-* **Children's Code.** `/quest-editor` is in the router's `parentOnly` list
-  (`app/lib/app/router.dart:88`); kid mode is redirected to `/parental-gate`
-  (proven by a test). No analytics, no ads, no network, no child data leaving
-  the device — the screen reads the family's own children and writes only to
-  `quests`. No `subscription_status` written anywhere (not a screen that touches
-  it).
+  `Semantics` node next to the `InkWell`, with `excludeSemantics: true` on that
+  node: `QuestCancelButton`, `QuestSavePill`, `QuestIconTile`,
+  `QuestPersonPill`, `QuestDueOptionRow`, and the due `NestCard`
+  (`semanticLabel` + `onTap`, verified in `nest_card.dart:61-83`).
+  `QuestSavePill` reports `enabled: false` and drops the action while disabled or
+  while a write is in flight. `Semantics(header: true)` on the title and the
+  three group labels (the test pins exactly 4 headers); the icon row is a
+  `container` named `Quest icon`, matching the HTML's `role="radiogroup"`. The
+  only semantics problem in the tree is the three stale test lookups in
+  finding 1b — the node itself is intact, and
+  `shared_batch5_REPORT.md` prescribes the same fix for P14.
+* **Children's Code.** `/quest-editor` is in the router's `parentOnly` list;
+  kid mode is redirected to `/parental-gate` (proven by a test). No analytics,
+  no ads, no network, no child data leaving the device — the screen reads the
+  family's own children and writes only to `quests`. No `subscription_status`
+  written anywhere; no period/`countsForCurrentPeriod` logic is needed on P09;
+  no Pip on this screen, so the PIP ruling does not apply.
 * **Error handling.** Save/update/delete failures surface a toast, keep the
-  editor on screen, leave the Drift row untouched and re-enable the pill via
-  `clearSaveGuard()`; the route-level load failure offers `Try again` that really
-  re-subscribes (the `_closeOnError` transformer, pre-existing).
+  editor on screen, leave the Drift row untouched and re-enable the pill through
+  `clearSaveGuard()`; the route-level load failure offers `Try again` that
+  really re-subscribes. Coins are validated in the repository before Drift is
+  touched, so a corrupt row can never be re-persisted.
 * **Performance / lifecycle.** `buildWhen: previous.status != current.status`
-  stops `watchItems()` re-emissions from rebuilding ~50 widgets; subscriptions
+  stops `watchItems()` re-emissions from rebuilding the form; both subscriptions
   are `late` fields created once in `initState` and cancelled in `dispose`, as is
-  `_title`; `const` is used wherever it compiles; the sheet's
-  `minHeight: constraints.maxHeight` keeps paper to the physical bottom edge
-  while still scrolling in edit mode. Open items are findings 4 and 5.
-* **Bottom edge and alignment.** The sheet is a `tokens.paper` container with
-  `NestRadii.topXl` and `minHeight = viewport`, inside a `tokens.surface2`
-  backdrop — no coloured strip can appear under the sheet in either theme, and
-  the geometry test samples the last physical row. Gutters are `NestSpacing.padSide`
-  (20) on every row; the icon row is `space-between` and the person pills
-  `Wrap`, so nothing is a few px off at 390, 320 or 430.
-
----
+  `_title`; neither subscription rebuilds on an unchanged value; `const` is used
+  everywhere it compiles; the sheet's `minHeight: constraints.maxHeight` keeps
+  the paper to the physical edge while still scrolling in edit mode. Iteration 2's
+  two perf findings are closed and I found no new rebuild storm.
+* **Bottom edge, alignment, child order.** The sheet is a `tokens.paper`
+  container inside a `tokens.surface2` backdrop, so no coloured strip can appear
+  under it in either theme (a test samples the last physical row). Gutters are
+  `NestSpacing.padSide` (20) on every row, the icon row is `space-between` over
+  350 and the assignee pills are a `Wrap`, so nothing is a few px off at 390,
+  320 or 430. Children come from `watchChildren()`, which the shared repository
+  already orders by creation (`createdAt`, `rowid`) — Maya then Leo, never
+  alphabetical — and a new quest defaults to `_children.first`.
 
 ## LEFT FOR THE LOOP
 
-1. **Finding 1** — one-line revert of the Dishes tile (plus deleting the false
-   "main redrew the glyphs" claim so it is not re-litigated). Nothing else is
-   needed for it; §4 stays filed for the three glyphs only a `core/` agent can
-   draw.
-2. **Finding 2** — implement `?idea=` in `quests_routes.dart` + the editor,
-   delete the stale `TODO(P10)` in `quest_library_body.dart`, add the test.
-3. **Findings 3, 4, 5, 6** — cheap in-screen cleanups; 3 needs the same
-   cross-file authorisation this branch already used.
-4. **Findings 7, 8** — doc/test-annotation corrections; flip the hyphen entry in
-   the same commit that fixes `NestStepper`.
-5. **Finding 9** — must travel on the merge, not be reverted.
-6. No simulator was used in this stage; stage 5 owns the ±2 px verdict and can
-   lean on `quest_editor_view_geometry_test.dart` (compare bands, not
-   absolutes, if the device status bar is taller than 47 px).
+1. **Finding 1** — 6 test-side edits (one character, three lookups, two sweep
+   pins, one icon list). Nothing crosses a feature boundary; all of it is in
+   `app/test/features/quests/**`.
+2. **Finding 2** — delete `Transform.translate` + `QuestEditorMetrics.toggleTrackOffset`,
+   restore the card's bottom padding to `NestSpacing.s4`, update the two
+   geometry assertions. Verified to land the card and the track exactly on the
+   design rects.
+3. **Finding 3** — switch four `NestIcons` constants; the same commit updates
+   `quest_editor_data_integrity_test.dart:170`.
+4. **Findings 4-9** — small; 4 and 8 are one-liners.
+5. **Finding 9 of the closed list** (the two `test/features/today/` files) must
+   travel on the merge, not be reverted.
+6. **Do not** re-open the icon question: `2b_build_ui.md` and `5_ui.md` are
+   corrected, and the design PNG + CSS are the authority (44 px tiles, not the
+   spec's 48).
+7. No simulator was used in this stage; stage 5 owns the ±2 px verdict and can
+   lean on `quest_editor_view_geometry_test.dart` (compare bands, not absolute
+   y, if the device status bar is taller than 47 px). Expect the four icon tiles
+   and the toggle/card block to move; re-shoot after findings 2 and 3.
 
 ## Process note (not findings)
 
 While this review ran, another stage was writing in this same worktree. Its
-uncommitted files are the loop's business and are **not** reported as findings,
-but three of them will matter when the loop commits:
+files are the loop's business and are **not** reported here, but the next
+iteration should not commit them blind:
 
-* scratch diagnostic probe files written into `app/test/features/quests/`
-  during this review (`_diag2_test.dart`, later `zz_debug_probe_test.dart`) —
-  **must not be committed**; they are untracked and would run in `flutter test`.
-* `app/test/features/quests/quest_editor_coin_rules_test.dart` — currently has
-  two analyzer issues (`unused_local_variable` at :242, missing newline at EOF at
-  :259), which would turn the `flutter analyze` gate red if committed as-is.
-  HEAD itself is clean (verified above).
-* `p09_bugs_test.dart`, `quest_editor_states_test.dart`, `SHARED_REQUEST.md` and
-  `5_ui.md` are mid-edit — re-check finding 1 and finding 8's doc corrections
-  against whatever that stage finally writes.
+* `HEAD` was `aaea888` for the whole review and every measurement above was
+  taken from a `git archive HEAD` export, so none of this is affected by them.
+* After the review finished, `app/test/features/quests/quest_editor_copy_test.dart`
+  had an uncommitted one-line change and `app/test/features/quests/_diag3_test.dart`
+  appeared — a scratch diagnostic probe. **The probe must not be committed**
+  (it would run in `flutter test`). The one-line change looks like finding 1(a)
+  being fixed; re-check finding 1 against whatever that stage finally writes.
 
 VERDICT: FAIL

@@ -1,206 +1,198 @@
-# P09 — stage 3 · TEST (iteration 2)
+# P09 — stage 3 · TEST (iteration 3)
 
 Scope: `app/test/features/quests/**` only. No screen code, no shared code and
 no `tools/` touched; `flutter clean` never run; no simulator booted, installed
 on, screenshotted or driven; no `skip:` added, no test weakened, no
 `analysis_options.yaml` change; `google_fonts` appears nowhere.
 
-Iteration 1's 56 tests are still here and still pass against the iteration-2
-tree (`5c25db1`), which is itself worth recording: the fixes landed without
-breaking a single assertion from the previous round.
+Iteration 3's tree is different in two ways: `shared/shared_batch5` is now
+merged (`87cf5d4`/`9bbf65a`) and stage 2 fixed BUG-P09-6/7/8 plus four review
+findings. Both are recorded below — including the three assertions that batch5
+broke and that the mandated integrator change will fix.
 
-## 1. What iteration 2 changed, and what this stage adds
+## 1. What changed, and what this stage did about it
 
-Stage 2 (`2_build.md`) fixed the iteration-1 findings. A test stage's job
-after a fix round is to prove the *fix*, not the symptom the bug hunt
-reported — so every test below targets the mechanism, and none of them repeats
-a stage-6 proof.
+### 1.1 The shared merge broke 6 of my assertions; 6 are now correct
 
-| Fix | Where it lives | What this stage proves (beyond `p09_bugs_test.dart`) |
+`shared_batch5` item 2 made the **51×31 track the toggle's laid-out box** and
+moved the 59×44 tap area into `_ToggleHitSlop`; item 3 made the shared
+`NestStepper` draw **U+2212** (the design's minus).
+
+| Was | Now | Why |
 |---|---|---|
-| BUG-P09-1 rate from the database | `watchCoinValuePencePerCoin()` + `_pencePerCoin` field | 5p and 2p families; a **live** rate change while the form is open; the rate never scales the coin count; the stored value stays in coins, not pence |
-| BUG-P09-2 save guard | `_saving` + `QuestSavePill(onPressed: _canSave && !_saving)` + `clearSaveGuard()` | the pill goes dead **while the write is in flight**; three taps dispatch **one** write; a **failed** write releases the guard so a retry reaches the repository again |
-| BUG-P09-3 icon aliases | `_questIcons.aliases` | all six legacy keys map to the right tile and light **exactly one**; the stored key survives a save that did not tap a tile; tapping a *different* tile still rewrites it; the six tiles draw the design glyphs in design order |
-| BUG-P09-4 coin bounds | `_coinFloor` / `_coinCeiling` + `_save` clamp | 9999 opens as 9999 and **writes nothing**; `−` walks it back; a 0-coin row shows 0 with `−` inert (no InkWell handler *and* no tap action) and `+` climbing to 1; an in-range row is never rewritten |
-| BUG-P09-5 orphan assignee | `_isKnownAssignee` fallback | the dangling id shows as **Anyone**, exactly one pill active, and **Save clears the id**; a *listed* assignee is never hijacked by the fallback |
-| review 9 archived rows | `active: initialQuest?.active ?? true` | editing an archived quest changes its title but leaves `active: false`; a new quest is stored active |
-| review 5 `detail` | view no longer writes a copy | after changing coins and repeat, the stored `detail` is the repository's recomputation (`Once · 21 coins`) |
-| review 11 roster | one `initState` subscription | the roster is **live**: a child inserted on another screen appears, last, in creation order — a latched snapshot would fail here |
+| `kGlyphs` listed `'-'` | `'−'` | item 3 — the third item of `2_build.md` §3 names this file |
+| `getSemantics(find.byType(NestToggle)).label` | node addressed by **label + `toggled` role** | the widget finder now resolves to `_ToggleHitSlop`, which owns no label; the card's *title* is a text node with the same label |
+| toggle box ≥ 44 high | track is 51×31, tap area 59×44 | the 44 px target moved into hit slop |
+| edge taps on the toggle box | taps at ±6.5 / ±4 **around the track** | same, asserted relative to the track so the pending `toggleTrackOffset` removal cannot move it |
 
-## 2. Tests added this iteration (31)
+The same `getSemantics(find.byType(NestToggle))` mistake also sat in
+`quest_editor_view_test.dart`'s a11y test (stage 2b's file, in this feature's
+test dir) — fixed the same way, and its assertions were strengthened (the
+announcement must follow the real state, plus the widget's `value`).
+
+### 1.2 Tests added (9 new, 3 files)
 
 | File | Before → after | New tests |
 |---|---|---|
-| `quest_editor_coin_rules_test.dart` (**new**) | — → 9 | 5 rate + 4 coin-range |
-| `quest_editor_data_integrity_test.dart` (**new**) | — → 18 | 9 icon-alias/glyph, 5 assignee, 4 archived/detail/days |
-| `quest_editor_states_test.dart` | 17 → 20 | 3 save-guard (the `_FaultyRepository` grew a `holdWrites` mode) |
-| `quest_editor_bloc_test.dart` | 6 → 7 | 1 bloc path: the repository's coin contract surfacing as `editorStatus.failure` |
+| `quest_editor_coin_rules_test.dart` | 9 → 12 | the BUG-P09-6 repair contract (3) |
+| `quest_editor_data_integrity_test.dart` | 18 → 23 | BUG-P09-7 inert alias tap, BUG-P09-8 nicknames (3), `?id=` outranks `?idea=` |
+| `quest_editor_a11y_test.dart` | 14 → 15 | the due row announces the current choice, and follows it |
 
-Nothing else moved. The three fault-injection groups from iteration 1
-(`holdGet`, `failFirstWatch`, `failWrites`) are unchanged; `holdWrites` was
-added beside them.
+**The BUG-P09-6 repair contract** (iteration 2 deliberately left this open):
+the reward is still *shown* as stored, and the save is now **blocked with an
+announced reason** instead of being silently clamped. What the block must
+guarantee, and what these three pin: the caption `Coins must be 1–100` exists,
+is a **live region**, and uses the design's **en dash** (U+2013, asserted by
+code point); the Save pill has **no tap action** for VoiceOver as well as no
+handler for the finger; tapping it **writes nothing** (the row is still 9999,
+no toast, no navigation); and one step back into range **clears** the caption,
+re-enables Save, and stores the repaired value.
 
-### 2.1 `quest_editor_coin_rules_test.dart`
+**BUG-P09-7**: tapping the already-highlighted alias tile is inert — the
+highlight does not drop, exactly one tile stays selected, and the stored key
+survives the save.
 
-`Seed.demo()` sets the rate to 1, so the seeded screen looks right whether or
-not the helper reads the database — the whole bug class is invisible until the
-family's row says otherwise, so each test writes `families` (or a corrupt
-quest row) straight into Drift. Corrupt rows have to bypass the repository:
-`QuestsRepositoryImpl._checkCoins` now rejects out-of-range coins on write *by
-design*, which is exactly why the row has to be planted below the data layer.
+**BUG-P09-8**: an emoji-leading nickname (`😀 Sam`) and a nickname that is
+*only* an emoji (`🧹`) both paint without throwing, the avatar carries the
+**whole first grapheme** (not half a surrogate pair), the roster still reads in
+creation order, and such a child can be selected and saved.
 
-- 5p/coin → `= 75p at payout` for 15 coins (and no `= 15p` anywhere).
-- A rate change **while the editor is open** (write `families`, pump) → the
-  helper follows: `= 60p at payout`. This is the stream path; a value latched
-  in `build` would fail here.
-- The rate never scales the stepper: the value stays `15`, the helper becomes
-  `= 60p`.
-- The rate multiplies after a stepper move: 16 coins at 2p → `= 32p at payout`.
-- Saving stores **coins**, not pence (15 coins at 5p → row `coins == 15`).
-- 9999 opens as `9999` / `= 9999p at payout` and the row is still 9999 after
-  the open (no write).
-- `−` walks 9999 → 9998 with the helper following.
-- 0 opens as `0` / `= 0p at payout`, `−` is inert for the finger (no InkWell
-  handler) *and* for VoiceOver (no `SemanticsAction.tap`), `+` climbs to 1.
-- An in-range row (20 coins) survives open → Save unchanged.
+**Route contract**: `?id=q-hoover&idea=idea-bed` opens the *quest* (Edit quest,
+20 coins, Delete present) and never the template — the documented precedence in
+`2a_build_logic.md`, previously untested.
 
-### 2.2 `quest_editor_data_integrity_test.dart`
+**Due-row announcement**: `Due by, Before tea (5pm)` → after picking another
+option the stale label is *gone* (not duplicated) and the row is still
+operable under `Due by, Before bed (7:30pm)` (review finding 6).
 
-One test per legacy icon key (`sofa`→Bed, `plate`→Dishes, `bins`/`shirt`/`bag`
-→Bins, `leaf`→Paw), each asserting the mapped tile is selected **and** that
-exactly one tile is selected — a radiogroup with two highlighted tiles is
-worse than none. Plus: the stored key survives a save without a tap; a tap on a
-*different* tile rewrites it; the six tiles' `label` and `icon` match the
-design's order and glyphs (`NestIcons.basket` for Dishes, per 2b's
-ORCHESTRATOR_NOTES 17:57 item 1 answer).
-
-Assignee: a dangling `assigneeChildId` (no FK column, so the id really can
-survive a deleted child) shows as Anyone, exactly one pill active, and Save
-stores `null`; a listed assignee (`leo`) is untouched by the fallback, so the
-fix cannot over-fire; a new quest still defaults to Maya (creation order, never
-alphabetical); and the roster subscription is **live** — inserting
-`Annabella` while the form is open appends her pill before Anyone.
-
-Archived/detail: an archived quest (`active: false`) can be edited without
-being resurrected; a new quest is stored active; `detail` is the repository's
-recomputation; switching a weekly quest to Once clears the stored day CSV.
-
-### 2.3 Save guard (in `quest_editor_states_test.dart`)
-
-`_FaultyRepository.holdWrites` parks each write on a `Completer` the test
-releases, which is the editor's in-flight state:
-
-- **pill dead while in flight**: `onPressed == null`, one dispatch, no
-  navigation; release → `/quests`.
-- **three taps, one dispatch**: `written.length == 1`, and after the release
-  exactly one row titled `Hoover the stairs` exists.
-- **a failed write releases the guard**: `clearSaveGuard()` runs before the
-  toast, so the pill is live again and a second tap reaches the repository
-  (`written.length == 2`). Without that release the editor would be stuck with
-  a dead Save and no way out — the failure mode this test exists for.
-
-### 2.4 One more bloc path
-
-`quest_editor_bloc_test.dart`: a repository that throws
-`ArgumentError.value(9999, 'coins', 'Quest coins must be 1..100')` must surface
-as `editorStatus.failure` + an `editorError` containing the message. The view
-clamps before dispatching, so this is the last line of defence — and it is the
-only new wiring the iteration-2 interface addition introduced.
-
-## 3. Results
+## 2. Results
 
 ```
 $ dart format --set-exit-if-changed .
-Formatted 494 files (0 changed) in 3.94 seconds.          (exit 0)
+Formatted 495 files (0 changed) in 6.82 seconds.          (exit 0)
 
 $ flutter analyze
 Analyzing app...
-No issues found! (ran in 3.7s)
+No issues found! (ran in 5.0s)
 
 $ flutter test test/features/quests/
-00:52 +367 ~5: All tests passed!
+00:52 +384 ~7 -3: Some tests failed.
 
 $ flutter test
-04:25 +2562 ~6: All tests passed!
+04:14 +2598 ~8 -4: Some tests failed!
 ```
 
-The `~6` skips are stage 6's parked bug proofs (BUG-P09-6/7/8 in
-`p09_bugs_test.dart`, `skip: true` until their fix lands) plus the
-pre-existing repo skip in `test/features/pocket_money/p12_bugs_test.dart:320`.
-Nothing this stage skips.
+Feature totals per file (all green unless noted): states 20, data-integrity 23,
+coin-rules 12, robustness 17, copy 8, a11y 15, bloc 7, bugs 23, library/idea
+suites unchanged.
 
-Process note, not a finding: at 18:52 one feature run reported
-`p09_bugs_test.dart BUG-P09-1` red while stage 6 was rewriting that file
-(its mtime moved under the run). Re-run afterwards: green. The loop owns merge
-and file ordering.
+The `~8` skips are stage 6's parked iteration-3 proofs (BUG-P09-9..12) plus
+the pre-existing repo skip in `p12_bugs_test.dart:320`. Nothing this stage
+skips.
 
-## 4. Bugs found
+## 3. Failures and bugs
 
-### P09-TEST-2 — major — an emoji-leading nickname crashes the editor
+### P09-TEST-3 — major — the approval block misses the design after batch5 (3 red assertions)
 
-- File: `app/lib/features/quests/presentation/views/quest_editor_view.dart:738-739`
-  ```dart
-  static String _initial(String nickname) {
-    return nickname.isEmpty ? '?' : nickname.substring(0, 1).toUpperCase();
-  }
-  ```
-  `substring(0, 1)` splits the surrogate pair of an astral-plane first
-  character, so the pill is painted with a lone surrogate.
-- Repro: any child whose nickname starts with an emoji (`😀 Sam`). Insert such
-  a row into `children` (`nickname: '😀 Sam'`), open `/quest-editor`, and the
-  screen throws while painting the assignee pill. Measured in a throwaway probe
-  on the current tree: `ArgumentError: Invalid argument(s): string is not
-  well-formed UTF-16`. The whole screen fails to render — no form, no error
-  state, nothing recoverable but a restart.
-- Reachability: P05 allows any non-empty nickname up to 24 UTF-16 units, emoji
-  included, so a parent can create this row from the app itself.
-- Status: stage 6 filed the same defect concurrently as **BUG-P09-8** (proof
-  `p09_bugs_test.dart:336`, `skip: true`); my probe was an independent
-  reproduction, not a second report. The fix is the first grapheme
-  (`characters.first`, or guard the code-unit length) — I did not patch it.
-- **This is why the stage verdict is FAIL.**
+`shared_batch5` changed the toggle's box; the screen's compensation for the old
+component has not been removed yet, so **the approval card renders 68 px high
+where the design says 72**. Measured, light and dark alike:
 
-### P09-TEST-1 — carried over from iteration 1 (still open)
+| Test | Line | Asserted | Measured |
+|---|---|---|---|
+| `quest_editor_view_geometry_test.dart` "reward, repeats, approval and due blocks are on the rects" | 313 (and 450 for dark) | card `(20, 600, 350, 72)` | height **68** (4 px short) |
+| `quest_editor_view_test.dart` "vertical positions match the design (±2px)" | 622 | `toggle.height == NestDevice.tapParent` (44) | **31** (the track is now the box) |
 
-The shared `NestStepper` renders its minus as U+002D while both designs print
-U+2212 (`nest_stepper.dart:32`; `SHARED_REQUEST.md` §5, advisory, unresolved
-on `main`). `quest_editor_copy_test.dart` still excludes the glyph from its
-set-equality audit and says so in the file header, so the audit stays green
-while the request is open.
+Repro: `flutter test test/features/quests/quest_editor_view_geometry_test.dart`
+→ `Expected: a numeric value within <2.0> of <72.0> Actual: <68.0>`.
 
-### Constrained by stage 6's open findings (deliberate, not a bug in my tests)
+Why 68: the row is now driven by its text (16/22 + 13/18 = 40) instead of by
+the toggle's 44-high box, and the card keeps the iteration-2 compensation
+`padding: fromLTRB(s4, s4, s4, s3)` → 16 + 40 + 12 = 68. The design's 72 is
+16 + 40 + 16, which is what the CSS gives (`.card{padding:16px}` with the
+`.toggle::before` hit area hanging outside the layout).
 
-Stage 6 filed **BUG-P09-6** (an out-of-range reward is shown at face value —
-`9999`, `= 9999p` — but silently clamped to 100 on save) against the same rows
-my coin-range tests read. I removed the two assertions that pinned the clamp
-so this suite does not break the moment the fix lands. What remains is what
-survives either answer: *opening* the editor writes nothing, and the parent can
-walk the value back into range with `−`/`+`. The save-time decision (store what
-was shown, or block the save with a visible reason) belongs to
-`p09_bugs_test.dart`. **BUG-P09-7** (tapping an alias-highlighted tile rewrites
-the stored key) does not conflict with my tests: mine tap a *different* tile
-and assert that still rewrites.
+**This is the integrator's mandated change, not a test problem** — ORCHESTRATOR
+_NOTES 20:09 and `shared_batch5_REPORT.md`'s P09 follow-up. The fix, when the
+product code moves:
+1. delete `QuestEditorMetrics.toggleTrackOffset` and its `Transform.translate`
+   (`quest_editor_view.dart:995-997`) — the track now aligns by layout;
+2. drop the compensating bottom padding on the approval card so it is `s4` all
+   round (16 + 40 + 16 = **72**), which also puts the track back on the
+   design's rect: row 616→656, track centred → **x 303→354, y 620.5→651.5** —
+   exactly the values the geometry file's own header table (lines 32-33)
+   documents and asserts;
+3. update the three assertions above (the geometry file's `toggleBox.width ==
+   59` / `height == 44` / `top == 614` lines 328-342 describe the *old*
+   component; they become the track rect `51×31` at `620.5`);
+4. switch the six tiles to `questBed / questDishes / questHoover / questBins`
+   (book and paw unchanged) — which also replaces the `NestIcons.*` list in
+   `quest_editor_data_integrity_test.dart`'s glyph-order test.
 
-## 5. Notes for the next stages
+Stage 6 filed the same thing independently as **BUG-P09-9** (approval block),
+**BUG-P09-10** (see below) and **BUG-P09-12** (legacy glyphs), so it is not a
+new discovery here; my contribution is the measured numbers and the exact test
+lines.
 
-- **Flip points when the fixes land:** `quest_editor_copy_test.dart` gains
-  `−` in `kGlyphs` when `SHARED_REQUEST.md` §5 resolves;
-  `p09_bugs_test.dart` un-skips BUG-P09-6/7/8; and if BUG-P09-6's fix changes
-  what the editor *shows* for an out-of-range row, the display assertions in
-  `quest_editor_coin_rules_test.dart` ('a 9999-coin quest opens showing 9999',
-  'a 0-coin quest shows 0') move with it — they are the only two assertions
-  that describe the current tree rather than an invariant.
-- **Deliberately untested:** review finding 7 (`buildWhen` keeps the form from
-  rebuilding on `items` emissions) is a performance property with no observable
-  contract; a build-count probe would be brittle without proving anything a
-  parent can see.
-- **Observation, unreachable from the app's own navigation:**
-  `QuestEditorView.didChangeDependencies` fetches `?id=` once
-  (`if (_loadedQuest != null) return`), so navigating straight from
-  `/quest-editor?id=a` to `/quest-editor?id=b` on the same `State` would keep
-  showing quest `a`. Every in-app path pushes a new page instead, so this is
-  not reachable today; it is noted so a future "switch to another quest from
-  this screen" affordance does not inherit it silently.
+### P09-TEST-4 — minor — an out-of-range reward has no practical repair
+
+With the save now blocked (correctly, per BUG-P09-6), a stored 9999 needs 9899
+taps of `−` before Save comes back. The screen shows the value and explains
+the block, but offers no way to jump to a legal value — no clamp, no "reset to
+100" affordance, no field to type into. Repro: open `?id=q-huge` with
+`coins: 9999`; `Save` stays disabled and `−` steps one coin at a time.
+Stage 6 filed this as **BUG-P09-11**; same defect, same conclusion. Design has
+no frame for a corrupt value, so the fix is a product decision, not a
+restoration.
+
+### P09-TEST-5 — minor — my own blind spot: the toggle slop test cannot see the clipping
+
+`shared_batch5`'s 59×44 tap area needs 44 of row height; the design's
+`.switchrow` is 40 high, so stage 6's **BUG-P09-10** reports the slop being
+clipped at the top and bottom. My new slop test (taps at ±6.5 above/below and
+±4 beside the track) **passes anyway**, because the widget-test font wraps
+`Coins land after your thumbs-up` onto two lines: the row is ~76 high there,
+not 40. In other words the test is font-dependent and would not catch a real
+clipping regression at the design's real metrics. Recording it rather than
+papering over it: the honest version of that proof belongs in the real-font
+geometry suite (`quest_editor_view_geometry_test.dart`, which loads the bundled
+faces through `FontLoader`), and it has to be written together with the
+P09-TEST-3 fix because both depend on the row's final height.
+
+### Resolved since iteration 2
+
+- **P09-TEST-1 (the U+002D minus)** — `shared_batch5` fixed the component;
+  `kGlyphs` now carries `'−'` and the copy audit asserts the design's glyph.
+- **P09-TEST-2 (the emoji nickname crash)** — fixed with
+  `nickname.characters.first`; three tests of mine now cover the grapheme, the
+  empty-of-ASCII case and the select-and-save path.
+
+### Observation, outside this screen's scope
+
+`test/core/family_time_test.dart:319` ("kid_home completions are stamped with
+the family zone") fails on this tree: after `Seed.movedToDubai(db)` the second
+completion is stamped with the wrong zone. It is a `core/` test (not mine to
+edit — RULES §1) and `shared_batch5` touched no zone plumbing
+(`git show --stat 9bbf65a` lists only icons, toggle, stepper, text field and
+their tests), so it is not a consequence of this iteration's merge. Flagged for
+the orchestrator with the repro; it needs whoever owns `core/`.
+
+## 4. Notes for the next stages
+
+- **Coupled test sites** for the pending integrator change (all in
+  `app/test/features/quests/`): `quest_editor_view_geometry_test.dart:313`,
+  `:328-342`, `:450`; `quest_editor_view_test.dart:622`;
+  `quest_editor_data_integrity_test.dart`'s glyph list (4 of 6 names).
+  Nothing else in my suites depends on the toggle's box or the glyph names —
+  the slop test is relative to the track, so it survives.
+- **`buildWhen`** (review 7) and the `ValueListenableBuilder` (review 4) remain
+  untested: both are performance properties with no observable contract.
+- **Observation, unreachable today:** `QuestEditorView.didChangeDependencies`
+  fetches `?id=` once (`if (_loadedQuest != null) return`), so going straight
+  from `/quest-editor?id=a` to `?id=b` on the same `State` would keep showing
+  quest `a`. Every in-app path pushes a new page, so nothing reaches it — but a
+  future "switch to another quest from this screen" affordance would inherit
+  it.
 - Every widget test here ends with `disposeApp(tester)`, and every semantics
   handle is disposed **inside** the test body.
 

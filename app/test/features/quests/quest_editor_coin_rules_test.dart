@@ -8,10 +8,12 @@
 //              opening such a row could not be repaired.
 //
 // Stage 6 filed BUG-P09-6 against the same rows on top of the iteration-2 fix
-// (an out-of-range reward is shown at face value but silently clamped on
-// save). This file therefore proves only what survives either answer to
-// BUG-P09-6 — opening writes nothing, and the parent can walk the value back
-// into range — and leaves the save-time decision to `p09_bugs_test.dart`.
+// (an out-of-range reward was shown at face value but silently clamped on
+// save). Iteration 3 settled it: the value is still SHOWN as stored, and the
+// save is BLOCKED with an announced reason instead of being rewritten. The
+// two `Save is blocked` tests in `quest_editor_view_test.dart` cover the
+// stepper walk; the ones here pin what the block must guarantee — no write,
+// no tap action, a live region, and the design's own characters.
 //
 // `Seed.demo()` sets the rate to 1, so the seeded screen looks right either
 // way — the whole class is invisible until the family's row says otherwise.
@@ -30,7 +32,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/seed.dart';
+import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/quests/domain/quests_repository.dart';
+import 'package:nestling/features/quests/presentation/widgets/quest_editor_widgets.dart';
 import 'package:nestling/features/quests/quests_routes.dart';
 
 import '../../test_scope.dart';
@@ -237,11 +241,107 @@ void main() {
       await disposeApp(tester);
     });
 
-    // NOT asserted here: what an out-of-range row does when it is SAVED
-    // (store what was shown, or block the save with a visible reason — the
-    // screen currently clamps silently). That question is BUG-P09-6 and its
-    // proof lives in `p09_bugs_test.dart`; pinning either side of it here
-    // would break the moment the fix lands.
+    testWidgets('an out-of-range reward BLOCKS the save and says why', (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      final db = await setUpTestScope();
+      await _plantQuest(db, id: 'q-huge', coins: 9999);
+      await pumpAppRoute(tester, '${QuestsRoutePaths.editor}?id=q-huge');
+
+      // Shown as stored…
+      expect(find.text('9999'), findsOneWidget);
+      expect(find.text('= 9999p at payout'), findsOneWidget);
+
+      // …announced as a problem, in a live region, with the design's own
+      // en dash (U+2013) rather than a hyphen.
+      final caption = tester.widget<Text>(
+        find.text('Coins must be 1\u{2013}100'),
+      );
+      expect(caption.data!.codeUnitAt(caption.data!.length - 4), 0x2013);
+      final live = find.semantics
+          .byPredicate(
+            (node) =>
+                node.label == 'Coins must be 1\u{2013}100' &&
+                node.getSemanticsData().flagsCollection.isLiveRegion,
+          )
+          .evaluate()
+          .single;
+      expect(live.id, isNot(0));
+
+      // The pill is inert for the finger AND for VoiceOver.
+      expect(
+        tester.widget<QuestSavePill>(find.byType(QuestSavePill)).onPressed,
+        isNull,
+      );
+      expect(
+        tester
+            .getSemantics(find.byType(QuestSavePill))
+            .getSemanticsData()
+            .hasAction(SemanticsAction.tap),
+        isFalse,
+      );
+
+      handle.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('a blocked save writes nothing — no silent clamp', (
+      tester,
+    ) async {
+      final db = await setUpTestScope();
+      await _plantQuest(db, id: 'q-huge', coins: 9999);
+      await pumpAppRoute(tester, '${QuestsRoutePaths.editor}?id=q-huge');
+
+      await tester.tap(find.text('Save'), warnIfMissed: false);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Still on the editor, still 9999 in the row: BUG-P09-6's "silent"
+      // half is gone.
+      expect(find.text('New quest'), findsNothing);
+      expect(find.text('Edit quest'), findsOneWidget);
+      expect(find.byType(NestToast), findsNothing);
+      expect(
+        (await tester.runAsync(
+          () => GetIt.instance<QuestsRepository>().getQuest('q-huge'),
+        ))?.coins,
+        9999,
+        reason: 'the stored value is never rewritten behind the parent',
+      );
+      await disposeApp(tester);
+    });
+
+    testWidgets('the caption is gone the moment the value is back in range', (
+      tester,
+    ) async {
+      final db = await setUpTestScope();
+      await _plantQuest(db, id: 'q-zero', coins: 0);
+      await pumpAppRoute(tester, '${QuestsRoutePaths.editor}?id=q-zero');
+      expect(find.text('Coins must be 1\u{2013}100'), findsOneWidget);
+
+      await tester.tap(_increase());
+      await tester.pump();
+
+      expect(find.text('Coins must be 1\u{2013}100'), findsNothing);
+      expect(
+        tester.widget<QuestSavePill>(find.byType(QuestSavePill)).onPressed,
+        isNotNull,
+      );
+      // …and the repaired value is what gets stored.
+      await tester.tap(find.text('Save'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        (await tester.runAsync(
+          () => GetIt.instance<QuestsRepository>().getQuest('q-zero'),
+        ))?.coins,
+        1,
+      );
+      await disposeApp(tester);
+    });
 
     testWidgets('an in-range quest is never rewritten by opening it', (
       tester,

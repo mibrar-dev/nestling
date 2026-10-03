@@ -1,3 +1,5 @@
+import 'dart:ui' show Tristate;
+
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
@@ -775,11 +777,32 @@ void main() {
       }
       expect(find.text('15'), findsOneWidget);
 
-      final toggle = tester.getSemantics(find.byType(NestToggle));
+      // Addressed by label + role: `shared_batch5` wrapped the 51x31 track in
+      // `_ToggleHitSlop`, so `getSemantics(find.byType(NestToggle))` resolves
+      // to the slop wrapper, which owns no label and no action. The card's
+      // title is a plain text node with the same label, so the switch is the
+      // one that reports `toggled`.
+      SemanticsNode approvalSwitch() => find.semantics
+          .byPredicate(
+            (node) =>
+                node.label == 'Needs my approval' &&
+                node.getSemanticsData().flagsCollection.isToggled !=
+                    Tristate.none,
+          )
+          .evaluate()
+          .single;
+
+      var toggle = approvalSwitch();
       expect(toggle.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
       toggle.owner!.performAction(toggle.id, SemanticsAction.tap);
       await tester.pump();
       expect(tester.widget<NestToggle>(find.byType(NestToggle)).value, isFalse);
+      toggle = approvalSwitch();
+      expect(
+        toggle.getSemanticsData().flagsCollection.isToggled,
+        Tristate.isFalse,
+        reason: 'the announcement followed the real state',
+      );
 
       final dueRow = tester.getSemantics(find.text('Due by'));
       expect(dueRow.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);

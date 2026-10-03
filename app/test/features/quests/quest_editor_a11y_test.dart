@@ -278,6 +278,45 @@ void main() {
       });
     }
 
+    testWidgets('the due row announces the CURRENT choice and follows it', (
+      tester,
+    ) async {
+      // Review finding 6: the row used to announce a bare 'Change due time',
+      // so VoiceOver never heard which of the three times was in force. The
+      // value is part of the label now — and it must MOVE with the choice, or
+      // it is decoration rather than information.
+      final handle = await _pumpWithSemantics(tester);
+      final defaultChoice = _dueOptions[1].$1;
+
+      final row = _button('Due by, $defaultChoice');
+      expect(row.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+
+      row.owner!.performAction(row.id, SemanticsAction.tap);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      final option = _button(_dueOptions[2].$1);
+      option.owner!.performAction(option.id, SemanticsAction.tap);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(
+        find.semantics.byPredicate(
+          (node) => node.label == 'Due by, $defaultChoice',
+        ),
+        findsNothing,
+        reason: 'the stale announcement is gone, not merely duplicated',
+      );
+      final moved = _button('Due by, ${_dueOptions[2].$1}');
+      expect(
+        moved.getSemanticsData().hasAction(SemanticsAction.tap),
+        isTrue,
+        reason: 'the row is still operable under its new label',
+      );
+
+      handle.dispose();
+      await disposeApp(tester);
+    });
+
     testWidgets('the sheet re-opens with the newest choice marked selected', (
       tester,
     ) async {
@@ -476,8 +515,22 @@ void main() {
       tester,
     ) async {
       final handle = await _pumpWithSemantics(tester);
-      final toggle = tester.getSemantics(find.byType(NestToggle));
-      expect(toggle.label, 'Needs my approval');
+      // Addressed by label: `shared_batch5` wrapped the 51x31 track in
+      // `_ToggleHitSlop`, so the widget finder resolves to the slop wrapper,
+      // which carries no label and no action of its own.
+      // The card's TITLE is a plain text node with the same label, so the
+      // switch is picked by its role as well as its label.
+      SemanticsNode toggleNode() => find.semantics
+          .byPredicate(
+            (node) =>
+                node.label == 'Needs my approval' &&
+                node.getSemanticsData().flagsCollection.isToggled !=
+                    Tristate.none,
+          )
+          .evaluate()
+          .single;
+
+      final toggle = toggleNode();
       expect(toggle.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
       expect(
         toggle.getSemanticsData().flagsCollection.isToggled,
@@ -487,12 +540,13 @@ void main() {
       toggle.owner!.performAction(toggle.id, SemanticsAction.tap);
       await tester.pump();
       expect(
-        tester
-            .getSemantics(find.byType(NestToggle))
-            .getSemanticsData()
-            .flagsCollection
-            .isToggled,
+        toggleNode().getSemanticsData().flagsCollection.isToggled,
         Tristate.isFalse,
+      );
+      expect(
+        tester.widget<NestToggle>(find.byType(NestToggle)).value,
+        isFalse,
+        reason: 'the action moves the real state, not just the announcement',
       );
       handle.dispose();
       await disposeApp(tester);

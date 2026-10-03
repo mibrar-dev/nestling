@@ -253,7 +253,6 @@ void main() {
         'Save': find.byType(QuestSavePill),
         'stepper −': find.byKey(const ValueKey<String>('decrease')),
         'stepper +': find.byKey(const ValueKey<String>('increase')),
-        'approval toggle': find.byType(NestToggle),
         'due card': find.byType(NestCard).at(2),
         'delete button': find.widgetWithText(NestButton, 'Delete quest'),
         for (final key in _iconKeys)
@@ -291,6 +290,15 @@ void main() {
           reason: '${entry.key} is ${rect.width} wide',
         );
       }
+
+      // The toggle's 44 px tap minimum is NOT its box: `shared_batch5` made
+      // the 51x31 track the laid-out box and moved the 59x44 tap area into
+      // `_ToggleHitSlop`, exactly as `.toggle::before` does in the CSS. So the
+      // track may be 31 high while the tappable area is still 59x44 — the
+      // edge taps in the next test prove where it is.
+      final track = tester.getRect(find.byType(NestToggle));
+      expect(track.width, 51, reason: '.toggle is a 51x31 track');
+      expect(track.height, 31);
 
       // The design's own minimums, pinned outright.
       expect(tester.getRect(find.byType(QuestSavePill)).height, 44);
@@ -455,13 +463,16 @@ void main() {
 
       // Segmented options: 5 px inside the track's own edge is still inside
       // the button (4 px track padding + 44 px button = 52).
-      final track = tester.getRect(find.byType(NestSegmented<String>));
+      final segmentTrack = tester.getRect(find.byType(NestSegmented<String>));
       for (final (label, value) in const <(String, String)>[
         ('Once', 'once'),
         ('Weekly', 'weekly'),
       ]) {
         final option = tester.getRect(find.text(label));
-        for (final dy in <double>[track.top + 6, track.bottom - 6]) {
+        for (final dy in <double>[
+          segmentTrack.top + 6,
+          segmentTrack.bottom - 6,
+        ]) {
           await tester.tapAt(Offset(option.center.dx, dy));
           await tester.pump();
           expect(
@@ -476,16 +487,29 @@ void main() {
         }
       }
 
-      // The toggle's whole 44-high box answers, not just the painted track.
-      final toggle = tester.getRect(find.byType(NestToggle));
-      for (final dy in <double>[2, toggle.height - 2]) {
+      // The toggle's 44-high TAP AREA answers, not just its painted 31-high
+      // track: (44 - 31) / 2 = 6.5 px of slop above and below, 4 px either
+      // side. Asserted relative to the track, so the screen's pending removal
+      // of `QuestEditorMetrics.toggleTrackOffset` cannot move this test.
+      final track = tester.getRect(find.byType(NestToggle));
+      const slopY = (44 - 31) / 2;
+      const slopX = (59 - 51) / 2;
+      for (final offset in <(double, double)>[
+        (0, -slopY),
+        (0, slopY),
+        (-slopX, 0),
+        (slopX, 0),
+        (0, 0),
+      ]) {
         final before = tester.widget<NestToggle>(find.byType(NestToggle)).value;
-        await tester.tapAt(Offset(toggle.center.dx, toggle.top + dy));
+        await tester.tapAt(
+          Offset(track.center.dx + offset.$1, track.center.dy + offset.$2),
+        );
         await tester.pump();
         expect(
           tester.widget<NestToggle>(find.byType(NestToggle)).value,
           isNot(before),
-          reason: 'the toggle flips $dy px from its top edge',
+          reason: 'the toggle flips at slop (${offset.$1}, ${offset.$2})',
         );
       }
 

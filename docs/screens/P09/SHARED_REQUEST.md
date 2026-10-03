@@ -221,3 +221,24 @@ inset").
 Files: `app/lib/core/design_system/components/nest_text_field.dart`
 Blocks: **no** — 3 px of glyph inset inside a 52 px field; the element rects
 are exact and stage 5 measured every edge within ±2 px.
+## STATUS (iteration 3, stage 5) — shared sides DONE via batch5, remainder is P09-local
+
+- §2 (toggle track vs hit area): DONE on main (`87cf5d4` — 51×31 track IS
+  the box, 59×44 slop external). P09-local remainder: delete the now-
+  harmful `toggleTrackOffset` Transform (`quest_editor_view.dart:996-1003`)
+  and remove the metric — measured +4/−2.3 off-design in `5_ui.md` iter3.
+- §4 (quest icon glyphs): DONE on main (`ic_quest_{bed,dishes,hoover,bins}.svg`
+  + `NestIcons.questBed/questDishes/questHoover/questBins`). P09-local
+  remainder: switch `_questIcons` to those four names (design order kept);
+  revert-nothing (the `basket` substitution is already gone). The exact
+  design SVG sources quoted in §4 were the batch5 input.
+- §5 (stepper U+2212): DONE on main. No P09 action (verified in shots:
+  band-5 residue down).
+- §6 (field text inset): DONE on main (default `contentPadding` → s3/12;
+  12 + 4 inset + 1 border = 17). No P09 action (measured text x 38.3 vs
+  37.7 in `5_ui.md` iter3 — orchestrator 17:57 item (b) closed).
+- New P09-local item from iter3 shots (NOT shared): `_approvalCard`
+  bottom padding is still the workaround `s3` (12) for the old 44-tall
+  toggle box, so the card is 68 not 72 and the due card rides 4 px high.
+  Fix in `quests/` (restore `s4`); filed here for traceability, needs no
+  shared change.
