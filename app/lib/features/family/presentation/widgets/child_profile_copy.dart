@@ -11,7 +11,7 @@
 //   `On · Maya knows her code`       U+00B7
 //   `Change ›`                       `20` SPACE + U+203A SINGLE RIGHT-POINTING
 //                                    ANGLE QUOTATION MARK
-//   `£3.00 a week · Owed £4.20`      U+00A3 (from `moneyPounds`), U+00B7
+//   `£3.00 a week · Owed £4.20`      U+00A3, U+00B7
 //
 // Never ASCII `-`, `|`, `>` or a straight quote in this screen's copy.
 //
@@ -20,9 +20,9 @@
 // the row reads "knows **their** code" — the same data-driven adaptation
 // `1_plan.md` §(a).4 records.
 
+import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/family/domain/entities/family_child.dart';
 import 'package:nestling/features/family/presentation/widgets/child_display.dart';
-import 'package:nestling/features/pocket_money/presentation/widgets/money_pounds.dart';
 
 /// U+00B7 MIDDLE DOT — the P15 clause separator (`Age 7–9 · Pip is …`).
 const String kProfileDot = '·';
@@ -104,11 +104,14 @@ String profileQuestsSubtitle({
   return buffer.toString();
 }
 
-/// `£3.00 a week · Owed £4.20` — `moneyPounds` is the ledger's own helper
-/// (U+00A3, two decimals), imported read-only.
-String profileMoneySubtitle(int weeklyBasePence, int owedPence) =>
-    '${moneyPounds(weeklyBasePence)} a week '
-    '$kProfileDot Owed ${moneyPounds(owedPence)}';
+/// `£3.00 a week · Owed £4.20` — formatted with the design system's own
+/// `formatPounds` (exported from the barrel); `.abs()` matches the ledger's
+/// `moneyPounds` sign-free rendering, so the copy is unchanged.
+String profileMoneySubtitle(int weeklyBasePence, int owedPence) {
+  String pounds(int pence) => formatPounds(pence.abs() / 100);
+  return '${pounds(weeklyBasePence)} a week '
+      '$kProfileDot Owed ${pounds(owedPence)}';
+}
 
 /// `Change ›` — the PIN row's trailing control text.
 String profilePinTrailing() => 'Change $kProfileChevron';

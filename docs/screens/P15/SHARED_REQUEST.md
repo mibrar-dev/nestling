@@ -58,8 +58,10 @@ width (320/390/430) at text scale 1.0, so the row cannot pass a UI check.
 > **Update (stage 2b, iteration 2).** §2a needs **no new asset** after all:
 > `assets/icons/ic_quests.svg` is already the design's glyph — `<circle
 > cx="12" cy="12" r="9"/><path d="M8.5 12.5 11 15l4.5-5.5"/>`, 24 viewBox,
-> `currentColor`, stroke 2 — and P15 now passes `leadingAsset:
-> NestIcons.quests`. Only an alias would be nice (`NestIcons.checkCircle`),
+> `currentColor`, stroke 2 — and P15 now passes
+> `leading: (fg) => NestIcon(NestIcons.quests, color: fg)` (the builder form,
+> because `ProfileRow` has no `leadingAsset`). Only an alias would be nice
+> (`NestIcons.checkCircle`),
 > purely for naming. §2b still stands for the illustration case, and P15
 > works around it with the `leadingWidget` escape hatch this section asks for
 > (`app/lib/features/family/presentation/widgets/child_profile_row.dart`
@@ -73,8 +75,10 @@ a. **Circled check** for the Quests row. The design draws
    `<circle cx="12" cy="12" r="9"/>` + `<path d="m8.5 12.5 2.5 2.5 4.5-5.5"/>`
    (`design/html-source/screens/P15-child-profile.html`), stroke 2, round caps
    and joins. `NestIcons` has `ic_circle.svg` (r 7, no check) and `ic_check.svg`
-   (bare check, no circle) but no combined asset, and P15 currently passes
-   `leadingAsset: NestIcons.check`, so the row shows a plain tick.
+   (bare check, no circle) but no combined alias, and P15 passes the builder
+   `leading: (fg) => NestIcon(NestIcons.quests, color: fg)` — `ic_quests.svg`
+   is already the design's glyph, so no new asset is needed here (see the
+   Update above); only a `NestIcons.checkCircle` alias would be nice.
    Please add e.g. `assets/icons/ic_check_circle.svg`:
 
    ```svg
@@ -85,9 +89,10 @@ a. **Circled check** for the Quests row. The design draws
 
 b. **Coin illustration** for the Pocket money row. The design uses
    `<img src="../assets/coin.svg" width="24" height="24">` — the coloured
-   `assets/illustrations/coin.svg` — while P15 passes `leadingAsset:
-   NestIcons.poundCoin`, which tints `ic_pound_coin.svg` (a line £ in a circle)
-   and therefore loses the gold coin. `NestListRow.leadingAsset` only accepts a
+   `assets/illustrations/coin.svg` — while a tintable `NestIcon` path would
+   draw `ic_pound_coin.svg` (a line £ in a circle) and therefore lose the
+   gold coin. P15 works around it with the builder form (untinted
+   illustration in the tile — see the Update above). `NestListRow.leadingAsset` only accepts a
    tintable line icon (`NestIcon`). Suggest either a `leadingWidget` escape
    hatch on `NestListRow`/`NestIconTile`, or a `NestIcons`-style constant for
    the illustration so a screen can drop `SvgPicture.asset(coin.svg, size: 24)`
@@ -111,7 +116,7 @@ site. P15 uses the literal with a citing comment in the meantime.
 
 Blocks: **no** — purely a token-hygiene request.
 
-## 3. Cross-feature test anchor already landed (review finding 9 — record only)
+## 4. Cross-feature test anchor already landed (review finding 9 — record only)
 
 `app/test/features/today/today_view_test.dart:531-546` ("kid card opens the
 child profile with its childId") taps the P08 kid card, lands on
@@ -123,3 +128,60 @@ outside this screen's RULES §1 test set (`app/test/features/family/**`), so
 it is recorded here for the orchestrator to ratify rather than reverted.
 
 Blocks: **no**.
+
+## 5. One-shot roster-order query (review finding 4, minor)
+
+Need: the CHILD ORDER ruling (`createdAt`, then `rowid`) currently lives in
+two places — `AppDatabase.watchChildren` (`app/lib/core/data/
+app_database.dart`, the shared stream) and `FamilyRepositoryImpl.removeChild`'s
+repoint query (same `orderBy`, cited in a comment). The two copies are the
+only definition of roster order and can diverge (e.g. if the shared tie-break
+changes, `removeChild` picks a different "next child" than the roster the
+screen renders). Please add a one-shot
+`AppDatabase.childrenInCreationOrder(familyId)` both call sites share. No
+behaviour change today.
+
+Blocks: **no**.
+
+## 6. BLOCKING (not P15's) — `test/core/family_time_test.dart` is red on `main`
+
+Need: one shared/core test fails for the whole app, on `main` as well as on
+this branch, and P15 cannot legally fix it (RULES §1 — `app/test/core/**` is
+shared).
+
+```
+test/core/family_time_test.dart
+  seed + repository zone plumbing › kid_home completions are stamped with the family zone
+  Bad state: Too many elements            (line 319, `leoRows.single`)
+```
+
+Evidence it is **not** a P15 regression: `git diff main HEAD -- app/test/core/
+family_time_test.dart app/lib/core/data/seed.dart` is **empty** — both files
+are byte-identical to `main`, and `git diff --name-only main...HEAD` shows this
+branch touches no `lib/core/**` or `test/core/**` file at all. Every other
+suite is green (P15's own `test/features/family/` is 272/272).
+
+What changed under the test: the shared demo seed now pre-creates a `to_do`
+completion row for `q-plants` in the "Still to do" block
+(`lib/core/data/seed.dart:392`, `['q-plants', 'leo', '10']`), which this test
+predates (its file was last touched by `eed280d`). The test then calls
+`KidHomeRepositoryImpl.completeQuest('leo', 'q-plants')` and asserts
+`leoRows.single`. `completeQuest` flips an existing in-period `to_do`/`not_yet`
+row in place but **inserts a fresh row** when `inPeriod` is empty
+(`kid_home_repository_impl.dart:169-201`); after `Seed.movedToDubai` the
+seeded row no longer satisfies `countsForCurrentPeriod(...)` under
+`Asia/Dubai`, so the insert branch runs and `q-plants` ends up with two rows —
+`Bad state: Too many elements` is that second row. The first leg (`q-reading`,
+London) still flips in place and passes, which is why only the Dubai leg is red.
+
+Suggested fix (shared, one line of intent): scope the assertion to the row the
+test itself produced instead of assuming uniqueness — e.g. order the query by
+`createdAt` descending and assert on `first` (the row `completeQuest` just
+wrote, whose `createdAtTz` is the zone under test), or filter on
+`status == 'done_pending'`. Same for the `q-reading` leg at line 313, which is
+one seed change away from breaking the same way. Please do not paper over it
+by loosening the zone expectation — the stamping behaviour under test is
+correct; only the test's row-selection assumption is stale.
+
+Blocks: **yes** — the full-suite gate for every screen loop, P15 included.
+The P15 loop must not attempt this fix; it needs the shared edit on `main`.

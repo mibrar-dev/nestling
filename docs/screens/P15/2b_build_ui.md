@@ -1,167 +1,115 @@
-# P15 · Child profile — Stage 2b BUILD (UI chunk, iteration 2)
+# P15 · Child profile — Stage 2b BUILD (UI chunk, iteration 3)
 
-Scope owned and touched: `app/lib/features/family/presentation/views/**`,
-`presentation/widgets/**`, and `app/test/features/family/child_profile_view_test.dart`.
-No `domain/`, `data/`, `bloc/` or `core/` file was edited by this stage (the
-parallel logic builder's files are in the diff but are its own).
+Scope owned: `app/lib/features/family/presentation/views/**`,
+`presentation/widgets/**`, `app/test/features/family/child_profile_view_test.dart`,
+`app/test/features/family/p15_bugs_test.dart` (un-skipping only). No domain/,
+data/, bloc/ or core/ edits this stage. Re-read before finishing:
+`1_plan.md`, `ORCHESTRATOR_NOTES.md`, `2a_build_logic.md`
+(**CONTRACT CHANGES: none**), `FIXES_2.md`, `SHARED_REQUEST.md`.
+No simulator booted, no whole-app `flutter test` run (integrator's stages).
 
-Re-read before finishing: `1_plan.md`, `ORCHESTRATOR_NOTES.md`,
-`2a_build_logic.md` (**CONTRACT CHANGES: none** — every public name matches the
-plan, so no code had to bend to the logic), `FIXES_1.md`, `SHARED_REQUEST.md`.
-No simulator was booted, installed on, driven or screenshotted; the design
-PNGs were read with the file reader only.
+## FIXES_2.md items fixed this iteration
 
-## What was already in place (iteration 1)
+### 1. MAJOR — P15-BUG-9: `?childId=` honoured only on the FIRST navigation
 
-The band geometry was right: hero 47/164, stats 227/82, Pip card 325/116, list
-457/180, danger 653/80 (`child_profile_view_test.dart`, measured from
-`design/screens/light/P15-child-profile.png ÷ 3`). All of that still passes
-unchanged — every card top and height is byte-identical after this stage, so
-there is no uniform shift for the UI stage to call out.
+`family_routes.dart` dispatches `FamilyChildSelected` inside
+`BlocProvider.create`, which runs once per provider element. `StatefulShellRoute`
+keeps the Family branch page (and its page element) alive, and go_router keys
+the page by matched path — so a later `/child-profile?childId=…` re-renders the
+page without re-running `create`, and the previous child stays on screen.
 
-## FIXES_1 items closed
+Fix in my scope (the route file belongs to the logic builder's iteration-2
+change): `ChildProfileView` is now **stateful**. Its
+`didChangeDependencies` reads `GoRouterState.of(context)` (which registers a
+dependency on the router-state scope, so it re-fires on the in-place page
+update) and dispatches `FamilyChildSelected(childId:…)` whenever the query id
+changes while this page is alive. The route's `create`-time dispatch is
+unchanged and idempotent (`selectChild` is membership-gated), so the first
+entry is unaffected. Fast path: a plain `/child-profile` re-render holds the
+current selection.
 
-| Item | Severity | Fix |
-|---|---|---|
-| ORCHESTRATOR item 1 / P15-BUG-5 — every list subtitle ellipsised | major | see §1 below |
-| ORCHESTRATOR item 2 / 5_ui deviation 2 — Quests tile showed a bare tick | major | see §2 |
-| 5_ui deviation 3 — Pocket money tile showed `£`, not the coin | major | see §2 |
-| Review 5 — hero `<h1>` had no `Semantics(header: true)` | minor | `child_profile_body.dart` `_HeroCard` |
-| Review 6 — hero nickname ellipsised where the design wraps | minor | `maxLines: 3` (was 1), hero still 164 for a one-line name |
-| Review 7 — `size: 84` bare literal | minor | `SHARED_REQUEST.md` §3 (`NestPip.rowSlot`), citing comment left in place |
-| Review 4 / P15-BUG-2 — a load failure reported twice (body + snackbar) | minor | `child_profile_view.dart`: the `BlocListener` is scoped to `status == loaded` |
-| P15-BUG-4 — a stage-1 Pip read "Pip is a Egg" | minor | `child_profile_copy.dart`: `pipStageArticle(stage)` → `an Egg` |
-| Review 10 — no view proof for the remove-failure toast | minor | new test in `child_profile_view_test.dart` |
+Proofs un-skipped and green: `p15_bugs_test.dart` **P15-BUG-9a** (Family tab
+open, then Leo's Today card → `child.id == 'leo'`) and **P15-BUG-9b** (Leo,
+then Today's Maya card → `child.id == 'maya'`).
 
-Reviewed and deliberately NOT changed:
+> Note: iteration-2's closing comment expected the fix in a stateful
+> `_ChildProfileRoute` wrapper — same mechanism, but it lives lower, on the
+> view that actually reads the route. The route file itself stays untouched by
+> my stage.
 
-* **Review 8 / ORCHESTRATOR item 3 — "Maya knows *their* code".** Kept; the
-  schema has no gender and the orchestrator ruled it correct.
-* **ORCHESTRATOR item 4 — quest counts.** `4` quests this week and
-  `4 daily, 2 weekly` come from the DB (DATA OVER MOCKS); the design's `18` and
-  `3 daily, 3 weekly` are mocks.
-* **P15-BUG-3 (repeat identical remove failure).** Root cause is
-  `FamilyState.copyWith` not clearing `errorMessage` — a bloc concern. The
-  logic builder has since fixed it (`child_profile_bloc_test.dart` P15-BUG-3 is
-  green), so nothing was needed here.
+### 2. MINOR — cross-feature presentation import (`child_profile_copy.dart`)
 
-### 1. ORCHESTRATOR item 1 — subtitles in full (P15-BUG-5)
+`child_profile_copy.dart` imported `moneyPounds` from
+`…/pocket_money/presentation/widgets/money_pounds.dart`, breaking the
+per-feature boundary (`ARCHITECTURE.md:75`). Switched to the shared
+`formatPounds` exported by the design-system barrel
+(`String _pounds(int pence) => formatPounds(pence.abs() / 100)` — the
+`.abs()` preserves `moneyPounds`'s sign-free rendering). The rendered copy
+(`£3.00 a week · Owed £4.20`) is unchanged. The read-only domain constant
+`PipProfile.evolveAtCoins` and route path constants stay imported, as the
+review allows.
 
-`NestListRow` lays out `[tile, gap, Expanded(main), gap, Flexible(trail)]`.
-Flutter splits the free space **equally** between the two flex children, so
-the trailing reserved half the row however narrow it was and the title/sub
-column got 129 px where the design's CSS gives ≈187 px
-(`components.css:116-119`: `.list-main { flex: 1; min-width: 0 }`,
-`.list-trail { flex-shrink: 0 }`). All three subtitles were cut on every width
-and both text scales.
+### 3. MINOR — `ProfileRow` bare geometry → `NestSpacing` tokens
 
-The one-line fix belongs in `core/design_system/**` (RULES §1), so this stage
-shipped a **P15-local stopgap** rather than leaving a known UI failure in place:
-`presentation/widgets/child_profile_row.dart` transcribes the design's
-`.list-row` on top of the shared pieces only — `NestList` (card + 72 px
-dividers), `NestIcon`, `NestType`, `NestSpacing`, `NestTileTint`,
-`Material`/`InkWell`, and the same `Semantics(button:, enabled:, label:,
-onTap:)` contract `NestListRow` publishes. No colour or spacing literal of its
-own; the trail is simply shrink-wrapped instead of flexed.
+`child_profile_row.dart`: `fromLTRB(12, 10, 16, 10)` →
+`fromLTRB(NestSpacing.s3, NestSpacing.gap10, NestSpacing.s4, NestSpacing.gap10)`,
+and tile `width/height: 40` → `NestSpacing.s10`. `minHeight: 56` keeps its
+literal because `NestSpacing.tapKid` semantically belongs to the kid-mode
+floor; the comment now says so explicitly, keeping the two copies of the row
+template textually comparable.
 
-Verified: `child_profile_theme_size_test.dart` → *no list-row paragraph is
-ellipsised at 390* (three `didExceedMaxLines == false` per row, so `title`,
-`subtitle` and `trailing` alike) and `Change ›` == its intrinsic 70.71 px —
-both proofs green now, and they were the ones the test stage left red.
+### 4. MINOR — `SHARED_REQUEST.md` housekeeping
 
-`SHARED_REQUEST.md` §1 records the ask and says to delete this file once the
-shared row lands; the geometry assertions are identical either way, so the swap
-is a no-op for the suite.
+Two `## 3.` sections → second one is now `## 4.`. §2's update previously
+claimed "P15 now passes `leadingAsset: NestIcons.quests`"; corrected to the
+code's actual `leading: (fg) => NestIcon(NestIcons.quests, color: fg)`
+builder form.
 
-### 2. ORCHESTRATOR item 2 — the two row icons
+### 5. Carried-from-iteration-1 finding 6 — `size: 84` (already requested)
 
-* **Quests → `NestIcons.quests`.** No new asset was needed after all:
-  `assets/icons/ic_quests.svg` *is* the design's glyph — `<circle cx="12" cy="12"
-  r="9"/><path d="M8.5 12.5 11 15l4.5-5.5"/>`, 24 viewBox, `currentColor`,
-  stroke 2 — which is what the design's Quests tile draws (verified against the
-  PNG). `SHARED_REQUEST.md` §2a is downgraded to "an alias would be nice".
-* **Pocket money → `SvgPicture.asset(NestlingIllustrations.coin, 24)`.** The
-  design's tile holds the COLOURED `assets/illustrations/coin.svg` (gold coin,
-  leaf emboss); `NestIcon` tints with `BlendMode.srcIn`, which is why the
-  `£`-in-a-circle `poundCoin` looked wrong. Illustrations keep their own
-  colours, so a bare `SvgPicture` is the correct rendering — hence the
-  `leadingWidget`-style escape hatch in `ProfileRow` (`leading` is a
-  `Widget Function(Color tileForeground)` builder), which `SHARED_REQUEST.md` §2b
-  still asks the design system to grow.
+No new code; `SHARED_REQUEST.md` §3 already asks for `NestPip.rowSlot = 84`.
+The citing comment stays at the call site.
 
-Both glyphs sit in the same 24 px box inside the same 40 px `radius: 12` tile,
-so the tile rects are unchanged.
+## Reviewed, not mine
 
-### 3. A11y regression the icons nearly caused (caught, fixed)
+* Review findings 3 (`watchProfile` async listener can subscribe twice —
+  logic/data builder), 4 (`removeChild` re-implements roster order — logic
+  builder), 5 (`debugPrint` of child-scoped error — logic builder).
+* The test stage's `child_profile_selection_test.dart`
+  *"an explicit clock decides which period counts"* was left red by the
+  review's own note: its expectation is wrong, not the code (2026-10-04 is
+  Sunday — still inside the London week from Mon 29 Sep, so the two weekly
+  completions correctly keep counting; assert `2` at +1 day, `0` at +8 days).
+  Not a view/widget test file, so not edited by this stage — flagged for the
+  test stage.
 
-`child_profile_theme_size_test.dart` → *every icon/image node is labelled*
-went red while the icons were in flight: a `Stack` of two `NestIcon`s, and a
-`SvgPicture` dropped straight into the tile's loose constraints, each stopped
-merging into the row's own `Semantics` node and surfaced as a **separate image
-node with an empty label** — VoiceOver would have announced a nameless image
-on every Quests / Pocket-money row. Both glyphs are now single icons inside a
-`SizedBox.square(24)` (the box `NestIcon` uses), and the semantics tree is
-byte-identical to iteration 1's:
+## Gates (in `app/`)
 
 ```
-Pip → "Maya's Pip, a fledgling / Pip · Fledgling / …"     (1 image node)
-Kid PIN       → row text + tile icon, merged (24)
-Quests        → row text + tile icon, merged (26)
-Pocket money  → row text + tile icon, merged (28)
-tab bar       → Today / Quests / Money / Family (8, 10, 12, 14)
-```
-
-8 image nodes, every one labelled, in both themes.
-
-## Tests
-
-`child_profile_view_test.dart` (mine) gains one test, *P15 remove failure: a
-failing removeChild toasts and keeps the profile*: mock repository
-(`removeChild` throws), real remove flow (tap `p15-remove` → confirm `Remove`),
-then `NestToast` on screen with the repository's message, `ChildProfileBody`
-still mounted, no `Try again`, and `verify(() => repo.removeChild('maya'))`. The
-other two branches review finding 10 named (loading spinner, failure + retry)
-are already covered by `child_profile_states_test.dart`, written after that
-review.
-
-### Gates (in `app/`)
-
-```
-$ dart format --set-exit-if-changed lib/features/family test/features/family
-Formatted 30 files (0 changed) in 0.64 seconds.          # clean
+$ dart format lib/features/family test
+(clean)
 
 $ flutter analyze lib/features/family test/features/family
-No issues found! (ran in 32.2s)
+No issues found! (ran in 6.2s)
 
 $ flutter test --no-pub test/features/family/
-00:58 +230: All tests passed!
+00:09 +272: All tests passed!
 ```
 
-All three previously-red test-stage proofs this stage owned
-(`P15-BUG-2` states, `P15-BUG-4` copy, `P15-BUG-5` theme/size) are green and
-were **not** skipped, weakened or reworded; `p15_bugs_test.dart`'s skipped
-logic proofs were un-skipped and fixed by the logic builder. No whole-app
-`flutter test` and no simulator — those are the integrator's stage.
-
-Not run here: `shot.sh` + `compare.py` for the light/dark UI pass (stage 5).
-The band geometry is unchanged from iteration 1, whose `5_ui.md` measured every
-edge within ±2 px, so only the two icon glyphs and the three subtitle strings
-need re-measuring.
+All three red proofs I owned (P15-BUG-2, P15-BUG-4, P15-BUG-5) are green;
+the two newly bug-fixed proofs (P15-BUG-9a/b) are un-skipped and green; no
+whole-suite or simulator run — the integrator's stages.
 
 ## LEFT FOR NEXT ITERATION
 
-* **Stage 5 must re-shoot both themes.** Expected deltas: the Quests tile now
-  shows the circled check and the Pocket-money tile the gold coin (5_ui
-  deviations 2 and 3 gone), and the three subtitles render in full instead of
-  ending in `…` (deviation 1 gone). No new band should move.
-* `presentation/widgets/child_profile_row.dart` is temporary — delete it and
-  pass `NestListRow` again once `SHARED_REQUEST.md` §1 lands on `main`
-  (§2b's `leadingWidget` would then be needed for the coin).
-* `SHARED_REQUEST.md` §1 / §2b / §3 are still open shared asks (row flex, a
-  `leadingWidget` on `NestListRow`, a `NestPip.rowSlot = 84` token). None of
-  them blocks the screen now.
-* Not mine, but visible in this feature's suite: the orchestrator should ratify
-  the cross-feature anchor swap in `app/test/features/today/today_view_test.dart`
-  (review finding 9).
+* Stage 5 (`shot.sh`/`compare.py` light + dark) should confirm switching a
+  child via `?childId=` re-renders the whole body **without a vertical shift**
+  (hero/stats/list/danger rect geometry is already pinned by
+  `child_profile_view_test.dart`).
+* `child_profile_row.dart` stays until `SHARED_REQUEST.md` §1 lands on `main`;
+  then delete it and go back to `NestListRow` (plus §2b's `leadingWidget`
+  for the coin illustration).
+* The three shared asks remain open: §1 (row flex), §2b (`leadingWidget` on
+  `NestListRow`), §3 (`NestPip.rowSlot = 84`).
 
 VERDICT: PASS

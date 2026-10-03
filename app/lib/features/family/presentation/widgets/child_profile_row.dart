@@ -88,19 +88,27 @@ class ProfileRow extends StatelessWidget {
     final trail = trailing;
 
     // `.list-row { min-height: 56px; padding: 10px 16px 10px 12px; gap: 12px }`.
+    // 56 has no token; the CSS grid-row meter matches `NestSpacing.tapKid`
+    // but that constant is the kid-mode floor, so the CSS value stands with
+    // its comment rather than borrowing a parent-inappropriate name.
     final content = Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 16, 10),
+          padding: const EdgeInsets.fromLTRB(
+            NestSpacing.s3,
+            NestSpacing.gap10,
+            NestSpacing.s4,
+            NestSpacing.gap10,
+          ),
           child: Row(
             spacing: NestSpacing.s3,
             children: <Widget>[
               if (glyph != null)
                 Container(
-                  width: 40,
-                  height: 40,
+                  width: NestSpacing.s10,
+                  height: NestSpacing.s10,
                   decoration: BoxDecoration(
                     color: tileBg,
                     // Owner QA: the 40 px tile uses radius 12
@@ -150,6 +158,9 @@ class ProfileRow extends StatelessWidget {
       label: semanticLabel ?? title,
       onTap: onTap,
       child: ConstrainedBox(
+        // `min-height: 56px` in `.list-row` — off the 4 pt scale, so the
+        // design value stands with this comment (review-finding-7 noted 56
+        // has no token).
         constraints: const BoxConstraints(minHeight: 56),
         child: content,
       ),

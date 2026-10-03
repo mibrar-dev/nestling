@@ -29,8 +29,37 @@ import 'package:nestling/features/family/presentation/bloc/family_event.dart';
 import 'package:nestling/features/family/presentation/bloc/family_state.dart';
 import 'package:nestling/features/family/presentation/widgets/child_profile_body.dart';
 
-class ChildProfileView extends StatelessWidget {
+class ChildProfileView extends StatefulWidget {
   const ChildProfileView({super.key});
+
+  @override
+  State<ChildProfileView> createState() => _ChildProfileViewState();
+}
+
+class _ChildProfileViewState extends State<ChildProfileView> {
+  /// Last `?childId=` value dispatched to the bloc. The route's
+  /// `BlocProvider.create` dispatches the first one; this state catches every
+  /// later one.
+  String? _seenChildId;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // P15-BUG-9: this view is a page of a `StatefulShellRoute.indexedStack`,
+    // so the Family branch stays alive — a later `go('/child-profile?childId=…')`
+    // only updates the page with the new query; its `BlocProvider.create`
+    // (and therefore its `FamilyChildSelected`) never re-runs. Reading
+    // `GoRouterState.of(context)` registers a dependency on the router state,
+    // so this method re-fires on the in-place update and the screen follows
+    // the deep link instead of keeping the previous child. `selectChild` is
+    // idempotent and membership-gated in the repository, so a duplicate
+    // first-dispatch is harmless.
+    final requested = GoRouterState.of(context).uri.queryParameters['childId'];
+    if (requested != null && requested != _seenChildId) {
+      _seenChildId = requested;
+      context.read<FamilyBloc>().add(FamilyChildSelected(childId: requested));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

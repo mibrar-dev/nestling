@@ -127,7 +127,9 @@ class FamilyBloc extends Bloc<FamilyEvent, FamilyState> {
     try {
       await _repository.removeChild(event.childId);
     } on Exception catch (error) {
-      debugPrint('P15 removeChild failed: $error');
+      // Review finding 5: `debugPrint` ships to release logs, where a Drift
+      // error string could carry child data — keep it debug-only.
+      if (kDebugMode) debugPrint('P15 removeChild failed: $error');
       final message = error.toString();
       // P15-BUG-3: consecutive identical failures compute identical states,
       // which Equatable suppresses — so first clear the signal, then raise
@@ -149,7 +151,8 @@ class FamilyBloc extends Bloc<FamilyEvent, FamilyState> {
     try {
       await _repository.selectChild(event.childId);
     } on Exception catch (error) {
-      debugPrint('P15 selectChild failed: $error');
+      // Review finding 5: see above — debug-only logging.
+      if (kDebugMode) debugPrint('P15 selectChild failed: $error');
       emit(state.copyWith(errorMessage: error.toString()));
     }
   }

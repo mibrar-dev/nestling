@@ -134,22 +134,30 @@ class FamilyRepositoryImpl implements FamilyRepository {
               _db.watchAllCompletions(Seed.familyId),
             ).listen((parts) async {
               latestParts = parts;
-              final appState = parts[0] as AppStateData?;
-              final kids = parts[1] as List<ChildrenData>;
-              final selected = _selectProfileChild(
-                _effectiveSelection(appState?.activeChildId, kids),
-                kids,
-              );
+              final selected = _selectedOf(parts);
               if (selected == null) {
-                await ledgerSub?.cancel();
+                final previous = ledgerSub;
                 ledgerSub = null;
+                await previous?.cancel();
+                // A newer emission may have superseded this run while
+                // awaiting; only the newest run may clear, or an older run
+                // could wipe a subscription the newer run just made.
+                if (!identical(latestParts, parts)) return;
                 ledgerChildId = null;
                 latestLedger = null;
                 controller.add(null);
                 return;
               }
               if (ledgerChildId != selected.id) {
-                await ledgerSub?.cancel();
+                final previous = ledgerSub;
+                ledgerSub = null; // claim the slot synchronously
+                await previous?.cancel();
+                // A newer emission may have superseded this run while
+                // awaiting (the remove transaction writes five tables in one
+                // commit, so several emissions land at once): only the newest
+                // run may subscribe, so an older run can never orphan one by
+                // overwriting `ledgerSub` after the newer run claimed it.
+                if (!identical(latestParts, parts)) return;
                 ledgerChildId = selected.id;
                 latestLedger = null;
                 // The fresh subscription emits the current rows on its own;
@@ -170,6 +178,18 @@ class FamilyRepositoryImpl implements FamilyRepository {
       },
     );
     return controller.stream;
+  }
+
+  /// Resolves the selected child from a base snapshot (null when empty).
+  /// Single home for the resolve step so the listener and any re-check
+  /// after an `await` cannot disagree.
+  ChildrenData? _selectedOf(List<dynamic> parts) {
+    final appState = parts[0] as AppStateData?;
+    final kids = parts[1] as List<ChildrenData>;
+    return _selectProfileChild(
+      _effectiveSelection(appState?.activeChildId, kids),
+      kids,
+    );
   }
 
   /// P15 selection: `activeChildId` match, else the first child in creation
@@ -396,6 +416,11 @@ class FamilyRepositoryImpl implements FamilyRepository {
         _db.appState,
       )..where((a) => a.id.equals(1))).getSingleOrNull();
       if (session?.activeChildId == childId) {
+        // Same order as the roster itself (`AppDatabase.watchChildren`,
+        // `app_database.dart`: creation order via `createdAt`, then `rowid`
+        // — CHILD ORDER ruling). Kept in sync by inspection; a one-shot
+        // `AppDatabase.childrenInCreationOrder(familyId)` is requested in
+        // `SHARED_REQUEST.md` so both call sites share one query.
         final next =
             await (_db.select(_db.children)
                   ..where((c) => c.familyId.equals(Seed.familyId))

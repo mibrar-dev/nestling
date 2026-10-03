@@ -3,8 +3,7 @@
 // Iteration 1's six proofs below are GREEN on the iteration-2 checkpoint
 // (`31a44b8`) and run as regression guards (the build un-skipped them once the
 // fixes landed). Iteration 2's adversarial pass found one NEW major bug,
-// P15-BUG-9, proven by the two skipped tests at the bottom — un-skip them when
-// the build fixes it.
+// P15-BUG-9, fixed in iteration 3 — its two proofs below are un-skipped too.
 //
 //   P15-BUG-1  major  `/child-profile?childId=` ignored — FIXED iteration 2
 //                      (`FamilyChildSelected` + `FamilyRepository.selectChild`)
@@ -20,16 +19,11 @@
 //   P15-BUG-8  major  wall-clock period math vs the pinned seed anchor —
 //                      FIXED iteration 2 (injectable clock, P08 pattern)
 //                      (review finding 3)
-//   P15-BUG-9  major  OPEN — `?childId=` is honoured only on the FIRST
-//                      navigation to the route: once the Family branch page
-//                      is alive, a later `?childId=` (P08 Today kid card, or
-//                      a different child after one was already opened) is
-//                      ignored, so the wrong child's profile stays on
-//                      screen. The route dispatches `FamilyChildSelected`
-//                      inside `BlocProvider.create`, which runs once per
-//                      page; a same-branch `go` with a new query updates the
-//                      existing page without re-running it. Proofs:
-//                      P15-BUG-9a (Family tab first, then Leo's Today card),
+//   P15-BUG-9  major  `?childId=` honoured only on the FIRST navigation —
+//                      FIXED iteration 3 (`ChildProfileView.didChangeDependencies`
+//                      re-dispatches `FamilyChildSelected` whenever the query
+//                      id changes while the branch page is alive).
+//                      Proofs: P15-BUG-9a (Family tab, then Leo's Today card),
 //                      P15-BUG-9b (Leo, then Maya).
 //
 // Seeds are pinned to Sat 3 Oct 2026 by `test/flutter_test_config.dart`;
@@ -271,11 +265,12 @@ void main() {
   }); // P15-BUG-3 fixed (iteration 2): clear-then-raise re-emits
 
   // -- P15-BUG-9 ---------------------------------------------------------
-  // The route dispatches `FamilyChildSelected` inside `BlocProvider.create`,
-  // which runs once per route page. `StatefulShellRoute` keeps the Family
-  // branch page alive, so a later `go('/child-profile?childId=…')` updates
-  // the page in place: the router URI carries the new id, but the event never
-  // fires and the previously selected child stays rendered.
+  // Fixed in iteration 3: the route used to dispatch `FamilyChildSelected`
+  // only inside `BlocProvider.create` (once per route page), so a later
+  // `go('/child-profile?childId=…')` on the live `StatefulShellRoute` branch
+  // updated the page in place without re-firing the event. A stateful
+  // `_ChildProfileRoute` wrapper now re-dispatches whenever the query id
+  // changes while mounted. These proofs cover the repeat navigations.
 
   testWidgets(
     'P15-BUG-9a: a Today card switches the child after the Family tab was opened',
@@ -306,40 +301,37 @@ void main() {
       );
       await disposeApp(tester);
     },
-    skip: true, // P15-BUG-9 — major: live branch ignores the new ?childId=
-  );
+  ); // P15-BUG-9 fixed (iteration 3): live branch follows the new id
 
-  testWidgets(
-    'P15-BUG-9b: tapping Maya after Leo switches the profile',
-    (tester) async {
-      await setUpTestScope();
-      await pumpAppRoute(tester, '/today');
+  testWidgets('P15-BUG-9b: tapping Maya after Leo switches the profile', (
+    tester,
+  ) async {
+    await setUpTestScope();
+    await pumpAppRoute(tester, '/today');
 
-      await tester.tap(find.text('Leo'));
-      await tester.pumpAndSettle();
-      await _flushDrift(tester);
-      await tester.pumpAndSettle();
-      expect(_profile(tester).child.id, 'leo');
+    await tester.tap(find.text('Leo'));
+    await tester.pumpAndSettle();
+    await _flushDrift(tester);
+    await tester.pumpAndSettle();
+    expect(_profile(tester).child.id, 'leo');
 
-      await tester.tap(
-        find.descendant(
-          of: find.byType(NestTabBar),
-          matching: find.text('Today'),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Maya'));
-      await tester.pumpAndSettle();
-      await _flushDrift(tester);
-      await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(NestTabBar),
+        matching: find.text('Today'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Maya'));
+    await tester.pumpAndSettle();
+    await _flushDrift(tester);
+    await tester.pumpAndSettle();
 
-      expect(
-        _profile(tester).child.id,
-        'maya',
-        reason: 'P15-BUG-9: the second deep link must switch the profile',
-      );
-      await disposeApp(tester);
-    },
-    skip: true, // P15-BUG-9 — major: second ?childId= navigation ignored
-  );
+    expect(
+      _profile(tester).child.id,
+      'maya',
+      reason: 'P15-BUG-9: the second deep link must switch the profile',
+    );
+    await disposeApp(tester);
+  }); // P15-BUG-9 fixed (iteration 3): second deep link switches
 }
