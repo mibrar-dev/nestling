@@ -731,4 +731,96 @@ void main() {
       },
     );
   });
+
+  group('RewardsBloc — subscription hygiene (P14-B06 logic half)', () {
+    // `_closeOnError` in `rewards_bloc.dart` forwards the first stream error
+    // AND closes the stream, so `emit.forEach` completes and cancels. Without
+    // it a failed load left a dead subscription parked on the dead stream, and
+    // every `Try again` stacked another one on top — a leak that grows with
+    // each retry and never shows up in the UI.
+    test(
+      'repeated failing retries leave no live subscription behind',
+      () async {
+        final repository = _CountingRewardsRepository();
+        final bloc = RewardsBloc(repository: repository);
+
+        for (var attempt = 0; attempt < 4; attempt++) {
+          bloc.add(const RewardsLoadRequested());
+          await bloc.stream.firstWhere(
+            (state) => state.status == RewardsStatus.failure,
+          );
+          // The failed load must have released its subscription: the stream
+          // errored and closed, so nothing may still be listening.
+          expect(
+            repository.live,
+            0,
+            reason: 'after failed load $attempt nothing may still listen',
+          );
+        }
+
+        expect(
+          repository.subscriptions,
+          4,
+          reason: 'one subscription per load',
+        );
+        expect(repository.live, 0, reason: 'none survive');
+
+        // …and a load that recovers is live again, still exactly one.
+        repository.recover();
+        bloc.add(const RewardsLoadRequested());
+        final loaded = await bloc.stream.firstWhere(
+          (state) => state.status == RewardsStatus.loaded,
+        );
+        expect(loaded.items, hasLength(1));
+        expect(repository.live, 1, reason: 'exactly one live subscription');
+
+        await bloc.close();
+        expect(
+          repository.live,
+          0,
+          reason: 'closing the bloc must release it — no leak on teardown',
+        );
+      },
+    );
+  });
+}
+
+/// Counts `watchItems` subscriptions and how many are still listening, so a
+/// leak across retries is measurable rather than inferred.
+class _CountingRewardsRepository extends _FailingRewardsRepository {
+  int subscriptions = 0;
+  int live = 0;
+  bool _recovering = false;
+
+  /// After this call the next `watchItems` succeeds and stays open.
+  void recover() => _recovering = true;
+
+  @override
+  Stream<List<Reward>> watchItems() {
+    subscriptions++;
+    late final StreamController<List<Reward>> controller;
+    controller = StreamController<List<Reward>>(
+      onListen: () {
+        live++;
+        scheduleMicrotask(() {
+          if (_recovering) {
+            controller.add(const <Reward>[
+              Reward(
+                id: 'r-screen',
+                title: '30 min extra screen time',
+                detail: '50 coins',
+                icon: 'tv',
+                coinPrice: 50,
+                needsOk: true,
+              ),
+            ]);
+          } else {
+            controller.addError(Exception('stream is down'));
+          }
+        });
+      },
+      onCancel: () => live--,
+    );
+    return controller.stream;
+  }
 }

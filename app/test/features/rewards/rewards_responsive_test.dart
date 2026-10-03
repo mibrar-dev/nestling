@@ -26,6 +26,24 @@ NestTokens tokensFor(ThemeMode theme) =>
     (theme == ThemeMode.dark ? NestTheme.dark() : NestTheme.light())
         .extension<NestTokens>()!;
 
+/// One (device, text scale, keyboard) combination for the sheet sweep.
+class _KeyboardCase {
+  const _KeyboardCase({
+    required this.width,
+    required this.height,
+    required this.scale,
+    required this.keyboard,
+  });
+
+  final int width;
+  final int height;
+  final double scale;
+
+  /// iOS keyboard height in logical px (260 = compact, 336 = with the
+  /// predictive row).
+  final double keyboard;
+}
+
 void main() {
   setUpAll(loadBundledFonts);
 
@@ -175,6 +193,134 @@ void main() {
         await disposeApp(tester);
       }
     }
+  });
+
+  // The height axis of the responsive matrix. `pumpRewardsApp` at 844 covers
+  // the no-keyboard case; a real keyboard is an INSET that shrinks the space
+  // the sheet can use, and short devices have much less of it. P14-B08 was a
+  // hand-derived chrome budget that under-counted the 44 px close button and
+  // the text scaler, so the form overflowed once the keyboard capped it; the
+  // budget is now measured by the layout engine. Every row below is a
+  // regression guard on that, including the ones where Save starts *below*
+  // the keyboard and has to be scrolled to.
+  const keyboardCases = <_KeyboardCase>[
+    _KeyboardCase(width: 390, height: 844, scale: 1, keyboard: 300),
+    _KeyboardCase(width: 390, height: 844, scale: 1.3, keyboard: 336),
+    _KeyboardCase(width: 375, height: 667, scale: 1, keyboard: 260),
+    _KeyboardCase(width: 375, height: 667, scale: 1.3, keyboard: 260),
+    _KeyboardCase(width: 360, height: 640, scale: 1.3, keyboard: 260),
+    // The narrowest and shortest surface we support (iPhone SE, 320×568) at
+    // the largest text scale with a keyboard: Save starts *behind* the
+    // keyboard here, so this is the row that actually exercises the scroll
+    // escape rather than just the no-overflow assertion.
+    _KeyboardCase(width: 320, height: 568, scale: 1.3, keyboard: 260),
+  ];
+
+  for (final device in keyboardCases) {
+    testWidgets('the sheet fits a ${device.keyboard.toInt()} px keyboard on '
+        '${device.width}x${device.height} at scale ${device.scale}', (
+      tester,
+    ) async {
+      await pumpRewardsApp(
+        tester,
+        width: device.width,
+        height: device.height,
+        textScale: device.scale,
+      );
+      await tester.ensureVisible(find.byKey(const ValueKey('p14_new_reward')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('p14_new_reward')));
+      await tester.pumpAndSettle();
+      // The parent focuses the name field; on iOS the keyboard is an inset
+      // over the Flutter view rather than a resize.
+      await tester.tap(find.byKey(const ValueKey('p14_name_field')));
+      await tester.pump();
+      tester.view.viewInsets = FakeViewPadding(bottom: device.keyboard * 3);
+      addTearDown(tester.view.resetViewInsets);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'the sheet chrome must never overflow (P14-B08)',
+      );
+
+      final keyboardTop = device.height - device.keyboard;
+      final save = tester.getRect(find.byKey(const ValueKey('p14_save')));
+      if (save.bottom > keyboardTop) {
+        // Too little room to show everything, so the body must scroll rather
+        // than strand the control the parent is reaching for. Drive the
+        // Scrollable that OWNS the Save button: `find.byType(Scrollable)`
+        // also matches the name field's internal scrollable, and picking the
+        // wrong one silently scrolls nothing.
+        final formScroll = find
+            .ancestor(
+              of: find.byKey(const ValueKey('p14_save')),
+              matching: find.byType(Scrollable),
+            )
+            .first;
+        final position = tester
+            .widget<Scrollable>(formScroll)
+            .controller!
+            .position;
+        expect(
+          position.maxScrollExtent,
+          greaterThan(0),
+          reason: 'Save starts under the keyboard, so the form must scroll',
+        );
+        while (position.pixels < position.maxScrollExtent) {
+          await tester.drag(formScroll, const Offset(0, -120));
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+      }
+      expect(
+        tester.getRect(find.byKey(const ValueKey('p14_save'))).bottom,
+        lessThanOrEqualTo(keyboardTop),
+        reason: 'Save must be reachable above the keyboard',
+      );
+      expect(tester.takeException(), isNull, reason: 'after scrolling');
+
+      await disposeApp(tester);
+    });
+  }
+
+  testWidgets('the resting editor sheet is the design height in both modes', (
+    tester,
+  ) async {
+    // The keyboard work must not have moved the resting sheet. The create
+    // sheet (no Delete) and the edit sheet (with Delete) are both pinned:
+    // measured before iteration 2 was 422→794 and 362→794 respectively.
+    await pumpRewardsApp(tester);
+    await tester.ensureVisible(find.byKey(const ValueKey('p14_new_reward')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('p14_new_reward')));
+    await tester.pumpAndSettle();
+    expect(
+      tester.getRect(find.byType(RewardEditorSheet)),
+      const Rect.fromLTRB(20, 422, 370, 794),
+      reason: 'create sheet',
+    );
+    await tester.tap(find.byKey(const ValueKey('p14_cancel')));
+    await tester.pumpAndSettle();
+
+    // Cancelling leaves the list where `ensureVisible` parked it, so bring
+    // the first card back on screen before addressing its edit button.
+    final editFirst = find.bySemanticsLabel('Edit 30 min extra screen time');
+    await tester.ensureVisible(editFirst);
+    await tester.pumpAndSettle();
+    await tester.tap(editFirst);
+    await tester.pumpAndSettle();
+    expect(
+      tester.getRect(find.byType(RewardEditorSheet)),
+      const Rect.fromLTRB(20, 362, 370, 794),
+      reason: 'edit sheet is taller by the Delete button',
+    );
+    expect(find.byKey(const ValueKey('p14_delete')), findsOneWidget);
+
+    await disposeApp(tester);
   });
 
   testWidgets('the empty state fits and its action works at 320 px / 1.3', (

@@ -1,28 +1,24 @@
-// P14 · Rewards manager — adversarial bug proofs (Stage 6, iterations 1 + 2).
+// P14 · Rewards manager — adversarial bug proofs (Stage 6, iterations 1–3).
 //
 // Iteration 1 found B01–B05 (keyboard covers the sheet; empty/failure not
 // centred; sheet write failure loses input; delete orphans redemptions; price
-// order instead of creation order). All five were fixed by the iteration-2
-// build and their proofs below run unskipped and green.
+// order instead of creation order). Fixed by the iteration-2 build.
 //
-// Iteration 2 re-hunted the rebuilt tree and found three new minor defects:
-//   P14-B06 (minor) a stream error *after* the first emission is swallowed —
-//                   the stale list stays with no error surface and no retry.
-//   P14-B07 (minor) the inline write-error caption is not a live region, so
-//                   screen readers never hear the failure.
-//   P14-B08 (minor) the sheet's chrome reservation ignores the 44 px close
-//                   button (and text-scale growth), so the sheet overflows
-//                   when the keyboard caps the form (390×844 @1.3 with a
-//                   336 px keyboard; 375×667 @1.0 with 260 px).
+// Iteration 2 found B06–B08 (a stream error after data swallowed; the inline
+// error caption not a live region; a sheet overflow when the keyboard caps
+// the form). Fixed by the iteration-3 build.
 //
-// The new open-bug proofs are `skip`-marked with their id so the suite stays
-// green; `flutter test test/features/rewards/p14_bugs_test.dart --run-skipped`
-// proves each one fails on the current code. When a fix lands, remove its
-// skip and the test must pass.
+// Iteration 3 re-hunted the rebuilt tree — keyboard matrix, notched safe
+// area, sheet semantics, retry recovery, small screens — and found no new
+// defect with a repro. Its new guards (matrix, notch, single a11y node,
+// retry recovery) live in the `verified clean` group below.
 //
-// Full report: docs/screens/P14/6_bugs.md.
+// All B01–B08 proofs run unskipped and green; `flutter test
+// test/features/rewards/p14_bugs_test.dart --run-skipped` is therefore the
+// same green run (no skips remain). Full report: docs/screens/P14/6_bugs.md.
 
 import 'dart:async';
+import 'dart:ui' show Tristate;
 
 import 'package:drift/drift.dart' show OrderingTerm, Value;
 import 'package:flutter/material.dart';
@@ -60,6 +56,23 @@ Future<List<db.Reward>> _rows() {
   return (database.select(
     database.rewards,
   )..orderBy([(r) => OrderingTerm(expression: r.coinPrice)])).get();
+}
+
+/// Emits one reward, then errors and closes — the mid-stream failure shape of
+/// P14-B06. An `async*` generator is re-listenable, so `Try again` can call
+/// `watchItems()` again and get a fresh subscription.
+Stream<List<Reward>> _emitThenError() async* {
+  yield const <Reward>[
+    Reward(
+      id: 'r-screen',
+      title: '30 min extra screen time',
+      detail: '50 coins',
+      icon: 'tv',
+      coinPrice: 50,
+      needsOk: true,
+    ),
+  ];
+  throw StateError('stream died');
 }
 
 /// Widget tests do not load the bundled families automatically; the centring
@@ -1040,6 +1053,161 @@ void main() {
         expect(titles(), hasLength(7));
 
         await disposeApp(tester);
+      },
+    );
+
+    testWidgets(
+      '[P14-clean] the sheet does not overflow on a small screen with the keyboard',
+      (tester) async {
+        await setUpTestScope();
+        await pumpAppRoute(tester, '/rewards');
+        tester.view.physicalSize = const Size(320 * 3, 568 * 3);
+        tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        await tester.pumpAndSettle();
+
+        await tester.ensureVisible(
+          find.byKey(const ValueKey('p14_new_reward')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('p14_new_reward')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('p14_name_field')));
+        await tester.pump();
+        tester.view.viewInsets = const FakeViewPadding(bottom: 260 * 3);
+        addTearDown(tester.view.resetViewInsets);
+        await tester.pump();
+
+        expect(tester.takeException(), isNull);
+        // The capped form scrolls; Save is reachable above the keyboard.
+        await tester.dragFrom(const Offset(160, 120), const Offset(0, -200));
+        await tester.pumpAndSettle();
+        final save = tester.getRect(find.byKey(const ValueKey('p14_save')));
+        expect(save.bottom, lessThanOrEqualTo(568 - 260));
+
+        await disposeApp(tester);
+      },
+    );
+
+    testWidgets(
+      '[P14-clean] the sheet title clears a notched status bar with the keyboard up',
+      (tester) async {
+        await setUpTestScope();
+        await pumpAppRoute(tester, '/rewards');
+        // A notched device reports a 47 px top safe area; `useSafeArea: true`
+        // must keep the sheet (and its title) below it even when the sheet is
+        // as tall as the screen.
+        tester.view.padding = const FakeViewPadding(top: 47 * 3);
+        addTearDown(tester.view.reset);
+        tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        await tester.pumpAndSettle();
+
+        await tester.ensureVisible(
+          find.byKey(const ValueKey('p14_new_reward')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('p14_new_reward')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('p14_name_field')));
+        await tester.pump();
+        tester.view.viewInsets = const FakeViewPadding(bottom: 336 * 3);
+        addTearDown(tester.view.resetViewInsets);
+        await tester.pump();
+
+        final sheet = tester.getRect(find.byType(NestBottomSheet));
+        final title = tester.getRect(find.text('New reward'));
+        expect(sheet.top, greaterThanOrEqualTo(47));
+        expect(title.top, greaterThanOrEqualTo(47));
+        expect(tester.takeException(), isNull);
+
+        await disposeApp(tester);
+      },
+    );
+
+    testWidgets(
+      '[P14-clean] the sheet announces one Needs my OK node with tap + toggled',
+      (tester) async {
+        await setUpTestScope();
+        final handle = tester.ensureSemantics();
+        await pumpAppRoute(tester, '/rewards');
+        await tester.ensureVisible(
+          find.byKey(const ValueKey('p14_new_reward')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('p14_new_reward')));
+        await tester.pumpAndSettle();
+
+        final nodes = find.semantics
+            .byLabel('Needs my OK')
+            .evaluate()
+            .map((e) => e.getSemanticsData())
+            .toList();
+        expect(nodes, hasLength(1), reason: 'one announcement, not two');
+        expect(nodes.single.hasAction(SemanticsAction.tap), isTrue);
+        expect(nodes.single.flagsCollection.isToggled, Tristate.isTrue);
+
+        final toggle = find.descendant(
+          of: find.byType(RewardEditorSheet),
+          matching: find.byType(NestToggle),
+        );
+        final before = tester.widget<NestToggle>(toggle).value;
+        final node = tester.getSemantics(toggle);
+        node.owner!.performAction(node.id, SemanticsAction.tap);
+        await tester.pumpAndSettle();
+        expect(tester.widget<NestToggle>(toggle).value, !before);
+
+        handle.dispose();
+        await disposeApp(tester);
+      },
+    );
+
+    testWidgets(
+      '[P14-clean] Try again after a mid-stream error recovers with one subscription',
+      (tester) async {
+        final repository = _MockRewardsRepository();
+        var attempt = 0;
+        when(repository.watchItems).thenAnswer((_) {
+          attempt++;
+          return attempt == 1
+              ? _emitThenError()
+              : Stream.value(const <Reward>[
+                  Reward(
+                    id: 'r-screen',
+                    title: '30 min extra screen time',
+                    detail: '50 coins',
+                    icon: 'tv',
+                    coinPrice: 50,
+                    needsOk: true,
+                  ),
+                ]);
+        });
+        when(repository.watchRequests).thenAnswer((_) => const Stream.empty());
+        when(repository.getItems).thenAnswer((_) async => <Reward>[]);
+        when(
+          () => repository.setNeedsOk(
+            id: any(named: 'id'),
+            needsOk: any(named: 'needsOk'),
+          ),
+        ).thenAnswer((_) async {});
+        when(() => repository.createReward(any())).thenAnswer((_) async {});
+        when(() => repository.updateReward(any())).thenAnswer((_) async {});
+        when(() => repository.deleteReward(any())).thenAnswer((_) async {});
+
+        final bloc = RewardsBloc(repository: repository)
+          ..add(const RewardsLoadRequested());
+        await _pumpViewWithFailingWrites(tester, bloc);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+
+        expect(find.byKey(const ValueKey('p14_try_again')), findsOneWidget);
+        await tester.tap(find.byKey(const ValueKey('p14_try_again')));
+        await tester.pumpAndSettle();
+        expect(find.text('30 min extra screen time'), findsOneWidget);
+        verify(repository.watchItems).called(2);
+
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump();
       },
     );
 

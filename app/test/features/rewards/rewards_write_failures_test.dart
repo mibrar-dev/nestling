@@ -192,15 +192,15 @@ void main() {
       (tester) async {
         // A stream that delivered rows and *then* died leaves the parent with a
         // stale list whose stream is dead: later writes would never be
-        // reflected, and there is no retry. `rewards_view.dart` short-circuits
-        // its `failure` branch on `state.items.isNotEmpty` — a shortcut that
-        // existed for failed ACTION writes, which no longer emit `failure` — so
-        // the error is swallowed and `Try again` never appears (stage 6,
-        // P14-B06).
+        // reflected, and there is no retry. `rewards_view.dart` used to
+        // short-circuit its `failure` branch on `state.items.isNotEmpty` — a
+        // shortcut that existed for failed ACTION writes, which no longer emit
+        // `failure` — so the error was swallowed and `Try again` never
+        // appeared (stage 6, P14-B06).
         //
-        // This deliberately asserts the CORRECT behaviour, so it fails until the
-        // branch is fixed. Do not "fix" it by expecting the stale list: that is
-        // the defect, not the contract.
+        // This asserts the CORRECT behaviour. Do not "fix" a future regression
+        // here by expecting the stale list back: that is the defect, not the
+        // contract.
         final repository = _StubRewardsRepository();
         // A self-terminating stream (rows, then the error, then done) — the
         // shape a Drift `QueryStream` takes when its query fails. A

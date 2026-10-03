@@ -19,13 +19,24 @@ import 'dart:ui' show Tristate;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:nestling/core/design_system/design_system.dart';
+import 'package:nestling/features/rewards/domain/entities/reward.dart';
+import 'package:nestling/features/rewards/domain/rewards_repository.dart';
+import 'package:nestling/features/rewards/presentation/bloc/rewards_bloc.dart';
+import 'package:nestling/features/rewards/presentation/bloc/rewards_event.dart';
+import 'package:nestling/features/rewards/presentation/views/rewards_view.dart';
 import 'package:nestling/features/rewards/presentation/widgets/p14_reward_editor_sheet.dart';
 
 import '../../test_scope.dart';
 import 'p14_test_support.dart';
+
+/// Serves one reward and fails every create, so the sheet's inline error
+/// caption can be reached.
+class _FailingWrites extends Mock implements RewardsRepository;
 
 /// Nodes carrying [label] that can actually be activated.
 List<SemanticsNode> actionableNodes(WidgetTester tester, String label) => find
@@ -37,6 +48,18 @@ List<SemanticsNode> actionableNodes(WidgetTester tester, String label) => find
 
 void main() {
   setUpAll(loadBundledFonts);
+  setUpAll(
+    () => registerFallbackValue(
+      const Reward(
+        id: '',
+        title: '',
+        detail: '',
+        icon: '',
+        coinPrice: 0,
+        needsOk: false,
+      ),
+    ),
+  );
 
   group('P14 accessibility — labels and tap actions', () {
     testWidgets('every control is one labelled node with a tap action', (
@@ -360,6 +383,134 @@ void main() {
 
       handle.dispose();
       await disposeApp(tester);
+    });
+
+    testWidgets('the sheet switch is announced once, and so is a card row', (
+      tester,
+    ) async {
+      // Iteration 3 wrapped the sheet's visible `Needs my OK` twin in
+      // `ExcludeSemantics`: the switch already announces that label (with
+      // `toggled`), so VoiceOver used to read "Needs my OK" and then
+      // "Needs my OK, switch, on" for one control (stage 4, finding 2).
+      //
+      // The card does the same thing the other way round — visible
+      // `Needs my OK`, semantic `Needs approval for …` — so both rows are
+      // asserted here: exactly one actionable node each, no duplicate.
+      await pumpRewardsApp(tester);
+
+      final handle = tester.ensureSemantics();
+      await tester.pump();
+
+      // Card: the switch is announced once per row with the design's own
+      // `aria-label`. The visible `Needs my OK` text is absorbed into an
+      // ancestor node by the `.okrow` subtree, so it is never announced as a
+      // separate string — which is why the card never doubled up.
+      final cardToggles = find.semantics
+          .byLabel(RegExp('^Needs approval for '))
+          .evaluate();
+      expect(cardToggles, hasLength(6), reason: 'one node per seeded row');
+      expect(
+        find.semantics.byLabel('Needs my OK').evaluate(),
+        isEmpty,
+        reason: 'the card must not announce the visible label as its own node',
+      );
+
+      // Sheet: the switch keeps the label and its state, and nothing else
+      // claims the same string.
+      await tester.tap(find.bySemanticsLabel('Edit Baking together'));
+      await tester.pumpAndSettle();
+      await tester.pump();
+
+      final sheetNodes = find.semantics.byLabel('Needs my OK').evaluate();
+      expect(
+        sheetNodes,
+        hasLength(1),
+        reason: 'the visible twin must not be announced a second time',
+      );
+      final data = sheetNodes.single.getSemanticsData();
+      expect(data.hasAction(SemanticsAction.tap), isTrue);
+      // Read the state from the database, never a constant: `Baking together`
+      // seeds `needsOk: false` (the design's state) while every other row is
+      // on, and the sheet switch must mirror whichever row it is prefilled
+      // from.
+      expect(
+        data.flagsCollection.isToggled,
+        (await rewardNeedsOk('r-baking')) ? Tristate.isTrue : Tristate.isFalse,
+        reason: 'the sheet switch mirrors r-baking.needsOk',
+      );
+
+      handle.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('a failed write caption is a live region announced once', (
+      tester,
+    ) async {
+      // P14-B07: the inline caption was a plain `Text`, so a screen-reader
+      // user never heard that the save failed — the sheet silently staying
+      // open was their only feedback.
+      final repository = _FailingWrites();
+      when(repository.watchRequests).thenAnswer((_) => const Stream.empty());
+      when(repository.getItems).thenAnswer((_) async => <Reward>[]);
+      when(
+        () => repository.setNeedsOk(
+          id: any(named: 'id'),
+          needsOk: any(named: 'needsOk'),
+        ),
+      ).thenAnswer((_) async {});
+      when(() => repository.updateReward(any())).thenAnswer((_) async {});
+      when(() => repository.deleteReward(any())).thenAnswer((_) async {});
+      when(() => repository.createReward(any())).thenThrow(StateError('full'));
+      when(repository.watchItems).thenAnswer(
+        (_) => Stream.value(const <Reward>[
+          Reward(
+            id: 'r-screen',
+            title: '30 min extra screen time',
+            detail: '50 coins',
+            icon: 'tv',
+            coinPrice: 50,
+            needsOk: true,
+          ),
+        ]),
+      );
+      final bloc = RewardsBloc(repository: repository)
+        ..add(const RewardsLoadRequested());
+      await pumpRewardsApp(tester);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: NestTheme.light(),
+          home: BlocProvider<RewardsBloc>.value(
+            value: bloc,
+            child: const RewardsView(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      await tester.tap(find.byKey(const ValueKey('p14_new_reward')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('p14_name_field')),
+        'Pizza night',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('p14_save')));
+      await tester.pumpAndSettle();
+
+      final handle = tester.ensureSemantics();
+      await tester.pump();
+      final nodes = find.semantics
+          .byLabel(RegExp('Could not save the reward'))
+          .evaluate();
+      expect(nodes, hasLength(1), reason: 'announced exactly once');
+      expect(
+        nodes.single.getSemanticsData().flagsCollection.isLiveRegion,
+        isTrue,
+      );
+
+      handle.dispose();
+      await tester.pumpWidget(const SizedBox());
     });
 
     testWidgets('sheet controls are at least 44 px and Save is 52', (
