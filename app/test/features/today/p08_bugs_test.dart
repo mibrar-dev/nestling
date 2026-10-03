@@ -39,18 +39,6 @@ import 'package:nestling/features/today/presentation/views/today_view.dart';
 
 import '../../test_scope.dart';
 
-/// The pushed page's own location (the shell branch still reports `/today`
-/// via `currentConfiguration` after a `push`, so read the page URI).
-Uri currentUri(WidgetTester tester, Finder anchor) =>
-    GoRouter.of(tester.element(anchor)).state.uri;
-
-/// The same location read from the router instead of a widget: the pushed
-/// screen may replace its placeholder view at any time, so these proofs assert
-/// the route (the durable contract), never a view title
-/// (`docs/screens/_shared/router_push_test_fix_REPORT.md` §4).
-GoRouter _pushedRouter(WidgetTester tester) =>
-    GoRouter.of(tester.element(find.byType(Navigator).first));
-
 class _MockTodayRepository extends Mock implements TodayRepository;
 
 Future<void> _insertChild(
@@ -273,10 +261,14 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
       // The pushed page observes the new location (the shell branch still
-      // reports `/today` via `currentConfiguration`, so read the URI from
-      // the pushed page itself — same method as the navigation tests).
-      expect(find.text('P11 Approvals'), findsOneWidget);
-      expect(currentUri(tester, find.text('P11 Approvals')).path, '/approvals');
+      // reports `/today` via `currentConfiguration`), so read the URI from
+      // the top-most rendered route via the shared `pushedPath` helper —
+      // `GoRouter.state` is built from the full match list, so this asserts
+      // both where we are AND what the Navigator renders. Never assert a
+      // pushed screen's title text: screen agents replace placeholder views
+      // (P11's `AppBar('P11 Approvals')` → `Waiting for you (N)`), paths are
+      // the stable contract. See `_shared/router_push_test_fix_REPORT.md`.
+      expect(pushedPath(tester), '/approvals');
 
       final popped = await tester.binding.handlePopRoute();
       await tester.pump();
@@ -549,6 +541,10 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
 
+      // Assert the route (durable contract) via the shared `pushedPath`
+      // helper — same as the /approvals assertion — plus the view type.
+      // Never assert a pushed screen's placeholder title text.
+      expect(pushedPath(tester), '/quest-editor');
       expect(
         find.byType(QuestEditorView, skipOffstage: false),
         findsOneWidget,
@@ -706,7 +702,10 @@ void main() {
 
       // The pushed page navigates home with `go` (P09/P11 may; §4 asks them
       // to pop, but the guard must not depend on another screen's contract).
-      _pushedRouter(tester).go('/today');
+      // Use the same Navigator lookup as the shared `pushedPath` helper.
+      GoRouter.of(
+        tester.element(find.byType(Navigator).first),
+      ).go('/today');
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 700));
 
@@ -715,6 +714,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
+      expect(pushedPath(tester), '/quest-editor');
       expect(
         find.byType(QuestEditorView, skipOffstage: false),
         findsOneWidget,

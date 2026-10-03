@@ -37,6 +37,11 @@ for i in 1 2 3 4 5; do
     fi
   done
   wait $OC; rc=$?
+  # Reap flutter_tester processes this agent orphaned in its worktree (killed
+  # test runs leave them parented to launchd, eating memory and CPU).
+  WD="$(pwd)"; for tp in $(pgrep -f flutter_tester); do
+    [ "$(ps -p "$tp" -o ppid= | tr -d ' ')" = 1 ] && lsof -p "$tp" 2>/dev/null | awk '$4=="cwd"{print $9}' | grep -q "^$WD" && kill "$tp" 2>/dev/null
+  done
   if grep -q "idle watchdog killed" "$LOG"; then
     ev RETRY "attempt=$i reason=idle_${IDLE_MAX}s"
     [ "$SID" = "-" ] && SID=$(opencode session list 2>/dev/null | grep -F "$TITLE" | head -1 | awk '{print $1}')
