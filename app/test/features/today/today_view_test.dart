@@ -212,11 +212,12 @@ void main() {
       await tester.tap(find.text('Review'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
-      expect(find.text('P11 Approvals'), findsOneWidget);
-      expect(
-        _currentUri(tester, find.text('P11 Approvals')).path,
-        '/approvals',
-      );
+      // Assert the location, not a placeholder view title: P11 replaced its
+      // foundation `AppBar('P11 Approvals')` with the real screen
+      // (`Waiting for you (N)`). `pushedPath` reads `GoRouter.state`, which is
+      // built from the full match list and therefore reflects exactly what the
+      // Navigator renders. See `_shared/router_push_test_fix_REPORT.md`.
+      expect(pushedPath(tester), '/approvals');
 
       await disposeApp(tester);
     });
