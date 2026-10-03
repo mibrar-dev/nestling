@@ -1,379 +1,405 @@
-# P12 · Money (ledger) — Stage 4 QA code review (iteration 1)
+# P12 · Money (ledger) — Stage 4 QA code review (iteration 2)
 
-Scope: `git diff main...HEAD` (35 files) for screen P12 / feature
-`pocket_money` / route `/money`. Reviewed against `docs/ARCHITECTURE.md`,
+Scope: `git diff main...HEAD` (61 files, 24 of them code) for screen P12 /
+feature `pocket_money` / route `/money`. Reviewed against `docs/ARCHITECTURE.md`,
 `docs/screens/RULES.md`, `docs/DESIGN_SPEC.md` §5 P12,
 `design/html-source/screens/P12-money.html` (copy source of truth),
+`design/html-source/{components,tokens}.css`,
 `design/screens/{light,dark}/P12-money.png` (1170×2532 → ÷3 = 390×844), the
-design system in `app/lib/core/design_system/`, and `1_plan.md`.
-**No code was edited in this stage.** No simulator was booted, installed on,
-driven or screenshotted; no image was attached (PNGs were read, never
+design system in `app/lib/core/design_system/`, `1_plan.md`,
+`ORCHESTRATOR_NOTES.md`, `SHARED_REQUEST.md` and iteration 1's `4_review.md`
+/ `6_bugs.md`.
+
+**No code was edited in this stage. No simulator was booted, installed on,
+driven or screenshotted; no image was attached** (PNGs and CSS were read, never
 uploaded).
 
-Design geometry used below was measured directly from
-`design/screens/light/P12-money.png` by scanning rows/columns for the fills
-the HTML specifies (`--paper` #FBF7F0, `--surface` #FFFFFF, `--hero-bg`
-#1E1B3A, `--leaf` #17804F, `--leaf-tint` #E3F5EC). These reproduce the CSS
-exactly: status bar 47 (`.status-bar{height:var(--status-h)}`), title line box
-55..89 (`.ptitle{padding-top:8}`), segmented track 105.0 h 52 with a
-169-wide thumb at x 24, hero fill 173.0..384.0 x 20..370, `Payout time` fill
-x 40 w 310 y 312 h 52, goal card fill 400.0..488.0, history card top 504.0,
-tab bar 726..810.
+Gates re-run in this worktree (read-only, host VM — no simulator):
 
-Independent gates re-run in this worktree: `dart format
---output=none --set-exit-if-changed .` and `flutter analyze` (results in
-"Process notes" — the only diagnostics are in untracked files a sibling stage
-is writing right now).
+```
+$ dart format --output=none --set-exit-if-changed .
+Formatted 436 files (0 changed) in 1.49 seconds.
+
+$ flutter analyze
+Analyzing app...
+No issues found! (ran in 11.9s)
+
+$ flutter test test/features/pocket_money/{geometry,view,states,responsive,bugs,
+    ledger_bloc,repository,next_payout,p06_bugs}_test.dart
+00:06 +155 ~1: All tests passed!        ← the ~1 is the documented P12-BUG-04 skip
+```
 
 ## Result
 
-**3 major findings — all three are design-geometry defects that the
-orchestrator's own measurement already flagged. VERDICT: FAIL.**
+**1 major finding — the 47 px status-bar band scrolls away with the ledger
+instead of staying pinned above it, which the design does pin and which every
+other screen built so far pins. VERDICT: FAIL.**
 
-| # | Severity | Subject |
-|---|---|---|
-| 1 | **major** | Whole screen sits 16 px below the design (extra spacer after `NestStatusBar`) |
-| 2 | **major** | Goal card is 2 px too tall (`bodyStrong` 24 vs the CSS's 22 line box) |
-| 3 | **major** | History tile corner radius is 12 px; the design's `.icon-tile` is 16 px |
-| 4 | minor | Hero card still +3 px vs the PNG after 1–3 — measure, do not guess |
-| 5 | minor | Sheet validation error is not a live region |
-| 6 | minor | Success toast fires before the write is confirmed |
-| 7 | minor | Raw `error.toString()` rendered to the parent |
-| 8 | minor | `domain/next_payout.dart` breaks the `domain/` contract |
-| 9 | minor | Test-only `ledgerDataFallback` shipped in production domain code |
-| 10 | minor | `MoneyLedgerData.setup` couples the ledger aggregate to P06 |
-| 11 | minor | `BlocBuilder` without `buildWhen` rebuilds every history row |
-| 12 | minor | `.ptitle` has no shared component (4 screens need it) |
-| 13 | minor | `state.items` semantics changed for the shared bloc (P13 hand-off) |
+All three iteration-1 majors are genuinely closed and are now pinned by a
+real-font geometry suite that passes.
+
+| # | Severity | Subject | Status |
+|---|---|---|---|
+| 1 | **major** | Status-bar reserve is `ListView` child 0, so it scrolls away (design + P05/P06/K03 pin it) | new |
+| 2 | minor | The sheet hand-rolls the inline error instead of using `NestTextField.errorText` | new |
+| 3 | minor | Write-confirmation toast can be lost or misattributed across a child switch | new |
+| 4 | minor | `summarise()`'s `break`-at-payout assumes strict newest-first; same-second ties | new |
+| 5 | minor | `domain/next_payout.dart` is still not an entity or the abstract repo | carried (it-1 #8) |
+| 6 | minor | `_PageTitle` is still the 4th private copy of `.ptitle` | carried (it-1 #12) |
+| 7 | minor | Raw exception text still reaches the parent after the friendly lead | carried (it-1 #7, partial) |
+| 8 | minor | `state.items` is now the *selected* child's ledger and P13 reads it | carried (it-1 #13) |
+| 9 | minor | `MoneyLedgerData.setup` couples the ledger aggregate to P06 | carried, declined with reason (it-1 #10) |
+| it-1 1 | ~~major~~ | 16 px uniform shift | **closed** — see below |
+| it-1 2 | ~~major~~ | Goal card 90 px instead of 88 | **closed** |
+| it-1 3 | ~~major~~ | History tile radius 12 instead of 16 | **closed** |
+| it-1 4 | minor | Hero +3 px | **closed by measurement** (17 px `.lab` line box) |
+| it-1 5/6/9/11 | minor | liveRegion / premature toast / test helper in `domain/` / missing `buildWhen` | **closed** |
 
 ---
 
-## 1. MAJOR — the whole screen is 16 px below the design
+## 1. MAJOR — the status-bar band scrolls away instead of staying pinned
 
-**File:** `app/lib/features/pocket_money/presentation/views/money_ledger_view.dart:141`
-(same defect in the empty state at `:378`).
+**Files:** `app/lib/features/pocket_money/presentation/views/money_ledger_view.dart:267`
+(`_LoadedBody`), `:527` (`_EmptyBody`); the widget itself is at `:286` and
+`:533`.
 
 ```dart
-const NestStatusBar(),
-const SizedBox(height: NestSpacing.s4),   // ← not in the design
-const _PageTitle(),
+return ListView(
+  padding: _scrollPadding,
+  children: <Widget>[
+    const NestStatusBar(),   // ← child 0 of the SCROLL VIEW
+    const _PageTitle(),
+    …
 ```
 
-`P12-money.html:18-20` puts `.status-bar` **outside** `.scroll`:
+`P12-money.html:17-20` is a **flex column with the bar outside the scroller**:
 
 ```html
 <div class="screen parent">
   <div class="status-bar">…</div>
-  <div class="scroll">
-    <div class="ptitle">Pocket money</div>
+  <div class="scroll">      <!-- .scroll { flex:1; overflow-y:auto } -->
 ```
 
-so `.scroll > * + * { margin-top: var(--s4) }` (`components.css:66`) does
-**not** apply to `.ptitle` — it is the first child — and its only top spacing
-is `.ptitle{padding-top:8px}`. The design therefore puts the title line box at
-47 + 8 = **55**; the app puts it at 47 + 16 + 8 = **71**.
+with `components.css:46` `.status-bar { min-height:47px; flex-shrink:0 }` and
+`components.css:65` `.scroll { flex:1; overflow-y:auto; min-height:0 }`. So in
+the design the 47 px band is **pinned**: history rows scroll inside the
+viewport below it and can never reach the clock.
 
-Measured against `design/screens/light/P12-money.png`:
+In the app the reserve is the first row of the scrollable, and neither the
+`Scaffold` body nor `ParentShell` applies a top inset
+(`lib/app/router.dart:32-44` has no `SafeArea`; there is no global
+`SystemUiOverlayStyle`/`edgeToEdge` handling in `lib/app/**`). So as soon as the
+parent scrolls the ledger, the reserve — and the title with it — move up and the
+white history cards are painted at y < 47, underneath the OS-drawn status bar.
+The ledger is longer than the fold by design (the row buttons and footer are
+below it), so this is reached by ordinary use, not by an edge case.
 
-| Element | design (÷3) | app (code) | Δ |
-|---|---|---|---|
-| title line box top | 55 | 71 | +16 |
-| segmented track top | 105.0 | 121 | +16 |
-| hero card top | 173.0 | 189 | +16 |
-| goal card top | 400.0 | 419 | +19 (= +16 and finding 2) |
-| history card top | 504.0 | 525 | +21 (+16, +3 hero, +2 goal) |
+It is also the outlier in the codebase: every screen built so far reserves the
+band **outside** its scrollable — `P05 add_children_view.dart:87`
+(`Column[NestStatusBar, NestNavBar, Expanded(…)]`), `P06
+pocket_money_setup_view.dart:43`, `K03 kid_home_view.dart:236`/`:280`, and P08
+`today_view.dart:20` (`SafeArea`). P12 is the only one that scrolls it away.
+`NestStatusBar` itself is fine and shared
+(`nest_chrome.dart`: `height: max(viewPadding.top, NestDevice.statusH)`), so on
+a 59 px-inset device the band still measures correctly — the defect is purely
+that it is inside the scroller.
 
-This reproduces `ORCHESTRATOR_NOTES.md` exactly (title 72→88, segmented
-106→121, hero 173→189, goal 400→419, history 504→525), so the notes' "find
-the extra 16 px above the title" is this line and no other. Side effects:
-the history card bottom lands at 807 instead of 788, so the fold cuts the
-third history row ~6 px earlier than the design, and the whole 10.46 % mean
-diff is dominated by a constant translation.
+**Impact:** visible content under the OS clock in the most-used interaction on
+the screen, plus a divergence from the design's flex layout that no screenshot
+at scroll-0 can reveal (which is why it survived two UI passes).
 
-**Fix:** delete the `const SizedBox(height: NestSpacing.s4),` that follows
-`const NestStatusBar()` in both `_LoadedBody` (`:141`) and `_EmptyBody`
-(`:378`). Every other gap on the screen is already an `s4` separator, which
-is exactly the design's `.scroll > * + * { margin-top:16px }` — no other
-separator changes.
-
-## 2. MAJOR — the goal card is 2 px too tall
-
-**File:** `app/lib/features/pocket_money/presentation/views/money_ledger_view.dart:342`
-
-The design's goal title is `P12-money.html:11`
-`.goal .t{font-weight:700;font-size:16px;line-height:22px}` — a **22 px**
-line box. `NestType.bodyStrong` is 16/**24**
-(`core/design_system/tokens/typography.dart:69`). The column is
-`24 + 18 (caption) + 8 (progress margin) + 8 (NestProgress) = 58` where the
-design has `22 + 18 + 8 + 8 = 56`; the row is `max(56 art, column)`, so the
-card is 90 instead of 88.
-
-Measured: design goal card fill `400.0..487.67` = **88**. App = 90. This is
-the "one more +5 inside the stack" the notes mention (it turns +19 into +21
-on the history card top) and it is the only inner delta that is
-attributable to a token mismatch.
-
-**Fix:** override at the call site, following the pattern the orchestrator
-mandated for `.hero .amt`'s `-0.4`:
+**Fix (RULES-legal, no geometry change at rest):** pin the band like P05/P06/K03.
 
 ```dart
-style: NestType.bodyStrong(color: tokens.ink).copyWith(height: 22 / 16),
+return Column(
+  children: <Widget>[
+    const NestStatusBar(),                  // pinned band outside the scroller
+    Expanded(
+      child: ListView(
+        padding: _scrollPadding,
+        children: <Widget>[
+          const _PageTitle(),               // still 55 … at rest
+          …
 ```
 
-(or file a `SHARED_REQUEST.md` for a 16/22 `bodyStrong` variant if other
-screens need it — do not edit `core/` from here).
+Drop the `NestStatusBar()` child from both bodies. `_PageTitle` keeps its own
+`padding-top: s2`, so title 55 / segmented 105 / hero 173 / goal 400 / history
+504 are unchanged and `money_ledger_geometry_test.dart` stays green.
 
-## 3. MAJOR — history tile corner radius is 12 px, the design says 16 px
+**Guard to add** (the at-rest assertions cannot catch this): scroll the list by
+120 px and assert no descendant paints above the band —
+`tester.getRect(find.byType(MoneyHistoryRow).first).top` stays `≥ 47`, or assert
+`tester.getRect(find.byType(ListView)).top == 47`.
 
-**File:** `app/lib/features/pocket_money/presentation/widgets/money_history_row.dart:69`
+## 2. MINOR — the sheet re-implements the inline error instead of using the shared one
 
-```dart
-borderRadius: BorderRadius.circular(NestSpacing.s3),   // 12
-```
+**File:** `app/lib/features/pocket_money/presentation/widgets/money_edit_sheet.dart:114-146`
 
-`components.css:110` is `.icon-tile { width:40px; height:40px;
-border-radius: var(--r-m) }` and `tokens.css:77` is `--r-m:16px`. A circle
-fit on the design PNG's first tile (fill x 36.0..75.7, y 556.0..595.7,
-`--leaf-tint` #E3F5EC) reproduces **r = 16** to < 0.2 px over 15 rows
-(predicted vs measured left edge: y+1 46.43/46.33, y+3 42.67/42.67,
-y+8 38.14/38.00, y+12 36.51/36.67); r = 12 is off by up to 3.1 px. So all ten
-history tiles are 4 px too square — and `NestSpacing.s3` is a *spacing*
-token: the design system has no 12 px radius at all (`--r-s:10 --r-m:16
---r-l:24 --r-xl:32`), so the wrong token family is being used as well.
+The Amount field is a plain `NestTextField` (`:114-123`) and the rejection
+message is a hand-rolled `SizedBox` + `Semantics(liveRegion: true)` + `Text`
+placed **below the Note field** (`:131-146`). The shared component already does
+exactly this job: `nest_text_field.dart:11-14` documents
+"`errorText` paints the invalid state: a 2 px danger border on the field plus a
+gutter-aligned error row below it … announced through a live region", and
+`:329-336` implements it (`Semantics(liveRegion: true, label: errorText, …)`).
 
-Where the 12 came from: `core/design_system/components/nest_list_row.dart:65`
-applies P02's **compact 36 px** tile radius (`P02-value-tour.html:25`
-`.pg-rows .icon-tile{width:36px;height:36px;border-radius:12px}` — its own
-doc comment at `nest_list_row.dart:32` attributes 12 to the compact variant)
-to the standard 40 px tile as well. `MoneyHistoryRow` correctly mirrors the
-shared `NestTileTint` mapping, but should not mirror that radius.
+Consequences: the Amount field never gets the shared invalid border, and the
+message "Enter an amount like £1.00" / "Enter an amount up to £1,000,000.00"
+renders under the *Note* field, spatially detached from the input it is about —
+a VoiceOver/TalkBack user hears it, a sighted user looks in the wrong place.
+"Never re-implement components" (brief) is the rule being bent here.
 
-**Fix (local, RULES-legal):** `borderRadius: NestRadii.allM` in
-`MoneyHistoryRow`. **Also** file `SHARED_REQUEST.md` for
-`nest_list_row.dart:65` so the compact radius is split from the standard one
-— every other screen's tiles are 4 px off for the same reason.
+**Fix:** pass `errorText: _error` to the Amount `NestTextField` and delete the
+`:131-146` block (and the now-unused `NestSpacing.s3`/`tokens.danger` there).
+Keep the same three strings and keep clearing `_error` in `onChanged`.
 
-## 4. MINOR — the hero card is still +3 px after 1–3; measure, don't guess
+## 3. MINOR — the write-confirmation toast can be lost or attributed to the wrong child
 
-**File:** `money_ledger_view.dart:158-195`. The app's stack computes
-`20 + 20 (lab) + 44 (amt) + 4 + 40 (brk × 2 lines) + 14 + 52 (btn) + 20 =
-214`; the PNG fill is `173.0..384.0` = **211**. `ORCHESTRATOR_NOTES.md`
-reconciles to `189 + 214 + 16 = 419` (goal top) and `419 + 90 + 16 = 525`
-(history top), so the app's +21 is fully explained by `+16` (finding 1),
-`+3` (hero) and `+2` (goal).
+**File:** `app/lib/features/pocket_money/presentation/views/money_ledger_view.dart:46`,
+`:70-89`, `:136-163`
 
-The 3 px cannot be attributed from the source: `P12-money.html:2` links only
-`tokens.css` + `components.css` and no webfont, so the PNG's text line boxes
-were laid out with fallback metrics (the glyph bands inside the card do not
-match Inter's real ascent/descent). **Do not** nudge `NestType` line-heights
-or add padders to force it. Re-measure after findings 1–3 and either close
-the residual with a measurement or record it as a design-render artefact;
-the notes' "±1 px" mandate cannot be signed off until it is resolved one way
-or the other.
+Iteration-1 #6 (toast fired before the write was proven) is fixed correctly in
+principle: `_pendingWrite` records `(count, message)` and the second
+`BlocListener` toasts only when the selected child's ledger grows past `count`.
+Two gaps remain:
 
-## 5. MINOR — the sheet's validation error is not announced
+* the tuple has **no child id**, and `listenWhen` (`:73-76`) fires on *any*
+  change of the selected child's row count. If the parent taps a segment
+  between submit and the stream round-trip, `_pendingWrite` is left set for the
+  old child and the **next** write on the new child pops the stale
+  `"Added £5.00 for Maya"`;
+* a second submit before the first emission **overwrites** the tuple
+  (`:148`/`:156`), so the first write's confirmation is silently dropped.
 
-**File:** `app/lib/features/pocket_money/presentation/widgets/money_edit_sheet.dart:97-105`.
-The inline error appears after a tap with no `liveRegion`, so VoiceOver /
-TalkBack users get no notification that the amount was rejected (the sheet
-stays open with the reason off-screen or unannounced).
-**Fix:** `Semantics(liveRegion: true, child: Text(error, …))`.
+**Fix:** add `childId` to the tuple and require
+`state.selectedChildId == pending.childId` in the listener; clear
+`_pendingWrite` in `setState` when `PocketMoneyChildSelected` is dispatched, and
+clear it after the first confirmation even if the count did not grow.
 
-## 6. MINOR — the success toast is fired before the write is confirmed
+## 4. MINOR — `summarise()` breaks on the first payout, which ties on same-second rows
 
-**File:** `money_ledger_view.dart:288-309`. `onSubmit` calls
-`bloc.add(PocketMoneyAddMoneySubmitted(…))` and then immediately
-`showNestToast('Added £5.00 for Maya')`. If the write throws, the user sees
-"Added £5.00 for Maya" followed by the raw error toast from finding 7.
-**Fix:** either `await` the repository call before popping/toasting (moving
-the write out of the sheet), or have the bloc emit a one-shot confirmation
-the view toasts on state change (as it already does for errors at
-`money_ledger_view.dart:43-48`).
+**File:** `app/lib/features/pocket_money/data/pocket_money_repository_impl.dart:254-268`
 
-## 7. MINOR — raw exception text is rendered to the parent
+`watchLedgerData` merges the per-child streams and re-sorts with
+`..sort((a, b) => b.date.compareTo(a.date))` (`:422-423`), and `summarise`
+relies on that order: `if (row.type == 'payout') break;` (`:258`). Two writers
+can land in the same clock second — `approvals_repository_impl.dart:87-90`
+writes a `quest_bonus` with `date: Value(now)` and `recordPayout`
+(`:315-336`) writes a `payout` — and `_db.watchLedger`
+(`app_database.dart:504-511`) orders by `date desc` **only**, so the tie is
+resolved by whatever SQLite returns (rowid asc), not by insertion recency. When
+the payout sorts first, the bonus that was written after it is silently dropped
+from "Maya is owed" until the next emission reorders.
 
-**File:** `pocket_money_bloc.dart:85` (load), `:217`, `:233` (submits).
-`error.toString()` becomes `errorMessage`, which `_FailureBody`
-(`money_ledger_view.dart:412`) prints and the toast (`:48`) shows verbatim —
-a Drift/SQLite message on a parent-facing screen. This is the inherited P06
-pattern, but P12 is a new surface.
-**Fix:** map to a friendly "We couldn't load your ledger" style message and
-keep the raw string for logs.
+**Fix (no core edit needed):** make the rule order-independent — take the
+latest `payout` date first and then sum rows with `date >= thatPayout` instead
+of `break`-ing. (A SQL `rowid desc` tie-break in `app_database.dart` would be
+the belt-and-braces version — that file is `core/`, so it needs
+`SHARED_REQUEST.md`.)
 
-## 8. MINOR — `domain/next_payout.dart` breaks the `domain/` contract
+## 5. MINOR — `domain/next_payout.dart` is still neither an entity nor the abstract repo
 
-`ARCHITECTURE.md` §"Per-feature contract": `domain/` = *entities + abstract
-`<feature>_repository.dart` ONLY*. `next_payout.dart` is the only non-entity,
-non-repository file in any feature's `domain/` (checked across all 19
-features). Its two top-level functions are presentation formatting
-(`formatDay` lives in `core/data/family_time.dart`).
-**Fix:** move it under `presentation/` (it is used only by
-`money_ledger_view.dart` and its test), or fold `payoutLabel` into the
-entity and file a `SHARED_REQUEST.md` for a shared payout-day helper, since
-P13 will need the same label.
+**File:** `app/lib/features/pocket_money/domain/next_payout.dart:1-64`
 
-## 9. MINOR — a test-only helper ships in production domain code
+`ARCHITECTURE.md:71` — "`domain/` — entities + abstract
+`<feature>_repository.dart` **ONLY**". This file holds two top-level functions
+(`nextPayoutDayUtc`, `payoutLabel`); it is the only non-entity, non-repo file in
+any feature's `domain/`. It was kept because `1_plan.md:162` mandates the path,
+but the plan is not an architecture exemption. P13 will need the same label, so
+the right home is a shared helper (core) or the entity.
 
-**File:** `app/lib/features/pocket_money/domain/pocket_money_repository.dart:66-156`
-— `ledgerDataFallback` plus `_owedFromEntries` and a private
-`_combineLatest2`. Grep confirms the only callers are three **test** fakes
-(`p06_bugs_test.dart:136`, `pocket_money_setup_bloc_test.dart:82`,
-`pocket_money_setup_view_test.dart:69/:436`). `ARCHITECTURE.md` puts fakes
-and models under `data/`; a domain file that implements stream plumbing (and
-a second, feature-local `combineLatest` next to `core/data/stream_combine.dart`)
-inverts the dependency direction.
-**Fix:** move the three helpers to `app/test/features/pocket_money/`
-(a shared test helper) and keep `domain/pocket_money_repository.dart`
-abstract-only.
+**Fix:** move it under `presentation/` (its only callers are
+`money_ledger_view.dart` and `next_payout_test.dart`) and file
+`SHARED_REQUEST.md` for a shared payout-day label helper for P13/P16.
 
-## 10. MINOR — `MoneyLedgerData.setup` couples the ledger aggregate to P06
+## 6. MINOR — `.ptitle` is still a fourth private copy
 
-**File:** `domain/entities/money_ledger_data.dart:11,41-48,88`. A
-P12-named entity carrying `PocketMoneySetup?` means every setup edit
-(mode / payout day / weekly base) lands in `props` and re-emits
-`MoneyLedgerData`, rebuilding the whole ledger for a change the ledger does
-not display. It works and it is additive, which is why it is minor.
-**Fix (optional):** serve `PocketMoneySetup` from its own stream/aggregate so
-the ledger aggregate only carries what `/money` renders.
+**File:** `money_ledger_view.dart:167-185`
 
-## 11. MINOR — `BlocBuilder` without `buildWhen`
+`.ptitle` appears in `P10`, `P12`, `P13`, `P16`. `SHARED_REQUEST.md` §2 asks
+for a shared `NestPageTitle`; until it lands, P12 keeps a private one — which is
+exactly how iteration 1's 16 px drift happened. Documented and non-blocking.
 
-**File:** `money_ledger_view.dart:49`. A failed submit changes only
-`errorMessage`, which the `BlocListener` already consumes, yet the entire
-`ListView` (title, segmented, hero, goal card and every history row) rebuilds.
-**Fix:** `buildWhen: (p, c) =>
-p.status != c.status || p.data != c.data || p.selectedChildId != c.selectedChildId`.
-The sibling P06 view already does this (`pocket_money_setup_view.dart:51`).
+## 7. MINOR — the raw exception still reaches the parent
 
-## 12. MINOR — `.ptitle` has no shared component
+**Files:** `pocket_money_bloc.dart:243-247`, surfaced by
+`money_ledger_view.dart:68` (`showNestToast`) and `:107` (`_FailureBody`)
 
-**Files:** `money_ledger_view.dart:74-92` (private `_PageTitle`).
-`.ptitle` appears in `P10-quest-library.html`, `P12-money.html`,
-`P13-payout.html` and `P16-settings.html` — four screens, one private
-re-implementation, and finding 1 shows how easily the top spacing drifts.
-**Fix:** file `SHARED_REQUEST.md` for a `NestPageTitle` (28/34 w900,
-`padding-top: 8`, `Semantics(header: true)`, `maxLines: 1` + ellipsis) so
-the four screens share one source.
+`_loadErrorMessage` / `_submitErrorMessage` now lead with
+"We couldn’t load your ledger: " / "We couldn’t save that: " (curly ’ U+2019 —
+correct), which is most of iteration-1 #7, but the Drift/SQLite string is still
+appended and rendered on a parent-facing screen. Keeping it for diagnostics is
+reasonable; it should go to `debugPrint`/`FlutterError.reportError` instead of
+the toast/body.
 
-## 13. MINOR — `state.items` semantics changed under the shared bloc
+## 8. MINOR — `state.items` semantics changed under a shared bloc (P13 hand-off)
 
-**Files:** `pocket_money_bloc.dart:79` and `:195`. `items` is now the
-**selected** child's ledger (`data.entriesFor(selectedChildId)`); before this
-diff it was `watchItems()` = the active child's ledger
-(`data/pocket_money_repository_impl.dart:26-32`). `payout_view.dart:24-30`
-(P13) reads `state.items`, so when P13 is built its list will silently follow
-whichever child the parent last selected on `/money` instead of the active
-child. No current test fails (P13 is still a placeholder), which is exactly
-why it needs to be in P13's hand-off.
-**Fix:** add a note to P13's brief, or keep `activeChildItems` alongside
-`items`.
+**Files:** `pocket_money_bloc.dart:79`, `:195`; consumer
+`payout_view.dart:24-30`
+
+`items` is now the **selected** child's ledger (`data.entriesFor(...)`), not the
+active child's (`watchItems()`). `/payout` reads `state.items`, so when P13 is
+built its list follows whichever child the parent last tapped on `/money`. No
+test can fail today (P13 is still a placeholder) — this belongs in P13's brief.
+
+## 9. MINOR — `MoneyLedgerData.setup` couples the ledger aggregate to P06 (declined)
+
+**File:** `domain/entities/money_ledger_data.dart:17`, `:45`, `:88`
+
+Every P06 setup edit (mode / payout day / weekly base) re-emits the whole
+`MoneyLedgerData`, rebuilding the ledger for changes it does not display. The
+build stage declined this with a concrete reason (a second stream re-breaks the
+P06 fakes' single-subscription stubs). Acceptable as a documented trade-off;
+`setup` stays optional and nullable.
 
 ---
 
+## Iteration-1 majors — closed, with evidence
+
+| it-1 | Fix | Evidence |
+|---|---|---|
+| #1 16 px shift | the `SizedBox(s4)` after `NestStatusBar()` is gone in both bodies (`money_ledger_view.dart:285-287`, `:532-534`) | `money_ledger_geometry_test.dart` pins title 55 / segmented 105 (h 52) / hero 173 (h 211, `Payout time` top 312) / goal 400 (h 88) / history 504 with real fonts, and passes |
+| #2 goal card 90 px | `money_ledger_view.dart:495` `.copyWith(height: 22 / 16)` for `.goal .t`'s 22 px line box | same geometry test, goal height 88 |
+| #3 tile radius | `money_history_row.dart:86` `NestRadii.allM` | geometry test asserts the decoration + a 40×40 rect |
+| #4 hero +3 px | `money_ledger_view.dart:242` `_heroLabHeight = 17/14` (Inter `normal` at 14 px = ascender 0.969 + descender 0.241 ⇒ 16.94) | hero 211 + `Payout time` 312 pinned |
+| #5 live region | sheet `:137` `Semantics(liveRegion: true)` — superseded in substance by finding 2 | asserted with `SemanticsFlag.isLiveRegion` |
+| #6 premature toast | `_pendingWrite` + second `BlocListener` | asserted that a rejected write toasts the error, not the confirmation |
+| #9 helper in `domain/` | moved to `app/test/features/pocket_money/ledger_data_fallback.dart`; `domain/pocket_money_repository.dart` is abstract-only again; the only P06 test edits are the imports + the three fake overrides | `rg ledger_data_fallback lib/` → no hits |
+| #11 rebuild storm | `buildWhen` at `money_ledger_view.dart:95-98` | code read |
+
+## ORCHESTRATOR_NOTES.md (12:08) — all 7 items
+
+1. **+16 px above the title** — gone; the geometry test pins the title at 55.
+2. **Segmented control top 106 → design** — pinned at 105 ± 1, height 52.
+3. **Owed / goal / history card tops** — pinned at 173 / 400 / 504 ± 1.
+4. **Hero amount letter-spacing −0.4** — `money_ledger_view.dart:319-320`
+   `NestType.kidHero(...).copyWith(letterSpacing: -0.4)`; no other NestType style
+   in the feature adds tracking.
+5. **±1 px mandate + a real-font geometry test** — `money_ledger_geometry_test.dart`
+   (10 tests, `FontLoader` for Inter + Nunito, all green).
+6. **History rows / dates / amounts are DB-driven** — every string comes from
+   `PocketMoneyEntry` / `OwedSummary` / `SavingsGoalData`; no design literal
+   survives (`'4.20'`, `'Sat 4 Oct'`, `'Lego'`, `'Mum'` appear only in the
+   repository/seed fixtures, not in the view).
+7. **`ORCHESTRATOR_NOTES` line 8 "add a real-font geometry test pinning …"** — done.
+
 ## Verified clean (no finding)
 
-- **Scope / RULES.md §1.** `git diff main...HEAD --stat` touches only
-  `app/lib/features/pocket_money/**`, `app/test/features/pocket_money/**`
-  and `docs/screens/P12/**`. No `app/lib/core/**`, no `app/lib/app/**`, no
-  other feature, no `tools/screens/**`, no `analysis_options.yaml`.
-- **Copy, character by character, against `P12-money.html`.** "Pocket
-  money", "Maya is owed", "Weekly base £3.00 + quests £1.20 · Next payout
-  <date>", "Payout time", "Lego Friends set — £24.99" (U+2014),
-  "£15.50 saved · 62%" (U+00B7), "History", "Paid · Sat 27 Sep",
-  "Cash from Mum", "Quest bonus · …", "+12p · Approved", "Birthday money
-  (added by Mum)", "To savings goal", "Spent · Comic", "Recorded by Mum",
-  "−£2.00" (U+2212), "+£0.12", "£3.80" (payout unsigned), "Add money",
-  "Record spending", "Nestling keeps track — the real money stays with
-  you." (U+2014). The design's hard-coded "Sat 4 Oct" is correctly replaced
-  by the DB/clock value (DATA OVER MOCKS). UK spelling throughout ("Mum",
-  "£", no US forms). `kMoneyMinus`/`kMoneyDot`/`kMoneyEmDash` are named
-  constants, and the view test asserts no ASCII hyphen survives anywhere on
-  the route.
-- **Design-system reuse.** `NestStatusBar`, `NestType`, `NestSegmented`,
-  `NestCard(variant: hero)`, `NestButton`, `NestProgress`, `NestEmptyState`,
-  `NestTextField`, `showNestBottomSheet`, `showNestToast`, `NestIcon` and the
-  shared `NestTileTint` are all reused; nothing is re-implemented, no colour
-  literal, no font family, no `GoogleFonts`, no `NestChip`/`Wrap`
-  (no chips on this screen), no `NestBalancedText` (no `text-wrap:balance`
-  in the P12 CSS). Only `NestSpacing`/`NestRadii`/`NestDevice`/`NestType`
-  values are used, with two documented screen-local consts (`.hrow`
-  min-height 56, `.goal img` 56) that match the CSS and follow the existing
-  `NestPager` convention. Letter spacing: `kidHero.copyWith(letterSpacing:
-  -0.4)` at the hero only, exactly the known P12 case; no Material tracking
-  anywhere else. Dark mode has zero theme branches — every colour via
-  `context.nest`, the hero paints `heroBg`/`onHero`/`onHero2` (never `ink`).
-- **Tokens and dark geometry.** Side gutters 20 everywhere, cards/bars share
-  x 20..370, hero button fills x 40 w 310 h 52, `Payout time` 52, row
-  buttons 48 with `fontSize: 15`, segmented 52 track / 44 options (the
-  `1_plan.md` watch-item is resolved in `NestSegmented`, no local padding
-  needed), progress 8 px. BOTTOM EDGE is safe: `ParentShell` +
-  `NestTabBar` paint `surface` through `SafeArea` to the physical edge, so
-  no paper strip appears under the bar in either theme.
-- **CHILD ORDER.** `watchChildren` orders by `createdAt` then `rowid`
-  (`app_database.dart:457-469`) and `watchLedgerData` maps that list as-is,
-  so Maya precedes Leo in the segment, the oweds and the goals. Asserted in
-  the repository test.
-- **Accessibility / RULES §8.** Every control exposes `SemanticsAction.tap`
-  and is operable: both segment options (44 px), `Payout time` (52),
-  `Add money` / `Record spending` (48), sheet CTA (52), sheet close (44),
-  empty-state `Add a child` (52), `Try again` (52). No
-  `Semantics(excludeSemantics: true)` wrapper without `onTap:` anywhere in
-  the diff; the tile/coin art is `ExcludeSemantics` display-only; the goal
-  progress carries `semanticLabel: 'Savings goal progress'` +
-  `value: '62 percent'`; the toast is a live region. `performAction(tap)`
-  is asserted to change real state (segment → hero re-renders) and the real
-  DB (sheet CTA → new ledger row) in
-  `money_ledger_view_test.dart:399-476`. Width 320 × text scale 1.3 is
-  covered with `takeException() isNull` (`:524-542`).
-- **Streams and lifecycle.** One `emit.forEach` per load, cancelled by the
-  bloc; `_combineLedgers` cancels all N subscriptions in `controller.onCancel`
-  and `asyncExpand` cancels the inner graph on a roster change; the P06
-  `_pendingDay` / `_requestedBase` bookkeeping is preserved. Both
-  `TextEditingController`s and the `NestButton` focus nodes are disposed. No
-  `Timer`, no `AnimationController`, nothing to gate for
-  `DISABLE_ANIMATIONS`.
-- **Error handling.** Load failure → `_FailureBody` with the only legal
-  retry; submit failure keeps the ledger on screen and toasts (does not blank
-  the screen) — better than the P06 write path, and the tests cover the
-  load path.
-- **Routing / DI.** `/money` is a tab root, so both pushes use
-  `context.push` (`money_ledger_view.dart:191`, `:388`), never `go`; the
-  route constants come from `PocketMoneyRoutePaths` / `FamilyRoutePaths`;
-  no shared DI or router file was touched.
-- **Children's Code.** Parent-only screen; no analytics, ads, network calls,
-  or child identifiers leaving the device; no kid-mode code path touched.
-- **Tests.** 544-line widget suite, plus repository (24), `next_payout` (7)
-  and ledger-bloc suites; every `pumpAppRoute` test ends with
-  `disposeApp(tester)`; no `skip:`, no weakened expectations, no
-  `analysis_options.yaml` change.
+- **RULES §1 scope.** `git diff main...HEAD --name-only` outside `docs/` is
+  exactly `app/lib/features/pocket_money/**` and
+  `app/test/features/pocket_money/**`. No `app/lib/core/**`, no `app/lib/app/**`,
+  no other feature, no `tools/screens/**`, no `analysis_options.yaml` (byte-identical
+  to main), no routes/DI file. `SHARED_REQUEST.md` is filed (3 non-blocking
+  shared items).
+- **Copy, character by character, against `P12-money.html`.** "Pocket money",
+  "Maya is owed", "£4.20" (`moneyPounds(420)`), "Weekly base £3.00 + quests £1.20
+  · Next payout <label>" with U+00B7, "Payout time", "Lego Friends set — £24.99"
+  (U+2014), "£15.50 saved · 62%", "History", "Paid · Sat 27 Sep", "Cash from Mum",
+  "£3.80" (payout unsigned), "Quest bonus · Put the bins out", "+12p · Approved",
+  "+£0.12", "Birthday money (added by Mum)", "To savings goal", "+£10.00",
+  "Spent · Comic", "Recorded by Mum", "−£2.00" (**U+2212**, `kMoneyMinus`),
+  "Add money", "Record spending", "Nestling keeps track — the real money stays
+  with you." (U+2014). UK spelling throughout ("Mum", "£"); no US forms.
+  `money_ledger_view_test.dart:326` asserts the code points and that no ASCII
+  hyphen survives on the route.
+- **Design-system reuse / no hard-coded colours, sizes or fonts.** Zero
+  `Color(0x…)` and zero `Colors.*` in the whole P12 diff (the only `transparent`
+  in the neighbourhood is inside the shared `nest_card.dart`), zero
+  `GoogleFonts`/`google_fonts` (grep clean), zero Material tracking.
+  The only literals are documented CSS values: `.hrow` min-height 56,
+  `.goal img` 56, the two call-site line-box ratios (17/14, 22/16) and the
+  `.rowbtns .btn` 15 px / 48 px — the same call-site pattern the orchestrator
+  mandated for `.hero .amt`'s −0.4. `NestStatusBar`, `NestType`, `NestSegmented`,
+  `NestCard(hero)`, `NestButton`, `NestProgress`, `NestEmptyState`,
+  `NestTextField`, `showNestBottomSheet`, `showNestToast`, `NestIcon`,
+  `NestRadii`, `NestDevice`, `NestTileTint` are all reused. No chips on this
+  screen (so `NestChipWrap` is N/A); no `text-wrap: balance` in the P12 CSS
+  (`.ptitle` is not `.h1`), so plain `Text` is correct and
+  `NestBalancedText` must **not** be used here.
+- **CHILD ORDER.** `watchLedgerData` maps `_db.watchChildren(Seed.familyId)`
+  (`app_database.dart:460-469`, `createdAt` then `rowid`) as-is into the
+  segment, the oweds and the goal lookup; asserted in
+  `pocket_money_repository_test.dart:83` and `:92`.
+- **Accessibility (RULES §8).** No `Semantics(excludeSemantics: true)` wrapper
+  around a control anywhere in the diff (the only `excludeSemantics` is the
+  shared `NestTextField` internals and `ExcludeSemantics` on display-only art:
+  the history tile and the goal coin, matching `alt="" aria-hidden="true"`).
+  Every control — both segment options, `Payout time` (labelled "Payout time
+  for Maya"), `Add money`, `Record spending`, the sheet CTA, the sheet close, the
+  empty-state `Add a child` and `Try again` — is asserted to expose
+  `SemanticsAction.tap`, and `performAction(tap)` is asserted to change real
+  state (segment → hero re-renders) and the real DB (sheet CTA → new ledger
+  row). The hero card passes neither `onTap` nor `semanticLabel` to `NestCard`,
+  so `nest_card.dart:58-70` takes the non-merging branch and the card's texts
+  stay individually reachable (2b's "merged button node" concern does not apply
+  here). `NestProgress` carries `semanticLabel: 'Savings goal progress'`.
+- **Performance / lifecycle.** One `emit.forEach` per load, cancelled with the
+  bloc; `_combineLedgers` cancels all N per-child subscriptions in
+  `controller.onCancel` (`:429-433`) and `asyncExpand` re-cancels the inner
+  graph on a roster change; `_closeOnError` closes the stream so a failed load
+  cannot leak a second watcher set on "Try again". `buildWhen` keeps an
+  `errorMessage`-only emission off the whole `ListView`. Both
+  `TextEditingController`s are disposed (`money_edit_sheet.dart:35-38`).
+  `const` on every widget that can be (`NestStatusBar`, `SizedBox`, `_PageTitle`,
+  `_scrollPadding`, all literals). No `Timer`, no `AnimationController`, so
+  nothing needs a `DISABLE_ANIMATIONS` gate.
+- **Error handling.** Load failure → `_FailureBody` with the only legal retry and
+  no stack/SQLite dump on the layout path; a *write* failure keeps the ledger on
+  screen and toasts instead of blanking the screen (better than the P06 write
+  path); both controllers are disposed; every sheet rejection is caught before
+  the bloc (`:84-104`) and the amount is bounded at £1,000,000.00 with integer
+  pence arithmetic (no float multiply), so the iteration-1 overflow class cannot
+  recur through the UI.
+- **Routing / DI.** `/money` is a tab root, so both pushes use `context.push`
+  (`money_ledger_view.dart:337`, `:382`, `:399`, `:543`); route constants come
+  from `PocketMoneyRoutePaths` / `FamilyRoutePaths`; the kid-mode guard on
+  `/money` is the router's (asserted in `p12_bugs_test.dart:630`).
+- **Children's Code.** Parent-only screen: no analytics, no ads, no network, no
+  logging of child data, nothing leaving the device, and no kid-mode code path
+  touched. `subscription_status` is never written. No Pip on this screen, so the
+  PIP ruling is N/A.
+- **Tests.** 155 tracked P12 tests pass, 1 intentional skip (P12-BUG-04, the
+  shared `NestSegmented` 44 px floor at 320 dp — cross-screen, `SHARED_REQUEST`
+  §3, documented inline at `p12_bugs_test.dart:316-320`). No `analysis_options`
+  change, no weakened expectations; every widget test that pumps the app ends
+  with `disposeApp(tester)` (the two exceptions, `_pumpSheet`
+  (`p12_bugs_test.dart:85-91`) and
+  the pure parser harnesses, pump a bare `MoneyEditSheet` without the app scope,
+  so RULES §7 does not apply). The bottom-edge, 20 px gutter and 44 px tap-target
+  groups in `money_ledger_responsive_test.dart` read real pixels and assert the
+  probe discriminates (`tokens.surface != tokens.paper`), so they cannot pass
+  vacuously.
 
 ## Process notes (explicitly NOT findings)
 
-`flutter analyze` currently reports 54 diagnostics, all inside
-`app/test/features/pocket_money/{p12_probe_test.dart, p12_probe2_test.dart,
-p12_probe3_test.dart, money_ledger_states_test.dart}` and one modified
-`pocket_money_ledger_bloc_test.dart` — untracked/uncommitted scratch from the
-sibling `5_ui`/`6_bugs` stages writing into this same worktree while this
-review ran (mtimes 12:05–12:08, after this stage started). Per the brief,
-uncommitted work is a process item: the loop commits each iteration. The
-committed tree (`git diff main...HEAD`) is analyzer-clean apart from finding 3.
-`docs/screens/P12/ORCHESTRATOR_NOTES.md` (12:08) and `5_ui.md` were also
-written during this review; every item in the notes is treated as mandatory
-and findings 1, 2 and 4 above cover it.
+* Untracked scratch from the sibling `5_ui` stage —
+  `app/test/features/pocket_money/p12_probe_iter2_test.dart` and
+  `p12_probe_iter2b_test.dart` — made `flutter test test/features/pocket_money/`
+  report one failure ("Failed to load … Does not exist") while I ran it; both
+  files were deleted before my second run, and the tracked suite is green. They
+  must not be committed. `docs/screens/P12/ui/*_2.png` is likewise untracked.
+* `.brief_bugs/.brief_review/.brief_test/.brief_ui.md` are modified but
+  uncommitted — the loop commits each iteration.
+* While this review ran, a sibling stage added 278 uncommitted lines to
+  `app/test/features/pocket_money/{money_ledger_states_test.dart,
+  pocket_money_ledger_bloc_test.dart}` (new `performAction` / toast-rejection
+  and error-message-mapping tests for findings 6 and 7 — no skips, no weakened
+  expectations). Outside `main...HEAD` scope, so not reviewed here; the loop
+  commits them.
+* No `flutter clean`, no interactive `flutter run`, no simulator of any kind.
 
 ## Handed to the next stage
 
-1. Fix findings 1–3 (three one-line edits), then re-shoot light + dark and
-   re-run `compare.py`; the expected design targets are listed in the tables
-   above (title 55, segmented 105, hero 173, goal 400 h 88, history 504,
-   tile radius 16).
-2. Add the real-font geometry test the notes ask for: pin the title,
-   segmented, hero, goal-card and history-card **tops** (plus the goal card
-   height 88 and a history-tile radius assertion), so the ±1 px requirement
-   is enforced by `flutter test` and not only by the band table.
-3. File `SHARED_REQUEST.md` for the `nest_list_row.dart:65` tile radius
-   (compact 12 vs standard 16) and, if convenient, for a shared
-   `NestPageTitle`; both are cross-screen and cannot be fixed from here.
-4. Findings 5–13 can ride along in the same iteration.
+1. Fix finding 1 (pin `NestStatusBar` above the `ListView` in both bodies) and
+   add a scrolled-state guard (nothing paints above y = 47). Re-run
+   `money_ledger_geometry_test.dart`: the at-rest anchors must stay 55/105/173/
+   400/504.
+2. Finding 2: move the sheet's error onto `NestTextField(errorText:)` — same
+   three strings, `SemanticsFlag.isLiveRegion` assertion unchanged.
+3. Findings 3 and 4 are cheap and self-contained; 5–9 stay open with their
+   documented rationale (5, 6 → `SHARED_REQUEST.md`; 8 → P13's brief).
+4. Stage 5 should still re-shoot light + dark after finding 1 (at rest the frame
+   is unchanged, so `cmp_*_2` should be unaffected — if the band table moves, the
+   fix introduced a regression).
 
 VERDICT: FAIL

@@ -23,6 +23,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
+import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/pocket_money/domain/entities/money_ledger_data.dart';
 import 'package:nestling/features/pocket_money/domain/entities/owed_summary.dart';
@@ -139,6 +140,31 @@ class _FlakyLedgerRepository extends _DelegatingLedgerRepository {
   }
 }
 
+/// Rejects the two ledger writes while the watch stream stays healthy — the
+/// "the database said no" half of the submit path, which the sheet's own
+/// validation can never produce.
+class _RejectingWriteRepository extends _DelegatingLedgerRepository {
+  _RejectingWriteRepository(super._inner);
+
+  @override
+  Future<void> addMoney({
+    required String childId,
+    required int amountPence,
+    required String note,
+  }) async {
+    throw StateError('ledger is read-only');
+  }
+
+  @override
+  Future<void> recordSpending({
+    required String childId,
+    required int amountPence,
+    required String note,
+  }) async {
+    throw StateError('ledger is read-only');
+  }
+}
+
 /// Swaps the feature's repository in GetIt — the route builds its bloc through
 /// `GetIt.instance<PocketMoneyBloc>()`, so the swap must happen before the
 /// pump.
@@ -152,6 +178,24 @@ Future<void> _settle(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 200));
 }
 
+/// Back to the top — a ListView disposes what it scrolls past, so the hero
+/// only exists in the tree again once the scroll position returns to 0.
+Future<void> _scrollToStart(WidgetTester tester) async {
+  await tester.fling(
+    find.byType(Scrollable).first,
+    const Offset(0, 1400),
+    1200,
+  );
+  await tester.pumpAndSettle();
+}
+
+/// Drift write + watch-stream re-emission + SnackBar/toast entry.
+Future<void> _pumpPastWrite(WidgetTester tester) async {
+  for (var i = 0; i < 8; i++) {
+    await tester.pump(const Duration(milliseconds: 120));
+  }
+}
+
 /// The ledger is taller than the viewport; park it at the end so the row
 /// buttons and the footer are built.
 Future<void> _scrollToEnd(WidgetTester tester) async {
@@ -161,6 +205,22 @@ Future<void> _scrollToEnd(WidgetTester tester) async {
     1200,
   );
   await tester.pumpAndSettle();
+}
+
+/// Row counts read straight from Drift — a widget test's fake clock only
+/// drains real async inside `runAsync` (same pattern as `p12_bugs_test.dart`).
+Future<int> _ledgerRows(WidgetTester tester, AppDatabase db) async {
+  final rows = await tester.runAsync(() => db.select(db.ledgerEntries).get());
+  return rows?.length ?? 0;
+}
+
+Future<int> _giftRows(WidgetTester tester, AppDatabase db) async {
+  final rows = await tester.runAsync(
+    () => (db.select(
+      db.ledgerEntries,
+    )..where((row) => row.type.equals('gift'))).get(),
+  );
+  return rows?.length ?? 0;
 }
 
 /// The hero card — the `NestCard` that owns the "is owed" line.
@@ -220,6 +280,15 @@ void main() {
       await _settle(tester);
 
       expect(find.textContaining('ledger is down'), findsOneWidget);
+      // Review finding 7 (iteration 2): the parent-facing copy is the
+      // friendly lead sentence + the raw cause, with a curly ’ U+2019 — never
+      // the bare `Bad state: …` on its own.
+      expect(
+        find.text(
+          'We couldn\u2019t load your ledger: Bad state: ledger is down',
+        ),
+        findsOneWidget,
+      );
       expect(find.byType(CircularProgressIndicator), findsNothing);
       expect(find.text('Maya is owed'), findsNothing);
       // The shell chrome stays: the failure is inside the tab, not a dead app.
@@ -282,6 +351,92 @@ void main() {
         reason: 'each retry must open a fresh subscription',
       );
       expect(find.text('Maya is owed'), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    // Iteration 2 moved the success toast onto a second `BlocListener` that
+    // fires when the watch stream re-emits (review finding 6), so a success
+    // message can no longer precede a write the database rejected. These two
+    // cover the rejection half; `money_ledger_view_test.dart` covers the
+    // sheet-validation half (which never reaches the bloc at all).
+    testWidgets('a rejected Add money toasts the reason, never a success', (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      final db = await setUpTestScope();
+      final before = await _giftRows(tester, db);
+      await _useRepository(
+        _RejectingWriteRepository(GetIt.instance<PocketMoneyRepository>()),
+      );
+      await pumpAppRoute(tester, '/money');
+
+      expect(find.text('£4.20'), findsOneWidget);
+      await _scrollToEnd(tester);
+      await tester.tap(find.text('Add money'));
+      await _settle(tester);
+      await tester.enterText(find.byType(TextField).first, '5.00');
+      await tester.enterText(find.byType(TextField).last, 'Rejected top-up');
+      await tester.pump();
+      await tester.tap(find.widgetWithText(NestButton, 'Add money').last);
+      await _pumpPastWrite(tester);
+
+      // No success toast — the money was not added.
+      expect(find.textContaining('Added £'), findsNothing);
+      // The parent-facing reason, as a live region a screen reader announces.
+      final toast = find.textContaining('We couldn\u2019t save that:');
+      expect(toast, findsOneWidget);
+      expect(
+        tester.widgetList<Text>(toast).map((widget) => widget.data ?? ''),
+        everyElement(contains('ledger is read-only')),
+      );
+      expect(
+        tester
+            .getSemantics(toast)
+            .getSemanticsData()
+            .flagsCollection
+            .isLiveRegion,
+        isTrue,
+        reason: 'a toast that appears without any focus change must announce',
+      );
+      // The ledger is untouched: same owed figure, same rows, still navigable.
+      await _scrollToStart(tester);
+      expect(find.text('£4.20'), findsOneWidget);
+      expect(find.text('Rejected top-up'), findsNothing);
+      expect(await _giftRows(tester, db), before);
+      expect(tester.takeException(), isNull);
+
+      handle.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('a rejected Record spending toasts the reason and keeps the '
+        'ledger', (tester) async {
+      final db = await setUpTestScope();
+      final before = await _ledgerRows(tester, db);
+      await _useRepository(
+        _RejectingWriteRepository(GetIt.instance<PocketMoneyRepository>()),
+      );
+      await pumpAppRoute(tester, '/money');
+
+      await _scrollToEnd(tester);
+      await tester.tap(find.text('Record spending'));
+      await _settle(tester);
+      await tester.enterText(find.byType(TextField).first, '2');
+      await tester.pump();
+      await tester.tap(find.widgetWithText(NestButton, 'Record spending').last);
+      await _pumpPastWrite(tester);
+
+      expect(find.textContaining('Spent £'), findsNothing);
+      expect(
+        find.textContaining('We couldn\u2019t save that:'),
+        findsOneWidget,
+      );
+      expect(await _ledgerRows(tester, db), before);
+      await _scrollToStart(tester);
+      expect(find.text('£4.20'), findsOneWidget);
+      expect(find.text('History'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
       await disposeApp(tester);

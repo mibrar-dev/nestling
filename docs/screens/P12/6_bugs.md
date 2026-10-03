@@ -1,183 +1,113 @@
-# P12 · Money (ledger) — Stage 6 bug hunt (iteration 1)
+# P12 · Money (ledger) — Stage 6 bug hunt (iteration 2)
 
-Adversarial pass over `/money` (parent mode, `pocket_money`): data edge cases
-(0/1/6 children, long UK names, £0.00, £999.99, empty ledgers), rapid double
-taps, back navigation and deep links, Drift restart persistence, parent/kid
-mode guard, dark-mode contrast, 320 dp × text scale 1.3, async gaps,
-Europe/London/BST timezone handling and integer-pence rounding.
+Re-audit of iteration 1's five findings against the iteration-2 build, plus a
+fresh adversarial pass over the changed code (amount parser, write-
+confirmation toasts, geometry, history-row layout).
 
-Method: widget tests on the real app routes with the in-memory Drift seed
-(plus one file-backed restart probe), direct `MoneyEditSheet` harnesses for
-the parser, and pure tests for time/contrast. **No simulator was used** (stage
-rule; only stage 5_ui may). No screen code was edited (stage rule). All probes
-ran with `test/flutter_test_config.dart` pinning `Seed.anchorDay` to
-Sat 3 Oct 2026.
+Method: the same widget/pure-test probes as iteration 1 on the in-memory and
+file-backed Drift databases, with extra boundary matrices for the new parser
+and the new toast confirmation flow. **No simulator was used** (stage rule;
+only stage 5_ui may). No screen code was edited (stage rule).
 
-Reproducers live in `app/test/features/pocket_money/p12_bugs_test.dart`.
-Findings P12-BUG-01…05 are marked `skip: true` so the suite stays green; run
-them with `flutter test --run-skipped` (all five fail for the stated reason).
-Suite state at hand-off: `flutter test` 1879 pass / 5 skipped, `flutter
-analyze` No issues found, `dart format` clean.
+Reproducers/guards: `app/test/features/pocket_money/p12_bugs_test.dart`
+(23 tests — 22 active, 1 skipped: P12-BUG-04, the known minor cross-screen
+item). `flutter test --run-skipped` proves BUG-04 is still the only
+unresolved one, and that it fails exactly at the 42 px segment width.
+
+Hand-off state: `dart format` clean, `flutter analyze` → No issues found,
+`flutter test` → **1900 passed / 1 skipped / 0 failed**.
 
 ---
 
-## P12-BUG-01 — Unbounded amount: int64 clamp, wrong £ display, 98 px row overflow — MAJOR
+## Iteration-1 findings — status
 
-`MoneyEditSheet._parsePence` accepts any digit string and returns
-`(double * 100).round()` with no upper bound.
+| # | Severity | Status | Verified by |
+|---|---|---|---|
+| P12-BUG-01 | major | **FIXED** | `P12-BUG-01: an unbounded amount is clamped to int64 and overflows the history row` (now active, green) |
+| P12-BUG-02 | major | **FIXED** | `P12-BUG-02: "1,50" is silently recorded as £150.00 (100x)` (now active, green) |
+| P12-BUG-03 | minor | **FIXED** | `P12-BUG-03: "1.005" silently stores £1.00 (half-penny dropped)` (now active, green) |
+| P12-BUG-04 | minor | **OPEN** — shared `NestSegmented`, tracked in `SHARED_REQUEST.md` §3 | `P12-BUG-04: six children at 320dp collapse the segment below the 44px tap target` (still `skip: true`; fails at 42.0 px when run) |
+| P12-BUG-05 | major | **FIXED** | `P12-BUG-05: the whole stack sits 15-21px below the design` (now active, green) |
 
-**Repro**
-1. `/money` → scroll down → `Add money`.
-2. Enter `99999999999999999999999` (23 digits — a mash/paste; the field has no
-   `maxLength`).
-3. Tap `Add money`.
-4. Result: a `RenderFlex overflowed by 98 pixels on the right` exception; the
-   stored `gift` row is clamped by `.round()` to `9223372036854775807`
-   (int64 max) and renders as `+£92233720368547760.00` — already 2p short of
-   the stored value because the display path is also double-based.
+### P12-BUG-01 — unbounded amount (major) — FIXED, independently verified
 
-**Failing test** `P12-BUG-01: an unbounded amount is clamped to int64 and
-overflows the history row` (skipped)
+`_parsePence` now validates `^\s*£?\s*(?:\d{1,9}(?:\.\d{1,2})?|\.\d{1,2})\s*$`
+and caps at `maxPence = 100,000,000` (£1,000,000.00); the history row's
+trailing amount is additionally bounded to `maxWidth − 64`. Probes:
 
-**Suggested fix**
-- Cap the parsed amount (e.g. reject > £1,000,000) with the sheet's inline
-  error, and parse pence without a float multiply: split the input on `.`,
-  `int.parse(left) * 100 + int.parse(right.padRight(2, '0'))`.
-- Defence-in-depth for the row: wrap `MoneyHistoryRow`'s trailing amount in
-  `Flexible` + `TextOverflow.ellipsis` (it is `softWrap: false` with no
-  overflow policy today).
+- 23-digit mash → inline error, nothing written, no `RenderFlex` exception,
+  no `92233720368547760` anywhere.
+- `1000000` and `1000000.00` → exactly `100000000p`, rendered
+  `+£1000000.00`, toast once, no overflow at 320 dp and at 320 dp × 1.3.
+- `1000000.01`, `999999999.99`, `1000000000`, `10000000000` → rejected.
 
----
+### P12-BUG-02 — separator stripping (major) — FIXED, independently verified
 
-## P12-BUG-02 — Separator stripping silently rewrites the amount by 10–100× — MAJOR
+The parser no longer strips: `1,50`, `1,000`, `5 5`, `1\u00a0000`, `+5`,
+`-5`, `5e3` are all rejected with `Enter an amount like £1.00` and never
+reach the bloc (comma-decimal keyboards can no longer record 10–100× the
+typed amount). Accepted double-checked: `£5`, `.5`, `0.01`, `1.15`, `999.99`,
+`  £ 5.50 `.
 
-`_parsePence` runs `replaceAll(RegExp('[^0-9.]'), '')` before parsing, so any
-separator is *deleted*, never rejected.
+### P12-BUG-03 — half-penny float rounding (minor) — FIXED, independently verified
 
-**Repro**
-1. `/money` → `Record spending`.
-2. Enter `1,50` (a comma-decimal keyboard, or a paste).
-3. Tap `Record spending`.
-4. Result: `15000p` → **£150.00** recorded, not £1.50 (probe DB value
-   `-15000`). Same class: `1,5` → £15.00; `-5` → +£5.00 (minus silently
-   dropped); `5 5` → £5.50.
+Integer-only maths (`whole * 100 + int.parse(fraction.padRight(2, '0'))`):
+`.05` → 5p, `0005.6` → 560p; `1.005` and `1.234` are rejected (no float
+multiply anywhere).
 
-**Failing test** `P12-BUG-02: "1,50" is silently recorded as £150.00 (100x)`
-(skipped)
+### P12-BUG-04 — six children at 320 dp (minor) — OPEN (shared)
 
-**Suggested fix**
-- Validate instead of stripping: allow an optional leading `£`/spaces and then
-  only `^\d+(\.\d{1,2})?$` (or a lone leading `.`); reject everything else
-  with the existing inline error copy.
-- If comma support is wanted, accept exactly one comma as the decimal
-  separator only when no dot is present and ≤ 2 digits follow; never silently
-  delete an ambiguous separator.
+Still 42.0 × 44.0 px per option at 320 dp with six children; remains
+`skip: true` by design because P12 must not fork the shared control. Fix
+requested in `SHARED_REQUEST.md` §3 (44 px floor / horizontal scroll in
+`core/design_system/components/nest_segmented.dart`). No P12-local workaround
+is appropriate; not a blocker.
 
----
+### P12-BUG-05 — geometry stack (major) — FIXED, independently verified
 
-## P12-BUG-03 — >2-decimal input drops half a penny through float rounding — MINOR
-
-**Repro** `Add money` → enter `1.005` → `Add money`. `1.005 * 100` evaluates
-to `100.49999999999999` and `.round()` floors it: **100p** (£1.00) is stored
-instead of 101p (or a rejection of sub-penny input).
-
-**Failing test** `P12-BUG-03: "1.005" silently stores £1.00 (half-penny
-dropped)` (skipped)
-
-**Suggested fix** covered by BUG-02's strict two-decimal parser (integer
-pence maths; no float multiply).
+The extra 16 px spacer is gone from both the loaded and empty bodies; the
+real-font probe now measures title top **55** (centre 72), segmented **105**,
+owed card **173**, goal card **400**, history card **504** — all within ±1 px
+of `ORCHESTRATOR_NOTES.md`, matching stage 5's iteration-2 table (Δ 0/+1 px)
+and `money_ledger_geometry_test.dart` (10/10 green).
 
 ---
 
-## P12-BUG-04 — Six children at 320 dp shrink the segment below the 44 px target — MINOR
+## Fresh adversarial probes (iteration 2) — all hold
 
-With six children, `NestSegmented`'s five 4 px gaps plus 4 px track padding
-divide 280 px into six 42 px options at 320 dp (measured semantics rect
-`42.0 × 44.0`), under the parent-mode 44 px tap-target rule, and long names
-truncate to ~5 characters (`Maximili…`). At 390 dp the same roster gives
-53.7 px, so this is a 320 dp-only collapse.
+- **Parser boundary matrix**: 8 accepted forms exact to the penny; 16
+  malformed/rejected forms (`1000000.01`, `1,000`, `1,50`, `5.`, `+5`,
+  `-5`, `5e3`, `£`, `1.234`, `.`, `..5`, `5 5`, NBSP, 10-digit wholes)
+  all show the inline error and write nothing. `5.` is now rejected rather
+  than silently read as £5.00 — that is the intended strict-validation
+  behaviour, not a regression.
+- **Rejected write** (repo throws on `addMoney`): only the error toast
+  (`We couldn’t save that: …`, U+2019) appears; no `Added £5.00 for Maya`
+  toast.
+- **Stale confirmation**: after a rejected write, an unrelated ledger-stream
+  emission does not pop the pending success toast (`_pendingWrite` is
+  cleared).
+- **Payout double-tap**: two same-frame taps on `Payout time` render one
+  `/payout` page, not two.
+- **Rapid writes**: three sequential add-money submissions each land exactly
+  once, one toast each.
+- **Regression re-runs**: every iteration-1 "attack that holds" stays green —
+  double-tap add/save single write, six children in creation order at 390,
+  long UK name at 320 × 1.3, empty ledger child, single child, £999.99,
+  rapid child switching, back from `/payout`, kid-mode gate, `Seed.fresh`
+  → `/welcome`, empty-state semantics tap, dark-mode contrast ≥ 4.5:1,
+  Europe/London + BST labels, `Asia/Dubai` zone switch, file-backed restart
+  persistence of gift/spend rows.
+- **No `ledgerDataFallback` (or other test helper) in `app/lib/`** — the
+  iteration-2 move stayed test-side; `grep` is clean.
 
-**Failing test** `P12-BUG-04: six children at 320dp collapse the segment below
-the 44px tap target` (skipped)
+## No new bugs found
 
-**Suggested fix** Shared component, not P12: file a SHARED_REQUEST to make
-`core/design_system/components/nest_segmented.dart` horizontally scrollable
-(or wrap into rows) when `width / options.length` would drop below 44 px.
-P12 should not fork the shared control locally.
+No new blocker, major or minor finding survived reproduction this iteration.
+Deferred review-level items (`next_payout.dart` placement, the
+`MoneyLedgerData.setup` coupling, the P13 `state.items` hand-off) are
+architecture notes explicitly accepted by the loop, not user-facing bugs, and
+are not re-reported here. P12-BUG-04 above is the only open finding, at
+minor severity.
 
----
-
-## P12-BUG-05 — ORCHESTRATOR_NOTES geometry: the stack sits 15–21 px low — MAJOR
-
-Mandated by `ORCHESTRATOR_NOTES.md` (12:08, overruling the stage-5 PASS). The
-extra `SizedBox(height: NestSpacing.s4)` between `NestStatusBar` and
-`_PageTitle` pushes everything down 16 px (title centre 88 vs design 72);
-the cards then accumulate +3/+5 more px.
-
-**Repro** Pump `/money` at 390×844 with the bundled real fonts and measure:
-
-| Element | Design | App |
-|---|---|---|
-| Title centre | 72 | **88** |
-| Segmented top | 106 | **121** |
-| Owed card top | 173 | **189** |
-| Goal card top | 400 | **419** |
-| History card top | 504 | **525** |
-
-**Failing test** `P12-BUG-05: the whole stack sits 15-21px below the design`
-(skipped; `setUpAll(_loadBundledFonts)` real-font metrics)
-
-**Suggested fix**
-- Drop the extra 16 px spacer above the title (keep `_PageTitle`'s own
-  `top: 8`) so the title/segmented/hero land on the design y.
-- Reconcile the remaining hero/goal/history heights against the HTML
-  (`.hero .brk` margin-top 4, card paddings) so every anchor is within ±1 px,
-  then un-skip this test as the real-font geometry guard. The hero amount
-  already carries the required `letterSpacing: -0.4`.
-
----
-
-## Attacks that hold (no bug found)
-
-All of these are unskipped guards in `p12_bugs_test.dart`:
-
-- **Parser exactness for 2 dp input**: `5.00`/`£5`/`.5`/`0.01`/`1.15`/`999.99`
-  → `500/500/50/1/115/99999` pence; empty/`abc`/`0`/`0.00`/`1.2.3`/`.` show the
-  inline error and never reach the bloc.
-- **Rapid taps**: two same-frame taps on `Add money` open one sheet; two fast
-  presses (0 and 120 ms apart) of the sheet CTA write exactly one row.
-- **Six children at 390 dp**: creation order (Maya, Leo, Maximilian-Alexander,
-  Noah, Ava, Ethan), one row, no overflow.
-- **Long UK name** `Maximilian-Alexander` at 320 dp × 1.3: hero renders, no
-  `RenderFlex` exception.
-- **Empty ledger child**: `£0.00`, `Weekly base £0.00 + quests £0.00 · …`,
-  `No history yet`, buttons still live.
-- **Single-child family**: one segment, no crash.
-- **£999.99 top-up**: stores `99999p`, toast `Added £999.99 for Maya`.
-- **Rapid child switching**: last tap wins.
-- **Back from `/payout`**: route returns to `/money`, ledger state intact.
-- **Deep links**: kid mode `/money` → `/parental-gate`; never-onboarded
-  `Seed.fresh` `/money` → `/welcome`.
-- **Empty state**: `Add a child` exposes `SemanticsAction.tap`; performing it
-  navigates to `/add-children`.
-- **Dark mode**: same copy; P12 text pairs (onHero2/heroBg, onHero/heroBg,
-  ink/ink2 on surface/paper, danger/paper) all ≥ 4.5:1 in both themes.
-- **Europe/London + BST**: 23:30 UTC 24 Oct 2026 → `Sun 25 Oct`,
-  `12:30am` (BST still in force); post-fall-back instants resolve to GMT;
-  `payoutLabel(Sat)` from Sun 4 Oct → `Sat 10 Oct`; Saturday 23:59 still names
-  today.
-- **Family zone change**: `Asia/Dubai` floats the `Next payout` label in
-  Dubai; stored London rows keep and name their own zone `(London)`.
-- **Restart (file-backed Drift)**: gift `+500` and spend `-150` rows persist
-  across close/reopen; owed maths unchanged at 420p.
-
-## Process notes
-
-- Concurrent loop stages added `money_ledger_states_test.dart`,
-  `money_ledger_responsive_test.dart` and `ORCHESTRATOR_NOTES.md` while this
-  stage ran; a transient 8-test failure in the responsive file mid-write
-  disappeared once the file settled (it passes on its own and in the full
-  run). Not a finding.
-- `p06_bugs_test.dart` was left untouched.
-
-VERDICT: FAIL
+VERDICT: PASS

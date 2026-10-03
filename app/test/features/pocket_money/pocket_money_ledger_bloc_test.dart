@@ -113,6 +113,27 @@ class _ThrowingSubmitRepository implements PocketMoneyRepository {
   Future<void> setWeeklyBasePence(String childId, int pence) async {}
 }
 
+/// Fake whose **P06 setup** writes all fail while the load path stays healthy.
+/// Used to pin that the friendly parent-facing copy added for P12 (review
+/// finding 7) does NOT leak into the setup screens: their error strings are
+/// P06's own copy and must stay byte-identical.
+class _ThrowingSetupWriteRepository extends _ThrowingSubmitRepository {
+  @override
+  Future<void> setMode(String mode) async {
+    throw Exception('mode write refused');
+  }
+
+  @override
+  Future<void> setPayoutDay(int day) async {
+    throw Exception('payout-day write refused');
+  }
+
+  @override
+  Future<void> setWeeklyBasePence(String childId, int pence) async {
+    throw Exception('weekly-base write refused');
+  }
+}
+
 /// A hand-built emission — the shape `watchLedgerData` produces, without a
 /// Drift database, so a test can drive the stream step by step.
 MoneyLedgerData _ledgerData({
@@ -783,5 +804,107 @@ void main() {
         expect(repository.attempts, 1);
       },
     );
+  });
+
+  // Iteration 2 closed review finding 7 by mapping the two P12 failures to
+  // parent-facing copy. This group pins BOTH halves of that change: the exact
+  // P12 strings (curly ’ U+2019) and the fact that P06's own error copy was
+  // deliberately left untouched.
+  group('PocketMoneyBloc — error-message mapping (review finding 7)', () {
+    test(
+      'the load message is exactly the friendly sentence plus the cause',
+      () async {
+        final bloc = PocketMoneyBloc(
+          repository: _ScriptedLedgerRepository(
+            (_) => Stream<MoneyLedgerData>.error(StateError('ledger is down')),
+          ),
+        );
+        addTearDown(bloc.close);
+        bloc.add(const PocketMoneyLoadRequested());
+        final failure = await bloc.stream.firstWhere(
+          (state) => state.status == PocketMoneyStatus.failure,
+        );
+
+        expect(
+          failure.errorMessage,
+          // U+2019 curly apostrophe, exactly as `2a_build_logic.md` records.
+          'We couldn\u2019t load your ledger: Bad state: ledger is down',
+        );
+        expect(
+          failure.errorMessage!.codeUnits,
+          contains(0x2019),
+          reason: 'ASCII apostrophe in the parent-facing copy',
+        );
+        expect(failure.errorMessage!.codeUnits, isNot(contains(0x27)));
+      },
+    );
+
+    test('a rejected submit reads "We couldn’t save that: <cause>"', () async {
+      final bloc = PocketMoneyBloc(repository: _ThrowingSubmitRepository())
+        ..add(const PocketMoneyLoadRequested());
+      addTearDown(bloc.close);
+      await bloc.stream.firstWhere(
+        (state) => state.status == PocketMoneyStatus.loaded,
+      );
+      bloc.add(const PocketMoneyAddMoneySubmitted('maya', 500, 'Nope'));
+
+      final failed = await bloc.stream.firstWhere(
+        (state) => state.errorMessage != null,
+      );
+      expect(
+        failed.errorMessage,
+        'We couldn\u2019t save that: Exception: add-money refused',
+      );
+      expect(failed.status, isNot(PocketMoneyStatus.failure));
+    });
+
+    // The setup screens (P06) show the raw cause; the friendly lead sentence
+    // is P12 copy and must not leak across.
+    test('P06 setup write failures keep their own raw copy', () async {
+      final scenarios = <(String, PocketMoneyEvent, String)>[
+        (
+          'mode',
+          const PocketMoneyModeChanged('weekly'),
+          'Exception: mode write refused',
+        ),
+        (
+          'payout day',
+          const PocketMoneyPayoutDayChanged(3),
+          'Exception: payout-day write refused',
+        ),
+        (
+          'weekly base',
+          const PocketMoneyWeeklyBaseStepped('maya', 50),
+          'Exception: weekly-base write refused',
+        ),
+      ];
+
+      for (final scenario in scenarios) {
+        final bloc = PocketMoneyBloc(
+          repository: _ThrowingSetupWriteRepository(),
+        )..add(const PocketMoneyLoadRequested());
+        addTearDown(bloc.close);
+        await bloc.stream.firstWhere(
+          (state) => state.status == PocketMoneyStatus.loaded,
+        );
+        bloc.add(scenario.$2);
+
+        final failed = await bloc.stream.firstWhere(
+          (state) => state.errorMessage != null,
+        );
+        expect(
+          failed.errorMessage,
+          scenario.$3,
+          reason:
+              'the "${scenario.$1}" write failure must stay P06\'s raw copy, '
+              'with no P12 friendly prefix',
+        );
+        expect(
+          failed.errorMessage,
+          isNot(contains('We couldn')),
+          reason: 'the P12 friendly sentence must not leak into P06',
+        );
+      }
+    });
   });
 }
