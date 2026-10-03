@@ -82,17 +82,6 @@ GoRouter buildAppRouter(
         : Listenable.merge([appMode, session]),
     redirect: (context, state) {
       final location = state.matchedLocation;
-      if (session != null) {
-        final onboarded = session.onboardingComplete;
-        if (!onboarded && !_onboardingLocations.contains(location)) {
-          return OnboardingRoutePaths.welcome;
-        }
-        if (onboarded &&
-            session.trialExpired &&
-            location != PaywallRoutePaths.paywall) {
-          return PaywallRoutePaths.paywall;
-        }
-      }
       const parentOnly = <String>[
         '/today',
         '/today-empty',
@@ -112,8 +101,27 @@ GoRouter buildAppRouter(
           parentOnly.any(
             (prefix) => location == prefix || location.startsWith('$prefix/'),
           );
+      // Kid-mode first (P07-BUG-9): a parent-only location in kid mode stops
+      // at the gate even mid-onboarding. The gate itself is kid-reachable,
+      // so this redirect sticks instead of bouncing to `/welcome`.
       if (appMode.isKid && isParentOnly) {
         return ParentalGateRoutePaths.gate;
+      }
+      if (session != null) {
+        final onboarded = session.onboardingComplete;
+        // The parental gate is exempt: without this, the redirect above
+        // lands on the gate and is immediately re-evaluated back to
+        // `/welcome` for an app that has not onboarded yet.
+        if (!onboarded &&
+            location != ParentalGateRoutePaths.gate &&
+            !_onboardingLocations.contains(location)) {
+          return OnboardingRoutePaths.welcome;
+        }
+        if (onboarded &&
+            session.trialExpired &&
+            location != PaywallRoutePaths.paywall) {
+          return PaywallRoutePaths.paywall;
+        }
       }
       return null;
     },

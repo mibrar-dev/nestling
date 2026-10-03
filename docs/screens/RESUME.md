@@ -48,3 +48,12 @@ Owner wants a progress update every ~2 hours (session cron job; re-create it aft
 ## Owner rule (2026-10-02 08:20): orchestrator + QA only
 Claude delegates ALL implementation to OpenCode sub-agents with comprehensive briefs, including shared fixes:
 `bash tools/agents/shared_fix.sh <name> <task.md>` (branch shared/<name>, header docs/screens/_shared/HEADER.md) → review `docs/screens/_shared/<name>_REPORT.md`, diff, analyze, tests → merge → `git merge main` into running screen worktrees. Claude edits code only when an agent is stuck. Last direct edit: 633dfd2.
+
+## Detached launch (owner approved 2026-10-03 04:55)
+Every wave and every shared-fix agent runs in a detached macOS `screen` session, so it survives the Claude app quitting:
+- Wave: `bash tools/screens/start_detached.sh wave<N> "bash tools/screens/run_wave.sh <IDs…> > docs/screens/_status/wave<N>.log 2>&1"`
+- Shared fix: `bash tools/screens/start_detached.sh fix_<name> "bash tools/agents/shared_fix.sh <name> <task.md>"`
+- Inspect: `screen -ls`; attach with `screen -r wave<N>`; detach with Ctrl-a d.
+- Current wave: `wave8` (P06 resume 4, then P09…K03b).
+- P03/P05/K03 were started before the switch (nohup). If the app quits and they die, recover them with finalize_iter + a resume file + a new detached wave.
+Merged so far: P01, P02, P04, P07, P08.
