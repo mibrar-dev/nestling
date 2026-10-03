@@ -136,6 +136,80 @@ class _RecordingRepository implements PocketMoneyRepository {
   }
 }
 
+/// Wraps the real repository and delays `setPayoutDay` so a test can hold a
+/// write in flight while the watch stream re-emits the OLD day — the window
+/// P06-BUG-09 lived in.
+class _SlowPayoutDayRepository implements PocketMoneyRepository {
+  _SlowPayoutDayRepository(this._inner);
+
+  final PocketMoneyRepository _inner;
+
+  static const Duration delay = Duration(milliseconds: 40);
+
+  @override
+  Future<void> setPayoutDay(int day) async {
+    await Future<void>.delayed(delay);
+    await _inner.setPayoutDay(day);
+  }
+
+  @override
+  Future<void> setMode(String mode) => _inner.setMode(mode);
+
+  @override
+  Future<void> setWeeklyBasePence(String childId, int pence) =>
+      _inner.setWeeklyBasePence(childId, pence);
+
+  @override
+  Stream<PocketMoneySetup> watchSetup() => _inner.watchSetup();
+
+  @override
+  Future<List<PocketMoneyEntry>> getItems() => _inner.getItems();
+
+  @override
+  Stream<List<PocketMoneyEntry>> watchItems() => _inner.watchItems();
+
+  @override
+  Stream<List<PocketMoneyEntry>> watchLedger(String childId) =>
+      _inner.watchLedger(childId);
+
+  @override
+  Future<OwedSummary> owed(String childId) => _inner.owed(childId);
+
+  @override
+  Stream<OwedSummary> watchOwed(String childId) => _inner.watchOwed(childId);
+
+  @override
+  Future<void> addMoney({
+    required String childId,
+    required int amountPence,
+    required String note,
+  }) => _inner.addMoney(childId: childId, amountPence: amountPence, note: note);
+
+  @override
+  Future<void> recordSpending({
+    required String childId,
+    required int amountPence,
+    required String note,
+  }) => _inner.recordSpending(
+    childId: childId,
+    amountPence: amountPence,
+    note: note,
+  );
+
+  @override
+  Future<void> recordPayout({
+    required String childId,
+    required int amountPence,
+    int savingsMovePence = 0,
+    String? goalId,
+  }) => _inner.recordPayout(
+    childId: childId,
+    amountPence: amountPence,
+    savingsMovePence: savingsMovePence,
+    goalId: goalId,
+  );
+}
+
 void main() {
   group('PocketMoneyState', () {
     test('starts initial with no items, no setup and no error', () {
@@ -1063,5 +1137,45 @@ void main() {
         ], reason: 'the retry must reach the repository');
       },
     );
+  });
+
+  group('P06-BUG-09 — an unrelated re-emission must not swallow a pending day', () {
+    test('a slow day write plus an unrelated emission still lands the '
+        'correction', () async {
+      await setUpTestScope();
+      final repository = GetIt.instance<PocketMoneyRepository>();
+      final bloc = PocketMoneyBloc(
+        repository: _SlowPayoutDayRepository(repository),
+      )..add(const PocketMoneyLoadRequested());
+      await bloc.stream.firstWhere((state) => state.setup != null);
+
+      // Tap Sun; the write is deliberately slow, so the watch still reports
+      // Saturday when the stepper write below re-emits the setup.
+      bloc.add(const PocketMoneyPayoutDayChanged(7));
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      bloc.add(const PocketMoneyWeeklyBaseStepped('maya', 50));
+      // Land the correction while the slow day-7 write is STILL in flight:
+      // the database therefore reports Saturday, and only the pending-request
+      // guard can tell this apart from a genuine no-op re-tap.
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      // The correction back to Saturday: with the old unconditional
+      // `_pendingDay = null` this arrived while `setup.payoutDay` was still 6,
+      // so the no-op guard swallowed it and the screen kept Sunday.
+      bloc.add(const PocketMoneyPayoutDayChanged(6));
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+
+      final setup = await repository.watchSetup().first;
+      expect(
+        setup.payoutDay,
+        6,
+        reason:
+            'the last requested day wins: Sunday must not survive an '
+            'unrelated re-emission that still reported Saturday',
+      );
+      // The stepper write in the middle is untouched by the day churn.
+      expect(setup.childById('maya')?.weeklyBasePence, 350);
+      expect(bloc.state.setup?.payoutDay, 6);
+      await bloc.close();
+    });
   });
 }

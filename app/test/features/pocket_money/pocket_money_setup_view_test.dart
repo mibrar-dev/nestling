@@ -1889,4 +1889,259 @@ void main() {
       await disposeApp(tester);
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Iteration 4 — ORCHESTRATOR_NOTES items 1, 3, 4, 5 + the CHIP ROWS rule.
+  // -------------------------------------------------------------------------
+  group('P06 setup — iteration 4 contract', () {
+    testWidgets(
+      'Seed.onboardingKids (the shoot seed) renders the children from '
+      'the database, in insertion order',
+      (tester) async {
+        final db = await setUpTestScope(seedDemo: false);
+        await Seed.onboardingKids(db);
+        await GetIt.instance<AppSession>().refresh();
+        await _pumpSetup(
+          tester,
+          theme: ThemeMode.light,
+          surface: const Size(390, 844),
+          textScale: 1,
+        );
+
+        // Note item 1: the parent arrives here from P05 *after* adding
+        // children, so the Weekly base card must be populated — and every
+        // number comes from the row, never from the view.
+        expect(find.text('Maya'), findsOneWidget);
+        expect(find.text('Leo'), findsOneWidget);
+        expect(find.text('£3.00'), findsOneWidget);
+        expect(find.text('£1.50'), findsOneWidget);
+        expect(find.text('Add children to set weekly amounts.'), findsNothing);
+        expect(
+          tester.getTopLeft(find.text('Maya')).dy,
+          lessThan(tester.getTopLeft(find.text('Leo')).dy),
+          reason: 'insertion order (Maya, then Leo) — never alphabetical',
+        );
+        expect(find.text('L'), findsOneWidget); // Leo's avatar initial
+        expect(find.text('M'), findsOneWidget);
+
+        // Out-of-band the values are still the seed's (no view defaults): a
+        // stepper tap starts from £3.00, not from a hard-coded number.
+        await tester.tap(
+          find.bySemanticsLabel(RegExp('More weekly pocket money for Maya')),
+        );
+        await _settle(tester);
+        expect(find.text('£3.50'), findsOneWidget);
+        expect(find.textContaining('£3.00'), findsNothing);
+        expect(tester.takeException(), isNull);
+
+        await disposeApp(tester);
+      },
+    );
+
+    testWidgets('no text on the screen carries letter spacing (note item 3)', (
+      tester,
+    ) async {
+      for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+        await setUpTestScope();
+        await _pumpSetup(
+          tester,
+          theme: theme,
+          surface: const Size(390, 844),
+          textScale: 1,
+        );
+
+        final tracked = <String>[];
+        for (final widget in tester.widgetList<Text>(find.byType(Text))) {
+          final data = widget.data;
+          if (data == null || data.isEmpty) continue;
+          final spacing = widget.style?.letterSpacing;
+          // The shared fix (shared/letter_spacing_zero) keeps NestType at 0
+          // because the design CSS has no tracking; a non-zero value here
+          // means Material tracking crept back in or a local copyWith added
+          // it (the only sanctioned cases are P12's hero -0.4 and K02's
+          // `.mark` 1.28 — neither is on P06).
+          if (spacing != null && spacing != 0) {
+            tracked.add('"$data" letterSpacing=$spacing');
+          }
+        }
+        expect(
+          tracked,
+          isEmpty,
+          reason: 'the design CSS declares no tracking for P06',
+        );
+
+        // Spot-check the resolved style of the styles the screen sets
+        // explicitly, in case a merge re-introduced Material defaults.
+        final h1 = tester.widget<Text>(
+          find.text('How does pocket money work in your house?'),
+        );
+        expect(h1.style?.letterSpacing ?? 0, 0);
+        final caption = tester.widget<Text>(
+          find.textContaining('Nestling never holds or moves money'),
+        );
+        expect(caption.style?.letterSpacing ?? 0, 0);
+        expect(tester.takeException(), isNull);
+
+        await disposeApp(tester);
+      }
+    });
+
+    testWidgets('option cards use the HTML line heights 22/20 (note item 5)', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpSetup(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      // design/html-source/screens/P06-pocket-money.html:
+      //   .opt-title { font-size: 16px; line-height: 22px }
+      //   .opt-sub   { font-size: 15px; line-height: 20px }
+      //   .opt-card  { min-height: 60px; padding: 8px 13px }
+      final title = tester.widget<Text>(find.text('Weekly amount'));
+      final sub = tester.widget<Text>(find.text('A set amount every week'));
+      expect(title.style?.fontSize, 16);
+      expect(title.style?.height, moreOrLessEquals(22 / 16, epsilon: 0.001));
+      expect(sub.style?.fontSize, 15);
+      expect(sub.style?.height, moreOrLessEquals(20 / 15, epsilon: 0.001));
+
+      final card = tester.getRect(
+        find.byKey(const ValueKey('p06_option_weekly')),
+      );
+      expect(card.height, greaterThanOrEqualTo(60));
+      expect(card.left, moreOrLessEquals(NestSpacing.padSide, epsilon: 0.01));
+      expect(
+        card.right,
+        moreOrLessEquals(390 - NestSpacing.padSide, epsilon: 0.01),
+      );
+      // The 22px radio sits on the card's own padding edge.
+      final radio = tester.getRect(
+        find
+            .descendant(
+              of: find.byKey(const ValueKey('p06_option_weekly')),
+              matching: find.byWidgetPredicate(
+                (widget) =>
+                    widget is Container &&
+                    widget.constraints?.maxWidth == 22 &&
+                    widget.constraints?.maxHeight == 22,
+              ),
+            )
+            .first,
+      );
+      // 2px card border + 13px HTML padding.
+      expect(radio.left - card.left, moreOrLessEquals(2 + 13, epsilon: 0.01));
+      expect(radio.height, 22);
+
+      // 2px border + 8px padding + 22 title + 2 gap + 20 sub + 8px padding =
+      // 64 for the design's single-line card. The widget-test fallback font
+      // is ~1em per glyph and wraps the sub onto two lines here, so the card
+      // is only bounded from below; the line boxes themselves are pinned
+      // above (22 / 20) and by the painted title height.
+      expect(card.height, greaterThanOrEqualTo(64));
+      expect(
+        tester.getSize(find.text('Weekly amount')).height,
+        moreOrLessEquals(22, epsilon: 0.01),
+        reason: 'the title paints one 22px line box',
+      );
+      final subHeight = tester
+          .getSize(find.text('A set amount every week'))
+          .height;
+      expect(subHeight, greaterThanOrEqualTo(20));
+      expect(subHeight % 20, moreOrLessEquals(0, epsilon: 0.01));
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the coin tile is a 40x40 coinTint tile with the gold coin '
+        'glyph (note item 4)', (tester) async {
+      await setUpTestScope();
+      await _pumpSetup(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      final tile = tester.getRect(_coinTile());
+      expect(tile.width, NestSpacing.s10);
+      expect(tile.height, NestSpacing.s10);
+
+      final decoration =
+          tester.widget<Container>(_coinTile()).decoration! as BoxDecoration;
+      final tokens = tester.element(find.text('Coin value')).nest;
+      expect(decoration.color, tokens.coinTint);
+      expect(
+        (decoration.borderRadius! as BorderRadius).topLeft.x,
+        NestRadii.m,
+        reason: 'the design tile uses r-m',
+      );
+
+      // The glyph is the gold coin SVG from app/assets, not a £ symbol.
+      final coin = find.descendant(
+        of: _coinTile(),
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is SvgPicture &&
+              widget.bytesLoader is SvgAssetLoader &&
+              (widget.bytesLoader as SvgAssetLoader).assetName ==
+                  NestlingIllustrations.coin,
+        ),
+      );
+      expect(coin, findsOneWidget);
+      final svg = tester.widget<SvgPicture>(coin);
+      expect(svg.width, NestSpacing.s6);
+      expect(svg.height, NestSpacing.s6);
+      // Still decorative: excluded from the a11y tree.
+      expect(
+        find.ancestor(of: coin, matching: find.byType(ExcludeSemantics)),
+        findsWidgets,
+      );
+      // No leftover pound-sign glyph from the previous iteration.
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is NestIcon && widget.assetName == NestIcons.poundCoin,
+        ),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the chip row is a NestChipWrap, so its 44px hit area '
+        'survives the 32px pills', (tester) async {
+      await setUpTestScope();
+      await _pumpSetup(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      // CHIP ROWS rule (main): an interactive chip row uses NestChipWrap.
+      final wrap = find.ancestor(
+        of: find.byKey(const ValueKey('p06_day_1')),
+        matching: find.byType(NestChipWrap),
+      );
+      expect(wrap, findsOneWidget);
+      // The wrap owns a 44dp-tall box while the pills paint 32.
+      final row = tester.getRect(
+        find
+            .ancestor(
+              of: find.byKey(const ValueKey('p06_day_1')),
+              matching: find.byType(SizedBox),
+            )
+            .first,
+      );
+      expect(row.height, NestDevice.tapParent);
+      expect(tester.getRect(dayPill(1)).height, NestSpacing.s8);
+
+      await disposeApp(tester);
+    });
+  });
 }

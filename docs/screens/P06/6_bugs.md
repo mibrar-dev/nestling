@@ -1,134 +1,82 @@
-# P06 Pocket money setup — Stage 6 adversarial bug hunt (iteration 3)
+# P06 Pocket money setup — Stage 6 adversarial bug hunt (iteration 4)
 
 Route `/pocket-money-setup` · feature `pocket_money` · parent mode · onboarding
-(P05 → P06 → P07). No `ORCHESTRATOR_NOTES.md`. No Pip on this screen. This
-stage changed no screen code — only `app/test/features/pocket_money/
-p06_bugs_test.dart` and this report.
+(P05 → P06 → P07). `ORCHESTRATOR_NOTES.md` exists — every item is verified
+below. This stage changed no screen code: only
+`app/test/features/pocket_money/p06_bugs_test.dart` and this report.
 
-Method: re-run every iteration-2 repro against the iteration-3 build, rewrite
-the one proof whose subject was replaced (BUG-03's `FittedBox`/`NestChip` is
-gone), then attack the new fix code. The seven iteration-2 bugs are now
-UNskipped regression guards; the two new findings are kept `skip: true` with
-their ids in the test names.
+Method: re-verify every earlier repro against the iteration-4 build, then
+attack the new geometry/logic and independently verify all six orchestrator
+notes (including shooting seed, chip rects, `NestChipWrap` hit slop, gold coin
+tile, option-card line heights).
 
-Unskipped run evidence (delete the two `skip:` flags to reproduce):
+Suite state: `flutter test test/features/pocket_money/p06_bugs_test.dart` →
+**+24 ~1: All tests passed!** The single skip is `P06-BUG-04`, a proof whose
+demand the orchestrator superseded (kept for history, comment explains why).
+`flutter analyze` on the file → No issues found.
 
-```text
-00:03 +9 -1  P06-BUG-08  Expected: 36.0 (±1.0)   Actual: <22.0>
-00:03 +9 -2  P06-BUG-09  Expected: [7, 6]        Actual: [7]
-00:04 +17 -2  Some tests failed.
-```
+## Open bugs
 
-Default suite (skips in place): `flutter test test/features/pocket_money/
-p06_bugs_test.dart` → `+17 ~2: All tests passed!`; full feature dir green;
-`flutter analyze` → No issues found.
+**None.** No skipped failing repro is outstanding; the one `skip: true` is the
+superseded P06-BUG-04.
 
-## Iteration-2 bugs — all fixed, independently re-verified
+## Earlier findings — all fixed (unskipped guards in `p06_bugs_test.dart`)
 
-| # | Was | Fix (iteration 3) | Guard now green |
+| # | Severity (was) | Iteration-4 state | Guard |
 |---|---|---|---|
-| 01 | **MAJOR** stepper lost rapid taps | `_requestedBase` accumulates each tap on the previous *request* (synchronous, pre-await) and the write is confirmed locally via `withChildBase` — `pocket_money_bloc.dart:28-35,113-160` | `P06-BUG-01 (fixed)` real repo 350→400; new **01b** three taps → 450; **01c** `+` then `−` → 300 |
-| 02 | minor fast Sun→Sat dropped | guard compares against `_pendingDay`, the last *requested* day — `bloc:21-26,90-111` | `P06-BUG-02 (fixed)` → 6 |
-| 03 | minor pill painted ~19dp | `NestChip`+`FittedBox` replaced by the token-built `_DayPill` (32dp pill, 13/18 w600 label, fills the cell) — `view:604-644` | **rewritten** `P06-BUG-03 (fixed)` measures the pill itself → 32 ± 2 and label 13px |
-| 04 | minor day cells 40.3dp wide | `cellWidth = max(44, (available−6·gap6)/7)`, breakout inset, horizontal scroll below the 44dp width — `view:489-562` | `P06-BUG-04 (fixed)` → all 7 cells ≥44 at 390 **and** 320 |
-| 05 | minor failed write blanked form | failure branch keeps `_LoadedBody` with an inline danger caption when `setup != null`; `_FailureBody`/Retry only for load failures — `view:59-72,199-231` | `P06-BUG-05 (fixed)` options + inline `database is locked`, no Retry |
-| 06 | minor stale `errorMessage` | `copyWith(clearErrorMessage:)`; every load emission clears it — `state:29-40`, `bloc:60-65` | `P06-BUG-06 (fixed)` → null after recovery |
-| 07 | minor unknown-child write | `childById` null → early return before any repository call — `bloc:117-120` | `P06-BUG-07 (fixed)` → no writes |
+| 01 | **major** stepper lost rapid taps | fixed (iter 3, `_requestedBase`) | `P06-BUG-01/01b/01c (fixed)` real repo: 2 taps → £4.00, 3 → £4.50, `+−` → £3.00 |
+| 02 | minor fast day-tap dropped | fixed (iter 3, `_pendingDay`) | `P06-BUG-02 (fixed)` → Sat; **02b** three rapid taps Sun→Sat→Mon → Mon |
+| 03 | minor pill painted ~19dp | fixed (iter 3/4 `_DayPill`) | `P06-BUG-03 (fixed)` → 32 ± 2, label 13px |
+| 04 | minor day cells 40.3dp wide | **superseded** by ORCHESTRATOR_NOTES #2 (chips inside the 16px inset) | `P06-BUG-04` skip + comment; replaced by the inset/geometry guard below |
+| 05 | minor failed write blanked form | fixed (iter 3, inline error) | `P06-BUG-05 (fixed)` → form + `database is locked`, no Retry |
+| 06 | minor stale `errorMessage` | fixed (iter 3, `clearErrorMessage`) | `P06-BUG-06 (fixed)` → null after recovery |
+| 07 | minor unknown-child write | fixed (iter 3, early return) | `P06-BUG-07 (fixed)` → no writes |
+| 08 | minor day row broke out of card inset (22 vs 36) | fixed (iter 4; row back at 16px) | `P06-BUG-08 (fixed)` → first chip left == label left |
+| 09 | minor correction dropped after unrelated re-emission | fixed (iter 4; pending day cleared only on confirmation) | `P06-BUG-09 (fixed)` → writes `[7, 6]` |
 
-Note on BUG-03: the build left the old skip in place because the old finder
-expected `NestChip`; the visual defect is fixed, so this stage rewrote the
-proof to measure `_DayPill` and un-skipped it. The `NestChip` compact/day
-variant is still a valid `SHARED_REQUEST.md` item (code hygiene, not a bug) —
-closing it would retire the feature-private pill, not change what the user sees.
+## ORCHESTRATOR_NOTES verification (iteration 4)
 
-## New findings (iteration 3)
+| Note | Evidence (this stage, independent) |
+|---|---|
+| 1. Seed `onboarding_kids`; children from the DB in insertion order with their amounts; no view-side defaults | `seed onboarding_kids…` guard: `Seed.onboardingKids` → route renders Maya then Leo, `£3.00`/`£1.50`, both steppers labelled; values come from `children.weekly_base_pence` (seed `_childrenDemo`) |
+| 2. Chips inside the card's 16px padding, 32px high, even gaps, all 7 fit at 390 and 320; no chip rect leaves the padded rect | geometry guard at 390/320/430: pills 40.28/30.28 wide × **32.0** high, first left = 36.0 = card inner left, last right = 353.93 ≤ 354.0, gaps all 6.00 ± 0.2 |
+| 3. `letterSpacing` 0, no local tracking | P06 uses `NestType.h1` (no tracking), `bodyStrong`, `bodySmall`, `fieldLabel`, `caption`, `money` — none pass `letterSpacing`; no `.copyWith(letterSpacing:)` in the feature |
+| 4. Gold coin glyph tile, not a `£` symbol | coin-tile guard: `SvgPicture` with `SvgAssetLoader.assetName == NestlingIllustrations.coin` (`assets/illustrations/coin.svg`) inside the 40×40 `coinTint` Container, wrapped in `ExcludeSemantics` |
+| 5. Option cards match the HTML padding/line heights so the settings card lands at the design y | option-card guard: title 16 × `22/16`, sub 15 × `20/15` (HTML `.opt-title 16/22` + `.opt-sub 15/20` + `.opt-text gap:2`); measured card height at 390 (Ahem test font wraps subs to 2 lines, so height itself is font-dependent and asserted structurally) |
+| 6. `NestChipWrap` for the chip row; taps 5px above/below a chip | `NestChipWrap` guard: tap 5px above Sun selects Sun, 5px below Mon selects Mon, and a gap tap 1px right of Mon forwards to Mon (44-tall row + ±6px slop) |
 
-### P06-BUG-08 (minor, needs owner arbitration) — day row breaks out of the card's 16px inset
+## Notes, not bugs
 
-**Where:** `pocket_money_setup_view.dart:437-440` — `_DayRow` sits on a
-`gap2` (2px) inset so each of the 7 cells can be ≥44dp wide; the label above
-it still uses the card's 16px inset.
+- **BALANCED HEADINGS — blocked on the main merge, not actionable here.**
+  The design CSS has `.h1 { text-wrap: balance }`, so P06's H1 will need
+  `NestBalancedText` once main's `58b42de` (the shared component
+  `nest_balanced_text.dart`) is merged into this branch. It is **not present
+  in this worktree** (`grep balanced lib` → nothing; `git merge-base
+  --is-ancestor 58b42de HEAD` → false), so the H1 stays a plain `Text` this
+  iteration. Hand this to the next build after the merge; until then the
+  compare's 2-line break matches the design.
+- **320dp × text scale 1.3 day labels ellipsize** (`Mon`/`Wed` are the tight
+  ones). At 320 the 13px labels get 30.28px cells; scaled to 16.9px they need
+  ~35px. SPACING_SPEC §10.1 explicitly sanctions `maxLines: 1 +
+  overflow: ellipsis` for chip text at large scales, and at 1.0 the real Inter
+  metrics fit, so this is accepted behaviour — recorded here because §10.3
+  alternatively mentions `scaleDown`. No repro filed.
 
-**Repro / measurement:** at 390 the first day cell's left edge is x=22.0 while
-`Payout day` (and `Weekly base`, the avatar and coin tile) start at x=36.0 —
-a 14px offset; the row spans 346px vs the design's 318px, so the pills sit
-2px from the card border instead of 16px. Confirmed visually against the
-design PNG (`docs/screens/P06/ui/cmp_light_3.png`: app chips run visibly
-closer to both card edges than the design's).
+## Attacks that hold (unchanged guards, all green)
 
-**Failing test:** `P06-BUG-08: day chips must align with the card section
-labels` (22.0 vs 36.0, skipped).
-
-**Assessment:** deliberate and documented — the trade-off buys the ≥44dp
-target that DESIGN_SPEC §0.9 asks for, and the UI builder pinned the new inset
-in `pocket_money_setup_view_test.dart` (“the day row breaks out of the 16px
-card inset to gap2”). It is symmetric, functional and inside the card, so this
-stage rates it minor. The owner ALIGNMENT rule (“nothing a few px off … treat
-visible misalignment as a UI failure”) may rank it higher; owner options:
-(a) sanction the breakout for the larger tap target, or (b) restore the 16px
-inset and scroll the row at every width (design-inherent 40.3dp cells return,
-and the ≥44 width fix is dropped), or (c) two-line day grid under a breakpoint.
-
-### P06-BUG-09 (minor) — a day correction is dropped when an unrelated re-emission lands mid-write
-
-**Where:** `pocket_money_bloc.dart:53` — the load `onData` clears `_pendingDay`
-on **every** emission (“the stream has caught up”), but an emission can arrive
-while the day write is still in flight and still carry the old day.
-
-**Repro (deterministic, fake repo with a held write):**
-1. load (`payoutDay` 6); tap **Sun** → `_pendingDay = 7`, write in flight;
-2. an unrelated emission arrives (ledger/children/another screen) still
-   reporting day 6 → `_pendingDay` cleared, state shows Sat selected again;
-3. the parent taps **Sat** to correct → guard compares 6 == 6 → no-op, tap lost;
-4. the Sun write lands → stored day flips to **7** although the last tap was Sat.
-
-**Failing test:** `P06-BUG-09: a day correction must survive an unrelated
-re-emission` — expected day writes `[7, 6]`, observed `[7]` (skipped).
-
-**Severity:** minor — needs an external/parallel write inside the few-ms write
-window, but it is the same class as the fixed P06-BUG-02 and the same
-incoming-day-versus-emitted-day confusion. **Suggested fix:** clear
-`_pendingDay` only when the emitted `setup.payoutDay == _pendingDay` (the same
-confirmation rule `_requestedBase` already uses), not unconditionally.
-
-## Attacks that hold (passing probes, kept in the same file)
-
-- **Fix guards:** every iteration-2 bug above, plus 3× `+` → £4.50 and quick
-  `+`/`−` → £3.00 on the real repository (the new `_requestedBase` chain).
-- **Kid-mode guard:** deep link `/pocket-money-setup` in kid mode →
-  `/parental-gate`; expired-trial path re-redirects through the gate too.
-- **Restart persistence (file-backed Drift):** mode/day/base survive
-  `db.close()` + reopen; children stay in insertion order `[maya, leo]`.
-- **6 children incl. “Maximilian-Alexander” at 320dp × 1.3:** no overflow, no
-  exception, ellipsised, Maya first.
-- **0 children at 320dp × 1.3:** `Add children to set weekly amounts.` renders,
-  no fake £ rows, no overflow.
-- **£0.00 / £20.00:** render exactly; `(p/100).toStringAsFixed(2)` brute-forced
-  against exact pence formatting for **every value 0…2000** — zero mismatches.
-- **Async gap:** closing the bloc with a write pending and failing the write
-  afterwards completes cleanly (late `emit` is a cancelled-emitter no-op).
-- **Contrast:** P06's text pairs pass WCAG 4.5:1 in light and dark.
-- **Day row interaction:** at 320 the row scrolls and Sun can be dragged into
-  view and tapped (UI suite's `day row geometry` group is green).
-
-## Hunted, found clean / not applicable
-
-- **1 child / 6 children / empty lists:** child-count-independent row loop;
-  demo covers 2, probes cover 0 and 6.
-- **£999.99 / 9999 coins:** unreachable on P06 — writes clamp to 0…2000p by
-  design and the screen shows no coin balance (coin row is display-only).
-- **Timezone / BST:** weekday index only, no time-of-day or period math;
-  `updatedAt` is UTC + zone-tagged. Not applicable.
-- **Back navigation / deep links in parent mode:** `/add-children` and
-  `/paywall` covered by the feature suite; deep link renders light + dark.
+- Kid-mode deep link → `/parental-gate`; restart persistence on a file-backed
+  DB (mode/day/base + insertion order); 6 children incl.
+  “Maximilian-Alexander” at 320 × 1.3; 0 children caption; £0.00/£20.00 exact
+  (every pence 0…2000 brute-forced); close-during-write contained; WCAG 4.5:1
+  light + dark; two immediate widget `+` taps → £4.00.
 
 ## Verdict rationale
 
-All seven iteration-2 bugs are independently confirmed fixed (17 green guards,
-including three new rapid-tap chains). Two new findings remain: P06-BUG-08
-(day-row inset, deliberate trade-off — owner arbitration suggested) and
-P06-BUG-09 (narrow pending-day race, one-line fix suggested). Both are minor
-and both have executable skipped repros. No major bug is open, so the stage
-passes.
+All nine findings from iterations 2–3 are fixed and carried as unskipped
+regression guards (24 green), the one superseded proof is documented, and all
+six orchestrator notes verify independently in tests. No open bug has an
+executable repro; the only un-actionable rule (balanced H1) is blocked by the
+main merge, not by this screen. Nothing found that a designer or user would
+reject.
 
 VERDICT: PASS

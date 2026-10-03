@@ -1,12 +1,15 @@
-// P06 Pocket money setup — Stage 6 adversarial bug tests (iteration 3).
+// P06 Pocket money setup — Stage 6 adversarial bug tests (iteration 4).
 //
-// Iteration 2's seven bug proofs are all fixed in the iteration-3 build; the
-// tests below now run UNskipped as regression guards (P06-BUG-01..07).
+// Iteration 2's seven bug proofs and iteration 3's P06-BUG-08/09 are all
+// fixed; they run UNskipped as regression guards. Iteration 4 adds guards for
+// the ORCHESTRATOR_NOTES items (seed `onboarding_kids`, chip row inside the
+// 16px inset, NestChipWrap ±5px taps, gold coin tile, HTML option-card line
+// heights).
 //
 // Every test that PROVES an OPEN bug is marked `skip: true` (the test name
 // carries the `P06-BUG-nn` id) so the default suite stays green; delete the
-// skip to watch it fail. Each skipped test is the executable repro for the
-// matching entry in `docs/screens/P06/6_bugs.md`.
+// skip to watch it fail. The only skip today is P06-BUG-04, superseded by
+// ORCHESTRATOR_NOTES item 2.
 //
 // The group at the bottom ("attacks that hold") is NOT skipped: it documents
 // the adversarial probes that passed (kid-mode guard, restart persistence,
@@ -15,10 +18,12 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' show Tristate;
 
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:nestling/app/controllers.dart';
@@ -295,6 +300,28 @@ void main() {
     await bloc.close();
   });
 
+  test(
+    'P06-BUG-02b (fixed): three rapid day taps end on the last requested day',
+    () async {
+      await setUpTestScope();
+      final repository = GetIt.instance<PocketMoneyRepository>();
+      final bloc = PocketMoneyBloc(repository: repository)
+        ..add(const PocketMoneyLoadRequested());
+      await bloc.stream.firstWhere((state) => state.setup != null);
+
+      // Sun → Sat → Mon in one turn; the last tap must win.
+      bloc
+        ..add(const PocketMoneyPayoutDayChanged(7))
+        ..add(const PocketMoneyPayoutDayChanged(6))
+        ..add(const PocketMoneyPayoutDayChanged(1));
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+
+      final setup = await repository.watchSetup().first;
+      expect(setup.payoutDay, 1);
+      await bloc.close();
+    },
+  );
+
   // -- P06-BUG-03 ---------------------------------------------------------
 
   testWidgets('P06-BUG-03 (fixed): a day pill paints at the design size '
@@ -350,13 +377,12 @@ void main() {
     // SUPERSEDED by ORCHESTRATOR_NOTES iter 4 #2: the 7 chips must sit
     // inside the 16px card inset, 32px high with even gaps; the ≥44×44
     // cell demand no longer applies. Taps 5px above/below a chip reach it
-    // via NestChipWrap, and chip-inside-padding is covered by the view
-    // test + P06-BUG-08.
+    // via NestChipWrap; the iteration-4 guards below cover the geometry.
     skip: true,
   );
-  // FIXED (iteration 3, UI chunk): cell width is clamped to ≥44 and the row
-  // breaks out of the card inset (see _DayRow); must stay green. The wider
-  // inset is challenged by P06-BUG-08 below.
+  // FIXED (iteration 3, UI chunk): cell width was clamped to ≥44 and the
+  // row broke out of the card inset; iteration 4 restored the design's
+  // 16px inset per the orchestrator note (see the geometry guards below).
 
   // -- P06-BUG-05 ---------------------------------------------------------
 
@@ -476,29 +502,29 @@ void main() {
 
   // -- P06-BUG-08 ---------------------------------------------------------
 
-  testWidgets('P06-BUG-08: day chips must align with the card section labels', (
-    tester,
-  ) async {
-    await setUpTestScope();
-    await pumpAppRoute(tester, '/pocket-money-setup');
+  testWidgets(
+    'P06-BUG-08 (fixed): day chips align with the card section labels',
+    (tester) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/pocket-money-setup');
 
-    // The design keeps the day row inside the card's 16px inset, so the
-    // first chip's left edge lines up with the `Payout day` label above
-    // it. The BUG-04 fix widened the row to a 2px inset: cells start 14px
-    // to the left of every other row/label in the card.
-    final labelLeft = tester.getTopLeft(find.text('Payout day')).dx;
-    final firstCellLeft = tester
-        .getTopLeft(find.byKey(const ValueKey('p06_day_1')))
-        .dx;
-    expect(firstCellLeft, moreOrLessEquals(labelLeft, epsilon: 1));
+      // The design keeps the day row inside the card's 16px inset, so the
+      // first chip's left edge lines up with the `Payout day` label above
+      // it (iteration-3's 2px breakout is gone).
+      final labelLeft = tester.getTopLeft(find.text('Payout day')).dx;
+      final firstCellLeft = tester
+          .getTopLeft(find.byKey(const ValueKey('p06_day_1')))
+          .dx;
+      expect(firstCellLeft, moreOrLessEquals(labelLeft, epsilon: 1));
 
-    await disposeApp(tester);
-  });
+      await disposeApp(tester);
+    },
+  );
 
   // -- P06-BUG-09 ---------------------------------------------------------
 
   test(
-    'P06-BUG-09: a day correction must survive an unrelated re-emission',
+    'P06-BUG-09 (fixed): a day correction survives an unrelated re-emission',
     () async {
       final setupController = StreamController<PocketMoneySetup>.broadcast();
       final itemsController =
@@ -543,6 +569,200 @@ void main() {
       await itemsController.close();
     },
   );
+
+  // -- iteration-4 ORCHESTRATOR_NOTES guards -------------------------------
+
+  group('P06 iteration-4 orchestrator-note guards', () {
+    testWidgets('seed onboarding_kids: children and amounts come from the DB', (
+      tester,
+    ) async {
+      final db = await setUpTestScope(seedDemo: false);
+      await Seed.onboardingKids(db);
+      await GetIt.instance<AppSession>().refresh();
+      await pumpAppRoute(tester, '/pocket-money-setup');
+
+      // NOTE item 1: Maya £3.00 then Leo £1.50, insertion order, steppers
+      // present, nothing hard-coded against the seed.
+      expect(find.text('Maya'), findsOneWidget);
+      expect(find.text('Leo'), findsOneWidget);
+      expect(find.text('£3.00'), findsOneWidget);
+      expect(find.text('£1.50'), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.text('Maya')).dy,
+        lessThan(tester.getTopLeft(find.text('Leo')).dy),
+      );
+      expect(
+        find.bySemanticsLabel(RegExp('Less weekly pocket money for Maya')),
+        findsOneWidget,
+      );
+      expect(
+        find.bySemanticsLabel(RegExp('More weekly pocket money for Leo')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets(
+      'day chips stay inside the card 16px inset: 32px pills, 6px gaps '
+      '(390/320/430)',
+      (tester) async {
+        // NOTE item 2: no chip rect leaves the card's padded rect.
+        await setUpTestScope();
+        for (final width in <int>[390, 320, 430]) {
+          await pumpAppRoute(tester, '/pocket-money-setup');
+          tester.view.physicalSize = Size(width * 3, 844 * 3);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 200));
+
+          final card = tester.getRect(find.byType(NestCard));
+          double? previousRight;
+          for (var day = 1; day <= 7; day++) {
+            final pill = tester.getRect(
+              find
+                  .descendant(
+                    of: find.byKey(ValueKey('p06_day_$day')),
+                    matching: find.byType(DecoratedBox),
+                  )
+                  .first,
+            );
+            expect(
+              pill.height,
+              moreOrLessEquals(NestSpacing.s8, epsilon: 1),
+              reason: 'day $day pill height at ${width}dp',
+            );
+            expect(
+              pill.left,
+              greaterThanOrEqualTo(card.left + NestSpacing.s4 - 0.01),
+              reason: 'day $day leaves the left inset at ${width}dp',
+            );
+            expect(
+              pill.right,
+              lessThanOrEqualTo(card.right - NestSpacing.s4 + 0.01),
+              reason: 'day $day leaves the right inset at ${width}dp',
+            );
+            if (previousRight != null) {
+              expect(
+                pill.left - previousRight,
+                moreOrLessEquals(NestSpacing.gap6, epsilon: 0.2),
+                reason: 'uneven gap before day $day at ${width}dp',
+              );
+            }
+            previousRight = pill.right;
+          }
+          expect(tester.takeException(), isNull);
+          await disposeApp(tester);
+        }
+      },
+    );
+
+    testWidgets(
+      'NestChipWrap: taps 5px above/below and in the gaps reach the chip',
+      (tester) async {
+        // NOTE item 6: the 32px pills keep the 44px tap target.
+        await setUpTestScope();
+        await pumpAppRoute(tester, '/pocket-money-setup');
+
+        Finder pill(int day) => find
+            .descendant(
+              of: find.byKey(ValueKey('p06_day_$day')),
+              matching: find.byType(DecoratedBox),
+            )
+            .first;
+        bool selected(int day) =>
+            tester
+                .getSemantics(find.byKey(ValueKey('p06_day_$day')))
+                .getSemanticsData()
+                .flagsCollection
+                .isSelected ==
+            Tristate.isTrue;
+        Future<void> settle() async {
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 250));
+        }
+
+        final sun = tester.getRect(pill(7));
+        await tester.tapAt(Offset(sun.center.dx, sun.top - 5));
+        await settle();
+        expect(selected(7), isTrue, reason: '5px above Sun');
+
+        final mon = tester.getRect(pill(1));
+        await tester.tapAt(Offset(mon.center.dx, mon.bottom + 5));
+        await settle();
+        expect(selected(1), isTrue, reason: '5px below Mon');
+
+        // Gap tap (1px right of Mon's right edge): forwarded to the nearest.
+        final tue = tester.getRect(pill(2));
+        await tester.tapAt(Offset(mon.right + 1, tue.center.dy));
+        await settle();
+        expect(selected(1), isTrue, reason: 'gap tap nearest Mon');
+        expect(tester.takeException(), isNull);
+
+        await disposeApp(tester);
+      },
+    );
+
+    testWidgets('option cards use the HTML 22/20 line heights and 2px gap', (
+      tester,
+    ) async {
+      // NOTE item 5: card heights match the design so the settings card
+      // lands at the design y.
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/pocket-money-setup');
+
+      for (final pair in <(String, String)>[
+        ('Weekly amount', 'A set amount every week'),
+        ('Earn per quest', 'Coins turn into pence at payout'),
+        ('Both', 'Weekly base + bonus for extra quests'),
+      ]) {
+        final title = tester.widget<Text>(find.text(pair.$1));
+        expect(title.style?.fontSize, 16);
+        expect(title.style?.height, 22 / 16);
+        final sub = tester.widget<Text>(find.text(pair.$2));
+        expect(sub.style?.fontSize, 15);
+        expect(sub.style?.height, 20 / 15);
+      }
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('coin tile: gold coin asset in the 40×40 token tile', (
+      tester,
+    ) async {
+      // NOTE item 4: the gold coin glyph, not a £ symbol.
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/pocket-money-setup');
+
+      final coin = find.byWidgetPredicate(
+        (widget) =>
+            widget is SvgPicture &&
+            widget.bytesLoader is SvgAssetLoader &&
+            (widget.bytesLoader as SvgAssetLoader).assetName ==
+                NestlingIllustrations.coin,
+      );
+      expect(coin, findsOneWidget);
+      final tile = find.ancestor(
+        of: coin,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Container &&
+              widget.constraints?.maxWidth == NestSpacing.s10 &&
+              widget.constraints?.maxHeight == NestSpacing.s10,
+        ),
+      );
+      expect(tile, findsOneWidget);
+      expect(tester.getSize(tile), const Size(40, 40));
+      expect(
+        find.ancestor(of: coin, matching: find.byType(ExcludeSemantics)),
+        findsWidgets,
+      );
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+  });
 
   // -- attacks that hold --------------------------------------------------
 
