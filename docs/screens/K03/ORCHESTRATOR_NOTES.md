@@ -93,3 +93,9 @@ The pet block is now right in light mode.
 
 ## UPDATE (14:37) — iteration 12: verification only
 The only failure (the speech-bubble tail) was fixed on main by shared/speech_tail, which also updated kid_home_geometry_test.dart and kid_home_view_test.dart for the new tail. After the merge, do NOT change view code. If the merge conflicts in those two test files, keep main's tail assertions and keep your meadow assertions. Then re-verify. Nothing else to change.
+
+## UPDATE (15:02) — iteration 13: use the design's own spacing
+main has shared/pet_bubble_gap: `NestPetStage(bubbleGap: …)` and a speech bubble exactly 44 tall.
+- Pass `bubbleGap: 14` (`.k3-pet` margin-top) and set `_kStageToHearts` back to `NestSpacing.s4` (16). Delete the long workaround comment.
+- Targets: bubble 125…169, pet box 183…419, hearts centre 448, title 494, card 1 at 559. Pin these in kid_home_geometry_test.dart (±0.5).
+- Change nothing else.

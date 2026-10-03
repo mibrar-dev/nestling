@@ -88,10 +88,22 @@
 //   to the design's y 527…542 (alongside hearts 448 and card-1 559), so the
 //   ±2 px position rule has a regression net below the pet block too.
 //   UI iteration 10 measured the whole geometry chain EXACT and reported
-//   PASS; no new bugs found in this stage.
+//   PASS.
 //
-// The suite has NO skipped tests: every proof below runs in the plain suite.
-// (If you add one, do not park it to get green — see RULES.)
+// Iteration-12 work:
+// - `shared/speech_tail` (b1137f3) made the bubble tail a CSS-style overflow
+//   `::after`; the shared block got 10.25 px shorter and the build restored
+//   the rows below with `_kStageToHearts = 21`.
+// - K03-BUG-16 (OPEN, major, shared): the hero art itself (nest + Pip) still
+//   sits ~9-10 px above the design — rim 269 vs 278, feet 292 vs 301, head
+//   190 vs 199 — because the shared bubble→pet gap is 8 where the design has
+//   14 (SHARED_REQUEST #18). The geometry pin was re-based to the app's
+//   position by the build; this file carries the design-value proof instead.
+//   Run: `flutter test --run-skipped --plain-name K03-BUG-16`.
+//
+// The suite has exactly one parked proof: K03-BUG-16 (open, shared — the hero
+// block position pending SHARED_REQUEST #18). Everything else runs in the
+// plain suite; do not park a proof just to get green (see RULES).
 //
 // Probes that pass are kept as evidence for the "checked, clean" categories
 // (contrast, overflow, persistence, money rounding, deep links).
@@ -104,6 +116,7 @@ import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
+import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
@@ -1571,6 +1584,46 @@ void main() {
     semantics.dispose();
     await disposeApp(tester);
   });
+
+  // -------------------------------------------------------------------------
+  // Iteration-12 proof — UI VERDICT RULE, hero block
+  // -------------------------------------------------------------------------
+
+  /// K03-BUG-16 (OPEN, major, shared): the shared `NestSpeechBubble` tail
+  /// became an overflow `::after` (b1137f3), which is correct, but the shared
+  /// `NestPetStage` still lays the bubble→pet gap out as `NestSpacing.s2` (8)
+  /// where the design's `.k3-pet` has `margin: 14px auto 0`. The 236-tall pet
+  /// block is back on its rows below (via `_kStageToHearts`), but the hero art
+  /// itself — nest and Pip — sits ~9-10 px above the design: rim 269 vs 278,
+  /// Pip feet 292 vs 301, head 190 vs 199. The UI VERDICT RULE requires every
+  /// element within ±2 px, so this must FAIL until SHARED_REQUEST #18 lands
+  /// (bubble→pet gap 8 → 14; then `_kStageToHearts` reverts to 16).
+  ///
+  /// Repro: `flutter test --run-skipped --plain-name K03-BUG-16`.
+  testWidgets('K03-BUG-16: the pet hero art sits on the design rows', (
+    tester,
+  ) async {
+    await loadBundledFonts();
+    await pumpAppRoute(tester, '/kid-home');
+    final nest = tester.getRect(
+      find
+          .byWidgetPredicate(
+            (w) =>
+                w is SvgPicture &&
+                (w.bytesLoader as SvgAssetLoader).assetName.contains('nest'),
+          )
+          .first,
+    );
+    final rimY = nest.top + PipNestFallback.nestRimTopFraction * nest.height;
+    expect(
+      rimY,
+      closeTo(278, 2),
+      reason:
+          "the design's rim is y 278; the app is ~9 px high until "
+          'SHARED_REQUEST #18 (shared bubble→pet gap 8 vs the design’s 14)',
+    );
+    await disposeApp(tester);
+  }, skip: true);
 }
 
 // ---------------------------------------------------------------------------
@@ -1691,6 +1744,22 @@ List<String> _svgAssetNames(WidgetTester tester) => tester
     .whereType<SvgAssetLoader>()
     .map((loader) => loader.assetName)
     .toList();
+
+/// Loads the bundled faces so geometry matches a device run (same loader as
+/// `kid_home_geometry_test.dart`).
+Future<void> loadBundledFonts() async {
+  final inter = FontLoader('Inter')
+    ..addFont(rootBundle.load('assets/fonts/Inter-Regular.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-Medium.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-SemiBold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-Bold.ttf'));
+  final nunito = FontLoader('Nunito')
+    ..addFont(rootBundle.load('assets/fonts/Nunito-Bold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Nunito-ExtraBold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Nunito-Black.ttf'));
+  await inter.load();
+  await nunito.load();
+}
 
 /// Streams error on listen (load-failure state probe).
 class _FailLoadRepository extends KidHomeRepository {

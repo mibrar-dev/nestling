@@ -197,6 +197,20 @@ Finder _paintedCard(int index) => find
     )
     .first;
 
+/// The bubble's painted body (`.speech`): the 18-radius bordered box, without
+/// the tail that hangs below it.
+final Finder _speechBody = find.descendant(
+  of: find.byType(NestSpeechBubble),
+  matching: find.byWidgetPredicate((widget) {
+    if (widget is! Container) {
+      return false;
+    }
+    final box = widget.decoration;
+    return box is BoxDecoration &&
+        box.borderRadius == BorderRadius.circular(18);
+  }),
+);
+
 void main() {
   setUpAll(loadBundledFonts);
 
@@ -357,6 +371,60 @@ void main() {
 
       await disposeApp(tester);
     });
+  });
+
+  // `shared/speech_tail` (main b1137f3) turned the bubble's tail from a
+  // 10.25 px IN-FLOW box into a CSS `.speech::after` overflow: the bubble now
+  // lays out 10.25 px shorter, which lifted the pet block and every row below
+  // it, and K03 took it back with `_kStageToHearts = 21`. That compensation is
+  // only correct while the tail stays out of flow, so the contract is pinned
+  // here — on the bytes, because "is the tail painted" is a pixel fact.
+  //
+  // `.speech::after`: `bottom: -9px; left: 50%; border: 9px solid transparent;
+  // border-top-color: ink; border-bottom: 0` → an 18 px wide, 9 px tall ink
+  // triangle hanging below the body. 5_ui iteration 9 measured the app's tail
+  // 10 px too tall; the row count below is what catches that again.
+  testWidgets('the speech tail is an out-of-flow 9 px ink triangle', (
+    tester,
+  ) async {
+    await setUpTestScope();
+    await _pumpForPixels(tester, theme: ThemeMode.light);
+    final tokens = Theme.of(tester.element(find.byType(NestSpeechBubble)))
+        .extension<NestTokens>()!;
+    final bubble = tester.getRect(find.byType(NestSpeechBubble));
+    final body = tester.getRect(_speechBody);
+
+    // The tail must NOT be in flow: it adds zero height to the bubble, or
+    // `_kStageToHearts` compensates for a gap that is no longer there and every
+    // row below the nest moves.
+    expect(
+      bubble.height - body.height,
+      closeTo(0, 0.5),
+      reason: 'the tail overflows the body instead of sizing it',
+    );
+
+    // The tail is painted, in ink, below the body's bottom border.
+    final centreX = body.center.dx;
+    final ink = tokens.ink;
+    bool isInk(List<int> px) =>
+        (px[0] - ink.r * 255).abs() <= 2 &&
+        (px[1] - ink.g * 255).abs() <= 2 &&
+        (px[2] - ink.b * 255).abs() <= 2;
+    var run = 0;
+    for (var y = body.bottom + 1; y <= body.bottom + 12; y++) {
+      if (isInk(await _pixelAt(tester, centreX, y))) {
+        run++;
+      }
+    }
+    expect(
+      run,
+      inInclusiveRange(4, 9),
+      reason:
+          'the tail column is ink for $run px below the body; '
+          '`.speech::after` is 9 px (5_ui iteration 9 measured +10 px)',
+    );
+
+    await disposeApp(tester);
   });
 
   // FIXES_10 #1 (ORCHESTRATOR_NOTES 10:52, dark meadow, "4th time"): the lower
