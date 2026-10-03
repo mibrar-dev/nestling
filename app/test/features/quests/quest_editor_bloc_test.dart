@@ -40,6 +40,24 @@ const _editedQuest = Quest(
   active: true,
 );
 
+/// A quest whose coins are outside the repository's 1..100 contract — the
+/// value `_save` clamps before dispatching, and `_checkCoins` rejects if it
+/// ever reaches the data layer (BUG-P09-4).
+const _outOfRangeQuest = Quest(
+  id: 'q-out-of-range',
+  title: 'Too many coins',
+  detail: 'Weekly · 9999 coins',
+  icon: 'hoover',
+  coins: 9999,
+  repeatRule: 'weekly',
+  days: '6',
+  dueLabel: 'Before tea (5pm)',
+  dueTimeLocal: '17:00',
+  needsApproval: true,
+  assigneeChildId: 'maya',
+  active: true,
+);
+
 void main() {
   group('QuestsBloc editor', () {
     late MockQuestsRepository repo;
@@ -136,6 +154,31 @@ void main() {
               s.editorError == null,
         ),
         const QuestsState(editorStatus: QuestEditorStatus.saved),
+      ],
+    );
+
+    blocTest<QuestsBloc, QuestsState>(
+      "the repository's coin contract surfaces as a save failure (BUG-P09-4)",
+      build: () {
+        final repo = MockQuestsRepository();
+        // `QuestsRepositoryImpl._checkCoins` throws before touching Drift, so
+        // the bloc must map it to `editorStatus.failure` + a toast-able
+        // message rather than a silent no-op. The view clamps first, so this
+        // is the last line of defence.
+        when(() => repo.createQuest(_outOfRangeQuest)).thenThrow(
+          ArgumentError.value(9999, 'coins', 'Quest coins must be 1..100'),
+        );
+        return QuestsBloc(repository: repo);
+      },
+      act: (bloc) => bloc.add(const QuestsCreateRequested(_outOfRangeQuest)),
+      expect: () => <Object?>[
+        const QuestsState(editorStatus: QuestEditorStatus.saving),
+        predicate<QuestsState>(
+          // The parent is told what the write refused, and why.
+          (s) =>
+              s.editorStatus == QuestEditorStatus.failure &&
+              (s.editorError ?? '').contains('Quest coins must be 1..100'),
+        ),
       ],
     );
 

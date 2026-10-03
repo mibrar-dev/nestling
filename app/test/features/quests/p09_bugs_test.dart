@@ -1,12 +1,15 @@
-// P09 · New / edit quest — Stage 6 adversarial bug tests (iteration 1).
+// P09 · New / edit quest — Stage 6 adversarial bug tests (iterations 1–2).
 //
-// The five bug proofs below failed on the iteration-1 tree (`881880a`) and are
-// now UNSKIPPED: iteration 2 fixed them in
+// Iteration-1 proofs: the five bugs below failed on the iteration-1 tree
+// (`881880a`) and are now UNSKIPPED — iteration 2 fixed them in
 // `lib/features/quests/presentation/views/quest_editor_view.dart` (+ the
 // repository-side coin range and coin value the logic builder added), so they
-// run on every `flutter test`. The unskipped group at the bottom ("attacks
-// that hold") documents the adversarial probes that pass, so a regression is
-// caught here.
+// run on every `flutter test`.
+//
+// Iteration-2 proofs (BUG-P09-6..8) are `skip: true` until their fix lands
+// (same convention as `p12_bugs_test.dart`); run them with `--run-skipped`.
+// The unskipped group at the bottom ("attacks that hold") documents the
+// adversarial probes that pass, so a regression is caught here.
 //
 //   BUG-P09-1  major  the payout helper hard-codes 1p/coin and ignores the
 //                     family's `coinValuePencePerCoin` (wrong money figure)
@@ -25,6 +28,16 @@
 //                     pill and Save keeps the orphaned id
 //                     → an assignee the roster no longer lists falls back to
 //                       "Anyone", so Save clears the dangling id
+//   BUG-P09-6  minor  an out-of-range reward is shown at face value (9999 /
+//                     `= 9999p`, or 0 / `= 0p`) but silently clamped on save
+//                     (`_save` writes 100 / 1)
+//   BUG-P09-7  minor  tapping the alias-highlighted tile (Dishes for `plate`,
+//                     Bins for `bag`/`shirt`/`bins`) is visually a no-op but
+//                     rewrites the stored icon key
+//   BUG-P09-8  major  a nickname starting with an astral-plane character
+//                     (emoji) makes `_initial` emit a lone UTF-16 surrogate,
+//                     so the editor throws "string is not well-formed UTF-16"
+//                     while painting the avatar
 
 import 'dart:math' as math;
 
@@ -78,6 +91,10 @@ SemanticsNode _button(WidgetTester tester, String label) => find.semantics
     )
     .evaluate()
     .single;
+
+/// One of the six icon tiles, by its design key.
+QuestIconTile _iconTile(WidgetTester tester, String key) => tester
+    .widget<QuestIconTile>(find.byKey(ValueKey<String>('quest-icon-$key')));
 
 void main() {
   setUp(setUpTestScope);
@@ -214,6 +231,170 @@ void main() {
     });
   });
 
+  // -- iteration 2 proofs ---------------------------------------------------
+  group(
+    'BUG-P09-6 — an out-of-range reward is shown at face value, saved clamped',
+    () {
+      testWidgets('the screen says 9999 / 9999p and the write says 100', (
+        tester,
+      ) async {
+        final db = await setUpTestScope();
+        await db
+            .into(db.quests)
+            .insert(
+              QuestsCompanion.insert(
+                id: 'q-9999',
+                familyId: Seed.familyId,
+                title: 'Mega quest',
+                coins: const Value(9999),
+                repeatRule: const Value('weekly'),
+                days: const Value('6'),
+                assigneeChildId: const Value('maya'),
+              ),
+            );
+        await pumpAppRoute(tester, '${QuestsRoutePaths.editor}?id=q-9999');
+        expect(find.text('9999'), findsOneWidget);
+        expect(find.text('= 9999p at payout'), findsOneWidget);
+
+        await tester.tap(find.text('Save'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pump(const Duration(milliseconds: 300));
+
+        final saved = await tester.runAsync(() => _repo.getQuest('q-9999'));
+        // What the screen showed is what must be stored (or the save must be
+        // blocked with a visible reason); `_save` clamps silently to 100.
+        expect(saved?.coins, 9999);
+        await disposeApp(tester);
+      }, skip: true);
+
+      testWidgets('a 0-coin quest is shown as 0 / 0p and saved as 1', (
+        tester,
+      ) async {
+        final db = await setUpTestScope();
+        await db
+            .into(db.quests)
+            .insert(
+              QuestsCompanion.insert(
+                id: 'q-zero',
+                familyId: Seed.familyId,
+                title: 'Zero quest',
+                coins: const Value(0),
+                repeatRule: const Value('weekly'),
+                days: const Value('6'),
+                assigneeChildId: const Value('maya'),
+              ),
+            );
+        await pumpAppRoute(tester, '${QuestsRoutePaths.editor}?id=q-zero');
+        expect(find.text('0'), findsOneWidget);
+        expect(find.text('= 0p at payout'), findsOneWidget);
+
+        await tester.tap(find.text('Save'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pump(const Duration(milliseconds: 300));
+
+        final saved = await tester.runAsync(() => _repo.getQuest('q-zero'));
+        expect(saved?.coins, 0);
+        await disposeApp(tester);
+      }, skip: true);
+    },
+  );
+
+  group(
+    'BUG-P09-7 — tapping the alias-highlighted tile rewrites the stored key',
+    () {
+      testWidgets(
+        'q-table (plate) saves dishwasher after a no-op-looking tap',
+        (tester) async {
+          await pumpAppRoute(tester, '${QuestsRoutePaths.editor}?id=q-table');
+
+          // The Dishes tile is highlighted through the `plate` alias, so it
+          // already looks selected; tapping it is visually a no-op but
+          // `onTap` normalises `_icon` to the tile key.
+          expect(_iconTile(tester, 'dishwasher').selected, isTrue);
+          await tester.tap(
+            find.byKey(const ValueKey<String>('quest-icon-dishwasher')),
+          );
+          await tester.pump();
+
+          await tester.tap(find.text('Save'));
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 300));
+          await tester.pump(const Duration(milliseconds: 300));
+
+          final saved = await tester.runAsync(() => _repo.getQuest('q-table'));
+          // A tap on the already-selected tile must not change what is stored.
+          expect(saved?.icon, 'plate');
+          await disposeApp(tester);
+        },
+        skip: true,
+      );
+    },
+  );
+
+  group('BUG-P09-8 — an emoji-leading nickname breaks the avatar initial', () {
+    testWidgets(
+      'the initial is the full first grapheme, not a lone surrogate',
+      (tester) async {
+        final db = await setUpTestScope();
+        await db
+            .into(db.children)
+            .insert(
+              ChildrenCompanion.insert(
+                id: 'child-emoji',
+                familyId: Seed.familyId,
+                nickname: '😀 Sam',
+                ageBand: const Value('7-9'),
+                avatarColour: const Value('sky'),
+                createdAt: Value(DateTime.utc(2026, 9, 19, 9)),
+              ),
+            );
+        await pumpAppRoute(tester, QuestsRoutePaths.editor);
+
+        // P05 allows any non-empty nickname ≤ 24 UTF-16 units, emoji included.
+        // `_initial` uses `substring(0, 1)`, which splits the surrogate pair,
+        // so the avatar receives a lone high surrogate instead of '😀'.
+        final avatars = tester
+            .widgetList<NestAvatar>(find.byType(NestAvatar))
+            .toList();
+        expect(avatars.last.initial, '😀');
+        tester.takeException(); // drain: the paint failure is proven next door
+        await disposeApp(tester);
+      },
+      skip: true,
+    );
+
+    testWidgets('painting the lone surrogate throws a UTF-16 error', (
+      tester,
+    ) async {
+      final db = await setUpTestScope();
+      await db
+          .into(db.children)
+          .insert(
+            ChildrenCompanion.insert(
+              id: 'child-emoji',
+              familyId: Seed.familyId,
+              nickname: '😀 Sam',
+              ageBand: const Value('7-9'),
+              avatarColour: const Value('sky'),
+              createdAt: Value(DateTime.utc(2026, 9, 19, 9)),
+            ),
+          );
+      await pumpAppRoute(tester, QuestsRoutePaths.editor);
+
+      // Flutter's paragraph builder rejects the malformed string:
+      // `ArgumentError: string is not well-formed UTF-16` — the editor fails
+      // to paint. (Scratch run confirmed the exact error.)
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'a child nickname must never break the editor paint',
+      );
+      await disposeApp(tester);
+    }, skip: true);
+  });
+
   // -- attacks that hold ----------------------------------------------------
   group('attacks that hold (not skipped)', () {
     testWidgets('a double-tap on Delete quest shows one confirm modal', (
@@ -288,6 +469,19 @@ void main() {
 
       expect(currentPath(tester), ParentalGateRoutePaths.gate);
       expect(find.text('New quest'), findsNothing);
+      await disposeApp(tester);
+    });
+
+    testWidgets('kid mode cannot reach /quest-editor with a query either', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+      await pumpAppRoute(tester, '${QuestsRoutePaths.editor}?id=q-hoover');
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(currentPath(tester), ParentalGateRoutePaths.gate);
+      expect(find.text('Edit quest'), findsNothing);
       await disposeApp(tester);
     });
 

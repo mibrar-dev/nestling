@@ -28,13 +28,14 @@ import 'package:nestling/features/quests/quests_routes.dart';
 
 import '../../test_scope.dart';
 
-/// The real repository with three injectable faults.
+/// The real repository with injectable faults.
 class _FaultyRepository implements QuestsRepository {
   _FaultyRepository(
     this._inner, {
     this.failFirstWatch = false,
     this.failWrites = false,
     this.holdGet = false,
+    this.holdWrites = false,
   });
 
   final QuestsRepository _inner;
@@ -50,9 +51,24 @@ class _FaultyRepository implements QuestsRepository {
   /// `ConnectionState.waiting` branch.
   final bool holdGet;
 
+  /// Writes park on a [Completer] the test releases with [releaseWrites] —
+  /// the editor's in-flight `saving` state (BUG-P09-2's guard).
+  final bool holdWrites;
+
   int watchCalls = 0;
   final List<Quest> written = <Quest>[];
   final List<String> deleted = <String>[];
+  final List<Completer<void>> _pending = <Completer<void>>[];
+
+  /// Lets every parked write finish (the "user came back" half of the test).
+  void releaseWrites() {
+    for (final completer in _pending) {
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
+    }
+    _pending.clear();
+  }
 
   /// Reads the row straight from Drift, bypassing the faults.
   Future<Quest?> stored(String id) => _inner.getQuest(id);
@@ -77,25 +93,43 @@ class _FaultyRepository implements QuestsRepository {
   @override
   Future<void> createQuest(Quest quest) {
     written.add(quest);
-    return failWrites
-        ? Future<void>.error(StateError('disk full'))
-        : _inner.createQuest(quest);
+    if (failWrites) {
+      return Future<void>.error(StateError('disk full'));
+    }
+    if (holdWrites) {
+      return _park();
+    }
+    return _inner.createQuest(quest);
   }
 
   @override
   Future<void> updateQuest(Quest quest) {
     written.add(quest);
-    return failWrites
-        ? Future<void>.error(StateError('disk full'))
-        : _inner.updateQuest(quest);
+    if (failWrites) {
+      return Future<void>.error(StateError('disk full'));
+    }
+    if (holdWrites) {
+      return _park();
+    }
+    return _inner.updateQuest(quest);
   }
 
   @override
   Future<void> deleteQuest(String id) {
     deleted.add(id);
-    return failWrites
-        ? Future<void>.error(StateError('disk full'))
-        : _inner.deleteQuest(id);
+    if (failWrites) {
+      return Future<void>.error(StateError('disk full'));
+    }
+    if (holdWrites) {
+      return _park();
+    }
+    return _inner.deleteQuest(id);
+  }
+
+  Future<void> _park() {
+    final completer = Completer<void>();
+    _pending.add(completer);
+    return completer.future;
   }
 
   @override
@@ -118,6 +152,7 @@ Future<_FaultyRepository> _inject({
   bool failFirstWatch = false,
   bool failWrites = false,
   bool holdGet = false,
+  bool holdWrites = false,
 }) async {
   final real = GetIt.instance<QuestsRepository>();
   await GetIt.instance.unregister<QuestsRepository>();
@@ -126,6 +161,7 @@ Future<_FaultyRepository> _inject({
     failFirstWatch: failFirstWatch,
     failWrites: failWrites,
     holdGet: holdGet,
+    holdWrites: holdWrites,
   );
   GetIt.instance.registerSingleton<QuestsRepository>(faulty);
   return faulty;
@@ -322,6 +358,105 @@ void main() {
         await tester.runAsync(() => repository.stored('q-hoover')),
         isNotNull,
       );
+      await disposeApp(tester);
+    });
+  });
+
+  group('P09 editor save guard (BUG-P09-2)', () {
+    setUp(setUpTestScope);
+
+    testWidgets('the pill goes dead while the write is in flight', (
+      tester,
+    ) async {
+      final repository = await _inject(holdWrites: true);
+      await pumpAppRoute(tester, QuestsRoutePaths.editor);
+      expect(_savePill(tester).onPressed, isNotNull);
+
+      await tester.tap(find.text('Save'));
+      await tester.pump();
+
+      // The write has not come back yet: the pill must not be tappable, or a
+      // second tap dispatches a second create.
+      expect(_savePill(tester).onPressed, isNull);
+      expect(repository.written, hasLength(1));
+      expect(
+        find.text('New quest'),
+        findsOneWidget,
+        reason: 'no navigation yet',
+      );
+
+      repository.releaseWrites();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(pushedPath(tester), QuestsRoutePaths.library);
+      await disposeApp(tester);
+    });
+
+    testWidgets('a second tap before the write lands dispatches nothing', (
+      tester,
+    ) async {
+      final repository = await _inject(holdWrites: true);
+      await pumpAppRoute(tester, QuestsRoutePaths.editor);
+
+      await tester.tap(find.text('Save'));
+      await tester.pump();
+      await tester.tap(find.text('Save'), warnIfMissed: false);
+      await tester.pump();
+      await tester.tap(find.text('Save'), warnIfMissed: false);
+      await tester.pump();
+
+      expect(
+        repository.written,
+        hasLength(1),
+        reason: 'three taps, one dispatch (the guard is local, not the DB)',
+      );
+
+      repository.releaseWrites();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 300));
+      // …and exactly one row exists.
+      final saved = await tester.runAsync(
+        () => GetIt.instance<QuestsRepository>().getItems(),
+      );
+      expect(
+        saved!.where((quest) => quest.title == 'Hoover the stairs'),
+        hasLength(1),
+      );
+      await disposeApp(tester);
+    });
+
+    testWidgets('a failed write releases the guard so the parent retries', (
+      tester,
+    ) async {
+      final repository = await _inject(failWrites: true);
+      await pumpAppRoute(tester, QuestsRoutePaths.editor);
+
+      await tester.tap(find.text('Save'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(NestToast), findsOneWidget);
+      expect(repository.written, hasLength(1));
+
+      // `clearSaveGuard` runs before the toast: the pill is live again, or the
+      // editor would be stuck with a dead Save and no way out.
+      expect(
+        _savePill(tester).onPressed,
+        isNotNull,
+        reason: 'the failed write must not leave the pill disabled',
+      );
+      expect(pushedPath(tester), QuestsRoutePaths.editor);
+
+      await tester.tap(find.text('Save'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        repository.written,
+        hasLength(2),
+        reason: 'the retry really reaches the repository again',
+      );
+      await tester.pump(const Duration(seconds: 4));
       await disposeApp(tester);
     });
   });

@@ -1,197 +1,163 @@
-# P09 — stage 6 · FIND BUGS (iteration 1)
+# P09 — stage 6 · FIND BUGS (iteration 2)
 
-Tree: `881880a` (“P09: checkpoint after build (iteration 1)”) + the new test
-file below. No screen code was changed — the brief forbids fixing here.
+Tree: `5c25db1` (“P09: checkpoint after build (iteration 2)”) + the new proofs
+below. No screen code was changed — the brief forbids fixing here.
 
-Adversarial area sweep: data edge cases (0 / 1 / 6 children, long UK names,
-£0.00 / £999.99 / 9999 coins, empty lists), rapid double taps, back
-navigation and deep links, Drift restart persistence, the parent/kid guard,
-dark-mode contrast, 320 dp × text scale 1.3, async gaps, Europe/London
-wall-clock storage, and integer-pence money.
+Adversarial area sweep (iteration 2): the five iteration-1 bugs re-verified,
+then new probes over the changed code — data edge cases (0 / 1 / 6 children,
+emoji-leading and long UK names, £0.00 / £999.99 / 9999 coins), rapid double
+taps on every popping control, back navigation and deep links, Drift restart
+persistence, the parent/kid guard (with query strings), dark-mode contrast,
+320 dp × text scale 1.3, async gaps, Europe/London wall-clock storage and
+integer-pence money.
 
-All proofs live in `app/test/features/quests/p09_bugs_test.dart`. Each bug
-proof is `skip: true` (bug id in the group name) so the suite stays green;
-run them with `--run-skipped` to see them fail. Every probe in the
+All proofs live in `app/test/features/quests/p09_bugs_test.dart`. Iteration-2
+bug proofs are `skip: true` (bug id in the group name) so the suite stays
+green; run them with `--run-skipped` to see them fail. Every probe in the
 “attacks that hold” group runs unskipped.
 
-## Summary
+## Iteration-1 findings — all FIXED, proofs unskipped and green
+
+| id | what was wrong | iteration-2 fix (where) |
+|---|---|---|
+| BUG-P09-1 | payout helper hard-coded 1p/coin | view streams `watchCoinValuePencePerCoin()` (`quests_repository_impl.dart:26`, view `:405`) |
+| BUG-P09-2 | double-tap Save created the quest twice | local `_saving` guard + pill disabled while saving (`:362`, `:458-465`, `:663`) |
+| BUG-P09-3 | non-picker icon showed no selected tile | `_questIcons.aliases` covers every seeded key (`:257-280`) |
+| BUG-P09-4 | out-of-range coins unreachable after a tap | `_coinFloor`/`_coinCeiling` grow to the stored value (`:328-333`, `:787-792`) |
+| BUG-P09-5 | removed child left an orphaned assignee | roster-unknown assignee falls back to `Anyone` (`:367-384`) |
+
+All five proofs now run unskipped in the suite (5 of the 18 passing tests in
+the file). No regression.
+
+## Summary — iteration 2
 
 | id | severity | one-liner | failing test (group › test) |
 |---|---|---|---|
-| BUG-P09-1 | **major** | payout helper hard-codes 1p/coin and ignores the family’s `coinValuePencePerCoin` | `BUG-P09-1 — the payout helper ignores the family coin value` › `a 2p-per-coin family still reads "= 15p at payout"` |
-| BUG-P09-2 | **major** | double-tap **Save** creates the quest twice (no in-flight guard) | `BUG-P09-2 — double-tap Save creates the quest twice` › `two Save taps before the router frame make two quests` |
-| BUG-P09-3 | minor | a quest icon outside the six tiles (`plate`, `shirt`, `sofa`, `bag`, `leaf`) shows no selected tile | `BUG-P09-3 — a quest icon outside the six tiles has no selection` › `editing q-table (icon "plate") selects no tile` |
-| BUG-P09-4 | minor | out-of-range stored coins (9999 / 0) cannot be restored once the stepper touches them | `BUG-P09-4 — out-of-range stored coins cannot be restored` › `a 9999-coin quest drops to 9998 with no way back` |
-| BUG-P09-5 | minor | a quest assigned to a removed child shows no selected pill; Save keeps the orphan id | `BUG-P09-5 — a removed child leaves an orphaned assignee` › `q-bed assigned to deleted Leo shows no selected pill` |
+| BUG-P09-8 | **major** | an emoji-leading child nickname makes the editor throw `ArgumentError: string is not well-formed UTF-16` while painting the avatar (the screen fails to paint) | `BUG-P09-8 — an emoji-leading nickname breaks the avatar initial` › `the initial is the full first grapheme, not a lone surrogate` **and** `painting the lone surrogate throws a UTF-16 error` |
+| BUG-P09-6 | minor | an out-of-range reward is shown at face value (9999 / `= 9999p`, or 0 / `= 0p`) but silently clamped on save (writes 100 / 1) | `BUG-P09-6 — an out-of-range reward is shown at face value, saved clamped` › `the screen says 9999 / 9999p and the write says 100` **and** `a 0-coin quest is shown as 0 / 0p and saved as 1` |
+| BUG-P09-7 | minor | tapping the alias-highlighted tile (Dishes for `plate`) is visually a no-op but rewrites the stored icon key to the tile key | `BUG-P09-7 — tapping the alias-highlighted tile rewrites the stored key` › `q-table (plate) saves dishwasher after a no-op-looking tap` |
 
 ---
 
-## BUG-P09-1 — major — the payout helper ignores the family coin value
+## BUG-P09-8 — major — an emoji-leading nickname breaks the editor paint
 
-**Where:** `app/lib/features/quests/presentation/views/quest_editor_view.dart`
-— `const int _pencePerCoin = 1` (line 249) feeding
-`'= ${_coins * _pencePerCoin}p at payout'` (line 652).
+**Where:** `_initial` (`quest_editor_view.dart:738-740`) —
+`nickname.substring(0, 1).toUpperCase()` — fed to `NestAvatar.initial`
+(`:724`).
 
-**Why it is wrong:** the reward helper is the screen’s only money figure and
-the plan (§1-5) says it “derives from `families.coinValuePencePerCoin`”.
-The column is real, variable data: the schema carries it, P06’s setup screen
-reads it, and P06 pins the exact opposite behaviour for the same column
-(“the coin value string follows the database, not the design”,
-`pocket_money_setup_view_test.dart:1944`). P09 prints 15p for a family whose
-stored rate is 2p/coin — the database value the orchestrator’s DATA-over-mocks
-rule says is correct. Reachability note: every shipped seed writes 1, and no
-current UI writes a different value, so the wrong figure is latent today; it
-becomes wrong the moment any flow (P06/P16, a migration or a seed variant)
-stores another rate.
+**Why it is wrong:** `String.substring` slices UTF-16 code units, not
+graphemes. A nickname beginning with an astral-plane character (`😀`, flags,
+most emoji) has a surrogate pair at index 0, so `substring(0, 1)` returns the
+lone high surrogate. P05 accepts any non-empty nickname up to 24 UTF-16 units
+(`family_bloc.dart:66-71`, no input formatter), so this is reachable from the
+app’s own add-child flow. Flutter’s paragraph builder then rejects the
+malformed string — the editor fails to paint:
+
+```
+ArgumentError: Invalid argument(s): string is not well-formed UTF-16
+  at _NativeParagraphBuilder.addText
+```
+
+Not a font/rendering artifact: `addText` validates well-formedness, so it
+throws in release too, not just debug.
 
 **Repro:**
 ```dart
-final db = await setUpTestScope();
-await (db.update(db.families)..where((f) => f.id.equals(Seed.familyId)))
-    .write(const FamiliesCompanion(coinValuePencePerCoin: Value(2)));
+// child nickname '😀 Sam' inserted directly (P05's own rules allow it)
 await pumpAppRoute(tester, QuestsRoutePaths.editor);
-// 15 coins × 2p = 30p
-expect(find.text('= 30p at payout'), findsOneWidget); // FAILS
+final avatars = tester.widgetList<NestAvatar>(find.byType(NestAvatar));
+expect(avatars.last.initial, '😀');          // actual: lone surrogate '\uD83D'
+expect(tester.takeException(), isNull);      // actual: ArgumentError above
 ```
-Expected `= 30p at payout`; actual `= 15p at payout`.
+Two skipped tests prove each half: the initial is `'\uD83D'` (renders `�`),
+and the pump throws the UTF-16 `ArgumentError`.
 
-**Suggested fix:** read the rate from the database instead of the constant —
-e.g. add a read-only `Stream<int>/Future<int> coinValuePencePerCoin()` to
-`QuestsRepository` (feature-local, backed by the `families` row) and render
-`coins * rate`; or read it through the existing read-only
-`SettingsRepository.watchSettings()` / `FamilyRepository` import the way the
-view already imports `family/domain` read-only. Update the widget test that
-asserts `= 15p at payout` to keep the demo-seed case (rate 1) and add the 2p
-case.
+**Suggested fix:** take the first grapheme, not the first code unit —
+`nickname.characters.first.toUpperCase()` (`characters` is exported by
+`package:flutter/foundation.dart`, already imported via Material), with the
+existing `isEmpty → '?'` fallback. Add a unit test for `😀`, a flag emoji and
+a combining-mark name.
 
-## BUG-P09-2 — major — double-tap Save creates the quest twice
+## BUG-P09-6 — minor — out-of-range reward shown at face value, saved clamped
 
-**Where:** `_QuestEditorSheetState._save`
-(`quest_editor_view.dart:345`) and the header call site
-`QuestSavePill(onPressed: _canSave ? _save : null)` (line 540). `_save`
-never consults `state.editorStatus`, and the pill stays enabled while
-`QuestEditorStatus.saving`.
+**Where:** `_save` writes `coins: _coins.clamp(_minCoins, _maxCoins)`
+(`quest_editor_view.dart:478`) while the stepper and the helper render the
+raw `_coins` (`:773`, `:784`).
 
-**Why it is wrong:** two taps that land before the router frame replaces the
-editor both dispatch `QuestsCreateRequested`; `_save` mints the id from
-`DateTime.now().millisecondsSinceEpoch` per call, so the two inserts get
-different ids and both land — the parent gets two identical quests. (A
-same-millisecond pair instead collides on the primary key and surfaces as a
-save failure.) This is the same defect class the P10 hunt rated major
-(double-tap stacking two editor routes).
+**Why it is wrong:** the editor deliberately shows a corrupt stored value as
+stored (BUG-P09-4 fix: the stepper can reach it), but the write silently
+repairs it. The screen promises one number and stores another: a 9999-coin
+quest shows `9999` and `= 9999p at payout`, and Save writes **100**; a
+0-coin quest shows `0` / `= 0p` and writes **1**. The repository’s own
+comment says a corrupt value should “fail loudly instead of being silently
+rewritten” (`quests_repository_impl.dart:92-96`) — the view clamp means that
+path is unreachable from the editor, and the parent is never told the reward
+changed.
 
-**Repro:**
-```dart
-await pumpAppRoute(tester, QuestsRoutePaths.editor);
-await tester.enterText(find.byType(TextField).first, 'Double tap quest');
-await tester.tap(find.text('Save'));
-await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 30)));
-await tester.tap(find.text('Save'));
-// settle, then read the DB
-expect(quests.where((q) => q.title == 'Double tap quest').length, 1); // FAILS: 2
-```
-Actual: two rows, ids `q-…540` and `q-…548` (proven in a scratch diagnostic).
+**Repro:** insert `coins: 9999` (or `0`), open `?id=…`, Save without touching
+the reward; `getQuest` returns `100` (or `1`), while the screen showed the
+original.
 
-**Suggested fix:** guard the save in the sheet (`bool _saving = false;`
-early-return + set, cleared on the bloc’s failure emission) **and** disable the
-pill while `state.editorStatus == QuestEditorStatus.saving`
-(`onPressed: null`), so both the visual control and the handler are safe.
-Keep the `failure` path re-enabling it.
+**Suggested fix:** make the mismatch impossible instead of silent — when
+`_coins` is outside 1..100, disable Save and show a live-region caption (the
+same pattern as `Pick at least one day`), e.g. `Coins must be 1–100`, so the
+parent explicitly steps it into range; keep the widened stepper bounds so the
+repair is always reachable. (Alternative: don’t clamp and let the repo’s
+validation surface the toast — but then an untouched corrupt row cannot be
+saved at all.)
 
-## BUG-P09-3 — minor — a quest icon outside the six tiles shows no selection
+## BUG-P09-7 — minor — tapping the alias-highlighted tile rewrites the key
 
-**Where:** `_questIcons` (`quest_editor_view.dart:228`) + the selection test
-`selected == option.key || option.aliases.contains(selected)` (line 554).
+**Where:** the tile call site (`quest_editor_view.dart:677-678`) —
+`selected: selected == option.key || option.aliases.contains(selected)` with
+`onTap: () => setState(() => _icon = option.key)`.
 
-**Why it is wrong:** the seed stores ten distinct icon keys
-(`plate`, `shirt`, `sofa`, `bag`, `leaf`, …) but the picker has six tiles and
-only one alias (`bins` → `bin`). Editing `q-table` (`plate`), `q-washing`
-(`shirt`), `q-living` (`sofa`), `q-bag` (`bag`) or `q-plants` (`leaf`) renders
-the whole `role="radiogroup"` with **no checked tile**, so the parent cannot
-see the quest’s current icon (and screen readers announce no selection). The
-icon is preserved on save, so this is a visible-state/a11y defect, not data
-loss.
+**Why it is wrong:** for a quest stored as `plate`, the Dishes tile is
+highlighted through the alias, so it already looks selected; tapping it is
+visually a no-op, yet it rewrites `_icon` to `dishwasher`. Save then stores
+the normalised key and the library/today glyph changes — the parent cannot
+see that their tap changed anything. Same for `bins`→`bin` (a seeded quest,
+`q-bins`), `bag`/`shirt`→`bin`, `leaf`→`paw`, `sofa`→`bed`. A radio that is
+already checked is normally inert.
 
-**Repro:** `pumpAppRoute('/quest-editor?id=q-table')`; count
-`QuestIconTile.selected` → expected 1, actual 0.
+**Repro:** open `?id=q-table` (icon `plate`); assert the Dishes tile is
+selected; tap it; Save; `getQuest('q-table').icon` is `dishwasher`
+(expected `plate`).
 
-**Suggested fix:** extend the alias map so every icon the DB can hold maps to
-a tile, or render the stored icon as an extra selected tile when it is not one
-of the six; the durable fix is to align the seed’s icon vocabulary with the
-six-tile picker (shared/seed change → SHARED_REQUEST, orchestrator-owned).
-
-## BUG-P09-4 — minor — out-of-range stored coins cannot be restored
-
-**Where:** `_coins` initialised straight from the row (line 269) with button
-bounds `onDecrease: _coins > 1` / `onIncrease: _coins < 100` (lines 666–667).
-
-**Why it is wrong:** the stepper clamps only its buttons. A stored value
-outside the design’s 1–100 range is displayed and can be moved one step, but
-never back: a 9999-coin quest drops to 9998 and `+` is dead (9998 is not
-< 100); a 0-coin quest can be raised to 1 but never returned to 0. The editor
-neither clamps the stored data nor offers a representation for it, so a single
-mis-tap permanently rewrites an existing value.
-
-**Repro:** insert a quest with `coins: 9999`, open `?id=q-9999`, tap
-`decrease`; `find.text('9998')` passes, then
-`NestStepper.onIncrease` is null → the test expects it non-null and fails.
-
-**Suggested fix:** clamp on load (`_coins = quest.coins.clamp(1, 100)`, the
-same repair the rest of the app does for out-of-range data) or size the upper
-bound to `max(100, storedValue)` so the stored value stays reachable; add a
-repo-level range check so such rows cannot be written.
-
-## BUG-P09-5 — minor — a removed child leaves an orphaned assignee
-
-**Where:** `_assignee` seeded from the row (line 300) and
-`_effectiveAssignee` (line 287); `FamilyRepository.removeChild` deletes the
-child without touching `quests.assigneeChildId`.
-
-**Why it is wrong:** after a child is removed, editing one of their quests
-shows the pill row with **nothing selected** (`_assignee` matches no pill and
-is not `_anyone`), and Save writes the dead id straight back — the quest stays
-assigned to a child who no longer exists, with no visual indication.
-
-**Repro:** `removeChild('leo')`, open `?id=q-bed` (assigned to Leo); count
-selected `QuestPersonPill` → expected 1, actual 0.
-
-**Suggested fix:** once the roster is loaded, treat an assignee that matches
-no child as `_anyone` (fall back and let Save clear the id), or show a
-selected “Anyone” fallback; a cascade/reassign belongs in the family feature
-(SHARED_REQUEST, orchestrator-owned).
+**Suggested fix:** ignore the tap when the tile is already the visual
+selection — compute `isSelected` first and only `setState(_icon = option.key)`
+when `!isSelected` — so an alias-highlighted tile keeps the stored key unless
+the parent picks a *different* tile.
 
 ---
 
-## Attacks that hold (probes, unskipped — 12 tests)
+## Attacks that hold (probes, unskipped — 13 tests)
 
-- **Double-tap `Delete quest`** → one confirm modal: the first tap pushes the
-  dialog route synchronously, so the modal barrier is the hit-test target for
-  the second tap and the framework swallows it.
-- **Double-tap `Due by`** → one option sheet (same modal-barrier protection).
+- **Rapid double taps:** double-tap `Delete quest` → one confirm modal;
+  double-tap `Due by` → one option sheet; double-tap `Cancel`, a due-sheet
+  row and `Keep it` never pops a second route (all swallowed by the
+  route/modal transition). Double-tap **Save** is now guarded (iteration-1
+  proof runs green).
 - **Restart persistence:** save → dispose the app → new `NestlingApp` over
   the same Drift DB → the quest is on the library’s Active tab.
-- **Parent/kid guard:** kid mode + `/quest-editor` lands on
-  `/parental-gate`; the editor never builds.
+- **Parent/kid guard:** kid mode + `/quest-editor` (plain **and** with
+  `?id=`) lands on `/parental-gate`; the editor never builds.
 - **320 dp × text scale 1.3**, new and edit mode: no overflow/exception.
+- **One-child family:** the new quest defaults to that child.
 - **Six children with long names** (`Maximilian-Alexander`,
   `Annabella-Rose`, `Cassandra-Jane`, `Fitzwilliam`) at 320 × 1.3: pills wrap,
-  creation order preserved (Maya, Leo, then the added children, `Anyone`
-  last).
-- **One-child family:** the new quest defaults to that child.
+  creation order preserved, `Anyone` last.
 - **Dark mode:** the Save pill’s `--surface` on `--leaf` pair keeps ≥ 4.5:1
   contrast.
 - **Back navigation:** a quest pushed from Today (`?questId=`) → Cancel
   returns to `/today`.
 - **Zone/BST:** with the family moved to `Asia/Dubai`, the due time is still
   stored as the wall-clock string `17:00` (`dueLabel` `Before tea (5pm)`).
-- **Due-sheet a11y:** all three rows expose `SemanticsAction.tap`, and
-  `performAction(tap)` moves the real due label (and the saved `HH:MM`).
-- **Delete modal a11y:** `Keep it` and `Delete` expose tap; `Keep it` driven
-  through semantics keeps the Drift row.
-
-Existing suites already cover the other listed edges: 0 children / `Seed.empty`
-(`quest_editor_view_test.dart` — Anyone only), unknown `?id=` → “Quest not
-found”, blank title disables Save, weekly-with-no-days blocks Save.
+- **A11y actions:** all three due-sheet rows expose `SemanticsAction.tap` and
+  `performAction(tap)` moves the real due label (and the saved `HH:MM`);
+  `Keep it` / `Delete` expose tap and `Keep it` keeps the Drift row.
+- The 0-child / `Seed.empty`, unknown-id, blank-title and weekly-no-days edges
+  stay covered by the existing feature suites (green).
 
 ## Verification
 
@@ -201,21 +167,20 @@ Formatted 1 file (0 changed)
 $ flutter analyze test/features/quests/p09_bugs_test.dart
 No issues found!
 $ flutter test test/features/quests/p09_bugs_test.dart
-00:02 +12 ~5: All tests passed!        # 12 probes pass, 5 bug proofs skipped
+00:29 +18 ~5: All tests passed!        # 13 probes + 5 fixed iteration-1 proofs
 $ flutter test test/features/quests/p09_bugs_test.dart --run-skipped
-+12 -5: Some tests failed              # the five BUG-P09-* proofs fail as documented
+00:12 +18 -5: Some tests failed        # the five iteration-2 proofs fail as documented
+$ flutter test
+01:48 +2563 ~6: All tests passed!      # whole app; ~6 = 5 new proofs + P12-BUG-05
 ```
 
 No simulator was booted, installed on, screenshotted or driven; `flutter
 clean` was never run; no `// ignore:` and no shared file was touched.
 
 **Out of scope (process, not findings):** the worktree also carries other
-stages’ uncommitted work (`quest_editor_a11y_test.dart`,
-`quest_editor_states_test.dart`, `4_review.md`, `5_ui.md`, `ui/`). It was left
-untouched. At the time of writing, two of that file’s tests fail for
-test-side reasons (it expects `NestToggle`’s node to carry the `isButton`
-flag — Flutter’s switch role is `toggled` + `onTap`, which is what the
-component publishes — and it compares `Tristate.isSelected` to a `bool`); they
-are not P09 screen defects and are that stage’s to resolve.
+stages’ uncommitted work (`quest_editor_coin_rules_test.dart`,
+`quest_editor_data_integrity_test.dart`, `quest_editor_states_test.dart`,
+`5_ui.md`, UI PNGs). It was left untouched; at the time of writing those
+files’ two `flutter analyze` infos are theirs, not this stage’s.
 
 VERDICT: FAIL

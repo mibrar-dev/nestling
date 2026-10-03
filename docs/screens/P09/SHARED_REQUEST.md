@@ -102,8 +102,43 @@ is already semantically right (bed→bed, dishwasher→dishwasher,
 hoover→hoover, book→book, bins→bin, paw→paw) — and re-drawing glyphs inside
 `quests/` would fork the design system, so the screen takes no redraw.
 
-**UPDATE (iteration 2, stage 2b):** the loop merged `main` after this request
-was filed and two of the four glyphs have since been redrawn in the DS:
+**CORRECTION (iteration 2, stage 5 — verified against git, supersedes the
+paragraph below):** no DS redraw has landed. `git log --all` shows
+`ic_hoover.svg` / `ic_bed.svg` / `ic_bin.svg` / `ic_dishwasher.svg` untouched
+since the baseline (`f912ef0`), the working tree is clean under
+`app/assets/`, and the baseline bytes ARE what both UI checks measured:
+
+- `ic_bed.svg` (baseline) = bed frame + headboard arc
+  (`M3 18v-8…M3 18h18` + `M5 8V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v2`); the
+  design's Bed is the same frame WITHOUT the headboard arc (MAE 4.5 —
+  close, not exact).
+- `ic_hoover.svg` (baseline) = rounded canister (`rect x=3 y=10.8 w=11.8
+  h=8.2 rx=3.4`) + curved hose + handle bar + two filled-dot wheels; the
+  design's Hoover is an angular canister (`rect x=3 y=8 w=13 h=8 rx=2`) +
+  angular hose + two leg LINES (MAE 20.5 — a different drawing).
+- `ic_basket.svg` (baseline, substituted onto the Dishes tile in the
+  iter-2 build) = tapered slatted laundry basket; the design's Dishes is a
+  plain basket + single arch handle (MAE 17.5). Per the mandatory
+  orchestrator ruling (ORCHESTRATOR_NOTES.md 17:57 item 1) this look-alike
+  substitution must be REVERTED, not kept: the exact design glyph is
+  missing from `app/assets/icons`, so the DS must gain it.
+- `ic_bin.svg` (baseline) = rimmed wheelie bin; the design's Bins is a
+  small handled case with a clasp (MAE 17.3).
+- `ic_book.svg` and `ic_paw.svg` ARE path-identical to the design's SVGs
+  (verified byte-for-byte on the `<path>`/`<circle>` elements; tile MAE
+  4.1 / 1.9 is raster residue only).
+
+Exact design sources (verbatim from
+`design/html-source/screens/P09-quest-editor.html`, 24×24, stroke 2, round
+caps/joins) for the DS redraw — Bed, Dishes, Hoover, Bins in that order:
+
+- Bed: `<path d="M3 18v-8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v8"/><path d="M3 18h18"/>`
+- Dishes: `<path d="M4 11h16v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-9z"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>`
+- Hoover: `<rect x="3" y="8" width="13" height="8" rx="2"/><path d="M16 12h3a2 2 0 0 0 2-2V7a2 2 0 0 0-4 0M7 16v3M11 16v3"/>`
+- Bins: `<path d="M3 7h13v9H3zM7 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 12h4"/>`
+
+Superseded paragraph (kept for the audit trail — its redraw claims are
+wrong, see CORRECTION above):
 
 - `assets/icons/ic_hoover.svg` is now a canister body
   (`rect x="3" y="10.8" w="11.8" h="8.2" rx="3.4"`) with a hose, a handle bar
@@ -124,14 +159,17 @@ seeded quests on the P10 library rows (`quest_idea_meta.dart`'s
 `questIconAsset`).
 
 Files: `app/lib/core/design_system/**` wherever `NestIcons.bed`,
-`.dishwasher`, `.hoover`, `.bin` are drawn (design reference: 24 px,
-2 px stroke, round caps, Lucide-style — the exact paths are in the P09
-HTML source, lines 30–35).
+`.dishwasher`, `.hoover`, `.bin` are drawn. The exact design paths are
+quoted in the CORRECTION above (P09 HTML source, 24 px, stroke 2, round
+caps/joins).
 Blocks: **yes for the UI verdict** — P09 cannot PASS stage 5 until the DS
-glyphs match; no P09 code change is needed on top (screenshots just need
-re-taking after the merge-back). Stage 5 must re-measure the six tiles: the
-Dishes tile is expected to improve from MAE 19.9 and the Hoover tile from
-20.5, `bin` is unchanged at 17.3.
+glyphs match. Two P09-side steps are still needed on top of the DS redraw
+(screen code, next iteration): (1) REVERT the iter-2 `NestIcons.basket`
+substitution on the Dishes tile (`quest_editor_view.dart:260-270`) back to
+the exact-glyph icon once the DS gains it — look-alike substitution is
+forbidden by ORCHESTRATOR_NOTES.md 17:57 item 1; (2) re-take the stage-5
+screenshots after the merge-back. Iter-2 stage-5 tile MAEs for the record:
+bed 4.5 / dishes 17.5 / hoover 20.5 / book 4.1 / bins 17.3 / paw 1.9.
 
 ## 5. `NestStepper` draws its minus as U+002D, both designs print U+2212 (advisory)
 
