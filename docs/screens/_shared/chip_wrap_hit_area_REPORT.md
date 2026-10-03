@@ -18,10 +18,13 @@ renames. Screen branches merge and compile without edits.
   extending `RenderWrap`. Layout is exactly `Wrap` (no layout overrides),
   so no screen moves. Only `hitTest` is widened: points up to
   `NestChip.hitSlop` outside all four sides are passed to
-  `hitTestChildren`, and gap/outer-slop taps fall back to the nearest chip
-  (forwarded to the chip centre, which is always inside the stadium —
-  a clamped edge point can land outside the rounded ends and be rejected
-  by the InkWell's shape-aware hit test). Covers single rows too: a
+  `hitTestChildren`, and gap/outer-slop taps within `NestChip.hitSlop`
+  of a chip fall back to the nearest chip (forwarded to the chip centre,
+  which is always inside the stadium — a clamped edge point can land
+  outside the rounded ends and be rejected by the InkWell's shape-aware
+  hit test). Taps farther than `hitSlop` from every chip fall through
+  (return false) so whatever is behind handles them — no phantom target
+  (see Fix 1). Covers single rows too: a
   one-run `NestChipWrap` behaves like a `Row`, so no separate
   `NestChipRow` was added (simpler option chosen, documented on the class).
 - `app/lib/core/design_system/design_system.dart` — exports the new file.
@@ -47,6 +50,19 @@ chip) and the left/right ends meet the 44 px minimum for narrow chips.
 - `two runs with runSpacing 8 have no dead spots between runs`
   (sweeps the full run width in the middle of the runSpacing gap; every
   tap selects a chip).
+- `tap 20 px right of the last chip falls through to behind`
+- `tap 5 px right of the last chip selects it`
+
+## Fix 1 — distance gate (orchestrator review)
+
+Was: the nearest-chip fallback claimed ANY tap inside the wrap's bounds,
+however far from every chip — e.g. a tap 150 px right of the last chip
+in a half-full row selected that chip (phantom target).
+Now: the fallback only fires when the squared Euclidean distance to the
+nearest chip edge is ≤ `hitSlop²` (36). Gap middles sit 4 px from a chip
+(16 ≤ 36, still tappable); a 20 px-away tap (400 > 36) returns false so
+the tap falls through to the `GestureDetector` behind. The two new tests
+above prove both sides (fall-through + 5 px still selects).
 
 ## Where screens use Wrap/Row of NestChip today (grep `app/lib/features`)
 
@@ -77,6 +93,6 @@ layout re-measurement needed (size identical to `Wrap` by test).
 ## Verification
 
 `cd app && dart format .` clean, `flutter analyze` → No issues found!,
-`flutter test` → all pass (700 green).
+`flutter test` → all pass (702 green).
 
 VERDICT: PASS

@@ -214,5 +214,102 @@ void main() {
           selected['Long label A']!.length + selected['Long label B']!.length;
       expect(hits, taps);
     });
+
+    testWidgets('tap 20 px right of the last chip falls through to behind', (
+      tester,
+    ) async {
+      final selected = {'A': <bool>[], 'B': <bool>[], 'C': <bool>[]};
+      final behind = <bool>[];
+      await pumpNest(
+        tester,
+        SizedBox(
+          width: 350,
+          height: 100,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => behind.add(true),
+                  child: const SizedBox.expand(),
+                ),
+              ),
+              Align(
+                alignment: Alignment.topLeft,
+                child: SizedBox(
+                  width: 350,
+                  child: NestChipWrap(
+                    spacing: NestSpacing.s2,
+                    runSpacing: NestSpacing.s2,
+                    children: _chips(const ['A', 'B', 'C'], selected),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      final last = find.byKey(const ValueKey('wrap-C'));
+      expect(last, findsOneWidget);
+      final lastTopLeft = tester.getTopLeft(last);
+      final lastSize = tester.getSize(last);
+      // Half-full row: three narrow chips occupy roughly half the width.
+      expect(lastTopLeft.dx + lastSize.width, lessThan(200));
+      await tester.tapAt(
+        lastTopLeft + Offset(lastSize.width + 20, lastSize.height / 2),
+      );
+      await tester.pump();
+
+      expect(selected['A'], isEmpty);
+      expect(selected['B'], isEmpty);
+      expect(selected['C'], isEmpty);
+      expect(behind, [true]);
+    });
+
+    testWidgets('tap 5 px right of the last chip selects it', (tester) async {
+      final selected = {'A': <bool>[], 'B': <bool>[], 'C': <bool>[]};
+      final behind = <bool>[];
+      await pumpNest(
+        tester,
+        SizedBox(
+          width: 350,
+          height: 100,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => behind.add(true),
+                  child: const SizedBox.expand(),
+                ),
+              ),
+              Align(
+                alignment: Alignment.topLeft,
+                child: SizedBox(
+                  width: 350,
+                  child: NestChipWrap(
+                    spacing: NestSpacing.s2,
+                    runSpacing: NestSpacing.s2,
+                    children: _chips(const ['A', 'B', 'C'], selected),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      final last = find.byKey(const ValueKey('wrap-C'));
+      final lastTopLeft = tester.getTopLeft(last);
+      final lastSize = tester.getSize(last);
+      await tester.tapAt(
+        lastTopLeft + Offset(lastSize.width + 5, lastSize.height / 2),
+      );
+      await tester.pump();
+
+      expect(selected['C'], [true]);
+      expect(behind, isEmpty);
+    });
   });
 }

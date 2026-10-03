@@ -11,8 +11,9 @@ import 'package:nestling/core/design_system/components/nest_chip.dart';
 /// above/below the first/last run to the chip's expanded hit box. This
 /// widget lays out identically to [Wrap] but its render object also
 /// forwards points up to [NestChip.hitSlop] outside its bounds (all four
-/// sides) to its children, and taps landing in the spacing between two
-/// chips go to the nearest chip.
+/// sides) to its children, and taps landing within [NestChip.hitSlop] of
+/// a chip (including the spacing gaps between two chips) go to the
+/// nearest chip. Taps farther away fall through to whatever is behind.
 ///
 /// Covers single rows too: a one-run [NestChipWrap] behaves like a `Row`
 /// with wrapping disabled, so no separate `NestChipRow` is needed — use
@@ -84,10 +85,9 @@ class RenderNestChipWrap extends RenderWrap {
       result.add(BoxHitTestEntry(this, position));
       return true;
     }
-    // Gap or outer-slop tap: forward to the nearest chip with the position
-    // clamped just inside its bounds (epsilon-inset, since `Size.contains`
-    // excludes the bottom/right edge), so the chip's own bounds check
-    // passes while the gesture arena still sees the true pointer location.
+    // Gap or outer-slop tap within [NestChip.hitSlop] of a chip: forward
+    // to the nearest chip. Farther taps fall through (return false) so
+    // whatever is behind handles them instead of creating a phantom target.
     RenderBox? nearest;
     var nearestDist = double.infinity;
     var child = firstChild;
@@ -110,6 +110,9 @@ class RenderNestChipWrap extends RenderWrap {
       }
       child = childAfter(child);
     }
+    // Squared Euclidean distance: gap middles sit 4 px from a chip edge
+    // (16 <= 36) while a 20 px-away tap (400 > 36) falls through.
+    if (nearestDist > slop * slop) return false;
     final target = nearest;
     if (target == null) return false;
     // Forward to the chip centre (always inside the stadium, unlike a
