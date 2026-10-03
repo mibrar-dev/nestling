@@ -469,10 +469,10 @@ void main() {
       expect(continueSize.height, greaterThanOrEqualTo(NestDevice.tapParent));
 
       final toggleBox = find.byKey(const ValueKey('p04_crash_toggle'));
-      expect(
-        tester.getSize(toggleBox).height,
-        greaterThanOrEqualTo(NestDevice.tapParent),
-      );
+      // Shared batch 5: the toggle lays out at the design's 51x31 track; the
+      // 44 px tap target is an overlaid hit test (see shared_batch5_test),
+      // not layout — same rule as interactive NestChip (32 px pill, 44 hit).
+      expect(tester.getSize(toggleBox), const Size(51, 31));
 
       final footnote = find.byKey(const ValueKey('p04_privacy_notice'));
       final footnoteAncestor = find
@@ -501,9 +501,10 @@ void main() {
         tester.getSize(find.byKey(const ValueKey('p04_continue'))).height,
         greaterThanOrEqualTo(NestDevice.tapParent),
       );
+      // Shared batch 5: 51x31 track, 44 hit area via hit slop (see above).
       expect(
-        tester.getSize(find.byKey(const ValueKey('p04_crash_toggle'))).height,
-        greaterThanOrEqualTo(NestDevice.tapParent),
+        tester.getSize(find.byKey(const ValueKey('p04_crash_toggle'))),
+        const Size(51, 31),
       );
       expect(tester.takeException(), isNull);
 

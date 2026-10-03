@@ -174,13 +174,14 @@ void main() {
         );
       }
 
-      // The switch hit box is 44 tall even though the drawn track is 31.
+      // Shared batch 5: the switch lays out at the design's 51x31 track; the
+      // 44 px tap target is an overlaid hit test (proven by the next test
+      // tapping 5 px outside the track), not layout — same as NestChip.
       final toggles = find.byType(NestToggle);
       expect(toggles, findsNWidgets(6));
       for (var i = 0; i < 6; i++) {
         final box = tester.getRect(toggles.at(i));
-        expect(box.height, NestDevice.tapParent, reason: 'switch $i');
-        expect(box.width, greaterThanOrEqualTo(51));
+        expect(box.size, const Size(51, 31), reason: 'switch $i');
       }
 
       await disposeApp(tester);
@@ -522,6 +523,8 @@ void main() {
 
       // `'Needs my OK'` is both the visible row label and the switch's
       // semantic label, so the switch is addressed by type here.
+      // Shared batch 5: the switch lays out at 51x31 (44 hit via slop), so
+      // it is asserted separately below and excluded from the 44 px loop.
       final rects = <String, Rect>{
         'Close': tester.getRect(find.bySemanticsLabel('Close')),
         'Decrease price': tester.getRect(
@@ -530,7 +533,6 @@ void main() {
         'Increase price': tester.getRect(
           find.bySemanticsLabel('Increase price'),
         ),
-        'Needs my OK switch': tester.getRect(find.byType(NestToggle).last),
         'Save': tester.getRect(find.byKey(const ValueKey('p14_save'))),
         'Cancel': tester.getRect(find.byKey(const ValueKey('p14_cancel'))),
         'Delete': tester.getRect(find.byKey(const ValueKey('p14_delete'))),
@@ -547,6 +549,10 @@ void main() {
           reason: '${entry.key} height ${entry.value.size}',
         );
       }
+      expect(
+        tester.getRect(find.byType(NestToggle).last).size,
+        const Size(51, 31),
+      );
       expect(tester.getRect(find.byKey(const ValueKey('p14_save'))).height, 52);
       expect(
         tester.getRect(find.byKey(const ValueKey('p14_cancel'))).height,
