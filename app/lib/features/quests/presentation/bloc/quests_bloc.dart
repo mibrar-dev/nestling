@@ -7,6 +7,9 @@ import 'package:nestling/features/quests/presentation/bloc/quests_state.dart';
 class QuestsBloc extends Bloc<QuestsEvent, QuestsState> {
   new({required this._repository}) : super(const QuestsState()) {
     on<QuestsLoadRequested>(_onLoadRequested);
+    on<QuestsCreateRequested>(_onCreateRequested);
+    on<QuestsUpdateRequested>(_onUpdateRequested);
+    on<QuestsDeleteRequested>(_onDeleteRequested);
   }
 
   final QuestsRepository _repository;
@@ -25,5 +28,74 @@ class QuestsBloc extends Bloc<QuestsEvent, QuestsState> {
         errorMessage: error.toString(),
       ),
     );
+  }
+
+  Future<void> _onCreateRequested(
+    QuestsCreateRequested event,
+    Emitter<QuestsState> emit,
+  ) async {
+    emit(
+      state.copyWith(
+        editorStatus: QuestEditorStatus.saving,
+        clearEditorError: true,
+      ),
+    );
+    try {
+      await _repository.createQuest(event.quest);
+      emit(state.copyWith(editorStatus: QuestEditorStatus.saved));
+    } on Object catch (error) {
+      emit(
+        state.copyWith(
+          editorStatus: QuestEditorStatus.failure,
+          editorError: error.toString(),
+        ),
+      );
+    }
+  }
+
+  Future<void> _onUpdateRequested(
+    QuestsUpdateRequested event,
+    Emitter<QuestsState> emit,
+  ) async {
+    emit(
+      state.copyWith(
+        editorStatus: QuestEditorStatus.saving,
+        clearEditorError: true,
+      ),
+    );
+    try {
+      await _repository.updateQuest(event.quest);
+      emit(state.copyWith(editorStatus: QuestEditorStatus.saved));
+    } on Object catch (error) {
+      emit(
+        state.copyWith(
+          editorStatus: QuestEditorStatus.failure,
+          editorError: error.toString(),
+        ),
+      );
+    }
+  }
+
+  Future<void> _onDeleteRequested(
+    QuestsDeleteRequested event,
+    Emitter<QuestsState> emit,
+  ) async {
+    emit(
+      state.copyWith(
+        editorStatus: QuestEditorStatus.saving,
+        clearEditorError: true,
+      ),
+    );
+    try {
+      await _repository.deleteQuest(event.id);
+      emit(state.copyWith(editorStatus: QuestEditorStatus.saved));
+    } on Object catch (error) {
+      emit(
+        state.copyWith(
+          editorStatus: QuestEditorStatus.failure,
+          editorError: error.toString(),
+        ),
+      );
+    }
   }
 }

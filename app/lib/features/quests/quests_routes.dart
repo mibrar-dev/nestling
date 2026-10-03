@@ -16,6 +16,18 @@ abstract final class QuestsRoutePaths {
   static const String library = '/quests';
 }
 
+/// Query-string contract for [QuestsRoutePaths.editor] (P09 new / edit quest).
+///
+/// `?id=<questId>` opens the editor in edit mode for that quest; absent =
+/// new-quest mode. go_router needs no path declaration for query parameters:
+/// `QuestEditorView` reads it via
+/// `GoRouterState.of(context).uri.queryParameters[QuestsEditorQuery.questId]`
+/// and loads the quest with `QuestsRepository.getQuest` (unknown id shows
+/// `Quest not found` + a back link to the library).
+abstract final class QuestsEditorQuery {
+  static const String questId = 'id';
+}
+
 final GoRoute questEditorRoute = GoRoute(
   path: QuestsRoutePaths.editor,
   name: QuestsRouteNames.editor,

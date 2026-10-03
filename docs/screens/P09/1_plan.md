@@ -42,7 +42,11 @@ UK spelling throughout. Never import `google_fonts`.
   HTML `.cancel`) · title `New quest` (`NestType.h3`, 18/24 w800, Flexible +
   ellipsis) · `_SavePill` (screen-local: min 64×44, radius pill, bg leaf /
   fg surface, 16 w700, horizontal padding 18; disabled → `opacity .45`,
-  `onTap: null`). Semantics: buttons `Cancel`, `Save`.
+  `onTap: null`). Semantics: buttons `Cancel`, `Save` — the tappable's
+  `Semantics` node MUST expose `SemanticsAction.tap` (a11y-actions rule:
+  never `excludeSemantics: true` without passing the same `onTap:` on that
+  `Semantics` node; tests assert `hasAction(tap)` + state change via
+  `performAction`).
 - 2. `NestTextField(label: 'Quest name', controller: titleController)`
   (52 high, radius 16, focus ring per DS). Initial text `Hoover the stairs`
   for new; edit mode pre-fills from the quest (see §3).
@@ -53,7 +57,9 @@ UK spelling throughout. Never import `google_fonts`.
   Icons in order with `NestIcons`: `bed` (Bed), `dishwasher` (Dishes),
   `hoover` (Hoover, selected by default), `book` (Book), `bin` (Bins),
   `paw` (Paw). `Semantics(container: true, label: 'Quest icon')`, each tile
-  `button: true, selected: …, label: 'Icon: Hoover'` etc. Narrow-width rule
+  `Semantics(button: true, selected: …, onTap: <same handler as InkWell>,
+  label: 'Icon: Hoover')` etc. — `onTap` on the Semantics node is mandatory
+  (a11y-actions rule), whether or not the subtree is excluded. Narrow-width rule
   (320): tiles wrap — use `Wrap(spacing: 8, runSpacing: 8)` instead of `Row`
   so 6×44+5×8=304 overflow cannot happen on 280 content width (wrap to two
   rows; design order preserved).
@@ -65,7 +71,9 @@ UK spelling throughout. Never import `google_fonts`.
   peach)`, `Anyone` no avatar. Single-select, default = first child (Maya).
   Source: `StreamBuilder` on `sl<FamilyRepository>().watchChildren()`
   (creation order = Maya, Leo — never sort); `Anyone` appended last.
-  `assigneeChildId`: child id or null. Semantics button + selected.
+  `assigneeChildId`: child id or null. `Semantics(button: true, selected: …,
+  onTap: <same handler>, label: 'For Maya')` — `onTap` on the node is
+  mandatory (a11y-actions rule).
 - 5. `SizedBox(16)`. `NestCard(variant: inset)`: row space-between center —
   left `Column`: `Reward` (16 w600 ink) + `= {n}p at payout` (13/18 ink2,
   `softWrap: false`, ellipsis); right `NestStepper(valueText: '$coins',
@@ -86,7 +94,8 @@ UK spelling throughout. Never import `google_fonts`.
   `NestToggle(value: needsApproval, semanticLabel: 'Needs my approval')`,
   default true.
 - 8. `SizedBox(12)`. `NestCard(variant: standard)`: `InkWell` due row
-  (min-height 56, semantics button `Change due time`): left `Due by`
+  (min-height 56, `Semantics(button: true, onTap: <same handler>,
+  label: 'Change due time')` — do NOT exclude the subtree without `onTap`): left `Due by`
   (16 w600) + right row: value `Before tea (5pm)` (15 w600) + ` ›` chevron
   (ink-3). Toggles a local option; tap opens `showNestBottomSheet` with 3
   fixed rows (`Before school (8:30am)` → dueTimeLocal `08:30`;
@@ -156,6 +165,13 @@ UK spelling throughout. Never import `google_fonts`.
 - Semantics: header title `header: true`; every control labelled (§1);
   icon radiogroup pattern; save/cancel buttons; due row button;
   day cells via `NestDayPicker`; error caption in a live region.
+- A11y-actions rule (mandatory): EVERY interactive element's `Semantics` node
+  exposes `SemanticsAction.tap` — DS controls (`NestSegmented`,
+  `NestDayPicker`, `NestStepper` via `InkWell`; `NestToggle` via
+  `GestureDetector`) already do; every screen-local tappable (icon tiles,
+  person pills, `_SavePill`, Cancel, due row, due-sheet rows, delete flow)
+  passes `onTap:` on its `Semantics` node with the SAME handler as the visual
+  control. `performAction(tap)` on any control changes the real state or DB.
 - Tap targets ≥ 44 everywhere: icon tiles 44, pills 48, day cells 44
   (NestDayPicker), stepper 44, toggle 44 wrapper, Save 64×44, Cancel 44×44,
   due row 56.
@@ -185,6 +201,12 @@ UK spelling throughout. Never import `google_fonts`.
 - A11y/robustness: 320-wide surface pumps with no overflow; textScaler 1.3
   pumps with no overflow; tap 5 px above/below day cells still toggles
   (hit area); child order Maya-then-Leo.
+- A11y-action tests: for EVERY control (Cancel, Save, 6 icon tiles, 3 person
+  pills, stepper −/+, 3 segmented options, 7 day cells, toggle, due row,
+  each due-sheet row, delete + confirm) assert
+  `getSemantics(f).getSemanticsData().hasAction(SemanticsAction.tap)` and
+  that `performAction(SemanticsAction.tap)` flips the real state (or DB for
+  save/delete).
 - `dart format .`, `flutter analyze` (no issues), `flutter test` all pass.
 
 ## 7. SHARED_REQUEST
@@ -195,5 +217,42 @@ exist in `app/lib/core/design_system/`. Children come from the existing
 `FamilyRepository.watchChildren()` (read-only import, no edits outside
 `quests/` + this doc dir). Route query param is feature-local
 (`quests_routes.dart`). No schema, seed, DI, or router-shell change needed.
+
+## 8. Design geometry for the UI check (UI-verdict rule: ±2 px, no uniform shift)
+
+Design-side y values below are computed from the HTML/CSS stacking
+(status bar 47 + sheet padding-top 8 + grabber 4+5+12 + `sheet-top` 4+44+8,
+then §1 block heights). The UI check (stage 5) MUST report measured app y
+vs these design y for each row and FAIL on any drift > 2 px — including a
+uniform whole-screen shift. OS status-bar glyphs are excluded from checks
+(`NestStatusBar` reserves height only); DB-driven content n/a (form screen,
+seeded children Maya/Leo only affect pill labels).
+
+| Element | Design y (top edge, logical px) | Design h |
+|---|---|---|
+| Grabber bar (40×5) | 59 | 5 |
+| Header row (Cancel / title / Save) | 80 | 44 |
+| Title text `New quest` (18/24, centred in row) | ~90 | 24 |
+| `Quest name` label | 132 | 18 |
+| Name input box | 156 | 52 |
+| `Icon` label | 208 | 18 |
+| Icon tiles (6× 44) | 232 | 44 |
+| `Who's it for?` label | 276 | 18 |
+| Person pills (48) | 300 | 48 |
+| Reward card (inset) | 364 | 76 |
+| `Repeats` label | 456 | 18 |
+| Segmented (52) | 480 | 52 |
+| Day row (7× 44) | 540 | 44 |
+| Approval card | 600 | 72 |
+| Due-by card | 684 | 88 |
+| Sheet bottom pad (paper to screen edge) | 772–844 | — |
+
+Background/border-rect check (shapes, not only text): for each tile, pill,
+segmented thumb, day cell, card and the Save pill, compare the visible rect
+(x, y, w, h) against the design — e.g. Save pill min 64×44 at top-right
+(x≈306–370, y 80–124); person pills h48 full-bleed within 20 px gutters;
+segmented container full content width (350) × 52; day cells
+(350−6×6)/7 ≈ 44.6 wide × 44. Side gutters exactly 20 everywhere
+(ALIGNMENT rule).
 
 VERDICT: PASS
