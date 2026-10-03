@@ -16,6 +16,10 @@ import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 /// Minimal v1 DDL (pre-`…_tz`/`time_zone`/`due_time_local` columns).
 /// References are omitted on purpose: only the upgraded tables must exist.
+/// `rewards` is kept in its exact pre-v5 shape (no `created_at` /
+/// `created_at_tz` until schema v5): real v1 databases have this table, and
+/// the v5 open runs the v5 step on this fixture too, which needs the table
+/// to exist.
 const List<String> _v1Ddl = <String>[
   "CREATE TABLE families (id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL DEFAULT 'Nestling', payout_day INTEGER NOT NULL DEFAULT 6, coin_value_pence_per_coin INTEGER NOT NULL DEFAULT 1, pocket_money_mode TEXT NOT NULL DEFAULT 'both')",
   // Pre-creation-order `children` (no `created_at` / `created_at_tz` until
@@ -27,6 +31,7 @@ const List<String> _v1Ddl = <String>[
   "CREATE TABLE ledger_entries (id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, family_id TEXT NOT NULL, child_id TEXT NOT NULL, type TEXT NOT NULL, amount_pence INTEGER NOT NULL, note TEXT NOT NULL DEFAULT '', date INTEGER NOT NULL)",
   "CREATE TABLE reward_redemptions (id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, reward_id TEXT NOT NULL, child_id TEXT NOT NULL, family_id TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'requested', created_at INTEGER NOT NULL)",
   'CREATE TABLE earned_badges (id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, badge_id TEXT NOT NULL, child_id TEXT NOT NULL, family_id TEXT NOT NULL, earned_at INTEGER NOT NULL)',
+  "CREATE TABLE rewards (id TEXT NOT NULL PRIMARY KEY, family_id TEXT NOT NULL, title TEXT NOT NULL, icon TEXT NOT NULL DEFAULT 'gift', coin_price INTEGER NOT NULL, needs_ok INTEGER NOT NULL DEFAULT 1)",
   "CREATE TABLE settings (family_id TEXT NOT NULL PRIMARY KEY, pocket_money_mode TEXT NOT NULL DEFAULT 'both', payout_day INTEGER NOT NULL DEFAULT 6, coin_value_pence_per_coin INTEGER NOT NULL DEFAULT 1, notif_approvals INTEGER NOT NULL DEFAULT 1, notif_payout INTEGER NOT NULL DEFAULT 1, notif_summary INTEGER NOT NULL DEFAULT 1, crash_report_consent INTEGER NOT NULL DEFAULT 0, kid_gate_enabled INTEGER NOT NULL DEFAULT 1)",
   "CREATE TABLE app_state (id INTEGER NOT NULL PRIMARY KEY, onboarding_complete INTEGER NOT NULL DEFAULT 0, subscription_status TEXT NOT NULL DEFAULT 'trial', trial_start INTEGER NULL, active_child_id TEXT NULL, app_mode TEXT NOT NULL DEFAULT 'parent')",
 ];
