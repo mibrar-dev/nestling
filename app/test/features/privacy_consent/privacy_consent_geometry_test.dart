@@ -18,6 +18,8 @@
 // title locally (the RULES-legal half of SHARED_REQUEST §7); this test pins
 // the whole screen.
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_test/flutter_test.dart';
@@ -272,5 +274,90 @@ void main() {
 
       await disposeApp(tester);
     });
+
+    testWidgets('the inlined dialog title is the NestModal title', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/privacy');
+
+      await tester.tap(find.byKey(const ValueKey('p04_privacy_notice')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // `NestModal(title:)` renders its title above its own
+      // DefaultTextStyle, under the Dialog's Material, where the screen's
+      // zeroed ambient style cannot reach (P04-11). The view inlines the title
+      // instead; this pins that it still looks like the shared slot: the same
+      // h3 style, centred and clamped to three lines.
+      final title = tester.widget<Text>(find.text('Privacy Notice'));
+      final style = title.style!;
+      expect(style.fontSize, NestType.h3().fontSize);
+      expect(style.fontWeight, NestType.h3().fontWeight);
+      expect(style.fontFamily, NestType.h3().fontFamily);
+      expect(style.color, NestColors.light.ink);
+      expect(title.textAlign, TextAlign.center);
+      expect(title.maxLines, 3);
+      expect(title.overflow, TextOverflow.ellipsis);
+      expect(style.letterSpacing, 0, reason: "the design's rule for P04");
+
+      // …and the four promises follow it, one line each.
+      for (final promise in _titles) {
+        expect(find.text(promise), findsNWidgets(2), reason: promise);
+      }
+
+      await disposeApp(tester);
+    });
   });
+
+  group('P04 — the design really sets no tracking for this screen', () {
+    // The app-side tests prove what the screen renders; this one closes the
+    // loop with the source of truth, so a future design edit that adds
+    // tracking to a class P04 uses is caught here instead of silently
+    // disagreeing with the app (orchestrator LETTER SPACING rule).
+    test('no class P04 uses declares letter-spacing', () {
+      final css = _designFile('components.css').readAsStringSync();
+      const used = <String>[
+        'h1',
+        'body',
+        'body-s',
+        'caption',
+        'list-title',
+        'list-sub',
+        'opt-title',
+        'opt-sub',
+        'btn',
+        'footnote',
+      ];
+      final tracked = <String>[];
+      for (final name in used) {
+        final pattern = '\\.${RegExp.escape(name)}\\s*\\{([^}]*)\\}';
+        for (final match in RegExp(pattern).allMatches(css)) {
+          if (match.group(1)!.contains('letter-spacing')) tracked.add(name);
+        }
+      }
+      expect(
+        tracked,
+        isEmpty,
+        reason:
+            'the design gives these classes no tracking, so the app must not '
+            'render any (only `.display` and `.status-time` use -0.01em)',
+      );
+    });
+  });
+}
+
+/// Reads a file from `design/html-source/`, walking up from the package root.
+File _designFile(String name) {
+  var dir = Directory.current.absolute;
+  for (var depth = 0; depth < 5; depth++) {
+    final candidate = File('${dir.path}/design/html-source/$name');
+    if (candidate.existsSync()) return candidate;
+    final parent = dir.parent;
+    if (parent.path == dir.path) break;
+    dir = parent;
+  }
+  throw StateError(
+    'design/html-source/$name not found above ${Directory.current.path}',
+  );
 }

@@ -1,101 +1,110 @@
-# P04 · Privacy consent — bug hunt (Stage 6, iteration 8)
+# P04 · Privacy consent — bug hunt (Stage 6, iteration 9)
 
 Route `/privacy` · feature `privacy_consent` · parent mode · seeds `demo` and
-first-run. **No screen code was changed.** Re-hunted the iteration-8 tree
-after the P04-10 fix (the view zeroes the opt-card title's `letterSpacing`,
-checkpoint `9ee096b`).
+first-run. **No screen code was changed.** Re-hunted the iteration-9 tree
+after the screen-wide letter-spacing fix (P04-11: the view's ambient
+`DefaultTextStyle.merge(letterSpacing: 0)` + inlined dialog title, checkpoint
+`dfb4a63`) and the shared core default (`NestType` letterSpacing 0, main
+`fd92d95`, merged `df7c5e1`).
 
 `app/test/features/privacy_consent/p04_bugs_test.dart`: **17 proofs, all
-un-skipped and green** — zero skips in the feature suite. All ten findings
-from iterations 1–7 are fixed and pinned. **No new bug was found.**
+un-skipped and green** — zero skips in the feature suite. All eleven findings
+across the loop are fixed and pinned. **No new bug was found.**
 
-## P04-10 disposition — fixed (local half of SHARED_REQUEST §7)
+## P04-11 disposition — fixed (found by the iteration-8 test stage)
 
-- **Fix:** `privacy_consent_view.dart:135-142` sets `letterSpacing: 0` on the
-  opt-card title in its `copyWith`, with a comment pointing at the shared
-  half. The design sets no tracking; Material's `DefaultTextStyle` was
-  leaking 0.3 px through `inherit: true`, which with the bundled Inter pushed
-  the title to 250.2 px in the 247 px column.
-- **Device evidence (`ui/app_light_8.png` / `app_dark_8.png`, read with the
-  file reader):** the title is one line again — its dark-pixel extent is
-  **37.0→277.0 in both the design and the app** (identical to 0.1 px); the
-  opt card runs **531.7→616.0** vs the design's **531.3→616.0** (Δ0, card
-  back to 94 px). Both themes.
-- **Objective recovery:** `compare.py` mean diff is the best of any iteration
-  — light **3.87 %** (was 4.45 %), dark **3.76 %** (was 4.43 %); the
-  regression bands collapsed (band 5: 6.82→**2.60** % light, 7.79→**2.88** %
-  dark; band 6 back to **0.40/0.39 %**).
-- **Proof:** `[P04-10] the opt-card title stays on one 22px line` is
-  un-skipped and green (it loads the bundled Inter faces so the test measures
-  the device metrics).
+- **What it was (MAJOR, latent):** Material's `bodyMedium` tracking
+  (`letterSpacing: 0.25`) leaked into **14 of 15** text runs on the screen
+  because `NestType` styles were `inherit: true` and omitted
+  `letterSpacing`. The design sets tracking only on `.display` and
+  `.status-time` (neither used on P04), so every run was the wrong width; it
+  had already caused the P04-10 wrap. Pinned by the iteration-8
+  `privacy_consent_geometry_test.dart` (3 red tests), invisible to the
+  390 dp UI check because no box edge moved.
+- **Fix (iteration 9):** the Scaffold body is wrapped in
+  `DefaultTextStyle.merge(style: TextStyle(letterSpacing: 0))` and the
+  Privacy Notice dialog inlines its title with `letterSpacing: 0` (the
+  dialog's `Material` re-applies `bodyMedium` nearer to the content). The
+  shared core default (`NestType._inter/_nunito` → `letterSpacing ?? 0`)
+  landed in the same merge, so the screen is now correct with or without the
+  ambient zero.
+- **Device evidence (`ui/app_light_9.png` / `app_dark_9.png`):** every
+  measured dark-pixel extent is now **identical to the design** — h1
+  30.0→299.7 (design 299.7), standfirst 30.3→338.3 (338.3), row-1 title
+  283.0 (283.0), row-1 sub 321.7 (321.7), opt title 277.0 (277.0), opt sub
+  265.0 (265.0). The opt card stays at 531.7→616.0 vs the design's
+  531.3→616.0.
+- **Objective:** `compare.py` mean diff is the best of the whole loop —
+  light **1.84 %** (was 3.87 %), dark **1.74 %** (was 3.76 %); the
+  text-width bands collapsed (band 1 6.02→**0.29** %, band 5 2.60→**0.52** %,
+  band 6 0.40→**0.21** %). Residual band 7 (4.16/2.94 %) is the ignored
+  status bar and the OWNER-rule bottom strip, both expected.
+- **Proof:** the iteration-8 geometry contract tests (6/6 green) own this
+  finding; `[P04-10]` (title one line, card 94) remains green.
 
-## Iterations 1–5 findings — all fixed and pinned
+## Iterations 1–8 findings — all fixed and pinned
 
 | Id | Sev | Finding | Status |
 |---|---|---|---|
-| P04-1 | major | first-run opt-in silently dropped | **FIXED** (transactional upsert; migration also guarantees the row) |
-| P04-2 | major | row 4 empty peach tile | **FIXED** (`NestIcons.trash`; 1005 ink pixels at 463–503 on the it.-8 shot) |
+| P04-1 | major | first-run opt-in silently dropped | **FIXED** (transactional upsert; migration guarantees the row) |
+| P04-2 | major | row 4 empty peach tile | **FIXED** (`NestIcons.trash`; 1005 ink pixels on the shots) |
 | P04-3 | major | compact nav 16 px short | **FIXED** (shared merge; chevron 73, h1 107) |
 | P04-4 | major | dividers inflate the list 3 px | **FIXED** (shared overlay; tiles 295/351/407/463) |
 | P04-5 | minor | double-tap wrote the same value twice | **FIXED** (optimistic emit) |
 | P04-6 | major | failed OFF write claimed "it stays off" | **FIXED** (state-aware caption) |
-| P04-7 | major | dark shield rendered light | **FIXED** (`NestPrivacyShield`; disc `#1A2A4A`, body `#1F1C2E` = design) |
+| P04-7 | major | dark shield rendered light | **FIXED** (`NestPrivacyShield`; disc `#1A2A4A`, body `#1F1C2E`) |
 | P04-8 | minor | failed toggle reverted to an unpersisted value | **FIXED** (revert to stored) |
 | P04-9 | minor | overlapping first-run writes kept the earlier value | **FIXED** (transaction) |
-| P04-10 | major | opt-card title wrapped after font bundling | **FIXED** (local tracking fix above) |
-
-## Carried shared remainder (not a P04 blocker)
-
-The Material `letterSpacing: 0.3` still leaks into the screen's **other**
-texts (`NestType` styles are `inherit: true`). Measured dark-pixel extents on
-`ui/app_light_8.png` vs the design: h1 304.7 vs 299.7 (+5.0), standfirst
-348.3 vs 338.3 (+10.0), row-1 sub 331.3 vs 321.7 (+9.6), opt sub 272.3 vs
-265.0 (+7.3) — the expected 0.3 px × glyph count. **No layout impact on
-P04:** every wrap point and every box edge matches the design; the tracking
-only widens glyph runs inside their boxes. The shared half of
-`SHARED_REQUEST.md` §7 (zero the tracking in `NestType`/`NestTheme`, or
-`NestToggle` width 59→51) remains open for the orchestrator; it is carried,
-not a P04 defect.
+| P04-10 | major | opt-card title wrapped after font bundling | **FIXED** (it. 8; superseded in scope by P04-11) |
+| P04-11 | major | Material tracking leaked into 14/15 runs | **FIXED** (it. 9, screen-wide ambient zero + core default) |
 
 ## Adversarial checks this iteration
 
-- **FONTS rule:** the only `google_fonts`/`GoogleFonts` strings in the
-  feature are inside `privacy_consent_a11y_test.dart`'s guard test that
-  asserts the rule; no imports or calls anywhere in `app/lib`/`app/test`.
+- **LETTER SPACING rule:** P04 sets no tracking where the design has none and
+  adds none back; the ambient zero is the design's own value. The known
+  non-zero call sites (P12 hero -0.4, K02 `.mark` 1.28) do not exist on P04.
+- **FONTS rule:** no `google_fonts`/`GoogleFonts` imports or calls anywhere in
+  `app/lib`/`app/test` (the a11y guard builds its needles from pieces and
+  scans itself).
 - **Guards green:** kid-mode redirect to `/parental-gate`, deep-link back to
   `/create-account`, restart persistence (demo + first-run), first-run
   double-tap last-write-wins, async-gap after leaving, single dialog on a
-  double tap, failure captions both directions.
-- **Owner rules on the iteration-8 shots:** 20 px gutters; header at design y
-  (h1 cap 113–138); list/card/CTA edges aligned; CTA surface to the physical
-  edge in both themes (`#FFFFFF` / `#1F1C2E` at y 838); no coloured strip.
-- **Unchanged / N/A:** 320 px × scale 1.3 matrix, dark token contrast
-  (a11y tests), copy locked to the HTML source, Pip rule (no Pip),
-  child-order rule (no children), timezone/money (no dates or money on P04).
-- **Process note (not a finding):** the worktree still contains another
-  stage's untracked, self-declared temporary `zz_probe_test.dart`; it is the
-  sole source of the current `flutter analyze` infos. Every P04 feature file
-  is analyzer-clean.
+  double tap, both failure captions, dialog geometry at 320 px / 1.3×.
+- **Owner rules on the iteration-9 shots:** 20 px gutters; header at design y;
+  list/card/CTA aligned; CTA surface to the physical edge in both themes
+  (`#FFFFFF` / `#1F1C2E` at y 838); no coloured strip.
+- **Unchanged / N/A:** children/long names/coins/£ values, timezone, money
+  rounding (no such data on P04); Pip rule (no Pip); child-order rule (no
+  children).
+- **Optional cleanup (not a defect):** with the core `letterSpacing ?? 0`
+  default now merged, the view's ambient `DefaultTextStyle.merge` and the
+  inlined dialog title are redundant no-ops; they are harmless and can be
+  simplified whenever the loop next touches the view. `SHARED_REQUEST.md` §7
+  still notes that `NestModal` titles on other screens render with Material
+  tracking until every consumer gets the same treatment.
 
 ## Suite state at hand-off
 
 - `flutter test test/features/privacy_consent/p04_bugs_test.dart` → **17
   passed, 0 skipped, 0 failed**.
-- `flutter test test/features/privacy_consent/` → **160 passed, 0 skipped,
+- `flutter test test/features/privacy_consent/` → **168 passed, 0 skipped,
   0 failed**.
-- `flutter test` (whole app) → **825 passed, 0 skipped, 0 failed**.
-- `compare.py` vs `ui/app_light_8.png` → **3.87 %** (bands 1.61 / 6.02 /
-  1.91 / 7.77 / 5.46 / 2.60 / 0.40 / 5.12); vs `ui/app_dark_8.png` →
-  **3.76 %** (1.58 / 6.29 / 1.87 / 7.72 / 5.42 / 2.88 / 0.39 / 3.91).
-- Feature sources: `dart format` clean, `flutter analyze` clean.
+- `flutter test` (whole app) → **862 passed, 0 skipped, 0 failed**.
+- `dart format --set-exit-if-changed .` → 376 files, 0 changed;
+  `flutter analyze` → No issues found.
+- `compare.py` vs `ui/app_light_9.png` → **1.84 %** (bands 1.56 / 0.29 /
+  1.08 / 3.75 / 3.16 / 0.52 / 0.21 / 4.16); vs `ui/app_dark_9.png` →
+  **1.74 %** (1.57 / 0.31 / 1.08 / 3.81 / 3.18 / 0.77 / 0.23 / 2.94).
 
 ## Verdict
 
-Ten findings across the loop, all fixed and pinned; the iteration-7 wrap
-regression is cleared and the screen is at its closest match to the design
-yet (light 3.87 %, dark 3.76 %), with the trash glyph, themed shield, list
-rhythm and owner rules all verified on the fresh shots. The only open item is
-the shared typography-tracking remainder, which no longer causes any layout
-or wrap deviation on P04. No major bugs remain.
+Eleven findings across the loop, all fixed and pinned. The last one
+(P04-11, the screen-wide tracking leak that caused the P04-10 wrap) is closed
+by the screen-wide zero plus the shared core default, and the iteration-9
+shots are pixel-identical to the design on every measured text run, with the
+best compare scores of the loop (light 1.84 %, dark 1.74 %). No major bugs
+remain; the only follow-ups are optional redundancy cleanup and the core
+`NestModal` tracking note, neither of which affects P04's behaviour or
+appearance.
 
 VERDICT: PASS
