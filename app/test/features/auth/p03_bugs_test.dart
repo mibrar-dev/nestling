@@ -21,9 +21,22 @@
 //                build was ~3–4% wider than the design's, so the subtitle
 //                broke after "Children" instead of "Children never". The
 //                shared batch that bundled the designs' own Inter/Nunito
-//                builds fixed it with no local change. No local proof is
-//                possible (the harness' font is not Inter), so the width is
-//                pinned shared-side by `body_text_width_test.dart`.
+//                builds fixed it with no local change. Iteration 6 closed
+//                the "no local proof is possible" gap too: the bundled
+//                builds load into a widget test with a `FontLoader`, so
+//                `typography_test.dart` now pins the design's actual wrap
+//                ("…Children never" / "need an email.") and its 349.06 dp
+//                advance with the design's own metrics, while
+//                `body_text_width_test.dart` keeps pinning it shared-side.
+// P03-BUG-23 (MINOR, OPEN)  the "or" row paints an 18 dp `NestType.caption`
+//                line box where the design's `.or-label` sets no
+//                line-height (13 px/normal ≈15.7 dp), so the email label,
+//                both fields, the helper and the note row sit 2 dp below
+//                the design and the CTA panel 1 dp. Measured on the
+//                FILLED-state capture (`ui/filled-light.png`, mean 2.08% vs
+//                the design), proved twice below and at the design's
+//                absolute bands in `typography_test.dart`. Left red on
+//                purpose — Stage 3 does not patch the screen.
 // P03-BUG-18..21  all fixed (overhang reachability, first-frame/stale
 //                measurement, live regions, the empty-live-region
 //                regression).
@@ -36,14 +49,23 @@
 //                an empty/decorated-only bar area still reaches the
 //                overhanging link boxes (P03-BUG-18 stays green).
 //
-// Checked and clean this iteration (no proof needed): kid-mode deep link →
-// `/parental-gate`; restart persistence (one owner row); back/deep links;
-// 320/390/430 × 1.0/1.3 matrix; dark-mode contrast; all nine strings
-// byte-identical to the HTML (U+2019, U+2014, one U+00A0) with the
-// target/paragraph equality proofs green; bottom edge/alignment per the
-// owner rules; the two legal targets' lateral overlap is design-faithful;
-// money/timezone/children cases N/A; CHILD ORDER N/A. The harness' fallback
-// font is not Inter, so its line breaks are not product geometry.
+// Checked and clean in iteration 6 (no new proof needed): the compact nav
+// 60dp band; back → `/value-tour` and pop-when-stacked; Apple → `/privacy`,
+// Google → `/privacy`, social failure stays put; loading blocks every
+// control and stops on completion; repository `Error` (not `Exception`)
+// surfaces; a double tap creates one account; restart persistence (one owner
+// row); the 320/390/430 × 1.0/1.3 matrix incl. five consecutive resizes, a
+// live text-scale change and a theme switch; dark-mode contrast; all nine
+// strings byte-identical to the HTML (U+2019, U+2014, one U+00A0) with the
+// target/paragraph equality proofs green; the two legal targets' lateral
+// overlap is design-faithful; the BOTTOM EDGE owner rule now as painted
+// pixels (`create_account_view_test.dart`, both themes); P03-BUG-16 now proves
+// the danger border in the raster, not only in the decoration; money /
+// timezone / children-order cases N/A for this screen.
+//
+// The harness' fallback font is still not Inter, so line breaks measured in
+// this file are not product geometry — `typography_test.dart` loads the
+// bundled design builds and pins the real ones.
 
 import 'dart:async';
 
@@ -63,6 +85,7 @@ import 'package:nestling/features/auth/presentation/bloc/auth_state.dart';
 import 'package:nestling/features/auth/presentation/views/create_account_view.dart';
 
 import '../../test_scope.dart';
+import 'pixel_probe.dart';
 
 const String _emailError = 'Enter a valid email address';
 const String _passwordError = 'Use at least 8 characters';
@@ -1004,6 +1027,31 @@ void main() {
       reason: 'a clean field must not be marked invalid',
     );
 
+    /// The painted outline across the middle of the keyed field's top edge.
+    ///
+    /// The decoration read above is the input to the painter; this is its
+    /// output, so it also catches a border the painter declines to honour.
+    /// Two rows, because the design-system error state is 2 dp wide.
+    Future<List<String>> paintedTopEdge(ValueKey<String> key) {
+      final input = tester.getRect(
+        find.descendant(of: find.byKey(key), matching: find.byType(TextField)),
+      );
+      return paintedColumn(
+        tester,
+        input.left + input.width / 2,
+        input.top,
+        input.top + 1,
+      );
+    }
+
+    expect(
+      (await paintedTopEdge(const ValueKey('p03_email'))).map(hexOfRow),
+      <String>[hexOf(tokens.line), hexOf(tokens.surface)],
+      reason:
+          'a valid field wears the 1 dp line border over the surface fill '
+          '(nest_text_field.dart `enabledBorder`)',
+    );
+
     bloc.add(const AuthSubmitted());
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
@@ -1018,6 +1066,16 @@ void main() {
           'components.css:135; SPACING_SPEC §3). P03 hands the field '
           '`errorText`, and the shared field paints the danger border '
           'itself (nest_text_field.dart) alongside its gutter error row',
+    );
+
+    expect(
+      (await paintedTopEdge(const ValueKey('p03_email'))).map(hexOfRow),
+      <String>[hexOf(tokens.danger), hexOf(tokens.danger)],
+      reason:
+          'and that border has to be what the raster ends up painting, '
+          'not only what the decoration says. Sampled with the raster '
+          'settled: reading too early still shows the clean border, which '
+          'looks exactly like a live bug and is not one',
     );
 
     await disposeApp(tester);
@@ -1134,4 +1192,79 @@ void main() {
       // reaches the link.
     },
   );
+
+  // -------------------------------------------------------------------
+  // P03-BUG-23 (MINOR, open) — the form block sits 2 dp below the design.
+  //
+  //   Repro: `docs/screens/P03/ui/filled-light.png` against
+  //   `design/screens/light/P03-create-account.png` — the design PNG is the
+  //   FILLED state, so that capture is the only apples-to-apples frame
+  //   (docs/screens/P03/filled_shot.sh). compare.py: mean 2.08% light,
+  //   2.05% dark.
+  //
+  //   Measured tops (design → app): "or" row 392.67 → 393.67 (+1), Email
+  //   label 423.00 → 425.00 (+2), email field 443.00 → 445.00 (+2),
+  //   password label 515.33 → 517.33 (+2), password field 535.00 → 537.00
+  //   (+2), helper 597.33 → 599.33 (+2), note row 625.67 → 627.67 (+2),
+  //   CTA panel 677.00 → 678.00 (+1). Everything above the "or" row is
+  //   pixel-exact (headline 112.67/146.00, subtitle 188.67/212.67, Apple
+  //   255.00..307.00, Google 319.00..371.00).
+  //
+  //   Cause: `_OrRow` (create_account_view.dart:280) styles its label with
+  //   `NestType.caption`, whose line box is `--lh-caption` = 18 dp. The
+  //   design's `.or-label` sets `font-size: 13px; font-weight: 600` and NO
+  //   line-height (P03-create-account.html:27), so its row is 13 px ×
+  //   Inter's normal line height ≈ 15.7 dp. The 2.3 dp lands on every
+  //   element below the row, and the ALIGNMENT rule treats visible
+  //   misalignment as a UI failure.
+  //
+  //   The proof is font-independent on purpose: `NestType.caption` sets its
+  //   height explicitly, so the row is 18 dp whatever family the harness
+  //   resolves, and the design's arithmetic (16 + 15.7 + 16 + 24 = 71.7) can
+  //   be asserted directly. With the design's own fonts the same offset is
+  //   pinned against the design PNG's absolute bands in
+  //   `typography_test.dart`.
+  // -------------------------------------------------------------------
+  testWidgets('P03-BUG-23 the form block starts at the design band', (
+    tester,
+  ) async {
+    await _pumpCreateAccount(tester);
+
+    final google = tester.getRect(
+      find.byKey(const ValueKey('p03_google')).first,
+    );
+    final orLabel = tester.getRect(find.text('or'));
+    final email = tester.getRect(
+      find.descendant(
+        of: find.byKey(const ValueKey('p03_email')),
+        matching: find.byType(TextField),
+      ),
+    );
+
+    // The design's `.or-row` is as tall as its label's line box: 13 px at
+    // Inter's normal line height (≈15.7), not the caption token's 18.
+    expect(
+      orLabel.height,
+      lessThan(17),
+      reason:
+          "the design's `.or-label` sets no line-height, so its row is 13 px "
+          '× normal ≈ 15.7 dp; `NestType.caption` paints an 18 dp line box '
+          'and adds 2.3 dp to everything below it',
+    );
+
+    // Google button bottom → email field top, in the design:
+    // `.scroll > .or-row { margin-top: 16 }` + the or-row (15.7) +
+    // `.scroll > .field { margin-top: 16 }` + label 18 + label gap 6.
+    expect(
+      email.top - google.bottom,
+      closeTo(71.7, 1),
+      reason:
+          'the design measures 443.00 − 371.00 = 72 dp from the Google '
+          'button to the email field; with an 18 dp or-row it is 74',
+    );
+
+    await disposeApp(tester);
+    // Left red on purpose: the fix belongs to the screen (`_OrRow`'s label
+    // style) and Stage 3 must not patch it.
+  });
 }

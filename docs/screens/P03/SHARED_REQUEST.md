@@ -63,9 +63,16 @@ the designs' own Inter 4.001 / Nunito 3.602 builds are bundled in
 `app/assets/fonts`, `pubspec.yaml` no longer fetches `google_fonts`, and
 `body_text_width_test.dart` pins body advances against the browser's
 (including P03's subtitle line 1, 349.06dp, ±1%). So P03-BUG-17 is gone with
-**no local change**, and no local proof is possible either: the widget
-harness' fallback font is not Inter, so the wrap can only be pinned
-shared-side. Do not chase it with a size/width/letter-spacing hack.
+**no local change**. Do not chase it with a size/width/letter-spacing hack.
+
+Update (test stage, iteration 6): a *local* proof is possible after all. The
+bundled builds load into a widget test through a `FontLoader`
+(`test/features/auth/typography_test.dart`, same technique as
+`body_text_width_test.dart`), so P03 now pins the design's actual wrap —
+"…Children never" / "need an email." — and the 349.06 dp advance with the
+design's own metrics, plus the headline, helper and caption breaks and the
+design's ink widths. The device capture agrees: the subtitle's two lines sit
+at 189.00/213.00 dp against the design's 188.67/212.67.
 
 Original finding (kept for the record): `google_fonts` served an Inter build whose glyph advances are wider
 than the one the design HTML was rendered with, so text that fits on one
@@ -124,3 +131,19 @@ client-side validation error the moment it appeared; the shared row no
 longer did. P03 worked around Material and owned its error rows, and its
 attempt to re-add the live region regressed into an empty-label node
 (P03-BUG-21).
+
+## 9. Observation (not a request): `NestType.caption` is 2.3 dp taller than a
+## design label that sets no line-height
+
+Found while measuring P03-BUG-23. The design's `.or-label`
+(`P03-create-account.html:27`) sets `font-size: 13px; font-weight: 600` and
+**no** line-height, so its row is 13 px × Inter's normal line height ≈ 15.7 dp;
+`NestType.caption` is fixed at 13/18 (`typography.dart:64-65`), so any screen
+that reaches for the caption token to render such a label paints a 2.3 dp
+taller row and shifts everything below it. On P03 that is the whole form
+block sitting 2 dp low against the design.
+
+This is a pattern note, not shared work: the fix belongs to the screen
+(`_OrRow` should not use the caption token for a label the design gives no
+line-height), and §7 is the existing request for the neighbouring case. No
+core change is needed for P03 to go green.

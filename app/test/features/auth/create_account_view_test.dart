@@ -25,6 +25,7 @@ import 'package:nestling/features/auth/presentation/widgets/apple_glyph.dart';
 import 'package:nestling/features/auth/presentation/widgets/google_glyph.dart';
 
 import '../../test_scope.dart';
+import 'pixel_probe.dart';
 
 const String _title = 'Create your family account';
 const String _subtitle =
@@ -955,6 +956,64 @@ void main() {
         expect(scaffold.backgroundColor, tokens.paper);
 
         expect(tester.takeException(), isNull);
+        await disposeApp(tester);
+      }
+    });
+
+    // The proof above reads what the bar is told to paint. This one reads
+    // what the raster ends up holding, which is the rule the owner states
+    // ("never show a coloured strip under a bar, in light or dark"): a
+    // shadow, a page tint or a hairline that lands after the bar's box
+    // still fails it, and no decoration scan would see it.
+    testWidgets('no coloured strip is painted under the CTA bar', (
+      tester,
+    ) async {
+      for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+        await _pumpCreateAccount(
+          tester,
+          theme: theme,
+          surface: const Size(390, 844),
+          textScale: 1,
+        );
+
+        final tokens = tester.element(find.byType(NestBottomCta)).nest;
+        final bar = tester.getRect(find.byType(NestBottomCta));
+        final button = tester.getRect(find.byKey(_submitKey));
+        expect(bar.bottom, NestDevice.height);
+
+        final barSurface = hexOf(tokens.surface);
+        final pageTint = hexOf(tokens.paper);
+        expect(barSurface, isNot(pageTint));
+
+        // Columns between the bar's edge and the 20 px gutter, i.e. outside the
+        // caption's own column (20..370): the caption's glyphs live in there
+        // — with the harness' fallback font its first line starts at x≈26 —
+        // and this proof is about the bar's surface, not about its text.
+        final caption = tester.getRect(find.byType(RichText).last);
+        expect(caption.left, greaterThanOrEqualTo(20));
+        for (final x in <double>[
+          bar.left + 4,
+          bar.left + 12,
+          bar.right - 12,
+          bar.right - 4,
+        ]) {
+          final rows = await paintedColumn(
+            tester,
+            x,
+            button.bottom + 1,
+            NestDevice.height - 1,
+          );
+          final wrong = rows
+              .where((row) => hexOfRow(row) != barSurface)
+              .toList(growable: false);
+          expect(
+            wrong,
+            isEmpty,
+            reason:
+                'column x=$x under the bar painted ${wrong.length} rows '
+                'that are not the bar surface ($barSurface): ${wrong.take(6)}',
+          );
+        }
         await disposeApp(tester);
       }
     });

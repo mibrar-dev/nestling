@@ -1,4 +1,4 @@
-# P03 Create account — test notes (Stage 3, iteration 5)
+# P03 Create account — test notes (Stage 3, iteration 6)
 
 Route `/create-account` · feature `auth` · parent mode. Tests live in
 `app/test/features/auth/`; the in-memory Drift DB comes from
@@ -8,132 +8,207 @@ was touched by this stage.
 
 ## Verdict
 
-**One real bug remains open**: P03-BUG-16 (an invalid input paints no
-`danger` border). The iteration-5 build closed everything else — both bugs I
-reported, including the a11y regression — and I verified each fix on the
-simulator and with new proofs. What is left is a single **shared-blocked**
-defect: the screen cannot have both the design's red border and the live
-region the error needs, because the shared `NestTextField` only offers one
-or the other.
+**One real bug is open**: P03-BUG-23 — the form block sits 2 dp below the
+design because `_OrRow` paints an 18 dp caption line box where the design's
+`.or-label` has no line-height. It is proved twice (a font-independent proof
+in the bugs file and the design's absolute bands with the design's own
+fonts), it is a screen-local one-line fix, and Stage 3 must not patch the
+screen — so `flutter test` is red by design: **157 green, 2 red (the same
+bug), 0 skipped**.
 
-I have **un-skipped** that proof rather than leave it skipped: a skipped
-proof is not evidence, the standing rule for this stage is never to skip a
-test, and the premise the skip rested on is stale (§5 of the shared request
-already records that the change it was waiting for landed). So `flutter test`
-is red by design: **1** proof fails, everything else passes (790 green, **0
-skipped**).
+Everything the iteration-6 build claims is verified, and one of the two
+open items from iteration 5 is now closed with stronger evidence:
 
-## The iteration-5 fixes, verified
+- **BUG-16 (the missing danger border) — fixed, and the old proof was
+  weaker than it looked.** The proof read the `InputDecoration` the field is
+  handed, which is the painter's *input*, not its output. It now also reads
+  the raster: with the raster settled, the invalid field's top edge is two
+  rows of `c93a3a` (the design-system 2 dp danger border) over the 1 dp
+  `line` border the clean field wears. Worth recording: my first readings
+  showed `line` in the invalid state — the pixel probe had sampled before the
+  raster thread caught up, which looks exactly like a live bug and is not
+  one. `pixel_probe.dart` settles the raster for that reason and says so.
+- **BUG-22 (the overhang fallback double-fired)** — verified by its proof.
+- **BUG-17 (the subtitle's early wrap, shared §6)** — fixed, and now
+  provable *locally*: see the fonts section below.
 
-- **BUG-21 (MAJOR, the empty live region) — fixed properly.** Walking the
-  whole semantics tree after a rejected submit now shows
-  `live=true label="Enter a valid email address"` and
-  `live=true label="Use at least 8 characters"`, each exactly once, with no
-  duplicate node: the message rides on the `Semantics` wrapper and the inner
-  `Text` stays excluded. The BUG-20 proof was extended to assert the *label*
-  as well as the flag, which closes the hole the regression went through.
-- **BUG-6 (MINOR, shared) — fixed by the shared batch, un-skipped.** The CTA
-  is now a single `Create account` node. That was the suite's last skip, so
-  the feature suite now runs with **zero** skipped tests.
-- **Review finding 5 (`_verifyTotal` capped for the widget's lifetime) —
-  fixed.** Five consecutive resizes (320 → 430 → 390 → 390 → 320) leave both
-  link targets on their words; before the fix the verification chain would
-  have been exhausted after ~3 relayouts.
-- **Layout is unchanged**: compare.py mean diff **4.65%** (was 4.66%), CTA
-  surface top 678 (design 677), submit button 694–745.7 exactly, both
-  caption lines exact, bottom-edge owner rule holds (surface to y=844). The
-  shared component change did not shift anything, because P03 hands it
-  `errorText: null` and owns the helper row.
+## The unlock: the design's own fonts in a widget test
+
+For iterations 1–5 the harness' fallback font made every line-break claim
+untestable, so P03's wrap points could only be measured on the simulator. The
+shared batch bundled the designs' Inter 4.001 / Nunito 3.602 builds, and a
+`FontLoader` (the technique `body_text_width_test.dart` already uses) puts
+them into the widget tree: `At least 8 characters` then measures 126.74 dp
+against the design PNG's 126.00 dp, and the real wraps appear.
+
+`typography_test.dart` (new, 9 tests) therefore pins what five iterations
+could not:
+
+| string | design break, now asserted | measured vs design ink |
+|---|---|---|
+| headline (Nunito 900 28/34) | `Create your` / `family account` | 158.56 / 157.33, 197.68 / 198.00 |
+| subtitle (Inter 400 16/24) | `You’re the grown-up in charge. Children never` / `need an email.` | 349.05 / 349.06 advance (1% pin) |
+| helper (Inter 400 13/18) | one line | 126.74 / 126.00 |
+| caption (13/20 links) | `By continuing you agree to our Terms and` / `Privacy Notice` | 258.15 / 261.00, 91.31 / 91.33 |
+
+plus the line pitches (34 / 24 / 20), the 20 px gutter on the header pair,
+the caption's centring, no ellipsis at 390, no orphaned link at 320 / 430 /
+scale 1.3, and the same breaks in dark mode. The device agrees: on
+`ui/filled-light.png` the headline sits at 112.67/146.00 dp and the subtitle
+at 189.00/213.00 dp against the design's 112.67/146.00 and 188.67/212.67 —
+i.e. **BUG-17 is gone on the device too**, with the shared fonts and no local
+change.
 
 ## Tests added this stage
 
-`copy_audit_test.dart` 15 → **16** (1 added, green) — *"five consecutive
-resizes keep both targets on their words"*: the regression guard for the
-re-armed verification chain.
-
-`p03_bugs_test.dart` — BUG-16 un-skipped (now red) and the file header
-rewritten to state the suite's real status (it still described skip-marked
-open proofs; there are none). No new proofs were needed: BUG-21 and BUG-6 are
-already pinned by the build's own (now green) proofs, which I re-verified
-against the semantics tree rather than taking on trust.
-
-Coverage is otherwise complete and unchanged: `auth_bloc_test.dart` (45),
-`create_account_view_test.dart` (48) and `seeded_submit_test.dart` (7) cover
-every bloc event/state path, the 320/390/430 × 1.0/1.3 matrix in both
-themes, all five bloc statuses, both seeds, every tap target and route, the
-44 dp rule and the bottom-edge rule. I found no new gap.
-
-Feature total: 142 → **145** (144 green, 0 skipped, 1 red).
+- `typography_test.dart` (new) — **9 tests**: the four design breaks, the
+  three line pitches, gutter/centre alignment, no truncation, 320/430, text
+  scale 1.3, dark mode, and the design-band group (1 of its 1 test is the
+  red BUG-23 band proof).
+- `p03_bugs_test.dart` 29 → **30** (+1, red): P03-BUG-23; the BUG-16 proof
+  gained the painted-pixel assertions.
+- `create_account_view_test.dart` 37 → **38** (+1, green): *no coloured strip
+  is painted under the CTA bar* — the owner's BOTTOM EDGE rule as raster
+  pixels in both themes, in four columns outside the caption's own column,
+  from the submit button's last row to the physical edge. The existing proof
+  reads the bar's `BoxDecoration`; a shadow or a tint that lands after the
+  bar's box still fails this one.
+- `pixel_probe.dart` (new helper, no tests) — settled-raster column reader,
+  `hexOf`/`hexOfRow`, with a guard that the outermost repaint boundary still
+  sits at the view origin (a nesting change would otherwise shift every
+  reading silently).
+- Deleted `test/features/auth/_scratch_i6_test.dart`, left behind by the
+  build stage: it reported two `flutter analyze` infos.
 
 ## Bugs found
 
-### P03-BUG-16 (MINOR, still open — now provably local, blocked only on §8)
+### P03-BUG-23 (MINOR, OPEN) — the form block sits 2 dp below the design
 
-An invalid input keeps the resting `line` border. Measured on the current
-tree: the only opaque borders painted anywhere on the screen are `ff000000`
-and `ff000000`/`ffe7e0d4` (= `tokens.line`) — **no `tokens.danger` border is
-painted at all**. The design marks the input itself:
-`.field input[aria-invalid="true"] { border-color: var(--danger) }`
-(`design/html-source/components.css:135`, `docs/design/SPACING_SPEC.md` §3).
+`app/lib/features/auth/presentation/views/create_account_view.dart:280-299`
+(`_OrRow`).
 
-What changed since I first reported it (iteration 3): the shared batch
-`7eaa1f7` landed **both** halves of what was missing — `NestTextField` now
-renders `errorText` as a gutter-aligned row (`nest_text_field.dart:197-206`)
-*and* forces the danger border when `errorText != null` (`:160-172`), and
-pinned both in `shared_batch1_test.dart`. So passing `errorText` no longer
-re-opens P03-BUG-11; the screen's owned gutter rows are now redundant with
-the component's.
+Repro: `docs/screens/P03/ui/filled-light.png` against
+`design/screens/light/P03-create-account.png` —
+`tools/screens/compare.py` → **mean 2.08% light, 2.05% dark** (the first
+apples-to-apples comparison of this screen: the design PNG is the FILLED
+state, the app correctly launches empty).
 
-The build skip-marked the proof on the premise that this needed a shared
-`hasError` flag that "never landed", and its own proof comment says the
-opposite ("in fact `7eaa1f7` landed the gutter row + forced danger border, so
-the remaining work is local"). The real remaining gap is narrower: the
-component's error row is a plain `Text`, not a live region, so switching
-today would trade BUG-16 for BUG-20 — dropping the announcement of the
-validation message, which is the worse of the two. That half is
-SHARED_REQUEST §8, and it is a three-line core change (wrap the shared row
-in `Semantics(liveRegion: true)`).
+Band tops, design → app:
 
-**Path to green**: land §8 in core, then in the screen pass `errorText:` to
-both fields and delete the two owned rows (and their `buildWhen` selectors).
-That closes BUG-16 and BUG-11 together, and this proof goes green with no
-other change. I did not make that change — the brief forbids the test stage
-patching the screen.
+| band | design | app | Δ |
+|---|---|---|---|
+| headline L1 / L2 | 112.67 / 146.00 | 112.67 / 146.00 | 0 |
+| subtitle L1 / L2 | 188.67 / 212.67 | 189.00 / 213.00 | +0.33 |
+| Apple / Google button | 255.00 / 319.00..371.00 | 255.00 / 319.00..371.00 | 0 |
+| "or" row | 392.67 | 393.67 | +1 |
+| Email label | 423.00 | 425.00 | +2 |
+| email field | 443.00 | 445.00 | +2 |
+| password label / field | 515.33 / 535.00 | 517.33 / 537.00 | +2 |
+| helper | 597.33 | 599.33 | +2 |
+| note row | 625.67 | 627.67 | +2 |
+| CTA panel top | 677.00 | 678.00 | +1 |
 
-Repro: `flutter test test/features/auth/p03_bugs_test.dart` — proof
-P03-BUG-16 measures the borders painted inside the keyed field before and
-after a rejected submit.
+Cause: `_OrRow` styles its label `NestType.caption`, whose line box is
+`--lh-caption` = 18 dp. The design's `.or-label` (`P03-create-account.html:27`)
+sets `font-size: 13px; font-weight: 600` and **no** line-height, so its row
+is 13 px × Inter's normal line height ≈ 15.7 dp. The 2.3 dp lands on every
+element below the row. Per the ALIGNMENT rule ("nothing a few px off"),
+that is a UI failure, so the verdict is FAIL.
 
-## Non-blocking observations
+Fix (build stage, one line, screen-local): style the label with the design's
+metrics instead of the caption token — e.g.
+`NestType.caption(color: tokens.ink2).copyWith(height: null, fontWeight: FontWeight.w600)`
+— then both proofs go green. Note `SHARED_REQUEST.md` §7 is the neighbouring
+case (the legal caption's 13/20), and §9 records the pattern for the
+orchestrator: any screen that uses the caption token for a label the design
+gives no line-height will be 2.3 dp tall.
 
-- The trade the screen currently makes is the defensible side of it: a screen
-  reader must hear the error, and the message itself is already red, so the
-  missing border is a redundant cue rather than the only one. Worth stating
-  plainly so this is not mistaken for an oversight.
-- The device geometry has a ~4 dp strip where the submit button and the Terms
-  target both receive a tap (button 694–745.7, Terms target ≈741.7–785.7).
-  Inert today because the links are (`TODO(P03)`); note it where the link
-  routes land.
-- `_HitTestExpand.extra` is still never read by `hitTest` — the overhang is
-  bounded by each target's own 44 dp box, which is correct, but the field and
-  its `markNeedsPaint` are dead weight.
-- P03-BUG-17 (the subtitle breaks after "Children") stays a shared
-  font-pipeline item (SHARED_REQUEST §6); the orchestrator's iteration-5 note
-  confirms a shared `shared/body_text_width` fix is in flight, and no local
-  test can pin a break the harness font does not produce.
-- ORCHESTRATOR_NOTES §3 (filled-state simulator capture) remains the UI
-  stage's; the filled state is pinned by the widget test.
+Proved twice, both red:
+- `p03_bugs_test.dart` — *P03-BUG-23 the form block starts at the design
+  band*: the or-label's line box must be < 17 dp (it is 18.0) and the
+  Google-bottom → email-field-top gap must be the design's 71.7 dp
+  (16 + 15.7 + 16 + 24). Font-independent by construction: `NestType.caption`
+  sets its height explicitly, so the row is 18 dp whatever family the harness
+  resolves.
+- `typography_test.dart` — *the form bands are the design's*, with the
+  design's fonts loaded and the design PNG's absolute bands: the Google
+  button's bottom is exact, the two field tops are 445.00 / 537.00 against
+  443.00 / 535.00. This is the same measurement as the device capture.
+
+### Ruled out (not defects)
+
+- The CTA panel's top is 1 dp low (678 vs 677). Its content — the button at
+  694–746 and both caption lines at 759–792 — is exact, and the panel's
+  height is the 34 dp home-indicator inset; 1 dp there is rounding, not
+  misalignment. It is *not* in the band proof for that reason (the test
+  surface has no safe area, so its panel top is 712 dp).
+- The caption's first line's ink is 256.0 dp wide against the design's 261.0
+  (2.3% — the design's underline extents differ marginally). Rows and
+  centring are exact; the copy audit is byte-identical.
+- The design PNG paints `paper` below y=810 (a strip under the bar). The app
+  paints the bar's surface to y=844, which is the owner's BOTTOM EDGE rule
+  overriding the design — correct, and now proven in pixels.
+
+## Device evidence
+
+`docs/screens/P03/filled_shot.sh` (new, in this screen's notes directory
+because `tools/screens/**` is off-limits to screen agents) captures the
+**filled** state — ORCHESTRATOR_NOTES QA item 3, open since iteration 2.
+`idb ui text` cannot be used on this machine: its HID path needs
+`SimulatorKit.framework`, which this Xcode install does not ship
+(`/Applications/Xcode.app/Contents/Developer/Library/PrivateFrameworks/`
+does not exist). The script therefore generates a throwaway `flutter drive`
+target + driver, types the design's values through the fields' controllers
+and the bloc (never by tapping — a tap scrolls the form and the capture
+shows an interaction, not the design), writes
+`ui/filled-light.png` and `ui/filled-dark.png`, and deletes itself. It never
+runs an interactive `flutter run`.
+
+- `ui/filled-light.png`, `ui/filled-dark.png` — the design's own state:
+  `sarah@example.co.uk`, 18 dots, the eye toggle, the enabled green CTA,
+  headline / subtitle / helper / note row / two caption lines.
+- `ui/compare-filled-light.png` (2.08%), `ui/compare-filled-dark.png`
+  (2.05%). Bands: 0–3 under 1.3%, 4–7 (fields → CTA) 3.1–4.5% — the BUG-23
+  offset plus the enabled-vs-disabled button fill.
+
+## Rules checked this iteration
+
+- **FONTS**: no `google_fonts` import or `GoogleFonts.*` call anywhere in
+  `lib/features/auth/` or `test/features/auth/` (the build stage removed the
+  last ones; `grep` confirms none).
+- **LETTER SPACING**: P03 adds no tracking; `NestType` styles are used
+  as-is, and the only `copyWith` calls are `height` and `color`.
+- **CHIP ROWS**: N/A — P03 has no `NestChip`.
+- **CHILD ORDER**: N/A — P03 renders no child list.
+- **COPY**: unchanged, all nine strings byte-identical to the HTML
+  (`copy_audit_test.dart` 11/11).
+- **BOTTOM EDGE / ALIGNMENT**: both now have pixel proofs (see above);
+  ALIGNMENT produced P03-BUG-23.
+- **PIP / DATA OVER MOCKS / PERIODS**: N/A for this screen.
+- **PROCESS**: the build stage left `_scratch_i6_test.dart` in the feature's
+  test directory (deleted here — it reported two `flutter analyze` infos);
+  uncommitted work and merge order are not reported as findings.
 
 ## Results (`app/`)
 
-- `dart format --set-exit-if-changed .` → `Formatted 371 files (0 changed)`.
+- `dart format --set-exit-if-changed .` → `Formatted 377 files (0 changed)`.
 - `flutter analyze` → `No issues found!` — no ignores, no weakened options.
-- `flutter test test/features/auth` → **144 passed, 0 skipped, 1 failed**
-  (the single red proof above). Per file: `auth_bloc_test.dart` 45/45,
-  `create_account_view_test.dart` 48/48, `copy_audit_test.dart` 16/16,
-  `seeded_submit_test.dart` 7/7, `p03_bugs_test.dart` 29 green + 1 red.
-- `flutter test` (full suite) → **790 passed, 0 skipped, 1 failed**.
-- `shot.sh` light + `compare.py` → `ui/light.png`, `ui/compare-light.png`
-  (mean diff 4.65%; bands 0–5 all under 3%; the CTA is pixel-exact).
+- `flutter test test/features/auth` → **157 passed, 0 skipped, 2 failed**
+  (both the P03-BUG-23 proofs). Declared per file: `auth_bloc_test.dart` 20,
+  `create_account_view_test.dart` 38, `copy_audit_test.dart` 11,
+  `p03_bugs_test.dart` 30, `seeded_submit_test.dart` 7,
+  `typography_test.dart` 9.
+- `flutter test` (full suite) → **851 passed, 0 skipped, 2 failed**.
+
+## For the next stage
+
+1. Fix `_OrRow`'s label style (one line, screen-local) → both BUG-23 proofs
+   go green and this stage can return PASS.
+2. `ORCHESTRATOR_NOTES` QA item 3 is satisfied by
+   `docs/screens/P03/filled_shot.sh`; the UI stage can compare
+   `ui/filled-*.png` against the design instead of the empty launch frame,
+   which is what the design actually shows.
+3. `SHARED_REQUEST.md` §7 (a 13/20 legal-caption token) is still the only
+   open shared item and is non-blocking.
 
 VERDICT: FAIL

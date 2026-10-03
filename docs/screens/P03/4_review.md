@@ -1,147 +1,101 @@
-# P03 Create account — QA code review (Stage 4, iteration 5)
+# P03 Create account — QA code review (Stage 4, iteration 6)
 
-Scope reviewed: `git diff main` for P03 — `app/lib/features/auth/**` (view, bloc,
-domain, data, glyphs) + `app/test/features/auth/**` + `docs/screens/P03/**`. No code
-was edited by this stage. Reference set: `docs/ARCHITECTURE.md`, `docs/screens/RULES.md`,
-`docs/DESIGN_SPEC.md` §5 P03 (line 150) and §0.9, `docs/design/SPACING_SPEC.md`,
-`design/html-source/screens/P03-create-account.html`, `design/html-source/components.css:129-135`,
-`ORCHESTRATOR_NOTES.md` (mandatory), the standing COPY rule, `1_plan.md`, `FIXES_1…4`,
-`2_build.md`, `3_test.md`, `SHARED_REQUEST.md`.
+Scope reviewed: `git diff main...HEAD`, commit `520cd82` (iteration-6
+integration) on `screen/P03`. Reference set: `docs/ARCHITECTURE.md`,
+`docs/screens/RULES.md`, `docs/DESIGN_SPEC.md` §5 P03/§0.9,
+`docs/design/SPACING_SPEC.md`, `design/html-source/screens/P03-create-account.html`,
+`design/html-source/components.css:129-135`, `ORCHESTRATOR_NOTES.md`
+(mandatory), the standing COPY / FONTS / LETTER SPACING / CHIP ROWS rules,
+`1_plan.md`, `FIXES_1…4`, `2_build.md` (iter-6 INTEGRATE), `3_test.md` (iter-5),
+`SHARED_REQUEST.md`.
 
 Evidence gathered by this stage:
 
-- `flutter analyze` → `No issues found!` — no ignores, no weakened options.
-- `flutter test test/features/auth/p03_bugs_test.dart --reporter=expanded` → one red
-  proof only: `P03-BUG-16 an invalid field paints the danger border [E]`. Everything
-  else is green: BUG-15 (curly apostrophe — byte-verified U+2019 on the device capture),
-  BUG-18/19/20/21 (hit-test overhang, synchronous mirror, live region + label) all pass.
-- I read the iteration-5 shared `NestTextField` (`nest_text_field.dart:120-175`): the
-  decoration no longer takes `errorText` (it is forced to `errorBorder` when
-  `errorText != null`), the error row is a **gutter-aligned row under the input** with
-  `helperText` suppressed on error, and `shared_batch1_test.dart:252-267` pins all three
-  behaviours. So §5 is genuinely landed on this branch (merged `7eaa1f7` / `4751c52`),
-  including the half the iteration-4 build note said had "not landed".
-- Pixel check of `ui/light.png` vs the design: CTA hairline 678 vs 677; submit button
-  694–745 in both; caption line 1 one sky run x 262–300 (design 258–297) = "Terms",
-  line 2 x 149–241 (design 150–240) = "Privacy Notice"; helper ink 130dp vs 125dp wide
-  (the Inter-build width drift, §6, unchanged); `surface` uniform to y=844.
-- `git status` touches only `app/lib/features/auth/**`, `app/test/features/auth/**`,
-  `docs/screens/P03/**` — RULES §1 respected.
+- `flutter analyze` → `No issues found!` (from `app/`, ran in 4.9s). (Running
+  it from the repo root sweeps the design asset pack and errors — that is the
+  `design/` folder, not shipped code, and is never CI's scope.)
+- `flutter test test/features/auth` → **+147: All tests passed!**, 0 skipped,
+  0 failed. Per the build note, the full suite is `+841` green.
+- Copy bytes: the subtitle now ships U+2019 (`342 200 231` on disk), the legal
+  sentence carries exactly one U+00A0 inside "Privacy Notice", and
+  `copy_audit_test.dart` is green.
+- Device geometry, measured from `ui/app_light_6.png` vs the design PNGs:
+  - subtitle line 1 ink x 21–368 vs design 21–368; line 2 x 22–128 vs 22–128 —
+    the §6 drift is gone and the break is exactly the design's;
+  - helper ink 21–145 vs 21–145, note x 24–287 vs 24–288;
+  - CTA hairline y=678 vs 677; submit button 694–745 in both; the two legal
+    runs x 262–300 / 149–241 vs 258–297 / 150–240.
+- Bottom edge (OWNER rule): both themes paint `tokens.surface` to y=844
+  (`ui/app_dark_6.png` column scan is uniform `(31,28,46)` from 631 to 843;
+  `ui/app_light_6.png` is uniform `(255,255,255)`).
+- Shared changes verified landed and in scope: `nest_text_field.dart:120-175`
+  now takes `errorText` with `errorBorder` forced and a gutter-aligned row
+  pinned by `shared_batch1_test.dart`; `:208-216` now wraps that row in
+  `Semantics(liveRegion: true, label: errorText, …)` (§8 landed);
+  `typography.dart` has `letterSpacing: 0` by default and the device metrics
+  confirm it. `git status` touches only `app/lib/features/auth/**`,
+  `app/test/features/auth/**`, `docs/screens/P03/**` (plus loop metadata).
 
-## Iteration-4 findings — all six addressed
+## Iteration-5 findings — all three addressed
 
-| # | Iteration-4 finding | Status |
+| # | Iteration-5 finding | Status |
 |---|---|---|
-| 1 | BLOCKER — red suite; BUG-11/BUG-16 mutually exclusive | **corrected**: §5 has since landed, so the exclusion no longer holds; one proof still needs a decision — see finding 1 |
-| 2 | MAJOR — empty live region (BUG-21) | **closed**: both owned rows now `Semantics(liveRegion: true, label: …)` (`:193-196`, `:251-254`), with the label asserted in proofs |
-| 3 | MINOR — dead `extra` field | **closed** (removed) |
-| 4 | MINOR — fallback fires after a hit | **rejected by the build with a shaky reason** — see finding 2 |
-| 5 | MINOR — `_verifyTotal` lifetime cap | **closed** (reset in `didChangeDependencies`, `:409`) |
-| 6 | MINOR — stale §5 disposition | **closed** (reworded to the skip-with-reason outcome) |
+| 1 | BLOCKER — red suite (BUG-16) pending §5/§8 decision | **closed**: Decision B recorded in `SHARED_REQUEST.md` §5 — the shared row wins; §5 and §8 are both marked RESOLVED, no skip markers remain |
+| 2 | MINOR — double-fire in the button/link overlap | **closed**: `_RenderHitTestExpand.hitTest` now suppresses the fallback whenever `entry.path` already contains a gesture target (`RenderPointerListener`/`RenderSemanticsGestureHandler`); BUG-18's gap/gap-replacement overhang taps are ungated and stay green, and BUG-22's overlap is guarded; proofs green |
+| 3 | MINOR — stale §5/§8 wording | **closed**: §5 records the final disposition, §8 records the landed shape |
 
-I also audited the claims the build note makes that I had not directly verified before:
-the `NestTextField` shared half of §5 is genuinely done (see Evidence), the caption
-mirror is pinned by equality proofs, `copy_audit_test.dart` is 10/10 green, and the
-caption/CTA geometry is unchanged and correct.
+## Verified-as-correct changes this iteration
+
+- **BUG-16/20/21 together resolved by the shared batch**: `create_account_view.dart:175`
+  and `:200` now pass `errorText` to both fields, and the owned live-region rows are
+  deleted. The announcement is preserved because the shared field's error row is now
+  itself `Semantics(liveRegion: true, label: errorText, child: ExcludeSemantics(...))`.
+  Danger border forced, border state correct in both themes (`errorBorder` while
+  `errorText != null`, reset when cleared). All three proofs green.
+- **BUG-22 (overlap double-fire)** — the gesture-target gate is the right
+  implementation: the in-panel empty area claims nothing from a pointer listener
+  (only the bar's opaque `DecoratedBox`), so overhang points still reach the
+  fallback's children; the button's strip already sits on a gesture target, so it
+  suppresses the fallback. I also checked the iteration-4 suggestion (`if (!hit …)`)
+  and the build was right to reject it — `hit` is non-false over every in-panel
+  point because the bar's own decoration claims them — so a `!hit` gate would have
+  killed the overhang, not the overlap.
+- **BUG-17** resolved shared-side: `ui/app_light_6.png` measures the subtitle ink at
+  x 21–368 on line 1 and x 22–128 on line 2, matching the design exactly; no local
+  override needed.
+- **No-skip suite**: the feature suite runs 147/147 green and the files carry zero
+  `skip:` markers; the only open items are owned shared requests (§6, §7).
 
 ## Checked and clean (no finding)
 
-- **Architecture** — `domain/` = entity folder + abstract repository (enum inlined),
-  one bloc per screen from `registerAuth`, route-path constants only for cross-feature
-  navigation, no use-case classes, `package:nestling/...` only.
-- **RULES §4** — password never persisted; owner row idempotent; legacy
-  `createAccount(name:)` alias still documented for the one shared caller.
-- **RULES §7** — see finding 1: it currently fails only because of the unresolved
-  BUG-16 decision; everything else is green.
-- **Geometry (measured, device vs design)** — hairline 678 vs 677, submit 694–745 in
-  both, caption break and link positions within ~4dp, bottom-edge OWNER rule holds in
-  both themes (uniform `surface` to y=844), 20px gutters intact.
-- **Design system** — DS components only; `NestBottomCta.caption` avoided; the caption
-  line-height override is now token-expressed (`NestSpacing.s5 / 13`) and pinned by
-  `P03-BUG-12`; the brand glyphs are still the HTML's own artwork.
-- **A11y intent** — headline is the only `header:`; `or`-row, glyphs, shield excluded;
-  error rows announced once and labelled once; submit failure announced via
-  `sendAnnouncement`; every target ≥44dp at 320/390/430 × 1.0/1.3.
-- **Error handling** — both submits `on Object catch` + `addError`; the screen cannot
-  strand a spinner.
-- **Performance / lifecycle** — brand buttons on `BlocSelector(isSubmitting)`, fields on
-  `buildWhen` error selectors, static rows never rebuilt; controllers disposed; the bloc
-  subscription is route-scoped; no timers, no animations.
-- **Children's Code / privacy** — parent mode only; no analytics, ads, network calls,
-  child data, photos or locations; the copy states the privacy position.
-- **`ORCHESTRATOR_NOTES` iteration-3 §2** — apostrophe fixed; the break stays a shared
-  font-pipeline item (§6), correctly not chased locally.
+- **Architecture** — feature-first; `domain/` = abstract repository + entity folder only;
+  bloc per screen; `registerAuth` owns the repository + factory bloc; cross-feature
+  navigation via route-path constants; no use-case classes, no `utils` folder.
+- **RULES §4 data contract** — password never persisted; owner row idempotent; `Seed.familyId`
+  respected; legacy `name:` alias only for the one shared caller.
+- **RULES §1** — only allowed paths touched.
+- **Design-system usage** — all DS components and tokens; caption line-height is
+  `NestSpacing.s5 / 13` with §7 documented as the remaining 13/20 token request;
+  no `GoogleFonts` left anywhere; letter-spacing inherits `NestType`'s zero-tracking
+  default; no hard-coded colours, radii or text sizes remain in the view.
+- **A11y** — headline is the only `header:`; glyphs, shield and the `or` row excluded;
+  the brand labels announce once each (shared doubled-label bugs 2/4 landed in
+  `7eaa1f7` and proofs green); error rows live-region-announce their exact message;
+  all interactive boxes ≥44dp at every tested size/scale.
+- **Performance / rebuilds** — fields rebuild only on `errorText` change, brand buttons
+  only on `isSubmitting`, the CTA only on `canSubmit`/`isSubmitting`; a keystroke
+  cannot rebuild the static rows; controllers disposed; no timers or polling; the
+  verify chain is bounded (12) and re-armed only per dependency change.
+- **Error handling** — both submit handlers `on Object catch` + `addError`, so any
+  non-`Exception` surfaces a `formError` and never strands a spinner; failure is
+  announced.
+- **Children's Code / privacy** — parent mode; no analytics, ads, child data,
+  photo/location capture; the copy states the privacy position.
 
-## Findings
+## Remaining
 
-### 1. BLOCKER — the suite is red by exactly one proof, and the loop is oscillating on it
+None open on this screen. `SHARED_REQUEST.md` §6 and §7 are both non-blocking,
+owned shared items (fonts bundled; 13/20 legal-caption token pending). The
+`ORCHESTRATOR_NOTES` filled-state simulator capture remains UI-stage work.
 
-`app/test/features/auth/p03_bugs_test.dart` — `P03-BUG-16 an invalid field paints the
-danger border` (un-skipped by Stage 3, iteration 5, per `3_test.md`).
-
-Two stages have now landed on opposite states for the same proof: the iteration-5 build
-skip-marked it "until §8 lands", and Stage 3 un-skipped it on the grounds that §5 has
-landed. **Both are half right.** The build's reason was wrong (it still claimed the
-shared `hasError`/gutter row had "not landed" — it has; I read `nest_text_field.dart` and
-the border now defaults to `errorBorder` whenever `errorText != null`, and the shared row
-is gutter-aligned). Stage 3's conclusion ("passing `errorText` no longer re-opens
-BUG-11") is correct as far as layout goes. But the switch still cannot be made without
-deciding `SHARED_REQUEST.md` §8: the shared error row is a **plain `Text`** — no live
-region — so passing `errorText` fixes the border and the layout, and silently deletes the
-announcement my iteration-3/4 review (and Material's own `InputDecoration`) judged
-correct. That is the one open decision, and it is the owner's, not the build's:
-
-- **Decision A (recommended)** — the announcement wins: keep the screen-owned
-  live-region rows and **skip `P03-BUG-16` with the explicit reason
-  `SHARED_REQUEST.md §8`**, so the guard stays visible, the suite is green, and the
-  defect is tracked to its true unblock (three lines in `nest_text_field.dart`).
-- **Decision B** — the shared row wins: pass `errorText` to both fields, delete the
-  owned rows, and formally close §8 as *won't-fix*. `P03-BUG-16` goes green with the
-  same one-line change, but the announcement requirement is dropped — say so in the
-  review and do not keep `P03-BUG-20/21` as live-region proofs then.
-
-Either decision unblocks the loop; the current state (red proof + disagreement) does not.
-
-### 2. MINOR — `_HitTestExpand` still lacks a `!hit` gate, so a tap in the submit/caption overlap double-fires
-
-`create_account_view.dart` `_RenderHitTestExpand.hitTest` (`:677-691`). The verification
-fallback runs for every point outside the caption stack's rect, with no check of whether
-the normal path already claimed the tap. On the device geometry the Terms target's top
-(≈741.7) overlaps the submit button's last ~4dp (694–745.7), so a tap there reaches both
-the button's `onTap` and the link's `onTap`. Today the link is inert so the effect is
-nil, but the moment Terms/Notice routes exist that strip double-activates.
-
-The build rejected the fix on the grounds that "delegating first can never fall through —
-the bar background always claims every in-panel tap." Walking the chain shows otherwise:
-for an overhang tap every intermediate box bounds-checks the point away (the CTA
-`DecoratedBox` contains it, the caption `Stack` does not descend, the gap `SizedBox`
-claims nothing), so the normal path returns `hit == false` exactly where the fallback is
-needed. Gating the fallback behind `if (!hit && !stackRect.contains(position))` therefore
-preserves BUG-18 for overhang taps and removes the 4dp double-fire. Add a `tapAt` proof
-for a point inside the submit button asserting the link's `onTap` did not also run (the
-harness cannot reproduce the device's overlap strip, but an explicit `onTap` count still
-proves the gate).
-
-### 3. MINOR — the owner still needs to adjudicate `SHARED_REQUEST.md` §5 vs §8 wording
-
-`SHARED_REQUEST.md` §5 now reads that §5 is **RESOLVED** (correct — I verified the
-shared row is gutter-aligned, forced to `errorBorder`, helper-suppressed), but the
-iteration-5 build note's premise ("the shared row has no live region (§8), so switching
-would trade BUG-16 for BUG-20") is recorded there as if §5 were still open, and §8 still
-reads "Blocks: no — P03 can fix BUG-21 locally…but not BUG-16 without this." Once the
-decision in finding 1 is made, §5's "Consequence for P03" paragraph and §8's "Blocks"
-line should say which disposition was chosen, so the next stage does not un-skip/re-skip
-the proof a third time. This is the same oscillation as finding 1, at the document level.
-
-## Notes for the next stage
-
-- Decide §8 (finding 1) — that, plus the one-line switch if the owner chooses Decision
-  B, is the only blocker. Then 2 (one gate + one `tapAt` proof), then 3.
-- Nothing else is owed on this screen this iteration: the layout is within ~1–4dp of the
-  design in both themes, the caption break and positions match, the copy audit is 10/10,
-  the mirror proofs are exact, and the live-region labels are byte-identical to the
-  design's messages.
-- `ORCHESTRATOR_NOTES.md` iteration-3 item 3 (filled-state capture on the simulator) is
-  still outstanding for the UI stage; the filled *state* is pinned by the widget test.
-
-VERDICT: FAIL
+VERDICT: PASS
