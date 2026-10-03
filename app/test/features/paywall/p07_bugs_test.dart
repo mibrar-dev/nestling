@@ -1,12 +1,11 @@
-// P07 · Paywall — adversarial bug proofs (Stage 6, iteration 2).
+// P07 · Paywall — adversarial bug proofs (Stage 6, iteration 3).
 //
-// Iteration 1 found P07-BUG-1..9. Iteration 2 verified 1–7 fixed — their
-// proofs are unskipped and green below — adopted stage 3's P07-BUG-10
-// (expired-trial close trap) with an independent proof, added P07-BUG-11
-// (announced separators) and P07-BUG-12 (active-subscription downgrade), and
-// carries P07-BUG-8/9 as shared items filed in
-// `docs/screens/P07/SHARED_REQUEST.md`; every open proof stays `skip: true`
-// until its fix lands.
+// Iteration 1 found P07-BUG-1..9; iteration 2 added P07-BUG-10..12; all of
+// 1–12 are now unskipped and green (iteration 3 built the fixes). Iteration 3
+// added P07-BUG-13 (the legal-link labels are top-aligned, not centred) —
+// the one open proof, `skip: true` until the fix lands. P07-BUG-8/9 remain
+// shared items filed in `docs/screens/P07/SHARED_REQUEST.md`; their proofs
+// stay `skip: true` until the shared fix lands.
 //
 // Every open bug test is `skip`-marked with its id in the test name so the
 // suite stays green while the defect is unfixed; when the fix lands, remove
@@ -22,6 +21,7 @@ import 'dart:async';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
@@ -562,6 +562,42 @@ void main() {
       );
     },
   );
+
+  group('P07-BUG-13 — legal links are top-aligned, not centred (major)', () {
+    testWidgets(
+      '[P07-BUG-13] the legal links share the separators’ baseline',
+      skip: true,
+      (tester) async {
+        await _pumpPaywallWithSeed(tester, Seed.fresh);
+
+        // The design centres the link labels inside their 44px targets
+        // (`.legal-row .link { align-items: center; min-height: 44px }`),
+        // so labels and separators sit on one baseline. Iteration 3
+        // removed `_LegalLink`'s expanding `Center` (it stacked the row)
+        // but did not replace the vertical centring: the label paragraph
+        // is forced to the 44px min height and paints at its top, 13px
+        // above the centred `·`.
+        final link = tester.renderObject<RenderParagraph>(find.text('Terms'));
+        final dot = tester.renderObject<RenderParagraph>(find.text('·').first);
+        final linkBaseline =
+            tester.getRect(find.text('Terms')).top +
+            link.computeDistanceToActualBaseline(TextBaseline.alphabetic);
+        final dotBaseline =
+            tester.getRect(find.text('·').first).top +
+            dot.computeDistanceToActualBaseline(TextBaseline.alphabetic);
+
+        expect(
+          linkBaseline,
+          moreOrLessEquals(dotBaseline, epsilon: 1),
+          reason:
+              'the label must be vertically centred in its 44px target, '
+              'not top-aligned (design: 767–780, app: 754–766)',
+        );
+
+        await disposeApp(tester);
+      },
+    );
+  });
 
   group('verified clean — baselines that must stay green', () {
     test(

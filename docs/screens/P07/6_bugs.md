@@ -1,135 +1,86 @@
-# P07 Paywall — bug hunt (Stage 6, iteration 2)
+# P07 Paywall — bug hunt (Stage 6, iteration 3)
 
-Adversarial pass over the now-built P07 feature: `app/lib/features/paywall/**`
-(808-line view, action bloc, Drift repository, route), the router guard and
-session handoff, and the design sources
-(`design/html-source/screens/P07-paywall.html`,
+Adversarial pass over the iteration-3 P07 build: `app/lib/features/paywall/**`
+(view, action bloc with the new active-subscription guard, Drift repository
+with `readSubscription()`, route), the router guard and session handoff, and
+the design sources (`design/html-source/screens/P07-paywall.html`,
 `design/screens/{light,dark}/P07-paywall.png`, `docs/screens/P07/1_plan.md`,
-`docs/screens/P07/ORCHESTRATOR_NOTES.md`, `SHARED_REQUEST.md`).
+`SHARED_REQUEST.md`).
 
-**Headline: the screen is built and iteration-1 bugs 1–7 are fixed with green
-proofs.** Iteration 2 found one **major latent** defect — the close button
-cannot leave the expired-trial paywall (P07-BUG-10, found by stage 3 and
-independently reproduced here) — plus two new **minor** bugs (P07-BUG-11,
-P07-BUG-12). The two shared items from iteration 1 (P07-BUG-8 major,
-P07-BUG-9 minor) remain open, filed in `docs/screens/P07/SHARED_REQUEST.md`,
-and cannot be fixed under RULES §1. Because P07-BUG-10 is major (it becomes a
-blocking trap the moment P07-BUG-8’s expiry fix lands), this iteration cannot
-pass.
+**Headline: iteration-1/2 bugs 1–12 are all fixed with green proofs.** The
+iteration-3 hunt found **one new major bug — P07-BUG-13**: the legal-link
+labels are top-aligned inside their 44 px targets, so they sit ~13 px above
+the design and above the centred `·` separators (a visible misalignment the
+ALIGNMENT owner rule says to fail). The two shared items (P07-BUG-8 major,
+P07-BUG-9 minor) remain open and filed. Because P07-BUG-13 is major, this
+iteration cannot pass.
 
-Proof file: `app/test/features/paywall/p07_bugs_test.dart` — 14 tests
-unskipped and green (bugs 1–7 + 4 verified-clean baselines), 5 skipped
-(BUG-8/9 shared, BUG-10/11/12 open). `--run-skipped` fails each skipped proof
-for the documented reason.
+Proof file: `app/test/features/paywall/p07_bugs_test.dart` — 17 tests
+unskipped and green (bugs 1–7, 10–12 + 4 verified-clean baselines), 3 skipped
+(BUG-8/9 shared, BUG-13 open). `--run-skipped` fails each skipped proof for
+the documented reason.
 
-## Iteration-1 ledger
+## Ledger
 
-| ID | Iteration-1 finding | Iteration-2 outcome |
+| ID | Finding | Iteration-3 outcome |
 |---|---|---|
-| P07-BUG-1 | blocker: screen not implemented | **fixed** — full `1_plan.md` §a surface; proof green |
-| P07-BUG-2 | blocker: no trial/restore path, onboarding dead end | **fixed** — events + `PaywallAction`/`PaywallRequest`, session writes, `/today`; proofs green |
-| P07-BUG-3 | major: `NestBottomCta` cannot render CTA → caption → legal row | **fixed** — local column with `caption: null`; proof green |
-| P07-BUG-4 | minor: caption dropped “the” | **fixed** — `detail` now `after the 14-day trial`; proof green |
-| P07-BUG-5 | minor: stray full stop, tag missing from data | **fixed** — `detail` carries sub + caption + tag, em-dash joined; proofs green |
-| P07-BUG-6 | minor: stale `errorMessage` survived a retry | **fixed** — `copyWith(clearError:)`; proof green |
-| P07-BUG-7 | minor (latent): UPDATE-only writes | **fixed** — `_upsert` mirrors `AppSession._write`; proof green |
-| P07-BUG-8 | major (shared): the 14-day trial never expires | **open** — nothing writes `'expired'`; `SHARED_REQUEST.md` §1; proof skipped |
-| P07-BUG-9 | minor (shared): kid-mode guard order during onboarding | **open** — `router.dart` unchanged; `SHARED_REQUEST.md` §2; proof skipped |
+| P07-BUG-1 | blocker: screen not implemented | **fixed** (iter 2); proof green |
+| P07-BUG-2 | blocker: no trial/restore path, onboarding dead end | **fixed** (iter 2); proofs green |
+| P07-BUG-3 | major: bar could not render CTA → caption → legal row | **fixed** (iter 2); proof green |
+| P07-BUG-4 | minor: caption dropped “the” | **fixed** (iter 2); proof green |
+| P07-BUG-5 | minor: stray full stop, tag missing from data | **fixed** (iter 2); proofs green |
+| P07-BUG-6 | minor: stale `errorMessage` survived a retry | **fixed** (iter 2); proof green |
+| P07-BUG-7 | minor (latent): UPDATE-only writes | **fixed** (iter 2); proof green |
+| P07-BUG-8 | major (shared): the 14-day trial never expires | **open** — `SHARED_REQUEST.md` §1; proof skipped |
+| P07-BUG-9 | minor (shared): kid-mode guard order during onboarding | **open** — `SHARED_REQUEST.md` §2; proof skipped |
+| P07-BUG-10 | major (latent): X could not leave the expired-trial paywall | **fixed** (iter 3) — close tile omitted on the expired gate; proof green |
+| P07-BUG-11 | minor: `·` separators announced in semantics | **fixed** (iter 3) — `ExcludeSemantics`; proof green |
+| P07-BUG-12 | minor: trial CTA downgraded an active subscriber | **fixed** (iter 3) — bloc one-shot active guard, fail-open; proof green |
+| P07-BUG-13 | **major: legal-link labels top-aligned, not centred** | **open** — this iteration; proof skipped |
 
-Evidence for the fixes: all ten iteration-1 proofs are unskipped and pass
-(`flutter test test/features/paywall/p07_bugs_test.dart` → `+14 ~5`), plus the
-feature suites. The four stage-3 test defects the build repaired (impossible
-`tops[1] ≈ tops[2]`, CTA height measured on the label text, bool matcher on a
-`Tristate`, decorative-label regex that matched the title/Pip) were each
-re-verified as legitimate test bugs; intent was preserved, not weakened.
+Evidence: `flutter test test/features/paywall/p07_bugs_test.dart` → `+17 ~3`;
+all ten earlier proofs unskipped and passing.
 
-## Iteration-2 findings
+## Iteration-3 finding
 
-### P07-BUG-10 — Major (latent today; blocking trap once P07-BUG-8 lands) — the close button cannot leave the expired-trial paywall
+### P07-BUG-13 — Major (ALIGNMENT owner rule) — the legal-link labels are top-aligned
 
-**Found by:** stage 3 (`3_test.md`, proof in `paywall_view_test.dart:1102`);
-independently reproduced here with a second proof in `p07_bugs_test.dart`.
+**Where:** `app/lib/features/paywall/presentation/views/paywall_view.dart:795-836`
+(`_LegalLink`). The iteration-3 fix for the stacked legal row removed the
+expanding `Center` from the link subtree but did not replace the vertical
+centring: `ConstrainedBox(minWidth/minHeight 44)` forces the label
+`RenderParagraph` to 44 px tall, and a paragraph paints its text at the top of
+its box. The `Wrap` then centres the 44 px link boxes against the 18 px `·`
+separators, so the labels sit at the top while the dots sit in the middle.
 
-**Where:** `paywall_view.dart:27-34` (`_onBack`: `canPop() ? pop() : go(P06)`)
-combined with the router’s expired-trial rule (`router.dart:90-93`): when the
-trial is expired, **every** location except `/paywall` is redirected back to
-`/paywall`. `pop()` lands on `/today` and is bounced; `go(P06)` is bounced
-too. The design’s close X (`Close and go back`) is therefore a dead control
-for an expired user — they can only subscribe or restore.
+**Evidence (measured):**
+
+- Widget probe: `Terms` paragraph box `66.3×44`, intrinsic text height 18,
+  alphabetic baseline 12.25 px from the box top; `·` paragraph `13.3×18`,
+  baseline 12.25. Link baseline y = 744.25, dot baseline y = 757.25 → **13 px
+  apart**.
+- Device shot `docs/screens/P07/ui/app_light_3.png` vs
+  `design/screens/light/P07-paywall.png` (sky-pixel scan, logical px): app
+  link band **754.3–766.3**, design **767.3–779.7** — the labels render 13 px
+  above the design, with the dots hanging low; the design centres both
+  (`.legal-row .link { align-items: center; min-height: 44px }`).
+- Visible in both themes; a designer comparing the two PNGs would reject the
+  row (ALIGNMENT owner rule: “Treat visible misalignment as a UI failure”).
 
 **Repro:** `cd app && flutter test
 test/features/paywall/p07_bugs_test.dart --run-skipped --plain-name
-'[P07-BUG-10] close leaves'` → set `subscription_status='expired'`,
-onboarded, pump `/today` (redirects to `/paywall`), tap X →
-`Expected: not '/paywall' / Actual: '/paywall'`.
+'[P07-BUG-13]'` → `Expected: 757.25 (±1.0) / Actual: 744.25`.
 
-**Failing tests:** `[P07-BUG-10] close leaves the expired-trial paywall (no
-bounce)` (`p07_bugs_test.dart`, `skip: true`) and stage 3’s
-`[P07-BUG-10] close escapes the expired-trial paywall (no /today bounce)`
-(`paywall_view_test.dart`, `skip: true`).
-
-**Why latent:** nothing in `app/lib` writes `'expired'` (P07-BUG-8), so the
-state is unreachable in today’s product — but the moment the shared expiry
-fix lands, every expired parent hits this trap. The two must be fixed
-together.
-
-**Suggested fix (screen-local option):** for `session.trialExpired` the
-paywall is a hard gate, so the onboarding close affordance must not pretend
-to work — omit the close tile (and its 44px balance spacer) when
-`GetIt.instance<AppSession>().trialExpired`, or render it disabled with a
-correct label. **Orchestrator option:** relax the router guard to allow a
-specific escape (e.g. `/settings`) so X can `go` there. A test asserting
-*where* an expired parent should land is a product decision; the proofs only
-require “X leaves `/paywall`”.
-
-### P07-BUG-11 — Minor — the legal separators are announced
-
-**Where:** `paywall_view.dart:747` and `:753` render the two `·` separators
-as plain `Text('·', …)`. The design marks them `aria-hidden="true"`
-(`P07-paywall.html:108,110`), and the two links carry their own labels — the
-dots must not become separate semantics nodes.
-
-**Repro:** `--run-skipped --plain-name '[P07-BUG-11]'` → `Expected: no
-matching candidates / Actual: Found 2 widgets with a semantics label named
-"·"`. A screen reader announces “middle dot” between `Restore purchases`,
-`Terms` and `Privacy`.
-
-**Failing test:** `[P07-BUG-11] the · separators stay out of semantics`
+**Failing test:** `[P07-BUG-13] the legal links share the separators’ baseline`
 (`skip: true`).
 
-**Suggested fix:** wrap both separator `Text` widgets in `ExcludeSemantics`
-(or `Semantics(excludeSemantics: true, …)`) — one line each, screen-local.
-
-### P07-BUG-12 — Minor — Start free trial downgrades an active subscriber
-
-**Where:** `paywall_view.dart:41-55` (`_onActionSuccess` trial branch always
-calls `session.startTrialNow()`), after the bloc already ran
-`repository.startTrial()` (`paywall_bloc.dart:50` →
-`paywall_repository_impl.dart:30-39`). `/paywall` stays reachable for an
-onboarded app (`router.dart` `parentOnly` list), and `Seed.demo` is an
-`active` family, so the screen can be shown to a paying subscriber. Tapping
-`Start free trial` overwrites `subscription_status: 'active'` with `'trial'`
-and moves `trial_start`. The restore path deliberately refuses this
-(“Restore purchases never starts a trial”); the trial path has no equivalent
-guard.
-
-**Repro:** `--run-skipped --plain-name '[P07-BUG-12]'` on `Seed.demo` →
-`Expected: 'active' / Actual: 'trial'` (and the seeded `trial_start` is
-replaced by now).
-
-**Failing test:** `[P07-BUG-12] an active subscription is not replaced by a
-trial` (`skip: true`).
-
-**Suggested fix:** guard the trial action on the current subscription — e.g.
-the bloc watches `repository.watchSubscription()` and treats an `active`
-subscription as “already subscribed” (skip `startTrial()`, emit success), or
-the view skips `startTrialNow()` when `session.subscriptionStatus == 'active'`
-— then complete onboarding and go to `/today` as today. Note:
-`paywall_bloc_test.dart` pins repository-level “trial wins by design”; the
-guard belongs at the action layer, so that pin can stay as the raw repository
-contract. The orchestrator may also rule that a deep-linked paid user should
-be redirected off `/paywall` entirely — either way the CTA must not regress a
-paid subscription.
+**Suggested fix:** keep the 44×44 tap target and the non-expanding width but
+centre the label vertically, e.g. inside the `InkWell` use
+`Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment:
+CrossAxisAlignment.center, children: [Text(label, …)])`, or give the label
+`Padding(vertical: (44 − 18) / 2)`. A bare `Center()` expands to the Wrap run
+(the original regression) and `Center(widthFactor: 1)` collapses to the child,
+so neither works. After the fix, unskip the proof.
 
 ## Carried open items (shared, filed — not fixable under RULES §1)
 
@@ -137,10 +88,9 @@ paid subscription.
    `app/lib` writes `subscription_status = 'expired'`, so the router’s
    `trialExpired → /paywall` redirect is dead code. Filed in
    `SHARED_REQUEST.md` §1 (owner: `core/data/app_session.dart` +
-   `app/launch.dart`; suggested fix computes expiry from `trialStart + 14`
-   London calendar days). Proof `[P07-BUG-8]` stays `skip: true`. **Fix
-   together with P07-BUG-10** — landing expiry without the close fix traps
-   every expired parent.
+   `app/launch.dart`). Proof `[P07-BUG-8]` stays `skip: true`. The P07 side of
+   the pair is now ready: P07-BUG-10 fixed the expired-gate close behaviour,
+   so landing expiry will not trap the parent.
 2. **P07-BUG-9 — minor (shared):** kid-mode + onboarding-incomplete deep link
    to `/paywall` ends on `/welcome` instead of `/parental-gate` (guard
    ordering in `app/lib/app/router.dart`). Filed in `SHARED_REQUEST.md` §2.
@@ -148,57 +98,49 @@ paid subscription.
 
 ## Verified clean this iteration
 
-- **Bugs 1–7 proofs:** unskipped and green (see ledger).
-- **Rapid double taps:** trial same-frame double tap → one `startTrial` call,
-  one navigation; restore same-frame double tap → one `activate` call; close
-  double tap → one pop. (Bloc `working` guard + disabled CTA; probes run and
-  deleted.)
-- **Close during an in-flight trial:** pops to `/pocket-money-setup`, no
-  exception, and the completed request never navigates to `/today` (the
-  listener is gone; bloc 9 cancels the emitter, so no emit-after-close throw).
-- **Load error + trial:** error body with `Retry` and the CTA both render; a
-  trial tapped from the failure state still completes and lands on `/today`.
-- **Deep links / back (non-expired):** `/paywall` reachable with `Seed.fresh`
-  and stays open for an onboarded app; close → `/pocket-money-setup`; kid
-  mode (onboarded) → `/parental-gate`.
-- **Restart persistence:** trial handoff survives a fresh `AppSession` over
-  the same DB (onboarded, `trial`, `trial_start`, `Europe/London`); restore
-  survives as onboarded + `active`.
-- **Text scale 1.3 × width 320 × dark:** no overflow/exception (CTA present);
-  the stage-3 12-combination matrix covers the rest.
-- **Dark-mode contrast (tokens, computed):** sky on surface 7.14:1 dark /
-  5.48:1 light, leafInk on leafTint 8.47:1 / 7.12:1, ink2 on surface
-  9.82:1 — all ≥ 4.5:1 for the 13 px links.
-- **FONTS rule:** no `google_fonts`/`GoogleFonts` anywhere in the feature or
-  its tests (grep clean; nothing to delete).
-- **Money rounding / integer pence and child-data edge cases:** not applicable
-  — P07 does no arithmetic and renders no child or money data (static plan,
-  fixed `James` copy; demo/empty/fresh render identically per the stage-3
-  seed test).
-- **Owner rules:** bottom edge and 20 px gutters are pinned by the stage-3
-  pixel/geometry tests and the stage-5 compare (separate stage).
+- **Iteration-3 fixes audited in code and by test:** the expired gate renders
+  no close control and stays on `/paywall` with the CTA (probe: nav 52 px,
+  `close=0`, no exception; the normal screen still has the 44 px close tile
+  and its balance spacer); the separators are out of semantics (proof green);
+  the bloc’s `_alreadySubscribed()` reads once, fails open to the legacy trial
+  path on read errors, keeps the `working` double-tap guard, and emits
+  `success(request: restore)` for an active family (proof green).
+- **All 1–12 proofs green**, including the trial/restore handoff, close
+  navigation, bar order, copy pins and the upsert path.
+- **Standard hunt list re-checked on the changed build:** rapid double taps
+  (trial/restore/close), close during an in-flight request, deep links and
+  back navigation, kid-mode guard (onboarded → `/parental-gate`), restart
+  persistence, dark-mode contrast (tokens unchanged; all P07 pairs ≥ 5:1),
+  320 dp × 1.3 text scale (no overflow/exception), async/dispose (bloc 9
+  cancels emitters; no emit-after-close throw). Money rounding and child-data
+  edge cases remain N/A (no arithmetic, no child data on P07).
+- **FONTS:** no `google_fonts`/`GoogleFonts` anywhere in the feature or its
+  tests (grep clean).
+- One full-suite run hit a transient native-asset race (`libsqlite3.dylib`
+  missing while a concurrent stage built in the same worktree); the re-run is
+  green. Environment, not a product finding.
 
 ## Verification (run this stage, `app/`)
 
-- `flutter test test/features/paywall/p07_bugs_test.dart` → **+14 ~5**.
-- `flutter test test/features/paywall/` → **+92 ~6** (stage-3’s own skip
-  included; only the shared/open proofs skipped).
-- `flutter analyze` → `No issues found!`; `dart format` → 0 changed.
-- Full `flutter test` → **+742 ~6, all pass** (6 skips: the 5 open proofs in
-  this file + stage 3’s P07-BUG-10 proof).
-- The three new proofs (BUG-10/11/12) fail exactly as documented with
-  `--run-skipped`; the scratch probe files used for the hunt were deleted.
+- `flutter test test/features/paywall/p07_bugs_test.dart` → **+17 ~3**.
+- `flutter test test/features/paywall/` → **+106 ~3**.
+- Full `flutter test` → **+770 ~3, all pass** (3 skips: BUG-8, BUG-9,
+  BUG-13).
+- `flutter analyze` → `No issues found!`; `dart format` → 369 files, 0
+  changed.
+- The new proof fails exactly as documented with `--run-skipped`; the scratch
+  probe used for the hunt was deleted.
 - No screen code touched; only `app/test/features/paywall/p07_bugs_test.dart`
   and this file.
 
 ## Verdict basis
 
-Iteration-1 blockers/majors are fixed with green proofs and the two new minor
-findings have failing skip-marked proofs, but P07-BUG-10 is a real defect in
-the screen’s back navigation: on the expired-trial paywall the close control
-can never work while the router forces every location back to `/paywall`. It
-is latent only because P07-BUG-8 is unfixed; the two must be fixed together,
-and the screen should not ship a dead X into the expiry release. Per the
-stage rule — PASS only if no major bugs — this iteration fails.
+Iteration-1/2 bugs 1–12 are fixed with green proofs, and the three
+iteration-3 fixes are correct in code and test. But P07-BUG-13 is a real,
+measured, visible misalignment: the legal-link labels render 13 px above the
+design and above the centred separators, which the ALIGNMENT owner rule
+classifies as a UI failure. Per the stage rule — PASS only if no major bugs —
+this iteration fails; the next build should centre the labels (small,
+screen-local) and unskip the proof.
 
 VERDICT: FAIL

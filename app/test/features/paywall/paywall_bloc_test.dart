@@ -476,6 +476,34 @@ void main() {
     Future<AppStateData?> appStateRow() =>
         (db.select(db.appState)..where((a) => a.id.equals(1))).getSingle();
 
+    test(
+      'readSubscription is a one-shot read that never waits on a stream',
+      () async {
+        // P07-BUG-12's guard (`_alreadySubscribed`) awaits this before every
+        // `startTrial()`. The per-seed statuses are pinned by the
+        // `watchSubscription` tests above; what this pins is the *mechanism*.
+        // The interface default is `watchSubscription().first`, and awaiting a
+        // fresh Drift watch stream from inside a running widget test leaves
+        // the guard pending forever — so a regression to the default has to
+        // fail here on the budget, not hang the suite. The second half proves
+        // the same read is never stale: it sees a write immediately.
+        const budget = Duration(seconds: 1);
+        await Seed.fresh(db);
+
+        final first = await repository.readSubscription().timeout(budget);
+        expect(first.status, 'trial');
+
+        await repository.activate();
+
+        final afterWrite = await repository.readSubscription().timeout(budget);
+        expect(
+          afterWrite.status,
+          'active',
+          reason: 'a one-shot read must see the latest write',
+        );
+      },
+    );
+
     test('watchItems and getItems return the single annual plan', () async {
       await Seed.demo(db);
 

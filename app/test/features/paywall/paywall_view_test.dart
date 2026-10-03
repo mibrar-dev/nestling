@@ -307,6 +307,26 @@ Finder _cardWith(String text) =>
 Future<AppStateData?> _appStateRow(AppDatabase db) =>
     (db.select(db.appState)..where((a) => a.id.equals(1))).getSingleOrNull();
 
+/// Writes `subscription_status = 'expired'` on the seeded row — the one input
+/// the `trialExpired` guard reacts to (P07-BUG-8: nothing in the app writes it
+/// on its own yet, so a test has to) — and re-reads the session so the router
+/// and the nav's `ListenableBuilder` both see it.
+Future<void> _expireSubscription(AppDatabase db) async {
+  await (db.update(db.appState)..where((a) => a.id.equals(1))).write(
+    const AppStateCompanion(subscriptionStatus: Value('expired')),
+  );
+  await GetIt.instance<AppSession>().refresh();
+}
+
+/// Every 44-wide `SizedBox` inside the nav subtree: the close tile plus the
+/// balance spacer that mirrors it.
+Finder _navSpacers(WidgetTester tester) => find.descendant(
+  of: find.bySemanticsLabel(_navLabel),
+  matching: find.byWidgetPredicate(
+    (widget) => widget is SizedBox && widget.width == NestDevice.tapParent,
+  ),
+);
+
 // Probe boundary for the BOTTOM EDGE owner rule (painted-pixel proof).
 const Key _pixelProbe = ValueKey('p07_pixel_probe');
 
@@ -1137,6 +1157,46 @@ void main() {
       await disposeApp(tester);
     });
 
+    testWidgets('the nav keeps its balance spacer while the trial is live', (
+      tester,
+    ) async {
+      await _pumpPaywallWithSeed(tester, Seed.fresh);
+
+      expect(find.bySemanticsLabel(_closeLabel), findsOneWidget);
+      expect(
+        _navSpacers(tester),
+        findsNWidgets(2),
+        reason: 'the 44×44 close tile plus its 44-wide balance spacer',
+      );
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('an expired trial drops the close tile and its spacer', (
+      tester,
+    ) async {
+      // ALIGNMENT (owner rule): the balance spacer exists to mirror the close
+      // tile. Removing the dead control must remove its mirror too, or the
+      // nav is left with a stray 44px of nothing.
+      final db = await _pumpPaywallWithSeed(tester, Seed.fresh);
+      await _expireSubscription(db);
+      await _settle(tester);
+
+      expect(find.bySemanticsLabel(_closeLabel), findsNothing);
+      expect(
+        _navSpacers(tester),
+        findsNothing,
+        reason: 'no dangling 44px spacer behind an omitted close tile',
+      );
+
+      // The bar itself is untouched: the working exits stay reachable.
+      expect(find.byType(NestBottomCta), findsOneWidget);
+      expect(find.text(_cta), findsOneWidget);
+      expect((await _appStateRow(db))?.onboardingComplete, isFalse);
+
+      await disposeApp(tester);
+    });
+
     testWidgets(
       '[P07-BUG-10] the expired-trial paywall shows no dead close control',
       // Stage 6 proved the close button can never leave the expired-trial
@@ -1171,6 +1231,40 @@ void main() {
         );
         expect(find.text(_cta), findsOneWidget);
         expect(find.text('Restore purchases'), findsOneWidget);
+
+        await disposeApp(tester);
+      },
+    );
+
+    testWidgets(
+      'Start free trial on a paying family never downgrades them to trial',
+      (tester) async {
+        // P07-BUG-12 end to end: `/paywall` stays reachable for an onboarded
+        // app (`Seed.demo` ships `subscription_status = 'active'`), so a
+        // paying parent can tap the trial CTA. The bloc's `readSubscription()`
+        // guard must route it down the restore branch: `active` in,
+        // `active` out, `trial_start` untouched, and the family still lands
+        // on `/today`.
+        final db = await _pumpPaywallWithSeed(tester, Seed.demo);
+        final before = await _appStateRow(db);
+        expect(before?.subscriptionStatus, 'active');
+
+        await tester.tap(find.text(_cta));
+        await _settle(tester);
+
+        final after = await _appStateRow(db);
+        expect(
+          after?.subscriptionStatus,
+          'active',
+          reason: 'a paying family must not be handed a 14-day trial',
+        );
+        expect(
+          after?.trialStart,
+          before?.trialStart,
+          reason: 'trial_start moved',
+        );
+        expect(after?.onboardingComplete, isTrue);
+        expect(currentPath(tester), '/today');
 
         await disposeApp(tester);
       },
@@ -1327,6 +1421,31 @@ void main() {
   });
 
   group('P07 paywall — accessibility contract', () {
+    testWidgets('the legal separators are decoration, not links', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpPaywall(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+      );
+
+      // The design marks both `&middot;` separators `aria-hidden`: only the
+      // three links are announced, so a screen reader reads
+      // "Restore purchases, Terms, Privacy" (P07-BUG-11).
+      expect(find.bySemanticsLabel(_middot), findsNothing);
+      expect(find.text(_middot), findsNWidgets(2), reason: 'still painted');
+      for (final link in _legalLinks) {
+        expect(
+          find.bySemanticsLabel(link),
+          findsOneWidget,
+          reason: 'the link itself is still announced',
+        );
+      }
+
+      await disposeApp(tester);
+    });
     testWidgets('the nav bar and every control carry a semantics label', (
       tester,
     ) async {

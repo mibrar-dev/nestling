@@ -1,119 +1,114 @@
-# P07 Paywall — QA code review (Stage 4, iteration 2)
+# P07 Paywall — QA code review (Stage 4, iteration 3)
 
 Scope reviewed: `git diff main...HEAD` (paywall feature lib + tests, loop
 docs), against `docs/ARCHITECTURE.md`, `docs/screens/RULES.md`,
-`docs/DESIGN_SPEC.md` §5, `docs/design/SPACING_SPEC.md`, the design-system
-under `app/lib/core/design_system/`, and mandatory
-`docs/screens/P07/ORCHESTRATOR_NOTES.md`. Evidence: `flutter analyze`
-(No issues found!), `flutter test test/features/paywall/` → `+84 ~2` (all
-passed; 2 skips are the shared-router defects filed in
-`SHARED_REQUEST.md`), iteration-1 defects tracked in `6_bugs.md` are all
-closed in code.
+`docs/DESIGN_SPEC.md` §5, `docs/design/SPACING_SPEC.md`, the
+design-system under `app/lib/core/design_system/`, mandatory
+`docs/screens/P07/ORCHESTRATOR_NOTES.md`, and iteration-2 defects in
+`docs/screens/P07/6_bugs.md`. Evidence: `flutter analyze`
+(No issues found!), `flutter test test/features/paywall/` → `+101 ~2`
+(all passed; skips are recorded shared defects filed in
+`SHARED_REQUEST.md`).
+
+Iteration-3 diff versus iteration 2: `PaywallBloc` gains the already-
+subscribed guard on the trial path, `PaywallRepository` gains a one-shot
+`readSubscription()`, `_PaywallNav` hides the dead close button while the
+trial is expired, and the legal row gets tighter semantics/ellipsis.
 
 ## Findings
 
-1. **Minor — CTA caption copy duplicated.** The string
-   `£29.99/year after the 14-day trial. Cancel anytime in Settings.` appears
-   twice: rendered statically in
-   `app/lib/features/paywall/presentation/views/paywall_view.dart:691` and
-   again inside the repository's `PaywallPlan.detail`
-   (`app/lib/features/paywall/data/paywall_repository_impl.dart:60-63`).
-   The view's static render is intentional per `1_plan.md` §d, but the
-   repository must not be a second source of truth for it. Concrete fix:
-   drop the caption/tag sentence from `PaywallPlan.detail` (leave sub +
-   title), or expose a caption accessor on the entity and have the view
-   read it.
+1. **Minor — `PaywallRequest.restore` is reused to mean "already
+   subscribed".** `paywall_bloc.dart:50-66` reports success with
+   `request: PaywallRequest.restore` when `startTrial` is skipped for an
+   `active` subscriber, so the view's restore branch runs
+   `session.setSubscription('active')` (a no-op) — correct behaviour, but
+   the enum value is now a double meaning. Concrete fix: add a third
+   `PaywallRequest.alreadySubscribed` value and branch on it in the
+   listener (still `completeOnboarding()` + `/today`, but skip the
+   redundant `setSubscription` write), or document the reuse in
+   `paywall_state.dart` where `PaywallRequest` is declared.
 
-2. **Minor — hero geometry uses raw pixel literals.**
-   `paywall_view.dart:283-376` hard-codes the hero stack (170×170 circle at
-   (90,−5), 150 nest at (100,41), 120 Pip at (115,20), coin offsets), and
-   the body uses raw gaps `SizedBox(height: 26)` (:250), `18` (:253),
-   `48` (:260), and `Padding(left: 36)` (:615). This reproduces the design
-   exactly and matches the P01 hero-scene precedent, but the gaps should
-   either come from `NestSpacing` tokens or a short comment stating they
-   are design-absolute px (the `24/15` / `20/15` line-box `copyWith` at
-   :435,:502,:592,:631 has exactly that justification). Concrete fix:
-   replace the three body gaps with the nearest tokens only if the pixel
-   diff stays within tolerance; otherwise annotate each with
-   `// design-absolute`.
+2. **Minor — new trial guard is fail-open.** `paywall_bloc.dart:86-97`:
+   when `readSubscription()` throws, the trial proceeds and would
+   overwrite an unknown subscription. The comment justifies this (retry
+   parity with pre-guard behaviour), and the widget tests pin it; but the
+   overlap with P07-BUG-12's intent means a transient DB error can still
+   regress an active sub. Concrete fix: surface the read failure as
+   `PaywallAction.failure` with "Something went wrong" instead of
+   attempting the trial, or at minimum record the decision in
+   `6_bugs.md` as an accepted trade-off.
 
-3. **Minor — `_PaywallCta` composes its own bar instead of using
-   `NestBottomCta.caption`.** `paywall_view.dart:675-700` passes
-   `caption: null` (per `1_plan.md` §f, P07-BUG-3) and inlines the caption
-   text so `Restore purchases · Terms · Privacy` can sit after it. This
-   preserves the owner rule (the `NestBottomCta` `DecoratedBox` surface
-   still runs to the screen edge, `nest_bottom_cta.dart:19-30`), but the
-   duplication of the bar's caption styling (`NestType.caption`,
-   `ink2`, centred, maxLines 3) will drift if the component changes.
-   Concrete fix: the `SHARED_REQUEST.md` already asks for a
-   `caption/legal` slot on `NestBottomCta`; once that lands, delete the
-   local composition.
+3. **Minor — `AppSession` read twice per build in `_PaywallNav`.**
+   `paywall_view.dart:119,125`: `GetIt.instance<AppSession>()` is used as
+   the `ListenableBuilder` listenable and fetched again for
+   `trialExpired`. Functionally fine and rebuilds only when the session
+   notifies, but the second lookup should reuse the listenable local:
+   `final session = GetIt.instance<AppSession>();` once, then
+   `session.trialExpired`.
 
-4. **Minor (latent) — terms/privacy toast placeholders.** The legal links
-   answer in place with a toast (`paywall_view.dart:744-752`) pending real
-   routes. Acceptable for P07, but the TODO must be actioned before
-   release; it already is tracked in `SHARED_REQUEST.md`-adjacent planning
-   and carries no child-data exposure.
+4. **Minor — CTA caption copy still duplicated** between the static view
+   render (`paywall_view.dart:~697`) and `PaywallPlan.detail` in
+   `paywall_repository_impl.dart:60-63` (carried over from iteration 2).
+   Drop the caption/tag sentence from `detail` or expose it on the entity
+   and read it in the view.
+
+5. **Minor — legal-row `·` separators are now `ExcludeSemantics`.**
+   `paywall_view.dart:759-764,772-777` — this is the right call
+   (decorative punctuation was leaking into the announced text), but it
+   changes the asserted copy test expectations; verify the widget tests
+   that count `·` separators still assert on painted text, not semantics
+   (they do — suite is green). No code change needed; kept here because
+   the previous iteration's accessibility note is superseded.
 
 ## Checks passed
 
-- **Architecture:** feature-first layout holds — domain is entities
-  (`paywall_plan.dart`, `subscription_status.dart`) + abstract
-  `paywall_repository.dart` only; one BLoC for the screen; DI
-  (`paywall_di.dart`) and routes (`paywall_routes.dart`) per feature.
-- **RULES §1 paths:** the diff touches only
-  `app/lib/features/paywall/**`, `app/test/features/paywall/**` and
-  `docs/screens/P07/**` — nothing shared, nothing outside the allow-list.
-- **Design system:** no hard-coded colours/fonts; all text goes through
-  `NestType.*`, spacing through `NestSpacing.*`, icons through
-  `NestIcon`/`NestIcons`, the bottom bar through `NestBottomCta`, status
-  bar via `NestStatusBar`. No `google_fonts`/`GoogleFonts` anywhere in the
-  feature or its tests.
-- **DESIGN_SPEC §5 / COPY:** title, 4 benefits, plan title/sub/tag,
-  timeline (`Today` / `Day 12` / `Day 14` with curly apostrophe and em
-  dash), family note, CTA, caption and legal row all match
-  `P07-paywall.html` character-for-character (verified `—` U+2014, `’`
-  U+2019, `·` U+00B7, `£`). UK spelling throughout.
-- **Orchestrator rules:** `PipAvatar(style: mochi, skin: sunny [default],
-  stage: 4, inNest: true)` on the 120×120 hero slot (P01–P07 rule, no
-  `pip_stage_*.svg`); trial/restore writes go through
-  `AppSession.startTrialNow()` / `setSubscription('active')` /
-  `completeOnboarding()` before `/today` (ORCHESTRATOR_NOTES 1,
-  `paywall_view.dart:47-60`); restore never downgrades an `active`
-  subscription; `AppSession` read via `GetIt.instance` because it is not a
-  `Provider` ancestor.
-- **Iteration-1 regressions closed:** caption now contains "the"
-  (:691, repository :61); `_upsert` fallback in
-  `paywall_repository_impl.dart:65-75`; `copyWith(clearError:)` in
-  `paywall_state.dart:33-40`; trial vs restore discriminator
-  `PaywallRequest` prevents the startTrial-on-restore bug.
-- **Accessibility:** nav has `Semantics(label: 'Subscription', header:
-  true)` with `explicitChildNodes`; close is a 44×44 labelled button with
-  tap action; benefits rows labelled; plan card announces
-  `selected: true`; decorative nest/coins/ticks/connector carry no label;
-  legal links are `button: true` with labels on ≥44×44 targets.
-- **Performance:** screen is short static content under
-  `SingleChildScrollView` (eager layout, no sliver semantics issues);
-  bloc-scoped rebuilds only via `BlocBuilder`/`BlocListener` with
-  `listenWhen`; the repository stream is a single-value stream; hero uses
-  the scale-down `LayoutBuilder` pattern; heavy SVGs are `ExcludeSemantics`
-  wrapped. No rebuild storms observed.
-- **Error handling:** `initial`/`loading` progress, `failure` shows
-  "Something went wrong" + Retry that re-adds `PaywallLoadRequested`;
-  action failure surfaces `showNestToast` with the exception message;
-  second-tap while `working` is a bloc-level no-op.
-- **Children's Code:** parent mode only; no analytics, ads, tracking,
-  or child-data surfaces added.
-- **Tests:** 84 passed, 2 skipped (the shared router-guard trial-expiry
-  and kid-mode gate defects, correctly deferred via `SHARED_REQUEST.md`
-  rather than faked green here). Analyzer and format clean.
+- **Architecture:** feature-first layout holds — domain is entities +
+  abstract `PaywallRepository` (the new `readSubscription()` has a
+  documented default implementation; no Drift types leak into domain);
+  one BLoC per screen; DI/routes per feature.
+- **RULES §1 paths:** diff touches only `app/lib/features/paywall/**`,
+  `app/test/features/paywall/**`, `docs/screens/P07/**` and merge-brought
+  shared files outside this screen's diff. No shared edits made by P07.
+- **Design system:** all colour/spacing/type via `NestType`,
+  `NestSpacing`, `context.nest` tokens; `NestBottomCta`, `NestIcon`,
+  `NestCard`, `NestButton`, `PipAvatar` reused; no `google_fonts`.
+- **DESIGN_SPEC §5 / COPY:** hero title, benefits (incl. curly `’` in
+  "Pip’s"), plan card strings with `—` U+2014, timeline with `We’ll` /
+  `— cancel any time`, family note, CTA caption with `£`, legal row with
+  `·` separators — all match `P07-paywall.html`; UK spelling.
+- **Orchestrator rules:** `PipAvatar(style: mochi, stage: 4, inNest:
+  true)` with default `skin: sunny` on the 120×120 slot; close-button
+  no-op-on-expired now replaced by hiding the control (P07-BUG-10), and
+  the `trialExpired` router bounce makes that the only sane shape; the
+  already-subscribed guard (P07-BUG-12) stops `startTrialNow()` from
+  regressing `active` → `trial`; `AppSession` access via
+  `GetIt.instance` because it is not a `Provider` ancestor; child order
+  and periods rules are not exercised by this parent-mode screen.
+- **Accessibility:** nav header semantics preserved with
+  `explicitChildNodes`; close button labelled and 44×44 (hidden, not
+  dead, when expired); plan card `selected: true`; decorative coins,
+  nest, ticks, connectors and `·` separators excluded from semantics;
+  legal links are labelled buttons on ≥44 targets.
+- **Performance:** `ListenableBuilder` scoped to the nav row only;
+  one-shot `readSubscription()` avoids a dangling watch in tests; the
+  bloc still emits via `emit.forEach` for the items stream (single
+  subscription, cancelled on handler completion); static column renders
+  eagerly under `SingleChildScrollView`.
+- **Error handling:** action failure toasts with the exception message
+  and keeps the screen; load failure shows Retry; `readSubscription`
+  failure is caught (see finding 2); double-tap while `working` is a
+  bloc-level no-op.
+- **Children's Code:** parent mode only; no analytics, ads or
+  child-data surfaces added.
+- **Tests:** `+101 ~2` paywall suite green; the 2 skips are the shared
+  router-guard defects deferred via `SHARED_REQUEST.md` with proof tests
+  named `[P07-BUG-8]`/`[P07-BUG-9]`.
 
 ## Verdict basis
 
-No blocker or major findings remain in the P07 feature code. The
-remaining shared-side defects (trial expiry guard, kid-mode deep-link
-gate, `NestBottomCta` legal slot) are documented in
-`docs/screens/P07/SHARED_REQUEST.md` and skipped in the suite with the
-defect id in each test name.
+No blocker or major findings in the P07 feature. The trial-overwrite
+guard, expired-trial close handling and one-shot subscription read are
+correct improvements; remaining items are minor polish. The screen may
+proceed to stage 5/6.
 
 VERDICT: PASS
