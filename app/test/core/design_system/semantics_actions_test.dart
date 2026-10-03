@@ -378,17 +378,70 @@ void main() {
           onChanged: (v) => picked = v,
         ),
       );
-      // Inner Text duplicates the label: the button node is the outer.
+      // `excludeSemantics` keeps one node per option: the inner Text and
+      // InkWell contribute no second copy (same as NestChip).
       expect(
-        buttonNode('Seg B').getSemanticsData().hasAction(SemanticsAction.tap),
+        nodeByLabel('Seg B').getSemanticsData().hasAction(SemanticsAction.tap),
         isTrue,
       );
       tester.semantics.performAction(
-        buttonFinder('Seg B'),
+        find.semantics.byLabel('Seg B'),
         SemanticsAction.tap,
       );
       await tester.pump();
       expect(picked, 'b');
+      handle.dispose();
+    });
+
+    testWidgets('each option announces once with tap and selection', (
+      tester,
+    ) async {
+      var value = 'active';
+      final handle = await pumpWithSemantics(
+        tester,
+        StatefulBuilder(
+          builder: (context, setState) => NestSegmented<String>(
+            options: const [
+              NestSegmentOption(value: 'active', label: 'Active'),
+              NestSegmentOption(value: 'ideas', label: 'Ideas'),
+            ],
+            value: value,
+            onChanged: (v) => setState(() => value = v),
+          ),
+        ),
+      );
+      // One addressable node per option: no double announcement.
+      expect(find.bySemanticsLabel('Ideas'), findsOneWidget);
+      final before = nodeByLabel('Ideas').getSemanticsData();
+      expect(before.flagsCollection.isButton, isTrue);
+      expect(before.hasAction(SemanticsAction.tap), isTrue);
+      expect(
+        before.flagsCollection.isSelected.toBoolOrNull(),
+        isFalse,
+        reason: 'Ideas starts unselected',
+      );
+      tester.semantics.performAction(
+        find.semantics.byLabel('Ideas'),
+        SemanticsAction.tap,
+      );
+      await tester.pump();
+      // The tap action drives the real selection state.
+      expect(
+        nodeByLabel('Ideas')
+            .getSemanticsData()
+            .flagsCollection
+            .isSelected
+            .toBoolOrNull(),
+        isTrue,
+      );
+      expect(
+        nodeByLabel('Active')
+            .getSemanticsData()
+            .flagsCollection
+            .isSelected
+            .toBoolOrNull(),
+        isFalse,
+      );
       handle.dispose();
     });
 
@@ -404,8 +457,8 @@ void main() {
           onChanged: null,
         ),
       );
-      // Disabled merges outer + inner (`Seg B\nSeg B`): match by containment.
-      final data = containingNode('Seg B').getSemanticsData();
+      // `excludeSemantics` still keeps one node: the label stays exact.
+      final data = nodeByLabel('Seg B').getSemanticsData();
       expect(data.hasAction(SemanticsAction.tap), isFalse);
       expect(data.flagsCollection.isEnabled.toBoolOrNull(), isFalse);
       handle.dispose();
