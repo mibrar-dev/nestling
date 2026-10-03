@@ -1,90 +1,68 @@
-# P06 — Stage 4 QA code review (iteration 2)
+# P06 — Stage 4 QA code review (iteration 3)
 
 Diff reviewed: `git diff main...HEAD` (feature `pocket_money`, docs/screens/P06).
 Checks: architecture contract, RULES §1 path isolation, design-system/token
 usage, DESIGN_SPEC §5 P06 copy, a11y, performance, error handling, Children's
 Code. Verified locally: `flutter analyze lib/features/pocket_money
 test/features/pocket_money` → No issues found; `flutter test
-test/features/pocket_money` → 46/46 pass.
+test/features/pocket_money` → 100 pass, 1 skip (P06-BUG-03, pending shared
+chip mode).
 
 ## Scope compliance — OK
 
 All edits under `app/lib/features/pocket_money/**`,
 `app/test/features/pocket_money/**`, `docs/screens/P06/**` (RULES §1). No
-shared code touched, no `SHARED_REQUEST.md` outstanding. Architecture: domain
-still entities + abstract repo only; one bloc per feature; DI/routes per
-feature; view wrapped at the route level. Verified locally: analyze clean,
-`flutter test test/features/pocket_money` 46/46 pass, no
-`google_fonts`/`GoogleFonts.*`, no skips, no analytics/ads imports, copy
-matches `design/html-source/screens/P06-pocket-money.html` character-for-
-character, children in insertion order (rowid, not nickname), bottom edge rule
-holds (NestBottomCta SafeArea runs the CTA surface to the edge).
+shared code touched; `SHARED_REQUEST.md` filed for the `NestChip` compact
+mode (P06-BUG-03). Architecture: domain still entities + abstract repo only;
+one bloc; DI/routes unchanged. No google_fonts/GoogleFonts, no skips other
+than the filed BUG-03, no analytics/ads imports; copy matches the HTML;
+children by `ORDER BY rowid` (Maya→Leo); bottom-edge rule holds.
+
+## Fixed since iteration 2 (verified)
+
+- P06-BUG-01 stepper lost update — bloc now builds each step on
+  `_requestedBase` (recorded synchronously per child) and emits
+  `withChildBase` optimistically; stream confirms and dedupes. Bloc test
+  present.
+- P06-BUG-02 payout-day fast-tap guard — `_pendingDay` tracks the last
+  request; re-tap suppression compares against it.
+- P06-BUG-05 failed write — view keeps `_LoadedBody` with inline
+  `errorMessage` (`pocket_money_setup_view.dart:59-72`); only a load
+  failure with no setup swaps to `_FailureBody`.
+- P06-BUG-06 stale `errorMessage` — `clearErrorMessage: true` on data and
+  stepper-success emissions.
+- P06-BUG-07 unknown child id — `_onWeeklyBaseStepped` now no-ops when
+  `childById` returns null.
+- P06-BUG-04 day-cell target — `_DayRow` enforces
+  `math.max(NestDevice.tapParent, …)` per cell with horizontal scroll on
+  overflow.
 
 ## Findings
 
-1. **MAJOR — weekly-base stepper loses rapid taps (lost update).**
-   `app/lib/features/pocket_money/presentation/bloc/pocket_money_bloc.dart`
-   `_onWeeklyBaseStepped` (~line 83) computes the new value from
-   `state.setup?.childById(...)?.weeklyBasePence ?? 0` and writes it
-   absolute.
-   The bloc only awaits the repository write; the updated `state.setup`
-   arrives later via the independent `emit.forEach` subscription. Two quick
-   "+" taps can both read the stale base (e.g. £3.00), so both write £3.50
-   and net +50p instead of +£1.00. Mode/day writes are absolute so they are
-   immune; only the stepper arithmetic races. Fix: track in-flight deltas per
-   child and add them to the last confirmed base, or have the repository
-   accept a delta and do `SET weekly_base_pence = MIN(MAX(weekly_base_pence +
-   Δ, 0), 2000)` atomically, then let the stream reconcile the display.
+1. **MINOR — `assert`-only validation is still a no-op in release.**
+   `app/lib/features/pocket_money/data/pocket_money_repository_impl.dart`
+   `setMode` (~line 105), `setPayoutDay` (~line 135). In release an invalid
+   mode/day would persist and the screen renders with no selection. Fix:
+   `throw ArgumentError.value(...)` in all modes (same for the clamp note —
+   `setWeeklyBasePence` already clamps, fine).
 
-2. **MINOR — a failed write blanks the whole screen.**
-   `pocket_money_bloc.dart` `_onModeChanged` / `_onPayoutDayChanged` /
-   `_onWeeklyBaseStepped` emit `status: PocketMoneyStatus.failure`, and the
-   view's failure branch (`pocket_money_setup_view.dart` line 57-58) swaps
-   the entire settings card for `_FailureBody` even though
-   `state.setup` is still valid. A transient Drift error on a stepper tap
-   hides all setup UI until a later stream emission flips status back. Fix:
-   keep `status: loaded` and surface the error inline/snackbar.
+2. **MINOR — a few hard-coded pixel sizes remain.**
+   `pocket_money_setup_view.dart`: line ~320 `horizontal: 13`, line ~377
+   radio `22`, line ~159 loading placeholder `200`. The coin tile is now
+   `NestSpacing.s10` (fixed). Fix: add a 13px option-card inset and a 200px
+   loading-block height to the shared scale or reuse existing spacing.
 
-3. **MINOR — stale `errorMessage` survives recovery.**
-   `pocket_money_state.dart` `copyWith` never clears `errorMessage`; the
-   `onData` path doesn't reset it either, so after failure → re-emit the
-   message persists in state. Fix: clear `errorMessage` when status becomes
-   `loaded`.
+3. **MINOR — P06-BUG-03 open (day pill paints below ~30px).**
+   `pocket_money_setup_view.dart` `_DayCell` FittedBox-shrinks `NestChip`
+   to fit 7-across; the bug test stays `skip: true` (p06_bugs_test.dart:254)
+   pending the shared `NestChip` compact mode in `SHARED_REQUEST.md`. Not a
+   blocker while the request is filed, but the deviation must ship with the
+   shared fix.
 
-4. **MINOR — `assert` validation is a no-op in release.**
-   `pocket_money_repository_impl.dart` `setMode` (~line 105) and
-   `setPayoutDay` (~line 135) assert only; in release an invalid value would
-   be persisted and the screen would render with no option/day selected. Fix:
-   `throw ArgumentError.value(mode, 'mode')` in all modes.
+No blocker/major findings. GPT-style checks otherwise clean: single
+`emit.forEach` over combined streams, `_closeOnError` prevents watcher
+leaks, no analytics/child-data exposure, tap targets on option cards and
+stepper buttons ≥ 44dp parent, Semantics labels on all steppers, UK-noun
+copy.
 
-5. **MINOR — stepper fallback writes for unknown child.**
-   `pocket_money_bloc.dart` `_onWeeklyBaseStepped`: when the child id is not
-   in `state.setup` (`?? 0`), it still writes `±50` (clamped) for that id.
-   Fix: no-op when `childById` returns null.
-
-6. **MINOR — hard-coded pixel sizes instead of tokens.**
-   `pocket_money_setup_view.dart`: line 292 `horizontal: 13`, lines 349-364
-   radio `22`/`10`, line 145 loading placeholder `200`, lines 651-652 coin
-   tile `40` (could be `NestSpacing.s10`). Fix: move to spacing/size tokens
-   in the shared scale (or file a SHARED_REQUEST to add them) and reference
-   the tokens.
-
-7. **MINOR — day-cell tap targets ~30dp wide at 320dp.**
-   `pocket_money_setup_view.dart` `_DayRow`/`_DayCell` (lines 461-527): 7
-   `Expanded` cells across `320 − 40` gutters ≈ 40dp each minus 6px gaps —
-   below the 44dp parent target on the width axis alone (height is 44 via
-   `NestDevice.tapParent`). Fix: enforce a minimum chip width with
-   horizontal scroll at small widths, or widen the row into two lines under a
-   breakpoint (same pattern as `_WeeklyBaseRow`).
-
-## Positives
-
-Correct insertion-order children query (`ORDER BY rowid`, not nickname — and
-a repository test pins it), `families`/`settings` mirrored writes in one
-transaction, `0..2000p` clamp, day re-tap guard, `_closeOnError` so Retry
-resubscribes without leaking watchers, one combined `emit.forEach`, 44dp
-targets on option cards/steppers/cells, full Semantics labels on steppers,
-copy verbatim from the HTML, mock glyphs/status bar follow the foundation
-chrome, children only ever in Maya→Leo order.
-
-VERDICT: FAIL
+VERDICT: PASS

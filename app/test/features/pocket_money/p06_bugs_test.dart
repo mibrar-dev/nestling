@@ -1,15 +1,12 @@
-// P06 Pocket money setup — Stage 6 adversarial bug tests (iteration 2).
+// P06 Pocket money setup — Stage 6 adversarial bug tests (iteration 3).
+//
+// Iteration 2's seven bug proofs are all fixed in the iteration-3 build; the
+// tests below now run UNskipped as regression guards (P06-BUG-01..07).
 //
 // Every test that PROVES an OPEN bug is marked `skip: true` (the test name
 // carries the `P06-BUG-nn` id) so the default suite stays green; delete the
-// skip (or run the copy without skips) to watch the test fail. Each skipped
-// test is the executable repro for the matching entry in
-// `docs/screens/P06/6_bugs.md`.
-//
-// FIXED in iteration 3: P06-BUG-01/02/06/07 (logic chunk) and
-// P06-BUG-04/05 (UI chunk) are un-skipped below and must stay green.
-// Still skipped: P06-BUG-03 (day-pill paint size, needs the shared
-// `NestChip` compact mode — see `docs/screens/P06/SHARED_REQUEST.md`).
+// skip to watch it fail. Each skipped test is the executable repro for the
+// matching entry in `docs/screens/P06/6_bugs.md`.
 //
 // The group at the bottom ("attacks that hold") is NOT skipped: it documents
 // the adversarial probes that passed (kid-mode guard, restart persistence,
@@ -63,6 +60,28 @@ const PocketMoneySetup _demoSetup = PocketMoneySetup(
   ],
 );
 
+/// `Seed.demo` P06 setup with a different coin value: a distinct state used
+/// to force an unrelated `watchSetup` re-emission (P06-BUG-09).
+const PocketMoneySetup _demoSetupCoin2 = PocketMoneySetup(
+  mode: 'both',
+  payoutDay: 6,
+  coinValuePencePerCoin: 2,
+  children: <PocketMoneySetupChild>[
+    PocketMoneySetupChild(
+      id: 'maya',
+      nickname: 'Maya',
+      avatarColour: 'lilac',
+      weeklyBasePence: 300,
+    ),
+    PocketMoneySetupChild(
+      id: 'leo',
+      nickname: 'Leo',
+      avatarColour: 'peach',
+      weeklyBasePence: 150,
+    ),
+  ],
+);
+
 /// Fake repository with caller-controlled streams and recorded writes. Owns
 /// no database, timers or tickers; `watch…()` factories hand out the streams
 /// the test provides.
@@ -72,6 +91,7 @@ class _RecordingPocketMoneyRepository implements PocketMoneyRepository {
     Stream<List<PocketMoneyEntry>>? itemsStream,
     this.setModeError,
     this.setModeFuture,
+    this.setPayoutDayFuture,
   }) : _setupStream = setupStream ?? Stream<PocketMoneySetup>.value(_demoSetup),
        _itemsStream =
            itemsStream ??
@@ -85,6 +105,10 @@ class _RecordingPocketMoneyRepository implements PocketMoneyRepository {
 
   /// When set, [setMode] waits for it before completing (async-gap repro).
   final Future<void>? setModeFuture;
+
+  /// When set, [setPayoutDay] waits for it before recording the write
+  /// (in-flight payout-day repro for P06-BUG-09).
+  final Future<void>? setPayoutDayFuture;
 
   final List<({String childId, int pence})> baseWrites =
       <({String childId, int pence})>[];
@@ -148,7 +172,11 @@ class _RecordingPocketMoneyRepository implements PocketMoneyRepository {
   }
 
   @override
-  Future<void> setPayoutDay(int day) async => dayWrites.add(day);
+  Future<void> setPayoutDay(int day) async {
+    final pending = setPayoutDayFuture;
+    if (pending != null) await pending;
+    dayWrites.add(day);
+  }
 
   @override
   Future<void> setWeeklyBasePence(String childId, int pence) async =>
@@ -183,7 +211,7 @@ void main() {
   // -- P06-BUG-01 ---------------------------------------------------------
 
   test(
-    'P06-BUG-01: two quick "+" taps must each add 50p (real repo)',
+    'P06-BUG-01 (fixed): two quick "+" taps must each add 50p (real repo)',
     () async {
       await setUpTestScope();
       final repository = GetIt.instance<PocketMoneyRepository>();
@@ -198,16 +226,13 @@ void main() {
 
       final setup = await repository.watchSetup().first;
       // Two taps on "+" must move £3.00 → £3.50 → £4.00.
-      // FIXED (iteration 3, logic chunk): un-skipped, must stay green.
       expect(setup.childById('maya')!.weeklyBasePence, 400);
       await bloc.close();
     },
   );
 
-  // -- P06-BUG-02 ---------------------------------------------------------
-
   test(
-    'P06-BUG-02: a fast Sun→Sat correction must end on Saturday (real repo)',
+    'P06-BUG-01b (fixed): three quick "+" taps chain to £4.50 (real repo)',
     () async {
       await setUpTestScope();
       final repository = GetIt.instance<PocketMoneyRepository>();
@@ -215,158 +240,216 @@ void main() {
         ..add(const PocketMoneyLoadRequested());
       await bloc.stream.firstWhere((state) => state.setup != null);
 
-      // Parent taps Sun, changes their mind and taps Sat straight away.
       bloc
-        ..add(const PocketMoneyPayoutDayChanged(7))
-        ..add(const PocketMoneyPayoutDayChanged(6));
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+        ..add(const PocketMoneyWeeklyBaseStepped('maya', 50))
+        ..add(const PocketMoneyWeeklyBaseStepped('maya', 50))
+        ..add(const PocketMoneyWeeklyBaseStepped('maya', 50));
+      await Future<void>.delayed(const Duration(milliseconds: 400));
 
       final setup = await repository.watchSetup().first;
-      // FIXED (iteration 3, logic chunk): un-skipped, must stay green.
-      expect(setup.payoutDay, 6);
+      expect(setup.childById('maya')!.weeklyBasePence, 450);
       await bloc.close();
     },
   );
 
-  // -- P06-BUG-03 ---------------------------------------------------------
-
-  testWidgets(
-    'P06-BUG-03: a day pill must paint at the design height (32, ±2)',
-    (tester) async {
+  test(
+    'P06-BUG-01c (fixed): a quick "+" then "−" nets back to £3.00 (real repo)',
+    () async {
       await setUpTestScope();
-      await pumpAppRoute(tester, '/pocket-money-setup');
+      final repository = GetIt.instance<PocketMoneyRepository>();
+      final bloc = PocketMoneyBloc(repository: repository)
+        ..add(const PocketMoneyLoadRequested());
+      await bloc.stream.firstWhere((state) => state.setup != null);
 
-      // The painted pill is the FittedBox output; the design `.chip.day` is
-      // 32 high with 13px labels. The app scales the whole NestChip down to
-      // fit 7 cells, so the pill paints far below 30.
-      final painted = tester.getSize(
-        find
-            .ancestor(
-              of: find.byType(NestChip).first,
-              matching: find.byType(FittedBox),
-            )
-            .first,
-      );
-      expect(painted.height, greaterThanOrEqualTo(30));
+      bloc
+        ..add(const PocketMoneyWeeklyBaseStepped('maya', 50))
+        ..add(const PocketMoneyWeeklyBaseStepped('maya', -50));
+      await Future<void>.delayed(const Duration(milliseconds: 300));
 
-      await disposeApp(tester);
+      final setup = await repository.watchSetup().first;
+      expect(setup.childById('maya')!.weeklyBasePence, 300);
+      await bloc.close();
     },
-    skip: true,
   );
 
-  // -- P06-BUG-04 ---------------------------------------------------------
+  // -- P06-BUG-02 ---------------------------------------------------------
 
-  testWidgets('P06-BUG-04: every day cell must be a 44×44 parent tap target', (
-    tester,
-  ) async {
+  test('P06-BUG-02 (fixed): a fast Sun→Sat correction must end on Saturday '
+      '(real repo)', () async {
+    await setUpTestScope();
+    final repository = GetIt.instance<PocketMoneyRepository>();
+    final bloc = PocketMoneyBloc(repository: repository)
+      ..add(const PocketMoneyLoadRequested());
+    await bloc.stream.firstWhere((state) => state.setup != null);
+
+    // Parent taps Sun, changes their mind and taps Sat straight away.
+    bloc
+      ..add(const PocketMoneyPayoutDayChanged(7))
+      ..add(const PocketMoneyPayoutDayChanged(6));
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+
+    final setup = await repository.watchSetup().first;
+    // FIXED (iteration 3, logic chunk): the guard now compares against the
+    // last requested day; must stay green.
+    expect(setup.payoutDay, 6);
+    await bloc.close();
+  });
+
+  // -- P06-BUG-03 ---------------------------------------------------------
+
+  testWidgets('P06-BUG-03 (fixed): a day pill paints at the design size '
+      '(32 high, 13px label)', (tester) async {
     await setUpTestScope();
     await pumpAppRoute(tester, '/pocket-money-setup');
 
-    final cell = tester.getSize(find.byKey(const ValueKey('p06_day_1')));
-    expect(cell.width, greaterThanOrEqualTo(NestDevice.tapParent));
-    expect(cell.height, greaterThanOrEqualTo(NestDevice.tapParent));
+    // The design `.chip.day` is a 32-high pill with a 13px centred label
+    // filling the cell. Measured on the pill's own box inside the cell;
+    // the iteration-2 FittedBox-scaled NestChip is gone.
+    final pill = tester.getSize(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('p06_day_1')),
+            matching: find.byType(DecoratedBox),
+          )
+          .first,
+    );
+    expect(pill.height, greaterThanOrEqualTo(30));
+    expect(pill.height, lessThanOrEqualTo(34));
+
+    final label = tester.widget<Text>(find.text('Mon'));
+    expect(label.style?.fontSize, 13);
 
     await disposeApp(tester);
   });
-  // FIXED (iteration 3, UI chunk): cell width is clamped to ≥44 and the
-  // row breaks out of the card inset (see _DayRow); must stay green.
+
+  // -- P06-BUG-04 ---------------------------------------------------------
+
+  testWidgets('P06-BUG-04 (fixed): every day cell is a 44×44 parent tap target '
+      '(390 and 320)', (tester) async {
+    await setUpTestScope();
+    await pumpAppRoute(tester, '/pocket-money-setup');
+
+    for (var day = 1; day <= 7; day++) {
+      final cell = tester.getSize(find.byKey(ValueKey('p06_day_$day')));
+      expect(cell.width, greaterThanOrEqualTo(NestDevice.tapParent));
+      expect(cell.height, greaterThanOrEqualTo(NestDevice.tapParent));
+    }
+
+    // Narrow screen: the row scrolls horizontally and each cell keeps 44.
+    tester.view.physicalSize = const Size(320 * 3, 844 * 3);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    final narrow = tester.getSize(find.byKey(const ValueKey('p06_day_1')));
+    expect(narrow.width, greaterThanOrEqualTo(NestDevice.tapParent));
+    expect(narrow.height, greaterThanOrEqualTo(NestDevice.tapParent));
+    expect(tester.takeException(), isNull);
+
+    await disposeApp(tester);
+  });
+  // FIXED (iteration 3, UI chunk): cell width is clamped to ≥44 and the row
+  // breaks out of the card inset (see _DayRow); must stay green. The wider
+  // inset is challenged by P06-BUG-08 below.
 
   // -- P06-BUG-05 ---------------------------------------------------------
 
-  testWidgets('P06-BUG-05: a failed write must not blank the setup controls', (
-    tester,
-  ) async {
-    final repository = _RecordingPocketMoneyRepository(
-      setModeError: Exception('database is locked'),
-    );
-    final bloc = await _pumpSetupView(tester, repository: repository);
-    bloc.add(const PocketMoneyLoadRequested());
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 50));
-    expect(find.text('Weekly amount'), findsOneWidget);
+  testWidgets(
+    'P06-BUG-05 (fixed): a failed write keeps the form and shows an inline '
+    'error',
+    (tester) async {
+      final repository = _RecordingPocketMoneyRepository(
+        setModeError: Exception('database is locked'),
+      );
+      final bloc = await _pumpSetupView(tester, repository: repository);
+      bloc.add(const PocketMoneyLoadRequested());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.text('Weekly amount'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('p06_option_weekly')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 200));
+      await tester.tap(find.byKey(const ValueKey('p06_option_weekly')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
 
-    // The write failed; the parent must still see the options (with an
-    // inline error), not lose the whole form to the load-failure body.
-    expect(find.text('Weekly amount'), findsOneWidget);
-    expect(find.text('Retry'), findsNothing);
+      // The write failed; the parent must still see the options with the
+      // error inline, not lose the whole form to the load-failure body.
+      expect(find.text('Weekly amount'), findsOneWidget);
+      expect(find.text('Retry'), findsNothing);
+      expect(find.textContaining('database is locked'), findsOneWidget);
 
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
-  });
-  // FIXED (iteration 3, UI chunk): the failure branch keeps the loaded
-  // form and shows an inline error caption when setup is still valid.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
 
   // -- P06-BUG-06 ---------------------------------------------------------
 
-  test('P06-BUG-06: errorMessage must clear when the setup recovers', () async {
-    final setupController = StreamController<PocketMoneySetup>.broadcast();
-    final itemsController =
-        StreamController<List<PocketMoneyEntry>>.broadcast();
-    final repository = _RecordingPocketMoneyRepository(
-      setupStream: setupController.stream,
-      itemsStream: itemsController.stream,
-      setModeError: Exception('database is locked'),
-    );
-    final bloc = PocketMoneyBloc(repository: repository)
-      ..add(const PocketMoneyLoadRequested());
-    // The load handler subscribes to both sources before the first emission,
-    // so wait for its `loading` state (broadcast streams have no replay).
-    await bloc.stream.firstWhere(
-      (state) => state.status == PocketMoneyStatus.loading,
-    );
-    setupController.add(_demoSetup);
-    itemsController.add(const <PocketMoneyEntry>[]);
-    await bloc.stream.firstWhere(
-      (state) => state.status == PocketMoneyStatus.loaded,
-    );
+  test(
+    'P06-BUG-06 (fixed): errorMessage must clear when the setup recovers',
+    () async {
+      final setupController = StreamController<PocketMoneySetup>.broadcast();
+      final itemsController =
+          StreamController<List<PocketMoneyEntry>>.broadcast();
+      final repository = _RecordingPocketMoneyRepository(
+        setupStream: setupController.stream,
+        itemsStream: itemsController.stream,
+        setModeError: Exception('database is locked'),
+      );
+      final bloc = PocketMoneyBloc(repository: repository)
+        ..add(const PocketMoneyLoadRequested());
+      // The load handler subscribes to both sources before the first emission,
+      // so wait for its `loading` state (broadcast streams have no replay).
+      await bloc.stream.firstWhere(
+        (state) => state.status == PocketMoneyStatus.loading,
+      );
+      setupController.add(_demoSetup);
+      itemsController.add(const <PocketMoneyEntry>[]);
+      await bloc.stream.firstWhere(
+        (state) => state.status == PocketMoneyStatus.loaded,
+      );
 
-    bloc.add(const PocketMoneyModeChanged('weekly'));
-    await bloc.stream.firstWhere(
-      (state) => state.status == PocketMoneyStatus.failure,
-    );
-    expect(bloc.state.errorMessage, isNotNull);
+      bloc.add(const PocketMoneyModeChanged('weekly'));
+      await bloc.stream.firstWhere(
+        (state) => state.status == PocketMoneyStatus.failure,
+      );
+      expect(bloc.state.errorMessage, isNotNull);
 
-    // The next stream emission proves the database is healthy again; the
-    // stale error must not stay in state.
-    setupController.add(
-      const PocketMoneySetup(
-        mode: 'both',
-        payoutDay: 5,
-        coinValuePencePerCoin: 1,
-        children: <PocketMoneySetupChild>[
-          PocketMoneySetupChild(
-            id: 'maya',
-            nickname: 'Maya',
-            avatarColour: 'lilac',
-            weeklyBasePence: 300,
-          ),
-          PocketMoneySetupChild(
-            id: 'leo',
-            nickname: 'Leo',
-            avatarColour: 'peach',
-            weeklyBasePence: 150,
-          ),
-        ],
-      ),
-    );
-    await bloc.stream.firstWhere(
-      (state) => state.status == PocketMoneyStatus.loaded,
-    );
+      // The next stream emission proves the database is healthy again; the
+      // stale error must not stay in state.
+      setupController.add(
+        const PocketMoneySetup(
+          mode: 'both',
+          payoutDay: 5,
+          coinValuePencePerCoin: 1,
+          children: <PocketMoneySetupChild>[
+            PocketMoneySetupChild(
+              id: 'maya',
+              nickname: 'Maya',
+              avatarColour: 'lilac',
+              weeklyBasePence: 300,
+            ),
+            PocketMoneySetupChild(
+              id: 'leo',
+              nickname: 'Leo',
+              avatarColour: 'peach',
+              weeklyBasePence: 150,
+            ),
+          ],
+        ),
+      );
+      await bloc.stream.firstWhere(
+        (state) => state.status == PocketMoneyStatus.loaded,
+      );
 
-    expect(bloc.state.errorMessage, isNull);
-    await bloc.close();
-    await setupController.close();
-    await itemsController.close();
-  });
+      expect(bloc.state.errorMessage, isNull);
+      await bloc.close();
+      await setupController.close();
+      await itemsController.close();
+    },
+  );
 
   // -- P06-BUG-07 ---------------------------------------------------------
 
   test(
-    'P06-BUG-07: a stepper event for an unknown child must not write',
+    'P06-BUG-07 (fixed): a stepper event for an unknown child must not write',
     () async {
       final repository = _RecordingPocketMoneyRepository();
       final bloc = PocketMoneyBloc(repository: repository)
@@ -376,10 +459,81 @@ void main() {
       bloc.add(const PocketMoneyWeeklyBaseStepped('ghost', 50));
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
-      // FIXED (iteration 3, logic chunk): un-skipped, must stay green.
+      // FIXED (iteration 3, logic chunk): the handler no-ops on an unknown
+      // child; must stay green.
       expect(repository.baseWrites, isEmpty);
       await bloc.close();
     },
+  );
+
+  // -- P06-BUG-08 ---------------------------------------------------------
+
+  testWidgets('P06-BUG-08: day chips must align with the card section labels', (
+    tester,
+  ) async {
+    await setUpTestScope();
+    await pumpAppRoute(tester, '/pocket-money-setup');
+
+    // The design keeps the day row inside the card's 16px inset, so the
+    // first chip's left edge lines up with the `Payout day` label above
+    // it. The BUG-04 fix widened the row to a 2px inset: cells start 14px
+    // to the left of every other row/label in the card.
+    final labelLeft = tester.getTopLeft(find.text('Payout day')).dx;
+    final firstCellLeft = tester
+        .getTopLeft(find.byKey(const ValueKey('p06_day_1')))
+        .dx;
+    expect(firstCellLeft, moreOrLessEquals(labelLeft, epsilon: 1));
+
+    await disposeApp(tester);
+  }, skip: true);
+
+  // -- P06-BUG-09 ---------------------------------------------------------
+
+  test(
+    'P06-BUG-09: a day correction must survive an unrelated re-emission',
+    () async {
+      final setupController = StreamController<PocketMoneySetup>.broadcast();
+      final itemsController =
+          StreamController<List<PocketMoneyEntry>>.broadcast();
+      final pending = Completer<void>();
+      final repository = _RecordingPocketMoneyRepository(
+        setupStream: setupController.stream,
+        itemsStream: itemsController.stream,
+        setPayoutDayFuture: pending.future,
+      );
+      final bloc = PocketMoneyBloc(repository: repository)
+        ..add(const PocketMoneyLoadRequested());
+      await bloc.stream.firstWhere(
+        (state) => state.status == PocketMoneyStatus.loading,
+      );
+      setupController.add(_demoSetup);
+      itemsController.add(const <PocketMoneyEntry>[]);
+      await bloc.stream.firstWhere(
+        (state) => state.status == PocketMoneyStatus.loaded,
+      );
+
+      // Tap Sun; the write is still in flight.
+      bloc.add(const PocketMoneyPayoutDayChanged(7));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      // An unrelated emission arrives before the Sun write commits (e.g. the
+      // ledger or children tables changed on another screen); it still
+      // reports the old day 6 and clears the pending request.
+      setupController.add(_demoSetupCoin2);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      // The parent corrects back to Sat.
+      bloc.add(const PocketMoneyPayoutDayChanged(6));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      pending.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      // The last tap was Sat, so the day write chain must end on 6.
+      expect(repository.dayWrites, <int>[7, 6]);
+      await bloc.close();
+      await setupController.close();
+      await itemsController.close();
+    },
+    skip: true,
   );
 
   // -- attacks that hold --------------------------------------------------

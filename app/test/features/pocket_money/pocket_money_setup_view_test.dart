@@ -95,14 +95,103 @@ class _FakePocketMoneyRepository implements PocketMoneyRepository {
   @override
   Stream<PocketMoneySetup> watchSetup() => _setupFactory();
 
+  /// Iteration 3 (P06-BUG-05): the first `setMode` throws so the screen can be
+  /// observed in its "write failed, form kept" state. The fake holds a fixed
+  /// setup, so the second write simply succeeds and the view recovers.
+  bool failNextModeWrite = false;
+
   @override
-  Future<void> setMode(String mode) async {}
+  Future<void> setMode(String mode) async {
+    if (failNextModeWrite) {
+      failNextModeWrite = false;
+      throw Exception('mode write rejected');
+    }
+  }
 
   @override
   Future<void> setPayoutDay(int day) async {}
 
   @override
   Future<void> setWeeklyBasePence(String childId, int pence) async {}
+}
+
+/// Wraps the real Drift repository and can reject the next mode write, so the
+/// screen's *write-failure* path can be driven end to end with the real watch
+/// stream (the screen only clears the inline error when the stream re-emits,
+/// which a one-shot fake could never reproduce).
+class _FlakyModeRepository implements PocketMoneyRepository {
+  _FlakyModeRepository(this._inner);
+
+  final PocketMoneyRepository _inner;
+
+  /// Rejects the next [setMode] (P06-BUG-05 path).
+  bool failNextMode = false;
+
+  @override
+  Future<void> setMode(String mode) async {
+    if (failNextMode) {
+      failNextMode = false;
+      throw Exception('mode write rejected');
+    }
+    await _inner.setMode(mode);
+  }
+
+  @override
+  Future<void> setPayoutDay(int day) => _inner.setPayoutDay(day);
+
+  @override
+  Future<void> setWeeklyBasePence(String childId, int pence) =>
+      _inner.setWeeklyBasePence(childId, pence);
+
+  @override
+  Stream<PocketMoneySetup> watchSetup() => _inner.watchSetup();
+
+  @override
+  Future<List<PocketMoneyEntry>> getItems() => _inner.getItems();
+
+  @override
+  Stream<List<PocketMoneyEntry>> watchItems() => _inner.watchItems();
+
+  @override
+  Stream<List<PocketMoneyEntry>> watchLedger(String childId) =>
+      _inner.watchLedger(childId);
+
+  @override
+  Future<OwedSummary> owed(String childId) => _inner.owed(childId);
+
+  @override
+  Stream<OwedSummary> watchOwed(String childId) => _inner.watchOwed(childId);
+
+  @override
+  Future<void> addMoney({
+    required String childId,
+    required int amountPence,
+    required String note,
+  }) => _inner.addMoney(childId: childId, amountPence: amountPence, note: note);
+
+  @override
+  Future<void> recordSpending({
+    required String childId,
+    required int amountPence,
+    required String note,
+  }) => _inner.recordSpending(
+    childId: childId,
+    amountPence: amountPence,
+    note: note,
+  );
+
+  @override
+  Future<void> recordPayout({
+    required String childId,
+    required int amountPence,
+    int savingsMovePence = 0,
+    String? goalId,
+  }) => _inner.recordPayout(
+    childId: childId,
+    amountPence: amountPence,
+    savingsMovePence: savingsMovePence,
+    goalId: goalId,
+  );
 }
 
 /// Pumps `/pocket-money-setup` through the real app (router, DI, themes) at
@@ -888,12 +977,10 @@ void main() {
         textScale: 1,
       );
 
-      // Two taps, no frame in between. NOTE: `tester.tap` drains the microtask
-      // queue between gestures, so the first Drift write lands before the
-      // second event is dispatched and this passes. The same-tick race (two
-      // events in ONE event-loop turn) is a real defect and is pinned by the
-      // skipped P06-BUG-01 proof in `p06_bugs_test.dart`; this test is the
-      // user-level guard that must keep passing once the bloc is fixed.
+      // Two taps with no frame in between. FIXED in iteration 3 (P06-BUG-01:
+      // the second tap used to be lost because the handler re-read the stale
+      // `state.setup`); the same-tick proof lives in `p06_bugs_test.dart`
+      // (un-skipped), this is the user-level guard over the same contract.
       final more = find.bySemanticsLabel(
         RegExp('More weekly pocket money for Maya'),
       );
@@ -909,6 +996,364 @@ void main() {
             '£4.00, not £3.50',
       );
       expect(find.text('£3.50'), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('three rapid + taps reach £4.50 and then clamp at £20.00', (
+      tester,
+    ) async {
+      final db = await setUpTestScope();
+      await GetIt.instance<PocketMoneyRepository>().setWeeklyBasePence(
+        'maya',
+        1950,
+      );
+      // Keep the stream truth in step with the seed write.
+      await GetIt.instance<AppSession>().refresh();
+      await _pumpSetup(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      expect(find.text('£19.50'), findsOneWidget);
+      final more = find.bySemanticsLabel(
+        RegExp('More weekly pocket money for Maya'),
+      );
+      for (var tap = 0; tap < 4; tap++) {
+        await tester.tap(more);
+        await _settle(tester);
+      }
+
+      // 1950 + 50 = 2000 (the ceiling), and the two taps past it are no-ops.
+      expect(find.text('£20.00'), findsOneWidget);
+      expect(find.text('£20.50'), findsNothing);
+      expect(
+        (await (db.select(
+          db.children,
+        )..where((c) => c.id.equals('maya'))).getSingle()).weeklyBasePence,
+        2000,
+      );
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Iteration 3: the day row rewrite (P06-BUG-03/04) and the inline
+  // write-error path (P06-BUG-05).
+  // -------------------------------------------------------------------------
+  group('P06 setup — day row geometry (P06-BUG-03/04)', () {
+    /// The `.chip.day` pill inside day cell [n] — a 32-high, full-width
+    /// `SizedBox` wrapping the pill's `DecoratedBox`.
+    Finder dayPill(int day) => find
+        .descendant(
+          of: find.byKey(ValueKey('p06_day_$day')),
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is SizedBox &&
+                widget.height == NestSpacing.s8 &&
+                widget.width == double.infinity,
+          ),
+        )
+        .first;
+
+    testWidgets('every day cell is at least 44x44 and paints a 32dp pill', (
+      tester,
+    ) async {
+      for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+        for (final width in const <int>[320, 390, 430]) {
+          await setUpTestScope();
+          await _pumpSetup(
+            tester,
+            theme: theme,
+            surface: Size(width.toDouble(), 844),
+            textScale: 1,
+          );
+
+          for (var day = 1; day <= 7; day++) {
+            final size = tester.getSize(find.byKey(ValueKey('p06_day_$day')));
+            expect(
+              size.width,
+              greaterThanOrEqualTo(NestDevice.tapParent),
+              reason:
+                  'day $day is ${size.width} wide at ${width}dp — the parent '
+                  'minimum is ${NestDevice.tapParent}dp on both axes',
+            );
+            expect(size.height, NestDevice.tapParent);
+
+            // The pill is the design's 32-high `.chip.day`, not a
+            // FittedBox-scaled `NestChip` (which rendered ~19dp tall).
+            final pill = tester.getRect(dayPill(day));
+            expect(
+              pill.height,
+              moreOrLessEquals(NestSpacing.s8, epsilon: 0.01),
+              reason: 'day $day pill height at ${width}dp',
+            );
+            expect(
+              pill.width,
+              moreOrLessEquals(size.width, epsilon: 0.01),
+              reason: 'the pill fills its cell',
+            );
+          }
+          expect(tester.takeException(), isNull);
+          await disposeApp(tester);
+        }
+      }
+    });
+
+    testWidgets('at 390 and 430 all seven cells sit inside the card', (
+      tester,
+    ) async {
+      for (final width in const <int>[390, 430]) {
+        await setUpTestScope();
+        await _pumpSetup(
+          tester,
+          theme: ThemeMode.light,
+          surface: Size(width.toDouble(), 844),
+          textScale: 1,
+        );
+
+        final card = tester.getRect(_settingsCard());
+        for (var day = 1; day <= 7; day++) {
+          final cell = tester.getRect(find.byKey(ValueKey('p06_day_$day')));
+          expect(
+            cell.left,
+            greaterThanOrEqualTo(card.left),
+            reason: 'day $day escapes the card at ${width}dp',
+          );
+          expect(
+            cell.right,
+            lessThanOrEqualTo(card.right + 0.01),
+            reason: 'day $day escapes the card at ${width}dp',
+          );
+        }
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey('p06_day_7')),
+            matching: find.byType(SingleChildScrollView),
+          ),
+          findsNothing,
+          reason: 'no horizontal scroll is needed at ${width}dp',
+        );
+        expect(tester.takeException(), isNull);
+        await disposeApp(tester);
+      }
+    });
+
+    testWidgets('at 320 the row scrolls and Sun is still reachable', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpSetup(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(320, 844),
+        textScale: 1,
+      );
+
+      final sun = find.byKey(const ValueKey('p06_day_7'));
+      final dayRow = find.byWidgetPredicate(
+        (widget) =>
+            widget is SingleChildScrollView &&
+            widget.scrollDirection == Axis.horizontal,
+      );
+      expect(dayRow, findsOneWidget);
+
+      // Sunday starts off-viewport at 320dp; drag the day row left and tap it.
+      expect(tester.getRect(sun).right, greaterThan(320));
+      await tester.ensureVisible(find.byKey(const ValueKey('p06_day_1')));
+      await _settle(tester);
+      await tester.drag(dayRow, const Offset(-120, 0));
+      await _settle(tester);
+
+      expect(tester.getRect(sun).right, lessThanOrEqualTo(320.01));
+      await tester.tap(sun);
+      await _settle(tester);
+      final data = tester.getSemantics(sun).getSemanticsData();
+      expect(data.flagsCollection.isSelected, Tristate.isTrue);
+      expect(find.textContaining('Exception'), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the selected pill is token-coloured in light and dark', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      final sampled = <int>[];
+      for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+        await _pumpSetup(
+          tester,
+          theme: theme,
+          surface: const Size(390, 844),
+          textScale: 1,
+        );
+
+        final tokens = tester.element(dayPill(6)).nest;
+        BoxDecoration decorationOf(int day) {
+          final box = tester.widget<DecoratedBox>(
+            find
+                .descendant(
+                  of: dayPill(day),
+                  matching: find.byType(DecoratedBox),
+                )
+                .first,
+          );
+          return box.decoration as BoxDecoration;
+        }
+
+        // Saturday is selected in the seed: leafTint pill, leaf border.
+        expect(decorationOf(6).color, tokens.leafTint);
+        final border = decorationOf(6).border! as Border;
+        expect(border.top.color, tokens.leaf);
+        expect(border.top.width, 1.5);
+        // Monday is not: surface2 pill, transparent border.
+        expect(decorationOf(1).color, tokens.surface2);
+        expect(
+          (decorationOf(1).border! as Border).top.color,
+          Colors.transparent,
+        );
+
+        sampled.add(decorationOf(6).color!.toARGB32());
+      }
+      expect(
+        sampled.first,
+        isNot(sampled.last),
+        reason:
+            'the probe must discriminate: the two themes must resolve '
+            'different pill colours, or the dark assertion proves nothing',
+      );
+
+      await disposeApp(tester);
+    });
+  });
+
+  group('P06 setup — failed write keeps the form (P06-BUG-05)', () {
+    for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      final themeName = theme == ThemeMode.light ? 'light' : 'dark';
+      testWidgets('$themeName: a rejected write shows inline, keeps every '
+          'control', (tester) async {
+        final handle = tester.ensureSemantics();
+        await setUpTestScope();
+        final repository = _FlakyModeRepository(
+          GetIt.instance<PocketMoneyRepository>(),
+        );
+        final bloc = await _pumpSetupView(
+          tester,
+          repository: repository,
+          theme: theme,
+        );
+        bloc.add(const PocketMoneyLoadRequested());
+        await _settle(tester);
+        expect(find.text('Both'), findsOneWidget);
+        expect(find.text('£3.00'), findsOneWidget);
+
+        repository.failNextMode = true;
+        await tester.tap(find.byKey(const ValueKey('p06_option_weekly')));
+        await _settle(tester);
+
+        // The message rides inline in the danger token...
+        expect(find.textContaining('mode write rejected'), findsOneWidget);
+        final message = tester.widget<Text>(
+          find.textContaining('mode write rejected'),
+        );
+        final tokens = tester.element(find.text('Both')).nest;
+        expect(
+          message.style?.color,
+          tokens.danger,
+          reason: 'a write error must read as danger, not as body copy',
+        );
+        // ...and the whole setup form survives it.
+        for (final copy in const <String>[
+          'How does pocket money work in your house?',
+          'Weekly amount',
+          'Earn per quest',
+          'Both',
+          'Payout day',
+          'Weekly base',
+          'Maya',
+          '£3.00',
+          'Coin value',
+          '10 coins = 10p',
+          'Continue',
+        ]) {
+          expect(find.text(copy), findsOneWidget, reason: '"$copy" vanished');
+        }
+        expect(find.byKey(const ValueKey('p06_day_6')), findsOneWidget);
+        expect(find.byKey(const ValueKey('p06_retry')), findsNothing);
+        // The rejected write is not applied: Both is still selected.
+        final both = tester
+            .getSemantics(find.byKey(const ValueKey('p06_option_both')))
+            .getSemanticsData();
+        expect(both.flagsCollection.isSelected, Tristate.isTrue);
+        expect(tester.takeException(), isNull);
+
+        // The next successful write re-emits and clears the message
+        // (P06-BUG-06). Recovery rides the real Drift watch, so this test
+        // delegates to the real repository instead of one-shot fake streams.
+        await tester.tap(find.byKey(const ValueKey('p06_option_per_quest')));
+        await _settle(tester);
+        expect(find.textContaining('mode write rejected'), findsNothing);
+        final perQuest = tester
+            .getSemantics(find.byKey(const ValueKey('p06_option_per_quest')))
+            .getSemanticsData();
+        expect(perQuest.flagsCollection.isSelected, Tristate.isTrue);
+        expect(bloc.state.errorMessage, isNull);
+
+        handle.dispose();
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+      });
+    }
+
+    testWidgets('the router keeps working while an error is on screen', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      final repository = _FlakyModeRepository(
+        GetIt.instance<PocketMoneyRepository>(),
+      );
+      await GetIt.instance.unregister<PocketMoneyRepository>();
+      GetIt.instance.registerSingleton<PocketMoneyRepository>(repository);
+      await _pumpSetup(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      repository.failNextMode = true;
+      await tester.tap(find.byKey(const ValueKey('p06_option_weekly')));
+      await _settle(tester);
+      expect(find.textContaining('mode write rejected'), findsOneWidget);
+      expect(find.text('Payout day'), findsOneWidget);
+      expect(find.text('£3.00'), findsOneWidget);
+
+      await tester.tap(find.bySemanticsLabel('Back'));
+      await _settle(tester);
+      expect(currentPath(tester), '/add-children');
+
+      await disposeApp(tester);
+
+      // ...and forward, from a fresh load with a second rejected write.
+      await _pumpSetup(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+      repository.failNextMode = true;
+      await tester.tap(find.byKey(const ValueKey('p06_option_weekly')));
+      await _settle(tester);
+      expect(find.textContaining('mode write rejected'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('p06_continue')));
+      await _settle(tester);
+      expect(currentPath(tester), '/paywall');
       expect(tester.takeException(), isNull);
 
       await disposeApp(tester);

@@ -1,4 +1,4 @@
-# P06 Pocket money setup — UI check (Stage 5, iteration 2)
+# P06 Pocket money setup — UI check (Stage 5, iteration 3)
 
 Route `/pocket-money-setup` · feature `pocket_money` · parent mode · seed `fresh` · child `maya`.
 Simulator UDID `BC440E48-B3A3-43BC-971B-0EF5DB621874` (390×844, same as designs).
@@ -10,28 +10,28 @@ No Pip on this screen (P01–P07 onboarding rule). No `ORCHESTRATOR_NOTES.md` ex
 `OUT` resolves inside `app/` after the `cd` and the copy fails. Used absolute
 `OUT` paths (same files the stage names):
 
-- `bash tools/screens/shot.sh "$PWD/app" /pocket-money-setup "$PWD/docs/screens/P06/ui/app_light_2.png" BC440E48-B3A3-43BC-971B-0EF5DB621874 light fresh parent maya` → stable frame saved.
-- Same with `dark` → `docs/screens/P06/ui/app_dark_2.png`.
+- `bash tools/screens/shot.sh "$PWD/app" /pocket-money-setup "$PWD/docs/screens/P06/ui/app_light_3.png" BC440E48-B3A3-43BC-971B-0EF5DB621874 light fresh parent maya` → stable frame saved.
+- Same with `dark` → `docs/screens/P06/ui/app_dark_3.png`.
 
 ## Compares
 
-- `python3 tools/screens/compare.py design/screens/light/P06-pocket-money.png docs/screens/P06/ui/app_light_2.png docs/screens/P06/ui/cmp_light_2.png`
-- `python3 tools/screens/compare.py design/screens/dark/P06-pocket-money.png docs/screens/P06/ui/app_dark_2.png docs/screens/P06/ui/cmp_dark_2.png`
+- `python3 tools/screens/compare.py design/screens/light/P06-pocket-money.png docs/screens/P06/ui/app_light_3.png docs/screens/P06/ui/cmp_light_3.png`
+- `python3 tools/screens/compare.py design/screens/dark/P06-pocket-money.png docs/screens/P06/ui/app_dark_3.png docs/screens/P06/ui/cmp_dark_3.png`
 
-Mean diff: light **5.31%**, dark **5.27%**.
+Mean diff: light **5.40%**, dark **5.35%**.
 
 Band tables (8 horizontal bands, 0 = top):
 
 Light:
 
 ```text
-mean diff: 5.31%
+mean diff: 5.40%
 band  y-range    diff%
-  0      0-105    1.61%
+  0      0-105    1.59%
   1    105-211    7.85%
   2    211-316    6.65%
   3    316-422    8.35%
-  4    422-527    4.75%
+  4    422-527    5.49%
   5    527-633    5.60%
   6    633-738    5.18%
   7    738-844    2.44%
@@ -40,20 +40,20 @@ band  y-range    diff%
 Dark:
 
 ```text
-mean diff: 5.27%
+mean diff: 5.35%
 band  y-range    diff%
-  0      0-105    1.61%
+  0      0-105    1.57%
   1    105-211    8.09%
   2    211-316    6.74%
   3    316-422    7.56%
-  4    422-527    4.25%
+  4    422-527    4.91%
   5    527-633    5.50%
   6    633-738    5.83%
   7    738-844    2.54%
 ```
 
-Read `docs/screens/P06/ui/cmp_light_2.png`, `cmp_dark_2.png`,
-`app_light_2.png`, `app_dark_2.png` against
+Read `docs/screens/P06/ui/cmp_light_3.png`, `cmp_dark_3.png`,
+`app_light_3.png`, `app_dark_3.png` against
 `design/screens/light|dark/P06-pocket-money.png` and
 `design/html-source/screens/P06-pocket-money.html`. Band 0/7 are low
 (status reserve / CTA match); bands 1–3 heat is text antialiasing plus the
@@ -98,9 +98,9 @@ edge, status-bar rule.
 ## Numbered deviations (element, design value, app value, fix)
 
 1. Status bar time/icons — design: `9:41` + mock signal/wifi/battery;
-   app: real OS time (`00:53`/`00:58`) + real icons. Fix: none.
+   app: real OS time (`03:34`/`03:42`) + real icons. Fix: none.
    `NestStatusBar` reserves height only; orchestrator STATUS BAR rule says to
-   ignore status-bar differences. Band 0 diff (1.61%) is this only.
+   ignore status-bar differences. Band 0 diff (~1.6%) is this only.
 2. Weekly-base rows — design: two stepper rows (`Maya £3.00`, `Leo £1.50`
    with 44 px steppers); app (mandated `fresh` seed, no children):
    caption `Add children to set weekly amounts.` (plan §4 empty state).

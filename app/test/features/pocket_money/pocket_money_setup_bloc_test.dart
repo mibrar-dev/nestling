@@ -57,7 +57,7 @@ class _RecordingRepository implements PocketMoneyRepository {
 
   /// Every setter throws — the failure path. Off for the guard tests, which
   /// only care that the write reached the repository at all.
-  final bool throwOnWrite;
+  bool throwOnWrite;
 
   final List<String> modeWrites = <String>[];
   final List<int> payoutDayWrites = <int>[];
@@ -164,6 +164,45 @@ void main() {
             .errorMessage,
         'offline',
       );
+    });
+
+    test('copyWith keeps the message unless clearErrorMessage is set', () {
+      const failed = PocketMoneyState(
+        status: PocketMoneyStatus.failure,
+        errorMessage: 'disk is full',
+      );
+      // Default: a plain status flip must not silently drop the message.
+      expect(
+        failed.copyWith(status: PocketMoneyStatus.loaded).errorMessage,
+        'disk is full',
+      );
+      expect(
+        failed.copyWith(status: PocketMoneyStatus.loaded).errorMessage,
+        'disk is full',
+      );
+      // Explicit clear (P06-BUG-06): the load path drops the stale message.
+      expect(
+        failed
+            .copyWith(
+              status: PocketMoneyStatus.loaded,
+              setup: _demoSetup,
+              clearErrorMessage: true,
+            )
+            .errorMessage,
+        isNull,
+      );
+      // `clearErrorMessage: true` also wins over an explicit message, so a
+      // future caller cannot accidentally resurrect a stale one.
+      expect(
+        failed
+            .copyWith(errorMessage: 'new', clearErrorMessage: true)
+            .errorMessage,
+        isNull,
+      );
+      // Clearing never touches the other fields.
+      final cleared = failed.copyWith(clearErrorMessage: true);
+      expect(cleared.status, PocketMoneyStatus.failure);
+      expect(cleared.items, isEmpty);
     });
 
     test('equality includes the setup', () {
@@ -698,6 +737,330 @@ void main() {
         expect(bloc.state.status, PocketMoneyStatus.loaded);
         expect(bloc.state.setup, _demoSetup);
         expect(bloc.state.errorMessage, isNull);
+      },
+    );
+  });
+
+  group('PocketMoneySetup.withChildBase (P06-BUG-01 fix)', () {
+    test('replaces only the named child and keeps insertion order', () {
+      final updated = _demoSetup.withChildBase('maya', 350);
+
+      expect(updated.children.map((child) => child.nickname), <String>[
+        'Maya',
+        'Leo',
+      ]);
+      expect(updated.childById('maya')?.weeklyBasePence, 350);
+      expect(updated.childById('leo')?.weeklyBasePence, 150);
+      expect(updated.mode, _demoSetup.mode);
+      expect(updated.payoutDay, _demoSetup.payoutDay);
+      expect(updated.coinValuePencePerCoin, _demoSetup.coinValuePencePerCoin);
+      // The untouched child is the same instance, not a copy.
+      expect(updated.children[1], same(_demoSetup.children[1]));
+      expect(
+        _demoSetup.childById('maya')?.weeklyBasePence,
+        300,
+        reason: 'the original entity must not be mutated',
+      );
+    });
+
+    test('an unknown id returns an equal, unchanged setup', () {
+      expect(_demoSetup.withChildBase('nobody', 500), _demoSetup);
+    });
+
+    test('no children (Seed.empty) stays empty', () {
+      const empty = PocketMoneySetup(
+        mode: 'both',
+        payoutDay: 6,
+        coinValuePencePerCoin: 1,
+        children: <PocketMoneySetupChild>[],
+      );
+      expect(empty.withChildBase('maya', 350), empty);
+    });
+  });
+
+  group('PocketMoneyBloc — accumulation and clamps', () {
+    late _RecordingRepository repository;
+
+    setUp(() {
+      repository = _RecordingRepository(throwOnWrite: false);
+    });
+
+    blocTest<PocketMoneyBloc, PocketMoneyState>(
+      'three rapid steps add 50p each: £3.00 → £4.50',
+      setUp: setUpTestScope,
+      build: () =>
+          PocketMoneyBloc(repository: GetIt.instance<PocketMoneyRepository>()),
+      act: (bloc) async {
+        bloc.add(const PocketMoneyLoadRequested());
+        await bloc.stream.firstWhere((state) => state.setup != null);
+        bloc
+          ..add(const PocketMoneyWeeklyBaseStepped('maya', 50))
+          ..add(const PocketMoneyWeeklyBaseStepped('maya', 50))
+          ..add(const PocketMoneyWeeklyBaseStepped('maya', 50));
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      },
+      expect: () => <Matcher>[
+        isA<PocketMoneyState>().having(
+          (state) => state.status,
+          'status',
+          PocketMoneyStatus.loading,
+        ),
+        isA<PocketMoneyState>()
+            .having((state) => state.status, 'status', PocketMoneyStatus.loaded)
+            .having(
+              (state) => state.setup?.childById('maya')?.weeklyBasePence,
+              'maya base',
+              300,
+            ),
+        isA<PocketMoneyState>()
+            .having((state) => state.status, 'status', PocketMoneyStatus.loaded)
+            .having(
+              (state) => state.setup?.childById('maya')?.weeklyBasePence,
+              'maya base',
+              350,
+            ),
+        isA<PocketMoneyState>()
+            .having((state) => state.status, 'status', PocketMoneyStatus.loaded)
+            .having(
+              (state) => state.setup?.childById('maya')?.weeklyBasePence,
+              'maya base',
+              400,
+            ),
+        isA<PocketMoneyState>()
+            .having((state) => state.status, 'status', PocketMoneyStatus.loaded)
+            .having(
+              (state) => state.setup?.childById('maya')?.weeklyBasePence,
+              'maya base',
+              450,
+            ),
+      ],
+      verify: (_) async {
+        final repository = GetIt.instance<PocketMoneyRepository>();
+        expect(
+          (await repository.watchSetup().first)
+              .childById('maya')
+              ?.weeklyBasePence,
+          450,
+        );
+        // Leo's row is untouched by Maya's rapid taps.
+        expect(
+          (await repository.watchSetup().first)
+              .childById('leo')
+              ?.weeklyBasePence,
+          150,
+        );
+      },
+    );
+
+    blocTest<PocketMoneyBloc, PocketMoneyState>(
+      'the accumulation keeps the 2000p ceiling under rapid taps',
+      setUp: setUpTestScope,
+      build: () =>
+          PocketMoneyBloc(repository: GetIt.instance<PocketMoneyRepository>()),
+      act: (bloc) async {
+        await GetIt.instance<PocketMoneyRepository>().setWeeklyBasePence(
+          'maya',
+          1950,
+        );
+        bloc.add(const PocketMoneyLoadRequested());
+        await bloc.stream.firstWhere((state) => state.setup != null);
+        bloc
+          ..add(const PocketMoneyWeeklyBaseStepped('maya', 50))
+          ..add(const PocketMoneyWeeklyBaseStepped('maya', 50))
+          ..add(const PocketMoneyWeeklyBaseStepped('maya', 50));
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      },
+      expect: () => <Matcher>[
+        isA<PocketMoneyState>().having(
+          (state) => state.status,
+          'status',
+          PocketMoneyStatus.loading,
+        ),
+        isA<PocketMoneyState>()
+            .having((state) => state.status, 'status', PocketMoneyStatus.loaded)
+            .having(
+              (state) => state.setup?.childById('maya')?.weeklyBasePence,
+              'maya base',
+              1950,
+            ),
+        // 1950 + 50 = 2000; the taps past the ceiling are no-ops (the
+        // clamped write matches the current state, which bloc suppresses).
+        isA<PocketMoneyState>()
+            .having((state) => state.status, 'status', PocketMoneyStatus.loaded)
+            .having(
+              (state) => state.setup?.childById('maya')?.weeklyBasePence,
+              'maya base',
+              2000,
+            ),
+      ],
+      verify: (_) async {
+        final repository = GetIt.instance<PocketMoneyRepository>();
+        expect(
+          (await repository.watchSetup().first)
+              .childById('maya')
+              ?.weeklyBasePence,
+          2000,
+          reason: 'the database must never hold more than the 2000p cap',
+        );
+      },
+    );
+
+    blocTest<PocketMoneyBloc, PocketMoneyState>(
+      'the accumulation keeps the 0p floor under rapid taps',
+      setUp: setUpTestScope,
+      build: () =>
+          PocketMoneyBloc(repository: GetIt.instance<PocketMoneyRepository>()),
+      act: (bloc) async {
+        await GetIt.instance<PocketMoneyRepository>().setWeeklyBasePence(
+          'leo',
+          100,
+        );
+        bloc.add(const PocketMoneyLoadRequested());
+        await bloc.stream.firstWhere((state) => state.setup != null);
+        bloc
+          ..add(const PocketMoneyWeeklyBaseStepped('leo', -50))
+          ..add(const PocketMoneyWeeklyBaseStepped('leo', -50))
+          ..add(const PocketMoneyWeeklyBaseStepped('leo', -50));
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      },
+      expect: () => <Matcher>[
+        isA<PocketMoneyState>().having(
+          (state) => state.status,
+          'status',
+          PocketMoneyStatus.loading,
+        ),
+        isA<PocketMoneyState>()
+            .having((state) => state.status, 'status', PocketMoneyStatus.loaded)
+            .having(
+              (state) => state.setup?.childById('leo')?.weeklyBasePence,
+              'leo base',
+              100,
+            ),
+        isA<PocketMoneyState>()
+            .having((state) => state.status, 'status', PocketMoneyStatus.loaded)
+            .having(
+              (state) => state.setup?.childById('leo')?.weeklyBasePence,
+              'leo base',
+              50,
+            ),
+        isA<PocketMoneyState>()
+            .having((state) => state.status, 'status', PocketMoneyStatus.loaded)
+            .having(
+              (state) => state.setup?.childById('leo')?.weeklyBasePence,
+              'leo base',
+              0,
+            ),
+      ],
+      verify: (_) async {
+        final repository = GetIt.instance<PocketMoneyRepository>();
+        expect(
+          (await repository.watchSetup().first)
+              .childById('leo')
+              ?.weeklyBasePence,
+          0,
+        );
+      },
+    );
+
+    blocTest<PocketMoneyBloc, PocketMoneyState>(
+      'a rejected step forgets the request, so the next tap builds on the '
+      'database truth',
+      setUp: () {},
+      build: () => PocketMoneyBloc(repository: repository),
+      act: (bloc) async {
+        bloc.add(const PocketMoneyLoadRequested());
+        await bloc.stream.firstWhere((state) => state.setup != null);
+        // First write is rejected: the request must be dropped, not kept as
+        // the base for the next tap (which would jump 350 → 400 without a
+        // corresponding database write).
+        repository.throwOnWrite = true;
+        bloc.add(const PocketMoneyWeeklyBaseStepped('maya', 50));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        repository.throwOnWrite = false;
+        bloc.add(const PocketMoneyWeeklyBaseStepped('maya', 50));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      },
+      expect: () => <Matcher>[
+        isA<PocketMoneyState>().having(
+          (state) => state.status,
+          'status',
+          PocketMoneyStatus.loading,
+        ),
+        isA<PocketMoneyState>()
+            .having((state) => state.status, 'status', PocketMoneyStatus.loaded)
+            .having(
+              (state) => state.setup?.childById('maya')?.weeklyBasePence,
+              'maya base',
+              300,
+            ),
+        isA<PocketMoneyState>()
+            .having(
+              (state) => state.status,
+              'status',
+              PocketMoneyStatus.failure,
+            )
+            .having(
+              (state) => state.errorMessage,
+              'errorMessage',
+              contains('disk is full'),
+            ),
+        isA<PocketMoneyState>()
+            .having((state) => state.status, 'status', PocketMoneyStatus.loaded)
+            .having(
+              (state) => state.setup?.childById('maya')?.weeklyBasePence,
+              'maya base',
+              350,
+            ),
+      ],
+      verify: (_) {
+        expect(
+          repository.weeklyBaseWrites,
+          <(String, int)>[('maya', 350), ('maya', 350)],
+          reason:
+              'the second tap must start from the confirmed 300p, not '
+              'from the forgotten 350p request',
+        );
+      },
+    );
+
+    blocTest<PocketMoneyBloc, PocketMoneyState>(
+      'a rejected payout-day write unsticks the no-op guard',
+      setUp: () {},
+      build: () => PocketMoneyBloc(repository: repository),
+      act: (bloc) async {
+        bloc.add(const PocketMoneyLoadRequested());
+        await bloc.stream.firstWhere((state) => state.setup != null);
+        repository.throwOnWrite = true;
+        bloc.add(const PocketMoneyPayoutDayChanged(7));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        repository.throwOnWrite = false;
+        // Same day again: the failed request must not be remembered as
+        // "already selected", or the retry would be swallowed.
+        bloc.add(const PocketMoneyPayoutDayChanged(7));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      },
+      expect: () => <Matcher>[
+        isA<PocketMoneyState>().having(
+          (state) => state.status,
+          'status',
+          PocketMoneyStatus.loading,
+        ),
+        isA<PocketMoneyState>().having(
+          (state) => state.status,
+          'status',
+          PocketMoneyStatus.loaded,
+        ),
+        isA<PocketMoneyState>().having(
+          (state) => state.status,
+          'status',
+          PocketMoneyStatus.failure,
+        ),
+      ],
+      verify: (_) {
+        expect(repository.payoutDayWrites, <int>[
+          7,
+          7,
+        ], reason: 'the retry must reach the repository');
       },
     );
   });

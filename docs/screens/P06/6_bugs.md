@@ -1,241 +1,134 @@
-# P06 Pocket money setup — Stage 6 adversarial bug hunt (iteration 2)
+# P06 Pocket money setup — Stage 6 adversarial bug hunt (iteration 3)
 
 Route `/pocket-money-setup` · feature `pocket_money` · parent mode · onboarding
-(P05 → P06 → P07). No `ORCHESTRATOR_NOTES.md` exists. No Pip on this screen.
+(P05 → P06 → P07). No `ORCHESTRATOR_NOTES.md`. No Pip on this screen. This
+stage changed no screen code — only `app/test/features/pocket_money/
+p06_bugs_test.dart` and this report.
 
-Method: adversarial testing against the committed screen (no source edits).
-Executable repros live in `app/test/features/pocket_money/p06_bugs_test.dart`;
-every bug test is `skip: true` so the default suite stays green (`flutter test
-test/features/pocket_money/` → `+91 ~7: All tests passed!`). Removing the skips
-makes all seven fail deterministically — verified this iteration:
+Method: re-run every iteration-2 repro against the iteration-3 build, rewrite
+the one proof whose subject was replaced (BUG-03's `FittedBox`/`NestChip` is
+gone), then attack the new fix code. The seven iteration-2 bugs are now
+UNskipped regression guards; the two new findings are kept `skip: true` with
+their ids in the test names.
+
+Unskipped run evidence (delete the two `skip:` flags to reproduce):
 
 ```text
-00:00 +0 -1  P06-BUG-01  Expected: <400>       Actual: <350>
-00:01 +0 -2  P06-BUG-02  Expected: <6>         Actual: <7>
-00:02 +0 -3  P06-BUG-03  Expected: >= <30>     Actual: <19.11864406779661>
-00:02 +0 -4  P06-BUG-04  Expected: >= <44.0>   Actual: <40.285714285714285>
-00:02 +0 -5  P06-BUG-05  "Weekly amount" not found (form blanked)
-00:02 +0 -6  P06-BUG-06  Expected: null        Actual: 'Exception: database is locked'
-00:02 +0 -7  P06-BUG-07  Expected: empty       Actual: [(childId: ghost, pence: 50)]
-00:03 +8 -7  Some tests failed.
+00:03 +9 -1  P06-BUG-08  Expected: 36.0 (±1.0)   Actual: <22.0>
+00:03 +9 -2  P06-BUG-09  Expected: [7, 6]        Actual: [7]
+00:04 +17 -2  Some tests failed.
 ```
 
-## Summary
+Default suite (skips in place): `flutter test test/features/pocket_money/
+p06_bugs_test.dart` → `+17 ~2: All tests passed!`; full feature dir green;
+`flutter analyze` → No issues found.
 
-| # | Severity | Area | One-line |
+## Iteration-2 bugs — all fixed, independently re-verified
+
+| # | Was | Fix (iteration 3) | Guard now green |
 |---|---|---|---|
-| 01 | **MAJOR** | bloc state race | weekly-base stepper loses rapid taps (lost update, –50p per lost tap) |
-| 02 | minor | bloc state race | fast Sun→Sat payout-day correction silently dropped |
-| 03 | minor | visual fidelity | day pills paint at ~55–63% of the design size via `FittedBox` |
-| 04 | minor | accessibility | day cells are 40.3 dp wide at 390 (spec: ≥ 44×44) |
-| 05 | minor | error handling | a failed write replaces the whole form with the load-failure body |
-| 06 | minor | state hygiene | `errorMessage` is never cleared after recovery |
-| 07 | minor | robustness | a stepper event for an unknown child id still writes ±50p |
+| 01 | **MAJOR** stepper lost rapid taps | `_requestedBase` accumulates each tap on the previous *request* (synchronous, pre-await) and the write is confirmed locally via `withChildBase` — `pocket_money_bloc.dart:28-35,113-160` | `P06-BUG-01 (fixed)` real repo 350→400; new **01b** three taps → 450; **01c** `+` then `−` → 300 |
+| 02 | minor fast Sun→Sat dropped | guard compares against `_pendingDay`, the last *requested* day — `bloc:21-26,90-111` | `P06-BUG-02 (fixed)` → 6 |
+| 03 | minor pill painted ~19dp | `NestChip`+`FittedBox` replaced by the token-built `_DayPill` (32dp pill, 13/18 w600 label, fills the cell) — `view:604-644` | **rewritten** `P06-BUG-03 (fixed)` measures the pill itself → 32 ± 2 and label 13px |
+| 04 | minor day cells 40.3dp wide | `cellWidth = max(44, (available−6·gap6)/7)`, breakout inset, horizontal scroll below the 44dp width — `view:489-562` | `P06-BUG-04 (fixed)` → all 7 cells ≥44 at 390 **and** 320 |
+| 05 | minor failed write blanked form | failure branch keeps `_LoadedBody` with an inline danger caption when `setup != null`; `_FailureBody`/Retry only for load failures — `view:59-72,199-231` | `P06-BUG-05 (fixed)` options + inline `database is locked`, no Retry |
+| 06 | minor stale `errorMessage` | `copyWith(clearErrorMessage:)`; every load emission clears it — `state:29-40`, `bloc:60-65` | `P06-BUG-06 (fixed)` → null after recovery |
+| 07 | minor unknown-child write | `childById` null → early return before any repository call — `bloc:117-120` | `P06-BUG-07 (fixed)` → no writes |
 
----
+Note on BUG-03: the build left the old skip in place because the old finder
+expected `NestChip`; the visual defect is fixed, so this stage rewrote the
+proof to measure `_DayPill` and un-skipped it. The `NestChip` compact/day
+variant is still a valid `SHARED_REQUEST.md` item (code hygiene, not a bug) —
+closing it would retire the feature-private pill, not change what the user sees.
 
-## BUG-01 (MAJOR) — weekly-base stepper loses rapid taps
+## New findings (iteration 3)
 
-**Where:** `app/lib/features/pocket_money/presentation/bloc/pocket_money_bloc.dart:79-97`
-(`_onWeeklyBaseStepped` reads `state.setup?.childById(id)?.weeklyBasePence ?? 0`
-and writes an *absolute* `current + delta`).
+### P06-BUG-08 (minor, needs owner arbitration) — day row breaks out of the card's 16px inset
 
-**Repro:** on `/pocket-money-setup`, tap `+` on Maya twice in quick succession
-(the two `PocketMoneyWeeklyBaseStepped('maya', 50)` events are queued before the
-`watchSetup` stream re-emits). Maya ends on **£3.50**, not £4.00 — one tap is
-lost. The same race makes a correction tap land on a stale base.
+**Where:** `pocket_money_setup_view.dart:437-440` — `_DayRow` sits on a
+`gap2` (2px) inset so each of the 7 cells can be ≥44dp wide; the label above
+it still uses the card's 16px inset.
 
-**Failing test:** `P06-BUG-01: two quick "+" taps must each add 50p (real repo)`
-(real Drift repository; 350 vs 400).
+**Repro / measurement:** at 390 the first day cell's left edge is x=22.0 while
+`Payout day` (and `Weekly base`, the avatar and coin tile) start at x=36.0 —
+a 14px offset; the row spans 346px vs the design's 318px, so the pills sit
+2px from the card border instead of 16px. Confirmed visually against the
+design PNG (`docs/screens/P06/ui/cmp_light_3.png`: app chips run visibly
+closer to both card edges than the design's).
 
-**Root cause:** the bloc's arithmetic is a read-modify-write on state that is
-updated only by the independent `emit.forEach` subscription, while the event
-handlers run to completion before the stream re-emits. Note: a widget-level
-double `tester.tap` currently lands (see “attacks that hold”), because the test
-crosses the pointer-event gaps the DB round-trip needs — the defect is timing-
-dependent and real under load/slow storage, which is why it is rated major:
-the amount the parent sets can silently differ from the amount stored.
+**Failing test:** `P06-BUG-08: day chips must align with the card section
+labels` (22.0 vs 36.0, skipped).
 
-**Suggested fix:** make the write atomic. Either (a) have the repository accept
-a delta — `UPDATE children SET weekly_base_pence =
-MIN(MAX(weekly_base_pence + Δ, 0), 2000) WHERE id = ?` — or (b) keep an
-in-flight per-child pending delta on the bloc/state and add it to the last
-confirmed base, clearing it when the stream confirms.
+**Assessment:** deliberate and documented — the trade-off buys the ≥44dp
+target that DESIGN_SPEC §0.9 asks for, and the UI builder pinned the new inset
+in `pocket_money_setup_view_test.dart` (“the day row breaks out of the 16px
+card inset to gap2”). It is symmetric, functional and inside the card, so this
+stage rates it minor. The owner ALIGNMENT rule (“nothing a few px off … treat
+visible misalignment as a UI failure”) may rank it higher; owner options:
+(a) sanction the breakout for the larger tap target, or (b) restore the 16px
+inset and scroll the row at every width (design-inherent 40.3dp cells return,
+and the ≥44 width fix is dropped), or (c) two-line day grid under a breakpoint.
 
----
+### P06-BUG-09 (minor) — a day correction is dropped when an unrelated re-emission lands mid-write
 
-## BUG-02 (minor) — fast Sun→Sat payout-day tap is dropped
+**Where:** `pocket_money_bloc.dart:53` — the load `onData` clears `_pendingDay`
+on **every** emission (“the stream has caught up”), but an emission can arrive
+while the day write is still in flight and still carry the old day.
 
-**Where:** `pocket_money_bloc.dart:61-77` (`_onPayoutDayChanged` guard
-`if (event.day == state.setup?.payoutDay) return;`).
+**Repro (deterministic, fake repo with a held write):**
+1. load (`payoutDay` 6); tap **Sun** → `_pendingDay = 7`, write in flight;
+2. an unrelated emission arrives (ledger/children/another screen) still
+   reporting day 6 → `_pendingDay` cleared, state shows Sat selected again;
+3. the parent taps **Sat** to correct → guard compares 6 == 6 → no-op, tap lost;
+4. the Sun write lands → stored day flips to **7** although the last tap was Sat.
 
-**Repro:** tap `Sun`, then tap `Sat` straight away. The first write stores 7;
-the second event still sees `state.setup.payoutDay == 6` (stream not yet
-re-emitted), matches the guard, and is dropped. The stored payout day stays
-**Sunday** although the last tap was Saturday.
+**Failing test:** `P06-BUG-09: a day correction must survive an unrelated
+re-emission` — expected day writes `[7, 6]`, observed `[7]` (skipped).
 
-**Failing test:** `P06-BUG-02: a fast Sun→Sat correction must end on Saturday
-(real repo)` (7 vs 6).
+**Severity:** minor — needs an external/parallel write inside the few-ms write
+window, but it is the same class as the fixed P06-BUG-02 and the same
+incoming-day-versus-emitted-day confusion. **Suggested fix:** clear
+`_pendingDay` only when the emitted `setup.payoutDay == _pendingDay` (the same
+confirmation rule `_requestedBase` already uses), not unconditionally.
 
-**Suggested fix:** guard against the last *requested* day (a pending value on
-the bloc) or read the current value from the repository; alternatively drop
-the guard and let the idempotent write run — re-tapping the selected day is
-already a harmless no-op at the DB level.
+## Attacks that hold (passing probes, kept in the same file)
 
----
+- **Fix guards:** every iteration-2 bug above, plus 3× `+` → £4.50 and quick
+  `+`/`−` → £3.00 on the real repository (the new `_requestedBase` chain).
+- **Kid-mode guard:** deep link `/pocket-money-setup` in kid mode →
+  `/parental-gate`; expired-trial path re-redirects through the gate too.
+- **Restart persistence (file-backed Drift):** mode/day/base survive
+  `db.close()` + reopen; children stay in insertion order `[maya, leo]`.
+- **6 children incl. “Maximilian-Alexander” at 320dp × 1.3:** no overflow, no
+  exception, ellipsised, Maya first.
+- **0 children at 320dp × 1.3:** `Add children to set weekly amounts.` renders,
+  no fake £ rows, no overflow.
+- **£0.00 / £20.00:** render exactly; `(p/100).toStringAsFixed(2)` brute-forced
+  against exact pence formatting for **every value 0…2000** — zero mismatches.
+- **Async gap:** closing the bloc with a write pending and failing the write
+  afterwards completes cleanly (late `emit` is a cancelled-emitter no-op).
+- **Contrast:** P06's text pairs pass WCAG 4.5:1 in light and dark.
+- **Day row interaction:** at 320 the row scrolls and Sun can be dragged into
+  view and tapped (UI suite's `day row geometry` group is green).
 
-## BUG-03 (minor, largest remaining visual deviation) — day pills render scaled down
+## Hunted, found clean / not applicable
 
-**Where:** `pocket_money_setup_view.dart:504-527` — each day cell wraps a
-standard `NestChip` (14 px label, `0 14px` padding, 32 px pill) in
-`FittedBox(fit: BoxFit.scaleDown)` inside a 44-tall box.
-
-**Repro:** at 390 dp the cell width is 40.3 dp while the chip’s intrinsic box
-is 73.8 dp (test-metric font); the whole pill — label, radius and 1.5 px
-border — is scaled to fit, so the painted pill is **19.1 dp high** (real-device
-Inter metrics land ~20–22 dp) instead of the design’s 32 dp with 13 px labels.
-The design `.chip.day` uses `padding: 0; font-size: 13px` and fills the grid
-cell (SPACING_SPEC §10.3 “cells Expanded, font 13 … scaleDown”).
-
-**Failing test:** `P06-BUG-03: a day pill must paint at the design height
-(32, ±2)` (19.1 < 30).
-
-**Suggested fix (shared, not screen scope):** add an optional `labelStyle` /
-compact mode to `NestChip` (pre-agreed follow-up in `1_plan.md` §7,
-`SHARED_REQUEST` candidate — do not fork the component) so the day cell can
-use `padding: 0`, 13 px label, no `FittedBox`. UI stage records the same
-deviation (its “deviation 3”); it needs the shared change to close.
-
----
-
-## BUG-04 (minor) — day cell tap targets are 40.3 dp wide
-
-**Where:** `pocket_money_setup_view.dart:461-489` — 7 `Expanded` cells across
-318 dp of card content with 6 px gaps.
-
-**Repro:** at 390 dp `tester.getSize(p06_day_1)` is `40.3 × 44`; DESIGN_SPEC
-§0.9 requires parent tap targets ≥ 44×44 (height is correct at 44; width is
-not). At 320 dp the cells are ~30.3 dp wide (worse).
-
-**Failing test:** `P06-BUG-04: every day cell must be a 44×44 parent tap
-target` (40.29 vs 44).
-
-**Suggested fix:** keep the 7-up single-select look but give the row a
-horizontal scroll (like P10 chips) or a two-line layout under a breakpoint so
-each cell can reach 44 dp wide, or lift the day row out of the 16 px card
-inset. Cross-check SPACING_SPEC §10.3, which assumes ≥44-tall cells.
-
----
-
-## BUG-05 (minor) — a failed write blanks the whole setup form
-
-**Where:** `pocket_money_bloc.dart:49-77` (write handlers emit
-`status: failure`) + `pocket_money_setup_view.dart:57-58` (failure branch
-renders `_FailureBody`, replacing the loaded body).
-
-**Repro:** with a write that throws (`setMode`), tap `Weekly amount`: the
-option cards, payout day and stepper rows all disappear and are replaced by
-the error message + `Retry`, even though `state.setup` is still valid and only
-one write failed. The parent loses the form until a later stream emission.
-
-**Failing test:** `P06-BUG-05: a failed write must not blank the setup
-controls` (finds 0 × “Weekly amount” after the failed tap).
-
-**Suggested fix:** keep `status: loaded` for write errors and surface a
-snackbar/inline error; reserve `_FailureBody` for load failures (or gate the
-failure branch on `state.setup == null`).
-
----
-
-## BUG-06 (minor) — stale `errorMessage` survives recovery
-
-**Where:** `pocket_money_state.dart:23-35` (`copyWith` keeps `errorMessage`
-when not passed; the loaded `onData` path never clears it).
-
-**Repro:** let a `setMode` write throw (state `failure`,
-`errorMessage: 'Exception: database is locked'`), then let `watchSetup`
-re-emit (status back to `loaded`). `bloc.state.errorMessage` is still
-`'Exception: database is locked'`. Any UI that renders `errorMessage`
-irrespective of status (or a later failure branch) would show a stale error.
-
-**Failing test:** `P06-BUG-06: errorMessage must clear when the setup
-recovers` (non-null after recovery).
-
-**Suggested fix:** clear `errorMessage` in the `onData` path
-(`emit(state.copyWith(status: loaded, …, errorMessage: null))` via a
-sentinel/`Value`-style parameter, since `copyWith` cannot express null today).
-
----
-
-## BUG-07 (minor) — unknown child id still gets a stepper write
-
-**Where:** `pocket_money_bloc.dart:83` — `?? 0` fallback when `childById`
-returns null.
-
-**Repro:** dispatch `PocketMoneyWeeklyBaseStepped('ghost', 50)`; the bloc
-writes 50 pence for `ghost` instead of ignoring the event. Not reachable from
-the current UI (rows are built from `setup.children`), but any future caller /
-stale key hits a silent phantom write (the SQL UPDATE matches 0 rows, so the
-visible effect is a failure only if the child reappears — still wrong).
-
-**Failing test:** `P06-BUG-07: a stepper event for an unknown child must not
-write` (records `(ghost, 50)`).
-
-**Suggested fix:** `final child = state.setup?.childById(event.childId); if
-(child == null) return;`.
-
----
-
-## Attacks that hold (passing probes, same file, not skipped)
-
-- **Kid-mode guard:** `GetIt → AppModeController.selectMode(kid)` then deep-link
-  `/pocket-money-setup` → router redirects to `/parental-gate`; the setup H1 is
-  not rendered. No guard bypass (also checked the expired-trial path: it
-  redirects to `/paywall` then re-redirects through the kid gate).
-- **Restart persistence (file-backed Drift):** mode `weekly`, payout day 2 and
-  Maya £4.50 survive `db.close()` + reopen; children still come back in
-  insertion order `[maya, leo]`.
-- **6 children incl. “Maximilian-Alexander” at 320 dp × text scale 1.3:** no
-  overflow, no exception, name ellipsized, insertion order kept (Maya first).
-- **0 children (Seed.empty) at 320 dp × 1.3:** the `Add children to set weekly
-  amounts.` caption renders; no £0.00 rows; no overflow.
-- **£0.00 / £20.00 via the real repository:** render exactly, no rounding
-  artifact (also brute-forced `(p/100).toStringAsFixed(2)` against exact pence
-  formatting for **every pence value 0…2000** — zero mismatches).
-- **Async gap / emit after close:** with a write pending, close the bloc and
-  only then fail the write — `bloc.close()` completes and the late `emit` is a
-  contained no-op (bloc 9 cancels the emitter), no `StateError`/unhandled
-  exception.
-- **Dark + light contrast:** P06’s text pairs (`ink`/`ink2` on `surface`,
-  `ink2` on `leafTint`, `leafInk` on `leafTint`, `ink2` on `paper`) all pass
-  WCAG 4.5:1 in both themes.
-- **Widget-level quick taps:** two immediate `tester.tap`s on the real screen
-  do land (`£4.00`), because the test crosses DB/stream turns between pointers
-  — documented so the timing dependence of BUG-01 is explicit.
-
-## Hunted and found clean / not applicable
-
-- **One child:** row loop is child-count independent (demo path covers 2, the
-  probe covers 6; no per-index assumptions).
-- **£999.99 / 9999 coins:** unreachable on P06 — the repository clamps writes
-  to 0…2000 pence by design (`pocket_money_repository_impl.dart:164`), and the
-  screen renders no coin balance (the “Coin value” row is display-only from
-  `coinValuePencePerCoin`, seed 1). No finding.
-- **Empty lists:** covered above and by the existing suite.
-- **Timezone / BST:** P06 stores a weekday index (1–7, DB `payout_day`) with no
-  time-of-day or period math, and writes `updatedAt` as UTC + `updatedAtTz` —
-  no DST-sensitive path on this screen. Not applicable.
-- **Back navigation / deep link in parent mode:** `/add-children` back and
-  `/paywall` continue are covered by the existing view suite; deep link loads
-  the screen in both light and dark.
+- **1 child / 6 children / empty lists:** child-count-independent row loop;
+  demo covers 2, probes cover 0 and 6.
+- **£999.99 / 9999 coins:** unreachable on P06 — writes clamp to 0…2000p by
+  design and the screen shows no coin balance (coin row is display-only).
+- **Timezone / BST:** weekday index only, no time-of-day or period math;
+  `updatedAt` is UTC + zone-tagged. Not applicable.
+- **Back navigation / deep links in parent mode:** `/add-children` and
+  `/paywall` covered by the feature suite; deep link renders light + dark.
 
 ## Verdict rationale
 
-One MAJOR defect stands: **P06-BUG-01** — a stepper tap can be silently lost,
-so the saved weekly base may not match what the parent entered. Per the stage
-rule (“PASS only if no major bugs”), the stage fails; BUG-02/03 share the same
-stale-state class and should be fixed together. No files were changed outside
-`app/test/features/pocket_money/p06_bugs_test.dart` and this report; the
-temporary probe files were deleted.
+All seven iteration-2 bugs are independently confirmed fixed (17 green guards,
+including three new rapid-tap chains). Two new findings remain: P06-BUG-08
+(day-row inset, deliberate trade-off — owner arbitration suggested) and
+P06-BUG-09 (narrow pending-day race, one-line fix suggested). Both are minor
+and both have executable skipped repros. No major bug is open, so the stage
+passes.
 
-VERDICT: FAIL
+VERDICT: PASS
