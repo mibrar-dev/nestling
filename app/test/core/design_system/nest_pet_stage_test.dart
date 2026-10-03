@@ -12,6 +12,11 @@
 //
 // Found no placeholder texts here: every assertion measures rects of the
 // shared scene (never screen copy).
+//
+// pet-glow follow-up: the dark-mode glow is `--pet-glow` (tokens.css) — a
+// 230×230 `PetStageGlow` radial fade (white@10% → transparent at 70%,
+// centred on the stage x at 42% of the stage height), null (absent) in
+// light — shared by the explicit + legacy Rive boxes and the SVG fallback.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show FontLoader, rootBundle;
@@ -57,6 +62,7 @@ Future<void> _pumpSlot(
   bool riveEnabled = false,
   bool disableAnimations = false,
   String? speech,
+  ThemeMode mode = ThemeMode.light,
 }) async {
   final size = surface ?? const Size(390, 844);
   final scene = NestPetStage(
@@ -79,6 +85,7 @@ Future<void> _pumpSlot(
           )
         : boxed,
     surface: size,
+    mode: mode,
   );
   expect(
     tester.takeException(),
@@ -368,6 +375,152 @@ void main() {
       // + 2 × 3 px border ≈ 44 — the design PNG measures 44, not 35 (see the
       // explicit report: the 35 was the inner-white height misread as body).
       expect(tester.getSize(body).height, closeTo(44, 2));
+    });
+  });
+
+  group('pet glow matches --pet-glow (soft fade, not a solid disc)', () {
+    Finder glows() => find.byKey(PetStageGlow.glowKey);
+
+    /// Every glow box in the tree must be the 230×230 radial fade centred
+    /// on its own stage: x = stage centre, y = 42% of the stage height
+    /// (±2%). The stage geometry comes from the glow's own [PetStageGlow]
+    /// params (exactly one ancestor per glow); its origin is the nearest
+    /// width+height SizedBox's render box. The two coincide except inside a
+    /// Rive box, where `Positioned.fill` stretches the fallback scene to
+    /// the artboard box while the glow keeps its own 233-tall geometry —
+    /// so the render rect (260) must NOT be used for the 42% computation.
+    /// In the test env the Rive paths paint twice (box + the fallback the
+    /// artboard degrades to); each is checked in its own geometry.
+    void expectGlowsOnStage(WidgetTester tester) {
+      final found = glows();
+      expect(found, findsWidgets);
+      for (var i = 0; i < tester.widgetList(found).length; i++) {
+        final one = found.at(i);
+        final glowAncestor = find.ancestor(
+          of: one,
+          matching: find.byType(PetStageGlow),
+        );
+        expect(glowAncestor, findsOneWidget);
+        final params = tester.widget<PetStageGlow>(glowAncestor.first);
+        final stages = find.ancestor(
+          of: one,
+          matching: find.byWidgetPredicate(
+            (w) => w is SizedBox && w.width != null && w.height != null,
+          ),
+        );
+        expect(stages, findsWidgets);
+        // Order-proof: the inner stage renders smallest (or tied, with an
+        // identical origin — `Positioned.fill` stretches it exactly).
+        var originBox = tester.getRect(stages.first);
+        for (var j = 1; j < tester.widgetList(stages).length; j++) {
+          final rect = tester.getRect(stages.at(j));
+          if (rect.width * rect.height < originBox.width * originBox.height) {
+            originBox = rect;
+          }
+        }
+        final origin = originBox.topLeft;
+        final box = tester.getRect(one);
+        expect(box.width, closeTo(PetStageGlow.size, 0.5));
+        expect(box.height, closeTo(PetStageGlow.size, 0.5));
+        final expectedCenter =
+            origin +
+            Offset(
+              params.stageW / 2,
+              PetStageGlow.centerYFraction * params.stageH,
+            );
+        expect(box.center.dx, closeTo(expectedCenter.dx, 1));
+        expect(box.center.dy, closeTo(expectedCenter.dy, 0.02 * params.stageH));
+        final deco =
+            tester.widget<DecoratedBox>(found.at(i)).decoration
+                as BoxDecoration;
+        expect(deco.shape, BoxShape.circle);
+        final gradient = deco.gradient;
+        expect(gradient, isA<RadialGradient>());
+        final radial = gradient! as RadialGradient;
+        expect(radial.center, PetStageGlow.center);
+        expect(radial.radius, closeTo(PetStageGlow.radius, 1e-9));
+        expect(radial.stops, const [0, 0.7]);
+        expect(radial.colors, hasLength(2));
+        expect(radial.colors[0].a, closeTo(0.10, 0.02));
+        expect(radial.colors[0], const Color(0x1AFFFFFF));
+        expect(radial.colors[1], Colors.transparent);
+      }
+    }
+
+    testWidgets('token: null in light, white@10% in dark', (tester) async {
+      await _pumpSlot(tester, 350, pip: const SizedBox(key: _pipProbeKey));
+      expect(tester.element(find.byType(NestPetStage)).nest.petGlow, isNull);
+      await _pumpSlot(
+        tester,
+        350,
+        pip: const SizedBox(key: _pipProbeKey),
+        mode: ThemeMode.dark,
+      );
+      expect(
+        tester.element(find.byType(NestPetStage)).nest.petGlow,
+        const Color(0x1AFFFFFF),
+      );
+    });
+
+    testWidgets('dark explicit SVG path: one 230×230 radial fade', (
+      tester,
+    ) async {
+      await _pumpSlot(
+        tester,
+        350,
+        mode: ThemeMode.dark,
+        pip: const SizedBox(key: _pipProbeKey),
+      );
+      expect(glows(), findsOneWidget);
+      expectGlowsOnStage(tester);
+    });
+
+    testWidgets('dark legacy SVG path: one 230×230 radial fade', (
+      tester,
+    ) async {
+      await pumpNest(
+        tester,
+        const Center(
+          child: SizedBox(width: 350, child: NestPetStage(riveEnabled: false)),
+        ),
+        mode: ThemeMode.dark,
+      );
+      expect(tester.takeException(), isNull);
+      expect(glows(), findsOneWidget);
+      expectGlowsOnStage(tester);
+    });
+
+    testWidgets('dark Rive boxes: every glow is the fade', (tester) async {
+      // Explicit Rive box (K03 params). The Rive runtime is absent in tests,
+      // so the inner PipInNest degrades to a second fallback scene — both
+      // glows must still be the fade, on the same 236-tall slot.
+      await _pumpSlot(tester, 350, mode: ThemeMode.dark, riveEnabled: true);
+      await tester.pump();
+      expect(find.byType(PipNestFallback), findsOneWidget);
+      expectGlowsOnStage(tester);
+      // Legacy Rive box. Same doubling in the test env (box + fallback).
+      await pumpNest(
+        tester,
+        const Center(child: SizedBox(width: 350, child: NestPetStage())),
+        mode: ThemeMode.dark,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pump();
+      expect(find.byType(PipNestFallback), findsOneWidget);
+      expectGlowsOnStage(tester);
+    });
+
+    testWidgets('light: no glow in explicit or legacy paths', (tester) async {
+      await _pumpSlot(tester, 350, pip: const SizedBox(key: _pipProbeKey));
+      expect(glows(), findsNothing);
+      await pumpNest(
+        tester,
+        const Center(
+          child: SizedBox(width: 350, child: NestPetStage(riveEnabled: false)),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      expect(glows(), findsNothing);
     });
   });
 }
