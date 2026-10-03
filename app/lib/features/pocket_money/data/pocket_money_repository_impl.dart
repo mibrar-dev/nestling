@@ -1,11 +1,16 @@
+import 'dart:async';
+
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/data/stream_combine.dart';
+import 'package:nestling/features/pocket_money/domain/entities/money_child.dart';
+import 'package:nestling/features/pocket_money/domain/entities/money_ledger_data.dart';
 import 'package:nestling/features/pocket_money/domain/entities/owed_summary.dart';
 import 'package:nestling/features/pocket_money/domain/entities/pocket_money_entry.dart';
 import 'package:nestling/features/pocket_money/domain/entities/pocket_money_setup.dart';
+import 'package:nestling/features/pocket_money/domain/entities/savings_goal_data.dart';
 import 'package:nestling/features/pocket_money/domain/pocket_money_repository.dart';
 
 /// Drift-backed [PocketMoneyRepository].
@@ -47,6 +52,80 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
   @override
   Stream<OwedSummary> watchOwed(String childId) {
     return _db.watchLedger(childId).map((rows) => summarise(childId, rows));
+  }
+
+  /// P12 ledger truth: children (creation order) × the per-child ledger
+  /// fan-in × goals × family row, re-emitting when ANY table changes.
+  ///
+  /// The ledger fan-in rebuilds when the roster changes (children are
+  /// near-static; `asyncExpand` re-subscribes the per-child `watchLedger`
+  /// streams on every roster emission) and generalises to N children — no
+  /// fixed per-child subscription. `payoutDay`/`timeZone` come from the
+  /// family row; the setup mirror matches `watchSetup()` exactly so the
+  /// bloc serves P06 from this one stream.
+  @override
+  Stream<MoneyLedgerData> watchLedgerData() {
+    return _db.watchChildren(Seed.familyId).asyncExpand((kids) {
+      final allLedger = kids.isEmpty
+          ? Stream<List<LedgerEntry>>.value(const <LedgerEntry>[])
+          : _combineLedgers(<Stream<List<LedgerEntry>>>[
+              for (final kid in kids) _db.watchLedger(kid.id),
+            ]);
+      return combineLatest3(
+        allLedger,
+        _db.watchGoals(Seed.familyId),
+        _watchFamily(),
+      ).map((parts) {
+        final rows = parts[0] as List<LedgerEntry>;
+        final goals = parts[1] as List<SavingsGoal>;
+        final family = parts[2] as Family?;
+        final zone = normalizeZoneId(family?.timeZone);
+        final payoutDay = family?.payoutDay ?? 6;
+        final setupChildren = <PocketMoneySetupChild>[
+          for (final kid in kids)
+            PocketMoneySetupChild(
+              id: kid.id,
+              nickname: kid.nickname,
+              avatarColour: kid.avatarColour,
+              weeklyBasePence: kid.weeklyBasePence,
+            ),
+        ];
+        return MoneyLedgerData(
+          children: <MoneyChild>[
+            for (final kid in kids)
+              MoneyChild(id: kid.id, nickname: kid.nickname),
+          ],
+          entries: rows
+              .map((row) => _toEntity(row, zone))
+              .toList(growable: false),
+          oweds: <OwedSummary>[
+            for (final kid in kids)
+              summarise(
+                kid.id,
+                rows.where((row) => row.childId == kid.id).toList(),
+              ),
+          ],
+          goals: <SavingsGoalData>[
+            for (final goal in goals)
+              SavingsGoalData(
+                id: goal.id,
+                childId: goal.childId,
+                title: goal.title,
+                targetPence: goal.targetPence,
+                savedPence: goal.savedPence,
+              ),
+          ],
+          payoutDay: payoutDay,
+          zoneId: zone,
+          setup: PocketMoneySetup(
+            mode: family?.pocketMoneyMode ?? 'both',
+            payoutDay: payoutDay,
+            coinValuePencePerCoin: family?.coinValuePencePerCoin ?? 1,
+            children: setupChildren,
+          ),
+        );
+      });
+    });
   }
 
   // -- P06 setup -------------------------------------------------------------
@@ -170,15 +249,31 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
     );
   }
 
-  /// Pure owed math, shared with tests: entries arrive newest-first; only
-  /// `weekly_base` + `quest_bonus` rows after the latest `payout` count.
+  /// Pure owed math, shared with tests: [rows] is one child's ledger (any
+  /// order). Only `weekly_base` + `quest_bonus` rows at or after the latest
+  /// `payout` instant count. Order-independent (review finding 4): the latest payout date is found first, then rows
+  /// with `date >= payout` are summed — so a `quest_bonus` sharing the
+  /// payout's clock second can never be dropped by a tie in the
+  /// `date desc`-only ledger order. Rows on the payout instant itself count
+  /// (they settled nothing yet); anything strictly before it is settled.
   OwedSummary summarise(String childId, List<LedgerEntry> rows) {
+    DateTime? latestPayout;
+    for (final row in rows) {
+      if (row.type == 'payout' &&
+          (latestPayout == null || row.date.isAfter(latestPayout))) {
+        latestPayout = row.date;
+      }
+    }
     var base = 0;
     var quests = 0;
     for (final row in rows) {
-      if (row.type == 'payout') break;
-      if (row.type == 'weekly_base') base += row.amountPence;
-      if (row.type == 'quest_bonus') quests += row.amountPence;
+      if (row.type != 'weekly_base' && row.type != 'quest_bonus') continue;
+      if (latestPayout != null && row.date.isBefore(latestPayout)) continue;
+      if (row.type == 'weekly_base') {
+        base += row.amountPence;
+      } else {
+        quests += row.amountPence;
+      }
     }
     return OwedSummary(
       childId: childId,
@@ -297,6 +392,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
       amountPence: row.amountPence,
       note: row.note,
       date: row.date,
+      dateTz: row.dateTz,
     );
   }
 
@@ -318,4 +414,40 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
         return type;
     }
   }
+}
+
+/// Fan-in for N per-child ledger streams (newest-first each): emits the
+/// merged list, newest first, whenever any child ledger emits (after every
+/// child has emitted at least once). Generalises `combineLatest2/3/4` (max
+/// arity 4 in `stream_combine.dart`) to a near-static roster of any size.
+Stream<List<LedgerEntry>> _combineLedgers(
+  List<Stream<List<LedgerEntry>>> sources,
+) {
+  late final StreamController<List<LedgerEntry>> controller;
+  controller = StreamController<List<LedgerEntry>>(
+    onListen: () {
+      final latest = List<List<LedgerEntry>?>.filled(sources.length, null);
+      var seen = 0;
+      final subs = <StreamSubscription<List<LedgerEntry>>>[];
+      for (var i = 0; i < sources.length; i++) {
+        subs.add(
+          sources[i].listen((rows) {
+            if (latest[i] == null) seen++;
+            latest[i] = rows;
+            if (seen == sources.length) {
+              final all = latest.expand((list) => list!).toList()
+                ..sort((a, b) => b.date.compareTo(a.date));
+              controller.add(List<LedgerEntry>.unmodifiable(all));
+            }
+          }, onError: controller.addError),
+        );
+      }
+      controller.onCancel = () async {
+        for (final sub in subs) {
+          await sub.cancel();
+        }
+      };
+    },
+  );
+  return controller.stream;
 }

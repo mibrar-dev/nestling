@@ -44,3 +44,40 @@ final class PocketMoneyWeeklyBaseStepped extends PocketMoneyEvent {
   @override
   List<Object?> get props => <Object?>[childId, deltaPence];
 }
+
+/// P12: the parent switched the child segment (Maya | Leo). Synchronous —
+/// no stream work, no reload; the bloc re-filters `items` for that child.
+final class PocketMoneyChildSelected extends PocketMoneyEvent {
+  const new(this.childId);
+
+  final String childId;
+
+  @override
+  List<Object?> get props => <Object?>[childId];
+}
+
+/// P12: the "Add money" sheet saved. Pounds→pence parsing and inline
+/// validation live in the sheet; the bloc writes a `gift` row and the
+/// watch stream re-emits.
+final class PocketMoneyAddMoneySubmitted extends PocketMoneyEvent {
+  const new(this.childId, this.amountPence, this.note);
+
+  final String childId;
+  final int amountPence;
+  final String note;
+
+  @override
+  List<Object?> get props => <Object?>[childId, amountPence, note];
+}
+
+/// P12: the "Record spending" sheet saved (a `spend` row, stored negative).
+final class PocketMoneySpendingSubmitted extends PocketMoneyEvent {
+  const new(this.childId, this.amountPence, this.note);
+
+  final String childId;
+  final int amountPence;
+  final String note;
+
+  @override
+  List<Object?> get props => <Object?>[childId, amountPence, note];
+}
