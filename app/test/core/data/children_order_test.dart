@@ -25,11 +25,15 @@ import 'package:sqlite3/sqlite3.dart' as sqlite;
 /// `rewards` is included in its exact pre-v5 shape for the same reason:
 /// real v2 databases always have it, and the v5 open runs the v5 step on
 /// this fixture too.
+///
+/// `quest_completions` is a PK-only stub: real v2 databases always have it,
+/// and the v6 open runs the v6 `kid_note` step on this fixture too.
 const List<String> _v2Ddl = <String>[
   "CREATE TABLE families (id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL DEFAULT 'Nestling', payout_day INTEGER NOT NULL DEFAULT 6, coin_value_pence_per_coin INTEGER NOT NULL DEFAULT 1, pocket_money_mode TEXT NOT NULL DEFAULT 'both')",
   'CREATE TABLE children (id TEXT NOT NULL PRIMARY KEY, family_id TEXT NOT NULL, nickname TEXT NOT NULL, age_band TEXT NOT NULL DEFAULT "7-9", age_years INTEGER NOT NULL DEFAULT 7, avatar_colour TEXT NOT NULL DEFAULT "lilac", pin_hash TEXT NULL, pip_style TEXT NOT NULL DEFAULT "mochi", pip_skin TEXT NOT NULL DEFAULT "sunny", pip_accessory TEXT NOT NULL DEFAULT "none", pip_stage INTEGER NOT NULL DEFAULT 1, pip_total_coins INTEGER NOT NULL DEFAULT 0, coins INTEGER NOT NULL DEFAULT 0, happiness INTEGER NOT NULL DEFAULT 4, happy_days INTEGER NOT NULL DEFAULT 0, weekly_base_pence INTEGER NOT NULL DEFAULT 0)',
   "CREATE TABLE quests (id TEXT NOT NULL PRIMARY KEY, family_id TEXT NOT NULL, title TEXT NOT NULL, icon TEXT NOT NULL DEFAULT 'star', coins INTEGER NOT NULL DEFAULT 10, repeat_rule TEXT NOT NULL DEFAULT 'once', days TEXT NOT NULL DEFAULT '', due_label TEXT NULL, needs_approval INTEGER NOT NULL DEFAULT 1, assignee_child_id TEXT NULL, active INTEGER NOT NULL DEFAULT 1, due_time_local TEXT NULL)",
   "CREATE TABLE rewards (id TEXT NOT NULL PRIMARY KEY, family_id TEXT NOT NULL, title TEXT NOT NULL, icon TEXT NOT NULL DEFAULT 'gift', coin_price INTEGER NOT NULL, needs_ok INTEGER NOT NULL DEFAULT 1)",
+  'CREATE TABLE quest_completions (id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT)',
   "CREATE TABLE settings (family_id TEXT NOT NULL PRIMARY KEY, pocket_money_mode TEXT NOT NULL DEFAULT 'both', payout_day INTEGER NOT NULL DEFAULT 6, coin_value_pence_per_coin INTEGER NOT NULL DEFAULT 1, notif_approvals INTEGER NOT NULL DEFAULT 1, notif_payout INTEGER NOT NULL DEFAULT 1, notif_summary INTEGER NOT NULL DEFAULT 1, crash_report_consent INTEGER NOT NULL DEFAULT 0, kid_gate_enabled INTEGER NOT NULL DEFAULT 1)",
   "CREATE TABLE app_state (id INTEGER NOT NULL PRIMARY KEY, onboarding_complete INTEGER NOT NULL DEFAULT 0, subscription_status TEXT NOT NULL DEFAULT 'trial', trial_start INTEGER NULL, active_child_id TEXT NULL, app_mode TEXT NOT NULL DEFAULT 'parent')",
 ];

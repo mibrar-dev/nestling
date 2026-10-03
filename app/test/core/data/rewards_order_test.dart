@@ -20,11 +20,14 @@ import 'package:sqlite3/sqlite3.dart' as sqlite;
 /// Minimal v4 DDL: `rewards` in its exact v4 shape (every column except
 /// `created_at` / `created_at_tz`) plus PK-only stubs for the tables
 /// `beforeOpen` touches (the v4 → v5 open only runs the v5 step).
+/// `quest_completions` is a PK-only stub: real v4 databases always have it,
+/// and the v6 step needs the table to exist.
 const List<String> _v4Ddl = <String>[
   'CREATE TABLE families (id TEXT NOT NULL PRIMARY KEY)',
   'CREATE TABLE settings (family_id TEXT NOT NULL PRIMARY KEY)',
   'CREATE TABLE app_state (id INTEGER NOT NULL PRIMARY KEY)',
   "CREATE TABLE rewards (id TEXT NOT NULL PRIMARY KEY, family_id TEXT NOT NULL, title TEXT NOT NULL, icon TEXT NOT NULL DEFAULT 'gift', coin_price INTEGER NOT NULL, needs_ok INTEGER NOT NULL DEFAULT 1)",
+  'CREATE TABLE quest_completions (id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT)',
 ];
 
 /// Seed insertion order (the P14 display order — never price order).
