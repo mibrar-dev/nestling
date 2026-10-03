@@ -52,7 +52,7 @@ class PocketMoneyBloc extends Bloc<PocketMoneyEvent, PocketMoneyState> {
         // request is dropped only once the stream confirms it — an unrelated
         // re-emission still reporting the old day must not swallow a
         // correction tap (P06-BUG-09). The setup arrives inside `data`
-        // (fakes without a savings table still carry it via the interface
+        // (fakes without a savings table carry it via the shared test
         // fallback); a previous emission is kept only when the new one has
         // none (hand-built fixtures).
         final setup = data.setup ?? state.setup;
@@ -82,7 +82,7 @@ class PocketMoneyBloc extends Bloc<PocketMoneyEvent, PocketMoneyState> {
       },
       onError: (error, _) => state.copyWith(
         status: PocketMoneyStatus.failure,
-        errorMessage: error.toString(),
+        errorMessage: _loadErrorMessage(error),
       ),
     );
   }
@@ -214,7 +214,7 @@ class PocketMoneyBloc extends Bloc<PocketMoneyEvent, PocketMoneyState> {
       );
     } on Object catch (error) {
       if (emit.isDone) return;
-      emit(state.copyWith(errorMessage: error.toString()));
+      emit(state.copyWith(errorMessage: _submitErrorMessage(error)));
     }
   }
 
@@ -230,10 +230,21 @@ class PocketMoneyBloc extends Bloc<PocketMoneyEvent, PocketMoneyState> {
       );
     } on Object catch (error) {
       if (emit.isDone) return;
-      emit(state.copyWith(errorMessage: error.toString()));
+      emit(state.copyWith(errorMessage: _submitErrorMessage(error)));
     }
   }
 }
+
+/// Parent-facing failure copy (review finding 7): a friendly lead sentence
+/// a parent can act on, with the raw cause retained after the colon so
+/// diagnostics — and the pinned `contains(...)` test expectations — still
+/// match. Only the P12 paths use these; the P06 setup writes keep their
+/// inherited inline-error format.
+String _loadErrorMessage(Object error) =>
+    'We couldn\u2019t load your ledger: $error';
+
+String _submitErrorMessage(Object error) =>
+    'We couldn\u2019t save that: $error';
 
 /// Errors are terminal: forward the first error, then close — otherwise the
 /// failed load's watchers stay subscribed and every "Try again" leaks

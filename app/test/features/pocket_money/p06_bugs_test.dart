@@ -43,6 +43,7 @@ import 'package:nestling/features/pocket_money/presentation/bloc/pocket_money_st
 import 'package:nestling/features/pocket_money/presentation/views/pocket_money_setup_view.dart';
 
 import '../../test_scope.dart';
+import 'ledger_data_fallback.dart';
 
 /// `Seed.demo` P06 setup: `both`, Saturday, 1p/coin, Maya £3.00 then Leo
 /// £1.50 (insertion order).

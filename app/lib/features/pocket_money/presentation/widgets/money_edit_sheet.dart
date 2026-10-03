@@ -42,14 +42,44 @@ class _MoneyEditSheetState extends State<MoneyEditSheet> {
 
   String get _ctaLabel => _isAdd ? 'Add money' : 'Record spending';
 
-  /// `£5.00`, `5`, `5.5` → pence. Anything else → null.
+  /// One ledger row may not exceed £1,000,000.00 (P12-BUG-01: an unbounded
+  /// numpad mashtroke was stored as int64 max and printed as
+  /// `+£92233720368547760.00`, overflowing the history row).
+  static const int maxPence = 100000000;
+
+  /// Pounds → pence in **integer** maths, validating instead of stripping.
+  ///
+  /// P12-BUG-01/02/03 (all three reproducers are in `p12_bugs_test.dart`):
+  ///
+  /// * the old `replaceAll(RegExp('[^0-9.]'), '')` deleted any separator, so
+  ///   `1,50` recorded £150.00 (100×), `-5` recorded +£5.00 and `5 5` recorded
+  ///   £5.50 — a silent rewrite of the amount the parent typed;
+  /// * `(value * 100).round()` lost half a penny (`1.005` → 100p, because
+  ///   `1.005 * 100 == 100.49999999999999`) and overflowed to int64 max.
+  ///
+  /// Accepted: an optional leading `£`, optional spaces, an optional whole
+  /// part, and **at most two** decimals (`5.00`, `£5`, `.5`, `0.01`,
+  /// `1.15`, `999.99`). Everything else returns null and never reaches the
+  /// bloc. The whole part is capped at 9 digits so `int.parse` cannot
+  /// overflow before [maxPence] is applied.
   static int? _parsePence(String raw) {
-    final cleaned = raw.replaceAll(RegExp('[^0-9.]'), '');
-    if (cleaned.isEmpty) return null;
-    final value = double.tryParse(cleaned);
-    if (value == null) return null;
-    return (value * 100).round();
+    final match = _amountPattern.firstMatch(raw);
+    if (match == null) return null;
+    final cleaned = raw.replaceAll(_strip, '');
+    final dot = cleaned.indexOf('.');
+    final whole = dot < 0 ? cleaned : cleaned.substring(0, dot);
+    final fraction = dot < 0 ? '' : cleaned.substring(dot + 1);
+    return (whole.isEmpty ? 0 : int.parse(whole)) * 100 +
+        int.parse(fraction.padRight(2, '0'));
   }
+
+  static final RegExp _amountPattern = RegExp(
+    r'^\s*£?\s*(?:\d{1,9}(?:\.\d{1,2})?|\.\d{1,2})\s*$',
+  );
+
+  /// Leading `£` and the spaces around it are the only non-digit characters
+  /// the pattern lets through, so exactly those are removed before parsing.
+  static final RegExp _strip = RegExp(r'[£\s]');
 
   void _submit() {
     final pence = _parsePence(_amount.text);
@@ -59,6 +89,10 @@ class _MoneyEditSheetState extends State<MoneyEditSheet> {
     }
     if (pence <= 0) {
       setState(() => _error = 'Enter an amount above 0');
+      return;
+    }
+    if (pence > maxPence) {
+      setState(() => _error = 'Enter an amount up to £1,000,000.00');
       return;
     }
     final note = _note.text.trim();
@@ -96,11 +130,18 @@ class _MoneyEditSheetState extends State<MoneyEditSheet> {
         ),
         if (error != null) ...<Widget>[
           const SizedBox(height: NestSpacing.s3),
-          Text(
-            error,
-            style: NestType.caption(color: tokens.danger),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+          // Finding 5 (4_review.md): the inline error appears only after a
+          // tap, so without a live region VoiceOver / TalkBack never
+          // announces that the amount was rejected and the sheet stays open
+          // with the reason off-screen.
+          Semantics(
+            liveRegion: true,
+            child: Text(
+              error,
+              style: NestType.caption(color: tokens.danger),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
         const SizedBox(height: NestSpacing.s4),

@@ -37,6 +37,7 @@ import 'package:nestling/features/pocket_money/presentation/bloc/pocket_money_st
 import 'package:nestling/features/pocket_money/presentation/views/pocket_money_setup_view.dart';
 
 import '../../test_scope.dart';
+import 'ledger_data_fallback.dart';
 
 /// In-memory repository with caller-controlled streams, used to reach the
 /// states the Drift repository cannot (pending load, stream error).

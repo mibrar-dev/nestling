@@ -27,8 +27,23 @@ import 'package:nestling/features/pocket_money/presentation/widgets/money_pounds
 /// two row buttons and the footer caption. Every colour comes from
 /// `context.nest`, so dark mode needs no branch here (the hero card paints
 /// `heroBg`, never `ink`).
-class MoneyLedgerView extends StatelessWidget {
+///
+/// The vertical stack reproduces the design's arithmetic exactly — see
+/// `_LoadedBody`'s anchors comment for the measured tops.
+class MoneyLedgerView extends StatefulWidget {
   const MoneyLedgerView({super.key});
+
+  @override
+  State<MoneyLedgerView> createState() => _MoneyLedgerViewState();
+}
+
+class _MoneyLedgerViewState extends State<MoneyLedgerView> {
+  /// Finding 6 (4_review.md): a write is only announced once the watch
+  /// stream has actually re-emitted, so a rejected write shows the error
+  /// toast instead of a false "Added £5.00 for Maya". The pending tuple is
+  /// the child's ledger size at submit time plus the copy to show once it
+  /// grows by a row.
+  ({int count, String message})? _pendingWrite;
 
   @override
   Widget build(BuildContext context) {
@@ -44,29 +59,107 @@ class MoneyLedgerView extends StatelessWidget {
             current.status == PocketMoneyStatus.loaded &&
             previous.errorMessage != current.errorMessage &&
             current.errorMessage != null,
-        listener: (context, state) =>
-            showNestToast(context, state.errorMessage!),
-        child: BlocBuilder<PocketMoneyBloc, PocketMoneyState>(
-          builder: (context, state) {
-            switch (state.status) {
-              case PocketMoneyStatus.initial:
-              case PocketMoneyStatus.loading:
-                return Center(
-                  child: CircularProgressIndicator(color: tokens.leaf),
-                );
-              case PocketMoneyStatus.failure:
-                return _FailureBody(message: state.errorMessage);
-              case PocketMoneyStatus.loaded:
-                final data = state.data;
-                if (data == null || data.children.isEmpty) {
-                  return const _EmptyBody();
-                }
-                return _LoadedBody(state: state, data: data);
+        listener: (context, state) {
+          // The write was rejected: drop the pending confirmation so the
+          // error toast above is the only thing the parent is told.
+          if (_pendingWrite != null) {
+            setState(() => _pendingWrite = null);
+          }
+          showNestToast(context, state.errorMessage!);
+        },
+        child: BlocListener<PocketMoneyBloc, PocketMoneyState>(
+          // The confirmation half of finding 6: the ledger stream re-emits
+          // after a successful write, which is the proof the row landed.
+          listenWhen: (previous, current) =>
+              _pendingWrite != null &&
+              current.status == PocketMoneyStatus.loaded &&
+              _ledgerSize(current) != _ledgerSize(previous),
+          listener: (context, state) {
+            final pending = _pendingWrite;
+            if (pending == null) return;
+            final data = state.data;
+            if (data == null) return;
+            final childId = state.selectedChildId;
+            if (childId == null) return;
+            if (data.entriesFor(childId).length > pending.count) {
+              final message = pending.message;
+              setState(() => _pendingWrite = null);
+              showNestToast(context, message);
             }
           },
+          child: BlocBuilder<PocketMoneyBloc, PocketMoneyState>(
+            // Finding 11: a rejected submit only changes `errorMessage`,
+            // which the listener above already consumes. Without this the
+            // whole ListView — title, segment, hero, goal card and every
+            // history row — rebuilt for a message it does not render.
+            buildWhen: (previous, current) =>
+                previous.status != current.status ||
+                previous.data != current.data ||
+                previous.selectedChildId != current.selectedChildId,
+            builder: (context, state) {
+              switch (state.status) {
+                case PocketMoneyStatus.initial:
+                case PocketMoneyStatus.loading:
+                  return Center(
+                    child: CircularProgressIndicator(color: tokens.leaf),
+                  );
+                case PocketMoneyStatus.failure:
+                  return _FailureBody(message: state.errorMessage);
+                case PocketMoneyStatus.loaded:
+                  final data = state.data;
+                  if (data == null || data.children.isEmpty) {
+                    return const _EmptyBody();
+                  }
+                  return _LoadedBody(
+                    state: state,
+                    data: data,
+                    onWrite: _recordWrite,
+                  );
+              }
+            },
+          ),
         ),
       ),
     );
+  }
+
+  /// How many ledger rows the selected child has in [state] — the stream's
+  /// own proof that a write landed.
+  int _ledgerSize(PocketMoneyState state) {
+    final data = state.data;
+    final childId = state.selectedChildId;
+    if (data == null || childId == null) return -1;
+    return data.entriesFor(childId).length;
+  }
+
+  /// Dispatches the write and remembers what to say once it is confirmed.
+  void _recordWrite(
+    BuildContext context,
+    PocketMoneyBloc bloc,
+    MoneyChild child,
+    MoneyEditSheetMode mode,
+    int amountPence,
+    String note,
+  ) {
+    final data = bloc.state.data;
+    final before = data == null ? 0 : data.entriesFor(child.id).length;
+    if (mode == MoneyEditSheetMode.addMoney) {
+      bloc.add(PocketMoneyAddMoneySubmitted(child.id, amountPence, note));
+      setState(
+        () => _pendingWrite = (
+          count: before,
+          message: 'Added ${moneyPounds(amountPence)} for ${child.nickname}',
+        ),
+      );
+    } else {
+      bloc.add(PocketMoneySpendingSubmitted(child.id, amountPence, note));
+      setState(
+        () => _pendingWrite = (
+          count: before,
+          message: 'Spent ${moneyPounds(amountPence)} recorded',
+        ),
+      );
+    }
   }
 }
 
@@ -103,13 +196,50 @@ const EdgeInsets _scrollPadding = EdgeInsets.fromLTRB(
 
 /// Loaded body for the selected child: hero, goal, history, row buttons.
 class _LoadedBody extends StatelessWidget {
-  const _LoadedBody({required this.state, required this.data});
+  const _LoadedBody({
+    required this.state,
+    required this.data,
+    required this.onWrite,
+  });
 
   final PocketMoneyState state;
   final MoneyLedgerData data;
 
+  /// Writes a sheet's validated row through the bloc; the owning State keeps
+  /// the confirmation copy (finding 6).
+  final void Function(
+    BuildContext context,
+    PocketMoneyBloc bloc,
+    MoneyChild child,
+    MoneyEditSheetMode mode,
+    int amountPence,
+    String note,
+  )
+  onWrite;
+
   /// `.goal img` — the 56×56 coin illustration (design CSS).
   static const double _goalArt = 56;
+
+  /// `.hero .lab` (`P12-money.html:5`) declares `font-size:14px` and **no**
+  /// line-height, so the design render resolves the browser's `normal`:
+  /// Inter's font metrics (ascender 0.969 em + descender 0.241 em, lineGap 0)
+  /// at 14 px give a 16.94 ≈ 17 px line box — 3 px less than the 14/20
+  /// `chipLabel` token.
+  ///
+  /// Measured off `design/screens/light/P12-money.png`: the hero fill runs
+  /// 519…1151 px = 173…383.7 logical (a height of exactly 211 px) and the
+  /// `Payout time` fill starts at 936 px = 312 logical, which only closes
+  /// with a 17 px label:
+  ///
+  /// ```text
+  /// 173 + 20 pad + 17 lab + 44 amt + 4 brk-top + 40 brk(2 × 20)
+  ///     + 14 btn-top + 52 btn + 20 pad = 384
+  /// ```
+  ///
+  /// (With a 20 px label the button lands at 315, three px below the design.)
+  /// Pinned at the call site, like `.hero .amt`'s −0.4 tracking — the shared
+  /// `NestType` styles are untouched.
+  static const double _heroLabHeight = 17 / 14;
 
   @override
   Widget build(BuildContext context) {
@@ -136,9 +266,24 @@ class _LoadedBody extends StatelessWidget {
 
     return ListView(
       padding: _scrollPadding,
+      // Design anchors at 390×844 (`design/screens/light/P12-money.png`
+      // ÷ 3), pinned by `money_ledger_geometry_test.dart`:
+      //
+      // ```
+      // 47  NestStatusBar          (.status-bar height 47)
+      // +8  .ptitle padding-top    → title line box 55…89 (28/34)
+      // +16 .scroll > * + *        → segmented track 105…157 (4 + 44 + 4)
+      // +16                        → owed card 173…384  (211)
+      // +16                        → goal card 400…488  (88)
+      // +16                        → history card 504…
+      // ```
+      //
+      // The status bar is the `.scroll`'s *preceding* sibling in the HTML,
+      // so `.scroll > * + *` gives `.ptitle` — the first child — nothing:
+      // its only top spacing is its own `padding-top:8px`. Nothing may be
+      // inserted between them (P12-BUG-05).
       children: <Widget>[
         const NestStatusBar(),
-        const SizedBox(height: NestSpacing.s4),
         const _PageTitle(),
         const SizedBox(height: NestSpacing.s4),
         // Creation order (Maya, then Leo), never alphabetical.
@@ -162,7 +307,8 @@ class _LoadedBody extends StatelessWidget {
             children: <Widget>[
               Text(
                 '$name is owed',
-                style: NestType.chipLabel(color: tokens.onHero2),
+                style: NestType.chipLabel(color: tokens.onHero2)
+                    .copyWith(height: _heroLabHeight),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -238,6 +384,7 @@ class _LoadedBody extends StatelessWidget {
                   bloc,
                   child,
                   MoneyEditSheetMode.addMoney,
+                  onWrite,
                 ),
               ),
             ),
@@ -254,6 +401,7 @@ class _LoadedBody extends StatelessWidget {
                   bloc,
                   child,
                   MoneyEditSheetMode.recordSpending,
+                  onWrite,
                 ),
               ),
             ),
@@ -277,39 +425,38 @@ void _openSheet(
   PocketMoneyBloc bloc,
   MoneyChild child,
   MoneyEditSheetMode mode,
+  _LoadedBodyWrite onWrite,
 ) {
-  final name = child.nickname;
   final isAdd = mode == MoneyEditSheetMode.addMoney;
   unawaited(
     showNestBottomSheet<void>(
       context,
-      title: isAdd ? 'Add money for $name' : 'Record spending for $name',
+      title: isAdd
+          ? 'Add money for ${child.nickname}'
+          : 'Record spending for ${child.nickname}',
       child: isAdd
           ? MoneyEditSheet.addMoney(
-              onSubmit: (amountPence, note) {
-                bloc.add(
-                  PocketMoneyAddMoneySubmitted(child.id, amountPence, note),
-                );
-                showNestToast(
-                  context,
-                  'Added ${moneyPounds(amountPence)} for $name',
-                );
-              },
+              onSubmit: (amountPence, note) =>
+                  onWrite(context, bloc, child, mode, amountPence, note),
             )
           : MoneyEditSheet.recordSpending(
-              onSubmit: (amountPence, note) {
-                bloc.add(
-                  PocketMoneySpendingSubmitted(child.id, amountPence, note),
-                );
-                showNestToast(
-                  context,
-                  'Spent ${moneyPounds(amountPence)} recorded',
-                );
-              },
+              onSubmit: (amountPence, note) =>
+                  onWrite(context, bloc, child, mode, amountPence, note),
             ),
     ),
   );
 }
+
+/// The write seam between the sheet and the view's State, which holds the
+/// confirmation copy until the ledger stream proves the row landed.
+typedef _LoadedBodyWrite = void Function(
+  BuildContext context,
+  PocketMoneyBloc bloc,
+  MoneyChild child,
+  MoneyEditSheetMode mode,
+  int amountPence,
+  String note,
+);
 
 /// `.card .goal` — coin illustration, title + saved caption + progress.
 /// Display-only: the card is not tappable.
@@ -339,7 +486,13 @@ class _GoalCard extends StatelessWidget {
               children: <Widget>[
                 Text(
                   '${goal.title} $kMoneyEmDash ${moneyPounds(goal.targetPence)}',
-                  style: NestType.bodyStrong(color: tokens.ink),
+                  // `.goal .t` (`P12-money.html:11`) is a **22 px** line box;
+                  // `NestType.bodyStrong` is 16/24. The card is
+                  // `max(56 art, 22 + 18 + 8 + 8)` = 56 tall either way only
+                  // with 22 — with 24 the column is 58 and the card renders
+                  // 90, pushing the history card 2 px down (finding 2).
+                  style: NestType.bodyStrong(color: tokens.ink)
+                      .copyWith(height: 22 / 16),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -373,9 +526,11 @@ class _EmptyBody extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       padding: _scrollPadding,
+      // Same stack as the loaded body: the 47 px status bar is the `.scroll`'s
+      // preceding sibling, so the title gets only its own 8 px padding
+      // (P12-BUG-05). Pinned by `money_ledger_geometry_test.dart`.
       children: <Widget>[
         const NestStatusBar(),
-        const SizedBox(height: NestSpacing.s4),
         const _PageTitle(),
         const SizedBox(height: NestSpacing.s4),
         NestEmptyState(

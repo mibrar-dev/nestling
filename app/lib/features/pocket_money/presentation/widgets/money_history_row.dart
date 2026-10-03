@@ -29,6 +29,11 @@ class MoneyHistoryRow extends StatelessWidget {
   /// display-only.
   static const double _minHeight = 56;
 
+  /// The 40 px tile plus the two 12 px `.hrow` gaps: the width the trailing
+  /// amount may never take from the row.
+  static const double _leadingReserve =
+      NestSpacing.s10 + NestSpacing.s3 + NestSpacing.s3;
+
   @override
   Widget build(BuildContext context) {
     final tokens = context.nest;
@@ -57,56 +62,76 @@ class MoneyHistoryRow extends StatelessWidget {
     }
     return ConstrainedBox(
       constraints: const BoxConstraints(minHeight: _minHeight),
-      child: Row(
-        children: <Widget>[
-          // Display-only art: excluded from semantics, the row is text.
-          ExcludeSemantics(
-            child: Container(
-              width: NestSpacing.s10,
-              height: NestSpacing.s10,
-              decoration: BoxDecoration(
-                color: tileBg,
-                borderRadius: BorderRadius.circular(NestSpacing.s3),
+      // `.hrow` gap 12 px on each side of the 40 px tile. The reserve below
+      // is what the trailing `.hrow .b` may never eat into, so an absurd
+      // figure ellipsizes (P12-BUG-01 defence in depth) instead of pushing
+      // the row into a `RenderFlex overflowed` — the amount itself stays an
+      // inflexible child, exactly as the design's flex box does, so it keeps
+      // its intrinsic width and its right edge on the card's content edge.
+      child: LayoutBuilder(
+        builder: (context, constraints) => Row(
+          children: <Widget>[
+            // Display-only art: excluded from semantics, the row is text.
+            ExcludeSemantics(
+              child: Container(
+                width: NestSpacing.s10,
+                height: NestSpacing.s10,
+                decoration: BoxDecoration(
+                  color: tileBg,
+                  // `.icon-tile` is `border-radius: var(--r-m)` = 16 px
+                  // (`tokens.css --r-m:16px`) for the STANDARD 40 px tile.
+                  // `NestSpacing.s3` (12) is a spacing token and was the
+                  // compact P02 variant's radius — see 4_review.md finding 3
+                  // and SHARED_REQUEST.md for `nest_list_row.dart`.
+                  borderRadius: NestRadii.allM,
+                ),
+                alignment: Alignment.center,
+                child: entry.type == 'quest_bonus'
+                    ? SvgPicture.asset(
+                        NestlingIllustrations.coin,
+                        width: NestSpacing.s6,
+                        height: NestSpacing.s6,
+                      )
+                    : NestIcon(_iconFor(entry.type), color: tileFg),
               ),
-              alignment: Alignment.center,
-              child: entry.type == 'quest_bonus'
-                  ? SvgPicture.asset(
-                      NestlingIllustrations.coin,
-                      width: NestSpacing.s6,
-                      height: NestSpacing.s6,
-                    )
-                  : NestIcon(_iconFor(entry.type), color: tileFg),
             ),
-          ),
-          const SizedBox(width: NestSpacing.s3),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Text(
-                  _titleFor(entry, familyZoneId),
-                  style: NestType.bodySmallStrong(color: tokens.ink),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  _subtitleFor(entry, familyZoneId),
-                  style: NestType.caption(color: tokens.ink2),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+            const SizedBox(width: NestSpacing.s3),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    _titleFor(entry, familyZoneId),
+                    style: NestType.bodySmallStrong(color: tokens.ink),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    _subtitleFor(entry, familyZoneId),
+                    style: NestType.caption(color: tokens.ink2),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: NestSpacing.s3),
-          Text(
-            _amountFor(entry),
-            style: NestType.money(color: tokens.ink),
-            maxLines: 1,
-            softWrap: false,
-          ),
-        ],
+            const SizedBox(width: NestSpacing.s3),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: constraints.maxWidth - _leadingReserve,
+              ),
+              child: Text(
+                _amountFor(entry),
+                style: NestType.money(color: tokens.ink),
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -28,12 +28,14 @@
 // The screen is NOT patched here — a test stage records a defect, the build
 // stage fixes it. See docs/screens/P12/3_test.md.
 
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
+import 'package:nestling/features/pocket_money/presentation/widgets/money_history_row.dart';
 
 import '../../test_scope.dart';
 
@@ -42,8 +44,13 @@ import '../../test_scope.dart';
 const double designTitleTop = 55;
 const double designSegmentedTop = 105;
 const double designOwedCardTop = 173;
+const double designOwedCardHeight = 211;
 const double designGoalCardTop = 400;
+const double designGoalCardHeight = 88;
 const double designHistoryTop = 504;
+
+/// `.icon-tile` corner radius for the standard 40 px tile (`--r-m`).
+const double designTileRadius = 16;
 
 Future<void> _loadBundledFonts() async {
   final inter = FontLoader('Inter')
@@ -125,6 +132,27 @@ void main() {
       await disposeApp(tester);
     });
 
+    testWidgets('the owed card is the design 211 px tall', (tester) async {
+      await _pumpLedger(tester);
+
+      // `20 + 17 (.lab, CSS `normal`) + 44 (.amt) + 4 (.brk margin-top)
+      // + 40 (.brk 2 × 20) + 14 (.btn margin-top) + 52 (.btn) + 20`.
+      // `Payout time` therefore fills y 312…364 and the card ends at 384,
+      // exactly the PNG's ink run (519…1151 px).
+      expect(
+        tester.getRect(_cardOwning('Maya is owed')).height,
+        moreOrLessEquals(designOwedCardHeight, epsilon: 1),
+        reason:
+            'the 14 px `.hero .lab` has no line-height in the CSS, so it '
+            'resolves to the font `normal` 17 px, not the chipLabel 20 px',
+      );
+      expect(
+        tester.getRect(find.widgetWithText(NestButton, 'Payout time')).top,
+        moreOrLessEquals(312, epsilon: 1),
+      );
+      await disposeApp(tester);
+    });
+
     testWidgets('the goal card sits on the design top (400)', (tester) async {
       await _pumpLedger(tester);
 
@@ -132,6 +160,41 @@ void main() {
         tester.getRect(_cardOwning('£15.50 saved · 62%')).top,
         moreOrLessEquals(designGoalCardTop, epsilon: 1),
       );
+      await disposeApp(tester);
+    });
+
+    testWidgets('the goal card is the design 88 px tall', (tester) async {
+      await _pumpLedger(tester);
+
+      // `.goal .t` is a 22 px line box; `NestType.bodyStrong` is 16/24, and
+      // the taller column (58 vs 56) makes the card 90.
+      expect(
+        tester.getRect(_cardOwning('£15.50 saved · 62%')).height,
+        moreOrLessEquals(designGoalCardHeight, epsilon: 1),
+      );
+      await disposeApp(tester);
+    });
+
+    testWidgets('a history tile is the design 16 px rounded square', (
+      tester,
+    ) async {
+      await _pumpLedger(tester);
+
+      // `.icon-tile { width:40px; height:40px; border-radius: var(--r-m) }`
+      // and `--r-m:16px`. `NestSpacing.s3` (12) is a *spacing* token — it is
+      // the compact P02 tile's radius, 4 px off on every standard tile.
+      final tile = find.descendant(
+        of: find.byType(MoneyHistoryRow).first,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Container && widget.alignment == Alignment.center,
+        ),
+      );
+      final decoration =
+          tester.widget<Container>(tile).decoration! as BoxDecoration;
+      expect(decoration.borderRadius, NestRadii.allM);
+      expect(tester.getSize(tile).width, moreOrLessEquals(40, epsilon: 0.01));
+      expect(tester.getSize(tile).height, moreOrLessEquals(40, epsilon: 0.01));
       await disposeApp(tester);
     });
 

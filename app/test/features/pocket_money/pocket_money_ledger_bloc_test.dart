@@ -23,6 +23,7 @@ import 'package:nestling/features/pocket_money/presentation/bloc/pocket_money_ev
 import 'package:nestling/features/pocket_money/presentation/bloc/pocket_money_state.dart';
 
 import '../../test_scope.dart';
+import 'ledger_data_fallback.dart';
 
 /// The `Seed.demo` setup, carried inside every `MoneyLedgerData`.
 const PocketMoneySetup _demoSetup = PocketMoneySetup(
@@ -45,8 +46,8 @@ const PocketMoneySetup _demoSetup = PocketMoneySetup(
   ],
 );
 
-/// Fake whose submits always fail; the load path flows through the
-/// interface's `watchLedgerData` fallback (setup × items, no goals).
+/// Fake whose submits always fail; the load path flows through the shared
+/// test fallback for `watchLedgerData` (setup × items, no goals).
 class _ThrowingSubmitRepository implements PocketMoneyRepository {
   @override
   Future<List<PocketMoneyEntry>> getItems() => watchItems().first;
@@ -450,7 +451,7 @@ void main() {
           'status',
           PocketMoneyStatus.loading,
         ),
-        // The interface fallback carries the setup with no goals.
+        // The shared test fallback carries the setup with no goals.
         isA<PocketMoneyState>()
             .having((state) => state.status, 'status', PocketMoneyStatus.loaded)
             .having((state) => state.setup, 'setup', _demoSetup)
@@ -461,7 +462,10 @@ void main() {
             .having(
               (state) => state.errorMessage,
               'errorMessage',
-              contains('add-money refused'),
+              allOf(
+                startsWith('We couldn\u2019t save that'),
+                contains('add-money refused'),
+              ),
             ),
       ],
     );
@@ -486,7 +490,10 @@ void main() {
             .having(
               (state) => state.errorMessage,
               'errorMessage',
-              contains('ledger is down'),
+              allOf(
+                startsWith('We couldn\u2019t load your ledger'),
+                contains('ledger is down'),
+              ),
             ),
       ],
     );
@@ -518,7 +525,10 @@ void main() {
             .having(
               (state) => state.errorMessage,
               'errorMessage',
-              contains('spend refused'),
+              allOf(
+                startsWith('We couldn\u2019t save that'),
+                contains('spend refused'),
+              ),
             ),
       ],
     );

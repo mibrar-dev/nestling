@@ -1,10 +1,15 @@
 // P12 Money ledger — Stage 6 adversarial bug tests (iteration 1).
 //
-// Findings P12-BUG-01…05 are skipped reproducers (the suite stays green
-// until the iteration-2 builders fix them). The group at the bottom
-// ("attacks that hold") is NOT skipped: it documents the adversarial probes
-// that passed — rapid taps, deep links, restart persistence, timezone/BST,
-// dark contrast, 320dp × 1.3, parse guards — so regressions are caught here.
+// Findings P12-BUG-01/02/03/05 were skipped reproducers in iteration 1 and
+// are now FIXED and UN-SKIPPED (see docs/screens/P12/2b_build_ui.md): the
+// sheet validates instead of stripping separators, parses integer pence with
+// a £1,000,000.00 ceiling, and the view stack no longer carries the extra
+// header spacer. P12-BUG-04 stays skipped — it is a shared
+// `NestSegmented` fix (SHARED_REQUEST.md), and P12 must not fork the shared
+// control. The group at the bottom ("attacks that hold") is NOT skipped: it
+// documents the adversarial probes that passed — rapid taps, deep links,
+// restart persistence, timezone/BST, dark contrast, 320dp × 1.3, parse
+// guards — so regressions are caught here.
 //
 // All probes ran without a simulator (stage rule): widget tests on the
 // in-memory/file-backed Drift DB plus pure function tests.
@@ -201,39 +206,32 @@ void main() {
 
       await disposeApp(tester);
     },
-    // P12-BUG-01: major — unbounded amount input, int64 clamp, 98 px row
-    // overflow. Fixed in iteration 2.
-    skip: true,
   );
 
   // -- P12-BUG-02 ---------------------------------------------------------
 
-  testWidgets(
-    'P12-BUG-02: "1,50" is silently recorded as £150.00 (100x)',
-    (tester) async {
-      final submit = await _submitAmount(
-        tester,
-        MoneyEditSheetMode.recordSpending,
-        '1,50',
-      );
+  testWidgets('P12-BUG-02: "1,50" is silently recorded as £150.00 (100x)', (
+    tester,
+  ) async {
+    final submit = await _submitAmount(
+      tester,
+      MoneyEditSheetMode.recordSpending,
+      '1,50',
+    );
 
-      // A comma-decimal keyboard (or a paste) types `1,50` for one pound
-      // fifty. The greedier `replaceAll(RegExp('[^0-9.]'), '')` turns it
-      // into 150 pounds. Correct behaviour: 150 pence, or reject the input
-      // with the inline error and write nothing.
-      expect(
-        submit == null || submit.pence == 150,
-        isTrue,
-        reason:
-            'P12-BUG-02: "1,50" was parsed as ${submit?.pence}p '
-            '(£${(submit?.pence ?? 0) / 100}) — 100x the intended amount',
-      );
-      expect(tester.takeException(), isNull);
-    },
-    // P12-BUG-02: major — separator stripping silently multiplies the typed
-    // amount by 10-100x. Fixed in iteration 2.
-    skip: true,
-  );
+    // A comma-decimal keyboard (or a paste) types `1,50` for one pound
+    // fifty. The greedier `replaceAll(RegExp('[^0-9.]'), '')` turns it
+    // into 150 pounds. Correct behaviour: 150 pence, or reject the input
+    // with the inline error and write nothing.
+    expect(
+      submit == null || submit.pence == 150,
+      isTrue,
+      reason:
+          'P12-BUG-02: "1,50" was parsed as ${submit?.pence}p '
+          '(£${(submit?.pence ?? 0) / 100}) — 100x the intended amount',
+    );
+    expect(tester.takeException(), isNull);
+  });
 
   // -- P12-BUG-03 ---------------------------------------------------------
 
@@ -256,9 +254,6 @@ void main() {
       );
       expect(tester.takeException(), isNull);
     },
-    // P12-BUG-03: minor — >2-decimal amounts round through a float and drop
-    // half a penny. Fixed in iteration 2.
-    skip: true,
   );
 
   // -- P12-BUG-04 ---------------------------------------------------------
@@ -318,8 +313,10 @@ void main() {
       handle.dispose();
       await disposeApp(tester);
     },
-    // P12-BUG-04: minor — shared NestSegmented shrinks options below 44 px
-    // with 6 children at 320dp; SHARED_REQUEST for iteration 2.
+    // P12-BUG-04: minor — shared `NestSegmented` shrinks options below 44 px
+    // with 6 children at 320dp. P12 must not fork the shared control, so
+    // this one stays skipped pending the cross-screen fix filed in
+    // docs/screens/P12/SHARED_REQUEST.md.
     skip: true,
   );
 
@@ -328,62 +325,58 @@ void main() {
   group('P12-BUG-05 — ORCHESTRATOR_NOTES geometry targets', () {
     setUpAll(_loadBundledFonts);
 
-    testWidgets(
-      'P12-BUG-05: the whole stack sits 15-21px below the design',
-      (tester) async {
-        await setUpTestScope();
-        await pumpAppRoute(tester, '/money');
+    testWidgets('P12-BUG-05: the whole stack sits 15-21px below the design', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/money');
 
-        // ORCHESTRATOR_NOTES (12:08, overruling the stage-5 PASS): measured
-        // off `P12-money.png` ÷3 at 390 wide — title centre 72, segmented
-        // top 106, owed card top 173, goal card top 400, history card top
-        // 504. The app renders 88 / 121 / 189 / 419 / 525: an extra 16 px
-        // above the title (the `SizedBox(height: NestSpacing.s4)` between
-        // `NestStatusBar` and `_PageTitle`) plus a few px inside the cards.
-        final title = tester.getRect(find.text('Pocket money'));
-        expect(
-          title.center.dy,
-          moreOrLessEquals(72, epsilon: 1.5),
-          reason: 'P12-BUG-05: title centre is ${title.center.dy}',
-        );
+      // ORCHESTRATOR_NOTES (12:08, overruling the stage-5 PASS): measured
+      // off `P12-money.png` ÷3 at 390 wide — title centre 72, segmented
+      // top 106, owed card top 173, goal card top 400, history card top
+      // 504. The app renders 88 / 121 / 189 / 419 / 525: an extra 16 px
+      // above the title (the `SizedBox(height: NestSpacing.s4)` between
+      // `NestStatusBar` and `_PageTitle`) plus a few px inside the cards.
+      final title = tester.getRect(find.text('Pocket money'));
+      expect(
+        title.center.dy,
+        moreOrLessEquals(72, epsilon: 1.5),
+        reason: 'P12-BUG-05: title centre is ${title.center.dy}',
+      );
 
-        final segmented = tester.getRect(find.byType(NestSegmented<String>));
-        expect(
-          segmented.top,
-          moreOrLessEquals(106, epsilon: 1.5),
-          reason: 'P12-BUG-05: segmented top is ${segmented.top}',
-        );
+      final segmented = tester.getRect(find.byType(NestSegmented<String>));
+      expect(
+        segmented.top,
+        moreOrLessEquals(106, epsilon: 1.5),
+        reason: 'P12-BUG-05: segmented top is ${segmented.top}',
+      );
 
-        final cards = find.byType(NestCard);
-        expect(
-          tester.getRect(cards.at(0)).top,
-          moreOrLessEquals(173, epsilon: 1.5),
-          reason:
-              'P12-BUG-05: owed card top is '
-              '${tester.getRect(cards.at(0)).top}',
-        );
-        expect(
-          tester.getRect(cards.at(1)).top,
-          moreOrLessEquals(400, epsilon: 1.5),
-          reason:
-              'P12-BUG-05: goal card top is '
-              '${tester.getRect(cards.at(1)).top}',
-        );
-        expect(
-          tester.getRect(cards.at(2)).top,
-          moreOrLessEquals(504, epsilon: 1.5),
-          reason:
-              'P12-BUG-05: history card top is '
-              '${tester.getRect(cards.at(2)).top}',
-        );
-        expect(tester.takeException(), isNull);
+      final cards = find.byType(NestCard);
+      expect(
+        tester.getRect(cards.at(0)).top,
+        moreOrLessEquals(173, epsilon: 1.5),
+        reason:
+            'P12-BUG-05: owed card top is '
+            '${tester.getRect(cards.at(0)).top}',
+      );
+      expect(
+        tester.getRect(cards.at(1)).top,
+        moreOrLessEquals(400, epsilon: 1.5),
+        reason:
+            'P12-BUG-05: goal card top is '
+            '${tester.getRect(cards.at(1)).top}',
+      );
+      expect(
+        tester.getRect(cards.at(2)).top,
+        moreOrLessEquals(504, epsilon: 1.5),
+        reason:
+            'P12-BUG-05: history card top is '
+            '${tester.getRect(cards.at(2)).top}',
+      );
+      expect(tester.takeException(), isNull);
 
-        await disposeApp(tester);
-      },
-      // P12-BUG-05: major — ORCHESTRATOR_NOTES mandates ±1 px; the stack
-      // currently carries the extra 16 px header spacer. Fixed in iteration 2.
-      skip: true,
-    );
+      await disposeApp(tester);
+    });
   });
 
   // -- attacks that hold --------------------------------------------------

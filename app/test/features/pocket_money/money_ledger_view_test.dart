@@ -541,4 +541,90 @@ void main() {
       await disposeApp(tester);
     });
   });
+
+  group('P12 sheet validation (P12-BUG-01/02/03, finding 5)', () {
+    testWidgets('rejects a comma decimal, a third decimal and a numpad mash', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/money');
+
+      await _scrollToEnd(tester);
+      await tester.tap(find.text('Add money'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // One sheet session: a rejected amount never closes it, so every bad
+      // input is probed without re-opening.
+      for (final input in const <String>[
+        '1,50', // a comma-decimal keyboard: never £150.00
+        '1.005', // a third decimal: never a floored half-penny
+        '99999999999999999999999', // a 23-digit mash: never int64 max
+        '99999999', // £99,999,999 — over the £1,000,000.00 ceiling
+      ]) {
+        await tester.enterText(find.byType(TextField).first, input);
+        await tester.pump();
+        await tester.tap(find.widgetWithText(NestButton, 'Add money').last);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+
+        expect(
+          find.textContaining('Enter an amount'),
+          findsOneWidget,
+          reason: '"$input" must show the inline error and stay in the sheet',
+        );
+        expect(
+          find.text('Add money for Maya'),
+          findsOneWidget,
+          reason: '"$input" must never write a row',
+        );
+        // Finding 6: nothing was submitted, so the success toast must never
+        // be armed — the parent is told the amount was not accepted, not
+        // that the money was added.
+        expect(find.textContaining('Added £'), findsNothing);
+      }
+
+      // No `gift` row was written by any of the four inputs.
+      await tester.tap(find.bySemanticsLabel('Close'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await _scrollToStart(tester);
+      expect(find.textContaining('9223372036854'), findsNothing);
+      expect(find.textContaining('+£999,999'), findsNothing);
+      expect(find.textContaining('+£15'), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the inline error is announced by VoiceOver / TalkBack', (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/money');
+
+      await _scrollToEnd(tester);
+      await tester.tap(find.text('Add money'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.widgetWithText(NestButton, 'Add money').last);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Finding 5: the error appears only after a tap, so without a live
+      // region the screen reader never says why the sheet stayed open.
+      expect(
+        tester
+            .getSemantics(find.text('Enter an amount like £1.00'))
+            .getSemanticsData()
+            .flagsCollection
+            .isLiveRegion,
+        isTrue,
+      );
+
+      handle.dispose();
+      await disposeApp(tester);
+    });
+  });
 }
