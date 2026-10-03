@@ -313,6 +313,7 @@ abstract final class Seed {
       int coins,
       DateTime created, [
       DateTime? decided,
+      String? kidNote,
     ]) {
       return db
           .into(db.questCompletions)
@@ -329,20 +330,33 @@ abstract final class Seed {
                   ? const Value.absent()
                   : Value(decided),
               decidedAtTz: const Value(defaultFamilyZoneId),
+              kidNote: kidNote == null ? const Value.absent() : Value(kidNote),
             ),
           );
     }
 
-    // 3 awaiting approval (P11 "Waiting for you (3)").
+    // 3 awaiting approval (P11 "Waiting for you (3)"). The child's note
+    // (`kid_note`) is stored WITHOUT the surrounding “ ” — P11 adds them
+    // at render time. q-table has no note (NULL → no quote line).
     await completion(
       'q-dishwasher',
       'maya',
       'done_pending',
       15,
       utc(10, 3, 7, 12),
+      null,
+      'I stacked everything neatly!',
     );
     await completion('q-table', 'maya', 'done_pending', 10, utc(10, 3, 7, 5));
-    await completion('q-bed', 'leo', 'done_pending', 5, utc(10, 3, 6, 58));
+    await completion(
+      'q-bed',
+      'leo',
+      'done_pending',
+      5,
+      utc(10, 3, 6, 58),
+      null,
+      'I did the pillows too.',
+    );
     // Approved this week (drive P08 progress + ledger).
     await completion(
       'q-bins',
