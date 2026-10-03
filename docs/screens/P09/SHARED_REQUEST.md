@@ -151,12 +151,13 @@ wrong, see CORRECTION above):
 Still outstanding: **`ic_dishwasher.svg`** is an appliance (rack line + two
 control dots) where the design's Dishes is a handled basket, and
 **`ic_bin.svg`** is a rimmed wheelie bin where the design's Bins is a small
-handled case with a clasp. For Dishes the screen now draws
-`NestIcons.basket` (the DS laundry basket: tapered body + handle arc) as the
-closest in-DS match — a glyph swap in `quests/`, not a redraw — but the exact
-design path is still wanted. `ic_dishwasher.svg` stays the right glyph for the
-seeded quests on the P10 library rows (`quest_idea_meta.dart`'s
-`questIconAsset`).
+handled case with a clasp. The Dishes tile's iter-2 `NestIcons.basket`
+look-alike has been **REVERTED** (iteration 3, `quest_editor_view.dart`
+`_questIcons`): the tile again draws the glyph its own key is named after,
+`NestIcons.dishwasher`, because ORCHESTRATOR_NOTES.md 17:57 item 1 forbids
+substituting a look-alike for a missing design path. The exact design path is
+still wanted. `ic_dishwasher.svg` also stays the right glyph for the seeded
+quests on the P10 library rows (`quest_idea_meta.dart`'s `questIconAsset`).
 
 Files: `app/lib/core/design_system/**` wherever `NestIcons.bed`,
 `.dishwasher`, `.hoover`, `.bin` are drawn. The exact design paths are
@@ -164,12 +165,14 @@ quoted in the CORRECTION above (P09 HTML source, 24 px, stroke 2, round
 caps/joins).
 Blocks: **yes for the UI verdict** — P09 cannot PASS stage 5 until the DS
 glyphs match. Two P09-side steps are still needed on top of the DS redraw
-(screen code, next iteration): (1) REVERT the iter-2 `NestIcons.basket`
-substitution on the Dishes tile (`quest_editor_view.dart:260-270`) back to
-the exact-glyph icon once the DS gains it — look-alike substitution is
-forbidden by ORCHESTRATOR_NOTES.md 17:57 item 1; (2) re-take the stage-5
-screenshots after the merge-back. Iter-2 stage-5 tile MAEs for the record:
-bed 4.5 / dishes 17.5 / hoover 20.5 / book 4.1 / bins 17.3 / paw 1.9.
+(screen code): (1) the Dishes tile is back on `NestIcons.dishwasher` — when the
+DS gains the exact path, swap that one constant in and delete nothing else
+(look-alike substitution is forbidden by ORCHESTRATOR_NOTES.md 17:57 item 1);
+(2) re-take the stage-5 screenshots after the merge-back. When
+`shared/shared_batch5` lands (ORCHESTRATOR_NOTES 19:19) the picker takes the
+icon names from `docs/screens/_shared/shared_batch5_REPORT.md` and
+`toggleTrackOffset` goes away with it. Iter-2 stage-5 tile MAEs for the
+record: bed 4.5 / dishes 17.5 / hoover 20.5 / book 4.1 / bins 17.3 / paw 1.9.
 
 ## 5. `NestStepper` draws its minus as U+002D, both designs print U+2212 (advisory)
 

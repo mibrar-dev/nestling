@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
@@ -19,8 +20,9 @@ import 'package:nestling/features/quests/quests_routes.dart';
 /// surface-2 backdrop (`design/html-source/screens/P09-quest-editor.html`).
 ///
 /// `?id=<questId>` opens edit mode; without it the editor creates a quest.
-/// The form draft is local state; only the save/delete attempt reaches the
-/// bloc (`QuestsState.editorStatus`).
+/// `?idea=<ideaId>` (P10's "+ Add") pre-fills that new quest from the
+/// template the parent tapped. The form draft is local state; only the
+/// save/delete attempt reaches the bloc (`QuestsState.editorStatus`).
 class QuestEditorView extends StatefulWidget {
   const new({super.key});
 
@@ -31,6 +33,11 @@ class QuestEditorView extends StatefulWidget {
 class _QuestEditorViewState extends State<QuestEditorView> {
   Future<Quest?>? _loadedQuest;
 
+  /// `?idea=<ideaId>` (P10 Ideas → "+ Add"): the template the sheet opens
+  /// pre-filled from. Null for a plain new quest (default template) and for
+  /// edit mode. The template is never stored, so it is only a seed.
+  Quest? _ideaSeed;
+
   /// Lets the sheet clear its in-flight save guard when a write fails (the
   /// bloc reports failures; the guard is local UI state).
   final GlobalKey<_QuestEditorSheetState> _sheetKey =
@@ -39,13 +46,38 @@ class _QuestEditorViewState extends State<QuestEditorView> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_loadedQuest != null) {
+    if (_loadedQuest != null || _ideaSeeded) {
       return;
     }
     final questId = _questIdOf(context);
-    _loadedQuest = questId == null
-        ? null
-        : GetIt.instance<QuestsRepository>().getQuest(questId);
+    if (questId != null) {
+      _loadedQuest = GetIt.instance<QuestsRepository>().getQuest(questId);
+      return;
+    }
+    // No `?id=`: new-quest mode. `?idea=` (P10's "+ Add") pre-fills the form
+    // from the template row so the parent edits the idea they tapped instead
+    // of the blank `Hoover the stairs` default.
+    final ideaId = GoRouterState.of(context)
+        .uri
+        .queryParameters[QuestsEditorQuery.ideaId];
+    if (ideaId != null) {
+      _ideaSeed = _ideaTemplateOf(ideaId);
+    }
+    _ideaSeeded = true;
+  }
+
+  bool _ideaSeeded = false;
+
+  /// The P10 template behind `?idea=`, or null when the id is unknown (a
+  /// stale link then falls back to the default new-quest template instead of
+  /// showing `Quest not found`, which is only for a missing *stored* quest).
+  static Quest? _ideaTemplateOf(String ideaId) {
+    for (final idea in GetIt.instance<QuestsRepository>().ideas()) {
+      if (idea.id == ideaId) {
+        return idea;
+      }
+    }
+    return null;
   }
 
   /// `?id=<questId>` is the editor's own contract (`QuestsEditorQuery`).
@@ -77,7 +109,8 @@ class _QuestEditorViewState extends State<QuestEditorView> {
       // No `?id=`: new-quest mode, nothing to fetch.
       body = _QuestEditorSheet(
         key: _sheetKey,
-        initialQuest: null,
+        initialQuest: _ideaSeed,
+        isEdit: false,
         onCancel: _cancel,
       );
     } else {
@@ -94,6 +127,7 @@ class _QuestEditorViewState extends State<QuestEditorView> {
           return _QuestEditorSheet(
             key: _sheetKey,
             initialQuest: quest,
+            isEdit: true,
             onCancel: _cancel,
           );
         },
@@ -261,12 +295,7 @@ _questIcons = <({String key, List<String> aliases, String label, String icon})>[
     key: 'dishwasher',
     aliases: <String>['plate'],
     label: 'Dishes',
-    // The design's Dishes SVG is a handled basket
-    // (`M4 11h16v9…` + `M8 11V7a4 4 0 0 1 8 0v4`), so the tile draws the DS
-    // basket glyph; `NestIcons.dishwasher` (an appliance with a rack line and
-    // two control dots) is a different object (stage-5 whole-tile MAE 19.9 —
-    // SHARED_REQUEST §4 still asks the DS for the exact path).
-    icon: NestIcons.basket,
+    icon: NestIcons.dishwasher,
   ),
   (key: 'hoover', aliases: <String>[], label: 'Hoover', icon: NestIcons.hoover),
   (key: 'book', aliases: <String>[], label: 'Book', icon: NestIcons.book),
@@ -295,11 +324,20 @@ const String _anyone = 'anyone';
 class _QuestEditorSheet extends StatefulWidget {
   const _QuestEditorSheet({
     required this.initialQuest,
+    required this.isEdit,
     required this.onCancel,
     super.key,
   });
 
+  /// The row being edited (`?id=`) or the P10 template seeded into a new quest
+  /// (`?idea=`). Null = the default new-quest template.
   final Quest? initialQuest;
+
+  /// True only for `?id=` edit mode. A `?idea=` seed is still a CREATE — the
+  /// template is not a stored row — so the mode cannot be inferred from
+  /// [initialQuest] alone (review finding 2).
+  final bool isEdit;
+
   final VoidCallback onCancel;
 
   @override
@@ -393,15 +431,23 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
     final repository = GetIt.instance<QuestsRepository>();
     _childrenSubscription = GetIt.instance<FamilyRepository>()
         .watchChildren()
-        .listen((children) {
-          if (!mounted) {
-            return;
-          }
-          setState(() {
-            _children = children;
-            _rosterLoaded = true;
-          });
-        });
+        .listen(
+          (children) {
+            if (!mounted ||
+                (_rosterLoaded && listEquals(children, _children))) {
+              // Only a REAL roster change rebuilds the form — `watchChildren`
+              // re-emits on every `children` write anywhere (review finding 5).
+              return;
+            }
+            setState(() {
+              _children = children;
+              _rosterLoaded = true;
+            });
+          },
+          // A stream error must not become an unhandled async error: keep the
+          // last known roster (or the `Anyone`-only default) and carry on.
+          onError: (_) {},
+        );
     _coinValueSubscription = repository.watchCoinValuePencePerCoin().listen((
       pence,
     ) {
@@ -409,15 +455,26 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
         return;
       }
       setState(() => _pencePerCoin = pence);
-    });
+    }, onError: (_) {});
   }
 
-  bool get _isEdit => widget.initialQuest != null;
+  bool get _isEdit => widget.isEdit;
 
   bool get _weeklyDaysMissing => _repeat == 'weekly' && _days.isEmpty;
 
+  /// A stored row can hold a coin count outside the repository's 1..100
+  /// contract. The editor deliberately SHOWS it as stored (BUG-P09-4: opening
+  /// never silently rewrites a row) and the stepper can walk it back into
+  /// range, but Save used to clamp it silently — the screen promised one
+  /// number and stored another (9999 shown, 100 written; 0 shown, 1 written).
+  /// So an out-of-range value now BLOCKS the save with a visible reason, the
+  /// same live-region pattern as `Pick at least one day` (BUG-P09-6).
+  bool get _coinsOutOfRange => _coins < _minCoins || _coins > _maxCoins;
+
   bool get _canSave {
-    return _title.text.trim().isNotEmpty && !_weeklyDaysMissing;
+    return _title.text.trim().isNotEmpty &&
+        !_weeklyDaysMissing &&
+        !_coinsOutOfRange;
   }
 
   static Set<int> _daysFromCsv(String? csv) {
@@ -464,17 +521,21 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
     }
     setState(() => _saving = true);
     final quest = Quest(
-      id:
-          widget.initialQuest?.id ??
-          'q-${DateTime.now().millisecondsSinceEpoch}',
+      // A `?idea=` seed is a CREATE, so the new row gets a fresh id — the
+      // template's id (`idea-bed`) must never be written (review finding 2).
+      id: _isEdit
+          ? widget.initialQuest!.id
+          : 'q-${DateTime.now().millisecondsSinceEpoch}',
       title: _title.text.trim(),
       // `Quest.detail` is not a column — the repository recomputes
       // `'{repeat} · {coins} coins'` on every read — so the view carries no
       // copy of its own (review finding 5).
       detail: widget.initialQuest?.detail ?? '',
       icon: _icon,
-      // An out-of-range stored value is shown as stored but written back
-      // inside the repository's 1..100 contract (BUG-P09-4).
+      // Shown as stored, written inside the repository's 1..100 contract —
+      // `_canSave` blocks the write outright while the value is out of range
+      // (BUG-P09-4 shown-honestly, BUG-P09-6 no-silent-clamp), so the clamp is
+      // now unreachable from the editor and only a belt-and-braces guard.
       coins: _coins.clamp(_minCoins, _maxCoins),
       repeatRule: _repeat,
       days: _repeat == 'weekly' ? _daysToCsv(_days) : '',
@@ -486,7 +547,9 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
         final String id => id == _anyone ? null : id,
       },
       // Editing a quest must not resurrect an archived one (review finding 9).
-      active: widget.initialQuest?.active ?? true,
+      // A new quest is always stored active — including a `?idea=` create,
+      // whose template carries `active: false` (templates are not rows).
+      active: _isEdit && widget.initialQuest!.active,
     );
     context.read<QuestsBloc>().add(
       _isEdit ? QuestsUpdateRequested(quest) : QuestsCreateRequested(quest),
@@ -589,11 +652,7 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
                     _header(),
                     // `.field` → `.lbl` "Icon": the design stacks them
                     // flush (no margin between the two blocks).
-                    NestTextField(
-                      label: 'Quest name',
-                      controller: _title,
-                      onChanged: (_) => setState(() {}),
-                    ),
+                    NestTextField(label: 'Quest name', controller: _title),
                     const QuestEditorLabel('Icon', semanticHeader: true),
                     const SizedBox(height: NestSpacing.gap6),
                     _iconRow(),
@@ -605,6 +664,19 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
                     _assigneeRow(),
                     const SizedBox(height: NestSpacing.s4),
                     _rewardCard(),
+                    if (_coinsOutOfRange) ...<Widget>[
+                      const SizedBox(height: NestSpacing.gap6),
+                      Semantics(
+                        liveRegion: true,
+                        child: Text(
+                          // Screen-local validation caption, same pattern (and
+                          // same wording shape) as `Pick at least one day`.
+                          'Coins must be 1–100',
+                          style: NestType.caption(color: tokens.danger)
+                              .copyWith(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: NestSpacing.s4),
                     _repeatsGroup(),
                     const SizedBox(height: NestSpacing.s4),
@@ -637,15 +709,16 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
       ),
       child: Row(
         children: <Widget>[
-          // Integration (P09+P10 merge): the sheet design offers no AppBar,
-          // so `Cancel` is the only way back from a pushed editor. Expose it
-          // under the platform back tooltip so system-back harnesses
-          // (`WidgetTester.pageBack`, assistive back actions) find exactly
-          // one back affordance; the tap lands on Cancel and pops.
-          Tooltip(
-            message: 'Back',
-            child: QuestCancelButton(onPressed: widget.onCancel),
-          ),
+          // Integration (P09+P10 merge): the sheet design offers no AppBar, so
+          // `Cancel` is the only way back from a pushed editor — and the only
+          // element on screen a system back resolves to. No `Tooltip` wraps
+          // it: a `Back` tooltip in product code existed only so
+          // `WidgetTester.pageBack()` (which resolves by tooltip) could find
+          // it, and it would collide with any future library back button
+          // (review finding 3). The back tests use
+          // `tester.binding.handlePopRoute()`, the idiom `today_view_test`
+          // and `p08_bugs_test` already use.
+          QuestCancelButton(onPressed: widget.onCancel),
           Expanded(
             child: Semantics(
               header: true,
@@ -660,7 +733,15 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
               ),
             ),
           ),
-          QuestSavePill(onPressed: _canSave && !_saving ? _save : null),
+          // `_canSave` reads the title's text, so only the pill needs to
+          // rebuild as it changes — the six tiles, three person pills, two
+          // LayoutBuilders, three cards, the segmented control and the seven
+          // day cells no longer rebuild per keystroke (review finding 4).
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: _title,
+            builder: (context, value, _) =>
+                QuestSavePill(onPressed: _canSave && !_saving ? _save : null),
+          ),
         ],
       ),
     );
@@ -670,12 +751,27 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
     final selected = _icon;
     final tiles = <Widget>[
       for (final option in _questIcons)
-        QuestIconTile(
-          key: ValueKey<String>('quest-icon-${option.key}'),
-          icon: option.icon,
-          label: option.label,
-          selected: selected == option.key || option.aliases.contains(selected),
-          onTap: () => setState(() => _icon = option.key),
+        Builder(
+          builder: (context) {
+            // A tile that is ALREADY the visual selection (directly or through
+            // an alias) is a radio that is already checked, so it is inert
+            // (BUG-P09-7): tapping `plate`'s Dishes tile used to look like a
+            // no-op while silently rewriting the stored key to `dishwasher`.
+            final isSelected =
+                selected == option.key || option.aliases.contains(selected);
+            return QuestIconTile(
+              key: ValueKey<String>('quest-icon-${option.key}'),
+              icon: option.icon,
+              label: option.label,
+              selected: isSelected,
+              onTap: () {
+                if (isSelected) {
+                  return;
+                }
+                setState(() => _icon = option.key);
+              },
+            );
+          },
         ),
     ];
 
@@ -735,8 +831,18 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
     );
   }
 
+  /// The first **grapheme**, not the first UTF-16 code unit (BUG-P09-8).
+  /// `substring(0, 1)` slices a surrogate pair in half, and a lone surrogate
+  /// is not well-formed UTF-16: Flutter's paragraph builder throws
+  /// `ArgumentError: string is not well-formed UTF-16` while painting the pill,
+  /// so an emoji-leading nickname (`😀 Sam`, which P05 accepts) failed to draw
+  /// the screen at all. `String.characters` is the same accessor P06 uses for
+  /// the same job (`pocket_money_setup_view.dart:684`).
   static String _initial(String nickname) {
-    return nickname.isEmpty ? '?' : nickname.substring(0, 1).toUpperCase();
+    if (nickname.isEmpty) {
+      return '?';
+    }
+    return nickname.characters.first.toUpperCase();
   }
 
   static NestAvatarColor _avatarColour(String colour) {
@@ -904,7 +1010,12 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
     final tokens = context.nest;
     return NestCard(
       onTap: _pickDueTime,
-      semanticLabel: 'Change due time',
+      // The value is part of the label: `NestCard` sets
+      // `excludeSemantics: semanticLabel != null`, so a bare "Change due time"
+      // label DROPPED the row's own text and VoiceOver never announced the
+      // current choice (review finding 6). The sheet still announces each
+      // option's own label.
+      semanticLabel: 'Due by, $_dueLabel',
       child: ConstrainedBox(
         constraints: const BoxConstraints(
           minHeight: QuestEditorMetrics.dueRowMinHeight,

@@ -239,8 +239,9 @@ class _QuestLibraryBodyState extends State<QuestLibraryBody> {
       tint: meta?.tint ?? NestTileTint.neutral,
       addSemanticLabel: 'Add ${idea.title}',
       onAdd: () => pushTo(
-        // TODO(P10): P09 does not read `?idea=` yet — it opens the editor
-        // blank until it does. Same feature, no shared change needed.
+        // P09 reads `?idea=` (`QuestsEditorQuery.ideaId`): the editor seeds the
+        // new quest from this template's title, icon, coins, repeat rule and
+        // approval flag instead of opening blank.
         '${QuestsRoutePaths.editor}?idea=${idea.id}',
       ),
     );

@@ -1,164 +1,159 @@
-# P09 — stage 2 · INTEGRATE (iteration 2)
+# P09 — stage 2 · INTEGRATE (iteration 3)
 
-This iteration is a **FIXES_1** round: 2a (logic) and 2b (UI) each took half
-of the loop's `test=FAIL / ui=FAIL / bugs=FAIL` findings and fixed them in
-parallel. Both halves needed **no** integration repair from me — see §4 for
-the one formatting normalisation the merge forced. No redesign, no refactor.
+This iteration is a **FIXES_2** round: 2a (logic) and 2b (UI) split the
+loop's `test=FAIL / review=FAIL / ui=FAIL / bugs=FAIL` findings and fixed them
+in parallel. They met on the same contract — 2a added one route query key,
+2b consumed it — so **no integration repair was needed** (details in §4). No
+redesign, no refactor, no shared-file edit.
 
 ## 1. What 2a handed over (logic half)
 
-Two additive interface changes on `QuestsRepository` — **no renames, no
-event/state changes**, so 2b could consume them as they landed:
+One additive route-contract key, nothing else:
 
-1. **`Stream<int> watchCoinValuePencePerCoin()`** (BUG-P09-1) — reads the
-   `families` row (the same source of truth as pocket_money's setup; the
-   `settings` mirror deliberately *not* subscribed, because the bug repro
-   writes `families` directly). Emits `1` until the row exists.
-2. **`minCoins = 1` / `maxCoins = 100` + `_checkCoins`** on `createQuest` /
-   `updateQuest` (BUG-P09-4) — assert in debug, `ArgumentError` in release,
-   same shape as pocket_money's `setMode`/`setPayoutDay`. Bodies became
-   `async` so the throw surfaces as a failed future the bloc already maps to
-   `editorStatus.failure` + `editorError`.
-
-Files: `domain/quests_repository.dart`, `data/quests_repository_impl.dart`,
-`quests_repository_test.dart` (new `BUG-P09-1` and `BUG-P09-4` groups), plus
-**one** forced knock-on line in `quest_editor_states_test.dart` — the
-hand-written `_FaultyRepository implements QuestsRepository` would not compile
-after the interface addition, so the new method is pure delegation (no fault
-injected, none of that stage's assertions changed). Flagged in 2a, not hidden.
-Bloc/events/state, entity, DI and routes untouched.
+- **`QuestsEditorQuery.ideaId` (`'idea'`)** in `quests_routes.dart` — P10's
+  Ideas tab already pushes `/quest-editor?idea=<templateId>`; 2a defined what
+  the editor does with it (seed a **new** draft from
+  `QuestsRepository.ideas()`, `?id=` wins over `?idea=`, unknown ids fall back
+  to the new-quest defaults) and left the view half to 2b.
+- **Deliberately not changed, with reasons recorded rather than silently
+  dropped:**
+  - *Review finding 10* (parent-safe toast copy) would rewrite the bloc's
+    `editorError` contract and turn green `quest_editor_states_test.dart`
+    assertions red — another stage's file, and a path no parent can reach
+    (the view clamps before dispatching).
+  - *BUG-P09-6/7/8* need no repository/bloc/route change; the repo's coins
+    validation stays as the unreachable last line of defence. Their five
+    proofs stayed skipped until 2b's halves landed.
+- No `domain/`, `data/`, `bloc/`, DI or DI-adjacent file needed work; the
+  FIXES_1 additions (`watchCoinValuePencePerCoin`, the 1..100 write guard,
+  `_FaultyRepository` delegation) stand.
 
 ## 2. What 2b handed over (UI half)
 
-Five bug fixes plus review findings 4/5/6/7/9/11/13 in `quest_editor_view.dart`
-(one comment in `quest_editor_widgets.dart`, no behavioural change), and the
-five `BUG-P09-*` proofs in `p09_bugs_test.dart` **un-skipped** (330 + ~5 →
-335, all running):
+Everything `ORCHESTRATOR_NOTES.md` 19:19 listed as P09-local, plus the local
+test/bugs findings:
 
-- **BUG-P09-1** — `const _pencePerCoin = 1` deleted; the sheet subscribes once
-  to `watchCoinValuePencePerCoin()` and prints `= ${coins × rate}p at payout`.
-  The demo seed's rate of 1 still prints `= 15p at payout`, unchanged
-  (DATA-over-mocks).
-- **BUG-P09-2** — `_saving` flag guards `_save()` and drives the pill's
-  disabled state; the route releases it through
-  `_sheetKey.currentState?.clearSaveGuard()` when `editorStatus` turns
-  `failure`, so a failed write never leaves a dead pill. No logic-layer guard
-  was added on purpose (bloc handlers already run sequentially — 2a's
-  analysis, which I checked against the code and agree with).
-- **BUG-P09-3** — `_questIcons.aliases` now covers every seeded key
-  (`sofa`→Bed, `plate`→Dishes, `bins`/`shirt`/`bag`→Bins, `leaf`→Paw), so the
-  radiogroup is never silent. The alias only picks the highlighted tile; the
-  stored key is preserved on save. Six tiles, same order, same geometry.
-- **BUG-P09-4** — the stored value is shown as stored (opening the editor never
-  silently rewrites it) and the stepper's bounds widen to include it
-  (`_coinFloor`/`_coinCeiling`), while `_save` hands the repository an in-range
-  value.
-- **BUG-P09-5** — the roster moved from a `StreamBuilder` build-time write to
-  one `initState` subscription; an assignee the roster no longer lists falls
-  back to `Anyone`, so exactly one pill is selected and Save clears the
-  dangling FK.
-- Review findings 5 (`Quest.detail` is not a column — the view keeps no copy
-  of its own), 7 (`buildWhen: previous.status != current.status`),
-  9 (`active: initialQuest?.active ?? true` — editing never resurrects an
-  archived row), 11 (roster), 13 (copy list names the ASCII apostrophe, which
-  I re-verified byte-for-byte against the HTML: the source has zero U+2019 and
-  the code matches).
+| Item | Fix |
+|---|---|
+| Review **1** (major) | Dishes tile **reverted** from the look-alike `NestIcons.basket` to `NestIcons.dishwasher`; 19:19 says icons are shared, so the screen keeps the baseline glyph and substitutes nothing. |
+| Review **2** (major) | `?idea=<templateId>` read next to `?id=`, seeding a **new** draft. The sheet grew an explicit `isEdit` flag, because a template seed is still a create: title stays `New quest`, no `Delete quest`, **fresh id** on save (never `idea-bed`), `active: true`. The stale `TODO(P10)` is gone. |
+| Review **3** (minor) | `Tooltip(message: 'Back')` deleted (product code was serving `tester.pageBack()`); all 8 `pageBack()` sites across 4 P10 test files became `tester.binding.handlePopRoute()`. New P09 test pins the consequence. |
+| Review **4** (minor, perf) | `QuestSavePill` inside a `ValueListenableBuilder<TextEditingValue>`; the per-keystroke `setState(() {})` is gone, so typing no longer rebuilds ~50 widgets. |
+| Review **5** (minor) | Roster subscription rebuilds only on a real change (`listEquals`), and **both** subscriptions carry `onError: (_) {}`. |
+| Review **6** (minor, a11y) | Due row's `semanticLabel: 'Due by, $_dueLabel'` — the old bare label made `NestCard` drop the row's own text, so VoiceOver never heard the current choice. |
+| Review **8** (docs) | The false "main redrew the glyphs" claim struck; the `Who's` apostrophe sentence corrected to U+0027 (I re-verified: the HTML has zero U+2019 and the code matches). |
+| **BUG-P09-8** (major) | `nickname.substring(0, 1)` → `nickname.characters.first` (same accessor P06 uses) — an emoji-leading nickname handed the paragraph builder a lone surrogate. |
+| **BUG-P09-6** | Out-of-range stored coins: still *shown* as stored, but Save is blocked with a live-region `Coins must be 1–100`, so no silent clamp. |
+| **BUG-P09-7** | An already-highlighted icon tile's tap is inert, so tapping Dishes for a `plate` quest no longer rewrites the stored key. |
+| Un-skips | BUG-P09-6 ×2, -7, -8 ×2 now run every `flutter test` (5 skips → 0). Assertions untouched. |
 
-## 3. Mandatory ORCHESTRATOR_NOTES items (17:57) — both handled
+Forced mechanical test updates (my check: none weakened or deleted — each was
+forced by a rendered string or harness contract changing): the due-row label
+in `quest_editor_a11y_test.dart` (3 refs + the `pick()` helper), the Dishes
+glyph in `quest_editor_data_integrity_test.dart`, and the 8 `pageBack()`
+conversions. `quest_editor_view_test.dart` gained 6 tests.
 
-1. **Icon glyphs and order.** Order verified against
-   `design/html-source/screens/P09-quest-editor.html` lines 30–35: Bed,
-   Dishes, Hoover (selected), Book, Bins, Paw — exactly what
-   `_questIcons` renders, labels included. On glyph *shape*: `ic_hoover.svg`
-   and `ic_bed.svg` were redrawn in the DS by the `main` merge (canister +
-   hose + wheels; bed frame + headboard), and `ic_book.svg` / `ic_paw.svg` are
-   byte-identical to the design's. `ic_dishwasher.svg` and `ic_bin.svg` still
-   differ, and those files are `core/` (off-limits), so 2b took the sanctioned
-   route: SHARED_REQUEST §4 keeps asking for the exact paths, and Dishes draws
-   the DS `basket` glyph — a swap inside `quests/`, not a redraw. **Stage 5
-   owns the re-measure**; `bin` (tile MAE 17.3) is the one still expected to
-   read clearly off.
-2. **`Quest name` field text inset (app x ≈ 40, design x ≈ 37).** The cause is
-   shared: `NestTextField`'s default variant leaves ~3 px more inset than the
-   design's `1 px border + 16 px padding`. 2b filed it as SHARED_REQUEST §6
-   with the numbers instead of hard-coding a call-site padding. Nothing in the
-   screen moved (orchestrator instruction 3: do not move other elements).
+Feature scope: **367 + ~5 → 378 pass, 0 skipped**.
+
+## 3. Mandatory orchestrator items
+
+**19:19 — "icons, toggle, stepper minus, field inset are SHARED … do not
+substitute icons"** — honoured: the picker uses the baseline `NestIcons.*`
+set in the design's order (Bed, Dishes, Hoover, Book, Bins, Paw, verified
+against the HTML), `SHARED_REQUEST.md` §4 no longer argues for a substitute,
+and the only string this stage adds to the screen is the local validation
+copy `Coins must be 1–100` (en dash, matching the sanctioned
+`Pick at least one day` pattern).
+
+**19:19 — "when main has batch5 … switch the picker to the icon names in
+`shared_batch5_REPORT.md` and remove `toggleTrackOffset`" — NOT yet
+actionable in this tree.** `shared/shared_batch5` **is** on `main`
+(`87cf5d4`/`9bbf65a`, "P09 exact quest icons, NestToggle 51x31 + hit slop,
+stepper U+2212, textfield 17px inset"), but it landed at **19:19:39**, two
+minutes *after* this branch's merge of `main` (`6072d8a`, 19:17:51), so it is
+not in this worktree: `git merge-base --is-ancestor 9bbf65a HEAD` fails and
+`app/assets/icons/ic_quest_*.svg` are absent here. Per the orchestrator's
+PROCESS ITEMS rule ("the branch being behind main, and merge order are handled
+by the loop and the orchestrator"), merging `main` is the loop's step, not a
+P09 finding — so I did not merge, and did not pre-empt the batch with a local
+hack. **Next build, immediately after the loop's merge, this becomes
+mandatory** and is the only P09 work left that touches product code:
+
+1. read `docs/screens/_shared/shared_batch5_REPORT.md`, switch the six tiles to
+   the exact icon names it lists;
+2. delete `QuestEditorMetrics.toggleTrackOffset`, its `Transform.translate`
+   wrapper and the approval card's comment (the fixed `NestToggle` now paints
+   its 51×31 track as the layout box with the hit area as slop);
+3. flip `quest_editor_copy_test.dart`'s `kGlyphs` minus entry from `'-'` to
+   `'−'` **in the same commit** as the shared `NestStepper` flip;
+4. re-measure the toggle rect in `quest_editor_view_geometry_test.dart` and the
+   six tile MAEs for stage 5.
+
+**17:57 item 2** (field text inset, app x ≈ 40 vs design x ≈ 37) is the shared
+`NestTextField` 17 px inset that batch5 also carries; nothing local to do.
 
 ## 4. FIXES in this stage
 
-**No integration breakage was found.** The halves met on the same merged
-bloc/state (`QuestEditorStatus`, `editorStatus`, `editorError` untouched by
-2a), the same event names, and `QuestEditorView` needed no rename or import
-fix. The one thing the merge left behind was cosmetic:
+**None needed.** The halves met on the merged bloc/state surface
+(`QuestEditorStatus`, `editorStatus`, `editorError` — 2a touched none of them),
+on the same event names, and 2b consumed `QuestsEditorQuery.ideaId` as it was
+written. `dart format .` reported **0 changed** — not even a merge residue
+this time. Checks I ran beyond the gate:
 
-- `app/test/features/today/p08_bugs_test.dart` — the `main`-side conflict
-  resolution (`fcdd5ed`, P11 approvals) left
-  `GoRouter.of(tester.element(find.byType(Navigator).first)).go('/today')`
-  split across five lines. `dart format .` joined it back to one line — no
-  behaviour change, and `dart format --set-exit-if-changed .` is clean
-  afterwards. The file is P08's; this is the formatting-only residue of the
-  merge, not an edit of P08's assertions.
-
-Coherence checks I ran beyond the gate: no `skip: true` anywhere in
-`test/features/quests` (the repo's only skip is `p12_bugs_test.dart:320`,
-P12's, unchanged from `main`); no `google_fonts` / `GoogleFonts` in the
-feature; child order still comes from `watchChildren()` (creation order —
-Maya, Leo), never sorted; icon order and copy verified against the HTML; and
-`git status --short -- lib/core lib/app ../tools` is empty (no shared code, no
-`tools/`, no `analysis_options.yaml`).
+- `skip: true` count in `test/features/quests` = **0**; the repo's only skip is
+  `p12_bugs_test.dart:320` (P12's, identical on `main`) — that is the `~1`.
+- no `google_fonts` / `GoogleFonts` in the feature's lib or tests;
+- `git status --short -- lib/core lib/app ../tools` → **empty** (no shared
+  code, no `tools/`, no `analysis_options.yaml` change);
+- icon order and the `Who's it for?` apostrophe re-verified against
+  `design/html-source/screens/P09-quest-editor.html`;
+- `_save()` re-read end-to-end: a `?idea=` seed writes a fresh id and
+  `active: true`, an edit keeps its id and `active` flag, and the create/update
+  event follows `isEdit` — the template row can never be updated or written.
 
 ## 5. FIXES deliberately left open
 
-- **Review finding 3** — `Tooltip(message: 'Back')` on Cancel stays: seven P10
-  tests push `/quest-editor` and call `pageBack()`, which needs
-  `find.byTooltip('Back')`. Converting those three files to
-  `tester.binding.handlePopRoute()` is a separate commit (worth doing for
-  VoiceOver, out of this stage's scope).
-- **Review finding 8** — the per-keystroke `setState` still rebuilds the sheet
-  (the `ValueListenableBuilder` split is cheap but out of the FIXES_1 list).
-- **Review finding 2** — `tokens.surface` on the Save pill stays: measured in
-  the dark PNG the label's core is rgb(21,19,31) ≈ `--surface`, and the design's
-  own CSS says `color: var(--surface)`. Evidence recorded at the call site.
-- **Shared, cannot be fixed from a screen agent:** `NestStepper`'s U+002D minus
-  (§5), `NestTextField`'s ~3 px inset (§6), and the remaining
-  `ic_dishwasher` / `ic_bin` paths (§4).
-- **`?idea=` prefill** (P10's `+ Add` on an idea row) is still not implemented —
-  new behaviour, not a merge breakage; `TODO(P10)` stands in
-  `quest_library_body.dart`.
+- **Review finding 10** (parent-safe toast copy) — bloc layer; 2a's note is
+  right that applying it turns green `quest_editor_states_test.dart`
+  assertions red, so it needs one commit across the bloc and that file.
+- **Review findings 7/8/9** — docs/process items for the loop.
+- **`?idea=` unknown-id fallback** and the template → draft mapping are
+  covered by tests; nothing further queued.
+- **The four batch-5 follow-ups in §3** — the next build's mandatory list.
 
 ## 6. Verification (tails)
 
 ```
-$ dart format .                              # 1 change: the merged p08_bugs_test line
-Formatted 492 files (1 changed) in 1.91 seconds.
-
-$ dart format --set-exit-if-changed .        # re-run, proves the tree is clean
-Formatted 492 files (0 changed) in 1.95 seconds.   (exit 0)
+$ dart format .
+Formatted 494 files (0 changed) in 2.15 seconds.
 
 $ flutter analyze
 Analyzing app...
-No issues found! (ran in 3.4s)
+No issues found! (ran in 4.7s)
 
 $ flutter test
-01:48 +2530 ~1: All tests passed!
+02:06 +2573 ~1: All tests passed!
 ```
 
 `~1` is the single pre-existing skip in the repo
-(`test/features/pocket_money/p12_bugs_test.dart:320`, P12-BUG-05 — identical on
-`main`). The `WARNING (drift): AppDatabase created multiple times` notices are
-the repo-wide debug-build notice from `test_scope.dart`, not failures.
+(`test/features/pocket_money/p12_bugs_test.dart:320`, P12-BUG-05, unchanged
+from `main`). The `WARNING (drift): AppDatabase created multiple times`
+notices are the repo-wide debug-build notice from `test_scope.dart`, not
+failures. Suite grew 2530 → 2573 (+11 new P09 tests, +5 un-skipped BUG-P09
+proofs, +27 elsewhere in the repo's other features).
 
 No simulator was booted, installed on, screenshotted or driven in this stage.
-`flutter clean` was never run; no `// ignore:` and no test was skipped or
-weakened to reach green.
+`flutter clean` was never run; no `// ignore:` was added and no test was
+skipped or weakened to reach green.
 
 ## 7. Handover
 
-Stage 3 (test) has a green 2530-test suite and five newly-unskipped BUG-P09
-proofs. Stage 5 (UI check) must re-measure the six icon tiles after the merged
-glyphs + the Dishes→basket swap (2b's geometry table otherwise still holds:
-uniform shift 0, every edge ≤ ±2 px, gutters 20, paper to the physical edge),
-and can close ORCHESTRATOR_NOTES 17:57 item 2 only if the shared
-`NestTextField` inset (§6) lands.
+Stage 3 (test) has a green 2573-test suite with **zero** skipped proofs in the
+feature. Stage 5 (UI check): nothing moved in the design state this iteration
+(the caption is reachable only from a corrupt stored value, the pill swap is
+the same widget inside a listenable, `quest_editor_view_geometry_test.dart` is
+green unchanged), so the ±2 px table still holds — **but** after the loop's
+batch-5 merge the icon tiles and the toggle track will move, so the tile-MAE
+and toggle-rect re-measure is the first job of that stage.
 
 VERDICT: PASS

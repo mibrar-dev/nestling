@@ -227,7 +227,7 @@ void main() {
         final handle = await _pumpWithSemantics(tester);
 
         // The card opens the sheet from its own button node.
-        final dueRow = _button('Change due time');
+        final dueRow = _button('Due by, Before tea (5pm)');
         expect(
           dueRow.getSemanticsData().hasAction(SemanticsAction.tap),
           isTrue,
@@ -283,8 +283,10 @@ void main() {
     ) async {
       final handle = await _pumpWithSemantics(tester);
 
-      Future<void> pick(String label) async {
-        final dueRow = _button('Change due time');
+      // The due row's label carries its current value (review finding 6), so
+      // the row to open is looked up by the value it is showing now.
+      Future<void> pick(String current, String label) async {
+        final dueRow = _button('Due by, $current');
         dueRow.owner!.performAction(dueRow.id, SemanticsAction.tap);
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 400));
@@ -294,9 +296,9 @@ void main() {
         await tester.pump(const Duration(milliseconds: 400));
       }
 
-      await pick(_dueOptions[2].$1);
+      await pick(_dueOptions[1].$1, _dueOptions[2].$1);
       expect(find.text('${_dueOptions[2].$1} ›'), findsOneWidget);
-      await pick(_dueOptions[0].$1);
+      await pick(_dueOptions[2].$1, _dueOptions[0].$1);
       expect(find.text('${_dueOptions[0].$1} ›'), findsOneWidget);
       expect(find.text('${_dueOptions[2].$1} ›'), findsNothing);
 
@@ -389,7 +391,7 @@ void main() {
           'Day W',
           'Anyone',
           'Cancel',
-          'Change due time',
+          'Due by, Before tea (5pm)', // the value is part of the label (review finding 6)
           'Daily',
           'Decrease reward',
           'Increase reward',

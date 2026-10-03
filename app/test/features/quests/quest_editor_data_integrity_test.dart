@@ -148,9 +148,10 @@ void main() {
       tester,
     ) async {
       // ORCHESTRATOR_NOTES 17:57 item 1: the design's `.icons` is
-      // Bed, Dishes, Hoover (selected), Book, Bins, Paw. The Dishes tile draws
-      // the DS `basket` because the design's SVG IS a handled basket
-      // (SHARED_REQUEST §4 still asks for `ic_dishwasher`).
+      // Bed, Dishes, Hoover (selected), Book, Bins, Paw. The Dishes tile
+      // draws the glyph its own key is named after (`dishwasher`); the design's
+      // exact path is still requested in SHARED_REQUEST §4, and review
+      // finding 1 forbids substituting a look-alike for it.
       await pumpAppRoute(tester, QuestsRoutePaths.editor);
 
       final tiles = tester.widgetList<QuestIconTile>(
@@ -166,7 +167,7 @@ void main() {
       ]);
       expect(tiles.map((tile) => tile.icon).toList(), <String>[
         NestIcons.bed,
-        NestIcons.basket,
+        NestIcons.dishwasher,
         NestIcons.hoover,
         NestIcons.book,
         NestIcons.bin,

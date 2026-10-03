@@ -53,7 +53,10 @@ day cells (44.9 wide / 50.86 pitch, ≤ 0.9 cumulative), stepper, toggle track
 20 (card edges 19.7 → 369.7, both images, both themes). No overflow,
 clipping, or ellipsis faults. Child order Maya → Leo → Anyone (correct).
 Copy unchanged from iter1 and matching the HTML source character-for-
-character (curly ’ in `Who's`, `Before tea (5pm) ›` with U+203A).
+character. Correction (review finding 8, iteration 3): `Who's it for?` uses a
+STRAIGHT apostrophe U+0027 — `hexdump` of the HTML line 37 is `61 73 73 3d
+22 6c 62 6c 22 3e 57 68 6f 27 73` — and the code is right; the "curly ’" in
+this sentence was the error. `Before tea (5pm) ›` carries U+203A.
 
 ## Deviations
 
@@ -64,13 +67,12 @@ character (curly ’ in `Who's`, `Before tea (5pm) ›` with U+203A).
    tile 3 Book 4.1 (match), tile 4 Bins 17.3, tile 5 Paw 1.9 (match).
    - Tile 0 `Bed`: design flat mattress/bed-frame side view; app
      `NestIcons.bed` = lidded chest/box.
-   - Tile 1 `Dishes`: design handled basket; app now `NestIcons.basket`
-     (tapered slatted basket, substituted in the iter-2 build for
-     `NestIcons.dishwasher`). The substitution violates the mandatory
-     orchestrator instruction ("write SHARED_REQUEST … rather than
-     substituting a look-alike"): the basket is visibly a different
-     drawing (plain body + arch handle vs slats + side handles, MAE 17.5)
-     and must be replaced with the exact design glyph, not kept.
+   - Tile 1 `Dishes`: design handled basket; `NestIcons.dishwasher` (an
+     appliance with a rack line and two control dots). Iteration 3 reverted the
+     iter-2 `NestIcons.basket` substitution: look-alikes are forbidden by the
+     mandatory orchestrator instruction, so the tile draws the glyph its key
+     is named after and the exact design path stays in
+     `SHARED_REQUEST.md` §4 (MAE stays ~17.5 until the DS redraw lands).
    - Tile 2 `Hoover` (selected): design canister vacuum + hose + wheels;
      app `NestIcons.hoover` = hook/whistle-like loop.
    - Tile 4 `Bins`: design small handled case/clasp; app `NestIcons.bin` =

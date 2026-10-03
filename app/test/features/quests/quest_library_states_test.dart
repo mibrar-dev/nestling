@@ -475,7 +475,7 @@ void main() {
         expect(uri.path, QuestsRoutePaths.editor);
         expect(uri.queryParameters['idea'], row[1], reason: row[0]);
 
-        await tester.pageBack();
+        await tester.binding.handlePopRoute();
         await tester.pumpAndSettle();
         expect(currentPath(tester), QuestsRoutePaths.library);
       }
@@ -517,7 +517,7 @@ void main() {
 
       await tester.tap(find.byType(QuestAddButton).first);
       await tester.pumpAndSettle();
-      await tester.pageBack();
+      await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
 
       expect(currentPath(tester), QuestsRoutePaths.library);

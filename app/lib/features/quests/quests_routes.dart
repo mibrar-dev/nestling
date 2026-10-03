@@ -33,6 +33,15 @@ abstract final class QuestsEditorQuery {
   /// both keys keeps every call site working without a cross-feature edit;
   /// `?id=` stays the documented contract for new callers.
   static const String legacyQuestId = 'questId';
+
+  /// P10 Ideas tab pushes `/quest-editor?idea=<templateId>`
+  /// (`quest_library_body.dart`, review finding 2). With no `?id=`, the
+  /// editor seeds a NEW quest draft from `QuestsRepository.ideas()` (title,
+  /// icon, coins, repeatRule, needsApproval) with a fresh id — never an
+  /// update of the template row. Read next to the `?id=` handling in
+  /// `QuestEditorView`; unknown idea ids fall back to the new-quest
+  /// defaults.
+  static const String ideaId = 'idea';
 }
 
 final GoRoute questEditorRoute = GoRoute(

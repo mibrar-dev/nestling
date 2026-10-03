@@ -1,11 +1,15 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
+import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/quests/domain/quests_repository.dart';
+import 'package:nestling/features/quests/presentation/views/quest_editor_view.dart';
+import 'package:nestling/features/quests/presentation/views/quest_library_view.dart';
 import 'package:nestling/features/quests/presentation/widgets/quest_editor_widgets.dart';
 import 'package:nestling/features/quests/quests_routes.dart';
 
@@ -848,6 +852,166 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('New quest'), findsOneWidget);
       expect(find.text('Coins land after your thumbs-up'), findsOneWidget);
+      await disposeApp(tester);
+    });
+  });
+
+  group('P09 quest editor — `?idea=` (P10 Ideas → "+ Add")', () {
+    setUp(setUpTestScope);
+
+    testWidgets('the form opens pre-filled from the tapped template', (
+      tester,
+    ) async {
+      await pumpAppRoute(tester, '${QuestsRoutePaths.editor}?idea=idea-bed');
+
+      // Review finding 2: the row the parent tapped is the draft they get.
+      expect(find.text('Make your bed'), findsOneWidget);
+      expect(find.text('New quest'), findsOneWidget); // still a CREATE
+      expect(find.text('5'), findsOneWidget); // the template's suggested coins
+      expect(find.text('= 5p at payout'), findsOneWidget);
+      expect(find.text('Daily'), findsOneWidget); // the template's repeat rule
+      // Daily hides the day row, which is how the template's rule shows.
+      expect(find.byKey(const ValueKey<int>(0)), findsNothing);
+      expect(_iconTile(tester, 'bed').selected, isTrue);
+      // The saved copy is a new row: no update of the template id.
+      expect(find.text('Edit quest'), findsNothing);
+      expect(find.text('Delete quest'), findsNothing);
+      await disposeApp(tester);
+    });
+
+    testWidgets('saving stores a new quest, not the template row', (
+      tester,
+    ) async {
+      final repository = GetIt.instance<QuestsRepository>();
+      await pumpAppRoute(tester, '${QuestsRoutePaths.editor}?idea=idea-bed');
+      // The demo seed already holds an active `q-bed` with the same title, so
+      // the new row is identified by what the save ADDS.
+      final before = (await tester.runAsync(repository.getItems))!
+          .map((quest) => quest.id)
+          .toSet();
+
+      await tester.tap(find.text('Save'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final saved = await tester.runAsync(repository.getItems);
+      final created = saved!
+          .where((quest) => !before.contains(quest.id))
+          .toList();
+      expect(created, hasLength(1));
+      expect(created.single.id, isNot('idea-bed'));
+      expect(created.single.active, isTrue);
+      expect(created.single.coins, 5);
+      // The template itself is never stored.
+      expect(
+        await tester.runAsync(() => repository.getQuest('idea-bed')),
+        isNull,
+      );
+      await disposeApp(tester);
+    });
+
+    testWidgets('an unknown idea id falls back to the new-quest defaults', (
+      tester,
+    ) async {
+      await pumpAppRoute(tester, '${QuestsRoutePaths.editor}?idea=idea-nope');
+      expect(find.text('Hoover the stairs'), findsOneWidget);
+      expect(find.text('= 15p at payout'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+  });
+
+  group('P09 quest editor — out-of-range reward (BUG-P09-6)', () {
+    setUp(setUpTestScope);
+
+    testWidgets('Save is blocked and the reason is shown', (tester) async {
+      final db = await setUpTestScope();
+      await db
+          .into(db.quests)
+          .insert(
+            QuestsCompanion.insert(
+              id: 'q-huge',
+              familyId: Seed.familyId,
+              title: 'Mega quest',
+              coins: const Value(9999),
+              repeatRule: const Value('weekly'),
+              days: const Value('6'),
+              assigneeChildId: const Value('maya'),
+            ),
+          );
+      await pumpAppRoute(tester, '${QuestsRoutePaths.editor}?id=q-huge');
+
+      // Shown as stored (BUG-P09-4), and the repair is announced.
+      expect(find.text('9999'), findsOneWidget);
+      expect(find.text('Coins must be 1–100'), findsOneWidget);
+      expect(_savePill(tester).onPressed, isNull);
+
+      // A step that stays out of range keeps the block: nothing is written
+      // until the parent walks the value back in.
+      await tester.tap(find.byKey(const ValueKey<String>('decrease')));
+      await tester.pump();
+      expect(find.text('9998'), findsOneWidget);
+      expect(find.text('Coins must be 1–100'), findsOneWidget);
+      expect(_savePill(tester).onPressed, isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('one step into range clears the caption and enables Save', (
+      tester,
+    ) async {
+      final db = await setUpTestScope();
+      await db
+          .into(db.quests)
+          .insert(
+            QuestsCompanion.insert(
+              id: 'q-zero',
+              familyId: Seed.familyId,
+              title: 'Zero quest',
+              coins: const Value(0),
+              repeatRule: const Value('weekly'),
+              days: const Value('6'),
+              assigneeChildId: const Value('maya'),
+            ),
+          );
+      await pumpAppRoute(tester, '${QuestsRoutePaths.editor}?id=q-zero');
+
+      // The other end of the range: 0 shows as stored and blocks the save.
+      expect(find.text('0'), findsOneWidget);
+      expect(find.text('= 0p at payout'), findsOneWidget);
+      expect(find.text('Coins must be 1–100'), findsOneWidget);
+      expect(_savePill(tester).onPressed, isNull);
+
+      await tester.tap(find.byKey(const ValueKey<String>('increase')));
+      await tester.pump();
+      expect(find.text('1'), findsOneWidget);
+      expect(find.text('= 1p at payout'), findsOneWidget);
+      expect(find.text('Coins must be 1–100'), findsNothing);
+      expect(_savePill(tester).onPressed, isNotNull);
+      await disposeApp(tester);
+    });
+  });
+
+  group('P09 quest editor — system back', () {
+    setUp(setUpTestScope);
+
+    // Review finding 3: the sheet has no AppBar, and the `Back` tooltip that
+    // existed only so `WidgetTester.pageBack()` could resolve it is gone —
+    // nothing in product code serves the test harness any more.
+    testWidgets('Cancel is the only back affordance, and it works', (
+      tester,
+    ) async {
+      await pumpAppRoute(tester, QuestsRoutePaths.editor);
+      expect(find.byTooltip('Back'), findsNothing);
+      expect(find.byType(BackButton), findsNothing);
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      // Mounted as the root there is nothing to pop, so Cancel falls back to
+      // the library instead of trapping the parent.
+      expect(find.byType(QuestEditorView), findsNothing);
+      expect(find.byType(QuestLibraryView), findsOneWidget);
       await disposeApp(tester);
     });
   });

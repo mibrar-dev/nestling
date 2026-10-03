@@ -6,8 +6,9 @@
 // repository-side coin range and coin value the logic builder added), so they
 // run on every `flutter test`.
 //
-// Iteration-2 proofs (BUG-P09-6..8) are `skip: true` until their fix lands
-// (same convention as `p12_bugs_test.dart`); run them with `--run-skipped`.
+// Iteration-2 proofs (BUG-P09-6..8) are UNSKIPPED as of iteration 3 — the view
+// halves landed in `quest_editor_view.dart`, so all eight proofs now run on
+// every `flutter test`. Run with `--run-skipped` only for a parked proof.
 // The unskipped group at the bottom ("attacks that hold") documents the
 // adversarial probes that pass, so a regression is caught here.
 //
@@ -22,22 +23,26 @@
 //                     → `_questIcons.aliases` maps every seeded key to a tile
 //   BUG-P09-4  minor  out-of-range stored coins cannot be restored once the
 //                     stepper touches them (9999 → 9998; `+` is disabled)
-//                     → the stepper bounds grow to include the stored value,
-//                       and `_save` clamps what it writes
+//                     → the stepper bounds grow to include the stored value
 //   BUG-P09-5  minor  a quest assigned to a removed child shows no selected
 //                     pill and Save keeps the orphaned id
 //                     → an assignee the roster no longer lists falls back to
 //                       "Anyone", so Save clears the dangling id
 //   BUG-P09-6  minor  an out-of-range reward is shown at face value (9999 /
 //                     `= 9999p`, or 0 / `= 0p`) but silently clamped on save
-//                     (`_save` writes 100 / 1)
+//                     (`_save` wrote 100 / 1)
+//                     → the value is still shown as stored, but Save is
+//                       BLOCKED with a live-region `Coins must be 1–100`
+//                       caption, so nothing is written until it is in range
 //   BUG-P09-7  minor  tapping the alias-highlighted tile (Dishes for `plate`,
 //                     Bins for `bag`/`shirt`/`bins`) is visually a no-op but
 //                     rewrites the stored icon key
+//                     → an already-selected tile's tap is inert
 //   BUG-P09-8  major  a nickname starting with an astral-plane character
-//                     (emoji) makes `_initial` emit a lone UTF-16 surrogate,
-//                     so the editor throws "string is not well-formed UTF-16"
+//                     (emoji) made `_initial` emit a lone UTF-16 surrogate,
+//                     so the editor threw "string is not well-formed UTF-16"
 //                     while painting the avatar
+//                     → `_initial` takes the first grapheme (`characters`)
 
 import 'dart:math' as math;
 
@@ -266,7 +271,7 @@ void main() {
         // blocked with a visible reason); `_save` clamps silently to 100.
         expect(saved?.coins, 9999);
         await disposeApp(tester);
-      }, skip: true);
+      });
 
       testWidgets('a 0-coin quest is shown as 0 / 0p and saved as 1', (
         tester,
@@ -297,7 +302,7 @@ void main() {
         final saved = await tester.runAsync(() => _repo.getQuest('q-zero'));
         expect(saved?.coins, 0);
         await disposeApp(tester);
-      }, skip: true);
+      });
     },
   );
 
@@ -328,7 +333,6 @@ void main() {
           expect(saved?.icon, 'plate');
           await disposeApp(tester);
         },
-        skip: true,
       );
     },
   );
@@ -353,8 +357,8 @@ void main() {
         await pumpAppRoute(tester, QuestsRoutePaths.editor);
 
         // P05 allows any non-empty nickname ≤ 24 UTF-16 units, emoji included.
-        // `_initial` uses `substring(0, 1)`, which splits the surrogate pair,
-        // so the avatar receives a lone high surrogate instead of '😀'.
+        // `_initial` took the first grapheme, which does not split the
+        // surrogate pair, so the avatar receives '😀'.
         final avatars = tester
             .widgetList<NestAvatar>(find.byType(NestAvatar))
             .toList();
@@ -362,7 +366,6 @@ void main() {
         tester.takeException(); // drain: the paint failure is proven next door
         await disposeApp(tester);
       },
-      skip: true,
     );
 
     testWidgets('painting the lone surrogate throws a UTF-16 error', (
@@ -392,7 +395,7 @@ void main() {
         reason: 'a child nickname must never break the editor paint',
       );
       await disposeApp(tester);
-    }, skip: true);
+    });
   });
 
   // -- attacks that hold ----------------------------------------------------
