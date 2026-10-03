@@ -1181,15 +1181,18 @@ void main() {
         path.any((entry) => entry.target == targetRender),
         isFalse,
         reason:
-            'the submit button owns this point; the overhang fallback must '
-            'run only when the normal path hit nothing (`if (!hit && …)`), or '
-            'the link double-activates with the button once the routes land',
+            'the submit button owns this point, so the overhang fallback must '
+            'not also collect the link box, or it double-activates with the '
+            'button once the routes land. (`hit` cannot be the gate: the '
+            "bar's DecoratedBox claims every in-panel point — see "
+            '6_bugs.md, "The `!hit` question is settled")',
       );
 
       await disposeApp(tester);
-      // skip removed in iteration 6: `_HitTestExpand.hitTest` now gates the
-      // overhang fallback behind `!hit`, so a button-strip tap no longer
-      // reaches the link.
+      // skip removed in iteration 6: `_HitTestExpand.hitTest` now suppresses
+      // the overhang fallback whenever the normal path already landed on a
+      // gesture target, so a button-strip tap no longer reaches the link
+      // while an empty-bar overhang tap still does (P03-BUG-18).
     },
   );
 

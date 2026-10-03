@@ -1,4 +1,4 @@
-# P03 Create account — Stage 2a logic build (iteration 6)
+# P03 Create account — Stage 2a logic build (iteration 7)
 
 Route `/create-account` · feature `auth` · parent mode. Scope: non-UI layer only
 (`domain/**`, `data/**`, `presentation/bloc/**`, DI/routes, bloc/repository/data
@@ -15,62 +15,55 @@ None. Public names stable per `1_plan.md` §(b): `AuthEmailChanged`,
 
 ## Files changed
 
-None in this iteration. The logic layer already matches the plan exactly
-(verified by reading every file, not assumed):
+None in this iteration. The logic layer matches the plan (re-verified by
+reading/grep, not assumed):
 
-- `app/lib/features/auth/domain/auth_repository.dart` — `AuthProvider` enum,
-  `createAccount({email, name})` (legacy `name:` alias kept + documented for the
-  shared `repositories_test.dart` caller, out of scope per RULES §1),
-  `createAccountSocial({provider})`.
-- `app/lib/features/auth/domain/entities/auth_account.dart` — Equatable value
-  object, unchanged.
-- `app/lib/features/auth/data/auth_repository_impl.dart` — Drift-backed,
-  email local-part → owner name (`Parent` fallback), idempotent `_ensureOwner`,
-  password never persisted, `TODO(P03)` markers. Only lib caller of
-  `createAccount` is `AuthBloc` with `email:` (grep-verified).
-- `app/lib/features/auth/data/models/auth_account_model.dart` — fromJson/toJson,
-  unchanged.
-- `app/lib/features/auth/presentation/bloc/{auth_bloc,auth_event,auth_state}.dart`
-  — dirty-gated validation (P03-BUG-2), shared helpers `isAuthEmailValid` /
-  `isAuthPasswordValid` + error texts, `canSubmit`, submit/social with `on Object
-  catch` + `addError` (P03-BUG-5/14), in-flight guards, `AuthSubmitConsumed`
-  no-op when nothing submitted.
-- `app/lib/features/auth/{auth_di,auth_routes,auth}.dart` — already registered
-  (`/create-account`, `BlocProvider` + `AuthLoadRequested`); no change needed.
+- `domain/auth_repository.dart` — `AuthProvider` enum, `createAccount` (legacy
+  `name:` alias kept + documented for the shared `repositories_test.dart`
+  caller, out of scope per RULES §1), `createAccountSocial`.
+- `domain/entities/auth_account.dart`, `data/models/auth_account_model.dart` —
+  unchanged value object + fromJson/toJson.
+- `data/auth_repository_impl.dart` — Drift-backed, email local-part → owner
+  name (`Parent` fallback), idempotent `_ensureOwner`, password never persisted,
+  `TODO(P03)` markers. Sole lib caller is `AuthBloc` with `email:`.
+- `presentation/bloc/*` — dirty-gated validation (P03-BUG-2), shared helpers +
+  error texts, `canSubmit`, `on Object catch` + `addError` (P03-BUG-5/14),
+  in-flight guards, `AuthSubmitConsumed` no-op guard.
+- `auth_di.dart` / `auth_routes.dart` — registered, `BlocProvider` +
+  `AuthLoadRequested`; no change needed.
 
-## FIXES_5 items in my layer
+## FIXES_6 items in my layer
 
-None — every open item is view/shared/UI-test layer, owned by the parallel UI
-builder or the orchestrator:
+None — the single open bug, P03-BUG-23 (2 dp form offset from `_OrRow`'s
+caption-token label, `create_account_view.dart:280-299`), is a one-line
+screen-local view fix owned by the parallel UI builder. Both its proofs live
+in `p03_bugs_test.dart` and `typography_test.dart` — neither name contains
+bloc/cubit/repository/data, so there is nothing to un-skip or edit in my
+layer. Also confirmed out of my scope / already handled:
 
-- P03-BUG-16 (danger border, Decision A): view switch to shared `errorText`
-  row, pending SHARED_REQUEST §8. Proof already skip-marked in
-  `p03_bugs_test.dart:1035-1043` (not my file — name contains none of
-  bloc/cubit/repository/data).
-- Review finding 2 (`_HitTestExpand` `!hit` gate + tapAt proof): view-only.
-- P03-BUG-22 skip (`p03_bugs_test.dart:1142-1145`): view-only latent proof.
-- `google_fonts` imports in `create_account_view_test.dart` / `p03_bugs_test.dart`:
-  real, but both files are UI-owned; editing them in parallel would conflict
-  with the UI builder, so cleanup is left to that stage. My owned test file
-  (`auth_bloc_test.dart`) has zero `google_fonts`/skip references (grep-verified).
-- No skipped bug test referenced by FIXES_5 lives in a file I own, so nothing
-  to un-skip.
+- BUG-16 now fixed + pixel-proven (view), BUG-22 verified (view), BUG-17 gone
+  via shared fonts (no local change).
+- `google_fonts`: zero imports/calls in `lib/features/auth/` and in my owned
+  test file (grep-verified); remaining view-test cleanup (if any) is the UI
+  builder's.
+- SHARED_REQUEST §7 (13/20 legal-caption token) and §9 (caption-token pattern
+  note): shared/orchestrator items, non-blocking, no logic change.
+- No letter-spacing, chip-row, child-order, or trial concerns in this layer.
 
 ## Verification (allowed scope only)
 
 - `flutter analyze lib/features/auth` → `No issues found!`
-- `flutter test test/features/auth/auth_bloc_test.dart` → `+45: All tests passed!`
-  (34 bloc/state-machine + 11 Drift repository proofs; no skips).
-- Full-suite `flutter test`, simulator shots, and view-test runs NOT done —
+- `flutter test test/features/auth/auth_bloc_test.dart` → `All tests passed!`
+  (no skips).
+- Full-suite `flutter test`, simulator, and view-test runs NOT done —
   integrator / UI builder scope per the stage brief.
 
 ## LEFT FOR NEXT ITERATION
 
-Nothing in the logic layer. If the orchestrator lands SHARED_REQUEST §8
-(live-region shared error row), the follow-up logic work is zero lines — the
-bloc already exposes `emailError`/`passwordError`, so the UI stage just passes
-`errorText:` and deletes its owned rows. If the shared `repositories_test.dart`
-migrates off `createAccount(name:)`, the legacy alias can be dropped and the
-param restored to `required String email`.
+Nothing in the logic layer. When SHARED_REQUEST §8 lands, the UI stage passes
+`errorText:` and deletes its owned rows — zero logic lines (bloc already
+exposes both error fields). If shared `repositories_test.dart` migrates off
+`createAccount(name:)`, drop the legacy alias and restore
+`required String email`.
 
 VERDICT: PASS

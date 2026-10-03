@@ -280,9 +280,17 @@ class _CreateAccountViewState extends State<CreateAccountView> {
 class _OrRow extends StatelessWidget {
   const new();
 
+  /// The design's `.or-label` sets `font-size: 13px` and **no** line-height,
+  /// so the browser lays the label out in its CSS-normal line box: 13px ×
+  /// Inter's 1.2077 normal ratio ≈ 15.7dp (`SHARED_REQUEST.md` §9). The only
+  /// number this screen owns; P03-BUG-23 and the `typography_test.dart` band
+  /// proof both pin it, the second with the design's own fonts loaded.
+  static const double _orLabelLineBox = 15.7;
+
   @override
   Widget build(BuildContext context) {
     final tokens = context.nest;
+    final base = NestType.caption(color: tokens.ink2);
     return ExcludeSemantics(
       child: Row(
         children: <Widget>[
@@ -290,8 +298,21 @@ class _OrRow extends StatelessWidget {
           const SizedBox(width: NestSpacing.s3),
           Text(
             'or',
-            style: NestType.caption(color: tokens.ink2)
-                .copyWith(fontWeight: FontWeight.w600),
+            // P03-BUG-23: the design's `.or-label` has no line-height, so
+            // its row is 13px × Inter's CSS-normal ≈ 15.7dp (measured on the
+            // design PNG; SHARED_REQUEST §9) — not the caption token's 18dp
+            // box, which pushed the form 2dp low. `copyWith` cannot unset the
+            // token's `height` (null keeps it), so the style is rebuilt from
+            // the caption token's own metrics with only the line box replaced:
+            // family, size, tracking and colour all still come from the token.
+            style: TextStyle(
+              fontFamily: base.fontFamily,
+              fontSize: base.fontSize,
+              fontWeight: FontWeight.w600,
+              letterSpacing: base.letterSpacing,
+              height: _orLabelLineBox / base.fontSize!,
+              color: base.color,
+            ),
           ),
           const SizedBox(width: NestSpacing.s3),
           Expanded(child: Divider(height: 1, thickness: 1, color: tokens.line)),

@@ -147,3 +147,9 @@ This is a pattern note, not shared work: the fix belongs to the screen
 (`_OrRow` should not use the caption token for a label the design gives no
 line-height), and §7 is the existing request for the neighbouring case. No
 core change is needed for P03 to go green.
+
+P03's fix keeps the caption token's family, size, tracking and colour and
+replaces only the line box (`_OrRow._orLabelLineBox = 15.7`), so the second
+override stays screen-local too. If §7 is ever actioned, the useful shape is
+a "label whose CSS sets no line-height" variant alongside `legalCaption` —
+otherwise the next screen repeats this 2.3 dp.
