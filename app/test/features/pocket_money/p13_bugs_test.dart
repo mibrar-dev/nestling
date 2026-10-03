@@ -1,28 +1,22 @@
-// P13 · Payout (parent) — Stage 6 adversarial bug tests (iteration 1→2).
+// P13 · Payout (parent) — Stage 6 adversarial bug tests (iteration 1→3).
 //
-// Iteration 1 found five defects (3 major, 2 minor). Iteration 2 fixed all
-// five and the fixers promoted every reproducer below from `skip:` to an
-// ACTIVE regression test — a re-break fails the suite.
-//
-// This iteration re-audited the iteration-2 diff with fresh probes: the five
-// fixes, the ORCHESTRATOR_NOTES items 1–3 (full-screen scrim, inline 13 px
-// amount, ±1 px row text), the new retry/partial-failure logic, the busy CTA
-// and the scrim semantics. Every probe holds except one new minor finding:
-// P13-BUG-06 (a goal-bearing Leo still gets the design copy's "her"), kept
-// `skip:`-ed with its bug id so the suite stays green until it is fixed.
+// Iteration 1 found five defects (3 major, 2 minor); iteration 2 fixed all
+// five and the fixers promoted their reproducers from `skip:` to ACTIVE
+// regression tests. This file's iteration-2 re-audit found one new minor:
+// P13-BUG-06 (the design copy's gendered "her" leaked onto a goal-bearing
+// Leo when the goal title contained "Lego"). Iteration 3 fixed it by gating
+// the design string on the exact seeded shape (goal child Maya AND title
+// "Lego Friends set") and using the neutral data-driven sentence otherwise —
+// so every reproducer here is now an ACTIVE regression test and a re-break
+// fails the suite.
 //
 // The "attacks that hold" group is NOT skipped: it documents the adversarial
 // probes that passed (same-frame double tap on the real repo, a ticked £0
 // child riding along, real 320 dp × 1.3 and 320×568 layouts, six children
 // with a long UK name, single child, £0.00, gated single write, goal child
 // unticked, back mid-write, deep links, kid-mode guard, restart persistence,
-// dark contrast) so a regression is caught here.
-//
-// The "attacks that hold" group at the bottom is NOT skipped: it documents
-// the adversarial probes that passed (real 320 dp × 1.3 and 320×568 layouts,
-// six children with a long UK name, single child, £0.00, gated single write,
-// goal child unticked, back mid-write, deep links, kid-mode guard, restart
-// persistence, dark contrast) so a regression is caught here.
+// dark contrast) plus the iteration-3 shape/copy pins (summary start-align,
+// toggle track x 305–356, neutral copy for a non-Lego goal).
 //
 // Method: widget/pure probes on the in-memory and file-backed Drift
 // databases, plus one gated repository that holds the payout write mid-flight
@@ -995,6 +989,69 @@ void main() {
           );
         }
       }
+    });
+
+    // -- iteration-3 fixes --------------------------------------------------
+
+    testWidgets('the dimmed summary starts at the card padding edge', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _openPayoutFromLedger(tester);
+
+      final summary = find.text('Maya is owed £4.20 · Leo is owed £2.10');
+      expect(tester.widget<Text>(summary).textAlign, TextAlign.start);
+      // Card x 20 + NestCard padding 16 → glyph origin x ≈ 36 (design 37).
+      expect(tester.getRect(summary).left, closeTo(36, 1.5));
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the saverow toggle track matches the design x and size', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _openPayoutFromLedger(tester);
+
+      final track = find
+          .descendant(
+            of: find.byType(NestToggle),
+            matching: find.byType(AnimatedContainer),
+          )
+          .first;
+      final rect = tester.getRect(track);
+      // Design: 51×31 at x 305…355, right-flush with the card content edge
+      // (`5_ui` deviation 2, fixed by main's hit-slop `NestToggle`).
+      expect(rect.width, closeTo(51, 1));
+      expect(rect.height, closeTo(31, 1));
+      expect(rect.left, closeTo(305, 1.5));
+      expect(rect.right, closeTo(356, 1.5));
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('a non-Lego goal uses the neutral copy, never a pronoun', (
+      tester,
+    ) async {
+      final db = await setUpTestScope();
+      await (db.update(db.savingsGoals)..where((g) => g.id.equals('goal-lego')))
+          .write(const SavingsGoalsCompanion(title: Value('Holiday')));
+      await GetIt.instance<AppSession>().refresh();
+
+      await _openPayoutFromLedger(tester);
+      final copy = tester
+          .widgetList<Text>(find.byType(Text))
+          .map((widget) => widget.data)
+          .whereType<String>()
+          .firstWhere((s) => s.startsWith('Move £1.00 of Maya'));
+
+      expect(copy, "Move £1.00 of Maya's money to their Holiday fund");
+      expect(copy.contains('her '), isFalse);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
     });
   });
 }
