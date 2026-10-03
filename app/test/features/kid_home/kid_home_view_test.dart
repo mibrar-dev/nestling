@@ -299,6 +299,30 @@ Finder _questTile(WidgetTester tester, String questTitle) => find.descendant(
   }),
 );
 
+/// The PAINTED quest-card surface (the all-side-ink-bordered [Container]
+/// inside the card's 6 px shadow reserve). The widget rect of
+/// [NestKidQuestCard] includes that reserve, so only this rect can be
+/// compared with the design's `.quest-card` rows — the UI-check rule
+/// "measure shapes, not only text" in the same form as [_dockSurfaceFinder].
+Finder _questCardPainted(int index) => find
+    .descendant(
+      of: find.byType(NestKidQuestCard).at(index),
+      matching: find.byWidgetPredicate((widget) {
+        if (widget is! Container) {
+          return false;
+        }
+        final box = widget.decoration;
+        if (box is! BoxDecoration) {
+          return false;
+        }
+        final border = box.border;
+        return border is Border &&
+            border.top.width > 0 &&
+            border.left.width == border.top.width;
+      }),
+    )
+    .first;
+
 /// The meadow band behind progress + cards: the full-bleed [CustomPaint] that
 /// wraps the quest list panel (a local painter until the design system owns a
 /// meadow band — SHARED_REQUEST #6).
@@ -418,8 +442,12 @@ void main() {
       // so they cannot drift with the test font:
       //  · hearts → section: 16 (the heart is a fixed 26 px slot)
       //  · progress → first card: 16 (meadow panel column spacing)
-      //  · card → card: 12 (the card's 6 px shadow reserve is inside its
-      //    own rect, so the inter-card gap is the bare 12 px token)
+      //  · card → card: 12 between the PAINTED cards, which is what the
+      //    design's `.k3-quests { gap: 12px }` means. The shared card also
+      //    reserves 6 px under itself for `kidShadow`, so the column hands
+      //    that room back (`_kQuestCardShadowRoom`, FIXES_8 finding 2 /
+      //    5_ui deviation 1) — measured on the painted rects, because the
+      //    widget rects carry the reserve and would read 6 instead of 12.
       // The section → progress gap is NOT asserted: the section title is
       // the only block whose height depends on glyph metrics (it wraps to
       // two lines in the test font), so the exact value is a font fact,
@@ -431,7 +459,24 @@ void main() {
         reason: 'the progress bar never rides up into the section header',
       );
       expect(card1.top - progress.bottom, closeTo(NestSpacing.s4, 1));
-      expect(card2.top - card1.bottom, closeTo(NestSpacing.s3, 1));
+      expect(
+        tester.getRect(_questCardPainted(1)).top -
+            tester.getRect(_questCardPainted(0)).bottom,
+        closeTo(NestSpacing.s3, 1),
+        reason:
+            '.k3-quests gap is 12 px between painted cards (design: '
+            'card 1 bottom 646 → card 2 top 659)',
+      );
+      expect(
+        card1.bottom - tester.getRect(_questCardPainted(0)).bottom,
+        closeTo(NestSpacing.gap6, 0.5),
+        reason: "the card's kidShadow reserve stays inside its own widget rect",
+      );
+      expect(
+        card2.top,
+        greaterThan(card1.bottom),
+        reason: 'cards never overlap, whatever the reserve does',
+      );
       await disposeApp(tester);
     });
 
@@ -676,10 +721,10 @@ void main() {
         final painter = tester
             .widget<CustomPaint>(_meadowBandFinder())
             .painter!;
-        // `components.css` l.25: kid-horizon at 62 % of 844, kid-meadow at
-        // 100 %; the dock's top border is the design's y 719.
-        const designRun = 844 - 0.62 * 844; // ≈320.7
-        const intoRun = 719 - 0.62 * 844; // ≈195.7
+        // `components.css` l.25: kid-horizon at 62 % of the design height,
+        // kid-meadow at 100 %; the dock's top border is the design's y 719.
+        const designRun = NestDevice.height * (1 - 0.62); // ≈320.7
+        const intoRun = 719 - 0.62 * NestDevice.height; // ≈195.7
         const t = intoRun / designRun; // ≈0.61 — where the dock starts
         final h = bandRect.height.round();
         final sampled = await tester.runAsync(() async {

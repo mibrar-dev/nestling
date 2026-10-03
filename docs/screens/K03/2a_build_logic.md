@@ -1,70 +1,48 @@
-# K03 Kid home — Stage 2a logic chunk (iteration 8)
+# K03 Kid home — Stage 2a logic chunk (iteration 9)
 
 Scope: non-UI layer of `kid_home` only. No edits to
-`presentation/views/**` or `presentation/widgets/**`.
-
-## CONTRACT CHANGES (for the UI builder — please read)
-
-Two ADDITIVE events in `presentation/bloc/kid_home_event.dart`; every
-existing event/state name and field is untouched, so current view code
-compiles and behaves identically:
-
-- `KidHomeDataReceived(home)` — bloc-internal; the bloc raises it from its
-  own home-stream subscription. Views must never send it.
-- `KidHomeStreamFailed(error)` — bloc-internal; same.
-
-Reason (K03-BUG-15 / review finding 1): the load handler can no longer
-`await emit.forEach(...)` on a never-ending stream — the failure card's
-"Try again" stacked a second live handler per tap. The handler now owns a
-`StreamSubscription` guarded by early-return while live, released on error
-and on `close()`; stream output re-enters as the two events above.
+`presentation/views/**` or `presentation/widgets/**`. No state/event shape
+changes this iteration — **no CONTRACT CHANGES**.
 
 ## Files changed
 
-- `app/lib/features/kid_home/presentation/bloc/kid_home_bloc.dart`:
-  `_homeSub` guard + manual subscription, `_onDataReceived` /
-  `_onStreamFailed` handlers (celebration logic moved verbatim),
-  `close()` override. Mid-session error keeps a loaded list: failure state
-  only when `state.child == null` (review finding 6); healthy emissions
-  restore `loaded` via `copyWithLoaded`. No DI/route changes.
-- `app/lib/features/kid_home/presentation/bloc/kid_home_event.dart`: the
-  two internal events above (sealed family — same library, no break).
-- `app/test/features/kid_home/kid_home_bloc_test.dart`: BUG-15 comment
-  updated; new "two completion taps one frame apart celebrate exactly once"
-  (review finding 5: both taps reach the repo — row dedupe stays with the
-  K03-BUG-1 transaction proof — bloc celebrates once); new "mid-session
-  stream error keeps the loaded list" via a `failItemsNow` fake hook.
-- `app/test/features/kid_home/k03_bugs_test.dart`: K03-BUG-15 un-skipped
-  (one word; same in-scope defect, per "keep one proof, un-skipped").
+- `docs/screens/K03/SHARED_REQUEST.md`: new entry #16 (review findings
+  1+2, one batch): (a) nest art-box/aspect independence in
+  `PipNestFallback` — `BoxFit.fill` into the 236×156 stage box stretches
+  the bowl to 0.661 vertical (rim 38→25 px, widest row +26 px, identical in
+  dark), arithmetically unreachable from K03, with the exact numbers and the
+  `nestH ≈ 214` vs `stageH = 236` conflict recorded; (b) shared-card 6 px
+  bottom padding stacking with the 12 px `.k3-quests` gap (18–19 px painted
+  rhythm vs 12–13). Per `ORCHESTRATOR_NOTES` 09:52 no local pet-block change.
 
-## FIXES_7 items in my layer
+## FIXES_8 items in my layer
 
-- Finding 1 [blocker] K03-BUG-15 — DONE. Both proofs pass (bloc-suite
-  counters 1/1; bugs-suite peak ≤ 2 with 0 live after failure — release
-  comes from cancelling the chain on error, which also keeps Try-again
-  working).
-- Finding 5 [minor] — duplicate-proof half DONE (bugs proof un-skipped and
-  green); cross-frame double-dispatch proof ADDED at bloc level.
-- Finding 6 [minor] mid-session error — DONE (keep-list rule above).
-- Finding 8 [minor] `switchMapStream` in domain — no action (SHARED_REQUEST
-  #14 already carries it).
-- Findings 3, 4 (pet slot, meadow) — shared/views, not mine. BUG-13/14 stay
-  skipped (shared #13).
+- Finding 1 [major] nest stretch — shared cause (`pip_rive.dart`
+  `BoxFit.fill` + mandated call); filed as #16a above. No K03-side fix
+  exists or is attempted.
+- Finding 2 [minor] card rhythm — shared cause (in-card 6 px shadow
+  padding); filed as #16b above. No local compensation (would
+  double-correct once core lands).
+- Finding 6 [minor] `switchMapStream` in domain — no action (SHARED_REQUEST
+  #14 already carries it; helper stays tested in place).
+- Findings 3 (geometry pin), 4 (meadow painter), 5 (`844` constant) —
+  views/geometry-test layer, UI builder's. Not touched.
+- Skipped tests: zero in the feature (`grep skip:` clean); BUG-13/14 stay
+  un-skipped-and-passing after the shared pet-stage batch, BUG-15 green in
+  both files. Nothing to un-skip in my layer.
 
 ## Verification
 
-- `dart format` on touched dirs — clean (`0 changed` on re-run).
-- `flutter analyze` on domain/data/bloc + both touched test files —
-  No issues found.
-- `flutter test test/features/kid_home/kid_home_bloc_test.dart` — 29/29.
-- `flutter test .../k03_bugs_test.dart --plain-name K03-BUG-15` — pass;
-  full file — +47 ~4 (4 skips are BUG-13/14, shared), all pass.
+- `dart format --set-exit-if-changed` on domain/data/bloc +
+  `kid_home_bloc_test.dart` — 0 changed.
+- `flutter analyze` on the same scope — No issues found.
+- `flutter test test/features/kid_home/kid_home_bloc_test.dart` — 31/31.
 - No `google_fonts` in my files; no letter-spacing touches; period/copy
-  logic untouched.
+  logic untouched. Full-suite run and simulator are the integrator's.
 
 ## LEFT FOR NEXT ITERATION
 
-- Nothing open in my layer. Shared #13/#14/#15 and the pet/meadow UI work
-  belong to the orchestrator / UI builder.
+- Nothing open in my layer. Shared #13/#14/#16 (+ card rhythm) await the
+  orchestrator; pet/meadow/card-gap UI work belongs to the UI builder.
 
 VERDICT: PASS

@@ -92,6 +92,23 @@ const double _kPipSlotSize = 152;
 /// component owns the box now, the gap is the only lever left.
 const double _kStageToHearts = 10.75;
 
+/// Shadow room that `NestKidQuestCard` puts UNDER its own painted card
+/// (`core/design_system/components/nest_quest_card.dart:168`,
+/// `EdgeInsets.only(bottom: 6)`), so `tokens.kidShadow`'s offset never
+/// collides with the next card.
+///
+/// The design's `.k3-quests { gap: 12px }`
+/// (`design/html-source/screens/K03-kid-home.html:30`) is the gap between
+/// PAINTED cards, so the column spacing has to hand those 6 px back or the
+/// rects sit 18 px apart: card 2's top border then lands on y 665 instead of
+/// the design's 659 (FIXES_8 finding 2 / 5_ui deviation 1), 6 px per card
+/// further down, eating the card-2 peek above the dock.
+///
+/// REMOVE this subtraction when SHARED_REQUEST #16(b) lands (drop the
+/// in-card padding, or add a `shadowPadding` parameter) — the column then
+/// goes straight back to `NestSpacing.s3` and nothing else moves.
+const double _kQuestCardShadowRoom = 6;
+
 /// Display name for the pet-stage semantics label (design alt text).
 String _pipStageName(int stage) {
   return switch (stage) {
@@ -516,12 +533,12 @@ class _KidHomeBody extends StatelessWidget {
                         ),
                         // 12 + the band's own 4 px top inset below, so the
                         // band's top edge lands on the design's 62 % horizon
-                        // stop (y ≈523 of 844) and the progress bar still
-                        // starts exactly `s4` (16) below the section title,
-                        // as `.scroll > * + *` does. The band is the design's
-                        // *screen background* there, so in the HTML it never
-                        // pushes content; the inset reproduces that without
-                        // moving anything.
+                        // stop (`0.62 × NestDevice.height` ≈ y 523) and the
+                        // progress bar still starts exactly `s4` (16) below
+                        // the section title, as `.scroll > * + *` does. The
+                        // band is the design's *screen background* there, so in
+                        // the HTML it never pushes content; the inset
+                        // reproduces that without moving anything.
                         const SizedBox(height: NestSpacing.s3),
                         // Meadow band behind progress + cards (FIXES_1 #1,
                         // review finding 4): in-flow full-bleed hill, so it
@@ -530,9 +547,9 @@ class _KidHomeBody extends StatelessWidget {
                         // design PNGs lands exactly on it (light #EAF7E2, dark
                         // within a few levels), and it grades to `kidMeadow`
                         // over the design's own 321 px gradient span
-                        // (`components.css` l.25: kid-horizon at 62 %,
-                        // kid-meadow at 100 % of 844). The shared KidScope
-                        // hill (untouched) stays `kidMeadow`.
+                        // (`components.css` l.25: kid-horizon at 62 %, kid-meadow at
+                        // 100 % of the design height). The shared KidScope hill
+                        // (untouched) stays `kidMeadow`.
                         CustomPaint(
                           painter: _MeadowPainter(
                             top: tokens.kidHorizon,
@@ -555,7 +572,11 @@ class _KidHomeBody extends StatelessWidget {
                                       "$done of $total of today's quests done",
                                 ),
                                 Column(
-                                  spacing: NestSpacing.s3,
+                                  // `.k3-quests` gap 12, less the card's own
+                                  // 6 px shadow room: see
+                                  // `_kQuestCardShadowRoom`.
+                                  spacing:
+                                      NestSpacing.s3 - _kQuestCardShadowRoom,
                                   children: [
                                     for (final item in state.items)
                                       _QuestCard(
@@ -762,14 +783,18 @@ class _MeadowPainter extends CustomPainter {
   final Color bottom;
 
   /// The design's gradient run in logical px: the band starts at the 62 %
-  /// horizon stop (`0.62 × 844 = 523.3`) and reaches `kid-meadow` at the
-  /// screen bottom (844) — ≈321 px. The in-flow band is far taller than that
-  /// (progress bar plus every card), so the grade is compressed into the
-  /// design's span and stays `kidMeadow` below it: that is what makes the
-  /// visible part match both PNGs. Grading over the band's whole height (the
-  /// old behaviour) left dark mode a flat navy block, three iterations
-  /// running.
-  static const double gradeSpan = 844 - 0.62 * 844;
+  /// horizon stop (`0.62 × NestDevice.height = 523.3`) and reaches
+  /// `kid-meadow` at the design screen bottom (`NestDevice.height`) —
+  /// ≈321 px. The in-flow band is far taller than that (progress bar plus every card), so the grade is
+  /// compressed into the design's span and stays `kidMeadow` below it: that
+  /// is what makes the visible part match both PNGs. Grading over the band's
+  /// whole height (the old behaviour) left dark mode a flat navy block,
+  /// three iterations running.
+  ///
+  /// The two stops are the design's own percentages of the design device
+  /// height, so the whole run comes from `NestDevice.height` (FIXES_8 finding
+  /// 5) rather than a repeated literal.
+  static const double gradeSpan = NestDevice.height * (1 - 0.62);
 
   @override
   void paint(Canvas canvas, Size size) {

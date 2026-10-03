@@ -243,3 +243,46 @@ No schema/DI/token changes needed. No new assets needed (all icons +
     ≈35 in the design. Files:
     `app/lib/core/design_system/components/nest_pet_stage.dart`.
     Blocks: no.
+16. Need (review findings 1+2, iteration 8 — one batch, same component):
+    (a) Nest art-box independence. `PipNestFallback` renders `nest.svg`
+    with `fit: BoxFit.fill` into the full stage box, so K03's mandated call
+    (`nestWidth: 236, nestHeight: 156`) stretches the bowl to 156/236 =
+    0.661 vertically: rim 38→25 px at x102, bowl widest row y327→353 (+26),
+    bowl bottom ≈378→387 (+9), identical in dark (26/40 = 0.65). Measured
+    with the same detector on design vs `ui/app_light_8.png` /
+    `ui/app_dark_8.png`. The arithmetic is closed from K03: forcing
+    `stageH = 236` (design `.k3-pet`) with `fixedPipHeight: 152`,
+    `rimOverlap: 20` gives `nestH = 155.6` — the current 156 is the only
+    value that keeps the block at 236 — while preserving the art aspect
+    needs `nestH ≈ 214` → `stageH ≈ 271`, and `ORCHESTRATOR_NOTES` #35
+    forbids the negative stage→hearts gap that would absorb it; `BoxFit`
+    change alone renders 156×156 art (bowl ≈131×71, further off). Request:
+    an art-box/aspect parameter (e.g. `nestArtHeight:`) so the caller can
+    ask for the 198-wide outline at the art's 260:236 aspect, deriving
+    `nestTop`/`stageH` from the visible rim + bowl + shadow; K03's target
+    call then keeps block 236 with the widest row on y327. Files:
+    `app/lib/core/design_system/motion/pip_rive.dart` (`explicitGeometry`,
+    `nestTop`/`stageH`, `BoxFit.fill`), optionally
+    `.../components/nest_pet_stage.dart`. Blocks: the hero centrepiece
+    (major; `shared/pet_stage_seat` branch is reportedly fixing it — K03
+    makes no local change per `ORCHESTRATOR_NOTES` 09:52).
+    (b) Card rhythm. The shared `NestKidQuestCard` carries 6 px bottom
+    padding (`nest_quest_card.dart:168`) inside K03's `.k3-quests` 12 px
+    column, so painted cards sit 18–19 px apart vs the design's 12
+    (card-2 top 665 vs 659, accumulating 6 px per card). Request: drop the
+    in-card padding with the shadow offset absorbed by the caller's gap, or
+    add a `shadowPadding` parameter. Files:
+    `app/lib/core/design_system/components/nest_quest_card.dart`.
+    Blocks: no (6 px, minor).
+    **K03 now compensates (iteration 9, 5_ui deviation 1).** The review
+    preferred no local compensation, but the owner ALIGNMENT rule makes a
+    visible 6 px drift a UI failure and the UI stage measured it as one, so
+    the quest column reads
+    `spacing: NestSpacing.s3 - _kQuestCardShadowRoom`
+    (`kid_home_view.dart`, `_kQuestCardShadowRoom = 6`), which puts painted
+    card 2's top border back on the design's y 659 and its 60 px peek above
+    the dock back on the design's 719. **Reverting rule: when (b) lands,
+    delete `_kQuestCardShadowRoom` and put `NestSpacing.s3` straight back in
+    the column** — one constant, one call site, nothing else moves. A
+    `shadowPadding:` parameter is the cleanest shape for it (K03 would then
+    pass `shadowPadding: EdgeInsets.zero`).
