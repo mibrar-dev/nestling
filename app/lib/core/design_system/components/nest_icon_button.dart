@@ -42,6 +42,7 @@ class NestIconButton extends StatelessWidget {
         button: true,
         label: semanticLabel,
         enabled: enabled,
+        onTap: onPressed,
         child: Opacity(
           opacity: enabled ? 1 : 0.45,
           child: Material(

@@ -79,6 +79,7 @@ class _StepBtn extends StatelessWidget {
       button: true,
       enabled: enabled,
       label: semanticLabel,
+      onTap: tapped,
       child: Opacity(
         opacity: enabled ? 1 : 0.45,
         child: SizedBox(

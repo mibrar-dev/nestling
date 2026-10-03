@@ -25,6 +25,7 @@ class NestFab extends StatelessWidget {
     return Semantics(
       button: true,
       label: semanticLabel ?? label,
+      onTap: onPressed,
       child: Material(
         color: Colors.transparent,
         borderRadius: NestRadii.allPill,
