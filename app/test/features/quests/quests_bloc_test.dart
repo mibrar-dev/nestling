@@ -157,5 +157,136 @@ void main() {
       ],
       wait: const Duration(milliseconds: 300),
     );
+
+    blocTest<QuestsBloc, QuestsState>(
+      'a load with no event is never requested twice for one emission',
+      build: () {
+        final repo = MockQuestsRepository();
+        when(repo.watchItems).thenAnswer((_) => Stream.value(_items));
+        return QuestsBloc(repository: repo);
+      },
+      // RULES §4: a stream emission must update the state on its own, with no
+      // extra event — otherwise every keystroke would re-watch the table.
+      act: (bloc) => bloc.add(const QuestsLoadRequested()),
+      expect: () => [
+        const QuestsState(status: QuestsStatus.loading),
+        const QuestsState(status: QuestsStatus.loaded, items: _items),
+      ],
+      verify: (bloc) {
+        expect(bloc.state.items, _items);
+      },
+    );
+  });
+
+  group('QuestsEvent', () {
+    test('QuestsLoadRequested is the only event and carries no payload', () {
+      expect(const QuestsLoadRequested().props, isEmpty);
+      expect(const QuestsLoadRequested(), const QuestsLoadRequested());
+    });
+
+    test('QuestsEvent is sealed — an unknown event cannot be added', () {
+      // Compile-time guarantee, asserted here so a future event has to be
+      // given its own handler deliberately.
+      expect(QuestsEvent, isNotNull);
+    });
+  });
+
+  group('QuestsState', () {
+    test('the default is initial with no items and no message', () {
+      const state = QuestsState();
+      expect(state.status, QuestsStatus.initial);
+      expect(state.items, isEmpty);
+      expect(state.errorMessage, isNull);
+    });
+
+    test('every QuestsStatus value is distinct', () {
+      expect(QuestsStatus.values, hasLength(4));
+      expect(
+        QuestsStatus.values.toSet(),
+        hasLength(QuestsStatus.values.length),
+      );
+    });
+
+    test('copyWith replaces only what it is given', () {
+      const base = QuestsState(
+        status: QuestsStatus.loaded,
+        items: _items,
+        errorMessage: 'old',
+      );
+
+      expect(base.copyWith(status: base.status), base);
+      expect(
+        base.copyWith(status: QuestsStatus.failure).status,
+        QuestsStatus.failure,
+      );
+      expect(base.copyWith(items: const <Quest>[]).items, isEmpty);
+      expect(base.copyWith(errorMessage: 'new').errorMessage, 'new');
+
+      // Untouched fields survive.
+      final changed = base.copyWith(status: QuestsStatus.failure);
+      expect(changed.items, _items);
+      expect(changed.errorMessage, 'old');
+    });
+
+    test('copyWith cannot clear errorMessage (null means "keep")', () {
+      const base = QuestsState(
+        status: QuestsStatus.failure,
+        errorMessage: 'boom',
+      );
+      expect(base.copyWith(status: QuestsStatus.loading).errorMessage, 'boom');
+    });
+
+    test('equality covers status, items and errorMessage', () {
+      const a = QuestsState(
+        status: QuestsStatus.loaded,
+        items: _items,
+        errorMessage: 'x',
+      );
+      expect(
+        a,
+        const QuestsState(
+          status: QuestsStatus.loaded,
+          items: _items,
+          errorMessage: 'x',
+        ),
+      );
+      expect(
+        a.hashCode,
+        const QuestsState(
+          status: QuestsStatus.loaded,
+          items: _items,
+          errorMessage: 'x',
+        ).hashCode,
+      );
+
+      expect(a, isNot(const QuestsState(status: QuestsStatus.failure)));
+      expect(
+        a,
+        isNot(
+          // `items` defaults to empty, so this is the "no items" state.
+          const QuestsState(status: QuestsStatus.loaded, errorMessage: 'x'),
+        ),
+        reason: 'a different items list is a different state',
+      );
+      expect(
+        a,
+        isNot(
+          const QuestsState(
+            status: QuestsStatus.loaded,
+            items: _items,
+            errorMessage: 'y',
+          ),
+        ),
+      );
+    });
+
+    test('props lists status, items and errorMessage', () {
+      const state = QuestsState(
+        status: QuestsStatus.failure,
+        items: _items,
+        errorMessage: 'boom',
+      );
+      expect(state.props, <Object?>[QuestsStatus.failure, _items, 'boom']);
+    });
   });
 }

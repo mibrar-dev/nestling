@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get_it/get_it.dart';
+import 'package:nestling/app/app.dart';
+import 'package:nestling/app/controllers.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/quests/presentation/views/quest_library_view.dart';
 import 'package:nestling/features/quests/presentation/widgets/quest_category_chips.dart';
@@ -241,4 +244,145 @@ void main() {
       await disposeApp(tester);
     });
   });
+
+  group('P10 responsive matrix', () {
+    // 320 (small), 390 (design), 430 (large) x light/dark x 1.0/1.3 text.
+    const widths = <double>[320, 390, 430];
+    const scales = <double>[1, 1.3];
+
+    for (final width in widths) {
+      for (final scale in scales) {
+        for (final theme in <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+          testWidgets(
+            'w$width s$scale ${theme.name}: gutters hold and nothing overflows',
+            (tester) async {
+              await setUpTestScope();
+              await _pumpAt(
+                tester,
+                QuestsRoutePaths.library,
+                width: width,
+                textScale: scale,
+                theme: theme,
+              );
+
+              expect(
+                tester.takeException(),
+                isNull,
+                reason: 'overflow or build error at w$width s$scale',
+              );
+
+              // OWNER ALIGNMENT: every full-bleed element keeps the 20 px
+              // gutter at every width.
+              final card = tester.getRect(_ideaRow('idea-bed'));
+              expect(card.left, NestSpacing.padSide);
+              expect(card.width, width - 2 * NestSpacing.padSide);
+              // `.trow` is 44 (the `+ Add` pill) + 2x12 padding at 1.0; at
+              // 1.3 the text grows past the pill and the card grows with it,
+              // but the padding never changes.
+              if (scale == 1) {
+                expect(card.height, 68);
+              } else {
+                expect(card.height, greaterThanOrEqualTo(68));
+              }
+
+              // Only the chip row bleeds past the gutter, by design.
+              expect(tester.getRect(find.byType(QuestCategoryChips)).left, 0);
+              expect(
+                tester
+                    .getRect(
+                      find.byKey(
+                        const ValueKey<String>('quest-filter-chip-All'),
+                      ),
+                    )
+                    .left,
+                NestSpacing.padSide,
+              );
+
+              // Interactive controls keep the 44 px parent floor.
+              expect(
+                tester.getSize(find.byType(NestSegmented<String>)).height,
+                greaterThanOrEqualTo(NestDevice.tapParent),
+              );
+              expect(
+                tester.getSize(find.byType(TextField)).height,
+                greaterThanOrEqualTo(NestDevice.tapParent),
+              );
+              final add = tester.getRect(find.byType(QuestAddButton).first);
+              expect(add.height, greaterThanOrEqualTo(NestDevice.tapParent));
+              expect(add.width, greaterThanOrEqualTo(NestDevice.tapParent));
+
+              // The `+ Add` pill stays glued to the card's inner edge.
+              expect(
+                card.right - add.right,
+                NestSpacing.s3,
+                reason: '.trow padding 12',
+              );
+
+              expect(
+                tester.element(_ideaRow('idea-bed')).nest.isDark,
+                theme == ThemeMode.dark,
+              );
+
+              await disposeApp(tester);
+            },
+          );
+        }
+      }
+    }
+
+    testWidgets('the shell clamps text scale above 1.3', (tester) async {
+      await setUpTestScope();
+      await _pumpAt(tester, QuestsRoutePaths.library, textScale: 1.3);
+      final at13 = tester.getRect(_ideaRow('idea-bed'));
+      await disposeApp(tester);
+
+      await setUpTestScope();
+      await _pumpAt(tester, QuestsRoutePaths.library, textScale: 2);
+      final at20 = tester.getRect(_ideaRow('idea-bed'));
+      await disposeApp(tester);
+
+      expect(at20, at13, reason: 'the shell pins the scaler to 1.0-1.3');
+    });
+
+    testWidgets('the Active tab survives every width and scale', (
+      tester,
+    ) async {
+      for (final width in widths) {
+        await setUpTestScope();
+        await _pumpAt(tester, QuestsRoutePaths.library, width: width);
+        await tester.tap(find.text('Active (12)'));
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull, reason: 'w$width');
+        expect(find.byType(QuestIdeaRow), findsWidgets, reason: 'w$width');
+
+        final row = tester.getRect(
+          find.byKey(const ValueKey<String>('quest-active-q-dishwasher')),
+        );
+        expect(row.left, NestSpacing.padSide, reason: 'w$width');
+        expect(row.width, width - 2 * NestSpacing.padSide, reason: 'w$width');
+
+        await disposeApp(tester);
+      }
+    });
+  });
+}
+
+/// [pumpAppRoute] with a width, a text scale and a theme.
+Future<void> _pumpAt(
+  WidgetTester tester,
+  String route, {
+  double width = 390,
+  double textScale = 1.0,
+  ThemeMode theme = ThemeMode.light,
+}) async {
+  tester.view.physicalSize = Size(width * 3, 844 * 3);
+  tester.view.devicePixelRatio = 3;
+  tester.platformDispatcher.textScaleFactorTestValue = textScale;
+  addTearDown(tester.view.reset);
+  addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+  GetIt.instance<ThemeModeController>().selectMode(theme);
+  await tester.pumpWidget(NestlingApp(initialRoute: route));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
 }
