@@ -1,69 +1,59 @@
-# P10 · Stage 2a — build, logic chunk (iteration 3)
+# P10 · Stage 2a — build, logic chunk (iteration 4)
 
 Scope: non-UI layer of feature `quests` only
 (`domain/**`, `data/**`, `presentation/bloc/**`, DI/route registration,
-plus `bloc`/`repository` unit tests). Views/widgets untouched (the UI
-builder has uncommitted work in `quest_idea_row.dart` /
-`quest_library_body.dart` — not disturbed).
+plus `bloc`/`repository` unit tests). Views/widgets untouched.
 
 ## CONTRACT CHANGES
 
-None this iteration. `QuestsState(status, items, ideas, errorMessage)` and
-`QuestsLoadRequested` are exactly as declared in iteration 2. The only
-behavioural change is internal to the bloc (failed watcher is now released;
-see below) — states, events and their shapes are unchanged.
+None. `QuestsState(status, items, ideas, errorMessage)` and
+`QuestsLoadRequested` are exactly as iterations 2–3 declared; the UI layer
+needed no re-plumbing (integrator confirmed disjoint file sets, no overlap).
 
 ## Files changed
 
-- `app/lib/features/quests/presentation/bloc/quests_bloc.dart` — review
-  finding 3: the `watchItems()` stream is now passed through a
-  `_closeOnError` transformer (forward the first error, then close) before
-  `emit.forEach`, so a failed load's Drift watcher is cancelled and `Try
-  again` starts exactly one fresh subscription instead of piling another
-  live watcher behind the dead one. Same guard as `today_bloc.dart:80`,
-  `family_bloc.dart:110`, `pocket_money_bloc.dart:174`; typed
-  `StreamTransformer<List<Quest>, List<Quest>>` (the shared files'
-  `List<dynamic>` version does not satisfy this call site).
-- `app/test/features/quests/quests_bloc_test.dart` — new proof `a failed
-  load releases its watcher so retry subscribes exactly once`: broadcast
-  controller, error → `hasListener == false` (asserted in `act`), retry →
-  `hasListener == true` while loaded, `verify(repo.watchItems).called(2)`.
+None. FIXES_3 contains zero items in this layer (triage below), and the
+layer verifies green as-is after the `686ce06` main merge.
 
-## FIXES_2 triage — items in this layer vs not
+## FIXES_3 triage — every item, and why none is mine
 
-Done here:
-- Review finding 3 (MAJOR, `Try again` watcher leak): fixed + proven (above).
-  Mutation-checked: the new test FAILS against the pre-fix bloc
-  (stashed/re-ran/re-popped) and passes with the fix.
-
-NOT this layer (untouched — owned by UI builder / orchestrator):
-- BUG-P10-12 / review finding 2 (invisible filter after tab round-trip):
-  `quest_library_body.dart` state + `TextEditingController` — UI builder.
-- BUG-P10-13 / review finding 5 (search field accessible name),
-  review finding 1/BLOCKER + finding 4 (NestSegmented double label,
-  2 px search-field box): shared `core/` — orchestrator via
-  `SHARED_REQUEST.md` (RULES §1 forbids screen edits there).
-- Review 6/7/8 (`quest_idea_row` style, gutters, tile token): widgets —
-  UI builder.
-- FIXES-1/2/3 (states-test mock stub, a11y finder regex, anchor deletion):
-  already landed by the integrator / in UI files.
-- `p10_bugs_test.dart` (BUG-P10-12 proof, still skipped/failing) and the
-  a11y/geometry suites are outside the `bloc|cubit|repository|data`
-  filename scope — not edited here.
-
-Skipped tests in this layer: none (no `skip:` in either owned file).
+- FIXES-1 (integrator): explicitly "NONE NEEDED — no integration breakage".
+  Contract unchanged, file sets disjoint. Nothing to do.
+- FIXES-2 (sole blocker): shared `NestTextField.search` hint-centering
+  (`core/`, `SHARED_REQUEST.md` §10). RULES §1 forbids screen edits to
+  `core/`; the orchestrator 10:00 rule forbids local hacks. NOT mine.
+- FIXES-3 (shared informational §6/§7/§8/§9): orchestrator-owned. NOT mine.
+- Test stage additions (`quest_library_seed_empty_test.dart`, view-test
+  tab coverage): view-layer files, outside the
+  `bloc|cubit|repository|data` filename scope. NOT mine — and they pass
+  against the unchanged bloc (states suite 19/19 covers the `ideas`
+  contract from the consumer side).
+- Review findings: 1 (BLOCKER) and 4 are the shared hint/field-box items
+  above; 2 (BUG-P10-12 controller), 6/7/8 are widgets — UI builder's,
+  all landed. Finding 3 (watcher leak) was MY item in iteration 3 and
+  stays green (re-verified below).
+- Bugs: BUG-P10-14 is the shared hint defect (sole red, mandatory pin —
+  NOT mine, must stay red until the shared fix lands); BUG-P10-1…13 all
+  green, guarded.
+- Skipped tests in this layer: none (no `skip:` in either owned file;
+  feature-wide grep confirms only a comment recording their removal).
 
 ## Verification (this stage only — no simulator, per SIMULATORS rule)
 
-- `dart format lib/features/quests test/features/quests` — clean.
-- `flutter analyze lib/features/quests test/features/quests` — No issues found.
+- `dart format` on owned paths — 0 changed.
+- `flutter analyze lib/features/quests test/features/quests/quests_bloc_test.dart
+  test/features/quests/quests_repository_test.dart` — No issues found.
 - `flutter test test/features/quests/quests_repository_test.dart
-  test/features/quests/quests_bloc_test.dart` — all 27 pass (10 + 17).
+  test/features/quests/quests_bloc_test.dart` — all 27 pass (10 + 17),
+  including the `_closeOnError` leak proof and the creation-order pin.
 - No `google_fonts` / `GoogleFonts.*` in the feature's lib or tests.
+- ORCHESTRATOR_NOTES (09:46 / 10:00 / 12:17): every item is geometry or
+  shared-component work — none touches `domain`/`data`/`bloc`; the
+  creation-order ruling (§5) is pinned by the repository test.
 
 ## LEFT FOR NEXT ITERATION
 
-Nothing in this layer. Residual red in the feature suite (BUG-P10-10 ×3,
-BUG-P10-12, BUG-P10-13) is all UI/shared-owned per the triage above.
+Nothing in this layer. Feature red is exactly one shared-owned pin
+(BUG-P10-14, `SHARED_REQUEST.md` §10); no P10-local logic issue is open.
 
 VERDICT: PASS

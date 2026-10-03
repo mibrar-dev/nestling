@@ -12,8 +12,12 @@
 //   seg track   `--surface-2`                     → 105.0 … 157.0  (52 tall)
 //   seg thumb   `--surface`  x 190…385           → 109.0 … 153.0  (44 tall)
 //   field box   `--line`     x  20…370           → 173.0 … 227.0  (54 tall)
-//   chip pill   `--leaf`     x  20…70            → 227.0 … 271.0  (44 tall)
-//   card 1      `--surface`  x  20…370           → 291.0 … 359.0  (68 tall)
+//   chip pill   `--leaf`     x  20…70            → 227.0 … 270.7  (44 tall,
+//                                                        x 20.33…67.33)
+//   `+ Add`     `--leaf`     x 287…358           → 304.3 … 345.3  (71 × 44)
+//   card 1      `--surface`  x  20…370           → 291.0 … 358.7  (68 tall)
+//   hint ink    `--ink-3`    x  74…170           → 194.0 … 206.0  (centre 200)
+//   magnifier   `--ink-3`    x  40…58            → 191.0 … 208.7  (centre 199.8)
 //   tab bar     `--line`     x   5               → surface top 726.0
 //   tab icon    `--ink-3`    x  30…60            → 739.3 … 759.0  (24 box 736…760)
 //   tab label   `--ink-3`    x  30…60            → 768.0 … 776.0  (14 box 764…778)
@@ -37,6 +41,7 @@ import 'package:nestling/app/app.dart';
 import 'package:nestling/app/controllers.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/quests/presentation/widgets/quest_category_chips.dart';
+import 'package:nestling/features/quests/presentation/widgets/quest_idea_row.dart';
 import 'package:nestling/features/quests/presentation/widgets/quest_library_body.dart';
 import 'package:nestling/features/quests/quests_routes.dart';
 
@@ -76,6 +81,11 @@ class _Design {
 
   /// The UI VERDICT RULE's tolerance.
   static const double tolerance = 2;
+
+  /// ORCHESTRATOR_NOTES 13:42 item 1 — with the shared batch landed, the
+  /// search field, the chip row and every card must land on the design y
+  /// within ±1, not the ±2 the rule allows as a ceiling.
+  static const double tight = 1;
 }
 
 const List<String> _ideaIds = <String>[
@@ -130,12 +140,17 @@ Future<void> _pumpDevice(
   await tester.pump(const Duration(milliseconds: 300));
 }
 
-/// Why the hint-centring pin is red (BUG-P10-14 · SHARED_REQUEST §10).
+/// The design centres the hint ink in the `.search` box.
+///
+/// The field spans 173…227, so its centre — where the design puts the hint ink,
+/// level with the magnifier — is y 200 (measured on the PNG: hint ink
+/// 194.0…206.0). `SHARED_REQUEST.md` §10 filed the shared fix; it landed on
+/// main (`1db0f8a`), so this pin is GREEN and guards the fix.
 const String _hintReason =
     'the design centres the hint ink in the `.search` box (field 173…227 ⇒ '
-    'centre y 200); `NestTextField.search` renders the 24-tall hint box at the '
-    'TOP of its 44 px input (y 177…201 ⇒ 189). Cause is in core/ — see '
-    'SHARED_REQUEST §10 — so P10 must not patch it locally.';
+    'centre y 200). `NestTextField.search` gives its editable 10 px of vertical '
+    'content padding ((44 − 24) / 2) inside the 44 px slot, so the painted '
+    'hint box must centre there too — SHARED_REQUEST §10, landed on main.';
 
 void main() {
   setUpAll(_loadBundledFonts);
@@ -192,14 +207,15 @@ void main() {
       await _pumpDevice(tester, QuestsRoutePaths.library);
 
       final field = tester.getRect(find.byType(NestTextField));
-      expect(field.top, closeTo(_Design.fieldTop, _Design.tolerance));
+      expect(field.top, closeTo(_Design.fieldTop, _Design.tight));
       expect(
         field.height,
-        closeTo(_Design.fieldHeight, _Design.tolerance),
+        closeTo(_Design.fieldHeight, _Design.tight),
         reason:
             '`.search { min-height:52px; padding:4px 16px; border:1px }` with '
-            '`box-sizing: border-box` computes to 52 content + 2 border = 54; '
-            'the app renders 52, which pushes everything below it 2 px up',
+            '`box-sizing: border-box` computes to 52 content + 2 border = 54 '
+            '(SHARED_REQUEST §9, landed on main). At 52 the whole lower half '
+            '— chip row and all ten cards — sat a uniform 2 px high.',
       );
 
       // `.chipscroll { margin: 0 -20px }` cancels `.scroll > * + *`.
@@ -254,25 +270,26 @@ void main() {
             .first,
       );
 
-      // The icon IS centred today (199 vs the field's 199). Pinned so the
-      // hint fix (SHARED_REQUEST §10, BUG-P10-14) cannot be paid for by moving
-      // the icon.
+      // The icon is centred on the field. Pinned so the hint fix
+      // (SHARED_REQUEST §10, BUG-P10-14) cannot be paid for by moving the icon.
       expect(icon.center.dy, closeTo(field.center.dy, 1));
 
       await disposeApp(tester);
     });
 
-    // ORCHESTRATOR_NOTES 12:17 items 1 + 3 (mandatory pin). RED on purpose:
-    // the design puts the hint's ink centre at y = 200 (the field spans
-    // 173…227) and the app paints it at 189 — `NestTextField.search` gives the
-    // input a fixed 44 px box but the hint renders at the TOP of it (24 tall
-    // box at y 177…201) while the magnifier is correctly centred at 199.
+    // ORCHESTRATOR_NOTES 12:17 items 1 + 3 and 13:42 item 1 (mandatory pin).
+    // The design puts the hint's ink centre at y = 200 (the field spans
+    // 173…227); before the shared fix the app painted it at 189, because
+    // `NestTextField.search` gave the input a fixed 44 px box and the hint
+    // rendered at the TOP of it (24-tall box at y 177…201) while the magnifier
+    // was correctly centred.
     //
-    // Cause is inside `core/design_system/components/nest_text_field.dart:169-191`
-    // (the 44-high `SizedBox` + `textAlignVertical` do not centre the hint),
-    // which RULES §1 forbids P10 from editing, and P10 must not wrap or
-    // re-pad the shared field locally. Filed as SHARED_REQUEST §10; the pin
-    // turns green the moment that lands.
+    // Cause was inside `core/design_system/components/nest_text_field.dart`,
+    // which RULES §1 forbids P10 from editing, so it was filed as
+    // SHARED_REQUEST §10 rather than patched locally. The shared fix landed on
+    // main (`1db0f8a`): the field is 54 tall and the decoration carries the
+    // 10 px of vertical content padding that centres the 24 px hint line box.
+    // The pin below is now GREEN and guards that fix.
     testWidgets('the hint is centred in the field, not floated to the top', (
       tester,
     ) async {
@@ -285,7 +302,7 @@ void main() {
       expect(hint.center.dy, closeTo(200, 1), reason: _hintReason);
       expect(
         hint.center.dy,
-        closeTo(field.center.dy, 2),
+        closeTo(field.center.dy, 1),
         reason: 'the hint and the magnifier share the centre of the field',
       );
 
@@ -300,13 +317,29 @@ void main() {
       await setUpTestScope();
       await _pumpDevice(tester, QuestsRoutePaths.library);
 
+      // Shapes, not just text (the UI rule's P05 trap): the pill's visible
+      // rect must be the design's full 48 × 44, never collapsed to its
+      // label width. Design `--leaf` border measured at x 20.33…67.33,
+      // y 227.0…270.67.
       final chip = tester.getRect(_chip('All'));
-      expect(chip.top, closeTo(_Design.chipTop, _Design.tolerance));
-      expect(chip.height, closeTo(_Design.chipHeight, _Design.tolerance));
+      expect(chip.top, closeTo(_Design.chipTop, _Design.tight));
+      expect(chip.height, closeTo(_Design.chipHeight, _Design.tight));
+      expect(chip.left, NestSpacing.padSide);
+      expect(chip.width, closeTo(48, _Design.tolerance));
+
+      // `.chipscroll { gap: 8px }` between the pills. Each pill's own x is the
+      // running sum of the label widths in front of it, and Flutter's Inter
+      // advance measures ~0.2 px per glyph wider than the Chrome render the
+      // PNG came from, so later pills drift right by a fraction of a pixel
+      // each. The layout rule — a fixed 8 px gap, the first pill flush with
+      // the gutter — is what is pinned, not the cumulative sum.
+      final bedroom = tester.getRect(_chip('Bedroom'));
+      expect(bedroom.left - chip.right, closeTo(8, _Design.tight));
+      expect(bedroom.height, closeTo(_Design.chipHeight, _Design.tight));
 
       final card = tester.getRect(_card(0));
-      expect(card.top, closeTo(_Design.card1Top, _Design.tolerance));
-      expect(card.height, closeTo(_Design.cardHeight, _Design.tolerance));
+      expect(card.top, closeTo(_Design.card1Top, _Design.tight));
+      expect(card.height, closeTo(_Design.cardHeight, _Design.tight));
       expect(card.left, NestSpacing.padSide);
       expect(card.right, 390 - NestSpacing.padSide);
 
@@ -326,7 +359,7 @@ void main() {
         if (card.evaluate().isEmpty) break;
         expect(
           tester.getRect(card).top,
-          closeTo(first + i * _Design.cardStep, _Design.tolerance),
+          closeTo(first + i * _Design.cardStep, _Design.tight),
           reason: 'card ${i + 1} (${_ideaIds[i]})',
         );
       }
@@ -340,6 +373,30 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(_card(_ideaIds.length - 1), findsOneWidget);
+
+      await disposeApp(tester);
+    });
+
+    // The UI rule measures SHAPES, not only text: `.addbtn` is a visible
+    // pill, so its painted rect is pinned against the design PNG (the
+    // `--leaf` border of `+ Add` on card 1: x 287.00…357.67,
+    // y 304.33…345.33 ⇒ a 71 × 44 pill centred in the 68-tall card).
+    testWidgets('the `+ Add` pill is the design shape, not its label width', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpDevice(tester, QuestsRoutePaths.library);
+
+      final card = tester.getRect(_card(0));
+      final pill = tester.getRect(find.byType(QuestAddButton).first);
+
+      expect(pill.width, closeTo(71, _Design.tolerance));
+      expect(pill.height, closeTo(44, _Design.tolerance));
+      expect(pill.left, closeTo(287, _Design.tolerance));
+      // Vertically centred in the row, like `.trow { align-items:center }`.
+      expect(pill.center.dy, closeTo(card.center.dy, 1));
+      // Right edge on the card's inner edge (12 px padding).
+      expect(card.right - pill.right, closeTo(12, _Design.tolerance));
 
       await disposeApp(tester);
     });
@@ -426,11 +483,11 @@ void main() {
 
       expect(
         tester.getRect(_card(0)).top,
-        closeTo(_Design.card1Top, _Design.tolerance),
+        closeTo(_Design.card1Top, _Design.tight),
       );
       expect(
         tester.getRect(_chip('All')).top,
-        closeTo(_Design.chipTop, _Design.tolerance),
+        closeTo(_Design.chipTop, _Design.tight),
       );
       expect(
         tester.getRect(find.byType(NestTabBar)).top,

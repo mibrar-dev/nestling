@@ -42,8 +42,10 @@ class _MockQuestsRepository extends Mock implements QuestsRepository {
 
 /// Pumps [QuestLibraryView] over a bloc backed by [repository].
 ///
-/// The view reads the idea templates from GetIt, so the scope is set up the
-/// same way `pumpAppRoute` does; only the bloc is swapped.
+/// The view reads the idea templates from `QuestsState.ideas` (the bloc owns
+/// every repository read), so the scope is set up only because
+/// [_MockQuestsRepository] needs the real templates to stub `ideas()` with;
+/// only the bloc is swapped.
 Future<void> _pumpView(
   WidgetTester tester,
   QuestsRepository repository, {

@@ -169,7 +169,7 @@ carries the actions.
 
 ---
 
-## 9. MINOR — `NestTextField.search` renders 52 high where `.search` computes to 54
+## 9. MINOR — CLOSED on main (`1db0f8a`) — `NestTextField.search` rendered 52 high where `.search` computes to 54
 
 File: `app/lib/core/design_system/components/nest_text_field.dart` (the `search`
 layout path).
@@ -203,9 +203,11 @@ it goes red if the field drops further or the drift grows).
 
 ---
 
-## 10. MAJOR (new) — `NestTextField.search` floats its hint to the top of the box
+## 10. MAJOR — CLOSED on main (`1db0f8a`) — `NestTextField.search` floated its hint to the top of the box
 
-ORCHESTRATOR_NOTES 12:17 items 1 + 3, measured and pinned by me.
+ORCHESTRATOR_NOTES 12:17 items 1 + 3, measured and pinned by me. Landed with
+`1933e48`/`1db0f8a` ("Fix NestTextField.search: 54-high border box, centred
+hint/text"); the P10 pin is green and now guards the fix.
 
 File: `app/lib/core/design_system/components/nest_text_field.dart:167-193`.
 
@@ -236,10 +238,17 @@ therefore painted at the top of the 44 px slot instead of at 199.
 slot and let `TextAlignVertical.center` do its work. P10 must not wrap or
 re-pad the shared field locally, so it stays unfixed here — same rule as §1.
 
-**Proof (red, in `quest_library_design_geometry_test.dart`):**
+**Proof (now green, in `quest_library_design_geometry_test.dart`):**
 `the hint is centred in the field, not floated to the top` — asserts the hint
-centre at 200 ±1 and within 2 px of the field centre. It is the only P10 test
-red for this reason, and it turns green the moment this lands.
+centre at 200 ±1 and within 1 px of the field centre. Tightened from 2 px to
+1 px in iteration 4 now that the shared fix has landed, so the fix is guarded
+rather than merely satisfied.
+
+**Verified after landing (iteration 4).** Field `173.0 … 227.0` (54 tall),
+magnifier centre 200.0, hint box `188.0 … 212.0` → centre **200.0** — the
+design's 200 exactly, and level with the icon. Everything below the field also
+came back onto the design y: chip row 227.0…271.0, cards 291/375/459/543/627/
+711, each 68 tall on an exact 84 px step (previously a uniform −2).
 
 **Note.** Once §9 (54 tall) lands, the field spans 173…227 and the expected
 centre is exactly 200 — the pin above already uses the design number, not the
