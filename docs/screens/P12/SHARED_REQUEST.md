@@ -75,6 +75,28 @@ control locally, so P12-BUG-04 stays skipped until the shared fix lands.
 
 ---
 
+## 4. `watchLedger` tie-break — same-second rows resolve arbitrarily
+
+**Need.** `core/data/app_database.dart:504-511` orders the ledger by `date
+desc` **only**. Two writers can land in the same clock second (an approval
+`quest_bonus` and the `recordPayout` `payout`), and then the tie resolves by
+whatever SQLite returns (rowid asc) rather than insertion recency. P12's
+`summarise()` no longer depends on the order (it sums rows at or after the
+latest payout instant — fixed locally in the feature with a regression test),
+but any other consumer reading "rows since the payout" off the raw
+newest-first position inherits the same coin flip.
+
+**Fix.** Belt-and-braces: add a `rowid desc` (insertion-recency) tie-break to
+the `watchLedger` orderBy, so same-second rows always resolve newest-write
+first.
+
+**Files.** `app/lib/core/data/app_database.dart` (`watchLedger` only)
+
+**Blocks.** No — P12 is correct without it; this hardens the shared query
+for every ledger consumer.
+
+---
+
 ## Not requested here (deliberately)
 
 * **`NestType.bodyStrong` 16/24 → a 22 px line box variant.** P12's

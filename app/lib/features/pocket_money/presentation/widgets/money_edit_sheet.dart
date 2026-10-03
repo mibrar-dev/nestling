@@ -105,16 +105,23 @@ class _MoneyEditSheetState extends State<MoneyEditSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = context.nest;
-    final error = _error;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
+        // Finding 2 (iteration 2 review): the rejection belongs to the
+        // shared `NestTextField.errorText`, which paints the 2 px danger
+        // border on the field itself and a gutter-aligned error row below
+        // **it** — announced through a live region, which is what finding 5
+        // needed. The hand-rolled copy used to render under the Note field,
+        // spatially detached from the input it is about (and it bypassed the
+        // design system entirely). Same three strings, still cleared on
+        // change.
         NestTextField(
           label: 'Amount',
           hintText: '£0.00',
           controller: _amount,
+          errorText: _error,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           textInputAction: TextInputAction.next,
           onChanged: (_) {
@@ -128,22 +135,6 @@ class _MoneyEditSheetState extends State<MoneyEditSheet> {
           controller: _note,
           textInputAction: TextInputAction.done,
         ),
-        if (error != null) ...<Widget>[
-          const SizedBox(height: NestSpacing.s3),
-          // Finding 5 (4_review.md): the inline error appears only after a
-          // tap, so without a live region VoiceOver / TalkBack never
-          // announces that the amount was rejected and the sheet stays open
-          // with the reason off-screen.
-          Semantics(
-            liveRegion: true,
-            child: Text(
-              error,
-              style: NestType.caption(color: tokens.danger),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
         const SizedBox(height: NestSpacing.s4),
         NestButton(label: _ctaLabel, onPressed: _submit),
       ],

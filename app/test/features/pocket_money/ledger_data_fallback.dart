@@ -44,16 +44,29 @@ Stream<MoneyLedgerData> ledgerDataFallback(
 }
 
 /// Same payout-boundary rule as the impl's `summarise`, over entities:
-/// newest-first [rows] for every child; only `weekly_base` + `quest_bonus`
-/// rows after the latest `payout` count for [childId].
+/// the latest `payout` instant is found first, then `weekly_base` +
+/// `quest_bonus` rows at or after it are summed (order-independent, so a
+/// same-second tie in the `date desc`-only order can never drop a bonus).
 OwedSummary _owedFromEntries(String childId, List<PocketMoneyEntry> rows) {
+  DateTime? latestPayout;
+  for (final row in rows) {
+    if (row.childId == childId &&
+        row.type == 'payout' &&
+        (latestPayout == null || row.date.isAfter(latestPayout))) {
+      latestPayout = row.date;
+    }
+  }
   var base = 0;
   var quests = 0;
   for (final row in rows) {
     if (row.childId != childId) continue;
-    if (row.type == 'payout') break;
-    if (row.type == 'weekly_base') base += row.amountPence;
-    if (row.type == 'quest_bonus') quests += row.amountPence;
+    if (row.type != 'weekly_base' && row.type != 'quest_bonus') continue;
+    if (latestPayout != null && row.date.isBefore(latestPayout)) continue;
+    if (row.type == 'weekly_base') {
+      base += row.amountPence;
+    } else {
+      quests += row.amountPence;
+    }
   }
   return OwedSummary(
     childId: childId,

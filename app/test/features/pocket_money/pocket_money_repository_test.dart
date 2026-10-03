@@ -6,6 +6,7 @@
 // entries, oweds, the Lego goal, payout day + zone), re-emission on writes,
 // and the empty-family shape.
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/seed.dart';
@@ -67,6 +68,55 @@ void main() {
       expect(summary.basePence, 150);
       expect(summary.questsPence, 60);
       expect(summary.totalPence, 210);
+    });
+
+    test('a quest bonus sharing the payout instant still counts '
+        '(review finding 4)', () async {
+      // Two writers landing in the same clock second: the `date desc`-only
+      // ledger order resolves the tie arbitrarily, so the payout can sort
+      // first and the old break-at-payout rule drops the bonus.
+      final at = Seed.utc(10, 3, 9);
+      Future<void> entry(String type, int pence) {
+        return db
+            .into(db.ledgerEntries)
+            .insert(
+              LedgerEntriesCompanion.insert(
+                familyId: Seed.familyId,
+                childId: 'leo',
+                type: type,
+                amountPence: pence,
+                note: const Value('tie probe'),
+                date: Value(at),
+                dateTz: const Value('Europe/London'),
+              ),
+            );
+      }
+
+      await entry('payout', -210);
+      await entry('quest_bonus', 25);
+
+      final fetched = await rowsFor('leo');
+      final payout = fetched.firstWhere(
+        (row) => row.note == 'tie probe' && row.type == 'payout',
+      );
+      final bonus = fetched.firstWhere(
+        (row) => row.note == 'tie probe' && row.type == 'quest_bonus',
+      );
+      final rest = fetched.where((row) => row.note != 'tie probe').toList();
+      // Both input orders must agree: the rule is order-independent.
+      for (final order in <List<LedgerEntry>>[
+        <LedgerEntry>[payout, bonus, ...rest],
+        <LedgerEntry>[bonus, payout, ...rest],
+      ]) {
+        final summary = repository.summarise('leo', order);
+        expect(summary.questsPence, 25, reason: 'order must not matter');
+        expect(
+          summary.basePence,
+          0,
+          reason: 'the 08:00 base predates the 09:00 payout',
+        );
+        expect(summary.totalPence, 25);
+      }
     });
   });
 

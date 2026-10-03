@@ -90,6 +90,40 @@ void main() {
       await disposeApp(tester);
     });
 
+    // Finding 1 (4_review.md, iteration 2): the band must be the scroller's
+    // *preceding sibling*, not its first row. At rest the two layouts are
+    // pixel-identical, so only a scrolled state can tell them apart — with
+    // the reserve inside the scroller it scrolled away and the white history
+    // cards painted under the OS-drawn status bar.
+    testWidgets('the band stays pinned when the ledger scrolls', (
+      tester,
+    ) async {
+      await _pumpLedger(tester);
+
+      await tester.drag(find.byType(ListView), const Offset(0, -120));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.getRect(find.byType(NestStatusBar)).top,
+        moreOrLessEquals(0, epsilon: 0.01),
+        reason: 'the band is pinned above the viewport, never scrolled off',
+      );
+      expect(
+        tester.getRect(find.byType(ListView)).top,
+        moreOrLessEquals(47, epsilon: 0.01),
+        reason:
+            'the scroller starts where the band ends — P12-money.html:17-20 '
+            'makes .status-bar the preceding sibling of .scroll',
+      );
+      expect(
+        tester.getRect(find.byType(MoneyHistoryRow).first).top,
+        greaterThanOrEqualTo(47),
+        reason: 'no ledger row may paint above the pinned band',
+      );
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
     testWidgets('the title sits on the design top (55)', (tester) async {
       await _pumpLedger(tester);
 
@@ -221,6 +255,11 @@ void main() {
       // `_EmptyBody` repeats the status bar → spacer → title stack and must
       // land identically.
       expect(find.text('No pocket money yet'), findsOneWidget);
+      // Finding 1: the empty body pins the band the same way.
+      expect(
+        tester.getRect(find.byType(ListView)).top,
+        moreOrLessEquals(47, epsilon: 0.01),
+      );
       expect(
         tester.getRect(find.text('Pocket money')).top,
         moreOrLessEquals(designTitleTop, epsilon: 1),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,7 +9,12 @@ import 'package:nestling/app/controllers.dart';
 import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
+import 'package:nestling/features/pocket_money/domain/entities/money_ledger_data.dart';
+import 'package:nestling/features/pocket_money/domain/entities/owed_summary.dart';
+import 'package:nestling/features/pocket_money/domain/entities/pocket_money_entry.dart';
+import 'package:nestling/features/pocket_money/domain/entities/pocket_money_setup.dart';
 import 'package:nestling/features/pocket_money/domain/next_payout.dart';
+import 'package:nestling/features/pocket_money/domain/pocket_money_repository.dart';
 import 'package:nestling/features/pocket_money/presentation/widgets/money_edit_sheet.dart';
 
 import '../../test_scope.dart';
@@ -614,17 +621,201 @@ void main() {
 
       // Finding 5: the error appears only after a tap, so without a live
       // region the screen reader never says why the sheet stayed open.
+      //
+      // Finding 2 (iteration 2 review): the shared
+      // `NestTextField.errorText` owns that live region now — its inner
+      // Text is `ExcludeSemantics`, so the message is announced once,
+      // through the labelled node.
+      final data = tester
+          .getSemantics(
+            find.bySemanticsLabel('Enter an amount like £1.00').first,
+          )
+          .getSemanticsData();
+      expect(data.flagsCollection.isLiveRegion, isTrue);
+      expect(find.text('Enter an amount like £1.00'), findsOneWidget);
+      // …and it belongs to the Amount input, never detached under Note.
       expect(
-        tester
-            .getSemantics(find.text('Enter an amount like £1.00'))
-            .getSemanticsData()
-            .flagsCollection
-            .isLiveRegion,
-        isTrue,
+        tester.getRect(find.text('Enter an amount like £1.00')).top,
+        lessThan(tester.getRect(find.text('Note')).top),
+        reason: 'the error row belongs to the Amount field that was rejected',
       );
+      expect(tester.takeException(), isNull);
 
       handle.dispose();
       await disposeApp(tester);
     });
+
+    // Finding 3 (iteration 2 review): the armed confirmation carries the
+    // child id, so a write confirmed after the parent switched children is
+    // retired instead of resurfacing on the next write. The write is gated
+    // (a fake repository) because the real one lands within the same pump.
+    testWidgets('a write confirmed after a child switch names its own child', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      final gate = _GatedLedgerRepository(
+        GetIt.instance<PocketMoneyRepository>(),
+      );
+      await _useRepository(gate);
+      await pumpAppRoute(tester, '/money');
+
+      await _scrollToEnd(tester);
+      await tester.tap(find.text('Add money'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.enterText(find.byType(TextField).first, '5.00');
+      await tester.enterText(find.byType(TextField).last, 'Switch probe');
+      await tester.pump();
+      await tester.tap(find.widgetWithText(NestButton, 'Add money').last);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // The sheet is closed but the write has not reached the database yet —
+      // the parent switches children in that window.
+      expect(gate.writes, 1);
+      expect(find.textContaining('Added £'), findsNothing);
+      await _scrollToStart(tester);
+      await tester.tap(find.text('Leo'));
+      await tester.pump();
+      expect(find.text('Leo is owed'), findsOneWidget);
+
+      // Release the write: the ledger stream re-emits for Maya, but the armed
+      // confirmation belonged to Maya while Leo is the selected child, so it
+      // is retired, not announced.
+      gate.releaseAll();
+      await _pumpPastWrite(tester);
+      expect(find.textContaining('Added £'), findsNothing);
+
+      // …and it must not resurface on the next write, which announces Leo.
+      await _scrollToEnd(tester);
+      await tester.tap(find.text('Add money'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.enterText(find.byType(TextField).first, '1.00');
+      await tester.pump();
+      await tester.tap(find.widgetWithText(NestButton, 'Add money').last);
+      await tester.pump();
+      gate.releaseAll();
+      await _pumpPastWrite(tester);
+      expect(find.text('Added £1.00 for Leo'), findsOneWidget);
+      expect(find.text('Added £5.00 for Maya'), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
   });
+}
+
+/// Holds every ledger write until the test releases it, so "the parent
+/// switched children before the stream round-tripped" is a reachable state
+/// rather than a race. Everything else is the real Drift repository, so the
+/// rows the release produces are read back from the real tables.
+class _GatedLedgerRepository implements PocketMoneyRepository {
+  _GatedLedgerRepository(this._inner);
+
+  final PocketMoneyRepository _inner;
+  final List<Future<void> Function()> _held = <Future<void> Function()>[];
+
+  /// How many writes are currently being held.
+  int get writes => _held.length;
+
+  void releaseAll() {
+    final pending = _held.toList(growable: false);
+    _held.clear();
+    for (final write in pending) {
+      unawaited(write());
+    }
+  }
+
+  void _hold(Future<void> Function() write) {
+    _held.add(write);
+  }
+
+  @override
+  Future<void> addMoney({
+    required String childId,
+    required int amountPence,
+    required String note,
+  }) async {
+    final done = Completer<void>();
+    _hold(() async {
+      await _inner.addMoney(
+        childId: childId,
+        amountPence: amountPence,
+        note: note,
+      );
+      done.complete();
+    });
+    await done.future;
+  }
+
+  @override
+  Future<void> recordSpending({
+    required String childId,
+    required int amountPence,
+    required String note,
+  }) async {
+    final done = Completer<void>();
+    _hold(() async {
+      await _inner.recordSpending(
+        childId: childId,
+        amountPence: amountPence,
+        note: note,
+      );
+      done.complete();
+    });
+    await done.future;
+  }
+
+  @override
+  Stream<MoneyLedgerData> watchLedgerData() => _inner.watchLedgerData();
+
+  @override
+  Future<List<PocketMoneyEntry>> getItems() => _inner.getItems();
+
+  @override
+  Stream<List<PocketMoneyEntry>> watchItems() => _inner.watchItems();
+
+  @override
+  Stream<List<PocketMoneyEntry>> watchLedger(String childId) =>
+      _inner.watchLedger(childId);
+
+  @override
+  Future<OwedSummary> owed(String childId) => _inner.owed(childId);
+
+  @override
+  Stream<OwedSummary> watchOwed(String childId) => _inner.watchOwed(childId);
+
+  @override
+  Future<void> recordPayout({
+    required String childId,
+    required int amountPence,
+    int savingsMovePence = 0,
+    String? goalId,
+  }) => _inner.recordPayout(
+    childId: childId,
+    amountPence: amountPence,
+    savingsMovePence: savingsMovePence,
+    goalId: goalId,
+  );
+
+  @override
+  Stream<PocketMoneySetup> watchSetup() => _inner.watchSetup();
+
+  @override
+  Future<void> setMode(String mode) => _inner.setMode(mode);
+
+  @override
+  Future<void> setPayoutDay(int day) => _inner.setPayoutDay(day);
+
+  @override
+  Future<void> setWeeklyBasePence(String childId, int pence) =>
+      _inner.setWeeklyBasePence(childId, pence);
+}
+
+/// The route builds its bloc through `GetIt.instance<PocketMoneyBloc>()`, so
+/// the swap must happen before the pump.
+Future<void> _useRepository(PocketMoneyRepository repository) async {
+  await GetIt.instance.unregister<PocketMoneyRepository>();
+  GetIt.instance.registerSingleton<PocketMoneyRepository>(repository);
 }

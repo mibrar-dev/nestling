@@ -249,15 +249,31 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
     );
   }
 
-  /// Pure owed math, shared with tests: entries arrive newest-first; only
-  /// `weekly_base` + `quest_bonus` rows after the latest `payout` count.
+  /// Pure owed math, shared with tests: [rows] is one child's ledger (any
+  /// order). Only `weekly_base` + `quest_bonus` rows at or after the latest
+  /// `payout` instant count. Order-independent (review finding 4): the latest payout date is found first, then rows
+  /// with `date >= payout` are summed — so a `quest_bonus` sharing the
+  /// payout's clock second can never be dropped by a tie in the
+  /// `date desc`-only ledger order. Rows on the payout instant itself count
+  /// (they settled nothing yet); anything strictly before it is settled.
   OwedSummary summarise(String childId, List<LedgerEntry> rows) {
+    DateTime? latestPayout;
+    for (final row in rows) {
+      if (row.type == 'payout' &&
+          (latestPayout == null || row.date.isAfter(latestPayout))) {
+        latestPayout = row.date;
+      }
+    }
     var base = 0;
     var quests = 0;
     for (final row in rows) {
-      if (row.type == 'payout') break;
-      if (row.type == 'weekly_base') base += row.amountPence;
-      if (row.type == 'quest_bonus') quests += row.amountPence;
+      if (row.type != 'weekly_base' && row.type != 'quest_bonus') continue;
+      if (latestPayout != null && row.date.isBefore(latestPayout)) continue;
+      if (row.type == 'weekly_base') {
+        base += row.amountPence;
+      } else {
+        quests += row.amountPence;
+      }
     }
     return OwedSummary(
       childId: childId,
