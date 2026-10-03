@@ -45,6 +45,7 @@ class NestPetStage extends StatelessWidget {
     this.speech,
     this.semanticLabel,
     this.pip,
+    this.bubbleGap = NestSpacing.s2,
   });
 
   /// The child's own Pip (v2 `PipAvatar`, inNest: false) to seat in the
@@ -98,6 +99,14 @@ class NestPetStage extends StatelessWidget {
   final String? speech;
   final String? semanticLabel;
 
+  /// Gap between the speech bubble and the pet scene (logical px).
+  ///
+  /// The design's K03 `.k3-pet { margin: 14px auto 0 }` puts 14 px here, while
+  /// every other bubble user keeps the historical 8 ([NestSpacing.s2], the
+  /// default, so callers that do not pass it render exactly as before).
+  /// K03 passes `bubbleGap: NestSpacing.gap14`.
+  final double bubbleGap;
+
   @override
   Widget build(BuildContext context) {
     final bubbleText = speech;
@@ -106,7 +115,7 @@ class NestPetStage extends StatelessWidget {
       children: [
         if (bubbleText != null)
           Padding(
-            padding: const EdgeInsets.only(bottom: NestSpacing.s2),
+            padding: EdgeInsets.only(bottom: bubbleGap),
             child: NestSpeechBubble(text: bubbleText),
           ),
         Semantics(
@@ -301,8 +310,10 @@ class _PetScene extends StatelessWidget {
 ///
 /// Matches `.speech` in `design/html-source/components.css` exactly:
 /// `padding: 8px 14px`, Nunito 800 16 px with the browser-default
-/// line-height (`normal`, ≈22 px in Nunito — so ≈44 px tall with border),
-/// 3 px ink border, radius 18, tail `::after` (9 px triangle). Every screen
+/// line-height (`normal`, 22 px in Nunito — the laid-out body is
+/// 3 + 8 + 22 + 8 + 3 = 44, pinned by a force-strut because the `Text`
+/// widget otherwise rounds the line box to 23), 3 px ink border,
+/// radius 18, tail `::after` (9 px triangle). Every screen
 /// that shows a bubble (K03, K03b, K04, K05, K07, K10) uses the same
 /// `.speech`, so there is a single default and no size parameter.
 class NestSpeechBubble extends StatelessWidget {
@@ -341,9 +352,17 @@ class NestSpeechBubble extends StatelessWidget {
           child: Text(
             text,
             // `.speech` sets no line-height, so the browser uses `normal`
-            // (the font's natural height, ≈22 px in Nunito): omitting
-            // `height` is Flutter's equivalent. A fixed 24/16 rendered the
-            // bubble 46 px tall instead of the design's ≈44.
+            // (the font's natural height, 22 px in Nunito): omitting
+            // `height` is Flutter's equivalent, and `style.height` stays
+            // null so the K03 typography pin keeps passing. A fixed 24/16
+            // rendered the bubble 46 px tall instead of the design's 44 —
+            // and null alone lays out 45, not 44: the `Text` widget rounds
+            // the line box up to 23 (the painter itself reports 22.0 for
+            // this string at real Nunito), so the body is 3 + 8 + 23 +
+            // 8 + 3 = 45. The force-strut pins the laid-out line to the
+            // browser-normal 22 without touching the style, giving the
+            // design's 3 + 8 + 22 + 8 + 3 = 44 exactly
+            // (`shared/pet_bubble_gap`).
             style: TextStyle(
               fontFamily: 'Nunito',
               fontSize: 16,
@@ -351,6 +370,13 @@ class NestSpeechBubble extends StatelessWidget {
               // `.speech` sets no letter-spacing: browser default 0.
               letterSpacing: 0,
               color: tokens.ink,
+            ),
+            strutStyle: const StrutStyle(
+              fontFamily: 'Nunito',
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              height: 22 / 16,
+              forceStrutHeight: true,
             ),
             textAlign: TextAlign.center,
           ),
