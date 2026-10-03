@@ -271,6 +271,28 @@ Finder _dockSurfaceFinder() => find.byWidgetPredicate((widget) {
   return border is Border && border.top.width == 3 && border.left.width == 0;
 });
 
+/// The nest artwork inside the pet slot: the 260 px-wide [SvgPicture] of
+/// [PipNestFallback]. The Pip is drawn as a [PipAvatar] (and the v1 fallback
+/// pictures live in the empty/failure states), so the width identifies it.
+Finder _nestSvgFinder() => find.descendant(
+  of: find.byType(PipNestFallback),
+  matching: find.byWidgetPredicate(
+    (widget) => widget is SvgPicture && widget.width == 260,
+  ),
+);
+
+/// The meadow band behind progress + cards: the full-bleed [CustomPaint] that
+/// wraps the quest list panel (a local painter until the design system owns a
+/// meadow band — SHARED_REQUEST #6).
+Finder _meadowBandFinder() => find.ancestor(
+  of: find.byType(NestProgress),
+  matching: find.byWidgetPredicate(
+    (widget) =>
+        widget is CustomPaint &&
+        widget.painter.runtimeType.toString() == '_MeadowPainter',
+  ),
+);
+
 /// v1 Pip illustrations — the orchestrator forbids them in product screens.
 List<String> _v1PipAssets(WidgetTester tester) =>
     _svgAssets(tester).where((name) => name.contains('pip_stage')).toList();
@@ -403,6 +425,200 @@ void main() {
       final petStage = tester.widget<NestPetStage>(find.byType(NestPetStage));
       expect(petStage.speech, "Let's do some quests!");
       expect(petStage.pip, isA<PipAvatar>());
+      await disposeApp(tester);
+    });
+  });
+
+  group('K03 pet slot (explicit size)', () {
+    // ORCHESTRATOR_NOTES #1 + review finding 1: the slot is the design's own
+    // composition — a 260 px nest with a 152 px Pip — expressed through the
+    // shared `NestPetStage` explicit size mode (SHARED_REQUEST #11), never a
+    // feature-local scene fork. Sizes only: centring is K03-BUG-13's proof.
+    testWidgets('the nest is 260 wide and the Pip exactly 152 tall', (
+      tester,
+    ) async {
+      await _pumpRoute(tester);
+      final stage = tester.widget<NestPetStage>(find.byType(NestPetStage));
+      expect(stage.nestWidth, 260, reason: '.k3-pet .nest is 260 px wide');
+      expect(stage.fixedPipHeight, 152, reason: '.k3-pet .pip is 152 px tall');
+      final fallback = tester.widget<PipNestFallback>(
+        find.byType(PipNestFallback),
+      );
+      expect(fallback.nestW, 260);
+      expect(fallback.pipH, 152);
+      // Rendered shapes, not only the props: the previous derived sizing
+      // rendered a 217 px nest with a 119 px Pip on this very viewport.
+      final pip = tester.getRect(find.byType(PipAvatar));
+      expect(pip.width, closeTo(152, 0.5));
+      expect(pip.height, closeTo(152, 0.5));
+      // The fallback paints the nest twice (back + front rim), same 260 width.
+      expect(_nestSvgFinder(), findsNWidgets(2));
+      final nest = tester.getRect(_nestSvgFinder().first);
+      expect(nest.width, closeTo(260, 0.5));
+      await disposeApp(tester);
+    });
+
+    testWidgets('the slot box keeps the 20 px gutters', (tester) async {
+      await _pumpRoute(tester);
+      final slot = tester.getRect(find.byType(PipNestFallback));
+      expect(slot.left, closeTo(NestSpacing.padSide, 0.5));
+      expect(slot.right, closeTo(NestDevice.width - NestSpacing.padSide, 0.5));
+      await disposeApp(tester);
+    });
+  });
+
+  group('K03 typography (NestType, zero tracking)', () {
+    // The K03 CSS sets no `letter-spacing` anywhere, and main fd92d95 made
+    // NestType default to 0, so every string on this screen must render in a
+    // shared NestType style with no tracking — Material's default must not
+    // creep back in. Sizes/weights are the design's own
+    // (.k3-name 22/26 w900, .k3-sub + .kcap 15/20 w700, .kchip 15/15 w800,
+    // .kid-title 28/34 w900, .speech 16 w800).
+    testWidgets('every K03 string uses the shared kid styles with tracking 0', (
+      tester,
+    ) async {
+      await _pumpRoute(tester);
+      final expected = <String, (double, double, FontWeight)>{
+        'Hi Maya!': (22, 26 / 22, FontWeight.w900), // .k3-name
+        '4 done today': (15, 20 / 15, FontWeight.w700), // .k3-sub
+        'Pip is happy today': (15, 20 / 15, FontWeight.w700), // .kcap
+        "Today's quests": (28, 34 / 28, FontWeight.w900), // .kid-title
+        '4 of 6 done': (15, 15 / 15, FontWeight.w800), // .kchip
+        "Let's do some quests!": (16, 24 / 16, FontWeight.w800), // .speech
+        '120': (16, 16 / 16, FontWeight.w800), // .coin-pill
+      };
+      for (final MapEntry(key: text, value: spec) in expected.entries) {
+        final finder = find.text(text);
+        expect(finder, findsOneWidget, reason: 'copy: $text');
+        final style = tester.widget<Text>(finder).style!;
+        final (size, height, weight) = spec;
+        expect(style.fontSize, size, reason: 'font size: $text');
+        expect(style.height, closeTo(height, 0.001), reason: 'line box: $text');
+        expect(style.fontWeight, weight, reason: 'weight: $text');
+        expect(
+          style.letterSpacing ?? 0,
+          0,
+          reason: '$text must carry no tracking (design sets none)',
+        );
+      }
+      // The shared styles, not a screen-local fork (review finding 3): the
+      // kid styles now exist in the type scale.
+      expect(NestType.kidName().fontSize, 22);
+      expect(NestType.kidCaption().fontSize, 15);
+      expect(NestType.kidTitle().fontSize, 28);
+      expect(NestType.kidChipLabel().fontSize, 15);
+      await disposeApp(tester);
+    });
+  });
+
+  group('K03 meadow band', () {
+    // 5_ui.md finding 1 (dark-only FAIL driver): the band behind progress +
+    // cards must grade from `kidHorizon` at its top toward the meadow tone —
+    // in BOTH themes, or dark renders a flat navy block.
+    const themes = <(String, ThemeMode)>[
+      ('light', ThemeMode.light),
+      ('dark', ThemeMode.dark),
+    ];
+    for (final (themeName, theme) in themes) {
+      testWidgets('$themeName: the band grades horizon → meadow', (
+        tester,
+      ) async {
+        await _pumpRoute(tester, theme: theme);
+        await _revealCards(tester);
+        final tokens = Theme.of(tester.element(find.byType(NestProgress)))
+            .extension<NestTokens>()!;
+        // `_MeadowPainter` is feature-private, so its fields cannot be named
+        // from the test library; reading them through `dynamic` is the only
+        // way to pin the gradient the screen actually paints.
+        final painter = tester.widget<CustomPaint>(_meadowBandFinder()).painter;
+        final top = (painter! as dynamic).top as Color;
+        final bottom = (painter as dynamic).bottom as Color;
+        expect(
+          top,
+          tokens.kidHorizon,
+          reason: 'the band starts at the horizon tone',
+        );
+        expect(
+          bottom,
+          Color.lerp(tokens.kidHorizon, tokens.kidMeadow, 0.5),
+          reason: 'the band must grade toward the meadow tone, not stay flat',
+        );
+        // Full-bleed horizontally, behind progress and the card column.
+        final bandRect = tester.getRect(_meadowBandFinder());
+        expect(bandRect.left, 0);
+        expect(bandRect.right, closeTo(NestDevice.width, 0.5));
+        expect(
+          bandRect.top,
+          lessThan(tester.getRect(find.byType(NestProgress)).top),
+        );
+        expect(
+          bandRect.bottom,
+          greaterThan(tester.getRect(find.byType(NestKidQuestCard).first).top),
+        );
+        await disposeApp(tester);
+      });
+    }
+  });
+
+  group('K03 shapes (pills and rects, not just text)', () {
+    // Orchestrator rule: a UI check compares the visible BACKGROUND/BORDER
+    // rect, not only where the text lands.
+    testWidgets('the section chip is a 32 px leaf-tint pill', (tester) async {
+      await _pumpRoute(tester);
+      final chip = find.ancestor(
+        of: find.text('4 of 6 done'),
+        matching: find.byType(KidStatusChip),
+      );
+      final rect = tester.getRect(chip);
+      expect(rect.height, closeTo(32, 0.5), reason: '.kchip is 32 px tall');
+      final container = tester.widget<Container>(
+        find.descendant(of: chip, matching: find.byType(Container)).first,
+      );
+      final decoration = container.decoration! as BoxDecoration;
+      final tokens = Theme.of(tester.element(find.byType(NestProgress)))
+          .extension<NestTokens>()!;
+      expect(decoration.color, tokens.leafTint, reason: '.kchip background');
+      expect(
+        decoration.borderRadius,
+        NestRadii.allPill,
+        reason: '.kchip is a pill',
+      );
+      // The 12 px horizontal padding keeps the label off the pill edge.
+      expect(
+        rect.left,
+        closeTo(
+          tester.getRect(find.text('4 of 6 done')).left - NestSpacing.s3,
+          0.5,
+        ),
+      );
+      await disposeApp(tester);
+    });
+
+    testWidgets('the card tile is 48 px and the check a 56 px ink circle', (
+      tester,
+    ) async {
+      await _pumpRoute(tester);
+      await _revealCards(tester);
+      final card = find.byType(NestKidQuestCard).first;
+      // `.quest-card.kid .kid-icon`: 48×48, radius 16.
+      final tile = find.descendant(
+        of: card,
+        matching: find.byWidgetPredicate((widget) {
+          if (widget is! Container) {
+            return false;
+          }
+          final box = widget.decoration;
+          return box is BoxDecoration &&
+              box.borderRadius == BorderRadius.circular(16);
+        }),
+      );
+      expect(tile, findsOneWidget);
+      expect(tester.getSize(tile), const Size(48, 48));
+      // `.quest-check`: 56×56. The first demo card is already done, so read a
+      // to-do quest's check node (`.quest-card.kid .quest-check`).
+      final check = find.bySemanticsLabel('Mark done');
+      expect(check, findsWidgets);
+      expect(tester.getSize(check.first), const Size(56, 56));
       await disposeApp(tester);
     });
   });

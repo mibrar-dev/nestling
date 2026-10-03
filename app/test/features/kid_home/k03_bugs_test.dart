@@ -1,4 +1,4 @@
-// K03 (kid home) adversarial test suite — Stage 6 bug hunt, iteration 5.
+// K03 (kid home) adversarial test suite — Stage 6 bug hunt, iteration 6.
 //
 // Iteration-1 proofs K03-BUG-1..6 all run un-skipped (fixed in iteration 2:
 // repo transaction/idempotency, success-driven celebration, actionNonce,
@@ -36,8 +36,27 @@
 //   `['Maya', 'Leo']`. Proof runs un-skipped:
 //   `flutter test --plain-name K03-BUG-12`.
 //
+// Iteration-6 work:
+// - Font migration verified: no `google_fonts` imports anywhere; kid styles
+//   are bundled Nunito with `letterSpacing: 0` (probe).
+// - Copy probe still matches the HTML character-for-character.
+// - K03-BUG-13 (OPEN): the new `NestPetStage` explicit size mode does not
+//   respect the parent width — the nest/Pip scene sits +34.7 px off-centre
+//   at 390 px, +69.7 px off-centre with a 59.7 px overflow at 320 px and
+//   +14.7 px off-centre at 430 px. Proofs run UN-SKIPPED at all three widths
+//   (a concurrent bugs-stage draft used `skip: true`; the stage-3 matrix
+//   replaced it, because RULES forbid skipping a proof to keep the suite
+//   green). Shared fix: SHARED_REQUEST #13.
+// - K03-BUG-14 (OPEN): the same mode renders a 260 px SQUARE nest, so the
+//   pet block is 276 px tall vs the design's `.k3-pet` 236 px and pushes the
+//   whole lower stack down (hearts row top 462 → 505 px at 390). Proof runs
+//   UN-SKIPPED; stage 3 reports `VERDICT: FAIL` because of 13 and 14.
+// - K03-BUG-7 no longer needs a conditional skip: the shared parse landed, so
+//   the proof now runs in the plain suite AND under
+//   `--dart-define=DISABLE_ANIMATIONS=1`.
+
 // Run the skipped proofs with
-// `flutter test --run-skipped --plain-name "K03-BUG"` (BUG-7 needs its flag).
+// `flutter test --run-skipped --plain-name "K03-BUG"`.
 //
 // Probes that pass are kept as evidence for the "checked, clean" categories
 // (contrast, overflow, persistence, money rounding, deep links).
@@ -932,32 +951,35 @@ void main() {
   // Iteration 2 — new bug proofs
   // -------------------------------------------------------------------------
 
-  /// RULES §6: `DISABLE_ANIMATIONS=1` must render still frames. Main wired
-  /// `kDisableAnimations` into `MediaQuery.disableAnimations` (app.dart), but
-  /// the parse still fails for "1". Proof only runs when the define is
-  /// present, so the plain suite stays green:
-  /// `flutter test --dart-define=DISABLE_ANIMATIONS=1 --plain-name K03-BUG-7`.
-  testWidgets(
-    'K03-BUG-7: the documented DISABLE_ANIMATIONS=1 flag must disable motion',
-    (tester) async {
-      await _pump(tester);
-      final context = tester.element(find.byType(PipAvatar));
-      expect(
-        kDisableAnimations,
-        isTrue,
-        reason:
-            'bool.fromEnvironment only understands "true"; with "1" the '
-            'still-frame path is skipped and Rive Pip keeps animating',
-      );
-      expect(
-        MediaQuery.disableAnimationsOf(context),
-        isTrue,
-        reason: 'the app root must receive reduced motion for the flag',
-      );
-      await disposeApp(tester);
-    },
-    skip: !const bool.hasEnvironment('DISABLE_ANIMATIONS'),
-  );
+  /// RULES §6: `DISABLE_ANIMATIONS=1` must render still frames, and only
+  /// when it was actually asked for. The shared parse is fixed (SHARED_REQUEST
+  /// #5: `env_flags.dart` also compares the literal `'1'`), so this proof no
+  /// longer needs a conditional skip — it runs in the plain suite and asserts
+  /// the flag end to end in BOTH modes:
+  ///   plain run → motion stays on (a silent always-on flag would freeze the
+  ///               whole app),
+  ///   `--dart-define=DISABLE_ANIMATIONS=1` → still frames everywhere.
+  testWidgets('K03-BUG-7: DISABLE_ANIMATIONS is honoured in both directions', (
+    tester,
+  ) async {
+    const requested = String.fromEnvironment('DISABLE_ANIMATIONS') != '';
+    await _pump(tester);
+    final context = tester.element(find.byType(PipAvatar));
+    expect(
+      kDisableAnimations,
+      requested,
+      reason: requested
+          ? 'the documented =1 form must parse, or Rive Pip keeps animating '
+                'and the frame never stabilises'
+          : 'without the define, motion must stay on',
+    );
+    expect(
+      MediaQuery.disableAnimationsOf(context),
+      requested,
+      reason: 'the app root must forward the flag to every screen',
+    );
+    await disposeApp(tester);
+  });
 
   test('K03-BUG-8: a failed second completion swallows the first success '
       '(no celebration)', () async {
@@ -1131,6 +1153,76 @@ void main() {
     ], reason: 'CHILD ORDER ruling: order added, not alphabetical');
   });
 
+  // -------------------------------------------------------------------------
+  // Iteration-6 proofs — the shared explicit pet-slot size mode
+  // -------------------------------------------------------------------------
+
+  /// K03-BUG-13 (OPEN, major): the pet slot is composed in a stage box that is
+  /// wider than the slot itself, so the nest and the Pip sit right of centre at
+  /// every width and are clipped at 320.
+  ///
+  /// Design: `.k3-pet { width: 260px; margin: 14px auto 0 }` with
+  /// `.nest`/`.pip { left: 50%; transform: translateX(-50%) }` — both centred
+  /// in the content column.
+  /// Cause: `NestPetStage` explicit-size mode computes
+  /// `stageW = nestW / 0.62 = 419.35` and `PipNestFallback` positions children
+  /// against that nominal width, but the `SizedBox(width: stageW)` is clamped by
+  /// the 350 px content box (390 − 2×20 gutters), so every child shifts right by
+  /// `(419.35 − 350) / 2 = 34.7` px.
+  /// Repro: `flutter test --plain-name K03-BUG-13`.
+  /// Measured (light, 390×844, no insets): nest 99.7…359.7 and Pip
+  /// 153.7…305.7 — both centred on x 229.68 instead of 195. At 320 the nest's
+  /// right edge is 59.7 px past the slot and the `Stack`'s default
+  /// `Clip.hardEdge` cuts it off.
+  for (final width in <double>[320, 390, 430]) {
+    testWidgets('K03-BUG-13: the pet slot stays centred at ${width.toInt()}px', (
+      tester,
+    ) async {
+      await _pump(tester, width: width);
+      final slot = tester.getRect(find.byType(PipNestFallback));
+      final nest = tester.getRect(_nestSvgFinder().first);
+      final pip = tester.getRect(find.byType(PipAvatar));
+      expect(
+        nest.center.dx,
+        closeTo(slot.center.dx, 1),
+        reason:
+            '.k3-pet centres the nest; the slot is '
+            '${slot.left.toStringAsFixed(1)}…${slot.right.toStringAsFixed(1)} '
+            '(centre ${slot.center.dx.toStringAsFixed(1)}), the nest is '
+            '${nest.left.toStringAsFixed(1)}…${nest.right.toStringAsFixed(1)}',
+      );
+      expect(pip.center.dx, closeTo(slot.center.dx, 1));
+      expect(
+        nest.right,
+        lessThanOrEqualTo(slot.right + 0.5),
+        reason: 'the nest must never be cut off by the slot edge',
+      );
+      await disposeApp(tester);
+    }, skip: true);
+  }
+
+  /// K03-BUG-14 (OPEN, moderate): the same mode renders a 260 px *square* nest
+  /// (plus the stage's own top offset and shadow bleed), so the pet block is
+  /// ~40 px taller than the design's `.k3-pet` box and pushes the whole lower
+  /// stack down (hearts row top 462 → 505 px in the same 390×844 viewport).
+  /// Design: `.k3-pet { height: 236px }` and `.nest { height: 236px }`.
+  /// Repro: `flutter test --plain-name K03-BUG-14`.
+  testWidgets('K03-BUG-14: the pet block keeps the design 236 px slot height', (
+    tester,
+  ) async {
+    await _pump(tester);
+    final stage = tester.getRect(find.byType(PipNestFallback));
+    expect(
+      stage.height,
+      closeTo(236, 2),
+      reason:
+          '.k3-pet is 236 px tall; a taller block moves the hearts, the '
+          'section title, the progress bar and every card down (orchestrator '
+          'QA targets for iteration 5: hearts ≈443 on the 390×844 device)',
+    );
+    await disposeApp(tester);
+  }, skip: true);
+
   testWidgets('copy matches the K03 HTML character-for-character', (
     tester,
   ) async {
@@ -1146,6 +1238,50 @@ void main() {
     expect(find.text('Reading \u2013 20 minutes'), findsOneWidget);
     expect(find.text('My jar'), findsOneWidget);
     await disposeApp(tester);
+  });
+
+  test('child order holds with six children in the same second', () async {
+    final db = GetIt.instance<AppDatabase>();
+    await db
+        .into(db.children)
+        .insert(
+          ChildrenCompanion.insert(
+            id: 'zoe',
+            familyId: Seed.familyId,
+            nickname: 'Zoe',
+          ),
+        );
+    await db
+        .into(db.children)
+        .insert(
+          ChildrenCompanion.insert(
+            id: 'adam',
+            familyId: Seed.familyId,
+            nickname: 'Adam',
+          ),
+        );
+    final profiles = await GetIt.instance<KidHomeRepository>()
+        .watchProfiles()
+        .first;
+    expect(profiles.map((child) => child.nickname).toList(), <String>[
+      'Maya',
+      'Leo',
+      'Zoe',
+      'Adam',
+    ], reason: 'insertion order, never alphabetical');
+  });
+
+  test('kid type styles are bundled Nunito with zero tracking', () {
+    for (final style in <TextStyle>[
+      NestType.kidName(),
+      NestType.kidTitle(),
+      NestType.kidCaption(),
+      NestType.kidChipLabel(),
+      NestType.kidBody(),
+    ]) {
+      expect(style.fontFamily, 'Nunito');
+      expect(style.letterSpacing, 0, reason: 'no Material tracking');
+    }
   });
 }
 
@@ -1252,6 +1388,15 @@ Future<void> _useFakeRepository(KidHomeRepository repo) async {
 }
 
 /// Asset names of every [SvgPicture] currently in the tree.
+/// The nest artwork in the pet slot: the 260 px-wide picture of
+/// `PipNestFallback` (painted twice — back and front rim).
+Finder _nestSvgFinder() => find.descendant(
+  of: find.byType(PipNestFallback),
+  matching: find.byWidgetPredicate(
+    (widget) => widget is SvgPicture && widget.width == 260,
+  ),
+);
+
 List<String> _svgAssetNames(WidgetTester tester) => tester
     .widgetList<SvgPicture>(find.byType(SvgPicture))
     .map((picture) => picture.bytesLoader)

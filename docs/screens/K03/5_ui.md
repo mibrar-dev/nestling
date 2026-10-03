@@ -1,34 +1,31 @@
-# K03 Kid home — UI check (Stage 5, iteration 5)
+# K03 Kid home — UI check (Stage 5, iteration 6)
 
 Method (simulator E7D5555E-378A-49DF-AAEE-16677AF4B9DB, 390x844):
-- `bash tools/screens/shot.sh "$PWD/app" /kid-home "$PWD/docs/screens/K03/ui/app_light_5.png" <udid> light demo kid maya` -> `docs/screens/K03/ui/app_light_5.png` (1170x2532). Same with `dark` -> `app_dark_5.png`.
-- NOTE: absolute OUT paths used (`shot.sh` cds to `$APP_DIR`). First stable run: both shots printed `stable frame saved` (no stabilisation warning) — the shared `disableAnimations` fix works.
-- `python3 tools/screens/compare.py design/screens/light/K03-kid-home.png docs/screens/K03/ui/app_light_5.png docs/screens/K03/ui/cmp_light_5.png` (and dark). Read both sheets. Logical px (PNG/3), tolerance ±2px.
-- Rules applied: PIP (`PipAvatar` Mochi/sunny/stage 3), STATUS BAR (ignore), DATA OVER MOCKS + PERIODS (in-period counts win; seed anchored to today), BOTTOM EDGE owner rule (bar surface to the edge — FAIL any coloured strip; overrides design), ALIGNMENT owner rule (20px gutters, nothing visibly off), CHILD ORDER (no child list on this screen — n/a; quest order stays alphabetical per `1_plan.md` §a), COPY (typographic characters verified by codepoint below), ORCHESTRATOR_NOTES (all items incl. iter4 shared-component migration + iter5 QA targets), `1_plan.md`, SPACING_SPEC.
+- `bash tools/screens/shot.sh "$PWD/app" /kid-home "$PWD/docs/screens/K03/ui/app_light_6.png" <udid> light demo kid maya` -> `docs/screens/K03/ui/app_light_6.png` (1170x2532). Same with `dark` -> `app_dark_6.png`. Absolute OUT paths used. Both `stable frame saved`, no warnings.
+- `python3 tools/screens/compare.py design/screens/light/K03-kid-home.png docs/screens/K03/ui/app_light_6.png docs/screens/K03/ui/cmp_light_6.png` (and dark). Read all four images. Logical px (PNG/3), tolerance ±2px.
+- SHAPES rule: background/border rects (x,y,w,h) measured by colour segmentation for coin pill, lock, bubble, dock buttons, card-1 extents (chip pill rects share colours with neighbouring fills so were verified visually instead — full padded pills, no P05-style collapse).
+- Rules applied: PIP (art mandated, slot must match design), STATUS BAR (ignore), DATA + PERIODS, BOTTOM EDGE (pass required), ALIGNMENT (20px gutters), CHILD ORDER (no child list here — n/a; quest order stays alphabetical per `1_plan.md` §a), COPY (U+0027 verified again in both files), FONTS (grepped: no `GoogleFonts`/google_fonts in feature lib or tests ✓), LETTER SPACING (no `letterSpacing` in view; no K03 case ✓), CHIP ROWS (chips display-only, no interactive row — n/a ✓), BALANCED HEADINGS (checked — see obs 5), TRIAL (n/a), ORCHESTRATOR_NOTES (all incl. #29 shared batch 2 + #32 partial-edits warning), `1_plan.md`, SPACING_SPEC.
 
 Results:
-- light mean diff: 11.99% — bands: 0: 2.94% · 1: 5.06% · 2: 9.93% · 3: 7.79% · 4: 9.08% · 5: 23.45% · 6: 24.88% · 7: 12.80%
-- dark mean diff: 10.95% — bands: 0: 3.00% · 1: 4.98% · 2: 9.48% · 3: 5.58% · 4: 8.07% · 5: 22.18% · 6: 22.81% · 7: 11.49%
-- QA band target MET: bands 3-5 dropped clearly vs iter4 (light 13.18→7.79 / 13.20→9.08; dark 9.71→5.58 / 12.90→8.07). Band 7 residual is the required dock-surface-vs-outdated-PNG-green delta (override, not a defect).
-- QA position targets (logical px): hearts top design 443 vs app 446 (+3, was +12) ✓; dock top 719-721 vs 713-715 (−6, unchanged); bottom edge dock-surface to y842 both themes (white light, navy (31,28,46) dark) ✓ no strip.
+- light mean diff: 12.52% — bands: 0: 1.89% · 1: 4.36% · 2: 14.03% · 3: 22.84% · 4: 9.54% · 5: 22.33% · 6: 18.37% · 7: 6.73%
+- dark mean diff: 11.22% — bands: 0: 1.86% · 1: 3.98% · 2: 14.54% · 3: 16.22% · 4: 9.67% · 5: 21.70% · 6: 16.33% · 7: 5.42%
+- Band 3 spiked (light 7.79→22.84): the pet slot regressed (see #1). Band 7 at its best yet (dock exact + bottom edge correct; residual is the required surface-vs-PNG-green delta).
 
-Fixed since iter4: bottom-edge strip gone both themes (was must-FAIL); hearts +12→+3; light green band now starts y536 (was 562); shared forks removed per notes #15-20 (visual result identical-or-better).
+SHAPES (design → app, light): coin pill (227,65,79,36) → (228,65,78,36) ✓; lock (315,56,54,54) → identical ✓; dock Pip (27,741,95,52) → (27,741,93,54) ✓; Shop (145,738,100,58) → (144,738,102,58) ✓; My jar (264,737,103,60) → (265,737,102,60) ✓; dock top border 719-721 → 719-721 EXACT ✓; bottom edge dock-surface to y842 both themes ✓ (white light, navy (31,28,46) dark — BOTTOM EDGE pass). Card-1 same height (~85-86 both) — position only (see #1).
 
-Accepted / overridden (NOT defects):
-- A1 counts "4 done today" / "4 of 6 done" / ~66.7% vs PNG 3/50% — correct per DATA + PERIODS + notes #2.
-- A2 2nd card "Hoover the stairs" (approved → "Done") vs PNG "Reading" sample — alphabetical data order wins (`1_plan.md` §a); same peek-above-dock presentation. CHILD ORDER ruling concerns children, not quests.
-- A3 Pip drawing vs v1 SVG — MANDATED `PipAvatar`. A4 status bar (OS time only) — ignored (band 0 is this only).
-- A5 tiles `surface2` vs tints — SHARED_REQUEST #1. A6 title ≈17/22 vs 18/24 — pre-declared token. A7 no OS pill in captures — expected.
-- A8 COPY rule PASS: "Today's quests" and "Let's do some quests!" use U+0027 in BOTH the HTML source and the view (verified codepoint-by-codepoint); "Waiting for Mum", "Hi Maya!", "Pip is happy today" match; quest titles come from the DB seed (data wins).
+Fixed / held since iter5: bottom edge, dock top exact (was −6), hearts stroke, dock icons, no OS pill artefacts, stable frames.
 
-Deviations (design value → app value + fix):
-1. Dark lower-content background missing the meadow tint (moderate, dark-only — FAIL driver, carried from iter4). Design dark x=10 grades (37,52,88) at y540 → teal (33,64,72) at y700 behind progress/cards. App dark is flat navy (37,51,89) across y540-710, while light correctly renders its green band. Fix: dark meadow fills behind the lower content (dark `--kid-meadow`/`--horizon`, `hill-front` bake per SPACING §9.14) — light proves the layer works; dark renders nothing. For the iteration-6 builder; no code touched here.
-2. Residual +10-13px excess in the hearts→progress span (moderate, both themes). Hearts bottom → progress top: design 75px vs app 85px; progress borders ≈+13 (527-542 vs 540-555); card-1 top +13 (559-561 vs 572-574, same 3px triplet; progress→card-1 gap correct at 17 both). Title/chip/progress show clear doubling in the diff. Fix: trim ≈10px from the section-title block/gaps (shared section style or K03 spacing), keeping hearts top at 443-446.
-3. Dock top −6px (minor, ALIGNMENT): light 713-715 vs 719-721, unchanged from iter3/4. Fix: land exactly on y≈720 when owning the inset.
-4. Dark pet glow circle present in app, absent in PNG (informational). App follows SPACING §7 (white@10% dark); the PNG omits it. Spec-compliant — orchestrator to rule if ever normalised; not counted toward the verdict.
+Accepted / overridden (NOT defects): A1 counts 4/4-of-6 + fill (DATA+PERIODS); A2 2nd-card sample order (alphabetical wins); A3 Pip ART (mandated v2); A4 status bar; A5 tiles (SHARED_REQUEST #1); A6 title size (pre-declared); A7 band-7 PNG delta (required by override); A8 COPY exact (U+0027 both files).
 
-Otherwise correct: header row, bubble, hearts 4/5 stroked + caption, section chip, kid progress geometry, card geometry/chips/checks per status, dock buttons (glyphs, labels, colours both themes), 20px gutters edge-aligned, no overflow/ellipsis issues, coins-only, all other dark token flips correct.
+Deviations (design → app + fix):
+1. Pet-stage block ~46-56px too tall; Pip slot wrong (MAJOR, both themes — REGRESSION from iter5, consistent with notes #32 partial migration). Design: Pip ≈152 seated IN the 260x236 nest (nest top ≈y300). App: small Pip floating high with a daylight gap + detached shadow above a smaller nest. Measured knock-on: hearts +46 (443-452 → 489-498), progress ≈+56 (borders 527/542 → 583/598), card-1 top +56 (559-561 → 615-617, height unchanged), card-2 fully hidden below the dock (design shows it peeking). Fix: size the shared `NestPetStage` box per notes #17/#25 (explicit size mode, `pipSize` = design size, PipAvatar seated between the nest rims, no gap, no excess bottom gap) — keep the correct fixes, finish the rest. No code touched in this stage.
+2. Dark lower-content meadow still missing (moderate, dark-only, carried from iter4/5). Design dark x=10: (37,52,88)@540 grading to teal (33,64,72)@700. App dark: flat navy (38,46,102)→(36,53,86). Light renders its green band correctly, so this is dark-only. Fix: dark meadow fills behind the lower content (tokens + `hill-front` bake, SPACING §9.14).
+3. Speech bubble 11px too tall (minor): white bbox (100,130,190,35) → (100,130,190,46), same x/y/w. Contributes to the downstream shift. Fix: `NestSpeechBubble` padding/text metrics vs HTML (`padding 8px 14px`, 16/24).
+4. Section/card vertical positions inherit #1 (position only — shapes pass): section chip pill and card chips render full padded pills, correct h32 look; nothing collapsed. No separate fix beyond #1.
+5. Observation (code conformance, NOT visible, not counted): "Today's quests" uses `NestType.kidTitle` directly (view l.477) instead of `NestBalancedText`, although `.kid-title` CSS has `text-wrap: balance`. Single-line heading renders identically, so no visual deviation — flag for the builder to adopt the component anyway per the BALANCED rule.
 
-Iteration-6 fixes (local): #1 dark meadow behind lower content; #2 section-block trim (≈10px); #3 dock top to y≈720. Shared/pre-declared: tile tint, title size.
+Otherwise correct: header row, bubble copy/tail, hearts 4/5 + caption, section chip, kid progress geometry, card geometry/chips/checks per status, dock (exact), 20px gutters edge-aligned, no overflow/ellipsis, coins-only, all other dark flips correct.
+
+Iteration-7 fixes (local): #1 pet-stage size/seat (the whole +56 chain), #2 dark meadow, #3 bubble height; adopt #5 `NestBalancedText`. Shared/pre-declared: tile tint, title size.
 
 VERDICT: FAIL

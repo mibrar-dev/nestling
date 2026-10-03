@@ -798,4 +798,106 @@ void main() {
       },
     );
   });
+
+  // -------------------------------------------------------------------------
+  // `switchMapStream` — the helper `watchHome` is built on
+  // -------------------------------------------------------------------------
+  //
+  // Two hazards this helper exists for, both reachable in production:
+  //  1. `Stream.asyncExpand` pauses the outer subscription until the current
+  //     inner stream CLOSES. Drift watch streams never close, so a child
+  //     switch after the first emission would stall forever.
+  //  2. The outer stream may legitimately end after one value (`Stream.value`
+  //     — which `watchActiveChild` returns for "no active child", and any
+  //     `async*` that yields the row once). If the result closed there, the
+  //     inner quest subscription would be torn down one tick in and every
+  //     later completion flip would be silently dropped — the screen would
+  //     stop updating after its first frame.
+
+  group('switchMapStream', () {
+    test(
+      'keeps forwarding the live inner stream after the outer completes',
+      () async {
+        final outer = Stream<String>.value('maya');
+        final inner = StreamController<String>();
+        final seen = <String>[];
+        final sub = switchMapStream<String, String>(
+          outer,
+          (_) => inner.stream,
+        ).listen(seen.add);
+        await Future<void>.delayed(Duration.zero);
+        inner.add('items-1');
+        await Future<void>.delayed(Duration.zero);
+        // The outer is already done; the inner is still live.
+        inner.add('items-2');
+        await Future<void>.delayed(Duration.zero);
+        expect(seen, <String>[
+          'items-1',
+          'items-2',
+        ], reason: 'an outer that completes must not end the result stream');
+        await sub.cancel();
+        await inner.close();
+      },
+    );
+
+    test('a second outer emission replaces the inner subscription', () async {
+      final outer = StreamController<String>();
+      final first = StreamController<String>();
+      final second = StreamController<String>();
+      final seen = <String>[];
+      final sub = switchMapStream<String, String>(
+        outer.stream,
+        (child) => (child == 'maya' ? first.stream : second.stream),
+      ).listen(seen.add);
+      outer.add('maya');
+      await Future<void>.delayed(Duration.zero);
+      first.add('maya-items');
+      await Future<void>.delayed(Duration.zero);
+      outer.add('leo');
+      await Future<void>.delayed(Duration.zero);
+      // The old child's stream must be detached…
+      first.add('maya-stale');
+      // …and the new child's must flow.
+      second.add('leo-items');
+      await Future<void>.delayed(Duration.zero);
+      expect(seen, <String>['maya-items', 'leo-items']);
+      await sub.cancel();
+      await outer.close();
+      await first.close();
+      await second.close();
+    });
+
+    test('forwards an inner error without closing the result', () async {
+      final inner = StreamController<String>();
+      final seen = <String>[];
+      final errors = <Object>[];
+      final sub = switchMapStream<String, String>(
+        Stream<String>.value('maya'),
+        (_) => inner.stream,
+      ).listen(seen.add, onError: errors.add);
+      await Future<void>.delayed(Duration.zero);
+      inner
+        ..addError(Exception('load failed'))
+        ..add('after-error');
+      await Future<void>.delayed(Duration.zero);
+      expect(errors, hasLength(1));
+      expect(seen, <String>['after-error'], reason: 'the stream stays usable');
+      await sub.cancel();
+      await inner.close();
+    });
+
+    test('cancelling the result cancels the inner subscription', () async {
+      final inner = StreamController<String>();
+      var innerCancelled = false;
+      final sub = switchMapStream<String, String>(
+        Stream<String>.value('maya'),
+        (_) => inner.stream,
+      ).listen((_) {});
+      await Future<void>.delayed(Duration.zero);
+      inner.onCancel = () => innerCancelled = true;
+      await sub.cancel();
+      expect(innerCancelled, isTrue, reason: 'no leaked quest subscription');
+      await inner.close();
+    });
+  });
 }

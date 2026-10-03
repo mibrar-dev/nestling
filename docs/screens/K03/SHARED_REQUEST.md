@@ -106,3 +106,26 @@
 No schema/DI/token changes needed. No new assets needed (all icons +
 `nest`/`coin`/`meadowHill` exist in `nestling_assets.dart`; Pip renders via
 `PipAvatar` + `pip_v2/mochi` fallbacks).
+
+13. Need (Stage 6 iteration 6, K03-BUG-13 — follow-up to #11): the new
+    explicit size mode does not respect the parent width. K03 calls
+    `NestPetStage(nestWidth: 260, fixedPipHeight: 152)`; the shared
+    component derives `nominalStageW = 260 / 0.62 ≈ 419.35` and renders the
+    scene at that width regardless of `LayoutBuilder.maxWidth`, anchored so
+    its centre stays at x ≈ 229.7 for every screen width. Measured on the
+    current tree (widget test, pet-slot proof):
+    - 390 px: slot centre 195.0 vs nest/Pip centre 229.68 → **+34.68 px
+      off-centre**;
+    - 320 px: slot centre 160.0 vs 229.68 → **+69.68 px off-centre**, nest
+      right edge 359.7 vs slot right 300 → **+59.68 px overflow** (≈40 px
+      past the physical screen edge, clipped).
+    Fix (shared): in explicit mode, clamp the scene to the available width
+    (scale `stageW`/`nestW`/`pipH` by `maxW / nominalStageW` when
+    `maxW < nominalStageW`) and centre it in the box; or let the caller pass
+    a responsive `nestWidth` from a `LayoutBuilder`. The legacy path already
+    scaled down instead of overflowing, so this is a regression of that
+    guard. Proof: `K03-BUG-13: pet slot: nest and Pip centred at 390, no
+    clip at 320` (skipped; run with `--run-skipped`). Files:
+    `app/lib/core/design_system/components/nest_pet_stage.dart`, optionally
+    `app/lib/features/kid_home/presentation/views/kid_home_view.dart`.
+    Blocks: K03's owner ALIGNMENT rule at narrow widths.
