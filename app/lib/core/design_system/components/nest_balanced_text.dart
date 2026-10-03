@@ -23,7 +23,7 @@ class NestBalancedText extends StatelessWidget {
     super.key,
     this.textAlign = TextAlign.center,
     this.maxLines,
-    this.overflow = TextOverflow.ellipsis,
+    this.overflow = TextOverflow.clip,
     this.softWrap = true,
   });
 
@@ -49,7 +49,7 @@ class NestBalancedText extends StatelessWidget {
       textDirection: textDirection,
       textScaler: textScaler,
       maxLines: maxLines,
-      ellipsis: '…',
+      ellipsis: maxLines == null ? null : '…',
     )..layout(maxWidth: maxWidth < 1 ? 1 : maxWidth);
     return painter.computeLineMetrics().length;
   }
@@ -100,7 +100,7 @@ class NestBalancedText extends StatelessWidget {
     style: style,
     textAlign: textAlign,
     maxLines: maxLines,
-    overflow: overflow,
+    overflow: maxLines == null ? TextOverflow.clip : overflow,
     softWrap: softWrap,
   );
 
