@@ -43,20 +43,31 @@ Consequence for P03: passing `errorText` no longer re-opens `P03-BUG-11`
 switch away — pass `errorText` to both fields and delete the screen-owned
 error rows.
 
-Status (bugs stage, iteration 5 — **final disposition: Decision A**): the
-screen keeps its own live-region error rows and the proof is
-skip-marked with this reason until §8 lands. Switching to the shared row
-today would fix the border but drop the announcement of the validation
-message (the test/review stages both judge the announcement the higher
-value; see `6_bugs.md` P03-BUG-16). When §8 lands, the switch is: pass
-`errorText` to both fields, delete the owned rows and their `buildWhen`
-selectors, un-skip P03-BUG-16. Do **not** pass `errorText` while keeping the
-owned rows — the message would render twice.
+Status (integrate stage, iteration 6 — **final disposition: Decision B**):
+§8 landed (`0bafd2a`, shared batch 2), so the switch happened: both fields
+take `errorText`, the screen-owned error rows and their `buildWhen`
+selectors are deleted, and the shared row supplies the live region — the
+danger border and the announcement now arrive together. `P03-BUG-16`,
+`P03-BUG-20` and `P03-BUG-21` are green regression guards and **no proof
+on this screen is skip-marked**: do not re-skip them. The password helper
+row stays feature-owned (the shared field's `helperText` is left null) and
+is hidden while an error shows, matching the shared field's error-wins
+behaviour. Do **not** re-add owned error rows while passing `errorText` —
+the message would render twice.
 
 ## 6. The served Inter build is ~3–4% wider than the design's, so line
-## breaks land early (new, non-blocking)
+## breaks land early — RESOLVED
 
-Need: `google_fonts` serves an Inter build whose glyph advances are wider
+Resolved by the shared `body_text_width` work (`a4691f9`, merged `bbc7b55`):
+the designs' own Inter 4.001 / Nunito 3.602 builds are bundled in
+`app/assets/fonts`, `pubspec.yaml` no longer fetches `google_fonts`, and
+`body_text_width_test.dart` pins body advances against the browser's
+(including P03's subtitle line 1, 349.06dp, ±1%). So P03-BUG-17 is gone with
+**no local change**, and no local proof is possible either: the widget
+harness' fallback font is not Inter, so the wrap can only be pinned
+shared-side. Do not chase it with a size/width/letter-spacing hack.
+
+Original finding (kept for the record): `google_fonts` served an Inter build whose glyph advances are wider
 than the one the design HTML was rendered with, so text that fits on one
 line in the design wraps a word early in the app. Measured on P03's light
 capture against `design/screens/light/P03-create-account.png` (identical
@@ -94,19 +105,22 @@ overrides disappear. Blocks: no — `P03-BUG-12` pins the current override and
 the geometry matches the design.
 
 ## 8. `NestTextField`'s gutter error row should announce like Material's did
-## (new, non-blocking)
+## — RESOLVED
 
-Need: the shared `errorText` row renders as a plain `Text`
-(`nest_text_field.dart:199-206`) — no live region, no explicit label node
-beyond the text's own. Material wrapped `InputDecoration.errorText` in a
-`liveRegion` (`material/input_decorator.dart:419`), so a VoiceOver user heard
-a client-side validation error the moment it appeared; the shared row no
-longer does. P03 currently works around Material and owns its error rows, and
-its attempt to re-add the live region regressed into an empty-label node
-(P03-BUG-21); once this shared row announces (e.g.
+**RESOLVED** by shared batch 2 (`0bafd2a`), with the exact shape requested:
+`nest_text_field.dart` wraps the gutter row in
 `Semantics(liveRegion: true, label: errorText,
-child: ExcludeSemantics(child: Text(errorText, …)))`), P03 can pass
-`errorText`, delete its owned rows, and close P03-BUG-16/20/21 together.
-Blocks: no — P03 keeps its own live-region rows and skip-marks P03-BUG-16
-pending this (Decision A, see §5). Landing it is a ~3-line core change and
-P03's switch then closes the last open P03-local defect.
+child: ExcludeSemantics(child: Text(errorText, …)))`, so the message is
+announced once and the node is labelled (P03-BUG-21's shape). P03's switch
+(Decision B, §5) then closed P03-BUG-16/20/21 together; nothing local
+remains.
+
+Original finding (kept for the record): the shared `errorText` row rendered
+as a plain `Text` (`nest_text_field.dart:199-206`) — no live region, no
+explicit label node beyond the text's own. Material wrapped
+`InputDecoration.errorText` in a `liveRegion`
+(`material/input_decorator.dart:419`), so a VoiceOver user heard a
+client-side validation error the moment it appeared; the shared row no
+longer did. P03 worked around Material and owned its error rows, and its
+attempt to re-add the live region regressed into an empty-label node
+(P03-BUG-21).

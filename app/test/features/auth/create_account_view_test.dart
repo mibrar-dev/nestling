@@ -13,7 +13,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/auth/auth_routes.dart';
 import 'package:nestling/features/auth/domain/auth_repository.dart';
@@ -126,7 +125,6 @@ Future<AuthBloc> _pumpCreateAccountView(
   required AuthRepository repository,
   required ThemeMode theme,
 }) async {
-  GoogleFonts.config.allowRuntimeFetching = false;
   final bloc = AuthBloc(repository: repository);
   addTearDown(bloc.close);
   await tester.pumpWidget(
@@ -257,10 +255,6 @@ void main() {
   });
 
   group('P03 create account — BLoC states render the static form', () {
-    setUp(() {
-      GoogleFonts.config.allowRuntimeFetching = false;
-    });
-
     testWidgets('initial: content renders before the load event', (
       tester,
     ) async {
@@ -643,7 +637,6 @@ void main() {
     });
 
     testWidgets('back pops when a route is stacked', (tester) async {
-      GoogleFonts.config.allowRuntimeFetching = false;
       final bloc = AuthBloc(repository: _FakeAuthRepository());
       addTearDown(bloc.close);
       final router = GoRouter(

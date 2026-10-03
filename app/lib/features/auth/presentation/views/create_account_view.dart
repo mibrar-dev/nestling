@@ -166,44 +166,16 @@ class _CreateAccountViewState extends State<CreateAccountView> {
                         buildWhen: (previous, current) =>
                             previous.emailError != current.emailError,
                         builder: (context, state) {
-                          return Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              NestTextField(
-                                key: const ValueKey('p03_email'),
-                                label: 'Email',
-                                controller: _emailController,
-                                keyboardType: TextInputType.emailAddress,
-                                textInputAction: TextInputAction.next,
-                                onChanged: (value) => context
-                                    .read<AuthBloc>()
-                                    .add(AuthEmailChanged(value)),
-                                // P03-BUG-11: no errorText — Material indents
-                                // it 20dp inside the field; the error lives
-                                // in the owned row below, on the gutter.
-                              ),
-                              if (state.emailError != null) ...[
-                                const SizedBox(height: NestSpacing.gap6),
-                                // P03-BUG-20/21: the owned row must announce
-                                // like Material's live-region error row did —
-                                // and the message rides on the wrapper: an
-                                // `ExcludeSemantics` child leaves the node
-                                // labelless (P03-BUG-21).
-                                Semantics(
-                                  liveRegion: true,
-                                  label: state.emailError,
-                                  child: ExcludeSemantics(
-                                    child: Text(
-                                      state.emailError!,
-                                      style: NestType.caption(
-                                        color: tokens.danger,
-                                      ).copyWith(fontWeight: FontWeight.w600),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
+                          return NestTextField(
+                            key: const ValueKey('p03_email'),
+                            label: 'Email',
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
+                            errorText: state.emailError,
+                            onChanged: (value) => context.read<AuthBloc>().add(
+                              AuthEmailChanged(value),
+                            ),
                           );
                         },
                       ),
@@ -225,40 +197,21 @@ class _CreateAccountViewState extends State<CreateAccountView> {
                                 controller: _passwordController,
                                 obscureText: true,
                                 textInputAction: TextInputAction.done,
+                                errorText: errorText,
                                 onChanged: (value) => context
                                     .read<AuthBloc>()
                                     .add(AuthPasswordChanged(value)),
-                                // P03-BUG-11: no errorText — Material indents
-                                // it 20dp inside the field; the error lives
-                                // in the owned row below, on the gutter like
-                                // the helper it replaces.
                               ),
                               // P03-BUG-8: the helper is a feature-owned row
                               // on the field gutter (6dp below the input),
                               // not the indented InputDecoration line.
-                              // Hidden while an error shows in its place.
+                              // Hidden while an error shows in its place
+                              // (the shared field's error row takes over).
                               if (errorText == null) ...[
                                 const SizedBox(height: NestSpacing.gap6),
                                 Text(
                                   'At least 8 characters',
                                   style: NestType.caption(color: tokens.ink2),
-                                ),
-                              ] else ...[
-                                const SizedBox(height: NestSpacing.gap6),
-                                // P03-BUG-20/21: announce like Material's
-                                // live-region row did, with the message on
-                                // the wrapper (see the email row).
-                                Semantics(
-                                  liveRegion: true,
-                                  label: errorText,
-                                  child: ExcludeSemantics(
-                                    child: Text(
-                                      errorText,
-                                      style: NestType.caption(
-                                        color: tokens.danger,
-                                      ).copyWith(fontWeight: FontWeight.w600),
-                                    ),
-                                  ),
                                 ),
                               ],
                             ],
@@ -665,11 +618,20 @@ class _RenderHitTestExpand extends RenderProxyBox {
     // Normal path first: taps the layout box resolves keep working exactly
     // as before (a single path, no duplicates).
     var hit = child.hitTest(entry, position: position);
-    // Caption overhang (P03-BUG-18): points outside the caption Stack never
-    // reach the targets through normal descent — every intermediate box
-    // bounds-checks them away (and the bar background would claim them
-    // first). Descend into the caption Stack's children directly for those
-    // points only; each box still applies its own bounds.
+    // Caption overhang (P03-BUG-18/22): points outside the caption Stack
+    // never reach the targets through normal descent — the Stack
+    // bounds-checks them away, and the bar background's DecoratedBox claims
+    // the tap instead (so `hit` is true over the bar's empty area). For
+    // those points, descend into the caption Stack's children directly, so
+    // every overhanging link box applies its own bounds (P03-BUG-18). Each
+    // box still applies its own bounds.
+    //
+    // The exception is an interactive control: when the normal path already
+    // landed on a gesture target (the submit button's strip overlapping a
+    // link box), the link must NOT also be collected, or the tap activates
+    // both once the routes land (P03-BUG-22). Ancestors add their entries
+    // after ours returns, so at this point `entry` holds only the bar
+    // subtree's results.
     final stack = _captionStack();
     if (stack != null) {
       final origin = stack.localToGlobal(Offset.zero);
@@ -680,17 +642,24 @@ class _RenderHitTestExpand extends RenderProxyBox {
         stack.size.width,
         stack.size.height,
       ).contains(position)) {
-        stack.visitChildren((grandchild) {
-          if (grandchild is RenderBox) {
-            final childOrigin = grandchild.localToGlobal(Offset.zero);
-            if (grandchild.hitTest(
-              entry,
-              position: position - (childOrigin - mine),
-            )) {
-              hit = true;
+        final ownedByControl = entry.path.any(
+          (e) =>
+              e.target is RenderPointerListener ||
+              e.target is RenderSemanticsGestureHandler,
+        );
+        if (!ownedByControl) {
+          stack.visitChildren((grandchild) {
+            if (grandchild is RenderBox) {
+              final childOrigin = grandchild.localToGlobal(Offset.zero);
+              if (grandchild.hitTest(
+                entry,
+                position: position - (childOrigin - mine),
+              )) {
+                hit = true;
+              }
             }
-          }
-        });
+          });
+        }
       }
     }
     return hit;
