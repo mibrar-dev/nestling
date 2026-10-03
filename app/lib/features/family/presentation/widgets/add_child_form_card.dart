@@ -1,0 +1,196 @@
+import 'package:flutter/material.dart';
+import 'package:nestling/core/design_system/design_system.dart';
+import 'package:nestling/features/family/presentation/widgets/child_display.dart';
+
+/// P05 "Add a child" form card (HTML `.form-card`, padding 14).
+///
+/// The nickname [TextEditingController]/[FocusNode] are owned by the caller
+/// (the screen's state) so the bottom CTA can read the field and restore
+/// focus after a save; the bloc stays the source of truth for validation.
+class AddChildFormCard extends StatelessWidget {
+  const AddChildFormCard({
+    required this.nicknameController,
+    required this.nicknameFocus,
+    required this.draftAgeBand,
+    required this.draftAvatarColour,
+    required this.nicknameError,
+    required this.onNicknameChanged,
+    required this.onAgeBandSelected,
+    required this.onAvatarColourSelected,
+    super.key,
+  });
+
+  final TextEditingController nicknameController;
+  final FocusNode nicknameFocus;
+  final String draftAgeBand;
+  final String draftAvatarColour;
+  final String? nicknameError;
+  final ValueChanged<String> onNicknameChanged;
+  final ValueChanged<String> onAgeBandSelected;
+  final ValueChanged<String> onAvatarColourSelected;
+
+  static const List<String> ageBands = <String>['4-6', '7-9', '10-12', '13+'];
+
+  static const List<String> swatchColours = <String>[
+    'lilac',
+    'peach',
+    'sky',
+    'leaf',
+    'coin',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.nest;
+    return NestCard(
+      padding: const EdgeInsets.all(NestSpacing.gap14),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Add a child', style: NestType.h3(color: tokens.ink)),
+          const SizedBox(height: NestSpacing.gap10),
+          NestTextField(
+            key: const Key('nicknameField'),
+            label: 'Nickname',
+            hintText: 'e.g. Ollie',
+            controller: nicknameController,
+            focusNode: nicknameFocus,
+            textInputAction: TextInputAction.done,
+            errorText: nicknameError,
+            onChanged: onNicknameChanged,
+          ),
+          const SizedBox(height: NestSpacing.s2),
+          // The design's `role="group" aria-label` (P05-add-children.html)
+          // becomes this labelled node. It sits on the row's own `.lbl`
+          // heading and deliberately does NOT wrap the chips: a `Semantics`
+          // render box is tight around its child (RenderBox.hitTest stops at
+          // `size.contains`), so wrapping the row would clip the 44-px tap
+          // target's 6 px above/below the 32-px run — P05-BUG-11. The card
+          // `Column` hit-tests its children without a bounds check, so
+          // `NestChipWrap` (which widens its own hit test) receives the tap.
+          Semantics(
+            container: true,
+            label: 'Age band',
+            excludeSemantics: true,
+            child: Text(
+              'Age band',
+              style: NestType.fieldLabel(color: tokens.ink2),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(height: NestSpacing.s1),
+          // `NestChipWrap`, not `Wrap`: the pill is 32 high in the flow
+          // (`SPACING_SPEC` §6/§10.6) and the wrap is what keeps the 44-px tap
+          // target reachable 6 px above and below the run (P05-BUG-11).
+          NestChipWrap(
+            spacing: NestSpacing.s2,
+            runSpacing: NestSpacing.s2,
+            children: [
+              // The shared NestChip shrink-wraps by construction (its old
+              // greedy Center is gone), so the row lays out in one run.
+              for (final band in ageBands)
+                NestChip(
+                  key: Key('ageChip-$band'),
+                  label: displayAgeBand(band),
+                  selected: draftAgeBand == band,
+                  onSelected: (_) => onAgeBandSelected(band),
+                ),
+            ],
+          ),
+          const SizedBox(height: NestSpacing.s2),
+          // Same rule as the "Age band" heading above.
+          Semantics(
+            container: true,
+            label: 'Avatar colour',
+            excludeSemantics: true,
+            child: Text(
+              'Avatar colour',
+              style: NestType.fieldLabel(color: tokens.ink2),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(height: NestSpacing.s1),
+          // Swatches are interactive items too, so the row uses
+          // `NestChipWrap` as well (owner rule). Their own boxes are already
+          // 44×44 (`.sw`), so this only widens the hit test: no layout change.
+          NestChipWrap(
+            spacing: NestSpacing.s2,
+            runSpacing: NestSpacing.s2,
+            children: [
+              for (final colour in swatchColours)
+                _Swatch(
+                  colour: colour,
+                  selected: draftAvatarColour == colour,
+                  onTap: () => onAvatarColourSelected(colour),
+                ),
+            ],
+          ),
+          const SizedBox(height: NestSpacing.gap6),
+          Text(
+            'We only ask for an age range so quests suit them.',
+            style: NestType.caption(color: tokens.ink2),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Swatch extends StatelessWidget {
+  const _Swatch({
+    required this.colour,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String colour;
+  final bool selected;
+  final VoidCallback onTap;
+
+  Color _fill(NestTokens tokens) => switch (colour) {
+    'lilac' => tokens.lilac,
+    'peach' => tokens.peach,
+    'sky' => tokens.sky,
+    'leaf' => tokens.leaf,
+    'coin' => tokens.coin,
+    _ => tokens.surface2,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.nest;
+    return Semantics(
+      key: Key('swatch-$colour'),
+      label: 'Avatar colour $colour',
+      selected: selected,
+      button: true,
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: Container(
+            width: NestDevice.tapParent,
+            height: NestDevice.tapParent,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: _fill(tokens),
+              boxShadow: selected
+                  ? <BoxShadow>[
+                      BoxShadow(
+                        color: tokens.ink,
+                        spreadRadius: NestSpacing.gap3,
+                      ),
+                    ]
+                  : null,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
