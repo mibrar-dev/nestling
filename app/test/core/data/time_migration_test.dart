@@ -18,6 +18,10 @@ import 'package:sqlite3/sqlite3.dart' as sqlite;
 /// References are omitted on purpose: only the upgraded tables must exist.
 const List<String> _v1Ddl = <String>[
   "CREATE TABLE families (id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL DEFAULT 'Nestling', payout_day INTEGER NOT NULL DEFAULT 6, coin_value_pence_per_coin INTEGER NOT NULL DEFAULT 1, pocket_money_mode TEXT NOT NULL DEFAULT 'both')",
+  // Pre-creation-order `children` (no `created_at` / `created_at_tz` until
+  // schema v3): real v1 databases have this table, so the fixture keeps it
+  // and the v3 step backfills it (empty here ⇒ no-op).
+  'CREATE TABLE children (id TEXT NOT NULL PRIMARY KEY, family_id TEXT NOT NULL, nickname TEXT NOT NULL, age_band TEXT NOT NULL DEFAULT "7-9", age_years INTEGER NOT NULL DEFAULT 7, avatar_colour TEXT NOT NULL DEFAULT "lilac", pin_hash TEXT NULL, pip_style TEXT NOT NULL DEFAULT "mochi", pip_skin TEXT NOT NULL DEFAULT "sunny", pip_accessory TEXT NOT NULL DEFAULT "none", pip_stage INTEGER NOT NULL DEFAULT 1, pip_total_coins INTEGER NOT NULL DEFAULT 0, coins INTEGER NOT NULL DEFAULT 0, happiness INTEGER NOT NULL DEFAULT 4, happy_days INTEGER NOT NULL DEFAULT 0, weekly_base_pence INTEGER NOT NULL DEFAULT 0)',
   "CREATE TABLE quests (id TEXT NOT NULL PRIMARY KEY, family_id TEXT NOT NULL, title TEXT NOT NULL, icon TEXT NOT NULL DEFAULT 'star', coins INTEGER NOT NULL DEFAULT 10, repeat_rule TEXT NOT NULL DEFAULT 'once', days TEXT NOT NULL DEFAULT '', due_label TEXT NULL, needs_approval INTEGER NOT NULL DEFAULT 1, assignee_child_id TEXT NULL, active INTEGER NOT NULL DEFAULT 1)",
   "CREATE TABLE quest_completions (id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, quest_id TEXT NOT NULL, child_id TEXT NOT NULL, family_id TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'to_do', coins INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, decided_at INTEGER NULL)",
   "CREATE TABLE ledger_entries (id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, family_id TEXT NOT NULL, child_id TEXT NOT NULL, type TEXT NOT NULL, amount_pence INTEGER NOT NULL, note TEXT NOT NULL DEFAULT '', date INTEGER NOT NULL)",
