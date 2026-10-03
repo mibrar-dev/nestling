@@ -570,17 +570,33 @@ void main() {
     (tester) async {
       await _pumpCreateAccount(tester);
 
+      // The width itself is pinned with the design's own fonts in
+      // `typography_test.dart` (197.68 dp). Here — where the harness
+      // substitutes a much wider display font — a width assertion would pass
+      // for the wrong reason: `NestBalancedText` cannot find a two-line
+      // width for that font with `maxLines: 3`, so the shared clamp
+      // (SHARED_REQUEST §10) collapses the box to 0.1 dp and *any*
+      // "narrower than 260" expectation is satisfied. So this proof pins the
+      // two things that must hold in every font: the design break comes from
+      // the balanced component, and the headline lays out in the full
+      // content column with no hand-set cap.
+      final balanced = tester.widget<NestBalancedText>(
+        find.byType(NestBalancedText),
+      );
+      expect(balanced.text, 'Create your family account');
       expect(
-        tester.getSize(find.text('Create your family account')).width,
-        lessThanOrEqualTo(260),
+        balanced.style.fontSize,
+        NestType.h1().fontSize,
+        reason: 'the design sets --fs-h1 on the h1 only',
+      );
+      expect(
+        tester.getSize(find.byType(NestBalancedText)).width,
+        closeTo(350, 0.5),
         reason:
-            'real-font widths are "Create your family" 251.2 and '
-            '"family account" 197.7, so the headline column must stay below '
-            '252 rather than filling the 350dp content width; the design '
-            'breaks "Create your / family account". Since iteration 8 that '
-            'narrowing comes from the balanced search inside '
-            'NestBalancedText rather than from a hand-set cap, so this proof '
-            'still holds the headline constrained instead of full-bleed',
+            'the headline owns the whole 350dp content column; the retired '
+            '240dp cap (`_headlineMaxWidth`) is what this proof used to hold, '
+            'and re-adding a cap would put the design break back at the mercy '
+            'of a hand-tuned constant',
       );
 
       await disposeApp(tester);

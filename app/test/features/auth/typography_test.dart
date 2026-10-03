@@ -360,67 +360,98 @@ void main() {
       await disposeApp(tester);
     });
 
-    testWidgets('the migration keeps the pixels at the design size', (
+    testWidgets('the full 350dp column balances to the design break', (
       tester,
     ) async {
-      // Builds the component the rule asks for, inside the cap the design
-      // needs, so the fix is known to be reachable: at 1.0
-      // `NestBalancedText` narrows the 240 dp box to 197.7 dp — the
-      // narrowest width that still holds "family account" — and neither the
-      // break nor the gutter moves. If this goes red the migration needs a
-      // different width, not a different component.
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: NestTheme.light(),
-          home: Scaffold(
-            body: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: NestSpacing.s5),
-              child: Align(
-                alignment: Alignment.topLeft,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 240),
-                  child: NestBalancedText(
-                    'Create your family account',
-                    // Colour is irrelevant to wrapping here; the screen
-                    // applies the design's `tokens.ink`.
-                    style: NestType.h1(),
-                    textAlign: TextAlign.left,
-                    maxLines: 3,
-                  ),
-                ),
+      // The h1 now lays out in the whole content column (the hand-calibrated
+      // 240 dp cap is gone, P03-BUG-24), so this pins *why* the design break
+      // still comes out: `NestBalancedText` takes the minimum line count the
+      // column needs (2) and then narrows to the narrowest width that still
+      // holds 2 lines — 197.68 dp — which is exactly where the design PNG
+      // breaks. The greedy wrap of the same text in the same column is
+      // asserted below for contrast, because that is what the old cap was
+      // emulating.
+      Widget column(Widget child) => MaterialApp(
+        theme: NestTheme.light(),
+        home: Scaffold(
+          body: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: NestSpacing.s5),
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: NestDevice.width - 2 * NestSpacing.s5,
+                child: child,
               ),
             ),
           ),
         ),
       );
-      await tester.pump();
 
-      final paragraph = tester.renderObject<RenderParagraph>(
-        find.text('Create your family account'),
+      Future<List<_Line>> layout(Widget child) async {
+        await tester.pumpWidget(column(child));
+        await tester.pump();
+        final paragraph = tester.renderObject<RenderParagraph>(
+          find.text('Create your family account'),
+        );
+        return _linesOf(paragraph);
+      }
+
+      final balanced = await layout(
+        NestBalancedText(
+          'Create your family account',
+          // Colour is irrelevant to wrapping; the screen applies tokens.ink.
+          style: NestType.h1(),
+          textAlign: TextAlign.left,
+          maxLines: 3,
+        ),
       );
-      final lines = _linesOf(paragraph);
       expect(
-        lines.map((line) => line.text),
+        balanced.map((line) => line.text),
         <String>['Create your', 'family account'],
         reason:
-            'inside the 240 dp cap the design break is already the '
-            'narrowest two-line break, so balancing cannot move it',
+            'the design PNG breaks the h1 after "your"; in a 350 dp '
+            'column the balanced wrap is what produces that',
       );
-      lines.forEach(_expectDesignWidth);
+      balanced.forEach(_expectDesignWidth);
       expect(
-        lines.first.global(paragraph).left,
+        balanced.first
+            .global(
+              tester.renderObject<RenderParagraph>(
+                find.text('Create your family account'),
+              ),
+            )
+            .left,
         closeTo(20, 0.6),
         reason:
             'the narrowed box must stay on the 20 dp gutter, which is why '
-            'the call site has to pass textAlign: TextAlign.left',
+            'the call site passes textAlign: TextAlign.left',
       );
       expect(
-        paragraph.size.width,
+        tester.getSize(find.text('Create your family account')).width,
         closeTo(197.7, 1),
         reason:
-            'the component narrows the cap to the narrowest two-line '
-            'width; measured 197.68 dp',
+            'the component narrows the 350 dp column to the narrowest '
+            'two-line width; measured 197.68 dp',
       );
+
+      // Contrast: the greedy wrap of the same string in the same column is
+      // the break the retired cap used to prevent. If this ever matches the
+      // balanced break, the column is no longer wide enough for the design
+      // and the two are indistinguishable.
+      final greedy = await layout(
+        Text('Create your family account', style: NestType.h1(), maxLines: 3),
+      );
+      expect(
+        greedy.map((line) => line.text),
+        <String>['Create your family', 'account'],
+        reason:
+            'greedy at 350 dp fits "Create your family" (251.2 dp of '
+            'advance) on line 1 — this is why the balanced component, not a '
+            'width constant, is what reproduces the design',
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
     });
 
     // Shared defect, not a P03 one — see SHARED_REQUEST.md §10.
@@ -435,6 +466,66 @@ void main() {
     // These guards exist to catch a regression into the collapsed box
     // (240×0.1 dp, 132 tall), not to pin one wrap pattern — the two width
     // expectations below are the part that must never give.
+    // Accessibility scales go well past the 1.3 the brief asks for. With the
+    // design's own Nunito the h1 needs two lines at every width and scale
+    // below, so the balanced search never enters the clamped region where
+    // SHARED_REQUEST §10's collapse lives (natural line count == maxLines).
+    // These six combinations are the proof that P03 stays out of it; the
+    // fallback-font harness *does* enter it (0.1 × 102 dp), which is why the
+    // shared fix matters for callers that do.
+    for (final size in const <Size>[
+      Size(320, 844),
+      Size(390, 844),
+      Size(430, 844),
+    ]) {
+      for (final scale in const <double>[1.5, 2]) {
+        testWidgets(
+          '${size.width.toInt()}dp at scale $scale keeps the h1 sane',
+          (tester) async {
+            tester.platformDispatcher.textScaleFactorTestValue = scale;
+            addTearDown(
+              tester.platformDispatcher.clearTextScaleFactorTestValue,
+            );
+            await _pump(tester, size: size);
+
+            final finder = find.text('Create your family account');
+            final paragraph = tester.renderObject<RenderParagraph>(finder);
+            final lines = _linesOf(paragraph);
+            expect(
+              paragraph.size.width,
+              greaterThan(150),
+              reason:
+                  'a balanced wrap must never collapse the box '
+                  '(SHARED_REQUEST §10)',
+            );
+            expect(
+              lines.every((line) => line.box.width > 100),
+              isTrue,
+              reason:
+                  'every line must carry words, not single glyphs; got '
+                  '${lines.map((line) => line.text).toList()}',
+            );
+            // All six are two lines. At 430 dp and scale 1.0 the whole
+            // string fits on one (363.6 dp of advance in a 390 dp column) and
+            // the component leaves the full width alone, but from 1.5 up the
+            // balanced wrap is the design's.
+            expect(
+              lines.map((line) => line.text),
+              <String>['Create your', 'family account'],
+              reason:
+                  'the design break survives the scale that forces two '
+                  'lines',
+            );
+            // The line *pitch* is not asserted here: `--lh-h1` is a pixel
+            // value, and Flutter scales it with the text scale (34 dp at
+            // 1.0, 44 dp at 1.5 and 2.0), so it belongs to the scale case
+            // rather than to the wrap.
+            await disposeApp(tester);
+          },
+        );
+      }
+    }
+
     testWidgets('the headline is not a per-glyph column at text scale 1.3', (
       tester,
     ) async {

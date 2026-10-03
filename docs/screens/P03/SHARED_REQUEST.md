@@ -154,48 +154,38 @@ override stays screen-local too. If §7 is ever actioned, the useful shape is
 a "label whose CSS sets no line-height" variant alongside `legalCaption` —
 otherwise the next screen repeats this 2.3 dp.
 
-## 10. `NestBalancedText` collapses to a ~0 dp box when `maxLines` clips the
-## natural line count (still open — no longer blocks P03)
+## 10. `NestBalancedText` collapses to a ~0 dp box when `maxLines` clamps the
+## line count — STILL OPEN, no longer blocking P03
 
-**Status update (iteration 8): still a real `core/` defect, but no longer
-blocking this screen.** P03's migration landed *without* the cap and is green,
-and the measurement that made it look blocking was an artefact of that cap: at
-full 350 dp the h1's minimum line count is 2, which is under `maxLines: 3`, so
-the clamped painter never degenerates — even at text scale 1.3, where the
-unconstrained box would need 3 lines but the *balanced* search still finds a
-2-line width (~257 dp). The collapse needs a caller whose text needs **more
-lines than `maxLines` at every width it offers**. P03's guard
-(`the headline is not a per-glyph column at text scale 1.3`) stays green as the
-regression guard for any future caller.
+Found by Stage 3 (iteration 7), re-checked in iteration 8: **still unfixed.**
+`balancedWidthFor` binary-searches the narrowest width whose line count is
+`<= lineCount`, but it measures through the same `maxLines`-clamped painter it
+searches in (`lineCountFor` forwards `maxLines`). Whenever the text needs
+*more* lines than `maxLines` allows at some width, the count reports exactly
+`maxLines` there, so the predicate stops telling the search where to stop.
 
-Fix unchanged (below): search on the *unclamped* line count
-(`lineCountFor(maxLines: null)`) and only narrow while that count equals the
-target; if the unclamped count already exceeds `maxLines`, fall back to the
-full-width `Text` (the greedy wrap is then the best available). A unit test on
-the component's two static helpers would pin both branches.
-
-Original finding (kept for the record): `balancedWidthFor` binary-searches the narrowest width whose line
-count is `<= lineCount`, but it measures through the same `maxLines`-clamped
-painter it is searching in (`lineCountFor` forwards `maxLines`). When the text
-needs more lines than `maxLines` allows, the count is clamped at every width,
-so the predicate never turns false and the search converges to ~0.
-
-Measured with P03's h1 — `Create your family account`, Nunito 900 28/34, inside
-the 240 dp cap the design needs, `textAlign: TextAlign.left`:
+Measured with the pre-migration shape — P03's h1 inside the 240 dp cap,
+`textAlign: TextAlign.left`, `maxLines: 3`, design fonts:
 
 | text scale | plain `Text` | `NestBalancedText(maxLines: 3)` |
 |---|---|---|
 | 1.0 | 240.00 × 68.00 dp, `Create your` / `family account` | 197.68 × 68.00 dp, same two lines (correct) |
 | 1.3 | 240.00 × 132.00 dp, `Create your` / `family` / `account` | **0.10 × 132.00 dp, `C` / `r` / `eate your family account`** |
 
+The trigger is the *natural* line count reaching `maxLines`: in the cap at
+scale 1.3 the h1 needs three lines and the call site allows three, so every
+narrower width also reports three and the search runs to ~0.
+
+**P03 no longer reaches it** (iteration 8 migrated the h1 and deleted the
+cap): in the full 350 dp column the h1 needs two lines at scale 1.0 *and*
+1.3, both below `maxLines: 3`, so the search leaves the clamped region at a
+real width (197.68 dp / ~257 dp). So this no longer blocks P03 — it is filed
+for the screens that still have a heading whose natural line count equals its
+`maxLines`, where it renders one glyph per line.
+
 Need: search on the *unclamped* line count (`lineCountFor(maxLines: null)`)
 and only narrow while that count equals the target; if the unclamped count
-already exceeds `maxLines`, fall back to the full-width `Text` (the greedy wrap
-is then the best available). A unit test on the component's two static
-helpers would pin both branches; P03's own guard is
-`test/features/auth/typography_test.dart` ("the headline is not a per-glyph
-column at text scale 1.3"), which is green today and turns red if the
-migration lands before this fix.
+already exceeds `maxLines`, fall back to the full-width `Text`.
 Files: `app/lib/core/design_system/components/nest_balanced_text.dart`
 (`balancedWidthFor`, `build`). Blocks: **no longer for P03** (the migration
 landed and is green); still yes for any caller that would enter the collapsed
