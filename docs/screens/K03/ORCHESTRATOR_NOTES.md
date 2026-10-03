@@ -31,3 +31,33 @@ NestChip is 32 px (44 hit area), NestTextField has an error state (errorText →
 
 ## UPDATE (05:36) — the UI builder for this iteration hit Fledge's rate limit and did not finish
 Integrator: there is no fresh 2b_build_ui report this iteration. YOU must also make the UI fixes in the current FIXES list and the notes above. Check the views on disk: the UI builder may have left partial edits, so keep the correct ones and finish the rest.
+
+## UPDATE (07:40, orchestrator) — ITERATION 7 IS THE LAST PASS. Exact targets, measured by the orchestrator
+ROOT CAUSE of the pet-block failure (6 passes):
+- kid_home_view.dart passes `nestWidth: _kNestWidth (260)`.
+- NestPetStage computes `stageW = nestW / 0.62 = 419 px`. That is WIDER than the 390 px screen, so the stage overflows and is laid out off-centre (+35 px right). The nest also renders too big (visible outline 218 wide instead of 198).
+- "260×236" was the design's whole pet slot box, NOT the nest width.
+
+Design geometry at 390×844 (logical px, from design/screens/light/K03-kid-home.png; the app shot uses the same coordinates):
+- Visible nest outline: x 96 → 294 (198 wide, centre x 195), y ≈ 278 → 364.
+- Pip: centred at x 195. Head top ≈ y 201. Pip's lower body sits INSIDE the nest bowl: Pip's bottom ≈ y 301 overlaps the nest's top rim by ≈ 20 px. No gap and no separate shadow under Pip's feet.
+- Ground shadow under the nest ends ≈ y 388.
+- Hearts row centre ≈ y 448. "Today's quests" title ≈ y 494. Progress bar ≈ y 527–542. First card top ≈ y 559. Card 2 must be visible, peeking above the dock as in the design.
+- App today: nest x 120→338 (218 wide, centre 229), nest y 299→414, hearts 494. So the pet block is 46 px too tall and 35 px off-centre.
+
+DO:
+1. Pick `nestWidth` so that the VISIBLE nest outline is 198 px. Measure the ratio of visible nest to nestW in PipNestFallback's art, or render and measure in a test.
+   - The resulting stage box must be ≤ the available width and horizontally centred.
+   - Pip (PipAvatar, the child's own v2 avatar) must be seated in the bowl, as in the design.
+2. Add a geometry test with real fonts (FontLoader, as app/test/features/privacy_consent/privacy_consent_geometry_test.dart does) that pins:
+   - nest outline rect centre x 195 ±1 and width 198 ±2;
+   - hearts row y 448 ±2;
+   - first card top 559 ±2.
+3. If the shared NestPetStage cannot produce this without editing core, do NOT hack around it. Write SHARED_REQUEST.md with the exact numbers above and stop. The orchestrator will fix the shared component.
+4. Also fix the rest of FIXES_6.md:
+   - The failing "double tap across frames" test (finder).
+   - Delete the scratch probe test so analyze is clean.
+   - "Today's quests" uses NestBalancedText (.kid-title has balance).
+   - Speech bubble height 46 → design 35, same x/y/w; check `.speech` in the HTML.
+   - Dark-mode lower meadow (dark only).
+   - Retry stacking subscriptions.

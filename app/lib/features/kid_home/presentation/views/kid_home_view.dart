@@ -448,15 +448,23 @@ class _KidHomeBody extends StatelessWidget {
                                 for (var i = 0; i < 5; i++)
                                   NestHeart(filled: i < filledHearts),
                                 Flexible(
-                                  child: Text(
-                                    'Pip is happy today',
-                                    // SHARED_REQUEST #7 landed: screen-exact
-                                    // `.kcap` is now NestType.kidCaption.
-                                    style: NestType.kidCaption(
-                                      color: tokens.ink2,
+                                  child: Padding(
+                                    // K03-kid-home.html l.58: the caption
+                                    // carries `margin-left:2px` on top of the
+                                    // row's 8 px gap (review finding 8).
+                                    padding: const EdgeInsets.only(
+                                      left: NestSpacing.gap2,
                                     ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                    child: Text(
+                                      'Pip is happy today',
+                                      // SHARED_REQUEST #7 landed: screen-exact
+                                      // `.kcap` is now NestType.kidCaption.
+                                      style: NestType.kidCaption(
+                                        color: tokens.ink2,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -472,11 +480,11 @@ class _KidHomeBody extends StatelessWidget {
                             spacing: NestSpacing.gap10,
                             children: [
                               Expanded(
-                                child: Text(
+                                child: NestBalancedText(
                                   "Today's quests",
                                   style: NestType.kidTitle(color: tokens.ink),
+                                  textAlign: TextAlign.start,
                                   maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                               KidStatusChip(label: '$done of $total done'),
@@ -580,6 +588,9 @@ class _KidHomeBody extends StatelessWidget {
                               contentPadding: const EdgeInsets.symmetric(
                                 horizontal: NestSpacing.gap6,
                               ),
+                              // Dock labels never wrap (review finding 5;
+                              // SHARED_REQUEST #9 `wrapLabel` API now on main).
+                              wrapLabel: false,
                               onPressed: () => context.go(PipRoutePaths.nest),
                             ),
                           ),
@@ -598,6 +609,9 @@ class _KidHomeBody extends StatelessWidget {
                               contentPadding: const EdgeInsets.symmetric(
                                 horizontal: NestSpacing.gap6,
                               ),
+                              // Dock labels never wrap (review finding 5;
+                              // SHARED_REQUEST #9 `wrapLabel` API now on main).
+                              wrapLabel: false,
                               onPressed: () =>
                                   context.go(KidShopRoutePaths.shop),
                             ),
@@ -616,6 +630,9 @@ class _KidHomeBody extends StatelessWidget {
                               contentPadding: const EdgeInsets.symmetric(
                                 horizontal: NestSpacing.gap6,
                               ),
+                              // Dock labels never wrap (review finding 5;
+                              // SHARED_REQUEST #9 `wrapLabel` API now on main).
+                              wrapLabel: false,
                               onPressed: () => context.go(KidJarRoutePaths.jar),
                             ),
                           ),
@@ -813,6 +830,15 @@ class _QuestCardState extends State<_QuestCard> {
     return NestKidQuestCard(
       title: widget.item.title,
       icon: NestIcon(_iconFor(widget.item.icon), size: 28, color: tokens.ink),
+      // Design tints the tile per quest (review finding 5; tileBackground
+      // landed on main): dishwasher is sky, reading lilac, tidy peach;
+      // anything else keeps the neutral surface2 tile.
+      tileBackground: switch (widget.item.icon) {
+        'dishwasher' => tokens.skyTint,
+        'book' => tokens.lilacTint,
+        'bed' => tokens.peachTint,
+        _ => null,
+      },
       coinAmount: done ? null : '+${widget.item.coins}',
       metaChip: done
           ? KidStatusChip(

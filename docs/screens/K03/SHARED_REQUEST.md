@@ -1,7 +1,9 @@
 # Shared request — K03 Kid home
 
-1. Need: `NestKidQuestCard` icon tile is fixed `surface2`, but the K03 HTML
-   tints tiles per quest (`sky-tint` dishwasher, `lilac-tint` reading,
+1. DONE on main (Stage 2b iteration 7 verified): `NestKidQuestCard` now
+   accepts `tileBackground`; K03 passes per-quest tint (see view). Preferred
+   semantics: the K03 HTML
+   tinted tiles per quest (`sky-tint` dishwasher, `lilac-tint` reading,
    `peach-tint` tidy). An optional tile background parameter would close
    the drift. Files: `app/lib/core/design_system/components/nest_quest_card.dart`.
    Blocks: no — shipping with `surface2` tiles, drift noted for compare.
@@ -57,8 +59,9 @@
    to false; lint forbids the redundant argument) and is in any case
    unused on the custom-`pip:` path. Slot measurements met; UI stage
    accepted twice.
-9. Need (review finding 13, iteration 5): a `NestKidButton` label-wrap
-   option (`softWrap: false` + `FittedBox(scaleDown)` or equivalent) for
+9. DONE on main (Stage 2b iteration 7 verified): `NestKidButton.wrapLabel`
+   landed and K03 passes `wrapLabel: false` on all three dock buttons. Was a
+   Need (`softWrap: false` + `FittedBox(scaleDown)` or equivalent) for
    narrow screens / large text scales — "My jar" wraps to two lines
    under fallback fonts today (cosmetic; real Nunito fits). Files:
    `app/lib/core/design_system/components/nest_kid_button.dart`.
@@ -107,25 +110,100 @@ No schema/DI/token changes needed. No new assets needed (all icons +
 `nest`/`coin`/`meadowHill` exist in `nestling_assets.dart`; Pip renders via
 `PipAvatar` + `pip_v2/mochi` fallbacks).
 
-13. Need (Stage 6 iteration 6, K03-BUG-13 — follow-up to #11): the new
-    explicit size mode does not respect the parent width. K03 calls
-    `NestPetStage(nestWidth: 260, fixedPipHeight: 152)`; the shared
-    component derives `nominalStageW = 260 / 0.62 ≈ 419.35` and renders the
-    scene at that width regardless of `LayoutBuilder.maxWidth`, anchored so
-    its centre stays at x ≈ 229.7 for every screen width. Measured on the
-    current tree (widget test, pet-slot proof):
+13. Need (Stage 6 iteration 6, K03-BUG-13/14 — follow-up to #11): the new
+    explicit size mode does not respect the parent width, and cannot express
+    the design's pet slot at all. K03 calls
+    `NestPetStage(nestWidth: 260, fixedPipHeight: 152)`; the shared component
+    derives `stageW = nestW / 0.62 = 419.35` and positions the scene against
+    that nominal width regardless of `LayoutBuilder.maxWidth`, so the nest sits
+    at a fixed centre x ≈ 229.68 at every screen width, and `nestH = nestW`
+    makes the nest square (stage height `6 + nestH + 10`).
+
+    **Measured (widget proofs, current tree):**
     - 390 px: slot centre 195.0 vs nest/Pip centre 229.68 → **+34.68 px
       off-centre**;
     - 320 px: slot centre 160.0 vs 229.68 → **+69.68 px off-centre**, nest
-      right edge 359.7 vs slot right 300 → **+59.68 px overflow** (≈40 px
-      past the physical screen edge, clipped).
-    Fix (shared): in explicit mode, clamp the scene to the available width
-    (scale `stageW`/`nestW`/`pipH` by `maxW / nominalStageW` when
-    `maxW < nominalStageW`) and centre it in the box; or let the caller pass
-    a responsive `nestWidth` from a `LayoutBuilder`. The legacy path already
-    scaled down instead of overflowing, so this is a regression of that
-    guard. Proof: `K03-BUG-13: pet slot: nest and Pip centred at 390, no
-    clip at 320` (skipped; run with `--run-skipped`). Files:
-    `app/lib/core/design_system/components/nest_pet_stage.dart`, optionally
-    `app/lib/features/kid_home/presentation/views/kid_home_view.dart`.
-    Blocks: K03's owner ALIGNMENT rule at narrow widths.
+      right edge 359.7 vs slot right 300 → **+59.68 px overflow** (clipped);
+    - 430 px: +14.68 px off-centre;
+    - pet block height 276 vs the design's 236 (K03-BUG-14).
+
+    **Design targets at 390×844 (logical px, `design/screens/light/
+    K03-kid-home.png` ÷3 — the app shot uses the same coordinates):** visible
+    nest outline x 96 → 294 (198 wide, centre x 195), y ≈ 278 → 364; Pip
+    centred at x 195, head top ≈ y 201, Pip's bottom ≈ y 301 overlapping the
+    nest's top rim by ≈ 20 px (no gap, no separate shadow under Pip's feet);
+    ground shadow ends ≈ y 388; hearts row centre ≈ y 448; `Today's quests`
+    ≈ y 494; progress bar ≈ y 527–542; first card top ≈ y 559; card 2 visible,
+    peeking above the dock.
+
+    **Why this cannot be fixed from K03 (arithmetic, integration-verified
+    iteration 7).** The nest SVG paints a visible-to-box ratio of ≈0.84
+    (two independent measurements agree: 218/260 at `nestW` 260, and
+    182.3/216.4 at the iteration-5 legacy `nestW` 216.4). The scene reserves
+    only 62 % of the stage width for the nest, so inside the 350 px content
+    box (390 − 2×20 gutters) the two targets are mutually exclusive:
+
+    | nestW (box) | stageW | visible nest | nest centre | overflow | stageH |
+    |---|---|---|---|---|---|
+    | 260 (shipped) | 419.4 | 218 | 229.7 | +69.4 | 276 |
+    | 236 → for a 198 visible | 380.9 | **198 ✓** | 210.4 | +30.9 | 252 |
+    | ≤217 (max that fits 350) | 350.0 | 181.9 | **195 ✓** | 0 | 233 |
+
+    A 198 px outline needs `nestW` ≈236, whose scene is 381 px wide — 31 px
+    wider than the content box. A box that fits (≤217) yields only a ≈182 px
+    outline, 16 px under the design. So no K03-side `nestWidth` value reaches
+    both, and an interim `Center` wrap cannot help (the child is clamped to
+    350 by the incoming constraints, so the 419 px nominal never materialises
+    as an over-wide box — the internal `Positioned`s are simply computed
+    against a width the widget never gets). Per `ORCHESTRATOR_NOTES`
+    iteration-7 UPDATE DO 3, K03 did not hack around this.
+
+    **Fix (shared).** In explicit mode, clamp the scene to the available width
+    — `stageW = min(nestW / 0.62, maxW)` and derive every `Positioned` from
+    the *actual* box — **and** make the nest box ratio a parameter so the
+    design's 260×236 nest is expressible (`PipNestFallback` assumes
+    `nestH == nestW`; it needs a `nestHeight:`, or the stage ratio must drop
+    from 0.62 to ≈0.674 so 236 fits in 350). The legacy sizing path already
+    scaled down instead of overflowing, so this is a regression of that guard.
+
+    **Proofs** (all parked with `skip: true`, all fail today):
+    `K03-BUG-13` at 320/390/430, `K03-BUG-14`, and
+    `the pet slot matches the design geometry` in the new
+    `kid_home_geometry_test.dart` — a real-font (`FontLoader` Inter/Nunito)
+    pin of nest centre 195±1, nest box 236±2 (→ the 198 px visible outline),
+    hearts centre 448±2 and first card top 559±2. Measured at real fonts it
+    reproduces the device captures exactly: nest centre 229.68 (+34.68),
+    hearts 494.0 (+46), first card 615.0 (+56) — so the pin is trustworthy
+    and should simply be un-skipped once the shared fix lands.
+    Files: `app/lib/core/design_system/components/nest_pet_stage.dart`,
+    `app/lib/core/design_system/motion/pip_rive.dart`.
+    Blocks: K03's owner ALIGNMENT rule at narrow widths, and the iteration-7
+    QA row targets.
+14. Need (review finding 7, iteration 6): `switchMapStream` — the
+    `switchMap`-for-never-closing-watch-streams helper backing
+    `KidHomeRepository.watchHome()` — currently lives in
+    `app/lib/features/kid_home/domain/kid_home_repository.dart` because K03
+    may not edit `core/`. It is generic plumbing, not a domain abstraction
+    (`ARCHITECTURE.md` keeps `domain/` to entities + abstract repository
+    only), and `app/lib/core/data/stream_combine.dart` already owns
+    `combineLatest2/3/4` for every feature. Request: move it next to them
+    (same semantics, feature re-imports it) or bless the current spot.
+    Files: `app/lib/core/data/stream_combine.dart`,
+    `app/lib/features/kid_home/domain/kid_home_repository.dart`,
+    `app/lib/features/kid_home/data/kid_home_repository_impl.dart`.
+    Blocks: no (helper is tested in place: `switchMapStream` group in
+    `kid_home_bloc_test.dart`).
+
+15. Need (iteration 7, 5_ui finding 3): the shared speech bubble renders
+    `NestSpeechBubble` = 3 px border + `NestSpacing.s2` (8) padding + 16/24
+    text + 8 padding + 3 px → ≈46 logical px tall; the K03 design measures
+    ≈35 (`.speech { padding: 8px 14px }` with a smaller line-height — its
+    bbox after `8px 14px` padding and a 3 px ink border is smaller). The
+    padding/size are hard-wired in the shared component
+    (`nest_pet_stage.dart`), so the exact PNG height can only be met by
+    exposing a `padding`/`textStyle` override (or by shrinking the default's
+    vertical padding to match the PNG: 35 − (3+3) − 24 ≈ 5 →
+    `NestSpacing.gap5`). Files:
+    `app/lib/core/design_system/components/nest_pet_stage.dart`.
+    Blocks: no (drift is minor and current render is consistent, just
+    slightly taller).

@@ -1,86 +1,74 @@
-# K03 Kid home — Stage 2a logic chunk (iteration 6)
+# K03 Kid home — Stage 2a logic chunk (iteration 7)
 
 Scope: non-UI layer of `kid_home` only. No edits to
 `presentation/views/**` or `presentation/widgets/**`.
 
 ## CONTRACT CHANGES (for the UI builder — please read)
 
-Public BLoC contract is UNCHANGED: same events (`KidHomeLoadRequested`,
-`KidHomeQuestCompleted`), same state fields. Views/widgets need no changes
-for this stage. Two additive notes:
+Two ADDITIVE events in `presentation/bloc/kid_home_event.dart`; every
+existing event/state name and field is untouched, so current view code
+compiles and behaves identically:
 
-1. `KidHomeRepository` gains `Stream<KidHomeData> watchHome()` (new entity
-   `domain/entities/kid_home_data.dart`: `{child, items}`). The bloc now
-   loads from it. Fakes note: `implements KidHomeRepository` no longer
-   compiles for the new member, so all 8 test fakes switched to
-   `extends KidHomeRepository` (one word each, inherits the default
-   combination) — including the `_FakeKidHomeRepository` in
-   `kid_home_view_test.dart` (only change in that file; behaviour identical).
-2. `switchMapStream` top-level helper lives in
-   `domain/kid_home_repository.dart` (feature-internal; core untouched).
+- `KidHomeDataReceived(home)` — bloc-internal; the bloc raises it from its
+  own home-stream subscription. Views must never send it.
+- `KidHomeStreamFailed(error)` — bloc-internal; same.
+
+Reason (review finding 6): the load handler can no longer `await
+emit.forEach(...)` on a never-ending stream, because a failure-state
+"Try again" then stacks a second live subscription. The handler now owns a
+`StreamSubscription` (cancelled before every reload and on `close()`); stream
+output re-enters as the two events above. Observable behaviour is unchanged
+apart from the leak fix.
 
 ## Files changed
 
-- `app/lib/features/kid_home/domain/entities/kid_home_data.dart` (new):
-  `KidHomeData` Equatable value `{child, items}`.
-- `app/lib/features/kid_home/domain/kid_home_repository.dart`: new
-  `watchHome()` with a default combination + `switchMapStream` helper.
-- `app/lib/features/kid_home/data/kid_home_repository_impl.dart`: extracted
-  `_watchItemsFor(childId)`; `watchItems()` rebuilt on it; new `watchHome()`
-  override (one `app_state` sub → one `watchChild` sub + quests/completions/
-  zone). Period logic (`countsForCurrentPeriod`, alphabetical title order,
-  `_detail` copy) untouched.
-- `app/lib/features/kid_home/presentation/bloc/kid_home_bloc.dart`: load path
-  uses `emit.forEach(_repository.watchHome())`; celebration/error logic
-  untouched. DI/routes untouched (no new deps).
-- `app/test/features/kid_home/kid_home_bloc_test.dart`: subscription counters
-  on the fake; new test "a load watches the child row exactly once";
-  new `watchHome` default-combination test; `load mirrors…` 4th emission
-  updated to the atomic `(null, [])` (see below).
-- `app/test/features/kid_home/k03_bugs_test.dart`: K03-BUG-12 un-skipped
-  (+ header comment updated). One-word `extends` on its 6 fakes.
-- `app/test/features/kid_home/kid_home_view_test.dart`: one-word `extends`
-  (compile-only, see §1).
-- `docs/screens/K03/SHARED_REQUEST.md`: #12 marked DONE on main.
+- `app/lib/features/kid_home/presentation/bloc/kid_home_bloc.dart`: manual
+  `_homeSub` subscription, cancel-before-reload, `close()` override,
+  `_onDataReceived` / `_onStreamFailed` handlers (celebration/error logic
+  moved verbatim). No DI/route changes.
+- `app/lib/features/kid_home/presentation/bloc/kid_home_event.dart`: the
+  two internal events above (sealed family — same library, no contract
+  break).
+- `app/test/features/kid_home/kid_home_bloc_test.dart`: new
+  `_ManualHomeRepository` (hand-driven `watchHome` controllers) + test
+  "reloading cancels the previous home subscription" (old controller
+  listener-free, orphaned emission ignored, live stream still drives,
+  `close()` detaches) + "internal stream events carry their payload".
+- `docs/screens/K03/SHARED_REQUEST.md`: new entry #14 (finding 7).
 
-## FIXES_5 items in my layer
+## FIXES_6 items in my layer
 
-- Finding 4 [minor] double child subscription — DONE via `watchHome()`.
-  Real fix detail: the first attempt used `asyncExpand`, and new tests
-  proved it stalls — `asyncExpand` pauses the outer subscription until the
-  current inner stream *closes*, and watch streams never close, so child
-  switches after the first emission never propagated (the old
-  `watchItems()` had this latent stall too; the old `load mirrors`
-  expectation `total: 6` after clearing the child was pinning it).
-  `switchMapStream` cancels/replaces the inner per outer emission instead.
-  Bonus: child switch now emits child+items atomically (old tear gone).
-- Finding 2 [minor] CHILD ORDER — shared fix already on main
-  (`watchChildren` orders by `createdAt`+`rowid`; seed staggers Maya/Leo).
-  My part DONE: K03-BUG-12 un-skipped; verified passing against a real
-  in-memory `Seed.demo` DB (`['Maya', 'Leo']`); #12 marked DONE.
-- Findings 1 (pet-slot size), 3 (typography TODOs), 5 (motion flag),
-  6 (dock wrap) — UI/shared layer, not mine. #11 already requests the
-  pet-slot size API; nothing to add.
+- Finding 6 [minor] retry stacks subscriptions — DONE (above), proven by
+  the new test.
+- Finding 7 [minor] `switchMapStream` in domain — recorded as
+  SHARED_REQUEST #14 (K03 may not edit `core/`). Helper stays tested in
+  place; no code moved.
+- Finding 1 [blocker] "double tap across frames" widget failure — already
+  gone from the tree (no such test in `k03_bugs_test.dart`; repo-level
+  idempotency still proven by the K03-BUG-1 row-count test). Nothing to fix.
+- Finding 3 [major] `probe_temp_test.dart` — already deleted from the
+  tree. Nothing to fix.
+- Findings 2 (pet slot), 4 (`NestBalancedText`), 5
+  (`tileBackground`/`wrapLabel`), 8 (hearts caption) — views/shared, UI
+  builder's. K03-BUG-13/14 stay skipped: shared-component cause, K03 cannot
+  fix in `core/`; un-skipping would keep the suite red.
 
 ## Verification
 
-- `dart format lib/features/kid_home test/features/kid_home` — clean.
-- `flutter analyze` on domain/data/bloc + all three kid_home test files —
+- `dart format` on touched dirs — clean.
+- `flutter analyze` on domain/data/bloc + `kid_home_bloc_test.dart` —
   No issues found.
-- `flutter test test/features/kid_home/kid_home_bloc_test.dart` — 22/22 pass.
-- Real-DB scratch (in-memory `Seed.demo`, deleted after): BUG-12 order
-  passes; `watchHome()` override yields Maya + 6 items in title order with
-  live statuses (dishwasher/table pending, bins/hoover approved = 4 done).
-- No `google_fonts` in my files (grep clean). Letter-spacing: no text styles
-  in my layer. Period/COPY rules untouched.
+- `flutter test test/features/kid_home/kid_home_bloc_test.dart` — 28/28
+  pass (26 existing + 2 new).
+- No `google_fonts` in my files. No letter-spacing touches (no text styles
+  in my layer). Period/copy logic untouched.
+- Full-folder `flutter test` and the simulator are the integrator's;
+  `k03_bugs_test.dart` / `kid_home_view_test.dart` were not run here
+  (widget files; UI builder is editing views concurrently).
 
 ## LEFT FOR NEXT ITERATION
 
-- Full `k03_bugs_test.dart` / `kid_home_view_test.dart` runs are blocked on
-  the UI builder's in-progress google_fonts → bundled-fonts migration in
-  `views/`+`widgets/` (pre-existing at HEAD: `kid_status_chip.dart:2`
-  still imports it; the parallel UI builder already fixed the view import).
-  Integrator re-runs them after that lands; no logic changes expected.
-- `flutter test` for the whole app + simulator shots are the integrator's.
+- Nothing open in my layer. If the orchestrator lands `stream_combine.dart`
+  hosting `switchMapStream` (#14), adopt the import (mechanical).
 
 VERDICT: PASS
