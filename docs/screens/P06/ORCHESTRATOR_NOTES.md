@@ -29,3 +29,7 @@ Fix the two spacings so every element lands within ±1 px. Add a geometry test w
 1. The title truncates to one line, "How does pocket mone…". This is a SHARED NestBalancedText bug: ellipsis with no maxLines means a single line. shared/balanced_text_ellipsis fixes it on main, and main is merged into your branch before the next build. Keep using NestBalancedText; do not work around it. After the merge the title must be 2 lines, as in the design, with the rest of the screen back at the iteration-4 positions.
 2. The stepper minus is STILL a short hyphen "-". Use "−" (U+2212), or the same icon set as "+", so both glyphs have equal visual weight and width. Add a test that the minus button's glyph is not U+002D.
 3. The payout card targets from the 07:22 note still apply, measured from the title's bottom once it is two lines again: chip row centre 555, "Weekly base" 597, Maya 630, Leo 674, Coin value 735 (all ±1).
+
+## UPDATE (09:30, orchestrator QA of cmp_light_6, 0.89%) — one item left
+- The Coin value row: "10 coins = 10p" must be RIGHT-aligned to the card's inner padding. In the design its right edge is x ≈ 354, the same right edge as the "+" buttons and the Sun chip. In the app it ends at x ≈ 322. Make the value a trailing, right-aligned element (Expanded/Spacer + TextAlign.end). Add a geometry test: the value's right edge == the card content's right edge ±1.
+Everything else matches. Do not touch anything else.

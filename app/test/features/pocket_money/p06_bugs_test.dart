@@ -1,10 +1,11 @@
-// P06 Pocket money setup — Stage 6 adversarial bug tests (iteration 5).
+// P06 Pocket money setup — Stage 6 adversarial bug tests (iteration 6).
 //
-// Iterations 2–4 bug proofs run UNskipped as regression guards. Iteration 5
-// adds the orchestrator's real-font geometry checks and two new findings:
-// P06-BUG-11 (the balanced H1 collapses to one ellipsized line) and
-// P06-BUG-12 (the stepper minus is a hyphen, not the design's U+2212).
-// Both are skipped with their ids; delete the skip to watch them fail.
+// Every finding from iterations 2–5 is fixed and runs UNskipped as a
+// regression guard, including the two iteration-5 findings: P06-BUG-11 (the
+// balanced H1 collapsed to one ellipsized line — fixed by main's
+// shared/balanced_text_ellipsis) and P06-BUG-12 (stepper minus U+2212 — fixed
+// by P06WeeklyStepper). One new minor finding, P06-BUG-13 (the "Coin value"
+// label ellipsizes at 320dp × text scale 1.3), is kept skipped with its id.
 //
 // The group at the bottom ("attacks that hold") is NOT skipped: it documents
 // the adversarial probes that passed (kid-mode guard, restart persistence,
@@ -757,74 +758,97 @@ void main() {
     });
   });
 
-  // -- iteration-5 geometry (real Inter/Nunito metrics) --------------------
+  // -- real-font geometry (light + dark, Inter/Nunito metrics) -------------
 
-  group('P06 iteration-5 geometry at 390×844 (real fonts)', () {
+  group('P06 geometry at 390×844 (real fonts)', () {
     setUpAll(_loadBundledFonts);
 
-    testWidgets("the payout card keeps the design's 270 height and gap chain", (
-      tester,
-    ) async {
+    testWidgets("the payout card keeps the design's 270 height and gap chain "
+        '(light + dark)', (tester) async {
       await setUpTestScope();
-      await pumpAppRoute(tester, '/pocket-money-setup');
+      for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+        await pumpAppRoute(tester, '/pocket-money-setup', theme: theme);
 
-      final card = tester.getRect(find.byType(NestCard));
-      final label = tester.getRect(find.text('Payout day'));
-      final pill1 = tester.getRect(_dayPill(1));
-      final weekly = tester.getRect(find.text('Weekly base'));
-      final maya = tester.getRect(find.text('Maya'));
-      final leo = tester.getRect(find.text('Leo'));
-      final coin = tester.getRect(find.text('Coin value'));
+        final h1 = tester.getRect(
+          find.text('How does pocket money work in your house?'),
+        );
+        final card = tester.getRect(find.byType(NestCard));
+        final label = tester.getRect(find.text('Payout day'));
+        final pill1 = tester.getRect(_dayPill(1));
+        final pill7 = tester.getRect(_dayPill(7));
+        final weekly = tester.getRect(find.text('Weekly base'));
+        final maya = tester.getRect(find.text('Maya'));
+        final leo = tester.getRect(find.text('Leo'));
+        final coin = tester.getRect(find.text('Coin value'));
 
-      // ORCHESTRATOR_NOTES (07:22) design geometry: card 415–684 (270); the
-      // HTML gaps are label→row 6, row→divider→label 8+1+8, label→row 2,
-      // rows 44, divider 8+1+8, card bottom padding 12.
-      expect(card.height, moreOrLessEquals(270, epsilon: 1));
-      expect(pill1.top - label.bottom, moreOrLessEquals(6, epsilon: 0.5));
-      expect(pill1.height, moreOrLessEquals(32, epsilon: 0.5));
-      expect(weekly.top - pill1.bottom, moreOrLessEquals(17, epsilon: 0.5));
-      expect(maya.top - weekly.bottom, moreOrLessEquals(13, epsilon: 0.5));
-      expect(leo.top - maya.bottom, moreOrLessEquals(22, epsilon: 0.5));
-      expect(coin.top - leo.bottom, moreOrLessEquals(39, epsilon: 0.5));
-      expect(card.bottom - coin.bottom, moreOrLessEquals(23, epsilon: 0.5));
-      expect(tester.takeException(), isNull);
+        // ORCHESTRATOR_NOTES (07:22/07:58) design anchors at 390×844,
+        // measured off `P06-pocket-money.png` ÷3: H1 107/68, card 415/270,
+        // pills 455/32 flush with the card's 16 px inset, Weekly base 503,
+        // Maya/Coo text boxes 534/639.
+        expect(h1.top, moreOrLessEquals(107, epsilon: 1));
+        expect(h1.height, moreOrLessEquals(68, epsilon: 1));
+        expect(card.top, moreOrLessEquals(415, epsilon: 1));
+        expect(card.height, moreOrLessEquals(270, epsilon: 1));
+        expect(pill1.top, moreOrLessEquals(455, epsilon: 1));
+        expect(pill1.height, moreOrLessEquals(32, epsilon: 0.5));
+        expect(
+          pill7.right,
+          moreOrLessEquals(card.right - NestSpacing.s4, epsilon: 0.5),
+        );
+        expect(weekly.top, moreOrLessEquals(503, epsilon: 1));
+        expect(maya.top, moreOrLessEquals(534, epsilon: 1));
+        expect(leo.top, moreOrLessEquals(578, epsilon: 1));
+        expect(coin.top, moreOrLessEquals(639, epsilon: 1));
 
-      // ORCHESTRATOR_NOTES (07:58) targets, anchored to the title's bottom so
-      // they hold while BUG-11 keeps the title collapsed: chip-row centre 555,
-      // Weekly base 597, Maya 630, Leo 674, Coin value 735 (sheet space,
-      // design H1 bottom 175 → 296 / 329 / 359 / 403 / 464 logical offsets).
-      final h1 = tester.getRect(
-        find.text('How does pocket money work in your house?'),
-      );
-      expect(pill1.center.dy - h1.bottom, moreOrLessEquals(296, epsilon: 1));
-      expect(weekly.top - h1.bottom, moreOrLessEquals(329, epsilon: 1));
-      expect(maya.top - h1.bottom, moreOrLessEquals(359, epsilon: 1));
-      expect(leo.top - h1.bottom, moreOrLessEquals(403, epsilon: 1));
-      expect(coin.top - h1.bottom, moreOrLessEquals(464, epsilon: 1));
+        // HTML gap chain inside the card: label→row 6, row→divider→label
+        // 8+1+8, label→row 2, rows 44, divider 8+1+8, bottom padding 12.
+        expect(pill1.top - label.bottom, moreOrLessEquals(6, epsilon: 0.5));
+        expect(weekly.top - pill1.bottom, moreOrLessEquals(17, epsilon: 0.5));
+        expect(maya.top - weekly.bottom, moreOrLessEquals(13, epsilon: 0.5));
+        expect(leo.top - maya.bottom, moreOrLessEquals(22, epsilon: 0.5));
+        expect(coin.top - leo.bottom, moreOrLessEquals(39, epsilon: 0.5));
+        expect(card.bottom - coin.bottom, moreOrLessEquals(23, epsilon: 0.5));
 
-      await disposeApp(tester);
+        // ORCHESTRATOR_NOTES (07:58) #3: the same targets measured from the
+        // title's bottom (design H1 bottom 175 → 296/329/359/403/464).
+        expect(pill1.center.dy - h1.bottom, moreOrLessEquals(296, epsilon: 1));
+        expect(weekly.top - h1.bottom, moreOrLessEquals(329, epsilon: 1));
+        expect(maya.top - h1.bottom, moreOrLessEquals(359, epsilon: 1));
+        expect(leo.top - h1.bottom, moreOrLessEquals(403, epsilon: 1));
+        expect(coin.top - h1.bottom, moreOrLessEquals(464, epsilon: 1));
+        expect(tester.takeException(), isNull);
+
+        await disposeApp(tester);
+      }
     });
 
     testWidgets(
-      "P06-BUG-11: the H1 must wrap to the design's two lines, not one "
-      'ellipsized line',
+      "P06-BUG-11 (fixed): the H1 wraps to the design's two lines and "
+      'balanced break',
       (tester) async {
         await setUpTestScope();
         await pumpAppRoute(tester, '/pocket-money-setup');
 
+        final h1Finder = find.text('How does pocket money work in your house?');
         final h1 = tester.renderObject<RenderParagraph>(
-          find.descendant(
-            of: find.text('How does pocket money work in your house?'),
-            matching: find.byType(RichText),
-          ),
+          find.descendant(of: h1Finder, matching: find.byType(RichText)),
         );
         // Design (`P06-pocket-money.png` ÷3): H1 107–175 = two 34 px lines.
-        // Today `NestBalancedText`'s ellipsis + null maxLines collapses the
-        // paragraph to 350×34 with an ellipsis (didExceedMaxLines = true).
-        expect(h1.size.height, greaterThanOrEqualTo(60));
+        // FIXED via main's shared/balanced_text_ellipsis: no ellipsis when
+        // maxLines is null, so the paragraph wraps instead of collapsing.
+        expect(h1.size.height, moreOrLessEquals(68, epsilon: 1));
         expect(h1.didExceedMaxLines, isFalse);
 
-        // The collapsed H1 drags the whole card 34 px above the design.
+        // CSS text-wrap: balance → line 1 ends after "money" (the design's
+        // break), never orphaning "work" onto its own second line.
+        final data = tester.widget<Text>(h1Finder).data!;
+        final line1End = h1
+            .getPositionForOffset(Offset(h1.size.width, h1.size.height / 4))
+            .offset
+            .clamp(0, data.length);
+        expect(data.substring(0, line1End).trim(), 'How does pocket money');
+
+        // With the title back at two lines the card returns to the design y.
         final card = tester.getRect(find.byType(NestCard));
         expect(card.top, moreOrLessEquals(415, epsilon: 1));
         expect(tester.takeException(), isNull);
@@ -833,29 +857,69 @@ void main() {
       },
     );
 
+    testWidgets("P06-BUG-12 (fixed): the stepper minus is the design's U+2212 "
+        '(&minus;)', (tester) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/pocket-money-setup');
+
+      final minus = tester.widget<Text>(
+        find
+            .descendant(
+              of: find.bySemanticsLabel(
+                RegExp('Less weekly pocket money for Maya'),
+              ),
+              matching: find.byType(Text),
+            )
+            .first,
+      );
+      // The design HTML prints `&minus;` (U+2212); P06WeeklyStepper renders
+      // the same glyph next to `+` (the shared NestStepper keeps U+002D).
+      expect(minus.data, '\u2212');
+      final plus = tester.widget<Text>(
+        find
+            .descendant(
+              of: find.bySemanticsLabel(
+                RegExp('More weekly pocket money for Maya'),
+              ),
+              matching: find.byType(Text),
+            )
+            .first,
+      );
+      expect(plus.data, '+');
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
     testWidgets(
-      "P06-BUG-12: the stepper minus must be the design's U+2212 (&minus;)",
+      'P06-BUG-13: the "Coin value" label must not ellipsize at 320dp × 1.3',
       (tester) async {
+        tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
         await setUpTestScope();
         await pumpAppRoute(tester, '/pocket-money-setup');
+        tester.view.physicalSize = const Size(320 * 3, 844 * 3);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
 
-        final minus = tester.widget<Text>(
-          find
-              .descendant(
-                of: find.bySemanticsLabel(
-                  RegExp('Less weekly pocket money for Maya'),
-                ),
-                matching: find.byType(Text),
-              )
-              .first,
+        // The coin row is one line with two flex children; at 320 × 1.3 the
+        // label gets half of 196 px (98) while Inter 16 × 1.3 needs ~105, so
+        // it paints "Coin val…". The weekly-base rows wrap at the same width
+        // (`_WeeklyBaseRow._wrapWidth = 300`); the coin row has no such
+        // branch. The trailing value's ellipsis stays sanctioned (plan §5).
+        final label = tester.renderObject<RenderParagraph>(
+          find.descendant(
+            of: find.text('Coin value'),
+            matching: find.byType(RichText),
+          ),
         );
-        // The design HTML uses `&minus;` (U+2212), a full-width bar like
-        // the `+`; the shared NestStepper renders a hyphen (U+002D).
-        expect(minus.data, '\u2212');
+        expect(label.didExceedMaxLines, isFalse);
+        expect(tester.getRect(_dayPill(1)).height, NestSpacing.s8);
         expect(tester.takeException(), isNull);
 
         await disposeApp(tester);
       },
+      skip: true,
     );
   });
 

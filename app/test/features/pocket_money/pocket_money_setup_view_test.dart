@@ -12,7 +12,9 @@ import 'dart:ui' show Tristate;
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
+import 'package:flutter/rendering.dart'
+    show RenderParagraph, RenderRepaintBoundary;
+import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -471,6 +473,39 @@ class _PushRepository implements PocketMoneyRepository {
   @override
   Future<void> setWeeklyBasePence(String childId, int pence) async =>
       pushSetup(current.withChildBase(childId, pence));
+}
+
+const String _matrixHeading = 'How does pocket money work in your house?';
+
+/// The real bundled faces, so the matrix sweep measures the same glyphs the
+/// simulator paints (the widget-test default is a ~1em-per-glyph fallback,
+/// which hides font-sensitive wrapping and truncation).
+Future<void> _loadBundledFontsForMatrix() async {
+  final inter = FontLoader('Inter')
+    ..addFont(rootBundle.load('assets/fonts/Inter-Regular.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-Medium.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-SemiBold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-Bold.ttf'));
+  final nunito = FontLoader('Nunito')
+    ..addFont(rootBundle.load('assets/fonts/Nunito-Bold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Nunito-ExtraBold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Nunito-Black.ttf'));
+  await inter.load();
+  await nunito.load();
+}
+
+/// The `RenderParagraph` behind the `Text` whose data is [text].
+RenderParagraph paragraphOf(WidgetTester tester, String text) {
+  return tester.renderObject<RenderParagraph>(
+    find
+        .descendant(
+          of: find.byWidgetPredicate(
+            (widget) => widget is Text && widget.data == text,
+          ),
+          matching: find.byType(RichText),
+        )
+        .first,
+  );
 }
 
 void main() {
@@ -2598,4 +2633,259 @@ void main() {
       await tester.pump();
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Iteration 6 — real-font sweep across the whole matrix. The iteration-5
+  // regressions (a one-line ellipsized H1, a hyphen for U+2212) were only
+  // visible with the bundled fonts, and the geometry guard pins 390×844 at
+  // scale 1.0 only; this group replays light/dark × 320/390/430 × 1.0/1.3
+  // with the real faces so a font-sensitive break cannot hide again.
+  // -------------------------------------------------------------------------
+  group('P06 setup — real-font matrix', () {
+    setUpAll(_loadBundledFontsForMatrix);
+
+    for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      for (final width in const <int>[320, 390, 430]) {
+        for (final scale in const <double>[1, 1.3]) {
+          final themeName = theme == ThemeMode.light ? 'light' : 'dark';
+          testWidgets('$themeName ${width}dp at scale $scale: real fonts '
+              'lay out without clipping or ellipsis', (tester) async {
+            await setUpTestScope();
+            await _pumpSetup(
+              tester,
+              theme: theme,
+              surface: Size(width.toDouble(), 844),
+              textScale: scale,
+            );
+
+            // The heading keeps every word: the shared ellipsis fix means a
+            // balanced heading may not truncate (iteration 5 regressed to a
+            // single "How does pocket mone…" line).
+            final heading = paragraphOf(tester, _matrixHeading);
+            expect(
+              heading.didExceedMaxLines,
+              isFalse,
+              reason: 'the H1 must not ellipsize at ${width}dp / $scale',
+            );
+            expect(heading.size.width, greaterThan(0));
+
+            // Every day pill still paints the design's 32 px band with even
+            // 6 px gaps, inside the card's 16 px padded rect.
+            final card = tester.getRect(_settingsCard());
+            final pills = <Rect>[
+              for (var day = 1; day <= 7; day++) tester.getRect(dayPill(day)),
+            ];
+            for (final pill in pills) {
+              expect(pill.height, NestSpacing.s8);
+              expect(
+                pill.top,
+                moreOrLessEquals(pills.first.top, epsilon: 0.01),
+              );
+              expect(pill.left, greaterThanOrEqualTo(card.left));
+              expect(pill.right, lessThanOrEqualTo(card.right + 0.01));
+            }
+            for (var i = 1; i < pills.length; i++) {
+              expect(
+                pills[i].left - pills[i - 1].right,
+                moreOrLessEquals(NestSpacing.gap6, epsilon: 0.01),
+              );
+            }
+
+            // The CTA caption and the coin value must not ellipsize either —
+            // both carry copy the design prints in full.
+            expect(
+              paragraphOf(
+                tester,
+                'Nestling never holds or moves money. '
+                'You pay your way; we keep score.',
+              ).didExceedMaxLines,
+              isFalse,
+            );
+            // The coin row's trailing value is the one text the plan lets
+            // ellipsize when the row runs out of room ("must ellipsis, never
+            // push the tile" — 1_plan.md §5): at 320 the Flexible shrinks it.
+            // From 390 up it must print in full.
+            if (width >= 390) {
+              expect(
+                paragraphOf(tester, '10 coins = 10p').didExceedMaxLines,
+                isFalse,
+                reason: 'the coin value prints in full at ${width}dp',
+              );
+            } else {
+              expect(
+                paragraphOf(tester, '10 coins = 10p').didExceedMaxLines,
+                isTrue,
+                reason:
+                    '320dp squeezes the row; the plan sanctions the '
+                    'ellipsis, but the 40px tile and the label must not move',
+              );
+              // The tile and label keep their place while the value shrinks.
+              expect(tester.getRect(_coinTile()).width, NestSpacing.s10);
+              expect(
+                tester.getRect(find.text('Coin value')).left,
+                moreOrLessEquals(
+                  tester.getRect(_coinTile()).right + NestSpacing.s3,
+                  epsilon: 0.01,
+                ),
+              );
+            }
+            expect(paragraphOf(tester, '£3.00').didExceedMaxLines, isFalse);
+
+            // Bottom edge: the panel runs to the physical edge in both themes.
+            expect(
+              tester.getRect(find.byType(NestBottomCta)).bottom,
+              moreOrLessEquals(844, epsilon: 0.01),
+            );
+            expect(tester.takeException(), isNull);
+
+            await disposeApp(tester);
+          });
+        }
+      }
+    }
+
+    testWidgets('at 390 scale 1.0 the real-font geometry matches the design '
+        'anchors (cross-check of the geometry guard)', (tester) async {
+      await setUpTestScope();
+      await _pumpSetup(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      // `design/screens/light/P06-pocket-money.png` ÷ 3: the H1 occupies
+      // y 107–175 (two 34 px lines) and the three option cards are 64 tall at
+      // y 191 / 263 / 335.
+      final heading = tester.getRect(find.text(_matrixHeading));
+      expect(heading.top, moreOrLessEquals(107, epsilon: 1));
+      expect(heading.height, moreOrLessEquals(68, epsilon: 1));
+      final cards = <double>[
+        for (final key in const <ValueKey<String>>[
+          ValueKey('p06_option_weekly'),
+          ValueKey('p06_option_per_quest'),
+          ValueKey('p06_option_both'),
+        ])
+          tester.getRect(find.byKey(key)).top,
+      ];
+      for (var i = 0; i < cards.length; i++) {
+        expect(
+          cards[i],
+          moreOrLessEquals(<double>[191, 263, 335][i], epsilon: 1),
+          reason: 'option card ${i + 1} y',
+        );
+        expect(
+          tester
+              .getSize(
+                find.byKey(
+                  const <ValueKey<String>>[
+                    ValueKey('p06_option_weekly'),
+                    ValueKey('p06_option_per_quest'),
+                    ValueKey('p06_option_both'),
+                  ][i],
+                ),
+              )
+              .height,
+          moreOrLessEquals(64, epsilon: 1),
+          reason: 'option card ${i + 1} height',
+        );
+      }
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // ORCHESTRATOR_NOTES "UPDATE (09:30, QA of cmp_light_6, 0.89%)" — the one
+  // item left. This is the geometry test the note asks for, so the target is
+  // stated in the note's own terms and cannot be argued with: the trailing
+  // value's right edge must land on the card's content right edge
+  // (design x ≈ 354 at 390 — the same edge as the "+" buttons and the Sun
+  // chip) within ±1 px.
+  // -------------------------------------------------------------------------
+  group(
+    'P06 setup — coin-value trailing alignment (ORCHESTRATOR_NOTES 09:30)',
+    () {
+      setUpAll(_loadBundledFontsForMatrix);
+
+      for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+        final themeName = theme == ThemeMode.light ? 'light' : 'dark';
+        testWidgets('$themeName: the coin value is flush with the card content '
+            'right edge', (tester) async {
+          await setUpTestScope();
+          await _pumpSetup(
+            tester,
+            theme: theme,
+            surface: const Size(390, 844),
+            textScale: 1,
+          );
+
+          final card = tester.getRect(_settingsCard());
+          // The card pads its content by s4; that inset is the edge every row
+          // inside the card shares.
+          final contentRight = card.right - NestSpacing.s4;
+          expect(
+            contentRight,
+            moreOrLessEquals(354, epsilon: 1),
+            reason: 'design: the card content edge at 390 is x ≈ 354',
+          );
+
+          // The three reference elements the note names: the Sun chip, the
+          // "+" stepper button and the card's own content edge.
+          final sun = tester.getRect(find.byKey(const ValueKey('p06_day_7')));
+          final plus = tester.getRect(
+            find.bySemanticsLabel(RegExp('More weekly pocket money for Maya')),
+          );
+          expect(
+            sun.right,
+            moreOrLessEquals(contentRight, epsilon: 1),
+            reason: 'the day strip already ends on the content edge',
+          );
+          expect(
+            plus.right,
+            moreOrLessEquals(contentRight, epsilon: 1),
+            reason: 'the "+" column already ends on the content edge',
+          );
+
+          // The defect: the value is laid out loose, so it ends wherever its
+          // text ends (≈322 at 390) instead of trailing to the content edge.
+          final value = tester.getRect(find.text('10 coins = 10p'));
+          expect(
+            value.right,
+            moreOrLessEquals(contentRight, epsilon: 1),
+            reason:
+                '"10 coins = 10p" must be right-aligned to the card content '
+                'edge ${contentRight.toStringAsFixed(1)}; it currently ends at '
+                '${value.right.toStringAsFixed(1)}. Fix: make the value a '
+                'trailing right-aligned element (Spacer/Expanded + '
+                'TextAlign.end), per ORCHESTRATOR_NOTES 09:30',
+          );
+          expect(tester.takeException(), isNull);
+
+          await disposeApp(tester);
+        });
+      }
+
+      testWidgets('the value keeps its trailing edge at 430 too', (
+        tester,
+      ) async {
+        await setUpTestScope();
+        await _pumpSetup(
+          tester,
+          theme: ThemeMode.light,
+          surface: const Size(430, 844),
+          textScale: 1,
+        );
+
+        final card = tester.getRect(_settingsCard());
+        expect(
+          tester.getRect(find.text('10 coins = 10p')).right,
+          moreOrLessEquals(card.right - NestSpacing.s4, epsilon: 1),
+        );
+
+        await disposeApp(tester);
+      });
+    },
+  );
 }

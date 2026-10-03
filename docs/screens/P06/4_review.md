@@ -1,200 +1,318 @@
-# P06 Pocket money setup — QA code review (Stage 4, iteration 5)
+# P06 Pocket money setup — QA code review (Stage 4, iteration 6)
 
-Reviewed `git diff main...HEAD` per `docs/ARCHITECTURE.md` (feature-first,
-domain = entities + abstract repo only, BLoC per screen, DI/routes per
-feature), `docs/screens/RULES.md` (edited only allowed paths), the design
-system in `app/lib/core/design_system/` (no hard-coded colours/sizes/fonts;
-components reused), `docs/DESIGN_SPEC.md §5 P06` (all elements, copy
-verbatim, UK spelling), accessibility, performance (no rebuild storms, const
-widgets, streams disposed), error handling and Children's Code hygiene. No
-code was edited.
+Reviewed `git diff main...HEAD` per `docs/ARCHITECTURE.md` (feature-first;
+domain = entities + abstract repo only; BLoC per feature/screen; DI + routes
+per feature), `docs/screens/RULES.md` (edited only allowed paths), the design
+system in `app/lib/core/design_system/` (tokens only, components reused),
+`docs/DESIGN_SPEC.md §5 P06` (every element, copy character-exact, UK
+spelling), accessibility, performance (no rebuild storms, `const` widgets,
+streams disposed), error handling and Children's Code hygiene. **No code was
+edited by this stage** (the one temporary probe file created for finding 2 was
+deleted; `git status` shows no `app/lib/**` or test change from this stage —
+see "Worktree note").
 
-## Method
+## Method / evidence
 
 | Check | Result |
 |---|---|
-| `git diff --name-only main...HEAD` | 11 files, all inside `app/lib/features/pocket_money/**` and `app/test/features/pocket_money/**` ✔ |
-| `dart format --output=none --set-exit-if-changed` on the 11 files | 0 changed |
-| `flutter analyze` (full app) | **No issues found** (rerun this stage) |
-| `flutter test test/features/pocket_money/` (iteration 4 state, 8271af9) | `+136 ~1: All tests passed!` |
-| Stage-6 probe `app/test/features/pocket_money/zz_p06_s6_probe_test.dart` (root-cause only) | passed, numbers quoted below |
-| design PNG re-scan (`design/screens/light/P06-pocket-money.png`, ÷3) | exactly as iteration 4 |
+| `git diff main...HEAD --stat` | 14 code files, all in `app/lib/features/pocket_money/**` + `app/test/features/pocket_money/**` (+ `docs/screens/P06/**`) ✔ |
+| `flutter analyze lib/features/pocket_money test/features/pocket_money` (this stage) | **No issues found!** (exit 0) |
+| `flutter test test/features/pocket_money/` (this stage) | **+170: All tests passed!** (exit 0, 0 skips) |
+| `dart format --set-exit-if-changed` on the diff files | 0 changed |
+| Design PNG re-measurement (PIL, ÷3, light + dark) + app shots `ui/app_light_6.png`, `ui/app_dark_6.png` | anchors reproduced below |
+| Semantics probe (temporary, deleted): real app at `/pocket-money-setup`, `onboarding_kids`, `ensureSemantics()` | action flags quoted in finding 2 |
+| Simulator | **not used** by this stage (stage 5 only, allowed UDID) |
 
-Design hooks (logical px, ÷3): scroll top 107 · H1 68 tall (107–175) ·
-option cards 191/263/335, each 64 · settings card **415–684** · `Payout day`
-431–449 · **chips 455–486 (32)**, x 36–353 · divider 495 · `Weekly base`
-503–521 · Maya 523–567 · Leo 567–611 · divider 620 · coin row 628–672 ·
-CTA top border **685**.
+Independent design anchors I re-measured off `design/screens/light/P06-pocket-money.png`
+(÷3), each matched by `app_light_6.png` to ≤0.7 px:
+
+| Element | Design | App |
+|---|---|---|
+| H1 | box 107–175 (ink 113–172) | 107–175 ✔ |
+| Option cards | tops 191 / 263 / 335, height 64 (borders 191–193 … 253–255) | identical ✔ |
+| Settings card | top 415, bottom border 685 | identical ✔ |
+| `Payout day` label ink | 438–447 | 438–447 ✔ |
+| Day pills | y 455–487 (32 tall); x runs 36.00–75.67 / 82.00–122.67 / … / 314.00–353.67 | 455–487; x 36.00–76.00 … 313.67–353.67 ✔ (≤0.7 px, same left/right edges) |
+| Dividers | 495, 620 | 495, 620 ✔ |
+| `Weekly base` ink | 511.7–518 | 511.7–518 ✔ |
+| CTA top border | 685 | 685 ✔ |
+| Bottom edge (owner rule) | design paints paper below 810; app must not | app rows to y 2531 are CTA `surface` in both themes (255,255,255 light / 31,28,46 dark) ✔ |
 
 ## Findings
 
-### 1. MAJOR — the H1 renders one line + ellipsis (`How does pocket mone…`) in both themes, instead of the design's two balanced lines
-`app/lib/features/pocket_money/presentation/views/pocket_money_setup_view.dart:143-147`
-
-`_SetupTitle` invokes `NestBalancedText('How does pocket money work in your
-house?', style: context.nestText.h1, textAlign: TextAlign.left)` with the
-widget's **defaults** `overflow: TextOverflow.ellipsis`, `maxLines: null`.
-Those defaults are what break it:
-
-* `NestBalancedText.build` (`nest_balanced_text.dart:115`) first calls
-  `lineCountFor`, which hard-codes `ellipsis: '…'`
-  (`nest_balanced_text.dart:52`). With an ellipsis painter, any text wider
-  than one line yields *one* line and `didExceedMaxLines=true`, so
-  `minLines` comes back **1** — the guard at `nest_balanced_text.dart:123`
-  then returns the plain `_text()` immediately.
-* That plain `_text()` itself carries the same defaults
-  (`overflow: TextOverflow.ellipsis`, `maxLines: null`), so the rendered
-  paragraph also marks the line as exceeded and draws `…` after the first
-  fitted line.
-
-Probe evidence at 390×844 (`zz_p06_s6_probe_test.dart` probes, run this
-stage, passing): `PROBE h1 widget: softWrap=true maxLines=null
-overflow=TextOverflow.ellipsis textAlign=TextAlign.left`;
-`PROBE h1 paragraph size=Size(350.0, 34.0)`; a plain painter at the same
-width yields 2 lines; `lineCountFor` returns 1; the real H1 rect is
-`Rect.fromLTRB(20.0, 107.0, 370.0, 141.0)` — 34 tall, one line, ellipsized.
-Everything below is shifted up one line-height (34 px): the settings card
-measures `Rect(20, 381, 370, 651)` instead of the design's 415–684. Both
-`app_light_5.png` and `app_dark_5.png` (8271af9) show the exact artifact,
-and `5_ui.md` deviation 1 flags it as BLOCKER.
-
-**Fix** — on the screen, stop relying on the collapsing defaults: hand the
-heading a wrap-safe overflow so it wraps like the design, e.g.
+### 1. MAJOR — the coin-value text is **not** right-aligned to the card's inner padding (33 px short); this is the new mandatory `ORCHESTRATOR_NOTES.md` "UPDATE (09:30)" item
+`app/lib/features/pocket_money/presentation/views/pocket_money_setup_view.dart:774-781`
 
 ```dart
-NestBalancedText(
-  'How does pocket money work in your house?',
-  style: context.nestText.h1,
-  textAlign: TextAlign.left,
-  overflow: TextOverflow.clip, // no ellipsis → wraps to the design's 2-line break
+Expanded(child: Text('Coin value', …)),        // flex: 1, tight
+Flexible(child: Text('10 coins = ${10 * coinValuePencePerCoin}p',
+    style: NestType.bodySmall(color: tokens.ink2), softWrap: false, …)),
+```
+
+`Expanded` and `Flexible` are **both flex: 1**, so the Row first gives each of
+them half the free space and *then* the loose `Flexible` sizes its `Text` to
+the intrinsic width inside that half. With the default `TextAlign.left` the
+value therefore hugs the middle of the row instead of the trailing edge.
+
+Measured ink on the trailing string, same scan, same row:
+
+| | ink start | ink end | vs card content edge (354) |
+|---|---|---|---|
+| `design/screens/light/P06-pocket-money.png` | 256.0 | **352.7** | −1.3 (right-aligned) |
+| `ui/app_light_6.png` | 224.3 | **320.7** | **−33.3** |
+
+The design's right edge is the same as the Sun pill's (353.67) and the `+`
+buttons'; the app's is 33 px inside it. This is a visible misalignment (owner
+ALIGNMENT rule: "nothing a few px off") and it is exactly the item the
+orchestrator added at 09:30.
+
+**Fix** — make the trailing value a tight, end-aligned flex child (no layout
+change to the row, the ellipsis backstop is kept):
+
+```dart
+Expanded(
+  child: Text(
+    '10 coins = ${10 * coinValuePencePerCoin}p',
+    style: NestType.bodySmall(color: tokens.ink2),
+    textAlign: TextAlign.end,
+    softWrap: false,
+    overflow: TextOverflow.ellipsis,
+  ),
 ),
 ```
 
-(With the ellipsis painter suppressed the 390 dp break is the design's
-`How does pocket money / work in your house?`; probe `variant=none lines=2`
-is the same input.) Also add a SHARED_REQUEST for the shared component:
-`NestBalancedText.lineCountFor` must not hard-code `ellipsis: '…'` (it makes
-every long text measure as one line), and the widget's default overflow
-should not turn a wrap-shaped heading into an ellipsized single line.
+**Test to add** (real fonts, as `pocket_money_setup_view_geometry_test.dart`
+already does): `expect(tester.getRect(find.text('10 coins = 10p')).right,
+moreOrLessEquals(tester.getRect(find.byType(NestCard)).right - NestSpacing.s4,
+epsilon: 1))` at 390 **and** at 320/430, light and dark. Note that at 320 the
+value must still ellipsis rather than push the tile — `Expanded` + `softWrap:
+false` keeps that behaviour.
 
-### 2. MAJOR — the mandated real-fonts geometry test that pins the drift-fixed y values is absent
-`ORCHESTRATOR_NOTES.md` "UPDATE (07:22)" requires literally: *"Add a geometry
-test with real fonts (FontLoader, as app/test/features/privacy_consent/privacy_consent_geometry_test.dart
-does) that pins these y values at 390×844."*
+### 2. MAJOR — the three option cards and the seven day cells are announced as buttons but carry **no `SemanticsAction.tap`**, so a screen-reader user cannot operate them
+`app/lib/features/pocket_money/presentation/views/pocket_money_setup_view.dart:313-319` (`_PocketOptionCard`) and `:556-567` (`_DayCell`)
 
-No file in `app/test/features/pocket_money/**` mentions `FontLoader`
-(grep returns empty). Only fuzzy widths/relationships are asserted under the test
-font (`pocket_money_setup_view_test.dart:1146-1250`), which cannot catch an
-Ahem-fallback drift. The exact vertical anchors that had to be repaired
-(`Payout day` label → chip row gap 6, `Weekly base` label, divider spacing,
-coin row, card bottom ≈ 684, CTA border ≈ 685) are nowhere pinned.
-`zz_p06_s6_probe_test.dart` currently in the worktree (probe, deleted
-before the stage's end) *does* produce the numbers — fold them into
-`app/test/features/pocket_money/pocket_money_setup_geometry_test.dart`
-(Inter/Nunito via `FontLoader('Inter')`/`('Nunito')` as
-`privacy_consent_geometry_test.dart:24-37`, `setUpTestScope`,
-`pumpAppRoute(tester, '/pocket-money-setup')` with the
-`onboarding_kids` shoot seed, then pin `Rect` heights/y-values to the design
-table above).
+Both use
 
-### 3. MAJOR — stepper minus glyph is the wrong character; the mandatory fix is missing entirely (even as a shared request)
-`app/lib/core/design_system/components/nest_stepper.dart:32` still renders a
-plain `'-'` (ASCII 45, short hyphen) for the minus button, and the feature
-neither overrides the glyph (the `NestStepper` constructor exposes only
-labels/onDecrease/onIncrease/valueText) nor filed a SHARED_REQUEST.
-`design/html-source/screens/P06-pocket-money.html:73` uses `&minus;`, i.e.
-`−` (U+2212). The probe renders `stepper glyphs: minus=- ([45])`.
-The 07:22 orchestrator note is explicit: *"Stepper glyphs: the design's minus
-is '−' (U+2212)… Use the same icon/glyph source for − and + so they match in
-weight and width; check the HTML for the exact glyph."*
+```dart
+Semantics(button: true, selected: selected, label: …, excludeSemantics: true,
+    child: GestureDetector(onTap: onTap, …)),
+```
 
-**Fix** — add a SHARED_REQUEST item asking `NestStepper` to emit `−`
-(U+2212) for the minus button so both stepper arrows share weight/width, and
-link it to a geometry check. Do **not** paste a custom glyph into the view.
+`excludeSemantics: true` drops **every descendant semantics contribution** —
+including the `GestureDetector`'s `onTap` action — while the node itself keeps
+`isButton`/`isSelected`. The result is a control that says "button" and cannot
+be activated (WCAG 2.1 AA SC 4.1.2 Name/Role/Value and SC 2.1.1 Keyboard;
+VoiceOver double-tap and TalkBack double-tap both send `SemanticsAction.tap`).
 
-### 4. MINOR — the `Semantics(container: true, label: 'Payout day')` group label was dropped
-In iteration 4 the day row wrapped its chips in a group
-(`Semantics(container: true, label: 'Payout day')` at
-`pocket_money_setup_view.dart`'s old `_DayRow`) matching the HTML's
-`<div class="day-row" role="group" aria-label="Payout day">`. The
-iteration-5 rewrite returns `NestChipWrap` directly from `_DayRow`
-(`pocket_money_setup_view.dart:~507-524`) to free the `±6 px` tap slop from
-the `RenderProxyBoxWithHitTestBehavior` wrapper — understandable — but the
-cells now announce as bare `Mon`, `Tue`, …. Fix: give each day-cell
-`Semantics` a label that carries the section, e.g.
-`label: 'Payout day: Mon' … 'Payout day: Sun'` (`_DayCell` at
-`pocket_money_setup_view.dart:~560-571`), or merge the section label into
-each chip's `button` + `selected` announcement. Either restores the grouping
-without reintroducing the hit-test container.
+Probe this stage, real app, `onboarding_kids`, semantics handle on
+(temporary file, since deleted):
 
-### 5. MINOR — invented empty-state copy still unratified
-`'Add children to set weekly amounts.'` (`pocket_money_setup_view.dart:455-459`)
-has no source in `DESIGN_SPEC.md §5` / the HTML source. Iteration-5
-`2_build.md` says it is "FLAGGED — needs orchestrator ratification" and the
-orchestrator note no longer mentions it. Keep as a finding-to-be-ratified,
-not a fix.
+```text
+PROBE option both  label="Both, Weekly base + bonus for extra quests" button=true selected=true tap=false actions=0
+PROBE day sat      label="Payout day: Sat"                         button=true selected=true tap=false actions=0
+PROBE back         label="Back"                                   button=true                 tap=true  actions=4194305
+PROBE control  (Semantics(button, excludeSemantics:true) > GestureDetector(onTap))  tap=false
+```
+
+`Back` (shared `NestNavBar`) and the stepper buttons (plain `InkWell`, no
+`excludeSemantics`) both expose the action, so the defect is exactly the
+`excludeSemantics: true` wrapper — and it hits the screen's **two primary
+controls**: the money-style choice and the payout day.
+
+The suite asserts `flagsCollection.isButton` for all 16 controls
+(`pocket_money_setup_view_test.dart:1072-1180`) but never the *action*, which
+is why this survived six iterations.
+
+**Fix** (keeps the single-node announcement the existing tests rely on):
+
+```dart
+return Semantics(
+  key: cardKey,
+  button: true,
+  selected: selected,
+  label: '$title, $sub',
+  onTap: onTap,            // ← restores the dropped action
+  excludeSemantics: true,
+  child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTap, …),
+);
+```
+
+and the same one line in `_DayCell`. **Test to add:** for all three option
+cards and all seven day cells,
+`tester.getSemantics(f).getSemanticsData().hasAction(SemanticsAction.tap)`
+is `true`; plus one test that performs `tester.getSemantics(card).performAction(SemanticsAction.tap)`
+and asserts the DB changed (mode / payout day), so the action is proven
+wired, not just declared.
+
+### 3. MAJOR (shared code — cannot be fixed in this branch; needs a SHARED_REQUEST) — the same `excludeSemantics` pattern strips the tap action from the shared `NestButton` and `NestChip`
+`app/lib/core/design_system/components/nest_button.dart:152-180`, `app/lib/core/design_system/components/nest_chip.dart:119-137`
+
+The probe also returns, for this screen's CTA:
+
+```text
+PROBE continue label="Continue" button=true tap=false actions=0
+```
+
+`NestButton` wraps its `InkWell` inside `Semantics(label: …, excludeSemantics:
+…)`, and `NestChip` does the same — so **every** button and chip in the app
+(including P06's `Continue`) announces as a button that cannot be activated.
+RULES §1 forbids editing `app/lib/core/**`, so this stage cannot fix it; it
+belongs in `docs/screens/P06/SHARED_REQUEST.md` as its own item: *"interactive
+design-system components must expose `SemanticsAction.tap` — add
+`onTap:` to the `Semantics` wrapper (or keep the inner label excluded with
+`ExcludeSemantics` instead of dropping the whole subtree)"*, with P06 as the
+repro. Findings 2 and 3 are the same class; only finding 2 is in scope.
+
+### 4. MINOR — the feature re-implements child ordering with a factually wrong rationale, bypassing the canonical query
+`app/lib/features/pocket_money/data/pocket_money_repository_impl.dart:92-103`
+
+```dart
+/// Children in the order they were added (Maya, then Leo). Never
+/// `AppDatabase.watchChildren` — it orders by nickname (Leo first).
+Stream<List<ChildrenData>> _watchChildrenInsertionOrder() {
+  return _db.customSelect('SELECT * FROM children WHERE family_id = ? ORDER BY rowid', …)
+```
+
+Both halves of that comment are now stale. `AppDatabase.watchChildren`
+(`app/lib/core/data/app_database.dart:433-442`, main/shared) **already**
+implements the CHILD ORDER ruling — `ORDER BY createdAt, rowid` — and the
+schema comment says so (`app_database.dart:93-94`). It does not order by
+nickname. Behaviour today is still correct (Maya 08:00 then Leo 08:01 in
+`Seed._childrenDemo`, `createdAt: now()` per insert in
+`family_repository_impl.dart:78`, so `createdAt` order == `rowid` order) and
+is pinned by tests, so this is duplication/drift risk rather than a visible
+bug — but a raw `ORDER BY rowid` silently ignores `createdAt`, so the moment a
+child row is backdated or imported the roster order could differ between P06
+and P15.
+
+**Fix:** delete `_watchChildrenInsertionOrder` and use
+`_db.watchChildren(Seed.familyId)` in `watchSetup()` (keeping the comment about
+insertion order, minus the wrong "orders by nickname" claim).
+
+### 5. MINOR — `_FailureBody` re-subscribes to the bloc, defeating the `buildWhen` filter
+`pocket_money_setup_view.dart:179`
+
+```dart
+final state = context.watch<PocketMoneyBloc>().state;
+```
+
+`_FailureBody` is built *inside* the `BlocBuilder` that already filters with
+`buildWhen: setup/status/errorMessage` (`:50-53`), so the nested
+`context.watch` re-subscribes and rebuilds the failure screen on **every**
+state emission, including ledger-only ones — the exact rebuild storm finding
+#14 of the iteration-4 review was filed to remove.
+
+**Fix:** give `_FailureBody({required this.errorMessage})` and pass
+`state.errorMessage` from the builder (`:67-70`), dropping the `watch`.
+
+### 6. MINOR — option cards announce as generic buttons, not radios
+`pocket_money_setup_view.dart:313-318`
+
+The HTML source uses `role="radiogroup"` / `role="radio"` + `aria-checked`
+(`P06-pocket-money.html:41-56`); the Flutter node is `button + selected`, so
+a screen reader says "selected button" and never communicates mutual
+exclusivity or position. `Semantics(inMutuallyExclusiveGroup: true,
+checked: selected, button: true)` is the faithful mapping ("radio, 3 of 3,
+selected"). Purely additive on top of finding 2's `onTap`. The radiogroup
+container label (`Semantics(container: true, label: 'Pocket money style')`,
+`:272-274`) is already correct.
+
+### 7. MINOR — screen-authored empty-state copy still unratified
+`pocket_money_setup_view.dart:462-465` — `'Add children to set weekly amounts.'`
+has no source in `DESIGN_SPEC.md §5` or the HTML. Mandated by `1_plan.md §4`
+(so the behaviour is right), but the wording still needs an orchestrator
+yes/no. Carried forward from iteration 5's review #5; unchanged for two
+iterations, so it should be ratified or replaced now.
+
+### 8. MINOR — a spacing token is used as a size
+`pocket_money_setup_view.dart:401-402` — `width: NestSpacing.gap10,
+height: NestSpacing.gap10` for the selected radio's 10 px dot (the CSS
+`inset 0 0 0 4px leaf-tint` read). The derivation is documented in the
+doc-comment above (`:377-378`), but `gap10` reads as "10 px gap" to the next
+maintainer. A private `static const _radioDot = 10` (with the CSS derivation
+in its comment) is clearer.
 
 ## Verified OK (no action at this review)
 
-* **RULES §1 scope** — every diff file is inside the feature + its test
-  folder + `docs/screens/P06/**`. No `core/`, `app/`, `tools/screens`,
-  `analysis_options.yaml`, no `flutter clean`, no `flutter run` by any stage
-  (screenshots via `shot.sh` on the allowed simulator `BC440E48-…`).
-* **ARCHITECTURE** — feature-first with the prescribed split; domain holds
-  `pocket_money_setup.dart` (entity) + `pocket_money_repository.dart` (abstract
-  with only stream/Future + entity types); one `PocketMoneyBloc` per screen;
-  DI/routes per feature unchanged.
-* **Copy / UK spelling** — `How does pocket money work in your house?`,
-  `Weekly amount`, `A set amount every week`, `Earn per quest`,
-  `Coins turn into pence at payout`, `Both`,
-  `Weekly base + bonus for extra quests`, `Payout day`, `Weekly base`,
-  `Coin value`, `10 coins = 10p`, `Nestling never holds or moves money. You pay
-  your way; we keep score.`, `Continue`, `Back` — character-exact vs the HTML
-  (5_ui also confirms end-to-end).
-* **Data over mocks + child order** — the supposed authoritative figures still
-  come from the seeded DB (`Seed.onboardingKids`, UI-checked `£3.00`/`£1.50`),
-  children combineLatest2 `watchSetup` in insertion order via the new
-  `ORDER BY rowid` customSelect (which reverted the unused `settings`
-  subscription — review #9 fixed).
-* **Tokens-only colours/sizes** — no hard-coded colour literals in the diff;
-  every pill/card/border/text style routes through `context.nest` /
-  `NestType`/`NestSpacing`/`NestRadii`/`NestDevice`; new literals (13/22/200/60/300/50/2000)
-  are carried in `SHARED_REQUEST.md` #2 + doc notes, i.e. blocked on shared work
-  rather than forking.
-* **CHIP ROWS / re-render contract** — the day strip is now a direct
-  `NestChipWrap` child of the card `Column` (no `Padding`/`SizedBox`/
-  `Semantics` compressor above it), the tight wrap that once blocked the 5-px
-  slop taps is gone, and the 5-px-above/below tap guards (view_test :870/:902)
-  stay green.
-* **BOTTOM EDGE (owner)** — CTA panel surface reaches the physical edge in
-  both themes; `NestHomeIndicator` paints no area; no page-colour strip
-  (inherent to `NestBottomCta`'s `SafeArea(top: false)` + paper scaffold
-  unchanged).
-* **Performance / lifecycle** — `BlocBuilder.buildWhen` (setup/status/
-  errorMessage only) means ledger-only emissions no longer rebuild the form —
-  review #14 fixed; review #10 `emit.isDone` guards are in; review #5/#6
-  `w600` 16/22 `.amount-name` metrics and a `tokens.leaf` spinner are in;
-  review #12 `ArgumentError` past `assert` is in; review #13's stale
-  `P06-BUG-04` skip was replaced by a deleted proof so the feature contains no
-  real `skip:`; review #4's six real-DB teardowns now call
-  `disposeApp(tester)` (45 call-sites, no `pumpWidget(SizedBox.shrink())` left).
-* **ERROR HANDLING / privacy** — load failure shows the message + `Retry`; a
-  failed write keeps the form, paints `danger`, clears on recovery; no
-  network, no `print`/`debugPrint` in the feature or its tests, no child
-  identifiers outside the local DB, no kid-mode surface, `google_fonts` /
-  `GoogleFonts` absent.
+* **RULES §1 scope** — the whole diff is inside `app/lib/features/pocket_money/**`,
+  `app/test/features/pocket_money/**` and `docs/screens/P06/**`. No
+  `app/lib/core/**`, no `app/lib/app/**`, no `tools/screens/**`, no
+  `analysis_options.yaml`, no `flutter clean`, no interactive `flutter run`,
+  no simulator by this stage.
+* **ARCHITECTURE** — feature-first split respected; `domain/` holds only the
+  Equatable entities + the abstract repository (streams/Futures + entities,
+  no Drift types leak: `watchSetup`/`setMode`/`setPayoutDay`/
+  `setWeeklyBasePence` are the only new surface, `:39-54`); one
+  `PocketMoneyBloc` per feature per the architecture's "one bloc per feature"
+  rule; DI/routes untouched (route + redirect already existed on main).
+* **Tokens only, components reused** — no colour literal anywhere in the diff
+  (every colour comes from `context.nest`); the two documented, TODO-marked
+  component forks (`P06WeeklyStepper`, `_DayPill`) are filed as
+  `SHARED_REQUEST.md` items 1/4/5 and match their shared twins token-for-token
+  (verified against `components.css`: `.stepper button` 44/1px line/surface,
+  `.chip.day` 32 high, `0` padding, 13 px, pill radius, 1.5 px transparent
+  border, selected `leafTint` + `leaf` + `leafInk`). Remaining raw literals
+  (13, 22, 60, 200, 1.5, ~300) are the design's own CSS numbers and are
+  carried by `SHARED_REQUEST.md` item 2 rather than invented.
+* **Copy / UK spelling** — every string is character-identical to the HTML
+  source (verified programmatically against
+  `design/html-source/screens/P06-pocket-money.html`): title, all six option
+  strings, `Payout day`, `Mon…Sun`, `Weekly base`, `Coin value`, `Continue`,
+  and the caption (split across two adjacent literals, concatenating to
+  `Nestling never holds or moves money. You pay your way; we keep score.`).
+  `10 coins = 10p` is built from the DB
+  (`'10 coins = ${10 * coinValuePencePerCoin}p'`), which is DATA OVER MOCKS,
+  not a deviation. `Back` comes from `NestNavBar`.
+* **Design fidelity (independently re-measured, table in Method)** — H1,
+  option cards, settings card, day strip x-runs, dividers, labels, CTA border
+  and the bottom edge all match the design PNG to ≤0.7 px in both themes.
+* **Owner rules** — BOTTOM EDGE: the CTA `surface` reaches the physical edge
+  in light and dark, no strip, no tint around the indicator. ALIGNMENT: single
+  20 px gutter on every element (geometry test + my x-run scan). BALANCED
+  HEADINGS: `.h1` renders through `NestBalancedText`, two lines, the design's
+  break after `money` (pinned by the real-font geometry test). CHIP ROWS: the
+  day strip is a `NestChipWrap`, so the ±5 px slop taps work. LETTER SPACING:
+  no local tracking added anywhere (`NestType` defaults 0). STATUS BAR:
+  `NestStatusBar` only reserves height. PIP: none on this screen. TRIAL:
+  `subscription_status` is never touched.
+* **Data over mocks + child order** — mode/day/base/coin value all come from
+  `watchSetup`; `£3.00`/`£1.50` are the seeded values; children are listed in
+  insertion order (Maya, then Leo) and the order is pinned by a test.
+* **Accessibility** — 16 labelled controls, every one ≥44 dp tall (day pills
+  32 + `NestChipWrap` hit slop = 44, which is the orchestrator's own override
+  of the ≥44-wide rule), `Semantics(header: true)` on the H1, decorative coin
+  icon excluded, stepper labels verbatim from the HTML, contrast from tokens.
+  Findings 2, 3 and 6 are what is left.
+* **Performance / lifecycle** — `buildWhen` keeps ledger-only emissions off the
+  form (except in the failure state — finding 5); `emit.forEach` on the single
+  combined stream (no second `forEach`, no re-added load events); the
+  terminal `_closeOnError` transformer prevents a leaked watcher per Retry;
+  `emit.isDone` guards on every post-`await` emit; no `Timer` /
+  `AnimationController` in the feature; `const` where it fits; `CustomPaint`
+  only inside shared chrome.
+* **Error handling** — load failure → message + `Retry`; a failed write keeps
+  the form and shows an inline `danger` message that clears on the next
+  confirmed emission; invalid mode/day are rejected with an assert (debug) and
+  an `ArgumentError` past it (release).
+* **Children's Code / privacy** — no analytics, no ads, no network, no
+  `print`/`debugPrint` in the feature or its tests, no identifiers leaving the
+  device, parent-mode route only (kid mode redirects to the gate, pinned by a
+  test), no `google_fonts`/`GoogleFonts` anywhere.
+* **Tests** — 170 passing, 0 skips, every widget test that pumps the app ends
+  with `disposeApp(tester)`; the real-font geometry test pins the orchestrator's
+  y anchors in light **and** dark; the 07:58 minus-glyph note is pinned
+  positively (`== U+2212`, not merely `!= U+002D`).
 
-## Notes on the worktree (not findings; process owned elsewhere)
+## Worktree note (not a finding — process owned by the loop)
 
-* `zz_p06_s6_probe_test.dart` is a raw "`PROBE`" dump from stage 6's
-  frontier and is uncommitted alongside edits to
-  `pocket_money_setup_view.dart` / `…_view_test.dart` (it dumps the exact
-  numbers being reported above). It is process state, not a diff item; its
-  numbers are the *evidence* for findings 1 and 2 and should be folded into
-  the real geometry test, then the file must be deleted before branch merge.
-* `SHARED_REQUEST.md` item 3 (BALANCED HEADINGS blocked on a main merge) is
-  now stale in wording — the component *is* merged (`88c2132` is now an ancestor
-  of `HEAD`) — but the *reason* is real: that component's own defaults are the
-  breaking part, so item 1's fix becomes the request above.
+While this review was running, other stages of the same iteration were
+editing this worktree: `p06_bugs_test.dart`, `pocket_money_setup_view_test.dart`,
+`5_ui.md`, `6_bugs.md` and `ORCHESTRATOR_NOTES.md` changed under me, and a new
+mandatory orchestrator item appeared ("UPDATE (09:30) … Coin value row … Do not
+touch anything else"), which is finding 1 above. No `app/lib/**` file changed
+during the review, so the production code reviewed here is exactly what
+`git diff main...HEAD` contains; `flutter analyze` and `flutter test` were both
+re-run by this stage on that tree. Per the brief, uncommitted work, branch
+position and merge order are not findings.
 
 VERDICT: FAIL

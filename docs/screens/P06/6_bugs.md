@@ -1,121 +1,98 @@
-# P06 Pocket money setup — Stage 6 adversarial bug hunt (iteration 5)
+# P06 Pocket money setup — Stage 6 adversarial bug hunt (iteration 6)
 
 Route `/pocket-money-setup` · feature `pocket_money` · parent mode · onboarding
-(P05 → P06 → P07). `ORCHESTRATOR_NOTES.md` (including the 07:22 and 07:58
-updates) is verified item by item below. No screen code was changed by this
-stage — only `app/test/features/pocket_money/p06_bugs_test.dart` and this
-report.
+(P05 → P06 → P07). All `ORCHESTRATOR_NOTES.md` items (04:05, 07:22, 07:58) are
+verified below. No screen code was changed by this stage — only
+`app/test/features/pocket_money/p06_bugs_test.dart` and this report.
 
 Suite state: `flutter test test/features/pocket_money/p06_bugs_test.dart` →
-**+25 ~2: All tests passed!** The two skips are this iteration's new findings;
-delete the skips to watch them fail:
-
-```text
-P06-BUG-11  Expected: a value greater than or equal to <60>   Actual: <34.0>
-P06-BUG-12  Expected: '−' (U+2212)                            Actual: '-'
-```
+**+27 ~1: All tests passed!** The one skip is the new minor finding; without it
+the run is `+27 -1` with exactly the P06-BUG-13 assertion failing.
 
 ## Open bugs
 
-### P06-BUG-11 (MAJOR) — the balanced H1 collapses to one ellipsized line
+### P06-BUG-13 (minor) — the "Coin value" label ellipsizes at 320dp × 1.3
 
-**Where:** `app/lib/features/pocket_money/presentation/views/pocket_money_setup_view.dart:143`
-(`_SetupTitle` calls `NestBalancedText` with no `maxLines`) +
-`app/lib/core/design_system/components/nest_balanced_text.dart:37-55` /
-`:98-105` (defaults `overflow: TextOverflow.ellipsis`, passes `maxLines: null`).
+**Where:** `_CoinValueRow` in
+`app/lib/features/pocket_money/presentation/views/pocket_money_setup_view.dart`
+— one row, two flex children (`Expanded` label + `Flexible` value), no wrap
+branch.
 
-**Repro / evidence (real bundled fonts, 390×844):**
-- The H1 `RenderParagraph` is **350×34, `didExceedMaxLines = true`** — one line,
-  ellipsized ("How does pocket money work in your hou…"), while the design
-  (`design/screens/light/P06-pocket-money.png` ÷3) draws the H1 at
-  **107–175 = two 34 px lines**.
-- `NestBalancedText.lineCountFor` returns **1** for the H1 (it lays out with
-  `ellipsis: '…'` and `maxLines: null`), so the component takes its
-  `minLines <= 1` early-out and never balances.
-- Minimal control probe (Flutter 3.47.5): the same text/style at width 200 —
-  `overflow: clip, maxLines: null` → 136 tall (4 lines);
-  `overflow: ellipsis, maxLines: null` → **34 tall (1 ellipsized line)**;
-  `overflow: ellipsis, maxLines: 2` → 68 tall. Under this engine,
-  `ellipsis + maxLines: null` collapses the paragraph instead of wrapping.
-- Knock-on: the collapsed H1 is 34 px shorter, so the settings card sits at
-  **381–651** instead of the design's **415–684** — every y in
-  ORCHESTRATOR_NOTES (07:22) is 34 px high even though the card's internal
-  gaps are now exactly right.
+**Repro / evidence (real bundled fonts):** at 320dp with the accessibility
+text scale at 1.3 the row's 196 dp of content split evenly gives the label
+98 dp while Inter 16 × 1.3 needs ~105, so `Coin value` paints truncated with
+an ellipsis (`RenderParagraph` 98×29, `didExceedMaxLines = true`). The
+weekly-base rows handle the same 320 × 1.3 combination by wrapping
+(`_WeeklyBaseRow._wrapWidth = 300`); the coin row has no equivalent. A
+real-font sweep of every `Text` at 320/390 × 1.0/1.3 shows this is the only
+unsanctioned truncation: 320 × 1.0 truncates only the trailing
+`10 coins = 10p` (plan §5 explicitly sanctions that ellipsis), 390 truncates
+nothing.
 
-**Failing test:** `P06-BUG-11: the H1 must wrap to the design's two lines, not
-one ellipsized line` (skipped; asserts paragraph height ≥ 60, no
-`didExceedMaxLines`, card top 415 ± 1).
+**Failing test:** `P06-BUG-13: the "Coin value" label must not ellipsize at
+320dp × 1.3` (skipped; asserts `didExceedMaxLines == false` plus the day pill
+still at 32 dp).
 
-**Fix:** shared, per the orchestrator's 07:58 update: `shared/balanced_text_ellipsis`
-fixes `NestBalancedText` on main (ellipsis must not collapse a null-`maxLines`
-heading) and main is merged before the next build. Keep using
-`NestBalancedText` on this screen and **do not work around it** (no local
-`maxLines: 2`); after the merge the title must be two lines with the screen
-back at the iteration-4 positions. P07 passes `maxLines: 3`
-(`paywall_view.dart:411`) so it is unaffected — P06 is the only
-null-`maxLines` caller today.
+**Fix (screen scope):** give the coin row the same narrow-width treatment as
+the weekly-base rows — under ~300 dp row width stack the label/value onto a
+second line (or let the label wrap to two lines) so both render in full; keep
+the trailing value's ellipsis as the last resort.
 
-### P06-BUG-12 (minor, mandatory-note item) — stepper minus is a hyphen, not U+2212
+## Iteration-5 findings — fixed and verified
 
-**Where:** `app/lib/core/design_system/components/nest_stepper.dart:32`
-(`label: '-'`, U+002D) used by `pocket_money_setup_view.dart:_BaseStepper`;
-the design HTML (`P06-pocket-money.html:73`) uses `&minus;` (U+2212), a
-full-width bar matching the `+` in weight and width.
+| # | Was | Fix | Guard now green |
+|---|---|---|---|
+| 11 (major) | `NestBalancedText` collapsed the H1 to one ellipsized line and pulled the card 34 px high | main's `shared/balanced_text_ellipsis` (no ellipsis when `maxLines == null`); view unchanged | `P06-BUG-11 (fixed)`: H1 = **331.2×68**, `didExceedMaxLines` false, line 1 ends after **"How does pocket money"**, card top **415** |
+| 12 (minor) | stepper minus was `-` (U+002D) | `P06WeeklyStepper` (feature-private copy of `NestStepper`) renders `−` U+2212 next to `+`; shared component untouched | `P06-BUG-12 (fixed)`: minus `== '\u2212'`, plus `== '+'` |
 
-**Repro:** on the screen, the Maya/Leo decrease buttons render `-`
-(`codeUnits [45]`) next to a `+` (`[43]`) — visibly narrower and lighter than
-the design's minus. ORCHESTRATOR_NOTES (07:22) explicitly asks for the same
-glyph source for `−` and `+`; it is unaddressed by the iteration-5 build.
+## Independent geometry verification (real Inter/Nunito, light + dark)
 
-**Failing test:** `P06-BUG-12: the stepper minus must be the design's U+2212
-(&minus;)` (skipped). The orchestrator's 07:58 update asks for "a test that the
-minus button's glyph is not U+002D"; this asserts the stronger positive form
-(`== '\u2212'`), which also fails on U+002D today.
+The real-font guard now sweeps both themes and pins the design anchors from
+`P06-pocket-money.png` ÷3 at 390×844 — every value within ±1:
 
-**Fix:** shared — `NestStepper` should render `'\u2212'` (keeping the existing
-semantics labels), or the screen needs a glyph override on `NestStepper`
-(forking the component is not allowed). File a `SHARED_REQUEST` if the shared
-change is not made in the next build.
+| Anchor | Design | App (both themes) |
+|---|---|---|
+| H1 top / height | 107 / 68 (two lines) | 107 / 68 |
+| settings card top / height | 415 / 270 | 415 / 270 |
+| day pill top / height | 455 / 32 | 455 / 32 |
+| last pill right | 354 (= card 16 px inset) | 354 |
+| Weekly base label top | 503 | 504 |
+| Maya / Leo text top | 534 / 578 | 535 / 579 |
+| Coin value text top | 639 | 640 |
+| gap chain | 6 / 17 / 13 / 22 / 39 / 23 | exact |
+| 07:58 title-anchored offsets | 296 / 329 / 359 / 403 / 464 | exact |
 
-## Earlier findings — all still green
+## Attacks that hold (unchanged, all green)
 
-The unskipped guards cover: P06-BUG-01/01b/01c (stepper accumulation),
-02/02b (day guard), 03 (pill 32 px), 05 (inline write error),
-06 (stale message), 07 (unknown child), 08 (day-row align), 09 (pending-day
-confirmation), the iteration-4 note guards (seed `onboarding_kids`, chip rects
-inside the 16 px inset at 390/320/430, `NestChipWrap` ±5 px and gap taps,
-option-card 22/20 line heights, gold coin tile), and the attack holds
-(kid-mode guard, restart persistence, 6 children at 320 × 1.3, £0.00/£20.00,
-async gap, contrast).
+Kid-mode deep link → `/parental-gate`; restart persistence on a file-backed DB;
+6 children incl. “Maximilian-Alexander” at 320 × 1.3; 0 children caption;
+£0.00/£20.00 exact; rapid stepper/day chains (BUG-01/01b/01c, 02/02b);
+`NestChipWrap` ±5 px and gap taps; seed `onboarding_kids` from the DB in
+insertion order; option-card 22/20 line heights; gold coin tile; async gap on
+close; WCAG 4.5:1 in both themes; `P06WeeklyStepper` is byte-identical to the
+shared stepper apart from the two glyphs (diff-checked).
 
-## ORCHESTRATOR_NOTES (07:22) verification
+## Notes, not bugs
 
-| Target | Result |
-|---|---|
-| "Payout day" label y 524 (sheet) | app label box 397, card top 381 → **34 px high** (BUG-11 knock-on) |
-| day-chip row centre +6 → 0 | **fixed inside the card**: label→pill 6.0, pill 32.0 |
-| "Weekly base" +12 → 0 | **fixed**: pill→weekly 17.0 (8+1+8) |
-| Maya/Leo/coin +12 → 0 | **fixed**: weekly→Maya 13.0, Maya→Leo 22.0, Leo→coin 39.0, card→bottom 23.0, card height **270.0** |
-| real-font geometry test | added in `p06_bugs_test.dart` ("the payout card keeps the design's 270 height and gap chain", `FontLoader` like the P04 test); absolute-y pins tied to BUG-11 |
-| stepper glyphs − (U+2212) like + | **not done** → P06-BUG-12 |
-| FIXES_4 items | #1 (32 px row / card height) fixed; #3 (`NestBalancedText`) adopted but broke the wrap (BUG-11); #2/#4–#6, #9–#10, #12–#14 fixed by the build; #7/#8 parked on `SHARED_REQUEST.md`; #11 empty-state copy still needs orchestrator ratification (screen-authored `Add children to set weekly amounts.` renders only for `Seed.empty`/`Seed.fresh`) |
-
-### UPDATE (07:58) rows
-
-| Target | Result |
-|---|---|
-| #1 the title truncates to one line; shared fix lands on main, keep `NestBalancedText` | independently reproduced as **P06-BUG-11** (paragraph 350×34, `didExceedMaxLines`, card 34 px high); skipped failing test in place; no local workaround added |
-| #2 minus glyph must not be U+002D; add a test | asserted `== U+2212` in **P06-BUG-12** (fails on `-` today) |
-| #3 card targets measured from the two-line title's bottom: chip row centre 555, Weekly base 597, Maya 630, Leo 674, Coin value 735 (±1) | title-anchored guard added and green today (296 / 329 / 359 / 403 / 464 logical offsets, ±1); the absolute positions return once BUG-11's fix merges |
+- **`P06WeeklyStepper` is a feature-private copy of `NestStepper`** pending
+  `SHARED_REQUEST.md` item 4 (glyph override on the shared component); the
+  copy is faithful (diff-checked) and retires in one edit when the shared
+  change lands. `_DayPill` similarly awaits item 5.
+- **320 × 1.3 day labels** (`Mon`/`Wed`/`Thu`/`Sun`) ellipsize to two
+  characters plus `…`. Noted since iteration 4; SPACING_SPEC §10.1 sanctions
+  `maxLines: 1 + ellipsis` for chip text at large scales (the §10.3
+  `scaleDown` alternative remains the nicer fix if the shared chip variant
+  ever lands).
+- **Empty-state copy** `Add children to set weekly amounts.` (renders only for
+  `Seed.empty`/`Seed.fresh`) still awaits orchestrator ratification — review
+  finding #11, carried forward untouched.
 
 ## Verdict rationale
 
-The iteration-5 build fixed the card's internal vertical drift exactly, but the
-mandated `NestBalancedText` adoption regressed the H1: under Flutter 3.47.5 the
-component's `ellipsis` + `maxLines: null` lays the heading out as **one
-truncated line** and drags the whole card 34 px above the design — a visible,
-screen-level defect with a deterministic repro. The stepper minus glyph from
-the same notes update is also still open. Two findings, one major, both with
-skipped failing tests, so the stage fails.
+Both iteration-5 findings are independently verified fixed, the full design
+geometry now matches in light and dark within a pixel, and every earlier guard
+still holds. One new minor finding remains — the "Coin value" label truncates
+at the extreme 320dp × 1.3 combination, contained and with a one-branch fix
+suggested. No major bug is open, so the stage passes.
 
-VERDICT: FAIL
+VERDICT: PASS
