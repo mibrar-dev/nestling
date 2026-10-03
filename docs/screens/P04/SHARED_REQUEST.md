@@ -143,6 +143,23 @@ Blast radius: (1) every text on every screen; (2) every `NestToggle` screen.
 P04's proof is `[P04-10]` in
 `app/test/features/privacy_consent/p04_bugs_test.dart` (fails now: title
 height 44 vs 22, card 116 vs 94).
+
+**STAGE 3 (iteration 8) — the local half is green, the rest of the screen is
+not.** `[P04-10]` now passes (the view zeroes the title's tracking) and the
+card is back to 94px, but a screen-wide measurement with the bundled faces
+found **14 of the 15 rendered text runs still carry Material's tracking**:
+h1, standfirst, the 4 row titles, the 4 row subs, the opt sub, `Continue`,
+the footnote link and the dialog's 4 promise lines all resolve to
+`letterSpacing: 0.25` (this theme's `bodyMedium`), while only
+"Optional: help improve Nestling" is 0. The design gives none of these classes
+tracking, so option (1) above is the real fix; the P04-local alternative is the
+same one-line `copyWith(letterSpacing: 0)` the title already uses, applied to
+each run. Measured by
+`app/test/features/privacy_consent/privacy_consent_geometry_test.dart`
+("P04 — letter-spacing contract (P04-10 class)"), which is red until this
+lands — geometry is unaffected today (the 390dp layout still matches the design
+exactly), so the risk is latent: any future copy change pushes a run over its
+line budget, as it did for the title.
 Files: `app/lib/core/design_system/tokens/typography.dart` (or
 `theme/nest_theme.dart`) and/or
 `app/lib/core/design_system/components/nest_toggle.dart`.

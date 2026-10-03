@@ -1,45 +1,43 @@
-# P04 · Privacy consent — UI check (STAGE 5, iteration 7)
+# P04 · Privacy consent — UI check (STAGE 5, iteration 8)
 
 Route `/privacy` · SEED=fresh · parent mode · child maya · simulator 604697A9-11DA-462F-9837-396E9CA2493A.
-Shots: `docs/screens/P04/ui/app_light_7.png`, `docs/screens/P04/ui/app_dark_7.png`
+Shots: `docs/screens/P04/ui/app_light_8.png`, `docs/screens/P04/ui/app_dark_8.png`
 (absolute OUT path — relative OUT breaks because `shot.sh` `cd`s to `app/` before copying).
-Compares: `docs/screens/P04/ui/cmp_light_7.png`, `docs/screens/P04/ui/cmp_dark_7.png`.
+Compares: `docs/screens/P04/ui/cmp_light_8.png`, `docs/screens/P04/ui/cmp_dark_8.png`.
 Mandatory context: `docs/screens/P04/ORCHESTRATOR_NOTES.md`.
 
 ## Mean diff
 
-- Light: **4.45%** (was 4.08%) — bands: 0 (0–105) 1.58% · 1 (105–211) 6.02% ·
-  2 (211–316) 1.91% · 3 (316–422) 7.77% · 4 (422–527) 5.46% · 5 (527–633) 6.82% ·
-  6 (633–738) 0.82% · 7 (738–844) 5.12%
-- Dark: **4.43%** (was 3.98%) — bands: 0 (0–105) 1.60% · 1 (105–211) 6.29% ·
-  2 (211–316) 1.87% · 3 (316–422) 7.72% · 4 (422–527) 5.42% · 5 (527–633) 7.79% ·
-  6 (633–738) 0.80% · 7 (738–844) 3.91%
+- Light: **3.87%** (was 4.45%) — bands: 0 (0–105) 1.61% · 1 (105–211) 6.02% ·
+  2 (211–316) 1.91% · 3 (316–422) 7.77% · 4 (422–527) 5.46% · 5 (527–633) 2.60% ·
+  6 (633–738) 0.40% · 7 (738–844) 5.12%
+- Dark: **3.76%** (was 4.43%) — bands: 0 (0–105) 1.58% · 1 (105–211) 6.29% ·
+  2 (211–316) 1.87% · 3 (316–422) 7.72% · 4 (422–527) 5.42% · 5 (527–633) 2.88% ·
+  6 (633–738) 0.39% · 7 (738–844) 3.91%
 
-Band 5 jumped vs iteration 5 (4.19→6.82 light, 4.44→7.79 dark): one new regression below.
+## Fixed since iteration 7
 
-## Verified matching (no action)
+- Opt-card title wrap regression gone: `Optional: help improve Nestling` is ONE line again
+  in both themes (ink probe: single title run y≈545–556, then body text — same structure as
+  design). Band 5 dropped 6.82→2.60 light / 7.79→2.88 dark.
 
-- Header (chevron/H1/sub at design y), 84 px shield both themes (dark disc correct),
-  all 4 promise rows with trash glyph rendering, toggle OFF 51×31, primary `Continue`,
-  footnote link, 20 px gutters, surface-to-edge bottom panel both themes.
-- Copy character-exact; no overflow/clipping/ellipsis elsewhere. No Pip → PIP rule N/A.
-- Status-bar clock and home-indicator pill ignored per STATUS BAR rule / prior iterations.
+## Verified matching (pixel-probed, logical px)
+
+- Opt-card title single-line both themes; row-4 glyph `#BA562E`/`#BA562E`;
+  dark shield disc `#1A2A4A`/`#1A2A4A`; header at design y (chevron 66, H1 113 per
+  iteration-5 probes, unchanged); toggle 51×31 OFF; CTA fill and y match.
+- Copy character-exact (curly ’, em dashes); order exact; 20 px gutters; tiles 40/r12;
+  divider indent 72; footnote link centred and underlined; surface-to-edge bottom panel
+  both themes (OWNER rule — design PNG strip overridden, app correct).
+- No Pip → PIP rule N/A. No overflow/clipping/ellipsis.
 
 ## Deviations
 
-1. Opt-card title wraps to two lines (both themes) — REGRESSION vs iteration 5, which was
-   single-line and PASS.
-   Design value: `Optional: help improve Nestling` on ONE line (ink rows y≈545–559 only).
-   App value: `Optional: help improve` / `Nestling` on TWO lines (ink runs y≈545–559 AND
-   y≈568–578), pushing the sub-copy and toggle geometry down ~22 px within the card.
-   This is exactly what band 5 measures. A designer would reject the wrap.
-   Fix (build stage, P04 scope — no code edited here): the opt-card text column lost width
-   somewhere in the iteration-7 build (toggle hit-box, row gap, or card padding change —
-   iteration 5 fit the same 16/22 Inter-600 string on one line). Restore the text-column
-   width so the title fits on one line at 390 dp; keep the 44 px toggle tap target and
-   16 h / 13 v card padding unchanged. Re-verify at text scale 1.0 that it stays one line.
+None. Residual band energy (1/3 ≈ 5–8%, 7 ≈ 4–5%) is fully accounted for: glyph-level
+font-raster doubling on display/body strokes (all measured edges within ±2 px), the
+ignored OS status-bar clock, the home-indicator pill position, and the intentional OWNER
+bottom-edge override. No element-level deviation a designer would reject.
 
-No other element-level deviation. Residual bands 1/3/7 are the known font-raster doubling,
-OS clock, home-indicator pill, and OWNER bottom-edge override.
+No code edited in this stage (UI check is read-only).
 
-VERDICT: FAIL
+VERDICT: PASS

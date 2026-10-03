@@ -5,3 +5,4 @@ iter 4 build=PASS test=PASS review=FAIL ui=FAIL bugs=FAIL
 iter 5 build=PASS test=PASS review=PASS ui=FAIL bugs=FAIL (finalized after interruption)
 iter 6 build=PASS test=PASS review=PASS ui=PASS bugs=FAIL (finalized after interruption)
 iter 7 build=PASS test=PASS review=PASS ui=FAIL bugs=FAIL
+iter 8 build=PASS test=FAIL review=FAIL ui=PASS bugs=PASS
