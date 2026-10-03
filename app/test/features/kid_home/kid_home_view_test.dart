@@ -505,6 +505,49 @@ void main() {
       expect(slot.right, closeTo(NestDevice.width - NestSpacing.padSide, 0.5));
       await disposeApp(tester);
     });
+
+    // SHARED_REQUEST #13's fix: explicit mode composes the scene inside the
+    // ACTUAL parent box (centred, scaled down) instead of a nominal
+    // `stageW = nestW / 0.62`, so nothing is ever off-centre or clipped.
+    for (final width in <double>[320, 390, 430]) {
+      testWidgets(
+        'the scene fills the real content box at ${width.toInt()}px',
+        (tester) async {
+          await _pumpRoute(tester, width: width);
+          final contentWidth = width - 2 * NestSpacing.padSide;
+          final fallback = tester.widget<PipNestFallback>(
+            find.byType(PipNestFallback),
+          );
+          expect(
+            fallback.stageW,
+            closeTo(contentWidth, 0.5),
+            reason: 'the scene is laid out in the box it was given',
+          );
+          final slot = tester.getRect(find.byType(PipNestFallback));
+          expect(slot.width, closeTo(contentWidth, 0.5));
+          final nest = tester.getRect(_nestSvgFinder().first);
+          expect(
+            nest.center.dx,
+            closeTo(slot.center.dx, 1),
+            reason: 'the nest stays on the slot axis at every width',
+          );
+          expect(
+            nest.left,
+            greaterThanOrEqualTo(slot.left - 0.5),
+            reason: 'never clipped left',
+          );
+          expect(
+            nest.right,
+            lessThanOrEqualTo(slot.right + 0.5),
+            reason: 'never clipped right',
+          );
+          final pip = tester.getRect(find.byType(PipAvatar));
+          expect(pip.center.dx, closeTo(slot.center.dx, 1));
+          expect(tester.takeException(), isNull);
+          await disposeApp(tester);
+        },
+      );
+    }
   });
 
   group('K03 typography (NestType, zero tracking)', () {
@@ -739,6 +782,61 @@ void main() {
       final check = find.bySemanticsLabel('Mark done');
       expect(check, findsWidgets);
       expect(tester.getSize(check.first), const Size(56, 56));
+      await disposeApp(tester);
+    });
+
+    // SHARED_REQUEST #15's fix: the bubble matches `.speech` — max-width
+    // 260, radius 18, 3 px ink border, 8×14 padding, surface fill — plus the
+    // tail, which the orchestrator's 07:40 note measures separately.
+    testWidgets('the speech bubble matches .speech', (tester) async {
+      await _pumpRoute(tester);
+      final tokens = Theme.of(tester.element(find.byType(NestProgress)))
+          .extension<NestTokens>()!;
+      final body = find.descendant(
+        of: find.byType(NestSpeechBubble),
+        matching: find.byWidgetPredicate((widget) {
+          if (widget is! Container) {
+            return false;
+          }
+          final box = widget.decoration;
+          return box is BoxDecoration &&
+              box.borderRadius == BorderRadius.circular(18);
+        }),
+      );
+      expect(body, findsOneWidget);
+      final container = tester.widget<Container>(body);
+      final decoration = container.decoration! as BoxDecoration;
+      expect(decoration.color, tokens.surface, reason: '.speech background');
+      expect(decoration.borderRadius, BorderRadius.circular(18));
+      final border = decoration.border! as Border;
+      expect(border.top.width, 3, reason: '.speech border is 3 px ink');
+      expect(border.top.color, tokens.ink);
+      expect(
+        container.padding,
+        const EdgeInsets.symmetric(
+          horizontal: NestSpacing.gap14,
+          vertical: NestSpacing.s2,
+        ),
+        reason: '.speech padding is 8 px / 14 px',
+      );
+      final rect = tester.getRect(body);
+      expect(
+        rect.width,
+        lessThanOrEqualTo(260),
+        reason: '.speech max-width is 260 px',
+      );
+      // The label and the tail below it.
+      final label = tester.widget<Text>(
+        find.descendant(of: body, matching: find.text("Let's do some quests!")),
+      );
+      expect(label.style!.fontSize, 16);
+      expect(label.style!.fontWeight, FontWeight.w800);
+      expect(label.style!.letterSpacing ?? 0, 0);
+      expect(
+        tester.getRect(find.byType(NestSpeechBubble)).bottom,
+        greaterThan(rect.bottom),
+        reason: 'the tail hangs below the bubble body',
+      );
       await disposeApp(tester);
     });
   });

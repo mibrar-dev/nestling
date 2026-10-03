@@ -18,6 +18,19 @@ import 'package:nestling/features/kid_home/presentation/bloc/kid_home_bloc.dart'
 import 'package:nestling/features/kid_home/presentation/bloc/kid_home_event.dart';
 import 'package:nestling/features/kid_home/presentation/bloc/kid_home_state.dart';
 
+const KidChild _leo = KidChild(
+  id: 'leo',
+  nickname: 'Leo',
+  avatarColour: 'mint',
+  coins: 60,
+  pipStyle: 'bolt',
+  pipSkin: 'sky',
+  pipAccessory: 'none',
+  pipStage: 2,
+  happiness: 3,
+  pinSet: true,
+);
+
 const KidChild _maya = KidChild(
   id: 'maya',
   nickname: 'Maya',
@@ -838,6 +851,68 @@ void main() {
         await bloc.close();
       },
     );
+
+    // The guard must not become a wedge: the subscription is released when
+    // the stream fails, so the failure card's "Try again" really reloads.
+    test('a retry after a stream failure opens a fresh subscription', () async {
+      final repo = _FakeKidHomeRepository()..failLoad = true;
+      final bloc = KidHomeBloc(repository: repo);
+      final sub = bloc.stream.listen((_) {});
+      bloc.add(const KidHomeLoadRequested());
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      expect(bloc.state.status, KidHomeStatus.failure);
+      expect(bloc.state.errorMessage, isNotNull);
+      expect(repo.activeChildSubscriptions, 1);
+
+      repo.failLoad = false;
+      bloc.add(const KidHomeLoadRequested());
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      expect(
+        repo.activeChildSubscriptions,
+        2,
+        reason:
+            'the failed subscription must be released on error, otherwise '
+            '"Try again" would be ignored and the card is a dead end',
+      );
+      expect(bloc.state.status, KidHomeStatus.loaded);
+      expect(bloc.state.child?.nickname, 'Maya');
+      await sub.cancel();
+      await bloc.close();
+    });
+
+    // …and it must not need a reload to follow the active child: the live
+    // `watchHome()` stream already re-emits on an `app_state` change, which is
+    // what the K01 picker relies on when it returns to this screen.
+    test('a child switch on the live stream needs no reload', () async {
+      final repo = _FakeKidHomeRepository();
+      final bloc = KidHomeBloc(repository: repo);
+      final sub = bloc.stream.listen((_) {});
+      bloc.add(const KidHomeLoadRequested());
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      expect(bloc.state.child?.nickname, 'Maya');
+
+      repo.pushChild(_leo);
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+      expect(
+        bloc.state.child?.nickname,
+        'Leo',
+        reason: 'the live stream follows the active child on its own',
+      );
+      expect(bloc.state.items, isNotEmpty);
+
+      // The router re-dispatches a load after the picker returns; the guard
+      // ignores it and the screen keeps the child the stream already gave.
+      bloc.add(const KidHomeLoadRequested());
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+      expect(
+        repo.activeChildSubscriptions,
+        1,
+        reason: 'the ignored reload must not open a second subscription',
+      );
+      expect(bloc.state.child?.nickname, 'Leo');
+      await sub.cancel();
+      await bloc.close();
+    });
 
     blocTest<KidHomeBloc, KidHomeState>(
       'two completion taps one frame apart celebrate exactly once',

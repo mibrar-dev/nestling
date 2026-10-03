@@ -73,3 +73,9 @@ main now has `NestPetStage` explicit mode: it is centred in the real box, with `
    - "Today's quests" uses NestBalancedText.
    - The failing/flaky tests, and no scratch probe tests.
    - Close SHARED_REQUEST #13 and #15 as done.
+
+## UPDATE (09:52, orchestrator QA of cmp_light_8, 7.39%)
+Everything from the hearts down now matches the design. The remaining pet-block deviation is the SHARED component: the nest is squashed (198×72 instead of 198×86) and placed 41 px low, and Pip stands ON the rim instead of IN the bowl.
+- Branch shared/pet_stage_seat is fixing it. Do NOT adjust the pet block locally and do not change the NestPetStage call unless that branch's report says so.
+- Only fix the non-pet items in FIXES_8.md this pass.
+- Quest order and "4 done today" come from the database (DATA OVER MOCKS): not findings.

@@ -63,6 +63,9 @@
 // - Mid-session stream errors now keep the loaded list (`status` only drops to
 //   `failure` when there is no child yet), so a single failed watch tick no
 //   longer replaces the screen the child is looking at.
+// - Stage-6 iteration-8 probes: a mid-session error keeps the list and a
+//   fresh load recovers (the subscription was released); a real-repo child
+//   switch never pairs the new child with the old child's items.
 //
 // The suite has NO skipped tests: every proof below runs in the plain suite.
 // (If you add one, do not park it to get green — see RULES.)
@@ -91,10 +94,12 @@ import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 import 'package:nestling/features/kid_home/data/kid_home_repository_impl.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_child.dart';
+import 'package:nestling/features/kid_home/domain/entities/kid_home_data.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_quest.dart';
 import 'package:nestling/features/kid_home/domain/kid_home_repository.dart';
 import 'package:nestling/features/kid_home/presentation/bloc/kid_home_bloc.dart';
 import 'package:nestling/features/kid_home/presentation/bloc/kid_home_event.dart';
+import 'package:nestling/features/kid_home/presentation/bloc/kid_home_state.dart';
 
 import '../../test_scope.dart';
 
@@ -1368,6 +1373,66 @@ void main() {
     await sub.cancel();
     await bloc.close();
   });
+
+  test(
+    'K03 probe: mid-session error keeps the list and a load recovers',
+    () async {
+      final repo = _PushableHomeRepository();
+      final bloc = KidHomeBloc(repository: repo);
+      final sub = bloc.stream.listen((_) {});
+      bloc.add(const KidHomeLoadRequested());
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      repo.push(const KidHomeData(child: _maya, items: _items2));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(bloc.state.status, KidHomeStatus.loaded);
+
+      repo.pushError(Exception('watch down'));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(
+        bloc.state.status,
+        KidHomeStatus.loaded,
+        reason: 'the child keeps the last list on a mid-session watch error',
+      );
+      expect(bloc.state.items, hasLength(2));
+
+      // The loaded screen has no retry affordance, but the subscription was
+      // released, so a fresh load event recovers.
+      bloc.add(const KidHomeLoadRequested());
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      expect(repo.listens, 2);
+      repo.push(const KidHomeData(child: _maya, items: _items2));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(bloc.state.status, KidHomeStatus.loaded);
+      await sub.cancel();
+      await bloc.close();
+    },
+  );
+
+  test(
+    'K03 probe: a child switch never pairs the new child with the old list',
+    () async {
+      final db = GetIt.instance<AppDatabase>();
+      final repo = KidHomeRepositoryImpl(db: db);
+      final states = <KidHomeData>[];
+      final sub = repo.watchHome().listen(states.add);
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+      await (db.update(db.appState)..where((a) => a.id.equals(1))).write(
+        const AppStateCompanion(activeChildId: Value<String?>('leo')),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+      await sub.cancel();
+      final loaded = states.where((state) => state.child != null).toList();
+      expect(loaded, isNotEmpty);
+      for (final state in loaded) {
+        expect(
+          state.items.every((q) => q.id.endsWith(':${state.child!.id}')),
+          isTrue,
+          reason: 'items must belong to the paired child',
+        );
+      }
+      expect(loaded.any((state) => state.child!.nickname == 'Leo'), isTrue);
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -1518,6 +1583,45 @@ class _FailLoadRepository extends KidHomeRepository {
 
 /// Counts live source subscriptions; each stream errors shortly after
 /// listen so the load-failure path (and its retry) can be exercised.
+/// Pushable combined home stream (mid-session error probe).
+class _PushableHomeRepository extends KidHomeRepository {
+  final StreamController<KidHomeData> _home =
+      StreamController<KidHomeData>.broadcast();
+  int listens = 0;
+
+  void push(KidHomeData data) => _home.add(data);
+
+  void pushError(Object error) => _home.addError(error);
+
+  @override
+  Stream<KidHomeData> watchHome() {
+    listens++;
+    return _home.stream;
+  }
+
+  @override
+  Future<List<KidQuest>> getItems() async => _items;
+
+  @override
+  Stream<List<KidQuest>> watchItems() => Stream<List<KidQuest>>.value(_items);
+
+  @override
+  Stream<List<KidChild>> watchProfiles() =>
+      Stream<List<KidChild>>.value(const <KidChild>[_maya]);
+
+  @override
+  Stream<KidChild?> watchActiveChild() => Stream<KidChild?>.value(_maya);
+
+  @override
+  List<String> stepsFor(String questId) => const <String>['Step one'];
+
+  @override
+  Future<bool> verifyPin(String childId, String pin) async => true;
+
+  @override
+  Future<void> completeQuest(String childId, String questId) async {}
+}
+
 class _SubCountingRepository extends KidHomeRepository {
   int _activeChild = 0;
   int _activeItems = 0;
