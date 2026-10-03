@@ -1,19 +1,11 @@
 // P15 · Child profile — Stage 6 bug proofs (iteration 1).
 //
-// Every test below is RED on the iteration-1 tree (checkpoint `586a9d2`,
-// branch screen/P15). Each one is marked `skip:` with its bug id so the suite
-// stays green; the TEST stage should un-skip each proof once the build fixes
-// the bug (the P11/P12 convention).
+// Iteration 2 un-skipped all six: the logic fixes below make them pass. (The
+// P11/P12 convention is that the build un-skips once the bug is fixed.)
 //
-// Ids 1–5 are the parallel test stage's (its un-skipped red proofs live in
-// `child_profile_view_test.dart` / `_bloc_test.dart` / `_states_test.dart` /
-// `_copy_test.dart` / `_theme_size_test.dart` + `SHARED_REQUEST.md` §1); this
-// file adds proofs for the same P15-BUG-1 and P15-BUG-3 plus three bugs the
-// test stage did not cover (P15-BUG-6/7/8).
-//
-//   P15-BUG-1  major  `/child-profile?childId=` is ignored — the deep link
-//                      from P08 Today's kid cards and P05's "Edit" pencil
-//                      opens the WRONG child (always `active_child_id`).
+//   P15-BUG-1  major  `/child-profile?childId=` is ignored — fixed by
+//                      `FamilyChildSelected` + `FamilyRepository.selectChild`
+//                      (route persists a valid id before the first load).
 //                      (test stage P15-BUG-1, review finding 1)
 //   P15-BUG-3  minor  a second identical `removeChild` failure produces the
 //                      same `errorMessage` state, which Equatable suppresses,
@@ -95,7 +87,7 @@ void main() {
       expect(find.text('Remove Leo from family'), findsOneWidget);
 
       await disposeApp(tester);
-    }, skip: true); // P15-BUG-1 — major: ?childId= ignored, Maya shown
+    }); // P15-BUG-1 fixed (iteration 2): the deep link selects Leo
 
     testWidgets("P15-BUG-1b: P05's Edit Leo pencil must open Leo's profile", (
       tester,
@@ -116,7 +108,7 @@ void main() {
       );
 
       await disposeApp(tester);
-    }, skip: true); // P15-BUG-1 — major: Edit Leo shows Maya's profile
+    }); // P15-BUG-1 fixed (iteration 2): Edit Leo opens Leo's profile
   });
 
   // -- P15-BUG-6 ---------------------------------------------------------
@@ -175,7 +167,7 @@ void main() {
       isEmpty,
       reason: 'P15-BUG-6: quests are still assigned to a deleted child',
     );
-  }, skip: true); // P15-BUG-6 — major: removeChild orphans every row
+  }); // P15-BUG-6 fixed (iteration 2): removeChild cascades
 
   // -- P15-BUG-7 ---------------------------------------------------------
   // After the remove, `active_child_id` still names the deleted row. The
@@ -210,8 +202,7 @@ void main() {
 
       await disposeApp(tester);
     },
-    skip: true, // P15-BUG-7 — major: stale active_child_id after removal
-  );
+  ); // P15-BUG-7 fixed (iteration 2): active_child_id moves off Maya
 
   // -- P15-BUG-8 ---------------------------------------------------------
   // `watchProfile` takes `DateTime.now()` (family_repository_impl.dart:102),
@@ -221,32 +212,26 @@ void main() {
   // is `TodayRepositoryImpl`'s injectable clock
   // (`Seed.anchorOverride ?? DateTime.now().toUtc()`).
 
-  test(
-    'P15-BUG-8: demo numbers must follow the pinned seed anchor',
-    () async {
-      Seed.anchorOverride = DateTime.utc(2020);
-      addTearDown(() => Seed.anchorOverride = DateTime.utc(2026, 10, 3));
+  test('P15-BUG-8: demo numbers must follow the pinned seed anchor', () async {
+    Seed.anchorOverride = DateTime.utc(2020);
+    addTearDown(() => Seed.anchorOverride = DateTime.utc(2026, 10, 3));
 
-      final db = AppDatabase.memory();
-      await Seed.demo(db);
-      final repo = FamilyRepositoryImpl(db: db);
+    final db = AppDatabase.memory();
+    await Seed.demo(db);
+    final repo = FamilyRepositoryImpl(db: db);
 
-      final profile = await repo.watchProfile().first;
+    final profile = await repo.watchProfile().first;
 
-      // The seed's story day IS 2020-01-01 now; its "done today" daily
-      // completions (q-dishwasher, q-table) must count for that day.
-      expect(
-        profile!.questsThisWeek,
-        4,
-        reason:
-            'P15-BUG-8: period math used the wall clock, not the pinned '
-            'seed anchor (got ${profile.questsThisWeek})',
-      );
-    },
-    skip:
-        'P15-BUG-8 — major: watchProfile is wall-clock bound; '
-        'the suite breaks on 2026-10-04',
-  );
+    // The seed's story day IS 2020-01-01 now; its "done today" daily
+    // completions (q-dishwasher, q-table) must count for that day.
+    expect(
+      profile!.questsThisWeek,
+      4,
+      reason:
+          'P15-BUG-8: period math used the wall clock, not the pinned '
+          'seed anchor (got ${profile.questsThisWeek})',
+    );
+  }); // P15-BUG-8 fixed (iteration 2): injectable clock follows the anchor
 
   // -- P15-BUG-3 ---------------------------------------------------------
 
@@ -280,5 +265,5 @@ void main() {
           'duplicate state (got ${seen.length} message)',
     );
     await bloc.close();
-  }, skip: 'P15-BUG-3 — minor: repeat identical remove failure is silent');
+  }); // P15-BUG-3 fixed (iteration 2): clear-then-raise re-emits
 }

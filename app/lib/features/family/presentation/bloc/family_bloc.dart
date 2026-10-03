@@ -16,6 +16,7 @@ class FamilyBloc extends Bloc<FamilyEvent, FamilyState> {
     on<FamilyDraftChanged>(_onDraftChanged);
     on<FamilyAddChildRequested>(_onAddChildRequested);
     on<FamilyRemoveChildRequested>(_onRemoveChildRequested);
+    on<FamilyChildSelected>(_onChildSelected);
   }
 
   final FamilyRepository _repository;
@@ -42,6 +43,9 @@ class FamilyBloc extends Bloc<FamilyEvent, FamilyState> {
           items: (roster[0] as List<FamilyMember>).toList(),
           children: (roster[1] as List<FamilyChild>).toList(),
           profile: parts[1] as ChildProfile?,
+          // P15-BUG-3: a recovered load must not drag the dead failure
+          // message along (P12 passes the same flag on every emission).
+          clearErrorMessage: true,
         );
       },
       onError: (error, _) => state.copyWith(
@@ -124,6 +128,28 @@ class FamilyBloc extends Bloc<FamilyEvent, FamilyState> {
       await _repository.removeChild(event.childId);
     } on Exception catch (error) {
       debugPrint('P15 removeChild failed: $error');
+      final message = error.toString();
+      // P15-BUG-3: consecutive identical failures compute identical states,
+      // which Equatable suppresses — so first clear the signal, then raise
+      // it, and the second failure toasts again too.
+      if (state.errorMessage == message) {
+        emit(state.copyWith(clearErrorMessage: true));
+      }
+      emit(state.copyWith(errorMessage: message));
+    }
+  }
+
+  /// P15-BUG-1: persists the route's `?childId=` through the session (the
+  /// repository ignores unknown ids). Dispatched before the first load, so
+  /// the profile stream already follows the requested child.
+  Future<void> _onChildSelected(
+    FamilyChildSelected event,
+    Emitter<FamilyState> emit,
+  ) async {
+    try {
+      await _repository.selectChild(event.childId);
+    } on Exception catch (error) {
+      debugPrint('P15 selectChild failed: $error');
       emit(state.copyWith(errorMessage: error.toString()));
     }
   }

@@ -24,9 +24,26 @@ int _ageYearsForBand(String ageBand) => switch (ageBand) {
 
 /// Drift-backed [FamilyRepository].
 class FamilyRepositoryImpl implements FamilyRepository {
-  new({required this._db});
+  new({required this._db, DateTime Function()? clock})
+    : _clock = clock ?? _defaultClock;
 
   final AppDatabase _db;
+
+  /// "Now" for period checks. Defaults to the seed anchor when tests pin it
+  /// (so demo assertions stay date-independent — P15-BUG-8) and to the wall
+  /// clock otherwise — pass an explicit clock in tests that need one.
+  /// (Same shape as `TodayRepositoryImpl`.)
+  final DateTime Function() _clock;
+
+  static DateTime _defaultClock() =>
+      Seed.anchorOverride?.toUtc() ?? DateTime.now().toUtc();
+
+  /// In-memory selection request from `selectChild`, effective for the
+  /// mapper below the moment it is set (synchronously — no DB roundtrip).
+  /// Only ever honoured when it names a loaded child, so a stale or unknown
+  /// value can never render: the persisted `activeChildId` stays the source
+  /// of truth and the async validation in `selectChild` converges the two.
+  String? _pendingSelection;
 
   @override
   Future<List<FamilyMember>> getItems() => watchItems().first;
@@ -90,7 +107,10 @@ class FamilyRepositoryImpl implements FamilyRepository {
           final kids = parts[1] as List<ChildrenData>;
           final quests = parts[2] as List<Quest>;
           final completions = parts[3] as List<QuestCompletion>;
-          final selected = _selectProfileChild(appState?.activeChildId, kids);
+          final selected = _selectProfileChild(
+            _effectiveSelection(appState?.activeChildId, kids),
+            kids,
+          );
           if (selected == null || ledgerChildId != selected.id) return;
           controller.add(
             _toProfile(
@@ -98,8 +118,9 @@ class FamilyRepositoryImpl implements FamilyRepository {
               quests,
               completions,
               ledger,
-              // PERIODS ruling: `now` is taken at emission.
-              DateTime.now().toUtc(),
+              // PERIODS ruling: `now` is taken at emission (via the
+              // injectable clock so tests can pin it — P15-BUG-8).
+              _clock(),
             ),
           );
         }
@@ -116,7 +137,7 @@ class FamilyRepositoryImpl implements FamilyRepository {
               final appState = parts[0] as AppStateData?;
               final kids = parts[1] as List<ChildrenData>;
               final selected = _selectProfileChild(
-                appState?.activeChildId,
+                _effectiveSelection(appState?.activeChildId, kids),
                 kids,
               );
               if (selected == null) {
@@ -164,6 +185,20 @@ class FamilyRepositoryImpl implements FamilyRepository {
       }
     }
     return kids.first;
+  }
+
+  /// The id the mapper resolves: the in-memory `selectChild` request when it
+  /// names a loaded child (set synchronously, so the deep link wins on the
+  /// very first emission), else the persisted `activeChildId` (which the
+  /// async validation converges to the same value).
+  String? _effectiveSelection(String? activeChildId, List<ChildrenData> kids) {
+    final requested = _pendingSelection;
+    if (requested != null) {
+      for (final kid in kids) {
+        if (kid.id == requested) return requested;
+      }
+    }
+    return activeChildId;
   }
 
   ChildProfile _toProfile(
@@ -301,8 +336,82 @@ class FamilyRepositoryImpl implements FamilyRepository {
   }
 
   @override
+  Future<void> selectChild(String childId) async {
+    // P15-BUG-1: the `?childId=` deep link persists through the session so
+    // `watchProfile` — and every sibling screen — follows it. The request is
+    // recorded synchronously so the mapper honours it on the very first
+    // emission (widget proofs assert after a fixed number of pumps); the
+    // async validation then converges the persisted row to the same value.
+    // Unknown ids are ignored: `_selectProfileChild` already falls back to
+    // the first-created child, and persisting junk would poison the sibling
+    // repositories that resolve `activeChildId` (P15-BUG-7 class). A
+    // superseded request never clobbers a newer one.
+    _pendingSelection = childId;
+    final row = await (_db.select(
+      _db.children,
+    )..where((c) => c.id.equals(childId))).getSingleOrNull();
+    if (_pendingSelection != childId) return;
+    if (row == null) {
+      _pendingSelection = null;
+      return;
+    }
+    await (_db.update(_db.appState)..where((a) => a.id.equals(1))).write(
+      AppStateCompanion(activeChildId: Value(childId)),
+    );
+  }
+
+  @override
   Future<void> removeChild(String childId) {
-    return (_db.delete(_db.children)..where((c) => c.id.equals(childId))).go();
+    // P15-BUG-6: the confirm modal promises "They will lose their quests,
+    // coins and Pip", so every dependent row goes with the child in one
+    // transaction (the schema's `references(Children, #id)` are declarative
+    // only — `beforeOpen` never enables `PRAGMA foreign_keys`, so nothing
+    // cascades). P15-BUG-7: when the removed child was the persisted
+    // selection, repoint it at the first remaining child in creation order
+    // (the P15 fallback), or NULL when the family is empty.
+    return _db.transaction(() async {
+      await (_db.delete(
+        _db.questCompletions,
+      )..where((c) => c.childId.equals(childId))).go();
+      await (_db.delete(
+        _db.ledgerEntries,
+      )..where((l) => l.childId.equals(childId))).go();
+      await (_db.delete(
+        _db.savingsGoals,
+      )..where((g) => g.childId.equals(childId))).go();
+      await (_db.delete(
+        _db.rewardRedemptions,
+      )..where((r) => r.childId.equals(childId))).go();
+      await (_db.delete(
+        _db.earnedBadges,
+      )..where((e) => e.childId.equals(childId))).go();
+      await (_db.delete(
+        _db.pipWardrobe,
+      )..where((w) => w.childId.equals(childId))).go();
+      await (_db.delete(
+        _db.quests,
+      )..where((q) => q.assigneeChildId.equals(childId))).go();
+      await (_db.delete(_db.children)..where((c) => c.id.equals(childId))).go();
+      final session = await (_db.select(
+        _db.appState,
+      )..where((a) => a.id.equals(1))).getSingleOrNull();
+      if (session?.activeChildId == childId) {
+        final next =
+            await (_db.select(_db.children)
+                  ..where((c) => c.familyId.equals(Seed.familyId))
+                  ..orderBy([
+                    (c) => OrderingTerm(expression: c.createdAt),
+                    (c) => OrderingTerm(
+                      expression: const CustomExpression<int>('rowid'),
+                    ),
+                  ])
+                  ..limit(1))
+                .getSingleOrNull();
+        await (_db.update(_db.appState)..where((a) => a.id.equals(1))).write(
+          AppStateCompanion(activeChildId: Value(next?.id)),
+        );
+      }
+    });
   }
 
   @override

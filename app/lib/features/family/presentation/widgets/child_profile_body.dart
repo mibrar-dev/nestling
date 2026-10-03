@@ -21,6 +21,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 // Not in the barrel: the v2 Pip widget (PIP ruling — never the v1
@@ -32,6 +33,7 @@ import 'package:nestling/features/family/presentation/bloc/family_bloc.dart';
 import 'package:nestling/features/family/presentation/bloc/family_event.dart';
 import 'package:nestling/features/family/presentation/widgets/child_display.dart';
 import 'package:nestling/features/family/presentation/widgets/child_profile_copy.dart';
+import 'package:nestling/features/family/presentation/widgets/child_profile_row.dart';
 import 'package:nestling/features/kid_home/kid_home_routes.dart';
 import 'package:nestling/features/pip/domain/entities/pip_profile.dart';
 import 'package:nestling/features/pocket_money/pocket_money_routes.dart';
@@ -113,14 +115,26 @@ class _HeroCard extends StatelessWidget {
           ),
           // `.hero h1 { margin-top: 10px }`.
           const SizedBox(height: NestSpacing.gap10),
-          Text(
-            nickname,
-            // `.hero h1` overrides `.h1`: Nunito 900 at 24/30, not 28/34.
-            style: NestType.h1(color: tokens.ink)
-                .copyWith(fontSize: 24, height: 30 / 24),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          // Every other screen flags its title as a heading for
+          // VoiceOver/TalkBack (`add_children_view.dart:196`,
+          // `today_loaded_body.dart:375`, `money_ledger_view.dart:207`), so
+          // the child's name — the largest text on the route — does too.
+          Semantics(
+            header: true,
+            child: Text(
+              nickname,
+              // `.hero h1` overrides `.h1`: Nunito 900 at 24/30, not 28/34.
+              style: NestType.h1(color: tokens.ink)
+                  .copyWith(fontSize: 24, height: 30 / 24),
+              textAlign: TextAlign.center,
+              // No `nowrap` in the design: `components.css:43` gives bare `h1`
+              // `overflow-wrap: anywhere`, so a long nickname wraps and the
+              // hero grows rather than truncating (review finding 6). The cap
+              // of three lines keeps an extreme name + 1.3 text scale from
+              // swallowing the stats band below.
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
           Text(
             profileAgeLine(child),
@@ -265,7 +279,10 @@ class _PipCard extends StatelessWidget {
                 stage: child.pipStage.clamp(1, 4),
                 skin: _pipSkin(child.pipSkin),
                 accessory: _pipAccessory(child.pipAccessory),
-                // `.piprow img { width: 84px; height: 84px }`.
+                // `.piprow img { width: 84px; height: 84px }` — off the 4 pt
+                // grid and not a token (review finding 7); `SHARED_REQUEST.md`
+                // §3 asks for a named slot token. The design value stands
+                // meanwhile, exactly like the 48 px button literal below.
                 size: 84,
               ),
             ),
@@ -334,8 +351,8 @@ PipAccessory _pipAccessory(String raw) => switch (raw) {
   _ => PipAccessory.none,
 };
 
-/// `.list` — one surface card, radius `r-m`, three `NestListRow`s with the
-/// design's overlay dividers (72 px indent) built into the component.
+/// `.list` — one surface card, radius `r-m`, three `ProfileRow`s with the
+/// design's overlay dividers (72 px indent) built into `NestList`.
 class _ProfileList extends StatelessWidget {
   const _ProfileList({required this.profile});
 
@@ -347,12 +364,12 @@ class _ProfileList extends StatelessWidget {
     final child = profile.child;
     return NestList(
       children: <Widget>[
-        NestListRow(
+        ProfileRow(
           key: const Key('p15-row-pin'),
           title: 'Kid PIN',
           subtitle: profilePinSubtitle(child),
           tint: NestTileTint.sky,
-          leadingAsset: NestIcons.lock,
+          leading: (fg) => NestIcon(NestIcons.lock, color: fg),
           // `.list-trail` — Inter 600 ink-3, vertically centred.
           trailing: Text(
             profilePinTrailing(),
@@ -363,7 +380,7 @@ class _ProfileList extends StatelessWidget {
           ),
           onTap: () => context.push(KidHomeRoutePaths.pin),
         ),
-        NestListRow(
+        ProfileRow(
           key: const Key('p15-row-quests'),
           title: 'Quests',
           subtitle: profileQuestsSubtitle(
@@ -372,11 +389,17 @@ class _ProfileList extends StatelessWidget {
             once: profile.onceActive,
           ),
           tint: NestTileTint.leaf,
-          leadingAsset: NestIcons.check,
+          // The design draws `circle r9` + `check` in one 24×24 tile, and
+          // `ic_quests.svg` IS that glyph (same `circle cx12 cy12 r9` + the
+          // same `m8.5 12.5 11 15 4.5-5.5` tick, 24 viewBox) — so the shared
+          // asset is an exact match, where a bare `NestIcons.check` read as a
+          // plain tick (5_ui deviation 2). `SHARED_REQUEST.md` §2a is
+          // therefore satisfied by an existing icon, no new asset needed.
+          leading: (fg) => NestIcon(NestIcons.quests, color: fg),
           trailing: _chevron(tokens.ink3),
           onTap: () => context.go(QuestsRoutePaths.library),
         ),
-        NestListRow(
+        ProfileRow(
           key: const Key('p15-row-money'),
           title: 'Pocket money',
           subtitle: profileMoneySubtitle(
@@ -384,7 +407,21 @@ class _ProfileList extends StatelessWidget {
             profile.owedPence,
           ),
           tint: NestTileTint.coin,
-          leadingAsset: NestIcons.poundCoin,
+          // The design's tile holds the COLOURED `assets/illustrations/coin.svg`
+          // (`<img src="../assets/coin.svg" width="24" height="24">`), not a
+          // tintable line icon — `NestIcon(poundCoin)` drew a `£` in a circle
+          // and lost the gold coin (5_ui deviation 3). Illustrations keep their
+          // own colours, so this one is a bare `SvgPicture`; the 24 px square
+          // is the same box `NestIcon` uses (and what lets the row's own
+          // semantics node absorb the icon — the design marks it `alt=""`).
+          leading: (_) => SizedBox.square(
+            dimension: 24,
+            child: SvgPicture.asset(
+              NestlingIllustrations.coin,
+              width: 24,
+              height: 24,
+            ),
+          ),
           trailing: _chevron(tokens.ink3),
           onTap: () => context.go(PocketMoneyRoutePaths.ledger),
         ),

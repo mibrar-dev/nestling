@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bloc_test/bloc_test.dart';
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:flutter_test/flutter_test.dart';
@@ -214,6 +216,36 @@ void main() {
 
       expect(profile?.child.id, 'leo');
       expect(profile?.owedPence, 210);
+    });
+
+    test(
+      'selectChild persists a valid id and ignores an unknown one',
+      () async {
+        final db = await _demoDb();
+        final repo = FamilyRepositoryImpl(db: db);
+
+        Future<String?> activeChild() async => (await (db.select(
+          db.appState,
+        )..where((a) => a.id.equals(1))).getSingle()).activeChildId;
+
+        await repo.selectChild('leo');
+        expect(await activeChild(), 'leo');
+
+        await repo.selectChild('nobody');
+        expect(await activeChild(), 'leo');
+      },
+    );
+
+    test('selectChild is honoured on the very first emission', () async {
+      final db = await _demoDb();
+      final repo = FamilyRepositoryImpl(db: db);
+
+      // No awaits between the request and the subscription: the request is
+      // effective synchronously, so the deep link wins immediately.
+      unawaited(repo.selectChild('leo'));
+      final profile = await repo.watchProfile().first;
+
+      expect(profile?.child.id, 'leo');
     });
 
     test('is null when there are no children', () async {

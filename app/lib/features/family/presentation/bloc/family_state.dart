@@ -68,6 +68,11 @@ final class FamilyState extends Equatable {
     bool? saveInProgress,
     Object? lastSavedNickname = _keepLastSavedNickname,
     String? errorMessage,
+
+    /// Set to drop a stale message (copyWith cannot express null otherwise).
+    /// The load path passes this on every emission (P15-BUG-3, same fix as
+    /// P12's P06-BUG-06).
+    bool clearErrorMessage = false,
   }) {
     return FamilyState(
       status: status ?? this.status,
@@ -86,7 +91,9 @@ final class FamilyState extends Equatable {
       lastSavedNickname: identical(lastSavedNickname, _keepLastSavedNickname)
           ? this.lastSavedNickname
           : lastSavedNickname as String?,
-      errorMessage: errorMessage ?? this.errorMessage,
+      errorMessage: clearErrorMessage
+          ? null
+          : (errorMessage ?? this.errorMessage),
     );
   }
 

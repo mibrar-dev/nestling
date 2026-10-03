@@ -11,6 +11,11 @@ abstract class FamilyRepository {
   Stream<List<FamilyChild>> watchChildren();
   Future<FamilyChild?> getChild(String childId);
 
+  /// Persists the selected child for P15's `?childId=` deep link (P15-BUG-1).
+  /// Unknown ids are ignored — the profile falls back to the first-created
+  /// child instead of persisting a stale selection (P15-BUG-7 class).
+  Future<void> selectChild(String childId);
+
   /// Selected-child profile for P15: resolves `app_state.activeChildId`,
   /// falling back to the first child in creation order, or null when there
   /// are no children.

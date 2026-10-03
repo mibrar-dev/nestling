@@ -19,12 +19,38 @@ import 'package:flutter/semantics.dart';
 
 import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get_it/get_it.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 import 'package:nestling/features/family/domain/entities/child_profile.dart';
+import 'package:nestling/features/family/domain/entities/family_child.dart';
+import 'package:nestling/features/family/domain/entities/family_member.dart';
+import 'package:nestling/features/family/domain/family_repository.dart';
 import 'package:nestling/features/family/presentation/widgets/child_profile_body.dart';
 
 import '../../test_scope.dart';
+
+class _MockFamilyRepository extends Mock implements FamilyRepository;
+
+/// Only what the status switch needs; the members stream is never rendered by
+/// P15 (the tab bar has no avatar on this route).
+const _me = FamilyMember(
+  id: 'sarah',
+  title: 'Sarah',
+  detail: 'You',
+  name: 'Sarah',
+  role: 'owner',
+  inviteStatus: 'active',
+);
+
+/// The route builds its bloc from `GetIt.instance<FamilyBloc>()`, so the
+/// repository has to be swapped BEFORE the pump (`child_profile_states_test.dart`
+/// uses the same seam) — the real router, shell and tab bar are still built.
+Future<void> _useRepository(FamilyRepository repository) async {
+  await GetIt.instance.unregister<FamilyRepository>();
+  GetIt.instance.registerSingleton<FamilyRepository>(repository);
+}
 
 Future<void> _loadBundledFonts() async {
   final inter = FontLoader('Inter')
@@ -463,6 +489,77 @@ void main() {
       await tester.tap(find.widgetWithText(NestButton, 'Add a child'));
       await tester.pumpAndSettle();
       expect(pushedPath(tester), '/add-children');
+
+      await disposeApp(tester);
+    });
+  });
+
+  // Review finding 10: the remove-FAILURE path had no view proof. The
+  // loading / failure / retry branches are covered by
+  // `child_profile_states_test.dart`; this is the one that needs a mock
+  // repository AND the real remove flow — tap the danger row, confirm, and a
+  // DB failure must raise the toast (`ChildProfileView`'s `BlocListener`)
+  // instead of replacing the screen. The screen must stay `loaded`.
+  group('P15 remove failure', () {
+    testWidgets('a failing removeChild toasts and keeps the profile', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      final repo = _MockFamilyRepository();
+      when(repo.watchItems).thenAnswer(
+        (_) => Stream<List<FamilyMember>>.value(const <FamilyMember>[_me]),
+      );
+      when(repo.watchChildren).thenAnswer((_) => Stream.value(<FamilyChild>[]));
+      when(repo.watchProfile).thenAnswer(
+        (_) => Stream<ChildProfile?>.value(
+          const ChildProfile(
+            child: FamilyChild(
+              id: 'maya',
+              nickname: 'Maya',
+              ageBand: '7-9',
+              ageYears: 7,
+              avatarColour: 'lilac',
+              pinSet: true,
+              pipStyle: 'mochi',
+              pipSkin: 'sunny',
+              pipAccessory: 'none',
+              pipStage: 3,
+              pipTotalCoins: 175,
+              coins: 120,
+              happiness: 0,
+              happyDays: 8,
+              weeklyBasePence: 300,
+              activeQuests: 6,
+              doneQuests: 4,
+            ),
+            questsThisWeek: 4,
+            dailyActive: 4,
+            weeklyActive: 2,
+            onceActive: 0,
+            owedPence: 420,
+          ),
+        ),
+      );
+      when(() => repo.removeChild(any())).thenThrow(Exception('offline'));
+      await _useRepository(repo);
+
+      await pumpAppRoute(tester, '/child-profile');
+
+      await tester.tap(find.byKey(const Key('p15-remove')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(NestButton, 'Remove'));
+      await tester.pumpAndSettle();
+      await _flushDrift(tester);
+
+      // The toast carries the real repository error…
+      expect(find.byType(NestToast), findsOneWidget);
+      expect(find.textContaining('offline'), findsOneWidget);
+      // …and the profile is untouched: `loaded`, not `failure`.
+      expect(find.byType(ChildProfileBody), findsOneWidget);
+      expect(find.text('Maya'), findsOneWidget);
+      expect(find.text('Try again'), findsNothing);
+
+      verify(() => repo.removeChild('maya')).called(1);
 
       await disposeApp(tester);
     });

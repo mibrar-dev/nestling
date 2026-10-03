@@ -38,7 +38,17 @@ class ChildProfileView extends StatelessWidget {
     return Scaffold(
       backgroundColor: tokens.paper,
       body: BlocListener<FamilyBloc, FamilyState>(
+        // Only the NON-destructive path toasts. `_closeOnError` sets
+        // `errorMessage` on the `failure` state too, so an unscoped listener
+        // printed the same raw exception twice — once in `_FailureBody` and
+        // once in a snackbar on top of it (BUG P15-BUG-2). The failure state
+        // has its own in-place retry, so it never needs a toast.
+        //
+        // A repeated IDENTICAL remove failure is still swallowed here
+        // (Equatable drops the duplicate state) — clearing `errorMessage` needs
+        // a new bloc event, so BUG P15-BUG-3 stays with the logic builder.
         listenWhen: (previous, current) =>
+            current.status == FamilyStatus.loaded &&
             current.errorMessage != null &&
             previous.errorMessage != current.errorMessage,
         listener: (context, state) =>

@@ -1,100 +1,114 @@
-# P15 · Child profile — Stage 2a BUILD (logic chunk, iteration 1)
+# P15 · Child profile — Stage 2a BUILD, LOGIC CHUNK (iteration 2)
 
 Scope: non-UI layer of feature `family` only — `domain/**`, `data/**`,
-`presentation/bloc/**`, plus unit/bloc tests. No edits to
-`presentation/views/**` or `presentation/widgets/**` (UI builder owns those;
-they were mid-edit in this worktree and were not touched).
-No DI/route changes (plan §b: "DI: unchanged" — `family_di.dart` and
-`family_routes.dart` already wire `FamilyBloc` + `/child-profile`).
+`presentation/bloc/**`, the feature's DI/route registration files, and
+unit/bloc tests (plus the explicitly-instructed un-skip of the six
+`p15_bugs_test.dart` proofs). No edits to `presentation/views/**` or
+`presentation/widgets/**` (the UI builder is concurrently editing those in
+this worktree and owns them). Implements `1_plan.md` §b plus every
+`FIXES_1.md` item in the logic layer.
 
 ## CONTRACT CHANGES
 
-None. Public names match the plan exactly: `ChildProfile`,
-`FamilyRepository.watchProfile()`, `FamilyState.profile`,
-`FamilyRemoveChildRequested(childId)`.
+Additive only (existing constructions, events and tests compile unchanged):
 
-## Implementation notes (deviation from plan, same public shape)
+- New event `FamilyChildSelected({required childId})` — the route
+  dispatches it before the first `FamilyLoadRequested`; events run in
+  order, so the first emission already follows the requested child.
+- New repository method `Future<void> selectChild(String childId)` —
+  validates the id against `children` and persists it to
+  `app_state.activeChildId`; unknown ids are ignored (fallback covers).
+- `FamilyState.copyWith` gains `bool clearErrorMessage = false` (P12
+  `P06-BUG-06` precedent) — the only way to express a null `errorMessage`.
+- `FamilyRepositoryImpl` constructor gains optional
+  `DateTime Function()? clock` (Today precedent) — all existing
+  `FamilyRepositoryImpl(db: …)` call sites compile unchanged.
 
-- Plan §b prescribes `asyncExpand` from the combined base streams onto
-  `watchLedger(childId)`. `Stream.asyncExpand` has concat semantics: it
-  waits for each inner stream to CLOSE before processing the next outer
-  event — and Drift `watch()` streams never close. Verified with a failing
-  test (since removed): after `removeChild('maya')` the base re-emits but
-  the profile never switches to Leo. `watchProfile()` therefore uses a
-  feature-local `StreamController` with *switch* semantics: the ledger
-  subscription follows the current selection, and a profile only emits
-  once the ledger rows match the current selection (no cross-child owed
-  flash). The four base streams still combine via the shared
-  `combineLatest4`; no core helpers added, no shared files touched.
-- `owedPence` replicates the pure algorithm from
-  `PocketMoneyRepositoryImpl.summarise`
-  (`pocket_money/.../pocket_money_repository_impl.dart:259-284`), cited in
-  a comment; no cross-feature import.
-- Period counting uses the 3-arg `countsForCurrentPeriod` from
-  `core/data/london_time.dart` (per the PERIODS ruling); `family_time.dart`
-  is imported with that name hidden (it exports a 4-arg overload).
-- `FamilyState.copyWith` uses a `_keepProfile` sentinel (same pattern as
-  `nicknameError`): draft edits omit it (stays put), the load stream passes
-  an explicit value — including null when the last child is removed.
+## Fixes landed (all in the logic layer)
+
+- **P15-BUG-1 (major)** — `?childId=` ignored. `childProfileRoute`
+  (`family_routes.dart`, owned by this chunk) reads
+  `state.uri.queryParameters['childId']` and dispatches
+  `FamilyChildSelected` before the load; the bloc persists valid ids via
+  `selectChild`, so `watchProfile` — and every sibling screen — follows.
+  No P05/P08 change. Timing subtlety found while proving it: the persist
+  costs DB roundtrips the tight view proofs don't allow, so `selectChild`
+  also records the request synchronously in `_pendingSelection`, which the
+  mapper honours when it names a loaded child (membership-gated, so stale
+  or unknown values can never render; async validation converges the
+  persisted row). Superseded requests never clobber newer ones.
+- **P15-BUG-6 (major)** — orphaned rows. `removeChild` now deletes the
+  child's `quest_completions`, `ledger_entries`, `savings_goals`,
+  `reward_redemptions`, `earned_badges`, `pip_wardrobe` rows, its assigned
+  `quests` (family-wide "Anyone" quests survive), then the `children` row —
+  all in one `transaction`.
+- **P15-BUG-7 (major)** — stale `activeChildId`. Same transaction: when the
+  removed child was the persisted selection, repoints it at the first
+  remaining child in creation order (the P15 fallback), or NULL when the
+  family is empty.
+- **P15-BUG-8 (major)** — wall-clock period math. Injectable clock
+  defaulting to `Seed.anchorOverride?.toUtc() ?? DateTime.now().toUtc()`
+  (Today shape verbatim); production behaviour unchanged
+  (`anchorOverride` is null outside tests).
+- **P15-BUG-3 (minor, both variants)** — stale/suppressed errors. Load
+  `onData` passes `clearErrorMessage: true` on every emission (recovered
+  loads drop the dead message); remove failures first clear then raise when
+  the message is unchanged, so a repeated identical failure emits twice
+  and toasts again — no state-shape change, no view change needed.
 
 ## Files changed
 
-- `app/lib/features/family/domain/entities/child_profile.dart` (new):
-  `ChildProfile` (Equatable, const) — `child`, `questsThisWeek`,
-  `dailyActive`/`weeklyActive`/`onceActive`, `owedPence`.
-- `app/lib/features/family/domain/family_repository.dart`:
-  `Stream<ChildProfile?> watchProfile()`.
-- `app/lib/features/family/data/family_repository_impl.dart`: `watchProfile`
-  (selection `activeChildId` ?? first-created ?? null; breakdown by
-  `repeatRule` with unknown → `once`; `questsThisWeek` =
-  done_pending/approved completions in the current London period via the
-  completion quest's rule; owed via the replicated summarise algorithm).
+- `app/lib/features/family/data/family_repository_impl.dart`: clock,
+  `_pendingSelection` + `_effectiveSelection`, `selectChild`, cascading
+  transactional `removeChild` with repoint.
+- `app/lib/features/family/domain/family_repository.dart`: `selectChild`.
 - `app/lib/features/family/presentation/bloc/family_event.dart`:
-  `FamilyRemoveChildRequested(childId)`.
+  `FamilyChildSelected`.
+- `app/lib/features/family/presentation/bloc/family_bloc.dart`:
+  `_onChildSelected`, `clearErrorMessage` on load, clear-then-raise on
+  repeated remove failures.
 - `app/lib/features/family/presentation/bloc/family_state.dart`:
-  `ChildProfile? profile` (+ sentinel copyWith, props).
-- `app/lib/features/family/presentation/bloc/family_bloc.dart`: single
-  `emit.forEach` nests `combineLatest2(watchItems, watchChildren)` with
-  `watchProfile`; remove handler awaits `removeChild` (streams re-emit),
-  failures emit `errorMessage` with status staying `loaded`.
-- `app/test/features/family/child_profile_bloc_test.dart` (new, 14 tests):
-  entity equality; real-DB profile for demo Maya (6 active, 4/2/0
-  breakdown, `questsThisWeek == 4`, `owedPence == 420`); fallback to
-  first-created when unset/unknown; Leo selection (`owedPence == 210`);
-  null on fresh seed; mock load emits members+children+profile; later
-  profile emission replaces (incl. clearing to null); remove calls
-  `removeChild('maya')`; remove failure keeps `loaded` + message; real-DB
-  remove maya → Leo re-emit + DB row gone; remove last child → null
-  profile; copyWith sentinel behaviour.
-- Stub-only upkeep in `app/test/features/family/add_children_test.dart` and
-  `p05_bugs_test.dart`: every mock setup that dispatches
-  `FamilyLoadRequested` now also stubs `watchProfile` to
-  `Stream<ChildProfile?>.value(null)` (+ `child_profile.dart` import).
-  Required by plan §f ("keep green"): mocktail returns null for unstubbed
-  methods, so the new bloc subscription threw
-  `type 'Null' is not a subtype of Stream<ChildProfile?>`. No assertions
-  changed; P05 screens never read `profile`.
+  `clearErrorMessage` flag.
+- `app/lib/features/family/family_routes.dart`: `?childId=` → selection
+  event before load. DI unchanged.
+- `app/test/features/family/child_profile_bloc_test.dart`: +2 tests
+  (`selectChild` persist/ignore; synchronous first-emission honour).
+- `app/test/features/family/p15_bugs_test.dart`: all six `skip:` markers
+  removed (brief explicitly instructs un-skipping); header updated. No
+  proof logic touched.
+- `docs/screens/P15/SHARED_REQUEST.md`: §3 records the landed
+  `today_view_test.dart` anchor swap (review finding 9, record-only).
 
-## Verification
+## Not mine (left for their owners)
 
-- `flutter analyze lib/features/family test/features/family/` → No issues.
-- `flutter test test/features/family/child_profile_bloc_test.dart` → 14/14 pass.
-- `flutter test .../p05_bugs_test.dart .../p05_view_metrics_test.dart` → all pass.
-- `flutter test .../add_children_test.dart` → 116 pass, 3 fail — all three
-  assert `find.text('P15 Child profile')` (the placeholder title) after
-  navigating to `/child-profile`; the UI builder's in-progress
-  `ChildProfileView` replacement removed that text. Navigation itself
-  (`currentPath == '/child-profile'`) still passes. View-owned assertions,
-  left for the UI builder/integrator.
-- Whole-app `flutter test` and any simulator use deliberately not run
-  (integrator's stage).
+- Test-stage P15-BUG-2 (failure toasted twice) and review finding 4: the
+  fix is view-listener scoping in `child_profile_view.dart` (UI builder).
+- Test-stage P15-BUG-4 ("an Egg"): `child_profile_copy.dart` (UI builder).
+- Test-stage P15-BUG-5 + ORCHESTRATOR items 1–2: shared `NestListRow` /
+  icons — already in `SHARED_REQUEST.md` §§1–2 (orchestrator).
+- Review findings 5, 6, 7 (header semantics, hero wrap, `size: 84` token),
+  8 (pronoun — no fix), 10 (view-state tests): UI builder / none.
+- `child_profile_theme_size_test.dart` icon-label proofs (light+dark) are
+  red because the UI builder's in-flight edit swaps row `leadingAsset:`
+  for custom `leading:` stacks whose `NestIcon` nodes carry no label —
+  view-layer, not this chunk.
+
+## Verification (in `app/`, no simulator)
+
+- `flutter analyze` on the logic scope → No issues found.
+- `flutter test test/features/family/` → 228 pass; the only red is the 2
+  icon-label proofs above (UI builder's in-flight views).
+- Six un-skipped `p15_bugs_test.dart` proofs → all green; the test-stage
+  BUG-1 (view) and BUG-3 (bloc) red proofs → green.
+- `add_children` + `p05_*` → 135/135 green. `test/core/data/
+  repositories_test.dart` → 22/22 green (covers `removeChild`).
+- `dart format` clean. No `google_fonts`. No whole-suite run, no
+  simulator (integrator's stage).
 
 ## LEFT FOR NEXT ITERATION
 
-- The 3 `add_children_test.dart` placeholder-text assertions above (UI
-  builder's view now renders the real P15 screen; update or relocate those
-  assertions alongside `child_profile_view_test.dart`).
-- `child_profile_view_test.dart` (widget/copy coverage) belongs to the UI
-  builder — not written here per the parallel-split rule.
+- Nothing in the logic layer is unfinished. The remaining red (2
+  icon-label proofs, BUG-2/BUG-4 view proofs, BUG-5 shared) all belong to
+  the UI builder or the orchestrator.
 
 VERDICT: PASS

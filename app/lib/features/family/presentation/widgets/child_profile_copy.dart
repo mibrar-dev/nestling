@@ -44,10 +44,21 @@ String pipStageName(int stage) {
   };
 }
 
-/// `Age 7–9 · Pip is a Fledgling` — the hero sub-line under the name.
-String profileAgeLine(FamilyChild child) =>
-    'Age ${displayAgeBand(child.ageBand)} '
-    '$kProfileDot Pip is a ${pipStageName(child.pipStage)}';
+/// The indefinite article for a Pip stage name: `a Fledgling` but `an Egg`.
+///
+/// `children.pipStage` defaults to 1, so every child added through P05 lands
+/// on `Egg` — the hard-coded `a` read "Pip is a Egg" (BUG P15-BUG-4). Same rule
+/// as [pipStagePhrase], which lower-cases the stage for the spoken label.
+String pipStageArticle(int stage) =>
+    pipStageName(stage).startsWith('E') ? 'an' : 'a';
+
+/// `Age 7–9 · Pip is a Fledgling` (`· Pip is an Egg` for a stage-1 Pip) —
+/// the hero sub-line under the name.
+String profileAgeLine(FamilyChild child) {
+  final stage = pipStageName(child.pipStage);
+  return 'Age ${displayAgeBand(child.ageBand)} '
+      '$kProfileDot Pip is ${pipStageArticle(child.pipStage)} $stage';
+}
 
 /// `Pip · Fledgling` — the Pip card heading.
 String profilePipTitle(FamilyChild child) =>
