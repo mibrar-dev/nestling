@@ -18,3 +18,11 @@ class ConsentOption extends Equatable {
   @override
   List<Object?> get props => <Object?>[id, title, detail, enabled];
 }
+
+/// Row ids for the consent options. The bloc finds the live crash row by
+/// [crash]; a shared const keeps that dependency from silently rotting.
+abstract final class ConsentOptionIds {
+  const new _();
+
+  static const String crash = 'crash';
+}

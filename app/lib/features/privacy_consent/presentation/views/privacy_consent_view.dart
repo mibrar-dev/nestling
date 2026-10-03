@@ -1,41 +1,397 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import 'package:nestling/core/design_system/design_system.dart';
+import 'package:nestling/features/auth/auth_routes.dart';
+import 'package:nestling/features/family/family_routes.dart';
 import 'package:nestling/features/privacy_consent/presentation/bloc/privacy_consent_bloc.dart';
+import 'package:nestling/features/privacy_consent/presentation/bloc/privacy_consent_event.dart';
 import 'package:nestling/features/privacy_consent/presentation/bloc/privacy_consent_state.dart';
 
+/// The four promise titles, shared by the list rows and the Privacy Notice
+/// dialog so the copy cannot drift between the two.
+const List<String> _promiseTitles = <String>[
+  'No ads or tracking — ever',
+  'Children only need a nickname',
+  'Data stored in the UK (London)',
+  'Delete everything anytime',
+];
+
+/// P04 · Privacy & consent, route `/privacy`.
+///
+/// Static parent-mode screen: the four promise rows and the shield render in
+/// every bloc status. Only the crash-report toggle is live data (Drift-backed
+/// `settings.crashReportConsent`, OFF by default).
 class PrivacyConsentView extends StatelessWidget {
-  const new({super.key});
+  const PrivacyConsentView({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final tokens = context.nest;
     return Scaffold(
-      appBar: AppBar(title: const Text('P04 Privacy & consent')),
-      body: BlocBuilder<PrivacyConsentBloc, PrivacyConsentState>(
-        builder: (context, state) {
-          switch (state.status) {
-            case PrivacyConsentStatus.initial:
-            case PrivacyConsentStatus.loading:
-              return const Center(child: CircularProgressIndicator());
-            case PrivacyConsentStatus.failure:
-              return Center(
-                child: Text(state.errorMessage ?? 'Something went wrong'),
-              );
-            case PrivacyConsentStatus.loaded:
-              if (state.items.isEmpty) {
-                return const Center(child: Text('No items yet'));
-              }
-              return ListView.builder(
-                itemCount: state.items.length,
-                itemBuilder: (context, index) {
-                  final item = state.items[index];
-                  return ListTile(
-                    title: Text(item.title),
-                    subtitle: Text(item.detail),
+      backgroundColor: tokens.paper,
+      // P04-11: the design sets letter-spacing only on `.display` and
+      // `.status-time`, but `NestType` styles omit `letterSpacing` and
+      // inherit, so Material's bodyMedium tracking (0.25) leaks into every
+      // run (the P04-10 class). Zero it for the whole screen here — this also
+      // reaches core-rendered labels a per-Text override cannot (the
+      // `NestButton` label) and, via the captured themes of `showDialog`,
+      // the Privacy Notice dialog. SHARED_REQUEST §7 tracks the core fix.
+      body: DefaultTextStyle.merge(
+        style: const TextStyle(letterSpacing: 0),
+        child: Column(
+          children: <Widget>[
+            const NestStatusBar(),
+            NestNavBar(
+              compact: true,
+              onBack: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(AuthRoutePaths.createAccount);
+                }
+              },
+            ),
+            Expanded(
+              child: BlocBuilder<PrivacyConsentBloc, PrivacyConsentState>(
+                builder: (context, state) {
+                  final live = state.status == PrivacyConsentStatus.loaded;
+                  return SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(
+                      NestSpacing.padSide,
+                      0,
+                      NestSpacing.padSide,
+                      NestSpacing.s8,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        Semantics(
+                          header: true,
+                          child: Text(
+                            'Your family’s privacy',
+                            style: context.nestText.h1,
+                          ),
+                        ),
+                        const SizedBox(height: NestSpacing.s2),
+                        Text(
+                          'Exactly what we store — and nothing else.',
+                          style: NestType.body(color: tokens.ink2),
+                        ),
+                        const SizedBox(height: NestSpacing.gap14),
+                        const Center(
+                          child: NestPrivacyShield(
+                            semanticLabel: 'A shield with a leaf and a heart, protecting your family',
+                          ),
+                        ),
+                        const SizedBox(height: NestSpacing.s4),
+                        // Not const: the rows read their titles from the shared
+                        // `_promiseTitles` list (also used by the dialog).
+                        // Shared NestList paints the separators as zero-height
+                        // overlays, so the four rows are direct children again.
+                        NestList(
+                          children: <Widget>[
+                            _PromiseRow(
+                              title: _promiseTitles[0],
+                              subtitle:
+                                  'No analytics profiles, no ad SDKs, ever',
+                              leadingAsset: NestIcons.noAds,
+                              tint: NestTileTint.leaf,
+                            ),
+                            _PromiseRow(
+                              title: _promiseTitles[1],
+                              subtitle:
+                                  'No photos, no email, no chat, no location',
+                              leadingAsset: NestIcons.person,
+                              tint: NestTileTint.lilac,
+                            ),
+                            _PromiseRow(
+                              title: _promiseTitles[2],
+                              subtitle: 'Kept on UK servers, nothing leaves',
+                              leadingAsset: NestIcons.pinUk,
+                              tint: NestTileTint.sky,
+                            ),
+                            _PromiseRow(
+                              title: _promiseTitles[3],
+                              subtitle: 'One tap and your family data is gone',
+                              leadingAsset: NestIcons.trash,
+                              tint: NestTileTint.peach,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: NestSpacing.s4),
+                        NestCard(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 13,
+                            horizontal: NestSpacing.s4,
+                          ),
+                          child: Row(
+                            spacing: NestSpacing.s3,
+                            children: <Widget>[
+                              Expanded(
+                                child: Column(
+                                  spacing: NestSpacing.gap2,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Text(
+                                      'Optional: help improve Nestling',
+                                      style: NestType.body(color: tokens.ink)
+                                          .copyWith(
+                                            fontWeight: FontWeight.w600,
+                                            height: 22 / 16,
+                                            // P04-10: the design sets no
+                                            // tracking, but Material's
+                                            // DefaultTextStyle leaks
+                                            // letterSpacing 0.3 through
+                                            // `inherit: true`; with the bundled
+                                            // Inter the title then needs
+                                            // 250.2px in this 247px column and
+                                            // wraps. Zero it here until the
+                                            // shared typography fix lands
+                                            // (SHARED_REQUEST §7).
+                                            letterSpacing: 0,
+                                          ),
+                                      softWrap: true,
+                                    ),
+                                    Text(
+                                      'Share anonymous crash reports. '
+                                      'No names, no photos.',
+                                      style: NestType.bodySmall(
+                                        color: tokens.ink2,
+                                      ),
+                                      softWrap: true,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              NestToggle(
+                                key: const ValueKey('p04_crash_toggle'),
+                                value: state.crashConsent,
+                                semanticLabel: 'Share anonymous crash reports',
+                                onChanged: live
+                                    ? (value) => context
+                                          .read<PrivacyConsentBloc>()
+                                          .add(
+                                            PrivacyConsentCrashToggled(
+                                              value: value,
+                                            ),
+                                          )
+                                    : null,
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (state.status == PrivacyConsentStatus.failure)
+                          Padding(
+                            padding: const EdgeInsets.only(top: NestSpacing.s2),
+                            child: Text(
+                              // State-aware (P04-6): "it stays off" is only
+                              // true when the prior consent was OFF; a failed
+                              // OFF write leaves the opt-in ON, so say so.
+                              state.crashConsent
+                                  ? 'Oops — your choice wasn’t saved. '
+                                        'Crash reports are still on. '
+                                        'Continue anyway.'
+                                  : 'Oops — your choice wasn’t saved. '
+                                        'Continue anyway; it stays off.',
+                              style: NestType.caption(color: tokens.danger),
+                              softWrap: true,
+                            ),
+                          ),
+                      ],
+                    ),
                   );
                 },
-              );
-          }
-        },
+              ),
+            ),
+            NestBottomCta(
+              child: Column(
+                spacing: NestSpacing.s2,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  NestButton(
+                    key: const ValueKey('p04_continue'),
+                    label: 'Continue',
+                    onPressed: () => context.go(FamilyRoutePaths.addChildren),
+                  ),
+                  const _NoticeLink(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Feature-private promise row.
+///
+/// Mirrors [NestListRow] geometry (40x40 tile, radius 12) but P04 wins per
+/// SPACING_SPEC §9.3/§9.4: rows pad 7px vertically and title/sub wrap
+/// instead of ellipsizing. Rows are display-only (no `onTap`). The
+/// separators between rows come from shared [NestList], which paints them
+/// as zero-height overlays.
+class _PromiseRow extends StatelessWidget {
+  const _PromiseRow({
+    required this.title,
+    required this.subtitle,
+    required this.tint,
+    this.leadingAsset,
+  });
+
+  final String title;
+  final String subtitle;
+  final NestTileTint tint;
+  final String? leadingAsset;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.nest;
+    final (Color tileBg, Color tileFg) = switch (tint) {
+      NestTileTint.neutral => (tokens.surface2, tokens.ink),
+      NestTileTint.leaf => (tokens.leafTint, tokens.leafInk),
+      NestTileTint.coin => (tokens.coinTint, tokens.coinInk),
+      NestTileTint.sky => (tokens.skyTint, tokens.sky),
+      NestTileTint.lilac => (tokens.lilacTint, tokens.lilac),
+      NestTileTint.peach => (tokens.peachTint, tokens.aPeach),
+    };
+    final asset = leadingAsset;
+    return Semantics(
+      container: true,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 56),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            NestSpacing.s3,
+            NestSpacing.gap7,
+            NestSpacing.s4,
+            NestSpacing.gap7,
+          ),
+          child: Row(
+            spacing: NestSpacing.s3,
+            children: <Widget>[
+              Container(
+                width: NestSpacing.s10,
+                height: NestSpacing.s10,
+                decoration: BoxDecoration(
+                  color: tileBg,
+                  borderRadius: BorderRadius.circular(NestSpacing.s3),
+                ),
+                alignment: Alignment.center,
+                child: asset == null
+                    ? const SizedBox.shrink()
+                    : NestIcon(asset, color: tileFg),
+              ),
+              Expanded(
+                child: Column(
+                  spacing: NestSpacing.gap2,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      title,
+                      style: NestType.bodyStrong(
+                        color: tokens.ink,
+                      ).copyWith(fontWeight: FontWeight.w600, height: 22 / 16),
+                      softWrap: true,
+                    ),
+                    Text(
+                      subtitle,
+                      style: NestType.caption(color: tokens.ink2),
+                      softWrap: true,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Underlined tappable footnote. [NestBottomCta] only takes plain-text
+/// `caption`, but the design needs a link, so this is a second child of the
+/// bottom-CTA column instead (CTA geometry unchanged).
+class _NoticeLink extends StatelessWidget {
+  const _NoticeLink();
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.nest;
+    return Semantics(
+      button: true,
+      label: 'Read the full Privacy Notice',
+      container: true,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          minHeight: NestDevice.tapParent,
+          minWidth: NestDevice.tapParent,
+        ),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => showNestModal<void>(
+            context,
+            // No `title:`: NestModal renders its title above its own
+            // DefaultTextStyle, straight under the Dialog's Material, which
+            // re-applies the theme's tracked bodyMedium (P04-11). Render the
+            // identical title (same style, spacing and clamp) inside the
+            // child, where the screen's no-tracking rule reaches it.
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  'Privacy Notice',
+                  style: NestType.h3(color: tokens.ink)
+                      .copyWith(letterSpacing: 0),
+                  textAlign: TextAlign.center,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: NestSpacing.s4),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  spacing: NestSpacing.s2,
+                  children: <Widget>[
+                    // The four promises as separate lines (plan §c), reusing
+                    // the row titles so the copy cannot drift (review
+                    // finding 7).
+                    for (final title in _promiseTitles)
+                      Text(
+                        title,
+                        style: NestType.bodySmall(color: tokens.ink2),
+                        textAlign: TextAlign.center,
+                        softWrap: true,
+                      ),
+                    NestButton(
+                      label: 'Close',
+                      variant: NestButtonVariant.secondary,
+                      minHeight: NestDevice.tapParent,
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          child: Center(
+            child: ExcludeSemantics(
+              child: Text(
+                'Read the full Privacy Notice',
+                key: const ValueKey('p04_privacy_notice'),
+                style: NestType.caption(color: tokens.sky).copyWith(
+                  fontWeight: FontWeight.w600,
+                  decoration: TextDecoration.underline,
+                  decorationThickness: 1,
+                ),
+                textAlign: TextAlign.center,
+                softWrap: true,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
