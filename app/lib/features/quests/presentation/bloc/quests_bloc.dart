@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:nestling/features/quests/domain/entities/quest.dart';
 import 'package:nestling/features/quests/domain/quests_repository.dart';
@@ -21,7 +23,7 @@ class QuestsBloc extends Bloc<QuestsEvent, QuestsState> {
     final ideas = _repository.ideas();
     emit(state.copyWith(status: QuestsStatus.loading, ideas: ideas));
     await emit.forEach<List<Quest>>(
-      _repository.watchItems(),
+      _repository.watchItems().transform(_closeOnError),
       onData: (items) => state.copyWith(
         status: QuestsStatus.loaded,
         items: items,
@@ -34,3 +36,16 @@ class QuestsBloc extends Bloc<QuestsEvent, QuestsState> {
     );
   }
 }
+
+/// Errors are terminal: forward the first error, then close — otherwise the
+/// failed load's watcher stays subscribed and every "Try again" leaks
+/// another one (review finding 3). Closing lets `emit.forEach` complete and
+/// cancel, so a retry starts exactly one fresh subscription. Same guard as
+/// `today_bloc.dart`, `family_bloc.dart` and `pocket_money_bloc.dart`.
+final _closeOnError = StreamTransformer<List<Quest>, List<Quest>>.fromHandlers(
+  handleError: (error, stackTrace, sink) {
+    sink
+      ..addError(error, stackTrace)
+      ..close();
+  },
+);

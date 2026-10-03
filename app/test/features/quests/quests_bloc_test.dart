@@ -196,6 +196,62 @@ void main() {
       wait: const Duration(milliseconds: 300),
     );
 
+    late MockQuestsRepository retryRepo;
+
+    blocTest<QuestsBloc, QuestsState>(
+      'a failed load releases its watcher so retry subscribes exactly once',
+      build: () {
+        final repo = MockQuestsRepository();
+        retryRepo = repo;
+        controller = StreamController<List<Quest>>.broadcast();
+        addTearDown(controller.close);
+        when(repo.ideas).thenReturn(_ideas);
+        when(repo.watchItems).thenAnswer((_) => controller.stream);
+        return QuestsBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const QuestsLoadRequested());
+        await Future<void>.delayed(Duration.zero);
+        controller.addError(Exception('offline'));
+        await Future<void>.delayed(Duration.zero);
+        expect(
+          controller.hasListener,
+          isFalse,
+          reason:
+              'the failed watcher must be released (review finding 3), '
+              'otherwise every Try again leaks another subscription',
+        );
+        bloc.add(const QuestsLoadRequested());
+        await Future<void>.delayed(Duration.zero);
+        controller.add(_items);
+        await Future<void>.delayed(Duration.zero);
+        expect(
+          controller.hasListener,
+          isTrue,
+          reason: 'the retry holds exactly one live subscription while loaded',
+        );
+      },
+      expect: () => [
+        const QuestsState(status: QuestsStatus.loading, ideas: _ideas),
+        predicate<QuestsState>((s) => s.status == QuestsStatus.failure),
+        predicate<QuestsState>((s) => s.status == QuestsStatus.loading),
+        predicate<QuestsState>(
+          (s) =>
+              s.status == QuestsStatus.loaded &&
+              s.items == _items &&
+              s.ideas == _ideas,
+        ),
+      ],
+      verify: (_) {
+        // Exactly two subscriptions: the first load and the one retry — the
+        // failed one was cancelled (asserted in act), not left piling up
+        // behind it. (blocTest closes the bloc before verify, so liveness
+        // itself is asserted in act, above.)
+        verify(retryRepo.watchItems).called(2);
+      },
+      wait: const Duration(milliseconds: 300),
+    );
+
     blocTest<QuestsBloc, QuestsState>(
       'retry after a failure reloads and reaches loaded',
       build: () {

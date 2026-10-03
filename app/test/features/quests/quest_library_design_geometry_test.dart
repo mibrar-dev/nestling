@@ -130,6 +130,13 @@ Future<void> _pumpDevice(
   await tester.pump(const Duration(milliseconds: 300));
 }
 
+/// Why the hint-centring pin is red (BUG-P10-14 · SHARED_REQUEST §10).
+const String _hintReason =
+    'the design centres the hint ink in the `.search` box (field 173…227 ⇒ '
+    'centre y 200); `NestTextField.search` renders the 24-tall hint box at the '
+    'TOP of its 44 px input (y 177…201 ⇒ 189). Cause is in core/ — see '
+    'SHARED_REQUEST §10 — so P10 must not patch it locally.';
+
 void main() {
   setUpAll(_loadBundledFonts);
 
@@ -228,6 +235,58 @@ void main() {
       expect(
         tester.getRect(find.text('Search ideas')).left - field.left,
         closeTo(50, 4),
+      );
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the magnifier is centred in the field', (tester) async {
+      await setUpTestScope();
+      await _pumpDevice(tester, QuestsRoutePaths.library);
+
+      final field = tester.getRect(find.byType(NestTextField));
+      final icon = tester.getRect(
+        find
+            .descendant(
+              of: find.byType(NestTextField),
+              matching: find.byType(NestIcon),
+            )
+            .first,
+      );
+
+      // The icon IS centred today (199 vs the field's 199). Pinned so the
+      // hint fix (SHARED_REQUEST §10, BUG-P10-14) cannot be paid for by moving
+      // the icon.
+      expect(icon.center.dy, closeTo(field.center.dy, 1));
+
+      await disposeApp(tester);
+    });
+
+    // ORCHESTRATOR_NOTES 12:17 items 1 + 3 (mandatory pin). RED on purpose:
+    // the design puts the hint's ink centre at y = 200 (the field spans
+    // 173…227) and the app paints it at 189 — `NestTextField.search` gives the
+    // input a fixed 44 px box but the hint renders at the TOP of it (24 tall
+    // box at y 177…201) while the magnifier is correctly centred at 199.
+    //
+    // Cause is inside `core/design_system/components/nest_text_field.dart:169-191`
+    // (the 44-high `SizedBox` + `textAlignVertical` do not centre the hint),
+    // which RULES §1 forbids P10 from editing, and P10 must not wrap or
+    // re-pad the shared field locally. Filed as SHARED_REQUEST §10; the pin
+    // turns green the moment that lands.
+    testWidgets('the hint is centred in the field, not floated to the top', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpDevice(tester, QuestsRoutePaths.library);
+
+      final field = tester.getRect(find.byType(NestTextField));
+      final hint = tester.getRect(find.text('Search ideas'));
+
+      expect(hint.center.dy, closeTo(200, 1), reason: _hintReason);
+      expect(
+        hint.center.dy,
+        closeTo(field.center.dy, 2),
+        reason: 'the hint and the magnifier share the centre of the field',
       );
 
       await disposeApp(tester);

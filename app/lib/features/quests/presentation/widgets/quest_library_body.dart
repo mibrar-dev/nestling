@@ -38,6 +38,23 @@ class _QuestLibraryBodyState extends State<QuestLibraryBody> {
   String _query = '';
   String _category = kAllQuestCategories;
 
+  /// Owns the search field's text (BUG-P10-12).
+  ///
+  /// BUG-P10-3 lifts the field out of the tree on the Active tab, which
+  /// disposes the `TextField`'s own `EditableText` state while `_query`
+  /// survives — so the parent came back to an EMPTY box with 9 of the 10
+  /// ideas still hidden and nothing on screen explaining why. Hoisting the
+  /// controller here makes the field keep showing the query that is actually
+  /// applied, which is also what the design implies: the filters persist
+  /// across a tab switch.
+  final TextEditingController _search = TextEditingController();
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
   @override
   void didUpdateWidget(covariant QuestLibraryBody oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -124,6 +141,7 @@ class _QuestLibraryBodyState extends State<QuestLibraryBody> {
             NestTextField.search(
               hintText: 'Search ideas',
               semanticLabel: 'Search quest ideas',
+              controller: _search,
               keyboardType: TextInputType.text,
               textInputAction: TextInputAction.search,
               onChanged: (value) => setState(() => _query = value),
@@ -158,10 +176,15 @@ class _QuestLibraryBodyState extends State<QuestLibraryBody> {
     // (BUG-P10-4 measured 48 while every row carried a trailing gap).
     if (activeTab) {
       if (widget.items.isEmpty) {
-        return const <Widget>[
-          NestEmptyState(
-            title: 'No active quests',
-            message: 'Add one from Ideas.',
+        // OWNER ALIGNMENT RULE: one 20 px gutter on the screen. `NestEmptyState`
+        // adds its own 16 px, so an ungutterd one would start 16 px from the
+        // edge while its Ideas sibling starts at 36 px.
+        return <Widget>[
+          _gutter(
+            const NestEmptyState(
+              title: 'No active quests',
+              message: 'Add one from Ideas.',
+            ),
           ),
         ];
       }

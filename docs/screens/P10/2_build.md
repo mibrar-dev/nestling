@@ -1,170 +1,171 @@
-# P10 · Stage 2 — INTEGRATE (iteration 2)
+# P10 · Stage 2 — INTEGRATE (iteration 3)
 
 Job: make the two halves (`2a_build_logic.md`, `2b_build_ui.md`) compile and
 pass together. Smallest change, no redesign, no shared-file edits (RULES §1).
 
-**Result: `dart format` clean · `flutter analyze` → No issues found ·
-`flutter test` → `+1921 −3`.** The 3 remaining failures are all one shared-code
-defect (`NestSegmented` announces every option label twice) that I may not fix
-here — detail and the exact one-line shared fix under FIXES-4. Per the brief,
-PASS requires the full suite green, so this stage is **FAIL on that single
-blocker**; everything in my scope is green.
+**Result: `dart format` → 0 changed (exit 0) · `flutter analyze` → No issues
+found · `flutter test` → `+1953 −1`.**
 
-## What landed (summary of the two halves)
+**There was no integration breakage left to fix this iteration** — the halves
+did not overlap a single file and neither changed the contract, so nothing had
+to be re-based, renamed or re-plumbed. The single red test is the *deliberate,
+mandatory* design pin for a shared-code defect (`NestTextField.search` floats
+its hint 11 px too high), which I may not fix here. Per the brief — PASS
+requires the full suite green — this stage is **FAIL on that one blocker**;
+everything inside my scope is green. Details and the exact one-line shared fix
+under FIXES-2.
 
-### 2a — logic chunk (`bloc/**` + logic tests)
+## Summary of 2a — logic chunk
 
-No contract *removal*: `QuestsState` **gained** `ideas: List<Quest>` (default
-`const []`, threaded through `copyWith`/`props`), populated by
-`QuestsBloc._onLoadRequested` from `_repository.ideas()` on the loading state
-and every loaded emission; a failure keeps the last ideas. That closes review
-finding 2 / BUG-P10-8 (the view no longer probes the service locator — the
-`get_it` import and `_ideaTemplates()` are gone). The repository order test now
-pins **creation order** per the orchestrator's §5 ruling (main `8ad0cdc`,
-`watchActiveQuests` ordered by `createdAt, id`). Added/updated:
-`quests_bloc_test.dart` (16), `quests_repository_test.dart` (10).
+Scope `bloc/**` + logic tests. **Contract changes: none.**
+`QuestsState(status, items, ideas, errorMessage)` and `QuestsLoadRequested` are
+exactly as iteration 2 declared, so the UI layer needed no re-plumbing.
 
-### 2b — UI chunk (`views/**`, `widgets/**` + view/widget tests)
+- `quests_bloc.dart` — review finding 3 (MAJOR, `Try again` watcher leak): the
+  `watchItems()` stream now goes through a typed `_closeOnError` transformer
+  (forward the first error, then close) before `emit.forEach`, so a failed
+  load's Drift watcher is released and the retry starts exactly one fresh
+  subscription instead of stacking another live watcher behind the dead one —
+  same guard as `today_bloc.dart:80` / `family_bloc.dart:110`, typed for this
+  call site (`List<dynamic>` does not satisfy `List<Quest>`).
+- `quests_bloc_test.dart` — new proof `a failed load releases its watcher so
+  retry subscribes exactly once` (broadcast controller: error ⇒ no listener,
+  retry ⇒ exactly one listener, `verify(repo.watchItems).called(2)`).
+  2a mutation-checked it against the pre-fix bloc (fails without the fix).
+- Files: `quests_bloc.dart`, `quests_bloc_test.dart` only. 27/27 in its two
+  test files, analyze clean, no `skip:`.
 
-`QuestLibraryView` now renders `QuestLibraryBody(items: state.items, ideas:
-state.ideas)` and no longer touches GetIt. Closed BUG-P10-1 (`QuestPushOnce`
-guard, new `widgets/quest_push_once.dart`), BUG-P10-2 (row text left-aligned at
-card x+64), BUG-P10-3 (search + category row only on the Ideas tab), BUG-P10-4
-(16 px separators *between* rows only), BUG-P10-5/6/7 (shared fixes adopted),
-BUG-P10-9 (`onTap:` **and** `container: true` on every `Semantics` control,
-Active-row label now `'$title. $meta'`), BUG-P10-11 (`plate`/`sofa` tints),
-review 6 (`.chipscroll` fade mask via `ShaderMask`), 7 (plain `Text` for the
-un-balanced title), 11 (`didUpdateWidget` re-reads `initialTab`). Verified all
-7 `ORCHESTRATOR_NOTES` items; shared batch4 fixes (`NestTextField.search`,
-`NestSegmented` 52/44, `NestTabBar` bottom-edge) are in the tree at `c1be080`.
+## Summary of 2b — UI chunk
 
-Handed to me: **12 red tests**, which 2b correctly reported as owned elsewhere.
+Scope `views/**` + `widgets/**` + UI proofs. No `domain/`, `data/` or `bloc/`
+file touched, so the two file sets are disjoint (confirmed against
+`git status`: 2a owns `quests_bloc.dart` + `quests_bloc_test.dart`, 2b owns
+`quest_idea_row.dart`, `quest_library_body.dart`,
+`quest_library_a11y_actions_test.dart`, `quest_library_design_geometry_test.dart`).
+
+- **BUG-P10-12 / review finding 2 (MAJOR)** — the applied search filter went
+  invisible after a tab round-trip: the field is only built while `filtersOn`
+  (BUG-P10-3), so the `EditableText` state was disposed while `_query`
+  survived. `_QuestLibraryBodyState` now owns a `TextEditingController`,
+  passes it to `NestTextField.search(controller:)` and disposes it.
+- **review finding 6** — the row title now uses `NestType.bodyStrong(…).copyWith(height: 22/16)`
+  instead of rebuilding `bodyStrong` by hand; **finding 7** — both empty states
+  share the 20 px gutter (OWNER ALIGNMENT); **finding 8** — the icon tile's
+  `40` literals became `NestSpacing.s10`.
+- **review advisory 1** — the search-field proof asserted `SemanticsAction.setText`
+  on a node that carries neither `setText` nor `tap` in this Flutter build
+  (framework baseline, not a P10 defect); rewritten to assert what P10 owns
+  (is a text field, the design's `aria-label` is in the tree once, typing
+  really filters) — the action half still proved end-to-end.
+- **Found and filed BUG-P10-14 (MAJOR, shared)** + added the two
+  `ORCHESTRATOR_NOTES` 12:17 pins (hint centre, magnifier centre) and
+  ORCHESTRATOR_NOTES item 12's real-font geometry suite.
+- Per-file: `p10_bugs_test` 10/10, `quest_library_a11y_actions_test` 11/11,
+  `quest_library_a11y_test` 20/20, `quest_library_view_test` 27/27,
+  `quest_library_widget_test` 16/16, `quest_library_states_test` 19/19,
+  `quests_bloc_test` 17/17, plus filter / meta / repository / geometry files.
+  **No live `skip:` marker** anywhere in `test/features/quests/` (the single
+  grep hit is a comment recording their removal). No `google_fonts` /
+  `GoogleFonts.*` in the feature.
 
 ## FIXES
 
-### FIXES-1 — DONE · 8 tests: `quest_library_states_test.dart` mock never stubbed `ideas()`
+### FIXES-1 — NONE NEEDED · no integration breakage
 
-`2a`'s new `QuestsState.ideas` means the bloc calls `_repository.ideas()` on
-every load. `_MockQuestsRepository` (a bare `extends Mock`) returned mocktail's
-`null` for it, so the handler threw
-`type 'Null' is not a subtype of type 'List<Quest>'` and the bloc never left
-`loading` — the spinner, the failure block and both empty states were all
-unreachable in that file.
+Checked, not assumed:
 
-Fix, in `app/test/features/quests/quest_library_states_test.dart` only: the mock
-now stubs the method once, in its constructor, with the *real* templates —
-`setUpTestScope()` registers the real `QuestsRepository`, so the body keeps
-rendering the same 10 ideas the view used to read straight from GetIt:
+- **Contract**: `QuestsState` unchanged this iteration; the view still passes
+  `state.items` / `state.ideas` (no `get_it` probe) and every widget signature
+  is untouched, so the two halves line up as-is.
+- **File overlap**: none (see above) — nothing had to be reconciled.
+- **Iteration-2 carry-overs, re-verified green**: the states-test mock stub,
+  the a11y prefix-match finder and the hidden-anchor deletion all still hold;
+  `today_view_test.dart` asserts `pushedPath(tester)` and passes with no anchor
+  in the tree.
+- **The 3 red tests that blocked iteration 2 are fixed by shared code that
+  landed mid-stage**: `ab1ba06` "Fix NestSegmented double announcement with
+  excludeSemantics" (merged `0cdb53c`, `nest_segmented.dart:63` now has
+  `excludeSemantics: true`), so `quest_library_a11y_test.dart` is 20/20. No
+  local workaround was taken, per the orchestrator's instruction.
 
-```dart
-class _MockQuestsRepository extends Mock implements QuestsRepository {
-  _MockQuestsRepository() {
-    when(ideas).thenReturn(GetIt.instance<QuestsRepository>().ideas());
-  }
-}
-```
+### FIXES-2 — LEFT (shared code, cannot fix here) · 1 test · the sole blocker
 
-(+1 import: `get_it`.) No assertion touched; the 8 tests now exercise the real
-status switch again (spinner colour/centring, error copy, `Try again` retry,
-`Active (0)` empty state).
+`quest_library_design_geometry_test.dart` →
+`the hint is centred in the field, not floated to the top`
 
-### FIXES-2 — DONE · 1 test: unsatisfiable exact-match finder on the Active row
-
-`quest_library_a11y_test.dart` → `a row is one tappable button naming the quest
-and its meta` asserted `find.bySemanticsLabel('Make your bed')` (an **exact**
-match) while two lines later requiring `data.label` to `contains('coins')`.
-Review finding 8 mandates the single combined label `'$title. $meta'`, so the
-two assertions could never both hold.
-
-Fix: the finder is now `find.bySemanticsLabel(RegExp('^Make your bed'))`.
-`findsOneWidget`, `isButton`, `hasAction(SemanticsAction.tap)` and both
-`contains(...)` assertions are unchanged — the proof is the same strength, it
-just stops demanding that the quest name be the *entire* label. This matches
-what 2b recommended.
-
-### FIXES-3 — DONE · mandatory orchestrator item: delete the hidden route anchor
-
-`ORCHESTRATOR_NOTES.md` (update 10:00) says: *"After the merge, delete the
-hidden anchor."* The shared batch4 "today test anchor" fix has landed —
-`app/test/features/today/today_view_test.dart:286-287` now asserts
-`pushedPath(tester) == '/quests'` ("Route-path assertion only: P10 owns the
-library view and its copy"), and no `P10 Quest library` literal remains in
-another feature's tests.
-
-So `QuestLibraryView` is back to 2b's plain `Scaffold → SafeArea →
-BlocBuilder` body: the `Stack(fit: StackFit.passthrough)` wrapper, the
-`Positioned` anchor and the whole `_QuestLibraryRouteAnchor` class (with its
-`TODO(P10)`) are deleted. Verified: P08's two navigation tests and
-`router_push_test.dart` pass without it, which is what the shared fix was for.
-P08b's "Browse ideas" assertion has the same `pushedPath` shape.
-
-### FIXES-4 — LEFT (shared code, cannot fix here) · 3 tests: `NestSegmented` double label
-
-All three failures are the same assertion and the same root cause:
+I re-ran it and confirmed the premise independently:
 
 ```
-Expected: exactly one matching candidate
-  Actual: _ElementPredicateWidgetFinder:<Found 2 widgets with a semantics label named "Ideas">
-   Which: is too many
+Expected: a numeric value within <1> of <200>
+  Actual: <189.0>
+   Which:  differs by <11.0>
 ```
 
-* `quest_library_a11y_test.dart` → `P10 segmented control each option is one
-  labelled, tappable button`
-* …→ `P10 icon buttons every interactive node announces what it does`
-* …→ `P10 dark mode the same semantics contract holds in dark`
+The painted `Text('Search ideas')` rect centres at **y 189.0**; the design's
+field spans 173…227, so its centre — where the design puts the hint ink, level
+with the magnifier — is **y 200**. The magnifier itself is correct (centre 199,
+pinned by its own passing test), so the drift is the hint alone.
 
-`app/lib/core/design_system/components/nest_segmented.dart:53-58` wraps each
-option in `Semantics(button: true, selected:, label: option.label, onTap: …)`
-but has no `excludeSemantics: true`, so the option's inner `Text` (`:78`) and
-the `InkWell`'s own node keep their own semantics — a screen reader walks
-"Ideas" twice on every segmented control in the app (`NestSegmented` is used by
-`quest_library_body.dart` and the gallery). Batch4 added the missing `onTap:`
-but not `excludeSemantics`.
+Cause is inside `app/lib/core/design_system/components/nest_text_field.dart`
+(`_buildSearch`, lines ~167-193): the `TextField` sits in a *tight*
+`SizedBox(height: 44)` with `isDense: true` and `contentPadding:
+EdgeInsets.only(left: -4)`, and `textAlignVertical: center` only centres within
+the editable's intrinsic ~24 px line box, which is painted at the top of the
+44 px slot.
 
-**Fix (shared, one line):** add `excludeSemantics: true` to that per-option
-`Semantics`; the `onTap` batch4 added stays, so the node keeps its action.
-`nest_chip.dart:119-121` already does exactly this ("One node per chip").
+Left here on purpose, and it is the whole of the remaining red:
 
-Left here on purpose: `app/lib/core/**` is forbidden to a screen agent
-(RULES §1); `ExcludeSemantics` around the control would delete its tap actions
-from the semantics tree (worse than the duplicate); re-implementing the control
-is forbidden; and relaxing the three proofs to `findsWidgets` would mask a real
-MAJOR a11y defect that `SHARED_REQUEST.md` §1 is tracking. `SHARED_REQUEST.md`
-§1 now records that this is the *only* remaining blocker plus the exact proof
-names.
+- `app/lib/core/**` is forbidden to a screen agent (RULES §1);
+- `NestTextField.search` exposes no `contentPadding` / `isDense` /
+  `textAlignVertical` / `strutStyle` knob (checked the constructor), so there
+  is no in-scope parameter to pass;
+- wrapping or re-padding the shared field locally is exactly the "hack it
+  locally" the orchestrator rules forbid, and re-implementing the field is
+  forbidden outright;
+- the pin itself is **mandatory** — `ORCHESTRATOR_NOTES.md` 12:17 item 3 says
+  "Pin the hint text centre (200 ±1) in the geometry test" — so deleting,
+  skipping or relaxing it is not an option.
 
-## LEFT / notes (not blockers)
+`SHARED_REQUEST.md` §10 carries the measurements, the cause and a suggested
+fix (give the editable the 44 px box instead of a line box: `strutStyle` /
+`textHeightBehavior`, or vertical `contentPadding` of `(44 - 24) / 2 = 10`
+alongside the existing `left: -4`). It composes with §9 (field 52 → 54): the
+pin already uses the design number 200, not the app's current 199, so it goes
+green the moment §10 lands either alone or with §9.
 
-1. Chip-row right-edge fade and the real-font geometry proofs are green per 2b
-   (`ShaderMask` + `p10_bugs_test.dart` 9/9); a UI pass (`shot.sh` +
-   `compare.py`, both themes) still belongs to stage 5 — no simulator was
-   booted, installed on, screenshotted or driven in this stage.
-2. `?idea=` / `?id=` query params on `/quest-editor` (P09, same feature) remain
-   documented `TODO(P10)`s.
-3. `SHARED_REQUEST.md` §5 (shared `NestChip` tap action), §6 (`QuestPushOnce`
-   → `core/`) and §7 (`plate` tint disagreement with P08) stay open for the
-   orchestrator; no P10 test is red on any of them.
+### FIXES-3 — LEFT (shared, informational, no red test)
 
-## Verification tails
+`SHARED_REQUEST.md` §8 (the search `aria-label` lands on a wrapper node rather
+than merging into the editable node — the test now asserts the label is in the
+tree exactly once), §9 (search row 52 where `.search` computes 54, leaving the
+chip row and all ten cards a uniform 2 px high; the geometry test still pins
+`54 ± 2` and should be tightened to ±1 once §9 lands), §6 (`QuestPushOnce` →
+`core/`) and §7 (P08 paints `plate` lilac where P10 paints sky) all stay with
+the orchestrator.
+
+## Gates
 
 ```
-$ dart format .
-Formatted 435 files (0 changed) in 1.13s.
+$ dart format --set-exit-if-changed .
+Formatted 438 files (0 changed) in 1.18s.
 
 $ flutter analyze
 Analyzing app...
-No issues found! (ran in 3.5s)
+No issues found! (ran in 3.0s)
 
 $ flutter test
-00:36 +1921 -3: Some tests failed.
-  test/features/quests/quest_library_a11y_test.dart: P10 segmented control each option is one labelled, tappable button
-  test/features/quests/quest_library_a11y_test.dart: P10 icon buttons every interactive node announces what it does
-  test/features/quests/quest_library_a11y_test.dart: P10 dark mode the same semantics contract holds in dark
+00:38 +1953 -1: Some tests failed.
+  test/features/quests/quest_library_design_geometry_test.dart:
+    P10 design geometry — the title and the controls under it
+    the hint is centred in the field, not floated to the top
 ```
 
-On entry: `+1912 −12`. Of the 12, **9 are fixed in scope** (FIXES-1, FIXES-2)
-and 3 are FIXES-4. The `WARNING (drift): AppDatabase created multiple times`
-notices in the output are the repo-wide debug-build notice from `test_scope.dart`,
-not failures.
+Per-file failure sweep of `test/features/quests/` (one command per file): the
+only file with a failure is `quest_library_design_geometry_test.dart` (1, the
+pin above); all ten other files report 0. The
+`WARNING (drift): AppDatabase created multiple times` notices in the output
+are the repo-wide debug-build notice from `test_scope.dart`, not failures.
+
+No simulator was booted, installed on, screenshotted or driven in this stage.
 
 VERDICT: FAIL

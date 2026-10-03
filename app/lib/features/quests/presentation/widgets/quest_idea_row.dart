@@ -57,8 +57,8 @@ class QuestIdeaRow extends StatelessWidget {
       child: Row(
         children: <Widget>[
           Container(
-            width: 40,
-            height: 40,
+            width: NestSpacing.s10,
+            height: NestSpacing.s10,
             decoration: BoxDecoration(
               color: tileBg,
               borderRadius: NestRadii.allM,
@@ -80,8 +80,8 @@ class QuestIdeaRow extends StatelessWidget {
                   title,
                   // `.trow .nm`: Inter 16 w700, line-height 22 (not the type
                   // scale's 24), single line with an ellipsis.
-                  style: NestType.body(color: tokens.ink)
-                      .copyWith(fontWeight: FontWeight.w700, height: 22 / 16),
+                  style: NestType.bodyStrong(color: tokens.ink)
+                      .copyWith(height: 22 / 16),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),

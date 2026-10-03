@@ -203,6 +203,50 @@ it goes red if the field drops further or the drift grows).
 
 ---
 
+## 10. MAJOR (new) — `NestTextField.search` floats its hint to the top of the box
+
+ORCHESTRATOR_NOTES 12:17 items 1 + 3, measured and pinned by me.
+
+File: `app/lib/core/design_system/components/nest_text_field.dart:167-193`.
+
+Measured in the widget tree at 390×844 with the 47/34 device insets and the
+bundled Inter face loaded (`quest_library_design_geometry_test.dart`):
+
+```
+FIELD     173.0 … 225.0   centre 199.0   (52 tall)
+ICON      187.0 … 211.0   centre 199.0   ← the magnifier IS centred
+TEXTFIELD 177.0 … 221.0   centre 199.0   (44 tall — the design's `input`)
+HINT      177.0 … 201.0   centre 189.0   ← 10 px high
+```
+
+Design (`design/screens/light/P10-quest-library.png`, ÷3): the `--line` ring
+spans **173 … 227**, so the field's centre is **y 200** and the design's hint
+ink is centred on it — the same y as the icon.
+
+**Cause.** The `SizedBox(height: 44)` around the `TextField` is a *tight*
+height, and `textAlignVertical: TextAlignVertical.center` only centres the text
+inside the editable's own box — which measures 24 (Inter 16 × the `height: 1.5`
+of `NestType.body`), i.e. the intrinsic line box, not the 44. The hint is
+therefore painted at the top of the 44 px slot instead of at 199.
+
+**Fix (shared).** Give the editable the 44 px box rather than a line box, e.g.
+`strutStyle`/`textHeightBehavior` on, or set the input's
+`InputDecoration.contentPadding` vertical to `(44 - 24) / 2 = 10`
+(combined with the existing `left: -4`), or wrap so the `TextField` fills the
+slot and let `TextAlignVertical.center` do its work. P10 must not wrap or
+re-pad the shared field locally, so it stays unfixed here — same rule as §1.
+
+**Proof (red, in `quest_library_design_geometry_test.dart`):**
+`the hint is centred in the field, not floated to the top` — asserts the hint
+centre at 200 ±1 and within 2 px of the field centre. It is the only P10 test
+red for this reason, and it turns green the moment this lands.
+
+**Note.** Once §9 (54 tall) lands, the field spans 173…227 and the expected
+centre is exactly 200 — the pin above already uses the design number, not the
+app's current 199, so the two fixes compose.
+
+---
+
 ## 7. (informational) P08 paints `plate` lilac, P10 paints it sky
 
 `features/today/.../today_loaded_body.dart`'s `todayTintFor` gives the seed icon
