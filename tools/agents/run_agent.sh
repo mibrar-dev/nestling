@@ -9,9 +9,9 @@ ev() { echo "$(date +%H:%M:%S) $1 $NAME ${2:-}" >> "$EV"; echo "$1" > "$ST/$NAME
 cd "${WORKDIR:-$ROOT}"
 [ -s "$BRIEF" ] || { ev FAILED "empty_or_missing_brief=$BRIEF"; exit 2; }
 # Rate-limit cooldown shared by all agents: a model that rate-limited in the
-# last 30 min is skipped in favour of Space Bunny (file: _status/cooldown/<model>).
+# last 2 h is skipped in favour of Space Bunny (file: _status/cooldown/<model>).
 CD="$ST/cooldown"; mkdir -p "$CD"; CDF="$CD/$(echo "$MODEL" | tr '/#' '__')"
-if [ "$MODEL" != "opencode-go/space-bunny-free#max" ] && [ -f "$CDF" ] && [ $(( $(date +%s) - $(cat "$CDF") )) -lt 1800 ]; then
+if [ "$MODEL" != "opencode-go/space-bunny-free#max" ] && [ -f "$CDF" ] && [ $(( $(date +%s) - $(cat "$CDF") )) -lt 7200 ]; then
   ORIG="$MODEL"; MODEL="opencode-go/space-bunny-free#max"; SID="-"
   ev START "model=$MODEL cooldown_from=$ORIG"
 else
