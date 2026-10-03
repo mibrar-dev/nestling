@@ -145,6 +145,10 @@ class QuestCompletions extends Table {
   DateTimeColumn get decidedAt => dateTime().nullable()();
   TextColumn get decidedAtTz =>
       text().withDefault(const Constant('Europe/London'))();
+  // Child's note on the completion, shown as the quote on P11 approvals
+  // (schema v6). Null = no note → no quote line. Stored WITHOUT the
+  // surrounding “ ” — the UI adds them at render time.
+  TextColumn get kidNote => text().nullable()();
 }
 
 class LedgerEntries extends Table {
@@ -330,7 +334,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   /// v1 → v2: every event instant gains a `…_tz` zone column, `families`
   /// (+ `settings` mirror) gains `time_zone`, and `quests` gains the
@@ -351,6 +355,11 @@ class AppDatabase extends _$AppDatabase {
   /// v4 → v5: `rewards` gains `created_at` (+ `created_at_tz`, London
   /// default) with the same rowid-order backfill, so the reward list is
   /// creation order on migrated databases too.
+  ///
+  /// v5 → v6: `quest_completions` gains nullable `kid_note` (the child's
+  /// note shown as the quote on P11 approvals). Null = no note → no quote
+  /// line. Nullable `ADD COLUMN` backfills existing rows to NULL, so no
+  /// data migration is needed.
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onUpgrade: (m, from, to) async {
@@ -425,6 +434,9 @@ class AppDatabase extends _$AppDatabase {
           "strftime('%s', 'now') + rowid - "
           '(SELECT MIN(rowid) FROM rewards)',
         );
+      }
+      if (from < 6) {
+        await m.addColumn(questCompletions, questCompletions.kidNote);
       }
     },
     beforeOpen: (details) async {
