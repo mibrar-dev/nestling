@@ -10,12 +10,25 @@ class QuestsRepositoryImpl implements QuestsRepository {
 
   final AppDatabase _db;
 
+  /// Editor coins range (plan §1-5; BUG-P09-4).
+  static const int minCoins = 1;
+  static const int maxCoins = 100;
+
   @override
   Future<List<domain.Quest>> getItems() => watchItems().first;
 
   @override
   Stream<List<domain.Quest>> watchItems() {
     return _db.watchActiveQuests(Seed.familyId).map(_toEntities);
+  }
+
+  @override
+  Stream<int> watchCoinValuePencePerCoin() {
+    // `families` is the source of truth (same read as pocket_money's
+    // setup); the `settings` mirror is deliberately NOT subscribed.
+    return (_db.select(_db.families)..where((f) => f.id.equals(Seed.familyId)))
+        .watchSingleOrNull()
+        .map((family) => family?.coinValuePencePerCoin ?? 1);
   }
 
   @override
@@ -30,8 +43,9 @@ class QuestsRepositoryImpl implements QuestsRepository {
   }
 
   @override
-  Future<void> createQuest(domain.Quest quest) {
-    return _db
+  Future<void> createQuest(domain.Quest quest) async {
+    _checkCoins(quest.coins);
+    await _db
         .into(_db.quests)
         .insert(
           QuestsCompanion.insert(
@@ -52,8 +66,9 @@ class QuestsRepositoryImpl implements QuestsRepository {
   }
 
   @override
-  Future<void> updateQuest(domain.Quest quest) {
-    return (_db.update(_db.quests)..where((q) => q.id.equals(quest.id))).write(
+  Future<void> updateQuest(domain.Quest quest) async {
+    _checkCoins(quest.coins);
+    await (_db.update(_db.quests)..where((q) => q.id.equals(quest.id))).write(
       QuestsCompanion(
         title: Value(quest.title),
         icon: Value(quest.icon),
@@ -72,6 +87,21 @@ class QuestsRepositoryImpl implements QuestsRepository {
   @override
   Future<void> deleteQuest(String id) {
     return (_db.delete(_db.quests)..where((q) => q.id.equals(id))).go();
+  }
+
+  /// Rejects out-of-range coins BEFORE touching Drift (BUG-P09-4). Assert
+  /// for debug, [ArgumentError] for release — same shape as pocket_money's
+  /// `setMode`/`setPayoutDay` validation. The bloc surfaces the message via
+  /// `editorStatus.failure` + `editorError` (toast), so a corrupt stored
+  /// value fails loudly instead of being silently rewritten.
+  void _checkCoins(int coins) {
+    assert(
+      coins >= minCoins && coins <= maxCoins,
+      'Quest coins must be 1..100, got $coins',
+    );
+    if (coins < minCoins || coins > maxCoins) {
+      throw ArgumentError.value(coins, 'coins', 'Quest coins must be 1..100');
+    }
   }
 
   List<domain.Quest> _toEntities(List<Quest> rows) =>

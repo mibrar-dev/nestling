@@ -1,56 +1,80 @@
-# P09 — 2a build, logic chunk (iteration 3)
+# P09 — 2a build, logic chunk (FIXES_1 iteration)
 
 ## CONTRACT CHANGES (UI builder: read first)
 
-No renames, no shape changes — third iteration running. The contract stands:
-`QuestsCreateRequested(Quest quest)`, `QuestsUpdateRequested(Quest quest)`,
-`QuestsDeleteRequested(String id)`, `QuestsState.editorStatus`
-(`QuestEditorStatus.initial/saving/saved/failure`) + `editorError`, edit id
-via `GoRouterState.of(context).uri.queryParameters[QuestsEditorQuery.questId]`,
-plus P10's additive `ideas` on state (review finding 2 / BUG-P10-8). The
-view suite now asserts the a11y-actions rule (`hasAction(tap)` /
-`performAction`, 18 such assertions) against this contract — all green, so
-the bloc's event/state surface satisfies the performAction→state-change
-path (save/delete drive the real repo/DB).
+Two additive interface changes on `QuestsRepository` (no renames, no shape
+changes to events/states). The view half of each bug is yours; the data
+half is done and tested here:
 
-## Files changed (logic layer only — no views/widgets touched)
+1. **NEW: `Stream<int> watchCoinValuePencePerCoin()`** (BUG-P09-1). Reads
+   the `families` row — the source of truth, same read as pocket_money's
+   setup — emits `1` until the row exists, re-emits on every change. The
+   editor's Reward helper must subscribe to this and render
+   `'= ${coins * rate}p at payout'` instead of `const _pencePerCoin = 1`.
+   Do NOT read it via `SettingsRepository.watchSettings()`: the skipped
+   proof writes the `families` row directly, so only the families-backed
+   stream un-skips it. Keep the demo-seed `= 15p at payout` assertion (rate
+   is 1 there) and add the 2p case from the bug repro.
+2. **NEW: `createQuest`/`updateQuest` throw on coins outside 1..100**
+   (BUG-P09-4: `AssertionError` in debug, `ArgumentError` in release —
+   same assert+throw shape as pocket_money's `setMode`/`setPayoutDay`).
+   Writes never reach Drift, so the stored row is provably untouched; the
+   bloc already maps the throw to `editorStatus.failure` + `editorError`
+   (toast). The stepper clamp on load is still yours (view half).
+3. No bloc/event/state changes. BUG-P09-2 (double-tap Save) has no
+   logic-layer fix: bloc handlers run sequentially, so an in-flight guard
+   would be dead code — the pill-disable + `_saving` flag from the bug
+   report (view half) is the deterministic repair. BUG-P09-3 (icon aliases)
+   and BUG-P09-5 (orphaned assignee fallback to Anyone) are view-only.
 
-Iteration 3 made NO logic edits. The loop merged `main` (`5ef8ea4`, P14
-reward shop + schema v5→v6) into this worktree; I audited the merge for
-logic-layer impact:
+## Files changed (logic layer + one forced knock-on)
 
-- `app/lib/features/quests/**`, `app/test/features/quests/**`,
-  `docs/screens/P09/1_plan.md` (§2 included): zero changes in the merge.
-- Schema v5→v6 adds nullable `kid_note` to `quest_completions` only
-  (P11 quote line). No `quests`-table change, no data migration, no effect
-  on `createQuest`/`updateQuest`/`deleteQuest`/`getQuest`/`watchItems`.
-  In-memory test DBs build the fresh schema, so nothing to migrate.
-- Seed delta only adds completion notes (dishwasher/bed pendings keep their
-  status, counts and timestamps). Pinned fixtures unaffected: still 12
-  active quests, `q-hoover` = Hoover the stairs / hoover / maya / weekly.
-- Prior iterations (committed): `quests_event.dart` (3 editor events),
-  `QuestEditorStatus` + state fields (+ P10's `ideas` union),
-  `QuestsEditorQuery` in `quests_routes.dart`, `quest_editor_bloc_test.dart`
-  (6 tests), P09 `editor` group in the merged `quests_repository_test.dart`.
-  No `google_fonts`. No shared-file edits by this stage → no new
-  `SHARED_REQUEST.md` (P09's `NestSegmented` request stands, owned by the
-  orchestrator).
+- `app/lib/features/quests/domain/quests_repository.dart` — new
+  `watchCoinValuePencePerCoin()` + 1..100 contract docs on
+  create/update.
+- `app/lib/features/quests/data/quests_repository_impl.dart` — the rate
+  stream (`families` row, `?? 1`); `minCoins/maxCoins` + `_checkCoins`
+  called first in `createQuest`/`updateQuest` (now `async` so the throw
+  surfaces as a failed future the bloc can catch).
+- `app/test/features/quests/quests_repository_test.dart` (my file) — new
+  `BUG-P09-1` group (seed rate 1; families rate 2 → stream emits 2, i.e.
+  the bug repro at repo level; re-emits 1→2→1) and `BUG-P09-4` group
+  (create 0/101/9999 throws + nothing written; update 9999 throws + stored
+  row keeps 15 coins; boundaries 1/100 accepted).
+- `app/test/features/quests/quest_editor_states_test.dart` — ONE added
+  delegation override (`watchCoinValuePencePerCoin` → `_inner`). This file
+  is outside my named scope, but the hand-written `_FaultyRepository`
+  `implements QuestsRepository` and would not compile after the interface
+  addition; the line is pure delegation with no fault injected and changes
+  none of that stage's assertions. Flagged here, not hidden.
+
+Not changed: bloc/events/state (sequential-handler analysis above),
+entity, DI, routes. No `google_fonts`. No shared-file edits → no new
+`SHARED_REQUEST.md` (P09's stepper-glyph §5, text-inset §6 and icon-glyph
+§4 requests stand). `p09_bugs_test.dart` untouched: its 5 skipped proofs
+stay skipped until the view halves land — un-skipping is the bugs stage's,
+not this layer's.
 
 ## Verification (logic layer only)
 
 - `flutter analyze lib/features/quests test/features/quests` → No issues
   found.
-- `flutter test` on the quests scope (bloc + repository + view as
-  contract-consumer sanity) → 58/58 pass (6 editor-bloc, 17 repository
-  incl. P10 groups, 35 editor-view incl. the new a11y-action assertions).
-- `dart format --set-exit-if-changed` on all six logic/test files → clean.
-- Whole-app `flutter test` and any simulator deliberately NOT run
+- Feature scope, split runs (one full-dir run was SIGKILLed by the
+  machine, infra flake — halves all green): 63 + 75 + 58 + 69 + 65 =
+  330 pass, `~5` skipped = exactly the documented BUG-P09-* proofs.
+- `dart format` applied to all four touched files.
+- Two implementation bugs caught by my own tests while building: sync
+  throw invisible to `expectLater` (fixed: `async` bodies) and
+  `Future<int>` vs `Future<void>` under `async` (fixed: `await`).
+  Whole-app `flutter test` and any simulator deliberately NOT run
   (integrator / stage 5 own them); no simulator was booted.
 
 ## LEFT FOR NEXT ITERATION
 
-- Nothing unfinished in the logic layer. Open P09 items live elsewhere:
-  UI re-check of the Repeats block once the `NestSegmented` shared fix
-  lands; stage 5 UI check with the ±2 px rule.
+- Nothing unfinished in the logic layer. View halves for the UI builder:
+  BUG-P09-1 helper wiring (item 1), BUG-P09-2 pill-disable + `_saving`
+  flag, BUG-P09-3 alias map, BUG-P09-4 load clamp, BUG-P09-5 Anyone
+  fallback; then the bugs stage un-skips the five proofs. Open P09 items
+  elsewhere: `NestSegmented` shared fix; stage 5 UI check (±2 px).
 
 VERDICT: PASS

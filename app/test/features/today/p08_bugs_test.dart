@@ -703,9 +703,7 @@ void main() {
       // The pushed page navigates home with `go` (P09/P11 may; §4 asks them
       // to pop, but the guard must not depend on another screen's contract).
       // Use the same Navigator lookup as the shared `pushedPath` helper.
-      GoRouter.of(
-        tester.element(find.byType(Navigator).first),
-      ).go('/today');
+      GoRouter.of(tester.element(find.byType(Navigator).first)).go('/today');
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 700));
 

@@ -175,6 +175,14 @@ class QuestSavePill extends StatelessWidget {
               ),
               child: Text(
                 'Save',
+                // `--surface` on `--leaf`, exactly as `.save` specifies — not
+                // `tokens.onLeaf` (every other leaf-filled DS control uses it,
+                // and review finding 2 asked for it). Measured on
+                // `design/screens/dark/P09-quest-editor.png` in the pill's rect:
+                // the label's darkest core is rgb(21,19,31) ≈ `--surface`
+                // #1F1C2E, while `--onLeaf` dark is rgb(14,26,20) — a greenish
+                // tone the design does not print. Light is identical either way
+                // (`--surface` == `--onLeaf` == #FFFFFF).
                 style: NestType.buttonLabel(color: tokens.surface),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

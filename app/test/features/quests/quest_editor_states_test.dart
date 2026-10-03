@@ -103,6 +103,12 @@ class _FaultyRepository implements QuestsRepository {
 
   @override
   List<Quest> ideas() => _inner.ideas();
+
+  // Added for the BUG-P09-1 interface addition (logic stage): pure
+  // delegation, no fault injected — the coin rate is never faulty.
+  @override
+  Stream<int> watchCoinValuePencePerCoin() =>
+      _inner.watchCoinValuePencePerCoin();
 }
 
 /// Replaces the registered repository with the decorated one. The real

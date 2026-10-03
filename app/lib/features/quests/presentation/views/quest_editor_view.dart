@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
@@ -28,6 +30,11 @@ class QuestEditorView extends StatefulWidget {
 
 class _QuestEditorViewState extends State<QuestEditorView> {
   Future<Quest?>? _loadedQuest;
+
+  /// Lets the sheet clear its in-flight save guard when a write fails (the
+  /// bloc reports failures; the guard is local UI state).
+  final GlobalKey<_QuestEditorSheetState> _sheetKey =
+      GlobalKey<_QuestEditorSheetState>();
 
   @override
   void didChangeDependencies() {
@@ -68,7 +75,11 @@ class _QuestEditorViewState extends State<QuestEditorView> {
     final Widget body;
     if (loaded == null) {
       // No `?id=`: new-quest mode, nothing to fetch.
-      body = _QuestEditorSheet(initialQuest: null, onCancel: _cancel);
+      body = _QuestEditorSheet(
+        key: _sheetKey,
+        initialQuest: null,
+        onCancel: _cancel,
+      );
     } else {
       body = FutureBuilder<Quest?>(
         future: loaded,
@@ -80,7 +91,11 @@ class _QuestEditorViewState extends State<QuestEditorView> {
           if (quest == null) {
             return _QuestNotFound(onBack: _cancel);
           }
-          return _QuestEditorSheet(initialQuest: quest, onCancel: _cancel);
+          return _QuestEditorSheet(
+            key: _sheetKey,
+            initialQuest: quest,
+            onCancel: _cancel,
+          );
         },
       );
     }
@@ -99,12 +114,19 @@ class _QuestEditorViewState extends State<QuestEditorView> {
                 final error = state.editorError;
                 if (state.editorStatus == QuestEditorStatus.failure &&
                     error != null) {
+                  // Release the sheet's in-flight save guard first: the write
+                  // never left the editor, so the pill must come back.
+                  _sheetKey.currentState?.clearSaveGuard();
                   showNestToast(context, error);
                 }
                 if (state.editorStatus == QuestEditorStatus.saved) {
                   context.go(QuestsRoutePaths.library);
                 }
               },
+              // The editor never reads `items`; `watchItems()` re-emits on
+              // every quests-table write, so the form is not rebuilt for it.
+              buildWhen: (previous, current) =>
+                  previous.status != current.status,
               builder: (context, state) {
                 if (state.status == QuestsStatus.failure) {
                   return _QuestLoadFailure(
@@ -223,36 +245,59 @@ const List<_DueOption> _dueOptions = <_DueOption>[
 ];
 
 /// P09's six `.ic` tiles, in design order. The `key` field is what
-/// `quests.icon` stores; `aliases` accepts the seed's existing spellings so
-/// an edited quest keeps its icon when no tile matches.
+/// `quests.icon` stores; `aliases` are the other spellings the family's own
+/// rows use, so editing a quest whose stored icon has no dedicated tile still
+/// shows ONE selected tile instead of an empty radiogroup (BUG-P09-3 /
+/// review finding 10). Every alias maps to the tile the seeded quest is
+/// visually about, so the parent sees the right glyph:
+/// `plate` → Dishes (tableware), `shirt`/`bag` → Bins (things to carry away),
+/// `leaf` → Paw (growing things), `sofa` → Bed (the other tidy-the-room
+/// furniture). An alias only decides which tile is *highlighted*: the stored
+/// key is preserved unless the parent taps a tile.
 const List<({String key, List<String> aliases, String label, String icon})>
 _questIcons = <({String key, List<String> aliases, String label, String icon})>[
-  (key: 'bed', aliases: <String>[], label: 'Bed', icon: NestIcons.bed),
+  (key: 'bed', aliases: <String>['sofa'], label: 'Bed', icon: NestIcons.bed),
   (
     key: 'dishwasher',
-    aliases: <String>[],
+    aliases: <String>['plate'],
     label: 'Dishes',
-    icon: NestIcons.dishwasher,
+    // The design's Dishes SVG is a handled basket
+    // (`M4 11h16v9…` + `M8 11V7a4 4 0 0 1 8 0v4`), so the tile draws the DS
+    // basket glyph; `NestIcons.dishwasher` (an appliance with a rack line and
+    // two control dots) is a different object (stage-5 whole-tile MAE 19.9 —
+    // SHARED_REQUEST §4 still asks the DS for the exact path).
+    icon: NestIcons.basket,
   ),
   (key: 'hoover', aliases: <String>[], label: 'Hoover', icon: NestIcons.hoover),
   (key: 'book', aliases: <String>[], label: 'Book', icon: NestIcons.book),
-  (key: 'bin', aliases: <String>['bins'], label: 'Bins', icon: NestIcons.bin),
-  (key: 'paw', aliases: <String>[], label: 'Paw', icon: NestIcons.paw),
+  (
+    key: 'bin',
+    aliases: <String>['bins', 'shirt', 'bag'],
+    label: 'Bins',
+    icon: NestIcons.bin,
+  ),
+  (key: 'paw', aliases: <String>['leaf'], label: 'Paw', icon: NestIcons.paw),
 ];
 
 const List<String> _dayLetters = <String>['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const String _defaultIcon = 'hoover';
 const String _defaultTitle = 'Hoover the stairs';
 
-/// `families.coinValuePencePerCoin` is 1 in every seed, so one coin pays one
-/// penny — the helper under the stepper reads `= {n}p at payout`.
-const int _pencePerCoin = 1;
+/// The editor's coin range (plan §1-5). The repository enforces the same
+/// bounds on write (`QuestsRepositoryImpl._checkCoins`), so these are the two
+/// numbers the stepper, the helper and the save path all agree on.
+const int _minCoins = 1;
+const int _maxCoins = 100;
 
 /// Assignee sentinel for the "Anyone" pill (a quest stores `null`).
 const String _anyone = 'anyone';
 
 class _QuestEditorSheet extends StatefulWidget {
-  const _QuestEditorSheet({required this.initialQuest, required this.onCancel});
+  const _QuestEditorSheet({
+    required this.initialQuest,
+    required this.onCancel,
+    super.key,
+  });
 
   final Quest? initialQuest;
   final VoidCallback onCancel;
@@ -266,7 +311,28 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
     text: widget.initialQuest?.title ?? _defaultTitle,
   );
   late String _icon = widget.initialQuest?.icon ?? _defaultIcon;
-  late int _coins = widget.initialQuest?.coins ?? 15;
+
+  /// The stored coin count is shown as stored (BUG-P09-4): a value outside
+  /// 1..100 must never be silently rewritten just by opening the editor, and
+  /// the stepper stays able to reach every value between here and the stored
+  /// one. The bounds grow to include whatever the row holds, so nothing the
+  /// parent can see becomes unreachable; `_save` still hands the repository
+  /// an in-range number.
+  late final int _storedCoins = widget.initialQuest?.coins ?? 15;
+
+  /// The stepper's own bounds: the design's 1..100 widened to include the
+  /// value the row actually holds (BUG-P09-4). A stored value outside the
+  /// design range is therefore shown as stored — opening the editor never
+  /// silently rewrites it — and every value between it and the design range
+  /// stays reachable; `_save` still hands the repository an in-range number.
+  late final int _coinFloor = _storedCoins < _minCoins
+      ? _storedCoins
+      : _minCoins;
+  late final int _coinCeiling = _storedCoins > _maxCoins
+      ? _storedCoins
+      : _maxCoins;
+
+  late int _coins = _storedCoins;
   late String _repeat = widget.initialQuest?.repeatRule ?? 'weekly';
   late final Set<int> _days = _daysFromCsv(widget.initialQuest?.days);
   late bool _needsApproval = widget.initialQuest?.needsApproval ?? true;
@@ -279,18 +345,43 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
   /// seeds explicitly, so a stored `null` (`Anyone`) is never overwritten.
   String? _assignee;
 
-  /// Latest roster emission, so a save before the first frame still resolves
-  /// the same assignee the UI shows.
+  /// The family roster, in creation order. Held in a field updated from ONE
+  /// stream subscription (review finding 11) instead of being written during
+  /// a `StreamBuilder` build, so the value a save resolves is the value the
+  /// pills are painted from.
   List<FamilyChild> _children = const <FamilyChild>[];
+  bool _rosterLoaded = false;
 
-  String? get _effectiveAssignee =>
-      _assignee ?? (_children.isEmpty ? null : _children.first.id);
+  /// `families.coinValuePencePerCoin` — the reward helper reads it from the
+  /// database, never from the design (BUG-P09-1 / review finding 4). One
+  /// coin pays this many pence at payout.
+  int _pencePerCoin = 1;
 
-  /// One subscription for the editor's lifetime: `watchChildren()` returns a
-  /// fresh Stream per call, so building a new one inside `build` would make
-  /// the `StreamBuilder` resubscribe on every rebuild.
-  late final Stream<List<FamilyChild>> _childrenStream =
-      GetIt.instance<FamilyRepository>().watchChildren();
+  /// In-flight save guard (BUG-P09-2): a double tap must not dispatch a
+  /// second create, and the pill is disabled while the write is out.
+  bool _saving = false;
+
+  StreamSubscription<List<FamilyChild>>? _childrenSubscription;
+  StreamSubscription<int>? _coinValueSubscription;
+
+  String? get _effectiveAssignee {
+    final assignee = _assignee;
+    if (assignee != null && !_isKnownAssignee(assignee)) {
+      // The row points at a child who is gone (removed on another screen):
+      // fall back to "Anyone" so no pill is empty and Save clears the orphan
+      // id instead of writing a dangling foreign key (BUG-P09-5).
+      return _anyone;
+    }
+    return assignee ?? (_children.isEmpty ? null : _children.first.id);
+  }
+
+  /// True when [id] is `Anyone` or a child the roster still lists.
+  bool _isKnownAssignee(String id) {
+    return id == _anyone ||
+        _children.any((child) => child.id == id) ||
+        // Before the roster arrives nothing is disproved yet.
+        !_rosterLoaded;
+  }
 
   @override
   void initState() {
@@ -299,6 +390,26 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
     if (quest != null) {
       _assignee = quest.assigneeChildId ?? _anyone;
     }
+    final repository = GetIt.instance<QuestsRepository>();
+    _childrenSubscription = GetIt.instance<FamilyRepository>()
+        .watchChildren()
+        .listen((children) {
+          if (!mounted) {
+            return;
+          }
+          setState(() {
+            _children = children;
+            _rosterLoaded = true;
+          });
+        });
+    _coinValueSubscription = repository.watchCoinValuePencePerCoin().listen((
+      pence,
+    ) {
+      if (!mounted || pence == _pencePerCoin) {
+        return;
+      }
+      setState(() => _pencePerCoin = pence);
+    });
   }
 
   bool get _isEdit => widget.initialQuest != null;
@@ -328,32 +439,43 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
     return sorted.map((day) => '${day + 1}').join(',');
   }
 
-  static String _repeatLabel(String repeatRule) {
-    return switch (repeatRule) {
-      'daily' => 'Daily',
-      'weekly' => 'Weekly',
-      _ => 'Once',
-    };
-  }
-
   @override
   void dispose() {
+    unawaited(_childrenSubscription?.cancel());
+    unawaited(_coinValueSubscription?.cancel());
     _title.dispose();
     super.dispose();
   }
 
+  /// Called by the route when a write fails, so the pill becomes live again
+  /// and the parent can retry (the write never left the editor).
+  void clearSaveGuard() {
+    if (mounted && _saving) {
+      setState(() => _saving = false);
+    }
+  }
+
   void _save() {
-    if (!_canSave) {
+    // One write per gesture (BUG-P09-2): the pill is disabled while saving,
+    // and this guard is what makes a second tap before the router frame a
+    // no-op even if it lands on an enabled frame.
+    if (!_canSave || _saving) {
       return;
     }
+    setState(() => _saving = true);
     final quest = Quest(
       id:
           widget.initialQuest?.id ??
           'q-${DateTime.now().millisecondsSinceEpoch}',
       title: _title.text.trim(),
-      detail: '${_repeatLabel(_repeat)} · $_coins coins',
+      // `Quest.detail` is not a column — the repository recomputes
+      // `'{repeat} · {coins} coins'` on every read — so the view carries no
+      // copy of its own (review finding 5).
+      detail: widget.initialQuest?.detail ?? '',
       icon: _icon,
-      coins: _coins,
+      // An out-of-range stored value is shown as stored but written back
+      // inside the repository's 1..100 contract (BUG-P09-4).
+      coins: _coins.clamp(_minCoins, _maxCoins),
       repeatRule: _repeat,
       days: _repeat == 'weekly' ? _daysToCsv(_days) : '',
       dueLabel: _dueLabel,
@@ -363,7 +485,8 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
         null => null,
         final String id => id == _anyone ? null : id,
       },
-      active: true,
+      // Editing a quest must not resurrect an archived one (review finding 9).
+      active: widget.initialQuest?.active ?? true,
     );
     context.read<QuestsBloc>().add(
       _isEdit ? QuestsUpdateRequested(quest) : QuestsCreateRequested(quest),
@@ -537,7 +660,7 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
               ),
             ),
           ),
-          QuestSavePill(onPressed: _canSave ? _save : null),
+          QuestSavePill(onPressed: _canSave && !_saving ? _save : null),
         ],
       ),
     );
@@ -582,37 +705,33 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
   }
 
   Widget _assigneeRow() {
-    return StreamBuilder<List<FamilyChild>>(
-      stream: _childrenStream,
-      builder: (context, snapshot) {
-        final children = snapshot.data ?? const <FamilyChild>[];
-        _children = children;
-        // New quests default to the first child in creation order (never
-        // sorted alphabetically); with no children at all, "Anyone" wins.
-        final selected =
-            _assignee ?? (children.isEmpty ? _anyone : children.first.id);
-        return Wrap(
-          spacing: NestSpacing.s2,
-          runSpacing: NestSpacing.s2,
-          children: <Widget>[
-            for (final child in children)
-              QuestPersonPill(
-                key: ValueKey<String>('quest-assignee-${child.id}'),
-                label: child.nickname,
-                selected: selected == child.id,
-                avatarInitial: _initial(child.nickname),
-                avatarColour: _avatarColour(child.avatarColour),
-                onTap: () => setState(() => _assignee = child.id),
-              ),
-            QuestPersonPill(
-              key: const ValueKey<String>('quest-assignee-anyone'),
-              label: 'Anyone',
-              selected: selected == _anyone,
-              onTap: () => setState(() => _assignee = _anyone),
-            ),
-          ],
-        );
-      },
+    // One subscription in `initState` owns the roster (review finding 11), so
+    // the pills are painted from the same value a save resolves.
+    final children = _children;
+    // New quests default to the first child in creation order (never sorted
+    // alphabetically); with no children at all, "Anyone" wins, and so does a
+    // stored assignee the roster no longer lists (BUG-P09-5).
+    final selected = _effectiveAssignee ?? _anyone;
+    return Wrap(
+      spacing: NestSpacing.s2,
+      runSpacing: NestSpacing.s2,
+      children: <Widget>[
+        for (final child in children)
+          QuestPersonPill(
+            key: ValueKey<String>('quest-assignee-${child.id}'),
+            label: child.nickname,
+            selected: selected == child.id,
+            avatarInitial: _initial(child.nickname),
+            avatarColour: _avatarColour(child.avatarColour),
+            onTap: () => setState(() => _assignee = child.id),
+          ),
+        QuestPersonPill(
+          key: const ValueKey<String>('quest-assignee-anyone'),
+          label: 'Anyone',
+          selected: selected == _anyone,
+          onTap: () => setState(() => _assignee = _anyone),
+        ),
+      ],
     );
   }
 
@@ -649,6 +768,8 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
+                  // One coin pays the family's own rate — the number comes from
+                  // `families.coinValuePencePerCoin`, never from the design.
                   '= ${_coins * _pencePerCoin}p at payout',
                   style: NestType.caption(color: tokens.ink2),
                   maxLines: 1,
@@ -663,8 +784,12 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
             valueText: '$_coins',
             decreaseSemanticLabel: 'Decrease reward',
             increaseSemanticLabel: 'Increase reward',
-            onDecrease: _coins > 1 ? () => setState(() => _coins -= 1) : null,
-            onIncrease: _coins < 100 ? () => setState(() => _coins += 1) : null,
+            onDecrease: _coins > _coinFloor
+                ? () => setState(() => _coins -= 1)
+                : null,
+            onIncrease: _coins < _coinCeiling
+                ? () => setState(() => _coins += 1)
+                : null,
           ),
         ],
       ),

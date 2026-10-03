@@ -1,21 +1,30 @@
 // P09 · New / edit quest — Stage 6 adversarial bug tests (iteration 1).
 //
-// The skipped proofs below fail on the iteration-1 tree (`881880a`) and are
-// marked `skip: true` so the suite stays green until each fix lands (same
-// convention as `p12_bugs_test.dart`). The unskipped group at the bottom
-// ("attacks that hold") documents the adversarial probes that pass, so a
-// regression is caught here.
+// The five bug proofs below failed on the iteration-1 tree (`881880a`) and are
+// now UNSKIPPED: iteration 2 fixed them in
+// `lib/features/quests/presentation/views/quest_editor_view.dart` (+ the
+// repository-side coin range and coin value the logic builder added), so they
+// run on every `flutter test`. The unskipped group at the bottom ("attacks
+// that hold") documents the adversarial probes that pass, so a regression is
+// caught here.
 //
 //   BUG-P09-1  major  the payout helper hard-codes 1p/coin and ignores the
 //                     family's `coinValuePencePerCoin` (wrong money figure)
+//                     → the view streams `watchCoinValuePencePerCoin()`
 //   BUG-P09-2  major  double-tap Save creates the quest twice (no in-flight
 //                     guard; the pill stays enabled while saving)
+//                     → local `_saving` guard + the pill disables itself
 //   BUG-P09-3  minor  a quest icon outside the six tiles (`plate`, `shirt`,
 //                     `sofa`, `bag`, `leaf`) shows no selected tile
+//                     → `_questIcons.aliases` maps every seeded key to a tile
 //   BUG-P09-4  minor  out-of-range stored coins cannot be restored once the
 //                     stepper touches them (9999 → 9998; `+` is disabled)
+//                     → the stepper bounds grow to include the stored value,
+//                       and `_save` clamps what it writes
 //   BUG-P09-5  minor  a quest assigned to a removed child shows no selected
 //                     pill and Save keeps the orphaned id
+//                     → an assignee the roster no longer lists falls back to
+//                       "Anyone", so Save clears the dangling id
 
 import 'dart:math' as math;
 
@@ -92,7 +101,7 @@ void main() {
       expect(find.text('= 30p at payout'), findsOneWidget);
       expect(find.text('= 15p at payout'), findsNothing);
       await disposeApp(tester);
-    }, skip: true);
+    });
   });
 
   // -- BUG-P09-2 -----------------------------------------------------------
@@ -124,7 +133,7 @@ void main() {
         reason: 'a double-tap on Save must not create the quest twice',
       );
       await disposeApp(tester);
-    }, skip: true);
+    });
   });
 
   // -- BUG-P09-3 -----------------------------------------------------------
@@ -145,7 +154,7 @@ void main() {
           .length;
       expect(selected, 1);
       await disposeApp(tester);
-    }, skip: true);
+    });
   });
 
   // -- BUG-P09-4 -----------------------------------------------------------
@@ -181,7 +190,7 @@ void main() {
       final stepper = tester.widget<NestStepper>(find.byType(NestStepper));
       expect(stepper.onIncrease, isNotNull);
       await disposeApp(tester);
-    }, skip: true);
+    });
   });
 
   // -- BUG-P09-5 -----------------------------------------------------------
@@ -202,7 +211,7 @@ void main() {
           .length;
       expect(selected, 1);
       await disposeApp(tester);
-    }, skip: true);
+    });
   });
 
   // -- attacks that hold ----------------------------------------------------

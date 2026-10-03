@@ -99,9 +99,29 @@ the *only* blocker and the UI check verdict is FAIL until they match.
 
 P09's mapping (`app/lib/features/quests/presentation/views/quest_editor_view.dart:230-240`)
 is already semantically right (bed→bed, dishwasher→dishwasher,
-hoover→hoover, book→book, bins→bin, paw→paw) — no better in-DS alternative
-exists, and re-drawing glyphs inside `quests/` would fork the design
-system, so the screen takes no workaround.
+hoover→hoover, book→book, bins→bin, paw→paw) — and re-drawing glyphs inside
+`quests/` would fork the design system, so the screen takes no redraw.
+
+**UPDATE (iteration 2, stage 2b):** the loop merged `main` after this request
+was filed and two of the four glyphs have since been redrawn in the DS:
+
+- `assets/icons/ic_hoover.svg` is now a canister body
+  (`rect x="3" y="10.8" w="11.8" h="8.2" rx="3.4"`) with a hose, a handle bar
+  and two wheels — the design's *object* (the "hook/whistle loop" the UI check
+  measured is gone).
+- `assets/icons/ic_bed.svg` is now a bed frame + headboard side view; the
+  design's SVG is the same frame without the headboard arc.
+- `ic_book.svg` and `ic_paw.svg` are byte-identical to the design's SVGs.
+
+Still outstanding: **`ic_dishwasher.svg`** is an appliance (rack line + two
+control dots) where the design's Dishes is a handled basket, and
+**`ic_bin.svg`** is a rimmed wheelie bin where the design's Bins is a small
+handled case with a clasp. For Dishes the screen now draws
+`NestIcons.basket` (the DS laundry basket: tapered body + handle arc) as the
+closest in-DS match — a glyph swap in `quests/`, not a redraw — but the exact
+design path is still wanted. `ic_dishwasher.svg` stays the right glyph for the
+seeded quests on the P10 library rows (`quest_idea_meta.dart`'s
+`questIconAsset`).
 
 Files: `app/lib/core/design_system/**` wherever `NestIcons.bed`,
 `.dishwasher`, `.hoover`, `.bin` are drawn (design reference: 24 px,
@@ -109,7 +129,9 @@ Files: `app/lib/core/design_system/**` wherever `NestIcons.bed`,
 HTML source, lines 30–35).
 Blocks: **yes for the UI verdict** — P09 cannot PASS stage 5 until the DS
 glyphs match; no P09 code change is needed on top (screenshots just need
-re-taking after the merge-back).
+re-taking after the merge-back). Stage 5 must re-measure the six tiles: the
+Dishes tile is expected to improve from MAE 19.9 and the Hoover tile from
+20.5, `bin` is unchanged at 17.3.
 
 ## 5. `NestStepper` draws its minus as U+002D, both designs print U+2212 (advisory)
 
@@ -127,9 +149,14 @@ minus is the design's U+2212, never U+002D") was fixed with a screen-local
 `money_ledger_view_test.dart:352` audits the app's copy for ASCII hyphens
 precisely because "the design uses U+2014/U+2212". P09 cannot take that
 workaround without forking the component (`--tap` sizing, `NestType.money`
-value, the shared 44 px buttons), so the glyph is recorded here and pinned
-by `quest_editor_copy_test.dart` (its `kGlyphs` list excludes the minus
-until this lands).
+value, the shared 44 px buttons), so the glyph stays a shared request.
+
+**Note for whoever lands it (verified iteration 2, stage 2b):**
+`test/features/quests/quest_editor_copy_test.dart`'s `kGlyphs` currently
+*requires* the ASCII hyphen (`'-'`, line 85) because the app still draws one —
+the opposite of the older note here, which said the list excluded it. When
+`nest_stepper.dart` switches to `'−'`, that entry must be replaced with `'−'`
+in the same commit or P09's copy audit goes red.
 
 Files: `app/lib/core/design_system/components/nest_stepper.dart`
 Blocks: **no** — a 1-character copy deviation in a shared control; P09 lands
