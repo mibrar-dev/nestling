@@ -24,3 +24,5 @@
 - DONE & verified: Maya first; header; kid cards; "Add a child" card top. Keep them.
 - Remaining drift inside the card: Age-band chips row centre is ≈ +5 px low (app ≈ 574 vs design ≈ 569) and the Avatar-colour row ≈ +12 px low (app ≈ 649 vs ≈ 637), helper text ≈ +12 px. Cause: chip height and the gap below the chips. Take the chip height (design ≈ 32 px), the chip-row→"Avatar colour" label gap and the label→swatch gap exactly from P05-add-children.html / components.css. Swatch diameter 44 with 8 px gaps — match.
 - Test stage: if your FAIL is only a shared/skipped item, write that explicitly in 3_test.md and mark PASS when every P05-owned test passes.
+
+## UPDATE (23:48) — NestChip now lays out at 32 px with a 44 px hit area (shared batch 2). Re-measure; remove any local chip workaround.
