@@ -42,10 +42,17 @@ for i in 1 2 3 4 5; do
   fi
   # Only a failed exit whose LAST lines show a provider error counts; agent
   # output (ps listings, docs) may mention "rate limit" harmlessly.
-  if [ $rc -ne 0 ] && tail -40 "$LOG" | grep -qE "temporarily overloaded|ENOTFOUND|ECONNRESET|ETIMEDOUT|socket connection was closed|rate limit|usage limit|Invalid upload request|not valid JSON|Upstream|502 Bad Gateway|503 Service|504 Gateway|Internal Server Error|fetch failed"; then
-    ev RETRY "attempt=$i reason=$(tail -40 "$LOG" | grep -oE 'temporarily overloaded|ENOTFOUND|ECONNRESET|ETIMEDOUT|socket connection was closed|rate limit|usage limit|Invalid upload request|not valid JSON|Upstream|502 Bad Gateway|503 Service|504 Gateway|Internal Server Error|fetch failed' | head -1 | tr ' ' '_')"
+  if [ $rc -ne 0 ] && tail -40 "$LOG" | grep -qiE "temporarily overloaded|ENOTFOUND|ECONNRESET|ETIMEDOUT|socket connection was closed|rate limit|usage limit|Invalid upload request|not valid JSON|Upstream|502 Bad Gateway|503 Service|504 Gateway|Internal Server Error|fetch failed"; then
+    ev RETRY "attempt=$i reason=$(tail -40 "$LOG" | grep -oiE 'temporarily overloaded|ENOTFOUND|ECONNRESET|ETIMEDOUT|socket connection was closed|rate limit|usage limit|Invalid upload request|not valid JSON|Upstream|502 Bad Gateway|503 Service|504 Gateway|Internal Server Error|fetch failed' | head -1 | tr ' ' '_')"
     [ "$SID" = "-" ] && SID=$(opencode session list 2>/dev/null | grep "$TITLE" | head -1 | awk '{print $1}')
     [ -z "$SID" ] && SID="-"
+    # Free models rate-limit hard: after two rate limits, fall back to Space Bunny (same session title, fresh session).
+    if tail -40 "$LOG" | grep -qiE "rate limit|usage limit"; then
+      RL=$(( ${RL:-0} + 1 ))
+      if [ "$RL" -ge 2 ] && [ "$MODEL" != "opencode-go/space-bunny-free#max" ]; then
+        ev RETRY "fallback_model=space-bunny from=$MODEL"; MODEL="opencode-go/space-bunny-free#max"; SID="-"
+      fi
+    fi
     sleep 120; continue
   fi
   # Killed by the OS (memory pressure) or interrupted: retry, never treat as done.
