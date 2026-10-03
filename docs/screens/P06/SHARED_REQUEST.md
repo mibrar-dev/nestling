@@ -13,12 +13,17 @@ parked item from `docs/screens/P06/1_plan.md` §7):
    constructor on `NestChip` would let it retire.
 2. Size tokens for the literal geometry the plan pins to the design:
    option-card vertical padding 13, radio circle 22, loading placeholder
-   200. No matching entries exist in `NestSpacing` today.
+   200, option-card `minHeight: 60`, and the weekly-base single-line /
+   wrapped-row breakpoint ~300 (row content is ~318 wide at 390; the
+   exact integer belongs with the shared scale). No matching entries exist
+   in `NestSpacing` today. The pill label style for the day variant is
+   `NestType.fieldLabel` (Inter 13/18 w600), which the shared variant
+   should reuse verbatim.
 
 Files: `app/lib/core/design_system/components/nest_chip.dart`,
 `app/lib/core/design_system/tokens/spacing.dart`.
 Blocks: no — P06 builds and tests green today with the feature-private
-pill + the two literals.
+pill + the four literals.
 
 ## Iteration 4 — merge dependency, not a new component
 

@@ -80,6 +80,8 @@ class PocketMoneyBloc extends Bloc<PocketMoneyEvent, PocketMoneyState> {
     try {
       await _repository.setMode(event.mode);
     } on Object catch (error) {
+      // The write may have been in flight when the bloc closed (review #10).
+      if (emit.isDone) return;
       emit(
         state.copyWith(
           status: PocketMoneyStatus.failure,
@@ -102,7 +104,9 @@ class PocketMoneyBloc extends Bloc<PocketMoneyEvent, PocketMoneyState> {
       await _repository.setPayoutDay(event.day);
     } on Object catch (error) {
       // The write never landed: unstick the guard so the tap can be retried.
+      // Bookkeeping first — it must run even if the emitter is gone.
       if (_pendingDay == event.day) _pendingDay = null;
+      if (emit.isDone) return;
       emit(
         state.copyWith(
           status: PocketMoneyStatus.failure,

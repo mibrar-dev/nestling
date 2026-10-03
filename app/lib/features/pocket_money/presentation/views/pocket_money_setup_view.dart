@@ -46,6 +46,10 @@ class PocketMoneySetupView extends StatelessWidget {
           ),
           Expanded(
             child: BlocBuilder<PocketMoneyBloc, PocketMoneyState>(
+              buildWhen: (previous, state) =>
+                  previous.setup != state.setup ||
+                  previous.status != state.status ||
+                  previous.errorMessage != state.errorMessage,
               builder: (context, state) {
                 switch (state.status) {
                   case PocketMoneyStatus.initial:
@@ -136,9 +140,10 @@ class _SetupTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       header: true,
-      child: Text(
+      child: NestBalancedText(
         'How does pocket money work in your house?',
         style: context.nestText.h1,
+        textAlign: TextAlign.left,
       ),
     );
   }
@@ -149,14 +154,16 @@ class _LoadingBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Column(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        _SetupTitle(),
-        SizedBox(height: NestSpacing.s4),
+        const _SetupTitle(),
+        const SizedBox(height: NestSpacing.s4),
         SizedBox(
           height: 200,
-          child: Center(child: CircularProgressIndicator()),
+          child: Center(
+            child: CircularProgressIndicator(color: context.nest.leaf),
+          ),
         ),
       ],
     );
@@ -431,12 +438,10 @@ class _SettingsCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: NestSpacing.gap6),
-          // The chip row sits exactly inside the card's 16 px padding,
-          // aligned with the 'Payout day' label on both sides.
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: NestSpacing.s4),
-            child: _DayRow(payoutDay: setup.payoutDay),
-          ),
+          // The chip row keeps the card's 16 px inner inset through the
+          // cell-width formula in _DayRow (not a tight Padding/SizedBox
+          // wrapper — those swallow the ±6 px NestChipWrap hit-slop taps).
+          _DayRow(payoutDay: setup.payoutDay),
           Container(
             height: 1,
             color: tokens.line,
@@ -499,44 +504,33 @@ class _DayRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      container: true,
-      label: 'Payout day',
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          const gaps = 6 * NestSpacing.gap6; // 6 inter-cell gaps
-          // Subtract a sub-pixel epsilon so the seven widths plus the gaps
-          // never round up past the row's width (which would wrap a chip
-          // into a second run). At 390/320 the pills render ~40/30 px
-          // wide; the 13 px labels still just fit, ellipsis is the
-          // backstop (orchestrator note, option: scroll at 320).
-          final cellWidth = (constraints.maxWidth - gaps) / 7 - 0.01;
-          return SizedBox(
-            width: constraints.maxWidth,
-            // The row box is the 44dp parent tap target; the pills inside
-            // paint the design's 32 (`NestSpacing.s8`). Hit testing stops at
-            // the first ancestor whose own bounds miss, so the row must
-            // *be* 44 tall for a tap 5px above a pill to reach the cell —
-            // `NestChipWrap` then also covers the 6px gaps between pills.
-            height: NestDevice.tapParent,
-            child: NestChipWrap(
-              spacing: NestSpacing.gap6,
-              children: <Widget>[
-                for (var i = 0; i < PocketMoneySetupView.dayLabels.length; i++)
-                  _DayCell(
-                    cellKey: ValueKey<String>('p06_day_${i + 1}'),
-                    label: PocketMoneySetupView.dayLabels[i],
-                    cellWidth: cellWidth,
-                    selected: payoutDay == i + 1,
-                    onTap: () => context.read<PocketMoneyBloc>().add(
-                      PocketMoneyPayoutDayChanged(i + 1),
-                    ),
-                  ),
-              ],
+    // Width math from the viewport: the card is edge-to-edge inside the
+    // scroll view's 20px gutters, and NestChipWrap is a direct child of
+    // the card's Column so its ±6px hitSlop is reachable (a LayoutBuilder/
+    // Semantics/SizedBox between them re-clamps routable hit positions).
+    const gaps = 6 * NestSpacing.gap6; // 6 inter-cell gaps
+    final cardSpan =
+        MediaQuery.sizeOf(context).width -
+        2 * NestSpacing.padSide -
+        2 * NestSpacing.s4;
+    // At 390/320 the pills render ~40/30 px wide; the 13 px labels still
+    // just fit, ellipsis is the backstop.
+    final cellWidth = (cardSpan - gaps) / 7;
+    return NestChipWrap(
+      spacing: NestSpacing.gap6,
+      alignment: WrapAlignment.center,
+      children: <Widget>[
+        for (var i = 0; i < PocketMoneySetupView.dayLabels.length; i++)
+          _DayCell(
+            cellKey: ValueKey<String>('p06_day_${i + 1}'),
+            label: PocketMoneySetupView.dayLabels[i],
+            cellWidth: cellWidth,
+            selected: payoutDay == i + 1,
+            onTap: () => context.read<PocketMoneyBloc>().add(
+              PocketMoneyPayoutDayChanged(i + 1),
             ),
-          );
-        },
-      ),
+          ),
+      ],
     );
   }
 }
@@ -569,11 +563,10 @@ class _DayCell extends StatelessWidget {
         onTap: onTap,
         child: SizedBox(
           width: cellWidth,
-          // 44dp tap box (DESIGN_SPEC §0.9 parent minimum), 32dp pill.
-          height: NestDevice.tapParent,
-          child: Center(
-            child: _DayPill(label: label, selected: selected),
-          ),
+          // The pill height; the ≥44 dp target is NestChipWrap's hitSlop,
+          // not a taller cell box (which would centre pills 6 dp low).
+          height: NestSpacing.s8,
+          child: _DayPill(label: label, selected: selected),
         ),
       ),
     );
@@ -663,7 +656,8 @@ class _WeeklyBaseRow extends StatelessWidget {
     final name = Expanded(
       child: Text(
         child.nickname,
-        style: context.nestText.bodyStrong,
+        style: NestType.body(color: context.nest.ink)
+            .copyWith(fontWeight: FontWeight.w600, height: 22 / 16),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
@@ -763,7 +757,8 @@ class _CoinValueRow extends StatelessWidget {
           Expanded(
             child: Text(
               'Coin value',
-              style: context.nestText.bodyStrong,
+              style: NestType.body(color: tokens.ink)
+                  .copyWith(fontWeight: FontWeight.w600, height: 22 / 16),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),

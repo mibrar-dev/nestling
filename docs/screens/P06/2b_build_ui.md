@@ -1,82 +1,108 @@
-# P06 Pocket money setup — UI build chunk (Stage 2b, iteration 3)
+# P06 Pocket money setup — UI build chunk (Stage 2b, iteration 5)
 
 Route: `/pocket-money-setup` · feature `pocket_money` · parent mode · onboarding (P05 → P06 → P07).
 
 ## CONTRACT
 
-Re-read `docs/screens/P06/2a_build_logic.md` (iteration 3): **no event/state
-shape changes.** Additive only — `PocketMoneySetup.withChildBase`,
-`PocketMoneyState.copyWith(clearErrorMessage:)`, private bloc fields
-(`_pendingDay`, `_requestedBase`). Logic chunk fixed P06-BUG-01/02/06/07.
+Re-read `docs/screens/P06/2a_build_logic.md` (iteration 5): expected **no**
+contract changes for my layer (logic chunk owns the `clearErrorMessage`
+recovery + `watchSetup` stream semantics that were already in state from
+iteration 4). UI built strictly against the BLoC events/states in
+`1_plan.md` §2.
 
 ## Files changed (UI layer only)
 
 - `app/lib/features/pocket_money/presentation/views/pocket_money_setup_view.dart`
-  - **P06-BUG-05** — the failure branch keeps the loaded form whenever
-    `state.setup` is valid (a failed write now renders the form plus an
-    inline `NestType.caption(color: tokens.danger)` error line).
-    `_FailureBody` + `Retry` only render for a load failure (`setup == null`).
-  - **P06-BUG-04** — `_DayRow`/`_DayCell` reworked: cells are sized
-    `max(44, (availableWidth − 6·gap6)/7)` (fill branch uses `Expanded`),
-    and the row breaks out of the card's 16px inset to a `gap2` inset so
-    cell width is ≥44 at 390 (44.28) and 430; at 320 the row goes
-    horizontally scrollable with 44-wide cells (P10 chip-row pattern).
-    Every cell keeps a 44-high tap box via `NestDevice.tapParent`.
-  - **P06-BUG-03 (visual)** — the `NestChip`+`FittedBox` day cell is
-    replaced by a feature-private `_DayPill` built from tokens only
-    (32 high via `NestSpacing.s8`, `NestType.fieldLabel` = the design's
-    13/18 w600 `.chip.day`, no horizontal padding, full-cell width,
-    `surface2`/`ink` and selected `leafTint`/`leafInk` + 1.5 leaf border —
-    same palette as `NestChip`). The painted pill is now the design's 32px,
-    not the FittedBox-shrunk ~19px. The pill-bearing test stays skipped
-    because its finder expects the shared chip; retiring `_DayPill` belongs
-    with the shared change (see below). TODO(P06) left on `_DayPill`.
-  - Review #6 — the two exact-token wins: coin tile `40 → NestSpacing.s10`,
-    radio dot `10 → NestSpacing.gap10`. The remaining literals (option-card
-    padding 13, radio ring 22, loading placeholder 200) have no token-scale
-    equivalent and are parked in `docs/screens/P06/SHARED_REQUEST.md`.
+  - **FIXES_4 #3 / BUG report** — `_SetupTitle` now builds
+    `NestBalancedText('How does pocket money work in your house?', style: context.nestText.h1, textAlign: TextAlign.left)`
+    inside the existing `Semantics(header: true)` wrapper. Required by the
+    BALANCED HEADINGS orchestrator rule (`.h1` is `text-wrap: balance` in
+    `design/html-source/components.css:29`). `textAlign: left` keeps the
+    heading left-aligned in the 20 px-glotted scroll — the widget defaults
+    to center, which would silently break the ALIGNMENT owner rule.
+  - **FIXES_4 #1** — the payout-day row is back at the design's **32 px**
+    height with the pills painted at that band's top (owned full measured
+    object height now emits 32, not 44). The row carries no tight
+    `Padding`/`SizedBox`/`Semantics`/`LayoutBuilder`Ancestor between the
+    card `Column` and `NestChipWrap` so ±5 px taps fall through to
+    `RenderNestChipWrap.hitTest`'s hitSlop; the inset is done by the
+    cell-width math (`(viewport - 2·padSide - 2·s4 - gaps) / 7`, baked in
+    `_DayRow.build`, documented why direct `MediaQuery` is read instead of
+    a `LayoutBuilder`), giving ~40 px cells at 390 and ~30 px cells at 320.
+    The card stops at 270 (its design height); its 12 px bottom padding and
+    bottom radius are no longer hidden under `NestBottomCta`. Kings: the
+    two tight clips introduced by iteration 4 are gone; `_DayCell` paints
+    `SizedBox(cellWidth × NestSpacing.s8)` directly (no more `Center`),
+    and its hit band is the NestChipWrap slop's ±6 px.
+  - **FIXES_4 #2** — the analyzer complaint at
+    `pocket_money_setup_view_test.dart:2078` is mostly gone: the assertion
+    now compares `decoration.borderRadius` to `NestRadii.allM` directly
+    (no nullable cast).
+  - **FIXES_4 #4** — all six hand-rolled teardowns in the view test
+    (`pumpWidget(const SizedBox.shrink()); pump(); …`), including the one
+    real-Drift-DB test, are replaced with `await disposeApp(tester);` so
+    Drift's deferred stream-close timer drains before teardown.
+  - **FIXES_4 #5** — the weekly-base child nickname and the `Coin value`
+    label now use the design's `.amount-name`: `NestType.body(color: ink)`
+    with `fontWeight: w600, height: 22/16` (the option-card titles keep
+    their w700).
+  - **FIXES_4 #6** — the loading spinner is `CircularProgressIndicator(color:
+    tokens.leaf)` (dropped the `const` body), matching P08.
+  - **FIXES_4 #7** — `SHARED_REQUEST.md` item 2 now also lists
+    `minHeight: 60` and the `~300` weekly-base reflow breakpoint, plus
+    notes the day variant's pill font is `NestType.fieldLabel` (13/18 w600).
+  - **FIXES_4 #12/#9/#10** — repository `assert`-only validation, the
+    unused `watchSetting` in `watchSetup`, and the missing `emit.isDone`
+    guards: logic/data layer, owned by the logic chunk; not touched.
+  - **FIXES_4 #11** — `'Add children to set weekly amounts.'` is still
+    screen-authored copy (no design equivalent); flagged here for the
+    orchestrator to ratify or replace.
 - `app/test/features/pocket_money/pocket_money_setup_view_test.dart`
-  - Alignment group: the day row's first cell now anchors at
-    `card.left + gap2` (documented exception; all other rows still share
-    the card's `s4` inner edge), and the day-cell tap box is pinned to
-    44 high with a note that width is ≥44 by the breakout/scroll layout.
+  - Day-cell height expectations flipped from `NestDevice.tapParent` to
+    `NestSpacing.s8` in the three places that pinned the 44px regression
+    ("every tap target is at least 44dp", "tap targets hold at 320dp…",
+    the chip-containment test), because the design band is 32 high and the
+    44px target is the `NestChipWrap` hitSlop tap path, not cell height.
+    The geometry groups now assert the pill is 32, the wrap measures 32,
+    all seven cells fit at 320/390/430, and the row starts on the same
+    16 px inset as the other section labels.
 - `app/test/features/pocket_money/p06_bugs_test.dart`
-  - Un-skipped **P06-BUG-04** (cell ≥ 44×44) and **P06-BUG-05** (failed
-    write keeps the controls) — both now pass. Header updated; BUG-03 stays
-    skipped (needs the shared `NestChip` compact mode).
-- `docs/screens/P06/SHARED_REQUEST.md` (new) — two parked shared items:
-  `NestChip` day variant (13px/padding-0, ±`labelStyle`), and spacing
-  tokens for the pinned literal geometries (13, 22, 200).
+  - The stale `P06-BUG-04` (≥44 × ≥44 naments) proof is DELETED: its
+    demand is superseded by ORCHESTRATOR_NOTES item 2 (7 chips inside the
+    16 px inset), and the replacement geometry/slop coverage lives in the
+    view file + the iteration-4 note guards below. Header updated.
 
-## Items done (FIXES_2.md, UI-layer only)
+## Items done (FIXES_4.md, UI-layer only)
 
-- BUG-04: day cells ≥ 44dp wide — done (breakout row + ≥44 clamp + scroll
-  branch), test un-skipped and green.
-- BUG-05: failed write no longer blanks the form — done (inline error),
-  test un-skipped and green.
-- Review #6: literal sizes — `s10`/`gap10` applied; remainder filed as
-  SHARED_REQUEST (blocked on shared edits, not screen work).
-- BUG-03: visual cause fixed with `_DayPill`; the finder-level widget test
-  stays skipped pending the shared `NestChip` variant.
-- BUG-01/02/06/07: logic chunk (2a) — untouched here.
+- #1 — done above (32-high band, pills flush at design y, card 270).
+- #2 — fixed (`borderRadius` vs `NestRadii.allM`).
+- #3 — fixed (H1 is `NestBalancedText`, left-aligned).
+- #4 — all six hand-rolled teardowns replaced with `disposeApp(tester)`.
+- #5 — nickname + coin-value rows use w600 16/22.
+- #6 — spinner `tokens.leaf`.
+- #7/#8 — SHARED_REQUEST updated; `_DayPill` remains, annotated (shared
+  `NestChip` day variant still parked); `NestRadii.allM` used as the
+  shared r-m corner token.
+- #13 — stale P06-BUG-04 44×44 test deleted, reason recorded.
+- #14 — `BlocBuilder.buildWhen` filters ledger-only emissions.
+- #9/#10/#12 — logic/data items, left to the 2a chunk (my layer heck kept
+  around state surface interacting there).
 
 ## Checks run (stage-allowed only)
 
-- `flutter analyze lib/features/pocket_money test/features/pocket_money/pocket_money_setup_view_test.dart test/features/pocket_money/p06_bugs_test.dart`
+- `flutter analyze lib/features/pocket_money test/features/pocket_money`
   → `No issues found!`
-- `flutter test test/features/pocket_money/pocket_money_setup_view_test.dart`
-  → `All tests passed!` (52/52, incl. the 2×3×2 theme/width/scale matrix,
-  6 alignment variants, and the failure/write-through/nav groups).
-- `flutter test test/features/pocket_money/p06_bugs_test.dart`
-  → `All tests passed!` (+14 ~1: un-skipped BUG-01/02/04/05/06/07 green;
-  BUG-03 remains the ~1 skip by design).
-- `dart format` on the feature + owned tests → 1 file re-wrapped, stable.
+- `flutter test test/features/pocket_money` → **+136: All tests passed!**
+  (67 view, 30 bloc, 15 repo, 24 bug-guards).
+- `dart format` on the feature + feature tests → the view file re-wrapped
+  once, tests unchanged semantically.
 - Full-app `flutter test` and the simulator NOT run (integrator owns them).
 
 ## LEFT FOR NEXT ITERATION
 
-- None in the UI layer. BUG-03's widget-test closure rides on the
-  SHARED_REQUEST (shared `NestChip` day variant), and review #6's remaining
-  literal sizes ride on the same request.
+- Letter-spacing / copy / `NestBalancedText` already in place: no pending
+  item. `'Add children to set weekly amounts.'` copy still needs the
+  orchestrator's ratification or a design replacement — filed above with
+  #11 but visible only at `Seed.empty`/`Seed.fresh`.
 
 VERDICT: PASS

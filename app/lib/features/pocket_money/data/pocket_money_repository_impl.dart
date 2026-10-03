@@ -53,15 +53,16 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
 
   @override
   Stream<PocketMoneySetup> watchSetup() {
-    return combineLatest3(
-      _watchFamily(),
-      _db.watchSetting(Seed.familyId),
-      _watchChildrenInsertionOrder(),
-    ).map((parts) {
-      // `families` is the source of truth; `settings` is its write-mirror
-      // (kept equal by the setters below so P16 never diverges).
+    // `families` is the source of truth. The `settings` row is its
+    // write-mirror (kept equal by the setters below so P16 never diverges),
+    // written in the same transaction — so it is deliberately NOT subscribed:
+    // a second subscription would re-emit an identical setup on every
+    // mirror write (review #9).
+    return combineLatest2(_watchFamily(), _watchChildrenInsertionOrder()).map((
+      parts,
+    ) {
       final family = parts[0] as Family?;
-      final children = parts[2] as List<ChildrenData>;
+      final children = parts[1] as List<ChildrenData>;
       return PocketMoneySetup(
         mode: family?.pocketMoneyMode ?? 'both',
         payoutDay: family?.payoutDay ?? 6,
@@ -107,6 +108,16 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
       mode == 'weekly' || mode == 'per_quest' || mode == 'both',
       'P06 mode must be weekly | per_quest | both, got $mode',
     );
+    // The assert above is stripped in release/profile builds, so enforce
+    // the invariant there too (review #12). In debug the assert still fires
+    // first, which the validation tests pin.
+    if (mode != 'weekly' && mode != 'per_quest' && mode != 'both') {
+      throw ArgumentError.value(
+        mode,
+        'mode',
+        'P06 mode must be weekly | per_quest | both',
+      );
+    }
     final now = DateTime.now().toUtc();
     final zone = await _db.familyZoneId();
     await _db.transaction(() async {
@@ -134,6 +145,10 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
   @override
   Future<void> setPayoutDay(int day) async {
     assert(day >= 1 && day <= 7, 'P06 payout day must be 1..7, got $day');
+    // See setMode: the assert is debug-only, so enforce in release too.
+    if (day < 1 || day > 7) {
+      throw ArgumentError.value(day, 'day', 'P06 payout day must be 1..7');
+    }
     final now = DateTime.now().toUtc();
     final zone = await _db.familyZoneId();
     await _db.transaction(() async {

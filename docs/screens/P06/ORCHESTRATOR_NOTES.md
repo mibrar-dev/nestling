@@ -14,3 +14,13 @@
 
 ## UPDATE (05:36) — the UI builder for this iteration hit Fledge's rate limit and did not finish
 Integrator: there is no fresh 2b_build_ui report this iteration. YOU must also make the UI fixes in the current FIXES list and the notes above. Check the views on disk: the UI builder may have left partial edits, so keep the correct ones and finish the rest.
+
+## UPDATE (07:22, orchestrator QA of cmp_light_4, 2.22%) — exact targets for iteration 5
+Seed, chips and coin icon are now right. What is left is vertical drift INSIDE the payout card. Measured on the 390-wide compare sheet, design → app:
+- "Payout day" label: y 524 → 524 ✓
+- day-chip row centre: 555 → 561 (+6). The gap from the label to the chips is 6 px too big; match the HTML (label → chip row gap).
+- "Weekly base" label: 597 → 609 (+12). The divider above it and the label spacing add another +6; match the HTML section padding.
+- Maya row centre 630 → 642, Leo 674 → 686, "Coin value" 735 → 747 (all +12, inherited from the above).
+Fix the two spacings so every element lands within ±1 px. Add a geometry test with real fonts (FontLoader, as app/test/features/privacy_consent/privacy_consent_geometry_test.dart does) that pins these y values at 390×844.
+- Stepper glyphs: the design's minus is "−" (U+2212), drawn as a full-width bar like the "+". The app renders a short hyphen "-". Use the same icon/glyph source for − and + so they match in weight and width; check the HTML for the exact glyph.
+- Also fix every item the test and review stages listed in FIXES_4.md.

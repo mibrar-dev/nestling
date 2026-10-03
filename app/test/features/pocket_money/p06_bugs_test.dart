@@ -8,8 +8,8 @@
 //
 // Every test that PROVES an OPEN bug is marked `skip: true` (the test name
 // carries the `P06-BUG-nn` id) so the default suite stays green; delete the
-// skip to watch it fail. The only skip today is P06-BUG-04, superseded by
-// ORCHESTRATOR_NOTES item 2.
+// skip to watch it fail. The superseded P06-BUG-04 (≥44px day cells) was
+// deleted in iteration 5 per ORCHESTRATOR_NOTES item 2.
 //
 // The group at the bottom ("attacks that hold") is NOT skipped: it documents
 // the adversarial probes that passed (kid-mode guard, restart persistence,
@@ -349,40 +349,11 @@ void main() {
     await disposeApp(tester);
   });
 
-  // -- P06-BUG-04 ---------------------------------------------------------
-
-  testWidgets(
-    'P06-BUG-04 (fixed): every day cell is a 44×44 parent tap target (390 and 320)',
-    (tester) async {
-      await setUpTestScope();
-      await pumpAppRoute(tester, '/pocket-money-setup');
-
-      for (var day = 1; day <= 7; day++) {
-        final cell = tester.getSize(find.byKey(ValueKey('p06_day_$day')));
-        expect(cell.width, greaterThanOrEqualTo(NestDevice.tapParent));
-        expect(cell.height, greaterThanOrEqualTo(NestDevice.tapParent));
-      }
-
-      // Narrow screen: the row scrolls horizontally and each cell keeps 44.
-      tester.view.physicalSize = const Size(320 * 3, 844 * 3);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
-      final narrow = tester.getSize(find.byKey(const ValueKey('p06_day_1')));
-      expect(narrow.width, greaterThanOrEqualTo(NestDevice.tapParent));
-      expect(narrow.height, greaterThanOrEqualTo(NestDevice.tapParent));
-      expect(tester.takeException(), isNull);
-
-      await disposeApp(tester);
-    },
-    // SUPERSEDED by ORCHESTRATOR_NOTES iter 4 #2: the 7 chips must sit
-    // inside the 16px card inset, 32px high with even gaps; the ≥44×44
-    // cell demand no longer applies. Taps 5px above/below a chip reach it
-    // via NestChipWrap; the iteration-4 guards below cover the geometry.
-    skip: true,
-  );
-  // FIXED (iteration 3, UI chunk): cell width was clamped to ≥44 and the
-  // row broke out of the card inset; iteration 4 restored the design's
-  // 16px inset per the orchestrator note (see the geometry guards below).
+  // P06-BUG-04 (iteration 3, ≥44 day cells) DELETED: the demand is
+  // superseded by ORCHESTRATOR_NOTES iter 4 #2 — the 7 chips must sit
+  // inside the card's 16px inset, 32px high with even gaps, and the ≥44
+  // tap band is the NestChipWrap hitSlop (guarded below + in
+  // pocket_money_setup_view_test.dart).
 
   // -- P06-BUG-05 ---------------------------------------------------------
 

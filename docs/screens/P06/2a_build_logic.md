@@ -1,59 +1,71 @@
-# P06 Pocket money setup — logic build (Stage 2a, iteration 4)
+# P06 Pocket money setup — logic build (Stage 2a, iteration 5)
 
 ## CONTRACT CHANGES
 
-No event/state shape changes — the UI builder's contract is untouched
-(`PocketMoneyModeChanged(mode)`, `PocketMoneyPayoutDayChanged(day)`,
-`PocketMoneyWeeklyBaseStepped(childId, deltaPence)`, `PocketMoneyState.setup`;
-step 50p; clamp 0..2000). No repository interface changes (all three feature
-fakes still compile untouched). Only private bloc behavior refined (see below).
+No event/state shape changes and no repository interface changes — the UI
+builder's contract is untouched (same events, `PocketMoneyState.setup`,
+same `watchSetup/setMode/setPayoutDay/setWeeklyBasePence` signatures; all
+three feature fakes still compile untouched). Behavior refinements only,
+all inside `domain`/`data`/`bloc` (see below).
 
 ## Files changed (logic layer only — no views/widgets touched)
 
+- `app/lib/features/pocket_money/data/pocket_money_repository_impl.dart`
+  - Review #9: `watchSetup` no longer subscribes to the `settings` mirror
+    (`combineLatest3` → `combineLatest2` over the `families` row + insertion-
+    ordered children). The mirror is written in the same transaction as
+    `families`, so the extra subscription only re-emitted identical setups.
+    No test depended on settings-driven re-emission (verified by grep).
+  - Review #12: `setMode`/`setPayoutDay` now also throw `ArgumentError` past
+    the `assert`, so the invariant holds in release/profile builds. In debug
+    the assert still fires first, which the existing validation tests pin
+    (`throwsA(isA<AssertionError>())` — green, unchanged).
 - `app/lib/features/pocket_money/presentation/bloc/pocket_money_bloc.dart`
-  - Load `onData` now drops the unconfirmed day request (`_pendingDay`) only
-    once the stream *confirms* it (`setup.payoutDay == _pendingDay`), instead
-    of on every emission. An unrelated re-emission still reporting the old
-    day no longer swallows a correction tap (P06-BUG-09). Step-request
-    reconciliation and `clearErrorMessage` behavior unchanged.
-- `app/test/features/pocket_money/pocket_money_setup_repository_test.dart` —
-  added `Seed.onboardingKids emits the same setup as demo (P06 shoot seed)`.
-- `app/test/features/pocket_money/p06_bugs_test.dart` — un-skipped P06-BUG-09
-  (now passes); header note refreshed. No fake changes needed.
+  - Review #10: `if (emit.isDone) return;` before the failure emits in
+    `_onModeChanged` and `_onPayoutDayChanged` (a write in flight across
+    `bloc.close()`). The day-guard rollback still runs first, as the review
+    requires. (`_onWeeklyBaseStepped` already had the guard.)
+- No test files needed changes: every existing assertion still describes the
+  behavior (validation asserts, write-through re-emits, guard/rollback
+  paths, BUG-01/02/06/07/09 proofs).
 
-## Items done (FIXES_3 → ORCHESTRATOR_NOTES "UPDATE (04:05", logic-layer only)
+Note: `git diff` also shows hunks in
+`presentation/views/pocket_money_setup_view.dart` — those are the parallel
+UI builder's partial edits (per ORCHESTRATOR_NOTES 05:36 they hit a rate
+limit), not mine; I did not touch that file.
 
-- Item 1 (SEED `onboarding_kids`): verified read-only in
-  `app/lib/core/data/seed.dart` — `onboardingKids` reuses `_family` (both/6/1)
-  and `_childrenDemo` (Maya £3.00 lilac, Leo £1.50 peach, insertion order), so
-  `watchSetup` emits exactly the design values with zero code changes and no
-  hard-coded view defaults. Pinned by the new repository test above. No
-  SHARED_REQUEST needed (seed already carries the amounts).
-- Items 2/4/5/6 (chip overflow, coin glyph, card height, `NestChipWrap`): view
-  files — UI chunk owns them; not touched.
-- Item 3 (letter-spacing 0): shared fix on main; nothing to do in
-  domain/data/bloc (no text styles there). Not touched.
-- Skipped bug tests in my layer: P06-BUG-09 was the only skipped logic-layer
-  proof — now un-skipped and green. The one remaining skip in
-  `p06_bugs_test.dart` is the view-layer day-cell alignment probe (UI chunk).
-  P06-BUG-03 likewise remains a shared/view matter.
+## Items done (FIXES_4 → review findings, logic-layer only)
+
+- #9 (wasted `watchSetting` subscription): fixed as above.
+- #10 (`emit` after `await` without `isDone`): fixed as above.
+- #12 (assert-only validation): fixed as above, debug behavior preserved.
+- Everything else in FIXES_4 is view/test/UI-check territory for the UI
+  chunk or integrator and was deliberately not touched: #1 (44 px day row
+  geometry), #2 (analyze `info` in the view *test* file — outside my
+  filename scope), #3 (`NestBalancedText`, needs a main merge per the test
+  stage), #4 (`disposeApp` teardowns in view tests), #5–#8/#11/#14 (view
+  copy/tokens/pill/buildWhen), #13 (BUG-04 skip — justified, orchestrator
+  item 2 makes 44 px width impossible), P06-BUG-10 (view heading).
+- Skipped bug tests in my layer: none — the only skip in
+  `p06_bugs_test.dart` remains the justified view-layer BUG-04 probe.
 
 ## Checks run (stage-allowed only)
 
-- `dart format` on touched files → clean (0 changed).
+- `dart format` on touched files → clean.
 - `flutter analyze` on domain + data + bloc + the three test files →
-  `No issues found!` (the one remaining `info` in the feature dir lives in
-  the UI chunk's `pocket_money_setup_view.dart`).
+  `No issues found!`
 - `flutter test pocket_money_setup_bloc_test +
-  pocket_money_setup_repository_test` → `All tests passed!` (44/44).
-- `flutter test p06_bugs_test` → `All tests passed!` (+18 ~1; the single
-  skip is the view-layer alignment probe).
-- Full-app `flutter test` and simulator NOT run (integrator owns them).
+  pocket_money_setup_repository_test` → `All tests passed!` (45/45).
+- `flutter test p06_bugs_test` → `All tests passed!` (+24 ~1; the single
+  skip is the justified BUG-04 width probe).
+- Full-app `flutter test` and simulator NOT run (integrator owns them;
+  per the new SIMULATORS rule only the UI-check stage may boot one).
 
 ## LEFT FOR NEXT ITERATION
 
-Nothing in the logic layer. Open items sit with the UI chunk / orchestrator:
-BUG-03 (day-pill paint size, needs the shared `NestChip` compact mode),
-the day-cell alignment probe skip, and the view-file `info` lint.
+Nothing in the logic layer. Open items for the UI chunk / integrator:
+the view-geometry fixes (#1), `NestBalancedText` adoption after merging
+main (#3, P06-BUG-10), view-test hygiene (#2, #4), and view minors
+(#5–#8, #11, #14).
 
 VERDICT: PASS

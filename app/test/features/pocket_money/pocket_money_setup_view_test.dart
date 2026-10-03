@@ -679,8 +679,7 @@ void main() {
       expect(bloc.state.status, PocketMoneyStatus.initial);
       expect(tester.takeException(), isNull);
 
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
+      await disposeApp(tester);
     });
 
     testWidgets('failure: message plus a Retry button', (tester) async {
@@ -707,8 +706,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
       expect(tester.takeException(), isNull);
 
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
+      await disposeApp(tester);
     });
   });
 
@@ -782,11 +780,12 @@ void main() {
         final size = tester.getSize(find.byKey(key));
         expect(size.height, greaterThanOrEqualTo(44));
       }
-      // Day cells are 44dp tall tap boxes; the design's 32dp pill is painted
-      // inside them (asserted by the day-row geometry group below).
+      // The design's day row is a single 32dp band of pills; the 44dp
+      // target comes from NestChipWrap forwarding ±6px taps (asserted by
+      // the day-row geometry group + the tap-above/below test below).
       for (var day = 1; day <= 7; day++) {
         final size = tester.getSize(find.byKey(ValueKey('p06_day_$day')));
-        expect(size.height, NestDevice.tapParent);
+        expect(size.height, NestSpacing.s8);
       }
       for (final label in <String>[
         'Less weekly pocket money for Maya',
@@ -819,7 +818,7 @@ void main() {
 
       for (var day = 1; day <= 7; day++) {
         final size = tester.getSize(find.byKey(ValueKey('p06_day_$day')));
-        expect(size.height, NestDevice.tapParent);
+        expect(size.height, NestSpacing.s8);
       }
       final continueSize = tester.getSize(
         find.byKey(const ValueKey('p06_continue')),
@@ -857,10 +856,11 @@ void main() {
         );
         expect(
           rect.height,
-          NestDevice.tapParent,
+          NestSpacing.s8,
           reason:
-              'the day cell is the 44dp tap box; its pill paints the design '
-              '32 (asserted in p06_bugs_test.dart P06-BUG-03)',
+              'the day cell IS the 32px pill; its ≥44dp tap band is the '
+              'NestChipWrap hitSlop (covered by the tap-above/below test '
+              'and P06-BUG-03)',
         );
       }
 
@@ -969,11 +969,13 @@ void main() {
           ),
         for (var day = 1; day <= 7; day++)
           (
+            // The pill is 32dp; the ≥44dp tap band comes from NestChipWrap
+            // hit-sloation as verified by the ±5px tap test.
             label: PocketMoneySetupView.dayLabels[day - 1],
             finder: find.bySemanticsLabel(
               PocketMoneySetupView.dayLabels[day - 1],
             ),
-            minHeight: NestDevice.tapParent,
+            minHeight: NestSpacing.s8,
           ),
         for (final name in const <String>['Maya', 'Leo'])
           for (final verb in const <String>['Less', 'More'])
@@ -1157,10 +1159,10 @@ void main() {
 
           for (var day = 1; day <= 7; day++) {
             final size = tester.getSize(find.byKey(ValueKey('p06_day_$day')));
-            // The cell is the 44dp parent tap box; the design's 32px pill
-            // is painted inside it and `NestChipWrap` also forwards the
-            // 6px gaps between pills.
-            expect(size.height, NestDevice.tapParent);
+            // The cell is the design's 32dp pill; the ≥44dp tap band
+            // around it comes from NestChipWrap's hitSlop, not a taller
+            // cell box (which would centre pills 6 dp low).
+            expect(size.height, NestSpacing.s8);
 
             // The pill is the design's 32-high `.chip.day`, not a
             // FittedBox-scaled `NestChip` (which rendered ~19dp tall).
@@ -1376,8 +1378,7 @@ void main() {
         expect(bloc.state.errorMessage, isNull);
 
         handle.dispose();
-        await tester.pumpWidget(const SizedBox.shrink());
-        await tester.pump();
+        await disposeApp(tester);
       });
     }
 
@@ -1721,8 +1722,7 @@ void main() {
       expect(find.byKey(const ValueKey('p06_continue')), findsOneWidget);
       expect(tester.takeException(), isNull);
 
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
+      await disposeApp(tester);
     });
 
     testWidgets('Retry after a failure recovers the loaded screen', (
@@ -1762,8 +1762,7 @@ void main() {
       expect(find.text('Coin value'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
+      await disposeApp(tester);
     });
 
     testWidgets('the failure body never leaks a half-loaded card', (
@@ -1788,8 +1787,7 @@ void main() {
         greaterThanOrEqualTo(NestDevice.tapParent),
       );
 
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
+      await disposeApp(tester);
     });
 
     testWidgets('Seed.empty: the screen still selects a style and advances', (
@@ -2075,9 +2073,9 @@ void main() {
       final tokens = tester.element(find.text('Coin value')).nest;
       expect(decoration.color, tokens.coinTint);
       expect(
-        (decoration.borderRadius! as BorderRadius).topLeft.x,
-        NestRadii.m,
-        reason: 'the design tile uses r-m',
+        decoration.borderRadius,
+        NestRadii.allM,
+        reason: 'the design tile uses r-m on all corners',
       );
 
       // The glyph is the gold coin SVG from app/assets, not a £ symbol.
@@ -2129,17 +2127,14 @@ void main() {
         matching: find.byType(NestChipWrap),
       );
       expect(wrap, findsOneWidget);
-      // The wrap owns a 44dp-tall box while the pills paint 32.
-      final row = tester.getRect(
-        find
-            .ancestor(
-              of: find.byKey(const ValueKey('p06_day_1')),
-              matching: find.byType(SizedBox),
-            )
-            .first,
+      // The wrap's box is 32, pinned to the pills' band — taps 5 px
+      // above/below are forwarded by RenderNestChipWrap.hitTest (proven by
+      // the tap-above/below test and the ±6px contract in P06/4_review).
+      expect(tester.getSize(wrap).height, NestSpacing.s8);
+      expect(
+        tester.getRect(dayPill(1)).height,
+        moreOrLessEquals(NestSpacing.s8, epsilon: 0.01),
       );
-      expect(row.height, NestDevice.tapParent);
-      expect(tester.getRect(dayPill(1)).height, NestSpacing.s8);
 
       await disposeApp(tester);
     });
