@@ -57,3 +57,4 @@ Every wave and every shared-fix agent runs in a detached macOS `screen` session,
 - Current wave: `wave8` (P06 resume 4, then P09…K03b).
 - P03/P05/K03 were started before the switch (nohup). If the app quits and they die, recover them with finalize_iter + a resume file + a new detached wave.
 Merged so far: P01, P02, P04, P07, P08.
+- WARNING: quitting a wave's `screen` session kills every loop that wave started (they share its process group). To retire a scheduler, kill ONLY its `run_wave.sh` bash PID, never `screen -X quit`. Since 08:25 run_wave.sh takes a lock (`_status/run/.lock`), so several waves can share the 3 simulators without racing.
