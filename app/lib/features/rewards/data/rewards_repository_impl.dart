@@ -19,8 +19,11 @@ class RewardsRepositoryImpl implements RewardsRepository {
 
   @override
   Stream<List<domain.Reward>> watchItems() {
+    // Owner rule (ORCHESTRATOR_NOTES 12:27): the P14 list is creation order
+    // — the order rewards were added — never price order. The legacy
+    // `watchRewards` (coinPrice ASC) is kept for backward compatibility only.
     return _db
-        .watchRewards(Seed.familyId)
+        .watchRewardsInCreationOrder(Seed.familyId)
         .map((rows) => rows.map(_toEntity).toList());
   }
 
@@ -89,7 +92,15 @@ class RewardsRepositoryImpl implements RewardsRepository {
 
   @override
   Future<void> deleteReward(String id) {
-    return (_db.delete(_db.rewards)..where((r) => r.id.equals(id))).go();
+    // P14-B04: foreign keys are off app-wide, so deleting only the reward row
+    // would orphan its `reward_redemptions` rows (a later approve is then a
+    // silent no-op). Remove both in one transaction.
+    return _db.transaction(() async {
+      await (_db.delete(
+        _db.rewardRedemptions,
+      )..where((r) => r.rewardId.equals(id))).go();
+      await (_db.delete(_db.rewards)..where((r) => r.id.equals(id))).go();
+    });
   }
 
   @override
