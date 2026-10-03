@@ -60,6 +60,8 @@ class NestAvatar extends StatelessWidget {
           fontFamily: 'Nunito',
           fontSize: size.fontSize,
           fontWeight: FontWeight.w900,
+          // `.avatar` sets no letter-spacing: browser default 0.
+          letterSpacing: 0,
           color: fg,
         ),
         textAlign: TextAlign.center,

@@ -49,6 +49,18 @@ stage() { # name model template iter fixes
     sid=$(opencode session list 2>/dev/null | grep -F "$title" | head -1 | awk '{print $1}')
     ev NUDGE "${name}_i${it} missing_report"
     STATUS_DIR="$ST" WORKDIR="$WT" "$MAIN/tools/agents/run_agent.sh" "${ID}_${name}_i${it}_nudge" "$model" "$nudge" "${sid:--}" "$title"
+    # Some models answer in chat instead of writing the file: save their final
+    # answer (text after the last "> build" marker) as the report.
+    if [ ! -f "$out" ] || [ "$out" -ot "$mark" ]; then
+      for lg in "$ST/${ID}_${name}_i${it}_nudge.log" "$ST/${ID}_${name}_i${it}.log"; do
+        [ -f "$lg" ] || continue
+        sed 's/\x1b\[[0-9;]*m//g' "$lg" | awk '/^> build/{buf=""; next} {buf=buf $0 "\n"} END{printf "%s", buf}' > "$out.tmp"
+        if grep -qE "^VERDICT: (PASS|FAIL)" "$out.tmp"; then
+          { echo "<!-- saved from the agent's final answer by loop.sh -->"; cat "$out.tmp"; } > "$out"; rm -f "$out.tmp"; ev REPORT_FROM_LOG "${name}_i${it}"; break
+        fi
+        rm -f "$out.tmp"
+      done
+    fi
   fi
 }
 checkpoint() { # commit the worktree so a crash or stop loses at most one stage
@@ -86,6 +98,9 @@ if [ "$START" -gt 1 ]; then
 fi
 for IT in $(seq "$START" "$MAX"); do
   [ "$IT" -eq 1 ] && stage plan "$MUSE" 1_plan.md "$IT"
+  if [ "${CHECKS_ONLY:-0}" = 1 ] && [ "$IT" -eq "$START" ]; then
+    : # resume after an interruption: the build of this iteration is already done
+  else
   # pick up shared fixes landed on main (orchestrator) before each build
   git -C "$WT" add -A >/dev/null 2>&1; git -C "$WT" commit -q -m "$ID: wip before sync" >/dev/null 2>&1
   git -C "$WT" merge -q --no-edit main >/dev/null 2>&1 || { git -C "$WT" merge --abort >/dev/null 2>&1; ev SYNC_CONFLICT "main"; }
@@ -95,6 +110,7 @@ for IT in $(seq "$START" "$MAX"); do
   wait $P1 $P2
   stage build "$BUNNY" 2_build.md "$IT" "$FIXES"
   checkpoint "after build"
+  fi
   # The four checks only read the code (test + bugs add their own test files),
   # so they run in parallel.
   stage test   "$BUNNY"  3_test.md   "$IT" & Q1=$!
