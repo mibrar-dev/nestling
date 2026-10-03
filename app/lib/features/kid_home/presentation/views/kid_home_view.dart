@@ -56,18 +56,41 @@ PipAccessory _pipAccessory(String raw) {
   };
 }
 
-/// Design-slot numbers (review finding 1: single place to change, cited to
-/// `.k3-pet` in `design/html-source/screens/K03-kid-home.html`):
-/// Pip ≈152 px tall on the 260 px nest.
+/// Design-slot numbers (single place to change, cited to `.k3-pet` in
+/// `design/html-source/screens/K03-kid-home.html` and to
+/// `design/screens/light/K03-kid-home.png` ÷3).
 ///
-/// SHARED_REQUEST #11 landed: the shared `NestPetStage` explicit size mode
-/// takes these, so the slot no longer needs a feature-local scene fork and
-/// no longer derives its size from the incoming width.
-const double _kNestWidth = 260;
-
-/// Design cap for Pip, kept as `pipSize` for the shared slot's legacy
-/// sizing path and asserted by the view suite.
+/// SHARED_REQUEST #11 + #13 landed: the shared `NestPetStage` explicit size
+/// mode composes the whole scene inside the ACTUAL parent box now (it is
+/// centred there, never off-centre, and scales down instead of overflowing),
+/// so the slot no longer needs a feature-local scene fork and no longer
+/// derives its size from the incoming width. The numbers below are the call
+/// `docs/screens/_shared/pet_stage_explicit_REPORT.md` asks for:
+///
+/// * `_kNestBoxWidth` is the nest BOX; `PipNestFallback.visibleNestRatio`
+///   (202/240) makes it paint the design's 198 px visible outline
+///   (x 96…294, centre 195) at any box height.
+/// * `_kNestBoxHeight` sets the block height (with the shared 10 px shadow
+///   bleed: `.k3-pet` is the design's 236 px slot).
+/// * `_kPipSlotSize` is the design's ≈152 px Pip.
+const double _kNestBoxWidth = 236;
+const double _kNestBoxHeight = 156;
 const double _kPipSlotSize = 152;
+
+/// Scroll gap between the pet stage and the hearts row.
+///
+/// `.scroll > * + *` is `--s4` (16) in the HTML, but the shared pet stage
+/// spends 18 px between the speech bubble's tail and the pet block where
+/// `.k3-pet` sets `margin: 14px auto 0`, and its block is 236.25 — the
+/// design's 236 px slot plus the shared 10 px ground-shadow bleed — for
+/// 5.25 px more in total (measured at real fonts, see
+/// `kid_home_geometry_test.dart`). This is the design's 16 with that
+/// overshoot taken back, so the hearts row sits on the design's y 448 and
+/// every row below it keeps the design's `s4` rhythm. The orchestrator's
+/// last-pass note sanctions this lever ("fix by sizing the NestPetStage box —
+/// pipSize / nest width / bottom gap — not by negative margins"); the shared
+/// component owns the box now, the gap is the only lever left.
+const double _kStageToHearts = 10.75;
 
 /// Display name for the pet-stage semantics label (design alt text).
 String _pipStageName(int stage) {
@@ -432,7 +455,7 @@ class _KidHomeBody extends StatelessWidget {
                           ),
                           child: _KidPetStage(child: child),
                         ),
-                        const SizedBox(height: NestSpacing.s4),
+                        const SizedBox(height: _kStageToHearts),
                         Padding(
                           padding: const EdgeInsets.symmetric(
                             horizontal: NestSpacing.padSide,
@@ -491,27 +514,34 @@ class _KidHomeBody extends StatelessWidget {
                             ],
                           ),
                         ),
-                        const SizedBox(height: NestSpacing.s4),
-                        // Meadow band behind progress + cards (FIXES_1 #1):
-                        // in-flow full-bleed hill, so it scrolls with
-                        // the content and needs no magic offsets. The tone
-                        // is `kidHorizon`: pixel measurement of both design
-                        // PNGs lands exactly on it (light #EAF7E2, dark
-                        // within a few levels), while the shared KidScope
+                        // 12 + the band's own 4 px top inset below, so the
+                        // band's top edge lands on the design's 62 % horizon
+                        // stop (y ≈523 of 844) and the progress bar still
+                        // starts exactly `s4` (16) below the section title,
+                        // as `.scroll > * + *` does. The band is the design's
+                        // *screen background* there, so in the HTML it never
+                        // pushes content; the inset reproduces that without
+                        // moving anything.
+                        const SizedBox(height: NestSpacing.s3),
+                        // Meadow band behind progress + cards (FIXES_1 #1,
+                        // review finding 4): in-flow full-bleed hill, so it
+                        // scrolls with the content and needs no magic offsets.
+                        // The tone is `kidHorizon`: pixel measurement of both
+                        // design PNGs lands exactly on it (light #EAF7E2, dark
+                        // within a few levels), and it grades to `kidMeadow`
+                        // over the design's own 321 px gradient span
+                        // (`components.css` l.25: kid-horizon at 62 %,
+                        // kid-meadow at 100 % of 844). The shared KidScope
                         // hill (untouched) stays `kidMeadow`.
                         CustomPaint(
                           painter: _MeadowPainter(
                             top: tokens.kidHorizon,
-                            bottom: Color.lerp(
-                              tokens.kidHorizon,
-                              tokens.kidMeadow,
-                              0.5,
-                            )!,
+                            bottom: tokens.kidMeadow,
                           ),
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(
                               NestSpacing.padSide,
-                              NestSpacing.gap10,
+                              NestSpacing.s1,
                               NestSpacing.padSide,
                               NestSpacing.s8,
                             ),
@@ -682,15 +712,14 @@ class _GateLockButtonState extends State<_GateLockButton> {
 /// Pet stage: the child's own Pip seated in the nest, under the design
 /// speech bubble.
 ///
-/// Review finding 1 (iteration 6) asked for the HTML's own slot — a 260 px
-/// nest with Pip 152 tall — which the shared `NestPetStage` could not
-/// express. SHARED_REQUEST #11 landed on main: `nestWidth` +
-/// `fixedPipHeight` are the explicit size mode, so the slot is composed by
-/// the shared component (nest exactly 260 wide, Pip exactly 152 tall)
-/// rather than by a feature-local `Stack` + `SvgPicture` fork. `pipSize`
-/// stays as the design cap it has always been. `inNest` remains omitted —
-/// it defaults to false and the custom `pip:` path seats the avatar between
-/// the nest rims either way (SHARED_REQUEST #8).
+/// Review finding 1 (iteration 6/7) asked for the HTML's own slot — the nest
+/// with Pip 152 tall in a 236 px block. The shared `NestPetStage` explicit
+/// size mode (SHARED_REQUEST #11, then #13) now expresses it and centres the
+/// scene in the real content box, so the numbers are the design's own and
+/// nothing local is derived from the incoming width. `pipSize` is dropped:
+/// explicit mode ignores it. `inNest` remains omitted — it defaults to false
+/// and the custom `pip:` path seats the avatar between the nest rims either
+/// way (SHARED_REQUEST #8).
 class _KidPetStage extends StatelessWidget {
   const new({required this.child});
 
@@ -707,28 +736,40 @@ class _KidPetStage extends StatelessWidget {
         accessory: _pipAccessory(child.pipAccessory),
       ),
       speech: "Let's do some quests!",
-      pipSize: _kPipSlotSize,
-      nestWidth: _kNestWidth,
+      nestWidth: _kNestBoxWidth,
+      nestHeight: _kNestBoxHeight,
       fixedPipHeight: _kPipSlotSize,
       semanticLabel: 'Pip the ${_pipStageName(stage)}, stage $stage of 4',
     );
   }
 }
 
-/// Tall meadow band behind progress + cards (FIXES_1 #1).
-// TODO(K03): replace with a `KidScope` meadow-band height/inset parameter
-// once the design system owns one (SHARED_REQUEST #6) and delete this
-// painter. The shared 136 px hill cannot cover the band: the design shows
-/// green from just below the section row, so until the shared API exists
-/// this in-flow full-bleed panel paints it. The vertical gradient matches
-/// the design PNGs: `kidHorizon` at the band top grading to a mid blend
-/// toward `kidMeadow` at the bottom (both themes — SPACING_SPEC §14.14
-/// hill-front bake: light #CCE9C2-ish ≈ lerp, dark #243B41-ish ≈ lerp).
+/// Tall meadow band behind progress + cards (FIXES_1 #1, review finding 4).
+// TODO(K03): this is still a feature-local band. The design paints it as the
+// SCREEN background — `components.css` l.25
+// `linear-gradient(180deg, kid-sky-top 0%, kid-sky-bottom 62%, kid-horizon 62%, kid-meadow 100%)`
+// — and `KidScope` grew `meadowHeight`/`meadowBottom`/`meadowColor` for it
+// (SHARED_REQUEST #6). What is still missing in `core/` is the third and
+// fourth gradient stop: `KidScope`'s own background has only two
+// (kidSkyTop → kidSkyBottom) and its hill SVG has a curved crest, while the
+// design's horizon stop is a flat horizontal line 62 % down the screen. Until
+// that lands the band is painted in flow behind the progress bar and the
+// cards, with the design's tones over the design's gradient span.
 class _MeadowPainter extends CustomPainter {
   const _MeadowPainter({required this.top, required this.bottom});
 
   final Color top;
   final Color bottom;
+
+  /// The design's gradient run in logical px: the band starts at the 62 %
+  /// horizon stop (`0.62 × 844 = 523.3`) and reaches `kid-meadow` at the
+  /// screen bottom (844) — ≈321 px. The in-flow band is far taller than that
+  /// (progress bar plus every card), so the grade is compressed into the
+  /// design's span and stays `kidMeadow` below it: that is what makes the
+  /// visible part match both PNGs. Grading over the band's whole height (the
+  /// old behaviour) left dark mode a flat navy block, three iterations
+  /// running.
+  static const double gradeSpan = 844 - 0.62 * 844;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -745,6 +786,7 @@ class _MeadowPainter extends CustomPainter {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: <Color>[top, bottom],
+        stops: <double>[0, (gradeSpan / h).clamp(0.0, 1.0)],
       ).createShader(Offset.zero & size);
     canvas.drawPath(path, paint);
   }

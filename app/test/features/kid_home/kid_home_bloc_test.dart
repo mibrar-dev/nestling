@@ -225,6 +225,12 @@ class _FakeKidHomeRepository extends KidHomeRepository {
     _childPushed.add(value);
   }
 
+  /// Fails the live items stream mid-session (review finding 6,
+  /// iteration 7): a single bad watch tick must not discard the list.
+  void failItemsNow(Object error) {
+    _itemsPushed.addError(error);
+  }
+
   @override
   Future<List<KidQuest>> getItems() async => _items;
 
@@ -798,13 +804,11 @@ void main() {
       },
     );
 
-    // Review finding 6 (iteration 6), still OPEN: `_onLoadRequested` awaits
-    // `emit.forEach(_repository.watchHome())`, which never completes, and the
-    // bloc's default transformer is concurrent — so the failure state's "Try
-    // again" button (`kid_home_view.dart:287`) starts a SECOND never-ending
-    // handler while the first is still subscribed. Every tap leaves another
-    // fan-out of the Drift watch queries alive until the bloc closes.
-    // The review's own smaller fix: early-return while a subscription is live.
+    // K03-BUG-15 (fixed iteration 8): `_onLoadRequested` guards on the live
+    // home subscription, so the failure state's "Try again" cannot stack a
+    // second never-ending handler while the first is still subscribed.
+    // The review's smaller fix: early-return while a subscription is live
+    // (released on error and on close, so retries still work).
     test(
       'K03-BUG-15: a retry must not stack a second live subscription',
       () async {
@@ -832,6 +836,85 @@ void main() {
         );
         await sub.cancel();
         await bloc.close();
+      },
+    );
+
+    blocTest<KidHomeBloc, KidHomeState>(
+      'two completion taps one frame apart celebrate exactly once',
+      build: () {
+        repo = _FakeKidHomeRepository();
+        return KidHomeBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        bloc.add(
+          const KidHomeQuestCompleted(
+            childId: 'maya',
+            questId: 'q-reading',
+            coins: 10,
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        // Second tap lands a frame later, after the card already flipped.
+        bloc.add(
+          const KidHomeQuestCompleted(
+            childId: 'maya',
+            questId: 'q-reading',
+            coins: 10,
+          ),
+        );
+      },
+      wait: const Duration(milliseconds: 100),
+      expect: () => <Matcher>[
+        _loading,
+        _loaded(done: 4, total: 6),
+        _celebrating('q-reading', coins: 10),
+        // Already done on arrival: no second celebration, list kept.
+        predicate<KidHomeState>(
+          (state) =>
+              state.status == KidHomeStatus.loaded &&
+              state.doneCount == 5 &&
+              state.justCompletedQuestId == null,
+        ),
+      ],
+      verify: (bloc) {
+        // Both taps reach the repository (its transaction dedupes the row —
+        // K03-BUG-1 proves the single `done_pending` row); the bloc
+        // celebrates only the first.
+        expect(repo.completed, hasLength(2));
+        expect(bloc.state.doneCount, 5);
+        expect(bloc.state.justCompletedQuestId, isNull);
+      },
+    );
+
+    blocTest<KidHomeBloc, KidHomeState>(
+      'a mid-session stream error keeps the loaded list',
+      build: () {
+        repo = _FakeKidHomeRepository();
+        return KidHomeBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        repo.failItemsNow(Exception('one bad tick'));
+      },
+      wait: const Duration(milliseconds: 100),
+      expect: () => <Matcher>[
+        _loading,
+        _loaded(done: 4, total: 6),
+        // No failure card: the child keeps the list they were looking at.
+        predicate<KidHomeState>(
+          (state) =>
+              state.status == KidHomeStatus.loaded &&
+              state.child?.nickname == 'Maya' &&
+              state.doneCount == 4 &&
+              state.totalCount == 6,
+        ),
+      ],
+      verify: (bloc) {
+        expect(bloc.state.status, KidHomeStatus.loaded);
+        expect(bloc.state.items, hasLength(6));
       },
     );
   });

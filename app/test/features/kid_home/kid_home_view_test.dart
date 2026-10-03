@@ -8,6 +8,7 @@
 // Every pumped app ends with `disposeApp` (see test_scope.dart).
 
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
@@ -277,7 +278,7 @@ Finder _dockSurfaceFinder() => find.byWidgetPredicate((widget) {
 Finder _nestSvgFinder() => find.descendant(
   of: find.byType(PipNestFallback),
   matching: find.byWidgetPredicate(
-    (widget) => widget is SvgPicture && widget.width == 260,
+    (widget) => widget is SvgPicture && widget.width == 236,
   ),
 );
 
@@ -447,31 +448,53 @@ void main() {
   });
 
   group('K03 pet slot (explicit size)', () {
-    // ORCHESTRATOR_NOTES #1 + review finding 1: the slot is the design's own
-    // composition — a 260 px nest with a 152 px Pip — expressed through the
-    // shared `NestPetStage` explicit size mode (SHARED_REQUEST #11), never a
-    // feature-local scene fork. Sizes only: centring is K03-BUG-13's proof.
-    testWidgets('the nest is 260 wide and the Pip exactly 152 tall', (
+    // ORCHESTRATOR_NOTES #1 + review finding 1/3: the slot is the design's own
+    // composition — a nest box that paints the 198 px visible outline, with a
+    // 152 px Pip, in the design's 236 px block — expressed through the shared
+    // `NestPetStage` explicit size mode (SHARED_REQUEST #11, then #13), never
+    // a feature-local scene fork. Sizes only: centring is K03-BUG-13's proof
+    // and the absolute rows are `kid_home_geometry_test.dart` (real fonts).
+    testWidgets('the nest box is 236×156 and the Pip exactly 152 tall', (
       tester,
     ) async {
       await _pumpRoute(tester);
       final stage = tester.widget<NestPetStage>(find.byType(NestPetStage));
-      expect(stage.nestWidth, 260, reason: '.k3-pet .nest is 260 px wide');
+      expect(
+        stage.nestWidth,
+        236,
+        reason:
+            '236 is the box that paints the design 198 px visible outline '
+            '(198 / 236 = visibleNestRatio 202/240)',
+      );
+      expect(
+        stage.nestHeight,
+        156,
+        reason: '.k3-pet is a 236 px slot; 156 + 70.25 + 10 shadow bleed',
+      );
       expect(stage.fixedPipHeight, 152, reason: '.k3-pet .pip is 152 px tall');
       final fallback = tester.widget<PipNestFallback>(
         find.byType(PipNestFallback),
       );
-      expect(fallback.nestW, 260);
+      expect(fallback.nestW, 236);
+      expect(fallback.nestH, 156);
       expect(fallback.pipH, 152);
+      expect(
+        fallback.explicitLayout,
+        isTrue,
+        reason: 'explicit mode centres the scene in the real content box',
+      );
       // Rendered shapes, not only the props: the previous derived sizing
       // rendered a 217 px nest with a 119 px Pip on this very viewport.
       final pip = tester.getRect(find.byType(PipAvatar));
       expect(pip.width, closeTo(152, 0.5));
       expect(pip.height, closeTo(152, 0.5));
-      // The fallback paints the nest twice (back + front rim), same 260 width.
+      // The fallback paints the nest twice (back + front rim), same width.
       expect(_nestSvgFinder(), findsNWidgets(2));
       final nest = tester.getRect(_nestSvgFinder().first);
-      expect(nest.width, closeTo(260, 0.5));
+      expect(nest.width, closeTo(236, 0.5));
+      expect(nest.height, closeTo(156, 0.5));
+      // The design's visible outline, through the shared ratio.
+      expect(nest.width * PipNestFallback.visibleNestRatio, closeTo(198, 2));
       await disposeApp(tester);
     });
 
@@ -495,13 +518,16 @@ void main() {
       tester,
     ) async {
       await _pumpRoute(tester);
-      final expected = <String, (double, double, FontWeight)>{
+      final expected = <String, (double, double?, FontWeight)>{
         'Hi Maya!': (22, 26 / 22, FontWeight.w900), // .k3-name
         '4 done today': (15, 20 / 15, FontWeight.w700), // .k3-sub
         'Pip is happy today': (15, 20 / 15, FontWeight.w700), // .kcap
         "Today's quests": (28, 34 / 28, FontWeight.w900), // .kid-title
         '4 of 6 done': (15, 15 / 15, FontWeight.w800), // .kchip
-        "Let's do some quests!": (16, 24 / 16, FontWeight.w800), // .speech
+        // `.speech` sets no line-height, so the browser uses `normal` and the
+        // shared `NestSpeechBubble` leaves `height` null on purpose (a fixed
+        // 24/16 rendered the bubble 46 px tall instead of the design's ≈44).
+        "Let's do some quests!": (16, null, FontWeight.w800), // .speech
         '120': (16, 16 / 16, FontWeight.w800), // .coin-pill
       };
       for (final MapEntry(key: text, value: spec) in expected.entries) {
@@ -510,7 +536,11 @@ void main() {
         final style = tester.widget<Text>(finder).style!;
         final (size, height, weight) = spec;
         expect(style.fontSize, size, reason: 'font size: $text');
-        expect(style.height, closeTo(height, 0.001), reason: 'line box: $text');
+        expect(
+          style.height,
+          height == null ? isNull : closeTo(height, 0.001),
+          reason: 'line box: $text',
+        );
         expect(style.fontWeight, weight, reason: 'weight: $text');
         expect(
           style.letterSpacing ?? 0,
@@ -529,9 +559,11 @@ void main() {
   });
 
   group('K03 meadow band', () {
-    // 5_ui.md finding 1 (dark-only FAIL driver): the band behind progress +
-    // cards must grade from `kidHorizon` at its top toward the meadow tone —
-    // in BOTH themes, or dark renders a flat navy block.
+    // 5_ui.md finding 2 (dark-only FAIL driver): the band behind progress +
+    // cards must grade from `kidHorizon` at its top to `kidMeadow` — in BOTH
+    // themes, over the DESIGN's gradient span (`components.css` l.25:
+    // kid-horizon at 62 %, kid-meadow at 100 % of 844), or dark renders a
+    // flat navy block (three iterations of deviation 2).
     const themes = <(String, ThemeMode)>[
       ('light', ThemeMode.light),
       ('dark', ThemeMode.dark),
@@ -557,8 +589,10 @@ void main() {
         );
         expect(
           bottom,
-          Color.lerp(tokens.kidHorizon, tokens.kidMeadow, 0.5),
-          reason: 'the band must grade toward the meadow tone, not stay flat',
+          tokens.kidMeadow,
+          reason:
+              'the band must reach the meadow tone, not a half-way blend or '
+              'nothing at all',
         );
         // Full-bleed horizontally, behind progress and the card column.
         final bandRect = tester.getRect(_meadowBandFinder());
@@ -572,6 +606,75 @@ void main() {
           bandRect.bottom,
           greaterThan(tester.getRect(find.byType(NestKidQuestCard).first).top),
         );
+        // The band's top inset is the design's 62 % horizon stop, so the
+        // progress bar still starts `s4` below the section title.
+        expect(
+          tester.getRect(find.byType(NestProgress)).top - bandRect.top,
+          closeTo(NestSpacing.s1, 0.5),
+          reason: 'components.css: kid-horizon 62% → 0.62 x 844 = 523.3',
+        );
+        await disposeApp(tester);
+      });
+
+      // The grade must run over the DESIGN's span (523.3 → 844 ≈ 321 px), not
+      // over the band's whole in-flow height (progress + every card), which is
+      // what left dark mode a flat navy block: at 390×844 the band is ≈640
+      // tall, so a whole-height grade has only reached t ≈ 0.31 by the dock.
+      // This samples the painter's real pixels at the dock's top row.
+      testWidgets('$themeName: the painted grade reaches the dock row', (
+        tester,
+      ) async {
+        await _pumpRoute(tester, theme: theme);
+        await _revealCards(tester);
+        final tokens = Theme.of(tester.element(find.byType(NestProgress)))
+            .extension<NestTokens>()!;
+        final bandRect = tester.getRect(_meadowBandFinder());
+        expect(bandRect.height, greaterThan(400));
+        final painter = tester
+            .widget<CustomPaint>(_meadowBandFinder())
+            .painter!;
+        // `components.css` l.25: kid-horizon at 62 % of 844, kid-meadow at
+        // 100 %; the dock's top border is the design's y 719.
+        const designRun = 844 - 0.62 * 844; // ≈320.7
+        const intoRun = 719 - 0.62 * 844; // ≈195.7
+        const t = intoRun / designRun; // ≈0.61 — where the dock starts
+        final h = bandRect.height.round();
+        final sampled = await tester.runAsync(() async {
+          final recorder = ui.PictureRecorder();
+          (painter as dynamic).paint(
+            Canvas(recorder),
+            Size(NestDevice.width, h.toDouble()),
+          );
+          final image = await recorder.endRecording().toImage(
+            NestDevice.width.toInt(),
+            h,
+          );
+          final data = await image.toByteData();
+          // Sample the row that is `intoRun` px below the BAND's top edge — the
+          // design's y 719 (the dock's top border) when the column is
+          // unscrolled, which is how the band's top is placed on the 62 %
+          // horizon stop. Sampling `t * h` instead would land past the 320.7 px
+          // gradient run and only prove the flat `kidMeadow` clamp.
+          final y = intoRun.round();
+          final at = (y * NestDevice.width.toInt() + 195) * 4;
+          return Color.fromARGB(
+            data!.getUint8(at + 3),
+            data.getUint8(at),
+            data.getUint8(at + 1),
+            data.getUint8(at + 2),
+          );
+        });
+        expect(sampled, isNotNull);
+        final expected = Color.lerp(tokens.kidHorizon, tokens.kidMeadow, t)!;
+        expect(
+          sampled!.r,
+          closeTo(expected.r, 0.03),
+          reason:
+              'the band must reach ~61 % of the horizon→meadow grade by '
+              'the dock top in $themeName mode',
+        );
+        expect(sampled.g, closeTo(expected.g, 0.03));
+        expect(sampled.b, closeTo(expected.b, 0.03));
         await disposeApp(tester);
       });
     }
@@ -952,9 +1055,11 @@ void main() {
       expect(avatar.skin, PipSkin.sunny);
       expect(avatar.accessory, PipAccessory.none);
       expect(avatar.stage, 3);
-      // The shared slot sizes the avatar: design cap 152, scaled by width.
+      // The shared slot sizes the avatar: the design's ≈152 px Pip is the
+      // explicit mode's `fixedPipHeight` (explicit mode ignores `pipSize`,
+      // which stays at its 200 default).
       final slot = tester.widget<NestPetStage>(find.byType(NestPetStage));
-      expect(slot.pipSize, 152);
+      expect(slot.fixedPipHeight, 152);
       expect(_v1PipAssets(tester), isEmpty);
       await disposeApp(tester);
     });

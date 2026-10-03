@@ -26,13 +26,25 @@
    (`bool.fromEnvironment(...) || String.fromEnvironment(...) == '1'`).
    The `K03-BUG-7` proof passes under `=1` and the still-frame path is
    taken; `shot.sh` frames are deterministic again. No action needed.
-6. Need (review finding 1c, iteration 5): a `KidScope` meadow-band
-   height/inset parameter so screens stop painting their own hill. K03
-   paints one in-flow full-bleed band (`_MeadowPainter`, marked
-   `TODO(K03)`) because the shared 136 px bottom hill cannot cover the
-   band the design shows behind progress/cards; same need will hit K06+.
-   Files: `app/lib/core/design_system/theme/kid_scope.dart`.
-   Blocks: no (local panel kept until the API exists).
+6. PARTLY LANDED (review finding 1c, iteration 5; revisited iteration 8):
+   `KidScope` grew `meadowHeight` / `meadowBottom` / `meadowColor`
+   (`core/design_system/theme/kid_scope.dart`, shared batch `7eaa1f7`), so
+   the *parameter* half is done — but K03 still paints its own in-flow band
+   (`_MeadowPainter`, still `TODO(K03)`) because what the design draws is
+   the SCREEN background gradient (`components.css` l.25
+   `linear-gradient(180deg, kid-sky-top 0%, kid-sky-bottom 62%,
+   kid-horizon 62%, kid-meadow 100%)`), and two pieces of it are still
+   missing in `core/`: (a) the flat horizontal 62 % horizon stop —
+   `KidScope`'s hill SVG has a curved crest, so no height parameter
+   reproduces a straight horizon line; (b) the horizon→meadow grade, since
+   `KidScope`'s background has only two stops (`kidSkyTop` →
+   `kidSkyBottom`). Iteration 8's interim fix grades K03's local band to
+   `tokens.kidMeadow` over the design's own 321 px run, so both themes now
+   match the PNGs; request re-scoped to the two missing gradient stops.
+   Files: `app/lib/core/design_system/theme/kid_scope.dart`,
+   `app/lib/core/design_system/components/nest_pet_stage.dart`'s hill asset
+   owner (`meadowHill`).
+   Blocks: no (local panel stays until the flat stop lands).
 7. DONE on main (Stage 2b iteration 6 verified): `NestType.kidName`,
    `NestType.kidCaption` and `NestType.kidChipLabel` exist
    (`app/lib/core/design_system/tokens/typography.dart:128,134,138`) with the
@@ -110,7 +122,22 @@ No schema/DI/token changes needed. No new assets needed (all icons +
 `nest`/`coin`/`meadowHill` exist in `nestling_assets.dart`; Pip renders via
 `PipAvatar` + `pip_v2/mochi` fallbacks).
 
-13. Need (Stage 6 iteration 6, K03-BUG-13/14 — follow-up to #11): the new
+13. DONE on main (shared batch `pet_stage_explicit`, merged into the branch
+    before the iteration-8 build — Stage 2b iteration 8 verified): explicit
+    mode now composes the scene inside the REAL parent box (centred there,
+    scaled down instead of overflowing) and `PipNestFallback` grew
+    `nestHeight` / `visibleNestWidth`, so the design's slot is expressible.
+    K03 calls `NestPetStage(pip: PipAvatar(<child's own>), speech: "Let's do
+    some quests!", nestWidth: 236, nestHeight: 156, fixedPipHeight: 152)` —
+    the box that paints the design's 198 px visible outline (236 ×
+    `visibleNestRatio` 202/240 = 197.9) in the design's 236 px block. All
+    five parked proofs are un-skipped and green: `K03-BUG-13` at 320/390/430,
+    `K03-BUG-14`, and `the pet slot matches the design geometry`
+    (`kid_home_geometry_test.dart`, real fonts: nest centre 195±1, nest box
+    236±2 → 198 visible, Pip centre 195±1, hearts centre 448±2, first card
+    top 559±2). The request is closed; the original analysis is kept below for
+    the trail.
+    Need (Stage 6 iteration 6, K03-BUG-13/14 — follow-up to #11): the new
     explicit size mode does not respect the parent width, and cannot express
     the design's pet slot at all. K03 calls
     `NestPetStage(nestWidth: 260, fixedPipHeight: 152)`; the shared component
@@ -201,16 +228,18 @@ No schema/DI/token changes needed. No new assets needed (all icons +
     Blocks: no (helper is tested in place: `switchMapStream` group in
     `kid_home_bloc_test.dart`).
 
-15. Need (iteration 7, 5_ui finding 3): the shared speech bubble renders
-    `NestSpeechBubble` = 3 px border + `NestSpacing.s2` (8) padding + 16/24
-    text + 8 padding + 3 px → ≈46 logical px tall; the K03 design measures
-    ≈35 (`.speech { padding: 8px 14px }` with a smaller line-height — its
-    bbox after `8px 14px` padding and a 3 px ink border is smaller). The
-    padding/size are hard-wired in the shared component
-    (`nest_pet_stage.dart`), so the exact PNG height can only be met by
-    exposing a `padding`/`textStyle` override (or by shrinking the default's
-    vertical padding to match the PNG: 35 − (3+3) − 24 ≈ 5 →
-    `NestSpacing.gap5`). Files:
+15. CLOSED — no change wanted (iteration 7 finding; settled in iteration 8):
+    the shared bubble already matches `.speech`, and the "≈35 px" target was
+    a misread of the inner white area of the design PNG. `ORCHESTRATOR_NOTES`
+    UPDATE (08:32) rules that 44 px is the design's FULL height: `.speech`
+    sets no `line-height`, so the browser renders `normal` (≈22 px in Nunito)
+    and the fix belongs in the shared component, which now omits `height`
+    instead of hard-coding 24/16 (a fixed 24/16 rendered it 46 px tall).
+    K03's typography proof records the browser-default line height instead of
+    pinning 24/16. No API change requested.
+    Original need (5_ui finding 3, closed as above): the shared speech bubble
+    rendered `NestSpeechBubble` 3 px border + `NestSpacing.s2` (8) padding +
+    16/24 text + 8 padding + 3 px → ≈46 logical px tall, against a reported
+    ≈35 in the design. Files:
     `app/lib/core/design_system/components/nest_pet_stage.dart`.
-    Blocks: no (drift is minor and current render is consistent, just
-    slightly taller).
+    Blocks: no.

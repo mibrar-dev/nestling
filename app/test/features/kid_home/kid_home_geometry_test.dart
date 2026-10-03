@@ -19,23 +19,22 @@
 //   progress bar       y ≈527…542
 //   first card top     ≈559
 //
-// PARKED, not passing. `NestPetStage`'s explicit-size mode composes the scene
-// in `stageW = nestW / 0.62`, i.e. the nest box may occupy only 62 % of the
-// stage (≈19 % margin each side). Inside the 350 px content box that caps the
-// nest box at 217 → a ≈182 px visible outline, 16 px under the design's 198.
-// Producing a 198 px outline needs a ≈236 box, whose scene is 381 px wide —
-// 31 px wider than the content box, so it overflows and the internal
-// `Positioned`s (computed against the nominal width) land the nest +34.7 px
-// right of the axis and clip it at 320. Size and centring are therefore
-// mutually exclusive until the shared stage ratio is fixed; that fix lives in
-// `core/` and is filed as SHARED_REQUEST #13.
+// LANDS and PASSING (iteration 8). SHARED_REQUEST #13's shared fix
+// (`shared/pet_stage_explicit`) composes the scene in the REAL parent box
+// instead of a nominal `stageW = nestW / 0.62`, and `PipNestFallback` grew
+// `nestHeight` / `visibleNestWidth`, so size and centring are no longer
+// mutually exclusive: K03 passes `nestWidth: 236, nestHeight: 156,
+// fixedPipHeight: 152`, the box that paints the design's 198 px visible
+// outline (236 × `visibleNestRatio` 202/240 = 197.9) centred on the axis, in
+// the design's 236 px block. Measured here at real fonts — nest centre 195
+// (±1), nest box 236 wide (±2, → 198 visible), Pip centre 195 (±1), hearts
+// centre 448 (±2), first card top 559 (±2). Before that fix the same pin read
+// nest centre 229.7 (+34.7), hearts 494.0 (+46), first card 615.0 (+56),
+// reproducing the device captures exactly, which is what makes the pin
+// trustworthy.
 //
-// Keep this file. Un-skip the proof when #13 lands:
-//   flutter test --run-skipped --plain-name "the pet slot matches the design"
-// Current (skipped) behaviour, measured here at real fonts — these reproduce
-// the device captures exactly, which is what makes the pin trustworthy:
-// slot 20…370 centre 195 ✓ · nest box 99.7…359.7 centre 229.7 (+34.7) ·
-// hearts centre 494.0 (+46 vs design 448) · first card top 615.0 (+56 vs 559).
+// Keep this file. Run it directly:
+//   flutter test test/features/kid_home/kid_home_geometry_test.dart
 
 import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_svg/flutter_svg.dart';
@@ -61,9 +60,8 @@ Future<void> loadBundledFonts() async {
 }
 
 /// The nest picture inside the shared fallback scene. Width-tolerant on
-/// purpose: the shared fix will move the box off 260, and this pin must
-/// survive that (the 260-specific finder in `kid_home_view_test.dart` is for
-/// the current geometry).
+/// purpose so this pin survives a future box change here; the
+/// `kid_home_view_test.dart` sibling finder pins the current 236 box.
 final Finder _nestPicture = find
     .descendant(
       of: find.byType(PipNestFallback),
@@ -112,6 +110,6 @@ void main() {
       expect(card1.top, closeTo(559, 2));
 
       await disposeApp(tester);
-    }, skip: true);
+    });
   });
 }

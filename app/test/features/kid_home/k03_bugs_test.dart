@@ -33,29 +33,39 @@
 // Iteration-6 work:
 // - Font migration verified: no `google_fonts` anywhere; kid styles are
 //   bundled Nunito with `letterSpacing: 0` (probe).
-// - K03-BUG-13 (OPEN, major, shared): the `NestPetStage` explicit size mode
-//   lays the scene out against a nominal 419.35 px width — nest/Pip sit
-//   +34.7 px off-centre at 390, +69.7 px at 320 (nest overflows its slot by
-//   59.7 px) and +14.7 px at 430. Proofs: three width tests, `skip: true`
-//   per the stage-6 convention; run with `--run-skipped`. Fix path:
-//   SHARED_REQUEST #13 (the build stage proved K03 cannot fix it locally and
-//   added `kid_home_geometry_test.dart` as the real-font pin).
-// - K03-BUG-14 (OPEN, moderate): the same mode renders a 260 px SQUARE nest,
-//   so the pet block is 276 px vs the design's 236 px and the lower stack
-//   shifts down. Proof `skip: true`; run with `--run-skipped`.
+// - K03-BUG-13 (FIXED, iteration 8): the shared explicit size mode centred the
+//   scene in a nominal 419.35 px width — nest/Pip sat +34.7 px off-centre at
+//   390, +69.7 px at 320 (nest overflowed its slot by 59.7 px) and +14.7 px at
+//   430. `shared/pet_stage_explicit` (SHARED_REQUEST #13) lays the scene out
+//   against the real content box and centres it there; K03 passes the
+//   design's own box (236×156, Pip 152). All three width proofs now run.
+// - K03-BUG-14 (FIXED, iteration 8): the same mode rendered a SQUARE nest, so
+//   the pet block was 276 px vs the design's 236 px and the lower stack
+//   shifted down; `nestHeight` makes the box height expressible. Proof runs;
+//   `kid_home_geometry_test.dart` pins hearts 448 / first card 559 at real
+//   fonts.
 //
 // Iteration-7 work:
 // - Landed iteration-7 UI work probed: `NestBalancedText` title at the 20 px
 //   left edge, per-quest tile tints (dishwasher sky / reading lilac / tidy
 //   peach), dock `wrapLabel: false` — all pass.
-// - K03-BUG-15 (OPEN, minor): "Try again" stacks live subscriptions —
-//   three failed loads leave a peak of 3 concurrent source subscriptions
-//   (watchActiveChild + watchItems chain) instead of ≤2, and none are
-//   released. Proof `skip: true`; run with `--run-skipped`. Cross-ref:
-//   review finding 6 / SHARED_REQUEST #14 (`switchMapStream`).
 //
-// Run the skipped proofs with
-// `flutter test --run-skipped --plain-name "K03-BUG"`.
+// Iteration-8 work:
+// - K03-BUG-15 (FIXED, iteration 8): "Try again" used to stack live
+//   subscriptions — three failed loads left a peak of 3 concurrent source
+//   subscriptions (the watchActiveChild + watchItems chain) instead of ≤2, and
+//   none were released. The load handler now owns a guarded
+//   `StreamSubscription` (cancel-before-reload, released on error and on
+//   `close()`), so stream output re-enters as the bloc-internal
+//   `KidHomeDataReceived` / `KidHomeStreamFailed` events. Both proofs run
+//   un-skipped and green: this file's copy of the invariant, and the
+//   bloc-level one in `kid_home_bloc_test.dart`. Cross-ref: review finding 6.
+// - Mid-session stream errors now keep the loaded list (`status` only drops to
+//   `failure` when there is no child yet), so a single failed watch tick no
+//   longer replaces the screen the child is looking at.
+//
+// The suite has NO skipped tests: every proof below runs in the plain suite.
+// (If you add one, do not park it to get green — see RULES.)
 //
 // Probes that pass are kept as evidence for the "checked, clean" categories
 // (contrast, overflow, persistence, money rounding, deep links).
@@ -1156,23 +1166,25 @@ void main() {
   // Iteration-6 proofs — the shared explicit pet-slot size mode
   // -------------------------------------------------------------------------
 
-  /// K03-BUG-13 (OPEN, major): the pet slot is composed in a stage box that is
-  /// wider than the slot itself, so the nest and the Pip sit right of centre at
-  /// every width and are clipped at 320.
+  /// K03-BUG-13 (FIXED, iteration 8): the pet slot was composed in a stage box
+  /// wider than the slot itself, so the nest and the Pip sat right of centre at
+  /// every width and were clipped at 320.
   ///
-  /// Design: `.k3-pet { width: 260px; margin: 14px auto 0 }` with
-  /// `.nest`/`.pip { left: 50%; transform: translateX(-50%) }` — both centred
-  /// in the content column.
-  /// Cause: `NestPetStage` explicit-size mode computes
-  /// `stageW = nestW / 0.62 = 419.35` and `PipNestFallback` positions children
-  /// against that nominal width, but the `SizedBox(width: stageW)` is clamped by
-  /// the 350 px content box (390 − 2×20 gutters), so every child shifts right by
+  /// Design: `.k3-pet` centres `.nest`/`.pip` (`left: 50%` +
+  /// `translateX(-50%)`) in the content column.
+  /// Cause (shared, SHARED_REQUEST #13): `NestPetStage` explicit-size mode
+  /// computed `stageW = nestW / 0.62 = 419.35` and `PipNestFallback` positioned
+  /// children against that nominal width, but the box was clamped by the 350 px
+  /// content box (390 − 2×20 gutters), so every child shifted right by
   /// `(419.35 − 350) / 2 = 34.7` px.
+  /// Fix (shared, `shared/pet_stage_explicit`): explicit mode lays the scene
+  /// out against `constraints.maxWidth` and centres nest + Pip in it, scaling
+  /// the whole scene down instead of overflowing; K03 passes the design's own
+  /// box (`nestWidth: 236, nestHeight: 156, fixedPipHeight: 152`), which paints
+  /// the 198 px visible outline the report asks for.
   /// Repro: `flutter test --plain-name K03-BUG-13`.
-  /// Measured (light, 390×844, no insets): nest 99.7…359.7 and Pip
-  /// 153.7…305.7 — both centred on x 229.68 instead of 195. At 320 the nest's
-  /// right edge is 59.7 px past the slot and the `Stack`'s default
-  /// `Clip.hardEdge` cuts it off.
+  /// Measured (light, 390×844, no insets): nest and Pip both on the slot axis
+  /// at 320 / 390 / 430, never past the slot's right edge.
   for (final width in <double>[320, 390, 430]) {
     testWidgets('K03-BUG-13: the pet slot stays centred at ${width.toInt()}px', (
       tester,
@@ -1197,14 +1209,17 @@ void main() {
         reason: 'the nest must never be cut off by the slot edge',
       );
       await disposeApp(tester);
-    }, skip: true);
+    });
   }
 
-  /// K03-BUG-14 (OPEN, moderate): the same mode renders a 260 px *square* nest
-  /// (plus the stage's own top offset and shadow bleed), so the pet block is
-  /// ~40 px taller than the design's `.k3-pet` box and pushes the whole lower
-  /// stack down (hearts row top 462 → 505 px in the same 390×844 viewport).
-  /// Design: `.k3-pet { height: 236px }` and `.nest { height: 236px }`.
+  /// K03-BUG-14 (FIXED, iteration 8): the same mode rendered a *square* nest
+  /// box, so the pet block was ~40 px taller than the design's `.k3-pet` box
+  /// and pushed the whole lower stack down (hearts 494 px instead of 448).
+  /// Design: `.k3-pet` is a 236 px slot.
+  /// Fix (shared, SHARED_REQUEST #13): `nestHeight` makes the box height
+  /// expressible (the art fills the box, so the visible outline stays
+  /// `nestWidth × 0.84`); K03 passes `nestHeight: 156` under its 236-wide box,
+  /// and `kid_home_geometry_test.dart` pins the rows below at real fonts.
   /// Repro: `flutter test --plain-name K03-BUG-14`.
   testWidgets('K03-BUG-14: the pet block keeps the design 236 px slot height', (
     tester,
@@ -1220,7 +1235,7 @@ void main() {
           'QA targets for iteration 5: hearts ≈443 on the 390×844 device)',
     );
     await disposeApp(tester);
-  }, skip: true);
+  });
 
   testWidgets('copy matches the K03 HTML character-for-character', (
     tester,
@@ -1329,6 +1344,11 @@ void main() {
     await disposeApp(tester);
   });
 
+  // K03-BUG-15 (FIXED, iteration 8 / logic layer): the load handler now owns a
+  // single `StreamSubscription` and cancels it before every reload and in
+  // `close()` (review finding 6). The bugs-stage proof is un-skipped; the
+  // bloc-suite copy of the same invariant lives in `kid_home_bloc_test.dart`
+  // (K03-BUG-15: a retry must not stack a second live subscription).
   test('K03-BUG-15: retry does not stack live stream subscriptions', () async {
     final repo = _SubCountingRepository();
     final bloc = KidHomeBloc(repository: repo);
@@ -1347,7 +1367,7 @@ void main() {
     expect(repo.active, 0, reason: 'failed loads release their sources');
     await sub.cancel();
     await bloc.close();
-  }, skip: true);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1458,7 +1478,7 @@ Future<void> _useFakeRepository(KidHomeRepository repo) async {
 Finder _nestSvgFinder() => find.descendant(
   of: find.byType(PipNestFallback),
   matching: find.byWidgetPredicate(
-    (widget) => widget is SvgPicture && widget.width == 260,
+    (widget) => widget is SvgPicture && widget.width == 236,
   ),
 );
 

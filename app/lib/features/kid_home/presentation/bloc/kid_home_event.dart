@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:nestling/features/kid_home/domain/entities/kid_home_data.dart';
 
 sealed class KidHomeEvent extends Equatable {
   const new();
@@ -26,4 +27,26 @@ final class KidHomeQuestCompleted extends KidHomeEvent {
 
   @override
   List<Object?> get props => <Object?>[childId, questId, coins];
+}
+
+/// Bloc-internal (K03-BUG-15): a fresh emission from the home stream. Views
+/// never send this; the bloc raises it from its own subscription so a reload
+/// can guard on the live subscription instead of stacking handlers.
+final class KidHomeDataReceived extends KidHomeEvent {
+  const new(this.home);
+
+  final KidHomeData home;
+
+  @override
+  List<Object?> get props => <Object?>[home];
+}
+
+/// Bloc-internal (K03-BUG-15): the home stream errored. Views never send this.
+final class KidHomeStreamFailed extends KidHomeEvent {
+  const new(this.error);
+
+  final Object error;
+
+  @override
+  List<Object?> get props => <Object?>[error];
 }
