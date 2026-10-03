@@ -1,140 +1,153 @@
-# P06 Pocket money setup — UI build (Stage 2b, iteration 6)
+# P06 Pocket money setup — UI build (Stage 2b, iteration 7)
 
-Route `/pocket-money-setup` · feature `pocket_money` · parent mode · onboarding
-(P05 → P06 → P07). Owned in this stage:
-`app/lib/features/pocket_money/presentation/{views,widgets}/**` and the
-view/widget tests under `app/test/features/pocket_money/`.
+Scope of this stage: `app/lib/features/pocket_money/presentation/views/**` +
+`presentation/widgets/**` and the view/widget tests. No domain/data/bloc file
+touched (the logic builder worked in the same worktree in parallel — its
+`2a_build_logic.md` reports review finding 4 done and **no contract changes**,
+so the view codes against the same events/states as iterations 3–6).
 
-## CONTRACT CHANGES (from `2a_build_logic.md`)
+All five UI items in `FIXES_6.md` (review findings 1, 2, 5, 6, 8) plus the
+`ORCHESTRATOR_NOTES` 09:30 and 09:42 items are done. The coin-row fix also
+turned **P06-BUG-13** green, so its skipped test is un-skipped: there is now
+**no `skip:` anywhere** in `app/test/features/pocket_money/`.
 
-None — "No event/state/repository signature changes; no files in the logic
-layer needed edits this iteration. The UI builder's contract is exactly as in
-iterations 3–5." Re-read before finishing: nothing to migrate.
+## Files changed
 
-## Starting state
+| File | Change |
+|---|---|
+| `presentation/views/pocket_money_setup_view.dart` | findings 1, 2, 5, 6, 8 (+ BUG-13) |
+| `test/features/pocket_money/pocket_money_setup_view_test.dart` | +2 tests (finding 2), `SemanticsAction` import |
+| `test/features/pocket_money/p06_bugs_test.dart` | P06-BUG-13 un-skipped + its stale "this is the bug" comment rewritten |
+| `docs/screens/P06/2b_build_ui.md` | this report |
 
-The loop merged `main` into `screen/P06` (`310514a`) **before** this stage, so
-both shared fixes behind iteration 5's open bugs are now in the worktree:
+## What changed, item by item
 
-* `shared/balanced_text_ellipsis` (`9ba19ab`) — `NestBalancedText` no longer
-  hard-codes `ellipsis: '…'` in `lineCountFor` and defaults to
-  `overflow: TextOverflow.clip`, which is what un-collapsed the H1.
-* `P06WeeklyStepper` (feature-private, `presentation/widgets/`) already renders
-  the design's `&minus;` (U+2212) paired with U+002B `+`.
+### Finding 1 / ORCHESTRATOR 09:30 — the coin value is now right-aligned
 
-Consequence: **P06-BUG-11 and P06-BUG-12 no longer need a skip.** Both proofs in
-`p06_bugs_test.dart` were already un-skipped and green in the merged tree; I
-verified there are **zero `skip:` occurrences** left anywhere in
-`app/test/features/pocket_money/` and re-ran them (below). The orchestrator
-rule "keep using `NestBalancedText`; do not work around it" is honoured —
-`_SetupTitle` still renders the copy through `NestBalancedText`, no local
-`maxLines`/overflow override was added.
+`_CoinValueRow`: the trailing value was a **loose** `Flexible`, so it took its
+intrinsic width and its text ended at ≈322 instead of the card's content edge
+(354 — the same edge as the `+` buttons and the Sun pill). It is now a tight
+`Expanded` with `textAlign: TextAlign.end`, exactly the note's prescription.
 
-## FIXES_5 — item by item
+The value's ink right edge now lands on `card.right − s4` (±1 px) in light,
+dark and at 430 — the three tests that were red in `3_test.md` pass.
 
-### From `4_review.md`
+### P06-BUG-13 — the coin-value **label** no longer truncates at 320 × 1.3
 
-| # | Item | State after the `main` merge | Action this stage |
-|---|---|---|---|
-| 1 | **MAJOR** — H1 collapsed to one ellipsized line (`How does pocket mone…`), dragging the card 34 px up | **Fixed by shared `9ba19ab`**; the view already used `NestBalancedText`. Verified the rendered paragraph is 350×68, `didExceedMaxLines == false`, card back at 415–684 | No view edit (a local override would violate the rule). **Added a new guard**: the H1 must break *after "money"* in the balanced box — see tests below |
-| 2 | **MAJOR** — no real-font geometry test pinning the 07:22 y values | `pocket_money_setup_view_geometry_test.dart` exists (real `FontLoader` Inter/Nunito) | **Extended** with an H1-break guard and a full dark-mode pass |
-| 3 | **MAJOR** — stepper minus is `'-'` (U+002D), not `&minus;` (U+2212) | `P06WeeklyStepper` renders `kP06StepperMinusGlyph = '−'`; `p06_weekly_stepper_widget_test.dart` pins it | None needed; **SHARED_REQUEST item 4** stands (shared `NestStepper` still hard-codes `'-'`, no glyph override) |
-| 4 | **MINOR** — the `role="group" aria-label="Payout day"` section label was dropped from the day strip | `_DayCell` already labels each cell `Payout day: Mon` … `Payout day: Sun` (no extra widget in the chain, so `NestChipWrap`'s ±5 px hit slop is untouched) | Verified; nothing to change |
-| 5 | **MINOR** — invented empty-state copy `Add children to set weekly amounts.` | Unchanged — the review's own resolution is "Keep as a finding-to-be-ratified, not a fix"; no source exists in `DESIGN_SPEC.md §5` or the HTML | **Left as-is** (still open for orchestrator ratification). Swapping in any other sentence would be equally unratified. Re-confirmed green at 320 dp × 1.3 by `p06_bugs_test.dart` |
+`Expanded` + `TextAlign.end` alone is not enough: with two flex children the
+row still splits 50/50, so at 320 dp × 1.3 the label's 98 px share was narrower
+than `Coin value` at Inter 16 × 1.3 and it painted `Coin val…` (the reason
+`p06_bugs_test.dart` carried the screen's only `skip:`). The label now has
+`softWrap: true, maxLines: 2`, so it wraps instead of truncating and the
+*value* — the one text `1_plan.md` §5 sanctions for ellipsis — takes the
+shortfall. Above 320 dp the label still prints on one line, so the design is
+unchanged (the 390 geometry guard, which pins the card at top 415 / height
+270 and every y anchor, is unchanged and green).
 
-### From `5_ui.md`
+Two layouts were tried and rejected on evidence, both recorded here so the
+next maintainer does not repeat them:
 
-Deviation 1 (H1) is the same shared fix as above. Deviations 2 (status bar),
-5 (bottom strip — owner BOTTOM EDGE override, the app is right) and 6
-(rasterisation artefact) are non-items per the brief. Deviation 3 (day-chip
-glyph size) is resolved by `_DayPill` rendering the 13 px `NestType.fieldLabel`
-directly instead of the shared `NestChip` + `FittedBox`; only de-duplication
-remains (`SHARED_REQUEST` item 5). Deviation 4 (coin tile) now uses the design's
-own `assets/coin.svg` via `NestlingIllustrations.coin`.
+- **label as a non-flex `Text`** (intrinsic width, value `Expanded`): in a
+  widget test the fallback font is 1 em per glyph, so `Coin value` needs 208 px
+  of the row's 196 px → `A RenderFlex overflowed by 12 pixels on the right` at
+  320 × 1.3 (6 tests red). The real-font matrix was fine; the test font was
+  not.
+- **a narrow-width wrap branch** (value on its own line, like
+  `_WeeklyBaseRow`): that would make the value print in full at 320 and force
+  a rewrite of the `3_test.md` matrix assertions, for a width the design does
+  not define. `maxLines: 2` fixes the label inside the design's own layout.
 
-### From `6_bugs.md`
+### Finding 2 / ORCHESTRATOR 09:42 — the screen's two primary controls are operable again
 
-`P06-BUG-11` and `P06-BUG-12` proofs pass un-skipped. No new skips added.
+`_PocketOptionCard` and `_DayCell` both wrapped a `GestureDetector(onTap:)` in
+`Semantics(excludeSemantics: true)`, which drops every descendant contribution
+**including the tap action**: the probe in `4_review.md` showed
+`tap=false actions=0` for all three cards and all seven day cells, i.e. a
+screen reader could not activate the money-style or payout-day choice. One line
+per widget — `onTap: onTap` on the `Semantics` node — restores
+`SemanticsAction.tap` without adding a second semantics node (the single-node
+announcement the rest of the suite relies on is preserved).
 
-## Design re-measure (PNG ÷3) vs the shipped view
+Two new tests:
 
-I re-measured both design PNGs pixel-by-pixel with a colour-run scan and
-compared against the iteration-5 app screenshot (`ui/app_light_5.png`) and the
-code:
+1. **every option card and day cell exposes a tap action** — all ten cells
+   `hasAction(SemanticsAction.tap) == true` and `isButton == true`; the three
+   cards additionally assert the radiogroup flags (finding 6).
+2. **performing the tap action really writes the choice** — `performAction`
+   through `tester.semantics` on `Earn per quest` and `Payout day: Mon`, then
+   asserts the selection flags moved. The action is proved *wired*, not just
+   declared.
 
-* **H1** design: glyph rows 113–172, line 1 x 21.7–350.7 (329 wide). App:
-  box `x = 20`, balanced width **331.2**, break **"How does pocket money" /
-  "work in your house?"** — the design's break, left-aligned at the 20 px
-  gutter (BALANCED HEADINGS + ALIGNMENT satisfied).
-* **Option cards** design 191/263/335, 64 tall, x 20–370. App identical; the
-  only difference in iteration 5 was the 34 px shift inherited from the H1.
-* **Settings card** design 415–684 (270 tall); label 431, chips 455–487,
-  dividers 495 / 620, "Weekly base" 503, Maya 545, Leo 589, coin 650.
-* **Day strip** — the design's pills run x 36–75.7 / 82–122.9 / … / 314–353.7
-  with 6 px gaps; the app produces the same runs to within 0.3 px. Cell width
-  `(390 − 2·20 − 2·16 − 6·6)/7 = 40.28` matches the CSS `repeat(7, 1fr)`
-  `gap: 6`.
-* **Selected radio** design: 22 px circle, 2 px `leaf` ring, 3.7 px `leafTint`
-  ring, 9.7 px `leaf` centre (i.e. the `inset 0 0 0 4px leaf-tint` read).
-  App: identical rects and colours to a 1-bit rounding difference.
-* **Dark PNG** carries the same anchors as light (H1 113–172, cards
-  191/263/335, card 415–684, chips 455–487, CTA border 685) — only colours
-  change (page `21,19,31`, panel `31,28,46`).
-* **CTA / BOTTOM EDGE**: the panel's `surface` reaches y 844 in the app
-  screenshot; the design paints paper below 810 (its `.home-indicator` strip),
-  which the owner BOTTOM EDGE rule overrides. App is correct.
+### Finding 6 — the options announce as radios, not generic buttons
 
-## Changes made
+The HTML source is a `role="radiogroup"` of `role="radio"` buttons with
+`aria-checked`. The three cards now add `checked: selected` and
+`inMutuallyExclusiveGroup: true` on top of the existing `selected:` (purely
+additive; the existing `isSelected` assertions are untouched), so a screen
+reader gets "radio, 3 of 3, selected" and can tell the group is single-select.
 
-`app/test/features/pocket_money/pocket_money_setup_view_geometry_test.dart`
-(only file touched — the view/widgets needed no edit after the merge):
+### Finding 5 — `_FailureBody` no longer re-subscribes to the bloc
 
-1. `_pumpOnboardingKids` takes a `theme` (`pumpAppRoute` already supported it).
-2. **New test — the H1 break.** Asserts the heading's rendered box starts at the
-   20 px gutter, is wider than 320 and never wider than the 350 px column, and
-   that a `TextPainter` laid out at that rendered width produces exactly two
-   lines whose first line ends after `"How does pocket money"` and does not
-   contain `"work"`. This pins the BALANCED HEADINGS rule on *this* screen
-   rather than trusting the shared component's defaults: it fails if the break
-   orphans a word, if a future edit re-narrows the box, or if the component
-   regresses back to ellipsis-collapsing.
-3. **New group — dark mode.** The dark PNG has identical anchors, so the
-   previously light-only pins are replayed under `ThemeMode.dark`
-   (H1 107/68, card 415–684 x 20–370, chips 455/32, "Weekly base" 503, Maya
-   545, Leo 589, coin 650, CTA bottom 844) plus token-colour checks: scaffold
-   `= tokens.paper`, CTA panel decoration `= tokens.surface`, selected Sat pill
-   `= tokens.leafTint`, and `takeException() == null`.
+It took its message from `context.watch<PocketMoneyBloc>().state` while being
+built *inside* the `BlocBuilder` that filters with `buildWhen` — so it rebuilt
+on every emission, including ledger-only ones the filter exists to drop. It now
+takes `errorMessage` from the builder like `_LoadedBody` already does.
 
-`docs/screens/P06/SHARED_REQUEST.md` — item 3 marked **CLOSED** (it was stale:
-the component is merged and its defaults are fixed; the real remaining ask is
-item 4, `NestStepper`'s U+2212).
+### Finding 8 — the radio dot's diameter is a size, not a gap
+
+`_RadioDot._dotDiameter = 10` (private constant, CSS derivation in the
+doc-comment) replaces `NestSpacing.gap10`, which read as "a 10 px gap" to the
+next maintainer.
+
+## Design / layout impact
+
+None above the coin row: the option cards, the day strip, the weekly-base rows,
+the dividers, the CTA and the bottom edge are untouched by this iteration, and
+the real-font geometry guard still matches `design/screens/light|P06` ÷3
+(H1 107–175, cards 191/263/335 at 64 tall, card 415–685, pills 455–487,
+dividers 495/620, CTA border 685) in both themes. Owner rules re-checked
+through the suite: bottom edge (CTA surface to the physical edge, light and
+dark, OS inset 0 and 34), single 20 px gutter, `NestBalancedText` on the H1,
+`NestChipWrap` for the day row, letterSpacing 0 everywhere, no hard-coded
+colours, children in insertion order, no Pip, no `subscription_status`.
 
 ## Checks run (stage-allowed only)
 
-* `flutter analyze lib/features/pocket_money test/features/pocket_money` →
-  **No issues found!** (two `unnecessary_non_null_assertion` warnings my first
-  draft of the dark test raised were fixed, not ignored).
-* `dart format` on the feature + its tests → 0 changed.
-* `flutter test test/features/pocket_money/` → **+157: All tests passed!**
-  (0 skips; BUG-11/BUG-12 included).
-* No whole-app `flutter test`, no simulator booted/installed/screenshotted, no
-  `flutter clean`, no `flutter run`, no files outside
-  `presentation/{views,widgets}/` + `test/features/pocket_money/` + this
-  screen's docs (RULES §1).
+- `flutter analyze lib/features/pocket_money test/features/pocket_money` →
+  **No issues found!** (0 ignores).
+- `dart format --set-exit-if-changed` on `lib/features/pocket_money` +
+  `test/features/pocket_money` → 0 changed.
+- `flutter test test/features/pocket_money` → **+176: All tests passed!**
+  (view 92, geometry 6, stepper 5, bugs 28 — one more than iteration 6, the
+  un-skipped BUG-13 — bloc 30, repository 15, 0 skips).
+- Full-app `flutter test` and the simulator were **not** run — the integrator
+  owns both, and only stage 5 may drive a simulator.
+
+## Deliberately not done
+
+- **Review finding 3** (`NestButton` / `NestChip` drop `SemanticsAction.tap`
+  too, so the `Continue` button is affected). Shared core, forbidden by
+  RULES §1, and the `09:42` note says it is being fixed on
+  `shared/semantics_tap` and must **not** fail P06 — so no SHARED_REQUEST item
+  was filed for it.
+- **Review finding 4** (child-order query) — logic layer; the parallel 2a
+  builder deleted `_watchChildrenInsertionOrder` in favour of
+  `AppDatabase.watchChildren`. Nothing for the UI chunk.
+- **Review finding 7** — the screen-authored empty-state copy
+  `Add children to set weekly amounts.` still has no source in
+  `DESIGN_SPEC.md §5` or the HTML and needs an orchestrator yes/no; it is
+  mandated by `1_plan.md` §4, so the behaviour is right and the string is
+  unchanged for the third iteration. This is the one item waiting on a
+  decision, not on code.
 
 ## LEFT FOR NEXT ITERATION
 
-1. **Empty-state copy ratification** (review #5). `Add children to set weekly
-   amounts.` still has no source in `DESIGN_SPEC.md §5` / the HTML. Needs an
-   orchestrator yes/no; the branch cannot invent a replacement.
-2. **`SHARED_REQUEST` items 4 and 5** (`NestStepper` U+2212 + glyph override,
-   `NestChip` day-cell variant). Both are de-duplication/mitigation asks; the
-   screen is correct and tested without them. When they land, delete
-   `p06_weekly_stepper.dart` and `_DayPill` in one edit each.
-3. **Confirmation screenshot.** This stage may not boot a simulator, so the
-   restored two-line H1 has been verified only through real-font geometry pins,
-   not through `shot.sh` + `compare.py`. The stage-5 UI check should re-shoot
-   `app_light_6.png` / `app_dark_6.png`; the expected mean diff is back to the
-   iteration-4 level (~2.2%) with bands 1–4 no longer inflated by the H1 shift.
+- Stage 5 UI check: re-shoot `cmp_light` / `cmp_dark` — the coin value's ink
+  right edge should now read 354, closing the last item of the 09:30 note
+  (0.89 % drift). No other pixel should move.
+- Orchestrator ratification of the empty-state copy (review finding 7).
+- Once `shared/semantics_tap` lands on main, the `Continue` button joins the
+  same `hasAction(SemanticsAction.tap)` guarantee the screen's own controls now
+  have; no P06 change needed.
 
 VERDICT: PASS

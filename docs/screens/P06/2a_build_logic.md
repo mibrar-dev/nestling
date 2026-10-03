@@ -1,44 +1,57 @@
-# P06 Pocket money setup — logic build (Stage 2a, iteration 6)
+# P06 Pocket money setup — logic build (Stage 2a, iteration 7)
 
 ## CONTRACT CHANGES
 
-None. No event/state/repository signature changes; no files in the logic
-layer needed edits this iteration. The UI builder's contract is exactly as
-in iterations 3–5.
+None. No event/state shape changes and no repository interface changes —
+same events, `PocketMoneyState.setup`, same
+`watchSetup/setMode/setPayoutDay/setWeeklyBasePence` signatures. One
+private helper deleted (see below); all feature fakes still compile
+untouched.
 
-## Files changed (logic layer only)
+## Files changed (logic layer only — no views/widgets touched)
 
-None — verified, no edits needed. FIXES_5 contains zero logic-layer items:
+- `app/lib/features/pocket_money/data/pocket_money_repository_impl.dart`
+  - Review #4: deleted the feature-private `_watchChildrenInsertionOrder`
+    (raw `customSelect … ORDER BY rowid` plus its factually wrong
+    "orders by nickname" rationale) and subscribed `watchSetup` to the
+    canonical `AppDatabase.watchChildren(Seed.familyId)`, which implements
+    the CHILD ORDER ruling (`ORDER BY createdAt, rowid`). Behaviour is
+    unchanged (seed `createdAt` order == `rowid` order; ad-hoc inserts use
+    per-insert `now()`), and the insertion-order tests pin it — including
+    the Anna case, which now exercises the canonical query.
 
-- Findings #1/#2/#3 (MAJOR: H1 `NestBalancedText` collapse, real-font
-  geometry test, stepper minus glyph) are view / view-test / shared-
-  component matters.
-- Findings #4/#5 (day-group semantics label, empty-state copy ratification)
-  are view copy/semantics — UI chunk / orchestrator.
-- P06-BUG-11 (H1 one-line collapse) and P06-BUG-12 (minus hyphen) were
-  rooted in shared components (`nest_balanced_text.dart`, `nest_stepper.dart`)
-  that RULES §1 forbids this screen to edit.
-- All earlier logic items stay fixed with no regressions: BUG-01 (request
-  tracking), BUG-02 (pending-day guard), BUG-06 (`clearErrorMessage`),
-  BUG-07 (unknown-child no-op), BUG-09 (confirm-only pending clear),
-  review #9 (no `watchSetting` subscription), #10 (`emit.isDone` guards),
-  #12 (`ArgumentError` past `assert`).
+## Items done (FIXES_6, logic-layer only)
 
-## Checks run (stage-allowed only, after the fresh main merge `310514a`)
+- #4 (custom child-order query): fixed as above.
+- Everything else in FIXES_6 is view / view-test / shared-component /
+  orchestrator-decision territory and was deliberately not touched: #1
+  (coin-value right alignment, `_CoinValueRow`), #2 (semantics `onTap` on
+  option cards/day cells), #3 (shared `NestButton`/`NestChip` tap action —
+  core, forbidden; SHARED_REQUEST matter), #5 (`_FailureBody` watch), #6
+  (radio semantics), #7 (empty-state copy ratification), #8 (spacing token
+  as size).
+- Skipped bug tests in my layer: none — the single remaining skip in
+  `p06_bugs_test.dart` is P06-BUG-13 (coin-label wrap at 320×1.3), a
+  view-layout probe that can only go green after the view fix for #1.
 
+## Checks run (stage-allowed only)
+
+- `dart format` on the touched file → clean.
 - `flutter analyze` on domain + data + bloc + the three test files →
   `No issues found!`
 - `flutter test pocket_money_setup_bloc_test +
   pocket_money_setup_repository_test` → `All tests passed!` (45/45).
-- `flutter test p06_bugs_test` → `All tests passed!` (+27, ~0 — the shared
-  fixes landed via main and the UI chunk un-skipped the BUG-11/12 proofs;
-  no `skip:` remains anywhere in `app/test/features/pocket_money/`).
+- `flutter test p06_bugs_test` → `All tests passed!` (+27 ~1; the skip is
+  the view-layer BUG-13 probe).
 - Full-app `flutter test` and simulator NOT run (integrator owns them;
   per the SIMULATORS rule only the UI-check stage may boot one).
 
 ## LEFT FOR NEXT ITERATION
 
-Nothing in the logic layer. Remaining FIXES_5 view items (geometry pins,
-semantics label, copy ratification) sit with the UI chunk / integrator.
+Nothing in the logic layer. Open items for the UI chunk / shared track /
+integrator / orchestrator: coin-row alignment (#1, then un-skip BUG-13),
+semantics actions (#2, + shared #3 via SHARED_REQUEST), `_FailureBody`
+watch (#5), radio semantics (#6), copy ratification (#7), radio-dot
+constant (#8).
 
 VERDICT: PASS

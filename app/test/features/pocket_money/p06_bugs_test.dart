@@ -904,9 +904,10 @@ void main() {
 
         // The coin row is one line with two flex children; at 320 × 1.3 the
         // label gets half of 196 px (98) while Inter 16 × 1.3 needs ~105, so
-        // it paints "Coin val…". The weekly-base rows wrap at the same width
-        // (`_WeeklyBaseRow._wrapWidth = 300`); the coin row has no such
-        // branch. The trailing value's ellipsis stays sanctioned (plan §5).
+        // it must wrap to a second line rather than truncate: `_CoinValueRow`
+        // gives the label `maxLines: 2` and lets the *value* — the text
+        // `1_plan.md` §5 sanctions for ellipsis — take the shortfall. Above
+        // 320 dp the label still prints on one line, as the design draws it.
         final label = tester.renderObject<RenderParagraph>(
           find.descendant(
             of: find.text('Coin value'),
@@ -919,7 +920,6 @@ void main() {
 
         await disposeApp(tester);
       },
-      skip: true,
     );
   });
 

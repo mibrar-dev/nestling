@@ -58,27 +58,30 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
     // written in the same transaction — so it is deliberately NOT subscribed:
     // a second subscription would re-emit an identical setup on every
     // mirror write (review #9).
-    return combineLatest2(_watchFamily(), _watchChildrenInsertionOrder()).map((
-      parts,
-    ) {
-      final family = parts[0] as Family?;
-      final children = parts[1] as List<ChildrenData>;
-      return PocketMoneySetup(
-        mode: family?.pocketMoneyMode ?? 'both',
-        payoutDay: family?.payoutDay ?? 6,
-        coinValuePencePerCoin: family?.coinValuePencePerCoin ?? 1,
-        children: children
-            .map(
-              (row) => PocketMoneySetupChild(
-                id: row.id,
-                nickname: row.nickname,
-                avatarColour: row.avatarColour,
-                weeklyBasePence: row.weeklyBasePence,
-              ),
-            )
-            .toList(),
-      );
-    });
+    // Roster order is the canonical CHILD ORDER query (creation order,
+    // Maya before Leo — never alphabetical), not a local raw query
+    // (review #4).
+    return combineLatest2(_watchFamily(), _db.watchChildren(Seed.familyId)).map(
+      (parts) {
+        final family = parts[0] as Family?;
+        final children = parts[1] as List<ChildrenData>;
+        return PocketMoneySetup(
+          mode: family?.pocketMoneyMode ?? 'both',
+          payoutDay: family?.payoutDay ?? 6,
+          coinValuePencePerCoin: family?.coinValuePencePerCoin ?? 1,
+          children: children
+              .map(
+                (row) => PocketMoneySetupChild(
+                  id: row.id,
+                  nickname: row.nickname,
+                  avatarColour: row.avatarColour,
+                  weeklyBasePence: row.weeklyBasePence,
+                ),
+              )
+              .toList(),
+        );
+      },
+    );
   }
 
   /// The `families` row for the demo family (null until the first launch
@@ -87,19 +90,6 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
     return (_db.select(
       _db.families,
     )..where((f) => f.id.equals(Seed.familyId))).watchSingleOrNull();
-  }
-
-  /// Children in the order they were added (Maya, then Leo). Never
-  /// `AppDatabase.watchChildren` — it orders by nickname (Leo first).
-  Stream<List<ChildrenData>> _watchChildrenInsertionOrder() {
-    return _db
-        .customSelect(
-          'SELECT * FROM children WHERE family_id = ? ORDER BY rowid',
-          variables: <Variable>[Variable.withString(Seed.familyId)],
-          readsFrom: <TableInfo<Table, dynamic>>{_db.children},
-        )
-        .watch()
-        .map((rows) => rows.map((row) => _db.children.map(row.data)).toList());
   }
 
   @override

@@ -66,7 +66,9 @@ class PocketMoneySetupView extends StatelessWidget {
                     // usable setup at all) replaces the screen with _FailureBody.
                     final setup = state.setup;
                     if (setup == null) {
-                      return const _SetupScroll(child: _FailureBody());
+                      return _SetupScroll(
+                        child: _FailureBody(errorMessage: state.errorMessage),
+                      );
                     }
                     return _SetupScroll(
                       child: _LoadedBody(
@@ -172,11 +174,16 @@ class _LoadingBody extends StatelessWidget {
 }
 
 class _FailureBody extends StatelessWidget {
-  const _FailureBody();
+  const _FailureBody({required this.errorMessage});
+
+  /// Passed down from the builder (review #5): a nested
+  /// `context.watch<PocketMoneyBloc>()` here re-subscribed and rebuilt the
+  /// failure screen on every state emission, including ledger-only ones the
+  /// outer `buildWhen` deliberately filters out.
+  final String? errorMessage;
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<PocketMoneyBloc>().state;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -184,7 +191,7 @@ class _FailureBody extends StatelessWidget {
         const SizedBox(height: NestSpacing.s4),
         Center(
           child: Text(
-            state.errorMessage ?? 'Something went wrong',
+            errorMessage ?? 'Something went wrong',
             style: NestType.body(color: context.nest.ink2),
             textAlign: TextAlign.center,
           ),
@@ -314,7 +321,18 @@ class _PocketOptionCard extends StatelessWidget {
       key: cardKey,
       button: true,
       selected: selected,
+      // review #6: the HTML source is a `role="radiogroup"` of
+      // `role="radio"` buttons with `aria-checked`, so the choice also
+      // announces as checked and as part of a mutually exclusive group
+      // ("radio, 3 of 3, selected") instead of a plain button.
+      checked: selected,
+      inMutuallyExclusiveGroup: true,
       label: '$title, $sub',
+      // review #2: `excludeSemantics` also drops the GestureDetector's tap
+      // action, which left a control announced as a button that could not be
+      // activated (WCAG 4.1.2 / 2.1.1). Re-declaring onTap restores
+      // `SemanticsAction.tap` without adding a second node.
+      onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -381,6 +399,13 @@ class _RadioDot extends StatelessWidget {
 
   final bool selected;
 
+  /// The design draws the selected centre as a `border: 4px solid
+  /// leaf-tint`-inside-`inset 0 0 0 4px` disc inside the 22px ring
+  /// (`components.css`), i.e. a 14px leaf centre; a 10px dot is the closest
+  /// token-free read. A named constant (not `NestSpacing.gap10`) says "a
+  /// size" instead of "a 10px gap" (review #8).
+  static const double _dotDiameter = 10;
+
   @override
   Widget build(BuildContext context) {
     final tokens = context.nest;
@@ -398,8 +423,8 @@ class _RadioDot extends StatelessWidget {
       alignment: Alignment.center,
       child: selected
           ? Container(
-              width: NestSpacing.gap10,
-              height: NestSpacing.gap10,
+              width: _dotDiameter,
+              height: _dotDiameter,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: tokens.leaf,
@@ -563,6 +588,8 @@ class _DayCell extends StatelessWidget {
       // announcing as bare "Mon", "Tue", … — so the section name rides in
       // each cell's label instead, with no extra widget in the chain.
       label: 'Payout day: $label',
+      // review #2: same dropped-tap-action fix as _PocketOptionCard.
+      onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -733,6 +760,13 @@ class _BaseStepper extends StatelessWidget {
 }
 
 /// Display-only coin-value row: 40px coin-tint tile + label + trailing value.
+///
+/// The value is a *tight* `Expanded` with `TextAlign.end`, so it ends on the
+/// card's content edge — the same edge as the `+` buttons and the Sun pill
+/// (ORCHESTRATOR_NOTES 09:30); a loose `Flexible` sized it to its intrinsic
+/// width and left it 33 px short of that edge. `Expanded` + `softWrap: false`
+/// also keeps it the one text allowed to ellipsize when the row runs out of
+/// room (`1_plan.md` §5: "must ellipsis, never push the tile").
 class _CoinValueRow extends StatelessWidget {
   const _CoinValueRow({required this.coinValuePencePerCoin});
 
@@ -767,14 +801,20 @@ class _CoinValueRow extends StatelessWidget {
               'Coin value',
               style: NestType.body(color: tokens.ink)
                   .copyWith(fontWeight: FontWeight.w600, height: 22 / 16),
-              maxLines: 1,
+              // Two lines, never truncated: the row's *name* must print in
+              // full at 320 dp × 1.3, where the label's share of the row is
+              // narrower than the scaled string (P06-BUG-13). Above 320 dp it
+              // stays one line, exactly as the design draws it.
+              softWrap: true,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          Flexible(
+          Expanded(
             child: Text(
               '10 coins = ${10 * coinValuePencePerCoin}p',
               style: NestType.bodySmall(color: tokens.ink2),
+              textAlign: TextAlign.end,
               softWrap: false,
               overflow: TextOverflow.ellipsis,
             ),

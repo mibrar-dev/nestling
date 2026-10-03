@@ -8,12 +8,13 @@
 // 44dp parent tap targets).
 
 import 'dart:async';
-import 'dart:ui' show Tristate;
+import 'dart:ui' show CheckedState, Tristate;
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart'
     show RenderParagraph, RenderRepaintBoundary;
+import 'package:flutter/semantics.dart' show SemanticsAction;
 import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -1176,6 +1177,130 @@ void main() {
         );
       }
 
+      await disposeApp(tester);
+    });
+
+    // review #2 (4_review.md): the three option cards and the seven day cells
+    // wrap a `GestureDetector(onTap:)` inside `Semantics(excludeSemantics:
+    // true)`, which dropped the `SemanticsAction.tap` a screen reader needs —
+    // they announced as buttons that could not be activated. `onTap:` is now
+    // re-declared on the node itself, so the action is proved both declared
+    // and wired.
+    testWidgets('every option card and day cell exposes a tap action', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpSetup(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      final cells = <Finder>[
+        for (final key in const <ValueKey<String>>[
+          ValueKey('p06_option_weekly'),
+          ValueKey('p06_option_per_quest'),
+          ValueKey('p06_option_both'),
+        ])
+          find.byKey(key),
+        for (var day = 1; day <= 7; day++) find.byKey(ValueKey('p06_day_$day')),
+      ];
+      expect(cells.length, 10);
+      for (final cell in cells) {
+        final data = tester.getSemantics(cell).getSemanticsData();
+        expect(
+          data.hasAction(SemanticsAction.tap),
+          isTrue,
+          reason:
+              '"${data.label}" must announce a tap action — a control that '
+              'cannot be activated fails WCAG 2.1 AA SC 4.1.2 / 2.1.1',
+        );
+        expect(data.flagsCollection.isButton, isTrue);
+      }
+
+      // review #6: the HTML is a `role="radiogroup"` of `role="radio"`
+      // buttons, so the three cards also announce as checked / mutually
+      // exclusive (a screen reader reads "radio, 3 of 3, selected").
+      for (final key in const <ValueKey<String>>[
+        ValueKey('p06_option_weekly'),
+        ValueKey('p06_option_per_quest'),
+        ValueKey('p06_option_both'),
+      ]) {
+        final data = tester.getSemantics(find.byKey(key)).getSemanticsData();
+        expect(
+          data.flagsCollection.isInMutuallyExclusiveGroup,
+          isTrue,
+          reason: 'the option cards are one radiogroup',
+        );
+        // Exactly the selected card checks: a radiogroup reports false for the
+        // other two, which is what makes the group single-select legible.
+        final isBoth = key == const ValueKey('p06_option_both');
+        expect(
+          data.flagsCollection.isChecked,
+          isBoth ? CheckedState.isTrue : CheckedState.isFalse,
+          reason: 'radio state mirrors the card selection',
+        );
+      }
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('performing the tap action really writes the choice', (
+      tester,
+    ) async {
+      // The handle must be disposed before the test body ends (the framework
+      // verifies it), not left to a tearDown.
+      final semantics = tester.ensureSemantics();
+      await setUpTestScope();
+      await _pumpSetup(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+      Future<void> settle() async {
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 250));
+      }
+
+      bool isSelected(Finder finder) =>
+          tester
+              .getSemantics(finder)
+              .getSemanticsData()
+              .flagsCollection
+              .isSelected ==
+          Tristate.isTrue;
+
+      // The money style: the seed is `both`, the action selects `per_quest`.
+      expect(isSelected(find.byKey(const ValueKey('p06_option_both'))), isTrue);
+      tester.semantics.performAction(
+        find.semantics.byLabel(
+          'Earn per quest, Coins turn into pence at payout',
+        ),
+        SemanticsAction.tap,
+      );
+      await settle();
+      expect(
+        isSelected(find.byKey(const ValueKey('p06_option_per_quest'))),
+        isTrue,
+      );
+      expect(
+        isSelected(find.byKey(const ValueKey('p06_option_both'))),
+        isFalse,
+      );
+
+      // The payout day: the seed is Saturday, the action moves it to Monday.
+      expect(isSelected(find.byKey(const ValueKey('p06_day_6'))), isTrue);
+      tester.semantics.performAction(
+        find.semantics.byLabel('Payout day: Mon'),
+        SemanticsAction.tap,
+      );
+      await settle();
+      expect(isSelected(find.byKey(const ValueKey('p06_day_1'))), isTrue);
+      expect(isSelected(find.byKey(const ValueKey('p06_day_6'))), isFalse);
+
+      semantics.dispose();
       await disposeApp(tester);
     });
 

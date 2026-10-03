@@ -33,3 +33,8 @@ Fix the two spacings so every element lands within ±1 px. Add a geometry test w
 ## UPDATE (09:30, orchestrator QA of cmp_light_6, 0.89%) — one item left
 - The Coin value row: "10 coins = 10p" must be RIGHT-aligned to the card's inner padding. In the design its right edge is x ≈ 354, the same right edge as the "+" buttons and the Sun chip. In the app it ends at x ≈ 322. Make the value a trailing, right-aligned element (Expanded/Spacer + TextAlign.end). Add a geometry test: the value's right edge == the card content's right edge ±1.
 Everything else matches. Do not touch anything else.
+
+## UPDATE (09:42) — iteration 7 (last pass)
+- Fix review finding 2 in THIS feature: add `onTap:` to the Semantics node of `_PocketOptionCard` and `_DayCell`. Add tests that `hasAction(SemanticsAction.tap)` holds for all 3 cards and all 7 days, and that `performAction` changes the DB.
+- Review finding 3 (NestButton/NestChip drop the tap action) is SHARED and is being fixed on branch shared/semantics_tap. It is NOT a P06 finding: do not fail P06 for it and do not edit core.
+- Coin value right alignment (09:30 note) plus minor findings 4, 5 and 8.
