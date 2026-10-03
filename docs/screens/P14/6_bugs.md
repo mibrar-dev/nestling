@@ -1,241 +1,161 @@
-# P14 · Rewards manager — Stage 6 adversarial bug hunt (iteration 1)
+# P14 · Rewards manager — Stage 6 adversarial bug hunt (iteration 2)
 
 Route `/rewards` · feature `rewards` · parent mode · design
 `design/html-source/screens/P14-rewards.html` + light/dark PNGs
-(1170×2532 ÷3). This stage changed **nothing** in `app/lib/**`; it added
+(1170×2532 ÷3). This stage changed **nothing** in `app/lib/**`; it extended
 `app/test/features/rewards/p14_bugs_test.dart` and this report.
 
-`ORCHESTRATOR_NOTES.md` (12:27 + 12:35) is mandatory and is covered below:
-the creation-order ruling is filed as **P14-B05**, and the "do not hard-code
-the toggle state" item is pinned by a verified-clean DB-driven guard (the
-seed's `Baking together = false` itself ships with `shared/rewards_seed_order`,
-not in this snapshot).
+Gates on the iteration-2 build (`5502cf6`, main merged through `c20a7c9` —
+`shared/rewards_seed_order` included):
 
-Gates on the snapshot (`flutter test test/features/rewards/p14_bugs_test.dart
-test/features/rewards/rewards_bloc_test.dart
-test/features/rewards/rewards_repository_test.dart
-test/features/rewards/rewards_view_test.dart
-test/features/rewards/reward_card_widget_test.dart`):
+* `flutter test` on the nine stable feature test files →
+  **+89 passed, 3 skipped, 0 failed** (the three skips are the new open-bug
+  proofs B06–B08).
+* `flutter test test/features/rewards/p14_bugs_test.dart --run-skipped` →
+  B06, B07 and B08 fail exactly as designed; the other 20 tests (the five
+  iteration-1 proofs, now unskipped, plus the clean guards) pass.
+* `flutter analyze` / `dart format` on the bug file → clean.
+* No simulator was booted, installed on, screenshotted or driven.
+* `ORCHESTRATOR_NOTES.md` (12:27, 12:35) verified in the code: the repository
+  serves `watchRewardsInCreationOrder`, the seed ships
+  `Baking together needsOk: false`, the toggle state is DB-driven, and the
+  order/toggle proofs below pin all of it.
 
-* **+42 passed, 6 skipped, 0 failed** — the six skips are the open-bug
-  proofs below; `--run-skipped` makes every one of them fail on the current
-  code, and the 9 verified-clean tests pass in both modes.
-* `flutter analyze test/features/rewards/p14_bugs_test.dart` → No issues found;
-  `dart format` clean.
-* Nothing under `app/lib/**`, `app/lib/core/**` or `tools/**` was touched.
+## Iteration-1 bugs — all fixed, proofs live and green
 
-## Bug summary
+| id | was | fix (iteration-2 build) | proof (unskipped, green) |
+|---|---|---|---|
+| P14-B01 | major — iOS keyboard covered Save/Cancel/Delete | feature-local `showRewardEditorSheet` + `viewInsets` padding and a keyboard-aware form cap/scroll in `RewardEditorSheet` (`SHARED_REQUEST.md` filed for the shared helper) | `[P14-B01] the keyboard must not cover the editor sheet controls` |
+| P14-B02 | minor — empty/failure surfaces top-aligned | `_RewardsCenteredScroll` (`LayoutBuilder` + `SingleChildScrollView` + `minHeight` + `Center`) | `[P14-B02] …` (both tests) |
+| P14-B03 | minor — failed sheet write lost the input | write-result channel (`Completer` on all four events) + awaited `_submit`, inline danger caption, `_saving` guard | `[P14-B03] a sheet write failure keeps the sheet open with an inline error` |
+| P14-B04 | minor, latent — delete orphaned redemptions | `deleteReward` removes the reward and its redemption rows in one transaction | `[P14-B04] deleting a reward with a pending request orphans the request` |
+| P14-B05 | major — price order instead of creation order | `watchItems()` → `watchRewardsInCreationOrder`; seed order + Baking OFF from `shared/rewards_seed_order` | `[P14-B05] rewards are listed in creation order, not price order` |
+
+Net effect: rows render `30 min screen time → Pick Friday film → Stay up 15 min
+later → Baking together (toggle OFF) → Trip to the park café → Choose dinner`,
+exactly the owner-rule/design order, all values DB-driven.
+
+## Open bugs (iteration 2)
 
 | id | severity | one-liner | failing test (skip-marked) |
 |---|---|---|---|
-| P14-B01 | **major** | On iOS the keyboard covers the editor sheet — Save, Cancel and Delete sit behind it once the name field is focused | `[P14-B01] the keyboard must not cover the editor sheet controls` |
-| P14-B02 | minor | The empty state and the failure surface are top-aligned under the nav bar, not centred in the scroll (plan §4) | `[P14-B02] the empty state is centred in the scroll area` · `[P14-B02] the failure surface is centred in the scroll area` |
-| P14-B03 | minor | A sheet write failure closes the sheet and loses the typed input; no inline error caption (plan §4) | `[P14-B03] a sheet write failure keeps the sheet open with an inline error` |
-| P14-B04 | minor, latent | Deleting a reward leaves its pending redemption request orphaned; approving it is a silent no-op | `[P14-B04] deleting a reward with a pending request orphans the request` |
-| P14-B05 | **major** | The list is ordered by coin price, not creation order (owner rule / ORCHESTRATOR_NOTES 12:27) | `[P14-B05] rewards are listed in creation order, not price order` |
+| P14-B06 | minor | A stream error **after** the first emission is swallowed — the stale list stays with no error surface and no `Try again` | `[P14-B06] a stream error after data still offers the failure surface` |
+| P14-B07 | minor | The inline write-error caption is not a live region — screen readers never hear the failure | `[P14-B07] the inline write-error caption is announced to screen readers` |
+| P14-B08 | minor | The sheet's chrome reservation ignores the 44 px close button (and text-scale growth), so the sheet overflows when the keyboard caps the form | `[P14-B08] the sheet must not overflow when the keyboard caps the form` |
 
----
+### P14-B06 — minor — a stream error after data is silently swallowed
 
-## P14-B01 — major — the iOS keyboard covers the editor sheet
+**Repro.** Mock `watchItems` emits one reward, then errors while staying open.
+The card stays on screen, `Try again` never appears, and `Something went
+wrong` never appears: the parent is left with a stale list whose stream is
+dead (later writes would not be reflected).
 
-**Repro.** `/rewards` → `+ New reward` → focus the `Name` field (the iOS
-keyboard opens and floats over the Flutter view — it does not resize it) →
-try to tap `Save`. The sheet does not move.
+**Measured** (`--run-skipped`): `Expected: exactly one matching candidate …
+p14_try_again`, `Actual: Found 0 widgets`.
 
-**Measured** (390×844, keyboard inset 300 px):
+**Root cause.** `RewardsView`'s `failure` branch short-circuits on
+`state.items.isNotEmpty` and renders `_RewardsLoaded`. That shortcut was meant
+for failed *action* writes, but writes no longer emit `failure` (iteration-2
+contract), so the only way to reach it is a stream error after data — exactly
+the case it then hides. `_onLoadRequested` keeps `items` in the failure state.
 
-| element | app rect (bottom) | keyboard top | result |
-|---|---|---|---|
-| `Save` | 682 → **734** | 544 | 190 px behind the keyboard |
-| `Cancel` | 742 → **794** | 544 | 250 px behind the keyboard |
-| `Delete` (edit sheet) | below Cancel | 544 | behind |
+**Suggested fix.** Show `_RewardsCenteredScroll(child: _RewardsFailure())` for
+every `failure` (drop the `items.isNotEmpty` branch — the reason it existed is
+gone), or track whether the failure came from the stream and only keep the
+list for non-stream errors. A `Try again` re-subscribes either way.
 
-**Failing test.**
-`[P14-B01] the keyboard must not cover the editor sheet controls`
-(`--run-skipped`: `Expected: a value less than or equal to <544.0>
-Actual: <734.0>`).
+### P14-B07 — minor — the inline error caption is silent to screen readers
 
-**Root cause.** `showNestBottomSheet`
-(`app/lib/core/design_system/components/nest_bottom_sheet.dart`) never reads
-`MediaQuery.viewInsets`; Flutter's `_ModalBottomSheetLayout` positions the
-sheet at `size.height − childHeight` and ignores insets (verified in the
-SDK source), and on iOS the keyboard is reported as insets only. On Android
-the window resizes so the sheet moves; **iOS is the broken platform**.
+**Repro.** A save write fails → the danger caption appears above Save; a
+VoiceOver/TalkBack user gets no announcement of the failure.
 
-**Suggested fix.** Pad the sheet content by
-`MediaQuery.viewInsetsOf(context).bottom` and keep it tappable when the
-remaining height is short. This is best done once in the shared
-`showNestBottomSheet` (file a `SHARED_REQUEST` — every screen's sheet has the
-same hole); feature-local alternative: wrap `RewardEditorSheet`'s body in an
-`AnimatedPadding(bottom: viewInsets)` + a height-constrained
-`Flexible`/`SingleChildScrollView` so Save/Cancel/Delete stay above the
-keyboard and the body scrolls.
+**Measured** (`--run-skipped`): the caption node's
+`flagsCollection.isLiveRegion` is `false` (`Expected: true`, `Actual:
+<false>`).
 
----
+**Root cause.** `RewardEditorSheet` renders the caption as a plain `Text`.
+The design-system error pattern (`NestTextField.errorText`) wraps it in
+`Semantics(liveRegion: true, label: …, child: ExcludeSemantics(...))`.
 
-## P14-B02 — minor — empty and failure surfaces are top-aligned, not centred
+**Suggested fix.** Mirror the `NestTextField` error-row semantics: wrap the
+caption in `Semantics(liveRegion: true, label: _errorText!, child:
+ExcludeSemantics(child: Text(...)))` so it is announced exactly once.
 
-**Repro A (empty).** Delete every reward (`Seed.demo`, then
-`DELETE FROM rewards`) → open `/rewards`. `NestEmptyState` renders at
-y 107 → 481; centre **294.0** vs the scroll viewport centre **475.5**
-(181.5 px off). The design surface hugs the nav bar and leaves 363 px of dead
-space below.
+### P14-B08 — minor — the sheet overflows when the keyboard caps the form
 
-**Repro B (failure).** A load failure (`watchItems` errors) → the message +
-`Try again` column renders at y ≈ 107 → 247; union centre **153.0** vs
-**475.5** (322.5 px off).
+**Repro.** `/rewards` → `+ New reward` → focus `Name` with a full iOS
+keyboard: 390×844 at 1.3 text scale with a 336 px keyboard (incl. the
+predictive row) reports `A RenderFlex overflowed by 13 pixels on the bottom`;
+375×667 (SE 2/3) overflows at both 1.0 (260 px keyboard) and 1.3; 360×640 too.
+At 1.0/390×844 with a 300 px keyboard there is no overflow.
 
-**Failing tests.**
-`[P14-B02] the empty state is centred in the scroll area` ·
-`[P14-B02] the failure surface is centred in the scroll area`.
+**Measured matrix** (Save stays above the keyboard in every case — this is a
+layout-hygiene defect, not a lost-control one):
 
-**Root cause.** `_RewardsScroll` is a `ListView`, so the `Center` inside its
-child gets an unbounded main axis, shrink-wraps and pins the surface to the
-top. Plan §4 says "centred in the scroll" for both states.
+| device | scale | keyboard | overflow | Save bottom vs keyboard top |
+|---|---|---|---|---|
+| 390×844 | 1.0 | 300 | no | 434 vs 544 |
+| 390×844 | 1.3 | 300 | no | 434 vs 544 |
+| 390×844 | 1.3 | 336 | **13 px** | 411 vs 508 |
+| 375×667 | 1.0 | 260 | **yes** | 389 vs 407 |
+| 375×667 | 1.3 | 260 | **yes** | 411 vs 407 |
+| 360×640 | 1.3 | 260 | **yes** | 411 vs 380 |
 
-**Suggested fix.** Use a `CustomScrollView` with
-`SliverFillRemaining(hasScrollBody: false, child: Center(...))` (or a
-`LayoutBuilder` + `SingleChildScrollView` + `ConstrainedBox(minHeight:
-constraints.maxHeight)`), keeping the 20 px gutters and the 66 px bottom pad.
+**Root cause.** `RewardEditorSheet.build` reserves
+`chrome = s2 + gap5 + s3 + fontSize*height + s2 + homeH + s4` for
+`NestBottomSheet`'s own chrome, but the actual title row is `max(text line,
+44 px close button)` tall and grows with the text scaler — 20 px more than the
+reservation. `available` is therefore 20 px too generous, and once the
+keyboard caps the form the `NestBottomSheet` Column is 13–20 px over its
+budget. (The overflowed band is the sheet's own bottom padding, which is why
+no control is lost.)
 
----
+**Suggested fix.** Compute the reservation from the real title row —
+`math.max(titleLineHeight, NestDevice.tapParent)` and include the text
+scaler (`MediaQuery.textScalerOf(context).scale(fontSize)`), or measure the
+sheet chrome with a `LayoutBuilder`/`GlobalKey` instead of a constant sum.
 
-## P14-B03 — minor — a failed sheet write loses the input with no inline error
+## Verified clean — iteration-2 guards (all green)
 
-**Repro.** Repository `createReward` throws (e.g. disk full / DB closed) →
-`+ New reward` → type `Pizza night` → `Save`. The sheet closes
-(`find.text('New reward')` = 0), the typed name is gone, and the list is
-replaced by the full-screen failure state (`Try again`); no inline caption.
-
-**Failing test.**
-`[P14-B03] a sheet write failure keeps the sheet open with an inline error`
-(`--run-skipped`: `Expected: exactly one matching candidate … "New reward"`,
-`Actual: Found 0`).
-
-**Root cause.** `RewardEditorSheet._submit()` calls `onSave` then `_close()`
-synchronously; the write result is only observable on the list's stream state
-(plan §4 wants the sheet kept open with a `danger` 13/18 w600 caption above
-Save). The 2a build flagged this as a missing per-write result channel.
-
-**Suggested fix.** Give the write events a result channel (`RewardsCreate/
-Update/DeleteRequested` returning a `Future`/emitting a per-write result the
-sheet awaits) or drive an `errorText` into the sheet from a `BlocListener`;
-keep the sheet open and render the caption above Save on failure.
-
----
-
-## P14-B04 — minor, latent — deleting a reward orphans its pending request
-
-**Repro.** Seed demo → insert the row K08's `requestReward` writes
-(`reward_redemptions`: `r-cafe`, `maya`, `requested`) → open `/rewards` →
-`Edit Trip to the park cafe` → `Delete` ×2. The reward row is gone but the
-redemption row remains `requested` (foreign keys are off). `watchRequests()`
-then maps it to title `Reward` / 0 coins, and `approveRedemption` returns
-silently — no coins are deducted and the status never leaves `requested`.
-
-**Failing test.**
-`[P14-B04] deleting a reward with a pending request orphans the request`
-(`Expected: empty`, `Actual: [RewardRedemption(… status: requested …)]`).
-
-**Root cause.** `RewardsRepositoryImpl.deleteReward` deletes only the reward
-row; there is no cascade or guard for `reward_redemptions` (and SQLite FK
-enforcement is off app-wide).
-
-**Suggested fix.** In the feature-owned repository, delete the reward and its
-redemptions in one transaction (or block the delete while a request is
-pending) — an orchestrator/product call, since keeping request history may
-also be legitimate. Latent today (K08's request UI is not built yet), but
-reachable as soon as it is.
-
----
-
-## P14-B05 — major — the list is ordered by price, not creation order
-
-**Repro.** Seed demo → open `/rewards`. The cards render
-`30 min extra screen time, Stay up 15 min later, Pick Friday film, Choose
-dinner, Baking together, Trip to the park café` — `coinPrice ASC`, not the
-order the rewards were added.
-
-**Measured** (`RewardCard` title order):
-
-| expected (creation order, owner rule) | actual (price order) |
-|---|---|
-| 30 min extra screen time | 30 min extra screen time |
-| Pick Friday film | **Stay up 15 min later** |
-| Stay up 15 min later | **Pick Friday film** |
-| Baking together | **Choose dinner** |
-| Trip to the park café | **Baking together** |
-| Choose dinner | Trip to the park café |
-
-**Failing test.**
-`[P14-B05] rewards are listed in creation order, not price order`
-(`--run-skipped`: `at location [1] is 'Stay up 15 min later' instead of
-'Pick Friday film'`).
-
-**Root cause.** `RewardsRepositoryImpl.watchItems()` still calls
-`_db.watchRewards(Seed.familyId)`, whose query is
-`ORDER BY coinPrice` (`app_database.dart:513`). `ORCHESTRATOR_NOTES.md`
-(12:27, 12:35) rules the list must follow the order the rewards were added and
-points at `AppDatabase.watchRewardsInCreationOrder` on `main` (branch
-`shared/rewards_seed_order`, which also fixes the seed's
-`Baking together → needsOk: false`). That shared branch is not in this
-snapshot yet (`git merge-base` check: not an ancestor).
-
-**Suggested fix.** With the next main merge, switch `watchItems()` to
-`_db.watchRewardsInCreationOrder(Seed.familyId)` and drop the price sort; the
-view already renders whatever the stream yields, so no widget change is
-needed. Keep the toggle state DB-driven (pinned clean by
-`[P14-clean] the toggle state comes from the DB, not the view`).
-
----
-
-## Verified clean — attacks that were run and held
-
-* **Kid-mode guard**: a kid-mode deep link to `/rewards` lands on
-  `/parental-gate` (`selectMode(kid)` + `session.setAppMode('kid')`).
-* **Back navigation**: `push('/rewards')` from `/today`, tap `Back` →
-  `pushedPath` returns to `/today`.
-* **Restart persistence**: a reward created through the sheet is still there
-  after `disposeApp` + a fresh app (new bloc/view) over the same Drift DB.
-* **Rapid double taps**: two taps on `Save` and two on `+ New reward` in the
-  same frame produce exactly one write / one sheet (the pop/push animation
-  ignores pointers); a toggle double tap 16 ms apart is two flips and ends
-  consistent in UI + DB.
-* **Data edges**: 9999 coins and
-  `Maximilian-Alexander’s cinema trip` render at 320 px width × 1.3 text
-  scale with no overflow and no clipped fixed rects; the empty list renders
-  the empty state and `+ New reward` round-trips a create into the list.
-* **Accessibility actions**: all 6 toggles, all 6 edit buttons, `Back` and
-  `+ New reward` expose `SemanticsAction.tap`; `performAction(tap)` on a
-  toggle flips the real `r-screen` DB row. `Save` with an empty name is
-  disabled (`enabled: false`, no tap action) — the disabled-control rule.
-* **Toggle state is DB-driven** (ORCHESTRATOR_NOTES 12:27): flipping
-  `r-baking.needsOk` to `false` in the DB renders that row OFF while the
-  other rows stay ON — nothing is hard-coded.
-* **Dark mode** at 1.3 scale renders the six seeded rows with no exception.
+* **A failed toggle** (`setNeedsOk` throws): `Hmm, that did not work. Try
+  again.` toast appears and the switch keeps the DB value — no full-screen
+  error, no lying state.
+* **A failed save then a retry**: the sheet stays open with the typed name and
+  the caption; the second Save succeeds and closes it (2 write attempts).
+* **Save is guarded while a write is in flight**: a slow write plus a second
+  tap performs exactly one create.
+* **Delete cascade scope**: deleting `Trip to the park café` removes only its
+  redemption row; `r-baking:requested` remains.
+* **Edit keeps position; create lands last**: renaming the 4th reward keeps it
+  4th; a new reward is appended (7 rows, last).
+* **Seeded Baking toggle is OFF** (design state, `shared/rewards_seed_order`)
+  while other rows are ON; flipping the DB row flips the view.
+* The iteration-1 clean guards (kid-mode gate, Back pop, restart persistence,
+  rapid double taps, 9999 coins + long name at 320×1.3, a11y tap actions,
+  empty-state create, dark mode at 1.3) all still pass.
 
 ## Notes, not bugs
 
-* **Same-frame toggle double tap.** Two taps in the same <1 ms frame both
-  compute `!true` and write `false` twice; with a 1 ms pump between taps the
-  stream has already re-emitted and the second tap restores `true`. A frame is
-  16 ms, so a human double tap cannot hit this window — recorded for
-  completeness, not filed.
-* **Raw exception text.** The failure surface prints `error.toString()`
-  (e.g. `Bad state: boom`) rather than a friendly message; cosmetic, matches
-  the plan's `errorMessage ?? …` contract.
-* **No in-app entry point yet.** `RewardsRoutePaths.rewards` is referenced
-  only by the router and smoke tests on this branch; the Family/Money entry
-  belongs to other screens. Not a P14 defect.
-* **`Reward.detail`** is still carried but unused by P14 (plan §2).
+* **Confirmed Delete has no in-flight guard** (unlike Save's `_saving`): a
+  rapid double tap on the confirmed Delete sends two delete events. Both are
+  idempotent (the second matches 0 rows), the first pop wins, and no state or
+  DB inconsistency results — recorded, not filed.
+* **Raw error detail** is appended to the inline caption
+  (`Could not save the reward: Bad state: disk full`). Friendly sentence first;
+  the technical tail matches the build's stated contract.
+* **`SHARED_REQUEST.md`** (bottom-sheet keyboard inset) still open; when the
+  shared helper learns `viewInsets`, `showRewardEditorSheet` can be deleted.
+* **Shared a11y wart** (design-system controls exposing the inner `InkWell` as
+  a second unnamed node) is pre-existing in `core/`, not P14.
+* **`Reward.detail`** remains carried but unused by P14 (plan §2).
 
 ## Verdict rationale
 
-P14-B01 and P14-B05 are major defects: on iOS the primary create/edit flow's
-Save, Cancel and Delete controls are covered by the keyboard, and the list is
-ordered by coin price against the owner rule / ORCHESTRATOR_NOTES 12:27.
-P14-B02–B04 are minor (two plan-§4 layout/copy deviations and one latent
-data-integrity gap). Per the stage rule ("PASS only if no major bugs") this
-iteration fails.
+All five iteration-1 defects (two major) are fixed with live, unskipped
+proofs. Iteration 2 found three new defects, all **minor** and each with a
+failing proof: a swallowed stream error, an unannounced error caption, and a
+13–20 px sheet overflow in a small-screen + keyboard + 1.3-scale combination
+(no control becomes unreachable). No major bug is open, so the stage passes
+with the three minors filed for a later iteration.
 
-VERDICT: FAIL
+VERDICT: PASS

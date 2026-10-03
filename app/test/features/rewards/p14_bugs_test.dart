@@ -1,30 +1,24 @@
-// P14 · Rewards manager — adversarial bug proofs (Stage 6, iteration 1).
+// P14 · Rewards manager — adversarial bug proofs (Stage 6, iterations 1 + 2).
 //
-// Iteration 1 found:
-//   P14-B01 (major) the editor sheet ignores the iOS keyboard — Save, Cancel
-//                   and Delete sit behind the keyboard once the name field is
-//                   focused.
-//   P14-B02 (minor) the empty and failure surfaces are top-aligned under the
-//                   nav bar instead of centred in the scroll (plan §4).
-//   P14-B03 (minor) a sheet write failure closes the sheet and loses the typed
-//                   input; no inline error caption (plan §4).
-//   P14-B04 (minor, latent) deleting a reward does not clean up or block its
-//                   pending redemption requests (foreign keys are off).
-//   P14-B05 (major) the list is ordered by coin price, not creation order
-//                   (ORCHESTRATOR_NOTES 12:27: "the data order is wrong";
-//                   main's `watchRewardsInCreationOrder` is the fix).
+// Iteration 1 found B01–B05 (keyboard covers the sheet; empty/failure not
+// centred; sheet write failure loses input; delete orphans redemptions; price
+// order instead of creation order). All five were fixed by the iteration-2
+// build and their proofs below run unskipped and green.
 //
-// Every open-bug proof is `skip`-marked with its id in the test name so the
-// suite stays green while the defect is unfixed. `flutter test
-// test/features/rewards/p14_bugs_test.dart --run-skipped` proves each skipped
-// test still fails on the current code; when a fix lands, remove its skip and
-// the test must pass.
+// Iteration 2 re-hunted the rebuilt tree and found three new minor defects:
+//   P14-B06 (minor) a stream error *after* the first emission is swallowed —
+//                   the stale list stays with no error surface and no retry.
+//   P14-B07 (minor) the inline write-error caption is not a live region, so
+//                   screen readers never hear the failure.
+//   P14-B08 (minor) the sheet's chrome reservation ignores the 44 px close
+//                   button (and text-scale growth), so the sheet overflows
+//                   when the keyboard caps the form (390×844 @1.3 with a
+//                   336 px keyboard; 375×667 @1.0 with 260 px).
 //
-// The green tests at the bottom are the checks this stage verified clean:
-// kid-mode guard, back navigation, restart persistence, rapid double taps,
-// 9999 coins / long names at 320 × 1.3, accessibility actions, the empty-state
-// create round-trip and dark mode. They separate "found broken" from
-// "verified working".
+// The new open-bug proofs are `skip`-marked with their id so the suite stays
+// green; `flutter test test/features/rewards/p14_bugs_test.dart --run-skipped`
+// proves each one fails on the current code. When a fix lands, remove its
+// skip and the test must pass.
 //
 // Full report: docs/screens/P14/6_bugs.md.
 
@@ -50,6 +44,7 @@ import 'package:nestling/features/rewards/presentation/bloc/rewards_event.dart';
 import 'package:nestling/features/rewards/presentation/views/rewards_view.dart';
 import 'package:nestling/features/rewards/presentation/widgets/p14_reward_card.dart';
 import 'package:nestling/features/rewards/presentation/widgets/p14_reward_editor_sheet.dart';
+import 'package:nestling/features/rewards/presentation/widgets/p14_reward_meta.dart';
 
 import '../../test_scope.dart';
 
@@ -368,6 +363,171 @@ void main() {
     // Live proof.
   );
 
+  testWidgets(
+    '[P14-B06] a stream error after data still offers the failure surface',
+    (tester) async {
+      final repository = _MockRewardsRepository();
+      final controller = StreamController<List<Reward>>();
+      when(repository.watchItems).thenAnswer((_) => controller.stream);
+      when(repository.watchRequests).thenAnswer((_) => const Stream.empty());
+      when(repository.getItems).thenAnswer((_) async => <Reward>[]);
+      when(
+        () => repository.setNeedsOk(
+          id: any(named: 'id'),
+          needsOk: any(named: 'needsOk'),
+        ),
+      ).thenAnswer((_) async {});
+      when(() => repository.createReward(any())).thenAnswer((_) async {});
+      when(() => repository.updateReward(any())).thenAnswer((_) async {});
+      when(() => repository.deleteReward(any())).thenAnswer((_) async {});
+
+      final bloc = RewardsBloc(repository: repository)
+        ..add(const RewardsLoadRequested());
+      await _pumpViewWithFailingWrites(tester, bloc);
+
+      controller.add(const <Reward>[
+        Reward(
+          id: 'r-screen',
+          title: '30 min extra screen time',
+          detail: '50 coins',
+          icon: 'tv',
+          coinPrice: 50,
+          needsOk: true,
+        ),
+      ]);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.text('30 min extra screen time'), findsOneWidget);
+
+      controller.addError(StateError('stream died'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(
+        find.byKey(const ValueKey('p14_try_again')),
+        findsOneWidget,
+        reason:
+            'plan §4: a failed stream must show the error surface with Try '
+            'again, not a silently stale list',
+      );
+
+      await controller.close();
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    },
+    // P14-B06: minor — `failure` with items takes the `_RewardsLoaded` branch;
+    // since writes no longer emit `failure`, that shortcut only ever matches a
+    // stream error after data, which it then swallows. Open.
+    skip: true,
+  );
+
+  testWidgets(
+    '[P14-B07] the inline write-error caption is announced to screen readers',
+    (tester) async {
+      final repository = _MockRewardsRepository();
+      when(repository.watchItems).thenAnswer(
+        (_) => Stream.value(const <Reward>[
+          Reward(
+            id: 'r-screen',
+            title: '30 min extra screen time',
+            detail: '50 coins',
+            icon: 'tv',
+            coinPrice: 50,
+            needsOk: true,
+          ),
+        ]),
+      );
+      when(repository.watchRequests).thenAnswer((_) => const Stream.empty());
+      when(repository.getItems).thenAnswer((_) async => <Reward>[]);
+      when(
+        () => repository.setNeedsOk(
+          id: any(named: 'id'),
+          needsOk: any(named: 'needsOk'),
+        ),
+      ).thenAnswer((_) async {});
+      when(() => repository.createReward(any()))
+          .thenThrow(StateError('disk full'));
+      when(() => repository.updateReward(any())).thenAnswer((_) async {});
+      when(() => repository.deleteReward(any())).thenAnswer((_) async {});
+
+      final handle = tester.ensureSemantics();
+      final bloc = RewardsBloc(repository: repository)
+        ..add(const RewardsLoadRequested());
+      await _pumpViewWithFailingWrites(tester, bloc);
+
+      await tester.tap(find.byKey(const ValueKey('p14_new_reward')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('p14_name_field')),
+        'Pizza night',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('p14_save')));
+      await tester.pumpAndSettle();
+
+      final caption = find.descendant(
+        of: find.byType(RewardEditorSheet),
+        matching: find.textContaining('disk full'),
+      );
+      expect(caption, findsOneWidget);
+      final data = tester.getSemantics(caption).getSemanticsData();
+      expect(
+        data.flagsCollection.isLiveRegion,
+        isTrue,
+        reason:
+            'the failure must be announced (NestTextField error-row '
+            'precedent: Semantics(liveRegion: true, label: errorText))',
+      );
+
+      handle.dispose();
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    },
+    // P14-B07: minor — the caption is a plain Text; VoiceOver/TalkBack users
+    // hear nothing when a save fails. Open.
+    skip: true,
+  );
+
+  testWidgets(
+    '[P14-B08] the sheet must not overflow when the keyboard caps the form',
+    (tester) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/rewards');
+      // 390×844 at 1.3 text scale with a full iOS keyboard (336 px incl. the
+      // predictive row) caps the form and exposes the chrome undercount.
+      tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.byKey(const ValueKey('p14_new_reward')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('p14_new_reward')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('p14_name_field')));
+      await tester.pump();
+      tester.view.viewInsets = const FakeViewPadding(bottom: 336 * 3);
+      addTearDown(tester.view.resetViewInsets);
+      await tester.pump();
+
+      expect(
+        tester.takeException(),
+        isNull,
+        reason:
+            'the sheet chrome reservation must include the 44 px close '
+            'button and text-scale growth, or the NestBottomSheet Column '
+            'overflows when the keyboard caps the form',
+      );
+      final save = tester.getRect(find.byKey(const ValueKey('p14_save')));
+      expect(save.bottom, lessThanOrEqualTo(844 - 336));
+
+      await disposeApp(tester);
+    },
+    // P14-B08: minor — `chrome` counts `fontSize * height` for the title but
+    // the title row is 44 tall (close button), so `available` is 20 px too
+    // generous; RenderFlex overflows on common small/medium devices. Open.
+    skip: true,
+  );
+
   // -------------------------------------------------------------------------
   // Verified clean — attacks that were run and held.
   // -------------------------------------------------------------------------
@@ -592,27 +752,287 @@ void main() {
       (tester) async {
         await setUpTestScope();
         final database = GetIt.instance<db.AppDatabase>();
-        // ORCHESTRATOR_NOTES 12:27: Baking together's seed value is false; the
-        // view must render whatever `needsOk` holds (never hard-code it).
-        await (database.update(database.rewards)
-              ..where((r) => r.id.equals('r-baking')))
-            .write(const db.RewardsCompanion(needsOk: Value(false)));
         await pumpAppRoute(tester, '/rewards');
 
-        final card = find.ancestor(
-          of: find.text('Baking together'),
-          matching: find.byType(RewardCard),
+        NestToggle bakingToggle() => tester.widget<NestToggle>(
+          find.descendant(
+            of: find.ancestor(
+              of: find.text('Baking together'),
+              matching: find.byType(RewardCard),
+            ),
+            matching: find.byType(NestToggle),
+          ),
         );
-        final toggle = find.descendant(
-          of: card,
-          matching: find.byType(NestToggle),
-        );
-        expect(tester.widget<NestToggle>(toggle).value, isFalse);
+
+        // ORCHESTRATOR_NOTES 12:27 / shared/rewards_seed_order: the seeded
+        // Baking row is OFF, exactly as the design draws it.
+        expect(bakingToggle().value, isFalse);
         expect(
           tester.widget<NestToggle>(find.byType(NestToggle).first).value,
           isTrue,
           reason: 'a different row stays ON — the state is per-row DB data',
         );
+
+        // Flip it in the DB; the view follows (nothing is hard-coded).
+        await (database.update(database.rewards)
+              ..where((r) => r.id.equals('r-baking')))
+            .write(const db.RewardsCompanion(needsOk: Value(true)));
+        await tester.pumpAndSettle();
+        expect(bakingToggle().value, isTrue);
+
+        await disposeApp(tester);
+      },
+    );
+
+    testWidgets('[P14-clean] a failed toggle shows the toast and snaps back', (
+      tester,
+    ) async {
+      final repository = _MockRewardsRepository();
+      when(repository.watchItems).thenAnswer(
+        (_) => Stream.value(const <Reward>[
+          Reward(
+            id: 'r-screen',
+            title: '30 min extra screen time',
+            detail: '50 coins',
+            icon: 'tv',
+            coinPrice: 50,
+            needsOk: true,
+          ),
+        ]),
+      );
+      when(repository.watchRequests).thenAnswer((_) => const Stream.empty());
+      when(repository.getItems).thenAnswer((_) async => <Reward>[]);
+      when(
+        () => repository.setNeedsOk(
+          id: any(named: 'id'),
+          needsOk: any(named: 'needsOk'),
+        ),
+      ).thenThrow(StateError('nope'));
+      when(() => repository.createReward(any())).thenAnswer((_) async {});
+      when(() => repository.updateReward(any())).thenAnswer((_) async {});
+      when(() => repository.deleteReward(any())).thenAnswer((_) async {});
+
+      final bloc = RewardsBloc(repository: repository)
+        ..add(const RewardsLoadRequested());
+      await _pumpViewWithFailingWrites(tester, bloc);
+
+      await tester.tap(find.byType(NestToggle).first);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text(RewardCopy.actionFailed), findsOneWidget);
+      expect(
+        tester.widget<NestToggle>(find.byType(NestToggle).first).value,
+        isTrue,
+        reason: 'the switch keeps the DB value — it never lies about a write',
+      );
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    });
+
+    testWidgets('[P14-clean] a failed save keeps the input and a retry works', (
+      tester,
+    ) async {
+      final repository = _MockRewardsRepository();
+      when(repository.watchItems).thenAnswer(
+        (_) => Stream.value(const <Reward>[
+          Reward(
+            id: 'r-screen',
+            title: '30 min extra screen time',
+            detail: '50 coins',
+            icon: 'tv',
+            coinPrice: 50,
+            needsOk: true,
+          ),
+        ]),
+      );
+      when(repository.watchRequests).thenAnswer((_) => const Stream.empty());
+      when(repository.getItems).thenAnswer((_) async => <Reward>[]);
+      when(
+        () => repository.setNeedsOk(
+          id: any(named: 'id'),
+          needsOk: any(named: 'needsOk'),
+        ),
+      ).thenAnswer((_) async {});
+      var fail = true;
+      when(() => repository.createReward(any())).thenAnswer((_) async {
+        if (fail) throw StateError('disk full');
+      });
+      when(() => repository.updateReward(any())).thenAnswer((_) async {});
+      when(() => repository.deleteReward(any())).thenAnswer((_) async {});
+
+      final bloc = RewardsBloc(repository: repository)
+        ..add(const RewardsLoadRequested());
+      await _pumpViewWithFailingWrites(tester, bloc);
+
+      await tester.tap(find.byKey(const ValueKey('p14_new_reward')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('p14_name_field')),
+        'Pizza night',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('p14_save')));
+      await tester.pumpAndSettle();
+      expect(find.text('New reward'), findsOneWidget);
+      expect(find.text('Pizza night'), findsOneWidget);
+
+      fail = false;
+      await tester.tap(find.byKey(const ValueKey('p14_save')));
+      await tester.pumpAndSettle();
+      expect(find.text('New reward'), findsNothing);
+      verify(() => repository.createReward(any())).called(2);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    });
+
+    testWidgets('[P14-clean] Save is guarded while a write is in flight', (
+      tester,
+    ) async {
+      final repository = _MockRewardsRepository();
+      when(repository.watchItems).thenAnswer(
+        (_) => Stream.value(const <Reward>[
+          Reward(
+            id: 'r-screen',
+            title: '30 min extra screen time',
+            detail: '50 coins',
+            icon: 'tv',
+            coinPrice: 50,
+            needsOk: true,
+          ),
+        ]),
+      );
+      when(repository.watchRequests).thenAnswer((_) => const Stream.empty());
+      when(repository.getItems).thenAnswer((_) async => <Reward>[]);
+      when(
+        () => repository.setNeedsOk(
+          id: any(named: 'id'),
+          needsOk: any(named: 'needsOk'),
+        ),
+      ).thenAnswer((_) async {});
+      final gate = Completer<void>();
+      when(() => repository.createReward(any())).thenAnswer((_) => gate.future);
+      when(() => repository.updateReward(any())).thenAnswer((_) async {});
+      when(() => repository.deleteReward(any())).thenAnswer((_) async {});
+
+      final bloc = RewardsBloc(repository: repository)
+        ..add(const RewardsLoadRequested());
+      await _pumpViewWithFailingWrites(tester, bloc);
+
+      await tester.tap(find.byKey(const ValueKey('p14_new_reward')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('p14_name_field')),
+        'Pizza night',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('p14_save')));
+      await tester.pump();
+      await tester.tap(
+        find.byKey(const ValueKey('p14_save')),
+        warnIfMissed: false,
+      );
+      await tester.pump();
+      verify(() => repository.createReward(any())).called(1);
+
+      gate.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('New reward'), findsNothing);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    });
+
+    testWidgets('[P14-clean] deleting removes only that reward’s redemptions', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      final database = GetIt.instance<db.AppDatabase>();
+      await database
+          .into(database.rewardRedemptions)
+          .insert(
+            db.RewardRedemptionsCompanion.insert(
+              rewardId: 'r-cafe',
+              childId: 'maya',
+              familyId: 'fam1',
+              status: const Value('requested'),
+            ),
+          );
+      await database
+          .into(database.rewardRedemptions)
+          .insert(
+            db.RewardRedemptionsCompanion.insert(
+              rewardId: 'r-baking',
+              childId: 'leo',
+              familyId: 'fam1',
+              status: const Value('requested'),
+            ),
+          );
+
+      await pumpAppRoute(tester, '/rewards');
+      final cafeEdit = find.bySemanticsLabel('Edit Trip to the park cafe');
+      await tester.ensureVisible(cafeEdit);
+      await tester.pumpAndSettle();
+      await tester.tap(cafeEdit);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('p14_delete')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('p14_delete')));
+      await tester.pumpAndSettle();
+
+      final left = await database.select(database.rewardRedemptions).get();
+      expect(left.map((r) => '${r.rewardId}:${r.status}').toList(), <String>[
+        'r-baking:requested',
+      ], reason: 'the cascade must not touch another reward’s requests');
+
+      await disposeApp(tester);
+    });
+
+    testWidgets(
+      '[P14-clean] editing keeps position and a new reward lands last',
+      (tester) async {
+        await setUpTestScope();
+        await pumpAppRoute(tester, '/rewards');
+
+        List<String> titles() => tester
+            .widgetList<RewardCard>(find.byType(RewardCard))
+            .map((c) => c.reward.title)
+            .toList();
+
+        // Edit the 4th reward; creation order must not change.
+        final bakingEdit = find.bySemanticsLabel('Edit Baking together');
+        await tester.ensureVisible(bakingEdit);
+        await tester.pumpAndSettle();
+        await tester.tap(bakingEdit);
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const ValueKey('p14_name_field')),
+          'Baking with Leo',
+        );
+        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('p14_save')));
+        await tester.pumpAndSettle();
+        expect(titles()[3], 'Baking with Leo');
+
+        // Create one; it is the newest, so it lands last.
+        await tester.ensureVisible(
+          find.byKey(const ValueKey('p14_new_reward')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('p14_new_reward')));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const ValueKey('p14_name_field')),
+          'Dessert night',
+        );
+        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('p14_save')));
+        await tester.pumpAndSettle();
+        expect(titles().last, 'Dessert night');
+        expect(titles(), hasLength(7));
 
         await disposeApp(tester);
       },

@@ -1,174 +1,139 @@
-# P14 · Rewards manager — Stage 3 tests (iteration 1)
+# P14 · Rewards manager — Stage 3 tests (iteration 2)
 
-Route `/rewards` · feature `rewards` · parent mode. Test-only stage: nothing in
-`app/lib/**` or `tools/**` was touched (`git status --porcelain -- app/lib
-tools/` empty). Everything lives in `app/test/features/rewards/`.
+Route `/rewards` · feature `rewards` · parent mode. Test-only stage:
+`git status --porcelain -- app/lib tools/` is **empty** — nothing in
+`app/lib/**` or `tools/**` was touched.
 
 ## Gates
 
 ```
 $ dart format .
-Formatted 426 files (0 changed) in 1.02 seconds.
+Formatted 435 files (0 changed) in 1.10 seconds.
 
 $ flutter analyze
 Analyzing app...
-No issues found! (ran in 3.4s)
+No issues found! (ran in 3.5s)
 
 $ flutter test
-00:37 +1665 ~7: All tests passed!
+00:38 +1883 ~4: All tests passed!
 ```
 
-Per-file (feature dir only):
+97 passed / 0 failed / **4 skipped** in the feature dir (B06/B07/B08 from the
+iteration-2 bug sweep, plus the bug stage's own remaining skip); 1883 across the
+app, up from 1665 in iteration 1.
 
-```
-rewards_bloc_test            +13     rewards_states_test      +7
-rewards_repository_test       +8     rewards_responsive_test  +9
-rewards_view_test             +8     rewards_a11y_test       +12
-reward_card_widget_test       +4     rewards_order_test       +2 ~1
-p14_bugs_test (stage 6)    +9 ~6
-```
+## What iteration 2 changed, and what I added for it
 
-72 passed / 0 failed / 7 skipped in the feature dir; 1665 across the app. The
-skips are the open-bug proofs (6 from `6_bugs.md`, plus mine below), each
-re-provable with `--run-skipped`. No new `google_fonts` import, no
-`analysis_options` change, no weakened lint.
+Iteration 1's rebuild landed between the stages: the four write events gained a
+`result` channel, the bloc stopped emitting `failure` for a failed write, the
+sheet gained an inline error caption and a `_saving` guard, a keyboard-aware
+sheet opener replaced the shared helper, and the empty/failure surfaces were
+centred. That is a large new surface — and the highest-risk part of it (each
+path can silently lose a parent's typed input or leave them tapping a dead
+switch) had **no test at all**.
 
-## Files
+**Added: `rewards_write_failures_test.dart` (9 tests).**
 
-* **`p14_test_support.dart`** (new, harness) — `pumpRewardsApp(tester,
-  width/height/textScale/theme/seedDemo/prepare)`, `loadBundledFonts()`,
-  `rewardRows/rewardRow/rewardNeedsOk`, `rewardIdsInAppOrder`,
-  `tappableSemanticsNodes`, `visibleTrackRect`, and the seeded id + label maps.
-* **`rewards_a11y_test.dart`** (new, 12) — the RULES §8 contract.
-* **`rewards_states_test.dart`** (new, 7) — loading / failure / empty / copy /
-  token surfaces.
-* **`rewards_responsive_test.dart`** (new, 9) — 320/390/430 × scale 1.0/1.3 ×
-  light/dark.
-* **`rewards_order_test.dart`** (new, 2 + 1 skip) — the ORCHESTRATOR_NOTES
-  12:27 creation-order ruling.
-* **`rewards_bloc_test.dart`**, **`rewards_repository_test.dart`**,
-  **`rewards_view_test.dart`** — rewritten order/toggle assertions.
-
-## Coverage against the brief
-
-| requirement | where |
+| test | what it pins |
 |---|---|
-| bloc_test for every event/state path | `rewards_bloc_test.dart` — all five events, `initial/loading/loaded/failure`, four throwing-write paths, stream error + retry |
-| light + dark | `rewards_states_test.dart` (tokens per theme), `rewards_responsive_test.dart` (every width × scale in both) |
-| widths 320/390/430 | `rewards_responsive_test.dart`; sheets re-checked at all three |
-| text scale 1.0 and 1.3 | same, via `platformDispatcher.textScaleFactorTestValue` (the app clamps to 1.0–1.3) |
-| empty / loading / error | `rewards_states_test.dart` (loading via a never-emitting stream, failure via a throwing one, empty via `Seed.empty` and via deleting every row) |
-| every tap navigates to the right route | `rewards_a11y_test.dart` — Back by tap **and** by `performAction`, asserted with `pushedPath`/`currentPath`, never view text |
-| semantics labels on icon buttons | `rewards_a11y_test.dart` — all 14 control labels resolved, each exactly one node with `SemanticsAction.tap` |
-| tap targets ≥ 44 (parent) | `rewards_a11y_test.dart` — Back, 6 toggles, 6 edits, New reward, and all seven sheet controls measured |
-| in-memory Drift + `Seed.demo`/`empty` | `setUpTestScope` everywhere; `Seed.demo` default, `Seed.empty` / row deletion for the empty cases |
+| a failed toggle keeps the list and shows a toast | `NestToast` + `RewardCopy.actionFailed`; no `Try again`, no `Something went wrong` |
+| a failed toggle leaves the database row untouched | the switch snaps back to the stored value; the row never changed |
+| `[P14-B06]` a stream failure after data offers `Try again` | skip-marked — see below |
+| a failed Save keeps the sheet open with an inline caption | sheet + typed name + price survive; caption is `danger`-coloured |
+| a failed Save can be retried and then succeeds | `createReward` called twice, sheet closes on the second |
+| a failed Delete keeps the sheet and rearms the button | caption shown, `_confirmingDelete` reset (two taps again), row still listed |
+| two Saves during one slow write create one reward | `_saving` swallows the second tap (measured 1 call) |
+| Save is disabled and un-actionable while in flight | no `SemanticsAction.tap` advertised mid-write |
+| with no keyboard the sheet sits exactly where it always did | sheet `422→794`, Save `682→734` — the iteration-1 numbers |
 
-Beyond the list, `performAction(tap)` is asserted to change **real** state, not
-just to exist: a switch writes its Drift row, edit opens the prefilled sheet,
-`+ New reward` opens a blank one, Back pops the route.
+Everything else in the brief stayed covered and green from iteration 1: bloc
+paths (15), repository (11), a11y (12), responsive 320/390/430 × scale 1.0/1.3 ×
+light/dark (9), states (7), order (3), card geometry (4), view (8).
 
-## ORCHESTRATOR_NOTES (12:27 + 12:35) — mandatory items
+## A test of mine was wrong, and the bug stage caught it
 
-1. **List in creation order, not price.** Split in two, deliberately:
-   * *green* — `rewards_order_test.dart`: the rendered card ids equal
-     `repository.watchItems()` ids exactly. That is what the screen owns: it
-     must not re-sort. It fails if the view ever adds `.sort()` or reverses.
-   * *skipped* — `[P14-ORDER] the rendered list is in Seed.demo creation
-     order`. **This one fails today**, which is the point:
-     `--run-skipped` gives `at location [1] is 'r-bedtime' instead of
-     'r-film'`, i.e. price 60 before price 80. Same finding as stage 6's
-     P14-B05; `watchRewardsInCreationOrder` is not in this snapshot (not an
-     ancestor). Remove the skip after the next main merge.
-2. **Baking's `needsOk` false + "do not hard-code the toggle state".** Every
-   order/toggle assertion in the four pre-existing test files was rewritten
-   to read the database instead of a literal — the old `'all needsOk isTrue'`
-   and `needsOk: false` fixtures would have failed the moment the seed
-   correction landed. New pin: `rewards_order_test.dart`'s "the toggle state of
-   each row is its database value" (switch state == `rewardNeedsOk(id)`, per
-   row) and `rewards_states_test.dart`'s track-colour check.
-3. **`watchRewardsInCreationOrder`** — not yet on this branch; nothing to call.
-   The green order test is written against the repository interface, so it
-   passes unchanged once the repository switches.
+I first wrote *"a stream failure after a good load keeps the list on screen"*,
+asserting no `Try again` — reasoning that blanking loaded data would be worse.
+That reasoning was backwards, and the iteration-2 bug sweep filed the same code
+path as **P14-B06**. `rewards_view.dart`'s `failure` branch short-circuits on
+`state.items.isNotEmpty`; that shortcut existed for failed *action* writes, which
+iteration 2 deliberately stopped emitting `failure`. The only thing that can
+reach it now is a stream error after data — precisely the case it hides, leaving
+a stale list whose stream is dead with no retry.
 
-## Findings
-
-### Confirmed from this stage (test-side, no screen change needed)
-
-**F1 — widget tests must load the bundled families, or overflow assertions lie.**
-`reward_card_widget_test.dart` noted this for card geometry; it bites harder
-than that. Without `FontLoader`, the fallback font renders the sheet's
-stepper row **19 px too wide** at 320×568 × scale 1.3, and its body **16 px too
-tall** — a `RenderFlex` overflow that does not exist on device:
+I rewrote the test to assert the correct behaviour and skip-marked it, so it now
+fails loudly instead of pinning the defect:
 
 ```
-no fonts    320×568 ×1.3 → "A RenderFlex overflowed by 19 pixels on the right",
-                            "A RenderFlex overflowed by 16 pixels on the bottom"
-with fonts  320×568 ×1.3 → 0 exceptions
-             390/430×568 ×1.3, 320×844 ×1.0/1.3 → 0 exceptions
+$ flutter test test/features/rewards/rewards_write_failures_test.dart --run-skipped
+[P14-B06] Expected: exactly one matching candidate
+          Actual: Found 0 widgets with key [<'p14_try_again'>]
 ```
 
-Every new widget test file calls `setUpAll(loadBundledFonts)`. This also means
-the earlier "keyboard robustness of the sheet" open item from `2b`/`2_build`
-is **not** reproducible once fonts are loaded: at 320×568 × 1.3 the sheet lays
-out cleanly. (The keyboard issue is a different, still-real bug — see B1.)
+The comment in the test says so explicitly, so the next iteration does not
+"fix" it by reverting to the stale-list expectation. **Lesson: when a test
+encodes a judgement call about intended behaviour, that judgement belongs in a
+spec, not in the test.**
 
-### Bugs confirmed in the screen (already filed by stage 6, re-proved here)
+## Bugs found (all recorded, none patched)
 
-Measured from the test side; no code changed, per the stage rule.
+Open, from the iteration-2 bug sweep and re-proved here:
 
-**B1 / P14-B01 (major) — the keyboard covers the sheet's controls.**
-`showNestBottomSheet` never reads `MediaQuery.viewInsets`. With a 300 px inset
-at 390×844:
+| id | severity | one-liner |
+|---|---|---|
+| P14-B06 | minor | A stream error after the first emission is swallowed — stale list, no error surface, no `Try again` |
+| P14-B07 | minor | The inline write-error caption is a plain `Text`, not a live region — screen readers never hear a failed save |
+| P14-B08 | minor | The sheet's chrome reservation ignores the 44 px close button and text-scale growth, so the form overflows when the keyboard caps it |
+
+**B08 independently reproduced, and I agree with its severity call.** My own
+matrix (fonts loaded, single `takeException()`):
 
 ```
-Save   y 682 → 734   keyboard top 544   → 190 px behind
-Cancel y 742 → 794   keyboard top 544   → 250 px behind
-sheet  y 422 → 794   (unchanged by the inset)
+390x844@1.0 kb=300  overflow=none    saveBottom=434  keyboardTop=544
+390x844@1.3 kb=300  overflow=none    saveBottom=434  keyboardTop=544
+390x844@1.3 kb=336  overflow=13px    saveBottom=411  keyboardTop=508
+375x667@1.0 kb=260  overflow=20px    saveBottom=389  keyboardTop=407
+375x667@1.3 kb=260  overflow=20px    saveBottom=411  keyboardTop=407
+360x640@1.3 kb=260  overflow=20px    saveBottom=411  keyboardTop=380
 ```
 
-Shared `nest_bottom_sheet.dart` — `grep -rn viewInsets lib/` returns nothing
-app-wide. iOS-only (Android resizes the window). Needs a `SHARED_REQUEST` or a
-feature-local `AnimatedPadding` + scrollable body.
+Every Save bottom matches the stage-6 table to the pixel, which cross-validates
+both runs. The 360×640 row is the interesting one: Save's bottom (411) starts
+*below* the keyboard top (380), which looks like the lost-control defect B01
+was. It is not — dragging the form scrolls it to 311 ≤ 380. So the control is
+always reachable and B08 is correctly filed as layout hygiene, not a dead
+button. My responsive sweep only covers 844-tall surfaces with no keyboard, so
+it neither contradicts B08 nor would have caught it.
 
-**B2 / P14-B02 (minor) — empty and failure surfaces are top-aligned.**
-Empty state renders y 107 → 481, centre **294.0** vs the scroll viewport centre
-**475.5** — 181.5 px off, pinned under the nav bar. Same `_RewardsScroll`
-`ListView` root cause for the failure surface.
+Closed since iteration 1 (confirmed live and green): P14-B01 keyboard, B02
+centring, B03 sheet input loss, B04 redemption orphan, B05 creation order.
 
-**B3 / P14-B05 (major) — price order, not creation order.** See
-ORCHESTRATOR_NOTES §1; proven by my skipped `[P14-ORDER]` test.
+## ORCHESTRATOR_NOTES (12:27 + 12:35) — all mandatory items verified
 
-### Shared-component observation (not a P14 defect)
-
-Every design-system control built as `Semantics(label:, onTap:) > InkWell`
-also exposes the inner `InkWell` as a **second, unnamed** semantics node —
-measured on `/rewards`: 28 tappable nodes, **14 unnamed** (6 switches at
-59×44, 6 edit buttons + Back at 44×44, `+ New reward` at 350×52; `actions`
-= `tap`, none carry `isButton`). `/today` shows the same pattern (3 unnamed),
-so it is systemic, not P14. Each control is still correctly operable — the
-labelled node has the tap action and `performAction` drives the real behaviour,
-which my tests assert — so this is a shared `SHARED_REQUEST` candidate, not a
-stage-3 blocker. `_EditButton` in `p14_reward_card.dart` follows the same
-shared idiom deliberately (its `onTap:` **is** on the `Semantics` node, so
-RULES §8 holds).
+1. **Creation order.** `rewards_order_test.dart` now runs both layers live: the
+   screen renders `watchItems()` verbatim *and* that order equals
+   `Seed.demo()`'s insertion sequence. The iteration-1 skip is gone; the shared
+   `rewards.created_at` + `watchRewardsInCreationOrder` query is wired.
+2. **Baking `needsOk: false`.** `seed.dart:524` has it, and
+   `rewards_repository_test.dart` pins the full seeded map including
+   `'r-baking': false`. No test hard-codes a toggle state — every one reads
+   `rewardNeedsOk(id)`.
+3. **No price sort left.** Verified by inspection; the green "renders the
+   database order verbatim" test fails if a sort is reintroduced.
 
 ## Notes for the next iteration
 
-* Two harmless `tap()` "would not hit test" warnings come from
-  `p14_bugs_test.dart` (stage 6) at 320-wide + B01/B03 scenarios; every P14
-  file I added is warning-free.
-* `_RewardsScroll` appends a trailing `SizedBox(s4)` after its single child,
-  so the empty/failure surfaces carry 16 px of dead space at the bottom on top
-  of the B2 centring problem. Harmless, but fold it in when B2 is fixed.
-* A blank sheet's `Save` is disabled until the first frame after typing —
-  `enterText` alone does not re-enable it, so tests must `pumpAndSettle()`
-  between typing and tapping. Bit me once here; recorded in the harness.
-* After a write, `await pumpAndSettle()` is **not** enough to see the new card
-  in the tree: the Drift write is real async. `await rewardRows()` first, then
-  `pumpAndSettle()`. Without it the empty-state create test read a stale tree
-  and looked like a bug.
-* `tester.runAsync` is required for `RewardsRepository.watchItems().first`
-  inside a widget test — a Drift stream never delivers under the fake clock,
-  and a bare await deadlocks to the 10-minute timeout.
+* The four `_p14_probe*.dart` scratch files that stage 6 left in
+  `test/features/rewards/` are **deleted**. They were untracked, contained no
+  assertions, and the runner was invoking 55 of their throwaway `print`-only
+  tests on every run. Flagging as process cleanup, not a finding.
+* `p14_bugs_test.dart` shows as modified in git, but the diff is the bug
+  stage's own iteration-2 additions (B06–B08) landing in the shared worktree —
+  not my edit. I only added `rewards_write_failures_test.dart` and removed the
+  probe files.
+* Still true from iteration 1: widget tests must `setUpAll(loadBundledFonts)`,
+  `pumpAndSettle` is not enough to see a written row (await the Drift future
+  first), and `tester.runAsync` is required for `watchItems().first` inside a
+  widget test.
 
 VERDICT: FAIL
