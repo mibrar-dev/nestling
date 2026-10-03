@@ -31,13 +31,6 @@ class _CreateAccountViewState extends State<CreateAccountView> {
   late final TextEditingController _emailController;
   late final TextEditingController _passwordController;
 
-  /// Headline width cap (P03-BUG-7, ORCHESTRATOR_NOTES §2): with the app's
-  /// Nunito 900, "Create your" is 158.6dp and "Create your family" is
-  /// 251.2dp, so any cap in [198, 252) breaks the design's
-  /// "Create your / family account" (no hard newline) and still wraps
-  /// sensibly at 320dp and text scale 1.3.
-  static const double _headlineMaxWidth = 240;
-
   @override
   void initState() {
     super.initState();
@@ -100,15 +93,16 @@ class _CreateAccountViewState extends State<CreateAccountView> {
                     children: <Widget>[
                       Semantics(
                         header: true,
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(
-                            maxWidth: _headlineMaxWidth,
-                          ),
-                          child: Text(
-                            'Create your family account',
-                            style: NestType.h1(color: tokens.ink),
-                            maxLines: 3,
-                          ),
+                        // BALANCED HEADINGS rule: the design's `.h1` uses
+                        // `text-wrap: balance`, so the break comes from the
+                        // balanced wrap, not a hand-calibrated width cap
+                        // (P03-BUG-24). With the bundled Nunito it narrows
+                        // to the design's "Create your" / "family account".
+                        child: NestBalancedText(
+                          'Create your family account',
+                          style: NestType.h1(color: tokens.ink),
+                          textAlign: TextAlign.left,
+                          maxLines: 3,
                         ),
                       ),
                       const SizedBox(height: NestSpacing.s2),

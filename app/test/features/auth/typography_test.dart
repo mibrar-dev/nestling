@@ -427,11 +427,14 @@ void main() {
     // `NestBalancedText.balancedWidthFor` binary-searches the narrowest
     // width whose line count is `<= lineCount`, but the painter it measures
     // through also applies `maxLines`. When the text needs more lines than
-    // `maxLines` allows (P03's h1 at text scale 1.3 needs 4, the cap and the
-    // call site allow 3), the count is clamped to 3 at *every* width, so the
-    // search converges to ~0 and the heading renders one glyph per line.
-    // This guard holds P03's current rendering; swapping in the component
-    // before the shared fix lands turns it red (240×0.1 dp, 132 tall).
+    // `maxLines` allows *at every width it is offered*, the count is clamped
+    // to `maxLines` throughout, so the search converges to ~0 and the heading
+    // renders one glyph per line. P03's h1 does not reach that state: at
+    // scale 1.3 the 350 dp column still holds two lines, so the count falls
+    // out of the clamp at ~257 dp and the narrowing lands on a real width.
+    // These guards exist to catch a regression into the collapsed box
+    // (240×0.1 dp, 132 tall), not to pin one wrap pattern — the two width
+    // expectations below are the part that must never give.
     testWidgets('the headline is not a per-glyph column at text scale 1.3', (
       tester,
     ) async {
@@ -456,13 +459,12 @@ void main() {
             'every headline line must carry words, not single glyphs; '
             'got ${lines.map((line) => line.text).toList()}',
       );
-      // What the design-sized cap does today: three lines, the last one a
-      // single word. Recorded so a fix is not judged against a reference the
-      // design does not have.
+      // Post-migration (BALANCED HEADINGS rule, P03-BUG-24): the balanced
+      // wrap keeps the design's two even lines at 1.3 too — the h1 no longer
+      // orphans a word on a third line the way the retired 240 dp cap did.
       expect(lines.map((line) => line.text), <String>[
         'Create your',
-        'family',
-        'account',
+        'family account',
       ]);
       await disposeApp(tester);
     });

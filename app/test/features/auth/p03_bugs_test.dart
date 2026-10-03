@@ -36,22 +36,25 @@
 //                the label with the design's own line box
 //                (`_orLabelLineBox = 15.7`, token-derived); both proofs
 //                green.
-// P03-BUG-24 (MAJOR, mandatory rule — OPEN)  the headline still renders with
-//                a hand-calibrated `ConstrainedBox(maxWidth: 240)` + `Text`
-//                instead of `NestBalancedText`. The design's `.h1` sets
-//                `text-wrap: balance` (components.css:29) and the standing
-//                BALANCED HEADINGS rule requires the component for `.h1`
-//                (copy, style, maxLines kept); the cap is exactly the
-//                hand-tuned pattern the rule replaces and drifts silently
-//                when a type token changes. Migration must keep the design's
-//                LEFT alignment (pass `textAlign: TextAlign.left`), not the
-//                component's centred default, and must KEEP the 240 dp cap:
-//                inside it the break is already the narrowest two-line break
-//                (197.7 dp), so the component is a no-op there, while
-//                dropping the cap would move the 390 dp break to "Create
-//                your family" / "account". Measured at text scale 1.3 the cap
-//                renders three lines ("Create your" / "family" / "account");
-//                balance cannot fix that, since it only ever narrows.
+// P03-BUG-24 (MAJOR, mandatory rule — fixed iteration 8)  the headline
+//                rendered with a hand-calibrated `ConstrainedBox(maxWidth:
+//                240)` + `Text` instead of `NestBalancedText`. The design's
+//                `.h1` sets `text-wrap: balance` (components.css:29) and the
+//                standing BALANCED HEADINGS rule requires the component for
+//                `.h1` (copy, style, maxLines kept). Fixed by swapping in
+//                `NestBalancedText(…, textAlign: TextAlign.left,
+//                maxLines: 3)` and DELETING the cap.
+//
+//                The iteration-7 stages predicted the cap had to stay (a
+//                350 dp column balances to "Create your family" /
+//                "account"). Measured wrong: at full width the component
+//                takes the minimum line count (2) and then binary-searches
+//                the NARROWEST width that still holds 2 lines, which is the
+//                design's 197.68 dp — so it reproduces the design break by
+//                itself. `the balanced headline keeps the design break and
+//                gutter` (real screen, design fonts, no cap) and both
+//                absolute band proofs are green: the cap was a no-op that
+//                merely capped the search.
 // P03-BUG-18..21  all fixed (overhang reachability, first-frame/stale
 //                measurement, live regions, the empty-live-region
 //                regression).
@@ -572,9 +575,12 @@ void main() {
         lessThanOrEqualTo(260),
         reason:
             'real-font widths are "Create your family" 251.2 and '
-            '"family account" 197.7, so the title column must cap below '
-            '252 (e.g. maxWidth 240) instead of filling the 350dp content '
-            'width; the design breaks "Create your / family account"',
+            '"family account" 197.7, so the headline column must stay below '
+            '252 rather than filling the 350dp content width; the design '
+            'breaks "Create your / family account". Since iteration 8 that '
+            'narrowing comes from the balanced search inside '
+            'NestBalancedText rather than from a hand-set cap, so this proof '
+            'still holds the headline constrained instead of full-bleed',
       );
 
       await disposeApp(tester);
@@ -1286,36 +1292,36 @@ void main() {
   });
 
   // -------------------------------------------------------------------
-  // P03-BUG-24 (MAJOR, mandatory BALANCED HEADINGS rule — OPEN) — the
-  // design's `.h1` sets `text-wrap: balance` (components.css:29) and the
-  // HTML is `<h1 class="h1">` (P03-create-account.html:36), so the
-  // headline must render with `NestBalancedText` (same copy, style and
-  // maxLines); the hand-calibrated `_headlineMaxWidth = 240` cap
-  // (create_account_view.dart:39) is the pattern the rule replaces.
+  // P03-BUG-24 (MAJOR, mandatory BALANCED HEADINGS rule — fixed iteration
+  // 8) — the design's `.h1` sets `text-wrap: balance`
+  // (components.css:29) and the HTML is `<h1 class="h1">`
+  // (P03-create-account.html:36), so the headline must render with
+  // `NestBalancedText` (same copy, style and maxLines); the hand-calibrated
+  // 240 dp width cap was the pattern the rule replaces.
   //
-  // Nothing changes on screen at 390 — the cap already reproduces the
-  // design's "Create your" / "family account" — so this is a rule
-  // violation, not a pixel defect. Two things the swap must respect, both
-  // measured in `typography_test.dart` with the design's fonts:
+  // Nothing changed on screen at 390 — the cap already reproduced the
+  // design's "Create your" / "family account" — so this was a rule
+  // violation, not a pixel defect. The swap respected both measured
+  // conditions in `typography_test.dart` (design fonts loaded):
   //
   //   * `textAlign: TextAlign.left`. The component centres its narrowed box
   //     by default; the design left-aligns both headline lines on the 20 dp
   //     gutter.
-  //   * keep the 240 dp cap. Inside it the break is already the narrowest
-  //     two-line break (197.7 dp), so `NestBalancedText` narrows to 197.68
-  //     and neither the break nor the ink moves. Dropping the cap would
-  //     break the design: at 350 dp the balanced break is "Create your
-  //     family" / "account".
+  //   * the cap deleted rather than kept. The iteration-7 prediction that
+  //     the 390 dp break would become "Create your family" / "account" was
+  //     measured wrong: the component first takes the minimum line count at
+  //     full width (2) and then binary-searches the narrowest width that
+  //     still holds 2 lines — the design's 197.68 dp. So it reproduces the
+  //     design break unconstrained, and `the balanced headline keeps the
+  //     design break and gutter` (real screen, no cap) is green.
   //
   // One shared caveat, measured in `typography_test.dart` and filed as
   // SHARED_REQUEST §10: with `maxLines: 3` the component's binary search
-  // runs through a clamped painter, so at text scale 1.3 (where the text
-  // needs 4 lines) it converges to a 0.1 dp box and renders one glyph per
-  // line. `maxLines: 3` is what this proof requires, so the shared fix has
-  // to land first — or the migration drops `maxLines`.
-  //
-  // Left red on purpose (Stage 3 un-skipped it: a skipped proof is not
-  // evidence). The fix is the screen's.
+  // runs through a clamped painter, so text that needs MORE lines than
+  // `maxLines` at every offered width converges to a 0.1 dp box and renders
+  // one glyph per line. P03's h1 never enters that state (at text scale 1.3
+  // the full-width line count is still 2, under the clamp), so §10 is a
+  // real core defect that another screen must reach first.
   // -------------------------------------------------------------------
   testWidgets('P03-BUG-24 the headline is rendered with NestBalancedText', (
     tester,
@@ -1328,8 +1334,8 @@ void main() {
       findsOneWidget,
       reason:
           'the design h1 uses `text-wrap: balance`; the BALANCED HEADINGS '
-          'rule requires NestBalancedText instead of the hand-calibrated '
-          '`_headlineMaxWidth = 240` cap',
+          'rule requires NestBalancedText instead of a hand-calibrated '
+          'width cap on the headline',
     );
     final headline = tester.widget<NestBalancedText>(balanced);
     expect(headline.text, 'Create your family account');

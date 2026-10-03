@@ -155,10 +155,26 @@ a "label whose CSS sets no line-height" variant alongside `legalCaption` —
 otherwise the next screen repeats this 2.3 dp.
 
 ## 10. `NestBalancedText` collapses to a ~0 dp box when `maxLines` clips the
-## natural line count (blocks the P03 balanced-heading migration)
+## natural line count (still open — no longer blocks P03)
 
-Found by Stage 3, iteration 7, while proving the BALANCED HEADINGS migration
-feasible. `balancedWidthFor` binary-searches the narrowest width whose line
+**Status update (iteration 8): still a real `core/` defect, but no longer
+blocking this screen.** P03's migration landed *without* the cap and is green,
+and the measurement that made it look blocking was an artefact of that cap: at
+full 350 dp the h1's minimum line count is 2, which is under `maxLines: 3`, so
+the clamped painter never degenerates — even at text scale 1.3, where the
+unconstrained box would need 3 lines but the *balanced* search still finds a
+2-line width (~257 dp). The collapse needs a caller whose text needs **more
+lines than `maxLines` at every width it offers**. P03's guard
+(`the headline is not a per-glyph column at text scale 1.3`) stays green as the
+regression guard for any future caller.
+
+Fix unchanged (below): search on the *unclamped* line count
+(`lineCountFor(maxLines: null)`) and only narrow while that count equals the
+target; if the unclamped count already exceeds `maxLines`, fall back to the
+full-width `Text` (the greedy wrap is then the best available). A unit test on
+the component's two static helpers would pin both branches.
+
+Original finding (kept for the record): `balancedWidthFor` binary-searches the narrowest width whose line
 count is `<= lineCount`, but it measures through the same `maxLines`-clamped
 painter it is searching in (`lineCountFor` forwards `maxLines`). When the text
 needs more lines than `maxLines` allows, the count is clamped at every width,
@@ -181,7 +197,6 @@ helpers would pin both branches; P03's own guard is
 column at text scale 1.3"), which is green today and turns red if the
 migration lands before this fix.
 Files: `app/lib/core/design_system/components/nest_balanced_text.dart`
-(`balancedWidthFor`, `build`). Blocks: **yes** for the P03-BUG-24 migration as
-specified (it must keep `maxLines: 3`, which the design's 3-line break at text
-scale 1.3 relies on); no if the migration drops `maxLines`, which would leave
-the heading unbounded.
+(`balancedWidthFor`, `build`). Blocks: **no longer for P03** (the migration
+landed and is green); still yes for any caller that would enter the collapsed
+state, so the core fix is worth doing before that caller arrives.

@@ -1,4 +1,4 @@
-# P03 Create account — Stage 2a logic build (iteration 7)
+# P03 Create account — Stage 2a logic build (iteration 8)
 
 Route `/create-account` · feature `auth` · parent mode. Scope: non-UI layer only
 (`domain/**`, `data/**`, `presentation/bloc/**`, DI/routes, bloc/repository/data
@@ -15,8 +15,7 @@ None. Public names stable per `1_plan.md` §(b): `AuthEmailChanged`,
 
 ## Files changed
 
-None in this iteration. The logic layer matches the plan (re-verified by
-reading/grep, not assumed):
+None in this iteration. The logic layer matches the plan (re-verified):
 
 - `domain/auth_repository.dart` — `AuthProvider` enum, `createAccount` (legacy
   `name:` alias kept + documented for the shared `repositories_test.dart`
@@ -32,38 +31,38 @@ reading/grep, not assumed):
 - `auth_di.dart` / `auth_routes.dart` — registered, `BlocProvider` +
   `AuthLoadRequested`; no change needed.
 
-## FIXES_6 items in my layer
+## FIXES_7 items in my layer
 
-None — the single open bug, P03-BUG-23 (2 dp form offset from `_OrRow`'s
-caption-token label, `create_account_view.dart:280-299`), is a one-line
-screen-local view fix owned by the parallel UI builder. Both its proofs live
-in `p03_bugs_test.dart` and `typography_test.dart` — neither name contains
-bloc/cubit/repository/data, so there is nothing to un-skip or edit in my
-layer. Also confirmed out of my scope / already handled:
+None — the single open item, P03-BUG-24 (headline must use `NestBalancedText`
+per BALANCED HEADINGS, `create_account_view.dart:39, :101-111`), is a
+view-only swap owned by the parallel UI builder, including its arbitration
+(keep vs drop the 240 dp cap) and the `P03-BUG-7` bound retirement. Its proof
+lives in `p03_bugs_test.dart`, whose name contains none of
+bloc/cubit/repository/data — nothing to un-skip or edit in my layer. Also
+confirmed out of scope:
 
-- BUG-16 now fixed + pixel-proven (view), BUG-22 verified (view), BUG-17 gone
-  via shared fonts (no local change).
-- `google_fonts`: zero imports/calls in `lib/features/auth/` and in my owned
-  test file (grep-verified); remaining view-test cleanup (if any) is the UI
-  builder's.
-- SHARED_REQUEST §7 (13/20 legal-caption token) and §9 (caption-token pattern
-  note): shared/orchestrator items, non-blocking, no logic change.
-- No letter-spacing, chip-row, child-order, or trial concerns in this layer.
+- SHARED_REQUEST §10 (`NestBalancedText` collapse when `maxLines` clips) is a
+  `core/` defect — off-limits per RULES §1; filed, not a P03 bug.
+- SHARED_REQUEST §7 (13/20 legalCaption token): open, non-blocking, no logic
+  change.
+- BUG-16/17/22/23 all green; nothing regressed in the bloc or repository.
+- `google_fonts`: zero imports/calls in `lib/features/auth/` and in
+  `auth_bloc_test.dart` (grep-verified); zero `skip:` markers there too.
 
 ## Verification (allowed scope only)
 
 - `flutter analyze lib/features/auth` → `No issues found!`
 - `flutter test test/features/auth/auth_bloc_test.dart` → `All tests passed!`
-  (no skips).
+  (+45, no skips).
 - Full-suite `flutter test`, simulator, and view-test runs NOT done —
   integrator / UI builder scope per the stage brief.
 
 ## LEFT FOR NEXT ITERATION
 
-Nothing in the logic layer. When SHARED_REQUEST §8 lands, the UI stage passes
-`errorText:` and deletes its owned rows — zero logic lines (bloc already
-exposes both error fields). If shared `repositories_test.dart` migrates off
-`createAccount(name:)`, drop the legacy alias and restore
-`required String email`.
+Nothing in the logic layer. When SHARED_REQUEST §8/§10 land, the UI stage does
+the `errorText:`/headline migrations — zero logic lines (bloc already exposes
+both error fields; no headline state exists in the bloc). If shared
+`repositories_test.dart` migrates off `createAccount(name:)`, drop the legacy
+alias and restore `required String email`.
 
 VERDICT: PASS
