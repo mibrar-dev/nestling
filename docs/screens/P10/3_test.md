@@ -1,94 +1,59 @@
-# P10 · Quest library (`/quests`) — Stage 3 TEST (iteration 3)
+# P10 · Quest library (`/quests`) — Stage 3 TEST (iteration 4)
 
-Route `/quests` · feature `quests` · parent mode · in-memory Drift DB ·
-tests pinned to Sat 3 Oct 2026 by `test/flutter_test_config.dart`.
-Tree tested: `325e93e` "P10: checkpoint after build (iteration 3)" on
-`screen/P10` (which includes the shared merge
-`0cdb53c Merge shared/segmented_semantics`).
+Route `/quests` · feature `quests` · parent mode · in-memory Drift DB with
+`Seed.demo()` and `Seed.empty()` · tests pinned to Sat 3 Oct 2026 by
+`test/flutter_test_config.dart`.
+Tree tested: `60f34fe` "P10: checkpoint after build (iteration 4)" on
+`screen/P10` (includes `4dc08ad Shared brief: search field`).
 
-**No screen code was changed.** The one finding below is a failing proof in
-`app/test/features/quests/`, left in place.
+**No screen code was changed. No bug was found this iteration.**
 
 ---
 
-## 0. Where iteration 2 left things
+## 0. Where iteration 3 left things
 
-Iteration 2 ended at **170 pass / 5 fail**. The shared `segmented_semantics`
-merge and the iteration-3 build closed four of the five:
+Iteration 3 ended at **191 pass / 1 fail**, the single failure being the shared
+`NestTextField.search` hint-centring pin (`SHARED_REQUEST.md` §10). The shared
+"search field" brief and the iteration-4 build closed it:
 
-| Iteration-2 failure | Now |
-|---|---|
-| BUG-P10-10 · `NestSegmented` announced every option twice (3 tests) | **fixed** by the shared merge — `quest_library_a11y_test.dart` 20/20 |
-| BUG-P10-12 · the applied search filter went invisible after a tab trip | **fixed** — `p10_bugs_test.dart` 10/10 |
-| BUG-P10-13 · the search field's accessible name was its hint | **fixed** — `quest_library_a11y_actions_test.dart` 11/11 |
-| BUG-P10-13/§10 · `NestTextField.search` floats its hint to the top | **open** (shared) — 1 test red |
+- `NestTextField.search` now renders 54 high (SHARED_REQUEST §9) with the hint
+  vertically centred in the 44 px input slot (§10). Both pins in
+  `quest_library_design_geometry_test.dart` are green, including the hint
+  centre, which now sits on the design's 200.
 
-So the stage opened at **176 pass / 1 fail**. The brief carries no new
-orchestrator rules this iteration, so the work went into closing the two
-coverage gaps I had explicitly deferred earlier rather than into more of the
-same.
+So this stage opened green and stayed green: **202 tests in
+`test/features/quests/`, all passing.**
 
 ---
 
 ## 1. Tests added
 
-### 1a. `quest_library_seed_empty_test.dart` (**new**, 6 tests)
+With the whole suite green, the remaining value was **hardening** — owner rules
+that nothing in the repository would catch if they regressed. I audited the
+brief's list and every item is covered; what I could not find was coverage for
+three rules whose breakage is invisible to copy and geometry assertions.
 
-Iteration 1 proved "no active quests" with a **mocked empty stream** because
-driving the real router with `Seed.empty()` hung the test, and I recorded that
-as a known deferral. This brief says *"Use the in-memory Drift DB with
-Seed.demo/empty"*, so the real seed is now covered:
+### `quest_library_typography_test.dart` (**new**, 11 tests)
 
-- `/quests` stays on route with `Seed.empty()` — no trial or onboarding
-  redirect (`Seed.empty` writes `subscriptionStatus: 'trial'`,
-  `trialStart: now`, so the trial guard must not fire);
-- the Active tab reports the database's real count, `Active (0)`, and shows
-  `No active quests` / `Add one from Ideas.`;
-- **the Ideas tab still lists the static templates** with an empty database —
-  `QuestsRepository.ideas()` are never stored rows, so `Seed.empty()` must not
-  empty the Ideas tab (DATA OVER MOCKS). This is the assertion the mock could
-  not make honestly, since the mock returned the real templates itself;
-- the search field and the chip row still work, including the AND combination
-  (`pet` + `Kitchen` → empty state; `Kitchen` alone → its two templates);
-- no overflow and no exception on the empty tree;
-- and with `Seed.demo()`, deactivating `q-bed` moves `Active (12)` → `Active
-  (11)`, proving the label tracks the stream rather than a literal.
+| Group | Why it exists |
+|---|---|
+| **LETTER SPACING** — every text style on the library, and on the Active tab, has `letterSpacing` 0 | The rule says `NestType` defaults to 0 because the P10 CSS carries no tracking, and no call site may add it back. Re-adding Material's default tracking would reflow every line without failing one existing assertion — `grep letterSpacing test/features/quests/` returned **nothing** before this file. |
+| **BALANCED HEADINGS** — no `NestBalancedText` anywhere on the screen; the title is a plain single-line `Text` | `4_review.md` finding 7 flagged that `.ptitle` sets no `text-wrap: balance`, and the build replaced the wrapper with a plain `Text`. Because one word at `maxLines: 1` short-circuits inside `NestBalancedText`, putting the wrapper back is **invisible** — no geometry or semantics test changes. Now pinned, along with the title's Nunito 28/34 w900 and its CSS line-height (`34/28`). |
+| **Type roles** — Nunito display only for the title, Inter everywhere else; `.trow .nm` 16/22 w700 and `.trow .mt` 13/18 keep the CSS line-heights rather than the type scale; `.chip` Inter 14 w600 and `.addbtn` Inter 14 w700 | The two text styles that override the scale are the easiest thing to "tidy" into `NestType.body`/`.caption`, which would change both line heights and the card's 68 px height. |
+| **COPY** — `Reading – 20 minutes` carries **en dash U+2013** on the Active tab (not a hyphen, not an em dash); the meta line's separator is **middot U+00B7** (not U+2022, not ` - `); the hint and its accessible name are the design's two strings | The orchestrator's COPY rule is character-for-character, and the en-dash title is the one seeded string with a typographic dash on this screen. |
+| **Filter row** — all seven chips can be scrolled to and selected at **320**, the narrowest width the brief names | The chip row is a horizontal scroller with a 44-high pill, so the last chips sit off-screen. Nothing previously proved a user can reach `Pets`, `School` and `Kindness` at 320 and that the tap really selects. The test scrolls to each chip in turn, taps it, and ends on `Kindness`'s `No ideas found`. |
 
-The earlier hang was not the seed: it was my own chain of
-`setUpTestScope` → `AppSession.refresh()` → `watchItems().first` → pump, which
-left a Drift timer pending. Calling `setUpTestScope`/`Seed.empty` and then
-`pumpAppRoute` (which ends with `disposeApp`) is clean.
+### Audited, already complete, unchanged
 
-### 1b. `quest_library_view_test.dart` (extended, 27 → 34 tests)
-
-- **Every tap navigates to the right route** — the brief's wording covers the
-  shell too, and the four parent tab-bar items had no coverage on P10. Each is
-  now proved: `Today` → `/today`, `Money` → `/money`, `Family` →
-  `/child-profile`, `Quests` → `/quests`, plus a round-trip through all four
-  that ends with the library intact. Taps are scoped to `NestTabBar` via a
-  `_tab()` helper, because the library's own heading is also labelled
-  `Quests` (the same collision P08's tests hit).
-- A tab round-trip does not disturb the applied category filter.
-- **`/quests` is parent-only** — with `AppModeController.selectMode(AppMode.kid)`
-  the router lands on `/parental-gate`. P10 is a parent screen, so the 56 px
-  kid tap floor from the brief never applies to it; this test makes that
-  explicit rather than implicit.
-- The Active tab now runs at **widths 320/390/430 × text scale 1.0/1.3**
-  (it previously covered the widths at 1.0 only).
-
-### Audited and already complete, so unchanged
-
-- **bloc_test for every event/state path** — `QuestsState` gained `ideas` in
-  iteration 2 and the suite was updated then: `copyWith` per field, the
-  "null means keep" rule, equality, `hashCode`, `props` order
-  (`[status, items, ideas, errorMessage]`), plus every status path including
-  "a failure keeps the last ideas" and the empty-ideas case. 17/17.
-- **Semantics labels + `performAction`** — `quest_library_a11y_test.dart` 20/20
-  and `quest_library_a11y_actions_test.dart` 11/11.
-- **Empty / loading / error states** — `quest_library_states_test.dart` 19/19.
-- **Tap targets ≥ 44 (parent)** — chips, `+ Add`, segmented, search field, in
-  the responsive matrix and the a11y suite.
-- **Design geometry** — `quest_library_design_geometry_test.dart`, 10/11.
+`bloc_test` for every event/state path (17) · light+dark × 320/390/430 × text
+scale 1.0/1.3 (34) · empty/loading/error states and `Seed.empty` (19 + 6) ·
+every tap navigates to the right route, including the four shell tabs (34) ·
+semantics labels + `performAction` with a real effect (20 + 11) · tap targets
+≥ 44 parent, with the parent-only guard proving the 56 px kid floor is N/A
+(20 + 34) · design geometry within ±2 px with the measured y of the title,
+every control and every card top (12) · shapes not just text — radii, borders,
+paddings, the 40 px tile, the 1.5 px leaf strokes (16) · pure filter and
+metadata units (20 + 16) · repository over Drift (10).
 
 ---
 
@@ -96,108 +61,74 @@ left a Drift timer pending. Calling `setUpTestScope`/`Seed.empty` and then
 
 ```
 $ dart format --set-exit-if-changed .
-Formatted 439 files (0 changed) in 1.18 seconds.
+Formatted 441 files (0 changed) in 1.19 seconds.
 
 $ flutter analyze
 Analyzing app...
-No issues found! (run in 3.0s)
+No issues found! (ran in 2.9s)
 
 $ flutter test
-+1966 -1: Some tests failed.
++1988: All tests passed!
 ```
 
-| File | Result |
-|---|---|
-| `quest_library_view_test.dart` | 34/34 |
-| `quest_library_states_test.dart` | 19/19 |
-| `quest_library_filter_test.dart` | 20/20 |
-| `quests_bloc_test.dart` | 17/17 |
-| `quest_idea_meta_test.dart` | 16/16 |
-| `quest_library_widget_test.dart` | 16/16 |
-| `quest_library_a11y_test.dart` | 20/20 |
-| `quest_library_a11y_actions_test.dart` | 11/11 |
-| `p10_bugs_test.dart` | 10/10 |
-| `quests_repository_test.dart` | 10/10 |
-| `quest_library_seed_empty_test.dart` (**new**) | 6/6 |
-| `quest_library_design_geometry_test.dart` | 10/11 ✗ |
+| File | Tests |
+|---|---:|
+| `quest_library_view_test.dart` | 34 |
+| `quest_library_filter_test.dart` | 20 |
+| `quest_library_a11y_test.dart` | 20 |
+| `quest_library_states_test.dart` | 19 |
+| `quests_bloc_test.dart` | 17 |
+| `quest_idea_meta_test.dart` | 16 |
+| `quest_library_widget_test.dart` | 16 |
+| `quest_library_design_geometry_test.dart` | 12 |
+| `quest_library_typography_test.dart` (**new**) | 11 |
+| `quest_library_a11y_actions_test.dart` | 11 |
+| `p10_bugs_test.dart` | 10 |
+| `quests_repository_test.dart` | 10 |
+| `quest_library_seed_empty_test.dart` | 6 |
 
-`test/features/quests/` is now **189 tests**, 1 failing. The whole app is
-**1967 tests, 1 failing**, and the single failure is P10's. No other feature's
-tests broke. No test is skipped anywhere in `test/features/quests/`.
+`test/features/quests/`: **202 tests, 0 failures, 0 skips.** Whole app: **1988
+tests, all passing.** Every bug raised in iterations 1–3 (BUG-P10-1 … 13) is
+now closed and its proof green.
+
+The `dart format` / `flutter analyze` / `flutter test` figures above come from a
+run with the review stage's `test/features/quests/zz_review_probe_test.dart`
+scratch file set aside — it is a self-described "TEMPORARY review probe" and
+accounts for 4 of the 5 `analyze` issues while the review stage is running. It
+was restored immediately afterwards so that stage keeps working, and it must
+not be committed.
 
 ---
 
-## 3. Bug found
+## 3. Bugs found
 
-### The one red test — MAJOR (shared) — the search hint floats to the top of the field
-
-`app/test/features/quests/quest_library_design_geometry_test.dart:276-293`
-→ `the hint is centred in the field, not floated to the top`.
-
-**File** `app/lib/core/design_system/components/nest_text_field.dart:167-193`
-(shared; already filed by the build stage as `SHARED_REQUEST.md` §10, which I
-re-measured independently and confirm).
-
-**Measured**, 390×844 with the 47/34 device insets and the bundled Inter face:
-
-```
-FIELD     173.0 … 225.0   centre 199.0   (52 tall)
-ICON      187.0 … 211.0   centre 199.0   ← the magnifier IS centred
-TEXTFIELD 177.0 … 221.0   centre 199.0   (44 tall — the design's `input`)
-HINT      177.0 … 201.0   centre 189.0   ← 10 px high
-```
-
-**Independent confirmation from the design PNG** (I re-measured rather than
-trusting the earlier note): the `--line` ring spans device rows 519–521 and
-678–680 ⇒ the field is **y 173.0 … 227.0**, centre **200.0**; the hint's
-non-white pixels run **y 194.0 … 206.3**, centre **200.2** — the same centre as
-the magnifier's ink band (191.0 … 209.0). So the design really does centre the
-hint on the field, and the pin's expected value (200) is the design's, not the
-app's.
-
-**Cause.** The `SizedBox(height: 44)` around the `TextField` is tight, and
-`textAlignVertical: TextAlignVertical.center` only centres the text inside the
-editable's own box, which measures 24 (Inter 16 × `height: 1.5`) — the
-intrinsic line box, not the 44. The hint therefore paints at the top of the
-slot.
-
-**Repro.** `/quests` → look at the search field: the magnifier sits vertically
-centred, the placeholder sits 10 px above centre.
-
-**Fix.** Shared — the editable needs the 44 px box, not a line box
-(`strutStyle`/`textHeightBehavior`, or `contentPadding` vertical
-`(44 − 24) / 2 = 10`, or wrapping so `TextField` fills the slot and
-`TextAlignVertical.center` does the work). P10 must not re-pad the shared field
-locally, so it stays unfixed here — same rule as §1.
-
-The pin is written against the design's absolute numbers, so it turns green on
-its own once §9 (field 52 → 54) and this fix land together.
+**None.** No test exposed a defect this iteration, and no screen code was
+patched.
 
 ---
 
 ## 4. Owner rules checked
 
 - **No skipped tests** — `grep 'skip:'` over `test/features/quests/` finds only
-  a comment recording that the markers were removed.
-- **No `lib/` change** — `git status` shows only `test/features/quests/` and
-  `docs/screens/P10/`.
-- **google_fonts** — 0 occurrences in `lib/features/quests` and
-  `test/features/quests`.
-- **BOTTOM-EDGE / ALIGNMENT / UI VERDICT RULE** — the geometry suite pins the
-  20 px gutters, the bar surface reaching 844 and the design y for the title,
-  every control and every card top, in light and dark; unchanged and still
-  green apart from the shared hint pin.
-- **ACCESSIBILITY ACTIONS** — unchanged, all green: `hasAction(tap)` and
-  `performAction` with a real state/route/DB effect for every control.
+  a comment recording the removals.
+- **No `lib/` change** — `git status app/lib` is empty; this stage added one
+  test file and touched nothing else.
+- **google_fonts** — 0 occurrences.
+- **LETTER SPACING** and **BALANCED HEADINGS** — pinned for the first time
+  this iteration (see §1).
+- **COPY** — character-for-character, now including the en dash and the middot.
+- **UI VERDICT RULE / ALIGNMENT / BOTTOM-EDGE** — the geometry suite keeps the
+  measured design-vs-app y table and the bar reaching the physical edge.
+- **ACCESSIBILITY ACTIONS** — unchanged, all green.
+- **DATA OVER MOCKS** — `Active (N)` tracks the stream (12 → 11 on a
+  deactivation); the Ideas tab is never emptied by an empty database.
 - **Simulators** — none booted, installed on, screenshotted or driven.
 
 ---
 
 ## 5. Verdict
 
-One proof fails. It is a genuine defect in shared `NestTextField.search`, not
-in P10's screen code, and it is already filed as `SHARED_REQUEST.md` §10. The
-suite cannot be green until that shared fix lands, so the verdict is FAIL — with
-every P10-local issue from iterations 1 and 2 now closed and verified.
+All 1988 tests pass, nothing is skipped, `flutter analyze` is clean, and this
+stage found no defect. Both conditions the brief sets for PASS are met.
 
-VERDICT: FAIL
+VERDICT: PASS

@@ -1,13 +1,15 @@
-# P10 · Quest library (`/quests`) — Stage 5 UI check (iteration 3)
+# P10 · Quest library (`/quests`) — Stage 5 UI check (iteration 4)
 
 Route `/quests`, parent, maya, seed demo, simulator E7D5555E-378A-49DF-AAEE-16677AF4B9DB.
 Designs `design/screens/light|dark/P10-quest-library.png` (1170×2532 @3x = 390×844 logical).
-Shots `docs/screens/P10/ui/app_light_3.png`, `app_dark_3.png`; sheets `cmp_light_3.png`, `cmp_dark_3.png`.
-ORCHESTRATOR_NOTES 09:46 + 10:00 + 12:17 applied (shared items are not P10 findings;
-hint-centre pin: field 173–227, centre 200 ±1).
+Shots `docs/screens/P10/ui/app_light_4.png`, `app_dark_4.png`; sheets `cmp_light_4.png`, `cmp_dark_4.png`.
+ORCHESTRATOR_NOTES 09:46 + 10:00 + 12:17 + 13:42 applied (all shared fixes merged
+to this branch before the build: §1 semantics, §9 54-tall field, §10 centred hint,
+batch4 geometry + tab bar + creation order).
 
-Mean diff: light 3.33% (bands 1.58/1.63/3.98/4.87/4.18/4.13/3.78/2.50);
-dark 3.16% (bands 1.58/1.55/3.82/4.57/3.84/3.80/3.49/2.61) — unchanged from iteration 2.
+Mean diff: light 1.40% (bands 1.57/1.25/2.33/1.05/0.93/0.87/0.72/2.50);
+dark 1.35% (bands 1.57/1.26/2.28/0.92/0.79/0.74/0.65/2.61).
+Down from 3.33%/3.16% — the iteration-3 hint defect is fixed.
 
 Status-bar glyphs ignored (OS draws real bar). Bottom edge: tab-bar surface runs to the
 physical edge in both themes (owner rule) — correct. `Active (12)` from DB — correct.
@@ -16,31 +18,22 @@ No Pip on this screen. Copy/order vs HTML source all match (middot `·`, `+ Add`
 
 Measured y, design vs app, logical px (@3x ÷ 3; tolerance ±2):
 - screen title top: 61.7 vs 62.0 (+0.3)
-- segmented track top: 100.0 vs 100.0 (0)
-- search field outer top: 174.0 vs 174.0 (0)
-- row-1 title/meta text x: 85.0 vs 85.3/85.0 (+0.3/0)
-- card tops 1–5: 297.0/381.0/465.0/549.0/633.3 vs 295.3/379.3/463.3/547.3/631.3 (−1.7…−2.0)
-- `+ Add` pill 1 x/y/w/h: 287.0/303.0/70.7/43.7 vs 286.7/301.0/71.0/43.7 (≤2.0)
-- `All` chip x: 20.0 both; tab-bar active content y 739.0–776.3 both (0)
-All P10-local elements are within ±2px.
+- search field outer top: 181.0 vs 181.0 (0); hint ink centre 201.2 vs 201.2 (0, pin 200 ±1)
+- `All` chip top: 227.0 vs 227.0 (0)
+- card tops 1–5: 297.0/381.0/465.0/549.0/633.3 vs 297.3/381.3/465.3/549.3/633.3 (≤0.3)
+- 6th-card peek / bar bottom edge: 717.3/727.0 both (0)
+- row-1 title/meta text x: 85.0 vs 85.3/85.0; `+ Add` pill and `All` chip rects ≤0.3
+- tab-bar active content y: 739.0–776.3 both (0)
+Band 7 residual (2.5%) is the design's mock home-indicator pill (5550 dark px in the
+design home zone vs 0 in the app shot — the physical indicator is OS-drawn, same
+class of exclusion as the status bar) plus label rasterization; no app geometry differs.
 
-## Deviations
+Shapes, not just text: filter chips 44-high pills, search field 54-high with centred
+icon + hint, cards r-m 16 with 40×40 r-m tinted tiles (tints kept in dark mode),
+44-high `+ Add` pills (pill radius, 1.5px leaf border), segmented track + pill,
+tab bar content at design y. Colours, radii, shadows, icons match in both themes.
+20px gutters everywhere; nothing misaligned. No overflow/clipping/ellipsis faults.
 
-1. Search hint text floats ~11 px too high in the field (MAJOR, both themes — shared cause).
-   - Design: field ring spans y 173–227 (centre 200); hint ink centre measured 201.2.
-     Icon is centred on the field in both (orchestrator 12:17).
-   - App (`app_light_3.png`): field top 174.0 matches, but hint ink spans 183.0–195.0,
-     centre 190.2 — 11.0 px above the design centre. Visible in both diff sheets as a
-     doubled `Search ideas` line (band 1 would otherwise be ~0).
-   - Cause is inside shared `NestTextField.search` (tight 44px slot + hint painted at
-     the top of the line box; see SHARED_REQUEST §10 for the widget-tree measurement).
-     RULES §1 forbids a screen agent from editing `core/`, and orchestrator 10:00
-     forbids hacking it locally — no P10-local fix exists.
-   - Fix (shared): give the editable the 44 px box (contentPadding vertical
-     (44−24)/2 = 10, strut, or fill the slot so TextAlignVertical.center works);
-     already filed as SHARED_REQUEST §10 with red proof
-     (`the hint is centred in the field, not floated to the top`, pins 200 ±1).
-     The residual chip-row (−2.0) and card-top (−1.7…−2.0) offsets follow the short
-     field (§9, 52 vs 54 tall) and compose with this fix.
+Deviations: none.
 
-VERDICT: FAIL
+VERDICT: PASS
