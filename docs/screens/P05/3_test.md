@@ -1,107 +1,94 @@
-# P05 · Add children — test notes (STAGE 3, iteration 6)
+# P05 · Add children — test notes (STAGE 3, iteration 7)
 
 Route `/add-children`, feature `family`, parent mode. Changes are confined to
-`app/test/features/family/` and these notes — no product code touched.
+`app/test/features/family/add_children_test.dart` and these notes — no product
+code touched.
 
-The suite is green (`+816 ~1` full, **+122 ~1** in `test/features/family/`,
-zero failures, one documented skip), but this stage **found a real bug**:
-the age-band chips expose a **32-px tap target** where parent mode requires
-≥44 (P05-BUG-11). So: PASS is not available, and FAIL is the honest verdict.
+Suite green (`+986 ~1` full, **+124 ~1** in `test/features/family/`, 0 failures,
+the one mandated skip). Per the orchestrator's 04:31 decision, **P05-BUG-11 is
+not a P05 finding while the shared fix is pending**, and every P05-owned test
+passes — so this stage is a PASS.
 
-## Tests added (3, in `add_children_test.dart`)
+## Orchestrator decision 04:31 — what this stage did
 
-The shared batch-2 chip landed (`NestChip` = 32-px visual + a `_ExpandedHitBox`
-that widens the hit test to 44×44), and the build stage correctly flipped my
-iteration-5 expectations to 32. That left a **coverage hole**, which is what this
-stage is about:
+The decision keeps both owner rules (32-px visual chips **and** a 44-px tap
+target), rejects the bug report's options 1 and 2, and makes the fix
+`NestChipWrap` from `shared/chip_wrap_hit_area`: swap the age-chip `Wrap` for it,
+restore the ≥44 tap-target assertion in both axes, and un-skip P05-BUG-11.
 
-1. **`[P05-BUG-11] the vertical overlay is clipped by the chip Wrap`** — the new
-   behaviour the batch introduced was previously only asserted as *layout*
-   (32 px tall box), which proves nothing about the hit area. This test taps
-   the pill (reachable), moves the selection away, then taps 3 px above the
-   first chip: the point is inside the 44-px target by design and is **dropped**,
-   because the `Wrap`'s own box is the 32-px run. Both assertions are written to
-   flip to `isTrue` when the shared fix lands.
-2. **The pill is the design size and selects on tap** — 32 px visual, selection
-   stays single, and the inert "Age band" label strip above the block belongs
-   to no control (a tap there changes nothing).
-3. **No added letter spacing** — sweeps every `Text` on the loaded screen and
-   fails if any style carries positive tracking, guarding the new ruling
-   (`main fd92d95`: `NestType` defaults `letterSpacing: 0`; Material's
-   positive tracking must not come back). P05 currently has none.
+`NestChipWrap` is **not in this worktree yet** (`main` is at `e3ae2b2` and
+carries it; this branch is at `6ba0cb8` and the loop merges main before each
+build — a process item, not a finding). So the "until then" branch applies: the
+skip stays with its `shared/chip_wrap_hit_area` reference, and the tap-target
+assertion stays at "width ≥ 44, height == 32". The exact check for the next
+build: `grep -rn NestChipWrap app/lib/core/design_system/` — empty means wait.
 
-Also updated: a stale comment in `p05_bugs_test.dart` still credited the
-removed `IntrinsicWidth` workaround for the chip fix — it now describes the
-shared fix accurately.
+What I added instead was the part of the swap that would otherwise be verified
+by hand later:
+
+1. **No ancestor of the chip row is tight around its ±6 px** — the
+   precondition `NestChipWrap` depends on (its hit test only widens if every
+   ancestor forwards the position). Asserts the form card's `Column` **and** the
+   `NestCard` both reach ≥6 px beyond the row, with the overhang derived from
+   tokens (`(44 − 32) / 2 == 6`). This passes today and must still pass after the
+   swap.
+2. **The gaps around the chip row are the design values** — 4 px above
+   (`.chip-row { margin-top: 4px }`) and 8 px below (`.lbl { margin-top: 8px }`).
+
+   The note says the Column "already gives at least 6 px above and below the
+   row"; it gives **4 above** (the design's own value) and 8 below. Not a problem
+   for the swap — reachability depends on the ancestors' boxes (test 1), not on
+   clear space — but worth recording: the 2 px of top overhang lands on the
+   inert "Age band" label, so no control can be stolen, and test 3 in the group
+   below proves a tap on that strip changes nothing.
+
+So the remaining swap is exactly: replace `Wrap` → `NestChipWrap`, flip the
+tap-target assertion to `atLeast44` in both axes, un-skip `[P05-BUG-11]`, and
+flip the two assertions in `[P05-BUG-11] the vertical overlay is clipped…` to
+`isTrue`. Nothing else is outstanding.
 
 ## Results
 
 ```
-dart format .        clean (373 files, 0 changed)
+dart format .        clean (381 files, 0 changed)
 flutter analyze      No issues found!
-flutter test         00:24 +816 ~1: All tests passed!
-  test/features/family/   122 tests (+1 skipped), 0 failures
+flutter test         00:31 +986 ~1: All tests passed!
+  test/features/family/   124 tests (+1 skipped), 0 failures
 ```
 
-`flutter test --run-skipped test/features/family/p05_bugs_test.dart` executes
-the skipped proof. Every app-pumping test ends with `disposeApp(tester)`.
+The skip is the mandated `[P05-BUG-11]` proof in `p05_bugs_test.dart:501`,
+carrying the `shared/chip_wrap_hit_area` reference and runnable with
+`flutter test --run-skipped test/features/family/p05_bugs_test.dart`. My green
+characterisation test for the same behaviour stays in the passing suite, so the
+clipping is visible either way. Every app-pumping test ends with
+`disposeApp(tester)`.
 
 ## Bugs found
 
-### P05-BUG-11 — age chips expose a 32-px tap target, not 44 (major, shared root cause)
+**None.** No P05-owned test failed and no defect was found in the screen.
 
-The batch-2 chip keeps the design's 32-px visual and widens the hit test to
-44×44 with `_ExpandedHitBox`. The **vertical** half of that never takes effect:
-the chips sit in a `Wrap` whose box is exactly the run height, so Flutter stops
-the hit test at the `Wrap` and the ±6 px overlay is dropped.
+Carried, explicitly not a P05 finding: **P05-BUG-11** — the age-chip rows expose
+a 32-px-tall touch target today (the shared chip's overlaid 44-px hit area is
+clipped by the chip `Wrap`'s own bounds), which violates the parent-mode ≥44
+rule. Per the 04:31 decision it is owned by `shared/chip_wrap_hit_area` and
+explicitly "NOT a P05 finding while the shared fix is pending"; the swap is
+gated on the main merge.
 
-Measured (390 px, scale 1.0, first row of the age-chip block; pill
-`34,527 → 104,559`):
+## Rules re-audited
 
-| tap y | inside the 44-px target? | selects the chip |
-|---|---|---|
-| 520–526 (above the pill) | yes | **no** — clipped by the Wrap |
-| 527–559 (the pill) | yes | yes |
-| 564 (below the pill) | yes | **no** — clipped |
+* **FONTS** — `google_fonts` is gone from `pubspec.yaml`; no import or
+  `GoogleFonts.*` call exists in `app/lib` or `app/test`, so nothing to delete.
+* **LETTER SPACING** — pinned by a sweep test that fails if any `Text` on the
+  screen carries positive tracking.
+* **CHILD ORDER** — Maya-first group, including the rename proof that keeps the
+  ruling green after the durable `createdAt` ordering lands.
+* **COPY** — code-unit assertions (curly apostrophe, em dash, en dashes, UK
+  `colour`).
+* **BOTTOM EDGE / ALIGNMENT** — CTA-to-edge and 20-px gutters at 320/390/430 in
+  light and dark.
+* **PIP** — no Pip slot on this screen (avatar initials only), so N/A.
+* Matrix coverage unchanged and green: bloc paths, light/dark, 320/390/430 ×
+  scale 1.0/1.3, `Seed.demo`/`empty`/`fresh`/`onboarding_kids`, loading/error/
+  retry, every tap → route, semantics labels, tap targets.
 
-Repro (in `add_children_test.dart`, group *P05 chip tap area*):
-tap `4–6`, tap `7–9`, then `tester.tapAt(Offset(pill.center.dx, pill.top - 3))`
-→ `4–6` stays unselected. So all four age bands expose a 32-px-tall touch
-target, against `SPACING_SPEC` §3/§10.6 (≥44 in parent mode) — precisely the
-regression the shared fix was meant to avoid. The horizontal half does work
-(the pill is 44-min wide by construction), and `_RenderExpandedHitBox`
-documents the constraint itself: "ancestors that are themselves tight … cannot
-forward hits outside their own box".
-
-Not fixable in P05 (RULES §1): the tight ancestor is the `Wrap` in
-`add_child_form_card.dart`, and every way to widen it (row padding, larger
-`runSpacing`, a `Stack` with a taller box) puts 44 px back **in the flow** —
-the 12-px drift batch 2 just removed. The fix has to come from the component
-side; filed in `SHARED_REQUEST.md` with the measurement table and options.
-Reported by the bugs stage as P05-BUG-11 first; my measurement adds the
-per-pixel reachability table and the repro.
-
-### Standing item reported explicitly: one skipped test
-
-`p05_bugs_test.dart` carries `skip: true` on the P05-BUG-11 proof (placed by
-the bugs stage, id in the test name, runnable with `--run-skipped`). It is the
-proof for the bug above; it stays skipped until the shared fix lands, because
-the "correct" assertion fails today. My own green characterisation test (1)
-covers the same defect in the passing suite, so the behaviour is visible either
-way.
-
-## Rules audited this iteration
-
-* **FONTS** — `google_fonts` is gone from `pubspec.yaml`; `app/lib` and
-  `app/test` contain no `google_fonts` import and no `GoogleFonts.*` call, so
-  there was nothing to delete in this feature's tests (verified by grep).
-  `test_scope.dart` no longer carries the old `allowRuntimeFetching` line, and
-  the whole suite builds without the package.
-* **LETTER SPACING** — `NestType` now defaults `letterSpacing: 0`
-  (`typography.dart:33,51`); P05 sets none, and test 3 now guards it.
-* **CHILD ORDER / COPY / BOTTOM EDGE / ALIGNMENT / PIP** — unchanged and still
-  pinned (Maya-first group incl. the rename proof; code-unit copy assertions;
-  CTA-to-edge and 20-px gutters at every width in both themes; no Pip slot on
-  this screen).
-
-VERDICT: FAIL
+VERDICT: PASS

@@ -2204,6 +2204,80 @@ void main() {
     });
   });
 
+  group('P05 chip row prerequisites for the shared hit-area fix', () {
+    // Orchestrator decision 04:31 — keep both owner rules (32-px visual chip,
+    // 44-px tap target). The fix is `NestChipWrap` on shared/chip_wrap_hit_area
+    // (not yet on main as of this stage), and it only widens the hit test if no
+    // ancestor between the chips and the card is tight. These tests pin that
+    // precondition and the gaps the swap relies on, so the swap is a one-line
+    // change with nothing left to verify by hand.
+    testWidgets('no ancestor of the chip row is tight around its ±6 px', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/add-children');
+
+      final rowTop = tester.getTopLeft(find.byKey(const Key('ageChip-4-6'))).dy;
+      final rowBottom = tester
+          .getBottomRight(find.byKey(const Key('ageChip-4-6')))
+          .dy;
+      const overhang = (NestDevice.tapParent - NestSpacing.s8) / 2;
+      expect(overhang, 6);
+
+      // The form card's Column and the card itself must both reach at least
+      // 6 px beyond the row, otherwise a `NestChipWrap` hit test would still be
+      // clipped by a tight ancestor.
+      final column = tester.getRect(
+        find
+            .ancestor(
+              of: find.byKey(const Key('ageChip-4-6')),
+              matching: find.byType(Column),
+            )
+            .first,
+      );
+      expect(column.top, lessThanOrEqualTo(rowTop - overhang));
+      expect(column.bottom, greaterThanOrEqualTo(rowBottom + overhang));
+
+      final card = tester.getRect(
+        find.ancestor(
+          of: find.byKey(const Key('ageChip-4-6')),
+          matching: find.byType(NestCard),
+        ),
+      );
+      expect(card.top, lessThanOrEqualTo(rowTop - overhang));
+      expect(card.bottom, greaterThanOrEqualTo(rowBottom + overhang));
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    testWidgets('the gaps around the chip row are the design values', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/add-children');
+
+      final ageLabel = tester.getRect(find.text('Age band'));
+      final row = tester.getRect(find.byKey(const Key('ageChip-4-6')));
+      final colourLabel = tester.getRect(find.text('Avatar colour'));
+
+      // `.chip-row { margin-top: 4px }` above, `.lbl { margin-top: 8px }`
+      // below. NB the note in ORCHESTRATOR_NOTES says the Column "already
+      // gives at least 6 px above and below": it gives 4 above (the design's
+      // own value) and 8 below. That is not a problem for `NestChipWrap` —
+      // reachability depends on the ancestors' boxes (asserted above), not on
+      // clear space — but the 2 px of top overhang lands on the inert
+      // "Age band" label, so no control can be stolen.
+      expect(row.top - ageLabel.bottom, NestSpacing.s1);
+      expect(colourLabel.top - chipsRowBottom(tester), NestSpacing.s2);
+      // What the 2 px of top overhang lands on is inert: "a tap on the label
+      // strip belongs to no control" is proven in the group below.
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+  });
+
   group('P05 chip tap area (shared batch 2: 32-px pill, 44-px overlay)', () {
     // P05-BUG-11 (open, filed by the bugs stage, proof skipped in
     // p05_bugs_test.dart): `_ExpandedHitBox` widens the chip's hit test to

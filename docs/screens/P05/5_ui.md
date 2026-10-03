@@ -1,13 +1,13 @@
-# P05 · Add children — UI check (STAGE 5, iteration 6)
+# P05 · Add children — UI check (STAGE 5, iteration 7)
 
 Route `/add-children`, simulator BC440E48-B3A3-43BC-971B-0EF5DB621874 (390×844).
 Shots use `SEED=onboarding_kids` (brief + `ORCHESTRATOR_NOTES.md`). Parent mode, `THEME=light|dark`.
 Comparisons: `tools/screens/compare.py` vs `design/screens/light|dark/P05-add-children.png`.
 
-- Light: `docs/screens/P05/ui/app_light_6.png` → `cmp_light_6.png`, **mean diff 1.34%** (was 3.89%)
-- Dark: `docs/screens/P05/ui/app_dark_6.png` → `cmp_dark_6.png`, **mean diff 1.25%** (was 3.79%)
+- Light: `docs/screens/P05/ui/app_light_7.png` → `cmp_light_7.png`, **mean diff 1.34%** (was 1.34%)
+- Dark: `docs/screens/P05/ui/app_dark_7.png` → `cmp_dark_7.png`, **mean diff 1.26%** (was 1.25%)
 
-Per-band drift (light): band0 0–105: 1.58% · band1 105–211: 0.32% · band2 211–316: 0.20% ·
+Per-band drift (light): band0 0–105: 1.63% · band1 105–211: 0.32% · band2 211–316: 0.20% ·
 band3 316–422: 1.70% · band4 422–527: 3.11% · band5 527–633: 0.14% · band6 633–738: 1.35% ·
 band7 738–844: 2.33%. Dark matches within ~0.5% (band5 0.13%).
 
@@ -28,9 +28,12 @@ Pixel landmarks measured from both PNGs at 3× (÷3 = logical px), light mode:
 | CTA (buttons + caption) | 678 / 716–768 / 781–790 | identical | 0 |
 | CTA top (gutter) | 644 | 645 | +1 |
 
-Every text/element row is within ±1 px. The shared batch-2 `NestChip` (32 px layout +
-44 px hit area) closed the iteration-4/5 +5/+12 residual exactly (band5 10.8% → 0.14%);
-the P05-local `IntrinsicWidth` workaround is removed (verified by grep).
+Every row within ±1 px, unchanged from iteration 6. `NestChipWrap` is not yet in
+`core/design_system` (grep: absent), so the age chips still use the plain `Wrap` + shared
+32 px-layout `NestChip` — visually and geometrically identical to iteration 6, one row,
+7–9 selected. The pending `NestChipWrap` swap is test-stage business ([P05-BUG-11] stays
+skipped per the orchestrator's 04:31 decision); it changes hit-testing, not layout, so it
+cannot regress these pixels.
 
 No Pip slot on this screen (avatar initials only) → PIP rule N/A.
 Status-bar time/glyphs (band0) and home-indicator pill (band7) ignored — OS-drawn.
@@ -38,17 +41,15 @@ Status-bar time/glyphs (band0) and home-indicator pill (band7) ignored — OS-dr
 ## Deviations (all accepted or sub-visible — none gate-blocking)
 
 1. Nickname field unfocused (design shows the focused leaf ring; band3 ≈1.7%).
-   Accepted mock state per orchestrator note 4 — do not add autofocus.
-2. Chip pills/selected-ring render within ±1 px rows; faint heat in band4 (3.1%) is the
-   accepted focus-ring difference plus sub-pixel pill/text rendering (bundled Nunito,
-   letterSpacing 0 per shared rule) — no measurable positional deviation.
+   Accepted mock state per orchestrator notes — do not add autofocus.
+2. Band4 heat (≈3.1% light / 2.6% dark) is the accepted focus-ring difference plus
+   sub-pixel pill/text rendering (bundled Nunito, letterSpacing 0 per shared rule);
+   chip label rows measure −1 px, inside tolerance.
 3. CTA caption/button heat (band6 ≈1.4%) is text-rendering only; geometry identical.
 4. Copy character-exact vs HTML (curly ’ U+2019, em/en dashes, "Avatar colour", all
    labels/captions/buttons, `Edit <name>`). No overflow/clipping/ellipsis.
 5. Owner rules: bottom bar surface to the physical edge both modes; 20 px gutters, all
-   edges aligned. Dark-mode colours match (band tables within 0.5%).
-6. Hygiene (read-only checks): no `GoogleFonts`/google_fonts references anywhere in
-   `features/family` or its tests (FONTS rule clean).
+   edges aligned. Dark-mode colours match.
 
 ## Verdict basis
 
