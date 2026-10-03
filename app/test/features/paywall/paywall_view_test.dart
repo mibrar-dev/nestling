@@ -22,6 +22,7 @@
 import 'dart:async';
 import 'dart:ui' show Tristate;
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart'
     show RenderParagraph, RenderRepaintBoundary;
@@ -109,7 +110,9 @@ Finder get _v1PipFinder => find.byWidgetPredicate(
 
 /// In-memory repository with a caller-controlled item stream, used to reach
 /// the states the static Drift repository cannot produce (pending load,
-/// empty, stream error, retry).
+/// empty, stream error, retry), plus the action paths: [failTrial] makes
+/// `startTrial()` throw and [trialGate] holds it open so the screen's
+/// `working` state is observable.
 class _FakePaywallRepository implements PaywallRepository {
   _FakePaywallRepository({this.pending = false, this.fail = false});
 
@@ -118,6 +121,13 @@ class _FakePaywallRepository implements PaywallRepository {
 
   /// Every `watchItems()` call errors — the screen shows its failure state.
   bool fail;
+
+  /// `startTrial()` throws — the trial action ends in `failure`.
+  bool failTrial = false;
+
+  /// When set, `startTrial()` waits on this before completing, so a test can
+  /// inspect the screen while `action == working`.
+  Completer<void>? trialGate;
 
   int watchCalls = 0;
   int startTrialCalls = 0;
@@ -141,12 +151,27 @@ class _FakePaywallRepository implements PaywallRepository {
   @override
   Future<void> startTrial() async {
     startTrialCalls++;
+    final gate = trialGate;
+    if (gate != null) await gate.future;
+    if (failTrial) throw Exception('offline');
   }
 
   @override
   Future<void> activate() async {
     activateCalls++;
   }
+}
+
+/// Replaces the DI `PaywallBloc` factory so the whole app (router, session,
+/// navigation) can be driven by a caller-controlled repository. The route
+/// builds its bloc from `GetIt.instance<PaywallBloc>()`.
+Future<void> _useFakePaywallBloc(PaywallRepository repository) async {
+  if (GetIt.instance.isRegistered<PaywallBloc>()) {
+    await GetIt.instance.unregister<PaywallBloc>();
+  }
+  GetIt.instance.registerFactory<PaywallBloc>(
+    () => PaywallBloc(repository: repository),
+  );
 }
 
 /// Pumps `/paywall` through the real app (router, DI, themes) at [surface]
@@ -156,11 +181,12 @@ Future<void> _pumpPaywall(
   required ThemeMode theme,
   required Size surface,
   double textScale = 1,
+  String route = '/paywall',
 }) async {
   tester.platformDispatcher.textScaleFactorTestValue = textScale;
   addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
 
-  await pumpAppRoute(tester, '/paywall', theme: theme);
+  await pumpAppRoute(tester, route, theme: theme);
   tester.view.physicalSize = surface * 3;
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 200));
@@ -523,6 +549,42 @@ void main() {
 
       await disposeApp(tester);
     });
+
+    // The hero is a fixed 350×148 frame; below 390dp the gutter is narrower
+    // than the frame, so the whole scene (Pip, nest, coins) scales down with
+    // it instead of overflowing. Above 390 the scale clamps at 1 — the
+    // design's size and position are kept.
+    for (final (width, scale) in const <(int, double)>[
+      (320, 280 / 350),
+      (390, 1),
+      (430, 1),
+    ]) {
+      testWidgets('the hero scales down at ${width}dp', (tester) async {
+        await setUpTestScope();
+        await _pumpPaywall(
+          tester,
+          theme: ThemeMode.light,
+          surface: Size(width.toDouble(), 844),
+        );
+
+        final pip = tester.getRect(find.bySemanticsLabel(_pipLabel));
+        expect(
+          pip.width,
+          moreOrLessEquals(120 * scale, epsilon: 0.5),
+          reason: 'Pip keeps the design slot, scaled with the hero frame',
+        );
+        expect(
+          pip.right,
+          lessThanOrEqualTo(width - NestSpacing.padSide + 0.01),
+          reason: 'the hero must stay inside the 20px gutters',
+        );
+        expect(pip.left, greaterThanOrEqualTo(NestSpacing.padSide - 0.01));
+        expect(find.byType(v2.PipAvatar), findsOneWidget);
+        expect(tester.takeException(), isNull);
+
+        await disposeApp(tester);
+      });
+    }
   });
 
   group('P07 paywall — widths, themes and text scales', () {
@@ -986,11 +1048,243 @@ void main() {
         surface: const Size(390, 844),
       );
 
+      // The card sits below the fold on a 390×844 surface, so scroll it into
+      // view first — otherwise this "tap" would never land and the test would
+      // prove nothing.
+      await tester.scrollUntilVisible(find.text(_planTitle), 120);
+      await _settle(tester);
+
       await tester.tap(find.text(_planTitle));
       await _settle(tester);
 
       expect(currentPath(tester), '/paywall');
       expect(find.text(_cta), findsOneWidget);
+      expect(
+        tester
+            .getSemantics(find.bySemanticsLabel(RegExp('Annual')))
+            .getSemanticsData()
+            .flagsCollection
+            .isSelected,
+        Tristate.isTrue,
+        reason: 'the single plan stays selected after the tap',
+      );
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('an expired trial sends /today to the paywall', (tester) async {
+      // The only way `trialExpired` can be true today (P07-BUG-8: nothing in
+      // `app/lib` ever writes 'expired' yet), so this is the one reachable
+      // shape of the guard: an ONBOARDED parent, mid-session, bounced off
+      // `/today` and shown the paywall.
+      final db = await setUpTestScope();
+      await (db.update(db.appState)..where((a) => a.id.equals(1))).write(
+        const AppStateCompanion(
+          subscriptionStatus: Value('expired'),
+          onboardingComplete: Value(true),
+        ),
+      );
+      await GetIt.instance<AppSession>().refresh();
+
+      await _pumpPaywall(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        route: '/today',
+      );
+
+      expect(currentPath(tester), '/paywall');
+      expect(find.text(_cta), findsOneWidget, reason: 'the paywall itself');
+
+      await disposeApp(tester);
+    });
+
+    testWidgets(
+      '[P07-BUG-10] close escapes the expired-trial paywall (no /today bounce)',
+      // Real defect, recorded not patched (stage 3 may not edit the screen):
+      // `PaywallView._onBack` pops when `context.canPop()` is true, and the
+      // expired-trial redirect leaves `/today` on the history — so X pops to
+      // `/today`, the guard redirects straight back to `/paywall`, and the
+      // parent can never leave. Proof and repro in `3_test.md`; remove the
+      // skip when the screen is fixed.
+      skip: true,
+      (tester) async {
+        final db = await setUpTestScope();
+        await (db.update(db.appState)..where((a) => a.id.equals(1))).write(
+          const AppStateCompanion(
+            subscriptionStatus: Value('expired'),
+            onboardingComplete: Value(true),
+          ),
+        );
+        await GetIt.instance<AppSession>().refresh();
+
+        await _pumpPaywall(
+          tester,
+          theme: ThemeMode.light,
+          surface: const Size(390, 844),
+          route: '/today',
+        );
+        expect(currentPath(tester), '/paywall');
+
+        await tester.tap(find.bySemanticsLabel(_closeLabel));
+        await _settle(tester);
+
+        expect(
+          currentPath(tester),
+          isNot('/paywall'),
+          reason: 'X must leave the paywall, not bounce back to it',
+        );
+        expect(currentPath(tester), '/pocket-money-setup');
+
+        await disposeApp(tester);
+      },
+    );
+
+    testWidgets('Restore purchases never starts a trial', (tester) async {
+      final db = await _pumpPaywallWithSeed(tester, Seed.fresh);
+
+      await tester.tap(find.text('Restore purchases'));
+      await _settle(tester);
+
+      // A restoring user already paid, so the handoff writes `active` ONLY.
+      // `startTrialNow()` here would move `trial_start` and hand a paying
+      // customer a brand-new 14-day trial — the `PaywallRequest` split exists
+      // for exactly this case.
+      final row = await _appStateRow(db);
+      expect(row?.subscriptionStatus, 'active');
+      expect(row?.onboardingComplete, isTrue);
+      expect(
+        row?.trialStart,
+        isNull,
+        reason: 'the restore path must not call startTrialNow()',
+      );
+
+      await disposeApp(tester);
+    });
+  });
+
+  group('P07 paywall — action states: working, failure, retry', () {
+    testWidgets('a failed trial toasts in place and stays on /paywall', (
+      tester,
+    ) async {
+      final repository = _FakePaywallRepository()..failTrial = true;
+      final db = await setUpTestScope(seedDemo: false);
+      await Seed.fresh(db);
+      await GetIt.instance<AppSession>().refresh();
+      await _useFakePaywallBloc(repository);
+      await _pumpPaywall(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+      );
+
+      await tester.tap(find.text(_cta));
+      await _settle(tester);
+
+      expect(repository.startTrialCalls, 1);
+      expect(
+        currentPath(tester),
+        '/paywall',
+        reason: 'a failed trial must not navigate',
+      );
+      expect(find.byType(SnackBar), findsOneWidget);
+      expect(
+        find.textContaining('offline'),
+        findsWidgets,
+        reason: 'the reason is surfaced, not swallowed',
+      );
+
+      // Nothing was written: the parent is still un-onboarded.
+      final row = await _appStateRow(db);
+      expect(row?.onboardingComplete, isFalse);
+      expect(row?.trialStart, isNull);
+
+      // The screen is not dead-ended: the same CTA works again.
+      repository.failTrial = false;
+      await tester.pump(const Duration(seconds: 4)); // let the toast dismiss
+      await tester.tap(find.text(_cta));
+      await _settle(tester);
+
+      expect(repository.startTrialCalls, 2, reason: 'the retry was accepted');
+      expect(currentPath(tester), '/today');
+      final retried = await _appStateRow(db);
+      expect(retried?.onboardingComplete, isTrue);
+      expect(retried?.subscriptionStatus, 'trial');
+      expect(retried?.trialStart, isNotNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets(
+      'the CTA is disabled and spinning while the trial is in flight',
+      (tester) async {
+        final repository = _FakePaywallRepository()
+          ..trialGate = Completer<void>();
+        final db = await setUpTestScope(seedDemo: false);
+        await Seed.fresh(db);
+        await GetIt.instance<AppSession>().refresh();
+        await _useFakePaywallBloc(repository);
+        await _pumpPaywall(
+          tester,
+          theme: ThemeMode.light,
+          surface: const Size(390, 844),
+        );
+
+        await tester.tap(find.text(_cta));
+        await tester.pump();
+
+        // Working: the pill shows its spinner and refuses further taps, and the
+        // restore link is disabled with it (one action at a time).
+        final button = tester.widget<NestButton>(find.byType(NestButton));
+        expect(button.onPressed, isNull);
+        expect(button.loading, isTrue);
+        expect(
+          tester
+              .getSemantics(find.bySemanticsLabel('Restore purchases'))
+              .getSemanticsData()
+              .hasAction(SemanticsAction.tap),
+          isFalse,
+          reason: 'Restore purchases must be disabled mid-action',
+        );
+
+        // A second tap while the first request is in flight is a no-op.
+        await tester.tap(find.text(_cta), warnIfMissed: false);
+        await tester.pump();
+        expect(repository.startTrialCalls, 1, reason: 'one tap, one trial');
+        expect(currentPath(tester), '/paywall');
+
+        repository.trialGate!.complete();
+        await _settle(tester);
+
+        expect(currentPath(tester), '/today');
+        expect((await _appStateRow(db))?.onboardingComplete, isTrue);
+        expect(tester.takeException(), isNull);
+
+        await disposeApp(tester);
+      },
+    );
+
+    testWidgets('a restore request never shows the trial spinner', (
+      tester,
+    ) async {
+      // `loading` belongs to the trial pill only: the restore link is not a
+      // button, so the CTA must not claim a trial is running.
+      await setUpTestScope();
+      await _pumpPaywall(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+      );
+
+      expect(
+        tester.widget<NestButton>(find.byType(NestButton)).loading,
+        isFalse,
+      );
+
+      await tester.tap(find.text('Restore purchases'));
+      await _settle(tester);
+
+      expect(currentPath(tester), '/today');
 
       await disposeApp(tester);
     });

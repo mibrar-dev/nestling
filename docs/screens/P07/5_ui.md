@@ -1,39 +1,38 @@
-# P07 Paywall — UI check (Stage 5, iteration 1)
+# P07 Paywall — UI check (Stage 5, iteration 2)
 
 Method (iPhone simulator E7D5555E-378A-49DF-AAEE-16677AF4B9DB, 390×844):
-- `bash tools/screens/shot.sh "$PWD/app" /paywall "$PWD/docs/screens/P07/ui/app_light_1.png" E7D5555E-378A-49DF-AAEE-16677AF4B9DB light fresh parent maya`
-- `bash tools/screens/shot.sh "$PWD/app" /paywall "$PWD/docs/screens/P07/ui/app_dark_1.png" E7D5555E-378A-49DF-AAEE-16677AF4B9DB dark fresh parent maya`
-- `python3 tools/screens/compare.py design/screens/light/P07-paywall.png docs/screens/P07/ui/app_light_1.png docs/screens/P07/ui/cmp_light_1.png`
-- `python3 tools/screens/compare.py design/screens/dark/P07-paywall.png docs/screens/P07/ui/app_dark_1.png docs/screens/P07/ui/cmp_dark_1.png`
-- Sources: `design/html-source/screens/P07-paywall.html`, `docs/DESIGN_SPEC.md` §5 P07, `docs/design/SPACING_SPEC.md` §§1–2/8/10–11, `docs/screens/P07/1_plan.md`, `docs/screens/P07/ORCHESTRATOR_NOTES.md` (item 1 mandatory).
-- Status bar differences ignored per orchestrator STATUS BAR rule (OS draws real bar; `NestStatusBar` reserves height only).
+- `bash tools/screens/shot.sh "$PWD/app" /paywall "$PWD/docs/screens/P07/ui/app_light_2.png" E7D5555E-378A-49DF-AAEE-16677AF4B9DB light fresh parent maya` → stable frame saved, EXIT 0
+- `bash tools/screens/shot.sh "$PWD/app" /paywall "$PWD/docs/screens/P07/ui/app_dark_2.png" E7D5555E-378A-49DF-AAEE-16677AF4B9DB dark fresh parent maya` → stable frame saved, EXIT 0
+- `python3 tools/screens/compare.py design/screens/light/P07-paywall.png docs/screens/P07/ui/app_light_2.png docs/screens/P07/ui/cmp_light_2.png`
+- `python3 tools/screens/compare.py design/screens/dark/P07-paywall.png docs/screens/P07/ui/app_dark_2.png docs/screens/P07/ui/cmp_dark_2.png`
+- Sources: `design/html-source/screens/P07-paywall.html`, `1_plan.md`, SPACING_SPEC §§1–2/8, `ORCHESTRATOR_NOTES.md`. All pixel numbers below are logical px (screenshot ÷ 3). Status-bar text ignored per orchestrator rule.
 
 ## Mean diff
 
-- Light: **9.92%** (bands: 0 0–105: 3.07% · 1 105–211: 9.54% · 2 211–316: 13.29% · 3 316–422: 6.92% · 4 422–527: 5.05% · 5 527–633: 8.31% · 6 633–738: 28.75% · 7 738–844: 4.56%)
-- Dark: **9.44%** (bands: 0 0–105: 3.28% · 1 105–211: 10.66% · 2 211–316: 9.77% · 3 316–422: 7.26% · 4 422–527: 5.22% · 5 527–633: 8.89% · 6 633–738: 25.35% · 7 738–844: 5.12%)
-- The low mean is misleading: both sides share large empty paper areas, so background pixels match while **every designed element is missing**. The app under test is still the foundation placeholder (`paywall_view.dart:9-42`: `AppBar('P07 Paywall')` + `ListTile`), consistent with `2_build.md` / `4_review.md` (no implementation in this loop). Band 6 peaks (28.75% light / 25.35% dark) where the design has the plan card + `NestBottomCta` and the app has empty paper.
+- Light: **11.43%** (bands: 0 0–105: 1.63% · 1 105–211: 3.52% · 2 211–316: 7.72% · 3 316–422: 7.37% · 4 422–527: 22.00% · 5 527–633: 16.79% · 6 633–738: 28.69% · 7 738–844: 3.88%)
+- Dark: **9.78%** (bands: 0 0–105: 1.58% · 1 105–211: 2.47% · 2 211–316: 7.82% · 3 316–422: 7.65% · 4 422–527: 19.25% · 5 527–633: 14.03% · 6 633–738: 21.72% · 7 738–844: 3.80%)
+- Bands 0–3 (nav, hero, title, benefits 1–3) match closely; all drift sits in bands 4–6 (4th benefit, plan card, CTA). The screen is fully built — the failures are two visible layout defects, not missing content.
 
-## Deviations (design value → app value)
+## Deviations (design value → app value + fix)
 
-1. Nav / close — design: compact nav `minHeight 52`, padding `4,12,12`, 44×44 close button surface-2 radius 12 with 24px X, semantics `Close and go back`, 44-wide balance spacer. App: Material `AppBar` titled `P07 Paywall`, no close control. Fix: build `_PaywallNav` per `1_plan.md` §a.
-2. Hero — design: `350×148`, `margin-top 4`; lilac-tint circle 170×170 at (90,−5); nest 150×150 at (100,41); `PipAvatar(style: mochi, skin: sunny, stage: 4)` 120×120 at (115,20) (orchestrator PIP rule for P01–P07, never `pip_stage_*.svg`); 3 coins 30/26/24px at specified positions/rotations with sh-1. App: absent. Fix: build `_PaywallHero` with `PipAvatar` exactly as planned.
-3. Title — design: `Try Nestling free for 14 days`, `NestType.h1` (Nunito 28/34 w900) centred, `margin-top 26`, maxLines 3. App: absent (only AppBar `P07 Paywall`). Fix: add title widget.
-4. Benefits — design: 4 rows, `margin-top 18`, gap 10; 24×24 leaf-tint tick (`NestIcon(check, 16, leafInk)`, `margin-top −1`) + Inter 15/24 w400 ink text `softWrap/anywhere`; exact copy `Unlimited children & quests` · `Pip’s full evolution & seasonal outfits` (curly ’ U+2019) · `Pocket money ledger & payout day` · `Co-parent sharing, so James sees the same`. App: absent. Fix: build `_BenefitList`.
-5. Plan card — design: `margin-top 24`, `NestCard` (radius 24, sh-1, padding 16) + local 2px leaf border; radio 22 selected (`margin-top 10`); title Nunito 800 18/24 `Annual — £29.99/year` (em dash U+2014); sub Inter 15/20 `Just £2.50 a month, billed yearly`; tag Inter 13/18 w600 leaf-ink `One price, the whole family` with `margin-top 4`. App: unstyled `ListTile` (title `Annual — £29.99/year`, subtitle concatenated detail), no card/border/radio/tag/shadow. Fix: build `_PlanCard` per plan.
-6. Timeline + family note (below fold) — design/HTML: `What happens next` card (`margin-top 48`, padding 16, 3 `tl-item`s with 24px dots + 2px connectors) + centred note `One subscription covers the whole family.` (`margin-top 20`). App: absent (no scroll body at all). Fix: build `_TimelineCard` + `_FamilyNote`; verify with a scrolled shot.
-7. Bottom CTA — design: `NestBottomCta` (surface + top hairline, padding `16/20`, gap 8); `NestButton.primary` 52h `Start free trial` full-width; caption `£29.99/year after the 14-day trial. Cancel anytime in Settings.` (note `the` — HTML wins over DESIGN_SPEC paraphrase); legal row `Restore purchases · Terms · Privacy` (Inter 13 w600 sky, underline offset 2, `·` U+00B7, each min 44×44). App: absent. Fix: wire `NestBottomCta` + CTA + caption + `_LegalRow` per plan.
-8. Bottom edge (OWNER RULE) — design/rule: surface colour from the bottom bar runs to the physical edge; no paper/meadow strip under bar or home indicator, light or dark. App: no bottom bar exists, so the rule cannot hold. Fix: add `NestBottomCta` wrapping `SafeArea(top: false)`; never add page-colour padding below it.
-9. Alignment (OWNER RULE) — design: consistent 20px side gutters, cards/bars on same edges. App: Material defaults (AppBar + ListTile insets), not 20px gutters. Fix: `ListView(padding: fromLTRB(20,0,20,32))` + shared 20px edges.
-10. Colours / radii / shadows / icons / dark mode — design: paper/surface/surface-2, leaf border + leaf-tint ticks/dots, leaf CTA, sky links, r24 cards + pill CTA, sh-1, Lucide-style 2px-stroke icons; dark tokens per SPACING_SPEC §0. App: placeholder Material greys, no cards, no ticks, no CTA, no links. Fix: tokens only, verify both themes.
-11. Copy defect (already filed as P07-BUG-3) — design caption `£29.99/year after the 14-day trial.` App `ListTile` detail `£29.99/year after 14-day trial.` (drops `the`). Fix: insert `the` at repository source.
-12. Orchestrator mandatory item 1 — trial/Restore must call `AppSession.startTrialNow()` (+ `completeOnboarding()`) / `setSubscription('active')` (+ `completeOnboarding()`) then go `/today`. App: no CTA exists, no events/state (`PaywallTrialStarted`/`PaywallRestoreRequested` absent), so the handoff is unmet. Fix: implement plan §b–c (via `GetIt.instance<AppSession>()`, not `context.read`).
-13. Status bar — app shows live `21:08/21:09` vs design mock `9:41`. Not a finding per orchestrator rule; ignored.
+1. **Major — legal row stacks vertically instead of one horizontal row.** Design (HTML `.legal-row`, flex, gap 2): `Restore purchases · Terms · Privacy` on a single centred row; sky link pixels sit on one band at y≈768–774. App: three full-width rows — `Restore purchases` at y≈615, `Terms` at y≈693, `Privacy` at y≈771 — with the `·` separators isolated on their own lines (ink dots at y≈575, ≈622). Root cause in `paywall_view.dart` `_LegalLink`: the chain `ConstrainedBox > Material > InkWell > Padding > Center > Text` sits inside a `Wrap`; `Center` (Align) expands to the Wrap run's full 350 px width, so every link occupies its own run. Fix: drop the expanding inner `Center` so the link sizes to its text (e.g. `InkWell > Padding > Text`), keeping the 44×44 min target from the outer `ConstrainedBox`; all three links + separators then fit one run at 390 dp as in the design.
+2. **Major — bottom CTA panel ≈150 px too tall; CTA button 156 px too high.** Design: green CTA button y 646–697 (52 px). App: y 490–541 (52 px, correct size, wrong place). The panel top edge is dragged up by deviation 1's five stacked legal lines. Fix: follows from fixing 1 — with a single-row legal row the panel compacts to the design geometry (button ≈646).
+3. **Major (consequence of 1–2) — 4th benefit and plan card hidden behind the CTA at top-of-scroll.** Design shows benefit rows 1–4 (last text band y 481–490) plus the plan card (leaf borders y 521–522 / 625–626) above the CTA. App: scroll content aligns exactly through row 3 (row-3 text band y 448 vs design 447), but row 4 (expected ≈481) is covered by the CTA panel and no plan-card border pixels are detected anywhere above the fold. The widgets exist in normal flow below (code order hero/title/benefits/plan/timeline/note is correct, presence covered by widget tests) — they are purely overlapped. Fix: same as 1; once the CTA compacts, design content bottom (plan border 625, panel top 630) fits exactly as drawn.
+4. **Minor — title breaks with orphan “days”.** Design (HTML `class="h1 balance"`, `text-wrap: balance`): `Try Nestling` / `free for 14 days`. App (plain engine wrap, centred, same 2-line height y≈291/297–344): `Try Nestling free for 14` / `days`. No layout shift (identical block height), purely typographic. Fix is constrained: copy tests require the exact single string, so a hard `\n` would break `find.text`; either accept engine wrap or add balance support at the design-system level — do not touch the copy string.
+5. **Not a finding — Pip rendering differs from the PNG.** Design shows the v1 `pip_stage_4.svg` songbird (with scarf); app renders `PipAvatar(style: mochi, stage: 4, inNest: true)`. The orchestrator PIP rule mandates `PipAvatar` and forbids v1 SVGs on product screens — the app is correct, the PNG is overridden. Hero geometry otherwise matches (circle/nest/coins positions and sizes align; hero ink rows y 250–280 identical).
 
-No spacing ±2px check is possible — there are no corresponding elements to measure. No overflow/clipping to assess for the same reason. DATA OVER MOCKS / PERIODS / CHILD ORDER: not exercised (P07 shows no DB numbers; copy fixity `James` holds trivially since no child names render).
+## Owner / orchestrator checks
+
+- **BOTTOM EDGE: PASS.** App last row = CTA surface in both themes (light 255,255,255 = surface; dark 31,28,46 = `#1F1C2E` surface). No paper/meadow strip under the bar or home-indicator area. (The design PNGs themselves show a paper strip there — the owner rule overrides the designs, and the app correctly does not reproduce it.)
+- **ALIGNMENT: PASS** for visible content — nav, hero, title, benefits 1–3 share the design's 20 px gutters (bands 0–3 ≤ 7.8%, rows align to the pixel: row 3 at 448 vs 447).
+- **COPY: PASS** — title, 3 visible benefits (curly ’ intact), CTA, caption (`…after the 14-day trial…` with `the`), links all character-correct vs HTML.
+- **DARK COLOURS: PASS** — dark surface panel, leaf-tint ticks, leaf CTA, readable sky links; deviations are the same two layout items, nothing theme-specific.
+- **FONTS: PASS** — no `google_fonts`/`GoogleFonts` in the view or feature tests (bundled-asset tokens used).
+- **STATUS BAR:** ignored per rule (live time vs `9:41` mock).
+- **ORCHESTRATOR_NOTES item 1** (trial/restore session handoff → `/today`) is behavioural, not visual; the CTA exists and the wiring is covered by stage 3/6 tests, not this check.
 
 ## Verdict basis
 
-Stage 5 passes only with no visible deviation a designer would reject. The screen is the untouched placeholder: hero, title, benefits, plan card, timeline, family note, CTA, caption, and legal row are all missing in light and dark. The mean diffs (9.92% / 9.44%) confirm wholesale mismatch, peaking at the CTA band.
+Two designer-visible defects at top-of-scroll in both themes: the legal links stacked as five full-width lines, and the oversized CTA panel swallowing the 4th benefit and the whole plan card. Everything else — nav, hero, title, benefits, CTA button, caption, bottom edge, gutters, dark theme — matches.
 
 VERDICT: FAIL

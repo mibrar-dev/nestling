@@ -1,194 +1,155 @@
-# P07 Paywall — test report (Stage 3, iteration 1)
+# P07 Paywall — test report (Stage 3, iteration 2)
 
 ## Summary
 
-The P07 test suite is written and runs, but it cannot pass: **the screen was
-never built.** `app/lib/features/paywall/presentation/views/paywall_view.dart`
-is still the foundation placeholder from the base branch, and the bloc still
-only loads. Stage 2 (build, iteration 1) implemented nothing — `2_build.md`
-says so itself and returned `VERDICT: FAIL`.
+The screen now exists. Iteration 1's 63-test contract suite turned red against
+a placeholder; after the iteration-2 build (`paywall_view.dart` is 808 lines,
+the bloc has the trial/restore events and `PaywallAction`/`PaywallRequest`,
+the repository upserts and its copy matches the HTML) **the whole suite is
+green**, and this iteration added 8 further tests for the paths the build
+introduced.
 
-63 tests were added (18 bloc/repository + 45 widget). 20 pass, 43 fail. Every
-failure is either "the screen does not exist yet" (42 widget tests) or a real
-copy defect in the paywall repository (1 test). Per the stage brief, nothing in
-`lib/` was patched — the defects are recorded below for the build stage.
+**One real bug was found and recorded, not patched** (stage 3 may not edit the
+screen): on the expired-trial paywall the close button is a no-op — P07-BUG-10.
+Per the stage brief, `VERDICT: PASS` requires all tests passing *and* no bugs
+found, so this iteration is a FAIL with a green suite.
 
 | Run | Result |
 |---|---|
-| `dart format --output=none --set-exit-if-changed .` | 366 files, 0 changed |
-| `flutter analyze` | **No issues found!** |
-| `flutter test` (whole app) | **+665 −43** (baseline before this stage: +645 −0) |
-| `flutter test test/features/paywall/` | **+20 −43** |
+| `dart format --output=none --set-exit-if-changed .` | 367 files, 0 changed |
+| `flutter analyze` (the 3 committed paywall test files) | **No issues found!** |
+| `flutter test test/features/paywall/paywall_bloc_test.dart` | **+25** all passed |
+| `flutter test test/features/paywall/paywall_view_test.dart` | **+53 ~1** all passed |
+| `flutter test test/features/paywall/p07_bugs_test.dart` (stage 6) | **+14 ~2** all passed |
+| `flutter test` (whole app) | **+742 ~3: All tests passed!** |
 
-## Files added (feature tests only — nothing outside RULES §1)
+The 3 skips are all recorded defects with proof tests, by stage convention
+(`6_bugs.md`: skipped while the defect is open, unskipped when fixed):
+`[P07-BUG-8]` and `[P07-BUG-9]` (shared code, filed in
+`docs/screens/P07/SHARED_REQUEST.md`) and `[P07-BUG-10]` (this stage, below).
 
-- `app/test/features/paywall/paywall_bloc_test.dart` — 18 tests
-- `app/test/features/paywall/paywall_view_test.dart` — 45 tests
+## Tests added this iteration (all in `paywall_view_test.dart`)
 
-Both use the shared scope (`setUpTestScope`, `pumpAppRoute`, `disposeApp`,
-`currentPath` from `app/test/test_scope.dart`), an in-memory Drift DB via
-`AppDatabase.memory()`, and `Seed.demo` / `Seed.empty` / `Seed.fresh`. Every
-widget test that pumps the app ends with `disposeApp(tester)`.
+The action events (`PaywallTrialStarted` / `PaywallRestoreRequested`,
+`PaywallAction`, `PaywallRequest`, `copyWith(clearError:)`) landed with the
+build, so the follow-up deferred in iteration 1 is now covered by
+`paywall_bloc_test.dart`'s `PaywallBloc trial and restore actions` group
+(working → success, failure + message per request, `startTrial` vs `activate`
+delegation). Those tests were verified green, not rewritten. The 8 tests below
+are new:
 
-## Tests added
-
-### `paywall_bloc_test.dart` (18 — 17 pass, 1 fail)
-
-| Group | Covers |
+| Test | What it pins |
 |---|---|
-| `PaywallState` | `copyWith` field-by-field, equality/hashCode |
-| `PaywallBloc` | initial state; `blocTest` load on the real Drift repository; a live multi-emission stream; an empty stream; a stream error; a retry while the first stream is still pending |
-| `PaywallRepository` (in-memory Drift) | the single annual plan under demo/empty/fresh; the plan detail's caption copy; `watchSubscription` for all three seeds (`active` / `trial` / `trial` with no start date); `startTrial()` writes status + UTC start + `Europe/London`; `activate()` writes `active` and does not move the trial start; `watchSubscription` re-emits on change |
+| `the hero scales down at 320dp` / `390dp` / `430dp` | the hero's fixed 350×148 frame scales as `min(w/350, 1)`: Pip's slot is 96px at 320, 120px at 390 and 430 (never upscaled), and the scene stays inside the 20px gutters |
+| `Restore purchases never starts a trial` | the restore handoff writes `active` only — `trial_start` must still be `null`, proving `startTrialNow()` did not run on that path |
+| `a failed trial toasts in place and stays on /paywall` | action failure: toast with the reason, no navigation, no `app_state` write, and the same CTA still works on retry (then `/today`, `onboarding_complete`, `trial_start` set) |
+| `the CTA is disabled and spinning while the trial is in flight` | `working`: `NestButton.onPressed == null`, `loading == true`, `Restore purchases` loses its tap action, and a second tap never starts a second trial (one tap → one `startTrial()`) |
+| `a restore request never shows the trial spinner` | `loading` belongs to the trial pill only — a restore never claims a trial is running |
+| `an expired trial sends /today to the paywall` | the `trialExpired` guard (router.dart:90-93) with `subscription_status = 'expired'`: `/today` redirects to `/paywall` and the paywall renders — the only reachable shape of that guard today |
+| `[P07-BUG-10] close escapes the expired-trial paywall` | **skipped proof** for the bug below |
+| `tapping the plan card changes nothing` (strengthened) | scrolls the card into view first (the old tap never hit it and emitted a hit-test warning), then taps it and asserts the plan stays `selected: true` and nothing navigated |
 
-### `paywall_view_test.dart` (45 — 3 pass, 42 fail)
-
-| Group | Tests | Covers |
-|---|---|---|
-| the design's copy | 5 | hero/title/benefits/plan card; timeline + family note after scrolling; `NestBottomCta` + CTA + caption + 3 legal links + 2 `·` separators; character-by-character punctuation (U+2019, U+2014, U+00A3, U+00B7, no ASCII apostrophe/quote/ellipsis/spaced hyphen, no repository caption variant); the design's type scale (h1 28 Nunito, benefits 15 Inter, plan title 18, sub 15, tag 13, `.h3` 18, `.tl-title` 15, note 15, caption 13) |
-| Pip v2 (orchestrator) | 1 | no `pip_stage_*.svg`; exactly one `PipAvatar(mochi, sunny, stage 4, inNest: true)`; the design's `alt` label on a 120×120 slot |
-| widths / themes / scales | 14 | 12-combination matrix (light+dark × 320/390/430 × scale 1.0/1.3): `NestBottomCta`, CTA and legal links present, `takeException()` null; plus both themes reading benefits/timeline in full |
-| alignment & tap targets | 7 | 20px gutters on both cards at 3 widths; centred title; plan text column shares one left edge; timeline steps in document order on one left edge; close 44×44, CTA ≥52, legal links ≥44×44, no kid controls |
-| bottom edge (owner rule) | 4 | light + dark: `NestBottomCta` reaches y = 844 with and without a 34px home-indicator inset, and the painted pixel on the last row is the bar's `surface` token (no page-tint or meadow strip) |
-| loading / empty / failure | 5 | `initial` and `loading` show a progress indicator; an empty plan list is **not** an empty state; `failure` shows “Something went wrong” + a Retry that re-adds the load event |
-| navigation & handoff | 5 | close → `/pocket-money-setup`; **Start free trial** → `onboarding_complete = true`, `subscription_status = 'trial'`, `trial_start` written, → `/today`; **Restore purchases** → `'active'` (never downgraded to trial) + onboarding complete → `/today`; Terms/Privacy answer in place and stay on `/paywall`; tapping the plan card does nothing |
-| accessibility | 2 | nav label `Subscription`, close label + button + tap action, legal links labelled buttons, plan announced `selected: true`; decorative nest/coins/ticks carry no label, benefits are labelled rows |
-| seeds (DATA OVER MOCKS) | 1 | demo / empty / fresh render an identical screen: the design's copy is there, `James` is there, `Maya`/`Leo` are not |
-| route wiring | 2 | the route's bloc loads the annual plan; `/paywall` is reachable while onboarding is incomplete |
+Supporting changes to the test file only: the fake repository gained
+`failTrial` and a `trialGate` `Completer` (to hold the screen in `working`), and
+`_useFakePaywallBloc()` re-registers the DI `PaywallBloc` factory so the *whole
+app* — router, session, navigation — can be driven by a failing or hanging
+repository. `_pumpPaywall` gained a `route` parameter for the guard test.
 
 ## Bugs found
 
-### P07-BUG-1 — blocker — the paywall screen does not exist
+### P07-BUG-10 — major (latent today, trap once P07-BUG-8 lands) — the close button cannot leave the expired-trial paywall
 
-**File:** `app/lib/features/paywall/presentation/views/paywall_view.dart:9-42`
-(`AppBar('P07 Paywall')` at :12, `Text(state.errorMessage ?? 'Something went
-wrong')` at :21, `Text('No items yet')` at :25, `ListTile` list at :31).
+**Where:** `app/lib/features/paywall/presentation/views/paywall_view.dart:27-34`
 
-**Repro:** `cd app && flutter test test/features/paywall/` → 42 of 45 widget
-tests fail. Pump `/paywall` at 390×844 light and the screen shows an app bar
-titled “P07 Paywall” and one `ListTile` whose title is the repository plan
-string. None of `1_plan.md` §a exists: no `NestStatusBar`, no hero (`PipAvatar`,
-nest, coins), no `Try Nestling free for 14 days`, no 4 benefit rows, no plan
-card, no timeline, no family note, no `NestBottomCta`, no
-`Start free trial`, no caption, no `Restore purchases` / `Terms` / `Privacy`.
-The design PNG (`design/screens/light/P07-paywall.png`) shows all of them.
-
-**Rule impact:** orchestrator PIP (no `PipAvatar` anywhere), ALIGNMENT, BOTTOM
-EDGE and COPY are all unimplemented.
-
-### P07-BUG-2 — major — no trial or restore path exists, so ORCHESTRATOR_NOTES 1 cannot hold
-
-**Files:** `presentation/bloc/paywall_event.dart:10` (only
-`PaywallLoadRequested`), `presentation/bloc/paywall_bloc.dart:9` (only the
-`_onLoadRequested` handler), `presentation/bloc/paywall_state.dart:4,13`
-(`PaywallStatus` only; no `action` field).
-
-**Repro:** the events `PaywallTrialStarted` / `PaywallRestoreRequested` and the
-`PaywallAction {idle, working, success, failure}` state do not compile —
-referencing them from a test would break the whole test target. Observed from
-the outside: pump `/paywall` on `Seed.fresh`, tap `Start free trial` → the
-control does not exist; no `app_state` write, no `AppSession.startTrialNow()` /
-`completeOnboarding()`, no navigation to `/today`. Consequently P07 is a dead
-end: onboarding cannot be completed from the last step.
-
-**Fix shape (from `1_plan.md` §b + `2_build.md`):** add both events, an
-`action` field plus the “which request succeeded” discriminator (trial vs
-restore need different session writes), and wire `GetIt.instance<AppSession>()`
-→ `startTrialNow()` + `completeOnboarding()` → `go('/today')` for trial, and
-`setSubscription('active')` + `completeOnboarding()` → `/today` for restore.
-
-### P07-BUG-3 — minor — the plan's caption copy drops the article “the”
-
-**File:** `app/lib/features/paywall/data/paywall_repository_impl.dart:52-54`
-
-```
-detail: 'Just £2.50 a month, billed yearly. '
-        '£29.99/year after 14-day trial. Cancel anytime in Settings.',
+```dart
+void _onBack(BuildContext context) {
+  if (!context.mounted) return;
+  if (context.canPop()) {
+    context.pop();                       // ← line 30
+  } else {
+    context.go(PocketMoneyRoutePaths.setup);
+  }
+}
 ```
 
-The design's `.caption`
-(`design/html-source/screens/P07-paywall.html:105`, and `1_plan.md`) is
-`£29.99/year after **the** 14-day trial. Cancel anytime in Settings.`
-Orchestrator COPY rule: the HTML is the source of truth.
+With the router's expired-trial guard (`app/lib/app/router.dart:90-93`,
+`onboarded && session.trialExpired && location != '/paywall' → '/paywall'`),
+`/today` is *redirected* to `/paywall`. A GoRouter redirect replaces the target
+but leaves `/today` on the navigation history, so `context.canPop()` is **true**
+here — unlike the onboarding case the `else` branch was written for. Tapping X
+therefore pops to `/today`, the guard immediately redirects back to `/paywall`,
+and the screen is a trap: the parent can never dismiss the paywall. Only
+starting a trial or restoring purchases gets them out.
 
-**Repro:** `cd app && flutter test test/features/paywall/paywall_bloc_test.dart`
-→ “the plan detail carries the design's caption verbatim” fails. The string is
-already on screen today (the placeholder renders `detail` as the `ListTile`
-subtitle) and the widget test
-`find.textContaining('after 14-day trial') → findsNothing` fails for the same
-reason.
+**Repro:**
+```
+cd app
+flutter test test/features/paywall/paywall_view_test.dart \
+  --run-skipped --plain-name 'P07-BUG-10'
+```
+→ `Expected: not '/paywall' / Actual: '/paywall'`.
 
-**Note for the fix:** `docs/DESIGN_SPEC.md:158` paraphrases the caption *without*
-“the”. The HTML wins; do not “fix” the test to match DESIGN_SPEC.
+Device-equivalent: onboard a family, let the trial lapse, open `/today` (the
+app redirects to the paywall), press the X — nothing happens, forever.
 
-### P07-BUG-4 — minor — the repository's plan detail omits the design's plan tag
+**Severity and reachability:** latent today, because nothing in `app/lib` ever
+writes `subscription_status = 'expired'` (P07-BUG-8, shared, filed in
+`SHARED_REQUEST.md`). The moment that shared fix lands, this becomes a
+blocker for the expired-trial user. Flagged here so the two are fixed
+together.
 
-**File:** `app/lib/features/paywall/data/paywall_repository_impl.dart:49-56`
+**Suggested fix (build stage — not applied by stage 3):** make the target
+explicit rather than history-dependent, e.g. pop only when the popped route is
+actually dismissible, or `context.go(PocketMoneyRoutePaths.setup)` whenever the
+session reports `trialExpired` (the `else` branch already lands somewhere
+legal). A test that asserts *which* destination an expired-trial parent should
+see is a product decision for the orchestrator; the proof test only requires
+"X leaves the paywall".
 
-The card has three strings in the design — title, sub
-(`Just £2.50 a month, billed yearly`) and tag
-(`One price, the whole family`, `P07-paywall.html:87`). `detail` concatenates
-the sub with the caption and drops the tag, so the plan card would have no data
-source for it.
+## Carried over from iteration 1 (all now green, nothing outstanding)
 
-**Repro:** `flutter test test/features/paywall/paywall_view_test.dart` → the
-copy group requires `One price, the whole family` on screen.
+- The screen surface: hero, `PipAvatar(mochi, sunny, stage 4, inNest)` on the
+  120px slot, h1, 4 benefits, plan card, timeline, family note,
+  `NestBottomCta` + caption + legal row.
+- Copy character-by-character against `P07-paywall.html`, including the caption
+  article “the” (P07-BUG-3) and the plan tag (P07-BUG-5) — the build fixed both
+  at the repository source.
+- Light + dark, 320/390/430, text scale 1.0 and 1.3, no overflow.
+- 20px gutters on cards, scroll and bar; the bottom edge reaching the physical
+  screen edge with the bar's own surface (painted-pixel proof, both themes,
+  including a 34px home-indicator inset).
+- Semantics labels on every control, ≥44dp parent targets, no kid controls.
+- `initial` / `loading` / `loaded` / `failure` + Retry, and an empty plan list
+  that is never an empty state.
+- ORCHESTRATOR_NOTES 1: trial → `startTrialNow()` + `completeOnboarding()` →
+  `/today`; restore → `active` + `completeOnboarding()` → `/today`; close →
+  `/pocket-money-setup`.
+- Identical screen under `Seed.demo` / `empty` / `fresh`, with no seeded child
+  names leaking (DATA OVER MOCKS).
 
-`1_plan.md` §d allows the view to render static spec copy, so this is not fatal
-on its own — but it leaves the plan card with two sources of truth. Either carry
-the tag in `detail` or keep it static and say so in the plan.
+## Notes for the next stage
 
-### P07-BUG-5 — minor (latent) — the repository writes are UPDATE-only, not upserts
-
-**File:** `app/lib/features/paywall/data/paywall_repository_impl.dart:36-45`
-(`startTrial`) and `:47-56` (`activate`) — both do
-`update(appState)..where(id = 1)` with no insert fallback, unlike
-`AppSession._write` (`core/data/app_session.dart:70-79`), which upserts.
-
-Not reachable today (all three seeds insert the `app_state` row), but it is the
-exact defect class of P01 BUG-4: if `app_state` is ever empty, the trial/restore
-write silently affects 0 rows and the parent is navigated to `/today` with no
-subscription recorded. Recommend the upsert pattern here too.
-
-## Observations (not bugs — constraints for the next iteration)
-
-1. **`AppSession` is not a Provider ancestor.** `app/lib/app/app.dart:46-52`
-   provides only `AppModeController` and `ThemeModeController`; `AppSession` is
-   reachable through GetIt only. `1_plan.md` §b's `context.read<AppSession>()`
-   would throw `ProviderNotFoundException` at runtime — use
-   `GetIt.instance<AppSession>()` (already flagged in `2_build.md`). The tests
-   written here are agnostic: they assert the *effect* by reading `app_state`
-   through Drift, so either wiring passes.
-2. **Event-level unit tests are deferred, deliberately.** `PaywallTrialStarted`
-   / `PaywallRestoreRequested` do not exist; naming them in a test file makes the
-   whole test target fail to compile, which would hide all 20 currently-green
-   tests behind one compile error. The trial and restore paths are covered from
-   the widget side instead (tap → assert `app_state` → assert route). When the
-   events land, add to `paywall_bloc_test.dart`: `blocTest` for
-   `PaywallTrialStarted` (working → success on `startTrial()`, failure with
-   `errorMessage` when the repository throws) and for `PaywallRestoreRequested`
-   (`activate()`), plus `PaywallAction` transitions in the state group.
-3. **Widget-test font width.** The test font is far wider than Inter
-   (P02-BUG-7), so at 320dp + 1.3× the h1 and the CTA caption genuinely
-   ellipsize. The matrix tests therefore assert “no exception”, not “full text
-   visible”, and no test asserts a real line count.
-4. **No shared change is needed**, so no `SHARED_REQUEST.md` is filed: every
-   failing test can be satisfied inside `app/lib/features/paywall/**`.
-
-## Green baseline to preserve
-
-The 20 passing tests are the contract the build must not break: the
-`PaywallStatus` machine (initial → loading → loaded | failure), live/empty/error
-streams, the Drift repository's `startTrial`/`activate` writes and
-`watchSubscription` (demo `active`, empty `trial`, fresh `trial` with no start
-date, `Europe/London` zone), the route's bloc wiring, and the `initial` /
-`loading` progress states.
+1. **Open shared findings.** `[P07-BUG-8]` (the trial never expires) and
+   `[P07-BUG-9]` (kid-mode guard order) live in `core/` and `app/` — filed in
+   `docs/screens/P07/SHARED_REQUEST.md`, out of this worktree's edit scope.
+   Their proofs stay skipped until the orchestrator lands them; P07-BUG-10
+   becomes reachable at that moment.
+2. **`google_fonts` is gone** and none of this feature's `lib/` or `test/` files
+   import it or call `GoogleFonts.*` (verified by grep).
+3. **Concurrent scratch file.** While this stage ran, the Stage 6 (bugs) agent
+   created `app/test/features/paywall/probe_scratch.dart` (its own header says
+   it is temporary and deleted before that report lands). It is not
+   auto-collected by `flutter test` (no `_test` suffix), so the suite above is
+   unaffected; it does currently produce 13 `flutter analyze` infos, all inside
+   that one file. Nothing else in the repo has analyze issues. Not deleted here
+   — it is another stage's in-flight work.
 
 ## Verdict basis
 
-Stage 3 requires all tests to pass with no bugs found. 43 tests fail and five
-defects are recorded — one of them a blocker (the screen is not implemented) —
-so this iteration cannot pass. The build stage must implement `1_plan.md`
-§§a–g; the failing tests are the checklist, and re-running
-`flutter test test/features/paywall/` is the proof.
+All tests pass (`+742 ~3`), `dart format` is clean and the three committed
+paywall test files analyze clean. But stage 3 may only pass when **no bugs are
+found**, and P07-BUG-10 is a real defect in the screen's back navigation,
+recorded above with a proof test and a repro. The build stage should fix it
+(with P07-BUG-8 in mind) and unskip `[P07-BUG-10]`.
 
 VERDICT: FAIL

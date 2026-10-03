@@ -1,10 +1,18 @@
-// P07 · Paywall — adversarial bug proofs (Stage 6, iteration 1).
+// P07 · Paywall — adversarial bug proofs (Stage 6, iteration 2).
 //
-// One or more tests per bug id in `docs/screens/P07/6_bugs.md`. Every bug
-// test is `skip`-marked with its id so the suite stays green while the defect
-// is unfixed; when the fix lands, remove the skip and the test must pass.
-// `flutter test test/features/paywall/ --run-skipped` proves each test fails
-// on the current code.
+// Iteration 1 found P07-BUG-1..9. Iteration 2 verified 1–7 fixed — their
+// proofs are unskipped and green below — adopted stage 3's P07-BUG-10
+// (expired-trial close trap) with an independent proof, added P07-BUG-11
+// (announced separators) and P07-BUG-12 (active-subscription downgrade), and
+// carries P07-BUG-8/9 as shared items filed in
+// `docs/screens/P07/SHARED_REQUEST.md`; every open proof stays `skip: true`
+// until its fix lands.
+//
+// Every open bug test is `skip`-marked with its id in the test name so the
+// suite stays green while the defect is unfixed; when the fix lands, remove
+// the skip and the test must pass. `flutter test
+// test/features/paywall/p07_bugs_test.dart --run-skipped` proves each
+// skipped test still fails on the current code.
 //
 // The green tests at the bottom are the checks this stage verified clean:
 // restart persistence, parent deep links, and the realistic kid-mode guard.
@@ -456,6 +464,103 @@ void main() {
       },
     );
   });
+
+  group(
+    'P07-BUG-10 — X cannot leave the expired-trial paywall (major, latent)',
+    () {
+      testWidgets(
+        '[P07-BUG-10] close leaves the expired-trial paywall (no bounce)',
+        skip: true,
+        (tester) async {
+          // Stage 3 found this; reproduced here independently. With the trial
+          // expired the router redirects every non-paywall location back to
+          // `/paywall`, so the design's close button is a dead control: pop
+          // lands on /today (bounced) and go(P06) is bounced too.
+          final db = await setUpTestScope();
+          await (db.update(db.appState)..where((a) => a.id.equals(1))).write(
+            const AppStateCompanion(
+              subscriptionStatus: Value('expired'),
+              onboardingComplete: Value(true),
+            ),
+          );
+          await GetIt.instance<AppSession>().refresh();
+
+          await pumpAppRoute(tester, '/today');
+          await tester.pump(const Duration(milliseconds: 200));
+          expect(currentPath(tester), '/paywall');
+
+          await tester.tap(find.bySemanticsLabel(_closeLabel));
+          await _settle(tester);
+
+          expect(
+            currentPath(tester),
+            isNot('/paywall'),
+            reason: 'X must leave the paywall, not bounce back to it',
+          );
+
+          await disposeApp(tester);
+        },
+      );
+    },
+  );
+
+  group('P07-BUG-11 — the legal separators are announced (minor)', () {
+    testWidgets(
+      '[P07-BUG-11] the · separators stay out of semantics',
+      skip: true,
+      (tester) async {
+        await _pumpPaywallWithSeed(tester, Seed.fresh);
+
+        // `P07-paywall.html:108,110` marks both separators `aria-hidden`;
+        // the two links carry their own labels, so the middle dots must not
+        // become separate semantics nodes.
+        expect(
+          find.bySemanticsLabel('·'),
+          findsNothing,
+          reason: 'aria-hidden separators must be ExcludeSemantics in Flutter',
+        );
+
+        await disposeApp(tester);
+      },
+    );
+  });
+
+  group(
+    'P07-BUG-12 — Start free trial downgrades an active subscriber (minor)',
+    () {
+      testWidgets(
+        '[P07-BUG-12] an active subscription is not replaced by a trial',
+        skip: true,
+        (tester) async {
+          // Seed.demo is an already-paying family (`subscriptionStatus:
+          // 'active'`, trial_start 2026-09-19). The paywall stays reachable
+          // for onboarded apps (deep link), so the CTA must not regress a
+          // paid subscription — the restore path already refuses to.
+          final db = await _pumpPaywallWithSeed(tester, Seed.demo);
+          final before = await _appStateRow(db);
+          expect(before?.subscriptionStatus, 'active');
+
+          await tester.tap(find.text(_cta));
+          await _settle(tester);
+
+          final after = await _appStateRow(db);
+          expect(
+            after?.subscriptionStatus,
+            'active',
+            reason: 'a paying family must not be downgraded to trial',
+          );
+          expect(
+            after?.trialStart,
+            before?.trialStart,
+            reason: 'the old trial date must not be overwritten',
+          );
+          expect(currentPath(tester), '/today');
+
+          await disposeApp(tester);
+        },
+      );
+    },
+  );
 
   group('verified clean — baselines that must stay green', () {
     test(
