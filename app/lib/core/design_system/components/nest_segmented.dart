@@ -12,12 +12,14 @@ class NestSegmentOption<T> {
   final String label;
 }
 
-/// Pill segmented control: 44px container, 4px padding, 36px thumb.
+/// Pill segmented control: 52px track, 4px padding, 44px buttons.
 ///
-/// The thumb fills its segment with a 4px inset on all sides and its sh-1
-/// shadow paints fully visible (nothing in the tree clips it). In dark mode
-/// the thumb drops the shadow for a 1px line-colour border instead —
-/// shadows render invisible/dirty on dark.
+/// `.segmented` is `padding:4px` around buttons whose `min-height:44px` beats
+/// `height:40px` (components.css self-conflict — rendered height 44), so the
+/// track is 4 + 44 + 4 = 52. The selected pill keeps r-pill and its sh-1
+/// shadow, which paints fully visible (nothing in the tree clips it). In
+/// dark mode the thumb drops the shadow for a 1px line-colour border
+/// instead — shadows render invisible/dirty on dark.
 class NestSegmented<T> extends StatelessWidget {
   const new({
     required this.options,
@@ -47,7 +49,7 @@ class NestSegmented<T> extends StatelessWidget {
       children.add(
         Expanded(
           child: SizedBox(
-            height: NestDevice.tapParent - NestSpacing.s2,
+            height: NestDevice.tapParent,
             child: Semantics(
               button: true,
               selected: isSelected,
@@ -96,7 +98,8 @@ class NestSegmented<T> extends StatelessWidget {
       container: true,
       label: semanticLabel,
       child: Container(
-        height: NestDevice.tapParent,
+        // `.segmented`: 4 px padding around 44 px buttons = 52 px track.
+        height: NestDevice.tapParent + NestSpacing.s2,
         padding: const EdgeInsets.all(NestSpacing.s1),
         decoration: BoxDecoration(
           color: tokens.surface2,

@@ -16,9 +16,15 @@ import 'package:sqlite3/sqlite3.dart' as sqlite;
 /// Minimal v2 DDL: every table `beforeOpen` touches (v1 shape is enough —
 /// the v2 → v3 open only runs the v3 step) plus `children` in its exact v2
 /// shape (every column except `created_at` / `created_at_tz`).
+///
+/// `quests` is included in its exact v2 shape (`due_time_local` included,
+/// no `created_at` / `created_at_tz` until schema v4): real v2 databases
+/// always have it, and the v4 open runs the v4 step on this fixture too,
+/// which needs the table to exist.
 const List<String> _v2Ddl = <String>[
   "CREATE TABLE families (id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL DEFAULT 'Nestling', payout_day INTEGER NOT NULL DEFAULT 6, coin_value_pence_per_coin INTEGER NOT NULL DEFAULT 1, pocket_money_mode TEXT NOT NULL DEFAULT 'both')",
   'CREATE TABLE children (id TEXT NOT NULL PRIMARY KEY, family_id TEXT NOT NULL, nickname TEXT NOT NULL, age_band TEXT NOT NULL DEFAULT "7-9", age_years INTEGER NOT NULL DEFAULT 7, avatar_colour TEXT NOT NULL DEFAULT "lilac", pin_hash TEXT NULL, pip_style TEXT NOT NULL DEFAULT "mochi", pip_skin TEXT NOT NULL DEFAULT "sunny", pip_accessory TEXT NOT NULL DEFAULT "none", pip_stage INTEGER NOT NULL DEFAULT 1, pip_total_coins INTEGER NOT NULL DEFAULT 0, coins INTEGER NOT NULL DEFAULT 0, happiness INTEGER NOT NULL DEFAULT 4, happy_days INTEGER NOT NULL DEFAULT 0, weekly_base_pence INTEGER NOT NULL DEFAULT 0)',
+  "CREATE TABLE quests (id TEXT NOT NULL PRIMARY KEY, family_id TEXT NOT NULL, title TEXT NOT NULL, icon TEXT NOT NULL DEFAULT 'star', coins INTEGER NOT NULL DEFAULT 10, repeat_rule TEXT NOT NULL DEFAULT 'once', days TEXT NOT NULL DEFAULT '', due_label TEXT NULL, needs_approval INTEGER NOT NULL DEFAULT 1, assignee_child_id TEXT NULL, active INTEGER NOT NULL DEFAULT 1, due_time_local TEXT NULL)",
   "CREATE TABLE settings (family_id TEXT NOT NULL PRIMARY KEY, pocket_money_mode TEXT NOT NULL DEFAULT 'both', payout_day INTEGER NOT NULL DEFAULT 6, coin_value_pence_per_coin INTEGER NOT NULL DEFAULT 1, notif_approvals INTEGER NOT NULL DEFAULT 1, notif_payout INTEGER NOT NULL DEFAULT 1, notif_summary INTEGER NOT NULL DEFAULT 1, crash_report_consent INTEGER NOT NULL DEFAULT 0, kid_gate_enabled INTEGER NOT NULL DEFAULT 1)",
   "CREATE TABLE app_state (id INTEGER NOT NULL PRIMARY KEY, onboarding_complete INTEGER NOT NULL DEFAULT 0, subscription_status TEXT NOT NULL DEFAULT 'trial', trial_start INTEGER NULL, active_child_id TEXT NULL, app_mode TEXT NOT NULL DEFAULT 'parent')",
 ];

@@ -102,7 +102,7 @@ void main() {
       NestSegmentOption(value: 'Weekly', label: 'Weekly'),
     ];
 
-    testWidgets('36 thumb in a 44 container', (tester) async {
+    testWidgets('44 thumb in a 52 container', (tester) async {
       await pumpBothModes(
         tester,
         NestSegmented<String>(
@@ -111,11 +111,12 @@ void main() {
           onChanged: (_) {},
         ),
       );
+      // `.segmented`: 4 px padding around 44 px buttons = 52 px track.
       expect(
         tester.getSize(find.byType(NestSegmented<String>).first).height,
-        44,
+        52,
       );
-      expect(tester.getSize(find.byType(InkWell).first).height, 36);
+      expect(tester.getSize(find.byType(InkWell).first).height, 44);
     });
 
     testWidgets('tap reports the value', (tester) async {
