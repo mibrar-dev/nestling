@@ -6,13 +6,17 @@
 // re-filters synchronously; the sheet submits write through and the stream
 // re-emits. All P06 setup behaviour (mode/day/stepper guards) is unchanged.
 
+import 'dart:async';
+
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
+import 'package:nestling/features/pocket_money/domain/entities/money_child.dart';
 import 'package:nestling/features/pocket_money/domain/entities/money_ledger_data.dart';
 import 'package:nestling/features/pocket_money/domain/entities/owed_summary.dart';
 import 'package:nestling/features/pocket_money/domain/entities/pocket_money_entry.dart';
 import 'package:nestling/features/pocket_money/domain/entities/pocket_money_setup.dart';
+import 'package:nestling/features/pocket_money/domain/entities/savings_goal_data.dart';
 import 'package:nestling/features/pocket_money/domain/pocket_money_repository.dart';
 import 'package:nestling/features/pocket_money/presentation/bloc/pocket_money_bloc.dart';
 import 'package:nestling/features/pocket_money/presentation/bloc/pocket_money_event.dart';
@@ -106,6 +110,100 @@ class _ThrowingSubmitRepository implements PocketMoneyRepository {
 
   @override
   Future<void> setWeeklyBasePence(String childId, int pence) async {}
+}
+
+/// A hand-built emission — the shape `watchLedgerData` produces, without a
+/// Drift database, so a test can drive the stream step by step.
+MoneyLedgerData _ledgerData({
+  List<MoneyChild> children = const <MoneyChild>[
+    MoneyChild(id: 'maya', nickname: 'Maya'),
+    MoneyChild(id: 'leo', nickname: 'Leo'),
+  ],
+  List<PocketMoneyEntry> entries = const <PocketMoneyEntry>[],
+  List<OwedSummary> oweds = const <OwedSummary>[],
+  List<SavingsGoalData> goals = const <SavingsGoalData>[],
+  int payoutDay = 6,
+  String zoneId = 'Europe/London',
+  PocketMoneySetup? setup = _demoSetup,
+}) {
+  return MoneyLedgerData(
+    children: children,
+    entries: entries,
+    oweds: oweds.isEmpty
+        ? <OwedSummary>[
+            for (final child in children)
+              OwedSummary(
+                childId: child.id,
+                totalPence: 0,
+                basePence: 0,
+                questsPence: 0,
+              ),
+          ]
+        : oweds,
+    goals: goals,
+    payoutDay: payoutDay,
+    zoneId: zoneId,
+    setup: setup,
+  );
+}
+
+PocketMoneyEntry _entry({
+  required int id,
+  required String childId,
+  required String type,
+  required int amountPence,
+  String note = '',
+  DateTime? date,
+}) {
+  return PocketMoneyEntry(
+    id: id,
+    title: note,
+    detail: note,
+    childId: childId,
+    type: type,
+    amountPence: amountPence,
+    note: note,
+    date: date ?? DateTime.utc(2026, 10, 3, 8),
+  );
+}
+
+/// Fake whose [watchLedgerData] stream the test scripts per subscription, and
+/// whose writes are recorded instead of performed (so "the submit emitted
+/// nothing" is observable — a write-through submit is silent until the watch
+/// stream re-emits).
+class _ScriptedLedgerRepository extends _ThrowingSubmitRepository {
+  _ScriptedLedgerRepository(this._onSubscribe);
+
+  final Stream<MoneyLedgerData> Function(int attempt) _onSubscribe;
+
+  /// How many times the bloc subscribed (1 on the first load, 2 after a
+  /// "Try again" re-subscription).
+  int attempts = 0;
+
+  /// `childId:amountPence:note` per accepted write.
+  final List<String> addMoneyCalls = <String>[];
+  final List<String> spendingCalls = <String>[];
+
+  @override
+  Stream<MoneyLedgerData> watchLedgerData() => _onSubscribe(attempts++);
+
+  @override
+  Future<void> addMoney({
+    required String childId,
+    required int amountPence,
+    required String note,
+  }) async {
+    addMoneyCalls.add('$childId:$amountPence:$note');
+  }
+
+  @override
+  Future<void> recordSpending({
+    required String childId,
+    required int amountPence,
+    required String note,
+  }) async {
+    spendingCalls.add('$childId:$amountPence:$note');
+  }
 }
 
 /// Fake whose ledger stream is down from the first subscription.
@@ -391,6 +489,289 @@ void main() {
               contains('ledger is down'),
             ),
       ],
+    );
+
+    blocTest<PocketMoneyBloc, PocketMoneyState>(
+      'a rejected spending submit keeps the loaded ledger and sets the '
+      'message (no failure state)',
+      build: () => PocketMoneyBloc(repository: _ThrowingSubmitRepository()),
+      act: (bloc) async {
+        bloc.add(const PocketMoneyLoadRequested());
+        await bloc.stream.firstWhere(
+          (state) => state.status == PocketMoneyStatus.loaded,
+        );
+        bloc.add(const PocketMoneySpendingSubmitted('maya', 200, 'Comic'));
+      },
+      expect: () => <Matcher>[
+        isA<PocketMoneyState>().having(
+          (state) => state.status,
+          'status',
+          PocketMoneyStatus.loading,
+        ),
+        isA<PocketMoneyState>().having(
+          (state) => state.status,
+          'status',
+          PocketMoneyStatus.loaded,
+        ),
+        isA<PocketMoneyState>()
+            .having((state) => state.status, 'status', PocketMoneyStatus.loaded)
+            .having(
+              (state) => state.errorMessage,
+              'errorMessage',
+              contains('spend refused'),
+            ),
+      ],
+    );
+
+    // A write-through submit is silent: the row appears only when the watch
+    // stream re-emits. An optimistic emission here would show a row the
+    // database rejected (the failure path above sets the message instead).
+    test(
+      'an accepted submit reaches the repository without emitting',
+      () async {
+        final controller = StreamController<MoneyLedgerData>.broadcast();
+        addTearDown(controller.close);
+        final repository = _ScriptedLedgerRepository((_) => controller.stream);
+        final bloc = PocketMoneyBloc(repository: repository);
+        addTearDown(bloc.close);
+
+        final seen = <PocketMoneyState>[];
+        final subscription = bloc.stream.listen(seen.add);
+        addTearDown(subscription.cancel);
+
+        bloc.add(const PocketMoneyLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        controller.add(_ledgerData());
+        await bloc.stream.firstWhere(
+          (state) => state.status == PocketMoneyStatus.loaded,
+        );
+        final afterLoad = seen.length;
+
+        bloc
+          ..add(const PocketMoneyAddMoneySubmitted('maya', 500, 'Quiet write'))
+          ..add(const PocketMoneySpendingSubmitted('maya', 200, 'Quiet spend'));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        expect(repository.addMoneyCalls, <String>[
+          'maya:500:Quiet write',
+        ], reason: 'the write must reach the repository exactly once');
+        expect(repository.spendingCalls, <String>['maya:200:Quiet spend']);
+        expect(
+          seen.length,
+          afterLoad,
+          reason: 'a write-through submit must not emit optimistically',
+        );
+        expect(bloc.state.errorMessage, isNull);
+      },
+    );
+  });
+
+  group('PocketMoneyBloc — P12 selection guards', () {
+    blocTest<PocketMoneyBloc, PocketMoneyState>(
+      'selecting a child before the first load is a no-op',
+      build: () => PocketMoneyBloc(repository: _ThrowingSubmitRepository()),
+      act: (bloc) => bloc.add(const PocketMoneyChildSelected('leo')),
+      expect: () => const <Matcher>[],
+    );
+
+    blocTest<PocketMoneyBloc, PocketMoneyState>(
+      're-selecting the current child emits nothing further',
+      setUp: setUpTestScope,
+      build: () =>
+          PocketMoneyBloc(repository: GetIt.instance<PocketMoneyRepository>()),
+      act: (bloc) async {
+        bloc.add(const PocketMoneyLoadRequested());
+        await bloc.stream.firstWhere((state) => state.data != null);
+        // Maya is already selected — the segment must not re-emit.
+        bloc.add(const PocketMoneyChildSelected('maya'));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      },
+      expect: () => <Matcher>[
+        isA<PocketMoneyState>().having(
+          (state) => state.status,
+          'status',
+          PocketMoneyStatus.loading,
+        ),
+        isA<PocketMoneyState>()
+            .having((state) => state.status, 'status', PocketMoneyStatus.loaded)
+            .having((state) => state.selectedChildId, 'selected', 'maya'),
+      ],
+    );
+
+    // `build` creates the controller and `act` drives it; `bloc_test` runs
+    // `build` first, so the same instance is visible to both.
+    late StreamController<MoneyLedgerData> controller;
+    blocTest<PocketMoneyBloc, PocketMoneyState>(
+      'a stream that drops the selected child falls back to the first one',
+      build: () {
+        controller = StreamController<MoneyLedgerData>.broadcast();
+        addTearDown(controller.close);
+        return PocketMoneyBloc(
+          repository: _ScriptedLedgerRepository((_) => controller.stream),
+        );
+      },
+      act: (bloc) async {
+        bloc.add(const PocketMoneyLoadRequested());
+        // Let the bloc subscribe before the broadcast controller receives
+        // anything — an event sent with no listener is dropped.
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        controller.add(
+          _ledgerData(
+            entries: <PocketMoneyEntry>[
+              _entry(
+                id: 1,
+                childId: 'maya',
+                type: 'weekly_base',
+                amountPence: 300,
+              ),
+              _entry(
+                id: 2,
+                childId: 'leo',
+                type: 'weekly_base',
+                amountPence: 150,
+              ),
+            ],
+          ),
+        );
+        await bloc.stream.firstWhere((state) => state.data != null);
+        bloc.add(const PocketMoneyChildSelected('leo'));
+        await bloc.stream.firstWhere((state) => state.selectedChildId == 'leo');
+        // Leo is deleted from the family: the next emission must not keep a
+        // dangling selection (the view would render the wrong child).
+        controller.add(
+          _ledgerData(
+            children: const <MoneyChild>[
+              MoneyChild(id: 'maya', nickname: 'Maya'),
+            ],
+            entries: <PocketMoneyEntry>[
+              _entry(
+                id: 1,
+                childId: 'maya',
+                type: 'weekly_base',
+                amountPence: 300,
+              ),
+            ],
+          ),
+        );
+      },
+      expect: () => <Matcher>[
+        isA<PocketMoneyState>().having(
+          (state) => state.status,
+          'status',
+          PocketMoneyStatus.loading,
+        ),
+        isA<PocketMoneyState>()
+            .having((state) => state.status, 'status', PocketMoneyStatus.loaded)
+            .having((state) => state.selectedChildId, 'selected', 'maya'),
+        isA<PocketMoneyState>()
+            .having((state) => state.selectedChildId, 'selected', 'leo')
+            .having((state) => state.items.length, 'items', 1),
+        isA<PocketMoneyState>()
+            .having((state) => state.selectedChildId, 'selected', 'maya')
+            .having(
+              (state) => state.items.map((entry) => entry.childId).toSet(),
+              'items children',
+              <String>{'maya'},
+            ),
+      ],
+    );
+
+    blocTest<PocketMoneyBloc, PocketMoneyState>(
+      'a family with no children loads with a null selection and no items',
+      build: () => PocketMoneyBloc(
+        repository: _ScriptedLedgerRepository(
+          (_) => Stream<MoneyLedgerData>.value(
+            _ledgerData(children: const <MoneyChild>[]),
+          ),
+        ),
+      ),
+      act: (bloc) => bloc.add(const PocketMoneyLoadRequested()),
+      expect: () => <Matcher>[
+        isA<PocketMoneyState>().having(
+          (state) => state.status,
+          'status',
+          PocketMoneyStatus.loading,
+        ),
+        isA<PocketMoneyState>()
+            .having((state) => state.status, 'status', PocketMoneyStatus.loaded)
+            .having((state) => state.selectedChildId, 'selected', isNull)
+            .having((state) => state.items, 'items', isEmpty)
+            .having((state) => state.data?.children, 'children', isEmpty),
+      ],
+    );
+  });
+
+  group('PocketMoneyBloc — P12 retry', () {
+    blocTest<PocketMoneyBloc, PocketMoneyState>(
+      'a second load after a failure re-subscribes and recovers',
+      build: () {
+        final repository = _ScriptedLedgerRepository(
+          (attempt) => attempt == 0
+              ? Stream<MoneyLedgerData>.error(StateError('ledger is down'))
+              : Stream<MoneyLedgerData>.value(_ledgerData()),
+        );
+        return PocketMoneyBloc(repository: repository);
+      },
+      act: (bloc) async {
+        bloc.add(const PocketMoneyLoadRequested());
+        await bloc.stream.firstWhere(
+          (state) => state.status == PocketMoneyStatus.failure,
+        );
+        bloc.add(const PocketMoneyLoadRequested());
+      },
+      expect: () => <Matcher>[
+        isA<PocketMoneyState>().having(
+          (state) => state.status,
+          'status',
+          PocketMoneyStatus.loading,
+        ),
+        isA<PocketMoneyState>()
+            .having(
+              (state) => state.status,
+              'status',
+              PocketMoneyStatus.failure,
+            )
+            .having(
+              (state) => state.errorMessage,
+              'errorMessage',
+              contains('ledger is down'),
+            ),
+        // The retry must clear the stale message, not keep it beside the
+        // recovered ledger.
+        isA<PocketMoneyState>()
+            .having(
+              (state) => state.status,
+              'status',
+              PocketMoneyStatus.loading,
+            )
+            .having(
+              (state) => state.errorMessage,
+              'errorMessage',
+              contains('ledger is down'),
+            ),
+        isA<PocketMoneyState>()
+            .having((state) => state.status, 'status', PocketMoneyStatus.loaded)
+            .having((state) => state.errorMessage, 'errorMessage', isNull)
+            .having((state) => state.selectedChildId, 'selected', 'maya'),
+      ],
+    );
+
+    test(
+      'a load failure must not leave a pending retry timer behind',
+      () async {
+        final repository = _ScriptedLedgerRepository(
+          (_) => Stream<MoneyLedgerData>.error(StateError('ledger is down')),
+        );
+        final bloc = PocketMoneyBloc(repository: repository)
+          ..add(const PocketMoneyLoadRequested());
+        await bloc.stream.firstWhere(
+          (state) => state.status == PocketMoneyStatus.failure,
+        );
+        // The error is terminal: the stream closes after the first error, so
+        // `close()` completes instead of hanging on a live `emit.forEach`.
+        await bloc.close().timeout(const Duration(seconds: 5));
+        expect(repository.attempts, 1);
+      },
     );
   });
 }
