@@ -538,8 +538,10 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
-      expect(find.text('P15 Child profile'), findsOneWidget);
-      final uri = _currentUri(tester, find.text('P15 Child profile'));
+      // P15 is a real screen now, so anchor on its hero card instead of the
+      // old placeholder title (same anchor add_children_test.dart uses).
+      expect(find.byKey(const Key('p15-hero')), findsOneWidget);
+      final uri = _currentUri(tester, find.byKey(const Key('p15-hero')));
       expect(uri.path, '/child-profile');
       expect(uri.queryParameters['childId'], 'maya');
 

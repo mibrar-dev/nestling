@@ -31,3 +31,12 @@ final class FamilyAddChildRequested extends FamilyEvent {
   @override
   List<Object?> get props => <Object?>[onSaved];
 }
+
+final class FamilyRemoveChildRequested extends FamilyEvent {
+  const new({required this.childId});
+
+  final String childId;
+
+  @override
+  List<Object?> get props => <Object?>[childId];
+}

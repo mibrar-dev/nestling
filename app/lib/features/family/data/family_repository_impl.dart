@@ -1,8 +1,13 @@
+import 'dart:async';
+
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_database.dart';
-import 'package:nestling/core/data/family_time.dart';
+import 'package:nestling/core/data/family_time.dart'
+    hide countsForCurrentPeriod;
+import 'package:nestling/core/data/london_time.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/data/stream_combine.dart';
+import 'package:nestling/features/family/domain/entities/child_profile.dart';
 import 'package:nestling/features/family/domain/entities/family_child.dart';
 import 'package:nestling/features/family/domain/entities/family_member.dart';
 import 'package:nestling/features/family/domain/family_repository.dart';
@@ -51,6 +56,184 @@ class FamilyRepositoryImpl implements FamilyRepository {
       final completions = parts[2] as List<QuestCompletion>;
       return kids.map((k) => _toChild(k, quests, completions)).toList();
     });
+  }
+
+  @override
+  Stream<ChildProfile?> watchProfile() {
+    // NOTE (P15-2a): the plan prescribes `asyncExpand` onto
+    // `watchLedger(childId)`, but `Stream.asyncExpand` waits for each inner
+    // stream to CLOSE before processing the next outer event ("concat"
+    // semantics) — and Drift `watch()` streams never close. The second
+    // selection therefore stalls forever (verified with a failing test:
+    // removing Maya never re-emits Leo). This controller implements the
+    // intended *switch* semantics instead — the ledger subscription follows
+    // the current selection — with no change to the public shape. The four
+    // base streams still combine with the shared `combineLatest4` helper.
+    late final StreamController<ChildProfile?> controller;
+    controller = StreamController<ChildProfile?>(
+      onListen: () {
+        StreamSubscription<List<dynamic>>? baseSub;
+        StreamSubscription<List<LedgerEntry>>? ledgerSub;
+        // Latest base snapshot; ledger rows are only meaningful against it.
+        List<dynamic>? latestParts;
+        // Child id the live ledger subscription tracks, with its rows.
+        // Null rows mean "subscription switched, fresh data not here yet":
+        // never emit a profile with another selection's ledger.
+        String? ledgerChildId;
+        List<LedgerEntry>? latestLedger;
+
+        void tryEmit() {
+          final parts = latestParts;
+          final ledger = latestLedger;
+          if (parts == null || ledger == null) return;
+          final appState = parts[0] as AppStateData?;
+          final kids = parts[1] as List<ChildrenData>;
+          final quests = parts[2] as List<Quest>;
+          final completions = parts[3] as List<QuestCompletion>;
+          final selected = _selectProfileChild(appState?.activeChildId, kids);
+          if (selected == null || ledgerChildId != selected.id) return;
+          controller.add(
+            _toProfile(
+              selected,
+              quests,
+              completions,
+              ledger,
+              // PERIODS ruling: `now` is taken at emission.
+              DateTime.now().toUtc(),
+            ),
+          );
+        }
+
+        baseSub =
+            combineLatest4(
+              _db.watchAppState(),
+              // Creation order (CHILD ORDER ruling) via the shared helper.
+              _db.watchChildren(Seed.familyId),
+              _db.watchActiveQuests(Seed.familyId),
+              _db.watchAllCompletions(Seed.familyId),
+            ).listen((parts) async {
+              latestParts = parts;
+              final appState = parts[0] as AppStateData?;
+              final kids = parts[1] as List<ChildrenData>;
+              final selected = _selectProfileChild(
+                appState?.activeChildId,
+                kids,
+              );
+              if (selected == null) {
+                await ledgerSub?.cancel();
+                ledgerSub = null;
+                ledgerChildId = null;
+                latestLedger = null;
+                controller.add(null);
+                return;
+              }
+              if (ledgerChildId != selected.id) {
+                await ledgerSub?.cancel();
+                ledgerChildId = selected.id;
+                latestLedger = null;
+                // The fresh subscription emits the current rows on its own;
+                // that emission (not this one) drives the profile update.
+                ledgerSub = _db.watchLedger(selected.id).listen((rows) {
+                  latestLedger = rows;
+                  tryEmit();
+                }, onError: controller.addError);
+                return;
+              }
+              tryEmit();
+            }, onError: controller.addError);
+
+        controller.onCancel = () async {
+          await baseSub?.cancel();
+          await ledgerSub?.cancel();
+        };
+      },
+    );
+    return controller.stream;
+  }
+
+  /// P15 selection: `activeChildId` match, else the first child in creation
+  /// order (the query above already sorts that way), else null.
+  ChildrenData? _selectProfileChild(
+    String? activeChildId,
+    List<ChildrenData> kids,
+  ) {
+    if (kids.isEmpty) return null;
+    if (activeChildId != null) {
+      for (final kid in kids) {
+        if (kid.id == activeChildId) return kid;
+      }
+    }
+    return kids.first;
+  }
+
+  ChildProfile _toProfile(
+    ChildrenData row,
+    List<Quest> quests,
+    List<QuestCompletion> completions,
+    List<LedgerEntry> ledger,
+    DateTime now,
+  ) {
+    var daily = 0;
+    var weekly = 0;
+    var once = 0;
+    for (final quest in quests) {
+      if (!quest.active || quest.assigneeChildId != row.id) continue;
+      switch (quest.repeatRule) {
+        case 'daily':
+          daily++;
+        case 'weekly':
+          weekly++;
+        default:
+          // 'once', plus unknown rules (same fallback as the plan).
+          once++;
+      }
+    }
+    final repeatByQuest = <String, String>{
+      for (final quest in quests) quest.id: quest.repeatRule,
+    };
+    var thisWeek = 0;
+    for (final completion in completions) {
+      if (completion.childId != row.id) continue;
+      if (completion.status != 'done_pending' &&
+          completion.status != 'approved') {
+        continue;
+      }
+      final repeat = repeatByQuest[completion.questId] ?? 'once';
+      if (countsForCurrentPeriod(repeat, completion.createdAt, now)) {
+        thisWeek++;
+      }
+    }
+    return ChildProfile(
+      child: _toChild(row, quests, completions),
+      questsThisWeek: thisWeek,
+      dailyActive: daily,
+      weeklyActive: weekly,
+      onceActive: once,
+      owedPence: _owedPence(ledger),
+    );
+  }
+
+  /// Owed math for one child's ledger — the same pure algorithm as
+  /// `PocketMoneyRepositoryImpl.summarise`
+  /// (`features/pocket_money/data/pocket_money_repository_impl.dart:259-284`):
+  /// only `weekly_base` + `quest_bonus` rows at or after the latest `payout`
+  /// instant count. Replicated here (no cross-feature import) so the family
+  /// feature stays self-contained.
+  static int _owedPence(List<LedgerEntry> rows) {
+    DateTime? latestPayout;
+    for (final row in rows) {
+      if (row.type == 'payout' &&
+          (latestPayout == null || row.date.isAfter(latestPayout))) {
+        latestPayout = row.date;
+      }
+    }
+    var total = 0;
+    for (final row in rows) {
+      if (row.type != 'weekly_base' && row.type != 'quest_bonus') continue;
+      if (latestPayout != null && row.date.isBefore(latestPayout)) continue;
+      total += row.amountPence;
+    }
+    return total;
   }
 
   @override

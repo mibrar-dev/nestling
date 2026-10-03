@@ -1,3 +1,4 @@
+import 'package:nestling/features/family/domain/entities/child_profile.dart';
 import 'package:nestling/features/family/domain/entities/family_child.dart';
 import 'package:nestling/features/family/domain/entities/family_member.dart';
 
@@ -9,6 +10,11 @@ abstract class FamilyRepository {
 
   Stream<List<FamilyChild>> watchChildren();
   Future<FamilyChild?> getChild(String childId);
+
+  /// Selected-child profile for P15: resolves `app_state.activeChildId`,
+  /// falling back to the first child in creation order, or null when there
+  /// are no children.
+  Stream<ChildProfile?> watchProfile();
 
   Future<void> addChild({
     required String nickname,
