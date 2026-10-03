@@ -405,6 +405,72 @@ class _PipBody extends StatelessWidget {
   }
 }
 
+/// Dark-mode pet glow: `.pet-stage::before` (`components.css` ~188).
+///
+/// A 230×230 box centred on the stage (x = stage centre, y = 42% of the
+/// stage height) painted with `--pet-glow` (`tokens.css`): `none` in light
+/// (this builds a shrink-wrapped nothing — see `NestSchemeColors.petGlow`)
+/// and `radial-gradient(circle 110px at 50% 45%, white@10%, transparent 70%)`
+/// in dark. The Flutter equivalent centres the gradient at 45% of the box
+/// ([center], i.e. 11.5 px above the box middle) with a 110 px ray ([radius])
+/// fading to transparent at 70% ([stops]).
+///
+/// One shared widget (used by the explicit + legacy Rive boxes in
+/// `nest_pet_stage.dart` and by [PipNestFallback]) so the three paths can
+/// never drift apart.
+class PetStageGlow extends StatelessWidget {
+  const PetStageGlow({required this.stageW, required this.stageH, super.key});
+
+  /// `.pet-stage::before` box edge (230 px).
+  static const double size = 230;
+
+  /// Gradient ray (`circle 110px`) as a fraction of the box's shortest side
+  /// (230 px). NOTE: `RadialGradient.radius` is a fraction of the whole
+  /// shortest side — not of the half-box — so 110 px is `110 / 230`
+  /// (`gradient.dart` `createShader`: `radius * rect.shortestSide`).
+  static const double radius = 110 / 230;
+
+  /// Gradient centre: 45% of the box height (11.5 px above its middle).
+  static const Alignment center = Alignment(0, -0.1);
+
+  /// `transparent 70%`: the fade reaches transparent 70% along the ray.
+  static const List<double> stops = [0, 0.7];
+
+  /// Box centre height as a fraction of the stage height (`top: 42%`).
+  static const double centerYFraction = 0.42;
+
+  /// Key on the glow's [DecoratedBox] (shared tests assert through it).
+  static const Key glowKey = ValueKey<String>('petStageGlow');
+
+  final double stageW;
+  final double stageH;
+
+  @override
+  Widget build(BuildContext context) {
+    final glow = context.nest.petGlow;
+    if (glow == null) return const SizedBox.shrink();
+    return Positioned(
+      left: stageW / 2 - size / 2,
+      top: stageH * centerYFraction - size / 2,
+      child: DecoratedBox(
+        key: glowKey,
+        decoration: BoxDecoration(
+          // `border-radius: 50%`; the gradient is already transparent past
+          // 70% of its 110 px ray, so the clip cuts nothing visible.
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            center: center,
+            radius: radius,
+            colors: [glow, Colors.transparent],
+            stops: stops,
+          ),
+        ),
+        child: const SizedBox(width: size, height: size),
+      ),
+    );
+  }
+}
+
 /// Static fallback scene: Pip standing IN the nest, the same geometry the
 /// `PipStage` Rive artboard composes in one file.
 ///
@@ -595,7 +661,6 @@ class PipNestFallback extends StatelessWidget {
       shadowTop = nestTop + resolvedNestH - 10.0;
     }
     final nestLeft = (stageW - nestW) / 2;
-    final glowD = nestW * 1.04;
 
     Widget nestSvg() {
       return SvgPicture.asset(
@@ -618,19 +683,7 @@ class PipNestFallback extends StatelessWidget {
         // stage instead of clipping or forcing the layout wider.
         clipBehavior: Clip.none,
         children: [
-          if (tokens.isDark)
-            Positioned(
-              left: nestLeft - (glowD - nestW) / 2,
-              top: nestTop + (resolvedNestH - glowD) / 2,
-              child: Container(
-                width: glowD,
-                height: glowD,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Color(0x1AFFFFFF),
-                ),
-              ),
-            ),
+          PetStageGlow(stageW: stageW, stageH: stageH),
           Positioned(
             left: nestLeft + nestW * 0.05,
             top: shadowTop,

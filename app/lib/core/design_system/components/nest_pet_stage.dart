@@ -216,7 +216,6 @@ class _PetScene extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = context.nest;
     final reduce = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     if (reduce || !riveEnabled) return _svgStage();
     if (explicitLayout) {
@@ -230,26 +229,13 @@ class _PetScene extends StatelessWidget {
         pipH: pipH,
         contactFrac: PipNestFallback.contactInSvg(stage),
       );
-      final glowD = nestW * 1.04;
       return SizedBox(
         width: stageW,
         height: g.stageH,
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            if (tokens.isDark)
-              Positioned(
-                left: stageW / 2 - glowD / 2,
-                top: g.nestTop + (nestH - glowD) / 2,
-                child: Container(
-                  width: glowD,
-                  height: glowD,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Color(0x1AFFFFFF),
-                  ),
-                ),
-              ),
+            PetStageGlow(stageW: stageW, stageH: g.stageH),
             Positioned.fill(
               child: PipInNest(
                 stage: stage,
@@ -274,28 +260,13 @@ class _PetScene extends StatelessWidget {
     const sceneW = 350.0;
     const sceneH = 260.0;
     final riveH = stageW * sceneH / sceneW;
-    // Nest centre in scene space: x 75..275, bowl mid ~y 139.
-    const nestCx = 175.0;
-    const nestCy = 139.0;
-    final glowD = stageW * 200 / sceneW * 1.04;
     return SizedBox(
       width: stageW,
       height: riveH,
       child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          if (tokens.isDark)
-            Positioned(
-              left: stageW * nestCx / sceneW - glowD / 2,
-              top: riveH * nestCy / sceneH - glowD / 2,
-              child: Container(
-                width: glowD,
-                height: glowD,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Color(0x1AFFFFFF),
-                ),
-              ),
-            ),
+          PetStageGlow(stageW: stageW, stageH: riveH),
           Positioned.fill(
             child: PipInNest(
               stage: stage,

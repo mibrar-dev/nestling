@@ -54,6 +54,7 @@ class NestSchemeColors {
     required this.kidSkyBottom,
     required this.kidMeadow,
     required this.kidHorizon,
+    this.petGlow,
   });
 
   factory lerp(NestSchemeColors a, NestSchemeColors b, double t) {
@@ -104,6 +105,7 @@ class NestSchemeColors {
       kidSkyBottom: c(a.kidSkyBottom, b.kidSkyBottom),
       kidMeadow: c(a.kidMeadow, b.kidMeadow),
       kidHorizon: c(a.kidHorizon, b.kidHorizon),
+      petGlow: Color.lerp(a.petGlow, b.petGlow, t),
     );
   }
 
@@ -153,6 +155,16 @@ class NestSchemeColors {
   final Color kidMeadow;
   final Color kidHorizon;
 
+  /// `--pet-glow` centre colour (`tokens.css`): null in light (no glow),
+  /// white @10% in dark. Widgets build the `radial-gradient(circle 110px…,
+  /// transparent 70%)` fade from this; never hard-code the alpha at call
+  /// sites. Nullable, so [copyWith] takes a sentinel default (below) — an
+  /// explicit null clears it.
+  final Color? petGlow;
+
+  /// Sentinel distinguishing "not passed" from an explicit null [petGlow].
+  static const Object _petGlowUnset = Object();
+
   NestSchemeColors copyWith({
     Color? ink,
     Color? ink2,
@@ -199,6 +211,7 @@ class NestSchemeColors {
     Color? kidSkyBottom,
     Color? kidMeadow,
     Color? kidHorizon,
+    Object? petGlow = _petGlowUnset,
   }) {
     return NestSchemeColors(
       ink: ink ?? this.ink,
@@ -246,6 +259,7 @@ class NestSchemeColors {
       kidSkyBottom: kidSkyBottom ?? this.kidSkyBottom,
       kidMeadow: kidMeadow ?? this.kidMeadow,
       kidHorizon: kidHorizon ?? this.kidHorizon,
+      petGlow: petGlow == _petGlowUnset ? this.petGlow : petGlow as Color?,
     );
   }
 }
@@ -351,5 +365,7 @@ abstract final class NestColors {
     kidSkyBottom: Color(0xFF2C3572),
     kidMeadow: Color(0xFF1E4A3A),
     kidHorizon: Color(0xFF253359),
+    // `--pet-glow` centre: rgba(255,255,255,.10) (0x1A = 26/255 ≈ 0.102).
+    petGlow: Color(0x1AFFFFFF),
   );
 }
