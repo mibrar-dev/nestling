@@ -9,10 +9,15 @@
 
 import 'dart:ui' show Tristate;
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
+import 'package:nestling/app/app.dart';
+import 'package:nestling/app/controllers.dart';
+import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
@@ -155,6 +160,111 @@ Future<void> _settle(WidgetTester tester) async {
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 200));
 }
+
+/// The `Seed.demo` setup, used where the fake repository has to hand the bloc
+/// a real value (the retry-recovery path).
+const PocketMoneySetup _demoSetup = PocketMoneySetup(
+  mode: 'both',
+  payoutDay: 6,
+  coinValuePencePerCoin: 1,
+  children: <PocketMoneySetupChild>[
+    PocketMoneySetupChild(
+      id: 'maya',
+      nickname: 'Maya',
+      avatarColour: 'lilac',
+      weeklyBasePence: 300,
+    ),
+    PocketMoneySetupChild(
+      id: 'leo',
+      nickname: 'Leo',
+      avatarColour: 'peach',
+      weeklyBasePence: 150,
+    ),
+  ],
+);
+
+/// RepaintBoundary used by the pixel probe for the owner BOTTOM EDGE rule.
+const Key _pixelProbe = ValueKey<String>('p06_pixel_probe');
+
+/// `_pumpSetup` plus a pixel probe, optionally with a home-indicator OS inset
+/// ([bottomInset] logical px) — the strip the rule is about only shows up when
+/// the OS reserves space at the bottom.
+Future<void> _pumpSetupForPixels(
+  WidgetTester tester, {
+  required ThemeMode theme,
+  required Size surface,
+  double bottomInset = 0,
+}) async {
+  tester.view.physicalSize = surface * 3;
+  tester.view.devicePixelRatio = 3;
+  addTearDown(tester.view.reset);
+  if (bottomInset > 0) {
+    tester.view.padding = FakeViewPadding(bottom: bottomInset * 3);
+    addTearDown(tester.view.resetPadding);
+  }
+  GetIt.instance<ThemeModeController>().selectMode(theme);
+  await tester.pumpWidget(
+    const RepaintBoundary(
+      key: _pixelProbe,
+      child: NestlingApp(initialRoute: '/pocket-money-setup'),
+    ),
+  );
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 200));
+}
+
+/// Painted RGBA bytes at logical (x, y) of the app surface.
+Future<List<int>> _pixelAt(WidgetTester tester, double x, double y) async {
+  final boundary = tester.renderObject<RenderRepaintBoundary>(
+    find.byKey(_pixelProbe),
+  );
+  late List<int> pixel;
+  await tester.runAsync(() async {
+    final image = await boundary.toImage();
+    final data = await image.toByteData();
+    final offset = (y.round() * image.width + x.round()) * 4;
+    pixel = <int>[
+      data!.getUint8(offset),
+      data.getUint8(offset + 1),
+      data.getUint8(offset + 2),
+      data.getUint8(offset + 3),
+    ];
+  });
+  return pixel;
+}
+
+/// The opaque RGBA bytes of [color] at 8-bit precision.
+List<int> _rgba(Color color) => <int>[
+  (color.r * 255).round(),
+  (color.g * 255).round(),
+  (color.b * 255).round(),
+  255,
+];
+
+/// The settings card (`Payout day` / `Weekly base` / `Coin value`).
+Finder _settingsCard() => find
+    .ancestor(of: find.text('Payout day'), matching: find.byType(NestCard))
+    .first;
+
+/// Maya's 32px avatar circle (the first child of her weekly-base row).
+Finder _mayaAvatar() =>
+    find.ancestor(of: find.text('M'), matching: find.byType(NestAvatar)).first;
+
+/// The 40x40 `coinTint` tile in the coin-value row.
+Finder _coinTile() => find
+    .ancestor(
+      of: find.byWidgetPredicate(
+        (widget) =>
+            widget is NestIcon && widget.assetName == NestIcons.poundCoin,
+      ),
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is Container &&
+            widget.constraints?.maxWidth == 40 &&
+            widget.constraints?.maxHeight == 40,
+      ),
+    )
+    .first;
 
 void main() {
   group('P06 setup — copy and theming', () {
@@ -613,6 +723,650 @@ void main() {
       );
       expect(continueSize.height, greaterThanOrEqualTo(44));
       expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the back button is a labelled 44dp icon button', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpSetup(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      final back = find.bySemanticsLabel('Back');
+      expect(back, findsOneWidget);
+      expect(tester.getSize(back).width, NestDevice.tapParent);
+      expect(tester.getSize(back).height, NestDevice.tapParent);
+      final data = tester.getSemantics(back).getSemanticsData();
+      expect(data.flagsCollection.isButton, isTrue);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('every tappable on the screen is labelled and 44dp+', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpSetup(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      // The screen's complete set of controls: back, three money-style
+      // cards, seven day cells, four stepper buttons, Continue. Nothing
+      // else on the screen may take a tap.
+      final controls = <({String label, Finder finder, double minHeight})>[
+        (label: 'Back', finder: find.bySemanticsLabel('Back'), minHeight: 44),
+        for (final option in const <(String, String, String)>[
+          (
+            'Weekly amount, A set amount every week',
+            'p06_option_weekly',
+            'Weekly amount, A set amount every week',
+          ),
+          (
+            'Earn per quest, Coins turn into pence at payout',
+            'p06_option_per_quest',
+            'Earn per quest, Coins turn into pence at payout',
+          ),
+          (
+            'Both, Weekly base + bonus for extra quests',
+            'p06_option_both',
+            'Both, Weekly base + bonus for extra quests',
+          ),
+        ])
+          (
+            label: option.$1,
+            finder: find.bySemanticsLabel(option.$3),
+            minHeight: NestDevice.tapParent,
+          ),
+        for (var day = 1; day <= 7; day++)
+          (
+            label: PocketMoneySetupView.dayLabels[day - 1],
+            finder: find.bySemanticsLabel(
+              PocketMoneySetupView.dayLabels[day - 1],
+            ),
+            minHeight: NestDevice.tapParent,
+          ),
+        for (final name in const <String>['Maya', 'Leo'])
+          for (final verb in const <String>['Less', 'More'])
+            (
+              label: '$verb weekly pocket money for $name',
+              finder: find.bySemanticsLabel(
+                RegExp('$verb weekly pocket money for $name'),
+              ),
+              minHeight: NestDevice.tapParent,
+            ),
+        (
+          label: 'Continue',
+          finder: find.bySemanticsLabel('Continue'),
+          minHeight: NestDevice.tapParent,
+        ),
+      ];
+
+      expect(controls.length, 16);
+      for (final control in controls) {
+        expect(
+          control.finder,
+          findsOneWidget,
+          reason:
+              'the control "${control.label}" must expose one labelled '
+              'semantics node',
+        );
+        final size = tester.getSize(control.finder);
+        expect(
+          size.height,
+          greaterThanOrEqualTo(control.minHeight),
+          reason:
+              '"${control.label}" is ${size.height} tall — parent mode '
+              'needs a ${NestDevice.tapParent}dp minimum',
+        );
+        final data = tester.getSemantics(control.finder).getSemanticsData();
+        expect(
+          data.flagsCollection.isButton,
+          isTrue,
+          reason: '"${control.label}" must announce as a button',
+        );
+      }
+      // Uniqueness: the day's Mon..Sun labels must not also match a longer
+      // label (e.g. 'Mon' inside the 'Payout day' group label).
+      for (final day in PocketMoneySetupView.dayLabels) {
+        expect(
+          find.bySemanticsLabel(RegExp('^$day\$')),
+          findsOneWidget,
+          reason: 'each day chip is announced exactly once',
+        );
+      }
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the decorative coin icon is not announced', (tester) async {
+      await setUpTestScope();
+      await _pumpSetup(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      // The 40px coin tile is `aria-hidden` in the HTML: the row announces
+      // "Coin value" + the value, never a bare icon.
+      final coinIcon = find.byWidgetPredicate(
+        (widget) =>
+            widget is NestIcon && widget.assetName == NestIcons.poundCoin,
+      );
+      expect(coinIcon, findsOneWidget);
+      expect(tester.widget<NestIcon>(coinIcon).semanticLabel, isNull);
+      expect(
+        find.ancestor(of: coinIcon, matching: find.byType(ExcludeSemantics)),
+        findsWidgets,
+        reason: 'the icon must sit inside an ExcludeSemantics wrapper',
+      );
+      expect(
+        find.ancestor(of: coinIcon, matching: find.byType(NestBottomCta)),
+        findsNothing,
+      );
+
+      await disposeApp(tester);
+    });
+    testWidgets('two quick + taps add 50p each (no lost update)', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpSetup(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      // Two taps, no frame in between. NOTE: `tester.tap` drains the microtask
+      // queue between gestures, so the first Drift write lands before the
+      // second event is dispatched and this passes. The same-tick race (two
+      // events in ONE event-loop turn) is a real defect and is pinned by the
+      // skipped P06-BUG-01 proof in `p06_bugs_test.dart`; this test is the
+      // user-level guard that must keep passing once the bloc is fixed.
+      final more = find.bySemanticsLabel(
+        RegExp('More weekly pocket money for Maya'),
+      );
+      await tester.tap(more);
+      await tester.tap(more);
+      await _settle(tester);
+
+      expect(
+        find.text('£4.00'),
+        findsOneWidget,
+        reason:
+            'each tap must add one 50p step — two taps from £3.00 are '
+            '£4.00, not £3.50',
+      );
+      expect(find.text('£3.50'), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Owner rule — BOTTOM EDGE: the CTA surface must run to the physical edge.
+  // -------------------------------------------------------------------------
+  group('P06 setup — owner rule: bottom edge', () {
+    for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      final themeName = theme == ThemeMode.light ? 'light' : 'dark';
+      for (final bottomInset in const <double>[0, 34]) {
+        testWidgets(
+          '$themeName: the panel runs to the edge (OS inset $bottomInset)',
+          (tester) async {
+            await setUpTestScope();
+            await _pumpSetupForPixels(
+              tester,
+              theme: theme,
+              surface: const Size(390, 844),
+              bottomInset: bottomInset,
+            );
+
+            final bar = tester.getRect(find.byType(NestBottomCta));
+            expect(
+              bar.bottom,
+              moreOrLessEquals(844, epsilon: 0.01),
+              reason:
+                  'the panel must end at the physical screen edge; ending '
+                  'it at ${bar.bottom} exposes page colour below the bar',
+            );
+            expect(bar.left, 0);
+            expect(bar.right, moreOrLessEquals(390, epsilon: 0.01));
+
+            final tokens = tester.element(find.byType(NestBottomCta)).nest;
+            expect(
+              tokens.paper,
+              isNot(tokens.surface),
+              reason:
+                  'the probe must discriminate: page colour and bar '
+                  'surface differ, so a strip below the bar cannot pass',
+            );
+            final edgePixel = await _pixelAt(tester, 195, 843);
+            expect(
+              edgePixel,
+              _rgba(tokens.surface),
+              reason:
+                  'the strip below the panel (y=843) must be the panel '
+                  'surface ${_rgba(tokens.surface)}; the scaffold paper '
+                  '${_rgba(tokens.paper)} must not show through there',
+            );
+
+            await disposeApp(tester);
+          },
+        );
+      }
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Owner rule — ALIGNMENT: 20px gutters, cards and bar on the same edges.
+  // -------------------------------------------------------------------------
+  group('P06 setup — owner rule: alignment', () {
+    for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      for (final width in const <int>[320, 390, 430]) {
+        final themeName = theme == ThemeMode.light ? 'light' : 'dark';
+        testWidgets('$themeName ${width}dp: one 20px gutter on every edge', (
+          tester,
+        ) async {
+          await setUpTestScope();
+          await _pumpSetup(
+            tester,
+            theme: theme,
+            surface: Size(width.toDouble(), 844),
+            textScale: 1,
+          );
+
+          const gutter = NestSpacing.padSide;
+          final edge = width.toDouble() - gutter;
+
+          // The H1 and every card share the 20px gutter.
+          expect(
+            tester
+                .getTopLeft(
+                  find.text(
+                    'How does pocket money work in your '
+                    'house?',
+                  ),
+                )
+                .dx,
+            moreOrLessEquals(gutter, epsilon: 0.01),
+          );
+          for (final key in const <ValueKey<String>>[
+            ValueKey('p06_option_weekly'),
+            ValueKey('p06_option_per_quest'),
+            ValueKey('p06_option_both'),
+          ]) {
+            final rect = tester.getRect(find.byKey(key));
+            expect(rect.left, moreOrLessEquals(gutter, epsilon: 0.01));
+            expect(rect.right, moreOrLessEquals(edge, epsilon: 0.01));
+          }
+
+          final card = tester.getRect(_settingsCard());
+          expect(card.left, moreOrLessEquals(gutter, epsilon: 0.01));
+          expect(card.right, moreOrLessEquals(edge, epsilon: 0.01));
+
+          // The CTA panel is full-bleed; its button shares the same gutter.
+          final bar = tester.getRect(find.byType(NestBottomCta));
+          expect(bar.left, 0);
+          expect(bar.right, moreOrLessEquals(width.toDouble(), epsilon: 0.01));
+          final cta = tester.getRect(
+            find.byKey(const ValueKey('p06_continue')),
+          );
+          expect(cta.left, moreOrLessEquals(gutter, epsilon: 0.01));
+          expect(cta.right, moreOrLessEquals(edge, epsilon: 0.01));
+
+          // Inside the settings card every row starts on one inner edge
+          // (the card pads its content by s4; the dividers stay full-bleed).
+          final inner = card.left + NestSpacing.s4;
+          for (final finder in <Finder>[
+            find.text('Payout day'),
+            find.byKey(const ValueKey('p06_day_1')),
+            find.text('Weekly base'),
+            _coinTile(),
+            _mayaAvatar(),
+          ]) {
+            expect(
+              tester.getTopLeft(finder).dx,
+              moreOrLessEquals(inner, epsilon: 0.01),
+              reason: 'every settings row must start on the same inner edge',
+            );
+          }
+          // The names sit one avatar in (s32 avatar + s3 gap), and the coin
+          // value one tile in — the same rhythm on both rows.
+          expect(
+            tester.getTopLeft(find.text('Maya')).dx,
+            moreOrLessEquals(inner + 32 + NestSpacing.s3, epsilon: 0.01),
+          );
+          expect(
+            tester.getTopLeft(find.text('Coin value')).dx,
+            moreOrLessEquals(inner + 40 + NestSpacing.s3, epsilon: 0.01),
+          );
+          // The coin row's trailing value never crosses the right inset, so
+          // it can never push the 40px tile.
+          expect(
+            tester.getRect(find.text('10 coins = 10p')).right,
+            lessThanOrEqualTo(card.right - NestSpacing.s4 + 0.01),
+          );
+
+          expect(tester.takeException(), isNull);
+          await disposeApp(tester);
+        });
+      }
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Orchestrator rulings: child order, data over mocks, parent-only route.
+  // -------------------------------------------------------------------------
+  group('P06 setup — orchestrator rulings', () {
+    for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      final themeName = theme == ThemeMode.light ? 'light' : 'dark';
+      for (final width in const <int>[320, 390]) {
+        testWidgets('$themeName ${width}dp: Maya above Leo, never reversed', (
+          tester,
+        ) async {
+          await setUpTestScope();
+          await _pumpSetup(
+            tester,
+            theme: theme,
+            surface: Size(width.toDouble(), 844),
+            textScale: 1,
+          );
+
+          final maya = tester.getTopLeft(
+            find.byKey(const ValueKey('p06_base_row_maya')),
+          );
+          final leo = tester.getTopLeft(
+            find.byKey(const ValueKey('p06_base_row_leo')),
+          );
+          expect(
+            maya.dy,
+            lessThan(leo.dy),
+            reason: 'children render in the order they were added',
+          );
+          expect(
+            tester.getTopLeft(find.text('Maya')).dy,
+            lessThan(tester.getTopLeft(find.text('Leo')).dy),
+            reason: 'the names stack in that same order',
+          );
+          expect(find.text('£3.00'), findsOneWidget);
+          expect(find.text('£1.50'), findsOneWidget);
+          // The steppers follow the same order: Maya's sits above Leo's.
+          expect(
+            tester
+                .getTopLeft(
+                  find.bySemanticsLabel(
+                    RegExp('Less weekly pocket money for Maya'),
+                  ),
+                )
+                .dy,
+            lessThan(
+              tester
+                  .getTopLeft(
+                    find.bySemanticsLabel(
+                      RegExp('Less weekly pocket money for Leo'),
+                    ),
+                  )
+                  .dy,
+            ),
+          );
+          // Avatar initials follow the same order (Maya lilac M, Leo peach L).
+          expect(find.text('M'), findsOneWidget);
+          expect(find.text('L'), findsOneWidget);
+          expect(tester.takeException(), isNull);
+
+          await disposeApp(tester);
+        });
+      }
+    }
+
+    testWidgets('the coin value string follows the database, not the design', (
+      tester,
+    ) async {
+      final db = await setUpTestScope();
+      await (db.update(db.families)..where((f) => f.id.equals(Seed.familyId)))
+          .write(const FamiliesCompanion(coinValuePencePerCoin: Value(2)));
+      await GetIt.instance<AppSession>().refresh();
+      await _pumpSetup(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      expect(find.text('10 coins = 20p'), findsOneWidget);
+      expect(find.text('10 coins = 10p'), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the route is parent-only: kid mode lands on the gate', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+      await pumpAppRoute(tester, '/pocket-money-setup');
+
+      expect(currentPath(tester), '/parental-gate');
+      expect(
+        find.text('How does pocket money work in your house?'),
+        findsNothing,
+      );
+
+      await disposeApp(tester);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // States: no fake defaults while loading, Retry recovers, empty is usable.
+  // -------------------------------------------------------------------------
+  group('P06 setup — state recovery', () {
+    testWidgets('loading never flashes a fake money style', (tester) async {
+      final bloc = await _pumpSetupView(
+        tester,
+        repository: _FakePocketMoneyRepository(),
+        theme: ThemeMode.light,
+      );
+      bloc.add(const PocketMoneyLoadRequested());
+      await _settle(tester);
+
+      expect(bloc.state.status, PocketMoneyStatus.loading);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      for (final fake in const <String>[
+        'Weekly amount',
+        'Earn per quest',
+        'Both',
+        '£3.00',
+        '10 coins = 10p',
+      ]) {
+        expect(
+          find.text(fake),
+          findsNothing,
+          reason:
+              'plan §4: no option cards with invented defaults — a flash '
+              'of "Both" before the stream emits would be a lie',
+        );
+      }
+      // The chrome and the CTA stay put so the step never collapses.
+      expect(find.text('Continue'), findsOneWidget);
+      expect(find.byKey(const ValueKey('p06_continue')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    });
+
+    testWidgets('Retry after a failure recovers the loaded screen', (
+      tester,
+    ) async {
+      var subscriptions = 0;
+      final bloc = await _pumpSetupView(
+        tester,
+        repository: _FakePocketMoneyRepository(
+          // Both halves of `combineLatest2` must emit for the bloc to reach
+          // `loaded`; a fake whose ledger stream stays empty would hang in
+          // `loading` (a fake artefact, not a screen behaviour).
+          items: () =>
+              Stream<List<PocketMoneyEntry>>.value(const <PocketMoneyEntry>[]),
+          setup: () {
+            subscriptions++;
+            return subscriptions == 1
+                ? Stream<PocketMoneySetup>.error(Exception('offline'))
+                : Stream<PocketMoneySetup>.value(_demoSetup);
+          },
+        ),
+        theme: ThemeMode.light,
+      );
+      bloc.add(const PocketMoneyLoadRequested());
+      await _settle(tester);
+
+      expect(find.textContaining('offline'), findsOneWidget);
+      expect(find.byKey(const ValueKey('p06_retry')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('p06_retry')));
+      await _settle(tester);
+
+      expect(bloc.state.status, PocketMoneyStatus.loaded);
+      expect(find.textContaining('offline'), findsNothing);
+      expect(find.text('Both'), findsOneWidget);
+      expect(find.text('£3.00'), findsOneWidget);
+      expect(find.text('Coin value'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    });
+
+    testWidgets('the failure body never leaks a half-loaded card', (
+      tester,
+    ) async {
+      final bloc = await _pumpSetupView(
+        tester,
+        repository: _FakePocketMoneyRepository(
+          setup: () => Stream<PocketMoneySetup>.error(Exception('offline')),
+        ),
+        theme: ThemeMode.light,
+      );
+      bloc.add(const PocketMoneyLoadRequested());
+      await _settle(tester);
+
+      expect(find.byKey(const ValueKey('p06_option_both')), findsNothing);
+      expect(find.byKey(const ValueKey('p06_day_6')), findsNothing);
+      expect(find.text('Retry'), findsOneWidget);
+      // Retry is a parent-mode control: same 44dp floor as the rest.
+      expect(
+        tester.getSize(find.byKey(const ValueKey('p06_retry'))).height,
+        greaterThanOrEqualTo(NestDevice.tapParent),
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    });
+
+    testWidgets('Seed.empty: the screen still selects a style and advances', (
+      tester,
+    ) async {
+      final db = await setUpTestScope(seedDemo: false);
+      await Seed.empty(db);
+      await GetIt.instance<AppSession>().refresh();
+      await _pumpSetup(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('p06_option_weekly')));
+      await _settle(tester);
+      final weekly = tester
+          .getSemantics(find.byKey(const ValueKey('p06_option_weekly')))
+          .getSemanticsData();
+      expect(weekly.flagsCollection.isSelected, Tristate.isTrue);
+      expect(currentPath(tester), '/pocket-money-setup');
+
+      await tester.tap(find.byKey(const ValueKey('p06_day_7')));
+      await _settle(tester);
+      expect(find.byKey(const ValueKey('p06_day_7')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('p06_continue')));
+      await _settle(tester);
+      expect(currentPath(tester), '/paywall');
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Navigation: the taps that must NOT navigate, and the two that must.
+  // -------------------------------------------------------------------------
+  group('P06 setup — every tap stays or goes somewhere deliberate', () {
+    testWidgets('mode, day and stepper taps never leave the screen', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpSetup(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('p06_option_weekly')));
+      await _settle(tester);
+      expect(currentPath(tester), '/pocket-money-setup');
+
+      await tester.tap(find.byKey(const ValueKey('p06_day_3')));
+      await _settle(tester);
+      expect(currentPath(tester), '/pocket-money-setup');
+
+      await tester.tap(
+        find.bySemanticsLabel(RegExp('More weekly pocket money for Maya')),
+      );
+      await _settle(tester);
+      expect(find.text('£3.50'), findsOneWidget);
+      expect(currentPath(tester), '/pocket-money-setup');
+
+      // The coin row is display-only: tapping it changes nothing. It lives
+      // below the fold, behind the fixed CTA, so scroll it into view first.
+      await tester.ensureVisible(find.text('Coin value'));
+      await _settle(tester);
+      await tester.tap(find.text('Coin value'));
+      await _settle(tester);
+      expect(find.text('10 coins = 10p'), findsOneWidget);
+      expect(currentPath(tester), '/pocket-money-setup');
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('Continue and Back are the only two exits', (tester) async {
+      await setUpTestScope();
+      await _pumpSetup(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      // Exactly two navigable controls on the screen.
+      expect(find.bySemanticsLabel('Back'), findsOneWidget);
+      expect(find.byKey(const ValueKey('p06_continue')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('p06_continue')));
+      await _settle(tester);
+      expect(currentPath(tester), '/paywall');
 
       await disposeApp(tester);
     });

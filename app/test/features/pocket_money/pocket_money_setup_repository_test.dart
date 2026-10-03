@@ -5,6 +5,7 @@
 // Leo-first of `AppDatabase.watchChildren`). Every setter writes `families`
 // AND the `settings` mirror in one transaction so P16 never diverges.
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/seed.dart';
@@ -74,6 +75,45 @@ void main() {
     });
 
     test(
+      'a child added later lands LAST even when it sorts first alphabetically',
+      () async {
+        await db
+            .into(db.children)
+            .insert(
+              ChildrenCompanion.insert(
+                id: 'anna',
+                familyId: Seed.familyId,
+                nickname: 'Anna',
+                weeklyBasePence: const Value(200),
+              ),
+            );
+
+        final setup = await repository.watchSetup().first;
+        expect(
+          setup.children.map((child) => child.nickname),
+          <String>['Maya', 'Leo', 'Anna'],
+          reason:
+              'orchestrator CHILD ORDER ruling: the order they were added, '
+              'never alphabetical (Anna-first would be the alphabetical read)',
+        );
+      },
+    );
+
+    test('re-emits when the family row changes out of band', () async {
+      final emissions = <PocketMoneySetup>[];
+      final subscription = repository.watchSetup().listen(emissions.add);
+      await pumpEventQueue();
+
+      await (db.update(db.families)..where((f) => f.id.equals(Seed.familyId)))
+          .write(const FamiliesCompanion(coinValuePencePerCoin: Value(2)));
+      await pumpEventQueue();
+
+      expect(emissions.length, greaterThanOrEqualTo(2));
+      expect(emissions.last.coinValuePencePerCoin, 2);
+      await subscription.cancel();
+    });
+
+    test(
       'Seed.empty still emits mode, day and coin with no children',
       () async {
         await Seed.empty(db);
@@ -94,6 +134,42 @@ void main() {
       expect((await familyRow()).pocketMoneyMode, 'per_quest');
       expect((await settingsRow()).pocketMoneyMode, 'per_quest');
       expect((await repository.watchSetup().first).mode, 'per_quest');
+    });
+
+    test('stamps one UTC instant on both rows', () async {
+      final before = DateTime.now().toUtc();
+      await repository.setMode('weekly');
+      final after = DateTime.now().toUtc();
+
+      final family = await familyRow();
+      final settings = await settingsRow();
+      final familyStamp = family.updatedAt!;
+      final settingsStamp = settings.updatedAt!;
+      // NOTE: drift reads `DateTime` columns back in local time, so the UTC
+      // contract belongs to the write site (`DateTime.now().toUtc()` in the
+      // impl); what the repository must guarantee here is that BOTH rows move
+      // to the same fresh instant in one transaction.
+      expect(familyStamp, settingsStamp);
+      expect(
+        familyStamp.toUtc().isBefore(
+          before.subtract(const Duration(seconds: 1)),
+        ),
+        isFalse,
+        reason: 'the stamp must be written now, not left at the seed value',
+      );
+      expect(
+        familyStamp.toUtc().isAfter(after.add(const Duration(seconds: 1))),
+        isFalse,
+      );
+      expect(settings.updatedAtTz, family.updatedAtTz);
+    });
+
+    test('writes both rows with no children (Seed.empty)', () async {
+      await Seed.empty(db);
+      await repository.setMode('weekly');
+
+      expect((await familyRow()).pocketMoneyMode, 'weekly');
+      expect((await settingsRow()).pocketMoneyMode, 'weekly');
     });
 
     test('rejects an unknown mode', () {
@@ -149,6 +225,18 @@ void main() {
         (await repository.watchSetup().first).childById('leo')?.weeklyBasePence,
         0,
       );
+    });
+
+    test('an unknown child id writes nothing and does not throw', () async {
+      await repository.setWeeklyBasePence('nobody', 350);
+
+      final setup = await repository.watchSetup().first;
+      expect(setup.childById('nobody'), isNull);
+      expect(setup.children.map((child) => child.id), <String>['maya', 'leo']);
+      expect(setup.children.map((child) => child.weeklyBasePence), <int>[
+        300,
+        150,
+      ], reason: 'an unknown id must not disturb the real children');
     });
   });
 }

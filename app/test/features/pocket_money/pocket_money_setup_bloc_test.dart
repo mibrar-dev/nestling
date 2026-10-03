@@ -11,6 +11,8 @@ import 'package:get_it/get_it.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/features/pocket_money/data/pocket_money_repository_impl.dart';
+import 'package:nestling/features/pocket_money/domain/entities/owed_summary.dart';
+import 'package:nestling/features/pocket_money/domain/entities/pocket_money_entry.dart';
 import 'package:nestling/features/pocket_money/domain/entities/pocket_money_setup.dart';
 import 'package:nestling/features/pocket_money/domain/pocket_money_repository.dart';
 import 'package:nestling/features/pocket_money/presentation/bloc/pocket_money_bloc.dart';
@@ -40,6 +42,99 @@ const PocketMoneySetup _demoSetup = PocketMoneySetup(
     ),
   ],
 );
+
+/// Records every write and can be told to fail, so the bloc's error and
+/// guard paths are reachable without a broken database. Streams are built by
+/// factories (a Drift stream is single-subscription, and Retry re-listens).
+class _RecordingRepository implements PocketMoneyRepository {
+  _RecordingRepository({
+    this.failFirstSetupStream = false,
+    this.throwOnWrite = true,
+  });
+
+  /// The first `watchSetup()` errors (Retry must recover on the second).
+  final bool failFirstSetupStream;
+
+  /// Every setter throws — the failure path. Off for the guard tests, which
+  /// only care that the write reached the repository at all.
+  final bool throwOnWrite;
+
+  final List<String> modeWrites = <String>[];
+  final List<int> payoutDayWrites = <int>[];
+  final List<(String, int)> weeklyBaseWrites = <(String, int)>[];
+
+  int _setupSubscriptions = 0;
+
+  @override
+  Future<List<PocketMoneyEntry>> getItems() => watchItems().first;
+
+  @override
+  Stream<List<PocketMoneyEntry>> watchItems() =>
+      Stream<List<PocketMoneyEntry>>.value(const <PocketMoneyEntry>[]);
+
+  @override
+  Stream<List<PocketMoneyEntry>> watchLedger(String childId) => watchItems();
+
+  @override
+  Future<OwedSummary> owed(String childId) => watchOwed(childId).first;
+
+  @override
+  Stream<OwedSummary> watchOwed(String childId) => Stream<OwedSummary>.value(
+    OwedSummary(childId: childId, totalPence: 0, basePence: 0, questsPence: 0),
+  );
+
+  @override
+  Future<void> addMoney({
+    required String childId,
+    required int amountPence,
+    required String note,
+  }) async {}
+
+  @override
+  Future<void> recordSpending({
+    required String childId,
+    required int amountPence,
+    required String note,
+  }) async {}
+
+  @override
+  Future<void> recordPayout({
+    required String childId,
+    required int amountPence,
+    int savingsMovePence = 0,
+    String? goalId,
+  }) async {}
+
+  @override
+  Stream<PocketMoneySetup> watchSetup() {
+    _setupSubscriptions++;
+    if (failFirstSetupStream && _setupSubscriptions == 1) {
+      return Stream<PocketMoneySetup>.error(
+        StateError('stream is down'),
+        StackTrace.current,
+      );
+    }
+    return Stream<PocketMoneySetup>.value(_demoSetup);
+  }
+
+  @override
+  Future<void> setMode(String mode) async {
+    modeWrites.add(mode);
+    if (throwOnWrite) throw Exception('disk is full');
+  }
+
+  @override
+  Future<void> setPayoutDay(int day) async {
+    payoutDayWrites.add(day);
+    if (throwOnWrite) throw Exception('disk is full');
+  }
+
+  @override
+  Future<void> setWeeklyBasePence(String childId, int pence) async {
+    weeklyBaseWrites.add((childId, pence));
+    if (throwOnWrite) throw Exception('disk is full');
+  }
+}
 
 void main() {
   group('PocketMoneyState', () {
@@ -303,5 +398,198 @@ void main() {
       expect(() => repository.setPayoutDay(0), throwsA(isA<AssertionError>()));
       expect(() => repository.setPayoutDay(8), throwsA(isA<AssertionError>()));
     });
+  });
+
+  group('PocketMoneyBloc — failure and guard paths', () {
+    late _RecordingRepository repository;
+
+    // KNOWN DEFECT (P06-BUG-01, pinned by the skipped proof in
+    // `p06_bugs_test.dart` and written up in `docs/screens/P06/6_bugs.md`):
+    // `_onWeeklyBaseStepped` computes `current + delta` from `state.setup`,
+    // which only refreshes when the watch stream re-emits. Two step events
+    // dispatched in ONE event-loop turn (a fast double tap on `+`) therefore
+    // read the same stale base and write the same absolute value twice —
+    // £3.00 +50p +50p lands on 350p, not 400p. Do not "fix" the assertions
+    // below to accept the lost update; fix the bloc.
+    setUp(() {
+      repository = _RecordingRepository();
+    });
+
+    blocTest<PocketMoneyBloc, PocketMoneyState>(
+      'a throwing write lands in failure with the error message',
+      build: () => PocketMoneyBloc(repository: repository),
+      act: (bloc) => bloc.add(const PocketMoneyModeChanged('weekly')),
+      expect: () => <Matcher>[
+        isA<PocketMoneyState>()
+            .having(
+              (state) => state.status,
+              'status',
+              PocketMoneyStatus.failure,
+            )
+            .having(
+              (state) => state.errorMessage,
+              'errorMessage',
+              contains('disk is full'),
+            ),
+      ],
+    );
+
+    blocTest<PocketMoneyBloc, PocketMoneyState>(
+      'a throwing payout-day write lands in failure too',
+      build: () => PocketMoneyBloc(repository: repository),
+      act: (bloc) async {
+        bloc.add(const PocketMoneyLoadRequested());
+        await bloc.stream.firstWhere((state) => state.setup != null);
+        bloc.add(const PocketMoneyPayoutDayChanged(2));
+      },
+      expect: () => <Matcher>[
+        isA<PocketMoneyState>().having(
+          (state) => state.status,
+          'status',
+          PocketMoneyStatus.loading,
+        ),
+        isA<PocketMoneyState>().having(
+          (state) => state.status,
+          'status',
+          PocketMoneyStatus.loaded,
+        ),
+        isA<PocketMoneyState>()
+            .having(
+              (state) => state.status,
+              'status',
+              PocketMoneyStatus.failure,
+            )
+            .having(
+              (state) => state.errorMessage,
+              'errorMessage',
+              contains('disk is full'),
+            ),
+      ],
+    );
+
+    blocTest<PocketMoneyBloc, PocketMoneyState>(
+      'a throwing stepper write lands in failure too',
+      build: () => PocketMoneyBloc(repository: repository),
+      act: (bloc) async {
+        bloc.add(const PocketMoneyLoadRequested());
+        await bloc.stream.firstWhere((state) => state.setup != null);
+        bloc.add(const PocketMoneyWeeklyBaseStepped('maya', 50));
+      },
+      expect: () => <Matcher>[
+        isA<PocketMoneyState>().having(
+          (state) => state.status,
+          'status',
+          PocketMoneyStatus.loading,
+        ),
+        isA<PocketMoneyState>().having(
+          (state) => state.status,
+          'status',
+          PocketMoneyStatus.loaded,
+        ),
+        isA<PocketMoneyState>()
+            .having(
+              (state) => state.status,
+              'status',
+              PocketMoneyStatus.failure,
+            )
+            .having(
+              (state) => state.errorMessage,
+              'errorMessage',
+              contains('disk is full'),
+            ),
+      ],
+    );
+
+    blocTest<PocketMoneyBloc, PocketMoneyState>(
+      'a stream error reaches failure, and Retry re-subscribes to recovery',
+      build: () {
+        repository = _RecordingRepository(failFirstSetupStream: true);
+        return PocketMoneyBloc(repository: repository);
+      },
+      act: (bloc) async {
+        bloc.add(const PocketMoneyLoadRequested());
+        await bloc.stream.firstWhere(
+          (state) => state.status == PocketMoneyStatus.failure,
+        );
+        bloc.add(const PocketMoneyLoadRequested());
+      },
+      expect: () => <Matcher>[
+        isA<PocketMoneyState>().having(
+          (state) => state.status,
+          'status',
+          PocketMoneyStatus.loading,
+        ),
+        isA<PocketMoneyState>()
+            .having(
+              (state) => state.status,
+              'status',
+              PocketMoneyStatus.failure,
+            )
+            .having((state) => state.setup, 'setup', isNull)
+            .having(
+              (state) => state.errorMessage,
+              'errorMessage',
+              contains('stream is down'),
+            ),
+        // Retry: loading again, then the real DB truth — no stuck UI.
+        isA<PocketMoneyState>().having(
+          (state) => state.status,
+          'status',
+          PocketMoneyStatus.loading,
+        ),
+        isA<PocketMoneyState>()
+            .having((state) => state.status, 'status', PocketMoneyStatus.loaded)
+            .having((state) => state.setup, 'setup', _demoSetup),
+      ],
+    );
+
+    blocTest<PocketMoneyBloc, PocketMoneyState>(
+      'a day tap before the first emission still writes (the guard reads '
+      'state.setup, which is null then)',
+      build: () {
+        repository = _RecordingRepository(throwOnWrite: false);
+        return PocketMoneyBloc(repository: repository);
+      },
+      act: (bloc) => bloc.add(const PocketMoneyPayoutDayChanged(7)),
+      expect: () => <Matcher>[],
+      verify: (_) {
+        expect(repository.payoutDayWrites, <int>[7]);
+      },
+    );
+
+    blocTest<PocketMoneyBloc, PocketMoneyState>(
+      'stepping a child that is not in the setup is a silent no-op',
+      build: () {
+        repository = _RecordingRepository(throwOnWrite: false);
+        return PocketMoneyBloc(repository: repository);
+      },
+      act: (bloc) async {
+        bloc.add(const PocketMoneyLoadRequested());
+        await bloc.stream.firstWhere((state) => state.setup != null);
+        bloc.add(const PocketMoneyWeeklyBaseStepped('nobody', 50));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      },
+      expect: () => <Matcher>[
+        isA<PocketMoneyState>().having(
+          (state) => state.status,
+          'status',
+          PocketMoneyStatus.loading,
+        ),
+        isA<PocketMoneyState>().having(
+          (state) => state.status,
+          'status',
+          PocketMoneyStatus.loaded,
+        ),
+      ],
+      verify: (_) {
+        expect(
+          repository.weeklyBaseWrites,
+          <(String, int)>[('nobody', 50)],
+          reason:
+              'the handler reads 0 for an unknown child and still calls '
+              'the repository, which updates no row — no error, no emission',
+        );
+      },
+    );
   });
 }
