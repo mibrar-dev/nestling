@@ -83,21 +83,23 @@ class NestChip extends StatelessWidget {
     );
 
     const visualPadding = EdgeInsets.symmetric(horizontal: NestSpacing.gap14);
-    // The decorated pill is exactly 32 high. `DecoratedBox` sizes to its
-    // child and paints the 1.5 border inside the box — unlike `Container`,
+    // The decorated pill is exactly 32 high and text width + 28 wide
+    // (`.chip`: height 32, padding `0 14px`, `SPACING_SPEC` §6). The padding
+    // sits INSIDE the `DecoratedBox` so the background and the 1.5 px border
+    // paint the full pill, not just the text. `DecoratedBox` sizes to its
+    // child and paints the border inside the box — unlike `Container`,
     // which folds a `BoxDecoration` border into its size (that was the old
     // 35 px pill: 32 content + the border on each side). Every box below
     // shrink-wraps (no `Center`/`Align`: those take the full run width and
-    // would force one chip per `Wrap` row).
+    // would force one chip per `Wrap` row). There is deliberately no
+    // `minWidth: 44` on the pill itself: CSS sets no min-width on `.chip`,
+    // so a pill narrower than 44 stays narrow visually and the 44 px minimum
+    // tap area comes from [_ExpandedHitBox] (interactive branch), which
+    // widens the hit test without changing layout.
     Widget pill() {
-      return ConstrainedBox(
-        // Narrow pills (e.g. `13+`) keep a 44 minimum width, matching the
-        // day-chip minimum in `SPACING_SPEC` §6.
-        constraints: const BoxConstraints(minWidth: NestDevice.tapParent),
-        child: Padding(
-          padding: visualPadding,
-          child: DecoratedBox(decoration: decoration, child: content),
-        ),
+      return DecoratedBox(
+        decoration: decoration,
+        child: Padding(padding: visualPadding, child: content),
       );
     }
 
