@@ -106,9 +106,11 @@ void main() {
       final decoration = tester
           .widget<TextField>(find.byType(TextField))
           .decoration!;
+      // Shared batch 5: default is 12 px horizontal (12 + 4 px editable inset
+      // + 1 px border = 17 from the field edge) with 14 px vertical.
       expect(
         decoration.contentPadding,
-        const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       );
       expect(find.text('Email'), findsOneWidget);
       expect(find.text('Children never need an email.'), findsOneWidget);

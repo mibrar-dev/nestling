@@ -151,13 +151,16 @@ void main() {
   });
 
   group('NestToggle', () {
-    testWidgets('51x31 track inside a 44 hit area', (tester) async {
+    testWidgets('51x31 track is the laid-out box (44 hit area overhangs)', (
+      tester,
+    ) async {
       await pumpBothModes(
         tester,
         NestToggle(value: true, semanticLabel: 'Approvals', onChanged: (_) {}),
       );
-      final hit = tester.getSize(find.byType(NestToggle));
-      expect(hit.height, greaterThanOrEqualTo(44));
+      // Shared batch 5: the track IS the box (51x31); the 59x44 tap area
+      // overhangs via hit slop (like NestChip) and never shifts the track.
+      expect(tester.getSize(find.byType(NestToggle)), const Size(51, 31));
       final track = tester.getSize(find.byType(AnimatedContainer));
       expect(track.width, 51);
       expect(track.height, 31);
