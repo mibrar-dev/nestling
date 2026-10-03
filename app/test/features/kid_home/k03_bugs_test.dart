@@ -42,8 +42,9 @@
 // - K03-BUG-14 (FIXED, iteration 8): the same mode rendered a SQUARE nest, so
 //   the pet block was 276 px vs the design's 236 px and the lower stack
 //   shifted down; `nestHeight` makes the box height expressible. Proof runs;
-//   `kid_home_geometry_test.dart` pins hearts 448 / first card 559 at real
-//   fonts.
+//   `kid_home_geometry_test.dart` pins hearts 438 / first card 549 at real
+//   fonts (shared/speech_tail moved the rows up ~9 px: the tail is now CSS
+//   `::after` overflow).
 //
 // Iteration-7 work:
 // - Landed iteration-7 UI work probed: `NestBalancedText` title at the 20 px
