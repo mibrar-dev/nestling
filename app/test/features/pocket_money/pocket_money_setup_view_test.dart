@@ -13,6 +13,7 @@ import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:nestling/app/app.dart';
@@ -250,6 +251,21 @@ Future<void> _settle(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 200));
 }
 
+/// The `.chip.day` pill inside day cell `n` — the 32-high, full-width
+/// `SizedBox` that wraps the pill's paint. The cell around it is the 44dp
+/// tap box, so taps are measured against the pill, not the cell.
+Finder dayPill(int day) => find
+    .descendant(
+      of: find.byKey(ValueKey('p06_day_$day')),
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is SizedBox &&
+            widget.height == NestSpacing.s8 &&
+            widget.width == double.infinity,
+      ),
+    )
+    .first;
+
 /// The `Seed.demo` setup, used where the fake repository has to hand the bloc
 /// a real value (the retry-recovery path).
 const PocketMoneySetup _demoSetup = PocketMoneySetup(
@@ -342,15 +358,12 @@ Finder _mayaAvatar() =>
 /// The 40x40 `coinTint` tile in the coin-value row.
 Finder _coinTile() => find
     .ancestor(
-      of: find.byWidgetPredicate(
-        (widget) =>
-            widget is NestIcon && widget.assetName == NestIcons.poundCoin,
-      ),
+      of: find.byType(SvgPicture),
       matching: find.byWidgetPredicate(
         (widget) =>
             widget is Container &&
-            widget.constraints?.maxWidth == 40 &&
-            widget.constraints?.maxHeight == 40,
+            widget.constraints?.maxWidth == NestSpacing.s10 &&
+            widget.constraints?.maxHeight == NestSpacing.s10,
       ),
     )
     .first;
@@ -769,11 +782,11 @@ void main() {
         final size = tester.getSize(find.byKey(key));
         expect(size.height, greaterThanOrEqualTo(44));
       }
-      // Day cells keep a 44dp-high tap box; width is ≥44 at 390 (breakout
-      // row) and pinned by the scroll branch below that.
+      // Day cells are 44dp tall tap boxes; the design's 32dp pill is painted
+      // inside them (asserted by the day-row geometry group below).
       for (var day = 1; day <= 7; day++) {
         final size = tester.getSize(find.byKey(ValueKey('p06_day_$day')));
-        expect(size.height, 44);
+        expect(size.height, NestDevice.tapParent);
       }
       for (final label in <String>[
         'Less weekly pocket money for Maya',
@@ -806,13 +819,91 @@ void main() {
 
       for (var day = 1; day <= 7; day++) {
         final size = tester.getSize(find.byKey(ValueKey('p06_day_$day')));
-        expect(size.height, 44);
+        expect(size.height, NestDevice.tapParent);
       }
       final continueSize = tester.getSize(
         find.byKey(const ValueKey('p06_continue')),
       );
       expect(continueSize.height, greaterThanOrEqualTo(44));
       expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('chip row: every chip stays inside the card padding', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpSetup(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      final card = tester.getRect(_settingsCard());
+      const inset = NestSpacing.s4;
+      for (var day = 1; day <= 7; day++) {
+        final rect = tester.getRect(find.byKey(ValueKey('p06_day_$day')));
+        expect(
+          rect.left,
+          greaterThanOrEqualTo(card.left + inset - 0.01),
+          reason: 'day $day must start inside the card padding',
+        );
+        expect(
+          rect.right,
+          lessThanOrEqualTo(card.right - inset + 0.01),
+          reason: 'day $day must end inside the card padding',
+        );
+        expect(
+          rect.height,
+          NestDevice.tapParent,
+          reason:
+              'the day cell is the 44dp tap box; its pill paints the design '
+              '32 (asserted in p06_bugs_test.dart P06-BUG-03)',
+        );
+      }
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('chip row: taps 5 px above and below a chip select it', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpSetup(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+        textScale: 1,
+      );
+
+      Future<void> tapAt(Offset offset) async {
+        await tester.tapAt(offset);
+        await _settle(tester);
+      }
+
+      final wed = tester.getRect(dayPill(3));
+
+      // 5 px above the pill's top edge — inside the 44dp cell tap box.
+      await tapAt(Offset(wed.center.dx, wed.top - 5));
+      var wedData = tester
+          .getSemantics(find.byKey(const ValueKey('p06_day_3')))
+          .getSemanticsData();
+      expect(wedData.flagsCollection.isSelected, Tristate.isTrue);
+
+      // Back to Sat directly, then 5 px below the chip's bottom edge must
+      // land back on Wed again.
+      await tapAt(tester.getRect(dayPill(6)).center);
+      wedData = tester
+          .getSemantics(find.byKey(const ValueKey('p06_day_3')))
+          .getSemanticsData();
+      expect(wedData.flagsCollection.isSelected, Tristate.isFalse);
+      await tapAt(Offset(wed.center.dx, wed.bottom + 5));
+      wedData = tester
+          .getSemantics(find.byKey(const ValueKey('p06_day_3')))
+          .getSemanticsData();
+      expect(wedData.flagsCollection.isSelected, Tristate.isTrue);
 
       await disposeApp(tester);
     });
@@ -947,13 +1038,17 @@ void main() {
       );
 
       // The 40px coin tile is `aria-hidden` in the HTML: the row announces
-      // "Coin value" + the value, never a bare icon.
+      // "Coin value" + the value, never a bare icon. The screen shows two
+      // SVGs — the nav back chevron (its own labelled button) and the gold
+      // coin glyph in the tile.
       final coinIcon = find.byWidgetPredicate(
         (widget) =>
-            widget is NestIcon && widget.assetName == NestIcons.poundCoin,
+            widget is SvgPicture &&
+            widget.bytesLoader is SvgAssetLoader &&
+            (widget.bytesLoader as SvgAssetLoader).assetName ==
+                NestlingIllustrations.coin,
       );
       expect(coinIcon, findsOneWidget);
-      expect(tester.widget<NestIcon>(coinIcon).semanticLabel, isNull);
       expect(
         find.ancestor(of: coinIcon, matching: find.byType(ExcludeSemantics)),
         findsWidgets,
@@ -1047,21 +1142,7 @@ void main() {
   // write-error path (P06-BUG-05).
   // -------------------------------------------------------------------------
   group('P06 setup — day row geometry (P06-BUG-03/04)', () {
-    /// The `.chip.day` pill inside day cell [n] — a 32-high, full-width
-    /// `SizedBox` wrapping the pill's `DecoratedBox`.
-    Finder dayPill(int day) => find
-        .descendant(
-          of: find.byKey(ValueKey('p06_day_$day')),
-          matching: find.byWidgetPredicate(
-            (widget) =>
-                widget is SizedBox &&
-                widget.height == NestSpacing.s8 &&
-                widget.width == double.infinity,
-          ),
-        )
-        .first;
-
-    testWidgets('every day cell is at least 44x44 and paints a 32dp pill', (
+    testWidgets('every day cell paints a 32dp pill at all widths', (
       tester,
     ) async {
       for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
@@ -1076,13 +1157,9 @@ void main() {
 
           for (var day = 1; day <= 7; day++) {
             final size = tester.getSize(find.byKey(ValueKey('p06_day_$day')));
-            expect(
-              size.width,
-              greaterThanOrEqualTo(NestDevice.tapParent),
-              reason:
-                  'day $day is ${size.width} wide at ${width}dp — the parent '
-                  'minimum is ${NestDevice.tapParent}dp on both axes',
-            );
+            // The cell is the 44dp parent tap box; the design's 32px pill
+            // is painted inside it and `NestChipWrap` also forwards the
+            // 6px gaps between pills.
             expect(size.height, NestDevice.tapParent);
 
             // The pill is the design's 32-high `.chip.day`, not a
@@ -1144,7 +1221,7 @@ void main() {
       }
     });
 
-    testWidgets('at 320 the row scrolls and Sun is still reachable', (
+    testWidgets('at 320 all seven chips fit without a scroll view', (
       tester,
     ) async {
       await setUpTestScope();
@@ -1156,19 +1233,12 @@ void main() {
       );
 
       final sun = find.byKey(const ValueKey('p06_day_7'));
-      final dayRow = find.byWidgetPredicate(
+      final scrollViews = find.byWidgetPredicate(
         (widget) =>
             widget is SingleChildScrollView &&
             widget.scrollDirection == Axis.horizontal,
       );
-      expect(dayRow, findsOneWidget);
-
-      // Sunday starts off-viewport at 320dp; drag the day row left and tap it.
-      expect(tester.getRect(sun).right, greaterThan(320));
-      await tester.ensureVisible(find.byKey(const ValueKey('p06_day_1')));
-      await _settle(tester);
-      await tester.drag(dayRow, const Offset(-120, 0));
-      await _settle(tester);
+      expect(scrollViews, findsNothing);
 
       expect(tester.getRect(sun).right, lessThanOrEqualTo(320.01));
       await tester.tap(sun);
@@ -1471,17 +1541,17 @@ void main() {
           expect(cta.left, moreOrLessEquals(gutter, epsilon: 0.01));
           expect(cta.right, moreOrLessEquals(edge, epsilon: 0.01));
 
-          // Inside the settings card every row starts on one inner edge
-          // (the card pads its content by s4; the dividers stay full-bleed).
-          // The day row is the one exception: it breaks out of the card's
-          // 16px inset down to a gap2 inset so each of its 7 cells can be
-          // ≥ 44dp wide at 390 (P06-BUG-04).
+          // Inside the settings card every row — including the payout-day
+          // chip row, which starts on the same 16 px inset as the label
+          // and ends at the matching right inset — shares one inner edge
+          // (the dividers stay full-bleed).
           final inner = card.left + NestSpacing.s4;
           for (final finder in <Finder>[
             find.text('Payout day'),
             find.text('Weekly base'),
             _coinTile(),
             _mayaAvatar(),
+            find.byKey(const ValueKey('p06_day_1')),
           ]) {
             expect(
               tester.getTopLeft(finder).dx,
@@ -1489,11 +1559,6 @@ void main() {
               reason: 'every settings row must start on the same inner edge',
             );
           }
-          expect(
-            tester.getTopLeft(find.byKey(const ValueKey('p06_day_1'))).dx,
-            moreOrLessEquals(card.left + NestSpacing.gap2, epsilon: 0.01),
-            reason: 'the day row breaks out of the 16px card inset to gap2',
-          );
           // The names sit one avatar in (s32 avatar + s3 gap), and the coin
           // value one tile in — the same rhythm on both rows.
           expect(

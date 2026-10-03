@@ -47,11 +47,13 @@ class PocketMoneyBloc extends Bloc<PocketMoneyEvent, PocketMoneyState> {
         _repository.watchSetup(),
       ).transform(_closeOnError),
       onData: (parts) {
-        // The stream has caught up: drop the unconfirmed day request, forget
-        // confirmed step requests, and clear any stale write error
-        // (P06-BUG-02, P06-BUG-01, P06-BUG-06).
-        _pendingDay = null;
+        // The stream has caught up: forget confirmed step requests and clear
+        // any stale write error (P06-BUG-01, P06-BUG-06). The unconfirmed day
+        // request is dropped only once the stream confirms it — an unrelated
+        // re-emission still reporting the old day must not swallow a
+        // correction tap (P06-BUG-09).
         final setup = parts[1] as PocketMoneySetup;
+        if (setup.payoutDay == _pendingDay) _pendingDay = null;
         for (final child in setup.children) {
           if (_requestedBase[child.id] == child.weeklyBasePence) {
             _requestedBase.remove(child.id);

@@ -11,3 +11,6 @@
 4. Coin value icon: match the design's gold coin glyph tile, not a £ symbol. Use the existing coin asset in app/assets (NestIcons/coin) if there is one; otherwise write a SHARED_REQUEST.
 5. Option cards are ~3–4 px taller than the design each: match the HTML padding and line heights so "Payout day" lands at the design y.
 6. (04:31) Payout-day chips: once main contains `NestChipWrap` (shared/chip_wrap_hit_area), use it for the chip row so each chip keeps its 44 px tap target. Test this with taps 5 px above and below a chip.
+
+## UPDATE (05:36) — the UI builder for this iteration hit Fledge's rate limit and did not finish
+Integrator: there is no fresh 2b_build_ui report this iteration. YOU must also make the UI fixes in the current FIXES list and the notes above. Check the views on disk: the UI builder may have left partial edits, so keep the correct ones and finish the rest.

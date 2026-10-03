@@ -61,6 +61,19 @@ void main() {
       expect(await repository.watchSetup().first, _demoSetup);
     });
 
+    test(
+      'Seed.onboardingKids emits the same setup as demo (P06 shoot seed)',
+      () async {
+        // ORCHESTRATOR_NOTES iteration 4: P06 shoots with `onboarding_kids`
+        // (family + Sarah + Maya/Leo, no ledger). The setup comes from the
+        // same DB rows as demo, so the weekly-base card lists Maya £3.00
+        // then Leo £1.50 with no hard-coded view defaults.
+        await Seed.onboardingKids(db);
+
+        expect(await repository.watchSetup().first, _demoSetup);
+      },
+    );
+
     test('children arrive in insertion order, not alphabetical', () async {
       final setup = await repository.watchSetup().first;
       expect(setup.children.map((child) => child.nickname), <String>[

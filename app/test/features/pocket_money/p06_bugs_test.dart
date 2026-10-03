@@ -324,28 +324,36 @@ void main() {
 
   // -- P06-BUG-04 ---------------------------------------------------------
 
-  testWidgets('P06-BUG-04 (fixed): every day cell is a 44×44 parent tap target '
-      '(390 and 320)', (tester) async {
-    await setUpTestScope();
-    await pumpAppRoute(tester, '/pocket-money-setup');
+  testWidgets(
+    'P06-BUG-04 (fixed): every day cell is a 44×44 parent tap target (390 and 320)',
+    (tester) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/pocket-money-setup');
 
-    for (var day = 1; day <= 7; day++) {
-      final cell = tester.getSize(find.byKey(ValueKey('p06_day_$day')));
-      expect(cell.width, greaterThanOrEqualTo(NestDevice.tapParent));
-      expect(cell.height, greaterThanOrEqualTo(NestDevice.tapParent));
-    }
+      for (var day = 1; day <= 7; day++) {
+        final cell = tester.getSize(find.byKey(ValueKey('p06_day_$day')));
+        expect(cell.width, greaterThanOrEqualTo(NestDevice.tapParent));
+        expect(cell.height, greaterThanOrEqualTo(NestDevice.tapParent));
+      }
 
-    // Narrow screen: the row scrolls horizontally and each cell keeps 44.
-    tester.view.physicalSize = const Size(320 * 3, 844 * 3);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 200));
-    final narrow = tester.getSize(find.byKey(const ValueKey('p06_day_1')));
-    expect(narrow.width, greaterThanOrEqualTo(NestDevice.tapParent));
-    expect(narrow.height, greaterThanOrEqualTo(NestDevice.tapParent));
-    expect(tester.takeException(), isNull);
+      // Narrow screen: the row scrolls horizontally and each cell keeps 44.
+      tester.view.physicalSize = const Size(320 * 3, 844 * 3);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      final narrow = tester.getSize(find.byKey(const ValueKey('p06_day_1')));
+      expect(narrow.width, greaterThanOrEqualTo(NestDevice.tapParent));
+      expect(narrow.height, greaterThanOrEqualTo(NestDevice.tapParent));
+      expect(tester.takeException(), isNull);
 
-    await disposeApp(tester);
-  });
+      await disposeApp(tester);
+    },
+    // SUPERSEDED by ORCHESTRATOR_NOTES iter 4 #2: the 7 chips must sit
+    // inside the 16px card inset, 32px high with even gaps; the ≥44×44
+    // cell demand no longer applies. Taps 5px above/below a chip reach it
+    // via NestChipWrap, and chip-inside-padding is covered by the view
+    // test + P06-BUG-08.
+    skip: true,
+  );
   // FIXED (iteration 3, UI chunk): cell width is clamped to ≥44 and the row
   // breaks out of the card inset (see _DayRow); must stay green. The wider
   // inset is challenged by P06-BUG-08 below.
@@ -485,7 +493,7 @@ void main() {
     expect(firstCellLeft, moreOrLessEquals(labelLeft, epsilon: 1));
 
     await disposeApp(tester);
-  }, skip: true);
+  });
 
   // -- P06-BUG-09 ---------------------------------------------------------
 
@@ -528,12 +536,12 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 200));
 
       // The last tap was Sat, so the day write chain must end on 6.
+      // FIXED (iteration 4, logic chunk): un-skipped, must stay green.
       expect(repository.dayWrites, <int>[7, 6]);
       await bloc.close();
       await setupController.close();
       await itemsController.close();
     },
-    skip: true,
   );
 
   // -- attacks that hold --------------------------------------------------
