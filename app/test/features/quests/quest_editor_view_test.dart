@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:nestling/core/data/app_session.dart';
@@ -464,6 +465,324 @@ void main() {
       expect(tester.getRect(find.byType(NestCard).at(0)).height, 76);
       // `.due` row: 56 + 2x16 padding.
       expect(tester.getRect(find.byType(NestCard).at(2)).height, 88);
+      await disposeApp(tester);
+    });
+
+    // Absolute y, design -> app, measured off the PNG (÷3). Everything above
+    // the assignee row is pinned outright; below it the assertions are
+    // block-to-block deltas, which are the same numbers (the design's pills
+    // sit on one row) but survive the widget-test font, whose fixed-width
+    // glyphs make the pills wrap.
+    testWidgets('vertical positions match the design (UI-verdict ±2px)', (
+      tester,
+    ) async {
+      await pumpAppRoute(tester, QuestsRoutePaths.editor);
+
+      Rect rectOf(Finder finder) => tester.getRect(finder);
+
+      // Sheet starts under the 47px status bar; the `.sheet::before` grabber
+      // sits 8 (sheet padding) + 4 (::before margin) below its top edge.
+      expect(rectOf(find.byType(NestStatusBar)).height, 47);
+      expect(rectOf(find.byType(DecoratedBox).at(0)).top, 47);
+
+      // Header row 80 -> 124, Save pill flush to the 370 gutter.
+      expect(rectOf(find.byType(QuestSavePill)).top, 80);
+      expect(rectOf(find.byType(QuestSavePill)).height, 44);
+      expect(rectOf(find.byType(QuestSavePill)).right, 370);
+      expect(rectOf(find.text('Cancel')).top, 90);
+      expect(rectOf(find.text('New quest')).top, 90);
+
+      // `.field`: label 132, input 156 (52 high, 350 wide, 20 gutter).
+      expect(rectOf(find.text('Quest name')).top, 132);
+      final input = rectOf(find.byType(TextField));
+      expect(input.top, 156);
+      expect(input.height, 52);
+      expect(input.left, NestSpacing.padSide);
+      expect(input.width, 350);
+
+      // `.lbl` "Icon" flush under the field, tiles on the 17.2px grid.
+      expect(rectOf(find.text('Icon')).top, 208);
+      final tiles = <String>[
+        'bed',
+        'dishwasher',
+        'hoover',
+        'book',
+        'bin',
+        'paw',
+      ];
+      for (var i = 0; i < tiles.length; i++) {
+        final tile = rectOf(
+          find.byKey(ValueKey<String>('quest-icon-${tiles[i]}')),
+        );
+        expect(tile.top, 232, reason: '${tiles[i]} top');
+        expect(tile.height, 44, reason: '${tiles[i]} height');
+        expect(
+          tile.left,
+          // `.icons` is `grid-template-columns: repeat(6, 44px)` with
+          // `justify-content: space-between`, so the free 86px splits into
+          // five 17.2px gaps.
+          closeTo(NestSpacing.padSide + i * (44 + (350 - 6 * 44) / 5), 0.05),
+          reason: '${tiles[i]} left',
+        );
+      }
+
+      // `.lbl` "Who's it for?" then the 48-tall pills.
+      expect(rectOf(find.text("Who's it for?")).top, 276);
+      final pill = rectOf(
+        find.byKey(const ValueKey<String>('quest-assignee-maya')),
+      );
+      expect(pill.top, 300);
+      expect(pill.height, 48);
+      expect(pill.left, NestSpacing.padSide);
+
+      // Below the pills: exact block-to-block deltas (design y in brackets).
+      // The design fits Maya/Leo/Anyone on ONE 48-tall row; the widget-test
+      // font's fixed-width glyphs make them wrap, so the chain is anchored on
+      // the last pill's bottom rather than on the row's top (the 16 gap below
+      // the pills is identical either way).
+      final lastPill = rectOf(
+        find.byKey(const ValueKey<String>('quest-assignee-anyone')),
+      );
+      final reward = rectOf(find.byType(NestCard).at(0));
+      expect(reward.top - lastPill.bottom, 16); // [364]
+      expect(reward.height, 76); // 364 -> 440
+      expect(reward.left, NestSpacing.padSide);
+      expect(reward.width, 350);
+
+      final stepper = rectOf(find.byType(NestStepper));
+      expect(stepper.top - reward.top, 16); // 44 inside a 76 card
+      expect(stepper.height, 44);
+      expect(stepper.right, 354);
+
+      final repeats = rectOf(find.text('Repeats'));
+      expect(repeats.top - reward.bottom, 16); // [456]
+      expect(repeats.height, 18);
+
+      final segmented = rectOf(find.byType(NestSegmented<String>));
+      expect(segmented.top - repeats.bottom, 6); // [480]
+      expect(segmented.height, 52);
+      expect(segmented.left, NestSpacing.padSide);
+      expect(segmented.width, 350);
+
+      final days = rectOf(find.byType(NestDayPicker));
+      expect(days.top - segmented.bottom, 8); // [540]
+      expect(days.height, 44);
+      expect(days.left, NestSpacing.padSide);
+      for (var i = 0; i < 7; i++) {
+        final cell = rectOf(find.byKey(ValueKey<int>(i)));
+        expect(cell.top, closeTo(days.top, 0.01), reason: 'day $i top');
+        expect(cell.height, 44, reason: 'day $i height');
+      }
+
+      final approval = rectOf(find.byType(NestCard).at(1));
+      expect(approval.top - days.bottom, 16); // [600]
+      // Design height 72 = 16 + 16/22 title + 13/18 sub + 16. Asserted
+      // against the measured text so it holds whatever the font does (the
+      // widget-test font wraps both lines to two).
+      expect(
+        approval.height,
+        NestSpacing.s4 +
+            rectOf(find.text('Needs my approval')).height +
+            rectOf(find.text('Coins land after your thumbs-up')).height +
+            NestSpacing.s3,
+      );
+      expect(approval.left, NestSpacing.padSide);
+      expect(approval.width, 350);
+
+      final toggle = rectOf(find.byType(NestToggle));
+      expect(toggle.right, 354); // content right edge of the card
+      expect(toggle.height, NestDevice.tapParent);
+
+      final due = rectOf(find.byType(NestCard).at(2));
+      expect(due.top - approval.bottom, 12); // [684]
+      expect(due.height, 88); // 56 row + 2x16 padding
+      expect(due.left, NestSpacing.padSide);
+      expect(due.width, 350);
+      await disposeApp(tester);
+    });
+
+    // Owner rule: the sheet's paper runs to the PHYSICAL bottom edge. A
+    // `--surface-2` strip under the last card (or around the home indicator)
+    // is a UI failure in both themes.
+    testWidgets('paper runs to the physical bottom edge', (tester) async {
+      await pumpAppRoute(tester, QuestsRoutePaths.editor);
+      final sheet = tester.getRect(
+        find.byKey(const ValueKey<String>('quest-editor-sheet')),
+      );
+      expect(sheet.top, 47); // straight under the status bar
+      expect(sheet.left, 0);
+      expect(sheet.width, NestDevice.width);
+      // The sheet is `minHeight: 100%` of the scroll area, so it always
+      // covers the last pixel of the screen. (When the content is taller than
+      // the viewport — the widget-test font makes the assignee pills wrap —
+      // it scrolls past, which still leaves no surface-2 strip on show.)
+      expect(sheet.bottom, greaterThanOrEqualTo(NestDevice.height));
+      expect(
+        tester.getRect(find.byType(SingleChildScrollView)).bottom,
+        NestDevice.height,
+      );
+      await disposeApp(tester);
+    });
+  });
+
+  group('P09 quest editor — accessibility actions', () {
+    setUp(setUpTestScope);
+
+    /// Every interactive control must expose `SemanticsAction.tap` on the one
+    /// node that announces it, and activating that node must move the real
+    /// state (WCAG 4.1.2 — an "is a button" node that cannot be activated is
+    /// the exact failure this guards).
+    SemanticsNode button(String label) => find.semantics
+        .byPredicate(
+          (n) =>
+              n.label == label && n.getSemanticsData().flagsCollection.isButton,
+        )
+        .evaluate()
+        .single;
+
+    /// The semantics tree must be switched on before the assertions, and the
+    /// handle released inside the test body (tear-down runs too late for
+    /// `flutter_test`'s own check).
+    Future<SemanticsHandle> pumpSemantics(WidgetTester tester) async {
+      final handle = tester.ensureSemantics();
+      await pumpAppRoute(tester, QuestsRoutePaths.editor);
+      await tester.pump();
+      return handle;
+    }
+
+    testWidgets('icon tiles expose tap and select through semantics', (
+      tester,
+    ) async {
+      final handle = await pumpSemantics(tester);
+      for (final key in <String>['book', 'bin', 'paw', 'hoover']) {
+        final label =
+            'Icon: ${switch (key) {
+              'book' => 'Book',
+              'bin' => 'Bins',
+              'paw' => 'Paw',
+              _ => 'Hoover',
+            }}';
+        expect(
+          button(label).getSemanticsData().hasAction(SemanticsAction.tap),
+          isTrue,
+          reason: '$label must expose tap',
+        );
+        tester.semantics.performAction(
+          find.semantics.byPredicate(
+            (n) =>
+                n.label == label &&
+                n.getSemanticsData().flagsCollection.isButton,
+          ),
+          SemanticsAction.tap,
+        );
+        await tester.pump();
+        expect(
+          _iconTile(tester, key).selected,
+          isTrue,
+          reason: '$label must select $key',
+        );
+      }
+      handle.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('person pills expose tap and select through semantics', (
+      tester,
+    ) async {
+      final handle = await pumpSemantics(tester);
+      for (final id in <String>['leo', 'anyone', 'maya']) {
+        final node = button(switch (id) {
+          'leo' => 'Leo',
+          'anyone' => 'Anyone',
+          _ => 'Maya',
+        });
+        expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+        node.owner!.performAction(node.id, SemanticsAction.tap);
+        await tester.pump();
+        expect(_personPill(tester, 'quest-assignee-$id').selected, isTrue);
+      }
+      handle.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('repeat options and day cells expose tap', (tester) async {
+      final handle = await pumpSemantics(tester);
+      for (final label in <String>['Once', 'Daily', 'Weekly']) {
+        final node = button(label);
+        expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+        node.owner!.performAction(node.id, SemanticsAction.tap);
+        await tester.pump();
+        expect(
+          tester
+              .widget<NestSegmented<String>>(find.byType(NestSegmented<String>))
+              .value,
+          label.toLowerCase(),
+        );
+      }
+      // Day cell 3 (Thursday) toggles on, then back off.
+      for (var i = 0; i < 2; i++) {
+        final node = tester.getSemantics(find.byKey(const ValueKey<int>(3)));
+        expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+        node.owner!.performAction(node.id, SemanticsAction.tap);
+        await tester.pump();
+        final selected = tester
+            .widget<NestDayPicker>(find.byType(NestDayPicker))
+            .selected;
+        expect(selected.contains(3), i == 0);
+      }
+      handle.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('stepper, toggle and the due row expose tap', (tester) async {
+      final handle = await pumpSemantics(tester);
+      for (final key in <String>['increase', 'decrease']) {
+        final node = tester.getSemantics(find.byKey(ValueKey<String>(key)));
+        expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+        node.owner!.performAction(node.id, SemanticsAction.tap);
+        await tester.pump();
+      }
+      expect(find.text('15'), findsOneWidget);
+
+      final toggle = tester.getSemantics(find.byType(NestToggle));
+      expect(toggle.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+      toggle.owner!.performAction(toggle.id, SemanticsAction.tap);
+      await tester.pump();
+      expect(tester.widget<NestToggle>(find.byType(NestToggle)).value, isFalse);
+
+      final dueRow = tester.getSemantics(find.text('Due by'));
+      expect(dueRow.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+      dueRow.owner!.performAction(dueRow.id, SemanticsAction.tap);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Before bed (7:30pm)'), findsOneWidget);
+      handle.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('Save and Cancel expose tap', (tester) async {
+      final handle = await pumpSemantics(tester);
+      final save = button('Save');
+      expect(save.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+      final cancel = button('Cancel');
+      expect(cancel.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+      cancel.owner!.performAction(cancel.id, SemanticsAction.tap);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('New quest'), findsNothing);
+      handle.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('a blank title takes tap away from Save', (tester) async {
+      final handle = await pumpSemantics(tester);
+      await tester.enterText(find.byType(TextField).first, ' ');
+      await tester.pump();
+      expect(
+        button('Save').getSemanticsData().hasAction(SemanticsAction.tap),
+        isFalse,
+      );
+      handle.dispose();
       await disposeApp(tester);
     });
   });

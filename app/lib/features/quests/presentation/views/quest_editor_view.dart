@@ -434,6 +434,10 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
             child: ConstrainedBox(
               constraints: BoxConstraints(minHeight: constraints.maxHeight),
               child: Container(
+                // Keyed so the bottom-edge owner rule is testable: the paper
+                // sheet must run to the physical bottom of the screen, never
+                // leaving a `--surface-2` strip under it.
+                key: const ValueKey<String>('quest-editor-sheet'),
                 decoration: BoxDecoration(
                   color: tokens.paper,
                   borderRadius: NestRadii.topXl,

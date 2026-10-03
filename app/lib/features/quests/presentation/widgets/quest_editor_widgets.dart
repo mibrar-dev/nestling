@@ -78,6 +78,12 @@ class QuestCancelButton extends StatelessWidget {
     return Semantics(
       button: true,
       label: 'Cancel',
+      // One node per control: the label above owns the announcement and the
+      // inner Text contributes no second copy, so VoiceOver says "Cancel,
+      // button" (not "Cancel, Cancel, button"). `onTap` mirrors the InkWell
+      // because `excludeSemantics` drops every descendant action.
+      excludeSemantics: true,
+      onTap: onPressed,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -126,6 +132,10 @@ class QuestSavePill extends StatelessWidget {
       button: true,
       enabled: enabled,
       label: 'Save',
+      // One node per control (see [QuestCancelButton]); a disabled pill keeps
+      // its label, reports `enabled: false` and exposes no tap action.
+      excludeSemantics: true,
+      onTap: onPressed,
       child: Opacity(
         opacity: enabled ? 1 : 0.45,
         child: Material(
@@ -147,13 +157,11 @@ class QuestSavePill extends StatelessWidget {
                 color: tokens.leaf,
                 borderRadius: NestRadii.allPill,
               ),
-              child: ExcludeSemantics(
-                child: Text(
-                  'Save',
-                  style: NestType.buttonLabel(color: tokens.surface),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+              child: Text(
+                'Save',
+                style: NestType.buttonLabel(color: tokens.surface),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ),
@@ -198,6 +206,11 @@ class QuestIconTile extends StatelessWidget {
       button: true,
       selected: selected,
       label: 'Icon: $label',
+      // One node per tile: the `NestIcon` glyph carries no label, and the
+      // tap action is mirrored here because `excludeSemantics` drops the
+      // InkWell's own.
+      excludeSemantics: true,
+      onTap: onTap,
       child: Material(
         color: selected ? tokens.leafTint : tokens.surface,
         shape: shape,
@@ -208,11 +221,9 @@ class QuestIconTile extends StatelessWidget {
           child: SizedBox.square(
             dimension: NestDevice.tapParent,
             child: Center(
-              child: ExcludeSemantics(
-                child: NestIcon(
-                  icon,
-                  color: selected ? tokens.leafInk : tokens.ink2,
-                ),
+              child: NestIcon(
+                icon,
+                color: selected ? tokens.leafInk : tokens.ink2,
               ),
             ),
           ),
@@ -257,6 +268,11 @@ class QuestPersonPill extends StatelessWidget {
       button: true,
       selected: selected,
       label: label,
+      // One node per pill: the avatar initial and the label would otherwise
+      // both merge into this node's label ("M\nMaya"). `onTap` mirrors the
+      // InkWell because `excludeSemantics` drops the descendant action.
+      excludeSemantics: true,
+      onTap: onTap,
       // `Material.shape` paints the hairline without insetting the child, so
       // the pill measures exactly 48 high including its border (CSS
       // border-box); the padding carries the extra 1.5 on each side.
@@ -326,6 +342,8 @@ class QuestDueOptionRow extends StatelessWidget {
       button: true,
       selected: selected,
       label: label,
+      excludeSemantics: true,
+      onTap: onTap,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
