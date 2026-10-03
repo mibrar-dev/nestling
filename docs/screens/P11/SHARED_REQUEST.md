@@ -41,3 +41,39 @@ Files: `app/test/features/today/p08_bugs_test.dart`,
 
 Blocks: no — applied locally on `screen/P11` (stage 2); needs orchestrator
 confirmation so `main` carries it.
+
+---
+
+# Shared request — `NestBottomCta` sits ~8 px low vs the P11 design
+
+Need: `ORCHESTRATOR_NOTES.md` (15:31) item 3 — match the P11 "Approve all"
+button to the design. The cause is the shared component
+(`app/lib/core/design_system/components/nest_bottom_cta.dart`): SafeArea +
+`EdgeInsets.symmetric(vertical: 16)`, so the button bottom is
+`safeArea.bottom + 16` from the physical edge. This is a design-system change
+(RULES §1 — screens cannot touch `core/`), and it shifts every
+`NestBottomCta` user, so it needs an orchestrator ruling.
+
+Measured numbers (all logical px, 390×844):
+
+| | panel top | button (x, y, w×h) | button centre y | surface to edge |
+|---|---|---|---|---|
+| design PNG | ≈718 | 20–370, 734–786, 350×52 | 760 | design: to 810 + paper home strip; OWNER rule replaces the strip with surface |
+| app (simulator, 34 px home inset) | ≈726 | 21–369, 742–793, 349×52 | ≈768 (+8) | surface to 844 ✓ |
+| app (widget test, zero inset) | 760 | 20–370, 776–828 | 802 | surface to 844 ✓ |
+
+Requested behaviour (per the note): button top 16 px under the panel top and
+the panel surface still runs to the physical edge — i.e. at the simulator's
+34 px home inset the button is 734–786 (centre 760), leaving 58 px of surface
+below it (34 home + 24). Concretely: keep the top pad 16 and use a bottom pad
+of `safeArea.bottom + 24` instead of `safeArea.bottom + 16` (at zero inset the
+button then sits 24 px above the edge: 768–820).
+
+Files: `app/lib/core/design_system/components/nest_bottom_cta.dart` (shared);
+P11's `app/test/features/approvals/approvals_view_geometry_test.dart`
+currently pins the old zero-inset position (`screen.bottom - button.bottom ==
+16`, button 776–828) and must be updated in the same change or the deviation
+stays green.
+
+Blocks: no — P11 ships; the −8 px UI delta stays until the shared change
+lands.
