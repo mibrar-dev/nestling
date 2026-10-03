@@ -71,6 +71,10 @@ class QuestIdeaRow extends StatelessWidget {
           Expanded(
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              // `.trow .main { flex:1; min-width:0 }` with block-level
+              // `.nm`/`.mt`: both lines start at the tile gap (card left +
+              // 12 padding + 40 tile + 12 gap = +64), never centred.
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
                   title,
@@ -120,10 +124,18 @@ class QuestIdeaRow extends StatelessWidget {
     );
 
     if (tap == null) return card;
+    // The `Semantics` wrapper MUST carry its own `onTap`: `excludeSemantics`
+    // drops the whole subtree, so without it the node announces `isButton`
+    // with no `SemanticsAction.tap` and VoiceOver/TalkBack cannot activate
+    // the row (the InkWell's action is inside the excluded subtree).
+    // The label keeps the meta line, so a screen-reader user hears the same
+    // two lines a parent reads on screen.
     return Semantics(
       button: true,
-      label: title,
+      label: '$title. $meta',
       excludeSemantics: true,
+      container: true,
+      onTap: tap,
       child: card,
     );
   }
@@ -146,6 +158,14 @@ class QuestAddButton extends StatelessWidget {
       button: true,
       label: semanticLabel,
       excludeSemantics: true,
+      // `container: true` is load-bearing: without it the node's annotations
+      // (label + tap) bubble up into the row and the control loses its own
+      // addressable node — the row then reads as one button whose action is
+      // "Add", and the row's own texts join the label (BUG-P10-9).
+      container: true,
+      // Required: `excludeSemantics` hides the InkWell's tap action, so the
+      // node itself has to expose one (ACCESSIBILITY rule + P10 BUG-P10-9).
+      onTap: onTap,
       child: Material(
         color: Colors.transparent,
         borderRadius: NestRadii.allPill,

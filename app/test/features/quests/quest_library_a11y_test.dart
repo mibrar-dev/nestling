@@ -317,12 +317,14 @@ void main() {
       await tester.pumpAndSettle();
 
       // `q-bed` is "Make your bed"; the row's semantic label must not hide
-      // the meta line a parent reads to judge the quest.
+      // the meta line a parent reads to judge the quest. Review finding 8
+      // asks for one label carrying both (`'$title. $meta'`), so the finder
+      // matches the quest name as a prefix rather than as the whole label.
       expect(
         find.byKey(const ValueKey<String>('quest-active-q-bed')),
         findsOneWidget,
       );
-      final finder = find.bySemanticsLabel('Make your bed');
+      final finder = find.bySemanticsLabel(RegExp('^Make your bed'));
       expect(finder, findsOneWidget, reason: 'the row needs its own node');
       final data = _data(tester, finder);
       expect(data.flagsCollection.isButton, isTrue);

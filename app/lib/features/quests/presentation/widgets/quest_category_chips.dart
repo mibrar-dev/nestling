@@ -30,7 +30,7 @@ class QuestCategoryChips extends StatelessWidget {
     // (`.chipscroll { margin: 0 -20px; padding: 0 20px 4px }`), so the
     // list applies no gutter to it and the scroll view carries the 20 px
     // edge padding itself.
-    return SingleChildScrollView(
+    final scroll = SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.fromLTRB(
         NestSpacing.padSide,
@@ -51,6 +51,20 @@ class QuestCategoryChips extends StatelessWidget {
           ],
         ],
       ),
+    );
+
+    // `.chipscroll { mask-image: linear-gradient(to right, var(--ink)
+    // calc(100% - 24px), transparent 100%) }` — the design PNG shows `Pets`
+    // fading out at the right edge. `dstIn` keeps the painted chips and fades
+    // their alpha over the last 24 px of the VIEWPORT (not of the content), so
+    // the mask stays put while the row scrolls, exactly like the CSS.
+    return ShaderMask(
+      blendMode: BlendMode.dstIn,
+      shaderCallback: (bounds) => LinearGradient(
+        colors: const <Color>[Colors.black, Colors.black, Colors.transparent],
+        stops: <double>[0, 1 - 24 / bounds.width, 1],
+      ).createShader(bounds),
+      child: scroll,
     );
   }
 }

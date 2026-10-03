@@ -23,30 +23,35 @@ void main() {
       },
     );
 
-    test('demo seed actives arrive title-sorted', () async {
-      final db = await setUpTestScope();
-      final impl = QuestsRepositoryImpl(db: db);
-      final items = await impl.getItems();
+    test(
+      'demo seed actives arrive in creation order (orchestrator §5)',
+      () async {
+        final db = await setUpTestScope();
+        final impl = QuestsRepositoryImpl(db: db);
+        final items = await impl.getItems();
 
-      final titles = items.map((q) => q.title).toList();
-      expect(
-        titles,
-        orderedEquals(<String>[
-          'Empty the dishwasher',
-          'Feed Biscuit the cat',
-          'Help with the washing',
-          'Hoover the stairs',
-          'Lay the table',
-          'Make your bed',
-          'Pack school bag',
-          'Put the bins out',
-          'Reading – 20 minutes',
-          'Tidy the living room',
-          'Tidy your bedroom',
-          'Water the plants',
-        ]),
-      );
-    });
+        // Creation order (shared `watchActiveQuests`): Maya's 6 in the order
+        // added, then Leo's 4, then the 2 Anyone quests — never alphabetical.
+        final titles = items.map((q) => q.title).toList();
+        expect(
+          titles,
+          orderedEquals(<String>[
+            'Empty the dishwasher',
+            'Reading – 20 minutes',
+            'Put the bins out',
+            'Tidy your bedroom',
+            'Hoover the stairs',
+            'Lay the table',
+            'Make your bed',
+            'Feed Biscuit the cat',
+            'Pack school bag',
+            'Water the plants',
+            'Help with the washing',
+            'Tidy the living room',
+          ]),
+        );
+      },
+    );
 
     test('watchItems re-emits when a quest row is inserted', () async {
       final db = await setUpTestScope();

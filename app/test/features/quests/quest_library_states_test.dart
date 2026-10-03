@@ -13,6 +13,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:nestling/core/design_system/design_system.dart';
@@ -28,7 +29,16 @@ import 'package:nestling/features/quests/quests_routes.dart';
 
 import '../../test_scope.dart';
 
-class _MockQuestsRepository extends Mock implements QuestsRepository;
+class _MockQuestsRepository extends Mock implements QuestsRepository {
+  /// The bloc owns the idea templates (`QuestsState.ideas`, stage 2a), so
+  /// `ideas()` is read on every load: mocktail answers an unstubbed method
+  /// with `null`, which threw and left the bloc in `loading` forever.
+  /// [setUpTestScope] registers the real repository, so hand the bloc the
+  /// very templates the view used to read straight from GetIt.
+  _MockQuestsRepository() {
+    when(ideas).thenReturn(GetIt.instance<QuestsRepository>().ideas());
+  }
+}
 
 /// Pumps [QuestLibraryView] over a bloc backed by [repository].
 ///

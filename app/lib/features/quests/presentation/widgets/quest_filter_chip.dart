@@ -31,6 +31,10 @@ class QuestFilterChip extends StatelessWidget {
       selected: selected,
       label: label,
       excludeSemantics: true,
+      // Required: `excludeSemantics` drops the InkWell's tap action, so the
+      // node itself has to expose one or assistive technology announces a
+      // button it cannot activate (P10 BUG-P10-9).
+      onTap: onTap,
       child: Material(
         color: Colors.transparent,
         borderRadius: NestRadii.allPill,

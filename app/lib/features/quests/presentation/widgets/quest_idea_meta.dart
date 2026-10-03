@@ -170,15 +170,31 @@ String questIconAsset(String icon) {
   }
 }
 
-/// `.icon-tile` tint for a live quest's icon key. Same mapping P08 uses for
-/// the same seed icons, so a quest looks identical in both screens.
+/// `.icon-tile` tint for a live quest's icon key.
+///
+/// Every seed key is mapped, so no quest falls through to the grey
+/// `NestTileTint.neutral`, and the tints agree with [kQuestIdeaMeta] for
+/// every title that appears on both tabs (e.g. `plate` is `sky`, like
+/// `idea-table`): switching tabs must not change a row's colour.
+///
+/// Note: P08's `todayTintFor` still paints `plate` lilac (see
+/// `docs/screens/P10/SHARED_REQUEST.md` §2) — a cross-screen disagreement the
+/// orchestrator owns, not a P10 edit.
 NestTileTint questTileTintFor(String icon) {
   switch (icon) {
     case 'dishwasher':
+    // `idea-table` is sky on the Ideas tab: the same title keeps its tint.
+    case 'plate':
+    case 'table':
+    // `idea-bag` ("Pack school bag") is sky too.
+    case 'bag':
       return NestTileTint.sky;
     case 'book':
     case 'reading':
     case 'hoover':
+    // `q-living` — "Tidy the living room". Lilac: the living-room ideas read
+    // as a lilac family on P08's today rows.
+    case 'sofa':
       return NestTileTint.lilac;
     case 'bins':
     case 'bin':
@@ -192,6 +208,9 @@ NestTileTint questTileTintFor(String icon) {
     case 'shirt':
     case 'washing':
       return NestTileTint.peach;
+    // An unknown key is not a real quest: it keeps the neutral tile rather
+    // than borrowing another family's colour. Every seed key is mapped above,
+    // so no seeded quest can reach this branch.
     default:
       return NestTileTint.neutral;
   }

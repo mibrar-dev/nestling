@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:nestling/app/app.dart';
@@ -364,6 +365,153 @@ void main() {
 
         await disposeApp(tester);
       }
+    });
+  });
+
+  // FIXES_1 / BUG-P10-2, 3, 4, 9 — the layout and accessibility repairs this
+  // iteration, pinned here so they cannot regress.
+  group('P10 fixes (iteration 2)', () {
+    testWidgets('row title and meta start at the tile gap, not centred', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, QuestsRoutePaths.library);
+
+      // Only the built rows are checked (the ListView has not scrolled), but
+      // every one of them must start at the tile gap.
+      final rows = find.byType(QuestIdeaRow);
+      expect(rows, findsWidgets);
+      for (final row in rows.evaluate()) {
+        final key = (row.widget as QuestIdeaRow).key!;
+        final finder = find.byKey(key);
+        final card = tester.getRect(finder);
+        final texts = tester
+            .widgetList<Text>(
+              find.descendant(of: finder, matching: find.byType(Text)),
+            )
+            .where((text) => text.data != '+ Add')
+            .toList();
+        expect(texts.length, 2, reason: '$key');
+        for (final text in texts) {
+          final rect = tester.getRect(
+            find.descendant(of: finder, matching: find.text(text.data!)),
+          );
+          // `.trow { padding:12; gap:12 }` + a 40 px tile = +64 from the card.
+          expect(rect.left - card.left, 64, reason: '$key · ${text.data}');
+        }
+      }
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the Active tab offers no filter it cannot honour', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, QuestsRoutePaths.library);
+
+      expect(find.byType(TextField), findsOneWidget);
+      expect(find.byType(QuestCategoryChips), findsOneWidget);
+
+      await tester.tap(find.text('Active (12)'));
+      await tester.pumpAndSettle();
+
+      // The Active board is the whole family list: a search box and a category
+      // row that filter nothing must not be rendered (BUG-P10-3).
+      expect(find.byType(TextField), findsNothing);
+      expect(find.byType(QuestCategoryChips), findsNothing);
+      expect(find.byType(QuestIdeaRow), findsWidgets);
+      expect(find.text('No active quests'), findsNothing);
+
+      // Switching back restores the Ideas filters, state intact.
+      await tester.tap(find.text('Ideas'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TextField), findsOneWidget);
+      expect(find.byType(QuestCategoryChips), findsOneWidget);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the gap after the last row is the design 32, not 48', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, QuestsRoutePaths.library);
+
+      await tester.drag(find.byType(ListView), const Offset(0, -20000));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.getRect(find.byType(ListView)).bottom -
+            tester.getRect(_ideaRow('idea-reading')).bottom,
+        NestSpacing.s8,
+      );
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('every P10 control is actionable from the semantics tree', (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      await setUpTestScope();
+      await pumpAppRoute(tester, QuestsRoutePaths.library);
+
+      // Filter chip: announcing `isButton` is not enough — the node must
+      // expose a tap that really moves the selection (BUG-P10-9).
+      final chip = tester.getSemantics(find.bySemanticsLabel('Kitchen'));
+      expect(chip.getSemanticsData().flagsCollection.isButton, isTrue);
+      expect(chip.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+      tester.semantics.performAction(
+        find.semantics.byLabel('Kitchen'),
+        SemanticsAction.tap,
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(QuestIdeaRow), findsNWidgets(2));
+      expect(find.text('Lay the table'), findsOneWidget);
+      expect(find.text('Empty the dishwasher'), findsOneWidget);
+
+      // `+ Add`: named after its own idea, and the tap really navigates.
+      final add = tester.getSemantics(
+        find.bySemanticsLabel('Add Lay the table'),
+      );
+      expect(add.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+      tester.semantics.performAction(
+        find.semantics.byLabel('Add Lay the table'),
+        SemanticsAction.tap,
+      );
+      await tester.pumpAndSettle();
+      expect(pushedPath(tester), QuestsRoutePaths.editor);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(currentPath(tester), QuestsRoutePaths.library);
+
+      // Active row: the whole row is the button and it carries its meta line.
+      await tester.tap(find.text('All'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Active (12)'));
+      await tester.pumpAndSettle();
+
+      final row = find.byKey(const ValueKey<String>('quest-active-q-bed'));
+      final data = tester.getSemantics(row).getSemanticsData();
+      expect(data.flagsCollection.isButton, isTrue);
+      expect(data.hasAction(SemanticsAction.tap), isTrue);
+      expect(data.label, contains('Make your bed'));
+      expect(data.label, contains('coins'));
+
+      tester.semantics.performAction(
+        find.semantics.byPredicate(
+          (node) =>
+              node.label.contains('Make your bed') &&
+              node.label.contains('coins'),
+        ),
+        SemanticsAction.tap,
+      );
+      await tester.pumpAndSettle();
+      expect(pushedPath(tester), QuestsRoutePaths.editor);
+
+      handle.dispose();
+      await disposeApp(tester);
     });
   });
 }

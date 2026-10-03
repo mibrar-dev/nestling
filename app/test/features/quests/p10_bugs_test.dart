@@ -186,7 +186,11 @@ void main() {
         await setUpTestScope();
         await pumpAppRoute(tester, QuestsRoutePaths.library);
 
-        final field = tester.getRect(find.byType(TextField));
+        // `NestTextField.search` renders the `.search` row itself (a 52-high
+        // bordered box) with the editable inside it, so "the field" is the
+        // NestTextField — Material's bare `TextField` is only the input box
+        // that starts after the icon and the gap.
+        final field = tester.getRect(find.byType(NestTextField));
         final icon = tester.getRect(
           find
               .descendant(
@@ -225,7 +229,8 @@ void main() {
 
       // The note's items 3–4 chain: segmented → 16 → search → 0 → chips →
       // 16 → first card (`.scroll > * + *` minus the `.chipscroll` reset).
-      final field = tester.getRect(find.byType(TextField));
+      // The field is the `NestTextField` box, not the editable inside it.
+      final field = tester.getRect(find.byType(NestTextField));
       final chips = tester.getRect(find.byType(QuestCategoryChips));
       final card = tester.getRect(
         find.byKey(const ValueKey<String>('quest-idea-idea-bed')),
