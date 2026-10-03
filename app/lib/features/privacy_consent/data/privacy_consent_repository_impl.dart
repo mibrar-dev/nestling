@@ -43,7 +43,7 @@ class PrivacyConsentRepositoryImpl implements PrivacyConsentRepository {
           enabled: true,
         ),
         ConsentOption(
-          id: 'crash',
+          id: ConsentOptionIds.crash,
           title: 'Share anonymous crash reports',
           detail: 'Optional — helps us fix bugs. Off by default.',
           enabled: crash,
@@ -60,9 +60,36 @@ class PrivacyConsentRepositoryImpl implements PrivacyConsentRepository {
   }
 
   @override
-  Future<void> setCrashConsent({required bool consent}) {
-    return (_db.update(_db.settings)
-          ..where((s) => s.familyId.equals(Seed.familyId)))
-        .write(SettingsCompanion(crashReportConsent: Value(consent)));
+  Future<void> setCrashConsent({required bool consent}) async {
+    // P04 is the first onboarding screen that writes a setting, and on a
+    // real first run no `settings` row exists yet (Seed.fresh writes only
+    // `app_state`), so a bare UPDATE matches zero rows and the opt-in is
+    // silently dropped (P04-1). Fall back to an insert when nothing was
+    // updated; every other column takes its table default. Drift does not
+    // enable PRAGMA foreign_keys, so the row lands even while `families` is
+    // still missing. The `watchSetting` stream re-emits and the bloc flips
+    // the toggle with no optimistic bookkeeping needed here.
+    //
+    // The pair runs in one transaction (P04-9): without it two overlapping
+    // calls both see the empty table and the first INSERT wins, dropping
+    // the parent's later tap. Serialised, the second call sees the
+    // committed row and its UPDATE wins — last write wins.
+    await _db.transaction(() async {
+      final changed =
+          await (_db.update(_db.settings)
+                ..where((s) => s.familyId.equals(Seed.familyId)))
+              .write(SettingsCompanion(crashReportConsent: Value(consent)));
+      if (changed == 0) {
+        await _db
+            .into(_db.settings)
+            .insert(
+              SettingsCompanion.insert(
+                familyId: Seed.familyId,
+                crashReportConsent: Value(consent),
+              ),
+              mode: InsertMode.insertOrIgnore,
+            );
+      }
+    });
   }
 }
