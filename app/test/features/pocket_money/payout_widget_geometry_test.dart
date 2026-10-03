@@ -104,6 +104,21 @@ void main() {
         tester.getRect(summary),
         const Rect.fromLTRB(20, 101, 370, 151),
       );
+
+      // 5_ui deviation 1 (iteration 2): the summary must start at the card's
+      // 16 px padding edge, not float in the centre of the card (the design's
+      // `.caption` has no `text-align`; glyph origin measured at x 37).
+      final summaryText = tester.widget<Text>(
+        find.text('Maya is owed £4.20 · Leo is owed £2.10'),
+      );
+      expect(summaryText.textAlign, TextAlign.start);
+      expect(
+        tester
+            .getRect(find.text('Maya is owed £4.20 · Leo is owed £2.10'))
+            .left,
+        closeTo(36, 1.5),
+        reason: 'card x 20 + NestCard padding 16',
+      );
       await disposeApp(tester);
     });
 
@@ -150,6 +165,32 @@ void main() {
       );
       await disposeApp(tester);
     });
+
+    testWidgets(
+      'the saverow toggle track is flush with the card content edge',
+      (tester) async {
+        await _pumpPayout(tester);
+
+        // 5_ui deviation 2 (iteration 2, build bf9f239): the old NestToggle
+        // laid out a 59×44 min-box, which shifted the visible 51×31 track 4 px
+        // left (measured 301–351). Main's 51×31 + hit-slop NestToggle now
+        // aligns the track to the saverow's content edge (x 355…356 per the
+        // design's 305–355 at y 633–663).
+        final track = find
+            .descendant(
+              of: find.byType(NestToggle),
+              matching: find.byType(AnimatedContainer),
+            )
+            .first;
+        final rect = tester.getRect(track);
+        expect(rect.width, closeTo(51, 1));
+        expect(rect.height, closeTo(31, 1));
+        expect(rect.left, closeTo(305, tolerance));
+        expect(rect.right, closeTo(356, tolerance));
+        expect(rect.top, closeTo(633, 2));
+        await disposeApp(tester);
+      },
+    );
 
     testWidgets('the CTA pill is the design 350×52 rect', (tester) async {
       await _pumpPayout(tester);

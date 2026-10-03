@@ -5,9 +5,8 @@
 // not trust the builders' reports: it re-derives the behaviour from the
 // database and from the rendered widget.
 //
-// A test here FAILS when it finds a real defect. Such a test is kept with
-// `skip: true` and a `P13-I2-*` id so the suite stays green and the finding is
-// pinned; run the un-skip recipe in docs/screens/P13/3_test.md to reproduce.
+// A test here FAILS when it finds a real defect. Found ones are kept with
+// their `P13-I2-*` id and were unskipped once the defect above them was fixed.
 //
 // **No simulator was used** (stage rule: only 5_ui may).
 
@@ -341,7 +340,8 @@ void main() {
         );
         await disposeApp(tester);
       },
-      skip: true, // P13-I2-01 — OPEN (minor): goal-title-keyed pronoun
+      skip: false, // P13-I2-01 — fixed (minor): design string gated on the
+      // exact seeded shape (Maya + "Lego Friends set"), neutral otherwise
     );
   });
 

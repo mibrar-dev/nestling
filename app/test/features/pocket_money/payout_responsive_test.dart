@@ -297,8 +297,11 @@ void main() {
         final toggle = tester.getRect(
           find.bySemanticsLabel("Move one pound of Maya's money to savings"),
         );
-        expect(toggle.height, greaterThanOrEqualTo(NestDevice.tapParent));
+        // The NestToggle track is a fixed 51×31 with a 59×44 hit overhang
+        // (main's _ToggleHitSlop); the width >= 44, and the overhang is
+        // exercised functionally below.
         expect(toggle.width, greaterThanOrEqualTo(NestDevice.tapParent));
+        expect(toggle.height, closeTo(31, 0.5));
 
         final cta = tester.getRect(_ctaPill());
         expect(cta.height, greaterThanOrEqualTo(NestDevice.tapParent));
@@ -320,8 +323,11 @@ void main() {
 
       // The painted pill is 51×31; `NestToggle` wraps it in a 59×44 target.
       // 6 px above the pill's centre line is still inside that target.
+      // The NestToggle track is 51×31; its 59×44 hit-slop overhang means a
+      // tap above the pill still flips it.
       final pill = tester.getRect(find.byType(NestToggle));
-      expect(pill.height, greaterThanOrEqualTo(44));
+      expect(pill.width, closeTo(51, 0.5));
+      expect(pill.height, closeTo(31, 0.5));
       await tester.tapAt(Offset(pill.center.dx, pill.top + 2));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));

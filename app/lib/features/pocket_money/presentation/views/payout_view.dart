@@ -319,7 +319,12 @@ class _DimmedLedger extends StatelessWidget {
                   child: Text(
                     _summary(data),
                     style: NestType.caption(color: tokens.ink2),
-                    textAlign: TextAlign.center,
+                    // `.caption` sets no `text-align` in the design, so the
+                    // summary starts at the card's padding edge (measured
+                    // glyph origin x 37 in the light PNG) — never centred.
+                    // (`1_plan.md` §(a) said "centered"; the HTML/CSS
+                    // truth overrides the plan, 5_ui deviation 1.)
+                    textAlign: TextAlign.start,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),

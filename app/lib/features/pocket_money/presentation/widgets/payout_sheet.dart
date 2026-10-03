@@ -418,13 +418,20 @@ class PayoutSaveRow extends StatelessWidget {
   /// neutral, data-driven sentence instead of hard-coding the design's
   /// "Lego fund" / gendered pronoun for an arbitrary family — review finding
   /// 7, whose failure mode was "Move £1.00 of Leo's to her Lego fund".
-  static String label(String name, String? goalTitle) {
+  static String label(String name, String? goalTitle, {String? childId}) {
     final amount = moneyPounds(PayoutSheet.savingsMovePence);
     final title = goalTitle?.trim() ?? '';
     if (title.isEmpty) {
       return "Move $amount of $name's money to savings";
     }
-    if (title.toLowerCase().contains('lego')) {
+    // The design string is verbatim only for the exact seeded shape — the
+    // demo family's goal is `goal-lego` ("Lego Friends set") owned by Maya.
+    // That string is Maya's copy: a gendered "her Lego fund" can only be said
+    // about the seeded child, and there is no gender column to derive it from.
+    // For any other shape (P13-BUG-06 / P13-I2-01: a goal-bearing Leo with a
+    // Lego goal) the sheet falls back to the neutral data-driven sentence —
+    // never borrowing the design's pronoun.
+    if (childId == 'maya' && title == 'Lego Friends set') {
       return "Move $amount of $name's to her Lego fund";
     }
     return "Move $amount of $name's money to their $title fund";
@@ -445,7 +452,7 @@ class PayoutSaveRow extends StatelessWidget {
         children: <Widget>[
           Expanded(
             child: Text(
-              label(name, goalTitle),
+              label(name, goalTitle, childId: child.id),
               // `.saverow .t`: Inter 15/22 w600 — `bodySmallStrong` exactly.
               style: NestType.bodySmallStrong(color: tokens.ink),
             ),

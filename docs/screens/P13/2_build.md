@@ -1,190 +1,193 @@
-# 2 — INTEGRATE (iteration 2) — P13 Payout
+# 2 — INTEGRATE (iteration 3) — P13 Payout
 
 Loop stage: combine the two parallel builder halves (`2a_build_logic.md` +
-`2b_build_ui.md`) after the iteration-1 QA sweep, then re-run the gates.
-Scope: **compile + green suite**. No redesign, no simulator (rule: only
-`5_ui` may drive `BC440E48-B3A3-43BC-971B-0EF5DB621874`).
+`2b_build_ui.md`) and run the three gates. Scope: **compile + green suite**.
 
-`docs/screens/P13/ORCHESTRATOR_NOTES.md` now exists (added 19:48, after the
-builders started). **All three of its items are mandatory** and I verified each
-one against the merged tree, not just against the builders' notes — see
-"ORCHESTRATOR_NOTES verification" below.
+## VERDICT: FAIL — one shared-code test fails, and I may not edit it
 
-## Headline
-
-Again **zero integration breakages**, and again **I changed no source file**.
-`2a` and `2b` both report `CONTRACT CHANGES: None`, and their work is
-complementary rather than overlapping: the bloc drops a duplicate in-flight
-event and the repository refuses a non-positive payout, while the view never
-sends one and never re-enters. Nothing needed renaming, re-importing or
-patching.
+`dart format` and `flutter analyze` are clean and **P13's own 439-test suite
+passes**, but the **whole-repo gate is red**:
 
 ```
-dart format .                                        → Formatted 491 files (0 changed)  exit 0
-flutter analyze                                      → No issues found! (ran in 4.2s)   exit 0
-flutter test                                         → 02:14 +2499 ~1: All tests passed! exit 0
-flutter test test/features/pocket_money             → 00:17 +423  ~1: All tests passed! exit 0
+dart format .                                 → Formatted 493 files (0 changed)   exit 0
+flutter analyze                               → No issues found! (ran in 5.0s)    exit 0
+flutter test                                  → 01:49 +2534 ~1 -1: Some tests failed.  exit 1
+flutter test test/features/pocket_money      → 00:17 +423 … → 00:17 +439 ~1: All tests passed!  exit 0
 ```
 
-Iteration 1 was `+2165 ~1`; iteration 2 is `+2499 ~1` — **+334 tests, same
-single pre-existing skip, zero failures.**
+The single failure:
+
+```
+test/core/family_time_test.dart:319
+  seed + repository zone plumbing kid_home completions are stamped with the family zone
+  Bad state: Too many elements
+  dart:core   List.single
+```
+
+Exactly **one** `[E]` in the whole run; every other test passes
+(`+2534 ~1 -1`). This stage's rule is explicit — *"VERDICT: PASS only if analyze
+is clean and the full suite passes"* — so the verdict is FAIL. I did **not**
+skip the test, add an ignore, or weaken `analysis_options` to get there, and I
+did not edit the failing file, because I am not allowed to (see below).
+
+## Why this is not P13's fault (proved, not assumed)
+
+**1. The failing path contains no P13 code, and is byte-identical to HEAD.**
+
+```
+git diff --name-only HEAD -- app/
+  app/lib/features/pocket_money/presentation/views/payout_view.dart
+  app/lib/features/pocket_money/presentation/widgets/payout_sheet.dart
+  app/test/features/pocket_money/p13_bugs_test.dart
+  app/test/features/pocket_money/p13_iter2_audit_test.dart
+  app/test/features/pocket_money/payout_responsive_test.dart
+  app/test/features/pocket_money/payout_widget_geometry_test.dart
+```
+
+Everything the failing test exercises is unchanged from `HEAD`:
+
+| File | vs HEAD |
+|---|---|
+| `app/test/core/family_time_test.dart` | identical to HEAD |
+| `app/lib/core/data/seed.dart` | identical to HEAD |
+| `app/lib/features/kid_home/data/kid_home_repository_impl.dart` | identical to HEAD |
+| `app/lib/core/data/london_time.dart` | identical to HEAD |
+| `app/lib/features/pocket_money/data/pocket_money_repository_impl.dart` | identical to HEAD |
+| `app/test/test_scope.dart`, `app/test/flutter_test_config.dart` | identical to HEAD |
+
+The failing test body (`family_time_test.dart:307-320`) exercises `Seed.demo`,
+`Seed.movedToDubai` and `KidHomeRepositoryImpl.completeQuest`. None of my six
+changed files is on that path.
+
+**2. It is the wall clock, not a code change.** Verified against source:
+
+- `seed.dart:392` seeds a `to_do` completion for `['q-plants', 'leo', '10']`
+  stamped `utc(10, 3, 6)` = **2026-10-03T06:00Z**.
+- `KidHomeRepositoryImpl.completeQuest`
+  (`kid_home_repository_impl.dart:157-182`) computes
+  `now = DateTime.now().toUtc()` — the **real wall clock**, *not* the
+  `Seed.anchorOverride` that `test/flutter_test_config.dart` pins — then keeps
+  only rows where `countsForCurrentPeriod(repeatRule, c.createdAt, now, zone)`.
+  If none is in period it **inserts a second row**.
+- The test calls `Seed.movedToDubai(db)`, so the period is evaluated in **Dubai
+  (UTC+4)**: the seeded `06:00Z` row is *2026-10-03 10:00 Dubai*, while the run
+  happened at **UTC 2026-10-03 21:52 = 2026-10-04 01:52 Dubai** — a different
+  Dubai day. The seeded row is therefore "yesterday", a second row is inserted,
+  and `leoRows.single` throws `Too many elements`.
+- Independent confirmation from this loop's own history: iteration 2's
+  whole-repo run reported `02:14 +2495… +2499 ~1: All tests passed!` at
+  **20:45 BST = 19:45 UTC**, i.e. before the 20:00 UTC trigger, on the same
+  shared code that is failing now.
+
+**3. I am not permitted to fix it.** RULES §1 allows editing only
+`app/lib/features/<feature>/**`, `app/test/features/<feature>/**` and
+`docs/screens/<ID>/**`. `app/test/core/family_time_test.dart` and
+`app/lib/core/data/seed.dart` are shared. `SHARED_REQUEST.md` **#2** already
+files exactly this, with the same root cause, and is marked
+`Blocks: yes for the repo-wide gate`.
+
+**What unblocks it** (shared `core`, for the orchestrator — any one of the three
+suggested fixes in the request works):
+
+- assert the row the call created instead of `.single`
+  (`leoRows.where((r) => r.status == 'done_pending')`, or `.last`); or
+- use a quest the seed leaves with **no** completion row (the test only needs
+  something to complete); or
+- make `completeQuest`'s period test read the same pinned clock the seed uses —
+  the real fix, since a repository whose period logic reads the wall clock
+  cannot be tested deterministically after 20:00 UTC.
 
 ## Summary of 2a (logic)
 
-- `pocket_money_bloc.dart` — `_onPayoutSubmitted` gains a per-child
-  `_payoutInFlight` re-entrancy guard (the synchronous `Set.add` runs in event
-  order, so a duplicate is dropped *before* its write while a ticked sibling
-  still proceeds; the entry is removed in `finally` so a retry stays
-  reachable), plus a clear-before-write so a repeated identical failure is a
-  state change again and the view's toast returns.
-- `pocket_money_repository_impl.dart` — `recordPayout` is now a **no-op when
-  `amountPence <= 0`** (no `Paid · £0.00` rows) and clamps
-  `savingsMovePence` to `min(move, amount)` with the goal bumped by the
-  clamped value.
-- `payout_bloc_test.dart` (+3) and `payout_repository_test.dart` (+2).
-- No change to the `PocketMoneyPayoutSubmitted` shape or `recordPayout`'s
-  signature.
+**No files changed this iteration** — and none could be. `2a` reports
+`CONTRACT CHANGES: None` and walks all four `FIXES_2` item groups to confirm
+none is in the logic layer: the saverow pronoun lives in
+`PayoutSaveRow.label` (widgets), both 5_ui deviations are view/sheet, and the
+whole-repo gate failure is shared `core`. Its 13 owned tests pass; neighbour
+logic suites (101 total) pass.
 
 ## Summary of 2b (UI)
 
-- `payout_view.dart` — `_DimmedLedger` is now a `Stack` with a full-bleed
-  `Positioned.fill` scrim layer between the chrome column and the sheet;
-  chrome `ExcludeSemantics`; `_prime` moved out of `build` into a dedicated
-  listener + `initState`; `_submit` gains the re-entrancy / zero-owed-skip /
-  clamped-savings-move guards; `_FailureBody` gains the `NestStatusBar()`
-  reserve.
-- `payout_sheet.dart` — `busy` CTA, single title announcement, grabber on
-  `NestSpacing.gap5`, **row amount inline 13 px bold `--ink-2`**, data-driven
-  `.saverow` copy, `PayoutCheck.grabberHeight` deleted.
-- `payout_view_test.dart` (+5 regression tests),
-  `payout_widget_geometry_test.dart` (+2 real-font tests),
-  `p13_bugs_test.dart` — **all 5 skipped reproducers un-skipped**
-  (`skip: false`, reasons rewritten as "fixed").
+| File | Change |
+|---|---|
+| `payout_view.dart` | summary caption `textAlign: TextAlign.center` → `TextAlign.start` — `.caption` sets no `text-align` in the CSS, so the design glyphs start at the card's padding edge (5_ui deviation 1). `1_plan.md` §(a) said "centered"; the HTML overrides the plan. |
+| `payout_sheet.dart` | `PayoutSaveRow.label` gates the verbatim design string on the **exact seeded shape** (`childId == 'maya'` AND title `'Lego Friends set'`); any other shape gets the neutral data-driven sentence, never the design's gendered "her Lego fund" (P13-BUG-06 / P13-I2-01). |
+| `payout_widget_geometry_test.dart` | +2 real-font pins: summary text start-aligned at x ≈ 36; saverow toggle track 51×31 at (305, 633). |
+| `payout_responsive_test.dart` | 3 toggle assertions migrated to main's new `NestToggle` contract (51×31 laid-out pill + 59×44 hit overhang), verified functionally with `tapAt` 6 px outside the pill. |
+| `p13_bugs_test.dart`, `p13_iter2_audit_test.dart` | BUG-06 and I2-01 reproducers un-skipped and green. |
 
 ## FIXES items
 
-### Done (by the two builders; verified by me)
+### Done
 
-Every item in `FIXES_1.md` is accounted for. I walked the list against the
-merged tree:
-
-| Source | Item | Where it landed | Verified |
+| Source | Item | Where | Verified |
 |---|---|---|---|
-| `3_test.md` T-1 | `payout_states_test.dart` hung 10 min/test (awaiting a never-completing Drift stream on `bloc.close()`) | test pumps the real `/payout` route over a GetIt-scripted repository instead of hand-building the bloc | file runs; `flutter test` exit 0 |
-| `3_test.md` T-2 | 8 analyzer issues + 1 unformatted file in the test stage's own files | `data!` promotion fix, comment rewording, dropped redundant `async` | `dart format` 0 changed, `analyze` No issues found |
-| `4_review` #1 / P13-BUG-03 | scrim not `inset: 0` | `Positioned.fill` scrim layer in `_DimmedLedger` | geometry test asserts `Rect(0,0,390,844)` |
-| `4_review` #2 / P13-BUG-01 | double-tap double-write | view `_submit` guard + `busy` CTA **and** bloc `_payoutInFlight` | repro un-skipped and green |
-| `4_review` #3 | ticked child owing £0 writes `Paid £0.00` | view skips `owed == 0` **and** repo no-ops `amountPence <= 0` | repro un-skipped and green |
-| `4_review` #4 | leftover `zz_probe_test.dart` scratch file breaking analyze | deleted in iteration 1; probes became real assertions | `find … zz_*` → none |
-| `4_review` #5 | `_prime` mutates State during build | dedicated `BlocListener` + `initState`; `build` is pure | analyze clean |
-| `4_review` #6 / P13-BUG-05 | dimmed chrome not `ExcludeSemantics` | `ExcludeSemantics` around the chrome column | repro un-skipped and green |
-| `4_review` #7 | saverow hard-codes a gendered, goal-specific noun | `PayoutSaveRow.label()` — verbatim design string for the seeded `goal-lego`, neutral data-driven sentence otherwise | — |
-| `4_review` #8 | grabber height duplicated on the wrong class | `NestSpacing.gap5`; `PayoutCheck.grabberHeight` deleted | — |
-| `4_review` #9 | sheet title announced twice; scrim not dismissible from the semantics tree | container `label:` dropped; scrim gets `Semantics(button: true, label: 'Close payout', onTap: onDismiss)` | — |
-| `4_review` #10 | `_FailureBody` skips the status-bar reserve | `NestStatusBar()` added | — |
-| `5_ui` | deviation 1 (scrim) and deviation 2 (Leo ≈ 2 px high) | = BUG-03 and ORCHESTRATOR item 3 | pinned at ±1 px |
-| `P13-BUG-02` | £1.00 move not clamped to the payout | view `min(£1.00, owed)` **and** repo clamp | repro un-skipped and green |
-| `P13-BUG-04` | repeated identical write failure gives no feedback | bloc clear-before-write + view `_lastFailure` re-arm | repro un-skipped, green over 3 runs |
+| `5_ui` dev. 1 | summary text centred in both themes | `textAlign: TextAlign.start` | geometry test pins x ≈ 36 ± 1.5 |
+| `5_ui` dev. 2 | saverow toggle 4 px left | **not reproducible on current build** — the 301–351 track belongs to build `bf9f239`, whose `NestToggle` had `ConstrainedBox(minWidth: 59, minHeight: 44)`; merge `87cf5d4` ("NestToggle 51x31 + hit slop") moved it to `size = child.size` with the overhang in `hitTest`. Real-font measurement is now `(305, 632.5, 356, 663.5)` vs design 305–355 @ 633–663 = correct | pinned by a new test at (305, 633) |
+| `3_test` P13-I2-01 / P13-BUG-06 | `Move £1.00 of Leo's to her Lego fund` for a goal-bearing Leo | `label()` seeded-shape gate | both reproducers un-skipped, green, assert the negative (no ` her ` for Leo) |
+| `3_test` / `2a` | `recordPayout` guards (BUG-02) | already correct | audit file re-verified: amount 0 / negative / clamp / `goalId == null` / `0` with a move |
+| `3_test` | submit guards (BUG-01/04/05) | untouched | audit file's same-frame double-tap and sibling tests still pass |
+| `2a`/shared | three `payout_responsive_test.dart` assertions red after main's `NestToggle` rework | migrated to the current contract, `NestDevice.tapParent` still 44, no `Skip:`/ignore added | suite green |
+| ORCHESTRATOR_NOTES 1–3 | scrim / inline amounts / row text y | already landed in iteration 2 | no regression; still pinned |
 
-**Skips retired.** `grep -rn "skip: true" app/test` now matches exactly one
-file, `p12_bugs_test.dart:320` — pre-existing P12, not this screen. All five
-P13 reproducers carry `skip: false` and run as real assertions.
+**Skips:** `grep -rn "skip: true" app/test` matches exactly one file,
+`p12_bugs_test.dart:320` (pre-existing P12). All P13 reproducers are
+un-skipped (`skip: false`, 6 in `p13_bugs_test` + 1 in `p13_iter2_audit_test`).
 
-### Left (deliberately — not integration defects)
+### Left
 
 | # | Item | Why left | Owner |
 |---|---|---|---|
-| 1 | **`SHARED_REQUEST.md`** — `test/test_scope.dart::pumpAppRoute` hard-codes `physicalSize = 390×844`, silently overwriting any size a test set before calling it, so two `payout_view_test.dart` cases (`320 px at text scale 1.3 overflows nothing`, `a short screen scrolls the sheet instead of overflowing`) pass while running at 390. | `app/test/test_scope.dart` is **shared** and outside RULES §1 — I may not edit it. The request itself says `Blocks: no`, and the real 320/390/430 and 320×568 probes in `payout_responsive_test.dart` / `p13_bugs_test.dart` pump `NestlingApp` directly and are genuine. Both trapped tests carry a `HARNESS TRAP` comment. | orchestrator (`shared/`) |
-| 2 | **`shot.sh` light + dark + `compare.py`.** | Stage rule: this stage must not touch a simulator. The scrim barrier, the amount metrics and the row text y are all pinned numerically by real-font widget tests, so `5_ui` should confirm rather than hunt. | 5_ui |
-| 3 | **`_EmptyBody` copy** (`No payouts yet`, `Add a child`) still has no design PNG to check against. | No design source exists for it; unchanged since iteration 1. | 4_review / 5_ui |
-
-## ORCHESTRATOR_NOTES verification (all three mandatory items)
-
-Checked against the merged tree, not just the builders' claims:
-
-1. **Scrim covers the whole screen.** `_DimmedLedger` is a `Stack`: the chrome
-   column, then `Positioned.fill` → `Semantics(button: true, label: 'Close
-   payout', onTap: onDismiss)` → `GestureDetector` → `ColoredBox(tokens.scrim)`,
-   with the sheet `Align`ed on top. Matches `P13-payout.html:21` /
-   `components.css:164` (`inset: 0; z-index: 20` under the sheet's 30).
-   `payout_widget_geometry_test.dart` finds that `ColoredBox` by its scrim
-   token colour and asserts `Rect.fromLTRB(0, 0, 390, 844)`. **Done.**
-2. **Amounts inline at the subtitle's size.** P13's markup puts
-   `<span class="money">` *inside* the `.caption` line
-   (`P13-payout.html:25`), and `components.css:155` shows `.money` adds only
-   `tabular-nums` + `font-weight: 700` — the page rule `.child .am { font-size:
-   18px }` is never applied by this screen's HTML. The code now uses
-   `NestType.money(tokens.ink2).copyWith(fontSize: 13, height: 18 / 13)`, and
-   `NestType.money` is already `w700` + tabular, matching the CSS exactly. The
-   geometry test asserts `fontSize == 13`, `w700`, `color == ink2`, tabular
-   features present, and `toPlainText() == 'Weekly + quests · £4.20'` (i.e.
-   one inline line, U+00B7 preserved). **Done.**
-3. **Row text y within ±1.** `.who` = name 22 + caption 18 = **40**, centred in
-   the 48 px content box by `.child { align-items: center }` → row 1 name
-   458…480, subtitle 480…498; row 2 (Leo) 544 / 566. The geometry test asserts
-   `name.top ≈ 458 (±1)`, `height ≈ 22`, `subtitle.top ≈ 480 (±1)`,
-   `height ≈ 18`, plus `leoName.top ≈ 544` and `leoSubtitle.top ≈ 566`.
-   **Done.**
+| 1 | **`family_time_test.dart:319` — the whole-repo gate failure.** | Shared `app/test/core/**` + `app/lib/core/**`, outside RULES §1. Already `SHARED_REQUEST.md` #2, `Blocks: yes for the repo-wide gate`. I may not skip the test or weaken `analysis_options` to hide it. **This is what forces this stage's FAIL.** | orchestrator `shared/` |
+| 2 | **`SHARED_REQUEST.md` #1** — `pumpAppRoute` hard-codes `physicalSize = 390×844`, overwriting any size a test sets first, so two `payout_view_test.dart` cases pass while running at 390. | `app/test/test_scope.dart` is shared. Non-blocking; the real 320/430/320×568 probes pump `NestlingApp` directly. | orchestrator `shared/` |
+| 3 | **Saverow copy is a product decision, still open.** `label()` now branches on a hard-coded `childId == 'maya'`. That is a demo-seed identity in product copy logic — correct for the seeded path (the design string stays byte-identical to `P13-payout.html:29`) but the alternative is making the row fully data-driven and diverging from the design copy on the seeded path too. There is no gender/pronoun column to derive it from. | Product decision, not an integration defect. `2b` implemented the seeded-verbatim branch and documented the other. | orchestrator |
+| 4 | **`shot.sh` light + dark + `compare.py`.** | Stage rule: no simulator here. | 5_ui |
+| 5 | **`_EmptyBody` copy** (`No payouts yet` / `Add a child`) has no design PNG. | No design source exists; unchanged since iteration 1. | 4_review / 5_ui |
 
 ## Integration checks I ran (beyond the three graded commands)
 
-- **Format/analyze/test**: as above, all green, twice.
-- **Feature suite**: `flutter test test/features/pocket_money` → `00:17 +423
-  ~1: All tests passed!` — matching `2b`'s number exactly. All five new/
-  changed P13 files run: `p13_bugs_test`, `payout_bloc_test`,
-  `payout_repository_test`, `payout_view_test`,
-  `payout_widget_geometry_test` (plus `payout_responsive_test`,
-  `payout_states_test` from the test stage, and the four P12 files).
+- **Format/analyze**: clean; `dart format` 0 changed on the merged tree, so
+  the two builders left it already formatted.
+- **P13 suite green**: `flutter test test/features/pocket_money` → `00:17 +439
+  ~1: All tests passed!` — exactly `2b`'s number. All eight P13 test files run
+  (`p13_bugs`, `p13_iter2_audit`, `payout_bloc`, `payout_repository`,
+  `payout_responsive`, `payout_states`, `payout_view`,
+  `payout_widget_geometry`) plus the four P12 files.
 - **Scope (RULES §1)**: `git status --porcelain` outside
   `docs/screens/P13/`, `app/lib/features/pocket_money/` and
-  `app/test/features/pocket_money/` is **empty**. Nothing in `app/lib/core/**`,
-  `app/lib/app/**`, another feature or `tools/screens/**` was touched.
-  `analysis_options.yaml` is byte-identical (no `git diff`).
-- **No skips used to reach green**: the single `~1` is `p12_bugs_test.dart:320`
-  (pre-existing P12). Nothing new was skipped, ignored or `@`-disabled.
-- **No `flutter clean`, no `flutter run`, no simulator** booted, installed on or
-  screenshotted at any point in this stage.
+  `app/test/features/pocket_money/` is **empty**; `analysis_options.yaml` is
+  byte-identical. No `flutter clean`, no `flutter run`, no simulator booted,
+  installed on or screenshotted.
+- **Contract between the halves**: `2a` reports no contract changes and
+  changed nothing; `2b` coded against the same BLoC / `MoneyLedgerData` /
+  `MoneyChild` shapes as iteration 2. **No mismatched states/events, no
+  renamed members, no import breakages** — nothing to fix. I made **no code
+  edit** this iteration.
 
 ### Orchestrator-rule spot-checks on the merged tree
 
-- **FONTS** — `google_fonts|GoogleFonts` in `lib/features/pocket_money` +
-  `test/features/pocket_money`: **no hits**.
-- **LETTER SPACING** — `git diff lib/features/pocket_money | grep
-  letterSpacing`: **no hits**. P13 adds no tracking (the only `letterSpacing`
-  in the feature is P12's own documented `-0.4`, untouched).
-- **CHILD ORDER** — the child rows and the `.saverow` child both iterate
-  `data.children` (creation order). Still pinned by a test.
-- **COPY** — unchanged from iteration 1 on the seeded path. The only string
-  this screen builds itself is the new `.saverow` fallback, and it is
-  deliberately *not* taken on the seeded `goal-lego` path, so the rendered
-  design string stays character-for-character: ASCII `0x27` in `you've` /
-  `Maya's`, U+00B7, `&`, U+2014 EM DASH in the toast.
-- **BOTTOM EDGE (owner)** — mechanism unchanged: bottom-anchored sheet,
-  `tokens.paper`, `homeH + s4` = 50 px bottom pad, so paper owns the last pixel
-  row in both themes. Re-verified by `payout_responsive_test.dart`'s
-  rendered-pixel probe (green).
-- **ALIGNMENT (owner)** — 20 px gutters on the title, both rows, the saverow and
-  the CTA, all pinned by `Rect.fromLTRB(20, …, 370, …)` assertions (green).
-- **BALANCED HEADINGS** — correctly still absent: `P13-payout.html:5`
-  (`.pay h2`) sets no `text-wrap: balance`, and the rule forbids
-  `NestBalancedText` on `.h2`. The `.ptitle` behind the scrim is a separate
-  CSS class from `.h1` with single-line copy, matching sibling P12.
-- **ACCESSIBILITY ACTIONS** — every control still exposes
-  `hasAction(SemanticsAction.tap)`. Both `excludeSemantics: true` wrappers
-  (`PayoutCheck`, the scrim) pass `onTap:`; the new scrim node does too, and a
-  new regression test asserts its tap action and that the dimmed title/summary
-  are gone from the semantics tree.
-- **TRIAL / PERIODS / PIP / NestChipWrap** — untouched by P13: no
-  `subscription_status` write, no quest-period logic, no Pip on this screen, no
-  `NestChip` row.
+- **FONTS** — `google_fonts|GoogleFonts` in the feature's lib + tests: no hits.
+- **LETTER SPACING** — no `letterSpacing` added by this iteration.
+- **CHILD ORDER** — untouched; rows and the saverow still iterate
+  `data.children`.
+- **COPY** — the seeded saverow string stays byte-identical to
+  `P13-payout.html:29` (`Move £1.00 of Maya's to her Lego fund`, ASCII `0x27`);
+  the new fallback strings are only reachable for non-seeded shapes.
+- **BOTTOM EDGE / ALIGNMENT / owner rules** — untouched by this iteration's
+  edits and still green in the suite.
+- **ORCHESTRATOR_NOTES 1–3** — still pinned by the iteration-2 geometry tests;
+  no regression.
+- **ACCESSIBILITY ACTIONS** — no `excludeSemantics` wrapper was added or
+  changed this iteration.
 
 ## Left for the next stages
 
-- `5_ui`: `shot.sh` light + dark on `BC440E48-B3A3-43BC-971B-0EF5DB621874` +
-  `compare.py`; report the measured y of the screen title, the first control
-  and each card top, design vs app (UI-verdict rule ±2 px; a uniform vertical
-  shift is a FAIL). It should now confirm the three orchestrator targets
-  rather than hunt.
-- `shared/`: the `SHARED_REQUEST.md` harness fix for `pumpAppRoute`.
+- **orchestrator `shared/`**: SHARED_REQUEST #2 — this is the only thing
+  standing between this screen and a green whole-repo gate. Everything else in
+  `FIXES_2` is closed.
+- `5_ui`: `shot.sh` light + dark + `compare.py`; report the measured y of the
+  screen title, the first control and each card top, design vs app (±2 px; a
+  uniform vertical shift is a FAIL). The summary alignment and toggle track are
+  now numerically pinned, so this should confirm rather than hunt.
 
-VERDICT: PASS
+VERDICT: FAIL

@@ -1,81 +1,62 @@
-# 2a — Build, logic chunk (iteration 2) — P13 Payout
+# 2a — Build, logic chunk (iteration 3) — P13 Payout
 
 Scope: logic layer only (`domain`/`data`/`bloc` + `*bloc*`/`*repository*`
-tests). Views/widgets (`payout_view.dart`, `payout_sheet.dart`) are being
-edited in parallel by the UI builder — not touched here. `p13_bugs_test.dart`
-is not in this layer's filename scope, so its `skip:` flags are left for the
-integrator/test stage to retire after both builders land.
+tests). Views/widgets untouched (UI builder's parallel lane).
 
 ## CONTRACT CHANGES
 
-None. `PocketMoneyPayoutSubmitted(childId, amountPence, savingsMovePence,
-goalId)` keeps its exact shape; `recordPayout` keeps its signature. The
-changes below are internal hardening only: a per-child in-flight set in the
-bloc, a clear-before-write on the payout error path, and `amount > 0` /
-`move ≤ paid` guards in `recordPayout`. The UI builder codes against the
-plan unchanged (their in-progress `_submit` already documents "one event per
-ticked child that owes money" — consistent with these guards).
+None. No signature or event/state shape changed this iteration.
 
 ## Files changed
 
-- `app/lib/features/pocket_money/presentation/bloc/pocket_money_bloc.dart`
-  — `_onPayoutSubmitted`: per-child `_payoutInFlight` re-entrancy guard
-  (duplicate event while a write is outstanding is dropped before its
-  write; siblings proceed; entry removed in `finally` so failure retries
-  stay reachable). Stale `errorMessage` is cleared before the write so a
-  repeated identical failure is a state change again (happy path stays
-  silent: the message is already null, the cleared state is equal and Bloc
-  suppresses it).
-- `app/lib/features/pocket_money/data/pocket_money_repository_impl.dart`
-  — `recordPayout`: no-op when `amountPence <= 0` (no `Paid £0.00` rows);
-  `savingsMovePence` clamped to `min(move, amount)` with the goal bumped by
-  the clamped value.
-- `app/test/features/pocket_money/payout_bloc_test.dart` (+3: gated
-  duplicate dropped; sibling proceeds mid-flight; retry re-surfaces the
-  message with a null-clear in between).
-- `app/test/features/pocket_money/payout_repository_test.dart` (+2: zero
-  amount writes nothing, goal/owed untouched; (50, 100) writes move +50 and
-  goal 1550 → 1600).
+None in `app/lib` or `app/test` — iteration 3 required no logic-layer
+edits (disposition below). This file is the stage's only write.
 
-## FIXES_1 disposition (logic-layer items only)
+## FIXES_2 disposition (logic-layer items only)
 
-- P13-BUG-01 (major, double-write): fixed at this layer — duplicate
-  in-flight event for the same child never reaches `recordPayout`
-  (`attempted == 1` in the skipped reproducer's terms). The view-side busy
-  CTA is the UI builder's item.
-- P13-BUG-02 (major, unclamped £1.00 move): backstopped at this layer —
-  `moved ≤ paid` and `goal delta == moved` hold for any caller. The
-  `min(100, owed)` view clamp is the UI builder's item.
-- Review #3 (£0.00 child writes `Paid £0.00`): backstopped at this layer —
-  zero-amount payouts are a no-op. The `_submit` skip is the UI builder's
-  (already in progress per their doc comment).
-- P13-BUG-04 (minor, silent identical retry): fixed at this layer —
-  clear-before-write makes the repeat failure emit null → message, so the
-  view's `listenWhen` fires and the toast returns.
-- BUG-03 (scrim), BUG-05 (semantics), review #1/#5–#10, 5_ui deviations,
-  ORCHESTRATOR_NOTES 1–3: all view/geometry — UI builder's layer, untouched
-  here. Finding 4 (`zz_probe_test.dart`) already deleted in iteration 1.
+FIXES_2 carries exactly four item groups, and **none of them is in this
+layer**:
 
-## Verification
+- P13-I2-01 / P13-BUG-06 (minor, the one open bug: `Move £1.00 of Leo's to
+  her Lego fund` for a goal-bearing Leo) — lives in
+  `PayoutSaveRow.label` (`presentation/widgets/payout_sheet.dart:421-427`),
+  which keys the design-verbatim string off the goal *title* containing
+  "lego". Not fixable from this layer: `Children` has no gender/pronoun
+  column, and the iteration-2 test stage explicitly routes the tension
+  (seeded design string vs DATA OVER MOCKS for non-Maya goal children) to
+  the orchestrator as a product decision. The logic side is neutral:
+  `payoutSaveChildId` (widgets, creation order) and `goalFor`/`owedFor`
+  return data only. No edit made; no edit possible here without breaking
+  the seeded verbatim path.
+- 5_ui deviations (summary-card text centering, saverow toggle −4 px) —
+  both in `payout_view.dart` / `payout_sheet.dart`. UI builder's lane.
+- Whole-repo gate failure (`test/core/family_time_test.dart`, Dubai
+  day-rollover vs wall clock) — shared `core` code, outside RULES §1,
+  already filed as SHARED_REQUEST #2. Not touchable from this worktree
+  lane; process item for the orchestrator.
+- ORCHESTRATOR_NOTES 1–3 (scrim, inline amounts, row y) — all view-side,
+  all verified done in iteration 2. No change since.
 
-- `dart format` clean on the 4 touched files.
-- `flutter analyze lib/features/pocket_money` + both new test files →
+## Verification (post-merge `9e1663e`, no logic edits pending)
+
+- `flutter analyze lib/features/pocket_money` + both owned test files →
   No issues found. No `google_fonts` in feature lib/tests.
-- New tests: 13/13 pass (7 bloc + 6 repository).
-- Regression (pure-logic suites, no widget pumping): ledger bloc (36),
-  ledger repository, setup bloc, setup repository, next_payout — 88 pass.
-- View/widget suites deliberately not run: the UI builder has uncommitted
-  edits in `payout_view.dart`/`payout_sheet.dart`; the integrator runs them
-  after the merge. No simulator used at any point.
+- Owned tests: `payout_bloc_test.dart` (7) + `payout_repository_test.dart`
+  (6) — 13/13 pass, including the BUG-01/02/04/review-#3 regression pins.
+- Neighbour logic suites (read-only rerun): ledger bloc + ledger
+  repository + setup bloc + setup repository + next_payout — all pass
+  (101 total with owned files, 0 failures).
+- View/widget suites deliberately not run: the UI builder owns them and
+  the integrator runs the full feature dir after the merge. No simulator
+  used at any point.
 
 ## LEFT FOR NEXT ITERATION
 
-- UI builder: view-side `_submit` guard + busy CTA, `min(100, owed)` clamp
-  + owed-guard, scrim `inset: 0`, `ExcludeSemantics`, ORCHESTRATOR_NOTES 1–3.
-- Integrator/test stage: un-skip the `p13_bugs_test.dart` reproducers that
-  now pass (BUG-01/02/04 expect `attempted == 1`, `moved ≤ paid` with
-  `goal delta == moved`, and a second SnackBar — all satisfied by the
-  layer fixes above plus the view fixes) and retire them per the
-  `p12_bugs_test.dart` precedent.
+- UI builder: summary-card alignment, toggle right-flush (5_ui 1–2).
+- Orchestrator: product decision on the saverow pronoun for non-Maya goal
+  children (P13-I2-01/BUG-06); shared `family_time` gate failure
+  (SHARED_REQUEST #2, fails every loop past 20:00 UTC).
+- Integrator/test stage: retire the BUG-06/I2-01 reproducers once the copy
+  decision lands.
 
 VERDICT: PASS

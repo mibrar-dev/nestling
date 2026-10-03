@@ -613,12 +613,12 @@ void main() {
 
       await disposeApp(tester);
     },
-    // P13-BUG-06 — minor, open: `PayoutSaveRow.label` uses
-    // `title.toLowerCase().contains('lego')` to select the design string, so
-    // Leo + a Lego goal still renders "of Leo's to her Lego fund". Fix: use
-    // the design string only for the exact seeded shape (goal child Maya /
-    // title "Lego Friends set"), the neutral data-driven form otherwise.
-    skip: true, // P13-BUG-06 — open (minor)
+    // P13-BUG-06 — FIXED (iteration 3): `PayoutSaveRow.label` renders the
+    // design string only for the exact seeded shape (goal child Maya AND goal
+    // title "Lego Friends set"); every other shape — a goal-bearing Leo with
+    // a Lego goal included — gets the neutral data-driven sentence, never the
+    // design's gendered "her Lego fund".
+    skip: false, // P13-BUG-06 — fixed (minor)
   );
 
   // -- attacks that hold --------------------------------------------------
