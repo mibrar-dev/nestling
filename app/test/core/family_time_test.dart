@@ -306,17 +306,51 @@ void main() {
 
     test('kid_home completions are stamped with the family zone', () async {
       final repo = KidHomeRepositoryImpl(db: db);
-      await repo.completeQuest('maya', 'q-reading');
-      final rows = await (db.select(
-        db.questCompletions,
-      )..where((c) => c.questId.equals('q-reading'))).get();
-      expect(rows.single.createdAtTz, london);
+      // completeQuest either flips the seeded to_do row in place (seed day ==
+      // real London today) or inserts a fresh row (seed day is stale relative
+      // to the real clock): identify the touched row by comparing the
+      // before/after snapshots (new id, or changed createdAt/status), never
+      // .single over the seeded rows. Deterministic on any real date.
+      Future<QuestCompletion> completeAndFindFresh(
+        String childId,
+        String questId,
+      ) async {
+        final beforeById = <int, QuestCompletion>{
+          for (final c
+              in await (db.select(db.questCompletions)
+                    ..where((c) => c.questId.equals(questId))
+                    ..where((c) => c.childId.equals(childId)))
+                  .get())
+            c.id: c,
+        };
+        await repo.completeQuest(childId, questId);
+        final rows =
+            await (db.select(db.questCompletions)
+                  ..where((c) => c.questId.equals(questId))
+                  ..where((c) => c.childId.equals(childId)))
+                .get();
+        final touched = rows.where((c) {
+          final before = beforeById[c.id];
+          if (before == null) return true;
+          return c.createdAt != before.createdAt || c.status != before.status;
+        }).toList();
+        expect(
+          touched,
+          hasLength(1),
+          reason: 'completeQuest($childId, $questId) must touch one row',
+        );
+        return touched.single;
+      }
+
+      expect(
+        (await completeAndFindFresh('maya', 'q-reading')).createdAtTz,
+        london,
+      );
       await Seed.movedToDubai(db);
-      await repo.completeQuest('leo', 'q-plants');
-      final leoRows = await (db.select(
-        db.questCompletions,
-      )..where((c) => c.questId.equals('q-plants'))).get();
-      expect(leoRows.single.createdAtTz, dubai);
+      expect(
+        (await completeAndFindFresh('leo', 'q-plants')).createdAtTz,
+        dubai,
+      );
     });
 
     test('approvals stamp decision + ledger zones', () async {
