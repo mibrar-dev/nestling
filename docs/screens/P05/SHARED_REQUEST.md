@@ -1,7 +1,16 @@
 # Shared request — P05 children in creation order (CHILD ORDER ruling)
 
-> Status (iteration 4): interim LANDED in P05 — `FamilyRepositoryImpl`
-> orders its own query by `rowid` (insertion proxy) inside RULES §1, so the
+> Status (iteration 6): durable fix LANDED on main (schema v3: `children`
+> gains `createdAt`/`createdAtTz`; `AppDatabase.watchChildren` orders by
+> `createdAt, rowid`). P05's interim `rowid`-only query is retired as of this
+> iteration — `FamilyRepositoryImpl.watchChildren` now delegates to the shared
+> `AppDatabase.watchChildren` helper. This request can be closed once the UI
+> gate confirms Maya-first on the merged build. The order-locking tests
+> (`add_children_test.dart` child-order groups) cover the ruling and stay
+> green unchanged (seed `createdAt` order == insertion order).
+>
+> Previous status (iteration 4): interim LANDED in P05 — `FamilyRepositoryImpl`
+> ordered its own query by `rowid` (insertion proxy) inside RULES §1, so the
 > screen and repository satisfy the ruling today. This request remains open
 > as the DURABLE fix (createdAt column + core ordering) so every roster
 > screen inherits it at once.

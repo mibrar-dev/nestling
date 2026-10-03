@@ -37,7 +37,12 @@ class FamilyRepositoryImpl implements FamilyRepository {
   @override
   Stream<List<FamilyChild>> watchChildren() {
     return combineLatest3(
-      _watchChildrenInAddedOrder(),
+      // CHILD ORDER ruling: creation order via the shared helper
+      // (`createdAt`, then `rowid` for same-second ties) — never
+      // alphabetical. (Pre-schema-v3 this feature carried its own
+      // `rowid`-only query; the durable column has landed, so the interim
+      // query is retired.)
+      _db.watchChildren(Seed.familyId),
       _db.watchActiveQuests(Seed.familyId),
       _db.watchAllCompletions(Seed.familyId),
     ).map((parts) {
@@ -46,19 +51,6 @@ class FamilyRepositoryImpl implements FamilyRepository {
       final completions = parts[2] as List<QuestCompletion>;
       return kids.map((k) => _toChild(k, quests, completions)).toList();
     });
-  }
-
-  /// CHILD ORDER ruling (interim): the core `watchChildren` helper orders by
-  /// `nickname`, but children must be listed in the order they were added.
-  /// The table has no creation marker, so this orders by `rowid` — the
-  /// insertion proxy — until the shared fix (createdAt column) lands.
-  Stream<List<ChildrenData>> _watchChildrenInAddedOrder() {
-    return (_db.select(_db.children)
-          ..where((c) => c.familyId.equals(Seed.familyId))
-          ..orderBy([
-            (c) => OrderingTerm(expression: const CustomExpression('rowid')),
-          ]))
-        .watch();
   }
 
   @override

@@ -12,7 +12,8 @@ import 'package:nestling/features/family/presentation/widgets/child_display.dart
 /// [TextScaler], so cards hug at 320 px wide and at text scale 1.3 alike.
 //
 // The roster arrives in added order (CHILD ORDER ruling) from the
-// repository's rowid-ordered watch; the grid renders it verbatim.
+// repository's creation-ordered watch (createdAt, rowid); the grid
+// renders it verbatim.
 class KidCardGrid extends StatelessWidget {
   const KidCardGrid({required this.children, super.key});
 

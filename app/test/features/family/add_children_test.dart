@@ -1119,9 +1119,19 @@ void main() {
         'edit pencil (Leo)',
       );
       for (final band in AddChildFormCard.ageBands) {
-        atLeast44(
-          tester.getSize(find.byKey(Key('ageChip-$band'))),
-          'age chip $band',
+        // Design geometry (`.chip { height: 32px }`) with the ≥44×44 tap area
+        // overlaid (SPACING_SPEC §10.6) — so the layout box is 32 high and the
+        // tap target extends beyond it invisibly.
+        final size = tester.getSize(find.byKey(Key('ageChip-$band')));
+        expect(
+          size.width,
+          greaterThanOrEqualTo(NestDevice.tapParent),
+          reason: 'age chip $band width',
+        );
+        expect(
+          size.height,
+          NestSpacing.s8,
+          reason: 'age chip $band visual height',
         );
       }
       for (final colour in AddChildFormCard.swatchColours) {
@@ -2116,29 +2126,25 @@ void main() {
   group('P05 chip row vertical geometry (final polish note)', () {
     // QA of cmp_light_4: "Age-band chips row centre ≈ +5 px low, Avatar-colour
     // row ≈ +12 px, helper text ≈ +12. Cause: chip height and the gap below the
-    // chips." Measured below: both gaps are already the design's 8 and 4, and
-    // the swatch row matches (44 + 8 gaps) — the whole remaining delta is the
-    // shared chip's 44 px tap box sitting *in the flow* where the design's
-    // `.chip { height: 32px }` occupies 32.
+    // chips." The shared NestChip fix (32-px pill in the flow, 44-px tap area
+    // overlaid, SPACING_SPEC §10.6) has landed — the chip row now measures the
+    // design's 32 px and everything below is flush with the design.
     testWidgets(
-      'the chip row height is the design value plus the 44-px tap box',
+      'the chip row height is the design value (32 px, shared fix landed)',
       (tester) async {
         await setUpTestScope();
         await pumpAppRoute(tester, '/add-children');
 
         final chip = tester.getRect(find.byKey(const Key('ageChip-4-6')));
-        // `.chip { height: 32px }` (components.css) is the flow height the design
-        // measures from; SPACING_SPEC §6 asks for a 44-min tap area on top of it.
-        // The shared component puts that 44 in the flow, so the chip row — and
-        // every row below it — sits exactly 12 px lower than the design (the
-        // chip's own centre is 6 px lower, which QA measured as ≈ +5).
+        // `.chip { height: 32px }` (components.css) — the pill's flow height.
+        // Its ≥44×44 tap area is overlaid (SPACING_SPEC §10.6: "keep visual
+        // size"), so the layout box reports exactly 32.
         expect(
-          chip.height - NestSpacing.s8,
-          NestDevice.tapParent - NestSpacing.s8,
+          chip.height,
+          NestSpacing.s8,
           reason:
-              'shared NestChip: 44-px tap box in the flow, design .chip = 32 '
-              'so this 12 px is the entire remaining in-card drift; it '
-              'becomes 0 when the shared fix lands',
+              'shared NestChip: 32-px pill in the flow with the 44-px tap '
+              'area overlaid — chip row matches the design height again',
         );
 
         expect(tester.takeException(), isNull);
