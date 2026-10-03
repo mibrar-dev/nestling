@@ -15,6 +15,7 @@ class PocketMoneyBloc extends Bloc<PocketMoneyEvent, PocketMoneyState> {
     on<PocketMoneyChildSelected>(_onChildSelected);
     on<PocketMoneyAddMoneySubmitted>(_onAddMoneySubmitted);
     on<PocketMoneySpendingSubmitted>(_onSpendingSubmitted);
+    on<PocketMoneyPayoutSubmitted>(_onPayoutSubmitted);
   }
 
   final PocketMoneyRepository _repository;
@@ -227,6 +228,28 @@ class PocketMoneyBloc extends Bloc<PocketMoneyEvent, PocketMoneyState> {
         childId: event.childId,
         amountPence: event.amountPence,
         note: event.note,
+      );
+    } on Object catch (error) {
+      if (emit.isDone) return;
+      emit(state.copyWith(errorMessage: _submitErrorMessage(error)));
+    }
+  }
+
+  Future<void> _onPayoutSubmitted(
+    PocketMoneyPayoutSubmitted event,
+    Emitter<PocketMoneyState> emit,
+  ) async {
+    // P13 "Mark as paid": write-through, mirroring the P12 add/spend
+    // submits — the `watchLedgerData` stream re-emits with the new `payout`
+    // row (plus the optional `savings_move` + goal bump). A failed submit
+    // keeps the loaded sheet and surfaces the message for the view's
+    // `NestToast` (no full-screen swap).
+    try {
+      await _repository.recordPayout(
+        childId: event.childId,
+        amountPence: event.amountPence,
+        savingsMovePence: event.savingsMovePence,
+        goalId: event.goalId,
       );
     } on Object catch (error) {
       if (emit.isDone) return;
