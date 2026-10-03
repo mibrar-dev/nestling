@@ -38,11 +38,6 @@ import 'package:nestling/features/today/presentation/views/today_view.dart';
 
 import '../../test_scope.dart';
 
-/// The pushed page's own location (the shell branch still reports `/today`
-/// via `currentConfiguration` after a `push`, so read the page URI).
-Uri currentUri(WidgetTester tester, Finder anchor) =>
-    GoRouter.of(tester.element(anchor)).state.uri;
-
 class _MockTodayRepository extends Mock implements TodayRepository;
 
 Future<void> _insertChild(
@@ -265,10 +260,14 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
       // The pushed page observes the new location (the shell branch still
-      // reports `/today` via `currentConfiguration`, so read the URI from
-      // the pushed page itself — same method as the navigation tests).
-      expect(find.text('P11 Approvals'), findsOneWidget);
-      expect(currentUri(tester, find.text('P11 Approvals')).path, '/approvals');
+      // reports `/today` via `currentConfiguration`), so read the URI from
+      // the top-most rendered route via the shared `pushedPath` helper —
+      // `GoRouter.state` is built from the full match list, so this asserts
+      // both where we are AND what the Navigator renders. Never assert a
+      // pushed screen's title text: screen agents replace placeholder views
+      // (P11's `AppBar('P11 Approvals')` → `Waiting for you (N)`), paths are
+      // the stable contract. See `_shared/router_push_test_fix_REPORT.md`.
+      expect(pushedPath(tester), '/approvals');
 
       final popped = await tester.binding.handlePopRoute();
       await tester.pump();
