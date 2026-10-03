@@ -428,6 +428,11 @@ void main() {
   });
 
   group('P13 payout — narrow and large text', () {
+    // HARNESS TRAP — the two cases below set `size`, but `test_scope.pumpAppRoute`
+    // (test/test_scope.dart:39) overwrites `physicalSize` with 390×844, so they
+    // actually run at 390×844 and cannot catch a 320 dp overflow.
+    // `payout_responsive_test.dart` covers the REAL 320 dp (it pumps
+    // `NestlingApp` directly). Fix on main: docs/screens/P13/SHARED_REQUEST.md.
     testWidgets('320 px at text scale 1.3 overflows nothing', (tester) async {
       await _pumpPayout(tester, size: const Size(320, 844), textScale: 1.3);
 
