@@ -67,6 +67,15 @@
 //   fresh load recovers (the subscription was released); a real-repo child
 //   switch never pairs the new child with the old child's items.
 //
+// Iteration-9 work (ACCESSIBILITY ACTIONS):
+// - Every interactive control exposes `SemanticsAction.tap` on its announced
+//   node: to-do check, card body, lock, dock Pip/Shop/My jar, Choose and
+//   Try again — asserted via `getSemantics(...).getSemanticsData()`.
+// - `performAction(tap)` reaches the real outcome: the check flips the DB row
+//   and opens K05, the card body opens K04, the lock opens P17, Choose opens
+//   the picker. K03's two `excludeSemantics: true` sites (header, hearts)
+//   are display-only, not controls.
+//
 // The suite has NO skipped tests: every proof below runs in the plain suite.
 // (If you add one, do not park it to get green — see RULES.)
 //
@@ -80,6 +89,7 @@ import 'dart:math' as math;
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
@@ -1433,6 +1443,118 @@ void main() {
       expect(loaded.any((state) => state.child!.nickname == 'Leo'), isTrue);
     },
   );
+
+  // -------------------------------------------------------------------------
+  // Iteration-9 proofs — ACCESSIBILITY ACTIONS
+  // -------------------------------------------------------------------------
+
+  testWidgets('every interactive control exposes SemanticsAction.tap', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await _pump(tester);
+    await _revealCards(tester);
+
+    void expectTap(Finder finder, String what) {
+      final data = tester.getSemantics(finder).getSemanticsData();
+      expect(
+        data.hasAction(SemanticsAction.tap),
+        isTrue,
+        reason: '$what must expose a tap action for VoiceOver/TalkBack',
+      );
+    }
+
+    expectTap(find.bySemanticsLabel('Mark done').first, 'to-do check');
+    expectTap(find.text('Reading \u2013 20 minutes'), 'quest card body');
+    expectTap(find.bySemanticsLabel('Grown-ups'), 'lock button');
+    expectTap(find.text('Pip'), 'dock Pip');
+    expectTap(find.text('Shop'), 'dock Shop');
+    expectTap(find.text('My jar'), 'dock My jar');
+    semantics.dispose();
+    await disposeApp(tester);
+  });
+
+  testWidgets('performAction(tap) on the check completes the quest', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await _pump(tester);
+    await _revealCards(tester);
+    // The to-do cards start below the fold; bring Reading's check into the
+    // viewport so its semantics node exists in the tree.
+    await tester.ensureVisible(find.text('Reading \u2013 20 minutes'));
+    await tester.pump();
+    final check = find.semantics.byLabel('Mark done').first;
+    tester.semantics.performAction(check, SemanticsAction.tap);
+    await _settle(tester);
+    expect(find.text('K05 Quest complete'), findsOneWidget);
+    final items = await tester.runAsync(
+      () => GetIt.instance<KidHomeRepository>().getItems(),
+    );
+    expect(
+      items!.singleWhere((q) => q.questId == 'q-reading').status,
+      'done_pending',
+      reason: 'the semantics action must reach the real DB write',
+    );
+    semantics.dispose();
+    await disposeApp(tester);
+  });
+
+  testWidgets('performAction(tap) on the card body opens the detail', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await _pump(tester);
+    await _revealCards(tester);
+    await tester.ensureVisible(find.text('Reading \u2013 20 minutes'));
+    await tester.pump();
+    final card = find.semantics.byLabel('Reading \u2013 20 minutes, To do');
+    tester.semantics.performAction(card, SemanticsAction.tap);
+    await _settle(tester);
+    expect(find.text('K04 Quest detail'), findsOneWidget);
+    semantics.dispose();
+    await disposeApp(tester);
+  });
+
+  testWidgets('performAction(tap) on the lock opens the gate', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await _pump(tester);
+    final lock = find.semantics.byLabel('Grown-ups');
+    tester.semantics.performAction(lock, SemanticsAction.tap);
+    await _settle(tester);
+    expect(find.text('P17 Parental gate'), findsOneWidget);
+    semantics.dispose();
+    await disposeApp(tester);
+  });
+
+  testWidgets('Choose exposes tap and opens the picker', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await tester.runAsync(() => Seed.empty(GetIt.instance<AppDatabase>()));
+    await tester.runAsync(() => GetIt.instance<AppSession>().refresh());
+    await _pump(tester);
+    final choose = find.semantics.byLabel('Choose');
+    expect(
+      choose.evaluate().single.getSemanticsData().hasAction(
+        SemanticsAction.tap,
+      ),
+      isTrue,
+    );
+    tester.semantics.performAction(choose, SemanticsAction.tap);
+    await _settle(tester);
+    expect(currentPath(tester), '/who-is-playing');
+    semantics.dispose();
+    await disposeApp(tester);
+  });
+
+  testWidgets('Try again exposes a tap action', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await _useFakeRepository(_FailLoadRepository());
+    await _pump(tester);
+    final data = tester.getSemantics(find.text('Try again')).getSemanticsData();
+    expect(data.hasAction(SemanticsAction.tap), isTrue);
+    semantics.dispose();
+    await disposeApp(tester);
+  });
 }
 
 // ---------------------------------------------------------------------------

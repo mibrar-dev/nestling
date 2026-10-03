@@ -12,6 +12,7 @@ import 'dart:ui' as ui;
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
@@ -1907,6 +1908,193 @@ void main() {
       await tester.tap(find.text('My jar'));
       await _settleRoute(tester);
       expect(find.text('K09 My jar'), findsOneWidget);
+      await disposeApp(tester);
+    });
+  });
+
+  group('K03 accessibility actions (VoiceOver/TalkBack)', () {
+    // Orchestrator rule: every interactive element must be operable without a
+    // pointer. Each control below must advertise `SemanticsAction.tap`, and
+    // performing that action must change the real state or the database —
+    // not just the visuals. Non-controls must NOT advertise it, or a screen
+    // reader offers a button that does nothing.
+    bool hasTap(WidgetTester tester, Finder finder) => tester
+        .getSemantics(finder)
+        .getSemanticsData()
+        .hasAction(SemanticsAction.tap);
+
+    /// Performs the real VoiceOver/TalkBack activation of [finder]'s node —
+    /// not a pointer tap — after checking the node advertises the action.
+    void performTap(WidgetTester tester, Finder finder) {
+      final node = tester.getSemantics(finder);
+      expect(
+        node.getSemanticsData().hasAction(SemanticsAction.tap),
+        isTrue,
+        reason: 'the control must expose SemanticsAction.tap',
+      );
+      node.owner!.performAction(node.id, SemanticsAction.tap);
+    }
+
+    testWidgets('the lock exposes a tap action that opens the parental gate', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await _pumpRoute(tester);
+      final lock = find.bySemanticsLabel('Grown-ups');
+      expect(lock, findsOneWidget);
+      expect(hasTap(tester, lock), isTrue);
+      performTap(tester, lock);
+      await _settleRoute(tester);
+      // A `push` route: `pushedPath` (not `currentPath`, which reports the
+      // declarative location it pushed from).
+      expect(pushedPath(tester), '/parental-gate');
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('every dock button exposes a tap action and routes', (
+      tester,
+    ) async {
+      for (final (label, path, screen) in <(String, String, String)>[
+        ('Pip', '/pip', 'K06 Pip nest'),
+        ('Shop', '/reward-shop', 'K08 Reward shop'),
+        ('My jar', '/my-jar', 'K09 My jar'),
+      ]) {
+        final semantics = tester.ensureSemantics();
+        await _pumpRoute(tester);
+        final button = find.descendant(
+          of: find.byType(NestKidButton),
+          matching: find.text(label),
+        );
+        expect(button, findsOneWidget);
+        expect(
+          hasTap(tester, button),
+          isTrue,
+          reason: 'dock "$label" must be operable by a screen reader',
+        );
+        performTap(tester, button);
+        await _settleRoute(tester);
+        expect(pushedPath(tester), path, reason: 'dock "$label"');
+        expect(find.text(screen), findsOneWidget);
+        semantics.dispose();
+        await disposeApp(tester);
+      }
+    });
+
+    testWidgets('a quest card exposes a tap action that opens the detail', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await _pumpRoute(tester);
+      final card = find.byType(NestKidQuestCard).first;
+      // The card's own node owns the merged label plus the tap action.
+      expect(hasTap(tester, card), isTrue);
+      performTap(tester, card);
+      await _settleRoute(tester);
+      expect(find.text('K04 Quest detail'), findsOneWidget);
+      final state = GoRouter.of(tester.element(find.text('K04 Quest detail')))
+          .state;
+      expect(state.extra, isA<Map<String, Object?>>());
+      expect((state.extra! as Map<String, Object?>)['childId'], 'maya');
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('a to-do check exposes a tap action that completes the quest', (
+      tester,
+    ) async {
+      final repo = _FakeKidHomeRepository();
+      await _useFakeRepository(repo);
+      final semantics = tester.ensureSemantics();
+      await _pumpRoute(tester);
+      // The check's own node (the card deliberately keeps it reachable: the
+      // shared card only excludes semantics when the check is display-only).
+      // The to-do cards are built below the fold, and an offstage card has no
+      // semantics node at all, so scroll one into view first.
+      final check = find.byWidgetPredicate(
+        (widget) =>
+            widget is Semantics && widget.properties.label == 'Mark done',
+      );
+      expect(check, findsNWidgets(2));
+      await tester.ensureVisible(check.first);
+      await tester.pump();
+      expect(find.bySemanticsLabel('Mark done'), findsNWidgets(2));
+      performTap(tester, check.first);
+      await _settleRoute(tester);
+      // The real effect: the repository recorded the completion and the
+      // celebration opened.
+      expect(repo.completed, <List<String>>[
+        <String>['maya', 'q-reading'],
+      ]);
+      expect(find.text('K05 Quest complete'), findsOneWidget);
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('the failure retry exposes a tap action that reloads', (
+      tester,
+    ) async {
+      final repo = _FakeKidHomeRepository(failLoad: true);
+      await _useFakeRepository(repo);
+      final semantics = tester.ensureSemantics();
+      await _pumpRoute(tester);
+      expect(find.text('Oh no! Pip got lost.'), findsOneWidget);
+      final retry = find.text('Try again');
+      expect(hasTap(tester, retry), isTrue);
+      repo.failLoad = false;
+      performTap(tester, retry);
+      await _settleRoute(tester);
+      expect(find.text('Hi Maya!'), findsOneWidget);
+      expect(find.byType(NestKidQuestCard), findsNWidgets(6));
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('the picker CTA exposes a tap action that opens K01', (
+      tester,
+    ) async {
+      await tester.runAsync(() => Seed.empty(GetIt.instance<AppDatabase>()));
+      await tester.runAsync(() => GetIt.instance<AppSession>().refresh());
+      final semantics = tester.ensureSemantics();
+      await _pumpRoute(tester);
+      expect(find.text("Who's playing?"), findsOneWidget);
+      final choose = find.text('Choose');
+      expect(hasTap(tester, choose), isTrue);
+      performTap(tester, choose);
+      await _settleRoute(tester);
+      expect(find.text('K01 Who is playing'), findsOneWidget);
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('non-controls advertise no tap action (no phantom buttons)', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await _pumpRoute(tester);
+      await _revealCards(tester);
+      // The greeting merges two Texts behind `excludeSemantics: true`; it is
+      // not a control, so it must not read as a button.
+      expect(
+        hasTap(tester, find.bySemanticsLabel('Hi Maya, 4 done today')),
+        isFalse,
+      );
+      // The hearts row and the progress bar are announcements, not controls.
+      expect(
+        hasTap(
+          tester,
+          find.bySemanticsLabel('Pip is happy today, 4 of 5 hearts'),
+        ),
+        isFalse,
+      );
+      expect(
+        hasTap(tester, find.bySemanticsLabel("4 of 6 of today's quests done")),
+        isFalse,
+      );
+      // A pending check is display-only: the shared card drops its semantics
+      // node entirely, so there is nothing a screen reader can activate.
+      expect(find.bySemanticsLabel('Waiting for Mum'), findsNothing);
+      semantics.dispose();
       await disposeApp(tester);
     });
   });

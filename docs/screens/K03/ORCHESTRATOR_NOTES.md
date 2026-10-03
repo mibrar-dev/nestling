@@ -79,3 +79,8 @@ Everything from the hearts down now matches the design. The remaining pet-block 
 - Branch shared/pet_stage_seat is fixing it. Do NOT adjust the pet block locally and do not change the NestPetStage call unless that branch's report says so.
 - Only fix the non-pet items in FIXES_8.md this pass.
 - Quest order and "4 done today" come from the database (DATA OVER MOCKS): not findings.
+
+## UPDATE (10:14) — iteration 10: the pet seating fix is on main (shared/pet_stage_seat)
+- Change ONE value: `_kNestBoxHeight = 188` (was 156). Keep nestWidth 236 and fixedPipHeight 152, as docs/screens/_shared/pet_stage_seat_REPORT.md says.
+- Targets: visible nest 198×86, top 278; Pip head ≈199, feet ≈301 (23 px into the bowl); hearts 448; first card 559. Update kid_home_geometry_test.dart to pin nest top 278 ±2 and Pip bottom 301 ±3.
+- Fix any remaining FIXES_9.md items. Nothing else.

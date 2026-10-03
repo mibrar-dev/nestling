@@ -1,53 +1,64 @@
-# K03 Kid home — bug hunt (Stage 6, iteration 8)
+# K03 Kid home — bug hunt (Stage 6, iteration 9)
 
-Adversarial pass over `kid_home` K03 after the iteration-8 integration (shared
-pet-stage fix, guarded load subscription, meadow gradient, speech bubble):
-data edges, rapid double taps, back navigation, deep links, restart
-persistence, mode guards, dark contrast, 320px + 1.3 scale, async gaps,
-Europe/London periods, integer money, owner rules, CHILD ORDER, COPY, fonts
-and the reworked stream pipeline. No screen code was changed in this stage.
+Adversarial pass over `kid_home` K03 after the shared semantics-tap batch and
+the iteration-9 integration: data edges, rapid double taps, back navigation,
+deep links, restart persistence, mode guards, dark contrast, 320px + 1.3
+scale, async gaps, Europe/London periods, integer money, owner rules, CHILD
+ORDER, COPY, fonts, and the new ACCESSIBILITY ACTIONS rule. No screen code
+was changed in this stage.
 
-- Suite: `app/test/features/kid_home/k03_bugs_test.dart` — 53 tests:
-  **all run green, zero skips** (first time in the loop).
-- Independent geometry pin: `kid_home_geometry_test.dart` (real bundled
-  fonts) runs un-skipped and passes — slot 20…370, nest/Pip centre 195,
-  hearts 448±2, first card 559±2.
-- Full suite: `flutter test` → `+1361: All tests passed!`
+- Suite: `app/test/features/kid_home/k03_bugs_test.dart` — 59 tests:
+  **all run green, zero skips**.
+- Only the UI-check stage may use a simulator (SIMULATORS rule); this stage
+  used none.
 
 ## Result: no open bugs
 
-Every bug found across the eight iterations is fixed and re-verified:
+| ID | Severity | Status |
+|---|---|---|
+| K03-BUG-1..6 | Major..Minor | fixed; proofs green |
+| K03-BUG-7 | Major (shared) | fixed; proof green in both flag modes |
+| K03-BUG-8/9 | Minor | fixed; proofs green |
+| K03-BUG-10 | Major (owner) | fixed; light + dark proofs green |
+| K03-BUG-11 | Minor | fixed; proof green |
+| K03-BUG-12 | Moderate (child order) | fixed (shared); proofs green |
+| K03-BUG-13 | Major (owner alignment) | fixed (shared pet-stage rework); three width proofs + real-font geometry pin green |
+| K03-BUG-14 | Moderate | fixed; proof green |
+| K03-BUG-15 | Minor | fixed (guarded `_homeSub`); two proofs green |
 
-| ID | Severity | Area | Status |
-|---|---|---|---|
-| K03-BUG-1..6 | Major..Minor | duplicate completions, celebration-before-save, swallowed failures, "done today" periods, router guard, stacked routes | fixed; proofs green |
-| K03-BUG-7 | Major | `DISABLE_ANIMATIONS=1` parse | fixed (shared); proof green in both modes |
-| K03-BUG-8/9 | Minor | celebration swallow, lock route stacking | fixed; proofs green |
-| K03-BUG-10 | Major (owner) | bottom edge surface | fixed; light + dark proofs green |
-| K03-BUG-11 | Minor | silent no-op latch | fixed; proof green |
-| K03-BUG-12 | Moderate | child order | fixed (shared); proofs green |
-| K03-BUG-13 | Major (owner) | pet slot off-centre / clipped | **fixed (shared `shared/pet_stage_explicit`)**; three width proofs + geometry pin green |
-| K03-BUG-14 | Moderate | pet block height 276 → 236 | **fixed**; proof green |
-| K03-BUG-15 | Minor | "Try again" stacked live subscriptions | **fixed** (guarded `_homeSub`, cancel-before-reload, release on error/close); two proofs green |
+## New this iteration: ACCESSIBILITY ACTIONS
 
-## New probes added this stage (passing)
+The shared `semantics_tap` batch gives every interactive design-system
+component a `SemanticsAction.tap` on the node that announces its label. K03
+is fully covered by new adversarial probes:
 
-1. **Mid-session stream error** — after a loaded state, an error keeps the
-   list (`status` stays `loaded`) and releases the subscription; a fresh
-   `KidHomeLoadRequested` re-subscribes and recovers. This pins the
-   iteration-8 review-finding-6 behaviour so it cannot regress silently.
-2. **Child switch consistency** — with the real Drift repository, switching
-   `active_child_id` from Maya to Leo never pairs a child with the previous
-   child's items (every emitted state's quest ids end with the paired child
-   id); Leo's own list arrives.
+- **Action presence** on every control: to-do check (`Mark done`), quest card
+  body, lock (`Grown-ups`), dock `Pip`/`Shop`/`My jar`, empty-state `Choose`,
+  failure `Try again` — asserted via
+  `getSemantics(...).getSemanticsData().hasAction(SemanticsAction.tap)`.
+- **Real outcomes via `performAction(tap)`**:
+  - the check flips the `q-reading` row to `done_pending` in Drift and opens
+    K05 (`K05 Quest complete`);
+  - the card body opens K04 (`/quest-detail`);
+  - the lock opens the parental gate;
+  - `Choose` navigates to `/who-is-playing`.
+- K03's two `Semantics(excludeSemantics: true)` sites (the header name/sub
+  and the hearts row) are display-only, not controls — no `onTap` required.
+  No violation found.
+
+One test-side note (not a product defect): the to-do cards sit below the fold
+and their semantics nodes are pruned from the tree until scrolled into view;
+the probes call `ensureVisible` first. The concurrent stage-3 test in
+`kid_home_view_test.dart` currently fails for exactly that reason and is
+expected to be corrected there.
 
 ## Verified clean (probes)
 
 | Category | Probe | Result |
 |---|---|---|
-| pet geometry | centring at 320/390/430, 236 px slot height, real-font pin (centre 195, hearts 448, card 559) | pass |
+| a11y actions | presence + performAction outcomes for every control | pass |
+| pet geometry | centring at 320/390/430, 236 px slot, real-font pin (centre 195, hearts 448, card 559) | pass |
 | stream pipeline | retry not stacked, mid-session error keeps list + recovers, child-switch pairing | pass |
-| iteration-7 UI | balanced title at the 20 px edge, per-quest tile tints, dock labels never wrap | pass |
 | child order | Maya→Leo; six children in one second keep insertion order | pass |
 | fonts / copy | bundled Nunito + zero tracking; strings match the HTML character-for-character | pass |
 | bottom edge | light + dark surface to the physical edge under a 34px inset | pass |
@@ -59,28 +70,20 @@ Every bug found across the eight iterations is fixed and re-verified:
 
 ## Observations (not defects)
 
-1. **No retry affordance for a mid-session watch error.** The design keeps
-   the last list (correct), but the loaded screen has no control to
-   re-subscribe; recovery needs a fresh load event (restart or navigation).
-   A silent reconnect on transient Drift errors would close the loop; the
-   error is not user-visible today.
-2. Period rollover computes at stream-map time (no injectable clock).
-3. Test wall-clock coupling: the seed anchor is pinned, `DateTime.now()` is
-   not.
+1. No retry affordance for a mid-session watch error (the kept-list design is
+   correct; recovery needs a reload event).
+2. Period rollover computes at stream-map time; no injectable clock.
+3. Test wall-clock coupling (seed anchor pinned, `DateTime.now()` not).
 4. Parent-mode `/kid-home` deep link and PIN bypass remain product-level
    questions; debug gallery routes unguarded.
 5. Static `PipAvatar` fallback omits accessories (no seed child equips one).
-6. The iteration-7 UI report (FAIL, pet geometry + dark meadow) predates the
-   iteration-8 shared fix; the geometry pin now passes and the meadow
-   gradient landed, so a fresh UI capture should confirm. UI-owned, not a
-   bug finding here.
+6. A fresh UI capture should confirm the post-iteration-8 pet geometry and
+   dark meadow on device (UI-owned).
 
 ## Summary
 
-Zero open bugs, zero skipped proofs: the functional, data, accessibility,
-period, copy and owner-rule suites all pass, and the last major (pet-slot
-geometry) is fixed by the shared component with both the widget proofs and
-the real-font geometry pin. The remaining items are observations and the
-pending UI re-capture.
+Zero open bugs, zero skipped proofs, and the new accessibility-action rule is
+fully satisfied and independently proven (presence + real outcomes). The
+remaining items are observations and the pending UI re-capture.
 
 VERDICT: PASS
