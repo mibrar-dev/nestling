@@ -16,3 +16,6 @@ docs/screens/P09/1_plan.md was briefly overwritten with a 4-line stub by a loop 
 Integrator: switch the icon picker to `NestIcons.questBed / questDishes / questHoover / questBins` (in the design order) and delete the `toggleTrackOffset` Transform.translate, as in docs/screens/_shared/shared_batch5_REPORT.md lines ~87-90 and ~209.
 
 ## UPDATE (23:03) — integrator, iteration 4: NestToggle on main now lays out its 51×31 track itself, so `QuestEditorMetrics.toggleTrackOffset` (Transform.translate(4,-2)) now double-shifts the switch. DELETE the offset and its Transform. The track must land at x 303→354, y 620.5→651.5 (design), so pin it in the geometry test.
+
+## UPDATE (23:55) — known red test on main, NOT your finding
+`test/core/family_time_test.dart` › 'kid_home completions are stamped with the family zone' fails since the date rolled to 4 Oct. It is a date-dependent test bug on main, being fixed by shared/family_time_test_fix. If it is the ONLY failing test in the full suite, treat the gate as green for this screen.

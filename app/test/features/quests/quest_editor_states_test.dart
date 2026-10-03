@@ -22,6 +22,7 @@ import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/quests/domain/entities/quest.dart';
 import 'package:nestling/features/quests/domain/quests_repository.dart';
+import 'package:nestling/features/quests/presentation/bloc/quests_bloc.dart';
 import 'package:nestling/features/quests/presentation/views/quest_library_view.dart';
 import 'package:nestling/features/quests/presentation/widgets/quest_editor_widgets.dart';
 import 'package:nestling/features/quests/quests_routes.dart';
@@ -36,7 +37,8 @@ class _FaultyRepository implements QuestsRepository {
     this.failWrites = false,
     this.holdGet = false,
     this.holdWrites = false,
-  });
+    Object? writeError,
+  }) : _writeError = writeError ?? StateError('disk full');
 
   final QuestsRepository _inner;
 
@@ -54,6 +56,11 @@ class _FaultyRepository implements QuestsRepository {
   /// Writes park on a [Completer] the test releases with [releaseWrites] —
   /// the editor's in-flight `saving` state (BUG-P09-2's guard).
   final bool holdWrites;
+
+  /// The error every write throws when [failWrites] is set. Defaults to an
+  /// operational failure (`StateError('disk full')`, which the bloc surfaces
+  /// verbatim); pass an [ArgumentError] to exercise the parent-safe mapping.
+  final Object _writeError;
 
   int watchCalls = 0;
   final List<Quest> written = <Quest>[];
@@ -94,7 +101,7 @@ class _FaultyRepository implements QuestsRepository {
   Future<void> createQuest(Quest quest) {
     written.add(quest);
     if (failWrites) {
-      return Future<void>.error(StateError('disk full'));
+      return Future<void>.error(_writeError);
     }
     if (holdWrites) {
       return _park();
@@ -106,7 +113,7 @@ class _FaultyRepository implements QuestsRepository {
   Future<void> updateQuest(Quest quest) {
     written.add(quest);
     if (failWrites) {
-      return Future<void>.error(StateError('disk full'));
+      return Future<void>.error(_writeError);
     }
     if (holdWrites) {
       return _park();
@@ -118,7 +125,7 @@ class _FaultyRepository implements QuestsRepository {
   Future<void> deleteQuest(String id) {
     deleted.add(id);
     if (failWrites) {
-      return Future<void>.error(StateError('disk full'));
+      return Future<void>.error(_writeError);
     }
     if (holdWrites) {
       return _park();
@@ -153,6 +160,7 @@ Future<_FaultyRepository> _inject({
   bool failWrites = false,
   bool holdGet = false,
   bool holdWrites = false,
+  Object? writeError,
 }) async {
   final real = GetIt.instance<QuestsRepository>();
   await GetIt.instance.unregister<QuestsRepository>();
@@ -162,6 +170,7 @@ Future<_FaultyRepository> _inject({
     failWrites: failWrites,
     holdGet: holdGet,
     holdWrites: holdWrites,
+    writeError: writeError,
   );
   GetIt.instance.registerSingleton<QuestsRepository>(faulty);
   return faulty;
@@ -335,6 +344,48 @@ void main() {
       );
       expect(pushedPath(tester), QuestsRoutePaths.editor);
       expect(find.text('Edit quest'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 4));
+      await disposeApp(tester);
+    });
+
+    testWidgets('a programmer error shows the parent-safe copy only', (
+      tester,
+    ) async {
+      // Review finding 4: an `ArgumentError` is a programmer error (today only
+      // the repository's coins guard), so the toast carries
+      // `QuestsBloc.saveFailedMessage` and the technical detail never reaches
+      // the screen. Operational failures still show the repository message —
+      // the test above pins that half.
+      await _inject(
+        failWrites: true,
+        writeError: ArgumentError.value(
+          9999,
+          'coins',
+          'Quest coins must be 1..100',
+        ),
+      );
+      await pumpAppRoute(tester, QuestsRoutePaths.editor);
+
+      await tester.tap(find.text('Save'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byType(NestToast), findsOneWidget);
+      expect(find.text(QuestsBloc.saveFailedMessage), findsOneWidget);
+      expect(
+        find.textContaining('Invalid argument'),
+        findsNothing,
+        reason: 'the parent never sees the raw exception',
+      );
+      expect(
+        find.textContaining('1..100'),
+        findsNothing,
+        reason: 'nor the coins range detail',
+      );
+      expect(pushedPath(tester), QuestsRoutePaths.editor);
+      // The guard is still released, so the parent can try again.
+      expect(_savePill(tester).onPressed, isNotNull);
 
       await tester.pump(const Duration(seconds: 4));
       await disposeApp(tester);

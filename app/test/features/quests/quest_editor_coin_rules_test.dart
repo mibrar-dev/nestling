@@ -345,6 +345,98 @@ void main() {
       await disposeApp(tester);
     });
 
+    testWidgets(
+      'the repair jump lands EXACTLY on the boundary and unlocks Save',
+      (tester) async {
+        final db = await setUpTestScope();
+        await _plantQuest(db, id: 'q-huge', coins: 9999);
+        await pumpAppRoute(tester, '${QuestsRoutePaths.editor}?id=q-huge');
+        expect(find.text('Coins must be 1\u{2013}100'), findsOneWidget);
+
+        await tester.tap(_decrease());
+        await tester.pump();
+
+        // One tap, not 9899 (BUG-P09-11) — and it lands ON the boundary, not
+        // one short of it (which would leave the save blocked).
+        expect(find.text('100'), findsOneWidget);
+        expect(find.text('= 100p at payout'), findsOneWidget);
+        expect(find.text('Coins must be 1\u{2013}100'), findsNothing);
+        expect(
+          tester.widget<QuestSavePill>(find.byType(QuestSavePill)).onPressed,
+          isNotNull,
+        );
+
+        await tester.tap(find.text('Save'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(
+          (await tester.runAsync(
+            () => GetIt.instance<QuestsRepository>().getQuest('q-huge'),
+          ))?.coins,
+          100,
+        );
+        await disposeApp(tester);
+      },
+    );
+
+    testWidgets('the jump is a ONE-SHOT repair, then ordinary stepping', (
+      tester,
+    ) async {
+      final db = await setUpTestScope();
+      await _plantQuest(db, id: 'q-huge', coins: 9999);
+      await pumpAppRoute(tester, '${QuestsRoutePaths.editor}?id=q-huge');
+
+      await tester.tap(_decrease());
+      await tester.pump();
+      expect(find.text('100'), findsOneWidget, reason: 'first tap repairs');
+
+      await tester.tap(_decrease());
+      await tester.pump();
+      expect(
+        find.text('99'),
+        findsOneWidget,
+        reason: 'in range the stepper is one coin at a time again',
+      );
+      await tester.tap(_increase());
+      await tester.pump();
+      expect(find.text('100'), findsOneWidget);
+      await disposeApp(tester);
+    });
+
+    testWidgets('an in-range value never jumps — both ends step by one', (
+      tester,
+    ) async {
+      // The guard against a sloppy fix that jumps on every tap: at 100 (the
+      // ceiling) `+` is inert and `\u{2212}` steps to 99; at 1 (the floor) `+`
+      // steps to 2 and `\u{2212}` is inert.
+      await pumpAppRoute(tester, QuestsRoutePaths.editor);
+      for (var i = 0; i < 85; i++) {
+        await tester.tap(_increase(), warnIfMissed: false);
+        await tester.pump();
+      }
+      expect(find.text('100'), findsOneWidget);
+
+      await tester.tap(_decrease());
+      await tester.pump();
+      expect(find.text('99'), findsOneWidget, reason: 'a normal decrement');
+      expect(
+        tester.widget<QuestSavePill>(find.byType(QuestSavePill)).onPressed,
+        isNotNull,
+        reason: '99 is in range, so the save is available',
+      );
+
+      for (var i = 0; i < 120; i++) {
+        await tester.tap(_decrease(), warnIfMissed: false);
+        await tester.pump();
+      }
+      expect(find.text('1'), findsOneWidget);
+      await tester.tap(_increase());
+      await tester.pump();
+      expect(find.text('2'), findsOneWidget, reason: 'a normal increment');
+      await disposeApp(tester);
+    });
+
     testWidgets('an in-range quest is never rewritten by opening it', (
       tester,
     ) async {

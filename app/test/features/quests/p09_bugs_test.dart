@@ -64,7 +64,19 @@
 //                     glyphs; the mandatory 20:09 note (batch-5 report) says
 //                     switch to questBed / questDishes / questHoover /
 //                     questBins (Book and Paw are unchanged)
+//
+// Iteration-4 proof (BUG-P09-13), `skip: true` until fixed:
+//
+//   BUG-P09-13 minor  the parent-safe save-failure copy (review finding 4)
+//                     is dead in debug builds: `QuestsRepositoryImpl
+//                     ._checkCoins` asserts first (`AssertionError`), which
+//                     the bloc's `_editorError` does not map, so the raw
+//                     `Failed assertion: …` text reaches the toast. In
+//                     release the assert is stripped and the ArgumentError
+//                     maps correctly. Latent today (the clamped editor never
+//                     sends an out-of-range value), defensive path only.
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:drift/drift.dart' show Value;
@@ -74,12 +86,16 @@ import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:nestling/app/controllers.dart';
-import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/app_database.dart' hide Quest;
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/family/domain/family_repository.dart';
 import 'package:nestling/features/parental_gate/parental_gate_routes.dart';
+import 'package:nestling/features/quests/domain/entities/quest.dart';
 import 'package:nestling/features/quests/domain/quests_repository.dart';
+import 'package:nestling/features/quests/presentation/bloc/quests_bloc.dart';
+import 'package:nestling/features/quests/presentation/bloc/quests_event.dart';
+import 'package:nestling/features/quests/presentation/bloc/quests_state.dart';
 import 'package:nestling/features/quests/presentation/widgets/quest_editor_widgets.dart';
 import 'package:nestling/features/quests/quests_routes.dart';
 import 'package:nestling/features/today/today_routes.dart';
@@ -143,7 +159,24 @@ SemanticsNode _button(WidgetTester tester, String label) => find.semantics
 QuestIconTile _iconTile(WidgetTester tester, String key) => tester
     .widget<QuestIconTile>(find.byKey(ValueKey<String>('quest-icon-$key')));
 
+/// A quest outside the repository's 1..100 coin contract (BUG-P09-13).
+const Quest _outOfRangeQuest = Quest(
+  id: 'q-out-of-range',
+  title: 'Out of range',
+  detail: '',
+  icon: 'hoover',
+  coins: 9999,
+  repeatRule: 'weekly',
+  days: '6',
+  dueLabel: 'Before tea (5pm)',
+  dueTimeLocal: '17:00',
+  needsApproval: true,
+  assigneeChildId: 'maya',
+  active: true,
+);
+
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(_loadBundledFonts);
   setUp(setUpTestScope);
 
@@ -553,6 +586,37 @@ void main() {
       expect(_iconTile(tester, 'paw').icon, NestIcons.paw);
       await disposeApp(tester);
     });
+  });
+
+  // -- iteration 4 proof ----------------------------------------------------
+  group('BUG-P09-13 — the parent-safe save copy is dead in debug', () {
+    test(
+      'the real range guard leaks the raw assert text into the toast',
+      () async {
+        await setUpTestScope();
+        final bloc = QuestsBloc(repository: GetIt.instance<QuestsRepository>());
+        final failure = Completer<QuestsState>();
+        final sub = bloc.stream.listen((state) {
+          if (state.editorStatus == QuestEditorStatus.failure &&
+              !failure.isCompleted) {
+            failure.complete(state);
+          }
+        });
+
+        bloc.add(const QuestsCreateRequested(_outOfRangeQuest));
+        final state = await failure.future.timeout(const Duration(seconds: 5));
+
+        // In release `_checkCoins` throws ArgumentError, which `_editorError`
+        // maps to the parent-safe copy. In debug the assert fires first
+        // (AssertionError), the mapping misses, and the raw
+        // `Failed assertion: … Quest coins must be 1..100` text is what the
+        // toast would show (review finding 4 wants neither mode to leak it).
+        expect(state.editorError, QuestsBloc.saveFailedMessage);
+        await sub.cancel();
+        await bloc.close();
+      },
+      skip: true,
+    );
   });
 
   // -- attacks that hold ----------------------------------------------------
