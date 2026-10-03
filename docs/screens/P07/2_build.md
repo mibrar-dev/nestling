@@ -1,144 +1,145 @@
-# P07 Paywall — build report (Stage 2 integration, iteration 2)
+# P07 Paywall — build report (Stage 2 integration, iteration 3)
 
-Two builders worked in parallel on the P07 paywall; this file is the
-integrator's report over the combined result. Sources:
-`docs/screens/P07/2a_build_logic.md` (logic), `2b_build_ui.md` (UI),
-`1_plan.md`, `FIXES_1.md`, `ORCHESTRATOR_NOTES.md`, `SHARED_REQUEST.md`.
+Integrator report over the two parallel builder chunks of iteration 3.
+Sources: `docs/screens/P07/2a_build_logic.md` (logic),
+`2b_build_ui.md` (UI), `1_plan.md`, `FIXES_2.md`, `ORCHESTRATOR_NOTES.md`,
+`SHARED_REQUEST.md`.
 
 ## Summary of 2a (logic chunk)
 
-No CONTRACT CHANGES; the logic layer was already in HEAD and was verified,
-not rewritten.
+One additive repository method, no event/state shape change:
 
-- `presentation/bloc/paywall_event.dart` — `PaywallLoadRequested`,
-  `PaywallTrialStarted`, `PaywallRestoreRequested` (`1_plan.md` §b names).
-- `presentation/bloc/paywall_state.dart` — `status` +
-  `action: PaywallAction{idle, working, success, failure}` +
-  `request: PaywallRequest{none, trial, restore}` discriminator (trial must
-  not call `startTrialNow()` on the restore path) + `copyWith(clearError:)`.
-- `presentation/bloc/paywall_bloc.dart` — `_onTrialStarted` → `startTrial()`
-  → success/failure, `_onRestoreRequested` → `activate()` →
-  success/failure, both with a `if (state.action == working) return;`
-  double-tap guard.
-- `data/paywall_repository_impl.dart` — `_upsert` mirroring
-  `AppSession._write` (P01 BUG-4 class), and the single annual plan whose
-  `detail` carries the design copy: sub without a stray full stop, caption
-  with the article "the", tag included, em-dash separators.
-- `test/features/paywall/paywall_bloc_test.dart` — 25 tests (status machine,
-  live/empty/error streams, action transitions with the discriminator,
-  repository under demo/empty/fresh).
-
-One documented deviation, kept: the view resolves `AppSession` through
-`GetIt.instance<AppSession>()`, not `context.read<AppSession>()` — it is
-registered in GetIt (`app/lib/app/di.dart`) but is not a Provider ancestor
-(`app/lib/app/app.dart`). Read-only; no shared edit needed.
+- `domain/paywall_repository.dart` — added
+  `readSubscription(): Future<SubscriptionStatus>` (one-shot read) with a
+  `watchSubscription().first` default, so every existing fake keeps
+  compiling.
+- `data/paywall_repository_impl.dart` — overrode `readSubscription()` with a
+  direct SELECT. 2a probe-verified that awaiting a fresh Drift watch stream
+  inside a widget test never resolves, so the BUG-12 guard cannot use the
+  watch stream.
+- `presentation/bloc/paywall_bloc.dart` — P07-BUG-12 guard in
+  `_onTrialStarted`: when `readSubscription()` reports `active`, skip
+  `startTrial()` and emit `success(request: restore)` so the view takes its
+  restore branch instead of downgrading a paying family to `trial`. Read
+  errors fail open to the legacy trial path; the `working` double-tap guard
+  is unchanged.
+- Tests: `paywall_bloc_test.dart` grew to 29 (fake gained
+  `subscription`/`failSubscription` + `readSubscription()`; four new tests for
+  the active-guard, fail-open and the three seeds). `p07_bugs_test.dart` and
+  `paywall_view_test.dart` each received the one-line `readSubscription`
+  stub their fakes need to compile, delegating to the watch stream (never
+  read by those fakes, so byte-identical legacy behaviour).
 
 ## Summary of 2b (UI chunk)
 
-- `presentation/views/paywall_view.dart` — the full `1_plan.md` §a screen:
-  `_PaywallNav` (compact bar, 44×44 surface-2 close tile, label
-  `Subscription`), `_PaywallHero` (350×148 frame with P01's
-  LayoutBuilder scale-down pattern; lilac-tint circle 170 at (90,−5), nest
-  150 at (100,41), `PipAvatar(style: mochi, stage: 4, inNest: true)` 120 at
-  (115,20), three coins at the design positions/rotations with `--sh-1`),
-  `_PaywallTitle` (h1, centred, maxLines 3), `_BenefitList` (4 rows, 24px
-  leaf-tint tick + Inter 15/24), `_PlanCard` (`NestCard` geometry + local 2px
-  leaf border + selected radio + title/sub/tag, `selected: true` announced),
-  `_TimelineCard` (margin-top 48, three steps, 24px dots, 2px connectors),
-  `_FamilyNote`, and `_PaywallCta` inside `NestBottomCta` composing
-  CTA → caption → legal row through a local column (`caption: null`), which
-  is how P07-BUG-3's order holds without re-implementing the bar surface.
-  Scroll body is `SingleChildScrollView` + `Column` (the sliver delegate's
-  `IndexedSemantics` wrapper hijacked descendant labels in widget tests and
-  built lazily, hiding below-fold copy). Close → `/pocket-money-setup`;
-  trial/restore → session writes → `/today` via `BlocListener`; Terms and
-  Privacy answer in place with a toast behind `TODO(P07)`.
-  The chunk's one view change: `explicitChildNodes: true` on the nav's
-  `Semantics` wrapper.
-- `test/features/paywall/paywall_view_test.dart` — four stage-3 contract
-  defects repaired with intent preserved, each with a NOTE comment in the
-  file (self-contradictory `tops[1] ≈ tops[2]`; CTA tap target measured on
-  `find.text` instead of the button key; `Tristate.isSelected` compared with
-  the bool `isTrue` matcher; decorative-art regex that legitimately matches
-  the hero title and Pip's alt).
+- `presentation/views/paywall_view.dart` — `_LegalLink` lost the expanding
+  inner `Center` (it made each link a full-width `Wrap` run, stacking the
+  legal row into five lines) and its label text is `maxLines: 1` /
+  `softWrap: false`; the two `·` separators became
+  `ExcludeSemantics(Text('·', …, softWrap: false))` (P07-BUG-11). The nav
+  now wraps its row in a `ListenableBuilder` on `AppSession` and omits the
+  close tile and its 44 px balance spacer while `session.trialExpired`
+  (P07-BUG-10) — with the trial expired the router bounces every non-paywall
+  location back, so a close control could never work.
+- `paywall_view_test.dart` — a legal-row geometry regression test (no
+  expanding `Center` in the link subtree) plus a structural plan-card
+  presence assertion; the stage-3 `[P07-BUG-10]` proof rewritten to the
+  fixed contract and un-skipped.
+- `p07_bugs_test.dart` — `[P07-BUG-10]` rewritten to the same contract,
+  `[P07-BUG-11]` and `[P07-BUG-12]` un-skipped.
+- 2b verified on a real device (`ui/app_light_3.png`, read back directly):
+  legal row on one run, compact panel, CTA at ~646, bottom edge still the
+  bar's own surface, `compare.py` mean diff 11.43% → 5.48%.
 
 ## Integration work done here
 
-The combined result needed one cleanup, no redesign:
+None required. The two halves landed with matching public names
+(`readSubscription()`, `PaywallAction`, `PaywallRequest`, the view's
+`success(request: restore)` branch), so there were no BLoC state/event
+mismatches, import breaks or renamed members to reconcile. `dart format`
+reports 0 changed and the analyzer is clean as-is.
 
-1. **Deleted `app/test/features/paywall/zz_debug_test.dart`** (leftover
-   semantics-dump helper committed in `fdc4238` "P07: wip before sync"). It
-   duplicated the 2b stage's diagnosis work and read the deprecated
-   `tester.binding.pipelineOwner`, which `flutter analyze` flags
-   (`deprecated_member_use`). 2b's report explicitly listed it as its own
-   debug helper, so removing it is not a redesign.
-2. `dart format .` → `0 changed`; no import, BLoC state/event or member
-   mismatches remained between the halves — 2a and 2b agreed on every
-   public name, so there was nothing to reconcile.
+The only worktree delta at integration time was 2b's in-flight
+`paywall_view_test.dart` (the legal-row test), which is committed by the
+loop; nothing in it needed adjustment.
 
-## FIXES_1 items — done
+## FIXES_2 items — done
 
-- **P07-BUG-1** (screen exists): implemented; 45-test view contract green.
-- **P07-BUG-2** (trial/restore path, ORCHESTRATOR_NOTES 1 mandatory):
-  events + action/request state + session writes + `/today` navigation;
-  verified by reading `app_state` after a tap (`trial` + `trial_start` +
-  `Europe/London` + onboarding complete; restore writes `active` and is
-  never downgraded), plus the rapid double-tap guard.
-- **P07-BUG-3** (bottom-bar order): CTA → caption → legal row inside
-  `NestBottomCta`.
-- **P07-BUG-4** (caption "the"): fixed at the data source.
-- **P07-BUG-5** (sub punctuation + tag data source): fixed; the tag is
-  reachable from the data layer.
-- **P07-BUG-6** (stale error survives retry): `clearError` path.
-- **P07-BUG-7** (UPDATE-only writes): `_upsert`.
-- **P07-BUG-1/2/3/4/5/6/7** proofs un-skipped in
-  `p07_bugs_test.dart` and passing.
-- COPY, FONTS, PIP, ALIGNMENT, BOTTOM EDGE: asserted by the suite
-  (character-by-character copy, no `google_fonts` anywhere in the feature,
-  `PipAvatar` v2 and no `pip_stage_*.svg`, 20px gutters at 320/390/430,
-  bottom-edge painted-pixel check in light and dark).
+- **UI deviations 1/2/3 (5_ui: stacked legal row, oversized CTA panel,
+  benefit 4 + plan card hidden behind it)** — root-caused to the expanding
+  `Center` in `_LegalLink`; fixed screen-locally. One run now fits at 390 dp
+  and the panel compacts to the design geometry.
+- **P07-BUG-10 (major: close trap on the expired-trial paywall)** — fixed
+  screen-locally by omitting the dead close affordance while
+  `trialExpired`; both proofs rewritten to that contract and un-skipped.
+- **P07-BUG-11 (announced `·` separators)** — `ExcludeSemantics` on both;
+  proof un-skipped.
+- **P07-BUG-12 (Start free trial downgrades an active subscriber)** — fixed
+  in the bloc action path; proof un-skipped.
+- **Iteration-1 bugs 1–7** — proofs stay un-skipped and green.
+- **UI deviation 4 (title orphan "days")** — accepted and documented by 2b:
+  the HTML's `text-wrap: balance` has no Flutter equivalent, a hard `\n`
+  would break the exact-copy `find.text` pins, and the block height is
+  unchanged. Not a screen defect.
+- **Benefit 4 wrapping on device** — accepted font-metric drift between the
+  bundled Inter build and the HTML mock's; the copy string is pinned
+  verbatim, so it is not fixable from the UI layer.
 
-## FIXES_1 items — LEFT (documented, not screen-local)
+## FIXES_2 items — LEFT (shared code, out of RULES §1 scope)
 
-- **P07-BUG-8** (major, shared): the 14-day trial never expires — nothing in
+- **P07-BUG-8 (major):** the 14-day trial never expires — nothing in
   `app/lib` writes `subscription_status = 'expired'`, so the router guard is
-  dead code. Owner: `core/data/app_session.dart` (+ `app/launch.dart`).
-- **P07-BUG-9** (minor, shared): kid-mode + onboarding-incomplete deep link
-  to `/paywall` ends on `/welcome` instead of the parental gate. Owner:
-  `app/lib/router.dart` (guard order).
+  dead code. Owner `core/data/app_session.dart` (+ `app/launch.dart`);
+  `SHARED_REQUEST.md` §1.
+- **P07-BUG-9 (minor):** kid-mode + onboarding-incomplete deep link to
+  `/paywall` lands on `/welcome` instead of `/parental-gate`. Owner
+  `app/lib/router.dart`; `SHARED_REQUEST.md` §2.
 
-Both are filed in `docs/screens/P07/SHARED_REQUEST.md`; their proof tests
-remain `skip: true` (the only 2 skips in the suite) until the shared fix
-lands. Neither blocks the P07 screen, its handoff or the green suite.
+Their two proof tests are the only remaining skips in the suite. They do not
+block the screen, its handoff or a green run. Note that BUG-10's fix is the
+screen half of the pair the bug hunt asked to land together: the close trap
+can no longer occur when the shared expiry fix arrives.
+
+## Orchestrator rules re-checked at integration
+
+- ORCHESTRATOR_NOTES 1 holds on both paths: trial →
+  `startTrialNow()` + `completeOnboarding()` → `/today`; restore →
+  `setSubscription('active')` + `completeOnboarding()` → `/today`.
+- COPY unchanged and still character-pinned; FONTS: grep for
+  `google_fonts`/`GoogleFonts` in the feature's `lib/` and `test/` is clean;
+  no `pip_stage_*.svg` anywhere; BOTTOM EDGE and ALIGNMENT still pinned by
+  the painted-pixel and gutter tests, re-confirmed green.
 
 ## Analyze / test tails
 
 ```
 $ dart format .
-Formatted 367 files (0 changed) in 0.76 seconds.
+Formatted 369 files (0 changed) in 1.10 seconds.
 
 $ flutter analyze
 Analyzing app...
-No issues found! (ran in 2.8s)
+No issues found! (ran in 4.9s)
 
 $ flutter test
-00:15 +734 ~2: All tests passed!
+00:22 +765 ~2: All tests passed!
 ```
 
 Per-file feature runs:
 
 ```
-test/features/paywall/p07_bugs_test.dart:    +14 ~2  All tests passed!
-test/features/paywall/paywall_bloc_test.dart: +25    All tests passed!
-test/features/paywall/paywall_view_test.dart: +45    All tests passed!
-test/features/paywall/ (whole dir):           +84 ~2  All tests passed!
+test/features/paywall/p07_bugs_test.dart:      +17 ~2  All tests passed!
+test/features/paywall/paywall_bloc_test.dart:  +29     All tests passed!
+test/features/paywall/paywall_view_test.dart:  +55     All tests passed!
+test/features/paywall/ (whole dir):            +101 ~2 All tests passed!
 ```
+
+The 2 skips are `[P07-BUG-8]` and `[P07-BUG-9]` (shared code).
 
 ## Verdict basis
 
 Stage 2 integration requires `dart format` clean, `flutter analyze` printing
-`No issues found!`, and the full suite passing. All three hold: 367 files
-formatted with 0 changes, no analyzer issues, and 734 tests pass with only
-the two documented shared-code skips remaining.
+`No issues found!`, and the full suite passing. All three hold: 369 files
+formatted with 0 changes, no analyzer issues, 765 tests passing with only
+the two documented shared-code skips left.
 
 VERDICT: PASS
