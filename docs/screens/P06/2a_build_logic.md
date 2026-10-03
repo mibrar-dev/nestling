@@ -78,16 +78,21 @@ feature sandbox:
 - `flutter test .../pocket_money_setup_bloc_test.dart
   .../pocket_money_setup_repository_test.dart` → `All tests passed!` (34/34).
 - `flutter test .../p06_bugs_test.dart` → `All tests passed!`
-  (+12 ~3: the 4 un-skipped proofs + 8 attacks-that-hold green; the 3 skips
-  are BUG-03/04/05, view layer).
+  (+14 ~1 on re-verification: the 4 un-skipped logic proofs + 8
+  attacks-that-hold green, plus the UI chunk's BUG-04/05 fixes; the 1 skip
+  is BUG-03, view/shared layer).
 - Full-app `flutter test` and simulator NOT run (integrator owns them).
+- Re-verified on re-run: logic layer analyzes with zero issues (the single
+  remaining `info` is in the UI chunk's view file); bloc+repo 34/34 green.
 
 ## LEFT FOR NEXT ITERATION
 
-Nothing in the logic layer. Handoff to the UI chunk / integrator:
-BUG-03 (day-pill paint size — needs the shared `NestChip` compact/`labelStyle`
-follow-up from `1_plan.md` §7), BUG-04 (day-cell width — view layout),
-BUG-05 (gate the view failure branch on `setup == null` so a failed *write*
-keeps the form and only a failed *load* shows `_FailureBody`).
+Nothing in the logic layer. Handoff to the UI chunk / integrator (re-verified
+this run — the UI chunk has since fixed + un-skipped BUG-04 and BUG-05):
+- BUG-03 still skipped (day-pill paint size — needs the shared `NestChip`
+  compact/`labelStyle` follow-up from `1_plan.md` §7).
+- One `info` lint remains in the UI chunk's file
+  (`pocket_money_setup_view.dart:556 avoid_redundant_argument_values`); the
+  logic layer analyzes with zero issues.
 
 VERDICT: PASS

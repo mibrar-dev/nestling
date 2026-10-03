@@ -553,7 +553,6 @@ class _DayRow extends StatelessWidget {
           }
           return SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            clipBehavior: Clip.hardEdge,
             child: row,
           );
         },
@@ -593,7 +592,9 @@ class _DayCell extends StatelessWidget {
         child: SizedBox(
           width: cellWidth,
           height: NestDevice.tapParent,
-          child: Center(child: _DayPill(label: label, selected: selected)),
+          child: Center(
+            child: _DayPill(label: label, selected: selected),
+          ),
         ),
       ),
     );
