@@ -26,7 +26,11 @@ abstract final class NestType {
       fontSize: size,
       height: lineHeight / size,
       fontWeight: weight,
-      letterSpacing: letterSpacing,
+      // The design CSS sets letter-spacing only on `.display` and
+      // `.status-time`; every other class uses the browser default of 0.
+      // Null would inherit Material 3 defaults (e.g. 0.25, 0.5), so default
+      // to 0 explicitly.
+      letterSpacing: letterSpacing ?? 0,
       color: color,
     );
   }
@@ -43,7 +47,8 @@ abstract final class NestType {
       fontSize: size,
       height: lineHeight / size,
       fontWeight: weight,
-      letterSpacing: letterSpacing,
+      // Same as [_inter]: design default is 0, not the Material default.
+      letterSpacing: letterSpacing ?? 0,
       color: color,
     );
   }

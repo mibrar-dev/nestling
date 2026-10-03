@@ -10,3 +10,11 @@ sealed class PaywallEvent extends Equatable {
 final class PaywallLoadRequested extends PaywallEvent {
   const new();
 }
+
+final class PaywallTrialStarted extends PaywallEvent {
+  const new();
+}
+
+final class PaywallRestoreRequested extends PaywallEvent {
+  const new();
+}

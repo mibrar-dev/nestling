@@ -15,6 +15,9 @@ import 'package:nestling/core/design_system/tokens/typography.dart';
 /// changing layout (`SPACING_SPEC` §10.6: "keep visual size", tap area
 /// overlaid) — so chip rows stay 32 tall and a `Wrap` still sees the pill's
 /// intrinsic width.
+///
+/// chips in a row: use NestChipWrap — a plain `Wrap`/`Row` is exactly
+/// 32 px high per run and clips the 44 px hit area above/below the row.
 class NestChip extends StatelessWidget {
   const new({
     required this.label,
@@ -23,6 +26,13 @@ class NestChip extends StatelessWidget {
     this.onSelected,
     this.leading,
   });
+
+  /// Hit slop around the 32 px pill to reach the 44 px minimum tap target.
+  ///
+  /// `(44 - 32) / 2`. Shared with `NestChipWrap`, which expands its own
+  /// hit test by this amount so edge runs stay tappable — do not duplicate
+  /// the number elsewhere.
+  static const double hitSlop = (NestDevice.tapParent - NestSpacing.s8) / 2;
 
   final String label;
   final bool selected;
