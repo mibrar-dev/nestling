@@ -919,18 +919,33 @@ void main() {
         lessThanOrEqualTo(260),
         reason: '.speech max-width is 260 px',
       );
-      // The label and the tail below it.
+      // The label and the tail below it. shared/speech_tail: the tail is CSS
+      // `::after` overflow — the bubble's laid-out box equals the body box,
+      // and the solid 18×9 ink tail hangs 9 px below it (its top flush with
+      // the body's outer bottom edge, centred).
       final label = tester.widget<Text>(
         find.descendant(of: body, matching: find.text("Let's do some quests!")),
       );
       expect(label.style!.fontSize, 16);
       expect(label.style!.fontWeight, FontWeight.w800);
       expect(label.style!.letterSpacing ?? 0, 0);
+      final bubbleRect = tester.getRect(find.byType(NestSpeechBubble));
       expect(
-        tester.getRect(find.byType(NestSpeechBubble)).bottom,
-        greaterThan(rect.bottom),
-        reason: 'the tail hangs below the bubble body',
+        bubbleRect.height,
+        closeTo(rect.height, 0.5),
+        reason: 'the tail is overflow: the bubble lays out as the body alone',
       );
+      expect(bubbleRect.width, closeTo(rect.width, 0.5));
+      final tail = find.descendant(
+        of: find.byType(NestSpeechBubble),
+        matching: find.byType(CustomPaint),
+      );
+      expect(tail, findsOneWidget);
+      final tailRect = tester.getRect(tail);
+      expect(tailRect.width, closeTo(18, 0.5));
+      expect(tailRect.height, closeTo(9, 0.5));
+      expect(tailRect.top, closeTo(rect.bottom, 0.5));
+      expect(tailRect.center.dx, closeTo(rect.center.dx, 0.5));
       await disposeApp(tester);
     });
   });
