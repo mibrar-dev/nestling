@@ -77,6 +77,14 @@ class _FakePaywallRepository implements PaywallRepository {
   /// `activate()` throws — the restore action reports failure.
   bool failRestore = false;
 
+  /// The subscription the fake reports from `readSubscription()`. `null`
+  /// keeps the legacy empty watch stream (the guard fails open and the
+  /// trial is attempted).
+  SubscriptionStatus? subscription;
+
+  /// `readSubscription()` throws — the guard fails open to the trial.
+  bool failSubscription = false;
+
   @override
   Future<List<PaywallPlan>> getItems() => _items.first;
 
@@ -84,8 +92,18 @@ class _FakePaywallRepository implements PaywallRepository {
   Stream<List<PaywallPlan>> watchItems() => _items;
 
   @override
-  Stream<SubscriptionStatus> watchSubscription() =>
-      const Stream<SubscriptionStatus>.empty();
+  Stream<SubscriptionStatus> watchSubscription() {
+    final current = subscription;
+    if (current == null) return const Stream<SubscriptionStatus>.empty();
+    return Stream<SubscriptionStatus>.value(current);
+  }
+
+  @override
+  Future<SubscriptionStatus> readSubscription() async {
+    if (failSubscription) throw Exception('offline');
+    return subscription ??
+        const SubscriptionStatus(status: 'trial', trialStart: null);
+  }
 
   @override
   Future<void> startTrial() async {
@@ -381,6 +399,67 @@ void main() {
         expect(bloc.state.request, PaywallRequest.restore);
       },
     );
+
+    blocTest<PaywallBloc, PaywallState>(
+      'P07-BUG-12: a trial tap while already active skips startTrial '
+      'and succeeds as restore',
+      build: () => PaywallBloc(
+        repository: _FakePaywallRepository()
+          ..subscription = const SubscriptionStatus(
+            status: 'active',
+            trialStart: null,
+          ),
+      ),
+      act: (bloc) => bloc.add(const PaywallTrialStarted()),
+      expect: () => const <PaywallState>[
+        PaywallState(
+          action: PaywallAction.working,
+          request: PaywallRequest.trial,
+        ),
+        PaywallState(
+          action: PaywallAction.success,
+          request: PaywallRequest.restore,
+        ),
+      ],
+    );
+
+    test(
+      'P07-BUG-12: the active-subscription guard never writes the trial',
+      () async {
+        final repository = _FakePaywallRepository()
+          ..subscription = const SubscriptionStatus(
+            status: 'active',
+            trialStart: null,
+          );
+        final bloc = PaywallBloc(repository: repository);
+        addTearDown(bloc.close);
+
+        bloc.add(const PaywallTrialStarted());
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        expect(repository.startTrialCalls, 0);
+        expect(bloc.state.action, PaywallAction.success);
+        // The view's restore branch (`setSubscription('active')`) is a
+        // no-op for a paying family, unlike its trial branch.
+        expect(bloc.state.request, PaywallRequest.restore);
+      },
+    );
+
+    test(
+      'P07-BUG-12: an unreadable subscription fails open to the trial',
+      () async {
+        final repository = _FakePaywallRepository()..failSubscription = true;
+        final bloc = PaywallBloc(repository: repository);
+        addTearDown(bloc.close);
+
+        bloc.add(const PaywallTrialStarted());
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        expect(repository.startTrialCalls, 1);
+        expect(bloc.state.action, PaywallAction.success);
+        expect(bloc.state.request, PaywallRequest.trial);
+      },
+    );
   });
 
   group('PaywallRepository (in-memory Drift)', () {
@@ -483,6 +562,24 @@ void main() {
       expect(status.expired, isFalse);
       expect(status.trialStart, isNull);
     });
+
+    test(
+      'readSubscription matches the watched status under every seed',
+      () async {
+        await Seed.demo(db);
+        expect((await repository.readSubscription()).status, 'active');
+
+        await Seed.empty(db);
+        final empty = await repository.readSubscription();
+        expect(empty.status, 'trial');
+        expect(empty.trialStart, isNotNull);
+
+        await Seed.fresh(db);
+        final fresh = await repository.readSubscription();
+        expect(fresh.status, 'trial');
+        expect(fresh.trialStart, isNull);
+      },
+    );
 
     test(
       'startTrial records the status, a UTC start and the family zone',

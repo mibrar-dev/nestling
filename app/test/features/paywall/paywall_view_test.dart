@@ -149,6 +149,9 @@ class _FakePaywallRepository implements PaywallRepository {
       const Stream<SubscriptionStatus>.empty();
 
   @override
+  Future<SubscriptionStatus> readSubscription() => watchSubscription().first;
+
+  @override
   Future<void> startTrial() async {
     startTrialCalls++;
     final gate = trialGate;
@@ -724,6 +727,33 @@ void main() {
       );
     });
 
+    testWidgets('the legal links share one row at 390dp', (tester) async {
+      await setUpTestScope();
+      await _pumpPaywall(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(390, 844),
+      );
+
+      // Stage 5 deviation 1: the legal row used to stack five full-width
+      // lines because `_LegalLink` contained an expanding `Center`; the
+      // design has `Restore purchases · Terms · Privacy` on one run.
+      final tops = <double>[
+        for (final link in _legalLinks)
+          tester.getRect(find.bySemanticsLabel(link)).top,
+      ];
+      expect(tops[0], moreOrLessEquals(tops[1], epsilon: 0.01));
+      expect(tops[1], moreOrLessEquals(tops[2], epsilon: 0.01));
+
+      // A compact panel unhides the 4th benefit + plan card at top-of-scroll.
+      final ctaTop = tester
+          .getRect(find.byKey(const ValueKey('p07_start_trial')))
+          .top;
+      expect(tester.getRect(find.text(_planTitle)).bottom, lessThan(ctaTop));
+
+      await disposeApp(tester);
+    });
+
     testWidgets('the timeline steps share one left edge in document order', (
       tester,
     ) async {
@@ -1100,14 +1130,12 @@ void main() {
     });
 
     testWidgets(
-      '[P07-BUG-10] close escapes the expired-trial paywall (no /today bounce)',
-      // Real defect, recorded not patched (stage 3 may not edit the screen):
-      // `PaywallView._onBack` pops when `context.canPop()` is true, and the
-      // expired-trial redirect leaves `/today` on the history — so X pops to
-      // `/today`, the guard redirects straight back to `/paywall`, and the
-      // parent can never leave. Proof and repro in `3_test.md`; remove the
-      // skip when the screen is fixed.
-      skip: true,
+      '[P07-BUG-10] the expired-trial paywall shows no dead close control',
+      // Stage 6 proved the close button can never leave the expired-trial
+      // paywall (the router bounces every location back to /paywall), so
+      // the screen must not pretend one exists. Product resolution belongs
+      // to the orchestrator; until then the gate keeps only its working
+      // exits (start trial / restore).
       (tester) async {
         final db = await setUpTestScope();
         await (db.update(db.appState)..where((a) => a.id.equals(1))).write(
@@ -1126,15 +1154,15 @@ void main() {
         );
         expect(currentPath(tester), '/paywall');
 
-        await tester.tap(find.bySemanticsLabel(_closeLabel));
-        await _settle(tester);
-
         expect(
-          currentPath(tester),
-          isNot('/paywall'),
-          reason: 'X must leave the paywall, not bounce back to it',
+          find.bySemanticsLabel(_closeLabel),
+          findsNothing,
+          reason:
+              'a close button on the hard gate can only bounce the parent '
+              'back to /paywall — it must not be rendered',
         );
-        expect(currentPath(tester), '/pocket-money-setup');
+        expect(find.text(_cta), findsOneWidget);
+        expect(find.text('Restore purchases'), findsOneWidget);
 
         await disposeApp(tester);
       },

@@ -115,31 +115,44 @@ class _PaywallNav extends StatelessWidget {
             NestSpacing.s3,
             NestSpacing.s3,
           ),
-          child: Row(
-            children: <Widget>[
-              Semantics(
-                button: true,
-                label: 'Close and go back',
-                onTap: onBack,
-                child: Material(
-                  color: tokens.surface2,
-                  borderRadius: BorderRadius.circular(NestSpacing.s3),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(NestSpacing.s3),
-                    onTap: onBack,
-                    child: SizedBox(
-                      width: NestDevice.tapParent,
-                      height: NestDevice.tapParent,
-                      child: Center(
-                        child: NestIcon(NestIcons.close, color: tokens.ink),
+          child: ListenableBuilder(
+            listenable: GetIt.instance<AppSession>(),
+            builder: (context, _) {
+              // P07-BUG-10: with the trial expired the router bounces every
+              // non-`/paywall` location back here, so a close button can
+              // never work — omit it instead of rendering a dead control.
+              final expired = GetIt.instance<AppSession>().trialExpired;
+              return Row(
+                children: <Widget>[
+                  if (!expired)
+                    Semantics(
+                      button: true,
+                      label: 'Close and go back',
+                      onTap: onBack,
+                      child: Material(
+                        color: tokens.surface2,
+                        borderRadius: BorderRadius.circular(NestSpacing.s3),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(NestSpacing.s3),
+                          onTap: onBack,
+                          child: SizedBox(
+                            width: NestDevice.tapParent,
+                            height: NestDevice.tapParent,
+                            child: Center(
+                              child: NestIcon(
+                                NestIcons.close,
+                                color: tokens.ink,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-              ),
-              const Expanded(child: SizedBox.shrink()),
-              const SizedBox(width: NestDevice.tapParent),
-            ],
+                  const Expanded(child: SizedBox.shrink()),
+                  if (!expired) const SizedBox(width: NestDevice.tapParent),
+                ],
+              );
+            },
           ),
         ),
       ),
@@ -744,13 +757,27 @@ class _LegalRow extends StatelessWidget {
           label: 'Restore purchases',
           onTap: disabled ? null : () => _restore(context),
         ),
-        Text('·', style: NestType.caption(color: context.nest.ink3)),
+        ExcludeSemantics(
+          child: Text(
+            '·',
+            maxLines: 1,
+            softWrap: false,
+            style: NestType.caption(color: context.nest.ink3),
+          ),
+        ),
         _LegalLink(
           label: 'Terms',
           onTap: () =>
               _placeholder(context, 'Terms are available in the full app.'),
         ),
-        Text('·', style: NestType.caption(color: context.nest.ink3)),
+        ExcludeSemantics(
+          child: Text(
+            '·',
+            maxLines: 1,
+            softWrap: false,
+            style: NestType.caption(color: context.nest.ink3),
+          ),
+        ),
         _LegalLink(
           label: 'Privacy',
           onTap: () => _placeholder(
@@ -790,13 +817,14 @@ class _LegalLink extends StatelessWidget {
             onTap: tap,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 6),
-              child: Center(
-                child: ExcludeSemantics(
-                  child: Text(
-                    label,
-                    style: NestType.fieldLabel(color: tokens.sky)
-                        .copyWith(decoration: TextDecoration.underline),
-                  ),
+              child: ExcludeSemantics(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                  style: NestType.fieldLabel(color: tokens.sky)
+                      .copyWith(decoration: TextDecoration.underline),
                 ),
               ),
             ),

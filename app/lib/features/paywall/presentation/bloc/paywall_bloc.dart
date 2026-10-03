@@ -47,6 +47,23 @@ class PaywallBloc extends Bloc<PaywallEvent, PaywallState> {
       ),
     );
     try {
+      // P07-BUG-12: `/paywall` stays reachable for an onboarded app, so a
+      // paying subscriber can tap the trial CTA. `startTrial()` (and the
+      // view's `startTrialNow()`) would overwrite `active` with `trial` and
+      // move `trial_start`. An already-active subscription is therefore
+      // treated as "already subscribed": the repository write is skipped and
+      // success is reported with `request: restore`, so the view takes its
+      // restore branch (`setSubscription('active')` — a no-op here — +
+      // `completeOnboarding()` → `/today`) instead of the trial branch.
+      if (await _alreadySubscribed()) {
+        emit(
+          state.copyWith(
+            action: PaywallAction.success,
+            request: PaywallRequest.restore,
+          ),
+        );
+        return;
+      }
       await _repository.startTrial();
       emit(
         state.copyWith(
@@ -62,6 +79,20 @@ class PaywallBloc extends Bloc<PaywallEvent, PaywallState> {
           errorMessage: error.toString(),
         ),
       );
+    }
+  }
+
+  /// Whether the family already pays. Read with the one-shot
+  /// [PaywallRepository.readSubscription] (a fresh watch subscription never
+  /// resolves inside a widget test). Fail-open: when the subscription
+  /// cannot be read, the trial is attempted exactly as before this guard
+  /// existed.
+  Future<bool> _alreadySubscribed() async {
+    try {
+      final subscription = await _repository.readSubscription();
+      return subscription.status == 'active';
+    } on Object {
+      return false;
     }
   }
 

@@ -27,6 +27,17 @@ class PaywallRepositoryImpl implements PaywallRepository {
   }
 
   @override
+  Future<SubscriptionStatus> readSubscription() async {
+    final row = await (_db.select(
+      _db.appState,
+    )..where((a) => a.id.equals(1))).getSingleOrNull();
+    return SubscriptionStatus(
+      status: row?.subscriptionStatus ?? 'trial',
+      trialStart: row?.trialStart,
+    );
+  }
+
+  @override
   Future<void> startTrial() async {
     final zone = await _db.familyZoneId();
     await _upsert(

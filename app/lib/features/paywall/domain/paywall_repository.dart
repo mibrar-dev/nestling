@@ -8,6 +8,15 @@ abstract class PaywallRepository {
   Stream<List<PaywallPlan>> watchItems();
 
   Stream<SubscriptionStatus> watchSubscription();
+
+  /// One-shot read of the current subscription (missing row → `trial` with
+  /// no start date, same default as [watchSubscription]). The default reads
+  /// the first watch emission; the Drift implementation overrides this with
+  /// a direct SELECT because subscribing to a fresh watch stream inside a
+  /// widget test never resolves (verified by probe: `watch().first` stays
+  /// pending while the one-shot SELECT returns immediately).
+  Future<SubscriptionStatus> readSubscription() => watchSubscription().first;
+
   Future<void> startTrial();
   Future<void> activate();
 }

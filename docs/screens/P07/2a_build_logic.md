@@ -1,83 +1,93 @@
-# P07 Paywall — Stage 2a logic chunk (iteration 2)
+# P07 Paywall — Stage 2a logic chunk (iteration 3)
 
 Scope: non-UI layer only — `domain/**`, `data/**`, `presentation/bloc/**`,
-DI/route registration, and unit/bloc tests. Views/widgets untouched.
+DI/route registration, and unit/bloc tests. Views/widgets untouched (the
+parallel UI builder owns them; its in-flight view edits are visible in
+`git diff` but were not made here).
 
 ## CONTRACT CHANGES
 
-None. Public names match `1_plan.md` §b exactly (`PaywallLoadRequested`,
-`PaywallTrialStarted`, `PaywallRestoreRequested`, `PaywallState` with
-`status` + `action: PaywallAction{idle,working,success,failure}`), plus the
-`PaywallRequest{none,trial,restore}` discriminator foreseen in `2_build.md`
-(trial must not call `startTrialNow()` on the restore path and vice versa).
-The parallel UI builder codes against these names — the view already
-consumes them (`paywall_view.dart:43-68,682-721`, read-only check, no edit).
+One additive repository method (no event/state shape change — the UI
+builder's contract is untouched):
 
-One documented deviation from the plan (from `2_build.md`, kept): the view
-uses `GetIt.instance<AppSession>()`, not `context.read<AppSession>()`,
-because `AppSession` is registered in GetIt (`app/lib/app/di.dart`) but is
-not a Provider ancestor (`app/lib/app/app.dart`). Read-only use, no shared
-edit needed.
+- `PaywallRepository.readSubscription()` → `Future<SubscriptionStatus>`
+  (one-shot read; missing row → `trial`/null, same default as
+  `watchSubscription()`). All existing fakes keep compiling: the only
+  behavioural override is in `PaywallRepositoryImpl` (direct SELECT) and
+  the bloc-test fake (canned value); the other two fakes delegate to
+  `watchSubscription().first`, preserving exact legacy semantics.
+
+Behavioural note (no shape change): a trial tap while the subscription is
+already `active` now emits `success` with `request: restore` instead of
+`request: trial`, so the view takes its restore branch
+(`setSubscription('active')` — a no-op for a paying family — +
+`completeOnboarding()` → `/today`) rather than regressing the user to
+`trial`. Events, `PaywallAction`, and `PaywallRequest` are unchanged.
 
 ## Files changed
 
-No edits were needed this stage — the logic layer in HEAD already
-implements the plan, and this stage verified it (`dart format`: 0 changed,
-`flutter analyze`: No issues found). Files verified (not modified):
-
-- `app/lib/features/paywall/presentation/bloc/paywall_event.dart` — both
-  action events present.
-- `app/lib/features/paywall/presentation/bloc/paywall_state.dart` —
-  `action` + `request` + `copyWith(clearError:)` present.
+- `app/lib/features/paywall/domain/paywall_repository.dart` — added
+  `readSubscription()` with a `watchSubscription().first` default.
+- `app/lib/features/paywall/data/paywall_repository_impl.dart` —
+  overrode `readSubscription()` with a one-shot SELECT. Rationale
+  (probe-verified): awaiting a fresh Drift watch stream inside a widget
+  test never resolves (`watch().first` stayed pending over 3 s of pumped
+  time while the SELECT returned immediately), so the guard cannot use
+  the watch stream. Plain unit tests are unaffected.
 - `app/lib/features/paywall/presentation/bloc/paywall_bloc.dart` —
-  `_onTrialStarted` (`startTrial()` → success/failure) and
-  `_onRestoreRequested` (`activate()` → success/failure); double-tap guard
-  (`if working return`) so a rapid second tap is a no-op.
-- `app/lib/features/paywall/data/paywall_repository_impl.dart` — upsert
-  writes (P01 BUG-4 class fixed); static annual plan detail carries the
-  design copy: sub without stray full stop, caption with "the", tag
-  included, em-dash separators.
-- `app/lib/features/paywall/domain/**`, `paywall_di.dart`,
-  `paywall_routes.dart` — unchanged, contract-stable.
-- `app/test/features/paywall/paywall_bloc_test.dart` — 25 tests, pin the
-  `PaywallStatus` machine, action transitions (working→success|failure with
-  discriminator), and the Drift repository under demo/empty/fresh seeds.
+  P07-BUG-12 guard in `_onTrialStarted`: if `readSubscription()` is
+  `active`, skip `startTrial()` and emit `success(restore)`; read errors
+  fail open to the legacy trial path. Double-tap `working` guard kept.
+- `app/test/features/paywall/paywall_bloc_test.dart` (my file) — fake
+  gained `subscription`/`failSubscription` + `readSubscription()`
+  override; 4 new tests: active-tap emits working→success(restore) with
+  zero `startTrial` calls, fail-open on unreadable subscription,
+  `readSubscription` matches the watched status under demo/empty/fresh.
+- `app/test/features/paywall/p07_bugs_test.dart` — un-skipped
+  `[P07-BUG-12]` (now passing); added the one-line `readSubscription`
+  stub `_FlakyRepository` needs to compile (delegates to the watch
+  stream; that fake never reads subscriptions).
+- `app/test/features/paywall/paywall_view_test.dart` — same one-line
+  `readSubscription` stub on its fake (empty watch stream → fail-open,
+  byte-identical legacy behaviour). No other touch; view expectations
+  untouched.
 
-## Items done (FIXES_1, logic layer only)
+## Items done (FIXES_2, logic layer only)
 
-- P07-BUG-2 (logic part): trial/restore events, action state, request
-  discriminator, double-tap guard — done; session writes + navigation are
-  the view's job (already wired per read-only check above).
-- P07-BUG-3 (caption "the"): `detail` contains
-  `£29.99/year after the 14-day trial.` — done.
-- P07-BUG-4/5 (detail punctuation + tag): no `billed yearly.`, tag
-  `One price, the whole family` reachable from the data layer — done.
-- P07-BUG-6 (stale error): `clearError` path used on load and both
-  actions — done.
-- P07-BUG-7 (UPDATE-only writes): `_upsert` mirrors `AppSession._write` —
-  done.
-- P07-BUG-8/9: shared code (`app_session.dart`, `router.dart`) — NOT this
-  layer; `SHARED_REQUEST.md` already filed, proofs stay `skip: true`.
-- P07-BUG-3 (bottom-bar order): view/core concern — UI builder's, not mine.
-- No `google_fonts`/`GoogleFonts` or `pip_stage_*` references in the
-  feature's non-UI code (grep clean).
+- P07-BUG-12 (minor) — FIXED end-to-end from this layer: proof
+  un-skipped and green (status stays `active`, `trial_start` untouched,
+  → `/today`). The `paywall_bloc_test` pin "activate then startTrial is
+  reachable (trial wins, by design)" stays valid as the raw repository
+  contract — the guard lives only in the bloc action path.
+- Iteration-1 bugs 1–7 proofs: still green (no logic-layer change except
+  the guarded trial path, which is fail-open for every fake).
+- P07-BUG-10/11: view layer — the UI builder fixed and un-skipped both
+  in parallel (visible in the worktree diff); not touched here.
+- P07-BUG-8/9: shared code — remain `skip: true`, `SHARED_REQUEST.md`
+  already filed; untouched.
+- UI deviations 1–4 (legal row, CTA panel, overlap, title orphan):
+  view/design-system — not this layer.
+- No `google_fonts`/`GoogleFonts` in the feature (grep clean);
+  ORCHESTRATOR_NOTES item 1 holds (both success paths still
+  `completeOnboarding()` → `/today`).
 
-## Evidence
+## Evidence (`app/`)
 
-- `dart format lib/features/paywall test/features/paywall/paywall_bloc_test.dart` → 0 changed.
-- `flutter analyze lib/features/paywall test/features/paywall/paywall_bloc_test.dart` → No issues found!
-- `flutter test test/features/paywall/paywall_bloc_test.dart` → +25 All tests passed.
-- `p07_bugs_test.dart --plain-name '[P07-BUG-4]'` → pass (un-skipped).
-- `--plain-name '[P07-BUG-5]'` → +2 pass (un-skipped).
-- `--plain-name '[P07-BUG-6]'` → pass (un-skipped).
-- `--plain-name '[P07-BUG-7]'` → pass (un-skipped).
+- `dart format` on touched files → clean.
+- `flutter analyze lib/features/paywall test/features/paywall/` →
+  No issues found!
+- `flutter test test/features/paywall/paywall_bloc_test.dart` → +29,
+  all passed.
+- `flutter test test/features/paywall/p07_bugs_test.dart --plain-name
+  '[P07-BUG-12]'` → pass (un-skipped).
+- `flutter test test/features/paywall/` → +100 ~2, all passed (the 2
+  skips are the shared BUG-8/9 proofs).
 
 ## LEFT FOR NEXT ITERATION
 
-Nothing in the logic layer. Widget/view proofs (BUG-1/2/3 groups,
-`paywall_view_test.dart`) belong to the UI builder; whole-app `flutter
-test` and the simulator belong to the integrator. Note:
-`app/test/features/paywall/zz_debug_test.dart` (semantics dump, UI
-builder's debug helper) was left untouched — not mine to remove.
+Nothing in the logic layer. Whole-app `flutter test`, simulator shots,
+and the view-side BUG-10/11 verification belong to the UI builder /
+integrator. A temporary probe test used to diagnose the watch-stream
+hang was deleted.
 
 VERDICT: PASS
