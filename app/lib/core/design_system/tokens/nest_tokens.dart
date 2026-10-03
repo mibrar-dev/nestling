@@ -63,6 +63,10 @@ class NestTokens extends ThemeExtension<NestTokens> {
   Color get kidMeadow => colors.kidMeadow;
   Color get kidHorizon => colors.kidHorizon;
 
+  /// `--pet-glow` centre colour: null in light (no glow), white @10% in
+  /// dark. See [NestSchemeColors.petGlow].
+  Color? get petGlow => colors.petGlow;
+
   List<BoxShadow> get cardShadow =>
       isDark ? NestShadows.sh1Dark : NestShadows.sh1;
   List<BoxShadow> get raisedShadow =>

@@ -52,6 +52,7 @@ Kid rule: `.screen.kid .body/.caption` switch to Nunito; `.screen.kid .body` = 1
 | `--a-lilac/a-peach/a-sky` | #3F35A8/#B44A1F/#1E4FA3 | #CDC4FF/#FFB795/#A9C6FF |
 | `--kid-sky-top/bottom` | #CFE6FF/#F2FAFF | #1B2150/#2C3572 |
 | `--kid-meadow/horizon` | #BFE8B0/#EAF7E2 | #1E4A3A/#253359 |
+| `--pet-glow` | none | radial white@10% (circle 110px at 50% 45%, transparent 70%) |
 
 Space: `--s1:4 --s2:8 --s3:12 --s4:16 --s5:20 --s6:24 --s8:32 --s10:40`, `--pad-side:20`.
 Radius: `--r-s:10 --r-m:16 --r-l:24 --r-xl:32 --r-pill:999`.

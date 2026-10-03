@@ -86,7 +86,7 @@ void main() {
       ),
     );
 
-    testWidgets('icon 24 at x+16, hint at x+50, field 52 high', (tester) async {
+    testWidgets('icon 24 at x+16, hint at x+50, field 54 high', (tester) async {
       await pumpBothModes(tester, searchRow());
 
       // The outer `.search` container (first Container under NestTextField —
@@ -99,8 +99,9 @@ void main() {
             )
             .first,
       );
-      // `.search { min-height:52px }`: 4 px padding around the 44 px input.
-      expect(field.height, moreOrLessEquals(52, epsilon: 1));
+      // `.search` border box: 4 px padding around the 44 px input plus
+      // 1 px borders = 54 px total.
+      expect(field.height, moreOrLessEquals(54, epsilon: 1));
 
       final icon = tester.getRect(find.byType(NestIcon));
       expect(icon.size, const Size(24, 24));

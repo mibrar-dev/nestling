@@ -488,7 +488,20 @@ abstract final class Seed {
   }
 
   static Future<void> _rewardsDemo(AppDatabase db) async {
-    Future<void> reward(String id, String title, String icon, int price) {
+    // Creation order is the P14 list order (owner rule "listed in the order
+    // they were added"): each reward is stamped one second after the
+    // previous, so `watchRewardsInCreationOrder` (created_at, then id)
+    // renders the seed in the order below. "Baking together" needs no
+    // parental OK — the P14 design (light + dark) shows its "Needs my OK"
+    // toggle OFF while every other visible reward is ON.
+    var order = 0;
+    Future<void> reward(
+      String id,
+      String title,
+      String icon,
+      int price, {
+      bool needsOk = true,
+    }) {
       return db
           .into(db.rewards)
           .insert(
@@ -498,6 +511,9 @@ abstract final class Seed {
               title: title,
               icon: Value(icon),
               coinPrice: price,
+              needsOk: Value(needsOk),
+              createdAt: Value(utc(9, 19, 8).add(Duration(seconds: order++))),
+              createdAtTz: const Value(defaultFamilyZoneId),
             ),
           );
     }
@@ -505,7 +521,7 @@ abstract final class Seed {
     await reward('r-screen', '30 min extra screen time', 'tv', 50);
     await reward('r-film', 'Pick Friday film', 'film', 80);
     await reward('r-bedtime', 'Stay up 15 min later', 'moon', 60);
-    await reward('r-baking', 'Baking together', 'cake', 100);
+    await reward('r-baking', 'Baking together', 'cake', 100, needsOk: false);
     await reward('r-cafe', 'Trip to the park café', 'coffee', 150);
     await reward('r-dinner', 'Choose dinner', 'plate', 90);
   }
