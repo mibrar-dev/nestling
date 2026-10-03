@@ -698,12 +698,18 @@ void main() {
 
         final toggles = find.byType(NestToggle);
         expect(toggles, findsNWidgets(6));
-        for (var i = 0; i < 6; i++) {
-          final data = tester.getSemantics(toggles.at(i)).getSemanticsData();
+        // Shared batch 5: `NestToggle` lays out at 51×31 with the tap target
+        // as hit slop (like `NestChip`), so the widget lookup no longer
+        // resolves to the semantics node — address the labelled nodes
+        // directly (the `NestChip` pattern).
+        final toggleNodes = find.semantics.byLabel(RegExp('^Needs approval'));
+        expect(toggleNodes.evaluate(), hasLength(6));
+        for (final element in toggleNodes.evaluate()) {
           expect(
-            data.hasAction(SemanticsAction.tap),
+            element.getSemanticsData().hasAction(SemanticsAction.tap),
             isTrue,
-            reason: 'toggle $i ("${data.label}") must be activatable',
+            reason:
+                'toggle ("${element.getSemanticsData().label}") must be activatable',
           );
         }
 
@@ -728,8 +734,10 @@ void main() {
         }
 
         // performAction(tap) on the first toggle flips the real DB row.
-        final node = tester.getSemantics(toggles.first);
-        node.owner!.performAction(node.id, SemanticsAction.tap);
+        // (Addressed by label — see above — since the widget lookup no
+        // longer resolves to the semantics node after shared batch 5.)
+        final toggleFinder = find.semantics.byLabel(RegExp('^Needs approval'));
+        tester.semantics.performAction(toggleFinder.first, SemanticsAction.tap);
         await tester.pumpAndSettle();
         expect(
           (await _rows()).firstWhere((r) => r.id == 'r-screen').needsOk,
@@ -1152,8 +1160,11 @@ void main() {
           matching: find.byType(NestToggle),
         );
         final before = tester.widget<NestToggle>(toggle).value;
-        final node = tester.getSemantics(toggle);
-        node.owner!.performAction(node.id, SemanticsAction.tap);
+        // Shared batch 5: address by label (see above).
+        tester.semantics.performAction(
+          find.semantics.byLabel('Needs my OK'),
+          SemanticsAction.tap,
+        );
         await tester.pumpAndSettle();
         expect(tester.widget<NestToggle>(toggle).value, !before);
 

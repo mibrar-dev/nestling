@@ -112,6 +112,30 @@ abstract final class NestlingIcons {
   /// Screens: P02, P04.
   static const String basket = 'assets/icons/ic_basket.svg';
 
+  /// P09 quest-editor Bed: flat mattress/bed-frame side view (no headboard
+  /// arc). Exact `P09-quest-editor.html` glyph. Distinct from [bed] (which
+  /// keeps the headboard arc for P08 `P08-today.html`).
+  /// Screens: P09 (picker + `questIconAsset`), P10 ideas/active rows.
+  static const String questBed = 'assets/icons/ic_quest_bed.svg';
+
+  /// P09 quest-editor Dishes: handled basket (plain body + single arch
+  /// handle). Exact `P09-quest-editor.html` glyph. Distinct from
+  /// [dishwasher] (appliance) and [basket] (slatted laundry basket).
+  /// Screens: P09, P08/P10 `Empty the dishwasher` rows.
+  static const String questDishes = 'assets/icons/ic_quest_dishes.svg';
+
+  /// P09 quest-editor Hoover: angular canister + angular hose + two leg
+  /// lines. Exact `P09-quest-editor.html` glyph (P10 omits the legs).
+  /// Distinct from [hoover] (rounded canister + dot wheels).
+  /// Screens: P09, P10 `Hoover the stairs` rows.
+  static const String questHoover = 'assets/icons/ic_quest_hoover.svg';
+
+  /// P09 quest-editor Bins: small handled case with a clasp. Exact
+  /// `P09-quest-editor.html` glyph (P10 omits the `M10 12h4` clasp).
+  /// Distinct from [bin] (rimmed wheelie bin).
+  /// Screens: P09, P08/P10 `Put the bins out` rows.
+  static const String questBins = 'assets/icons/ic_quest_bins.svg';
+
   /// Quest: read for 20 minutes.
   /// Screens: P08, P09, P10, K03, K03b.
   static const String book = 'assets/icons/ic_book.svg';
