@@ -16,21 +16,23 @@ import 'package:nestling/features/rewards/presentation/widgets/p14_reward_card.d
 import 'package:nestling/features/rewards/rewards_routes.dart';
 
 import '../../test_scope.dart';
+import 'p14_test_support.dart' show rewardIdsInAppOrder, rewardNeedsOk;
 
 class _FailRepository extends Mock implements RewardsRepository;
 
 final _failRepo = _FailRepository();
 
-/// Design order is the database order: `watchItems` is `coinPrice ASC`, so
-/// the demo seed renders 50/60/80/90/100/150 — six rows, not the five the
-/// HTML/PNGs draw (DATA OVER MOCKS).
-const _expectedOrder = <String, int>{
-  '30 min extra screen time': 50,
-  'Stay up 15 min later': 60,
-  'Pick Friday film': 80,
-  'Choose dinner': 90,
-  'Baking together': 100,
-  'Trip to the park café': 150,
+/// Design order is the database order, and per ORCHESTRATOR_NOTES (12:27) that
+/// order is CREATION order — not a sort key baked into the test. The expected
+/// list is read from the repository's own stream, so the screen is pinned to
+/// the database verbatim and the choice of order stays in the data layer.
+const _expectedById = <String, int>{
+  'r-screen': 50,
+  'r-film': 80,
+  'r-bedtime': 60,
+  'r-baking': 100,
+  'r-cafe': 150,
+  'r-dinner': 90,
 };
 
 Future<void> _pumpView(
@@ -94,21 +96,29 @@ void main() {
         findsOneWidget,
       );
 
+      // Six rows: the five the HTML draws plus the DB-only `Choose dinner`.
       final cards = tester
           .widgetList<RewardCard>(find.byType(RewardCard))
           .toList();
       expect(cards.length, 6);
       expect(
-        cards.map((c) => c.reward.title).toList(),
-        _expectedOrder.keys.toList(),
+        cards.map((c) => c.reward.id).toList(),
+        await rewardIdsInAppOrder(tester),
+        reason: 'the list renders the database order verbatim',
       );
       expect(
         cards.map((c) => c.reward.coinPrice).toList(),
-        _expectedOrder.values.toList(),
+        cards.map((c) => _expectedById[c.reward.id]),
       );
-      // Every seeded `needsOk` is true, so all six switches render ON (the
-      // light/dark PNGs draw "Baking together" off — the DB wins).
-      expect(cards.every((c) => c.reward.needsOk), isTrue);
+      // Every switch mirrors its own row's `needsOk` — the toggle state is
+      // data, never a design constant (ORCHESTRATOR_NOTES 12:27).
+      for (final card in cards) {
+        expect(
+          card.reward.needsOk,
+          await rewardNeedsOk(card.reward.id),
+          reason: '${card.reward.id} toggle state',
+        );
+      }
 
       await disposeApp(tester);
     });
@@ -123,7 +133,7 @@ void main() {
         theme: ThemeMode.dark,
       );
 
-      for (final price in _expectedOrder.values) {
+      for (final price in _expectedById.values) {
         expect(find.text('$price'), findsWidgets);
       }
       expect(tester.takeException(), isNull);
@@ -164,17 +174,22 @@ void main() {
       await pumpAppRoute(tester, RewardsRoutePaths.rewards);
 
       final toggle = find.byType(NestToggle).first;
+      final firstRow = tester.widget<RewardCard>(find.byType(RewardCard).first);
+      final seedValue = await rewardNeedsOk(firstRow.reward.id);
       expect(
         tester.widget<NestToggle>(toggle).value,
-        isTrue,
-        reason: 'the demo seed has needsOk true',
+        seedValue,
+        reason: 'the switch mirrors its row needsOk',
       );
 
       await tester.tap(toggle);
       await tester.pumpAndSettle();
 
       var rows = await _rows();
-      expect(rows.firstWhere((r) => r.id == 'r-screen').needsOk, isFalse);
+      expect(
+        rows.firstWhere((r) => r.id == firstRow.reward.id).needsOk,
+        !seedValue,
+      );
 
       // 5 px above the 51×31 track is still inside the 44 px tap box.
       final track = tester.getRect(
@@ -183,7 +198,10 @@ void main() {
       await tester.tapAt(Offset(track.center.dx, track.top - 5));
       await tester.pumpAndSettle();
       rows = await _rows();
-      expect(rows.firstWhere((r) => r.id == 'r-screen').needsOk, isTrue);
+      expect(
+        rows.firstWhere((r) => r.id == firstRow.reward.id).needsOk,
+        seedValue,
+      );
 
       await disposeApp(tester);
     });

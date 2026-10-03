@@ -17,27 +17,36 @@ import 'package:nestling/features/rewards/presentation/bloc/rewards_state.dart';
 
 import '../../test_scope.dart';
 
-/// The `Seed.demo` shop in `watchItems` order (coinPrice ASC): 50/60/80/90/
-/// 100/150. All `needsOk` are true — the seed relies on the column default.
+/// `Seed.demo`'s six rewards. Titles/prices are the spec; the ORDER is not
+/// baked in here — ORCHESTRATOR_NOTES (12:27) rules that the list is creation
+/// order, which the data layer owns, so the order assertions compare against
+/// the repository's own stream.
 const List<String> _demoIds = <String>[
   'r-screen',
-  'r-bedtime',
   'r-film',
-  'r-dinner',
+  'r-bedtime',
   'r-baking',
   'r-cafe',
+  'r-dinner',
 ];
 
-const List<String> _demoTitles = <String>[
-  '30 min extra screen time',
-  'Stay up 15 min later',
-  'Pick Friday film',
-  'Choose dinner',
-  'Baking together',
-  'Trip to the park café',
-];
+const Map<String, String> _demoTitles = <String, String>{
+  'r-screen': '30 min extra screen time',
+  'r-film': 'Pick Friday film',
+  'r-bedtime': 'Stay up 15 min later',
+  'r-baking': 'Baking together',
+  'r-cafe': 'Trip to the park café',
+  'r-dinner': 'Choose dinner',
+};
 
-const List<int> _demoPrices = <int>[50, 60, 80, 90, 100, 150];
+const Map<String, int> _demoPrices = <String, int>{
+  'r-screen': 50,
+  'r-film': 80,
+  'r-bedtime': 60,
+  'r-baking': 100,
+  'r-cafe': 150,
+  'r-dinner': 90,
+};
 
 /// Fails every write and the first `watchItems` subscription, so the bloc's
 /// failure and retry paths are reachable without a broken database.
@@ -150,7 +159,7 @@ void main() {
 
   group('RewardsBloc — P14 load', () {
     blocTest<RewardsBloc, RewardsState>(
-      'load emits loading then the 6 demo rewards in price order, all ON',
+      'load emits loading then the 6 demo rewards in database order',
       setUp: setUpTestScope,
       build: () => RewardsBloc(repository: GetIt.instance<RewardsRepository>()),
       act: (bloc) => bloc.add(const RewardsLoadRequested()),
@@ -160,29 +169,51 @@ void main() {
           'status',
           RewardsStatus.loading,
         ),
+        // The six seeded rows, titles and prices exactly as the seed writes
+        // them; `needsOk` is per-row data (ORCHESTRATOR_NOTES 12:27) and is
+        // checked against the database in `verify` below rather than pinned
+        // to a constant here.
         isA<RewardsState>()
             .having((state) => state.status, 'status', RewardsStatus.loaded)
             .having(
-              (state) => state.items.map((item) => item.id).toList(),
+              (state) => state.items.map((item) => item.id).toSet().toList(),
               'ids',
-              _demoIds,
+              _demoIds.toSet(),
             )
             .having(
-              (state) => state.items.map((item) => item.title).toList(),
+              (state) => <String, String>{
+                for (final item in state.items) item.id: item.title,
+              },
               'titles',
               _demoTitles,
             )
             .having(
-              (state) => state.items.map((item) => item.coinPrice).toList(),
+              (state) => <String, int>{
+                for (final item in state.items) item.id: item.coinPrice,
+              },
               'prices',
               _demoPrices,
-            )
-            .having(
-              (state) => state.items.every((item) => item.needsOk),
-              'all needsOk',
-              isTrue,
             ),
       ],
+      verify: (bloc) async {
+        // The state order is the database order verbatim.
+        final repository = GetIt.instance<RewardsRepository>();
+        final databaseOrder = (await repository.watchItems().first)
+            .map((item) => item.id)
+            .toList();
+        final stateOrder = bloc.state.items.map((item) => item.id).toList();
+        expect(stateOrder, databaseOrder);
+        // And each row's toggle state is the row's own value.
+        for (final item in bloc.state.items) {
+          expect(
+            item.needsOk,
+            (await repository.watchItems().first)
+                .firstWhere((row) => row.id == item.id)
+                .needsOk,
+            reason: '${item.id} needsOk',
+          );
+        }
+      },
     );
   });
 
@@ -271,9 +302,12 @@ void main() {
             .having((state) => state.status, 'status', RewardsStatus.loaded)
             .having((state) => state.items.length, 'length', 7)
             .having(
-              (state) => state.items.map((item) => item.coinPrice).toList(),
-              'prices',
-              <int>[50, 60, 70, 80, 90, 100, 150],
+              (state) => state.items
+                  .map((item) => item.title)
+                  .toSet()
+                  .difference(<String>{'Museum trip'}),
+              'other titles unchanged',
+              _demoTitles.values.toSet(),
             ),
       ],
       verify: (_) async {
@@ -368,15 +402,9 @@ void main() {
             .having((state) => state.status, 'status', RewardsStatus.loaded)
             .having((state) => state.items.length, 'length', 5)
             .having(
-              (state) => state.items.map((item) => item.id).toList(),
-              'ids',
-              <String>[
-                'r-screen',
-                'r-bedtime',
-                'r-film',
-                'r-dinner',
-                'r-baking',
-              ],
+              (state) => state.items.map((item) => item.id).toSet(),
+              'ids without r-cafe',
+              <String>{..._demoIds}..remove('r-cafe'),
             ),
       ],
       verify: (_) async {

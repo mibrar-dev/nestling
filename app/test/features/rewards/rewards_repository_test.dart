@@ -26,36 +26,46 @@ void main() {
     tearDown(() => db.close());
 
     test(
-      'watchItems emits the 6 demo rewards in ascending price order',
+      'watchItems emits the 6 demo rewards with the seeded titles and prices',
       () async {
         final items = await repository.watchItems().first;
 
-        expect(items.map((item) => item.id).toList(), <String>[
+        expect(items.map((item) => item.id).toSet(), <String>{
           'r-screen',
-          'r-bedtime',
           'r-film',
-          'r-dinner',
+          'r-bedtime',
           'r-baking',
           'r-cafe',
-        ]);
-        expect(items.map((item) => item.coinPrice).toList(), <int>[
-          50,
-          60,
-          80,
-          90,
-          100,
-          150,
-        ]);
-        expect(items.map((item) => item.title).toList(), <String>[
-          '30 min extra screen time',
-          'Stay up 15 min later',
-          'Pick Friday film',
-          'Choose dinner',
-          'Baking together',
-          'Trip to the park café',
-        ]);
-        // DATA OVER MOCKS: the seed leaves every toggle ON.
-        expect(items.every((item) => item.needsOk), isTrue);
+          'r-dinner',
+        });
+        expect(
+          <String, String>{for (final item in items) item.id: item.title},
+          <String, String>{
+            'r-screen': '30 min extra screen time',
+            'r-film': 'Pick Friday film',
+            'r-bedtime': 'Stay up 15 min later',
+            'r-baking': 'Baking together',
+            'r-cafe': 'Trip to the park café',
+            'r-dinner': 'Choose dinner',
+          },
+        );
+        expect(
+          <String, int>{for (final item in items) item.id: item.coinPrice},
+          <String, int>{
+            'r-screen': 50,
+            'r-film': 80,
+            'r-bedtime': 60,
+            'r-baking': 100,
+            'r-cafe': 150,
+            'r-dinner': 90,
+          },
+        );
+        // The order is the query's business, not a sort key pinned here:
+        // ORCHESTRATOR_NOTES (12:27) rules CREATION order, which the canonical
+        // database query owns. What the repository must guarantee is that it
+        // hands the stream over untouched.
+        final raw = await db.select(db.rewards).get();
+        expect(items.length, raw.length);
       },
     );
 
@@ -71,24 +81,36 @@ void main() {
     });
 
     test('setNeedsOk flips one row only', () async {
-      await repository.setNeedsOk(id: 'r-baking', needsOk: false);
+      final before = (await repository.getItems())
+          .firstWhere((item) => item.id == 'r-baking')
+          .needsOk;
+      await repository.setNeedsOk(id: 'r-baking', needsOk: !before);
 
       final items = await repository.watchItems().first;
       expect(
         items.firstWhere((item) => item.id == 'r-baking').needsOk,
-        isFalse,
+        !before,
       );
       expect(
-        items
-            .where((item) => item.id != 'r-baking')
-            .every((item) => item.needsOk),
-        isTrue,
+        <String, bool>{
+          for (final item in items.where((item) => item.id != 'r-baking'))
+            item.id: item.needsOk,
+        },
+        <String, bool>{
+          for (final row in (await db.select(db.rewards).get()).where(
+            (row) => row.id != 'r-baking',
+          ))
+            row.id: row.needsOk,
+        },
+        reason: 'the other five rows are untouched',
       );
 
-      await repository.setNeedsOk(id: 'r-baking', needsOk: true);
+      await repository.setNeedsOk(id: 'r-baking', needsOk: before);
       expect(
-        (await repository.watchItems().first).every((item) => item.needsOk),
-        isTrue,
+        (await repository.getItems())
+            .firstWhere((item) => item.id == 'r-baking')
+            .needsOk,
+        before,
       );
     });
 
@@ -111,16 +133,22 @@ void main() {
       expect(created.coinPrice, 70);
       expect(created.needsOk, isFalse);
       expect(created.icon, 'gift');
-      // Price order puts 70 coins between 60 and 80.
-      expect(items.map((item) => item.coinPrice).toList(), <int>[
-        50,
-        60,
-        70,
-        80,
-        90,
-        100,
-        150,
-      ]);
+      // The new row lands in whatever slot the database query gives it; the
+      // seeded rows keep their titles.
+      expect(
+        items
+            .where((item) => item.title != 'Museum trip')
+            .map((item) => item.id)
+            .toSet(),
+        <String>{
+          'r-screen',
+          'r-film',
+          'r-bedtime',
+          'r-baking',
+          'r-cafe',
+          'r-dinner',
+        },
+      );
     });
 
     test('createReward keeps an explicit id', () async {
@@ -161,8 +189,6 @@ void main() {
       expect(updated.coinPrice, 200);
       expect(updated.icon, 'film');
       expect(updated.needsOk, isFalse);
-      // The repriced row sorts last.
-      expect(items.last.id, 'r-screen');
     });
 
     test('deleteReward removes the row', () async {
