@@ -47,6 +47,7 @@ import 'package:nestling/app/app.dart';
 import 'package:nestling/app/controllers.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
+import 'package:nestling/features/kid_home/presentation/widgets/kid_status_chip.dart';
 
 import '../../test_scope.dart';
 
@@ -149,6 +150,42 @@ Color _designMeadowAt(NestTokens tokens, double y) {
   return Color.lerp(tokens.kidHorizon, tokens.kidMeadow, t.clamp(0.0, 1.0))!;
 }
 
+/// The dock's painted surface: a top-only 3 px ink border (design
+/// `.k3-dock`), which distinguishes it from the quest cards.
+final Finder _dockSurface = find.byWidgetPredicate((widget) {
+  if (widget is! Container) {
+    return false;
+  }
+  final decoration = widget.decoration;
+  if (decoration is! BoxDecoration) {
+    return false;
+  }
+  final border = decoration.border;
+  return border is Border && border.top.width == 3 && border.left.width == 0;
+});
+
+/// The PAINTED quest-card surface of card [index] (the all-side ink border
+/// inside the shared card's 6 px shadow reserve) — the rect the design's
+/// `.quest-card` rows are measured against.
+Finder _paintedCard(int index) => find
+    .descendant(
+      of: find.byType(NestKidQuestCard).at(index),
+      matching: find.byWidgetPredicate((widget) {
+        if (widget is! Container) {
+          return false;
+        }
+        final box = widget.decoration;
+        if (box is! BoxDecoration) {
+          return false;
+        }
+        final border = box.border;
+        return border is Border &&
+            border.top.width > 0 &&
+            border.left.width == border.top.width;
+      }),
+    )
+    .first;
+
 void main() {
   setUpAll(loadBundledFonts);
 
@@ -199,6 +236,89 @@ void main() {
       // Design rows: hearts centre 448, first card top 559.
       expect(hearts.center.dy, closeTo(448, 2));
       expect(card1.top, closeTo(559, 2));
+
+      // UI VERDICT RULE corroboration: the progress bar's bordered box is
+      // the design's y 527…542 (ORCHESTRATOR_NOTES exact geometry).
+      final progress = tester.getRect(find.byType(NestProgress));
+      expect(progress.top, closeTo(527, 2));
+      expect(progress.bottom, closeTo(542, 2));
+
+      await disposeApp(tester);
+    });
+
+    // UI VERDICT RULE: "a UI check may only PASS when every element is within
+    // ±2 px of the design position … A uniform vertical shift of the whole
+    // screen is a FAIL, even if each element looks the same. Report the
+    // measured y of the screen title, the first control and each card top."
+    //
+    // The pet-slot test above already pins the hero block, the hearts row
+    // (448) and the progress bar (527…542). This one closes the rest of the
+    // column — the section row, EVERY card top, the peek above the dock and
+    // the dock's own top — so a shift anywhere in the column is caught by a
+    // named row instead of by eye. Absolute targets come from
+    // ORCHESTRATOR_NOTES' exact geometry (07:40): hearts 448, title 494,
+    // progress 527…542, first card 559, dock top ≈720, card 2 peeking above
+    // the dock. The OS bottom inset is emulated (34 px) because the design's
+    // dock top is measured on a device with it.
+    testWidgets('every row below the nest lands within 2 px of the design', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      tester.view.physicalSize = const Size(390 * 3, 844 * 3);
+      tester.view.devicePixelRatio = 3;
+      tester.view.padding = const FakeViewPadding(bottom: 34 * 3);
+      tester.view.viewPadding = const FakeViewPadding(bottom: 34 * 3);
+      addTearDown(tester.view.reset);
+      await pumpAppRoute(tester, '/kid-home');
+
+      // The section row: the design's title baseline row is 494, read the same
+      // way the orchestrator read the hearts row (its vertical centre — the
+      // 32 px chip is centred on the title, so the row centre is font-proof).
+      final chip = tester.getRect(find.byType(KidStatusChip).first);
+      expect(
+        chip.center.dy,
+        closeTo(494, 2),
+        reason: "the 'Today\u2019s quests' row is the design's y 494",
+      );
+      expect(chip.height, closeTo(32, 0.5), reason: '.kchip is 32 px tall');
+
+      // Card 1 at the design's y 559, then EVERY card top: the design shows
+      // card 2 peeking above the dock and the rest scroll, so the painted
+      // tops must keep the design's `.k3-quests { gap: 12px }` rhythm from
+      // card 1 down rather than drifting.
+      final cards = find.byType(NestKidQuestCard).evaluate().length;
+      expect(cards, 6);
+      final tops = <double>[
+        for (var i = 0; i < cards; i++) tester.getRect(_paintedCard(i)).top,
+      ];
+      expect(tops.first, closeTo(559, 2), reason: 'first card top');
+      for (var i = 1; i < tops.length; i++) {
+        final previous = tester.getRect(_paintedCard(i - 1));
+        expect(
+          tops[i] - previous.bottom,
+          closeTo(12, 0.5),
+          reason: 'painted gap between card $i and card ${i + 1}',
+        );
+      }
+
+      // The dock owns the OS inset: its top is the design's y ≈720.
+      final dock = tester.getRect(_dockSurface);
+      expect(dock.top, closeTo(720, 2), reason: '.k3-dock top on the device');
+      expect(dock.bottom, closeTo(NestDevice.height, 0.5));
+
+      // Card 2 peeks above the dock, as the design shows: its top is above the
+      // bar and its bottom below it, so the list is never fully hidden.
+      final card2 = tester.getRect(_paintedCard(1));
+      expect(
+        card2.top,
+        lessThan(dock.top),
+        reason: 'card 2 starts above the dock',
+      );
+      expect(
+        card2.bottom,
+        greaterThan(dock.top),
+        reason: 'card 2 must peek above the dock',
+      );
 
       await disposeApp(tester);
     });

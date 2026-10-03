@@ -82,6 +82,13 @@
 //   real-font geometry pin now asserts the painted outline (198×86), rim 278
 //   and Pip's feet 301. No new bugs found in this stage.
 //
+// Iteration-11 work (UI VERDICT RULE corroboration):
+// - The real-font geometry pin now also pins the progress bar's bordered box
+//   to the design's y 527…542 (alongside hearts 448 and card-1 559), so the
+//   ±2 px position rule has a regression net below the pet block too.
+//   UI iteration 10 measured the whole geometry chain EXACT and reported
+//   PASS; no new bugs found in this stage.
+//
 // The suite has NO skipped tests: every proof below runs in the plain suite.
 // (If you add one, do not park it to get green — see RULES.)
 //
