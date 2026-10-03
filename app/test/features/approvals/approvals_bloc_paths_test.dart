@@ -127,12 +127,347 @@ Matcher _withActionError(String needle) => predicate<ApprovalsState>(
   'an actionError containing "$needle"',
 );
 
+/// Records every state the bloc emits and lets a test wait for a condition
+/// without racing its own subscription or its own history.
+///
+/// `bloc.stream` is a broadcast stream: a handler that emits twice inside one
+/// microtask turn (busy → cleared, or error → cleared) delivers both before a
+/// continuation that awaited the FIRST of them can subscribe for the second.
+/// Chaining `await bloc.stream.firstWhere(a); await bloc.stream.firstWhere(b);`
+/// therefore hangs even though `b` was emitted. One listener plus a recorded
+/// list cannot miss anything; `settled` polls the bloc's own `state`, so it
+/// cannot be fooled by a state that was already seen either.
+/// A hand-written repository that COUNTS its writes.
+///
+/// The absorb tests care about one thing — how many times `approve` /
+/// `markNotYet` / `approveAll` were actually called — and the busy flag is
+/// emitted one microtask BEFORE the call, so counting is both clearer and more
+/// reliable than verifying a mock at a moment when the handler may not have
+/// reached the repository yet.
+class _CountingApprovalsRepository implements ApprovalsRepository {
+  _CountingApprovalsRepository({Stream<List<Approval>>? watch})
+    : _watch = watch ?? Stream.value(_streamOrder);
+
+  final Stream<List<Approval>> _watch;
+
+  /// Every id passed to `approve`, in call order.
+  final List<int> approveCalls = <int>[];
+
+  /// Every id passed to `markNotYet`, in call order.
+  final List<int> notYetCalls = <int>[];
+
+  int approveAllCalls = 0;
+
+  /// When set, `approve(id)` throws it on the first call only.
+  Object? failFirstApprove;
+
+  /// When set, `approve(id)` waits for it — holds the card in its busy state.
+  Completer<void>? approveGate;
+
+  /// When set, `approveAll()` waits for it — holds the CTA busy.
+  Completer<void>? approveAllGate;
+
+  var _failed = false;
+
+  @override
+  Stream<List<Approval>> watchItems() => _watch;
+
+  @override
+  Future<List<Approval>> getItems() => _watch.first;
+
+  @override
+  Future<void> approve(int completionId) async {
+    approveCalls.add(completionId);
+    if (failFirstApprove != null && !_failed) {
+      _failed = true;
+      throw StateError('$failFirstApprove');
+    }
+    if (approveGate != null) await approveGate!.future;
+  }
+
+  @override
+  Future<void> markNotYet(int completionId) async {
+    notYetCalls.add(completionId);
+  }
+
+  @override
+  Future<void> approveAll() async {
+    approveAllCalls++;
+    if (approveAllGate != null) await approveAllGate!.future;
+  }
+}
+
+class _StateRecorder {
+  _StateRecorder(this._bloc) {
+    _subscription = _bloc.stream.listen(states.add);
+  }
+
+  final ApprovalsBloc _bloc;
+  final List<ApprovalsState> states = <ApprovalsState>[];
+  late final StreamSubscription<ApprovalsState> _subscription;
+
+  /// How many states have been recorded — capture this BEFORE dispatching an
+  /// event to assert "this event emitted nothing".
+  int get length => states.length;
+
+  /// Waits until the bloc's CURRENT state satisfies [test].
+  ///
+  /// Use it for "let the handler finish" — polling `bloc.state` cannot miss an
+  /// emission. It deliberately cannot observe a TRANSIENT state (the busy flag
+  /// lasts one microtask when the write is instant); use [until] for those.
+  Future<void> settled(bool Function(ApprovalsState) test) =>
+      _wait(() => test(_bloc.state), 'bloc.state');
+
+  /// Waits until some emitted state satisfies [test] — for transient states
+  /// ("did the busy flag ever appear") that a poll of the current state steps
+  /// straight over, and for history assertions a settled state can no longer
+  /// show.
+  Future<void> until(bool Function(ApprovalsState) test) =>
+      _wait(() => states.any(test), 'emitted states');
+
+  Future<void> _wait(bool Function() done, String what) async {
+    var spins = 0;
+    while (!done()) {
+      if (++spins > 1000) {
+        fail(
+          'timed out waiting for $what; saw: '
+          '${states.map((s) => '${s.status}/${s.items.length}items/${s.busyIds}/${s.busyActions}/${s.actionError}').join(' -> ')}',
+        );
+      }
+      await Future<void>.delayed(Duration.zero);
+    }
+  }
+
+  Future<void> dispose() => _subscription.cancel();
+}
+
 void main() {
   late MockApprovalsRepository repo;
 
   setUp(() {
     repo = MockApprovalsRepository();
     when(repo.watchItems).thenAnswer((_) => Stream.value(_streamOrder));
+  });
+
+  // BUG-P11-1 landed its bloc half in iteration 2: a card absorbs a repeat
+  // decision both while the write is in flight (`busyIds`) and after it
+  // finished (`_decided`), because with an instant write the second tap can
+  // arrive after the busy flag has already cleared. One decision per card, one
+  // ledger row. The database CAS is the backstop for every other path; these
+  // tests pin the bloc contract so a regression is caught here and not in a
+  // money-amount assertion.
+  group('ApprovalsBloc decision absorb (BUG-P11-1)', () {
+    test(
+      'a second approve while the write is in flight never reaches the repo',
+      () async {
+        final gate = Completer<void>();
+        final counting = _CountingApprovalsRepository()..approveGate = gate;
+        final bloc = ApprovalsBloc(repository: counting);
+        final seen = _StateRecorder(bloc);
+        addTearDown(() async {
+          if (!gate.isCompleted) gate.complete();
+          await seen.dispose();
+          await bloc.close();
+        });
+
+        bloc.add(const ApprovalsLoadRequested());
+        await seen.settled((s) => s.status == ApprovalsStatus.loaded);
+        bloc.add(const ApprovalsApproveRequested(completionId: 1));
+        await seen.until((s) => s.busyIds.contains(1));
+        final emissionsBefore = seen.length;
+
+        // The same frame a second tap: absorbed, so NO new emission at all.
+        bloc.add(const ApprovalsApproveRequested(completionId: 1));
+        await pumpEventQueue();
+        expect(seen.length, emissionsBefore);
+        expect(counting.approveCalls, <int>[1], reason: 'one write, one row');
+        expect(bloc.state.busyActions, <int, ApprovalsDecision>{
+          1: ApprovalsDecision.approve,
+        });
+
+        gate.complete();
+        await seen.settled((s) => s.busyIds.isEmpty && s.busyActions.isEmpty);
+        expect(bloc.state.busyActions, isEmpty);
+        expect(counting.approveCalls, <int>[1]);
+      },
+    );
+
+    test(
+      'a repeat approve AFTER the write finished is still absorbed',
+      () async {
+        final counting = _CountingApprovalsRepository();
+        final bloc = ApprovalsBloc(repository: counting);
+        final seen = _StateRecorder(bloc);
+        addTearDown(() async {
+          await seen.dispose();
+          await bloc.close();
+        });
+
+        bloc.add(const ApprovalsLoadRequested());
+        await seen.settled((s) => s.status == ApprovalsStatus.loaded);
+
+        bloc.add(const ApprovalsApproveRequested(completionId: 1));
+        await seen.until((s) => s.busyIds.contains(1));
+        await seen.settled((s) => s.busyIds.isEmpty && s.busyActions.isEmpty);
+        await pumpEventQueue();
+        expect(counting.approveCalls, <int>[1]);
+
+        // Busy flag is clear again, yet the row is still on screen with a
+        // live button: the decision must not be replayed.
+        final before = seen.length;
+        bloc.add(const ApprovalsApproveRequested(completionId: 1));
+        await pumpEventQueue();
+        expect(seen.length, before, reason: 'absorbed: no new state at all');
+        expect(counting.approveCalls, <int>[1]);
+        expect(bloc.state.busyIds, isEmpty);
+        expect(bloc.state.busyActions, isEmpty);
+
+        // A DIFFERENT card is still fully actionable.
+        bloc.add(const ApprovalsApproveRequested(completionId: 2));
+        await seen.until((s) => s.busyIds.contains(2));
+        await seen.settled((s) => s.busyIds.isEmpty && s.busyActions.isEmpty);
+        await pumpEventQueue();
+        expect(counting.approveCalls, <int>[1, 2]);
+      },
+    );
+
+    test('a not-yet decision is absorbed the same way', () async {
+      final counting = _CountingApprovalsRepository();
+      final bloc = ApprovalsBloc(repository: counting);
+      final seen = _StateRecorder(bloc);
+      addTearDown(() async {
+        await seen.dispose();
+        await bloc.close();
+      });
+
+      bloc.add(const ApprovalsLoadRequested());
+      await seen.settled((s) => s.status == ApprovalsStatus.loaded);
+      bloc.add(const ApprovalsNotYetRequested(completionId: 2));
+      await seen.until((s) => s.busyIds.contains(2));
+      await seen.settled((s) => s.busyIds.isEmpty && s.busyActions.isEmpty);
+      await pumpEventQueue();
+
+      bloc
+        ..add(const ApprovalsNotYetRequested(completionId: 2))
+        ..add(const ApprovalsApproveRequested(completionId: 2));
+      await pumpEventQueue();
+      // One decision per card: neither the repeat nor the flip reaches the
+      // repository, so the card cannot end up `not_yet` with a bonus row
+      // (BUG-P11-2's screen-level half).
+      expect(counting.notYetCalls, <int>[2]);
+      expect(counting.approveCalls, isEmpty);
+      expect(bloc.state.busyIds, isEmpty);
+    });
+
+    test(
+      'a failed decision is NOT absorbed, so the parent can retry',
+      () async {
+        final counting = _CountingApprovalsRepository()
+          ..failFirstApprove = 'write failed';
+        final bloc = ApprovalsBloc(repository: counting);
+        final seen = _StateRecorder(bloc);
+        addTearDown(() async {
+          await seen.dispose();
+          await bloc.close();
+        });
+
+        bloc.add(const ApprovalsLoadRequested());
+        await seen.settled((s) => s.status == ApprovalsStatus.loaded);
+
+        bloc.add(const ApprovalsApproveRequested(completionId: 1));
+        await seen.until((s) => s.actionError != null);
+        await seen.settled((s) => s.busyIds.isEmpty && s.busyActions.isEmpty);
+        await pumpEventQueue();
+        expect(counting.approveCalls, <int>[1]);
+        expect(
+          seen.states.map((s) => s.actionError).whereType<String>().join(),
+          contains('write failed'),
+        );
+
+        bloc.add(const ApprovalsActionErrorConsumed());
+        await seen.settled((s) => s.actionError == null && s.busyIds.isEmpty);
+
+        // A failure must not poison the card: the retry reaches the
+        // repository.
+        bloc.add(const ApprovalsApproveRequested(completionId: 1));
+        await seen.until((s) => s.busyActions[1] == ApprovalsDecision.approve);
+        await seen.settled((s) => s.busyIds.isEmpty && s.busyActions.isEmpty);
+        await pumpEventQueue();
+        expect(counting.approveCalls, <int>[
+          1,
+          1,
+        ], reason: 'the retry really hit the repository');
+      },
+    );
+
+    test('a decided id is released once the row leaves the inbox', () async {
+      // `_decided` is pruned on every stream emission; ids are never reused in
+      // production, but the pruning is what keeps the set from growing for the
+      // lifetime of a long session.
+      final controller = StreamController<List<Approval>>();
+      final counting = _CountingApprovalsRepository(watch: controller.stream);
+      final bloc = ApprovalsBloc(repository: counting);
+      final seen = _StateRecorder(bloc);
+      addTearDown(() async {
+        await seen.dispose();
+        if (!controller.isClosed) await controller.close();
+        await bloc.close();
+      });
+
+      bloc.add(const ApprovalsLoadRequested());
+      controller.add(_streamOrder);
+      await seen.settled((s) => s.status == ApprovalsStatus.loaded);
+
+      bloc.add(const ApprovalsApproveRequested(completionId: 1));
+      await seen.until((s) => s.busyIds.contains(1));
+      await seen.settled((s) => s.busyIds.isEmpty && s.busyActions.isEmpty);
+      await pumpEventQueue();
+      final mark = seen.length;
+      bloc.add(const ApprovalsApproveRequested(completionId: 1));
+      await pumpEventQueue();
+      expect(seen.length, mark, reason: 'still absorbed: the row is visible');
+      expect(counting.approveCalls, <int>[1]);
+
+      // The inbox re-emits WITHOUT that row (a real write removes it).
+      controller.add(<Approval>[_bed, _table]);
+      await seen.settled((s) => s.items.length == 2);
+
+      // Same id decided again is allowed now that the row is gone — the guard
+      // is about the visible card, not a permanent blacklist.
+      bloc.add(const ApprovalsApproveRequested(completionId: 1));
+      await seen.until((s) => s.busyIds.contains(1));
+      await seen.settled((s) => s.busyIds.isEmpty && s.busyActions.isEmpty);
+      await pumpEventQueue();
+      expect(counting.approveCalls, <int>[1, 1]);
+    });
+
+    test(
+      'a second approve-all while the write is in flight is absorbed',
+      () async {
+        final gate = Completer<void>();
+        final counting = _CountingApprovalsRepository()..approveAllGate = gate;
+        final bloc = ApprovalsBloc(repository: counting);
+        final seen = _StateRecorder(bloc);
+        addTearDown(() async {
+          if (!gate.isCompleted) gate.complete();
+          await seen.dispose();
+          await bloc.close();
+        });
+
+        bloc.add(const ApprovalsLoadRequested());
+        await seen.settled((s) => s.status == ApprovalsStatus.loaded);
+        bloc.add(const ApprovalsApproveAllRequested());
+        await seen.until((s) => s.approveAllBusy);
+        // Second tap on the CTA while the bulk write is running.
+        final emissionsBefore = seen.length;
+        bloc.add(const ApprovalsApproveAllRequested());
+        await pumpEventQueue();
+        expect(seen.length, emissionsBefore, reason: 'absorbed');
+        expect(counting.approveAllCalls, 1, reason: 'one bulk write');
+        expect(bloc.state.approveAllBusy, isTrue);
+        gate.complete();
+      },
+    );
   });
 
   group('ApprovalsBloc concurrent writes', () {

@@ -1,22 +1,25 @@
-// P11 · Approvals — Stage 6 bug proofs (iteration 1).
+// P11 · Approvals — Stage 6 bug proofs.
 //
-// Every proof in this file FAILS on the iteration-1 tree (checkpoint
-// `ba946d7`). Each group is marked `skip: '<bug id>'` so the suite stays
-// green until the fix lands (the TEST stage removes the markers and runs the
-// proofs — the P10 iteration-1 convention). Nothing in `lib/` was touched by
-// this stage; the fixes are described in `docs/screens/P11/6_bugs.md`.
+// All nine proofs in this file were RED on the iteration-1 tree (`ba946d7`)
+// and are GREEN on the iteration-2 checkpoint (`f2eb632`): the build fixed
+// every bug they pin, so the TEST stage removed the `skip:` markers and the
+// proofs now run on every `flutter test` as regression guards. The iteration-2
+// bug hunt added no new proofs: its adversarial probes (long/blank/NULL notes,
+// per-button spinners on two busy cards, double "Not yet", and concurrent
+// approve / approveAll / not-yet mixes) all pass on this tree — see
+// `docs/screens/P11/6_bugs.md` "iteration 2" for the evidence.
 //
-//   BUG-P11-1  major  rapid repeat decisions double-credit quest bonuses
-//                     (concurrent `approve()` / `approveAll()` writes)
-//   BUG-P11-2  major  "Not yet" overwrites an approved decision and the
-//                     quest_bonus ledger row stays
-//   BUG-P11-3  minor  BST spring-forward mislabels "Yesterday" as "Today"
-//   BUG-P11-4  minor  both card buttons show the spinner, only the tapped one
-//                     should (plan §1)
+//   BUG-P11-1  major  rapid repeat decisions double-credited quest bonuses
+//                     (concurrent `approve()` / `approveAll()` writes) — FIXED
+//   BUG-P11-2  major  "Not yet" overwrote an approved decision and the
+//                     quest_bonus ledger row stayed — FIXED
+//   BUG-P11-3  minor  BST spring-forward mislabelled "Yesterday" as "Today" —
+//                     FIXED
+//   BUG-P11-4  minor  both card buttons showed the spinner, only the tapped
+//                     one should (plan §1) — FIXED
 //
-// Evidence and proposed fixes: docs/screens/P11/6_bugs.md. Seeds are pinned
-// to Sat 3 Oct 2026 by test/flutter_test_config.dart; the seeded `quest_bonus`
-// rows total 300p (9 rows) before any approval.
+// Seeds are pinned to Sat 3 Oct 2026 by test/flutter_test_config.dart; the
+// seeded `quest_bonus` rows total 300p (9 rows) before any approval.
 
 import 'dart:async';
 

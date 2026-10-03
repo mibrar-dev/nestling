@@ -1,3 +1,6 @@
+// `drift` exports an `isNull` that collides with matcher's; only the `Value`
+// companion wrapper is needed from it.
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/seed.dart';
@@ -13,6 +16,93 @@ Future<List<LedgerEntry>> questBonusRows(AppDatabase db) async {
 }
 
 void main() {
+  // `ORCHESTRATOR_NOTES.md` item 1 data half: the child's own words travel
+  // from `quest_completions.kid_note` (schema v6, seeded) through the
+  // repository into the card. The rendering half lives in
+  // `approvals_quote_test.dart`.
+  group('ApprovalsRepository kidNote', () {
+    test('the seeded notes arrive RAW, without the curly quotes', () async {
+      final db = await setUpTestScope();
+      final items = await ApprovalsRepositoryImpl(db: db).getItems();
+
+      Approval row(String quest) =>
+          items.firstWhere((i) => i.questTitle == quest);
+
+      // The seed stores the text as the child said it — the quotes are the
+      // card's job (`completion_note_REPORT.md`).
+      expect(
+        row('Empty the dishwasher').kidNote,
+        'I stacked everything neatly!',
+      );
+      expect(row('Make your bed').kidNote, 'I did the pillows too.');
+      // q-table has no note: the card must render no quote and no gap.
+      expect(row('Lay the table').kidNote, isNull);
+      for (final item in items) {
+        expect(
+          item.kidNote ?? '',
+          isNot(contains('“')),
+          reason: 'quotes are added by the view, never stored',
+        );
+      }
+    });
+
+    test('a note written after the seed still reaches the card', () async {
+      final db = await setUpTestScope();
+      // q-table gets a note after seeding (K05-style write path).
+      await (db.update(
+        db.questCompletions,
+      )..where((c) => c.questId.equals('q-table'))).write(
+        const QuestCompletionsCompanion(kidNote: Value('All sorted!')),
+      );
+
+      final items = await ApprovalsRepositoryImpl(db: db).getItems();
+      expect(
+        items.firstWhere((i) => i.questTitle == 'Lay the table').kidNote,
+        'All sorted!',
+      );
+    });
+
+    test(
+      'kidNote round-trips through ApprovalModel and is part of equality',
+      () {
+        final withNote = ApprovalModel(
+          id: '1',
+          title: 'Empty the dishwasher',
+          detail: 'Maya · Today 8:12am',
+          completionId: 1,
+          questId: 'q-dishwasher',
+          questTitle: 'Empty the dishwasher',
+          childId: 'maya',
+          childName: 'Maya',
+          avatarColour: 'lilac',
+          coins: 15,
+          createdAt: DateTime.utc(2026, 10, 3, 7, 12),
+          createdAtTz: 'Europe/London',
+          kidNote: 'I stacked everything neatly!',
+        );
+        expect(ApprovalModel.fromJson(withNote.toJson()), withNote);
+        expect(withNote.toJson()['kidNote'], 'I stacked everything neatly!');
+
+        final withoutNote = ApprovalModel(
+          id: '1',
+          title: 'Lay the table',
+          detail: 'Maya · Today 8:05am',
+          completionId: 2,
+          questId: 'q-table',
+          questTitle: 'Lay the table',
+          childId: 'maya',
+          childName: 'Maya',
+          avatarColour: 'lilac',
+          coins: 10,
+          createdAt: DateTime.utc(2026, 10, 3, 7, 5),
+          createdAtTz: 'Europe/London',
+        );
+        expect(ApprovalModel.fromJson(withoutNote.toJson()).kidNote, isNull);
+        expect(withoutNote, isNot(withNote));
+      },
+    );
+  });
+
   group('ApprovalsRepository watchItems', () {
     test('demo seed emits exactly 3 pendings, oldest-first', () async {
       final db = await setUpTestScope();

@@ -22,6 +22,9 @@
 
 import 'dart:async';
 
+// `drift` exports an `isNull` that collides with matcher's; only the `Value`
+// companion wrapper is needed from it.
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart' show FontLoader, rootBundle;
@@ -175,18 +178,26 @@ class _RejectingWritesRepository extends _DelegatingApprovalsRepository {
 class _GatedWritesRepository extends _DelegatingApprovalsRepository {
   _GatedWritesRepository(super._inner);
 
+  /// When set, `approve(id)` waits for it instead of [openGate]'s own gate.
+  Completer<void>? approveGate;
+
   final Completer<void> _gate = Completer<void>();
 
   int approveCalls = 0;
 
   void openGate() {
     if (!_gate.isCompleted) _gate.complete();
+    if (approveGate?.isCompleted == false) approveGate!.complete();
   }
 
   @override
   Future<void> approve(int completionId) async {
     approveCalls++;
-    await _gate.future;
+    if (approveGate != null) {
+      await approveGate!.future;
+    } else {
+      await _gate.future;
+    }
     await super.approve(completionId);
   }
 }
@@ -496,6 +507,54 @@ void main() {
       expect(find.byType(ApprovalsBottomCta), findsNothing);
       expect(find.byType(ApprovalCard), findsNothing);
       expect(find.text('Waiting for you (0)'), findsOneWidget);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('Approve then Not yet on the same card keeps ONE decision', (
+      tester,
+    ) async {
+      // BUG-P11-2 end to end: the parent can still press the other pill while
+      // the first write is in flight (both are enabled until the busy flag
+      // paints). The card must end up `approved` with exactly one bonus row —
+      // never `not_yet` with money already credited.
+      final gate = Completer<void>();
+      final repository = _GatedWritesRepository(
+        GetIt.instance<ApprovalsRepository>(),
+      )..approveGate = gate;
+      await _useRepository(repository);
+      await pump(tester);
+      final bonusBefore = await _bonusRows(tester);
+
+      final card = _cardFor('Maya · Empty the dishwasher');
+      final approve = find.descendant(of: card, matching: find.text('Approve'));
+      final notYet = find.descendant(of: card, matching: find.text('Not yet'));
+      // Two taps, NO pump in between: the tree is still the pre-tap one, so the
+      // second press lands on a live control (the default `warnIfMissed` fails
+      // the test if it does not). This is the same-frame window the bug
+      // described — after a pump the busy flag has already disabled both pills.
+      await tester.tap(approve);
+      await tester.tap(notYet);
+      await tester.pump();
+      expect(
+        tester
+            .widget<NestButton>(
+              find.descendant(
+                of: card,
+                matching: find.widgetWithText(NestButton, 'Not yet'),
+              ),
+            )
+            .onPressed,
+        isNull,
+        reason: 'the card locks on the next frame',
+      );
+      gate.complete();
+      await _settle(tester);
+
+      expect(await _completionStatus(tester, 1), 'approved');
+      expect(await _bonusRows(tester), hasLength(bonusBefore.length + 1));
+      expect(find.byType(SnackBar), findsNothing, reason: 'nothing failed');
+      expect(find.text('Waiting for you (2)'), findsOneWidget);
 
       await disposeApp(tester);
     });
@@ -1121,6 +1180,99 @@ void main() {
       // HTML (`Waiting for you (3)`).
       expect(find.text('Waiting for you (3)'), findsOneWidget);
       expect(find.text('Approve all (3)'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    // The quote is the child's own words: it must be REACHABLE by a screen
+    // reader, not swallowed by the card's merged summary node.
+    testWidgets('the child quote is announced next to the card summary', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await pump(tester);
+
+      // The `.hd` block merges into one label that deliberately carries only
+      // the row facts (child, quest, when, coins).
+      expect(
+        find.bySemanticsLabel(
+          'Maya, Empty the dishwasher, Today 8:12am, 15 coins',
+        ),
+        findsOneWidget,
+      );
+      // The quote is its own node — the parent's screen reader reads it.
+      expect(
+        find.bySemanticsLabel('“I stacked everything neatly!”'),
+        findsOneWidget,
+      );
+      expect(find.bySemanticsLabel('“I did the pillows too.”'), findsOneWidget);
+      // A NULL note leaves nothing to announce.
+      expect(
+        find.bySemanticsLabel(RegExp('Toys are all in the box')),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+      semantics.dispose();
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the quote uses ink in dark mode too', (tester) async {
+      await pump(tester, theme: ThemeMode.dark);
+
+      final tokens = tester.element(find.byType(ApprovalsView)).nest;
+      final quote = tester.widget<Text>(
+        find.text('“I stacked everything neatly!”'),
+      );
+      // `.qn` inherits the card's ink, not the caption's ink-2.
+      expect(quote.style?.color, tokens.ink);
+      expect(quote.style?.fontSize, 17, reason: '.qn font-size 17');
+      expect(find.text('“I stacked everything neatly!”'), findsOneWidget);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('a long child note wraps instead of overflowing at 320 × 1.3', (
+      tester,
+    ) async {
+      const longNote =
+          'I put all the plates away and wiped the counter and the sink too';
+      final db = GetIt.instance<AppDatabase>();
+      await tester.runAsync(
+        () =>
+            (db.update(
+              db.questCompletions,
+            )..where((c) => c.questId.equals('q-dishwasher'))).write(
+              const QuestCompletionsCompanion(kidNote: Value(longNote)),
+            ),
+      );
+
+      await pump(tester);
+      tester.view.physicalSize = const Size(320 * 3, 844 * 3);
+      tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final quote = tester.getRect(find.text('“$longNote”'));
+      expect(
+        quote.width,
+        lessThanOrEqualTo(320 - 2 * NestSpacing.padSide - 2 * NestSpacing.s4),
+        reason: 'the quote stays inside the card padding',
+      );
+      expect(
+        quote.height,
+        greaterThan(24),
+        reason: 'it really wrapped instead of clipping',
+      );
+      // The buttons below it are still there and still tappable.
+      expect(
+        tester
+            .getRect(find.byKey(const ValueKey<String>('p11_approve_1')))
+            .height,
+        greaterThanOrEqualTo(NestDevice.tapParent),
+      );
       expect(tester.takeException(), isNull);
 
       await disposeApp(tester);
