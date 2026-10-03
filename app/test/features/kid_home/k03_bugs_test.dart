@@ -30,10 +30,11 @@
 // - Copy probe: the visible strings match the HTML source character for
 //   character (ASCII apostrophes in "Let's"/"Today's"/"Mum", en dash in the
 //   seed quest title) — passes.
-// - K03-BUG-12 (skipped): CHILD ORDER ruling violated — `watchProfiles()`
-//   returns `['Leo', 'Maya']` (shared `watchChildren` orders by nickname)
-//   instead of the added order. Proof:
-//   `flutter test --run-skipped --plain-name K03-BUG-12`.
+// - K03-BUG-12 (un-skipped iteration 6): CHILD ORDER ruling now holds —
+//   shared `watchChildren` orders by `createdAt` (+ `rowid`), the seed
+//   staggers Maya/Leo one minute apart, and `watchProfiles()` returns
+//   `['Maya', 'Leo']`. Proof runs un-skipped:
+//   `flutter test --plain-name K03-BUG-12`.
 //
 // Run the skipped proofs with
 // `flutter test --run-skipped --plain-name "K03-BUG"` (BUG-7 needs its flag).
@@ -1128,7 +1129,7 @@ void main() {
       'Maya',
       'Leo',
     ], reason: 'CHILD ORDER ruling: order added, not alphabetical');
-  }, skip: true);
+  });
 
   testWidgets('copy matches the K03 HTML character-for-character', (
     tester,
@@ -1152,7 +1153,7 @@ void main() {
 // Fake repository: streams are healthy, `completeQuest` always fails.
 // ---------------------------------------------------------------------------
 
-class _SlowFailRepository implements KidHomeRepository {
+class _SlowFailRepository extends KidHomeRepository {
   final Completer<void> _gate = Completer<void>();
 
   void fail() {
@@ -1184,7 +1185,7 @@ class _SlowFailRepository implements KidHomeRepository {
   Future<void> completeQuest(String childId, String questId) => _gate.future;
 }
 
-class _FailSaveRepository implements KidHomeRepository {
+class _FailSaveRepository extends KidHomeRepository {
   @override
   Future<List<KidQuest>> getItems() async => _items;
 
@@ -1259,7 +1260,7 @@ List<String> _svgAssetNames(WidgetTester tester) => tester
     .toList();
 
 /// Streams error on listen (load-failure state probe).
-class _FailLoadRepository implements KidHomeRepository {
+class _FailLoadRepository extends KidHomeRepository {
   @override
   Future<List<KidQuest>> getItems() async => throw Exception('load failed');
 
@@ -1288,7 +1289,7 @@ class _FailLoadRepository implements KidHomeRepository {
 /// Healthy streams; `completeQuest` returns without an error and without
 /// flipping anything — the race where the quest row vanished between load
 /// and tap (`KidHomeRepositoryImpl.completeQuest` returns silently).
-class _SilentNoopRepository implements KidHomeRepository {
+class _SilentNoopRepository extends KidHomeRepository {
   final List<String> calls = <String>[];
 
   @override
@@ -1334,7 +1335,7 @@ KidQuest _withStatus(KidQuest quest, String status) => KidQuest(
 
 /// Healthy streams; `completeQuest` fails until [failComplete] is cleared,
 /// then flips the quest and pushes the new list (retry probe).
-class _ToggleFailRepository implements KidHomeRepository {
+class _ToggleFailRepository extends KidHomeRepository {
   bool failComplete = true;
   List<KidQuest> _items = List<KidQuest>.of(_items2);
   final StreamController<List<KidQuest>> _pushed =
@@ -1378,7 +1379,7 @@ class _ToggleFailRepository implements KidHomeRepository {
 
 /// Each completion waits on its own gate, so a test can land the first write
 /// while the second is still in flight (K03-BUG-8).
-class _GatedCompletionRepository implements KidHomeRepository {
+class _GatedCompletionRepository extends KidHomeRepository {
   List<KidQuest> _items = List<KidQuest>.of(_items2);
   final StreamController<List<KidQuest>> _pushed =
       StreamController<List<KidQuest>>.broadcast();

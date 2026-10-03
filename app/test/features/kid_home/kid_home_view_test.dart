@@ -108,7 +108,7 @@ List<KidQuest> _mayaItems() => const <KidQuest>[
 /// matching the Drift repository; a successful `completeQuest` flips the
 /// quest to `done_pending` and re-emits, so the celebration can ride the
 /// flip exactly as it does on the real repository.
-class _FakeKidHomeRepository implements KidHomeRepository {
+class _FakeKidHomeRepository extends KidHomeRepository {
   _FakeKidHomeRepository({
     this.failLoad = false,
     this.hang = false,

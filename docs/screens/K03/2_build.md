@@ -1,143 +1,142 @@
-# K03 Kid home — build notes (Stage 2, iteration 5)
+# K03 Kid home — build notes (Stage 2 INTEGRATE, iteration 6)
 
-Implements `1_plan.md` as overridden by `ORCHESTRATOR_NOTES.md` and the
-owner BOTTOM EDGE + ALIGNMENT rules, and fixes every item in `FIXES_4.md`
-that is fixable inside the feature (RULES §1).
+Two builders worked in parallel on `kid_home`. This stage is the integrator:
+it made the merged tree compile and pass, and fixed the breakages the two
+halves produced together. No redesign, no scope widening.
 
-## Files changed (all inside RULES §1)
+**Gate: PASS** — `dart format .` clean · `flutter analyze` → *No issues found!* ·
+`flutter test` → *`+980 ~1: All tests passed!`*
 
-- `app/lib/features/kid_home/presentation/views/kid_home_view.dart`
-  - Pet slot migrated to shared components (review finding 1,
-    ORCHESTRATOR_NOTES iteration-4 mandate): `_KidPetStage` now renders
-    `NestPetStage(pip: PipAvatar(mapped style/skin/accessory/stage),
-    speech:, pipSize: 152, stage:, semanticLabel:)` — the shared nest
-    scene seats the avatar between the rims. Deleted `_SpeechBubble` /
-    `_TailPainter` (covered by `speech:` → shared `NestSpeechBubble`).
-    `inNest:` omitted on purpose (defaults false; lint forbids the
-    redundant argument; unused on the custom-`pip:` path — waiver recorded
-    in SHARED_REQUEST #8).
-  - Hearts migrated: `_HeartIcon` / `_HeartPainter` deleted, `NestHeart`
-    (identical rendering, promoted to shared in the meantime).
-  - Meadow panel kept with `TODO(K03)` + SHARED_REQUEST #6: no shared
-    meadow-band API exists, and deleting the panel would regress the
-    UI-accepted light band to sky. Curve numbers hoisted to cited consts
-    (review finding 2).
-  - Failure SnackBar → shared `showNestToast` (finding 7; live-region
-    semantics included).
-  - `_KidFailure(child:)` renders the known child's own Pip look, neutral
-    mochi/sunny/stage-1 only when childless (finding 9).
-  - `NestLockButton` ("Grown-ups", with the BUG-9 tap guard) added to the
-    loading / failure / no-child states (finding 11, DESIGN_SPEC §5 Group
-    C); the no-child test assertion flipped to `findsOneWidget`.
-  - Pet semantics now carry the growth stage
-    (`'Pip the Fledgling, stage 3 of 4'`, finding 12).
-  - `_QuestCard._complete` releases its latch on the next frame
-    (K03-BUG-11): the bloc emits nothing for a silent no-op, so a
-    state-driven reset would leave the check dead. Same-frame double taps
-    stay blocked; repo idempotency + the per-quest pending map keep rapid
-    taps to one row and one celebration.
-- `app/lib/features/kid_home/presentation/bloc/kid_home_state.dart` —
-  `copyWithLoaded` no longer carries a stale `errorMessage` (finding 5).
-- `app/lib/features/kid_home/presentation/bloc/kid_home_bloc.dart` — stream
-  emissions evict pending celebrations for vanished quests (K03-BUG-11
-  bloc half; silent, no new emissions, exact-sequence tests unaffected).
-- `app/test/features/kid_home/k03_bugs_test.dart` — K03-BUG-11 proof
-  un-skipped (passing); header note updated.
-- `app/test/features/kid_home/kid_home_view_test.dart` — pet-slot size
-  assertion now targets shared `NestPetStage.pipSize` (152); lock
-  assertion flipped; layout-gap contract corrected to the true split
-  (16 + 10 panel pad before progress, 16 before cards — the old comment
-  misattributed the pad).
-- `docs/screens/K03/SHARED_REQUEST.md` — new #6 (KidScope meadow-band
-  param), #7 (kid type styles + sub-17px exemption), #8 (inNest waiver),
-  #9 (kid-button wrap option), #2 extended (card-count note). #5 still
-  open (shared motion parsing).
-- Deleted stray scratch probes (`probe_temp_test.dart`,
-  `scratch_define_test.dart`) left untracked in `app/test/` by parallel
-  work; one of them was failing and polluting the semantics suite.
+## What the two halves delivered
 
-## Fix-item ledger (FIXES_4)
+### 2a — logic (`2a_build_logic.md`, domain/data/bloc)
 
-- Review finding 1 (major, forks): pet/bubble/hearts migrated to the new
-  shared components; meadow kept ONLY with the filed request + TODO(K03)
-  marker exactly as the review's clearance condition prescribes (no
-  shared band API exists; deleting it would regress UI-accepted visuals).
-- Findings 2 (consts), 5 (errorMessage), 9 (failure art), 11 (locks),
-  12 (semantics), 14 (card-count note): fixed as above.
-- Findings 3/4/13 (typography fork, inNest, dock wrap): shared-side items
-  filed/recorded in SHARED_REQUEST (#7–#9); not locally fixable.
-- Finding 6 / K03-BUG-11: fixed (latch reset + eviction); proof green.
-- Finding 7 (toast): fixed via shared helper.
-- Finding 8 (double child watch): accepted with rationale — duplicate
-  emissions are swallowed by equatable dedup, the disagree-frame is
-  transient with no observable defect or failing proof, and a `watchHome`
-  refactor would churn the interface plus every test fake for zero
-  user-visible gain.
-- Finding 10 (BUG-7 skip): stays conditional (shared parsing still open).
-- K03-BUG-7 (motion flag): still OPEN (shared). Proof fails as expected
-  under the flag; stays conditionally skipped; SHARED_REQUEST #5.
-- UI dev 1 (dark meadow): TBD from fresh captures below.
-- UI dev 2 (dock −6) / dev 3 (upper residuals): positions re-measured
-  below; gaps stay spec-exact (pinned by suite contract), absolute rows
-  follow block heights; live-Rive variance documented.
-- ALIGNMENT rule: probe-green (20px edges); no action.
+- New entity `KidHomeData {child, items}` and `KidHomeRepository.watchHome()`,
+  so a load watches the child row **once** instead of twice (review finding 4).
+  The Drift impl overrides it with a single `app_state` subscription; the
+  abstract default combines `watchActiveChild()` + `watchItems()` through a
+  feature-internal `switchMapStream`.
+- `kid_home_bloc.dart` load path now `emit.forEach(_repository.watchHome())`;
+  celebration/error handling (`_awaitingCelebration`, BUG-8/BUG-11) untouched.
+- `K03-BUG-12` un-skipped (CHILD ORDER now correct on main); all 8 test fakes
+  changed `implements` → `extends` so they inherit the new default member.
+- Public BLoC contract unchanged — same events, same state fields, so the UI
+  half needed no state/event changes.
 
-## New orchestrator rules compliance (late iteration 5)
+### 2b — UI (`views/`, `widgets/`) — reconstructed from the tree
 
-- COPY (typographic characters vs HTML source): audited every K03-visible
-  string byte-for-byte against `design/html-source/screens/K03-kid-home.html`.
-  The HTML uses straight apostrophes (`Let's do some quests!`,
-  `Today's quests`, aria `Waiting for Mum's thumbs-up`,
-  `Half of today's quests done`) — no curly quotes exist in the file —
-  while the view used `\u2019`. Normalised all six rendered/semantics
-  sites in `kid_home_view.dart` to straight `'` (double-quoted Dart
-  literals) plus mirroring fixtures/assertions in all three feature test
-  files (test names and reason strings untouched). En dash (`\u2013`,
-  `Reading – 20 minutes`) and middle dot (`\u00b7`) already match the
-  HTML entity/bytes; seed title bytes verified (`e2 80 93`).
-- CHILD ORDER (insertion order, never alphabetical): no K03 behaviour
-  change — the screen shows a single active child and quest order stays
-  title-alphabetical per `1_plan.md` §(a) (accepted A2; quests are not
-  children). `watchProfiles` passes shared-DB order through (nickname
-  sort lives in untouchable `app_database.dart`, and the children table
-  exposes no insertion-order key), so correct compliance needs shared
-  support — filed as SHARED_REQUEST #11 for the orchestrator/K01 loop.
-  No K03 test asserts profile order.
-- Shared-contract fallout (main `7eaa1f7`): display-only checks are now
-  excluded from semantics, which broke two K03 tests. Updated to the new
-  contract instead of working around it: the a11y test asserts card-level
-  status labels + `findsNothing` for `Done` check nodes; the done-tap
-  test taps the check centre (token-derived offset: padding 12 + half of
-  the 56 check) and still verifies fall-through-to-detail with untouched
-  approvals.
+`2b_build_ui.md` was **not** written (the chunk exited after a nudge without
+producing it), so the summary below is read back off the code:
 
-## Verification (in `app/`)
+- `google_fonts` removed from the feature; the four typography call sites now
+  use the shared `NestType.kidName` / `kidCaption` / `kidChipLabel`
+  (review finding 3 + the FONTS rule; SHARED_REQUEST #7 landed on main).
+- `_MeadowPainter` gained the vertical gradient UI dev 1 asked for:
+  `kidHorizon` at the band top grading to `Color.lerp(kidHorizon, kidMeadow, .5)`
+  at the bottom, so the dark lower content is no longer flat navy
+  (the light band was already correct).
+- Pet slot reworked against review finding 1 — `nestWidth: 260` +
+  `fixedPipHeight: 152`, `_kNestWidth`/`_kPipSlotSize` constants,
+  `_pipStage()` helper dropped as unused.
 
-- `dart format .` — clean.
-- `flutter analyze` — `No issues found!`
-- `flutter test` — full suite: `+641 ~1, All tests passed!` (1 skip =
-  K03-BUG-7 motion proof, conditional on the dart-define by design).
-- Screenshots: `shot.sh /kid-home` light + dark (kid/maya/demo) →
-  `docs/screens/K03/ui/app_light_8.png`, `app_dark_8.png`; `compare.py` →
-  `cmp_light_8.png`, `cmp_dark_8.png` (both runs warn "never stabilised",
-  the known K03-BUG-7 cause; layout chrome is static).
-  - light mean diff 12.17% — bands: 0:3.00 · 1:4.97 · 2:10.22 · 3:7.79 ·
-    4:9.05 · 5:23.45 · 6:24.88 · 7:13.95 (iter4: 13.37%)
-  - dark mean diff 10.98% — bands: 0:3.05 · 1:4.95 · 2:9.74 · 3:5.58 ·
-    4:8.04 · 5:22.18 · 6:22.81 · 7:11.47 (iter4: 12.13%)
-  - hearts yellow rows: app 447–457 both themes (design 444–454);
-    progress top 540 / card-1 top 572 (design 527 / 560 — shared font
-    metrics account for the rest; gaps proven spec-exact); dock top
-    713–715 both themes (design 719–721, shared shadow reserve);
-    home strip is dock surface to the edge (light white, dark navy);
-    dark band top matches horizon exactly.
-  - Band 7 residual vs the PNG is the rule-mandated strip-tone difference
-    (surface vs the PNG's green) plus pill pixels — not a defect under the
-    owner rule. Bands 5/6 remainder is the accepted set: live counts copy,
-    repo card order/content, tile tint + title size (shared), mandated Pip
-    art swap, shared font metrics.
-  - One dark capture in this round caught SpringBoard (stable home
-    screen); lingering `flutter run` processes were cleared and it was
-    re-taken valid.
+## Integration breakages found and fixed (my changes)
+
+Three distinct breakages, all caused by the two halves meeting:
+
+1. **Pet slot had been forked away from the shared component.** 2b had replaced
+   `NestPetStage` with a feature-local `Column → Semantics → SizedBox → Stack`
+   holding `SvgPicture.asset(nest.svg)` plus a positioned `PipAvatar`. That is
+   a design-system re-implementation (forbidden) *and* it broke 5 view tests
+   that pin the shared contract (`find.byType(NestPetStage)`, `slot.speech`,
+   `slot.pip`, `slot.pipSize`, `getSemantics(NestPetStage).label`). The cause
+   was benign: SHARED_REQUEST #11 **landed on main** during the merge, and
+   `NestPetStage` now has the exact explicit size mode 2b was waiting for
+   (`nestWidth:` / `fixedPipHeight:`). Fix: the local fork was reverted and the
+   slot now composes through the shared component —
+   `NestPetStage(pip: PipAvatar(...), speech:, pipSize: 152, nestWidth: 260,
+   fixedPipHeight: 152, semanticLabel:)`, which lands the design slot (260 px
+   nest, 152 px Pip) *and* satisfies the 5 tests. The now-dead
+   `_kNestHeight`/`_kPipHeight`/`_kNestLayoutHeight` constants and the
+   `flutter_svg` + `nest_assets` imports were removed with it.
+   No test was changed to accommodate the fork.
+2. **`switchMapStream` closed its result on outer done** — which silently
+   truncated every load driven by the repository's *default* `watchHome()`.
+   `watchActiveChild()` is `Stream.value(child)` in the test fakes, so
+   `onDone: controller.close` fired one tick in, tore down the inner quest
+   subscription, and ended `emit.forEach` — every later completion flip was
+   dropped, so nothing was ever celebrated. This broke 3 proofs
+   (`K03-BUG-8`, `retry after a failed completion still celebrates`,
+   `double-tapping the check completes once`). Fix: outer completion no longer
+   closes the controller (which is what its own doc comment already claimed —
+   "Never close: the next outer emission replaces the inner"); the live inner
+   keeps forwarding. Production is unaffected either way — the Drift override
+   emits from one never-closing subscription — so this only removed the
+   landmine for every fake and future default.
+3. **A leftover scratch test was failing analyze.** The UI chunk left
+   `app/test/features/kid_home/zz_measure_test.dart` — print-only, no
+   assertions, 22 lint hits (`avoid_print`, `unnecessary_string_escapes`,
+   `unused_local_variable`, `avoid_catches_without_on_clauses`). It was a
+   layout-measurement scratch pad, not a test; it was **moved out of the repo**
+   (kept at a temp path, not deleted outright) so `flutter analyze` is clean.
+
+## FIXES_5 items
+
+### Review findings (from `4_review.md`)
+
+| # | Item | Status |
+|---|---|---|
+| 1 | [major] pet slot size must reach `ORCHESTRATOR_NOTES` #1 | **DONE** — SHARED_REQUEST #11's target-size API landed; slot now `nestWidth: 260, fixedPipHeight: 152` through the shared component. Needs a capture to confirm pixels. |
+| 2 | [minor] CHILD ORDER at shared `watchChildren` | **DONE** (2a) — fixed on main; `K03-BUG-12` un-skipped and green. |
+| 3 | [minor] unmarked typography fork | **DONE** (2b) — four call sites on `NestType`, `google_fonts` gone from the feature. |
+| 4 | [minor] child stream watched twice per load | **DONE** (2a) — `watchHome()`; plus my `switchMapStream` outer-done fix. |
+| 5 | [minor] shared `DISABLE_ANIMATIONS=1` parse | **DONE** on main (`4751c52`) — re-verified here: `flutter test --dart-define=DISABLE_ANIMATIONS=1 --plain-name K03-BUG-7` → *All tests passed*. |
+| 6 | [minor] dock label can wrap | **LEFT** — shared `NestKidButton`; tracked as SHARED_REQUEST #9, no screen-local fix. |
+
+### UI deviations (from `5_ui.md`)
+
+| # | Item | Status |
+|---|---|---|
+| 1 | dark meadow tint behind the lower content (FAIL driver) | **DONE in code** (2b) — gradient `kidHorizon` → `lerp(horizon, meadow, .5)`. Visual confirmation is the UI stage's call; this stage ran no simulator. |
+| 2 | residual +10–13 px in the hearts→progress span | **LEFT** — the UI chunk changed no spacing in that block (verified: the view diff contains no `EdgeInsets`/`SizedBox` change). A layout probe in the test viewport could not settle it either way (test viewport ≠ 390×844 and the section title wraps to two lines), so it is honestly recorded as not done rather than guessed. |
+| 3 | dock top −6 px (ALIGNMENT) | **DONE** — dock bottom air is `NestSpacing.s1` (not the HTML `gap10`), so the dock owns the OS inset and lands on design y≈720. Already at HEAD before this stage. |
+
+### Skipped bug tests
+
+Only **K03-BUG-7** is skipped, and only by design: it asserts a
+compile-time `--dart-define`, so it is gated on `bool.hasEnvironment`
+(`skip: !const bool.hasEnvironment('DISABLE_ANIMATIONS')`). It passes when run
+the documented way (verified above). **K03-BUG-12** was un-skipped by 2a.
+No test is skipped to make the suite green.
+
+## Verification (in `app/`, this stage)
+
+```
+$ dart format .
+Formatted 381 files (0 changed) in 1.27 seconds.
+
+$ flutter analyze
+Analyzing app...
+No issues found! (ran in 4.7s)
+
+$ flutter test
+00:51 +980 ~1: All tests passed!
+```
+
+- `+980 ~1` — the 1 is the conditional K03-BUG-7 skip above.
+- `flutter test test/features/kid_home` alone → `00:06 +118 ~1: All tests passed!`
+- RULES §1 respected: `git status --porcelain` outside
+  `app/lib/features/kid_home/`, `app/test/features/kid_home/` and
+  `docs/screens/K03/` is empty — no `core/`, no other feature, no `tools/`.
+
+## Notes for the next stages
+
+- The pet slot now goes through the shared component again, so the UI stage
+  should re-measure nest width / Pip band against
+  `design/screens/*/K03-kid-home.png` and confirm finding 1 is closed
+  (previously nest 182 vs 198, Pip band 25 px short).
+- UI dev 2 above is still open and is the only unaddressed `5_ui.md` item.
+- Not run here, by design: simulator captures and `compare.py` sheets. The
+  meadow gradient (UI dev 1) and the re-composed pet slot both change pixels
+  the next UI check will measure.
 
 VERDICT: PASS

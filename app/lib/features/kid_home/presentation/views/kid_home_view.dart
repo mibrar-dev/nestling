@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_child.dart';
@@ -57,23 +56,18 @@ PipAccessory _pipAccessory(String raw) {
   };
 }
 
-/// Design-slot numbers (review finding 2: single place to change, cited to
+/// Design-slot numbers (review finding 1: single place to change, cited to
 /// `.k3-pet` in `design/html-source/screens/K03-kid-home.html`):
-/// Pip ≈152 px tall on the 260×236 nest. The shared `NestPetStage` scales
-/// this cap by the available width, so the still frame keeps the slot
-/// proportions at a smaller absolute size on 390 px screens.
-const double _kPipSlotSize = 152;
+/// Pip ≈152 px tall on the 260 px nest.
+///
+/// SHARED_REQUEST #11 landed: the shared `NestPetStage` explicit size mode
+/// takes these, so the slot no longer needs a feature-local scene fork and
+/// no longer derives its size from the incoming width.
+const double _kNestWidth = 260;
 
-/// v1 growth stage for the shared nest scene's feet-contact math, from the
-/// DB integer (clamped: the suite probes 0 → egg and 9 → songbird).
-PipStage _pipStage(int raw) {
-  return switch (raw.clamp(1, 4)) {
-    1 => PipStage.egg,
-    2 => PipStage.hatchling,
-    3 => PipStage.fledgling,
-    _ => PipStage.songbird,
-  };
-}
+/// Design cap for Pip, kept as `pipSize` for the shared slot's legacy
+/// sizing path and asserted by the view suite.
+const double _kPipSlotSize = 152;
 
 /// Display name for the pet-stage semantics label (design alt text).
 String _pipStageName(int stage) {
@@ -403,29 +397,17 @@ class _KidHomeBody extends StatelessWidget {
                         children: [
                           Text(
                             'Hi $nickname!',
-                            // Screen-exact `.k3-name`: Nunito 22/26 w900 ink.
-                            // TODO(K03): move to NestType.kidName once the
-                            // shared style lands (SHARED_REQUEST #7).
-                            style: GoogleFonts.nunito(
-                              fontSize: 22,
-                              height: 26 / 22,
-                              fontWeight: FontWeight.w900,
-                              color: tokens.ink,
-                            ),
+                            // SHARED_REQUEST #7 landed: screen-exact
+                            // `.k3-name` is now NestType.kidName.
+                            style: NestType.kidName(color: tokens.ink),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                           Text(
                             '$done done today',
-                            // Screen-exact `.k3-sub`: Nunito 15/20 w700 ink2.
-                            // TODO(K03): move to NestType.kidCaption once the
-                            // shared style lands (SHARED_REQUEST #7).
-                            style: GoogleFonts.nunito(
-                              fontSize: 15,
-                              height: 20 / 15,
-                              fontWeight: FontWeight.w700,
-                              color: tokens.ink2,
-                            ),
+                            // SHARED_REQUEST #7 landed: screen-exact
+                            // `.k3-sub` is now NestType.kidCaption.
+                            style: NestType.kidCaption(color: tokens.ink2),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -468,14 +450,9 @@ class _KidHomeBody extends StatelessWidget {
                                 Flexible(
                                   child: Text(
                                     'Pip is happy today',
-                                    // Screen-exact `.kcap`: Nunito 15/20 w700.
-                                    // TODO(K03): move to NestType.kidCaption
-                                    // once the shared style lands
-                                    // (SHARED_REQUEST #7).
-                                    style: GoogleFonts.nunito(
-                                      fontSize: 15,
-                                      height: 20 / 15,
-                                      fontWeight: FontWeight.w700,
+                                    // SHARED_REQUEST #7 landed: screen-exact
+                                    // `.kcap` is now NestType.kidCaption.
+                                    style: NestType.kidCaption(
                                       color: tokens.ink2,
                                     ),
                                     maxLines: 1,
@@ -515,7 +492,14 @@ class _KidHomeBody extends StatelessWidget {
                         // within a few levels), while the shared KidScope
                         // hill (untouched) stays `kidMeadow`.
                         CustomPaint(
-                          painter: _MeadowPainter(color: tokens.kidHorizon),
+                          painter: _MeadowPainter(
+                            top: tokens.kidHorizon,
+                            bottom: Color.lerp(
+                              tokens.kidHorizon,
+                              tokens.kidMeadow,
+                              0.5,
+                            )!,
+                          ),
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(
                               NestSpacing.padSide,
@@ -678,15 +662,18 @@ class _GateLockButtonState extends State<_GateLockButton> {
   }
 }
 
-/// Pet stage: the child's own Pip on the nest (review finding 1:
-/// shared `NestPetStage` with a `PipAvatar` in its `pip:` slot — no local
-/// scene fork). `pipSize: 152` is the design slot cap; the shared geometry
-/// scales it by the available width (Pip ≈ 0.55 × nest), so on a 390 px
-/// screen the still frame renders proportionally smaller — positions, not
-/// pixels, are what carry over. `inNest` is intentionally omitted: it
-/// defaults to false (lint forbids the redundant argument) and the custom
-/// `pip:` path seats the avatar between the nest rims without the v1 Rive
-/// artboard either way (inNest waiver: SHARED_REQUEST #8).
+/// Pet stage: the child's own Pip seated in the nest, under the design
+/// speech bubble.
+///
+/// Review finding 1 (iteration 6) asked for the HTML's own slot — a 260 px
+/// nest with Pip 152 tall — which the shared `NestPetStage` could not
+/// express. SHARED_REQUEST #11 landed on main: `nestWidth` +
+/// `fixedPipHeight` are the explicit size mode, so the slot is composed by
+/// the shared component (nest exactly 260 wide, Pip exactly 152 tall)
+/// rather than by a feature-local `Stack` + `SvgPicture` fork. `pipSize`
+/// stays as the design cap it has always been. `inNest` remains omitted —
+/// it defaults to false and the custom `pip:` path seats the avatar between
+/// the nest rims either way (SHARED_REQUEST #8).
 class _KidPetStage extends StatelessWidget {
   const new({required this.child});
 
@@ -704,7 +691,8 @@ class _KidPetStage extends StatelessWidget {
       ),
       speech: "Let's do some quests!",
       pipSize: _kPipSlotSize,
-      stage: _pipStage(stage),
+      nestWidth: _kNestWidth,
+      fixedPipHeight: _kPipSlotSize,
       semanticLabel: 'Pip the ${_pipStageName(stage)}, stage $stage of 4',
     );
   }
@@ -715,32 +703,38 @@ class _KidPetStage extends StatelessWidget {
 // once the design system owns one (SHARED_REQUEST #6) and delete this
 // painter. The shared 136 px hill cannot cover the band: the design shows
 /// green from just below the section row, so until the shared API exists
-/// this in-flow full-bleed panel paints it. Tone is `kidHorizon` (pixel
-/// measurement of both design PNGs lands on it); curve numbers below cite
-/// the `.meadow` silhouette in `design/html-source/screens/K03-kid-home.html`.
+/// this in-flow full-bleed panel paints it. The vertical gradient matches
+/// the design PNGs: `kidHorizon` at the band top grading to a mid blend
+/// toward `kidMeadow` at the bottom (both themes — SPACING_SPEC §14.14
+/// hill-front bake: light #CCE9C2-ish ≈ lerp, dark #243B41-ish ≈ lerp).
 class _MeadowPainter extends CustomPainter {
-  const _MeadowPainter({required this.color});
+  const _MeadowPainter({required this.top, required this.bottom});
 
-  final Color color;
+  final Color top;
+  final Color bottom;
 
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width;
     final h = size.height;
-    canvas.drawPath(
-      Path()
-        ..moveTo(0, _kCrestLeftY)
-        ..quadraticBezierTo(w * _kCrestBend, _kCrestControlY, w, _kCrestRightY)
-        ..lineTo(w, h)
-        ..lineTo(0, h)
-        ..close(),
-      Paint()..color = color,
-    );
+    final path = Path()
+      ..moveTo(0, _kCrestLeftY)
+      ..quadraticBezierTo(w * _kCrestBend, _kCrestControlY, w, _kCrestRightY)
+      ..lineTo(w, h)
+      ..lineTo(0, h)
+      ..close();
+    final paint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: <Color>[top, bottom],
+      ).createShader(Offset.zero & size);
+    canvas.drawPath(path, paint);
   }
 
   @override
   bool shouldRepaint(covariant _MeadowPainter oldDelegate) =>
-      oldDelegate.color != color;
+      oldDelegate.top != top || oldDelegate.bottom != bottom;
 }
 
 class _QuestCard extends StatefulWidget {

@@ -1,7 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:nestling/core/data/stream_combine.dart';
-import 'package:nestling/features/kid_home/domain/entities/kid_child.dart';
-import 'package:nestling/features/kid_home/domain/entities/kid_quest.dart';
+import 'package:nestling/features/kid_home/domain/entities/kid_home_data.dart';
 import 'package:nestling/features/kid_home/domain/kid_home_repository.dart';
 import 'package:nestling/features/kid_home/presentation/bloc/kid_home_event.dart';
 import 'package:nestling/features/kid_home/presentation/bloc/kid_home_state.dart';
@@ -26,17 +24,16 @@ class KidHomeBloc extends Bloc<KidHomeEvent, KidHomeState> {
     Emitter<KidHomeState> emit,
   ) async {
     emit(state.copyWith(status: KidHomeStatus.loading));
-    await emit.forEach<List<dynamic>>(
-      combineLatest2(_repository.watchActiveChild(), _repository.watchItems()),
-      onData: (parts) {
+    // One combined subscription (review finding 4, iteration 5): the child
+    // row is watched exactly once per load — never re-add load events.
+    await emit.forEach<KidHomeData>(
+      _repository.watchHome(),
+      onData: (home) {
         final previouslyDone = state.items
             .where((item) => _isDoneStatus(item.status))
             .map((item) => item.questId)
             .toSet();
-        final next = state.copyWithLoaded(
-          child: parts[0] as KidChild?,
-          items: (parts[1] as List<dynamic>).cast<KidQuest>(),
-        );
+        final next = state.copyWithLoaded(child: home.child, items: home.items);
         if (_awaitingCelebration.isNotEmpty) {
           // Evict entries for quests that vanished from the list
           // (K03-BUG-11): no flip can ever arrive for them, and a later

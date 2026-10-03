@@ -11,6 +11,7 @@ import 'dart:async';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_child.dart';
+import 'package:nestling/features/kid_home/domain/entities/kid_home_data.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_quest.dart';
 import 'package:nestling/features/kid_home/domain/kid_home_repository.dart';
 import 'package:nestling/features/kid_home/presentation/bloc/kid_home_bloc.dart';
@@ -178,7 +179,7 @@ Matcher _celebrating(String questId, {int? coins}) =>
 
 /// Controllable fake: fresh streams per call, pushable updates, injectable
 /// error and silence modes, and a record of `completeQuest` calls.
-class _FakeKidHomeRepository implements KidHomeRepository {
+class _FakeKidHomeRepository extends KidHomeRepository {
   _FakeKidHomeRepository({KidChild? child, List<KidQuest>? items})
     : child = child ?? _maya,
       _items = items ?? _mayaItems();
@@ -207,6 +208,11 @@ class _FakeKidHomeRepository implements KidHomeRepository {
   final StreamController<KidChild?> _childPushed =
       StreamController<KidChild?>.broadcast();
 
+  /// Subscription counts (review finding 4, iteration 5): a load must watch
+  /// the child row exactly once, no matter how many list updates follow.
+  int activeChildSubscriptions = 0;
+  int itemsSubscriptions = 0;
+
   List<KidQuest> get items => _items;
 
   void pushItems(List<KidQuest> value) {
@@ -224,6 +230,7 @@ class _FakeKidHomeRepository implements KidHomeRepository {
 
   @override
   Stream<List<KidQuest>> watchItems() async* {
+    itemsSubscriptions++;
     if (hang) {
       return;
     }
@@ -242,6 +249,7 @@ class _FakeKidHomeRepository implements KidHomeRepository {
 
   @override
   Stream<KidChild?> watchActiveChild() async* {
+    activeChildSubscriptions++;
     if (hang) {
       return;
     }
@@ -446,7 +454,9 @@ void main() {
         _loading,
         _loaded(done: 4, total: 6),
         _loaded(done: 5, total: 6),
-        _loaded(done: 5, total: 6, nullChild: true),
+        // A cleared child arrives WITH an empty list (atomic home emission),
+        // never paired with the previous child's quests.
+        _loaded(done: 0, total: 0, nullChild: true),
       ],
       verify: (bloc) => expect(bloc.state.child, isNull),
     );
@@ -743,6 +753,49 @@ void main() {
       verify: (_) => expect(repo.completed, <List<String>>[
         <String>['maya', 'q-tidy'],
       ]),
+    );
+
+    blocTest<KidHomeBloc, KidHomeState>(
+      'a load watches the child row exactly once (finding 4, iteration 5)',
+      build: () {
+        repo = _FakeKidHomeRepository();
+        return KidHomeBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        // A list update must not open a second child subscription.
+        repo.pushItems(<KidQuest>[
+          for (final KidQuest quest in repo.items)
+            if (quest.questId == 'q-reading')
+              _withStatus(quest, 'done_pending')
+            else
+              quest,
+        ]);
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        repo.pushChild(null);
+      },
+      wait: const Duration(milliseconds: 100),
+      verify: (bloc) {
+        expect(
+          repo.activeChildSubscriptions,
+          1,
+          reason: 'the child row is watched once per load, not twice',
+        );
+        expect(bloc.state.child, isNull);
+        expect(bloc.state.doneCount, 0);
+      },
+    );
+
+    test(
+      'watchHome default emits the child together with their quests',
+      () async {
+        final repo = _FakeKidHomeRepository();
+        final home = await repo.watchHome().first;
+        expect(home, KidHomeData(child: _maya, items: _mayaItems()));
+        expect(home.child?.nickname, 'Maya');
+        expect(home.items, hasLength(6));
+      },
     );
   });
 }

@@ -28,3 +28,6 @@ Keep the owner's bottom-edge rule. Re-run the UI check numbers afterwards.
 
 ## UPDATE (23:48) — shared batch 2 merged into your branch
 NestChip is 32 px (44 hit area), NestTextField has an error state (errorText → danger border + text below), NestPetStage has an explicit size mode, children order by created_at. Use them; remove local workarounds. google_fonts is gone: delete any GoogleFonts lines in your tests (analyze currently reports them).
+
+## UPDATE (05:36) — the UI builder for this iteration hit Fledge's rate limit and did not finish
+Integrator: there is no fresh 2b_build_ui report this iteration. YOU must also make the UI fixes in the current FIXES list and the notes above. Check the views on disk: the UI builder may have left partial edits, so keep the correct ones and finish the rest.

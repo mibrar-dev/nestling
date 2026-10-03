@@ -31,7 +31,17 @@
    band the design shows behind progress/cards; same need will hit K06+.
    Files: `app/lib/core/design_system/theme/kid_scope.dart`.
    Blocks: no (local panel kept until the API exists).
-7. Need (review finding 3, iteration 5): kid type styles missing from
+7. DONE on main (Stage 2b iteration 6 verified): `NestType.kidName`,
+   `NestType.kidCaption` and `NestType.kidChipLabel` exist
+   (`app/lib/core/design_system/tokens/typography.dart:128,134,138`) with the
+   exact values requested. K03's four call sites (view ×3, `kid_status_chip`
+   ×1) now use them and `google_fonts` is gone from the whole feature —
+   `grep -rn "google_fonts\|GoogleFonts" app/{lib,test}/features/kid_home`
+   returns nothing. Exemption on record for the sub-17 px kid copy is
+   unchanged: the K03 HTML uses 15 px, below DESIGN_SPEC §0.9's 17 px kid
+   minimum; the shared styles encode the design per `1_plan.md` §(a)/(e).
+   Original need below for the trail. Blocks: no.
+   Need (review finding 3, iteration 5): kid type styles missing from
    `NestType` — `kidName` (Nunito 22/26 w900 ink), `kidCaption` (Nunito
    15/20 w700 ink2), `kidChipLabel` (Nunito 15/15 w800 leafInk) — so K03
    can stop calling `GoogleFonts.nunito` directly. Exemption on record:
@@ -57,19 +67,28 @@
     cards but the screen correctly renders every active quest (6 under
     the demo seed, repo alphabetical order per DATA OVER MOCKS) — not a
     defect, recorded so future compares don't flag the extra cards.
-11. Need (review finding 1, iteration 6): `NestPetStage` accepts only a
-    `pipSize` cap (`pipH = min(maxW*0.62*0.55, pipSize)`), so on a 390 px
-    screen the slot is fixed at a ~119 px Pip on a ~217 px nest with no
-    API path to the design's 260×236 slot (would need maxW ≈ 446).
-    Measured: nest 182 vs 198 wide, Pip band 25 px shorter than design
-    (positions met: Pip top y=197, rim ≈286-292). Request: a target-size
-    API — `nestWidth:` / `pipHeight:` / `stageWidth:` that the scene
-    honors instead of deriving from `maxW`. Until it lands, K03 keeps
-    the shared `NestPetStage(pip:, speech:, pipSize: 152)` composition
-    per the mandatory migration note (positions carry over; art swap is
-    accepted). Files: `app/lib/core/design_system/components/nest_pet_stage.dart`.
-    Blocks: no.
-12. Need (orchestrator CHILD ORDER ruling, iteration 5; proof added by
+11. DONE on main (Stage 2 integrator, iteration 6 verified): `NestPetStage`
+    grew the target-size API requested here — `nestWidth:` +
+    `fixedPipHeight:` (explicit mode at
+    `app/lib/core/design_system/components/nest_pet_stage.dart:29-30,92-96`),
+    which sets `nestW = nestWidth ?? fixedPipHeight/split` and
+    `pipH = fixedPipHeight ?? nestW*pipPerNestWidth` instead of deriving
+    from `maxW`. K03 now calls
+    `NestPetStage(pip: PipAvatar(...), speech:, pipSize: 152, nestWidth: 260,
+    fixedPipHeight: 152, semanticLabel:)`, which lands the design slot
+    (260 px nest, 152 px Pip) through the shared component — the
+    feature-local `Stack` + `SvgPicture` scene fork the UI chunk had
+    provisionally added was reverted at integration, so the design-system
+    "never re-implement components" rule holds again. `pipSize` stays as the
+    design cap for the legacy sizing path. Needs a UI-stage capture to
+    confirm the rendered slot against the design PNG. Original need below
+    for the trail. Blocks: no.
+12. DONE on main (Stage 2a iteration 6 verified): shared `watchChildren`
+    now orders by `createdAt` (+ `rowid` tiebreak, schema v3) and the seed
+    staggers Maya/Leo one minute apart, so `watchProfiles()` returns
+    `['Maya', 'Leo']`. K03-BUG-12 un-skipped and passing. Original need below
+    for the trail. Blocks: no.
+    Need (orchestrator CHILD ORDER ruling, iteration 5; proof added by
     Stage 6 iter-5 — K03-BUG-12): children must be listed in insertion order
     (Maya, then Leo), never alphabetically. `KidHomeRepository.watchProfiles`
     passes through shared `watchChildren`, which orders by nickname in
