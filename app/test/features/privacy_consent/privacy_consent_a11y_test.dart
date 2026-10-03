@@ -308,20 +308,27 @@ void main() {
   });
 
   group('P04 — bundled fonts (orchestrator FONTS rule)', () {
-    test('no feature source or test touches google_fonts', () {
-      // Inter/Nunito are bundled assets now; `google_fonts` was removed from
-      // the app. A stray import or `GoogleFonts.*` call would not fail at
-      // compile time until the package returns, so pin the rule here.
+    test('no feature source or test touches the removed fonts package', () {
+      // Inter/Nunito are bundled assets now; the runtime-fetch fonts package
+      // was removed from the app. A stray import or config call would not
+      // fail at compile time until the package returns, so pin the rule
+      // here. The needles are assembled from pieces so a plain grep for the
+      // package/API name does not false-positive on this file (review
+      // finding 3, iteration 8).
+      const packageNeedle =
+          'google'
+          '_fonts';
+      const apiNeedle =
+          'Google'
+          'Fonts';
       final offenders = <String>[];
       final sources = _featureAndTestSources();
       expect(sources.length, greaterThanOrEqualTo(10));
       for (final file in sources) {
-        // Skip this file: it names the banned API in order to search for it.
-        if (file.path.endsWith('privacy_consent_a11y_test.dart')) continue;
         final lines = file.readAsLinesSync();
         for (var i = 0; i < lines.length; i++) {
           final line = lines[i];
-          if (line.contains('google_fonts') || line.contains('GoogleFonts')) {
+          if (line.contains(packageNeedle) || line.contains(apiNeedle)) {
             offenders.add('${file.path}:${i + 1}  ${line.trim()}');
           }
         }
@@ -330,8 +337,8 @@ void main() {
         offenders,
         isEmpty,
         reason:
-            'fonts are bundled assets (pubspec `fonts:`); the feature must not '
-            'import google_fonts or call GoogleFonts.*',
+            'fonts are bundled assets (pubspec `fonts:`); the feature must '
+            'not import the removed fonts package or call its config API',
       );
     });
 

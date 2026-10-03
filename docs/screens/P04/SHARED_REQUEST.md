@@ -171,3 +171,16 @@ title's `letterSpacing` (`privacy_consent_view.dart`), so the title is one
 and green. **The shared half stays open**: the Material 0.3px tracking still
 leaks into design text on every other screen until `NestType`/`NestTheme`
 (or `NestToggle` width) is fixed in core.
+
+**Status (iteration 9 — screen-wide, P04-11):** the same leak hit all 14
+other text runs on P04 (0.25px each; pinned red by
+`privacy_consent_geometry_test.dart`). Cleared locally: the view wraps its
+Scaffold body in `DefaultTextStyle.merge(letterSpacing: 0)` (covers
+core-rendered labels too, e.g. `NestButton`'s) and the Privacy Notice dialog
+renders its own title inside the child — necessary because the `Dialog`'s
+`Material` re-applies the theme's tracked `bodyMedium`
+(`material.dart: AnimatedDefaultTextStyle`), so even a captured
+DefaultTextStyle cannot reach a `NestModal(title:)`. **New evidence for the
+shared fix: every `NestModal` title on every screen renders with 0.25px
+tracking**, and `DefaultTextStyle.merge` around a Scaffold body is the only
+screen-local cure for core labels. Suite green: 166/166.

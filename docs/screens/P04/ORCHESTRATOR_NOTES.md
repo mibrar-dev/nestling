@@ -14,3 +14,13 @@ The ~16 px header offset is SHARED (P05 has the identical offset); a shared fix 
 
 ## UPDATE (15:27) — iteration 5: the trash icon is on main
 cmp_light_4 = 4.10%; orchestrator confirms the ONLY visible deviation left is the blank row-4 tile. `NestIcons.trash` (`app/assets/icons/ic_trash.svg`) is now merged into your branch: render it in the peach tile with the design's rust/red-ink colour (design pixels #BA562E), remove the TODO, un-skip [P04-2]/[P04-7] as the review asks, and fix the review's two findings. Also check dark mode uses the new `NestPrivacyShield` (token-coloured circle) from main.
+
+## UPDATE (03:58, iteration 9 — last pass) — letter-spacing
+The letter-spacing defect is shared. Branch shared/letter_spacing_zero is making NestType default to letterSpacing 0. Until it reaches main, fix it locally:
+- Pass `copyWith(letterSpacing: 0)` on P04's text runs, or a single local `_noTracking` helper.
+- Make the 3 "letter-spacing contract" tests green.
+- Keep those tests: once the shared fix lands, they keep passing.
+Also close the MINOR review items:
+- Commit the geometry test (it must be tracked, not left untracked).
+- Build the forbidden-font literals from pieces in privacy_consent_a11y_test.dart.
+- Loop bookkeeping in git history is NOT a finding.
