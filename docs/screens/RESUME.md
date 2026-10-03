@@ -58,3 +58,4 @@ Every wave and every shared-fix agent runs in a detached macOS `screen` session,
 - P03/P05/K03 were started before the switch (nohup). If the app quits and they die, recover them with finalize_iter + a resume file + a new detached wave.
 Merged so far: P01, P02, P04, P07, P08.
 - WARNING: quitting a wave's `screen` session kills every loop that wave started (they share its process group). To retire a scheduler, kill ONLY its `run_wave.sh` bash PID, never `screen -X quit`. Since 08:25 run_wave.sh takes a lock (`_status/run/.lock`), so several waves can share the 3 simulators without racing.
+- 09:10: run_wave.sh now starts each loop with `nohup`, so a loop survives its scheduler or its screen session ending (older waves, e.g. wave14, still run the old code: do NOT stop wave14 until its queue is empty).

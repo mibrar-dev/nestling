@@ -283,11 +283,8 @@ void main() {
       await tester.tap(find.text('See all'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
-      expect(find.text('P10 Quest library'), findsOneWidget);
-      expect(
-        _currentUri(tester, find.text('P10 Quest library')).path,
-        '/quests',
-      );
+      // Route-path assertion only: P10 owns the library view and its copy.
+      expect(pushedPath(tester), '/quests');
 
       await disposeApp(tester);
     });
@@ -332,7 +329,8 @@ void main() {
       await tester.tap(find.text('Browse ideas'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
-      expect(find.text('P10 Quest library'), findsOneWidget);
+      // Route-path assertion only: P10 owns the library view and its copy.
+      expect(pushedPath(tester), '/quests');
 
       expect(tester.takeException(), isNull);
       await disposeApp(tester);

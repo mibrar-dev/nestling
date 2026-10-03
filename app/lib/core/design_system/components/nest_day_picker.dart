@@ -71,6 +71,7 @@ class _DayCell extends StatelessWidget {
       button: true,
       selected: selected,
       label: semanticsLabel,
+      onTap: onTap,
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: NestDevice.tapParent),
         child: Material(
