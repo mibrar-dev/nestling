@@ -549,6 +549,49 @@ void main() {
       await disposeApp(tester);
     });
 
+    // 5_ui.md iteration 9, deviation 1: the nest was squashed (198×72 vs the
+    // design's 198×86) and Pip stood ON the rim (≈1 px overlap) instead of
+    // sitting IN the bowl with ≈23 px of rim overlap. `shared/pet_stage_seat`
+    // fixed both, and the screen answers with `nestHeight: 188`, which paints
+    // the design's 86 px tall outline (188 × 110/240).
+    testWidgets('the bowl outline is the design 198×86', (tester) async {
+      await _pumpRoute(tester);
+      final nest = tester.getRect(_nestSvgFinder().first);
+      // The art fills its box: 202/240 wide × 110/240 tall is the outline
+      // (`assets/illustrations/nest.svg`, measured in
+      // `pet_stage_seat_REPORT.md`).
+      expect(nest.width * PipNestFallback.visibleNestRatio, closeTo(198, 2));
+      expect(nest.height * 110 / 240, closeTo(86, 2));
+      await disposeApp(tester);
+    });
+
+    testWidgets("Pip's feet sit inside the bowl, not on the rim", (
+      tester,
+    ) async {
+      await _pumpRoute(tester);
+      final nest = tester.getRect(_nestSvgFinder().first);
+      final pip = tester.getRect(find.byType(PipAvatar));
+      // The bowl's visible top rim: the outline starts 95/240 down the art
+      // box (`nest.svg` outer bowl 95…205 of 240). The v2 avatar's feet are
+      // 21.2 px above the bottom of its own 152 px box
+      // (`pip_v2/*/s3_idle_1.svg`, feet 206.5) — both from
+      // `docs/screens/_shared/pet_stage_seat_REPORT.md`.
+      final rimTop = nest.top + nest.height * 95 / 240;
+      final feet = pip.bottom - 21.2;
+      expect(
+        feet - rimTop,
+        closeTo(23, 2),
+        reason:
+            'the design seats the feet ≈23 px below the rim (y 301 vs 278); '
+            '≈1 means Pip stands on the rim, which is what 5_ui iteration 9 '
+            'measured before shared/pet_stage_seat',
+      );
+      // …and the feet are inside the bowl, not sunk through its floor.
+      expect(feet, greaterThan(nest.top));
+      expect(feet, lessThan(nest.bottom));
+      await disposeApp(tester);
+    });
+
     testWidgets('the slot box keeps the 20 px gutters', (tester) async {
       await _pumpRoute(tester);
       final slot = tester.getRect(find.byType(PipNestFallback));
@@ -1020,6 +1063,46 @@ void main() {
         caption.left - lastHeart.right,
         closeTo(NestSpacing.s2 + NestSpacing.gap2, 0.5),
         reason: '.k3-hearts gap 8 + the caption 2 px inset',
+      );
+      await disposeApp(tester);
+    });
+  });
+
+  group('K03 quest order (data wins)', () {
+    // `1_plan.md` §a and the orchestrator's DATA OVER MOCKS ruling: quest
+    // order comes from the database, so the screen must NOT re-sort the
+    // design PNG's sample order. The repo's documented order is alphabetical
+    // by title (`kid_home_repository_impl.dart`: `sort(title.compareTo)`).
+    // NOTE for the next iteration: main's schema v4 / `shared_batch4` made
+    // `watchActiveQuests` return **creation** order (`orderBy(createdAt)`),
+    // so K03's repository is now the only place that re-sorts quests. Quest
+    // order is explicitly not a finding (ORCHESTRATOR_NOTES), so this test
+    // pins the documented behaviour and makes any future change deliberate.
+    testWidgets('the list keeps the repository order (alphabetical by title)', (
+      tester,
+    ) async {
+      await _pumpRoute(tester);
+      final list = find.byType(Scrollable).first;
+      for (var i = 0; i < 6; i++) {
+        await tester.drag(list, const Offset(0, -200));
+        await tester.pump();
+      }
+      expect(
+        <String>[
+          for (final element in find.byType(NestKidQuestCard).evaluate())
+            tester
+                .widget<NestKidQuestCard>(find.byWidget(element.widget))
+                .title,
+        ],
+        <String>[
+          'Empty the dishwasher',
+          'Hoover the stairs',
+          'Lay the table',
+          'Put the bins out',
+          'Reading – 20 minutes',
+          'Tidy your bedroom',
+        ],
+        reason: "the repository sorts Maya's six quests by title",
       );
       await disposeApp(tester);
     });

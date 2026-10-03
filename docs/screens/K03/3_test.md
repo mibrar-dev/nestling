@@ -1,4 +1,4 @@
-# K03 Kid home — Stage 3 (TEST), iteration 9
+# K03 Kid home — Stage 3 (TEST), iteration 10
 
 Scope: `kid_home` / `/kid-home`, kid mode. Tests in
 `app/test/features/kid_home/` (`kid_home_view_test.dart`,
@@ -13,137 +13,146 @@ UI-check stage may, and only `BC440E48-…`).
 ## Verification run (in `app/`, this iteration)
 
 - `dart format --set-exit-if-changed .` → **381 files, 0 changed**.
-- `flutter analyze` → **No issues found!** (`analysis_options.yaml` untouched; no
+- `flutter analyze` → **No issues found!** (`analysis_options.yaml` untouched, no
   new suppressions).
-- `flutter test` (whole app) → **exit 0, `+1557`** — 1557 pass, **0 skip,
+- `flutter test` (whole app) → **exit 0, `+1582`** — 1582 pass, **0 skip,
   0 fail**.
-- `flutter test test/features/kid_home/` → **exit 0, `+175`** — 175 pass,
+- `flutter test test/features/kid_home/` → **exit 0, `+178`** — 178 pass,
   **0 skip, 0 fail**.
 
-| File | Iteration 8 | Now |
+| File | Iteration 9 | Now |
 | --- | --- | --- |
-| `kid_home_view_test.dart` | 77 | **84** (+7, all pass) |
+| `kid_home_view_test.dart` | 84 | **87** (+3, all pass) |
 | `kid_home_bloc_test.dart` | 31 | **31** |
-| `k03_bugs_test.dart` | 53 | **59** (+6 from the bugs stage's accessibility probes) |
-| `kid_home_geometry_test.dart` | 1 | **1**, passing |
+| `k03_bugs_test.dart` | 59 | **59** |
+| `kid_home_geometry_test.dart` | 1 | **1**, extended by the build |
 
-## What iteration 9 delivered (the surface under test)
+Iteration 9 was the first iteration with `review=PASS`; the only failing stage
+was the UI check, and both of its deviations were outside K03's edit scope (one
+shared component, one shared cosmetic). Nothing from iteration 9's
+review/bugs output needed a test.
 
-1. **The new ACCESSIBILITY ACTIONS rule became testable**: main merged
-   `shared/semantics_tap` (191be8f) — "every interactive design-system component
-   exposes `SemanticsAction.tap`". Until now the suite only asserted labels.
-2. **Quest-card rhythm measured on painted rects** (`kid_home_view.dart:110`,
-   `_kQuestCardShadowRoom = 6`): the shared card reserves 6 px under itself for
-   `kidShadow`, so the column spacing is `s3 − 6` and the *painted* cards keep
-   the design's `.k3-quests { gap: 12px }`. Pending SHARED_REQUEST #16(b), which
-   would remove the subtraction entirely. The layout-invariants test now
-   measures the painted rects (new `_questCardPainted` helper), because the
-   widget rects carry the reserve and would read 6 instead of 12.
-3. Meadow-band documentation alignment (`0.62 × NestDevice.height`), no
-   behaviour change.
+## What iteration 10 delivered (the surface under test)
 
-## Tests added (this stage): the accessibility-actions matrix
+1. **`shared/pet_stage_seat` landed** (branch report:
+   `docs/screens/_shared/pet_stage_seat_REPORT.md`), fixing 5_ui iteration 9
+   deviation 1 — the bowl was squashed (198×**72** instead of 198×**86**) and Pip
+   stood **on** the rim (≈1 px overlap) instead of sitting in the bowl. The
+   screen answers with `nestHeight: 156 → 188`
+   (`kid_home_view.dart:81`), which paints the design's 86 px tall outline
+   (`188 × 110/240`) and seats the feet ≈23 px below the rim.
+2. **`_kQuestCardShadowRoom` tokenised** to `NestSpacing.gap6`, so the view and
+   the test name the same 6 px reserve the same way (behaviour unchanged).
+3. **The real-font geometry test** now pins the new rows: nest outline
+   278…364 (±2), nest centre 195 (±1), Pip centre 195 with feet 301 (±3),
+   hearts 448, first card 559 — and it passes.
+4. Main also merged `shared_batch4` (schema v4), which changed
+   `watchActiveQuests` to **creation order** — relevant below.
 
-New group `K03 accessibility actions (VoiceOver/TalkBack)` — **7 tests**. The
-rule has two halves and each is asserted: `getSemantics(f).getSemanticsData()
-.hasAction(SemanticsAction.tap)` for every control, and `performAction(tap)`
-must change the **real** state or database, not just the visuals.
+## Tests added (this stage)
 
-| Test | Control | Real effect asserted after the action |
-| --- | --- | --- |
-| `the lock exposes a tap action that opens the parental gate` | `Grown-ups` | `pushedPath` == `/parental-gate` |
-| `every dock button exposes a tap action and routes` | `Pip`, `Shop`, `My jar` | `/pip`, `/reward-shop`, `/my-jar` (and the pushed screen) |
-| `a quest card exposes a tap action that opens the detail` | merged card node | the K04 detail route with `childId: maya` in `extra` |
-| `a to-do check exposes a tap action that completes the quest` | `Mark done` | the repository records `['maya','q-reading']` **and** the K05 celebration opens |
-| `the failure retry exposes a tap action that reloads` | `Try again` | the screen returns to `loaded` with all 6 cards |
-| `the picker CTA exposes a tap action that opens K01` | `Choose` | `K01 Who is playing` |
-| `non-controls advertise no tap action (no phantom buttons)` | greeting, hearts row, progress bar, pending check | `hasAction(tap)` is **false**; a pending check exposes no node at all, so a screen reader never offers a button that does nothing |
+### `kid_home_view_test.dart` — pet slot group
 
-The actual semantics tree, dumped while writing these (390 px, light), is the
-evidence that the split is right:
+1. **`the bowl outline is the design 198×86`** — the rendered nest box is
+   236×188 and the art's visible outline is `box × (202/240 × 110/240)` →
+   198×86. Complements the width pin the build added; before `nestHeight: 188`
+   the outline was 72 tall (squashed).
+2. **"Pip's feet sit inside the bowl, not on the rim"** — the regression the UI
+   stage measured: `feet (pipBox.bottom − 21.2, the v2 avatar's feet line) −
+   rimTop (nestBox.top + nestBox.height × 95/240)` must be ≈23 px. Measured
+   22.98 in this viewport; the pre-fix value was ≈1 (standing on the rim). The
+   test also pins that the feet are *inside* the bowl, not sunk through its
+   floor. Both ratios come from the assets and are cited in the shared report,
+   so a change in either is a deliberate flag, not silent drift.
 
-```
-label="Hi Maya, 4 done today"                              tap=false
-label="120 coins"                                           tap=false
-label="Grown-ups"                          button=true      tap=true
-label="Let's do some quests!…"                             (image node)
-label="Pip is happy today, 4 of 5 hearts"                  tap=false
-label="Today's quests…"                                     (balanced heading)
-label="4 of 6 of today's quests done"                      tap=false
-label="Empty the dishwasher, Waiting for Mum's thumbs-up"  button=true tap=true
-label="Hoover the stairs, Done"              button=true   tap=true
-label="Pip" / "Shop" / "My jar"             button=true   tap=true
-```
+### `kid_home_view_test.dart` — new group `K03 quest order (data wins)`
 
-So every control is a real button with a tap action, and every announcement node
-is inert — exactly what the rule asks for.
+3. **`the list keeps the repository order (alphabetical by title)`** — pins
+   Maya's six cards as Empty the dishwasher · Hoover the stairs · Lay the table ·
+   Put the bins out · Reading – 20 minutes · Tidy your bedroom, i.e. the
+   repository's `sort(title.compareTo)`. This makes the order *intentional and
+   visible* rather than incidental, and documents the divergence below in the
+   test itself.
 
 ## Results
 
-All 7 new tests pass, and nothing else moved: the layout matrix (light + dark ×
-320/390/430 × text scale 1.0/1.3), the layout invariants on painted card rects,
-the PERIODS ruling, the bottom-edge and alignment owner rules, navigation,
-labels, tap targets (≥ 44 parent / ≥ 56 kid), the PipAvatar mandate, the
-completion/celebration state machine, the shapes group (chip pill, card tile +
-tint, 56 px check, `.speech` bubble, scene box per width), and the real-font
-geometry test.
+All 3 new tests pass; nothing else moved. Still green: the layout matrix (light
++ dark × 320/390/430 × text scale 1.0/1.3), layout invariants on painted card
+rects, PERIODS, bottom-edge and alignment owner rules, navigation, labels, tap
+targets, the accessibility-actions matrix from iteration 9 (every control
+advertises `SemanticsAction.tap` and performing it changes the real state/DB;
+non-controls advertise none), the PipAvatar mandate, the completion/celebration
+state machine, the shapes group (chip pill, tile + tint, 56 px check, `.speech`
+bubble, scene box per width), and the real-font geometry test.
 
 ## Bugs found
 
-**None.** No test failed, no semantics node was missing a required action, and
-nothing in the screen misbehaved under the new rule. The one thing worth
-recording is a harness subtlety rather than a defect (below).
+**None.** No test failed and nothing misbehaved under this stage's probes.
+
+### Observation for the orchestrator (not a finding)
+
+**Quest order vs the new shared ruling.** Main's schema v4 / `shared_batch4`
+changed `watchActiveQuests` to creation order
+(`app_database.dart:477-480`: `orderBy([createdAt, id])`), but K03's
+repository still re-sorts locally
+(`kid_home_repository_impl.dart:73`: `sort((a, b) => a.title.compareTo(b.title))`),
+so K03 is now the only screen that re-orders quests. This is **not** reported as
+a defect because:
+- `1_plan.md` §a states the repo order deliberately — "repo order
+  (alphabetical — visual order differs from PNG sample order; data order wins,
+  do NOT re-sort)";
+- the orchestrator's ORCHESTRATOR_NOTES says "Quest order and '4 done today'
+  come from the database (DATA OVER MOCKS): not findings", and the UI stage has
+  accepted the alphabetical data order for nine iterations (its A2 item);
+- the design settles nothing: the PNG's sample order (dishwasher, reading,
+  tidy) is a third order again.
+
+My test pins the documented behaviour and names the divergence in a comment, so
+if the orchestrator ever rules creation order, the diff shows exactly which six
+cards move.
 
 ## Owner rules re-checked
 
 - **BOTTOM EDGE:** the K03-BUG-10 proofs (light + dark, 34 px inset emulated)
   pass — the dock surface runs to the physical edge and the meadow ends at the
   dock's top border in both themes.
-- **ALIGNMENT:** gutters and shared card/bar/dock edges pass; the pet slot stays
-  on the axis at 320/390/430; dock labels cannot wrap, so the three buttons keep
-  equal heights at every width and text scale; quest cards now keep the design's
-  12 px gap **between painted rects**.
+- **ALIGNMENT:** gutters and shared card/bar/dock edges pass; the pet slot is on
+  the axis at 320/390/430 with no clipping; dock labels cannot wrap, so the
+  three buttons keep equal heights at every width and text scale; quest cards
+  keep the design's 12 px gap between *painted* rects.
 
 ## Rule coverage
 
 | Rule | Status on K03 |
 | --- | --- |
-| **ACCESSIBILITY ACTIONS** | **New group, 7 tests**: every control advertises `SemanticsAction.tap` and performing it changes the real state/DB; non-controls advertise none |
-| PIP | Mandated `PipAvatar` for the active child in every state; no v1 `pip_stage_*.svg` |
+| PIP | Mandated `PipAvatar` in every state; **now also seated in the bowl** with the design's 23 px rim overlap (new pin) |
 | BOTTOM EDGE / ALIGNMENT | Proven by tests (above) |
-| PERIODS + DATA OVER MOCKS | Counts from the DB; daily/weekly/once + new-period proofs green |
-| COPY | Re-verified character-by-character against the HTML source (0 curly / 4 straight apostrophes; the app matches) |
+| PERIODS + DATA OVER MOCKS | Counts from the DB; daily/weekly/once + new-period proofs green; quest order now pinned as documented |
+| COPY | Re-verified character-by-character against the HTML source (0 curly / 4 straight apostrophes; the seed's en dash and the detail chip's middle dot intact) |
 | FONTS / LETTER SPACING | No `google_fonts`; every rendered string asserts `letterSpacing == 0` |
 | CHIP ROWS (`NestChipWrap`) | Not applicable: K03's chips are the non-interactive `KidStatusChip` |
-| UI CHECK MEASURES SHAPES | Card rhythm now measured on painted rects; chip pill, tile + tint, check, bubble and scene box measured as background/border rects |
+| UI CHECK MEASURES SHAPES | Outline 198×86 and the Pip's feet line are measured as geometry, not inferred from props; painted-card gaps, chip pill, tile + tint, check, bubble and scene box likewise |
 | BALANCED HEADINGS | The only `.kid-title` heading renders through `NestBalancedText`; nothing else does |
+| ACCESSIBILITY ACTIONS | Iteration 9's 7-test matrix still green (tap action on every control, real effect, none on non-controls) |
 | CHILD ORDER | No child list here; pinned at the repository level (K03-BUG-12) |
 | TRIAL | No test writes `subscription_status` |
 | SIMULATORS | None booted by this stage |
 
 ## Harness notes (carry forward)
 
-- **An offstage card has no semantics node at all.** The two to-do cards are
-  built below the fold, so `tester.getSemantics(checkFinder).owner` is `null`
-  and the action cannot be performed. Scroll the control into view first
-  (`ensureVisible` + a pump) — that is why the check test does it, and why an
-  earlier draft failed with a null-check error rather than a clean assertion.
-- **`SemanticsAction` needs `package:flutter/semantics.dart`** (it is not
-  re-exported by `material.dart`).
-- Two ways to activate a semantics action, both used here:
-  `tester.semantics.tap(find.semantics.byLabel(label))` (public, throws unless
-  the node reports the action — but only finds nodes that exist in the
-  semantics tree) and, for a widget finder (including merged card nodes),
-  `tester.getSemantics(f).owner!.performAction(id, SemanticsAction.tap)`.
-  `tester.getSemantics(find.bySemanticsLabel(...))` is *not* interchangeable:
-  it can hand back a detached node.
-- **Pushed routes:** assert `pushedPath`, not `currentPath` — the latter reports
-  the declarative location a `push` came from (`/kid-home` while the gate is on
-  screen).
-- The design source uses a **straight** apostrophe in `Who's playing?`; a test
-  written with `\u2019` silently finds nothing.
+- The pet-slot derivations need both asset ratios, not one: the outline is
+  **not** vertically centred in the nest box — it starts 95/240 down it (the
+  art's outer bowl spans 95…205 of 240). A centred assumption is off by ~24 px
+  and hides a 46 px error as a 23 px one.
+- The v2 Pip's feet sit 21.2 px above the bottom of its 152 px box, so
+  `pipBox.bottom` is not the feet line.
+- Offstage cards have **no semantics node** (iteration 9's note): scroll a
+  control into view before asserting or performing its semantics action.
+- `pushedPath`, not `currentPath`, for `push`ed routes.
+- The design source uses a **straight** apostrophe (`Who's playing?`).
 - Direct Drift work inside `testWidgets` must run inside `tester.runAsync`;
   bottom insets are emulated via `tester.view.padding` / `viewPadding` at 3×
-  physical px; never `pumpAndSettle` while a loading spinner is on screen.
+  physical px; never `pumpAndSettle` while a loading spinner is on screen;
+  seed the DB before pumping the route.
 
 VERDICT: PASS

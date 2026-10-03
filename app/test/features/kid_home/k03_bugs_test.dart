@@ -76,6 +76,12 @@
 //   the picker. K03's two `excludeSemantics: true` sites (header, hearts)
 //   are display-only, not controls.
 //
+// Iteration-10 work:
+// - The shared pet-seating fix landed; K03 adopted `_kNestBoxHeight: 188`
+//   (nestW 236 / pipH 152 unchanged). All pet proofs stay green and the
+//   real-font geometry pin now asserts the painted outline (198×86), rim 278
+//   and Pip's feet 301. No new bugs found in this stage.
+//
 // The suite has NO skipped tests: every proof below runs in the plain suite.
 // (If you add one, do not park it to get green — see RULES.)
 //

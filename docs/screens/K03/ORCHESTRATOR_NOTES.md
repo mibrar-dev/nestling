@@ -84,3 +84,9 @@ Everything from the hearts down now matches the design. The remaining pet-block 
 - Change ONE value: `_kNestBoxHeight = 188` (was 156). Keep nestWidth 236 and fixedPipHeight 152, as docs/screens/_shared/pet_stage_seat_REPORT.md says.
 - Targets: visible nest 198×86, top 278; Pip head ≈199, feet ≈301 (23 px into the bowl); hearts 448; first card 559. Update kid_home_geometry_test.dart to pin nest top 278 ±2 and Pip bottom 301 ±3.
 - Fix any remaining FIXES_9.md items. Nothing else.
+
+## UPDATE (10:52, orchestrator QA of cmp_*_10: light 6.0%, dark 5.6%) — iteration 11
+The pet block is now right in light mode.
+1. DARK MEADOW (K03-local, 4th time): the lower content area behind the quest cards must use `--kid-meadow` dark `#1E4A3A` (light `#BFE8B0`, already correct). In the design, dark goes from navy at ≈ y 523 (sheet y 607) to teal-green behind the progress bar and the cards. The app is still flat navy. Use the token (add `kidMeadow` to tokens if missing: SHARED_REQUEST only if it is truly absent), and pin the colour at (10, 600) and (10, 700) in dark.
+2. The dark pet glow (a hard lilac disc) is SHARED. Branch shared/pet_glow is fixing it; not a K03 finding.
+3. Quest order and "4 done today" come from the DB (not findings).
