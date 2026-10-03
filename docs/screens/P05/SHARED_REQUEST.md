@@ -311,3 +311,53 @@ Files: `app/lib/core/design_system/components/nest_chip.dart`
 
 Blocks: no for P05 — every P05 gap, row height, swatch and gutter is
 design-exact and pinned; the residual is this shared effect.
+
+---
+
+# Shared request — P05 `NestChip`'s overlaid 44-px target is unreachable inside
+# the chip `Wrap` (P05-BUG-11, open — effective target is 32×pill)
+
+Need: the shared batch-2 chip keeps the design's 32-px visual and widens the
+hit test with `_ExpandedHitBox` (44×44). Measured on P05 today, the vertical
+half of that widening never happens: the chips sit in a `Wrap` whose own box is
+exactly the run height, so Flutter stops the hit test at the `Wrap` and the ±6
+px overlay is dropped. Reachable vertical target = the pill itself, 32 px, for
+every chip in a single-row layout (the production case).
+
+Measured (390 px, text scale 1.0, first row of the age-chip block, chip pill
+`34,527 → 104,559`):
+
+| tap y | inside the 44-px target? | selects the chip? |
+|---|---|---|
+| 520–526 (above the pill) | yes | **no** — clipped by the Wrap |
+| 527–559 (the pill) | yes | yes |
+| 564 (below the pill) | yes | **no** — clipped |
+
+So the screen's four age bands expose a 32-px-tall touch target where
+`SPACING_SPEC` §3/§10.6 require ≥44 in parent mode — the exact regression the
+shared fix was meant to avoid. Note the horizontal half works (the pill is
+44-min wide by construction), and `_RenderExpandedHitBox` documents the
+constraint itself ("ancestors that are themselves tight … cannot forward hits
+outside their own box").
+
+P05 cannot fix it locally: the tight ancestor is the `Wrap` inside
+`add_child_form_card.dart`, and the only ways to widen it (padding the row,
+`runSpacing` growth, a `Stack` with a taller box) put the 44 px back **in the
+flow**, which is the 12-px drift that batch 2 just removed. A real fix has to
+come from the component side — e.g. the chip's hit expander participating in a
+parent that is allowed to overflow (`RenderBox.hitTest` on a box whose ancestors
+forward), or a design-system row primitive that owns both the visual 32 px and
+the 44-px target.
+
+Files: `app/lib/core/design_system/components/nest_chip.dart` (+ whichever
+shared row/capsule primitive ends up owning the tap area).
+
+Blocks: no for the build — the screen builds and every gap is design-exact. It
+does block an accessibility pass: parent-mode tap targets must be ≥44.
+
+Proofs: `app/test/features/family/add_children_test.dart`, group *P05 chip tap
+area* — "[P05-BUG-11] the vertical overlay is clipped by the chip Wrap", which
+asserts today's reachable 32 px and flips to `isTrue` when the fix lands; the
+bugs-stage proof of the same defect is in `p05_bugs_test.dart` with the id in
+its name and carries `skip: true` (run it with
+`flutter test --run-skipped test/features/family/p05_bugs_test.dart`).

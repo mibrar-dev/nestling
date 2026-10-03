@@ -1,6 +1,10 @@
 // P05 · Add children — bug proofs.
 //
-// P05-BUG-1…10 are fixed; all proofs below run un-skipped as regressions.
+// P05-BUG-1…10 are fixed; their proofs run un-skipped as regressions.
+// P05-BUG-11 (the overlaid chip tap area is clipped by the chip `Wrap`) is
+// open and carries `skip: true` with the id in the name so `flutter test`
+// stays green; the fix stage removes the skip. Run it with
+// `flutter test --run-skipped test/features/family/p05_bugs_test.dart`.
 // Full reports: `docs/screens/P05/6_bugs.md`.
 
 import 'dart:async';
@@ -95,9 +99,10 @@ void main() {
         await setUpTestScope();
         await pumpAppRoute(tester, '/add-children');
 
-        // The fix (IntrinsicWidth around each NestChip) shrinks every box
-        // to its pill. The test fallback font is ~30% wider than the real
-        // Nunito, so in-test the last pill wraps to a second row while
+        // The shared fix (a 32-px pill that shrink-wraps inside the `Wrap`,
+        // with the ≥44 tap area overlaid by `_ExpandedHitBox`) makes every
+        // chip box hug its pill. The test fallback font is ~30% wider than the
+        // real Nunito, so in-test the last pill wraps to a second row while
         // production renders the design's single row (review measurement:
         // four pills ≈252–304 px ≤ the 322 px run). What must hold in both
         // is: no box claims the run, and at most two rows exist.
@@ -479,5 +484,47 @@ void main() {
 
       await disposeApp(tester);
     });
+  });
+
+  // P05-BUG-11 — the shared NestChip's overlaid 44-px hit area is
+  // unreachable in P05's chip `Wrap`: the run is exactly the 32-px pill and
+  // Flutter hit testing stops at the Wrap's bounds, so the effective tap
+  // target is 44×32. SPACING_SPEC §10.6 requires a 44-min tap area around
+  // the 32 visual; the tap-target test now asserts the 32 layout, so nothing
+  // currently proves the 44-high target.
+  group('P05-BUG-11 age-chip tap target is 32 high, not 44 (major)', () {
+    testWidgets(
+      '[P05-BUG-11] the overlaid tap area above/below the chip selects it',
+      skip: true,
+      (tester) async {
+        await setUpTestScope();
+        await pumpAppRoute(tester, '/add-children');
+
+        NestChip chip4() =>
+            tester.widget<NestChip>(find.byKey(const Key('ageChip-4-6')));
+        final pill = tester.getRect(find.byKey(const Key('ageChip-4-6')));
+
+        // The overlaid 44-px area extends 6 px above and below the 32-px pill.
+        await tester.tapAt(Offset(pill.center.dx, pill.top - 5));
+        await tester.pump();
+        expect(
+          chip4().selected,
+          isTrue,
+          reason: 'tap 5 px above the pill is inside the 44-px target',
+        );
+
+        await tester.tap(find.byKey(const Key('ageChip-7-9')));
+        await tester.pump();
+        await tester.tapAt(Offset(pill.center.dx, pill.bottom + 5));
+        await tester.pump();
+        expect(
+          chip4().selected,
+          isTrue,
+          reason: 'tap 5 px below the pill is inside the 44-px target',
+        );
+
+        await disposeApp(tester);
+      },
+    );
   });
 }

@@ -1,23 +1,15 @@
-# P05 · Add children — UI check (STAGE 5, iteration 5)
+# P05 · Add children — UI check (STAGE 5, iteration 6)
 
-Route `/add-children`, simulator 604697A9-11DA-462F-9837-396E9CA2493A (390×844).
+Route `/add-children`, simulator BC440E48-B3A3-43BC-971B-0EF5DB621874 (390×844).
 Shots use `SEED=onboarding_kids` (brief + `ORCHESTRATOR_NOTES.md`). Parent mode, `THEME=light|dark`.
 Comparisons: `tools/screens/compare.py` vs `design/screens/light|dark/P05-add-children.png`.
 
-- Light: `docs/screens/P05/ui/app_light_5b.png` → `cmp_light_5b.png`, **mean diff 3.89%**
-- Dark: `docs/screens/P05/ui/app_dark_5.png` → `cmp_dark_5.png`, **mean diff 3.79%**
+- Light: `docs/screens/P05/ui/app_light_6.png` → `cmp_light_6.png`, **mean diff 1.34%** (was 3.89%)
+- Dark: `docs/screens/P05/ui/app_dark_6.png` → `cmp_dark_6.png`, **mean diff 1.25%** (was 3.79%)
 
-Per-band drift (light retry): band0 0–105: 1.62% · band1 105–211: 5.02% · band2 211–316: 0.55% ·
-band3 316–422: 2.83% · band4 422–527: 4.24% · band5 527–633: 10.76% · band6 633–738: 1.50% ·
-band7 738–844: 4.53%. Dark matches within ~0.5% (band5 11.11%).
-
-Capture note: the first light shot (`app_light_5.png`, 9.30%) caught a transient broken
-frame rendering locale-measurement debug text (`devLocale=en_US`, `null=316.50`, …) instead
-of the screen. That string exists nowhere in `app/` (grepped all of `app/lib`, `app/test`;
-the body-text-width brief commit touched docs only), so it is not P05 product code — a
-stale/transient simulator frame. Re-running the identical command produced a valid stable
-frame (`app_light_5b.png`, 3.89%, band table consistent with iteration 4 and with dark).
-The retry is the record; the broken capture is kept for provenance only.
+Per-band drift (light): band0 0–105: 1.58% · band1 105–211: 0.32% · band2 211–316: 0.20% ·
+band3 316–422: 1.70% · band4 422–527: 3.11% · band5 527–633: 0.14% · band6 633–738: 1.35% ·
+band7 738–844: 2.33%. Dark matches within ~0.5% (band5 0.13%).
 
 Pixel landmarks measured from both PNGs at 3× (÷3 = logical px), light mode:
 
@@ -29,46 +21,40 @@ Pixel landmarks measured from both PNGs at 3× (÷3 = logical px), light mode:
 | h3 "Add a child" | 334.7–346.7 | 334.7–346.7 | 0 |
 | "Nickname" label | 370.0–376.7 | 370.0–376.7 | 0 |
 | "Age band" label | 454.0–460.7 | 454.0–460.7 | 0 |
-| chip labels | 481.0–490.7 | 486.0–495.7 | +5 |
-| "Avatar colour" label | 516.0–522.7 | 528.0–534.7 | +12 |
-| swatch row zone | 529–577 | 541–589 | +12 |
-| helper caption | 588.0–594.7 | 600.0–606.7 | +12 |
+| chip labels | 481.0–490.7 | 480.0–489.7 | −1 |
+| "Avatar colour" label | 516.0–522.7 | 516.0–522.7 | 0 |
+| swatch row zone | 529–577 | 529–577 | 0 |
+| helper caption | 588.0–594.7 | 588.0–594.7 | 0 |
 | CTA (buttons + caption) | 678 / 716–768 / 781–790 | identical | 0 |
 | CTA top (gutter) | 644 | 645 | +1 |
 
+Every text/element row is within ±1 px. The shared batch-2 `NestChip` (32 px layout +
+44 px hit area) closed the iteration-4/5 +5/+12 residual exactly (band5 10.8% → 0.14%);
+the P05-local `IntrinsicWidth` workaround is removed (verified by grep).
+
 No Pip slot on this screen (avatar initials only) → PIP rule N/A.
-Status-bar time/glyphs and home-indicator pill ignored (OS-drawn).
+Status-bar time/glyphs (band0) and home-indicator pill (band7) ignored — OS-drawn.
 
-## Deviations
+## Deviations (all accepted or sub-visible — none gate-blocking)
 
-1. [FAIL — the one remaining defect, unchanged since iteration 4] Chip row is 44 px tall
-   vs design 32 px, pushing swatches + caption +12 px low (outside ±2 px; band5 drift
-   10.8–11.1% is this shift of large colour circles).
-   Design: `.chip` 32 px row (467–499), labels 481–491, Avatar label 516, swatches
-   529–573, caption 588. App: same row top, but the shared `NestChip` interactive box
-   is 44 tall (labels centred +5 at 486–496), so every row below sits +12.
-   Root cause (shared, read-only finding): `nest_chip.dart` carries the 44-min tap minimum
-   AS the layout box (symmetric vertical 4.5 padding around a 35 px pill). SPACING_SPEC
-   §10.6 requires the tap area to "keep visual size" — 32 px layout row with the 44 px
-   tap area overlaid. P05 cannot fix this (never touch `core/`; no clean local workaround
-   that survives text-scale behaviour). Fix: shared DS follow-up (standing
-   `SHARED_REQUEST.md` #3). This is the exact residual the orchestrator's iteration-5 note
-   targets (chips ≈ +5, colour row ≈ +12, helper ≈ +12 — confirmed to the pixel).
-
-2. [Pass, kept] CHILD ORDER: Maya left, Leo right from the database. Header, kid cards,
-   "Add a child" card top all pixel-identical per the orchestrator's verified list.
-
-3. [Pass] Copy character-exact vs HTML (curly ’ U+2019, em/en dashes, "Avatar colour",
-   all labels/captions/buttons, `Edit <name>`). No overflow/clipping/ellipsis. Focus-ring
-   absence accepted (unfocused launch is fine).
-
-4. [Pass] Owner rules: bottom bar surface to the physical edge both modes; 20 px gutters,
-   all edges aligned. Dark-mode colours match.
+1. Nickname field unfocused (design shows the focused leaf ring; band3 ≈1.7%).
+   Accepted mock state per orchestrator note 4 — do not add autofocus.
+2. Chip pills/selected-ring render within ±1 px rows; faint heat in band4 (3.1%) is the
+   accepted focus-ring difference plus sub-pixel pill/text rendering (bundled Nunito,
+   letterSpacing 0 per shared rule) — no measurable positional deviation.
+3. CTA caption/button heat (band6 ≈1.4%) is text-rendering only; geometry identical.
+4. Copy character-exact vs HTML (curly ’ U+2019, em/en dashes, "Avatar colour", all
+   labels/captions/buttons, `Edit <name>`). No overflow/clipping/ellipsis.
+5. Owner rules: bottom bar surface to the physical edge both modes; 20 px gutters, all
+   edges aligned. Dark-mode colours match (band tables within 0.5%).
+6. Hygiene (read-only checks): no `GoogleFonts`/google_fonts references anywhere in
+   `features/family` or its tests (FONTS rule clean).
 
 ## Verdict basis
 
-One systematic +12 px shift of the swatch row, its label, and the helper caption remains,
-owned by the shared chip component and outside the ±2 px tolerance — visible as doubling
-in the compare heat-map. Everything else is pixel-identical or accepted.
+All elements present, correctly ordered (Maya, Leo), exact copy, positions within ±1 px
+of the design in both modes; every remaining diff pixel falls in an ignored category
+(OS status bar / home pill), an accepted mock state (unfocused field), or sub-pixel
+font rendering. No visible deviation a designer would reject.
 
-VERDICT: FAIL
+VERDICT: PASS

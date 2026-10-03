@@ -2204,6 +2204,116 @@ void main() {
     });
   });
 
+  group('P05 chip tap area (shared batch 2: 32-px pill, 44-px overlay)', () {
+    // P05-BUG-11 (open, filed by the bugs stage, proof skipped in
+    // p05_bugs_test.dart): `_ExpandedHitBox` widens the chip's hit test to
+    // 44×44, but only hits that reach it count — and the chip `Wrap`'s own box
+    // is exactly the 32-px run, so Flutter stops the hit test there and the
+    // ±6 px overlay is unreachable at the block's edges. Measured on the first
+    // row (the production-relevant one-row case): reachable = the pill itself.
+    testWidgets(
+      '[P05-BUG-11] the vertical overlay is clipped by the chip Wrap (32-px '
+      'effective target)',
+      (tester) async {
+        await setUpTestScope();
+        await pumpAppRoute(tester, '/add-children');
+
+        final pill = tester.getRect(find.byKey(const Key('ageChip-4-6')));
+        bool isSelected(String band) =>
+            tester.widget<NestChip>(find.byKey(Key('ageChip-$band'))).selected;
+
+        // Inside the pill: reachable.
+        await tester.tapAt(pill.center);
+        await tester.pump();
+        expect(isSelected('4-6'), isTrue);
+
+        // Move the selection away first, so "did this tap land?" is
+        // unambiguous (chips are single-select: re-tapping one keeps it).
+        final other = tester.getRect(find.byKey(const Key('ageChip-7-9')));
+        await tester.tapAt(other.center);
+        await tester.pump();
+        expect(isSelected('7-9'), isTrue);
+        expect(isSelected('4-6'), isFalse);
+
+        // 3 px above the pill is inside the 44-px target by design, but it is
+        // also above the Wrap's own top edge, so the tap is dropped. Flip to
+        // `isTrue` when the shared fix lands (SPACING_SPEC §10.6 wants a
+        // 44-min target around the 32-px visual).
+        await tester.tapAt(Offset(pill.center.dx, pill.top - 3));
+        await tester.pump();
+        expect(
+          isSelected('4-6'),
+          isFalse,
+          reason: 'P05-BUG-11: clipped by the Wrap — becomes true when fixed',
+        );
+        expect(isSelected('7-9'), isTrue, reason: 'the tap changed nothing');
+
+        // The bottom edge is left to the bugs-stage proof
+        // (`p05_bugs_test.dart`, P05-BUG-11, skipped): in this test font the
+        // chips wrap to two rows, so 5 px below row 1 sits inside row 2's
+        // stretched target as well and the assertion would be ambiguous.
+        // Production renders one row, where the point is outside the Wrap just
+        // like the top edge.
+
+        expect(tester.takeException(), isNull);
+        await disposeApp(tester);
+      },
+    );
+
+    testWidgets('the pill itself is the design size and selects on tap', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/add-children');
+
+      final pill = tester.getRect(find.byKey(const Key('ageChip-13+')));
+      expect(
+        pill.height,
+        NestSpacing.s8,
+        reason: '.chip { height: 32px } — the shared fix keeps the visual size',
+      );
+
+      bool isSelected(String band) =>
+          tester.widget<NestChip>(find.byKey(Key('ageChip-$band'))).selected;
+
+      await tester.tapAt(pill.center);
+      await tester.pump();
+      expect(isSelected('13+'), isTrue);
+      expect(isSelected('7-9'), isFalse, reason: 'selection is single');
+
+      // The "Age band" label strip above the block belongs to no control.
+      final label = tester.getRect(find.text('Age band'));
+      await tester.tapAt(Offset(pill.center.dx, label.bottom - 2));
+      await tester.pump();
+      expect(isSelected('13+'), isTrue, reason: 'the tap changed nothing');
+      expect(isSelected('7-9'), isFalse);
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    testWidgets('the whole form is free of added letter spacing', (
+      tester,
+    ) async {
+      // Orchestrator ruling (main fd92d95): the design CSS has no tracking, so
+      // NestType defaults `letterSpacing: 0`. Nothing on P05 may reintroduce
+      // Material's positive tracking.
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/add-children');
+
+      final tracked = <String, double>{
+        for (final text in tester.widgetList<Text>(find.byType(Text)))
+          if ((text.style?.letterSpacing ?? 0) > 0)
+            text.data ?? text.style?.fontFamily ?? '?':
+                text.style!.letterSpacing!,
+      };
+      expect(tracked, isEmpty, reason: 'no P05 copy may add tracking');
+
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+  });
+
   group('P05 focused nickname field', () {
     testWidgets('focus paints the leaf focus ring and unfocused does not', (
       tester,

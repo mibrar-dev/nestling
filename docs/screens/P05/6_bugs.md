@@ -1,82 +1,107 @@
-# P05 · Add children — bug hunt (STAGE 6, iteration 5 — final)
+# P05 · Add children — bug hunt (STAGE 6, iteration 6)
 
-Route `/add-children` (feature `family`, parent mode). Adversarial re-hunt of
-the iteration-5 build (working tree after `c5dcb00`, main merged through
-`28d62fe`, including the shared `router_push_test_fix` and
-`shared/family_time_zone` merges). No screen code was changed and **no new bug
-was found**.
+Route `/add-children` (feature `family`, parent mode). Adversarial pass on the
+iteration-6 build: schema v3 `createdAt` ordering, the shared batch-2 chip
+(32 px layout / 44 px overlay), the bundled-font and letter-spacing merges.
+This stage ran in the loop’s parallel wave together with the iteration-6
+test / review / UI stages, so the family-suite snapshot below includes the
+test stage’s in-flight edits (a process item, not a finding — noted so the
+gate record is honest).
 
-Gates on this build: `dart format` clean · `flutter analyze` No issues found! ·
-`flutter test test/features/family` **119 passed, 0 skipped, 0 failed** · full
-`flutter test` **672 passed, 0 skipped, 0 failed** (the iteration-3/4 shared
-gate is fixed on main: `cdd4cf5` made the push/pop contract path-based) · no
-file outside RULES §1 touched.
+Gates on my snapshot:
 
-Proofs: `app/test/features/family/p05_bugs_test.dart` — **11 proofs, all
-un-skipped and green**. No `skip` remains anywhere in
-`test/features/family/`; nothing needed re-skipping this iteration.
+* my proof file `app/test/features/family/p05_bugs_test.dart` —
+  **11 passed, 1 skipped**; with
+  `flutter test --run-skipped test/features/family/p05_bugs_test.dart` the
+  eleven fixed proofs pass and the new **P05-BUG-11** fails exactly as
+  recorded;
+* `dart format` clean for my files; `flutter analyze` shows **2 warnings in
+  `add_children_test.dart`** (the concurrently edited test-stage file) and
+  none in mine;
+* family suite at snapshot: **red only on the test stage’s in-flight
+  `P05 chip tap area … the ≥44 tap area extends past the 32-px pill and stops
+  there`** — their file, still being written; it asserts the same behaviour as
+  P05-BUG-11 and fails, which corroborates the finding.
 
-**Result: 0 new bugs, 0 P05-owned bugs open. The one remaining screen
-deviation is the shared `NestChip` flow height (+12 px, design `.chip` is
-32), which P05 cannot fix and which is filed, quantified and pinned by test.
-VERDICT: PASS** — per the orchestrator’s iteration-5 rule that a shared-only
-residual is recorded explicitly and does not block when every P05-owned test
-passes.
+**Result: iteration-5/6 items verified fixed; 1 new major open (P05-BUG-11:
+the chip’s overlaid 44 px hit area is clipped by the chip `Wrap`, so the
+effective tap target is 44×32). VERDICT: FAIL.**
 
 ---
 
-## Iteration-4 carried items — closed / verified
+## P05-BUG-11 — MAJOR — the age-chip tap target is 32 px high, not 44: the overlaid hit area is clipped by the chip `Wrap`
 
-| Item | State |
-|---|---|
-| Shared `router_push_test.dart` red | **resolved on main** — `099748e`/`cdd4cf5` assert router paths; full suite green; P05 untouched |
-| `NestChip` 44 px flow box vs design 32 (+5 centre, +12 below) | **filed in its own iteration-5 request** with the measured delta table; pinned by the new test `the chip row height is the design value plus the 44-px tap box`, which flips to 0 when the shared fix lands |
-| Shared typography line-box claim | re-checked — the iteration-4/5 UI landmarks are ±0 through “Age band”, so the residual is the chip box, not per-row font growth; the shared typography request stays non-blocking and separately filed |
-| `rowid` interim `VACUUM` caveat | one-line doc nit only; the durable shared `createdAt` request remains the permanent fix |
+**Where:** `app/lib/features/family/presentation/widgets/add_child_form_card.dart`
+(chips inside `Wrap(spacing: 8, runSpacing: 8)`) + the shared
+`app/lib/core/design_system/components/nest_chip.dart` `_ExpandedHitBox`.
 
-## Adversarial checks this iteration
+**Repro / proof:** `[P05-BUG-11] the overlaid tap area above/below the chip
+selects it` (skip: true). Measured at 390×844:
+
+```
+ageChip-4-6  rect 34,527 → 104,559  (44 × 32)
+tap 5 px above the pill (inside the intended 44 px target)  → not selected
+tap 5 px below the pill (inside the intended 44 px target)  → not selected
+tap the pill centre                                          → selected ✓
+```
+
+**Mechanism.** `_ExpandedHitBox` accepts hits up to 6 px outside its own
+32 px box, but Flutter hit testing stops at the first ancestor whose bounds do
+not contain the point — here the `Wrap` run is exactly the 32 px pill, so the
+overhang is never reached. The component’s own comment states it: *“Ancestors
+that are themselves tight (e.g. a 32-high `Wrap` run) cannot forward hits
+outside their own box … but roomy parents forward the full area.”* P05’s chip
+row is precisely that tight `Wrap`, so the design’s `flex-wrap` chip row
+cannot get the overlaid 44 px target.
+
+**Impact.** SPACING_SPEC §10.6 (“base 32 high is below 44 → Flutter must wrap
+in 44-min tap area”, “keep visual size”) is not met in the app’s actual chip
+row: the target is 44 wide × 32 high. The P05 tap-target test was changed this
+iteration from `atLeast44(chip)` to `width ≥ 44, height == 32`, so nothing in
+the suite proves a 44-high target any more — the a11y guarantee is asserted
+away rather than delivered.
+
+**Suggested fix (owner/shared decision — no P05-local fix exists; probed):**
+the hit region has to occupy layout somewhere, so either
+
+1. accept 32-high chip targets as the design’s trade-off — then amend
+   SPACING_SPEC §10.6 (chip rows are 32-high targets), delete this proof, and
+   fix the tap-target test comment to match reality; or
+2. reserve 44 px in the chip row (reverts the +12 px visual fix the UI gate
+   fought for); or
+3. a shared row-level component that owns a 44-high hit region without layout
+   shift (custom hit routing at the form-card level — substantial, app-wide).
+
+The shared batch-2 chip fix itself is correct for roomy parents; only the
+`Wrap` case is clipped.
+
+---
+
+## Iteration-5/6 items — verified sound
 
 | Check | Result |
 |---|---|
-| Order — `Seed.demo` | Maya left (30), Leo right (210) ✓ |
-| Order — `Seed.onboarding_kids` (UI state) | Maya left, Leo right ✓ |
-| Kid cards | height **116.0** (design-exact) ✓ |
-| Chips | one row on device, 8 px gaps, left-aligned; boxes 73.75/73.75/102.25/73.75 × **44.0** (the shared residual) |
-| Head anchor | `h1.top == 107` = status 47 + compact nav 60 ✓ |
-| Rapid double taps | two same-frame taps with the real DB → one child ✓ |
-| Restart / Drift persistence | child persisted and rendered after relaunch over the same DB ✓ |
+| Child order (CHILD ORDER ruling, durable fix) | `AppDatabase.watchChildren` orders `createdAt, rowid`; `FamilyRepositoryImpl` delegates; demo + `onboarding_kids` both render **Maya left (30), Leo right (210)** |
+| Two quick adds | `Zoe` then `Adam` → rows `[Zoe, Adam]`, Zoe left (same-second ties fall back to `rowid`) ✓ |
+| `addChild` creation marker | writes explicit `createdAt: now()` + `createdAtTz`; v2→v3 migration adds the column with a 0 placeholder and backfills `now + rowid − min(rowid)` oldest-first (read and verified) |
+| Chip row height (layout half) | 32.0 — design `.chip` height, +12 shift gone ✓ |
+| Kid cards | 116.0, design rhythm ✓ |
+| Same-frame double tap | one child inserted ✓ |
 | Kid-mode guard | deep link → `/parental-gate` ✓ |
-| Data edges | 0/1/6 children, “Maximilian-Alexander”, 320×1.3 → no overflow, no exceptions ✓ |
-| `family_time_zone` merge | schema v2 adds `…_tz` columns to event tables only (quest completions, redemptions, ledger); the children table and P05 paths are untouched; all 119 feature tests green ✓ |
-| Transient UI frame (`devLocale=…` debug text in `app_light_5.png`) | `grep` over `app/lib`, `app/test`, `design` finds no such string — a stale simulator frame, not product code; the re-shot `app_light_5b.png` is stable ✓ |
-| Money / timezone / async gaps | P05 renders no money or dates; bloc drops late emits and callbacks are `mounted`-guarded — N/A / sound ✓ |
-
-## The one carried shared item, precisely
-
-`NestChip`’s 44 px minimum tap box sits **in the flow**, so the chip row and
-everything below it is +12 px vs the design’s 32 px `.chip` (labels centred
-+5, “Avatar colour”/swatches/caption +12; UI iteration-5 band5 10.8–11.1%).
-
-I re-probed the only local construction that could shrink the row without
-touching `core/` — `SizedBox(height: 32)` + `OverflowBox(44)` around each
-chip: the row does become 32, but the 6 px of tap area above/below the parent
-**stops hit-testing** (measured: above-edge tap 0 hits, centre tap 1 hit).
-This is inherent to Flutter hit testing — a hit area cannot extend beyond an
-ancestor’s bounds — so no P05-local wrapper can keep the 44×44 target and the
-32 px row at the same time. The resolution is an owner/shared decision:
-keep the 44 px flow box (accept +12), amend the design’s `.chip` to 44, or
-build shared hit-routing that owns the overlay. P05’s gaps are already exact
-(chip-row→label 8, label→swatch 4, swatch 44 with 8 px gaps, note gap 6).
+| Restart / Drift persistence | child persisted and rendered after relaunch ✓ |
+| Data edges | 0/1/6 children, long names, 320×1.3 → no exceptions (existing tests; my 6-child probe needed a scroll, as the tests do) |
+| Fonts / letter spacing | no `google_fonts`/`GoogleFonts` in `lib/features/family` or `test/features/family`; `NestType` letterSpacing defaults 0; P05 CSS sets no tracking ✓ |
+| Copy / owner rules / dark | unchanged from the verified iteration-5 state ✓ |
 
 ## Notes
 
-* The new `add_children_test.dart` chip-height test asserts the shared delta
-  (44 − 32) with the reason inline, so it fails loudly in the right direction
-  when the shared fix lands — the acceptance criterion for that request.
-* `SHARED_REQUEST.md`’s `router_push_test` entry still reads “Blocks: yes”
-  although the gate is green (review iteration-5 finding 1) — a one-line
-  status move for the fix pass, not a P05 defect.
-* No skipped proofs were added this iteration: there are no P05-owned bugs to
-  prove.
+* The concurrent test stage has a test asserting the same tap-above behaviour
+  (currently failing, plus two analyzer warnings in its file). It is their
+  artifact; this report does not count it, but it independently reaches the
+  same wall as P05-BUG-11.
+* If the orchestrator chooses option 1 above, P05-BUG-11 becomes a documented
+  exception rather than a bug and the skipped proof should be deleted with the
+  spec amendment — the report says so explicitly so the decision is not
+  half-applied.
 
-VERDICT: PASS
+VERDICT: FAIL

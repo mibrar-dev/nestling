@@ -26,3 +26,10 @@
 - Test stage: if your FAIL is only a shared/skipped item, write that explicitly in 3_test.md and mark PASS when every P05-owned test passes.
 
 ## UPDATE (23:48) — NestChip now lays out at 32 px with a 44 px hit area (shared batch 2). Re-measure; remove any local chip workaround.
+
+## UPDATE (04:31, orchestrator decision on P05-BUG-11)
+Keep BOTH owner rules: 32 px visual chips AND a 44 px tap target. Do NOT take options 1 or 2 from the bug report.
+- Shared fix in progress: branch shared/chip_wrap_hit_area adds `NestChipWrap`, a Wrap whose hit test reaches 6 px around the row, with no change to layout.
+- When main contains `NestChipWrap` (it is merged into your branch before each build), replace the age-chip `Wrap` with it. Make sure the surrounding Column gives at least 6 px of gap above and below the row, which it already does in the design.
+- Restore the tap-target test to `atLeast44(chip)` in both height and width. Un-skip [P05-BUG-11].
+- Until then, keep [P05-BUG-11] skipped with a reason that references shared/chip_wrap_hit_area. That item is NOT a P05 finding while the shared fix is pending.

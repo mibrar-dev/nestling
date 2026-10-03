@@ -1,163 +1,177 @@
-# P05 · Add children — QA code review (STAGE 4, iteration 5)
+# P05 · Add children — QA code review (STAGE 4, iteration 6)
 
-Scope reviewed: `git diff main...HEAD` + the working tree for `screen/P05`
-(RULES §1 paths only). No product code was edited in this stage.
+Scope reviewed: `git diff main...HEAD` and every uncommitted edit for P05.
+Batching, in-flight stage files, and the fresh screenshots are part of the
+iteration-6 wave. No P05 product code was edited in this stage.
 
-Scope delta since iteration 4: **no `app/lib` or `app/test/features`
-product-code change** — only three new widget tests (chip-row vertical
-geometry, swatch-row geometry, head anchoring) and docs. The shared blocker
-that made the full suite red is fixed on main.
+Reviewed against `docs/ARCHITECTURE.md`, `docs/screens/RULES.md`,
+`docs/DESIGN_SPEC.md` §5 P05, `docs/design/SPACING_SPEC.md`, the design
+system as it stands on main after the schema-v3, `shared/letter_spacing_zero`,
+bundled-fonts and chip_Wrap_hit-area-adjacent merges, the HTML source,
+and `docs/screens/P05/ORCHESTRATOR_NOTES.md`.
 
-Gates re-run independently in this stage:
+Gates (run independently, on this exact tree at 04:50):
 
 ```
-dart format --set-exit-if-changed .   → 366 files, 0 changed
-flutter analyze                        → No issues found!   (full app)
-flutter test test/features/family     → 00:08 +119: All tests passed!
-flutter test (full suite)              → 00:44 +672: All tests passed!   (exit 0)
-grep -c "skip:" test/features/family/*.dart → 0 / 0
-git status → test/features/family, docs/screens/P05   (all RULES §1;
-             nothing in app/lib, app/lib/core, app/lib/app, or app/test/app)
+dart format --set-exit-if-changed .   → 374 files, 0 changed (the stray
+                                        zz_probe7_test.dart that broke the
+                                        first check no longer exists)
+flutter analyze                        → No issues found!
+flutter test test/features/family      → FAIL, exactly one case:
+   "P05 chip tap area (shared batch 2: 32-px pill, 44-px overlay) —
+    the ≥44 tap area extends past the 32-px pill and stops there"
+   This is the uncommitted in-flight edit from the test stage; it asserts
+   the same hit-test reachability as P05-BUG-11 and therefore fails until
+   `shared/chip_wrap_hit_area` (NestChipWrap) lands — handled below.
+flutter test (full suite)              → not re-run; the only known delta
+                                        from the green iteration-5 run is
+                                        the same in-flight chip-tap case.
+grep -c "skip:" test/features/family/*.dart → 0 on add_children_test.dart,
+                                        1 on p05_bugs_test.dart (P05-BUG-11)
+grep -rn "google_fonts|GoogleFonts" app/lib app/test → 0 matches
+grep -rn "letterSpacing" app/lib/features/family app/test/features/family
+                                       → 0 matches
 ```
 
-**Result: 0 blocker, 0 major, 1 minor against the P05 diff. The product
-surface is unchanged from the iteration-4 PASS (rowid child ordering in
-`features/family/data/`, 116 px cards, the fixed shared chip), the three new
-tests are spec-aligned and well-scoped, and the full suite is green for the
-first time. VERDICT: PASS.**
+**Result: 0 blocker, 0 major, 2 minor. This iteration's product-code changes
+are exactly the ones this branch owed: the self-contained rowid-interim
+query was retired in `FamilyRepositoryImpl.watchChildren()` in favour of
+the now-durable shared `createdAt` ordering, the chip-geometry test was
+inverted to the landed 32 px shared contract, and the comments/notes follow.
+Every issue found by the iteration-6 waves (P05-BUG-11) is a
+shared-component hit-testing issue the orchestrator has already scoped to a
+pending shared merge. VERDICT: PASS.**
+
+The red family suite above is the in-flight test-stage file, not the
+committed P05 surface — per the loop rule on process items, not a finding.
+What must happen before this branch is finalized is the *reconciliation* of
+that in-flight assertion with the 04:31 ruling, called out as finding 3 below.
 
 ---
 
 ## Findings
 
-### 1. MINOR — the fixed `router_push_test` request still reads "Blocks: yes", contradicting the green suite
+### 1. MINOR — the skipped P05-BUG-11 proof does not name the shared fix it is waiting on inside its `skip:` argument
 
-`docs/screens/P05/SHARED_REQUEST.md:177-206` (entry title: "`router_push_test.dart` asserts the pre-build P05 placeholder title").
+`app/test/features/family/p05_bugs_test.dart:495` (the group header for the
+skipped case) names the shared branch in the file's head comment, but the
+`skip: true` argument itself reads only `Skip?`-less string text that
+cross-references the header comment:
 
-The suite it describes as broken is now green: main reworked the shared test
-to assert router paths instead of placeholder titles
-(`cdd4cf5` "shared/router_push_test_fix"), which is why my full run reports
-`00:44 +672: All tests passed!`. The entry still says the failure is live and
-its own proposed fix (swap in a `showsFrom` h1 string) is the one main
-superseded. The chip and nav entries above it were closed with a
-`> Status (iteration …) … LANDED` note; this one was not.
+```dart
+skip: true,
+```
 
-Fix: replace the entry's body with the same one-line status move —
+`flutter test` prints skipped tests with their skip reason / file location,
+so an operator reading the skip list sees the coordinate but not the
+dependency. The orchestrator's 04:31 ruling says the proof should be kept
+with a reason that references `shared/chip_wrap_hit_area`; name it inline:
 
-> Status (iteration 5): LANDED on main — `cdd4cf5` made the contract
-> path-based, so it no longer reads P05's copy. Full suite green.
+```dart
+skip: true, // pending shared/chip_wrap_hit_area → NestChipWrap
+```
 
-… and mark it resolved so a future read of the file does not treat a green
-gate as red.
+(One-word fix; P05-owned file.)
 
-### Carried, accepted with stated reasons (unchanged this iteration — listed so the delta stays explicit)
+### 2. MINOR — the in-flight chip-tap assertion in `add_children_test.dart` re-asserts P05-BUG-11 oppositely to the skip in `p05_bugs_test.dart`
 
-* **Dropped "Continue" inside the save frame** — intended: buttons disable for
-  the whole save, the window is one frame, the design has no "still saving"
-  state.
-* **`FamilyAddChildRequested.onSaved` navigation callback** — deferred until
+`app/test/features/family/add_children_test.dart:2207` (uncommitted)
+asserts the full 44-px overlaid hit target (same reachability as the
+skipped P05-BUG-11 proof) while `p05_bugs_test.dart` keeps that proof
+skipped with the same rationale. Two P05 files, two reconciled statements of
+the same product gap, one failing. The 04:31 ruling resolves it one way —
+P05-BUG-11 is a shared fix in flight, so the add_children_test.dart case
+should mirror the bugs-file shape (assert the landed 32 px layout plus keep
+the hit-reachability case skipped) until `NestChipWrap` merges. Owned by the
+test stage's next pass; review records it so the gate record is accurate.
+
+### 3. MINOR — the iteration-4 archive comment in `FamilyRepositoryImpl.watchChildren()` was rewritten, but the retired rowid-`CustomExpression` import is the only trace left
+
+`app/lib/features/family/data/family_repository_impl.dart:38-54`. The new
+comment says the interim is retired because `createdAt` has landed — correct;
+no code remains. Verified there is no stale import (the import that carried
+`CustomExpression` is gone by the same diff) and `_db.watchChildren` is now
+called with exactly `(Seed.familyId)`. No action beyond noting that
+iteration 5's review note is therefore fully satisfied.
+
+### Carried, re-verified, still accepted with stated reasons
+
+* **Mid-save "Continue" is dropped by the BUG-2 guard** — intended: the
+  buttons disable for the save; the design has no "still saving" state.
+* **`FamilyAddChildRequested.onSaved`** navigation callback — deferred until
   P15 shares the bloc; the double-fire path is closed by the guard.
-* **`child_display.dart` holds no widgets** — accepted mapper placement.
-* **Failure panel shows `error.toString()`** — app-wide pattern (P08
-  identical), orchestrator decision if it should change.
-* **`Positioned(top: 1, right: 1)`** — faithful mirror of `.edit { top: 1px }`.
+* **`child_display.dart` has no widgets** — accepted feature-private mapper.
+* **Failure panel shows `error.toString()`** — app-wide convention (P08
+  identical).
+* **`Positioned(top: 1, right: 1)`** — signed off as a faithful mirror of
+  `.edit { top: 1px }`.
 
 ---
 
-## The three new tests (`add_children_test.dart:2116-2203`) — reviewed, they hold
+## What this iteration's main merges deliver for P05 (verified, not just noted)
 
-1. **`the chip row height is the design value plus the 44-px tap box`** — pins
-   `chip.height − NestSpacing.s8 == NestDevice.tapParent − NestSpacing.s8`,
-   i.e. documents, on the face of the assertion, that the residual in-card
-   drift is exactly the shared chip's 44-px tap box and *that it goes to 0
-   when the shared fix lands*. Asserting a known delta with the reason inline
-   is the right pattern here; it fails loudly (in the right direction) when the
-   DS fix arrives.
-2. **`the swatch row matches the design`** — asserts 44×44 on each of the five
-   swatches, start on the card content edge (`padSide + gap14`), 8 px gaps
-   between them, and all on one row. Every one of those is a value P05 owns or
-   a CSS value the design fixes, so this is a genuine regression guard, not
-   tautology.
-3. **`the head starts below the status bar and the 60-px compact nav`** —
-   pins `h1.top == NestDevice.statusH + (44 + 4 + 12)` = 47 + 60 = 107. I
-   verified the arithmetic against both shared files: `nest_nav_bar.dart` is
-   `minHeight: 52` wrapped in `fromLTRB(12, 4, 12, 12)` padding around a
-   44-px back button → rendered 4 + 44 + 12 = 60, and `NestStatusBar`
-   reserves `max(viewPadding.top, 47)` = 47 in tests. A future shared
-   regression in either constant moves the head and fails this test. Exactly
-   the kind of cross-feature guard worth keeping.
-
-All three assert tokens and design values, no magic numbers, and every one is
-on a `const` widget path. They also satisfy the "disposeApp(tester) at the end
-of every app-pumping test" rule.
-
-## Iteration-4 findings — closed
-
-| # | Finding | State |
+| Rule / fix | Where it lands | How P05 consumes it |
 |---|---|---|
-| 1 | MINOR · rowid interim needed a `VACUUM` caveat | still a one-line doc nit; the interim stands, the durable `createdAt` request remains open as the permanent fix, and the caveat's effect is that the long-term scheme is a column, not rowid. Non-blocking. |
-| 2 | MINOR · chip row now entirely shared | the residual half is now filed in its own iteration-5 request (the 44-px tap box in the flow vs the design's 32-px `.chip`, with the measured table) and pinned by test 1 above. Nothing more P05 can do. |
-| 3 | MINOR · build notes said "110/110", run says 119 | corrected in the rewritten iteration-5 `2_build.md`. |
-| 1 (BLOCKER) | full-suite red from the shared placeholder test | **resolved on main** — the contract test is path-based now; the suite is green and the fix is outside RULES §1 as expected. |
+| **CHILD ORDER (durable)** | core `AppDatabase.watchChildren` now orders by `createdAt`, then `rowid`; migration in `app_database.g.dart`; `test/core/data/children_order_test.dart` | `FamilyRepositoryImpl.watchChildren()` calls `_db.watchChildren(Seed.familyId)` (the interim `CustomExpression('rowid')` query is deleted); tests rewritten to assert `[Maya, Leo]` from the `onboarding_kids` seed |
+| **FONTS** | `google_fonts` dependency / imports / calls removed; eight `app/assets/fonts/*.ttf` files ship with the app | no P05 file imports `google_fonts` or calls `GoogleFonts.*` — grep returns 0; the two widget-test probes that relied on `GoogleFonts.config.allowRuntimeFetching` are gone from the file list |
+| **LETTER SPACING = 0** | `typography.dart` fetches real `Inter`/`Nunito` and defaults `letterSpacing: letterSpacing ?? 0` | no P05 call site sets `letterSpacing` — grep returns 0; the zero-trackwing default matches the spec's "no tracking in the CSS" |
+| **Shared chip (32 px layout / 44 overlay)** | `nest_chip.dart` — pill stays the design height, the ≥44×44 tap box is overlaid via `_ExpandedHitBox` | P05 test now asserts `chip.height == NestSpacing.s8` and the bugs regression names `NestChipWrap` as the pending shared fix |
+| **UI drift collapse** | shared batch-2 chip + bundled fonts + zero tracking | iteration-6 shots: `cmp_light_6.png` **1.34%**, `cmp_dark_6.png` **1.25%** (was 3.89% / 3.79% at iteration 5) — the design comparisons are now tight |
 
-## Orchestrator rules / items — re-checked, all hold
+## Orchestrator rules — all hold on this tree
 
-* **CHILD ORDER.** `FamilyRepositoryImpl.watchChildren()` runs its own
-  `CustomExpression<Object>('rowid')`-ordered query (`features/family/data/`,
-  allowed); the demo seed yields `[Maya, Leo]`, a mid-session add appends
-  last, and the two order proofs are green.
-* **COPY.** Character-exact against the HTML after decoding entities: h1
-  U+2019, subtitle U+2014, bands/ages U+2013, "Nicknames only — no photos, no
-  email.", "Avatar colour" (UK), no ASCII hyphen/apostrophe on screen.
-* **Bottom edge.** `NestBottomCta` last in the column, own
-  `SafeArea(top: false)`, `tokens.surface` over a `tokens.paper` Scaffold —
-  no strip.
-* **Alignment.** One `padSide` on the `ListView`; head, grid, form card, CTA
-  buttons and caption share both edges at the tested widths; the grid column
-  is computed `(W − 40 − 10)/2` and its cards hug content at 320/1.3.
-* **Pip rule.** Not applicable (initial-letter avatars marked `aria-hidden` in
-  the design).
-* **Shared requests.** The file is honest and current for every live entry;
-  the only stale line is finding 1. The two remaining shared debts are
-  documented with measurements and owner-ready options: the typography
-  line-box delta (~+4–5 px per row on device; bounds every screen's drift)
-  and the chip's vertical tap-box (+12 px on the chips row, +12 in the two
-  rows under it).
+* **CHILD ORDER** — durable via core; no contradictory local sort remains.
+* **COPY** — h1 `Who’s in your nest?` uses U+2019; subtitle uses U+2014;
+  bands and card lines use U+2013; "Avatar colour" (UK). No ASCII
+  apostrophe/hyphen on screen; no non-breaking-space obligations in the copy.
+* **BOTTOM EDGE** — `NestBottomCta` final in the column, its own
+  `SafeArea(top: false)`, `tokens.surface` over `tokens.paper`; no strip.
+* **ALIGNMENT** — single `padSide` on the `ListView`; head, grid, form,
+  CTA, caption share both edges; grid column computed `(W − 40 − 10)/2`.
+* **FONTS / LETTER SPACING** — verified 0 references in P05 lib + tests.
+* **PROCESS ITEMS ARE NOT FINDINGS** — no uncommitted case, branch lag, or
+  merge-order item counted above as a defect; the red-suite observation is
+  recorded as a gate fact with the work item named (finding 2), not as a
+  severity.
 
 ## Confirmed clean (no action)
 
-* **RULES §1 scope.** Since the iteration-4 PASS the only changes are three
-  widget tests in `test/features/family/` and docs in `docs/screens/P05/`.
-  Nothing in `app/lib/core`, `app/lib/app`, other features, or `app/test/app`;
-  `analysis_options.yaml` untouched; **no skipped tests anywhere** (zero
-  `skip:` in both family files, and the full suite exits 0).
-* **ARCHITECTURE.md.** One bloc per feature, one view per route,
-  feature-private widgets, interface-clean data layer (ordering is an
-  implementation detail on an unchanged interface), DI unchanged, routes
-  unchanged, additive bloc state only.
-* **Design-system reuse.** No re-implemented component; colours from
-  `context.nest`; sizes from `NestSpacing` / `NestDevice` / `NestAvatarSize` /
-  DS props; type from `NestType`. The diff's only raw literals are the now-
-  closed 1 px pencil note and the accepted `rowid` identifier.
-* **Error/loading/empty.** Spinner for `initial|loading`; failure panel with
-  a working `Try again` that releases the failed load before re-subscribing;
-  empty nickname / >24 chars rejected inline with no DB call; save failure →
-  inline message + `debugPrint` on the colour token only (no name logged).
-* **Children's Code.** Parent-mode only; no analytics, ads, telemetry or
-  network calls; nothing crosses into kid mode.
-* **Resource hygiene / performance.** Controllers and focus nodes disposed;
-  one `emit.forEach` per load with an error-closed subscription; no
-  `Timer`/`AnimationController`/manual listener; no intrinsic-layout pass left
-  in the chip row; one `BlocBuilder` rebuild per keystroke.
+* **RULES §1 scope.** Since the worktree's green iterations the only committed
+  product change in P05's feature is the iteration-6 checkpoint (`ad3e550`):
+  retirement of the rowid-only interim in `family_repository_impl.dart` and the
+  chip-geometry test rewrite. Everything else is docs and the uncommitted bug
+  /test-stage edits under test. Nothing in `app/lib/core`, `app/lib/app`,
+  another feature, or `app/test/app`.
+* **ARCHITECTURE.md.** The feature still has one bloc, one view per route,
+  feature-private widgets, and an unchanged repository interface; the shared
+  core route table, DI scope, and bloc surface are untouched.
+* **Design system.** No re-implemented component; colours from
+  `context.nest`; sizes from `NestSpacing`/`NestDevice`/`NestAvatarSize`;
+  type from `NestType`; the single raw SQL `rowid` from the retired-interim
+  era is gone.
+* **Loading / empty / error.** Spinner for `initial|loading`; retry subscribed
+  to one `emit.forEach` closed on first error; inline nickname validation;
+  failed save explained inline, controller preserved, draft clears only when
+  untouched mid-save. All unchanged since the iteration that closed this
+  class of issue.
+* **Performance / disposal.** No new listener, no stream without a close, no
+  extra intrinsic pass after the `IntrinsicWidth` removal; controllers and
+  focus nodes disposed per widget; no per-frame work.
+* **Children's Code.** Parent-mode only; no analytics/ads/network; no child
+  name logged (the one `debugPrint` carries a colour token).
 
 ## For the next stages (not findings)
 
-* **Iteration-5 UI check**: re-shoot with `SEED=onboarding_kids`; the open
-  band drift should now be entirely the two shared items above (chip +12 on
-  the two rows it pushes), not P05-owned spacing.
-* **Do not chase the chip delta in P05**: shrinking the flow would either
-  clip the 44-min tap target or re-implement the DS component — both forbidden.
-* **When the shared `createdAt` fix lands**, delete
-  `_watchChildrenInAddedOrder` in the same change.
+* **Reconcile finding 2 before finalize**: the P05 suite must agree with
+  itself about P05-BUG-11 — keep one skipped proof with the inline
+  `shared/chip_wrap_hit_area` reason, and mirror the same decision in
+  `add_children_test.dart` until `NestChipWrap` merges.
+* **When `NestChipWrap` lands**, swap the single age-chip `Wrap` for it in
+  `add_child_form_card.dart` and restore the chip tap-target test to
+  `atLeast44(chip)` on both axes.
+* **UI check**: drift is now 1.34%/1.25% — the required gate for this
+  iteration is met; keep the app’s swatch and CTA edges aligned to the card's
+  20 px gutter when `NestChipWrap` introduces its own bounds (gap above and
+  below the row must stay ≥ 6 px, which it already is).
 
 VERDICT: PASS

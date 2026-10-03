@@ -1,94 +1,107 @@
-# P05 · Add children — test notes (STAGE 3, iteration 5, final)
+# P05 · Add children — test notes (STAGE 3, iteration 6)
 
 Route `/add-children`, feature `family`, parent mode. Changes are confined to
-`app/test/features/family/add_children_test.dart` and these notes — no product
-code touched.
+`app/test/features/family/` and these notes — no product code touched.
 
-**Everything is green this iteration, including the shared gate that was red in
-iterations 3 and 4**: the full suite is `00:45 +672: All tests passed!`. The
-remaining visual drift the QA note asked about is measured, fully attributed and
-filed; nothing in it is fixable inside P05's scope.
+The suite is green (`+816 ~1` full, **+122 ~1** in `test/features/family/`,
+zero failures, one documented skip), but this stage **found a real bug**:
+the age-band chips expose a **32-px tap target** where parent mode requires
+≥44 (P05-BUG-11). So: PASS is not available, and FAIL is the honest verdict.
+
+## Tests added (3, in `add_children_test.dart`)
+
+The shared batch-2 chip landed (`NestChip` = 32-px visual + a `_ExpandedHitBox`
+that widens the hit test to 44×44), and the build stage correctly flipped my
+iteration-5 expectations to 32. That left a **coverage hole**, which is what this
+stage is about:
+
+1. **`[P05-BUG-11] the vertical overlay is clipped by the chip Wrap`** — the new
+   behaviour the batch introduced was previously only asserted as *layout*
+   (32 px tall box), which proves nothing about the hit area. This test taps
+   the pill (reachable), moves the selection away, then taps 3 px above the
+   first chip: the point is inside the 44-px target by design and is **dropped**,
+   because the `Wrap`'s own box is the 32-px run. Both assertions are written to
+   flip to `isTrue` when the shared fix lands.
+2. **The pill is the design size and selects on tap** — 32 px visual, selection
+   stays single, and the inert "Age band" label strip above the block belongs
+   to no control (a tap there changes nothing).
+3. **No added letter spacing** — sweeps every `Text` on the loaded screen and
+   fails if any style carries positive tracking, guarding the new ruling
+   (`main fd92d95`: `NestType` defaults `letterSpacing: 0`; Material's
+   positive tracking must not come back). P05 currently has none.
+
+Also updated: a stale comment in `p05_bugs_test.dart` still credited the
+removed `IntrinsicWidth` workaround for the chip fix — it now describes the
+shared fix accurately.
 
 ## Results
 
 ```
-dart format .        clean (366 files, 0 changed)
+dart format .        clean (373 files, 0 changed)
 flutter analyze      No issues found!
-flutter test         00:45 +672: All tests passed!     (full suite, green)
-  test/features/family/   119 tests — 108 add_children_test.dart,
-                          11 p05_bugs_test.dart, zero skips
+flutter test         00:24 +816 ~1: All tests passed!
+  test/features/family/   122 tests (+1 skipped), 0 failures
 ```
 
-The previously failing shared test is fixed on main: `cdd4cf5` /
-`099748e` ("push/pop contract asserts router paths, not placeholder titles")
-replaced `showsFrom: 'P05 Add children'` with path-based assertions, so
-`app/test/app/router_push_test.dart` passes and my iteration-3/4 BLOCKING
-filing is now historical. P05 needed no change for it. The `shared/family_time_zone`
-Drift v2 migration that landed with it also left all 119 feature tests green
-without edits.
-
-## Tests added (3)
-
-All three answer the QA note for `cmp_light_4` ("chips row centre ≈ +5 px low,
-Avatar colour ≈ +12 px, helper text ≈ +12 px — cause: chip height and the gap
-below the chips… take the chip height, the chip-row→label gap and the
-label→swatch gap exactly from the HTML… swatch diameter 44 with 8 px gaps —
-match").
-
-1. **The chip row height, exactly** — measures the chip box and asserts the
-   delta to the design rather than hand-waving it: `chip.height − 32 == 12`,
-   i.e. the shared chip's 44-px tap box is in the flow where the design's
-   `.chip { height: 32px }` is 32. That single number accounts for the whole
-   remaining in-card drift: 44/2 − 32/2 = 6 px for the chip row's own centre
-   (QA measured ≈ +5) and 44 − 32 = 12 px for every row below it (QA measured
-   ≈ +12 at "Avatar colour" and the helper text). The assertion is written so it
-   fails when the shared fix lands — that is its acceptance criterion.
-2. **The swatch row matches the design** — five 44 px circles, gaps of exactly
-   8, starting on the card content edge (20 + 14), all on one row.
-3. **The head starts below the status bar and the 60-px compact nav** —
-   `h1.top == statusH(47) + (44 + 4 + 12)`, derived from `.nav-bar.compact`'s
-   padding rather than hard-coded. This pins the shared nav-height fix from the
-   screen's side (the "DONE & verified: header" item): any regression in the bar
-   moves the head and fails here.
-
-Everything else the QA note listed as DONE is still pinned by existing tests:
-Maya first (the five-test CHILD ORDER group, including the rename proof), the
-kid cards (116-px tile, pencil containment, computed columns), the "Add a child"
-card top (`grid → form card == 12` at 320/390/430), the full form rhythm
-(`h3` 24 · 10 · label 18 · 6 · input 52 · 8 · label 18 · 4 · chips · 8 ·
-label 18 · 4 · swatch 44 · 6), the focus ring, copy characters, semantics,
-tap targets, navigation, and both owner rules (20 px gutters and bottom-edge at
-every width and in both themes).
+`flutter test --run-skipped test/features/family/p05_bugs_test.dart` executes
+the skipped proof. Every app-pumping test ends with `disposeApp(tester)`.
 
 ## Bugs found
 
-**None.** No P05-owned test failed and no defect was found in the screen.
+### P05-BUG-11 — age chips expose a 32-px tap target, not 44 (major, shared root cause)
 
-### One shared finding, filed and quantified (not a P05 bug)
+The batch-2 chip keeps the design's 32-px visual and widens the hit test to
+44×44 with `_ExpandedHitBox`. The **vertical** half of that never takes effect:
+the chips sit in a `Wrap` whose box is exactly the run height, so Flutter stops
+the hit test at the `Wrap` and the ±6 px overlay is dropped.
 
-`NestChip`'s 44-px minimum tap box is in the **flow**, so the chip row and
-everything below it sit 12 px lower than the design's 32-px `.chip` — the
-vertical twin of the width defect that landed in `7eaa1f7`. Measured to rule out
-every other suspect: the chips→label gap is exactly 8, the label→swatch gap
-exactly 4, the swatches are 44 with 8 px gaps, the note gap exactly 6, and the
-on-device line-box effect is already filed separately. So the chip's flow height
-is the only remaining term, and it is shared code that P05 cannot adjust without
-clipping the tap area or re-implementing the component. Filed in
-`SHARED_REQUEST.md` with the delta table and two owner options (move the 44-px
-minimum out of the flow, or accept 44 and amend the design's `.chip`).
+Measured (390 px, scale 1.0, first row of the age-chip block; pill
+`34,527 → 104,559`):
 
-## Standing state of P05 (for the record)
+| tap y | inside the 44-px target? | selects the chip |
+|---|---|---|
+| 520–526 (above the pill) | yes | **no** — clipped by the Wrap |
+| 527–559 (the pill) | yes | yes |
+| 564 (below the pill) | yes | **no** — clipped |
 
-* **CHILD ORDER** — satisfied: the repository orders by `rowid` and the screen
-  renders it verbatim. The durable `createdAt` ordering is still filed; the
-  rename proof keeps the ruling green after it lands.
-* **COPY** — character-exact against the HTML (curly apostrophe, em dash, en
-  dashes, UK `colour`), pinned by code-unit assertions.
-* **P05 bug proofs** — BUG-1 … BUG-10 all un-skipped and green in
-  `p05_bugs_test.dart`.
-* **Carried accepts** (unchanged positions, reviewed): mid-save Continue is
-  dropped by the BUG-2 guard, `onSaved` stays on the event until P15 lands,
-  `child_display.dart` placement, the raw exception string, and the 1 px pencil
-  offsets mirroring `.edit { top: 1px }`.
+Repro (in `add_children_test.dart`, group *P05 chip tap area*):
+tap `4–6`, tap `7–9`, then `tester.tapAt(Offset(pill.center.dx, pill.top - 3))`
+→ `4–6` stays unselected. So all four age bands expose a 32-px-tall touch
+target, against `SPACING_SPEC` §3/§10.6 (≥44 in parent mode) — precisely the
+regression the shared fix was meant to avoid. The horizontal half does work
+(the pill is 44-min wide by construction), and `_RenderExpandedHitBox`
+documents the constraint itself: "ancestors that are themselves tight … cannot
+forward hits outside their own box".
 
-VERDICT: PASS
+Not fixable in P05 (RULES §1): the tight ancestor is the `Wrap` in
+`add_child_form_card.dart`, and every way to widen it (row padding, larger
+`runSpacing`, a `Stack` with a taller box) puts 44 px back **in the flow** —
+the 12-px drift batch 2 just removed. The fix has to come from the component
+side; filed in `SHARED_REQUEST.md` with the measurement table and options.
+Reported by the bugs stage as P05-BUG-11 first; my measurement adds the
+per-pixel reachability table and the repro.
+
+### Standing item reported explicitly: one skipped test
+
+`p05_bugs_test.dart` carries `skip: true` on the P05-BUG-11 proof (placed by
+the bugs stage, id in the test name, runnable with `--run-skipped`). It is the
+proof for the bug above; it stays skipped until the shared fix lands, because
+the "correct" assertion fails today. My own green characterisation test (1)
+covers the same defect in the passing suite, so the behaviour is visible either
+way.
+
+## Rules audited this iteration
+
+* **FONTS** — `google_fonts` is gone from `pubspec.yaml`; `app/lib` and
+  `app/test` contain no `google_fonts` import and no `GoogleFonts.*` call, so
+  there was nothing to delete in this feature's tests (verified by grep).
+  `test_scope.dart` no longer carries the old `allowRuntimeFetching` line, and
+  the whole suite builds without the package.
+* **LETTER SPACING** — `NestType` now defaults `letterSpacing: 0`
+  (`typography.dart:33,51`); P05 sets none, and test 3 now guards it.
+* **CHILD ORDER / COPY / BOTTOM EDGE / ALIGNMENT / PIP** — unchanged and still
+  pinned (Maya-first group incl. the rename proof; code-unit copy assertions;
+  CTA-to-edge and 20-px gutters at every width in both themes; no Pip slot on
+  this screen).
+
+VERDICT: FAIL
