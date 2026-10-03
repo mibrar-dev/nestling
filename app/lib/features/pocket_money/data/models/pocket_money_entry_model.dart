@@ -10,6 +10,7 @@ class PocketMoneyEntryModel extends PocketMoneyEntry {
     required super.amountPence,
     required super.note,
     required super.date,
+    super.dateTz,
   });
 
   factory PocketMoneyEntryModel.fromJson(Map<String, dynamic> json) {
@@ -22,6 +23,7 @@ class PocketMoneyEntryModel extends PocketMoneyEntry {
       amountPence: json['amountPence'] as int,
       note: json['note'] as String,
       date: DateTime.parse(json['date'] as String),
+      dateTz: json['dateTz'] as String? ?? 'Europe/London',
     );
   }
 
@@ -35,6 +37,7 @@ class PocketMoneyEntryModel extends PocketMoneyEntry {
       'amountPence': amountPence,
       'note': note,
       'date': date.toIso8601String(),
+      'dateTz': dateTz,
     };
   }
 }

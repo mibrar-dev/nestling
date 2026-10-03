@@ -115,3 +115,12 @@ is set. Screenshots always launch with `DISABLE_ANIMATIONS=1`.
 2. `shot.sh` for the route in light + dark, `compare.py` against the design
    PNG; band table reviewed, spacing drift fixed or filed as SHARED_REQUEST.
 3. No files outside §1 touched; `SHARED_REQUEST.md` filed or absent.
+
+## 8. Accessibility actions (shared semantics_tap)
+
+Every interactive element must expose SemanticsAction.tap; tests assert
+hasAction(SemanticsAction.tap) and performAction drives the real behaviour.
+If a control is wrapped in `Semantics(excludeSemantics: true)`, the wrapper
+must still pass `onTap:` (and `onLongPress`/`onIncrease`/`onDecrease` where
+used) so VoiceOver/TalkBack can activate the labelled node; a disabled
+control passes no tap and reports `enabled: false`.

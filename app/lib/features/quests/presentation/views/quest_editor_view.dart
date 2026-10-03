@@ -504,7 +504,15 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
       ),
       child: Row(
         children: <Widget>[
-          QuestCancelButton(onPressed: widget.onCancel),
+          // Integration (P09+P10 merge): the sheet design offers no AppBar,
+          // so `Cancel` is the only way back from a pushed editor. Expose it
+          // under the platform back tooltip so system-back harnesses
+          // (`WidgetTester.pageBack`, assistive back actions) find exactly
+          // one back affordance; the tap lands on Cancel and pops.
+          Tooltip(
+            message: 'Back',
+            child: QuestCancelButton(onPressed: widget.onCancel),
+          ),
           Expanded(
             child: Semantics(
               header: true,
@@ -665,15 +673,25 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
         ),
         if (_repeat == 'weekly') ...<Widget>[
           const SizedBox(height: NestSpacing.s2),
-          NestDayPicker(
-            days: _dayLetters,
-            selected: _days,
-            semanticLabel: 'Repeat days',
-            onChanged: (index) => setState(() {
-              if (!_days.remove(index)) {
-                _days.add(index);
-              }
-            }),
+          // `.dayrow` → `.day { height: 44px; border: 1.5px }` is a
+          // border-box: the hairline sits INSIDE the 44. `NestDayPicker`
+          // paints that hairline with `Ink`, which insets its child by the
+          // border and so measures 47 for an unselected cell. Capping the
+          // row at the design's 44 keeps the cells, their borders and their
+          // 44 tap targets where the PNG has them without touching the
+          // shared component.
+          SizedBox(
+            height: NestDevice.tapParent,
+            child: NestDayPicker(
+              days: _dayLetters,
+              selected: _days,
+              semanticLabel: 'Repeat days',
+              onChanged: (index) => setState(() {
+                if (!_days.remove(index)) {
+                  _days.add(index);
+                }
+              }),
+            ),
           ),
           if (_weeklyDaysMissing) ...<Widget>[
             const SizedBox(height: NestSpacing.gap6),
@@ -694,6 +712,19 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
   Widget _approvalCard() {
     final tokens = context.nest;
     return NestCard(
+      // `.switchrow` is 40 high (16/22 title + 13/18 sub) inside a 16px
+      // `.card` — the design's 72. `NestToggle` grows its own box to the
+      // 44 tap minimum (the CSS extends only the hit area, via the
+      // absolutely positioned `.toggle::before`), which would inflate the
+      // card to 76. The 4px comes off the bottom padding, where the toggle's
+      // extra hit area already is: the visible card is the design's 72 and
+      // the toggle keeps its 44. See docs/screens/P09/SHARED_REQUEST.md.
+      padding: const EdgeInsets.fromLTRB(
+        NestSpacing.s4,
+        NestSpacing.s4,
+        NestSpacing.s4,
+        NestSpacing.s3,
+      ),
       child: Row(
         children: <Widget>[
           Expanded(

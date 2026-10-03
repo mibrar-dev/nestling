@@ -143,6 +143,9 @@ void main() {
       'editor saves leave the list load path untouched',
       build: () {
         final repo = MockQuestsRepository();
+        // Merged bloc reads static P10 ideas on every load; the editor path
+        // holds no templates, so stub the empty list.
+        when(repo.ideas).thenReturn(const <Quest>[]);
         when(repo.watchItems)
             .thenAnswer((_) => Stream.value(const <Quest>[_editedQuest]));
         return QuestsBloc(repository: repo);

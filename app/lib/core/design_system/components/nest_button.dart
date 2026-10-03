@@ -154,6 +154,7 @@ class _NestButtonState extends State<NestButton> {
       label: widget.semanticLabel ?? widget.label,
       enabled: !disabled,
       focused: _focused,
+      onTap: disabled ? null : tap,
       child: Opacity(
         opacity: disabled ? 0.45 : 1,
         child: SizedBox(

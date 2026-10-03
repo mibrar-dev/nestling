@@ -250,7 +250,11 @@ class _ValueTourViewState extends State<ValueTourView> {
                           const SizedBox(height: _titleGap),
                           Semantics(
                             header: true,
-                            child: Text(step.title, style: context.nestText.h1),
+                            child: NestBalancedText(
+                              step.title,
+                              style: context.nestText.h1,
+                              textAlign: TextAlign.left,
+                            ),
                           ),
                           const SizedBox(height: NestSpacing.s3),
                           Text(
