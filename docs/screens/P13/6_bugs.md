@@ -1,218 +1,181 @@
-# P13 · Payout (parent) — Stage 6 bug hunt (iteration 1)
+# P13 · Payout (parent) — Stage 6 bug hunt (iteration 2)
 
-Route `/payout` (feature `pocket_money`), build `c34904b` ("P13: checkpoint
-after build (iteration 1)"). First adversarial pass over the shipped screen.
+Route `/payout` (feature `pocket_money`), build `bf9f239` ("P13: checkpoint
+after build (iteration 2)"). This pass re-audits the iteration-2 fixes
+(ORCHESTRATOR_NOTES items 1–3, P13-BUG-01…05, review findings 1–10) and hunts
+for new defects in the changed code.
 
-Method: widget and pure probes on the in-memory and file-backed Drift
-databases, plus a **gated repository** that holds `recordPayout` mid-flight so
-the double-tap race is deterministic instead of timing-dependent, a semantics
-tree audit, and a restart persistence round-trip. **No simulator was used**
-(stage rule; only stage 5_ui may). No screen code was edited (stage rule).
+Method: every iteration-1 reproducer was re-run **unskipped** against the
+iteration-2 build; then fresh probes exercised the new non-reentrant submit /
+retry / partial-failure logic, the busy CTA, the full-screen scrim (light and
+dark, plus its semantics), the inline 13 px amount, the saverow copy paths and
+the restart/edge cases. **No simulator was used** (stage rule; only stage
+5_ui may). No screen code was edited (stage rule) — the changes live in
+`app/test/features/pocket_money/p13_bugs_test.dart`.
 
-Guards: `app/test/features/pocket_money/p13_bugs_test.dart` — 17 tests
-(12 active "attacks that hold" probes, 5 skipped reproducers, one per
-finding). During the hunt every skipped test was run unskipped and fails
-exactly as recorded below (12 passed / 5 failed); the quiet suite is green.
+Guards: `p13_bugs_test.dart` — **20 tests (19 active, 1 skipped
+reproducer)**. The 5 iteration-1 reproducers are now active regression tests
+(the fixers promoted them once the fixes landed); the one new finding keeps a
+`skip: true // P13-BUG-06` reproducer so the suite stays green. Every probe in
+this stage was run against the real iteration-2 build and behaves exactly as
+recorded below.
 
-**VERDICT: FAIL — three open major findings (P13-BUG-01/02/03).**
-
-Stages 4 (code review) and 5 (UI check) ran in parallel with this hunt and
-independently reached the same majors: review #1 / UI deviation 1 = this
-file's BUG-03 (scrim not `inset: 0`, UI measured +152 px), review #2 =
-BUG-01 (double submit). Review #3 (a ticked £0.00 child still writes a
-`Paid · <date> £0.00` row) shares its view-side root with BUG-02 here
-(`_submit` dispatches for every ticked child without an owed guard); the two
-should be fixed together. The review's finding 4 was the leftover
-`zz_probe_test.dart` scratch file — it has been deleted (see the test-suite
-note) so the loop cannot commit it or stall the suite.
+**VERDICT: PASS — no major bugs. One new minor finding (P13-BUG-06, open).**
 
 ---
 
-## Findings
+## Findings status
 
-| # | Severity | Status | Failing test (skipped in the suite) |
+| # | Sev | Status | Where / verified by |
 |---|---|---|---|
-| P13-BUG-01 | major | OPEN | `P13-BUG-01: a second tap while the payout write is in flight double-writes the payout, the savings move and the goal bump` |
-| P13-BUG-02 | major | OPEN | `P13-BUG-02: the £1.00 savings move is not clamped to the amount paid` |
-| P13-BUG-03 | major | OPEN | `P13-BUG-03: the scrim is not inset 0 — the P12 backdrop stays lit and the top of the screen does not dismiss the sheet` |
-| P13-BUG-04 | minor | OPEN | `P13-BUG-04: a repeated identical write failure gives the parent no feedback at all` |
-| P13-BUG-05 | minor | OPEN | `P13-BUG-05: the ledger behind the modal stays in the semantics tree` |
+| P13-BUG-01 | major | **FIXED** (it 2) | non-reentrant `_submit` + per-child `_payoutInFlight` in the bloc + `busy` CTA; active test passes |
+| P13-BUG-02 | major | **FIXED** (it 2) | savings move clamped to `min(100 p, owed)`; ticked £0 children skipped; active test passes |
+| P13-BUG-03 | major | **FIXED** (it 2) | scrim is a full-screen `Positioned.fill` layer over the dimmed chrome; rect `(0,0,390,844)` in both themes; active test passes |
+| P13-BUG-04 | minor | **FIXED** (it 2) | bloc clears `errorMessage` before the write, so a repeated failure re-emits; active test passes |
+| P13-BUG-05 | minor | **FIXED** (it 2) | dimmed chrome `ExcludeSemantics`-wrapped; scrim keeps a labelled `'Close payout'` node; active test passes |
+| P13-BUG-06 | minor | **OPEN** | `PayoutSaveRow.label` still uses the design's "her" for a goal-bearing Leo when the goal title contains "Lego" |
 
-### P13-BUG-01 — a fast second tap double-writes the payout (major)
+## Verification of the iteration-1 fixes (fresh runs, all unskipped)
 
-**Repro.** Open `/money` → "Payout time". Tap "Mark as paid & start the
-celebration", then tap it again while the first write is still in flight
-(80 ms later in the test; a real Drift round trip on device is longer).
-The sheet shows no in-flight state — the CTA stays enabled and unchanged, so
-nothing discourages the second tap.
+### P13-BUG-01 — double submit (major) — FIXED
 
-**Evidence.** With the write gated, the second tap dispatches a second
-`PocketMoneyPayoutSubmitted`. Result: `attempted = 2`; **two `payout` rows**
-(−420 each), **two `savings_move` rows** (100 each) and the Lego goal at
-**1750 instead of 1650** — a £2.00 move recorded for a £1.00 option, plus a
-duplicate "Paid" row in the child's ledger. (Probe also confirmed the simpler
-same-frame double tap gives the same state.)
+- The gated reproducer passes: second tap 80 ms into the write → exactly one
+  payout row (−420), one `savings_move` (100), goal **1650** (was 1750).
+- New probe, same-frame double tap on the **real** repository:
+  `payouts=1 savings=1 goal=1650 path=/money`.
+- New probe, sibling still in flight + instant retry after the first child
+  failed: `calls=[maya, leo, maya]` → `payouts=[leo:-210, maya:-420]`,
+  `savings=[100]`, goal 1650, pops. The bloc's per-child guard drops the
+  duplicate sibling event; the view's re-entrancy guard handles same-frame
+  taps; the `busy` state disables and spins the CTA (`hasTap=false`, label
+  still present, second tap ignored — probe N4).
+- The retry path stays reachable: after the failure the listener clears
+  `_submitted`, so the CTA re-arms (`P13-BUG-04`'s fix also keeps it
+  informed).
 
-**Suggested fix.** Make the submit non-reentrant: `if (_submitted.isNotEmpty)
-return;` at the top of `_submit`, and pass a `submitting` flag into
-`PayoutSheet` so the CTA disables (and, ideally, the checks/toggle are inert)
-until the stream proof or a failure clears it. The failure path already
-clears `_submitted`, so retries stay possible. A per-child idempotency key in
-`recordPayout` would be belt-and-braces, but the view guard is the minimal
-fix.
+### P13-BUG-02 — unclamped savings move (major) — FIXED
 
-### P13-BUG-02 — the £1.00 savings move is not clamped to the payout (major)
+- 50p week reproducer passes: payout −50, move **50** (was 100), goal
+  1550→1600, goal delta equals the ledger move exactly.
+- New probe N9: after Maya is paid (owed £0.00), re-open `/payout`, tick the
+  £0.00 Maya next to the £2.10 Leo, submit → **only** `leo:-210`; no
+  `savings_move`, no `Paid £0.00` row, goal unchanged (1650). This also
+  closes review finding 3 (the zero-owed row).
 
-**Repro.** A small week for the family: Maya is owed exactly **£0.50** (one
-50p weekly-base row, everything before the last payout). Open `/payout`; Maya
-is ticked by default and the saverow is ON by default. Tap "Mark as paid".
+### P13-BUG-03 — scrim not `inset: 0` (major) — FIXED
 
-**Evidence.** Payout row **−50**, `savings_move` row **+100**, goal
-**1550 → 1650**. £1.00 moved to savings on a £0.50 payout — the extra 50p
-never existed in the child's jar (the jar's balance *is* "owed since the last
-payout"). The same root hits the ticked-£0-child case: after a partial payout
-a parent can tick a child who owes £0.00 next to a paying sibling and the
-screen writes a −0 payout row **plus a £1.00 move** for that child.
+- Reproducer passes: the scrim rect is `(0,0,390,844)`; a tap at (195, 60)
+  over the title dismisses to `/money`.
+- New probe N5 (dark theme): rect `(0,0,390,844)`, top tap pops.
+- New probe N11: `find.bySemanticsLabel('Close payout')` has a real tap
+  action; `performAction(tap)` lands on `/money` (a11y rule satisfied).
+- New probe N12: scrim tap *mid-write* pops cleanly, the write still lands
+  exactly once, no exception.
+- The chrome (`Pocket money` / summary card) is now inside
+  `ExcludeSemantics` — see BUG-05.
 
-**Suggested fix.** Clamp the move to the money actually being paid:
-`savingsMovePence = min(PayoutSheet.savingsMovePence, owed)` (and skip the
-move when `owed == 0`), or hide/disable the saverow while the goal child's
-owed is below £1.00. `recordPayout` already bumps the goal by the value the
-view passes, so the clamped value is the single source.
+### P13-BUG-04 — repeated failure gave no feedback (minor) — FIXED
 
-### P13-BUG-03 — the scrim is not `inset: 0` (major)
+- Probe N10: two consecutive identical failures each surface one toast
+  (`snack=1` after each settle, was 0 on the retry), then the third attempt
+  succeeds → `/money`, `calls=[maya, maya, maya]`, one payout, one
+  `savings_move`, goal 1650.
+- Mechanism: the bloc now emits `clearErrorMessage` before writing whenever a
+  stale error is present, so the repeat failure is a state change again; the
+  view records `_lastFailure` and re-arms the submit only after a failure it
+  actually surfaced.
 
-**Repro.** Open `/payout` from `/money`. Compare with either design PNG:
-the whole backdrop (status-bar reserve, "Pocket money" title, "… is owed"
-summary card) is behind the darkened scrim in the design, and
-`docs/design/SPACING_SPEC.md` §5 defines `.scrim → absolute inset 0`. In the
-app the scrim only paints the `Expanded` area *below* the summary card.
+### P13-BUG-05 — background in the semantics tree (minor) — FIXED
 
-**Evidence.** The scrim rect measures **(0, 169, 390, 844)** (169 is the card
-bottom in the test's unloaded-font metrics; ≈151 with the bundled fonts), so
-the top band is undimmed. A tap over the title — inside the scrim in the
-design and in `1_plan.md` §a (`Positioned.fill → Container(color: scrim);
-tap = pop`) — does **not** dismiss the sheet (path stays `/payout`).
+- Reproducer passes: with semantics on, `find.bySemanticsLabel('Pocket
+  money')` and the summary-card label find **nothing** while the sheet is
+  open; the sheet's header remains reachable; the scrim exposes
+  `'Close payout'` with a tap action.
 
-**Suggested fix.** Put the scrim in its own full-screen stack layer between
-the ledger and the sheet: `Stack[Positioned.fill(ledger),
-Positioned.fill(GestureDetector(scrim)), Align(sheet)]`, or wrap the ledger
-content in the scrim while keeping a full-screen dismiss gesture. Do not grow
-the existing `Expanded` scrim — it inherits the card's bottom edge.
+## New finding
 
-### P13-BUG-04 — a repeated identical write failure gives no feedback (minor)
+### P13-BUG-06 — a goal-bearing Leo still gets the design copy's "her" (minor) — OPEN
 
-**Repro.** Force `recordPayout` to fail with the same error twice.
-Tap "Mark as paid": the failure toast appears. Let it expire, tap again
-(same failure): **nothing happens** — no toast, no state change, and
-`_submitted` stays armed.
+**Where:** `app/lib/features/pocket_money/presentation/widgets/payout_sheet.dart`
+(`PayoutSaveRow.label` — `title.toLowerCase().contains('lego')` selects the
+design string).
 
-**Evidence.** The bloc's error path emits `copyWith(errorMessage: …)`; the
-second identical message produces an **equal state, which Bloc suppresses**,
-so the view's `listenWhen` (`previous.errorMessage != current.errorMessage`)
-never fires. The failing test asserts a new `SnackBar` after the retry;
-measured `0`.
+**Repro.** Move the family's only goal (`goal-lego`, title "Lego Friends
+set") to Leo, open `/payout`. The saverow now belongs to Leo and reads
+**"Move £1.00 of Leo's to her Lego fund"** — a male child sent to "her" fund.
+There is no gender column in the schema, so any gendered phrasing chosen from
+data alone is unsafe.
 
-**Suggested fix.** Give the retry a visible outcome: clear `errorMessage`
-before the write (`emit(state.copyWith(clearErrorMessage: true))` ahead of
-the `recordPayout` await) so a repeat failure is a state change again, or
-have the view surface the retry directly (toast on tap once an error is
-already on screen). Keep the in-flight guard from BUG-01 in mind: the guard
-must clear on failure so this retry path stays reachable.
+**Evidence.** Probe N7, reproduced by the skipped test
+`P13-BUG-06: a goal-bearing Leo still gets the design copy with "her"` —
+measured copy `Move £1.00 of Leo's to her Lego fund`. The test stage
+independently found the same defect as its own skipped reproducer
+**P13-I2-01** (`p13_iter2_audit_test.dart:311-345`), so the two files pin it
+twice. The review finding 7 fix covers a *non-Lego* goal (probe N8: "Move
+£1.00 of Maya's money to their Holiday fund") but not a Lego goal held by
+anyone other than Maya.
 
-### P13-BUG-05 — the dimmed ledger stays in the semantics tree (minor)
+**Suggested fix.** Use the design string only for the exact seeded shape
+(goal child Maya **and** title "Lego Friends set"), and the neutral
+data-driven form for every other combination:
+`"Move £1.00 of $name's money to their $title fund"`. Pin the four cell
+combinations (Maya/Leo × Lego/other) in `payout_view_test.dart` or the
+geometry test.
 
-**Repro.** Enable a screen reader, open `/payout`, swipe back from the sheet.
+## Fresh probes (iteration 2) — all hold
 
-**Evidence.** With semantics enabled, `find.bySemanticsLabel('Pocket money')`
-and `find.bySemanticsLabel('Maya is owed £4.20 · Leo is owed £2.10')` each
-match a node *behind* the modal. `1_plan.md` §e requires the summary card
-(and the whole dimmed backdrop) to be `ExcludeSemantics`, and
-`_DimmedLedger`'s own doc comment claims it is — the build method never wraps
-the column.
+- Same-frame double tap, real repo: one payout, one move, goal 1650, pops.
+- Partial batch failure (Maya fails, Leo pays) then retry: first attempt
+  stays on `/payout`, only `leo:−210`, no move, goal 1550, one toast; retry
+  writes only the still-owing Maya (`calls=[maya, leo, maya]`), goal 1650,
+  pops — no duplicates.
+- Sibling in flight + instant retry: the bloc's per-child in-flight guard
+  drops the duplicate; one row per child.
+- Busy CTA: `hasAction(tap)` false, label retained, second tap ignored, no
+  dispatch.
+- Dark scrim: full-screen rect, top tap dismisses.
+- Scrim tap mid-write: pops, write lands once, no exception.
+- Inline amount: the amount span is **13 px / w700 / ink-2** (`NestType.money`
+  at the `.caption` size), the row stays **76** tall; the updated real-font
+  geometry test pins name top 458 / subtitle 480 (±1), Leo 544/566, and the
+  scrim `(0,0)` — ORCHESTRATOR_NOTES items 1–3.
+- Saverow neutral fallback for a non-Lego goal.
+- Scrim semantics `'Close payout'` + `performAction(tap)` → `/money`.
+- Iteration-1 held probes still green: six children at a real 320 dp × 1.3,
+  real 320×568 scroll, one child, everyone £0.00 (disabled CTA), goal child
+  unticked, back mid-write, kid-mode and fresh deep links, initial-route
+  scrim dismissal, restart persistence (file-backed), dark/light contrast
+  ≥ 4.5:1, integer-pence maths, no BST-sensitive path on this screen.
 
-**Suggested fix.** Wrap the non-sheet subtree in `ExcludeSemantics` (the
-title/card are not actionable). If the scrim's tap-to-dismiss should stay
-announced, keep a separate semantics node with `onTap` outside the excluded
-subtree; otherwise the system back gesture remains the accessible dismiss.
+## Notes (not findings)
 
----
-
-## Attacks that hold (active tests — no finding)
-
-- **Gated single write**: one tap → one payout row (−420), one `savings_move`
-  (100), goal 1650, pop to `/money`, toast
-  `Payout recorded — enjoy the celebration`, no exception. (Positive control
-  for BUG-01.)
-- **Real 320 dp × text scale 1.3 with six children and
-  "Maximilian-Alexander"**: rows in creation order (Maya, Leo, then the
-  added four), no overflow exception, the sheet scrolls and the CTA is
-  operable; one payout row lands (−420). NOTE: the width is set *after* the
-  first pump because `pumpAppRoute` forces 390×844 (see the test-suite note).
-- **Real 320×568**: the sheet scrolls to the CTA, the tap lands and the
-  screen returns to `/money`; no exception.
-- **Goal child unticked / sibling paid**: only `leo:−210` is written, no
-  `savings_move`, goal stays 1550.
-- **Everyone at £0.00**: two `Weekly + quests · £0.00` rows render and the
-  CTA reports `enabled: false` with no tap action.
-- **One-child family**: one row, no stale Leo copy, no exception.
-- **Deep links**: kid mode `/payout` → `/parental-gate` (guard intact);
-  fresh/never-onboarded `/payout` → `/welcome`; launched at `/payout` with
-  nothing to pop, the scrim tap still reaches `/money` via `_goBack`.
-- **System back mid-write**: no exception, exactly one payout row lands (the
-  tap was already committed before the pop).
-- **Restart persistence (file-backed)**: payout row, `savings_move` and the
-  1550 → 1650 goal bump all survive a close/reopen; owed back to 0.
-- **Dark/light contrast**: `ink/ink2` on `surface`/`paper` and
-  `onLeaf/leaf` all ≥ 4.5:1 in both themes.
-- **Money maths**: every P13 amount is an integer-pence value read from the
-  ledger (`owedFor().totalPence`); no float parsing/rounding exists on this
-  screen. The only money defect is BUG-02's *unclamped* move, not rounding.
-- **Timezone/BST**: the sheet title is the `families.payout_day` integer
-  (`kPayoutWeekdayNames[day − 1]`); no date arithmetic runs in P13, so there
-  is no BST-sensitive path here. The repository's `formatDay(now, zone)` note
-  is covered by the existing P06/P12 timezone tests.
-
-## Test-suite note (not a screen bug)
-
-`test_scope.pumpAppRoute` unconditionally sets `physicalSize = 390×844`, so
-`payout_view_test.dart`'s "320 px" cases (`_pumpPayout(size: Size(320, …))`)
-and its "short screen" case in fact run at **390×844** — the size is
-overwritten before the first frame. The new bugs file sets the width after
-the first pump so its 320 dp probes are real. Suggested follow-up (allowed
-paths): give `pumpAppRoute` an optional `size` parameter, or set the size
-post-pump in the responsive tests.
-
-Worktree hygiene: the review stage's `zz_probe_test.dart` (untracked,
-breaking `flutter analyze` and stalling the runner) was deleted in this
-stage; its £0.00-row finding is carried by review #3 and by BUG-02 above, so
-no coverage is lost. The quiet suite now contains only committed test files.
-
-## How to reproduce the skipped failures
-
-```bash
-cd app
-# the green suite (5 skips):
-flutter test test/features/pocket_money/p13_bugs_test.dart
-# prove the five findings (12 pass / 5 fail) — unskip a temp copy:
-sed 's/^    skip: true, \/\/ P13-BUG-/    \/\/ skip: true, \/\/ P13-BUG-/' \
-  test/features/pocket_money/p13_bugs_test.dart \
-  > test/features/pocket_money/_unskip_test.dart
-flutter test test/features/pocket_money/_unskip_test.dart   # 5 failures
-rm test/features/pocket_money/_unskip_test.dart
-```
+- The `pumpAppRoute` 390×844 override (iteration 1) is unchanged and already
+  filed as `SHARED_REQUEST.md` by the test stage; the narrow-layout probes in
+  `p13_bugs_test.dart` set the size after the first pump so they are real.
+- The saverow label promises "£1.00" while the clamped edge case moves less;
+  the invariant (never move more than was paid) takes precedence and the
+  goal/ledger stay consistent. No money can be created.
+- `p13_iter2_audit_test.dart` is the test stage's own iteration-2 audit file,
+  left in place; no scratch/probe files remain from this stage.
+- Cross-stage: the iteration-2 UI captures (`ui/app_light_2.png`,
+  `app_dark_2.png`, compares) are present in the worktree; this stage did not
+  read them (UI verdict belongs to stage 5).
 
 ## Hand-off state
 
 - `dart format` clean; `flutter analyze` → **No issues found!**
-- `flutter test test/features/pocket_money` → **366 passed / 6 skipped /
-  0 failed** (the 5 reproducers above + the pre-existing P12-BUG-04 skip).
-- `app/test/features/pocket_money/p13_bugs_test.dart`: 17 tests — 12 active,
-  5 skipped reproducers. No product or shared code was touched; only the
-  feature test path and `docs/screens/P13/**` (plus the stray scratch file
-  removal above).
-- Build under test: `c34904b` (iteration 1 checkpoint). Re-run the skipped
-  tests after the iteration-2 fixes and unskip the ones that pass (P12's
-  `p12_bugs_test.dart` is the precedent for retiring fixed findings).
+- `flutter test test/features/pocket_money` → **436 passed / 3 skipped /
+  0 failed** (skips: the pre-existing P12-BUG-04, this file's P13-BUG-06 and
+  the test stage's P13-I2-01 — the same open minor, pinned twice).
+- `p13_bugs_test.dart`: 20 tests — 19 active, 1 skipped (P13-BUG-06). The
+  five iteration-1 reproducers are active regression tests.
+- Build under test: `bf9f239` (iteration 2 checkpoint). Fix P13-BUG-06 (one
+  small copy gate) and unskip both its reproducers; then this stage has no
+  open findings.
+- Environment note (not a finding): two earlier full-suite runs reported
+  transient failures while concurrent stages were writing scratch files in
+  the same worktree (`_unskip_probe_test.dart` failed to load, then
+  vanished); every named test passes on its own and the final clean run is
+  the 436/3/0 above.
 
-VERDICT: FAIL
+VERDICT: PASS

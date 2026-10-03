@@ -1,9 +1,22 @@
-// P13 · Payout (parent) — Stage 6 adversarial bug tests (iteration 1).
+// P13 · Payout (parent) — Stage 6 adversarial bug tests (iteration 1→2).
 //
-// Five findings this iteration — three major (P13-BUG-01/02/03) and two
-// minor (P13-BUG-04/05). Iteration 2 fixed all five in the UI layer, so every
-// reproducer below is now an ACTIVE test carrying its bug id: a regression
-// re-fails here rather than hiding behind a `skip:`.
+// Iteration 1 found five defects (3 major, 2 minor). Iteration 2 fixed all
+// five and the fixers promoted every reproducer below from `skip:` to an
+// ACTIVE regression test — a re-break fails the suite.
+//
+// This iteration re-audited the iteration-2 diff with fresh probes: the five
+// fixes, the ORCHESTRATOR_NOTES items 1–3 (full-screen scrim, inline 13 px
+// amount, ±1 px row text), the new retry/partial-failure logic, the busy CTA
+// and the scrim semantics. Every probe holds except one new minor finding:
+// P13-BUG-06 (a goal-bearing Leo still gets the design copy's "her"), kept
+// `skip:`-ed with its bug id so the suite stays green until it is fixed.
+//
+// The "attacks that hold" group is NOT skipped: it documents the adversarial
+// probes that passed (same-frame double tap on the real repo, a ticked £0
+// child riding along, real 320 dp × 1.3 and 320×568 layouts, six children
+// with a long UK name, single child, £0.00, gated single write, goal child
+// unticked, back mid-write, deep links, kid-mode guard, restart persistence,
+// dark contrast) so a regression is caught here.
 //
 // The "attacks that hold" group at the bottom is NOT skipped: it documents
 // the adversarial probes that passed (real 320 dp × 1.3 and 320×568 layouts,
@@ -566,9 +579,114 @@ void main() {
     skip: false, // P13-BUG-05 — fixed (minor)
   );
 
+  // -- P13-BUG-06 ---------------------------------------------------------
+
+  testWidgets(
+    'P13-BUG-06: a goal-bearing Leo still gets the design copy with "her"',
+    (tester) async {
+      final db = await setUpTestScope();
+      // Move the only goal to Leo: he becomes the `.saverow` child, so the
+      // design string's fixed "her Lego fund" describes him.
+      await (db.update(db.savingsGoals)..where((g) => g.id.equals('goal-lego')))
+          .write(const SavingsGoalsCompanion(childId: Value('leo')));
+      await GetIt.instance<AppSession>().refresh();
+
+      await _openPayoutFromLedger(tester);
+      final copy = tester
+          .widgetList<Text>(find.byType(Text))
+          .map((widget) => widget.data)
+          .whereType<String>()
+          .firstWhere((s) => s.startsWith('Move £1.00 of Leo'));
+
+      // Measured today: "Move £1.00 of Leo's to her Lego fund" — the fix for
+      // review finding 7 keys the design string on the goal TITLE containing
+      // "lego" (`PayoutSaveRow.label`), so a male goal child with a Lego goal
+      // still gets the design's feminine pronoun. There is no gender column,
+      // so the only data-safe phrasing is the neutral fallback.
+      expect(
+        copy.contains('to her'),
+        isFalse,
+        reason:
+            'P13-BUG-06: "$copy" — the design string is Maya-specific; a '
+            'goal-bearing Leo must not be told the money goes to "her fund"',
+      );
+
+      await disposeApp(tester);
+    },
+    // P13-BUG-06 — minor, open: `PayoutSaveRow.label` uses
+    // `title.toLowerCase().contains('lego')` to select the design string, so
+    // Leo + a Lego goal still renders "of Leo's to her Lego fund". Fix: use
+    // the design string only for the exact seeded shape (goal child Maya /
+    // title "Lego Friends set"), the neutral data-driven form otherwise.
+    skip: true, // P13-BUG-06 — open (minor)
+  );
+
   // -- attacks that hold --------------------------------------------------
 
   group('P13 attacks that hold', () {
+    testWidgets('a same-frame double tap on the real repository writes once', (
+      tester,
+    ) async {
+      final db = await setUpTestScope();
+      await _openPayoutFromLedger(tester);
+      final seeded = _rowIds(await db.select(db.ledgerEntries).get());
+
+      final cta = find.widgetWithText(NestButton, kCta);
+      await tester.tap(cta);
+      await tester.tap(cta);
+      await _pumpPastWrite(tester);
+
+      final written = _newRows(await db.select(db.ledgerEntries).get(), seeded);
+      final goal = await (db.select(
+        db.savingsGoals,
+      )..where((g) => g.id.equals('goal-lego'))).getSingle();
+      expect(written.where((r) => r.type == 'payout').length, 1);
+      expect(written.where((r) => r.type == 'savings_move').length, 1);
+      expect(goal.savedPence, 1650);
+      expect(pushedPath(tester), '/money');
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('a ticked £0 child riding along writes no row and no move', (
+      tester,
+    ) async {
+      final db = await setUpTestScope();
+
+      // Visit 1: pay Maya only (default tick; Leo stays unticked).
+      await _openPayoutFromLedger(tester);
+      await tester.tap(find.widgetWithText(NestButton, kCta));
+      await _pumpPastWrite(tester);
+      expect(pushedPath(tester), '/money');
+
+      // Visit 2: Maya £0 (unticked by the prime), Leo £2.10 (ticked).
+      await tester.tap(find.text('Payout time'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.bySemanticsLabel('Maya paid in cash'));
+      await tester.pump(const Duration(milliseconds: 50));
+
+      final before = _rowIds(await db.select(db.ledgerEntries).get());
+      await tester.tap(find.widgetWithText(NestButton, kCta));
+      await _pumpPastWrite(tester);
+
+      final written = _newRows(await db.select(db.ledgerEntries).get(), before);
+      final goal = await (db.select(
+        db.savingsGoals,
+      )..where((g) => g.id.equals('goal-lego'))).getSingle();
+      final payouts = written.where((r) => r.type == 'payout').toList();
+      expect(payouts, hasLength(1));
+      expect(payouts.single.childId, 'leo');
+      expect(payouts.single.amountPence, -210);
+      expect(written.where((r) => r.type == 'savings_move'), isEmpty);
+      expect(goal.savedPence, 1650, reason: 'visit 1 moved £1.00 once');
+      expect(pushedPath(tester), '/money');
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
     testWidgets('a single gated write lands once and pops with the toast', (
       tester,
     ) async {

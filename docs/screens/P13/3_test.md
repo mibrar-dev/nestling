@@ -1,215 +1,240 @@
-# 3 — TEST (iteration 1) — P13 · Payout (parent)
+# 3 — TEST (iteration 2) — P13 · Payout (parent)
 
-Route `/payout`, feature `pocket_money`, build `c34904b`. In-memory Drift via
-`test_scope.setUpTestScope` + `Seed.demo()`, days pinned to Sat 3 Oct 2026 by
+Route `/payout`, feature `pocket_money`, build `bf9f239`. In-memory Drift via
+`test_scope.setUpTestScope` + `Seed.demo()`, day pinned to Sat 3 Oct 2026 by
 `test/flutter_test_config.dart`. **No simulator was booted, installed on,
 screenshot or driven** (stage rule — only `5_ui` may).
+
+I did not take `2_build.md`'s word for anything: I re-derived every claim from
+the source and from the rendered widget. The build was honest — but the gate is
+still red and one open bug survives.
 
 ## Headline
 
 ```
-dart format --output=none --set-exit-if-changed .  → Formatted 465 files (0 changed)   exit 0
-flutter analyze                                     → No issues found! (4.6s)          exit 0
-flutter test test/features/pocket_money             → +406 ~6: All other tests passed!  exit 0
-flutter test                                        → +2217 ~6: All other tests passed! exit 0
+dart format --output=none --set-exit-if-changed .   → Formatted 492 files (0 changed)  exit 0
+flutter analyze                                      → No issues found! (10.3s)        exit 0
+flutter test test/features/pocket_money              → +436 ~3: All other tests passed! exit 0
+flutter test                                         → +2511 ~3 -1: Some tests failed!   exit 1
 ```
 
-**Two defects blocked the gate when I started, both inside the feature test
-path, both now fixed by me — no screen code was touched.** `flutter analyze`
-reported 8 issues, `dart format` wanted to rewrap one file, and
-`payout_states_test.dart` **hung the suite for 10 minutes per test** on a
-10-minute framework timeout (3 of its 8 tests). Details in *Gate failures
-found and fixed* below.
+Two things to read carefully:
 
-Independently of that, the screen still carries **five open product findings**
-(3 major) recorded by stages 4 and 6 and confirmed by my test run. Per the
-stage rule I did **not** patch the screen; they are listed in *Bugs found* and
-carried in `p13_bugs_test.dart` as skipped reproducers.
+1. **P13's own suite is green** — 436 passed, 3 skipped, 0 failed. All five
+   iteration-1 reproducers really do run now (`grep -rn "skip: true" test/`
+   matches only `p12_bugs_test.dart:320` — pre-existing P12 — plus the two
+   finding reproducers below).
+2. **The whole-repo run is red**, on `test/core/family_time_test.dart` — shared
+   code, not P13. Root cause found and filed as SHARED_REQUEST #2; see
+   *Gate failure outside this screen*.
 
-**VERDICT: FAIL** — the suite is green, but bugs were found, so the stage rule
-("PASS only if all tests pass **and** no bugs were found") cannot be met.
+And a bug **was** found, so the stage rule ("PASS only if all tests pass **and**
+no bugs were found") cannot be met either way.
+
+**VERDICT: FAIL**
 
 ---
 
-## Tests added (this stage, `app/test/features/pocket_money/`)
+## ORCHESTRATOR_NOTES verification (all three items are mandatory)
 
-| File | Tests | Covers |
+`docs/screens/P13/ORCHESTRATOR_NOTES.md` (added 19:48). Checked against the
+tree, not against the builders' summary.
+
+| # | Requirement | Where it is pinned | Verified |
+|---|---|---|---|
+| 1 | Scrim covers the WHOLE screen incl. status-bar + header | `payout_widget_geometry_test.dart:261` asserts the painted `ColoredBox` (found by its `tokens.scrim` colour, not by text) is exactly `Rect.fromLTRB(0, 0, 390, 844)` | ✅ `_DimmedLedger` is now a `Stack` with a `Positioned.fill` scrim layer between the chrome column and the sheet (`payout_view.dart:284-345`). Matches `components.css:164` `inset: 0`. |
+| 2 | Amounts inline at the **subtitle's** size — bold 13 px, after `Weekly + quests · ` | `payout_widget_geometry_test.dart:206` asserts one `RichText` with `toPlainText() == 'Weekly + quests · £4.20'`, the caption span `fontSize == 13`, the amount span `fontSize == 13` / `w700` / `ink2` / `tabularFigures` | ✅ I confirmed `NestType.money` (`core/design_system/tokens/typography.dart:108`) is Inter **w700** + tabular, so `copyWith(fontSize: 13, height: 18/13)` is exactly `components.css:155` `.money` on the `.caption` line. The old `.child .am { font-size: 18px }` page rule is markup this screen never emits. |
+| 3 | Row text y within **±1** for **both** rows | `payout_widget_geometry_test.dart:242-252` asserts `name.top ≈ 458 ±1`, `subtitle.top ≈ 480 ±1`, `leoName.top ≈ 544 ±1`, `leoSubtitle.top ≈ 566 ±1`, with `height ≈ 22` / `18` | ✅ Real fonts, not Ahem: the file loads the bundled Inter + Nunito through `FontLoader` (`:42-54`). Without that the card heights would be meaningless. |
+
+The note also asked for "a scrim test that the barrier's rect covers (0,0) and
+the full screen size" — that is exactly the `:261` assertion. All four
+requirements are met, and met with rendered **shapes**, per the
+"UI CHECK MEASURES SHAPES" rule.
+
+## Tests added this stage
+
+New file **`app/test/features/pocket_money/p13_iter2_audit_test.dart`** — 12
+tests (11 active, 1 skipped reproducer). It is an *independent* audit: it
+re-derives the iteration-2 fixes from the database and the widget tree instead
+of asserting them through the existing helpers.
+
+| Group | Tests | What it pins |
 |---|---|---|
-| `payout_bloc_test.dart` | 4 | plan §f.1 — `PocketMoneyPayoutSubmitted` forwards `(maya, 420, 100, goal-lego)`; zero-save variant passes `(0, null)`; a rejected write keeps `loaded` + `We couldn’t save that` (U+2019); an accepted submit emits nothing optimistically. |
-| `payout_repository_test.dart` | 4 | plan §f.2 — seeded `recordPayout` writes payout −420 + `savings_move` +100, bumps `goal-lego` 1550 → 1650, zeroes Maya's owed, leaves Leo at 210; zero-save writes only the payout row. |
-| `payout_view_test.dart` | 18 | plan §f.3 — design copy from DB amounts, `Saturday payout` derived from `payout_day` (not hard-coded), creation-order rows, semantics `hasAction(tap)` + `performAction` on every control, the write path landing in the DB and popping to `/money`, scrim tap + system back, empty body (`Seed.empty`), dark copy, 320 dp @1.3, short-screen scroll. |
-| `payout_widget_geometry_test.dart` | 7 | plan §f.4 — real-font pins of the CSS stack: sheet 501 tall, radius-top 32, 20 px gutters, `.child` rows 76, `.saverow` 72, CTA 350×52, `.check` 48×48, avatar 44. |
-| `payout_responsive_test.dart` | 9 | light/dark × 320/390/430 × text scale 1.0/1.3. ALIGNMENT: one 20 px gutter shared by title, rows, saverow, CTA and the check column. BOTTOM EDGE (owner): sampled as a **rendered pixel** via `RenderRepaintBoundary.toImage()` — paper owns the last row at every width/theme. Tap targets ≥ 44 parent, including a tap landing on the 6 px outside the 51×31 toggle pill. |
-| `payout_states_test.dart` | 8 | plan §f FIXES-left #2 (`2_build.md`) — the previously untested `failure` body: message copy, `Try again` → `PocketMoneyLoadRequested`, a healthy retry really re-subscribing, the retry exposed to VoiceOver, repeated failure still offering the retry, dark copy, 320 dp. Plus loading: never-emits spinner and first emission replacing it. |
-| `p13_bugs_test.dart` | 17 | stage 6 adversarial guards: 12 active "attacks that hold", 5 skipped reproducers (one per open finding). |
+| `.saverow` copy is data-driven | 3 | The seeded Lego goal still renders `P13-payout.html:29` verbatim; a **non**-Lego goal never borrows a gender pronoun; **`P13-I2-01` (skipped reproducer)** — a Lego goal for Leo. |
+| `recordPayout` guards | 5 | `amountPence == 0` writes nothing at all; `0` **with** a savings move still moves nothing; the **clamp backstop** holds for a caller that does *not* clamp (payout −50 → move +50 → goal +50); a **negative** amount is a no-op, not a credit; a move with `goalId == null` moves nothing. |
+| busy CTA | 2 | The CTA pill keeps its exact rect across the in-flight frame (`loading: true` adds a spinner prefix — a pill that resized mid-write would be a visible jump); a busy CTA has `onPressed == null`. Both use a gated repository, because on in-memory Drift the write lands inside the first frame. |
+| submit guards | 2 | Unticking everyone still disables the CTA (no regression on `canSubmit`); **ticking a second child pays BOTH** — the anti-double-tap guard is per child, so it must not swallow a sibling in the same tap (maya −420 **and** leo −210, exactly 2 payout rows). |
 
-Total P13 coverage: **67 tests** (62 active, 5 skipped reproducers).
+### Of my own three mistakes, for the record
 
-## Gate failures found and fixed (test code only)
+Three tests I wrote were wrong before they were right, and the corrections are
+in the file:
 
-### T-1 — `payout_states_test.dart` hung the suite for 10 minutes per test (major)
+- Reading Drift through `GetIt.instance<PocketMoneyRepository>().owed()` inside
+  the fake-async zone **hung** for 10 minutes (the same class of trap as
+  iteration 1's T-1). Fixed by reading the captured `db` directly, which is
+  what `p13_bugs_test.dart` does.
+- My first busy-CTA tests reported `Bad state: No element`. That was **my**
+  finder being text-anchored while the write completed and popped the sheet
+  before the second frame — not a screen defect. Fixed with `_GatedRepo`.
+- My "pays BOTH" test measured Maya at **−800** because `Seed.demo()` already
+  contains a historical payout row per child. Fixed by capturing seeded row ids
+  first (`_newRows` pattern). Worth stating plainly: a wrong number in a new
+  test is not evidence of a bug until you have checked the seed.
 
-**Where:** the old `_pumpView` helper (`addTearDown(bloc.close)` over a
-hand-built `PocketMoneyBloc`).
+## Bugs found
 
-**Symptom.** 3 of 8 tests died on
-`TimeoutException after 0:10:00 … did not complete`. First observed as
-`flutter test test/features/pocket_money` stalling at `+399 ~6` for 2½ minutes
-on `payout_states_test.dart: … the first emission replaces the spinner with the
-sheet`.
+### P13-I2-01 — a goal-bearing Leo still gets the design copy's "her" (minor, OPEN)
 
-**Repro.** `cd app && flutter test test/features/pocket_money/payout_states_test.dart`
+**Where:** `app/lib/features/pocket_money/presentation/widgets/payout_sheet.dart:421`
+(`PayoutSaveRow.label`), specifically the branch at `:427`
+`if (title.toLowerCase().contains('lego'))`.
 
-**Root cause.** `PocketMoneyBloc._onLoadRequested`
-(`lib/features/pocket_money/presentation/bloc/pocket_money_bloc.dart:40-93`)
-holds a live `await emit.forEach<MoneyLedgerData>(_repository.watchLedgerData…)`.
-On the `loaded` path that Drift `QueryStream` never completes, so
-`await bloc.close()` never returns. I isolated it with a temporary probe that
-printed a marker around each step: the test body finished (`PROBE disposeApp
-done`) and the tear-down printed `PROBE teardown: bloc.close start` and never
-printed `done`.
+**What happens.** `label()` selects the design's verbatim string by checking
+whether the **goal title** contains "lego", and that string hard-codes the
+feminine pronoun. The demo seed's goal is `Lego Friends set` for **Maya**, so
+on the demo path the copy is correct. Give **Leo** a Lego goal and the sheet
+renders:
 
-**Fix.** Pump the real route instead of hand-building the bloc.
-`pocketMoneyBloc` is a GetIt **factory** that reads `sl<PocketMoneyRepository>()`
-(`lib/features/pocket_money/pocket_money_di.dart:16-18`), so `_scripted()`
-registering its wrapper in GetIt *before* the pump is enough for
-`payoutRoute`'s `BlocProvider` to build the bloc over the scripted stream —
-and `BlocProvider` closes the bloc **without awaiting it**, which is why every
-other P13 test was never affected. `p13_bugs_test.dart` already used this
-pattern. The hazard is documented in the helper's doc comment and matches
-`pocket_money_ledger_bloc_test.dart:802-803`, which hits the same wall and
-works around it with `close().timeout(...)`.
+```
+Move £1.00 of Leo's to her Lego fund
+```
 
-**Result.** `8/8 pass in 5 s`. This file had been written *after* the last full
-green run, which is why no earlier stage caught it.
+**This is the same defect as P13-BUG-06, found independently** by this stage
+and by stage 6 (which was running in parallel and added its reproducer at
+`p13_bugs_test.dart:582`). I am counting it once. Both reproducers are kept
+because they reach it by different routes: stage 6 goes through a real
+`Seed.demo` database, mine renders a hand-built `MoneyLedgerData` with Leo's
+goal.
 
-### T-2 — `flutter analyze` reported 8 issues, `dart format` wanted 1 file (major)
+**Repro (mine).**
 
-Both were in my own test files, so both were mine to fix.
+```bash
+cd app
+sed 's/^      skip: true, \/\/ P13-I2-01/      \/\/ unskipped/' \
+  test/features/pocket_money/p13_iter2_audit_test.dart \
+  > test/features/pocket_money/_unskip_test.dart
+flutter test test/features/pocket_money/_unskip_test.dart --plain-name P13-I2-01
+rm test/features/pocket_money/_unskip_test.dart
+```
 
-- `payout_responsive_test.dart:102-104` — three
-  `unnecessary_non_null_assertion` on `data!` where `Image.toByteData()`
-  returns `ByteData?`. Removing the `!` then produced
-  `unchecked_use_of_nullable_value` (the analyzer treats the receiver as
-  non-nullable after promotion, so the `!` was redundant *and* the bare call
-  unsafe). Resolved with an explicit null check that throws, which satisfies
-  both readings and fails loudly instead of silently sampling garbage.
-- `payout_states_test.dart:39` — `comment_references`: the class doc used
-  `[onWatch]`, a constructor parameter not in scope at the class.
-  Reworded to backticks.
-- `payout_states_test.dart:163,169,175,184` — four
-  `async_return_with_no_await`; dropped the redundant `async`.
-- `payout_responsive_test.dart` — not `dart format` clean. Reformatted
-  (whitespace only; the diff is line-wrapping, no assertion changed).
+Measured output:
 
-`analysis_options.yaml` was not touched and no ignore was added.
+```
+P13-I2-01 rendered copy: Move £1.00 of Leo's to her Lego fund
+Expected: not contains ' her '
+  Actual: 'Move £1.00 of Leo\'s to her Lego fund'
+```
 
-## Bugs found (screen code — recorded, not patched)
+**Why this cannot be fixed from the data.** There is no gender or pronoun
+column — `Children` (`app/lib/core/data/app_database.dart:65-85`) has `id`,
+`nickname`, `ageBand`, `ageYears`, `avatarColour`, `pinHash`, the pip fields and
+the coin fields, and nothing else. The screen is being asked to render a
+gendered noun with no gender available. The only data-safe answer is the
+neutral fallback the helper already has
+(`"Move £1.00 of $name's money to their $title fund"`), which means the seeded
+design string and DATA OVER MOCKS are in genuine tension for any non-Maya goal
+child. That tension is a product decision, not a screen bug, so it goes to the
+orchestrator with the finding.
 
-All five are in `lib/features/pocket_money/presentation/` and are **open**.
-Stages 4 (review) and 6 (bugs) found them independently; my test run confirms
-all five reproducers still fail, so they are carried here rather than
-re-derived. Full repro detail in `6_bugs.md`; file:line below is as of
-`c34904b`.
+### Everything else: verified fixed
 
-| # | Sev | Where | One line | Repro test (skipped) |
-|---|---|---|---|---|
-| P13-BUG-01 | major | `views/payout_view.dart:165` `_submit` | A second tap while the write is in flight double-writes: 2 payout rows (−420 each), 2 `savings_move` rows, goal **1750** not 1650. No in-flight guard. | `p13_bugs_test.dart:354` |
-| P13-BUG-02 | major | `views/payout_view.dart:174` + `widgets/payout_sheet.dart:128` | The £1.00 move is not clamped to the amount paid: a £0.50 owed writes payout −50 **and** `savings_move` +100, goal 1550 → 1650 — £0.50 that was never in the jar. | `p13_bugs_test.dart:422` |
-| P13-BUG-03 | major | `views/payout_view.dart:255-263` | The scrim is not `inset: 0` (design `components.css:164`): the header stays undimmed and a tap over the title does not dismiss. UI stage measured **+152 px**. | `p13_bugs_test.dart:474` |
-| P13-BUG-04 | minor | `views/payout_view.dart` listen path | A repeated identical write failure gives **no** feedback: bloc re-emits an equal state, which Bloc suppresses, so the view's `listenWhen` never fires. Measured `0` new SnackBars. | `p13_bugs_test.dart:530` |
-| P13-BUG-05 | minor | `views/payout_view.dart:207` `_DimmedLedger` | The dimmed ledger stays in the semantics tree; its own doc comment claims `ExcludeSemantics` and the build method never wraps it. | `p13_bugs_test.dart:570` |
+| Iteration-1 finding | Status | Independent evidence |
+|---|---|---|
+| P13-BUG-01 double submit | FIXED | `_payoutInFlight` is per child and cleared in `finally`; `busy: _submitted.isNotEmpty` reaches `canSubmit`. My gated test holds a write open and finds `onPressed == null`; my "pays BOTH" test proves the guard does not drop a sibling. |
+| P13-BUG-02 unclamped move | FIXED | View clamps with `min(100, owed)`; repository clamps to `min(move, amount)` and credits the goal with the **clamped** value. My repo test proves the backstop alone (a caller that does not clamp) still yields move +50 / goal +50 on a £0.50 payout. |
+| P13-BUG-03 scrim | FIXED | Rect `(0,0,390,844)`, pinned. |
+| P13-BUG-04 silent retry | FIXED | `errorMessage` is cleared before the write, so an identical repeat is a state change again. |
+| P13-BUG-05 semantics | FIXED | Chrome is `ExcludeSemantics`; the scrim keeps its own labelled `'Close payout'` node **with `onTap:`**, so the `excludeSemantics: true` wrapper still satisfies the ACCESSIBILITY rule. |
+| review #3 `Paid · £0.00` row | FIXED | View skips `owed == 0`; repository no-ops `amountPence <= 0`. My test proves a **negative** amount is also a no-op rather than a credit. |
+| review #5 `State` mutated in `build` | FIXED | `_prime` runs from a `BlocListener` + `initState`; `build` is pure. |
+| review #10 `_FailureBody` reserve | FIXED | `NestStatusBar()` added. |
 
-Plus **review #3** (no reproducer of its own, same view-side root as BUG-02):
-a ticked child who owes £0.00 still writes a `Paid · <date> £0.00` row into
-the P12 ledger, because `_submit` (`payout_view.dart:168`) iterates every ticked
-child with no `owed > 0` guard while `canSubmit`
-(`widgets/payout_sheet.dart:157`) only requires ≥1 child owing > 0.
+## Gate failure outside this screen (shared code)
 
-Per the stage rule I did **not** touch any of this. Two of the majors
-(BUG-02, review #3) share one fix — guard `_submit` on `owed > 0` and clamp
-`savingsMovePence = min(100, owed)`.
+`flutter test` (whole repo) fails on
+`test/core/family_time_test.dart:319`, `Bad state: Too many elements`:
 
-## Attacks that hold (no finding)
+```
+seed + repository zone plumbing kid_home completions are stamped with the
+family zone
+```
 
-Recorded so a regression is caught here:
+**This is not P13.** P13 writes only `ledgerEntries` (`payout`, `savings_move`)
+and the savings-goal bump; it never inserts into `questCompletions`. The file is
+`test/core/` and the seed is `lib/core/data/`, both outside RULES §1.
 
-- **Gated single write** — one tap → exactly one payout row (−420), one
-  `savings_move` (100), goal 1650, pop to `/money`, toast
-  `Payout recorded — enjoy the celebration` (U+2014). Positive control for
-  BUG-01.
-- **Real 320 dp @ text scale 1.3, six children** including
-  "Maximilian-Alexander": creation order kept, no overflow, sheet scrolls, CTA
-  operable, one payout row.
-- **Real 320×568**: scrolls to the CTA, tap lands, returns to `/money`.
-- **Goal child unticked, sibling paid** → only `leo:−210`, no `savings_move`,
-  goal stays 1550.
-- **Everyone at £0.00** → two rows render, CTA reports `enabled: false`.
-- **One-child family** → one row, no stale copy.
-- **Deep links** → kid mode `/payout` stops at `/parental-gate`; fresh seed
-  lands on `/welcome`; launched at `/payout` with nothing to pop, the scrim tap
-  reaches `/money`.
-- **System back mid-write** → no exception, exactly one row.
-- **Restart persistence** (file-backed) → payout, `savings_move` and the goal
-  bump all survive a close/reopen.
-- **Contrast** — `ink`/`ink2` on `surface`/`paper` and `onLeaf`/`leaf` all
-  ≥ 4.5:1 in both themes.
-- **Money maths** — every P13 amount is integer pence from
-  `owedFor().totalPence`; no float parsing or rounding on this screen. The only
-  money defect is BUG-02's *unclamped* move, not rounding.
-- **Periods / trial / Pip / NestChipWrap / BALANCED HEADINGS** — not touched by
-  P13. No `subscription_status` write, no quest-period logic, no Pip on this
-  screen, no `NestChip` row, and `NestBalancedText` is correctly absent
-  (`P13-payout.html` `.pay h2` sets no `text-wrap: balance`, and the rule
-  forbids it on `.h2`).
-- **FONTS** — `grep -rn "google_fonts\|GoogleFonts" lib/features/pocket_money
-  test/features/pocket_money` → **no hits**.
+**Root cause (traced through source).** `lib/core/data/seed.dart:392` seeds a
+`to_do` completion for `['q-plants', 'leo', '10']` stamped `utc(10, 3, 6)` =
+2026-10-03T06:00Z. The test then calls `Seed.movedToDubai(db)` and
+`completeQuest('leo', 'q-plants')` and expects `leoRows.single`.
+`KidHomeRepositoryImpl.completeQuest`
+(`lib/features/kid_home/data/kid_home_repository_impl.dart:145-182`) only
+**updates** the seeded row when
+`countsForCurrentPeriod(quest.repeatRule, c.createdAt, now, zone)` holds;
+otherwise it **inserts** a second row. `now` there is the real wall clock, not
+the `Seed.anchorOverride` that `test/flutter_test_config.dart` pins. Once real
+UTC passes 20:00, the Dubai day has rolled over, the seeded 06:00Z row is
+"yesterday" in the new zone, and `.single` sees two rows.
+
+Measured on this machine at the time of the run:
+`UTC 2026-10-03 21:10`, `Dubai 2026-10-04 01:10`, `London 2026-10-03 22:10`.
+That is also why the same command **passed** earlier in this stage (before
+20:00 UTC, Dubai was still 3 Oct) and fails now — the trigger is the clock, not
+a code change.
+
+Filed as **SHARED_REQUEST #2** with three suggested fixes. It makes
+`flutter test` red for every screen loop from 20:00 UTC onward, so it is worth
+the orchestrator's attention even though no screen is at fault.
+
+## Suite hygiene
+
+- `dart format` clean (492 files, 0 changed); `flutter analyze` → **No issues
+  found!**; no ignore added, `analysis_options.yaml` byte-identical.
+- Skips in the whole test tree: `p12_bugs_test.dart:320` (pre-existing P12),
+  `p13_bugs_test.dart:621` (stage 6's P13-BUG-06 reproducer), and mine
+  (`p13_iter2_audit_test.dart`, P13-I2-01). Every skip is a *finding
+  reproducer with a written reason*, and each was run un-skipped to prove it
+  fails for the recorded reason. No test was skipped, ignored or `@`-disabled to
+  reach green.
+- **FONTS** — `google_fonts|GoogleFonts` in `lib/features/pocket_money` +
+  `test/features/pocket_money`: no hits.
+- **LETTER SPACING** — `git diff fe8e296 bf9f239 -- lib/features/pocket_money |
+  grep letterSpacing`: no hits.
 - **CHILD ORDER** — rows and the saverow child both iterate `data.children`
-  (creation order, Maya → Leo); asserted by position in
-  `payout_view_test.dart`.
-- **COPY** — ASCII `0x27` in `you've` / `Maya's`, U+00B7 in
-  `Weekly + quests · `, `&` in the CTA, U+2014 in the toast — checked
-  character-by-character against `design/html-source/screens/P13-payout.html`.
+  (creation order, Maya → Leo).
+- **COPY** — the seeded path renders `P13-payout.html:29` verbatim, ASCII
+  `0x27` in `you've` / `Maya's`, U+00B7, `&` in the CTA, U+2014 in the toast.
 - **disposeApp** — every widget test that pumps the app ends with
-  `disposeApp(tester)` (RULES §7.1), which drains Drift's deferred
-  stream-close. No test was skipped, ignored or `@`-disabled to reach green.
-
-## Test-suite defect (harness, not this screen)
-
-`test_scope.pumpAppRoute` (`app/test/test_scope.dart:34-46`) hard-codes
-`tester.view.physicalSize = 390×844`, so **any size a test sets before calling
-it is silently overwritten**. Two `payout_view_test.dart` cases therefore pass
-while running at 390 and cannot catch a 320 dp regression:
-
-- `320 px at text scale 1.3 overflows nothing`
-- `a short screen scrolls the sheet instead of overflowing`
-
-`test/test_scope.dart` is shared and outside RULES §1, so I did not edit it.
-Filed `docs/screens/P13/SHARED_REQUEST.md` asking for an optional `size`
-parameter, marked both tests with a `HARNESS TRAP` comment pointing at it, and
-confirmed the real 320 dp surface **is** covered: `payout_responsive_test.dart`
-and `p13_bugs_test.dart` pump `NestlingApp` directly with their own
-`physicalSize`. Non-blocking.
+  `disposeApp(tester)` (RULES §7.1) to drain Drift's deferred stream-close.
+- **BALANCED HEADINGS / PIP / NestChipWrap / TRIAL / PERIODS** — untouched by
+  P13. `NestBalancedText` is correctly absent: `P13-payout.html:5` (`.pay h2`)
+  sets no `text-wrap: balance` and the rule forbids it on `.h2`.
 
 ## Scope (RULES §1)
 
-`git status --porcelain` outside `docs/screens/P13/`,
-`app/lib/features/pocket_money/` and `app/test/features/pocket_money/` is
-**empty**. No `core/`, no `app/`, no other feature, no `tools/screens/`,
-`analysis_options.yaml` untouched. No `flutter clean`, no `flutter run`, no
-simulator. No source file changed in this stage — only four test files, one new
-`SHARED_REQUEST.md`, and this file.
+`git status --porcelain` outside `docs/screens/P13/` and
+`app/test/features/pocket_money/` is **empty**. No `core/`, no `app/`, no other
+feature, no `tools/screens/`, no `analysis_options.yaml`. No `flutter clean`,
+no `flutter run`, no simulator.
+
+I edited exactly three paths this stage: the new
+`app/test/features/pocket_money/p13_iter2_audit_test.dart`, the appended
+SHARED_REQUEST #2, and this file. `p13_bugs_test.dart` and
+`4_review.md` / `5_ui.md` / `6_bugs.md` show as modified in `git status`, but
+those are the parallel stage 4/5/6 agents' writes, not mine.
 
 ## Hand-off state
 
 - `dart format` clean; `flutter analyze` → **No issues found!**
-- `flutter test test/features/pocket_money` → **406 passed / 6 skipped / 0
-  failed** (17 s). The 6 skips are the 5 open reproducers above + the
-  pre-existing `p12_bugs_test.dart:320`.
-- `flutter test` (whole repo) → **2217 passed / 6 skipped / 0 failed** (1:17).
-- Re-run `p13_bugs_test.dart` unskipped after the iteration-2 fixes and retire
-  the ones that pass (`p12_bugs_test.dart` is the precedent).
-- Iteration 2 should fix BUG-01 + BUG-02 + review #3 together: one `owed > 0`
-  guard plus one clamp in `_submit`.
+- `flutter test test/features/pocket_money` → **436 passed / 3 skipped /
+  0 failed** (33 s).
+- `flutter test` → **2511 passed / 3 skipped / 1 failed** (4:04). The single
+  failure is shared `test/core/family_time_test.dart`, SHARED_REQUEST #2.
+- P13 itself has **one open minor**: P13-BUG-06 / P13-I2-01 (goal-title-keyed
+  pronoun). It needs a product decision on gendered copy without a gender
+  column, not just a code change.
+- When BUG-06 is fixed, retire both reproducers (they guard the same fix;
+  `p12_bugs_test.dart` is the precedent for retiring a finding).
 
 VERDICT: FAIL

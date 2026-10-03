@@ -1,75 +1,72 @@
-# P13 · Payout — Stage 5 UI check (iteration 1)
+# P13 · Payout — Stage 5 UI check (iteration 2)
 
 Route `/payout`, simulator BC440E48-B3A3-43BC-971B-0EF5DB621874 (390×844).
-Shots: `docs/screens/P13/ui/app_light_1.png`, `app_dark_1.png`
-(seed demo, parent mode, Maya). Compares: `cmp_light_1.png`, `cmp_dark_1.png`
+Shots: `docs/screens/P13/ui/app_light_2.png`, `app_dark_2.png`
+(seed demo, parent mode, Maya). Compares: `cmp_light_2.png`, `cmp_dark_2.png`
 vs `design/screens/light|dark/P13-payout.png` (1170×2532 ÷ 3 = logical px;
-all y/x below are logical px). Status-bar glyphs excluded per orchestrator
+all x/y below are logical px). Status-bar glyphs excluded per orchestrator
 rule (OS draws the real bar).
 
 ## Mean diff
 
-- Light: **7.44 %** — band 0 (y 0–105) 36.89 %, band 1 (y 105–211) 16.96 %,
-  bands 2–7 (y 211–844) 0.00 / 0.19 / 1.74 / 1.53 / 0.90 / 1.41 %.
-- Dark: **2.21 %** — band 0 8.22 %, band 1 3.93 %, bands 2–7
-  0.00 / 0.19 / 1.68 / 1.48 / 0.76 / 1.45 %.
+- Light: **0.61 %** — bands 0–7: 1.04 / 0.94 / 0.00 / 0.19 / 0.20 / 0.16 /
+  0.90 / 1.41 %. (Iteration 1 was 7.44 %: the full-screen scrim fix landed —
+  header is dimmed again in both themes.)
+- Dark: **0.57 %** — bands 0–7: 1.29 / 0.60 / 0.00 / 0.19 / 0.16 / 0.12 /
+  0.76 / 1.45 %.
 
-Bands 0–1 carry the failure below. Bands 2–7 residual (~1–2 %) is text
-rasterisation (bundled Nunito/Inter vs browser render; glyph edges within
-±2 px, invisible at 1×) plus the OS home-pill mock (see non-findings).
+## Measured positions (design vs app, light; dark mirrors it)
 
-## Measured y positions (design vs app, light)
-
-| Element | Design y | App y | Δ |
+| Element | Design | App | Δ |
 |---|---|---|---|
-| Scrim top edge (full-screen dim) | 0 (covers header) | ~152 (below summary card) | **+152 FAIL** |
-| Sheet top edge (paper) | ~343 | ~343 | 0 |
-| Sheet title "Saturday payout" first glyph row | ~383 | ~383 | 0 |
-| Subtitle "Tick once…" | ~413 | ~413 | 0 |
+| Scrim top edge | y 0 (full-screen dim) | y 0 (full-screen dim) | 0 FIXED |
+| Sheet top edge (paper) | y ~343 | y ~343 | 0 |
+| Sheet title "Saturday payout" | y ~383 | y ~383 | 0 |
+| Subtitle "Tick once…" | y ~413 | y ~413 | 0 |
+| Summary card rect | x 20–370, y ~115–154 | x 20–370, y ~115–154 | 0 |
+| Summary text "Maya is owed £4.20 · Leo is owed £2.10" | x **37**–278, y 122–133 (left-aligned) | x **75**–315, y 122–133 (centered) | **+38 FAIL** |
+| Maya card rect | top y 445, x 20–369 | top y 445, x 20–369 | 0 |
+| Leo card rect | top y 531, x 20–369 | top y 531, x 20–369 | 0 |
+| Saverow card rect | top y 617, x 20–369 (L/R edges x 21/369) | top y 617, x 20–369 (x 21/369) | 0 |
 | Maya check rect (green, shape) | x 307–355 @ y 470 | x 307–355 @ y 470 | 0 |
 | Leo check rect (empty, shape) | x 307–355 @ y 560 | x 307–355 @ y 560 | 0 |
+| Toggle track rect (shape) | x **305**–355, y 633–663 (51×31) | x **301**–351, y 633–663 (51×31) | **−4 FAIL** |
 | CTA rect (green pill, shape) | x 20–369, bottom ~750 | x 20–369, bottom ~750 | 0 |
-| Caption "Your children…" last row | ~790 | ~790 | 0 |
+| Caption "Your children…" last row | y ~790 | y ~790 | 0 |
 | Bottom edge | paper to y 844 | paper to y 844 | 0 |
-
-Sampled colours prove the scrim gap: at (350, 50–150) design is
-`#97949E` (= paper × scrim 45 %: exact match for dimmed paper) while app is
-`#FBF7F0` pure paper with a bright-white summary card. Dark theme same
-shape: design header near-black dimmed, app bright `#15131F` paper + bright
-card. Sheet content below y ~343 is pixel-aligned (title, both checks, CTA,
-caption all Δ 0).
 
 ## Deviations
 
-1. **Scrim does not cover the background header (both themes).**
-   Design: `.scrim{position:absolute;inset:0}` dims the whole screen —
-   "Pocket money" title and the "Maya is owed £4.20 · Leo is owed £2.10"
-   summary card render dimmed (`#97949E` light). App: title + summary card
-   render bright/undimmed (`#FBF7F0` paper, white card); scrim starts at
-   ~y152. Visible side-by-side without zoom; a designer would reject.
-   Fix: in `app/lib/features/pocket_money/presentation/views/payout_view.dart`,
-   follow `1_plan.md` §(a) — `_DimmedLedger` must be a plain undimmed Column
-   (`Positioned.fill`), with a separate full-`Positioned.fill` scrim
-   `GestureDetector` (`ColoredBox(tokens.scrim)`, `onTap: _goBack`) layered
-   between it and the `PayoutSheet` `Align(bottomCenter)`. Do not keep the
-   scrim as the `Expanded` tail of the header Column (current lines 255–263).
-   Side benefit: scrim-tap dismissal then works over the header area too.
-2. **Leo name/amount block sits ~2 px high** (design name top ~555, app
-   ~553 at x=100; amount baseline +2 px extent). Within the ±2 px rule and
-   invisible at 1× — recorded, no fix required beyond the rebuild in (1);
-   re-measure after the scrim fix.
+1. **Summary-card text is centered; design is left-aligned (both themes).**
+   Design: `.caption` has no `text-align` (components.css:34), so the HTML
+   truth is start-aligned at card padding (glyphs x 37 = card x 20 + pad 16
+   + 1). App: `textAlign: TextAlign.center`
+   (`payout_view.dart` `_DimmedLedger`, the `NestCard` summary `Text`;
+   `1_plan.md` §(a) wrongly said "centered" — HTML/CSS truth overrides the
+   plan). Card rect itself matches; only the text shifts 38 px. Visible in
+   the dimmed card side-by-side and as the band-1 diff ghost.
+   Fix: drop `textAlign: TextAlign.center` on the summary `Text` (default
+   start alignment = design). Re-measure glyph bbox to x 37–278.
+2. **Savings toggle track sits 4 px left of design (both themes).**
+   Design: track x 305–355, right edge flush with card content edge
+   (370 − 14 pad = 356, −1 antialias). App: x 301–351, leaving a ~5 px gap
+   to the content edge; size is correct (51×31). Exceeds ±2 px.
+   Fix: right-flush the `NestToggle` track in the saverow `Row`
+   (`payout_sheet.dart` `_SaveRow`): inspect `NestToggle` for extra
+   right-side padding/hit-slop that insets the 51 px track inside a wider
+   box, and/or the row `gap`; track right edge must land at x 355–356.
 
 Checked OK (no deviation): presence/order of all elements; child order
-Maya→Leo; copy incl. `you've`/`Maya's` ASCII apostrophes, `·` U+00B7
-separators, `&`, two-line wraps identical; Maya ticked/Leo unticked; savings
-toggle ON with `Move £1.00 of Maya's to her Lego fund`; CTA label + caption;
-avatars (lilac M / peach L, s44); check 48×48 r14, toggle 51×31, CTA min-h 52
-pill, grabber 40×5, sheet radius-top 32, 20 px gutters, cards/sheet/CTA
-aligned; dark-mode leaf CTA/cards/toggle; OWNER bottom-edge rule (paper to
-y 844 both themes, no coloured strip); no overflow/clipping/ellipsis faults.
+Maya→Leo; copy incl. `you've`/`Maya's` ASCII apostrophes, `·` U+00B7,
+`&`, identical two-line wraps; Maya ticked / Leo unticked; toggle ON; CTA
+label + caption; avatars (lilac M / peach L, s44); check 48×48 r14, CTA
+min-h 52 pill, grabber 40×5, sheet radius-top 32, 20 px gutters, all cards
+and bars edge-aligned; dark-mode leaf CTA/cards/toggle/scrim; OWNER
+bottom-edge rule (paper to y 844, no strip); no overflow/clipping/ellipsis
+faults.
 
 Non-findings (not deviations): status-bar time/glyphs (OS-drawn, excluded);
-design home-indicator pill (y 825–829, OS-drawn live; app correctly runs
-paper to the edge); sheet-text rasterisation ≤2 px.
+design home-indicator pill (OS-drawn live; app correctly runs paper to the
+edge); ≤2 px glyph rasterisation on names/amounts/CTA (bands 3–5 ≈ 0.2 %).
 
 VERDICT: FAIL
