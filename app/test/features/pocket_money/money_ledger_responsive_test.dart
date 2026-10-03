@@ -21,6 +21,7 @@ import 'package:get_it/get_it.dart';
 import 'package:nestling/app/app.dart';
 import 'package:nestling/app/controllers.dart';
 import 'package:nestling/core/design_system/design_system.dart';
+import 'package:nestling/features/pocket_money/presentation/widgets/money_history_row.dart';
 
 import '../../test_scope.dart';
 
@@ -33,11 +34,22 @@ Future<void> _pumpMoney(
   required Size surface,
   double textScale = 1,
   double bottomInset = 0,
+  double topInset = 0,
 }) async {
   tester.view.physicalSize = surface * 3;
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
-  if (bottomInset > 0) {
+  if (topInset > 0) {
+    // `TestFlutterView.padding` and `.viewPadding` are independent overrides,
+    // and `NestStatusBar` reads `MediaQuery.viewPaddingOf` — so a notch needs
+    // BOTH, in physical pixels (the surface is pumped at dpr 3).
+    final top = FakeViewPadding(top: topInset * 3, bottom: bottomInset * 3);
+    tester.view
+      ..viewPadding = top
+      ..padding = top;
+    addTearDown(tester.view.resetViewPadding);
+    addTearDown(tester.view.resetPadding);
+  } else if (bottomInset > 0) {
     tester.view.padding = FakeViewPadding(bottom: bottomInset * 3);
     addTearDown(tester.view.resetPadding);
   }
@@ -377,6 +389,133 @@ void main() {
         expect(tester.takeException(), isNull);
 
         handle.dispose();
+        await disposeApp(tester);
+      });
+    }
+  });
+
+  // Iteration 3 made the status-bar reserve the scroller's *preceding
+  // sibling* (finding 1, `4_review.md`), so the whole screen's top now hinges
+  // on `NestStatusBar`'s `max(viewPadding.top, 47)`. At 47 the geometry suite
+  // covers it; nothing covered a device whose inset is TALLER than the design's
+  // 47 — where the band must grow, the scroller must move down with it, and
+  // nothing may paint under the notch.
+  group('P12 Money ledger — pinned band on a notched device', () {
+    for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      final themeName = theme == ThemeMode.light ? 'light' : 'dark';
+      testWidgets('$themeName: a 59 px inset grows the band and moves the '
+          'scroller with it', (tester) async {
+        await setUpTestScope();
+        await _pumpMoney(
+          tester,
+          theme: theme,
+          surface: const Size(390, 844),
+          topInset: 59,
+        );
+
+        final band = tester.getRect(find.byType(NestStatusBar));
+        expect(
+          band.height,
+          moreOrLessEquals(59, epsilon: 0.01),
+          reason:
+              'NestStatusBar reserves max(viewPadding.top, 47) — a 59 px '
+              'notch must not be drawn over',
+        );
+        expect(band.top, moreOrLessEquals(0, epsilon: 0.01));
+        expect(
+          tester.getRect(find.byType(ListView)).top,
+          moreOrLessEquals(band.bottom, epsilon: 0.01),
+          reason: 'the scroller must start where the pinned band ends',
+        );
+        // The design's own relationship is inset-independent: `.ptitle`'s
+        // 8 px padding-top below the band.
+        expect(
+          tester.getRect(find.text('Pocket money')).top - band.bottom,
+          moreOrLessEquals(NestSpacing.s2, epsilon: 0.01),
+        );
+
+        // And nothing may scroll up under the notch.
+        await tester.drag(find.byType(ListView), const Offset(0, -120));
+        await tester.pumpAndSettle();
+        expect(
+          tester.getRect(find.byType(NestStatusBar)).top,
+          moreOrLessEquals(0, epsilon: 0.01),
+        );
+        expect(
+          tester.getRect(find.byType(MoneyHistoryRow).first).top,
+          greaterThanOrEqualTo(59),
+          reason: 'no ledger row may paint under the OS clock or the notch',
+        );
+        expect(tester.takeException(), isNull);
+
+        await disposeApp(tester);
+      });
+    }
+
+    testWidgets('320dp + 59 px inset: the band still pins and nothing clips', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await _pumpMoney(
+        tester,
+        theme: ThemeMode.light,
+        surface: const Size(320, 844),
+        topInset: 59,
+        textScale: 1.3,
+      );
+
+      expect(
+        tester.getRect(find.byType(NestStatusBar)).height,
+        moreOrLessEquals(59, epsilon: 0.01),
+      );
+      expect(find.text('Maya is owed'), findsOneWidget);
+      await _scrollToEnd(tester);
+      expect(find.text('Add money'), findsOneWidget);
+      expect(find.text('Record spending'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+  });
+
+  // The Column/Expanded rebuild (finding 1) is the only change since the last
+  // pass to this screen's scroll geometry, and an `Expanded` typo would leave
+  // the list unscrollable or its last row under the tab bar. The band guard
+  // above covers the TOP; this covers the BOTTOM of the same scroller.
+  group('P12 Money ledger — the scroller still reaches its own end', () {
+    for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      final themeName = theme == ThemeMode.light ? 'light' : 'dark';
+      testWidgets('$themeName: the footer clears the tab bar and nothing is '
+          'clipped', (tester) async {
+        await setUpTestScope();
+        await _pumpMoney(tester, theme: theme, surface: const Size(390, 844));
+
+        await _scrollToEnd(tester);
+
+        final tabBar = tester.getRect(find.byType(NestTabBar));
+        final footer = tester.getRect(
+          find.text('Nestling keeps track — the real money stays with you.'),
+        );
+        expect(
+          footer.bottom,
+          lessThanOrEqualTo(tabBar.top + 0.01),
+          reason:
+              'the last line must end above the tab bar, not behind it '
+              '(footer bottom ${footer.bottom}, bar top ${tabBar.top})',
+        );
+        // `.scroll { padding-bottom: 32px }` — the design's own tail space.
+        expect(
+          tabBar.top - footer.bottom,
+          moreOrLessEquals(NestSpacing.s8, epsilon: 1),
+        );
+        for (final button in <Finder>[_addMoney(), _recordSpending()]) {
+          expect(
+            tester.getRect(button).bottom,
+            lessThanOrEqualTo(tabBar.top + 0.01),
+          );
+        }
+        expect(tester.takeException(), isNull);
+
         await disposeApp(tester);
       });
     }

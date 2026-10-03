@@ -1,4 +1,4 @@
-# P12 · 3 TEST (iteration 2)
+# P12 · 3 TEST (iteration 3)
 
 Route `/money`, feature `pocket_money`, parent mode. In-memory Drift DB
 (`AppDatabase.memory()`) with `Seed.demo` / `Seed.empty`; the story day is
@@ -9,179 +9,191 @@ installed on, screenshotted or driven (stage 5 only). No images attached.
 
 ## Outcome
 
-**PASS — all tests green, no bugs found.** The iteration-1 defect (the 16 px
-uniform stack shift, P12-BUG-05) is fixed in the screen and is now *proven*
-fixed by the geometry guard that failed last iteration: **7 tests / 6 red →
-10 tests / 10 green**.
+**PASS — all tests green, no bugs found.**
 
 ```
 $ dart format .
-Formatted 436 files (0 changed) in 1.17 seconds.
+Formatted 437 files (0 changed) in 1.31 seconds.
 
 $ flutter analyze
 Analyzing app...
-No issues found! (ran in 4.5s)
+No issues found! (ran in 4.2s)
 
 $ flutter test
-00:47 +1900 ~1: All tests passed!
+01:17 +1914 ~1: All tests passed!
 
 $ flutter test test/features/pocket_money
-00:15 +313 ~1: All tests passed!
+00:13 +321 ~1: All tests passed!
 ```
 
-The single `~1` is the intentional skip documented in `SHARED_REQUEST.md` §3
-(`p12_bugs_test.dart:320`, P12-BUG-04: six children at 320 dp shrink the
-**shared** `NestSegmented` options below 44 px — P12 must not fork the shared
-control, so it stays skipped until that cross-screen fix lands). It is not a
-P12 defect and must not be un-skipped here.
+The single `~1` is the intentional skip in `p12_bugs_test.dart:320`
+(P12-BUG-04: six children at 320 dp shrink the **shared** `NestSegmented`
+options below 44 px — `SHARED_REQUEST.md` §3; P12 must not fork a shared
+control, and main's `0cdb53c` shared brief fixed *semantics*, not the
+tap-target floor, so the skip correctly stands).
 
-Per file (all green):
+Per file, all green:
 
 ```
-money_ledger_geometry_test.dart      +10
-money_ledger_states_test.dart        +17
-money_ledger_responsive_test.dart    +24
-pocket_money_ledger_bloc_test.dart   +18
-money_ledger_view_test.dart          +14
-p12_bugs_test.dart                   +22 ~1
+money_ledger_responsive_test.dart     +29   (5 new this iteration)
+money_ledger_geometry_test.dart       +11
+money_ledger_states_test.dart         +17
+pocket_money_ledger_bloc_test.dart    +18
+money_ledger_view_test.dart           +15
+p12_bugs_test.dart                    +22 ~1
+pocket_money_repository_test.dart     +18
 ```
+
+## What iteration 3 changed, and what this stage added for it
+
+Iteration 2 exited `review=FAIL` on **one major**: the 47 px status-bar reserve
+was `ListView` child 0, so the longer-than-fold ledger scrolled the band away
+and painted white history cards under the OS clock. The iteration-3 build
+rebuilt both bodies as `Column[NestStatusBar, Expanded(ListView)]`, i.e. the
+band became the scroller's *preceding sibling* exactly as
+`P12-money.html:17-20` / `components.css:46/65` define it.
+
+That fix is **pixel-identical at rest**, so no existing assertion could see it,
+and it left two edges of the new layout unpinned. Both are now covered here.
+
+### `money_ledger_responsive_test.dart` (+5, now 29)
+
+**Group "pinned band on a notched device" (3 tests).** The whole screen's top
+now hinges on `NestStatusBar`'s `max(viewPadding.top, 47)`. Everything in the
+suite so far ran with a 0 inset, i.e. the design's own 47 — nothing had ever
+checked a device whose inset is **taller** than the design's band, which is the
+case where content would paint under a notch.
+
+- light + dark at 390×844, 59 px top inset: the band measures **59** (not 47),
+  stays at top 0, the scroller starts exactly at `band.bottom`, the title keeps
+  the design's own inset-independent relationship (`.ptitle`'s 8 px
+  `padding-top` below the band), and after a 120 px drag no `MoneyHistoryRow`
+  paints above 59.
+- 320 dp + 59 px inset at text scale 1.3: the band still pins and the whole
+  ledger (hero, row buttons, footer) still lays out with no overflow.
+
+Writing this uncovered a **test-harness** subtlety worth recording:
+`TestFlutterView.padding` and `.viewPadding` are *independent* overrides, and
+`NestStatusBar` reads `MediaQuery.viewPaddingOf` — setting only `padding`
+(what the bottom-inset probe does, correctly, for `SafeArea`) leaves the band
+at 47. The helper now sets both for a top inset. The app code was right; the
+probe was incomplete.
+
+**Group "the scroller still reaches its own end" (2 tests, light + dark).**
+The `Column`/`Expanded` rebuild is the only change to this screen's scroll
+geometry, and the finding-1 guard only covers the **top**. A missing
+`Expanded`, or padding moved to the wrong edge, would leave the last row and
+the footer caption under the tab bar. After scrolling to the end:
+
+- the footer caption's bottom is above `NestTabBar.top` (never behind it);
+- the tail space is the design's `.scroll { padding-bottom: 32px }`
+  (`NestSpacing.s8`, ±1 px);
+- both row buttons clear the tab bar too.
+
+### Already covered by the iteration-3 build, verified not duplicated
+
+I read each new test before writing anything and deliberately did **not**
+re-test them here:
+
+- **Finding 1** scrolled-state guard (`money_ledger_geometry_test.dart:98`) —
+  band pinned, scroller at 47, first row ≥ 47; plus the empty body at `:259`.
+- **Finding 2** shared `NestTextField.errorText` — announced once through the
+  labelled node and positioned above the Note field
+  (`money_ledger_view_test.dart:629-641`).
+- **Finding 3** `_PendingWrite` child attribution, gated on a fake repository so
+  the switch-before-round-trip state is reachable (`money_ledger_view_test.dart:652`).
+- **Finding 4** `summarise()` same-second tie — both input orders pinned in
+  `pocket_money_repository_test.dart`, mirrored into the shared test fallback so
+  production and fakes agree.
+- **The shared `NestSegmented` semantics change** (`0cdb53c`, one node per
+  option) — my states suite still asserts `hasAction(tap)` on both options and
+  `performAction` driving real bloc state; it was unaffected.
 
 ## Geometry vs the design (UI VERDICT RULE)
 
-Measured in a real-font widget test at 390×844 (`FontLoader`, so the bundled
-Inter/Nunito metrics apply), against `design/screens/light/P12-money.png`
-(1170×2532 ÷ 3). Every value is pinned at ±1 px, inside the ±2 px rule, and
-there is **no uniform vertical shift** any more:
+`money_ledger_geometry_test.dart` (real fonts via `FontLoader`, 390×844) pins
+all ten anchors at ±1 px — inside the ±2 px rule, with no uniform shift:
 
-| anchor | design y | app y | Δ |
-|---|---|---|---|
-| status-bar reserve | 47 | 47 | 0 |
-| title line-box top | 55 | 55 | 0 |
-| segmented track top (first control) | 105 | 105 | 0 |
-| owed card top | 173 | 173 | 0 |
-| owed card height | 211 | 211 | 0 |
-| `Payout time` top | 312 | 312 | 0 |
-| goal card top | 400 | 400 | 0 |
-| goal card height | 88 | 88 | 0 |
-| history card top | 504 | 504 | 0 |
-| history tile | 40×40, r 16 | 40×40, r 16 | 0 |
-| empty-state title top | 55 | 55 | 0 |
+| anchor | design y | app y |
+|---|---|---|
+| status-bar reserve | 47 | 47 |
+| title line-box top | 55 | 55 |
+| segmented track top (first control) | 105 | 105 |
+| owed card top / height | 173 / 211 | 173 / 211 |
+| `Payout time` top | 312 | 312 |
+| goal card top / height | 400 / 88 | 400 / 88 |
+| history card top | 504 | 504 |
 
-Iteration 1 recorded 71/121/189/419/525 and heights 214/90 — the +16 came
-from a `SizedBox(height: NestSpacing.s4)` the design does not have between
-`NestStatusBar` and the title (`components.css` gives the first child of
-`.scroll` no top margin; `.ptitle` supplies its own 8 px). Both call sites
-are now clean and the guard stays in the suite, so a future spacer cannot
-silently come back.
+Iteration 2's numbers (71/121/189/419/525) remain in the git history as the
+before-picture; the pin is what stops the spacer coming back.
 
-## Tests added this iteration (+5)
+## Re-verified from the brief (all green, no new tests needed)
 
-The iteration-2 build changed the submit/error path (review findings 6 and 7).
-Everything else was already covered, so this stage closed only the new gaps —
-no duplication of `money_ledger_view_test.dart`, `p12_bugs_test.dart` or the
-geometry guard.
-
-### `pocket_money_ledger_bloc_test.dart` (+3, now 18)
-
-New fake `_ThrowingSetupWriteRepository` (setup writes throw, load path
-healthy), plus the group `error-message mapping (review finding 7)`:
-
-1. **Load failure message is exact**: `We couldn’t load your ledger: Bad state:
-   ledger is down` — asserted as a whole string plus a code-unit check that
-   the apostrophe is U+2019 and **not** ASCII `'` (the COPY rule).
-2. **Rejected submit message is exact**: `We couldn’t save that: Exception:
-   add-money refused`, and the state does *not* drop to `failure`.
-3. **P06 setup write failures keep their own raw copy** — a regression guard
-   for the *shared* bloc: a failed `setMode` / `setPayoutDay` /
-   `setWeeklyBasePence` must still produce exactly `Exception: <cause>` with
-   no `We couldn…` prefix. Iteration 2 added the friendly sentence for P12;
-   P06's screens assert `contains(cause)`, which would have silently passed
-   with a leaked prefix. This pins byte-identity for all three writes.
-
-### `money_ledger_states_test.dart` (+2, now 17)
-
-New double `_RejectingWriteRepository` (delegates everything to the real
-Drift repository; only `addMoney` / `recordSpending` throw
-`StateError('ledger is read-only')`) — the "the database said no" half that
-the sheet's own validation can never produce:
-
-4. **A rejected `Add money` never shows a success message.** The sheet pops,
-   `Added £…` is absent, the parent-facing reason
-   `We couldn’t save that: … ledger is read-only` appears **as a live region**
-   (`SemanticsFlag.isLiveRegion` — a toast appears with no focus change, so it
-   must announce), the hero still reads `£4.20`, the note never lands in the
-   ledger, and the `gift` row count in the real database is unchanged.
-5. **A rejected `Record spending`** likewise: no `Spent £…`, the reason
-   toast, unchanged row count, ledger intact.
-
-Together with 2b's validation-rejection test, the review-6 guarantee is now
-pinned on both halves: a success message cannot precede a write that was
-rejected, whether the rejection came from the sheet or from the database.
-
-## Re-verified from the brief (no new tests needed — all green)
-
-- **bloc**: every event/state path — load, child selected (before load, same
-  child, unknown child, dropped child, empty family), both submits (accepted
-  silent write-through, rejected), stream failure, retry, terminal-error
-  close, and the three P06 setup writes.
-- **States**: loading (spinner, no chrome), failure (message, operable
-  `Try again` that really re-subscribes), repeated failure, one child with an
-  empty ledger, no children (`Seed.empty` → `/add-children`).
+- **bloc**: every event/state path — load, `ChildSelected` (before load, same
+  child, unknown child, dropped child, empty family), both submits (silent
+  write-through when accepted; message-only when rejected), stream failure,
+  retry, terminal-error close, the exact `We couldn’t…` copy (U+2019), P06's
+  own raw setup copy kept byte-identical, and the three P06 setup writes.
+- **States**: loading, failure (operable `Try again` that really re-subscribes),
+  repeated failure, one child with an empty ledger, no children
+  (`Seed.empty` → `/add-children`), a database-rejected write that toasts the
+  reason and never a success.
 - **Navigation**: `Payout time` pushes `/payout` (never `go`), back restores
   `/money`, all four tab-bar branches, the segment is not a navigation.
 - **Responsive**: light+dark × 320/390/430 × text scale 1.0/1.3, no overflow.
-- **Owner rules**: one 20 px gutter on every block; tab-bar surface runs to
-  the physical edge in light and dark, with and without a 34 px OS inset,
-  probed as a rendered pixel (must be `surface`, never `paper`).
-- **a11y**: `SemanticsAction.tap` on every control, each action driving real
-  state or a real DB write; icon-only close labelled + ≥ 44 dp; sheet fields
-  labelled; inline error is a live region; progressbar announces
-  `Savings goal progress` / `62 percent` and is not a button.
+- **Owner rules**: one 20 px gutter on every block; the tab-bar surface runs to
+  the physical edge in light and dark with and without a 34 px OS inset,
+  verified as a rendered pixel (must be `surface`, never `paper`).
+- **a11y**: `SemanticsAction.tap` on every control with each action driving real
+  state or a real DB write; icon-only close labelled and ≥ 44 dp; sheet fields
+  labelled; inline error a live region attached to Amount; progressbar
+  announces `Savings goal progress` / `62 percent` and is not a button.
 - **Copy**: em dash U+2014, middle dot U+00B7, minus U+2212, arrow U+2192, no
   ASCII hyphen anywhere; `CHILD ORDER` (Maya then Leo) in the segment, the
-  repository and the bloc; `google_fonts` absent; no `NestChip` rows on this
-  screen (segmented + buttons only), so `NestChipWrap` is N/A.
-- **Data**: every number asserted from the seeded database (`£4.20` / `£2.10`
-  / 62% / `Sat 3 Oct`); no design number hard-coded.
+  repository and the bloc; no `google_fonts`; no `NestChip` rows on this screen,
+  so `NestChipWrap` is N/A; every number asserted from the seeded database.
+- **DATA OVER MOCKS**: `£4.20` / `£2.10` / 62% / `Sat 3 Oct` come from
+  `Seed.demo`, never from the design PNG.
 
 ## Bugs found
 
 **None.**
 
-Checked and deliberately **not** reported, per the brief:
+Checked and deliberately **not** reported:
 
-- *Process items* (uncommitted work, branch vs main, merge order) — handled by
-  the loop.
-- *Deferred shared items* in `SHARED_REQUEST.md` §1–3 (tile radius in the
-  shared `NestListRow`, a shared `NestPageTitle`, the `NestSegmented` 44 px
-  floor) — P12 works around them correctly at the call site and the results
-  are pinned; they are other screens' / design-system items, not P12 defects.
-- *Review 8 / 10 / 13* — declined or hand-off items already documented in
-  `2_build.md` (review 13 is a P13 hand-off about `state.items`).
-- *Hero semantics merge* (card + `Payout time` in one node) and the
-  *`NestProgress` node merge* — operable and labelled; the same `NestCard`
-  behaviour ships on P08, and the required label/value are both announced.
-  Design-system note, not a P12 defect (unchanged from iteration 1).
+- *Process items* (uncommitted work, branch vs main, merge order) — the loop's
+  business.
+- The iteration-2 review's remaining minors, all documented with rationale in
+  `2_build.md`: finding 7 (raw exception suffix retained — ≈12 pinned
+  `contains` expectations depend on it), finding 6 (`.ptitle` is a 4th private
+  copy — `SHARED_REQUEST.md` §2, needs `core/`), findings 5/8/9 (plan-mandated
+  path, P13 hand-off, declined P06-compat trade-off).
+- `SHARED_REQUEST.md` §1–4 — cross-screen/design-system/core items, non-blocking,
+  with P12 correct at the call site.
+- The hero-card semantics merge and the `NestProgress` node merge — operable and
+  labelled, same `NestCard` behaviour that ships on P08.
+- *Not a bug, but worth the loop's attention:* the test-harness `padding` vs
+  `viewPadding` trap above. Any screen test that fakes a **top** inset must set
+  `tester.view.viewPadding` as well, or it silently tests the 0-inset case.
+  That is a shared-test-knowledge item, not a P12 defect.
 
 ## Handed to stages 4/5
 
-1. `money_ledger_geometry_test.dart` now pins ten anchors at ±1 px; a new
-   spacer above the title will fail the suite immediately, which is the
-   intended guard.
-2. Stage 5 still owes a fresh light+dark capture and `compare.py`: the
-   iteration-1 verdict was overruled on the basis of `cmp_light_1`, and no
-   screenshot has been taken since the fix. Widget-space geometry is proven;
-   the pixel band table is not.
-3. Stage 5 should verify shape rects, not only text: segmented thumb
-   173×44 at x 24, `Payout time` 310×52 at top 312, row buttons 170×48.
-4. `/payout` (P13) is still the placeholder the ledger pushes to — other
+1. Stage 5 still owes a fresh light + dark capture and `compare.py`: the
+   finding-1 pin is deliberately pixel-identical **at rest**, so `cmp_*_3` must
+   show no band movement. The scrolled state has never been pixel-compared; it
+   is now covered by widget guards at 47 and at a 59 px inset instead.
+2. Stage 5 should verify shape rects, not only text: segmented thumb 173×44 at
+   x 24, `Payout time` 310×52 at top 312, row buttons 170×48.
+3. `/payout` (P13) is still the placeholder the ledger pushes to — other
    screen's loop.
 
 ## Scope
 
-`git status --porcelain` shows only `app/test/features/pocket_money/**` (2
-files edited by me) plus this note. No `app/lib/**`, no `app/lib/core/**`, no
-`app/lib/app/**`, no other feature, no `tools/screens/**`. No `flutter clean`,
-no interactive `flutter run`, no simulator, `analysis_options` untouched.
+`git status --porcelain` shows only `app/test/features/pocket_money/
+money_ledger_responsive_test.dart` (edited by me) plus this note. No
+`app/lib/**`, no `app/lib/core/**`, no `app/lib/app/**`, no other feature, no
+`tools/screens/**`. No `flutter clean`, no interactive `flutter run`, no
+simulator, `analysis_options` untouched.
 
 VERDICT: PASS

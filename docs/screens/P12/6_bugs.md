@@ -1,113 +1,123 @@
-# P12 · Money (ledger) — Stage 6 bug hunt (iteration 2)
+# P12 · Money (ledger) — Stage 6 bug hunt (iteration 3)
 
-Re-audit of iteration 1's five findings against the iteration-2 build, plus a
-fresh adversarial pass over the changed code (amount parser, write-
-confirmation toasts, geometry, history-row layout).
+Re-audit of the iteration-2 review findings (one major + three minors) after
+their iteration-3 fixes, plus a fresh adversarial pass over the changed code
+(status-band pinning, sheet `errorText`, pending-write confirmations,
+same-second tie rule) and the shared `NestSegmented` semantics change that
+merged into main.
 
-Method: the same widget/pure-test probes as iteration 1 on the in-memory and
-file-backed Drift databases, with extra boundary matrices for the new parser
-and the new toast confirmation flow. **No simulator was used** (stage rule;
-only stage 5_ui may). No screen code was edited (stage rule).
+Method: widget/pure probes on the in-memory and file-backed Drift databases,
+including a pixel sample of the pinned status band after scrolling, a gated
+repository for the pre-emission write states, and both input orders for the
+owed-math tie. **No simulator was used** (stage rule; only stage 5_ui may).
+No screen code was edited (stage rule).
 
-Reproducers/guards: `app/test/features/pocket_money/p12_bugs_test.dart`
-(23 tests — 22 active, 1 skipped: P12-BUG-04, the known minor cross-screen
-item). `flutter test --run-skipped` proves BUG-04 is still the only
-unresolved one, and that it fails exactly at the 42 px segment width.
+Guards: `app/test/features/pocket_money/p12_bugs_test.dart` (23 tests — 22
+active, 1 skipped: P12-BUG-04). `flutter test --run-skipped` proves BUG-04 is
+still the only unresolved item (42.0 px segment width at 320 dp).
 
 Hand-off state: `dart format` clean, `flutter analyze` → No issues found,
-`flutter test` → **1900 passed / 1 skipped / 0 failed**.
+`flutter test` → **1914 passed / 1 skipped / 0 failed**.
 
 ---
 
-## Iteration-1 findings — status
+## Findings status
 
 | # | Severity | Status | Verified by |
 |---|---|---|---|
-| P12-BUG-01 | major | **FIXED** | `P12-BUG-01: an unbounded amount is clamped to int64 and overflows the history row` (now active, green) |
-| P12-BUG-02 | major | **FIXED** | `P12-BUG-02: "1,50" is silently recorded as £150.00 (100x)` (now active, green) |
-| P12-BUG-03 | minor | **FIXED** | `P12-BUG-03: "1.005" silently stores £1.00 (half-penny dropped)` (now active, green) |
-| P12-BUG-04 | minor | **OPEN** — shared `NestSegmented`, tracked in `SHARED_REQUEST.md` §3 | `P12-BUG-04: six children at 320dp collapse the segment below the 44px tap target` (still `skip: true`; fails at 42.0 px when run) |
-| P12-BUG-05 | major | **FIXED** | `P12-BUG-05: the whole stack sits 15-21px below the design` (now active, green) |
+| P12-BUG-01 | major | **FIXED** (it 2) | unbounded amount → parser cap, no overflow (active test) |
+| P12-BUG-02 | major | **FIXED** (it 2) | `1,50` rejected, never £150.00 (active test) |
+| P12-BUG-03 | minor | **FIXED** (it 2) | `1.005` rejected, integer-pence maths (active test) |
+| P12-BUG-04 | minor | **OPEN** — shared `NestSegmented`, `SHARED_REQUEST.md` §3 | skipped test still fails at 42.0 px |
+| P12-BUG-05 | major | **FIXED** (it 2) | geometry anchors ±1 px (active test) |
+| P12-BUG-06 | major | **FIXED** (it 3) | status band pinned — see below |
+| P12-BUG-07 | minor | **FIXED** (it 3) | sheet error attaches to Amount + live region |
+| P12-BUG-08 | minor | **FIXED** (it 3) | write confirmation carries its child id |
+| P12-BUG-09 | minor | **FIXED** (it 3) | `summarise()` same-second tie order-independent |
 
-### P12-BUG-01 — unbounded amount (major) — FIXED, independently verified
+### P12-BUG-06 — status-bar band scrolled away with the ledger (major) — FIXED
 
-`_parsePence` now validates `^\s*£?\s*(?:\d{1,9}(?:\.\d{1,2})?|\.\d{1,2})\s*$`
-and caps at `maxPence = 100,000,000` (£1,000,000.00); the history row's
-trailing amount is additionally bounded to `maxWidth − 64`. Probes:
+**Repro (before):** scroll `/money` down; the 47 px reserve (and the title)
+scrolled out because `NestStatusBar` was `ListView` child 0, so the white
+history cards painted under the OS clock.
+**Fix (iteration 3):** both bodies are `Column[NestStatusBar,
+Expanded(ListView)]` — the band is the scroller's preceding sibling, as the
+HTML/CSS defines and P05/P06/K03 already did.
+**Verification:** `money_ledger_geometry_test.dart`'s new scrolled-state
+guard, plus my independent probes: after a full fling to the end (light and
+dark) the band rect is `(0, 0, 390, 47)`, the scroller top is 47, and a pixel
+sample at (195, 24) equals `tokens.paper` — never the `tokens.surface` of a
+card scrolled underneath. The empty body stays pinned at 47 through a drag.
+No exception at 320 dp × 1.3.
 
-- 23-digit mash → inline error, nothing written, no `RenderFlex` exception,
-  no `92233720368547760` anywhere.
-- `1000000` and `1000000.00` → exactly `100000000p`, rendered
-  `+£1000000.00`, toast once, no overflow at 320 dp and at 320 dp × 1.3.
-- `1000000.01`, `999999999.99`, `1000000000`, `10000000000` → rejected.
+### P12-BUG-07 — sheet error detached from the field it describes (minor) — FIXED
 
-### P12-BUG-02 — separator stripping (major) — FIXED, independently verified
+**Repro (before):** the inline rejection rendered as a hand-rolled block
+under the *Note* field instead of the Amount field that was rejected.
+**Fix:** `NestTextField.errorText` (shared invalid state: 2 px danger border
++ gutter-aligned error row below Amount, its own live region, inner text
+excluded).
+**Verification:** error top 532 < Note label top 566 at 390 dp; exactly one
+`Enter an amount like £1.00` node with `isLiveRegion` true; clears on change
+and the write then succeeds; 320 dp × 1.3 sheet keeps the CTA on screen
+(Rect 20, 658 → 300, 710) with no exception.
 
-The parser no longer strips: `1,50`, `1,000`, `5 5`, `1\u00a0000`, `+5`,
-`-5`, `5e3` are all rejected with `Enter an amount like £1.00` and never
-reach the bloc (comma-decimal keyboards can no longer record 10–100× the
-typed amount). Accepted double-checked: `£5`, `.5`, `0.01`, `1.15`, `999.99`,
-`  £ 5.50 `.
+### P12-BUG-08 — write confirmation lost/misattributed across a child switch (minor) — FIXED
 
-### P12-BUG-03 — half-penny float rounding (minor) — FIXED, independently verified
+**Fix:** the single pending tuple became `List<_PendingWrite>` carrying
+`childId`; the listener retires entries belonging to a child the parent left
+and fires on selection changes.
+**Verification:** the view-test gated scenario (switch to Leo before the
+round-trip → no stale Maya toast, later Leo write names Leo), plus my probe
+with **two writes held before the first emission**: both rows land and both
+confirmations are announced in turn (`Added £1.00 for Maya` 0–4 s, then
+`Added £2.00 for Maya` from 4.25 s — the SnackBar queue loses neither).
 
-Integer-only maths (`whole * 100 + int.parse(fraction.padRight(2, '0'))`):
-`.05` → 5p, `0005.6` → 560p; `1.005` and `1.234` are rejected (no float
-multiply anywhere).
+### P12-BUG-09 — `summarise()` same-second tie (minor) — FIXED
 
-### P12-BUG-04 — six children at 320 dp (minor) — OPEN (shared)
+**Fix:** the latest payout instant is located first, then `weekly_base` +
+`quest_bonus` rows at/after it are summed (order-independent); the test
+fallback mirrors the rule.
+**Verification:** a payout and a quest bonus inserted at the same instant for
+Leo give `base 0 / quests 25 / total 25` in both list orders, and the live
+`watchLedgerData` stream reports the same 25.
 
-Still 42.0 × 44.0 px per option at 320 dp with six children; remains
-`skip: true` by design because P12 must not fork the shared control. Fix
-requested in `SHARED_REQUEST.md` §3 (44 px floor / horizontal scroll in
-`core/design_system/components/nest_segmented.dart`). No P12-local workaround
-is appropriate; not a blocker.
+## Shared change verified for P12
 
-### P12-BUG-05 — geometry stack (major) — FIXED, independently verified
+main's `shared/segmented_semantics` (`excludeSemantics: true` + `onTap` on
+each `NestSegmented` option) merged into the picker P12 renders:
 
-The extra 16 px spacer is gone from both the loaded and empty bodies; the
-real-font probe now measures title top **55** (centre 72), segmented **105**,
-owed card **173**, goal card **400**, history card **504** — all within ±1 px
-of `ORCHESTRATOR_NOTES.md`, matching stage 5's iteration-2 table (Δ 0/+1 px)
-and `money_ledger_geometry_test.dart` (10/10 green).
+- exactly one semantics node per option (`find.semantics.byLabel('Leo')`
+  matches once);
+- it keeps `SemanticsAction.tap`, and `performAction(tap)` selects Leo and
+  re-renders the hero (`Leo is owed`), announcing `selected` state.
 
----
+## Fresh adversarial probes (iteration 3) — all hold
 
-## Fresh adversarial probes (iteration 2) — all hold
-
-- **Parser boundary matrix**: 8 accepted forms exact to the penny; 16
-  malformed/rejected forms (`1000000.01`, `1,000`, `1,50`, `5.`, `+5`,
-  `-5`, `5e3`, `£`, `1.234`, `.`, `..5`, `5 5`, NBSP, 10-digit wholes)
-  all show the inline error and write nothing. `5.` is now rejected rather
-  than silently read as £5.00 — that is the intended strict-validation
-  behaviour, not a regression.
-- **Rejected write** (repo throws on `addMoney`): only the error toast
-  (`We couldn’t save that: …`, U+2019) appears; no `Added £5.00 for Maya`
-  toast.
-- **Stale confirmation**: after a rejected write, an unrelated ledger-stream
-  emission does not pop the pending success toast (`_pendingWrite` is
-  cleared).
-- **Payout double-tap**: two same-frame taps on `Payout time` render one
-  `/payout` page, not two.
-- **Rapid writes**: three sequential add-money submissions each land exactly
-  once, one toast each.
-- **Regression re-runs**: every iteration-1 "attack that holds" stays green —
-  double-tap add/save single write, six children in creation order at 390,
-  long UK name at 320 × 1.3, empty ledger child, single child, £999.99,
-  rapid child switching, back from `/payout`, kid-mode gate, `Seed.fresh`
-  → `/welcome`, empty-state semantics tap, dark-mode contrast ≥ 4.5:1,
-  Europe/London + BST labels, `Asia/Dubai` zone switch, file-backed restart
-  persistence of gift/spend rows.
-- **No `ledgerDataFallback` (or other test helper) in `app/lib/`** — the
-  iteration-2 move stayed test-side; `grep` is clean.
+- Status band pinned after scroll, light + dark, layout + pixel (above).
+- Empty body band pinned through a drag.
+- Sheet error attach, live region, clear-and-write, 320 × 1.3 layout.
+- Two held writes before the first emission: both rows land, both
+  confirmations queue in order.
+- Same-second payout/bonus tie in both orders and through the stream.
+- Segmented semantics after the shared change: one node, tap works.
+- Regression re-runs: parser boundary matrix, `£1,000,000` cap, geometry
+  anchors, double-tap single writes, deep links, restart persistence, BST and
+  Dubai zone labels, dark contrast, 320 × 1.3, empty/single-child, back from
+  `/payout` — all still green in the feature suite (321 pass / 1 skip).
 
 ## No new bugs found
 
-No new blocker, major or minor finding survived reproduction this iteration.
-Deferred review-level items (`next_payout.dart` placement, the
-`MoneyLedgerData.setup` coupling, the P13 `state.items` hand-off) are
-architecture notes explicitly accepted by the loop, not user-facing bugs, and
-are not re-reported here. P12-BUG-04 above is the only open finding, at
-minor severity.
+No blocker or major finding this iteration. The only open finding is
+P12-BUG-04 at minor severity (shared control, already filed). The remaining
+carried review items (`.ptitle` shared component, `next_payout.dart`
+placement, retained raw error suffix, P13 `state.items` hand-off, `setup`
+coupling) are documented architecture/hand-off decisions, not user-facing
+bugs, and are not re-reported.
+
+**Environment note (not a finding):** two full-suite runs failed on
+`Failed to load dynamic library ... build/native_assets/macos/libsqlite3.dylib`
+while a concurrent stage was rebuilding; the immediate re-runs passed
+(321/1 feature, 1914/1 full). Toolchain race, not P12.
 
 VERDICT: PASS
