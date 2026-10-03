@@ -1,91 +1,68 @@
-# P07 Paywall — Stage 2b UI chunk (iteration 3)
+# P07 Paywall — Stage 2b UI chunk (iteration 4)
 
 Scope: UI layer only — `app/lib/features/paywall/presentation/views/**`,
 `presentation/widgets/**`, and view/widget tests in
-`app/test/features/paywall/`. No edits to `domain/`, `data/`, bloc,
-DI/routes (the parallel 2a chunk landed its `readSubscription()` +
-BUG-12 active-guard in HEAD with no contract changes to the view).
+`app/test/features/paywall/`. The 2a report records no contract change
+this iteration; view code still consumes the iteration-3 bloc/seams.
 
-## FIXES_2 items — UI-side resolution
+## FIXES_3 items landed
 
-1. **Legal row stacked vertically (5_ui deviation 1/2/3)** — root cause
-   was two expanding boxes in `_LegalLink`: the inner `Center` behind the
-   `InkWell` put each item at run-width, and a bare soft-wrapped `Text`
-   for the `·` separator made it a full-width run item as well. Fix:
-   `_LegalLink` now is `ConstrainedBox(44) > Material > InkWell > Padding
-   > ExcludeSemantics(Text(label, maxLines: 1, softWrap: false))`; the
-   separators are `ExcludeSemantics(Text('·', maxLines: 1,
-   softWrap: false))`. Verified on a real device via `tools/screens/
-   shot.sh` + read-back of the shot (`docs/screens/P07/ui/
-   app_light_3.png`): all three links + both separators fit one centred
-   run, the bottom panel is compact (CTA button at the design's ~646), and
-   bands 4–6 of `compare.py` dropped from ~14–29% to ~2.5–10%. A
-   regression test pins "no `Center` anywhere in the link subtree".
-2. **P07-BUG-10 (expired-trial paywall close trap)** — the router makes
-   every destination bounce, so a working X is impossible; the screen now
-   omits the close tile and its 44px balance spacer while
-   `GetIt.instance<AppSession>().trialExpired` (`ListenableBuilder` on
-   `AppSession`, so the bar rebuilds on session changes). Both proofs
-   (mine and stage 6's) were updated to this contract and un-skipped. The
-   trial CTA + restore remain as the gate's exits. Product call on a
-   permanent redirect/exemption belongs to the orchestrator.
-3. **P07-BUG-11 (announced separators)** — both `·` separators are
-   `ExcludeSemantics`; the skipped proof is un-skipped and green.
-4. **P07-BUG-12 (active downgrade)** — fixed on the logic chunk
-   (`PaywallBloc._onTrialStarted` emits `success(request: restore)`
-   without `startTrial()` when already `active`); the view's restore
-   branch then no-ops the active write + completes onboarding → `/today`.
-   Proof un-skipped and green; the view needed no change for this one
-   (it already takes the bloc's `success(request: restore)` down the
-   restore branch).
-
-## Accepted, documented as-is (stage-5 deviation 4)
-
-Title wraps orphan-style (`...14` / `days`) — the HTML wants
-`text-wrap: balance`, which Flutter's text engine has no equivalent for,
-and a hard `\n` would break the exact-copy `find.text` pins. No layout
-shift (same two-line block height); accepted.
-
-Also note: benefit 4 wraps to two lines on the device because the bundled
-Inter metrics render that line 2–3 em-spaces wider than the
-HTML-mock's — accepted font-metric drift, not fixable from the UI layer (the copy string is pinned verbatim).
+1. **P07-BUG-13 (legal-link labels top-aligned)** — root cause: the
+   iteration-3 `softWrap:false` link Text is given its parent chain's
+   constraints; the `ConstrainedBox` min-height forces the
+   `RenderParagraph` to 44px tall and a paragraph paints its line at the
+   **top** of its box, 13px above the centred `·` separators. Fix in
+   `_LegalLink`: an inner `Padding` with
+   `vertical: (NestDevice.tapParent - 18) / 2` (13) lifts the single 13/18
+   line to the geometric centre of its 44px target. The maths tracks the
+   1.3 × text-scale case too: centre-of-text is always half the box. The
+   skipped proof (baseline equality between `Terms` and `·`) is un-skipped
+   and green; the coordinator's baseline sample now reads ≈ 25.25 from the
+   box top for both glyph families.
+2. **5_ui iteration-3 deviation 2 (`·` separators dropped)** — resolved as
+   a consequence: with both glyph families centred in the same 44px band,
+   they share one baseline. The device shot confirms it (the dots no longer
+   hang below the link row).
+3. **ORCHESTRATOR_NOTES: iteration-4 update** — item 1 (benefit-4 wrap):
+   not a code change on my side; budget merged fd92d95 set
+   `NestType.letterSpacing = 0` which restores HTML-matched advance widths.
+   Verified: the fresh pair of light/dark shots now render
+   `Co-parent sharing, so James sees the same` on one line, and the plan
+   card's tag line `One price, the whole family` is fully visible above the
+   CTA panel — the deviation is gone.
+   Item 2 (same 44px centred box for separators): covered by the
+   BUG-13 centring — the powered box stays 44px (Wrap runs height) and the
+   baseline proof holds.
+   Item 3 (title orphan “days”): accepted, no hard break (copy pin).
 
 ## Files changed
 
 - `app/lib/features/paywall/presentation/views/paywall_view.dart` —
-  `_LegalLink` chain without `Center`, `maxLines: 1`/`softWrap: false` on
-  link text; dot separators in `ExcludeSemantics(...softWrap:false)`; nav
-  now `ListenableBuilder` dropping `_close` tile + spacer while
-  `session.trialExpired` (BUG-10).
-- `app/test/features/paywall/paywall_view_test.dart` — new
-  "legal row" geometry test (no expanding `Center` in link subtree +
-  plan card still in the tree); stage-3 `[P07-BUG-10]` proof rewritten to
-  the fixed contract (no dead close control on the expired gate; CTA +
-  restore remain) and un-skipped.
-- `app/test/features/paywall/p07_bugs_test.dart` — `[P07-BUG-10]` proof
-  rewritten to the same contract, `[P07-BUG-11]` and `[P07-BUG-12]`
-  proofs un-skipped. The edited proofs only assert the screen/bloc behaviour the fix promises; BUG-8/9 skips remain (shared code).
+  `_LegalLink` gains the vertical-centring inset on its inner `Padding`
+  (the only view edit this iteration).
+- `app/test/features/paywall/p07_bugs_test.dart` —
+  `[P07-BUG-13] the legal links share the separators’ baseline`
+  un-skipped (green).
 
 ## Verification (this chunk)
 
 - `flutter analyze lib/features/paywall` → `No issues found!`
-- `flutter test test/features/paywall/paywall_view_test.dart` → +55 pass
-- `flutter test test/features/paywall/p07_bugs_test.dart` → +17 ~2
-- `dart format` clean.
-- Real-device shot (`app_light_3.png`, read back directly): legal row on
-  one line, compact panel compact, CTA at ~646, no page-coloured strip
-  below the bar (Bottom-edge owner rule re-confirmed visually), and
-  `compare.py` mean diff dropped from 11.43% to 5.48% with the CTA/bands
-  4–6 no longer flagged as major mismatches.
+- `flutter test test/features/paywall/` → `+107 ~2` all passed
+  (the 2 skips are the shared BUG-8/9 proofs; `SHARED_REQUEST.md`).
+- `dart format` clean (15 files, 0 changed).
+- Real-device light + dark shots
+  (`docs/screens/P07/ui/app_light_4.png`, `app_dark_4.png`): legal row on
+  one line with `·` separators on the link baseline, benefit 4 on one
+  line, plan card & tag fully above the CTA panel, bottom edge still
+  runs to the physical edge in both themes.
+- `compare.py` vs the design PNGs: light **2.56%**, dark **2.48%** mean
+  diff (iteration 3: 5.48% / 5.28%). Remaining drift is the hero Pip
+  artwork (intentional `PipAvatar` override) plus font-advance rounding.
 
 ## LEFT FOR NEXT ITERATION
 
-- Dark-device shot + compare for iteration 3 is stage 5's pass.
-- Real-device wrap of benefit 4 / title orphan documented above; not
-  fixable from the UI layer (font metrics / text-engine balance) or by
-  splitting the copy string (contract pins the exact string) — flag for
-  the orchestrator to either accept or relax the comparison band.
-- `[P07-BUG-8]` / `[P07-BUG-9]` remain open in shared code
-  (`SHARED_REQUEST.md`), can't land here.
+- None in the UI layer. The remaining skips are the shared-code findings
+  (BUG-8 expired-trial evaluation, BUG-9 kid-mode guard ordering) in
+  `SHARED_REQUEST.md` — fixable only by the shared-code owners.
 
 VERDICT: PASS

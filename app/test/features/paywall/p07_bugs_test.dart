@@ -564,39 +564,37 @@ void main() {
   );
 
   group('P07-BUG-13 — legal links are top-aligned, not centred (major)', () {
-    testWidgets(
-      '[P07-BUG-13] the legal links share the separators’ baseline',
-      skip: true,
-      (tester) async {
-        await _pumpPaywallWithSeed(tester, Seed.fresh);
+    testWidgets('[P07-BUG-13] the legal links share the separators’ baseline', (
+      tester,
+    ) async {
+      await _pumpPaywallWithSeed(tester, Seed.fresh);
 
-        // The design centres the link labels inside their 44px targets
-        // (`.legal-row .link { align-items: center; min-height: 44px }`),
-        // so labels and separators sit on one baseline. Iteration 3
-        // removed `_LegalLink`'s expanding `Center` (it stacked the row)
-        // but did not replace the vertical centring: the label paragraph
-        // is forced to the 44px min height and paints at its top, 13px
-        // above the centred `·`.
-        final link = tester.renderObject<RenderParagraph>(find.text('Terms'));
-        final dot = tester.renderObject<RenderParagraph>(find.text('·').first);
-        final linkBaseline =
-            tester.getRect(find.text('Terms')).top +
-            link.computeDistanceToActualBaseline(TextBaseline.alphabetic);
-        final dotBaseline =
-            tester.getRect(find.text('·').first).top +
-            dot.computeDistanceToActualBaseline(TextBaseline.alphabetic);
+      // The design centres the link labels inside their 44px targets
+      // (`.legal-row .link { align-items: center; min-height: 44px }`),
+      // so labels and separators sit on one baseline. Iteration 3
+      // removed `_LegalLink`'s expanding `Center` (it stacked the row)
+      // but did not replace the vertical centring: the label paragraph
+      // is forced to the 44px min height and paints at its top, 13px
+      // above the centred `·`.
+      final link = tester.renderObject<RenderParagraph>(find.text('Terms'));
+      final dot = tester.renderObject<RenderParagraph>(find.text('·').first);
+      final linkBaseline =
+          tester.getRect(find.text('Terms')).top +
+          link.computeDistanceToActualBaseline(TextBaseline.alphabetic);
+      final dotBaseline =
+          tester.getRect(find.text('·').first).top +
+          dot.computeDistanceToActualBaseline(TextBaseline.alphabetic);
 
-        expect(
-          linkBaseline,
-          moreOrLessEquals(dotBaseline, epsilon: 1),
-          reason:
-              'the label must be vertically centred in its 44px target, '
-              'not top-aligned (design: 767–780, app: 754–766)',
-        );
+      expect(
+        linkBaseline,
+        moreOrLessEquals(dotBaseline, epsilon: 1),
+        reason:
+            'the label must be vertically centred in its 44px target, '
+            'not top-aligned (design: 767–780, app: 754–766)',
+      );
 
-        await disposeApp(tester);
-      },
-    );
+      await disposeApp(tester);
+    });
   });
 
   group('verified clean — baselines that must stay green', () {

@@ -816,7 +816,15 @@ class _LegalLink extends StatelessWidget {
           child: InkWell(
             onTap: tap,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6),
+              // Centre the label in its 44px target: the ConstrainedBox's
+              // min-height makes the paragraph box 44 tall and a paragraph
+              // paints its line at the top — the vertical inset below lifts
+              // the line onto the centre so links and `·` separators share
+              // one baseline (P07-BUG-13, 5-Ui deviation 2).
+              padding: const EdgeInsets.symmetric(
+                horizontal: 6,
+                vertical: (NestDevice.tapParent - 18) / 2,
+              ),
               child: ExcludeSemantics(
                 child: Text(
                   label,
