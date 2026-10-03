@@ -362,5 +362,72 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('No rewards yet'), findsOneWidget);
     });
+
+    // [P14-B06] A stream that fails *after* it has already delivered rows used
+    // to leave the stale list on screen with no error surface and no retry:
+    // `emit.forEach` ends its subscription when the stream errors, so the list
+    // could never update again. Every `failure` now renders the surface, whose
+    // `Try again` re-subscribes.
+    testWidgets('[P14-B06] a stream error after rows shows Try again', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      when(_failRepo.watchItems).thenAnswer(
+        // One list, then the stream dies and closes — the shape a Drift
+        // `QueryStream` takes when its underlying query fails.
+        (_) async* {
+          yield const <Reward>[
+            Reward(
+              id: 'r-screen',
+              title: '30 min extra screen time',
+              detail: '50 coins',
+              icon: 'tv',
+              coinPrice: 50,
+              needsOk: true,
+            ),
+          ];
+          // The row is on screen first; the stream dies on a later tick.
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+          throw StateError('stream died');
+        },
+      );
+      when(_failRepo.watchRequests).thenAnswer((_) => const Stream.empty());
+      when(_failRepo.getItems).thenAnswer((_) async => <Reward>[]);
+      when(
+        () => _failRepo.setNeedsOk(
+          id: any(named: 'id'),
+          needsOk: any(named: 'needsOk'),
+        ),
+      ).thenAnswer((_) async {});
+      when(() => _failRepo.deleteReward(any())).thenAnswer((_) async {});
+      when(() => _failRepo.createReward(any())).thenAnswer((_) async {});
+      when(() => _failRepo.updateReward(any())).thenAnswer((_) async {});
+
+      final bloc = RewardsBloc(repository: _failRepo)
+        ..add(const RewardsLoadRequested());
+      await _pumpView(tester, bloc);
+      // Bounded pumps, not `pumpAndSettle` (see the failure test above).
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 5));
+      expect(find.text('30 min extra screen time'), findsOneWidget);
+
+      // Past the 20 ms the stream dies on.
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(
+        find.byKey(const ValueKey('p14_try_again')),
+        findsOneWidget,
+        reason: 'a dead subscription must not leave a frozen list on screen',
+      );
+      expect(find.byType(RewardCard), findsNothing);
+      expect(find.text('Something went wrong'), findsOneWidget);
+
+      // The recovery affordance really re-subscribes.
+      when(_failRepo.watchItems)
+          .thenAnswer((_) => Stream<List<Reward>>.value(const <Reward>[]));
+      await tester.tap(find.byKey(const ValueKey('p14_try_again')));
+      await tester.pumpAndSettle();
+      expect(find.text('No rewards yet'), findsOneWidget);
+    });
   });
 }

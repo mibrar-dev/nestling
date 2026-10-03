@@ -367,8 +367,27 @@ void main() {
     '[P14-B06] a stream error after data still offers the failure surface',
     (tester) async {
       final repository = _MockRewardsRepository();
-      final controller = StreamController<List<Reward>>();
-      when(repository.watchItems).thenAnswer((_) => controller.stream);
+      // A self-terminating stream (one list, then the error, then done) — the
+      // shape a Drift `QueryStream` takes when its query fails. A hand-driven
+      // `StreamController` left open across the error leaves the cancelled
+      // subscription pending in the test's fake-async zone and the test never
+      // returns; that is a harness artefact, not screen behaviour.
+      when(repository.watchItems).thenAnswer((_) async* {
+        yield const <Reward>[
+          Reward(
+            id: 'r-screen',
+            title: '30 min extra screen time',
+            detail: '50 coins',
+            icon: 'tv',
+            coinPrice: 50,
+            needsOk: true,
+          ),
+        ];
+        // Longer than the helper's settling pump, so the row is really on
+        // screen before the stream dies.
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        throw StateError('stream died');
+      });
       when(repository.watchRequests).thenAnswer((_) => const Stream.empty());
       when(repository.getItems).thenAnswer((_) async => <Reward>[]);
       when(
@@ -385,23 +404,12 @@ void main() {
         ..add(const RewardsLoadRequested());
       await _pumpViewWithFailingWrites(tester, bloc);
 
-      controller.add(const <Reward>[
-        Reward(
-          id: 'r-screen',
-          title: '30 min extra screen time',
-          detail: '50 coins',
-          icon: 'tv',
-          coinPrice: 50,
-          needsOk: true,
-        ),
-      ]);
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
+      // Before the 200 ms the stream dies on: the row is on screen.
+      await tester.pump(const Duration(milliseconds: 5));
       expect(find.text('30 min extra screen time'), findsOneWidget);
 
-      controller.addError(StateError('stream died'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 250));
 
       expect(
         find.byKey(const ValueKey('p14_try_again')),
@@ -411,14 +419,12 @@ void main() {
             'again, not a silently stale list',
       );
 
-      await controller.close();
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump();
+      // No drain needed: the repository is a mock and the stream has already
+      // closed, so no Drift `QueryStream` is open (stage 4, finding 7).
     },
-    // P14-B06: minor — `failure` with items takes the `_RewardsLoaded` branch;
-    // since writes no longer emit `failure`, that shortcut only ever matches a
-    // stream error after data, which it then swallows. Open.
-    skip: true,
+    // P14-B06 closed in the iteration-3 build: every `failure` renders the
+    // error surface with `Try again` (writes no longer emit `failure`, so
+    // this branch can only be the stream itself).
   );
 
   testWidgets(
@@ -483,9 +489,9 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       await tester.pump();
     },
-    // P14-B07: minor — the caption is a plain Text; VoiceOver/TalkBack users
-    // hear nothing when a save fails. Open.
-    skip: true,
+    // P14-B07 closed in the iteration-3 build: the caption is a
+    // `Semantics(liveRegion: true, label: …, child: ExcludeSemantics(…))`,
+    // the `NestTextField` error-row pattern.
   );
 
   testWidgets(
@@ -522,10 +528,9 @@ void main() {
 
       await disposeApp(tester);
     },
-    // P14-B08: minor — `chrome` counts `fontSize * height` for the title but
-    // the title row is 44 tall (close button), so `available` is 20 px too
-    // generous; RenderFlex overflows on common small/medium devices. Open.
-    skip: true,
+    // P14-B08 closed in the iteration-3 build: the form no longer re-derives
+    // the sheet's chrome at all — a loose `Flexible` is handed exactly what
+    // the grabber and title row left over.
   );
 
   // -------------------------------------------------------------------------

@@ -23,7 +23,7 @@ class RewardsBloc extends Bloc<RewardsEvent, RewardsState> {
   ) async {
     emit(state.copyWith(status: RewardsStatus.loading));
     await emit.forEach<List<Reward>>(
-      _repository.watchItems(),
+      _repository.watchItems().transform(_closeOnError),
       onData: (items) =>
           state.copyWith(status: RewardsStatus.loaded, items: items),
       onError: (error, _) => state.copyWith(
@@ -107,3 +107,18 @@ void _completeError(Completer<void>? result, Object error) {
   if (result == null || result.isCompleted) return;
   result.completeError(error);
 }
+
+/// Errors are terminal: forward the first error, then close — otherwise the
+/// failed load's subscription stays alive on the dead stream and every
+/// `Try again` stacks another subscription on top of it (house pattern:
+/// TodayBloc, PocketMoneyBloc; the logic half of P14-B06). Closing lets
+/// `emit.forEach` complete and cancel, so the retry resubscribes from
+/// scratch with exactly one live subscription.
+final _closeOnError =
+    StreamTransformer<List<Reward>, List<Reward>>.fromHandlers(
+      handleError: (error, stackTrace, sink) {
+        sink
+          ..addError(error, stackTrace)
+          ..close();
+      },
+    );

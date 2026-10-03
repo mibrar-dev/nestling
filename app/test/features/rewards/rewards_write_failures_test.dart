@@ -202,9 +202,16 @@ void main() {
         // branch is fixed. Do not "fix" it by expecting the stale list: that is
         // the defect, not the contract.
         final repository = _StubRewardsRepository();
-        final controller = StreamController<List<Reward>>();
-        addTearDown(controller.close);
-        when(repository.watchItems).thenAnswer((_) => controller.stream);
+        // A self-terminating stream (rows, then the error, then done) — the
+        // shape a Drift `QueryStream` takes when its query fails. A
+        // hand-driven controller left open across the error keeps the
+        // cancelled subscription pending in the test's fake-async zone and the
+        // test never returns; a harness artefact, not screen behaviour.
+        when(repository.watchItems).thenAnswer((_) async* {
+          yield _oneReward;
+          await Future<void>.delayed(const Duration(milliseconds: 200));
+          throw StateError('stream died');
+        });
         when(repository.watchRequests).thenAnswer((_) => const Stream.empty());
         when(repository.getItems).thenAnswer((_) async => <Reward>[]);
         when(
@@ -220,14 +227,12 @@ void main() {
         final bloc = _blocFor(repository);
         await _pumpView(tester, bloc);
 
-        controller.add(_oneReward);
         await tester.pump();
-        await tester.pump(const Duration(milliseconds: 50));
+        // Before the 200 ms the stream dies on: the card is on screen.
+        await tester.pump(const Duration(milliseconds: 5));
         expect(find.byType(RewardCard), findsOneWidget);
 
-        controller.addError(StateError('stream died'));
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 50));
+        await tester.pump(const Duration(milliseconds: 250));
 
         expect(
           find.byKey(const ValueKey('p14_try_again')),
@@ -238,9 +243,9 @@ void main() {
 
         await _dispose(tester);
       },
-      // P14-B06 open. Skip-marked so the suite stays green; `--run-skipped`
-      // proves it still fails.
-      skip: true,
+      // P14-B06 closed in the iteration-3 build: every `failure` renders the
+      // error surface with `Try again` (writes no longer emit `failure`, so
+      // this branch can only be the stream itself).
     );
   });
 

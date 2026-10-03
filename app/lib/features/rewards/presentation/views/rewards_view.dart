@@ -51,12 +51,18 @@ class RewardsView extends StatelessWidget {
                   case RewardsStatus.loading:
                     return const _RewardsLoading();
                   case RewardsStatus.failure:
-                    // A failed *action* write keeps the last loaded list in
-                    // state; only a stream failure has nothing to show, and
-                    // only then does `Try again` belong on screen.
-                    if (state.items.isNotEmpty) {
-                      return _RewardsLoaded(items: state.items);
-                    }
+                    // A failed *action* write never reaches this branch: the
+                    // 2a contract completes the event's `result` channel
+                    // instead of emitting `failure`, so the loaded list behind
+                    // a failed write stays exactly as it was. The only thing
+                    // that can get here is the `watchItems` stream itself
+                    // erroring — and `emit.forEach` ends its subscription
+                    // when it does, so the items still in state are a list
+                    // that will never update again. Rendering them (the
+                    // iteration-2 `items.isNotEmpty` shortcut) left the parent
+                    // with a frozen screen and no way back; P14-B06: every
+                    // failure shows the surface with `Try again`, which
+                    // re-subscribes.
                     return const _RewardsCenteredScroll(
                       child: _RewardsFailure(),
                     );
@@ -205,8 +211,8 @@ class _RewardsEmpty extends StatelessWidget {
   }
 }
 
-/// Full-screen failure surface — a stream failure only (see the `failure`
-/// branch above).
+/// Full-screen failure surface — always the stream, since writes no longer
+/// emit `failure` (see the branch above).
 ///
 /// The copy is static (`RewardCopy.loadError`), never the raw exception:
 /// `state.errorMessage` stays on the state as the technical detail, matching
@@ -252,11 +258,11 @@ class _RewardsFailure extends StatelessWidget {
 /// `MediaQuery.viewInsets`. On iOS the keyboard is reported as an inset only —
 /// it floats over the Flutter view — so with the name field focused the
 /// sheet's own `Save`, `Cancel` and `Delete` sat behind the keyboard with no
-/// scroll escape (P14-B01). Allowing the sheet to be as tall as the screen
-/// *plus* the keyboard band turns the inset into trailing space
-/// ([RewardEditorSheet] pads the form by it), which lifts the form above the
-/// keyboard; with no keyboard the cap is unchanged, so the resting layout is
-/// byte-identical to the design.
+/// scroll escape (P14-B01). `RewardEditorSheet` pads its form by the inset,
+/// which lifts the form above the keyboard, and takes only the space the
+/// sheet's own chrome left over, so the modal's own cap is never exceeded.
+/// With no keyboard the sheet shrink-wraps to exactly the height it had
+/// before, so the resting layout is identical to the design.
 ///
 /// The fix belongs in the shared `showNestBottomSheet` for every screen —
 /// filed in `docs/screens/P14/SHARED_REQUEST.md`; this is the feature-local
@@ -275,11 +281,11 @@ Future<void> showRewardEditorSheet(
     barrierColor: tokens.scrim,
     // Deliberately no `constraints` cap (unlike `showNestBottomSheet`'s
     // `maxHeight: size.height * 0.92`, which is read once when the sheet
-    // opens and so cannot know about a keyboard that appears later):
-    // unbounded is what lets the sheet grow by the keyboard band and ride its
-    // top off-screen instead of leaving Save/Cancel/Delete behind the
-    // keyboard. `RewardEditorSheet` applies the resting 92 % cap itself, so
-    // the sheet without a keyboard is exactly the shared helper's size.
+    // opens and so cannot know about a keyboard that appears later): the full
+    // screen is the budget the sheet's Column resolves for itself, and
+    // `RewardEditorSheet` takes what the chrome left over — so the resting
+    // sheet is exactly the shared helper's size, and a keyboard no longer
+    // leaves Save/Cancel/Delete behind it.
     builder: (sheetContext) => NestBottomSheet(
       title: title,
       onClose: () => Navigator.of(sheetContext).pop(),

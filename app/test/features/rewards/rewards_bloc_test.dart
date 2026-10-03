@@ -112,7 +112,66 @@ class _FailingRewardsRepository implements RewardsRepository {
   }
 }
 
+/// Serves rows and then kills the first `watchItems` subscription — the
+/// P14-B06 shape: a stream that delivered data and *then* died. Later
+/// subscriptions recover, so the retry path is reachable.
+class _DieAfterDataRepository implements RewardsRepository {
+  int watches = 0;
+
+  static const _rows = <Reward>[
+    Reward(
+      id: 'r-screen',
+      title: '30 min extra screen time',
+      detail: '50 coins',
+      icon: 'tv',
+      coinPrice: 50,
+      needsOk: true,
+    ),
+  ];
+
+  @override
+  Future<List<Reward>> getItems() => watchItems().first;
+
+  @override
+  Stream<List<Reward>> watchItems() {
+    watches++;
+    if (watches == 1) {
+      return _dataThenDeath();
+    }
+    return Stream<List<Reward>>.value(_rows);
+  }
+
+  static Stream<List<Reward>> _dataThenDeath() async* {
+    yield _rows;
+    throw Exception('stream died');
+  }
+
+  @override
+  Stream<List<RewardRedemption>> watchRequests() =>
+      Stream<List<RewardRedemption>>.value(const <RewardRedemption>[]);
+
+  @override
+  Future<void> createReward(Reward reward) async {}
+
+  @override
+  Future<void> updateReward(Reward reward) async {}
+
+  @override
+  Future<void> deleteReward(String id) async {}
+
+  @override
+  Future<void> setNeedsOk({required String id, required bool needsOk}) async {}
+
+  @override
+  Future<void> approveRedemption(int redemptionId) async {}
+
+  @override
+  Future<void> denyRedemption(int redemptionId) async {}
+}
+
 void main() {
+  _DieAfterDataRepository? dieAfterData;
+
   group('RewardsState', () {
     test('starts initial with no items and no error', () {
       const state = RewardsState();
@@ -619,6 +678,57 @@ void main() {
             .having((state) => state.status, 'status', RewardsStatus.loaded)
             .having((state) => state.items, 'items', isEmpty),
       ],
+    );
+    blocTest<RewardsBloc, RewardsState>(
+      'a stream error after data keeps the rows and Try again recovers',
+      build: () {
+        dieAfterData = _DieAfterDataRepository();
+        return RewardsBloc(repository: dieAfterData!);
+      },
+      act: (bloc) async {
+        bloc.add(const RewardsLoadRequested());
+        await bloc.stream.firstWhere(
+          (state) => state.status == RewardsStatus.failure,
+        );
+        bloc.add(const RewardsLoadRequested());
+      },
+      expect: () => <Matcher>[
+        isA<RewardsState>().having(
+          (state) => state.status,
+          'status',
+          RewardsStatus.loading,
+        ),
+        isA<RewardsState>()
+            .having((state) => state.status, 'status', RewardsStatus.loaded)
+            .having((state) => state.items.length, 'length', 1),
+        // P14-B06 logic half: the error surfaces (rows retained in state for
+        // the surface to report on) instead of leaving a silently dead list.
+        isA<RewardsState>()
+            .having((state) => state.status, 'status', RewardsStatus.failure)
+            .having((state) => state.items.length, 'length', 1)
+            .having(
+              (state) => state.errorMessage,
+              'errorMessage',
+              contains('stream died'),
+            ),
+        // Retry resubscribes from scratch (the dead subscription was closed,
+        // not stacked) and recovers the list.
+        isA<RewardsState>().having(
+          (state) => state.status,
+          'status',
+          RewardsStatus.loading,
+        ),
+        isA<RewardsState>()
+            .having((state) => state.status, 'status', RewardsStatus.loaded)
+            .having((state) => state.items.length, 'length', 1),
+      ],
+      verify: (_) {
+        expect(
+          dieAfterData!.watches,
+          2,
+          reason: 'exactly one recovery subscription, no stacked leak',
+        );
+      },
     );
   });
 }

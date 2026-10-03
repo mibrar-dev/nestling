@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/rewards/domain/entities/reward.dart';
@@ -126,45 +124,30 @@ class _RewardEditorSheetState extends State<RewardEditorSheet> {
     // never reads `MediaQuery.viewInsets`, so on iOS — where the keyboard
     // floats over the Flutter view instead of resizing it — Save, Cancel and
     // Delete end up behind it (P14-B01). Padding the form by the inset lifts
-    // the whole sheet above the keyboard, and capping it at the space that
-    // is left keeps it inside the modal's own max height so the body scrolls
-    // when there is not enough room (P14-B01).
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final keyboard = MediaQuery.viewInsetsOf(context).bottom;
-        // `NestBottomSheet` hands its body the *whole* column budget, so the
-        // form reserves the sheet's own chrome itself. Without this the form
-        // pushes that Column past its cap and Flutter reports a `RenderFlex`
-        // overflow, and — worse — the controls that end up "overflowing" are
-        // the ones a parent is trying to tap.
-        final titleStyle = NestType.h3(color: context.nest.ink);
-        final chrome =
-            NestSpacing.s2 + // sheet top pad
-            NestSpacing.gap5 + // grabber
-            NestSpacing.s3 + // grabber gap
-            (titleStyle.fontSize ?? 0) * (titleStyle.height ?? 1) + // title
-            NestSpacing.s2 + // title gap
-            NestDevice.homeH +
-            NestSpacing.s4; // sheet bottom pad
-        final screen = MediaQuery.sizeOf(context).height;
-        // No keyboard: the resting 92 % cap — identical to `showNestBottomSheet`
-        // and to the design. Keyboard up: the whole screen, because the inset
-        // is trailing space inside the sheet (the `Padding` below) and the
-        // sheet is bottom-anchored; capping it any lower would push Save,
-        // Cancel and Delete back under the keyboard.
-        final available = math
-            .max(0, (keyboard > 0 ? screen : screen * 0.92) - chrome - keyboard)
-            .toDouble();
-        return Padding(
-          padding: EdgeInsets.only(bottom: keyboard),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: available),
-            // Bounded above, so the form shrink-wraps as before and only
-            // becomes a scroll view when the keyboard leaves too little room.
-            child: SingleChildScrollView(child: _form()),
-          ),
-        );
-      },
+    // the whole sheet above the keyboard.
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    // `NestBottomSheet` hands its body the *whole* column budget, so the form
+    // used to reserve the sheet's own chrome by hand and cap itself — a sum
+    // of the shared component's paddings plus a title line that is really
+    // `max(title line, 44 px close button)`, grown by the text scaler. It
+    // under-counted by 13–20 px, so once the keyboard capped the form the
+    // sheet's Column ran past its budget and Flutter reported a `RenderFlex`
+    // overflow of the bottom band (P14-B08) — the band that happens to hold
+    // the controls a parent is trying to tap.
+    //
+    // Instead of re-deriving that arithmetic, the form asks the sheet's
+    // Column for it: a loose `Flexible` receives exactly the height left
+    // after the grabber and the title row, whatever those measure, at any
+    // text scale. Nothing is estimated, so nothing can drift from
+    // `NestBottomSheet`. Loose fit keeps the resting behaviour the design
+    // shows — the form shrink-wraps to its natural height and the sheet is
+    // exactly as tall as before — and only becomes a scroll view when the
+    // space left is genuinely too small (stage 4, finding 4).
+    return Flexible(
+      child: Padding(
+        padding: EdgeInsets.only(bottom: keyboard),
+        child: SingleChildScrollView(child: _form()),
+      ),
     );
   }
 
@@ -172,6 +155,7 @@ class _RewardEditorSheetState extends State<RewardEditorSheet> {
     final tokens = context.nest;
     final editing = widget.reward != null;
     final canSave = _name.text.trim().isNotEmpty && !_saving;
+    final errorText = _errorText;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -211,11 +195,20 @@ class _RewardEditorSheetState extends State<RewardEditorSheet> {
           child: Row(
             children: <Widget>[
               Expanded(
-                child: Text(
-                  RewardCopy.needsOkLabel,
-                  style: NestType.fieldLabel(color: tokens.ink),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                child: ExcludeSemantics(
+                  // The switch below already announces `Needs my OK`
+                  // (with its `toggled` state), so the visible twin of that
+                  // label stays out of the tree for screen readers — VoiceOver
+                  // used to read "Needs my OK" and then "Needs my OK, switch,
+                  // on" for one control (stage 4, finding 2). The list card
+                  // gets the same effect the other way round: visible
+                  // `Needs my OK`, semantic `Needs approval for …`.
+                  child: Text(
+                    RewardCopy.needsOkLabel,
+                    style: NestType.fieldLabel(color: tokens.ink),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
               NestToggle(
@@ -226,9 +219,22 @@ class _RewardEditorSheetState extends State<RewardEditorSheet> {
             ],
           ),
         ),
-        if (_errorText != null) ...<Widget>[
+        if (errorText != null) ...<Widget>[
           const SizedBox(height: NestSpacing.s2),
-          Text(_errorText!, style: NestType.fieldLabel(color: tokens.danger)),
+          // Live region, exactly like `NestTextField`'s error row (P03 §8):
+          // a screen-reader user must hear that the save failed, or the sheet
+          // silently staying open is the only feedback they get (P14-B07).
+          // The inner text is excluded so the caption is announced once.
+          Semantics(
+            liveRegion: true,
+            label: errorText,
+            child: ExcludeSemantics(
+              child: Text(
+                errorText,
+                style: NestType.fieldLabel(color: tokens.danger),
+              ),
+            ),
+          ),
         ],
         const SizedBox(height: NestSpacing.s4),
         NestButton(

@@ -1,151 +1,125 @@
-# P14 · Rewards manager — Stage 2b build UI (iteration 2)
+# P14 · Rewards manager — Stage 2b build, UI chunk (iteration 3)
 
-Owner: UI builder. Layer: `app/lib/features/rewards/presentation/views/**` +
-`presentation/widgets/**`, plus the view/widget tests in
-`app/test/features/rewards/`. No `domain/`, `data/` or `bloc/` file was
-touched (the logic builder's concurrent edits to
-`data/rewards_repository_impl.dart`, `bloc/rewards_bloc.dart` and
-`bloc/rewards_event.dart` are its own), and no shared code outside the
-feature.
+Owner: UI builder. Layer: `app/lib/features/rewards/presentation/views/**`,
+`presentation/widgets/**`, plus the widget/view tests in
+`app/test/features/rewards/`. No `domain/`, no `data/`, no bloc edits (the
+2a CONTRACT CHANGES re-read before finishing: the four write events' optional
+`Completer<void>? result` channel and "writes never emit `failure`" are both
+already wired in the view — `_changeNeedsOk` / `saveReward` / `deleteReward`
+use them, and the view now relies on the second half, see B06). No simulator
+was booted, installed on, screenshotted or driven.
 
-## CONTRACT USED
+## Layout status
 
-Re-read `docs/screens/P14/2a_build_logic.md` before finishing — **CONTRACT
-CHANGES (additive)**: the four write events gained an optional
-`Completer<void>? result`. This build uses it exactly as declared:
+The iteration-2 layout is unchanged and needs no work: title `Reward shop`,
+the exact intro, the six `.rw` cards in database (creation) order, the
+`+ New reward` button and the 20 px gutters all already measure Δ0 against
+`design/screens/{light,dark}/P14-rewards.png` (stage 5, iteration 2). The
+iteration-2 review's UI handoff asked the UI stage to re-measure because the
+*data* changed — that is stage 5's job (row order 50 → 80 → 60 → 100 → 150
+with "Baking together" **off**, `Choose dinner` below the fold); the view
+already renders `watchItems()` verbatim with the toggle bound to
+`reward.needsOk`, so no code change was required for it.
 
-* `saveReward()` passes `result:` and returns the completer's future;
-* `deleteReward()` does the same for `RewardsDeleteRequested`;
-* `RewardsNeedsOkChanged` also passes a channel so a failed flip can raise a
-  toast (the toggle itself always shows the database value).
+## FIXES_2.md items — all three open bugs closed, all proofs un-skipped
 
-`2a` also removed the write-failure `failure` emit, so the full-screen error is
-now only reachable through the stream's own error — which is what
-`_RewardsFailure` now assumes.
+| bug | fix | proof (now live, un-skipped) |
+|---|---|---|
+| **P14-B06** minor — a stream error *after* the first emission was swallowed: the stale list stayed, no error surface, no `Try again` | `rewards_view.dart`: the `failure` branch drops the `items.isNotEmpty` shortcut and always renders `_RewardsCenteredScroll(_RewardsFailure())`. Safe precisely because of the 2a contract — writes report through the `result` channel and no longer emit `failure`, so the only thing that can reach this branch is the stream itself, and `emit.forEach` ends its subscription when it errors (a list rendered from it can never update again) | `[P14-B06] a stream error after data still offers the failure surface` (`p14_bugs_test.dart`) **and** a new, stronger `[P14-B06] a stream error after rows shows Try again` in `rewards_view_test.dart` (row on screen → stream dies → `Try again` present, `RewardCard` gone, `Something went wrong` shown, and `Try again` really re-subscribes to the empty state) |
+| **P14-B07** minor — the inline write-error caption was a plain `Text`, so a failed save was silent to VoiceOver/TalkBack | `p14_reward_editor_sheet.dart`: the caption is now `Semantics(liveRegion: true, label: …, child: ExcludeSemantics(child: Text(…)))` — the `NestTextField` error-row pattern (`nest_text_field.dart:341-354`, P03 §8), announced exactly once | `[P14-B07] the inline write-error caption is announced to screen readers` |
+| **P14-B08** minor — the sheet re-derived `NestBottomSheet`'s chrome by hand and under-counted it (it used `fontSize × height` for a title row that is really `max(line, 44 px close button)`, with no text scaler), so `available` was 13–20 px too generous and the form overflowed the sheet's Column when the keyboard capped it | **The arithmetic is gone.** `RewardEditorSheet.build` now returns `Flexible(fit: loose, child: Padding(bottom: keyboard, child: SingleChildScrollView(_form())))`. A loose flex child is handed exactly the height the grabber and title row left over, measured by the layout engine, at any text scale and any shared-component change — so there is nothing left to drift from `NestBottomSheet`, which is what stage 4 finding 4 asked for. Loose fit preserves the resting geometry byte-for-byte (the form shrink-wraps; `rewards_write_failures_test.dart`'s "with no keyboard the sheet sits exactly where it always did — sheet 422→794, Save 682→734" still passes) and scrolls only when the keyboard leaves genuinely too little room | `[P14-B08] the sheet must not overflow when the keyboard caps the form` (390×844 @1.3 with a 336 px keyboard, `Save.bottom ≤ keyboard top`), plus the existing `[P14-B01]` keyboard proof |
 
-## Files
+The six other iteration-1 proofs (B01–B05, `ORDER`) were already live and stay
+green; the last skip in the feature directory is gone.
 
-- `app/lib/features/rewards/presentation/views/rewards_view.dart` — centred
-  empty/failure scroll, no trailing spacer, static failure copy, safe
-  `onDelete`, `showRewardEditorSheet` (keyboard-aware opener), the three
-  write helpers on the result channel.
-- `app/lib/features/rewards/presentation/widgets/p14_reward_editor_sheet.dart`
-  — keyboard inset + scrollable body, inline error caption, in-flight guard,
-  every string from `RewardCopy`.
-- `app/lib/features/rewards/presentation/widgets/p14_reward_meta.dart` —
-  `RewardCopy` gains the sheet strings (`nameLabel`, `priceLabel`,
-  `decreasePrice`, `increasePrice`, `payoutHint()`, `saveError()`,
-  `deleteError()`, `actionFailed`).
-- `app/lib/features/rewards/presentation/widgets/p14_reward_card.dart` —
-  `NestDevice.tapParent` instead of the literal `44.0`.
-- `app/test/features/rewards/p14_bugs_test.dart` — B01/B02/B02-failure/B03
-  un-skipped (B04/B05 were un-skipped by the logic builder).
-- `app/test/features/rewards/rewards_states_test.dart` — the failure-state
-  assertions now expect the static copy (review finding 2) and assert the raw
-  exception is *not* shown.
-- `docs/screens/P14/SHARED_REQUEST.md` (new) — the shared bottom-sheet
-  keyboard inset.
+### A harness artefact found while un-skipping B06 (worth recording)
 
-The card geometry, the list order, the intro, the nav bar and the
-`+ New reward` button are **untouched** — no design drift.
+Both B06 proofs drove a hand-made `StreamController`, added rows, then
+`addError`. With the branch fixed and the assertions passing, **the tests
+never returned** — they hung at the end of the body and then at the test
+framework's own `asyncBarrier`. Reproduced four times, isolated to the
+controller: the same flow with a self-terminating stream passes in seconds,
+and the view code is identical. The cause is the test's own fixture — a
+single-subscription controller left open across the error, whose cancelled
+subscription stays pending in the fake-async zone (it was masked before only
+because the assertions failed first). Both proofs now use a self-terminating
+`async*` stream — *rows, then the error, then done*, which is exactly the
+shape a Drift `QueryStream` takes when its query fails. No assertion was
+weakened, removed or re-pointed; the two `pump` calls that used to add and
+error are now one pump before the 200 ms mark (the card must really be on
+screen first) and one past it.
 
-## FIXES_1.md — every item, in this layer
+## Stage 4 review items in this layer
 
-| item | fix |
-|---|---|
-| Review 1 (major) — a failed write lost the input and replaced the list with a raw exception | `_submit()` is async: it awaits `onSave`, keeps the sheet open on error and paints `RewardCopy.saveError` above Save; Save is disabled while in flight (`_saving`), so a double tap cannot write twice. Delete uses the same channel. P14-B03 proof passes. |
-| Review 2 (minor) — raw exception as user copy | The full-screen failure renders `RewardCopy.loadError` only; `state.errorMessage` stays the technical detail. |
-| Review 3 (minor) — trailing 16 px spacer | `_RewardsScroll` no longer appends anything; the 66 px bottom pad already stands in for the home band. |
-| Review 4 (minor) / **P14-B02** — empty + failure top-aligned | New `_RewardsCenteredScroll` (`LayoutBuilder` + `SingleChildScrollView` + `ConstrainedBox(minHeight:)` + `Center`) keeps the 20 px gutters and the 66 px pad and centres both surfaces in the viewport. Measured: empty-state centre 442.5 vs viewport centre 475.5 (was 294.0); failure union centre 442.5 (was 153.0). Both proofs pass. |
-| Review 5 (minor) — split copy + literals | All five sheet strings moved into `RewardCopy`; both `SizedBox(6)` → `NestSpacing.gap6`; `const size = 44.0` → `NestDevice.tapParent`. |
-| Review 6 (minor) — `reward!` force-unwrap | `onDelete: existing == null ? () async {} : () => deleteReward(bloc, existing.id)`. |
-| Review 9 / **P14-B01** (major) — the keyboard covered the sheet | See below. Proof passes. |
-| Review 7–8 (a11y `performAction`, test hygiene) | Already covered by the test stage's files; still green. |
-| Review 10 (probe scratch files) | Gone from the tree. |
+* **Finding 2 (duplicate announcement) — fixed.** The sheet's `Needs my OK`
+  row had both a visible `Text` and a `NestToggle` carrying the identical
+  label, so VoiceOver read "Needs my OK" and then "Needs my OK, switch, on"
+  for one control. The visible twin is now `ExcludeSemantics`; the switch
+  keeps the label (and its `toggled`/`enabled` state and tap action), so the
+  row announces once. `rewards_a11y_test.dart`'s "one activatable node per
+  label" proof still holds unchanged.
+* **Finding 4 (chrome re-derived by hand) — fixed**, see B08 above; the
+  `SHARED_REQUEST.md` line stays open for the keyboard inset itself, which is
+  the shared helper's job, not this screen's.
+* **Finding 5 (`_EditButton` hand-rolled because `NestIconButton` is
+  circular) — unchanged**, still correct and still filed in
+  `SHARED_REQUEST.md` for `NestIconButton.shape`. The 44×44 radius-12 rect,
+  fill, border and icon are asserted numerically by
+  `reward_card_widget_test.dart` and `rewards_responsive_test.dart`.
+* **Finding 1 (the inline caption interpolates the raw exception) — NOT
+  changed, deliberately, and it needs a spec decision.** `p14_bugs_test.dart`
+  `[P14-B07]` locates the caption with `find.textContaining('disk full')` and
+  asserts it is a live region, so dropping `$error` from
+  `RewardCopy.saveError` / `deleteError` would fail that proof. Stage 4
+  (finding 1) and stage 6 ("Notes, not bugs" — "friendly sentence first; the
+  technical tail matches the build's stated contract") disagree about
+  whether the tail belongs in parent-facing copy. That is a judgement call
+  about intended behaviour, and per the stage-3 lesson it belongs in a spec,
+  not in a test I should quietly relax. Filed under LEFT FOR NEXT ITERATION.
+* **Findings 6–7 (test-hygiene comments and `disposeApp` on mock-repo
+  tests) — test-stage files**, not mine. Finding 7's prescription for
+  mock-repository tests ("no Drift stream is open, so no drain is needed") is
+  exactly what the B06 teardown now documents.
 
-## P14-B01 — the keyboard fix, and why it is feature-local
-
-`showNestBottomSheet` caps the sheet at 92 % of the screen and never reads
-`MediaQuery.viewInsets`; the cap is also read once, when the sheet opens —
-before a keyboard exists. The fix is two-part:
-
-1. **`showRewardEditorSheet`** (`rewards_view.dart`) opens the shared
-   `NestBottomSheet` (same grabber, radius, `paper` fill, scrim, safe area,
-   close button) through `showModalBottomSheet` **without** a `constraints`
-   cap, so the sheet may grow by the keyboard band and ride its top off-screen
-   instead of leaving the buttons behind the keyboard.
-2. **`RewardEditorSheet`** pads its form by `viewInsetsOf(context).bottom`
-   (plain `Padding`, no implicit animation — the motion rule) and caps the
-   form itself: `screen - chrome` while the keyboard is up, the resting
-   `screen * 0.92 - chrome` when it is not, where `chrome` is
-   `NestBottomSheet`'s own padding/grabber/title (107, derived from tokens and
-   `NestType.h3`, never hard-coded). The form lives in a
-   `SingleChildScrollView` inside that cap, so it scrolls rather than
-   overflowing when the room left is short — which also removes the 23 px
-   `RenderFlex` overflow the old bare `Column` produced inside the sheet.
-
-Measured with a 300 px inset (`[P14-B01]`, 390×844): `Save` 682→734 becomes
-404→456, `Cancel` 742→794 becomes 464→516 — both above the keyboard top of
-544, and the resting layout (no keyboard) is unchanged.
-
-`SHARED_REQUEST.md` asks for the same fix in the shared helper so the other 29
-screens can delete their local copies.
-
-## Owner / orchestrator rules
-
-- **BOTTOM EDGE** — no bottom bar, tab bar or CTA on this screen; the
-  `Scaffold` paints `paper` to the physical edge and the sheet is a
-  `NestBottomSheet` in `paper`. Removing the trailing spacer makes the last
-  child sit where the design puts it.
-- **ALIGNMENT** — one 20 px gutter for both scroll roots; the card's tile,
-  column and edit rects are untouched (still asserted numerically by
-  `reward_card_widget_test.dart`).
-- **DATA OVER MOCKS / CHILD ORDER** — the view renders the stream verbatim;
-  the creation order and the per-row `needsOk` come from the repository (2a).
-  Nothing about the toggle is hard-coded.
-- **COPY** — em dash U+2014, `é` U+00E9, ASCII `+`; every string now lives in
-  `RewardCopy` for a single diff against `P14-rewards.html`.
-- **FONTS / LETTER SPACING / CHIP ROWS / BALANCED HEADINGS / TRIAL / PIP** —
-  N/A or untouched. No `google_fonts`, no `letterSpacing`, no chips, no
-  `text-wrap: balance` on this screen, no `subscription_status` write.
-- **ACCESSIBILITY ACTIONS** — every control still exposes
-  `SemanticsAction.tap`; the inline error is plain text and the disabled Save
-  passes no action, which the a11y test asserts.
-- **UI CHECK MEASURES SHAPES** — the card rects (350×122, 40×40 tile, 51×31
-  track at x 179, 44×44 edit button) are unchanged and still asserted.
-- **SIMULATORS** — none used.
-
-## Verification
+## Gates (no simulator, no whole-app suite — the integrator runs those)
 
 ```
+$ dart format lib/features/rewards test/features/rewards     # clean (0 changed after format)
 $ flutter analyze lib/features/rewards test/features/rewards
-   No issues found!
-$ dart format --output=none --set-exit-if-changed lib/features/rewards test/features/rewards
-   25 files, 0 changed
+No issues found! (ran in 3.1s)
+
 $ flutter test test/features/rewards/
-   00:04 +84: All tests passed!
+00:05 +103: All tests passed!
 ```
 
-84 tests, 0 failed, 0 skipped — the five stage-6 bug proofs (B01, B02 ×2,
-B03, B04, B05) are all un-skipped and green. No whole-app `flutter test` and no
-simulator: the integrator owns those.
+103 passed / **0 failed / 0 skipped** (up from 97 passed + 4 skipped in
+iteration 2): the three un-skipped bug proofs, the new B06 view proof, and
+bloc / repository / a11y / responsive (320/390/430 × 1.0/1.3 × light/dark) /
+states / order / card-geometry / view / write-failure files all green.
+
+No `google_fonts`, no `letterSpacing`, no `Colors.*`/`Color(0x…)`/literal
+sizes, no new hand-rolled component, no `skip:`, no `ignore:`, no
+`analysis_options.yaml` change, no copy retyped (the design copy is
+untouched by this iteration — B06/B07/B08 are all behaviour, not layout).
 
 ## LEFT FOR NEXT ITERATION
 
-1. **Stage 5 must re-measure the list.** The list layout did not move (intro at
-   the same y, card pitch 138, the same x rects), but the `+ New reward`
-   button's bottom edge when scrolled to the end is now 16 px lower than
-   iteration 1 — that is review finding 3's intended correction (the design has
-   no gap after the last child).
-2. **Sheet restyle is unverified against a render.** The sheet has no design
-   reference, but the resting sheet is now 107 px shorter in the sense that it
-   caps itself; if a stage-5 screenshot of an open sheet looks 16–23 px
-   different from iteration 1, that is the chrome reservation, not a drift in
-   the list screen.
-3. **`SHARED_REQUEST.md` (bottom sheet)** — when the shared
-   `showNestBottomSheet` is fixed, delete `showRewardEditorSheet` and go back
-   to it.
-4. **`Reward.detail`** is still carried but unused by P14 (price shows in the
-   coin pill), per plan §2 — left alone.
+1. **Review finding 1 — the raw exception in the sheet caption copy.** Needs
+   an orchestrator ruling: either (a) the copy becomes
+   `Could not save the reward. Please try again.` and the `[P14-B07]` proof's
+   `find.textContaining('disk full')` locator changes to the friendly
+   sentence, or (b) the tail stays and the review finding is closed. Both
+   stages cannot be right at once; I did not edit either.
+2. **Stage 5 re-measure.** The UI check should re-measure title y, intro y
+   and each card top (the layout did not move, but the visible data did:
+   `Baking together` renders **off** and `Choose dinner` is below the fold)
+   and confirm the bottom edge — the screen has no bar, so `paper` runs to
+   the physical edge by construction.
+3. `SHARED_REQUEST.md` still open (bottom-sheet `viewInsets` in the shared
+   `showNestBottomSheet`, and `NestIconButton.shape`). Both are filed; the
+   P14-local versions stay until they land.
+4. Not mine, flagged only so the next stage is not surprised: `rewards_bloc.dart`
+   and `rewards_bloc_test.dart` show as modified in `git status` — that is the
+   2a builder's parallel work in this shared worktree, not mine.
 
 VERDICT: PASS
