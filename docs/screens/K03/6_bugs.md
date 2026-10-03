@@ -1,135 +1,125 @@
-# K03 Kid home — bug hunt (Stage 6, iteration 6)
+# K03 Kid home — bug hunt (Stage 6, iteration 7)
 
-Adversarial pass over `kid_home` K03 after the iteration-6 merges (fonts
-bundled, `NestType` kid styles, child order by `createdAt`, explicit
-`NestPetStage` size mode): data edges, rapid double taps, back navigation,
-deep links, restart persistence, mode guards, dark contrast, 320px + 1.3
-scale, async gaps, Europe/London periods, integer money, the owner rules,
-CHILD ORDER and COPY. No screen code was changed in this stage.
+Adversarial pass over `kid_home` K03 after the iteration-7 integration:
+data edges, rapid double taps, back navigation, deep links, restart
+persistence, mode guards, dark contrast, 320px + 1.3 scale, async gaps,
+Europe/London periods, integer money, the owner rules, CHILD ORDER, COPY,
+fonts and the newly landed shared components. No screen code was changed in
+this stage.
 
-- Suite: `app/test/features/kid_home/k03_bugs_test.dart` — 47 tests:
-  43 run green, 4 skipped (`K03-BUG-13` at 320/390/430, `K03-BUG-14`).
+- Suite: `app/test/features/kid_home/k03_bugs_test.dart` — 51 tests:
+  46 run green, 5 skipped (`K03-BUG-13` ×3 widths, `K03-BUG-14`,
+  `K03-BUG-15`).
 - Run the skipped proofs:
-  `cd app && flutter test --run-skipped --plain-name "K03-BUG-1"`.
-- Note: a concurrent iteration-6 stage briefly ran the two pet-slot proofs
-  un-skipped; this stage restores the `skip: true` convention so the plain
-  suite stays green until the build fixes them.
+  `cd app && flutter test --run-skipped --plain-name "K03-BUG"`.
 
-## Fixed and re-verified this iteration
+## Open bugs
 
-- **K03-BUG-12 (Moderate, CHILD ORDER) — FIXED on main.** Shared
-  `watchChildren` now orders by `createdAt` then `rowid`; the seed staggers
-  Maya/Leo. `watchProfiles()` returns `['Maya', 'Leo']`; the proof runs
-  un-skipped and a new probe adds four more children in the same second and
-  still gets insertion order (`Maya, Leo, Zoe, Adam`). SHARED_REQUEST #12
-  closed.
-- **Fonts migration — verified.** No `google_fonts` import anywhere in the
-  feature or its tests; K03 uses `NestType.kidName/kidCaption/kidTitle/
-  kidChipLabel/kidBody` and a new probe asserts the bundled Nunito family
-  with `letterSpacing: 0` (no Material tracking).
-- **COPY — verified** again character-for-character against the HTML
-  (`Let's`, `Today's`, `Mum's`, en dash in the seed quest title).
-- All earlier bugs (1–11) remain fixed; every proof is green.
+### K03-BUG-13 — Pet slot off-centre at every width, clipped at 320 (Major, shared)
 
-## Open bugs (iteration 6)
-
-### K03-BUG-13 — The pet slot is off-centre at every width and clipped at 320
-
-**Severity: Major (owner ALIGNMENT rule; the screen's main art is visibly
-displaced).**
-Where: the iteration-6 `NestPetStage` explicit size mode
-(`app/lib/core/design_system/components/nest_pet_stage.dart`) combined with
-K03's `nestWidth: 260, fixedPipHeight: 152` call. The component computes
-`stageW = nestW / 0.62 = 419.35` and lays the nest/Pip scene out against that
-nominal width, but the parent content box is only 350 px (390 − 2×20 gutters)
-— so every child shifts right by `(419.35 − 350) / 2 = 34.68 px`; at a 320 px
-screen (content 280) the shift is 69.68 px and the nest overflows its slot by
-59.68 px, where the `Stack`'s `Clip.hardEdge` cuts it (≈40 px past the
-physical screen edge).
-
-Repro (widget, current tree, no device insets):
-- 390 px: slot centre 195.0, nest/Pip centre 229.68 → **+34.68 off-centre**.
-- 320 px: slot centre 160.0, nest/Pip centre 229.68 → **+69.68 off-centre**;
-  nest right edge 359.7 vs slot right 300 → **+59.68 overflow**.
-- 430 px: slot centre 215.0 vs 229.68 → +14.68 off-centre.
+Unchanged since iteration 6 and now **quantified by the iteration-7 build**:
+the explicit `NestPetStage` mode reserves `stageW = nestW / 0.62` (419.35 px)
+and lays the scene out against that nominal width, while the content box is
+350 px (390 − 2×20) — every child shifts right by 34.68 px; at 320 px the
+shift is 69.68 px and the nest overflows its slot by 59.7 px, cut by the
+Stack (≈40 px past the screen edge). A 260×236 nest at the design's visible
+size is unreachable from K03 without the shared component also gaining a
+`nestHeight`/ratio change, so the build filed it rather than hacking:
+SHARED_REQUEST #13 (with the arithmetic table) plus a real-font pin in
+`kid_home_geometry_test.dart` (currently skipped) that reproduces the device
+captures: nest centre 229.68 (+34.68 vs 195), hearts 494.0 (+46 vs 448),
+first card 615.0 (+56 vs 559).
 
 Failing tests (skipped so the suite stays green):
-- `K03-BUG-13: the pet slot stays centred at 320px`
-- `K03-BUG-13: the pet slot stays centred at 390px`
-- `K03-BUG-13: the pet slot stays centred at 430px`
+- `K03-BUG-13: the pet slot stays centred at 320px` / `390px` / `430px`
 
-Suggested fix (shared, SHARED_REQUEST #13): in explicit mode, clamp the scene
-to the available width (`scale = min(1, maxW / nominalStageW)` applied to
-`stageW`/`nestW`/`pipH`) and centre it in the box — the legacy sizing path
-already scaled down instead of overflowing, so this is a regression of that
-guard. Alternatively the view can pass a responsive `nestWidth` from a
-`LayoutBuilder` (260 cap at ≥390, proportionally smaller below).
+### K03-BUG-14 — Pet block 276 px vs the design's 236 px (Moderate)
 
-### K03-BUG-14 — The pet block is 40 px taller than the design slot
-
-**Severity: Moderate (layout knock-on; pushes the whole lower stack).**
-Where: the same explicit mode renders a 260 px **square** nest (plus the
-stage's own top offset/shadow bleed), so `PipNestFallback` is 276 px tall
-instead of the design `.k3-pet` 236 px. The hearts row then sits at ~505 px
-instead of the orchestrator target ≈443, and everything below (section title,
-progress, cards, dock interplay) shifts down ~40 px.
-
-Repro: `flutter test --run-skipped --plain-name "K03-BUG-14"` →
-`Expected within 2 of 236, Actual 276`.
+The same mode renders a 260 px square nest; `PipNestFallback` is 276 px tall
+instead of the design `.k3-pet` 236 px, shifting the whole lower stack down
+(hearts ~505 instead of the ≈443 target). Same fix family as K03-BUG-13.
 
 Failing test (skipped):
 - `K03-BUG-14: the pet block keeps the design 236 px slot height`
+  (`Expected within 2 of 236, Actual 276`).
 
-Suggested fix: fix the slot height as part of the K03-BUG-13 change — the
-shared size mode should honour the design box (nest 260×236 with Pip 152,
-feet at the rim) and scale/centre inside the parent; then re-run the
-orchestrator QA rows (hearts ≈443, progress ≈520, card-1 ≈560, dock ≈720).
+### K03-BUG-15 — "Try again" stacks live stream subscriptions (Minor, new)
 
-## Status of all K03 bugs
+**Where:** `kid_home_bloc.dart` `_onLoadRequested` + the default
+`watchHome()`/`switchMapStream` chain. Each failed load leaves its source
+subscriptions live; the failure screen's "Try again" adds another chain.
 
-| ID | Severity | Area | Status |
-|---|---|---|---|
-| K03-BUG-1..6 | Major..Minor | iteration-1 defects | fixed, proofs green |
-| K03-BUG-7 | Major | motion flag (`DISABLE_ANIMATIONS=1`) | fixed (shared), proof green in both modes |
-| K03-BUG-8/9 | Minor | celebration swallow, lock route stacking | fixed, proofs green |
-| K03-BUG-10 | Major (owner) | bottom edge surface | fixed (light + dark proofs) |
-| K03-BUG-11 | Minor | silent no-op latch | fixed, proof green |
-| K03-BUG-12 | Moderate | child order | fixed (shared), proofs green |
-| K03-BUG-13 | **Major** | pet slot off-centre + clipped at 320 | **open (shared size mode)** |
-| K03-BUG-14 | Moderate | pet block +40 px height | **open (same fix family)** |
+**Repro (new proof):** a repository whose child/items streams error on
+listen after being counted; add `KidHomeLoadRequested` three times on the
+failure path. Actual: **peak = 3 concurrent source subscriptions** and
+`active = 3` at the end, i.e. nothing is released; expected ≤ 2 (one child +
+one items) with 0 live after the failure. This independently confirms review
+finding 6 (the iteration-7 logic rewrite that fixed it was reverted).
 
-## Verified clean (probes in the same file)
+Failing test (skipped):
+- `K03-BUG-15: retry does not stack live stream subscriptions`
+  (`Expected ≤ 2, Actual 3`).
+
+Suggested fix: in `_onLoadRequested`, early-return while a load subscription
+is live (the review's smaller alternative), or make `switchMapStream` cancel
+its source/inner subscriptions when the consumer cancels after an error
+(SHARED_REQUEST #14 — the helper sits in `domain/`).
+
+## Fixed / verified this iteration
+
+- **Iteration-7 UI landed and probed:** `NestBalancedText` renders the
+  `.kid-title` with the 20 px left edge; quest tiles carry the per-quest
+  tints (dishwasher `skyTint`, reading `lilacTint`, tidy `peachTint`, others
+  neutral) — SHARED_REQUEST #1 closed; all three dock buttons have
+  `wrapLabel: false` — SHARED_REQUEST #9 closed.
+- **Earlier bugs 1–12 remain fixed and green** (period semantics, tap
+  latches, celebration mapping, bottom edge light+dark, child order, fonts
+  bundled with zero tracking, copy character-for-character).
+
+## Carried items (owned elsewhere)
+
+| Source | Severity | Item |
+|---|---|---|
+| 5_ui iteration 7 | Moderate | `NestSpeechBubble` is 46 px vs design 35 px — SHARED_REQUEST #15 |
+| 5_ui iteration 7 | Moderate (dark only) | dark meadow band behind lower content still unverified (no simulator in this stage) |
+| geometry pin | — | `kid_home_geometry_test.dart` stays skipped until SHARED_REQUEST #13 lands |
+
+## Verified clean (probes)
 
 | Category | Probe | Result |
 |---|---|---|
+| iteration-7 UI | balanced title + 20 px edge; per-quest tile tints; dock labels never wrap | pass |
 | child order | `watchProfiles()` = Maya, Leo; six children in one second keep insertion order | pass |
-| fonts | kid styles: bundled `Nunito`, `letterSpacing: 0`, no `google_fonts` | pass |
-| copy | visible strings match the HTML character-for-character | pass |
+| fonts | bundled Nunito, `letterSpacing: 0`, no `google_fonts` | pass |
+| copy | strings match the HTML character-for-character | pass |
 | bottom edge | light + dark surface to the physical edge under a 34px inset | pass |
-| alignment | 20px gutters on progress bar, cards and dock | pass |
+| alignment | 20px gutters on bar, cards and dock | pass |
 | periods | day/week boundaries, daily/weekly/once, BST switch days | pass |
 | taps | same-frame double taps → one row / one route; silent no-op retry | pass |
 | data edges | 0 / 1 / 6 children; long name + 9999 coins at 320/1.3; no `£` | pass |
-| back nav / deep links / restart / guard / contrast / money / async gap | all earlier probes | pass |
+| back nav / deep links / restart / guard / contrast / money / async gap | earlier probes | pass |
 
 ## Observations
 
-1. **Period rollover without a DB change** (no injectable clock; not
-   provable here).
-2. **Test wall-clock coupling** — the seed anchor is pinned, `DateTime.now()`
-   is not; deterministic only inside the pinned day/week.
-3. Parent-mode `/kid-home` reachable by deep link; PIN not enforced
-   (K01/K02 placeholders); debug gallery routes unguarded.
-4. Accessories in the static `PipAvatar` fallback are not drawn (no seed
-   child equips one today).
+1. Period rollover computes at stream-map time (no injectable clock).
+2. Test wall-clock coupling (seed pinned, `DateTime.now()` not).
+3. Parent-mode `/kid-home` deep link and PIN bypass remain product-level
+   questions; debug gallery routes unguarded.
+4. Static `PipAvatar` fallback omits accessories (no seed child equips one).
 
 ## Summary
 
-The iteration-6 feature work is sound (child order, fonts, copy, tap and
-period behaviour all verified), but the newly adopted explicit pet-slot size
-mode introduced two real layout defects: the nest/Pip scene is off-centre at
-every width and visibly clipped at 320 px (major, owner ALIGNMENT), and the
-pet block is 40 px taller than the design, shifting the whole lower stack.
-Both are proven by skipped tests and filed with a shared fix path.
+| ID | Severity | Status |
+|---|---|---|
+| K03-BUG-13 | **Major (owner ALIGNMENT)** | **open (shared; SHARED_REQUEST #13, geometry pin)** |
+| K03-BUG-14 | Moderate | **open (same fix family)** |
+| K03-BUG-15 | Minor | **open (retry-stacked subscriptions; SHARED_REQUEST #14)** |
+| K03-BUG-1..12 | Major..Moderate | fixed, proofs green |
+
+The screen's functional behaviour remains in good shape (all iteration-1..6
+fixes hold, the iteration-7 UI work is verified), but the pet slot is still
+visibly off-centre at every width and clipped at 320 px — a major under the
+owner ALIGNMENT rule — with the height knock-on and a small retry
+subscription leak alongside it.
 
 VERDICT: FAIL

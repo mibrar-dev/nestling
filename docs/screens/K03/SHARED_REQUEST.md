@@ -188,6 +188,13 @@ No schema/DI/token changes needed. No new assets needed (all icons +
     only), and `app/lib/core/data/stream_combine.dart` already owns
     `combineLatest2/3/4` for every feature. Request: move it next to them
     (same semantics, feature re-imports it) or bless the current spot.
+    Stage 6 iteration 7 addendum (K03-BUG-15 proof): the helper also does
+    not release its source/inner subscriptions when the consumer cancels
+    after an error — three failed loads leave 3 live subscriptions
+    (`K03-BUG-15: retry does not stack live stream subscriptions`,
+    `Expected ≤ 2, Actual 3`). Whichever file it lives in, the shared fix
+    should cancel on consumer cancel; the feature-local alternative is an
+    early-return in `_onLoadRequested` while a load is live.
     Files: `app/lib/core/data/stream_combine.dart`,
     `app/lib/features/kid_home/domain/kid_home_repository.dart`,
     `app/lib/features/kid_home/data/kid_home_repository_impl.dart`.

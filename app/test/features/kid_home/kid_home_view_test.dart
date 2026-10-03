@@ -281,6 +281,23 @@ Finder _nestSvgFinder() => find.descendant(
   ),
 );
 
+/// The 48×48 icon tile of the quest card carrying [questTitle]
+/// (`.quest-card.kid .kid-icon`: radius 16, per-quest tint or surface2).
+Finder _questTile(WidgetTester tester, String questTitle) => find.descendant(
+  of: find.ancestor(
+    of: find.text(questTitle),
+    matching: find.byType(NestKidQuestCard),
+  ),
+  matching: find.byWidgetPredicate((widget) {
+    if (widget is! Container) {
+      return false;
+    }
+    final box = widget.decoration;
+    return box is BoxDecoration &&
+        box.borderRadius == BorderRadius.circular(16);
+  }),
+);
+
 /// The meadow band behind progress + cards: the full-bleed [CustomPaint] that
 /// wraps the quest list panel (a local painter until the design system owns a
 /// meadow band — SHARED_REQUEST #6).
@@ -619,6 +636,139 @@ void main() {
       final check = find.bySemanticsLabel('Mark done');
       expect(check, findsWidgets);
       expect(tester.getSize(check.first), const Size(56, 56));
+      await disposeApp(tester);
+    });
+  });
+
+  group('K03 iteration-7 chrome', () {
+    // Review finding 4 + the BALANCED HEADINGS rule: the section heading is
+    // `<h2 class="kid-title">`, and the CSS balances that class, so it must
+    // render through `NestBalancedText` — same copy, style and maxLines, with
+    // the design's line breaking. Body/caption copy must NOT use it.
+    testWidgets('the .kid-title heading renders through NestBalancedText', (
+      tester,
+    ) async {
+      await _pumpRoute(tester);
+      final balanced = tester.widget<NestBalancedText>(
+        find.byType(NestBalancedText),
+      );
+      expect(balanced.text, "Today's quests");
+      expect(balanced.style.fontSize, 28, reason: '.kid-title is 28 px');
+      expect(balanced.style.fontWeight, FontWeight.w900);
+      expect(balanced.maxLines, 2);
+      expect(balanced.textAlign, TextAlign.start);
+      expect(balanced.style.letterSpacing ?? 0, 0);
+      // The copy is unchanged and still sits on the left gutter.
+      expect(find.text("Today's quests"), findsOneWidget);
+      expect(
+        tester.getRect(find.byType(NestBalancedText)).left,
+        closeTo(NestSpacing.padSide, 0.5),
+      );
+      // Exactly one balanced heading on the screen: no body/caption copy was
+      // switched over (the rule forbids it there).
+      expect(find.byType(NestBalancedText), findsOneWidget);
+      await disposeApp(tester);
+    });
+
+    // Review finding 5 / SHARED_REQUEST #9 (`NestKidButton.wrapLabel`): the
+    // dock labels must never wrap, so the three buttons keep equal heights at
+    // every supported width and text scale. Iteration 5 could not compare the
+    // heights because the fallback test font wrapped "My jar" (80 vs 72 px).
+    for (final (width, scale) in <(double, double)>[
+      (320, 1),
+      (390, 1.3),
+      (320, 1.3),
+      (430, 1),
+    ]) {
+      testWidgets(
+        'dock labels stay on one line at ${width.toInt()}px / ${scale}x',
+        (tester) async {
+          await _pumpRoute(tester, width: width, textScale: scale);
+          final buttons = <Rect>[
+            for (var i = 0; i < 3; i++)
+              tester.getRect(find.byType(NestKidButton).at(i)),
+          ];
+          expect(
+            buttons[1].height,
+            closeTo(buttons[0].height, 0.5),
+            reason: 'the middle button must not wrap and grow',
+          );
+          expect(
+            buttons[2].height,
+            closeTo(buttons[0].height, 0.5),
+            reason: '"My jar" must not wrap and grow',
+          );
+          for (final label in <String>['Pip', 'Shop', 'My jar']) {
+            final text = tester.widget<Text>(
+              find.descendant(
+                of: find.byType(NestKidButton),
+                matching: find.text(label),
+              ),
+            );
+            expect(text.maxLines, 1, reason: '$label stays on one line');
+            expect(text.softWrap, isFalse, reason: '$label never soft-wraps');
+          }
+          expect(tester.takeException(), isNull);
+          await disposeApp(tester);
+        },
+      );
+    }
+
+    testWidgets('the dock does not grow when the viewport narrows', (
+      tester,
+    ) async {
+      await _pumpRoute(tester, width: 430);
+      final wide = tester.getRect(_dockSurfaceFinder()).height;
+      await disposeApp(tester);
+      await _pumpRoute(tester, width: 320);
+      final narrow = tester.getRect(_dockSurfaceFinder()).height;
+      expect(
+        narrow,
+        closeTo(wide, 0.5),
+        reason: 'a wrapped label would make the dock taller on the narrow slot',
+      );
+      await disposeApp(tester);
+    });
+
+    // Review finding 5 / SHARED_REQUEST #1 (`tileBackground`): the design tints
+    // each quest's icon tile (`.quest-card.kid .kid-icon`), and the shared card
+    // falls back to `surface2` when the screen passes no tint.
+    testWidgets('quest tiles carry the design per-quest tint', (tester) async {
+      await _pumpRoute(tester);
+      final tokens = Theme.of(tester.element(find.byType(NestProgress)))
+          .extension<NestTokens>()!;
+      final expected = <String, Color>{
+        'Empty the dishwasher': tokens.skyTint, // --sky-tint
+        'Reading – 20 minutes': tokens.lilacTint, // --lilac-tint
+        'Tidy your bedroom': tokens.peachTint, // --peach-tint
+        'Hoover the stairs': tokens.surface2, // unmapped icon → neutral tile
+      };
+      for (final MapEntry(key: title, value: tint) in expected.entries) {
+        final tile = _questTile(tester, title);
+        final decoration = tester.widget<Container>(tile).decoration!;
+        expect(
+          (decoration as BoxDecoration).color,
+          tint,
+          reason: 'tile tint for "$title"',
+        );
+        expect(tester.getSize(tile), const Size(48, 48));
+      }
+      await disposeApp(tester);
+    });
+
+    // Review finding 8: the design puts `margin-left:2px` on the hearts
+    // caption, so the gap after the fifth heart is the row's 8 px plus 2 px.
+    testWidgets('the hearts caption keeps the design 10 px gap', (
+      tester,
+    ) async {
+      await _pumpRoute(tester);
+      final lastHeart = tester.getRect(find.byType(NestHeart).last);
+      final caption = tester.getRect(find.text('Pip is happy today'));
+      expect(
+        caption.left - lastHeart.right,
+        closeTo(NestSpacing.s2 + NestSpacing.gap2, 0.5),
+        reason: '.k3-hearts gap 8 + the caption 2 px inset',
+      );
       await disposeApp(tester);
     });
   });

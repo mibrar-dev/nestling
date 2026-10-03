@@ -1,272 +1,304 @@
-# K03 Kid home — QA code review (Stage 4, iteration 6)
+# K03 Kid home — QA code review (Stage 4, iteration 7)
 
-Scope: feature `kid_home`, route `/kid-home`, kid mode. Reviewed
-`git diff main...HEAD` **plus the current working tree**, so the verdict
-reflects the code as it stands (per the orchestrator rule, "uncommitted
-work / behind main / merge order" are not findings and are not reported).
+Scope: feature `kid_home`, route `/kid-home`, kid mode, design (light + dark)
+`design/screens/{light,dark}/K03-kid-home.png`. Reviewed `git diff main...HEAD`
+**plus the current working tree**, so the verdict reflects the code as it
+stands. Per the orchestrator rules, uncommitted work / being behind `main` /
+merge order are not findings and are not reported.
 
 ## Gates run (in `app/`, this iteration)
 
-| gate | result |
-|---|---|
-| `dart format --set-exit-if-changed .` | ✅ 381 files, 0 changed |
-| `flutter analyze` | ❌ **6 issues** — all `test/features/kid_home/probe_temp_test.dart` (finding 3) |
-| `flutter test` | ❌ **`+986 -1: Some tests failed`** — `k03_bugs_test.dart: a double tap across frames still completes exactly once` (finding 1) |
+| gate | command | result |
+|---|---|---|
+| format | `dart format --set-exit-if-changed --output=none .` | ✅ `Formatted 391 files (0 changed)` |
+| analyze | `flutter analyze` | ✅ `No issues found!` — **but** at `HEAD` it reported 1 issue; fixed only in the working tree while this review was running (finding 2) |
+| test | `flutter test` | ❌ **`+1160 ~6 -1: Some tests failed`** (full suite); feature-suite re-run `+143 ~6 -1` — one failure: `kid_home_bloc_test.dart: K03-BUG-15: a retry must not stack a second live subscription` (finding 1) |
+| geometry (own) | pixel measurement of the committed captures with PIL, ÷3 to logical px | see findings 3 and 4 |
+| skipped proofs | 6 parked (`K03-BUG-13` ×320/390/430, `K03-BUG-14`, `K03-BUG-15` in `k03_bugs_test.dart`, the geometry pin) | see finding 5 |
 
-Neither gate is green, so the screen cannot pass review this iteration.
+One of the three done-criteria gates (RULES §7.1) is red, and the reported
+iteration-7 build verification is not reproducible: `2_build.md:186-191` claims
+`flutter test` → `+1149 ~5: All tests passed!`, while the same command at HEAD
+fails.
 
 ## Verified clean (no finding)
 
-- **RULES §1** — the diff touches only `app/lib/features/kid_home/**`,
-  `app/test/features/kid_home/**`, `docs/screens/K03/**`. No `core/`, no
-  `app/`, no other feature, no `tools/`. ✅
-- **ARCHITECTURE** — feature-first; `domain/` = entities (`kid_child`,
-  `kid_quest`, `kid_home_data`) + the abstract repository only; one bloc per
-  feature; `kid_home_di.dart` / `kid_home_routes.dart` untouched from the
-  foundation. ✅
-- **PIP rule** — the feature renders the child's own `PipAvatar`
-  (`kid_home_view.dart:686`, `:258`, `:849`) driven by the DB row; no
-  `pip_stage_*.svg`, no `PipRive`/`riveEnabled` anywhere in the feature. ✅
-- **PERIODS ruling** — `countsForCurrentPeriod(...)` is applied on both read
-  (`kid_home_repository_impl.dart:81`) and write (`:161`) paths, with the
-  family zone; the day/week/once proofs run un-skipped. ✅
-- **COPY** — compared with `design/html-source/screens/K03-kid-home.html`:
-  the source uses **straight** apostrophes (verified: zero U+2019 in the
-  file) in `Let's do some quests!`, `Today's quests`, `Waiting for Mum`, so
-  the screen's straight `'` is correct; `Reading &ndash; 20 minutes` renders
-  a real U+2013, matching the seed title asserted in the test. ✅
-- **CHILD ORDER** — `watchProfiles()` passes the shared `watchChildren`
-  order straight through, no local re-sort; the six-children proof runs
-  un-skipped. ✅
-- **Bottom edge (owner rule)** — measured on the current captures: at
-  x=10/380 the pixels from logical y 800…843 are the dock surface in both
-  themes (light `#FFFFFF`, dark `#1F1C2E`) — no meadow/sky strip under the
-  dock and none around the home indicator. ✅
-- **Gutters (owner rule)** — dock buttons span x 20.0…369.7 in the app and
-  x 20.0…369.7 in the design; the header, cards and dock all use
-  `NestSpacing.padSide` (20). ✅ (except the pet stage — finding 2)
-- **Accessibility** — `NestLockButton` is 56 px (`NestDevice.tapKid`,
-  design `.lock-btn.lg`), the quest check is a 28 px ring + 8 px padding =
-  44 px hit area, hearts/pet-stage/header/card all carry composed
-  `Semantics` labels, no raw error strings are shown to a child. ✅
-- **Children's Code** — no analytics, ads, SDK or network in the feature;
-  only nickname/coins/Pip look are exposed, the active child only. ✅
-- **Error handling** — load failure renders a retryable `_KidFailure` with
-  the known child's Pip; a failed completion keeps the list and announces
-  through `showNestToast` with kid-safe copy; the repository write is
-  idempotent inside one transaction. ✅
+- **RULES §1 paths** — the diff and the working tree touch only
+  `app/lib/features/kid_home/**`, `app/test/features/kid_home/**`,
+  `docs/screens/K03/**`. No `core/`, no `app/`, no other feature, no
+  `tools/screens/`, `analysis_options.yaml` untouched.
+- **ARCHITECTURE** — feature-first; `domain/` = `kid_child`, `kid_quest`,
+  `kid_home_data` entities + the abstract repository; one bloc for the feature;
+  `kid_home_di.dart` / `kid_home_routes.dart` / `kid_home.dart` untouched from
+  the foundation. Only finding 8 contests the domain layer, for a reason
+  already requested in SHARED_REQUEST #14.
+- **PIP rule** — every Pip on this screen is the active child's own
+  `PipAvatar` fed from the DB row (`kid_home_view.dart:258, 703, 875`),
+  `style/skin/accessory/stage` via `_pipStyle/_pipSkin/_pipAccessory`; no
+  `pip_stage_*.svg`, no `PipRive`, no `riveEnabled` in the feature. The
+  failure and empty states also show the known child's Pip.
+- **PERIODS ruling** — `countsForCurrentPeriod` applied on the read path
+  (`kid_home_repository_impl.dart:80-83`) and inside the write transaction
+  (`:158-183`) with the family zone (`createdAtTz: Value(zone)`); the
+  daily/weekly/once and London day/week proofs run un-skipped.
+- **COPY** — `K03-kid-home.html` contains **zero** U+2019 (verified again
+  this iteration), so the screen's straight `'` in `Let's do some quests!`,
+  `Today's quests`, `Waiting for Mum`, `Mum's thumbs-up` is correct; the
+  design's `&ndash;` is a real U+2013 and the seed title
+  (`core/data/seed.dart:279`) carries exactly that. No curly quotes anywhere
+  in `lib/features/kid_home/` (grep). UK spelling, coins only (never `£`).
+- **CHILD ORDER** — `watchProfiles()` (`kid_home_repository_impl.dart:98-102`)
+  passes the shared `watchChildren` (now `createdAt`-ordered) straight
+  through, no local re-sort; the six-children probe runs un-skipped.
+- **Bottom edge (owner rule)** — measured on the committed captures at x=30 and
+  x=360: light `#FFFFFF` and dark `#1F1C2E` from logical y 722 to 843 with no
+  meadow/sky strip and nothing coloured around the home indicator. The dock
+  `SafeArea(top: false)` inside the surface box (`kid_home_view.dart:552-557,
+  642`) is the right shape.
+- **Gutters / alignment outside the pet chain** — the header, section row,
+  cards and dock all use `NestSpacing.padSide` (20). Measured on the committed
+  captures at y=760: dock buttons design `20.0…128.7 / 141.0…248.7 /
+  261.0…369.7`, app `20.0…128.3 / 140.7…249.0 / 261.3…369.7` (≤0.5 px
+  everywhere); dock top border 719 in both.
+- **Design-system usage** — no hex colours, no hard-coded `Colors.*`, no
+  `google_fonts`/`GoogleFonts`, no `letterSpacing` overrides, no
+  `// ignore:`/`ignore_for_file:` anywhere in the feature (grep); the section
+  heading now renders through `NestBalancedText` (`:483`) as the BALANCED
+  HEADINGS rule requires, with the left edge preserved (`textAlign: .start`);
+  tile tints (`tileBackground`) and `wrapLabel: false` are used;
+  `KidStatusChip` (`widgets/kid_status_chip.dart`) is a justified leaf —
+  the shared `NestChip` is parent-mode Inter 14 with a leaf border, while
+  `.kchip` is Nunito 800 15/15 on `leaf-tint` with no border.
+- **Accessibility** — `NestLockButton` 56 px, quest check 28 px ring + 8 px
+  padding = 44 px, hearts/pet-stage/progress/header carry composed `Semantics`
+  labels, dock labels pinned to one line at 1.3×, no raw error string is shown
+  to a child (the toast is fixed copy). New iteration-7 tests assert all of it.
+- **Children's Code** — no analytics, ads, SDK, network or `print` in the
+  feature; only nickname, coins, happiness and Pip look of the **active**
+  child are read, and nothing is written outside the child's own completions.
+- **Trial rule** — no `subscription_status` write or read in the feature.
+- **Quest order** — the repository sorts by title
+  (`kid_home_repository_impl.dart:72-73`), which is also the design's order
+  (dishwasher → reading → tidy), so the visible list matches.
 
 ---
 
 ## Findings
 
-### 1. [blocker] `flutter test` fails: the new "double tap across frames" test cannot find its target
-`app/test/features/kid_home/k03_bugs_test.dart:1198` (fails at `:1209`).
+### 1. [blocker] `flutter test` is red: the new `K03-BUG-15` proof fails, and the product defect behind it is still unfixed
+
+`app/test/features/kid_home/kid_home_bloc_test.dart:808` (assertion at `:821`):
 
 ```
-StateError: Bad state: No element
-#7 WidgetController._maybeViewOf  (finders.dart:1383  Iterable.first)
-#8 WidgetController.tap          (k03_bugs_test.dart:1209)
+Expected: <1>
+Actual: <3>
+the child row must be watched once per load; every extra handler keeps a whole watch fan-out alive
 ```
 
-The test taps the check, pumps one frame, then taps the *same* finder again:
+Reproduce: `flutter test test/features/kid_home/kid_home_bloc_test.dart --plain-name "K03-BUG-15"`.
+
+The defect is in the bloc, not the test: `_onLoadRequested`
+(`kid_home_bloc.dart:22-68`) awaits `emit.forEach(_repository.watchHome())`,
+which never completes, and the bloc's default transformer is concurrent, so
+every `KidHomeLoadRequested` starts another never-ending handler with its own
+fan-out of Drift watch queries (one `app_state` + one `children` row + quests /
+completions / family-zone). Three loads → three live subscriptions, none
+cancelled until the bloc closes. The "Try again" button
+(`kid_home_view.dart:286-288`) is the reachable path: each tap on the failure
+card adds one.
+
+Fix (in scope — this is the review's own smaller alternative, iteration-6
+finding 6):
 
 ```dart
-await tester.tap(check);
-await tester.pump();            // releases the per-card latch (K03-BUG-11)
-await tester.tap(check);        // ← finder matches nothing any more
+StreamSubscription<KidHomeData>? _home;
+
+Future<void> _onLoadRequested(KidHomeLoadRequested e, Emitter<KidHomeState> emit) async {
+  if (_home != null) return;              // a load is already live
+  emit(state.copyWith(status: KidHomeStatus.loading));
+  _home = _repository.watchHome().listen(
+    (home) => add(KidHomeDataReceived(home)),
+    onError: (Object e) => add(KidHomeStreamFailed(e)),
+  );
+}
+
+@override
+Future<void> close() async {
+  await _home?.cancel();
+  return super.close();
+}
 ```
 
-That single `pump()` is enough for the write to land, the stream to flip the
-card (`Mark done` → `Done` in the shared card) and the `BlocListener` to
-push `/quest-complete`, so the home's semantics leave the tree and the
-second tap throws. Reproduced deterministically:
-`flutter test test/features/kid_home/k03_bugs_test.dart --plain-name "a double tap across frames still completes exactly once"` → `+0 -1`.
+with `_onDataReceived` / `_onStreamFailed` emitting from the bloc's own
+`emit`. Cancel `_home` in `close()` as well, so the retry path and bloc
+teardown both release it. The suite must be green before review again.
 
-Fix (test-only, no product change): the intent — *the post-frame latch
-release must not allow a second completion row* — belongs at the bloc level,
-which is where a "second event after a frame" can actually happen. Dispatch
-the event twice with a pump between and keep the row assertion:
+### 2. [minor] `flutter analyze` was red at `HEAD`; the working tree now fixes it, but the fix must land
+
+`app/test/features/kid_home/kid_home_bloc_test.dart:817-818` (at `HEAD`):
 
 ```dart
-final bloc = BlocProvider.of<KidHomeBloc>(tester.element(find.byType(KidHomeView)));
-bloc.add(const KidHomeQuestCompleted(childId: 'maya', questId: 'q-reading', coins: 10));
-await tester.pump();
-bloc.add(const KidHomeQuestCompleted(childId: 'maya', questId: 'q-reading', coins: 10));
-await _settle(tester);
-// then assert exactly one done_pending row for q-reading
+bloc.add(const KidHomeLoadRequested());
+bloc.add(const KidHomeLoadRequested());
 ```
 
-The "one celebration route only / one back press leaves it" half of the
-test duplicates `K03-BUG-6: double-tapping the check stacks two celebration
-routes` (`:488`), which already passes — drop that half rather than
-re-covering it. Whatever the fix, the suite must be green before review.
+`flutter analyze` at `HEAD` → `1 issue found`
+(`cascade_invocations`); RULES §7.1 requires "No issues found (no ignores)",
+so the branch as committed does not meet the gate. While this review was
+running the working tree picked up the cascade fix
+(`bloc..add(...)..add(...)`) and `flutter analyze` now reports
+**No issues found!** — so this is no longer a standing defect; it is only a
+requirement that the fix be committed rather than left in the working tree.
+Whatever survives finding 1's rewrite of this test must keep analyze clean.
 
-### 2. [blocker] The pet slot is off-centre by ~35 px and pushes everything below the nest 46–56 px down
-`kid_home_view.dart:685-697` (`nestWidth: _kNestWidth, fixedPipHeight: _kPipSlotSize`)
-→ shared `nest_pet_stage.dart:105` and `pip_rive.dart:461,469,470`.
+### 3. [major] The pet slot is still 34.7 px off the centre axis and ~40 px too tall — the iteration-7 mandate did not land
 
-`ORCHESTRATOR_NOTES` #1 asks for the design's own slot, and SHARED_REQUEST
-#11 landed the API for it — but in explicit-size mode
-`stageW = nestW / 0.62 = 419.35`, which is **wider than the 350 px the
-content column actually has** (390 − 2 × 20 gutter). `PipNestFallback`
-still computes `nestLeft = (stageW - nestW) / 2 = 79.67` and
-`stageH = nestTop + nestH(= nestW) + shadowBleed = 276`, so the nest is
-laid out as if it were centred in a 419 px box that starts at x=20 — i.e.
-**+34.7 px right of centre**, and 40 px taller than the design's 236 px
-`.k3-pet`. Measured on the current capture vs the design PNG (logical px):
+`app/lib/features/kid_home/presentation/views/kid_home_view.dart:66`
+(`const double _kNestWidth = 260;`) → `:711` `nestWidth: _kNestWidth`. The
+shared explicit-size mode computes `stageW = nestW / 0.62 = 419.35`
+(`core/design_system/components/nest_pet_stage.dart:105`) and `PipNestFallback`
+positions the scene against that nominal width
+(`core/design_system/motion/pip_rive.dart:461, 469, 470`), while the content
+box is 350 px — every child shifts right by `(419.35 − 350) / 2 = 34.68` px,
+and `nestH == nestW` makes the block 276 px tall instead of `.k3-pet`'s 236.
 
-| landmark | design | app (iter 6) | Δ |
+I re-measured the committed captures myself (PIL, ÷3), rather than trusting the
+carried numbers:
+
+| landmark (logical px) | design | app `app_light_7.png` | Δ |
 |---|---|---|---|
-| pet stage centre x (bubble *and* nest) | 194.8 | **229.6** | **+34.8** |
-| speech-bubble bottom border | 300 | 322 | +22 |
-| hearts row (coin fill) | 443–454 | 489–500 | +46 |
-| section title ink | 489–492 | 535–538 | +46 |
-| meadow band top | 523 | 578 | +55 |
-| progress bar top→bottom | 527–542 | 583–598 | +56 |
-| first quest card top border | 568 | 624 | +56 |
+| nest **visible outline** x | 96.0…294.0 (w 198.0, cx **195.0**) | 120.7…338.7 (w 218.0, cx **229.7**) | **+34.7** |
+| pet block height (widget proof `K03-BUG-14`) | 236 (`.k3-pet`) | 276 | +40 |
+| meadow band top @x30 | 524 | 579 | +55 |
+| hearts row (coin ink) | 441…457 (centre 448) | 487…503 (centre 494) | +46 |
+| section title ink | 484…503 | 530…549 | +46 |
+| progress bar | 527…542 | 583…598 | +56 |
+| quest card 1 top | 559 | 615 | +56 |
+| quest card 2 | top 656, 63 of its 85 px visible above the dock | top 712, 7 of 85 px visible | effectively hidden |
 | dock top border | 719 | 719 | 0 ✅ |
 
-`app_light_5.png` (legacy sizing) and `app_dark_10.png` both measure a
-centre of 194.7–194.8, so this is a **regression introduced this
-iteration**, and it also breaks the `ORCHESTRATOR_NOTES` iteration-5 QA
-targets (hearts ≈ 443, title ≈ 490, progress ≈ 520, card ≈ 560). The band
-table agrees: `compare.py` band 3 went **7.79 % → 22.84 %** (b5 22.33 %,
-b6 18.37 %), mean 11.99 % → 12.52 %. The hero of the screen — bubble, nest
-and Pip — visibly sits right of the axis, and the quest column is 56 px
-lower than the design, i.e. the owner ALIGNMENT rule ("nothing a few px
-off") is broken.
+So the screen's hero (bubble, nest, Pip) is visibly right of the axis and the
+quest column sits ~56 px low, which breaks the owner ALIGNMENT rule and hides
+card 2. This is iteration-6 finding 2 unchanged, and the last-pass instruction
+(`ORCHESTRATOR_NOTES` #35 DO 1) did not take effect in the running app.
 
-Root cause is shared, so K03 cannot fix it in `core/`:
+Fix: not in K03's scope, and the build stage's arithmetic proving that no
+`nestWidth` value reaches both targets is correct — SHARED_REQUEST #13 is
+accurate, complete and the right ask (clamp `stageW` to the real box **and**
+make the nest box ratio expressible; the 0.84 visible/box ratio is confirmed by
+my measurement: 198 / 236 = 0.839 and 218 / 260 = 0.838). Land #13, then
+un-skip `K03-BUG-13`, `K03-BUG-14` and `kid_home_geometry_test.dart` and
+re-run the UI band table. Until then K03 cannot pass a UI check.
 
-1. File/extend a SHARED_REQUEST: in explicit-size mode `NestPetStage` must
-   clamp `stageW` to the incoming `maxWidth`
-   (`stageW = min(nestW / 0.62, maxW)`), or accept an explicit
-   `stageWidth:`; and `PipNestFallback` needs a `nestHeight:` (it assumes
-   `nestH == nestW`, so it cannot express the design's 260×236 nest at
-   all). Files: `core/design_system/components/nest_pet_stage.dart`,
-   `core/design_system/motion/pip_rive.dart`. Blocks: yes for the hero slot.
-2. Interim, in K03-editable code, centre the over-wide stage box so the
-   visible geometry lands on the design axis while the shared fix is pending
-   — wrap the stage in the slot padding, e.g.
-   `Center(child: NestPetStage(…))` in `_KidPetStage` (a `Center` gives an
-   over-wide child a −34.7 px offset and puts bubble+nest back on x=195),
-   and pin the block height with a `SizedBox`/`Transform` only once
-   `nestHeight:` exists — do **not** re-introduce negative margins.
-3. Re-measure with `tools/screens/compare.py` (bands 3–6 must drop back to
-   iteration-5 levels) before this is considered closed.
+### 4. [major] The meadow band is still a feature-local painter although `KidScope` gained the K03 API on `main`, and its gradient never reaches the design's tone (dark reads flat navy)
 
-### 3. [major] `flutter analyze` is not clean: a scratch probe test is left in the feature tree
-`app/test/features/kid_home/probe_temp_test.dart:10, 40, 45, 49, 53, 65`
-(untracked; header: "Temporary probe … (deleted after use)").
+`kid_home_view.dart:502-510` (`CustomPaint(painter: _MeadowPainter(...))`) and
+`:718-755` (`TODO(K03)` + the painter).
 
-6 infos: one `unnecessary_import` plus five `document_ignores` (bare
-`// ignore:` suppressions, which RULES §7.1 forbids: *"No issues found (no
-ignores)"*). It is a scratch probe — it prints `NestPetStage`/`PipNestFallback`
-props and rects — and the leftover `PROBE … centreX=` prints are almost
-certainly how the finding-2 offset was discovered. It is not reported as
-"uncommitted work": the issue is that a dead file with lint suppressions
-sits inside `app/test/features/kid_home/**` and makes the analyze gate
-fail; the loop commits each iteration, so it would land on the branch and
-on `main`.
+1. **The shared API exists and names this screen.** `KidScope` grew
+   `meadowHeight` / `meadowBottom` / `meadowColor`
+   (`core/design_system/theme/kid_scope.dart:16-38`, shared batch `7eaa1f7`),
+   and its doc comment says: *"screens whose design shows a taller band behind
+   content (K03 progress + cards) pass a larger height instead of painting
+   their own hill"* / *"K03's in-flow band measured `kidHorizon` on both design
+   PNGs"*. K03 still paints its own and never calls them, so the request that
+   produced the API (SHARED_REQUEST #6) is stale and the duplication
+   `ORCHESTRATOR_NOTES` iteration 4 forbade ("rely on `KidScope`'s meadow …
+   instead of painting a second hill") is still in the tree.
+2. **The band is geometrically the wrong construct.** The design's green is the
+   *screen* background gradient — `components.css:25`:
+   `linear-gradient(180deg, kid-sky-top 0%, kid-sky-bottom 62%, kid-horizon 62%, kid-meadow 100%)`
+   — so the tone at a given `y` is fixed by the screen, not by content height.
+   K03 stretches its gradient over the whole in-flow panel (progress + all six
+   cards, most of it below the fold), so inside the viewport it never leaves
+   `kidHorizon`. Measured at x=30 (`design` vs `app_*_7.png`):
 
-Fix: delete `app/test/features/kid_home/probe_temp_test.dart`. If any of its
-measurements are worth keeping, land them as real assertions in
-`kid_home_view_test.dart` (e.g. "the pet slot is centred on the content
-axis" — which would have caught finding 2) with no `ignore:` comments.
+   | y | light design | light app | dark design | dark app |
+   |---|---|---|---|---|
+   | 580 | (226,244,217) | (233,246,225) | (35,55,83) | (36,50,88) |
+   | 640 | (218,241,208) | (231,245,223) | (34,59,77) | (36,51,86) |
+   | 712 | (208,238,196) | (229,244,220) | (32,64,70) | (35,52,85) |
 
-### 4. [major] The `.kid-title` heading is not rendered with `NestBalancedText`
-`kid_home_view.dart:474-481` (copy at `:476`, style at `:477`).
+   Worst case ΔRGB (21, 6, 24) light and (3, 12, 15) dark over a ~200 px band —
+   in dark mode the meadow simply does not appear, which is `5_ui.md`
+   deviation 2, now carried for the third iteration.
 
-`design/html-source/components.css:36` gives `.kid-title`
-`text-wrap: balance`, and the K03 markup uses exactly that class
-(`K03-kid-home.html:61`, `<h2 class="kid-title">Today's quests</h2>`). The
-mandatory BALANCED HEADINGS rule requires those headings to be rendered
-with `NestBalancedText`; this one is a plain `Text`. Impact is small at
-scale 1.0 (the title fits on one line) but grows once the chip and the
-title compete in the `Expanded` at larger text scales, and the rule is
-explicit.
+Fix (both halves): delete `_MeadowPainter` and pass
+`KidScope(meadowHeight: <design>, meadowColor: tokens.kidHorizon)`; then update
+SHARED_REQUEST #6 to the part that is still missing — `KidScope`'s background
+gradient has only two stops (`kid_scope.dart:62-64`), so the design's 62%
+horizon stop and horizon→meadow grade need to live in `core`. If the band has
+to stay in flow for now, at least grade to `tokens.kidMeadow` (not
+`lerp(horizon, meadow, 0.5)`) over the visible span so dark mode reads as the
+design does, and mark #6 "partly landed".
 
-Fix: after the branch picks up main (which now ships
-`core/design_system/components/nest_balanced_text.dart`), swap in
+### 5. [minor] One in-scope defect now carries two proofs with opposite conventions, and the iteration-6 replacement proof was never added
 
-```dart
-NestBalancedText(
-  "Today's quests",
-  style: NestType.kidTitle(color: tokens.ink),
-  textAlign: TextAlign.start,   // keep the left edge (owner ALIGNMENT rule)
-  maxLines: 2,
-)
-```
+- `K03-BUG-15` is parked `skip: true` at `k03_bugs_test.dart:1350` even though
+  the fix is **inside** K03 (`kid_home_bloc.dart`, finding 1) — while the
+  duplicate at `kid_home_bloc_test.dart:808` runs red. Shared-blocked proofs
+  (13/14/geometry) are parked; an in-scope one should not be. Keep one proof,
+  un-skipped.
+- The iteration-6 blocker test `a double tap across frames still completes
+  exactly once` was deleted (`2_build.md:133`) instead of being re-expressed
+  as the review asked. Cross-frame double dispatch is only covered on the
+  *failure* path (`kid_home_bloc_test.dart:660-694`, `:697-729`); no proof
+  asserts that two `KidHomeQuestCompleted` events one frame apart produce
+  exactly one completion row and one celebration. Fix: add the bloc-level proof
+  the review specified (add the event, `await tester.pump()`, add it again,
+  then assert one `done_pending` row and one `justCompletedQuestId`).
 
-(`NestBalancedText` defaults to `TextAlign.center`, so `textAlign` must be
-passed explicitly here.) Never on `.h2`/`.h3`/`.body`/`.caption` — the
-failure/empty headings in this file (`kid_home_view.dart:271`, `:276`,
-`:332`) correctly stay plain `Text`.
+### 6. [minor] A mid-session stream error replaces the whole screen with the failure card
 
-### 5. [minor] Two SHARED_REQUEST entries are stale: the shared API now exists but K03 does not use it
-`kid_home_view.dart:815` (quest tile) and `:569-620` (dock labels);
-`SHARED_REQUEST.md` #1 and #9.
+`kid_home_bloc.dart:64-67` emits `KidHomeStatus.failure` from `onError` whether
+or not a loaded screen exists, and `kid_home_view.dart:162-163` renders
+`_KidFailure`, discarding the quest list the child was looking at. This is
+inconsistent with the completion-failure path, which deliberately keeps the
+list and only shows a toast (`:146-155`, and `copyWithLoaded`'s comment).
+A single failed watch tick in kid mode currently replaces the screen with
+"Oh no! Pip got lost." Fix: only enter the failure state when there is nothing
+to keep — `status: state.child == null ? KidHomeStatus.failure : state.status`
+— and let a healthy emission restore the list.
 
-- **#1** `NestKidQuestCard` grew `tileBackground` and its own doc comment
-  says "K03 passes the per-quest tint … from
-  `design/html-source/screens/K03-kid-home.html`" — but the view still
-  passes only `NestIcon(_iconFor(...), size: 28, color: tokens.ink)`, so
-  every tile falls back to `surface2` while the design tints them
-  (sky-tint dishwasher, lilac-tint reading, peach-tint tidy). Fix: map
-  `item.icon` → `tokens.skyTint / lilacTint / peachTint` and pass
-  `tileBackground:`; mark #1 DONE in the file.
-- **#9** `NestKidButton` grew `wrapLabel`, documented for exactly this
-  screen ("Pass false for narrow slots / large text scales (K03 dock
-  'My jar' under fallback fonts)"), and the three dock buttons do not pass
-  it, so "My jar" can still wrap to two lines and grow the dock. Fix:
-  `wrapLabel: false` on all three; mark #9 DONE.
+### 7. [minor] The geometry pin measures the nest *box* (236), not the mandated visible outline (198), so it can go green on a wrong-size paint
 
-### 6. [minor] Retrying a failed load stacks live subscriptions
-`kid_home_bloc.dart:22-31` + `kid_home_view.dart:286-288`.
+`kid_home_geometry_test.dart:96-107` (skip, real fonts) pins
+`nest.center.dx 195 ±1` and `nest.width 236 ±2`, where 236 is "the box that
+paints the design's 198 px visible outline". `ORCHESTRATOR_NOTES` #35 DO 2 asks
+for the **outline** width `198 ±2`. A widget test cannot sample painted alpha,
+so the honest split is: keep the box pin (it is exactly what the shared fix must
+produce) but record the ratio as an assertion
+(`expect(nest.width * 0.839, closeTo(198, 2))`), and let the UI stage measure
+the painted outline on the device capture — which is what finding 3's table
+does today.
 
-`emit.forEach(_repository.watchHome())` never completes, and bloc's default
-transformer is concurrent, so the `_KidFailure` "Try again" button starts a
-*second* never-ending handler while the first is still subscribed — one
-extra fan-out of five Drift watch queries per tap, never cancelled until
-the bloc closes. Fix: track the subscription explicitly (e.g. keep a
-`StreamSubscription<KidHomeData>? _sub`, use `emit.onEach`, and cancel it
-at the top of `_onLoadRequested`), or early-return in `_onLoadRequested`
-while a subscription is live.
+### 8. [minor] `switchMapStream` still sits in `domain/` (carried, already requested)
 
-### 7. [minor] `switchMapStream` lives in the domain layer
-`app/lib/features/kid_home/domain/kid_home_repository.dart:54-82`.
-
-A generic stream combinator is plumbing, not a domain abstraction;
-`ARCHITECTURE.md` keeps `domain/` to "entities + abstract repository ONLY"
-and forbids utils dumping grounds, and `core/data/stream_combine.dart`
-already owns `combineLatest2/3/4` for every feature. Fix: move
-`switchMapStream` next to them (K03 may not edit `core/` → one line in
-SHARED_REQUEST.md), or keep it and mark the request.
-
-### 8. [minor] The hearts caption is 2 px closer to the hearts than the design
-`kid_home_view.dart:450-461`.
-
-`K03-kid-home.html:58` puts `style="margin-left:2px"` on the
-`Pip is happy today` caption, so the design's gap after the fifth heart is
-8 + 2 = 10 px; the row uses `spacing: NestSpacing.s2` (8) with no extra
-inset. Fix: wrap the caption in
-`Padding(padding: EdgeInsets.only(left: NestSpacing.gap2))` — `gap2` (2)
-already exists as a token.
+`app/lib/features/kid_home/domain/kid_home_repository.dart:54-82` — a generic
+stream combinator, not a domain abstraction; `ARCHITECTURE.md:71` keeps
+`domain/` to "entities + abstract repository ONLY" and
+`core/data/stream_combine.dart` already owns `combineLatest2/3/4`. Requested in
+SHARED_REQUEST #14 (iteration-6 finding 7, unchanged). No action available in
+K03; kept on the list so the record is complete.
 
 ---
 
 ## Verdict
 
-The design-system migration, PIP identity, PERIODS ruling, COPY,
-Children's Code, bottom-edge and gutter discipline all hold, and the
-architecture matches the docs. But three gate/defect items block this
-iteration: the suite is **red** (finding 1), `flutter analyze` is **not
-clean** because of a leftover probe file (finding 3), and the mandated
-pet-slot sizing change has knocked the screen's hero **35 px off the
-centre axis** with the whole quest column 46–56 px low (finding 2) — a
-regression against iteration 5, whose captures measure a correct centre.
-Fix 1 and 3 in this branch, raise the shared request in 2, and re-run the
-band table before review again.
+The screen's craft is in good shape: PIP identity, the PERIODS ruling, COPY,
+CHILD ORDER, the owner's bottom-edge rule, the 20 px gutters, the design-system
+adoption (balanced title, per-quest tile tints, non-wrapping dock labels),
+accessibility and Children's Code all hold, and the iteration-7 UI work is
+correctly implemented and newly covered by real tests. But the suite is **red**
+(finding 1 — an in-scope subscription leak on the retry path that nobody fixed,
+against a build report claiming green), and two major design deviations remain
+open: the hero pet slot is still 34.7 px off the centre axis with the quest
+column 56 px low (finding 3, shared — request #13 is accurate and must land),
+and the meadow band is still a duplicated local painter that renders flat navy
+in dark mode where the design is teal (finding 4, part shared — request #6 is
+stale). `2_build.md`'s green-suite verification does not reproduce at HEAD.
+Fix 1 in this branch (and commit the analyze fix, finding 2), land shared
+request #13 and update #6, then re-run the gates and the band table before
+review again.
 
 VERDICT: FAIL

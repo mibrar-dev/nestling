@@ -1,236 +1,189 @@
-# K03 Kid home — Stage 3 (TEST), iteration 6
+# K03 Kid home — Stage 3 (TEST), iteration 7
 
 Scope: `kid_home` / `/kid-home`, kid mode. Tests in
 `app/test/features/kid_home/` (`kid_home_bloc_test.dart`,
-`kid_home_view_test.dart`, `k03_bugs_test.dart`). Per RULES §1 this stage only
-touched `app/test/features/kid_home/**` and `docs/screens/K03/**` — **no screen
-code was patched**; both findings below are recorded for the next build.
+`kid_home_view_test.dart`, `k03_bugs_test.dart`, plus the build's parked
+`kid_home_geometry_test.dart`). Per RULES §1 this stage only touched
+`app/test/features/kid_home/**` and `docs/screens/K03/**` — **no screen code was
+patched**.
+
+**No simulator was booted, installed on or captured** (SIMULATORS rule: only the
+UI-check stage may, and only `E7D5555E-…`).
 
 ## Verification run (in `app/`, this iteration)
 
 - `dart format --set-exit-if-changed .` → **381 files, 0 changed**.
-- `flutter analyze` → **No issues found!** (`analysis_options.yaml` untouched;
-  the two `// ignore: avoid_dynamic_calls` reads are documented in place).
-- `flutter test` (whole app) → **exit 1, `+994 -4`** — 994 pass, **4 fail**, 0 skip.
-- `flutter test test/features/kid_home/` → **exit 1, `+132 -4`** — 132 pass,
-  4 fail, **0 skip** (the suite's last conditional skip is gone, see K03-BUG-7).
+- `flutter analyze` → **No issues found!** (the scratch probe that made
+  iteration 6's analyze red is gone; `analysis_options.yaml` untouched; no new
+  suppressions).
+- `flutter test` (whole app) → **exit 1, `+1160 ~6 -1`** — 1160 pass, 6 skip,
+  **1 fail**.
+- `flutter test test/features/kid_home/` → **exit 1, `+143 ~6 -1`** — 143 pass,
+  6 skip, **1 fail**.
 
-The 4 failures are exactly the two new pet-slot proofs of this stage
-(K03-BUG-13 at three widths, K03-BUG-14). Nothing else regressed.
+The single failure is this stage's new K03-BUG-15 proof. The 6 skips are all
+parked-pending-shared items (3 × K03-BUG-13's width loop, K03-BUG-14, the bugs
+stage's parallel finding-6 proof, and the build's geometry test) — see
+"Parked proofs" below.
 
-| File | Start of iteration 6 | Now |
+| File | Iteration 6 | Now |
 | --- | --- | --- |
-| `kid_home_view_test.dart` | 56 | **63** (+7, all pass) |
-| `kid_home_bloc_test.dart` | 22 | **26** (+4, all pass) |
-| `k03_bugs_test.dart` | 38 + 1 skip | **43 pass + 4 fail** |
+| `kid_home_view_test.dart` | 63 | **71** (+8, all pass) |
+| `kid_home_bloc_test.dart` | 26 | **27** (+1 proof, fails: K03-BUG-15) |
+| `k03_bugs_test.dart` | 43 pass + 4 fail (parked) | parked, +2 passing probes from the bugs stage |
+| `kid_home_geometry_test.dart` | — | new, parked (build stage) |
 
-Attribution of the bug-file delta: this stage added 4 proofs (K03-BUG-13 ×3,
-K03-BUG-14) and un-skipped K03-BUG-7 (+1 pass, −1 skip). The iteration-6
-**bugs stage was writing into the same file concurrently** (see
-"Concurrency" below) and contributed 2 passing probes — "child order holds with
-six children in the same second" and "kid type styles are bundled Nunito with
-zero tracking" — plus a first, skipped draft of the centring proof.
+## What the iteration-7 build changed (the surface under test)
 
-## What the iteration-6 build changed (the surface under test)
+The build closed review findings 1, 3, 4, 5 and 8:
 
-1. **Pet slot in the shared explicit-size mode** (SHARED_REQUEST #11 landed):
-   `NestPetStage(nestWidth: 260, fixedPipHeight: 152)` replaces the derived
-   sizing, so the design's 260/152 slot is finally expressed (review finding 1).
-2. **Typography fork closed**: `GoogleFonts.nunito(...)` → `NestType.kidName /
-   kidCaption / kidChipLabel` (review finding 3; SHARED_REQUEST #7).
-3. **One combined child subscription** (review finding 4): `KidHomeData` +
-   `KidHomeRepository.watchHome()` + the `switchMapStream` helper; the bloc
-   subscribes once per load.
-4. **Meadow band gradient** (5_ui.md finding 1): `_MeadowPainter(top:
-   kidHorizon, bottom: lerp(kidHorizon, kidMeadow, .5))`.
-5. **CHILD ORDER fixed on main** (K03-BUG-12): `watchProfiles()` → [Maya, Leo].
+1. **`NestBalancedText` for the section heading** (`kid_home_view.dart:483`) —
+   review finding 4, and it finally makes the BALANCED HEADINGS rule satisfiable
+   (the component landed on main; `Text` → `NestBalancedText` for
+   `.kid-title "Today's quests"`, same copy, `NestType.kidTitle`, `maxLines: 2`,
+   `textAlign: TextAlign.start`).
+2. **`NestKidButton(wrapLabel: false)` on all three dock buttons**
+   (`:593`, `:614`, `:635`) — review finding 5 / SHARED_REQUEST #9. The label
+   now renders `softWrap: false, maxLines: 1` inside a `FittedBox(scaleDown)`.
+3. **Per-quest tile tints** (`:836`, `tileBackground:`) — review finding 5 /
+   SHARED_REQUEST #1: `dishwasher → skyTint`, `book → lilacTint`,
+   `bed → peachTint`, anything else keeps the shared `surface2` default. This
+   closes a drift this suite had carried as "accepted" since iteration 1.
+4. **Hearts caption 2 px inset** (`:455-456`) — review finding 8
+   (`margin-left: 2px` in `K03-kid-home.html:58`).
+5. **A parked real-font geometry test** (`kid_home_geometry_test.dart`) pinning
+   the orchestrator's 07:40 targets — verified: nest centre x 195 ±1, nest box
+   236 ±2 (the box that paints the design's 198 px visible outline, ratio 0.84),
+   Pip centre 195, hearts centre y 448 ±2, first card top 559 ±2, and the stage
+   box inside the 20…370 gutters. Its numbers match the note and the
+   SHARED_REQUEST #13 table.
 
 ## Tests added (this stage)
 
-### `kid_home_view_test.dart` — new group `K03 pet slot (explicit size)`
+### `kid_home_view_test.dart` — new group `K03 iteration-7 chrome`
 
-1. **`the nest is 260 wide and the Pip exactly 152 tall`** — `nestWidth == 260`,
-   `fixedPipHeight == 152`, the fallback's `nestW`/`pipH`, and the **rendered**
-   shapes: `PipAvatar` 152×152 and the nest picture 260 wide (the derived
-   sizing rendered a 217 px nest with a 119 px Pip on this same viewport).
-2. **`the slot box keeps the 20 px gutters`** — the slot spans 20…370.
+1. **`the .kid-title heading renders through NestBalancedText`** — the heading
+   is a `NestBalancedText` carrying `"Today's quests"`, 28 px w900,
+   `maxLines: 2`, `TextAlign.start`, tracking 0, still on the left gutter, and
+   it is the **only** balanced text on the screen (the rule forbids it on
+   body/caption copy).
+2. **`dock labels stay on one line at 320px/1x, 390px/1.3x, 320px/1.3x,
+   430px/1x`** (4 tests) — the three dock buttons keep equal heights and each
+   label is `maxLines: 1, softWrap: false`. This is the comparison iteration 5
+   had to skip: the fallback test font used to wrap "My jar" (80 vs 72 px), so
+   button heights could not be compared.
+3. **`the dock does not grow when the viewport narrows`** — the dock surface is
+   the same height at 430 and 320, so no label wraps.
+4. **`quest tiles carry the design per-quest tint`** — rendered tile colours:
+   `Empty the dishwasher → skyTint`, `Reading – 20 minutes → lilacTint`,
+   `Tidy your bedroom → peachTint`, `Hoover the stairs → surface2`
+   (unmapped icon), each tile still 48×48.
+5. **`the hearts caption keeps the design 10 px gap`** — the gap after the
+   fifth heart is the row's 8 px plus the design's 2 px inset.
 
-### `kid_home_view_test.dart` — new group `K03 typography (NestType, zero tracking)`
+### `kid_home_bloc_test.dart` — new proof
 
-3. **`every K03 string uses the shared kid styles with tracking 0`** — for
-   `Hi Maya!`, `4 done today`, `Pip is happy today`, `Today's quests`,
-   `4 of 6 done`, `Let's do some quests!` and `120`: font size, line box and
-   weight equal the design CSS (`.k3-name` 22/26 w900, `.k3-sub`/`.kcap`
-   15/20 w700, `.kid-title` 28/34 w900, `.kchip` 15/15 w800, `.speech` 16 w800,
-   `.coin-pill` 16/16 w800) **and `letterSpacing == 0`** — the K03 CSS sets no
-   tracking anywhere, and main fd92d95 made NestType default to 0, so Material
-   tracking must not creep back in. Also asserts the kid styles exist in the
-   shared scale (`kidName`/`kidCaption`/`kidTitle`/`kidChipLabel`), i.e. no
-   screen-local font fork.
-
-### `kid_home_view_test.dart` — new group `K03 meadow band`
-
-4. **`light/dark: the band grades horizon → meadow`** — the band's painter top
-   is `kidHorizon` and its bottom `Color.lerp(kidHorizon, kidMeadow, 0.5)` **in
-   both themes** (5_ui.md finding 1: dark used to render a flat navy block),
-   and the band is full-bleed (0…390) behind the progress bar and the cards.
-
-### `kid_home_view_test.dart` — new group `K03 shapes (pills and rects, not just text)`
-
-5. **`the section chip is a 32 px leaf-tint pill`** — `.kchip` height 32,
-   background `leafTint`, `NestRadii.allPill`, 12 px label inset (the existing
-   alignment test already pinned its right edge to the 20 px gutter).
-6. **`the card tile is 48 px and the check a 56 px ink circle`** —
-   `.quest-card.kid .kid-icon` 48×48 with radius 16, `.quest-check` 56×56.
-
-### `kid_home_bloc_test.dart` — new group `switchMapStream`
-
-7. **`keeps forwarding the live inner stream after the outer completes`** —
-   the exact hazard the helper's doc comment describes: `watchActiveChild` may
-   end after one value, and closing there tore down the quest subscription one
-   tick in (later completion flips were silently dropped).
-8. **`a second outer emission replaces the inner subscription`** — a child
-   switch detaches the old child's stream (the reason `asyncExpand` cannot be
-   used: it would stall forever on never-closing watch streams).
-9. **`forwards an inner error without closing the result`** — a load failure
-   surfaces as an error event and the stream stays usable.
-10. **`cancelling the result cancels the inner subscription`** — no leaked
-    quest subscription when the bloc closes.
-
-### `k03_bugs_test.dart` — K03-BUG-7 un-skipped
-
-11. **`K03-BUG-7: DISABLE_ANIMATIONS is honoured in both directions`** — the
-    shared parse landed (`env_flags.dart` also compares the literal `'1'`), so
-    the proof no longer needs a conditional skip. It now runs in the plain suite
-    (asserting motion stays **on** — a silent always-on flag would freeze the
-    app) *and* under the documented flag (asserting `kDisableAnimations` and
-    `MediaQuery.disableAnimationsOf` are true). Both directions verified:
-    `flutter test --plain-name K03-BUG-7` and
-    `flutter test --dart-define=DISABLE_ANIMATIONS=1 --plain-name K03-BUG-7`
-    → All tests passed. The suite now has **zero skipped tests**.
-
-### `k03_bugs_test.dart` — two new proofs (these fail: real defects)
-
-12. **`K03-BUG-13: the pet slot stays centred at 320/390/430px`**
-13. **`K03-BUG-14: the pet block keeps the design 236 px slot height`**
+6. **`K03-BUG-15: a retry must not stack a second live subscription`** — the
+   review's exact invariant. It fails; see below.
 
 ## Bugs found
 
-### K03-BUG-13 [major, OPEN] — the pet slot is off-centre at every width and clipped at 320
+### K03-BUG-15 [moderate, OPEN, in scope] — retrying a load stacks live subscriptions
 
-**Where:** `app/lib/core/design_system/components/nest_pet_stage.dart:105`
-(`final stageW = nestW / 0.62;`) → `app/lib/core/design_system/motion/pip_rive.dart:482`
-(`SizedBox(width: stageW)`) with children positioned at
-`nestLeft = (stageW - nestW) / 2` (`pip_rive.dart:469`) and
-`left: (stageW - pipH) / 2` (`pip_rive.dart:527`); reached from
-`app/lib/features/kid_home/presentation/views/kid_home_view.dart:694-695`
-(`nestWidth: _kNestWidth, fixedPipHeight: _kPipSlotSize`).
+Review finding 6 (iteration 6), left open by the iteration-7 build and handed
+to "the next bloc owner".
 
-**Cause:** the explicit-size mode composes the scene in a **419.35 px** stage
-(`260 / 0.62`). The `SizedBox` is clamped by the slot's 350 px content box
-(390 − 2×20 gutters), but the `Positioned`s keep using the nominal 419.35, so
-every child shifts right by `(419.35 − 350) / 2 = 34.7 px`. The composition no
-longer responds to width at all (identical rects at 320/390/430).
+**Where:** `app/lib/features/kid_home/presentation/bloc/kid_home_bloc.dart:29`
+(`await emit.forEach<KidHomeData>(_repository.watchHome(), …)`) reached from
+`app/lib/features/kid_home/presentation/views/kid_home_view.dart:287` (the
+failure state's "Try again" button dispatches `KidHomeLoadRequested` again).
 
-**Measured (light, 390×844, no insets):**
+**Cause:** `emit.forEach` over `watchHome()` never completes and the bloc's
+default event transformer is concurrent, so every tap on "Try again" starts
+another never-ending handler while the previous one is still subscribed. Each
+one holds a live fan-out of the Drift watch queries (child row + quests +
+completions) until the bloc itself closes.
 
-| width | slot box | slot centre | nest rect | Pip rect | nest centre |
-| --- | --- | --- | --- | --- | --- |
-| 320 | 20…300 | 160 | 99.7…359.7 | 153.7…305.7 | **229.68** (+69.7) |
-| 390 | 20…370 | 195 | 99.7…359.7 | 153.7…305.7 | **229.68** (+34.7) |
-| 430 | 20…410 | 215 | 99.7…359.7 | 153.7…305.7 | **229.68** (+14.7) |
-
-At 320 the nest's right edge is **59.7 px past the slot** and the `Stack`'s
-default `Clip.hardEdge` cuts it off (no overflow error, so the matrix test's
-`takeException` check cannot see it). This violates the owner ALIGNMENT rule and
-`design/html-source/screens/K03-kid-home.html:24-26`, where `.k3-pet` is
-centred (`margin: 14px auto 0`) and both `.nest` and `.pip` use
-`left: 50%; transform: translateX(-50%)`.
+**Measured:** three load dispatches → `activeChildSubscriptions == 3`
+(expected 1); the same holds for `itemsSubscriptions`.
 
 **Repro:**
 ```
-cd app && flutter test test/features/kid_home/k03_bugs_test.dart --plain-name K03-BUG-13
+cd app && flutter test test/features/kid_home/kid_home_bloc_test.dart --plain-name K03-BUG-15
 ```
-→ 3 failures: `Expected: a numeric value within <1> of <160.0/195.0/215.0>`,
-`Actual: <229.67741935483872>`.
+→ `Expected: <1>  Actual: <3>`.
 
-**Fix location:** the shared component (outside K03's edit scope) — clamp the
-scene's coordinate space to the available width (`stageW = min(nestW / 0.62, maxW)`
-and derive every `Positioned` from the *actual* box), or let a caller pass a
-centred slot box. Filed as SHARED_REQUEST #13 by the iteration-6 bugs stage,
-which measured the same +34.7/+69.7 px values and the 59.7 px clip.
+**Suggested fix** (the review's own smaller alternative, which the build
+recommends over the full event refactor): early-return in `_onLoadRequested`
+while a subscription is live — e.g. keep a `StreamSubscription<KidHomeData>?`
+and cancel it at the top of the handler, or guard with a `_streaming` flag.
 
-### K03-BUG-14 [moderate, OPEN] — the pet block is ~40 px taller than the design, pushing the lower stack down
+**Overlap note:** the iteration-7 bugs stage wrote a parallel proof for the same
+review finding and parked it (`k03_bugs_test.dart:1350`, `skip: true`). I left
+their file untouched and kept mine un-skipped, because the fix is in K03's own
+scope and RULES forbid skipping a proof to keep the suite green. Either proof
+fails until the guard lands.
 
-**Where:** same cause — `pip_rive.dart:461` (`final nestH = nestW;`, i.e. a
-**square** 260×260 nest) plus the stage's own `nestTop` offset and shadow bleed
-(`pip_rive.dart:470`), reached from `kid_home_view.dart:694-695`.
+### Parked proofs (shared-blocked, not new this iteration)
 
-**Measured:** the pet stage box is **276 px** tall at 390 px width; the design's
-`.k3-pet` is **236 px** (`.nest` 236 too). Consequence in the same viewport:
-the hearts row top moved **462 → 505 px** versus iteration 5's verified
-rendering, i.e. the orchestrator's QA position targets regress (iteration 5
-closed with hearts +3 against the design's ≈443; this build puts the whole
-lower stack ≈43 px lower).
+- **K03-BUG-13** (pet slot +34.7 px off-centre at 390, +69.7 at 320 with a
+  59.7 px clip, +14.7 at 430) and **K03-BUG-14** (pet block 276 px vs the
+  design's 236, pushing the lower stack down) — the orchestrator's 07:40 note
+  confirms the root cause and that size vs centring are mutually exclusive with
+  the shared stage ratio (0.62). SHARED_REQUEST #13 carries the arithmetic and
+  the design targets; the build followed "write the request and stop".
+  Repro when needed: `flutter test --run-skipped --plain-name "K03-BUG-1[34]"`.
+- **Speech bubble 46 px vs the design's 35 px** — SHARED_REQUEST #15, shared.
+- **`switchMapStream` living in the domain layer** (review finding 7) —
+  architecture nit, shared (`core/data/stream_combine.dart` owns the combinators);
+  the helper itself is covered by four tests in the bloc suite.
 
-**Repro:**
-```
-cd app && flutter test test/features/kid_home/k03_bugs_test.dart --plain-name K03-BUG-14
-```
-→ `Expected: a numeric value within <2> of <236>  Actual: <276.0>`.
+## Closed since iteration 6
 
-**Fix location:** shared (the explicit-size mode should honour the design's
-260×236 slot, or nest height should be a parameter rather than `nestW`); the
-screen-side consequence is the pet block height feeding the whole list.
-
-### Closed since iteration 5
-
-- **K03-BUG-7** (shared motion flag) — fixed on main; the proof now runs in both
-  directions and the suite has no skips left.
-- **K03-BUG-12** (CHILD ORDER) — the shared ordering landed; the proof runs
-  un-skipped and passes.
-- Review findings 3, 4, 5 — typography fork closed (`NestType`), one child
-  subscription per load, no stale `errorMessage`.
+Review findings 1 (the failing cross-frame double-tap test), 3 (the scratch
+probe file — `flutter analyze` is clean again), 4 (`NestBalancedText`), 5
+(`tileBackground` + `wrapLabel`) and 8 (the hearts caption inset) are all closed
+and now pinned by tests. K03-BUG-7 (motion flag) and K03-BUG-12 (child order)
+stay closed.
 
 ## Owner rules re-checked
 
-- **BOTTOM EDGE:** the K03-BUG-10 proofs (light + dark, 34 px inset emulated)
-  still pass — the dock surface runs to the physical edge with no coloured
-  strip, and the owner's "no green under the dock" feedback still holds.
-- **ALIGNMENT:** gutters, shared card/bar edges, equal-width dock buttons and
-  the 3 px dock border all still pass; the *new* misalignment is the pet slot
-  (K03-BUG-13).
+- **BOTTOM EDGE:** the K03-BUG-10 proofs (light + dark, 34 px inset) still pass
+  — the dock surface runs to the physical edge with no coloured strip, and the
+  meadow ends at the dock's top border in both themes.
+- **ALIGNMENT:** gutters, shared card/bar edges and the 3 px dock border pass.
+  The dock is now *more* verifiable: with `wrapLabel: false` the three buttons
+  keep equal heights at every width/scale, which removes the font artifact this
+  report carried in iterations 1–6 ("dock button heights are not compared").
+  The remaining misalignment is still the shared pet slot (K03-BUG-13).
 
-## New orchestrator rules — coverage
+## Rule coverage
 
 | Rule | Status on K03 |
 | --- | --- |
-| FONTS (google_fonts removed) | No `google_fonts` import or `GoogleFonts.*` call remains in `app/lib/features/kid_home/` or its tests (verified by grep); the feature now uses `NestType.kidName/kidCaption/kidChipLabel`, pinned by the new typography test and the bugs stage's token probe |
-| LETTER SPACING (default 0) | Pinned: every rendered K03 string asserts `letterSpacing == 0`, and the K03 CSS sets no tracking |
-| UI CHECK MEASURES SHAPES | New `K03 shapes` group measures the chip (32 px pill, leaf-tint), the card tile (48×48) and the check (56×56) |
-| CHIP ROWS (`NestChipWrap`) | Not applicable: K03's chips are the feature-private, non-interactive `KidStatusChip` (`.kchip`); there is no interactive `NestChip` row on this screen |
-| BALANCED HEADINGS (`NestBalancedText`) | Not applicable **yet**: the section heading is `<h2 class="kid-title">`, which the CSS balances, but `NestBalancedText` (main 88c2132) is not in this worktree — a branch-behind-main process item, not a defect. When it merges, K03's only `.kid-title` must render through it (the copy never wraps at the supported widths, so there is no visible difference today) |
-| CHILD ORDER | No child list on this screen; pinned at the repository level by K03-BUG-12 (`['Maya','Leo']`) plus the bugs stage's six-children probe |
-| COPY | Re-verified character-by-character: the K03 HTML source has **0 curly / 4 straight** apostrophes (all screen sources: 0 curly / 25 straight), and the app matches; the source's only em dash is in `<title>`, not screen copy |
-| TRIAL | No test writes `subscription_status`; the demo seed is the active subscriber |
-| PERIODS | Unchanged and still green (daily/weekly/once, new-period completions) |
+| BALANCED HEADINGS | **Now covered**: `.kid-title` renders through `NestBalancedText`, and no other copy uses it |
+| CHIP ROWS (`NestChipWrap`) | Not applicable: K03's chips are the non-interactive `KidStatusChip`; no interactive `NestChip` row here |
+| FONTS | No `google_fonts` / `GoogleFonts` in the feature or its tests; `flutter analyze` clean |
+| LETTER SPACING | Pinned: every rendered K03 string asserts `letterSpacing == 0`, including the balanced heading |
+| UI CHECK MEASURES SHAPES | Extended: dock label boxes, tile rects + tints, chip pill, card tile and check (all measured as background/border rects) |
+| CHILD ORDER | No child list on this screen; pinned at the repository level (K03-BUG-12) |
+| COPY | Re-verified: the K03 HTML source has 0 curly / 4 straight apostrophes; the app matches; no tracking/quote drift |
+| TRIAL | No test writes `subscription_status` |
+| PERIODS / DATA OVER MOCKS | Unchanged and green (counts come from the DB: "4 done today", "4 of 6 done") |
+| SIMULATORS | None booted by this stage |
 
-## Concurrency note
+## Harness notes (unchanged from iteration 6)
 
-The iteration-6 **bugs stage was editing `k03_bugs_test.dart` at the same time**
-as this stage (its mtime moved while my proofs were being added). Its first
-draft of the centring proof was `skip: true`; this stage replaced that draft
-with the un-skipped three-width matrix under the same number (K03-BUG-13, same
-measured defect) so the defect shows in the plain suite, and added K03-BUG-14.
-Its two passing probes were kept as-is. The file's header comment now lists
-both findings. Nothing else in the repo was touched by this stage.
-
-At 06:31 a concurrent write put `skip: true` back on all four proofs (making the
-suite green and hiding both defects). RULES/brief forbid skipping tests to get
-green, so the markers were removed again; the final verified state is
-`+994 -4` for the app and `+132 -4` for the K03 folder, with the four failures
-being exactly the K03-BUG-13/14 proofs. If the next stage re-skips them, the
-defects are still real — the repro commands above work with
-`--run-skipped --plain-name K03-BUG-13/14`.
+- Direct Drift work inside `testWidgets` must run inside `tester.runAsync`;
+  bottom insets are emulated via `tester.view.padding` / `viewPadding` at 3×
+  physical px; never `pumpAndSettle` while a loading spinner is on screen;
+  card assertions after a celebration need `tester.pageBack()`.
+- Seed the DB **before** pumping: a Drift write in `runAsync` after the app is
+  pumped does not repaint the screen in the fake-async harness (`quest_completions`
+  writes do propagate, `app_state` writes did not in the probe), so tests that
+  change children/quests write first and pump the route fresh.
+- The section title wraps to two lines in the fallback test font, so the
+  section→progress gap is asserted as `>= 16` rather than exactly; real-font
+  geometry lives in the build's `kid_home_geometry_test.dart` instead.
 
 VERDICT: FAIL

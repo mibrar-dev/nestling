@@ -797,6 +797,43 @@ void main() {
         expect(home.items, hasLength(6));
       },
     );
+
+    // Review finding 6 (iteration 6), still OPEN: `_onLoadRequested` awaits
+    // `emit.forEach(_repository.watchHome())`, which never completes, and the
+    // bloc's default transformer is concurrent — so the failure state's "Try
+    // again" button (`kid_home_view.dart:287`) starts a SECOND never-ending
+    // handler while the first is still subscribed. Every tap leaves another
+    // fan-out of the Drift watch queries alive until the bloc closes.
+    // The review's own smaller fix: early-return while a subscription is live.
+    test(
+      'K03-BUG-15: a retry must not stack a second live subscription',
+      () async {
+        final repo = _FakeKidHomeRepository();
+        final bloc = KidHomeBloc(repository: repo);
+        final sub = bloc.stream.listen((_) {});
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        // Two retries while the first load is still streaming.
+        bloc
+          ..add(const KidHomeLoadRequested())
+          ..add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 60));
+        expect(
+          repo.activeChildSubscriptions,
+          1,
+          reason:
+              'the child row must be watched once per load; every extra '
+              'handler keeps a whole watch fan-out alive',
+        );
+        expect(
+          repo.itemsSubscriptions,
+          1,
+          reason: 'same for the quest list stream',
+        );
+        await sub.cancel();
+        await bloc.close();
+      },
+    );
   });
 
   // -------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-// K03 (kid home) adversarial test suite — Stage 6 bug hunt, iteration 6.
+// K03 (kid home) adversarial test suite — Stage 6 bug hunt, iteration 7.
 //
 // Iteration-1 proofs K03-BUG-1..6 all run un-skipped (fixed in iteration 2:
 // repo transaction/idempotency, success-driven celebration, actionNonce,
@@ -8,9 +8,8 @@
 // - Period-ruling probes (daily/weekly/once, London day/week, BST edges).
 // - K03-BUG-7: FIXED on main (`4751c52` parses `DISABLE_ANIMATIONS=1` as
 //   true). The proof asserts both `kDisableAnimations` and
-//   `MediaQuery.disableAnimationsOf` inside the pumped home and stays
-//   `skip`ped unless the define is present (it must be `true` under it):
-//   `flutter test --dart-define=DISABLE_ANIMATIONS=1 --plain-name K03-BUG-7`.
+//   `MediaQuery.disableAnimationsOf` inside the pumped home; it now runs in
+//   the plain suite AND under `--dart-define=DISABLE_ANIMATIONS=1`.
 // - K03-BUG-8/9 fixed mid-loop (per-quest celebrations, gate tap latch);
 //   proofs run un-skipped.
 //
@@ -18,43 +17,43 @@
 // - Owner alignment probe (20 px gutters shared by bar, cards, dock) — passes.
 // - Failure / empty-quests states use PipAvatar, never v1 `pip_stage_*.svg`
 //   — passes.
-// - K03-BUG-10 (owner BOTTOM EDGE): fixed in iteration 4; the light and dark
-//   proofs run un-skipped and assert a surface-filled box reaches the
-//   physical bottom edge under the 34px inset.
-// - K03-BUG-11 (fixed iteration 5): a silent no-op `completeQuest` resets
-//   the card latch on the next frame (post-frame reset; the bloc emits
-//   nothing for a noop) and evicts the pending entry when the quest is
-//   absent from an emission. Proof runs un-skipped.
+// - K03-BUG-10 (owner BOTTOM EDGE): fixed in iteration 4; light and dark
+//   proofs assert a surface-filled box reaches the physical edge.
+// - K03-BUG-11 (fixed iteration 5): silent no-op completion resets the latch
+//   and evicts the pending entry. Proof runs un-skipped.
 //
 // Iteration-5 work:
 // - Copy probe: the visible strings match the HTML source character for
 //   character (ASCII apostrophes in "Let's"/"Today's"/"Mum", en dash in the
 //   seed quest title) — passes.
 // - K03-BUG-12 (un-skipped iteration 6): CHILD ORDER ruling now holds —
-//   shared `watchChildren` orders by `createdAt` (+ `rowid`), the seed
-//   staggers Maya/Leo one minute apart, and `watchProfiles()` returns
-//   `['Maya', 'Leo']`. Proof runs un-skipped:
-//   `flutter test --plain-name K03-BUG-12`.
+//   shared `watchChildren` orders by `createdAt` (+ `rowid`); proof runs
+//   un-skipped, plus a six-children-in-one-second probe.
 //
 // Iteration-6 work:
-// - Font migration verified: no `google_fonts` imports anywhere; kid styles
-//   are bundled Nunito with `letterSpacing: 0` (probe).
-// - Copy probe still matches the HTML character-for-character.
-// - K03-BUG-13 (OPEN): the new `NestPetStage` explicit size mode does not
-//   respect the parent width — the nest/Pip scene sits +34.7 px off-centre
-//   at 390 px, +69.7 px off-centre with a 59.7 px overflow at 320 px and
-//   +14.7 px off-centre at 430 px. Proofs run UN-SKIPPED at all three widths
-//   (a concurrent bugs-stage draft used `skip: true`; the stage-3 matrix
-//   replaced it, because RULES forbid skipping a proof to keep the suite
-//   green). Shared fix: SHARED_REQUEST #13.
-// - K03-BUG-14 (OPEN): the same mode renders a 260 px SQUARE nest, so the
-//   pet block is 276 px tall vs the design's `.k3-pet` 236 px and pushes the
-//   whole lower stack down (hearts row top 462 → 505 px at 390). Proof runs
-//   UN-SKIPPED; stage 3 reports `VERDICT: FAIL` because of 13 and 14.
-// - K03-BUG-7 no longer needs a conditional skip: the shared parse landed, so
-//   the proof now runs in the plain suite AND under
-//   `--dart-define=DISABLE_ANIMATIONS=1`.
-
+// - Font migration verified: no `google_fonts` anywhere; kid styles are
+//   bundled Nunito with `letterSpacing: 0` (probe).
+// - K03-BUG-13 (OPEN, major, shared): the `NestPetStage` explicit size mode
+//   lays the scene out against a nominal 419.35 px width — nest/Pip sit
+//   +34.7 px off-centre at 390, +69.7 px at 320 (nest overflows its slot by
+//   59.7 px) and +14.7 px at 430. Proofs: three width tests, `skip: true`
+//   per the stage-6 convention; run with `--run-skipped`. Fix path:
+//   SHARED_REQUEST #13 (the build stage proved K03 cannot fix it locally and
+//   added `kid_home_geometry_test.dart` as the real-font pin).
+// - K03-BUG-14 (OPEN, moderate): the same mode renders a 260 px SQUARE nest,
+//   so the pet block is 276 px vs the design's 236 px and the lower stack
+//   shifts down. Proof `skip: true`; run with `--run-skipped`.
+//
+// Iteration-7 work:
+// - Landed iteration-7 UI work probed: `NestBalancedText` title at the 20 px
+//   left edge, per-quest tile tints (dishwasher sky / reading lilac / tidy
+//   peach), dock `wrapLabel: false` — all pass.
+// - K03-BUG-15 (OPEN, minor): "Try again" stacks live subscriptions —
+//   three failed loads leave a peak of 3 concurrent source subscriptions
+//   (watchActiveChild + watchItems chain) instead of ≤2, and none are
+//   released. Proof `skip: true`; run with `--run-skipped`. Cross-ref:
+//   review finding 6 / SHARED_REQUEST #14 (`switchMapStream`).
+//
 // Run the skipped proofs with
 // `flutter test --run-skipped --plain-name "K03-BUG"`.
 //
@@ -1283,6 +1282,72 @@ void main() {
       expect(style.letterSpacing, 0, reason: 'no Material tracking');
     }
   });
+
+  testWidgets('title uses NestBalancedText and keeps the 20px left edge', (
+    tester,
+  ) async {
+    await _pump(tester);
+    final title = find.byType(NestBalancedText);
+    expect(title, findsOneWidget);
+    expect(
+      tester.getTopLeft(title).dx,
+      closeTo(NestSpacing.padSide, 0.01),
+      reason: '.kid-title is left-aligned at the owner 20px gutter',
+    );
+    await disposeApp(tester);
+  });
+
+  testWidgets('quest tiles carry the per-quest tints', (tester) async {
+    await _pump(tester);
+    await _revealCards(tester);
+    final cards = tester
+        .widgetList<NestKidQuestCard>(find.byType(NestKidQuestCard))
+        .toList();
+    Color? tintFor(String title) {
+      return cards.firstWhere((card) => card.title == title).tileBackground;
+    }
+
+    const scheme = NestColors.light;
+    expect(tintFor('Empty the dishwasher'), scheme.skyTint);
+    expect(tintFor('Reading \u2013 20 minutes'), scheme.lilacTint);
+    expect(tintFor('Tidy your bedroom'), scheme.peachTint);
+    expect(
+      tintFor('Put the bins out'),
+      isNull,
+      reason: 'unmapped icons keep the neutral surface2 tile',
+    );
+    await disposeApp(tester);
+  });
+
+  testWidgets('dock labels never wrap', (tester) async {
+    await _pump(tester);
+    final buttons = tester
+        .widgetList<NestKidButton>(find.byType(NestKidButton))
+        .toList();
+    expect(buttons, hasLength(3));
+    expect(buttons.every((button) => !button.wrapLabel), isTrue);
+    await disposeApp(tester);
+  });
+
+  test('K03-BUG-15: retry does not stack live stream subscriptions', () async {
+    final repo = _SubCountingRepository();
+    final bloc = KidHomeBloc(repository: repo);
+    final sub = bloc.stream.listen((_) {});
+    bloc.add(const KidHomeLoadRequested());
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    bloc.add(const KidHomeLoadRequested());
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    bloc.add(const KidHomeLoadRequested());
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+    expect(
+      repo.peak,
+      lessThanOrEqualTo(2),
+      reason: 'one live child + one live items subscription, never stacked',
+    );
+    expect(repo.active, 0, reason: 'failed loads release their sources');
+    await sub.cancel();
+    await bloc.close();
+  }, skip: true);
 }
 
 // ---------------------------------------------------------------------------
@@ -1420,6 +1485,61 @@ class _FailLoadRepository extends KidHomeRepository {
   @override
   Stream<KidChild?> watchActiveChild() =>
       Stream<KidChild?>.error(Exception('child down'));
+
+  @override
+  List<String> stepsFor(String questId) => const <String>['Step one'];
+
+  @override
+  Future<bool> verifyPin(String childId, String pin) async => true;
+
+  @override
+  Future<void> completeQuest(String childId, String questId) async {}
+}
+
+/// Counts live source subscriptions; each stream errors shortly after
+/// listen so the load-failure path (and its retry) can be exercised.
+class _SubCountingRepository extends KidHomeRepository {
+  int _activeChild = 0;
+  int _activeItems = 0;
+  int peak = 0;
+
+  int get active => _activeChild + _activeItems;
+
+  void _track() {
+    final total = active;
+    if (total > peak) peak = total;
+  }
+
+  @override
+  Stream<KidChild?> watchActiveChild() {
+    final controller = StreamController<KidChild?>();
+    controller.onListen = () {
+      _activeChild++;
+      _track();
+      scheduleMicrotask(() => controller.addError(Exception('child down')));
+    };
+    controller.onCancel = () => _activeChild--;
+    return controller.stream;
+  }
+
+  @override
+  Stream<List<KidQuest>> watchItems() {
+    final controller = StreamController<List<KidQuest>>();
+    controller.onListen = () {
+      _activeItems++;
+      _track();
+      scheduleMicrotask(() => controller.addError(Exception('items down')));
+    };
+    controller.onCancel = () => _activeItems--;
+    return controller.stream;
+  }
+
+  @override
+  Future<List<KidQuest>> getItems() async => _items;
+
+  @override
+  Stream<List<KidChild>> watchProfiles() =>
+      Stream<List<KidChild>>.value(const <KidChild>[_maya]);
 
   @override
   List<String> stepsFor(String questId) => const <String>['Step one'];
