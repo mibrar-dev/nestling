@@ -235,9 +235,10 @@ class _WelcomeText extends StatelessWidget {
           header: true,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: _headlineW),
-            child: Text(
+            child: NestBalancedText(
               'Chores that feel like a game.',
               style: context.nestText.display,
+              textAlign: TextAlign.left,
             ),
           ),
         ),

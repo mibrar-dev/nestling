@@ -59,12 +59,15 @@ class NestCard extends StatelessWidget {
     if (tap != null) {
       return Semantics(
         button: true,
+        enabled: true,
         label: semanticLabel,
         // The explicit label already carries the announcement (P08 §2):
         // excluding the subtree keeps one node per card instead of
         // `label + every descendant text`. Only when a label is set —
-        // without one the children must stay reachable.
+        // without one the children must stay reachable. `onTap` mirrors
+        // the InkWell: `excludeSemantics` drops the descendant action.
         excludeSemantics: semanticLabel != null,
+        onTap: tap,
         child: Material(
           color: Colors.transparent,
           borderRadius: NestRadii.allL,

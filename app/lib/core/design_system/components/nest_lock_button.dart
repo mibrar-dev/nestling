@@ -25,6 +25,7 @@ class NestLockButton extends StatelessWidget {
     return Semantics(
       button: true,
       label: semanticLabel,
+      onTap: onPressed,
       child: Material(
         color: tokens.surface,
         shape: RoundedRectangleBorder(

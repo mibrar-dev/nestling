@@ -131,6 +131,7 @@ class _BrandButton extends StatelessWidget {
       button: true,
       label: semanticLabel ?? label,
       enabled: !disabled,
+      onTap: disabled ? null : onPressed,
       child: Opacity(
         opacity: disabled ? 0.45 : 1,
         child: SizedBox(
