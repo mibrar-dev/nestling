@@ -55,6 +55,12 @@ class NestSegmented<T> extends StatelessWidget {
               selected: isSelected,
               enabled: changed != null,
               label: option.label,
+              // One node per option: the label above owns the announcement
+              // and the inner Text/InkWell contribute no second copy (same
+              // as NestChip). `onTap` mirrors the InkWell below:
+              // `excludeSemantics` drops every descendant action, so without
+              // this the node says "button" but cannot be activated.
+              excludeSemantics: true,
               onTap: changed == null ? null : () => changed(option.value),
               child: Material(
                 color: Colors.transparent,
