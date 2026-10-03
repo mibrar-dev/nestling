@@ -44,13 +44,16 @@ Future<void> _loadBundledFonts() async {
 }
 
 /// Pumps `/pocket-money-setup` on the `onboarding_kids` seed.
-Future<void> _pumpOnboardingKids(WidgetTester tester) async {
+Future<void> _pumpOnboardingKids(
+  WidgetTester tester, {
+  ThemeMode theme = ThemeMode.light,
+}) async {
   await GetIt.instance.reset();
   final db = AppDatabase.memory();
   await configureDependencies(database: db);
   await Seed.onboardingKids(db);
   await GetIt.instance<AppSession>().refresh();
-  await pumpAppRoute(tester, '/pocket-money-setup');
+  await pumpAppRoute(tester, '/pocket-money-setup', theme: theme);
 }
 
 /// The painted pill of a day cell (the `.chip.day` background), by its key.
@@ -72,6 +75,43 @@ void main() {
       expect(rect.top, moreOrLessEquals(107, epsilon: 1));
       expect(rect.height, moreOrLessEquals(68, epsilon: 1));
       expect(rect.left, moreOrLessEquals(NestSpacing.padSide, epsilon: 0.01));
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the H1 breaks after "money", the design break, in the '
+        'balanced box', (tester) async {
+      await _pumpOnboardingKids(tester);
+
+      // BALANCED HEADINGS (owner rule): the heading renders through
+      // NestBalancedText, which narrows the box to the thinnest width that
+      // still holds the minimum line count. That search has to land on the
+      // design's break — the guard is the break below; the width band only
+      // keeps the box wide enough for line 1 and never wider than the column.
+      final rect = tester.getRect(find.text(_heading));
+      expect(rect.left, moreOrLessEquals(20, epsilon: 0.01));
+      expect(rect.width, greaterThan(320));
+      expect(rect.width, lessThanOrEqualTo(350 + 0.01));
+
+      // The break the design shows: "How does pocket money" / "work in your
+      // house?" — no one-word orphan line (BALANCED HEADINGS again). Laid out
+      // at the rendered box width, so this asserts what is on screen.
+      final style = tester.widget<Text>(find.text(_heading)).style!;
+      final painter = TextPainter(
+        text: TextSpan(text: _heading, style: style),
+        textDirection: TextDirection.ltr,
+        textScaler: MediaQuery.textScalerOf(
+          tester.element(find.text(_heading)),
+        ),
+      )..layout(maxWidth: rect.width);
+      expect(painter.computeLineMetrics().length, 2);
+      final endOfFirstLine = painter.getPositionForOffset(
+        Offset(rect.width, painter.preferredLineHeight / 2),
+      );
+      final prefix = _heading.substring(0, endOfFirstLine.offset);
+      expect(prefix, startsWith('How does pocket money'));
+      expect(prefix, isNot(contains('work')));
       expect(tester.takeException(), isNull);
 
       await disposeApp(tester);
@@ -185,5 +225,88 @@ void main() {
         await disposeApp(tester);
       },
     );
+  });
+
+  // The dark PNG carries the SAME anchors as the light one (re-measured off
+  // `design/screens/dark/P06-pocket-money.png` ÷3: H1 113–172, option cards
+  // 191/263/335, card 415–684, chips 455–487, dividers 495/620, coin row
+  // 628–672, CTA top border 685) — only the colours change. Until now nothing
+  // pinned that, so a dark-only vertical drift would only surface in the UI
+  // stage's compare sheet.
+  group('P06 screen geometry in dark mode', () {
+    setUpAll(_loadBundledFonts);
+
+    testWidgets('the dark screen lands on the same anchors and token colours', (
+      tester,
+    ) async {
+      await _pumpOnboardingKids(tester, theme: ThemeMode.dark);
+
+      expect(
+        tester.getRect(find.text(_heading)).top,
+        moreOrLessEquals(107, epsilon: 1),
+      );
+      expect(
+        tester.getRect(find.text(_heading)).height,
+        moreOrLessEquals(68, epsilon: 1),
+      );
+
+      final card = tester.getRect(find.byType(NestCard));
+      expect(card.top, moreOrLessEquals(415, epsilon: 1));
+      expect(card.bottom, moreOrLessEquals(684, epsilon: 1));
+      expect(card.left, moreOrLessEquals(20, epsilon: 0.01));
+      expect(card.width, moreOrLessEquals(350, epsilon: 0.01));
+
+      final pill = tester.getRect(_dayPill(1));
+      expect(pill.top, moreOrLessEquals(455, epsilon: 1));
+      expect(pill.height, moreOrLessEquals(32, epsilon: 1));
+      expect(
+        tester.getRect(find.text('Weekly base')).top,
+        moreOrLessEquals(503, epsilon: 1),
+      );
+      expect(
+        tester.getRect(find.text('Maya')).center.dy,
+        moreOrLessEquals(545, epsilon: 1),
+      );
+      expect(
+        tester.getRect(find.text('Leo')).center.dy,
+        moreOrLessEquals(589, epsilon: 1),
+      );
+      expect(
+        tester.getRect(find.text('Coin value')).center.dy,
+        moreOrLessEquals(650, epsilon: 1),
+      );
+
+      // OWNER BOTTOM EDGE in dark: the CTA panel's own surface reaches the
+      // physical edge — no page-tint strip under it or around the indicator.
+      expect(
+        tester.getRect(find.byType(NestBottomCta)).bottom,
+        moreOrLessEquals(844, epsilon: 1),
+      );
+
+      // Token colours, never literals: the page is `paper`, the CTA panel is
+      // `surface` (design PNG dark: page 21,19,31 / panel 31,28,46) and the
+      // selected day pill is `leafTint`.
+      final tokens = tester.element(find.byType(NestCard)).nest;
+      expect(
+        tester.widget<Scaffold>(find.byType(Scaffold)).backgroundColor,
+        tokens.paper,
+      );
+      final panelColour = tester
+          .widget<DecoratedBox>(
+            find
+                .descendant(
+                  of: find.byType(NestBottomCta),
+                  matching: find.byType(DecoratedBox),
+                )
+                .first,
+          )
+          .decoration;
+      expect((panelColour as BoxDecoration).color, tokens.surface);
+      final sat = tester.widget<DecoratedBox>(_dayPill(6));
+      expect((sat.decoration as BoxDecoration).color, tokens.leafTint);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
   });
 }

@@ -1,155 +1,140 @@
 # P06 Pocket money setup — UI build (Stage 2b, iteration 6)
 
-Builder: UI chunk only — `app/lib/features/pocket_money/presentation/views/**`,
-`presentation/widgets/**`, and the `view`/`widget` tests in
-`app/test/features/pocket_money/`. No `domain/`, `data/` or bloc/cubit file was
-touched; `2a_build_logic.md` reports **no CONTRACT CHANGES**, so the BLoC
-events/states in `1_plan.md` are exactly as iterations 3–5 used them.
-No simulator was booted, driven or screenshotted (SIMULATORS rule: only stage 5
-may). Full-app `flutter test` was not run (integrator owns it); the feature
-suite was.
+Route `/pocket-money-setup` · feature `pocket_money` · parent mode · onboarding
+(P05 → P06 → P07). Owned in this stage:
+`app/lib/features/pocket_money/presentation/{views,widgets}/**` and the
+view/widget tests under `app/test/features/pocket_money/`.
 
-## Files changed
+## CONTRACT CHANGES (from `2a_build_logic.md`)
 
-| File | Change |
-|---|---|
-| `lib/features/pocket_money/presentation/widgets/p06_weekly_stepper.dart` | **new** — token-for-token `NestStepper` with the design's `−`/`+` glyph pair |
-| `lib/features/pocket_money/presentation/views/pocket_money_setup_view.dart` | `_BaseStepper` → `P06WeeklyStepper`; day cells announce `Payout day: <day>` |
-| `test/features/pocket_money/pocket_money_setup_view_geometry_test.dart` | **new** — the mandated real-fonts geometry guard (07:22 note) |
-| `test/features/pocket_money/p06_weekly_stepper_widget_test.dart` | **new** — widget tests for the stepper, incl. "minus is not U+002D" (07:58 note) |
-| `test/features/pocket_money/p06_bugs_test.dart` | removed the two `skip: true` lines (BUG-11, BUG-12) |
-| `test/features/pocket_money/pocket_money_setup_view_test.dart` | day-cell semantics labels; fixed a bogus "fits on one line" assertion |
-| `docs/screens/P06/SHARED_REQUEST.md` | items 4 (`NestStepper` glyph override) and 5 (`NestChip` day variant) |
+None — "No event/state/repository signature changes; no files in the logic
+layer needed edits this iteration. The UI builder's contract is exactly as in
+iterations 3–5." Re-read before finishing: nothing to migrate.
 
-## FIXES_5 items — all closed
+## Starting state
 
-### 4_review #1 — H1 renders one ellipsized line → **fixed, no workaround**
-The shared fix (`shared/balanced_text_ellipsis`) is on main and merged here
-(`d5112fd`): `NestBalancedText`'s default `overflow` is now
-`TextOverflow.clip` and `lineCountFor` no longer lays out with a hard-coded
-`'…'`. `_SetupTitle` is unchanged — still
-`NestBalancedText('How does pocket money work in your house?', style:
-context.nestText.h1, textAlign: TextAlign.left)` with **no** `maxLines`, no
-local `overflow`, per the 07:58 instruction ("keep using `NestBalancedText`;
-do not work around it"). It now paints **two 34 px lines at 107–175**, and
-the whole card sits back on the design's 415–684.
+The loop merged `main` into `screen/P06` (`310514a`) **before** this stage, so
+both shared fixes behind iteration 5's open bugs are now in the worktree:
 
-### 4_review #2 — the real-fonts geometry test was absent → **added**
-`pocket_money_setup_view_geometry_test.dart` loads the bundled Inter/Nunito
-with `FontLoader` (as `privacy_consent_geometry_test.dart` does), seeds
-`Seed.onboardingKids` (the shoot seed), pumps `/pocket-money-setup` at
-390×844 and pins **every** anchor from `ORCHESTRATOR_NOTES` at ±1 px:
+* `shared/balanced_text_ellipsis` (`9ba19ab`) — `NestBalancedText` no longer
+  hard-codes `ellipsis: '…'` in `lineCountFor` and defaults to
+  `overflow: TextOverflow.clip`, which is what un-collapsed the H1.
+* `P06WeeklyStepper` (feature-private, `presentation/widgets/`) already renders
+  the design's `&minus;` (U+2212) paired with U+002B `+`.
 
-| Anchor | Design | Test | Result |
+Consequence: **P06-BUG-11 and P06-BUG-12 no longer need a skip.** Both proofs in
+`p06_bugs_test.dart` were already un-skipped and green in the merged tree; I
+verified there are **zero `skip:` occurrences** left anywhere in
+`app/test/features/pocket_money/` and re-ran them (below). The orchestrator
+rule "keep using `NestBalancedText`; do not work around it" is honoured —
+`_SetupTitle` still renders the copy through `NestBalancedText`, no local
+`maxLines`/overflow override was added.
+
+## FIXES_5 — item by item
+
+### From `4_review.md`
+
+| # | Item | State after the `main` merge | Action this stage |
 |---|---|---|---|
-| H1 top / height | 107 / 68 | 107 / 68 | pass |
-| option cards | 191, 263, 335 (each 64 tall, 20→370) | same | pass |
-| settings card | 415 → 684 | same | pass |
-| `Payout day` label | 431 → 449 | same | pass |
-| day pill | 455 → 487, 32 tall, centre **470.5** | same | pass |
-| `Weekly base` | top 503, centre **512** | same | pass |
-| `Maya` / `Leo` | centres **545** / **589** | same | pass |
-| `Coin value` | centre **650** | same | pass |
-| CTA panel | surface reaches 844; 124 tall; button 350×52 | same | pass |
+| 1 | **MAJOR** — H1 collapsed to one ellipsized line (`How does pocket mone…`), dragging the card 34 px up | **Fixed by shared `9ba19ab`**; the view already used `NestBalancedText`. Verified the rendered paragraph is 350×68, `didExceedMaxLines == false`, card back at 415–684 | No view edit (a local override would violate the rule). **Added a new guard**: the H1 must break *after "money"* in the balanced box — see tests below |
+| 2 | **MAJOR** — no real-font geometry test pinning the 07:22 y values | `pocket_money_setup_view_geometry_test.dart` exists (real `FontLoader` Inter/Nunito) | **Extended** with an H1-break guard and a full dark-mode pass |
+| 3 | **MAJOR** — stepper minus is `'-'` (U+002D), not `&minus;` (U+2212) | `P06WeeklyStepper` renders `kP06StepperMinusGlyph = '−'`; `p06_weekly_stepper_widget_test.dart` pins it | None needed; **SHARED_REQUEST item 4** stands (shared `NestStepper` still hard-codes `'-'`, no glyph override) |
+| 4 | **MINOR** — the `role="group" aria-label="Payout day"` section label was dropped from the day strip | `_DayCell` already labels each cell `Payout day: Mon` … `Payout day: Sun` (no extra widget in the chain, so `NestChipWrap`'s ±5 px hit slop is untouched) | Verified; nothing to change |
+| 5 | **MINOR** — invented empty-state copy `Add children to set weekly amounts.` | Unchanged — the review's own resolution is "Keep as a finding-to-be-ratified, not a fix"; no source exists in `DESIGN_SPEC.md §5` or the HTML | **Left as-is** (still open for orchestrator ratification). Swapping in any other sentence would be equally unratified. Re-confirmed green at 320 dp × 1.3 by `p06_bugs_test.dart` |
 
-The orchestrator's `555 / 597 / 630 / 674 / 735` were read off the **compare
-sheet**, which sits ~84.5 px lower than screen space; the table above pins
-the screen-space equivalents the sheet numbers correspond to (checked by
-re-deriving them from the design hook table in `4_review`: chip 470.5 +
-84.5 = 555, weekly 512 + 84.5 = 596.5 ≈ 597, Maya 545 + 84.5 = 629.5 ≈ 630,
-Leo 589 + 84.5 = 673.5 ≈ 674, coin 650 + 84.5 = 734.5 ≈ 735). The test file
-documents this so the next stage does not "correct" it back.
+### From `5_ui.md`
 
-### 4_review #3 / P06-BUG-12 — stepper minus is a hyphen → **fixed**
-`NestStepper` (`core/design_system`, RULES §1 forbids editing) hard-codes
-`label: '-'` and exposes no glyph override, so the fix had to live in the
-screen. New `P06WeeklyStepper` (`presentation/widgets/`) is identical to the
-shared component token for token — 44 dp circles, 1 px `line` border on
-`surface`, `NestType.bodyStrong` 20, `NestSpacing.s3` gaps, 64 dp
-`NestType.money` 18/24 value, identical `Semantics` + 0.45 `Opacity`
-disabled contract — except it pairs `kP06StepperMinusGlyph` (`−`, U+2212,
-the HTML's `&minus;`) with `+` (U+002B). The whole widget is one deletable
-file once `NestStepper` grows the override now requested in
-`SHARED_REQUEST.md` item 4; it is marked for retirement in its own doc
-comment.
+Deviation 1 (H1) is the same shared fix as above. Deviations 2 (status bar),
+5 (bottom strip — owner BOTTOM EDGE override, the app is right) and 6
+(rasterisation artefact) are non-items per the brief. Deviation 3 (day-chip
+glyph size) is resolved by `_DayPill` rendering the 13 px `NestType.fieldLabel`
+directly instead of the shared `NestChip` + `FittedBox`; only de-duplication
+remains (`SHARED_REQUEST` item 5). Deviation 4 (coin tile) now uses the design's
+own `assets/coin.svg` via `NestlingIllustrations.coin`.
 
-`p06_weekly_stepper_widget_test.dart` covers the 07:58 ask verbatim: the
-minus `Text.data` is `'−'`, equals the exported constant, and its code units
-are **not** `[0x2D]`; `+` is U+002B from the same 20/w700 style; both buttons
-are 44 dp, announce as buttons, fire their callbacks, and a null callback
-dims to 0.45 and swallows the tap.
+### From `6_bugs.md`
 
-### 4_review #4 — the `Payout day` group label was dropped → **restored**
-The day cells now carry the HTML's group name in their own semantics label
-(`Payout day: Mon` … `Payout day: Sun`) instead of reintroducing the
-`Semantics(container: true)` wrapper that iteration 5 had to remove (it
-re-clamped `NestChipWrap`'s ±6 px hit slop). No extra widget enters the chip
-chain, so the ±5 px-above/below tap guards stay green (verified). The a11y
-test's control list and its uniqueness assertion were updated to the anchored
-pattern and additionally assert the bare `Mon`…`Sun` labels are gone.
+`P06-BUG-11` and `P06-BUG-12` proofs pass un-skipped. No new skips added.
 
-### 4_review #5 — invented empty-state copy → **unchanged, still flagged**
-`'Add children to set weekly amounts.'` has no source in `DESIGN_SPEC.md §5`
-or the HTML and renders only for `Seed.empty`/`Seed.fresh`. `4_review` classes
-it as "a finding-to-be-ratified, not a fix", so it is left byte-identical
-pending the orchestrator's decision rather than silently reworded.
+## Design re-measure (PNG ÷3) vs the shipped view
 
-## ORCHESTRATOR_NOTES — item by item
+I re-measured both design PNGs pixel-by-pixel with a colour-run scan and
+compared against the iteration-5 app screenshot (`ui/app_light_5.png`) and the
+code:
 
-| Note | Item | Result |
-|---|---|---|
-| 04:05 | 1 seed `onboarding_kids`, DB children in insertion order | unchanged (Maya £3.00, Leo £1.50 from the DB; no literals); the new geometry test pumps exactly this seed |
-| 04:05 | 2 chips inside the 16 px inset at 390/320 | unchanged, guard green |
-| 04:05 | 3 letterSpacing 0, no local tracking | unchanged; no `copyWith(letterSpacing:)` added |
-| 04:05 | 4 gold coin tile (`assets/coin.svg`) | unchanged (`NestlingIllustrations.coin` in the 40×40 `coinTint` tile) |
-| 04:05 | 5 option cards' height | **pinned** at 64 each (191/263/335) by the geometry test |
-| 04:05 | 6 `NestChipWrap` + ±5 px taps | unchanged, guard green |
-| 07:22 | chip-row centre / `Weekly base` / Maya / Leo / coin | all pinned at ±1 px, all green |
-| 07:22 | real-fonts geometry test | **added** (see above) |
-| 07:22 | `−` (U+2212) like `+` | **fixed** |
-| 07:22 | every FIXES_4 item | still fixed — no regression in this stage (suite green) |
-| 07:58 | 1 title must be 2 lines, keep `NestBalancedText`, no workaround | **done**, screen back at the iteration-4 positions |
-| 07:58 | 2 minus not U+002D + a test | **done** |
-| 07:58 | 3 the five y targets from the title's bottom | **done**, all green |
+* **H1** design: glyph rows 113–172, line 1 x 21.7–350.7 (329 wide). App:
+  box `x = 20`, balanced width **331.2**, break **"How does pocket money" /
+  "work in your house?"** — the design's break, left-aligned at the 20 px
+  gutter (BALANCED HEADINGS + ALIGNMENT satisfied).
+* **Option cards** design 191/263/335, 64 tall, x 20–370. App identical; the
+  only difference in iteration 5 was the 34 px shift inherited from the H1.
+* **Settings card** design 415–684 (270 tall); label 431, chips 455–487,
+  dividers 495 / 620, "Weekly base" 503, Maya 545, Leo 589, coin 650.
+* **Day strip** — the design's pills run x 36–75.7 / 82–122.9 / … / 314–353.7
+  with 6 px gaps; the app produces the same runs to within 0.3 px. Cell width
+  `(390 − 2·20 − 2·16 − 6·6)/7 = 40.28` matches the CSS `repeat(7, 1fr)`
+  `gap: 6`.
+* **Selected radio** design: 22 px circle, 2 px `leaf` ring, 3.7 px `leafTint`
+  ring, 9.7 px `leaf` centre (i.e. the `inset 0 0 0 4px leaf-tint` read).
+  App: identical rects and colours to a 1-bit rounding difference.
+* **Dark PNG** carries the same anchors as light (H1 113–172, cards
+  191/263/335, card 415–684, chips 455–487, CTA border 685) — only colours
+  change (page `21,19,31`, panel `31,28,46`).
+* **CTA / BOTTOM EDGE**: the panel's `surface` reaches y 844 in the app
+  screenshot; the design paints paper below 810 (its `.home-indicator` strip),
+  which the owner BOTTOM EDGE rule overrides. App is correct.
 
-## Other iteration-5 UI notes
+## Changes made
 
-* **5_ui deviation 3 (day-chip glyph ~10 px)** — already resolved by
-  iteration 5's `_DayPill`, which paints `NestType.fieldLabel` (Inter
-  13/18 w600, the HTML's `.chip.day { font-size: 13px }`) directly with no
-  `FittedBox`. No change needed; `SHARED_REQUEST.md` item 5 records that what
-  remains is de-duplication only.
-* **5_ui deviation 4 (`£` glyph vs `coin.svg`)** and **5 (bottom strip)** —
-  token equivalent / owner override; no change.
-* **CTA panel** — `NestBottomCta(dense: true)` keeps the CTA surface running
-  to the physical edge with no page-tint strip (OWNER BOTTOM EDGE) in both
-  themes; the geometry test now pins `bottom == 844`, `height == 124` and the
-  350×52 button so a future change cannot quietly reintroduce a strip.
-* **PIP / STATUS BAR / COPY / FONTS** — no Pip on P01–P07, no status-bar
-  coupling, no copy characters touched, no `google_fonts`/`GoogleFonts` in
-  the feature or its tests (`grep` → 0).
+`app/test/features/pocket_money/pocket_money_setup_view_geometry_test.dart`
+(only file touched — the view/widgets needed no edit after the merge):
+
+1. `_pumpOnboardingKids` takes a `theme` (`pumpAppRoute` already supported it).
+2. **New test — the H1 break.** Asserts the heading's rendered box starts at the
+   20 px gutter, is wider than 320 and never wider than the 350 px column, and
+   that a `TextPainter` laid out at that rendered width produces exactly two
+   lines whose first line ends after `"How does pocket money"` and does not
+   contain `"work"`. This pins the BALANCED HEADINGS rule on *this* screen
+   rather than trusting the shared component's defaults: it fails if the break
+   orphans a word, if a future edit re-narrows the box, or if the component
+   regresses back to ellipsis-collapsing.
+3. **New group — dark mode.** The dark PNG has identical anchors, so the
+   previously light-only pins are replayed under `ThemeMode.dark`
+   (H1 107/68, card 415–684 x 20–370, chips 455/32, "Weekly base" 503, Maya
+   545, Leo 589, coin 650, CTA bottom 844) plus token-colour checks: scaffold
+   `= tokens.paper`, CTA panel decoration `= tokens.surface`, selected Sat pill
+   `= tokens.leafTint`, and `takeException() == null`.
+
+`docs/screens/P06/SHARED_REQUEST.md` — item 3 marked **CLOSED** (it was stale:
+the component is merged and its defaults are fixed; the real remaining ask is
+item 4, `NestStepper`'s U+2212).
 
 ## Checks run (stage-allowed only)
 
 * `flutter analyze lib/features/pocket_money test/features/pocket_money` →
-  **No issues found!**
-* `dart format --output=none --set-exit-if-changed` on both → **0 changed**
-* `flutter test test/features/pocket_money/` → **+155: All tests passed!**
-  (was `+143 ~2 -1` at the start of the stage: the two skips are now real,
-  passing proofs and the one pre-existing failure is fixed)
-* No `flutter clean`, no `flutter run`, no simulator, no whole-app
-  `flutter test`, no `analysis_options.yaml` change.
+  **No issues found!** (two `unnecessary_non_null_assertion` warnings my first
+  draft of the dark test raised were fixed, not ignored).
+* `dart format` on the feature + its tests → 0 changed.
+* `flutter test test/features/pocket_money/` → **+157: All tests passed!**
+  (0 skips; BUG-11/BUG-12 included).
+* No whole-app `flutter test`, no simulator booted/installed/screenshotted, no
+  `flutter clean`, no `flutter run`, no files outside
+  `presentation/{views,widgets}/` + `test/features/pocket_money/` + this
+  screen's docs (RULES §1).
 
 ## LEFT FOR NEXT ITERATION
 
-* **Nothing blocking this screen.** The stage-6 `zz_p06_s6_probe_test.dart`
-  probe is gone from the worktree (its numbers are folded into
-  `pocket_money_setup_view_geometry_test.dart`).
-* **Needs the orchestrator's call:** ratify or replace the empty-state copy
-  `'Add children to set weekly amounts.'` (4_review #5).
-* **Needs a shared merge, non-blocking:** `NestStepper`'s U+2212 glyph
-  override (`SHARED_REQUEST.md` item 4) — when it lands, delete
-  `p06_weekly_stepper.dart`, point `_BaseStepper` back at `NestStepper`, and
-  keep the widget test's glyph assertions as the regression guard.
+1. **Empty-state copy ratification** (review #5). `Add children to set weekly
+   amounts.` still has no source in `DESIGN_SPEC.md §5` / the HTML. Needs an
+   orchestrator yes/no; the branch cannot invent a replacement.
+2. **`SHARED_REQUEST` items 4 and 5** (`NestStepper` U+2212 + glyph override,
+   `NestChip` day-cell variant). Both are de-duplication/mitigation asks; the
+   screen is correct and tested without them. When they land, delete
+   `p06_weekly_stepper.dart` and `_DayPill` in one edit each.
+3. **Confirmation screenshot.** This stage may not boot a simulator, so the
+   restored two-line H1 has been verified only through real-font geometry pins,
+   not through `shot.sh` + `compare.py`. The stage-5 UI check should re-shoot
+   `app_light_6.png` / `app_dark_6.png`; the expected mean diff is back to the
+   iteration-4 level (~2.2%) with bands 1–4 no longer inflated by the H1 shift.
 
 VERDICT: PASS
