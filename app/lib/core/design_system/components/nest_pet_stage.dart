@@ -19,10 +19,12 @@ import 'package:nestling/core/design_system/tokens/spacing.dart';
 ///
 /// Explicit-size mode: pass [nestWidth] (or [visibleNestWidth]) and
 /// optionally [fixedPipHeight]/[nestHeight] to request the design's exact
-/// slot — e.g. K03's 236-wide nest (which paints the design's 198 px visible
-/// outline) with its ≈152-tall Pip in a 236-tall block — without forking the
+/// slot — e.g. K03's 236-wide × 188-tall nest (which paints the design's
+/// 198 × 86 visible outline) with its 152-tall PipAvatar (feet 23 px inside
+/// the bowl) in a 236-tall block — without forking the
 /// scene. The nest art fills its box, so the visible bowl outline is always
-/// `nestWidth × PipNestFallback.visibleNestRatio` (≈0.84): [nestWidth] sets
+/// `nestWidth × PipNestFallback.visibleNestRatio` (≈0.84) by
+/// `nestHeight × 110/240`: [nestWidth] sets
 /// the BOX, [visibleNestWidth] sets the OUTLINE directly (they are mutually
 /// exclusive). The scene lays out against the ACTUAL parent width: the nest
 /// stays centred, decor never shifts it, and a request wider than the box
@@ -72,11 +74,10 @@ class NestPetStage extends StatelessWidget {
   final double? nestWidth;
 
   /// Explicit nest-box height (logical px). The art fills the box, so the
-  /// bowl outline stays `nestWidth × visibleNestRatio` whatever the height;
-  /// the height only sets how much of the square art (bowl + shadow bleed)
-  /// the box holds, and hence the block height. K03 passes 156 under its
-  /// 236-wide box for the design's 236-tall slot. Null (default) keeps the
-  /// legacy square art (`nestH == nestW`).
+  /// bowl outline is `nestWidth × visibleNestRatio` by
+  /// `nestHeight × 110/240` (outer bowl 95…205/240); K03 passes 188 under
+  /// its 236-wide box for the design's 198 × 86 outline in a 236-tall slot.
+  /// Null (default) keeps the legacy square art (`nestH == nestW`).
   final double? nestHeight;
 
   /// Visible nest outline width (logical px), converted to the box via

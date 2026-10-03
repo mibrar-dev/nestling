@@ -20,7 +20,6 @@
 // static SVG via flutter_svg, and reduced motion uses the same path.
 
 import 'dart:ffi' as ffi;
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -423,19 +422,23 @@ class _PipBody extends StatelessWidget {
 ///   pad, and the stage is `6 + nestH + 10` tall. Bit-for-bit the historical
 ///   behaviour.
 /// * Explicit (`true`): [stageW] is the ACTUAL parent width and the nest/pip
-///   are centred in it. Pip is seated on the bowl's visible rim — the pip
-///   box bottom lands [rimOverlap] below the rim ([nestRimTopFraction] of
-///   the box) — and the stage is exactly tall enough for the design's slot
-///   (K03: 236). Decorative layers (glow, ground shadow) paint with
+///   are centred in it. Pip sits IN the bowl — the pip box bottom lands
+///   [rimOverlap] below the rim ([nestRimTopFraction] of the box), which puts
+///   the v2 avatar's feet ≈23 px below the rim (box 44.2, feet 44.2 − 21.2)
+///   — and the stage is always [_explicitSlotH] (236) for the design's slot.
+///   Decorative layers (glow, ground shadow) paint with
 ///   [Clip.none]: they may bleed past the nest but never move it, and the
 ///   layout never exceeds [stageW]. When the request is wider than the box,
 ///   the caller scales `nestW`/`nestH`/`pipH` down uniformly first, so the
-///   scene never overflows.
+///   scene never overflows. Pip may extend above the slot (negative pipTop,
+///   transparent padding over the speech gap) instead of pushing the nest
+///   down, so the nest stays at the design height.
 ///
 /// The nest art (`nest.svg`, 240-space) fills its box ([BoxFit.fill], like
 /// the design's `<img>` stretch), so the visible bowl outline is always
-/// [visibleNestRatio] × box width, whatever the box height: a 236-wide box
-/// paints the design's 198 px outline.
+/// [visibleNestRatio] × box width by (205 − 95)/240 × box height: a 236-wide
+/// × 188-tall box paints the design's 198 × 86 outline (202/240 × 236,
+/// 110/240 × 188).
 class PipNestFallback extends StatelessWidget {
   const PipNestFallback({
     required this.stage,
@@ -466,8 +469,9 @@ class PipNestFallback extends StatelessWidget {
 
   /// Explicit nest-box height (logical px). Null (default) keeps the legacy
   /// square art (`nestH == nestW`). Explicit-size mode passes the design's
-  /// slot height (K03: 156 under a 236-wide box) so the slot — not the art —
-  /// sets the layout height while the bowl keeps its outline via [BoxFit.fill].
+  /// bowl height (K03: 188 under a 236-wide box paints the 198 × 86 outline:
+  /// 202/240 × 236 by 110/240 × 188) so the slot — not the art — sets the
+  /// layout height while the bowl keeps its outline via [BoxFit.fill].
   final double? nestH;
 
   /// Selects the explicit rim-seated layout (see the class docs). False keeps
@@ -496,9 +500,13 @@ class PipNestFallback extends StatelessWidget {
   static const double nestBowlBottomFraction = 205 / 240;
 
   /// How far the pip box bottom sits below the visible rim in explicit
-  /// mode: the design seats Pip ≈20 px inside the bowl (pip bottom ≈301,
-  /// rim ≈278 at 390×844).
-  static const double rimOverlap = 20;
+  /// mode: the design seats PipAvatar's feet ≈23 px inside the bowl
+  /// (feet ≈301, rim ≈278 at 390×844). The v2 avatar's feet sit ≈21 px
+  /// above its box bottom (feet cy 195 + ry 8.5 + 3 px stroke = 206.5/240;
+  /// 33.5/240 × 152 ≈ 21.2), so the box lands ≈44 px below the rim.
+  /// Generic boxes (no padding, e.g. test probes) land with the box = feet
+  /// ≈44 px below the rim; use PipAvatar in the K03 harness to pin feet.
+  static const double rimOverlap = 44.2;
 
   /// Breathing room above the nest, kept from the legacy scene.
   static const double _padTop = 6;
@@ -506,16 +514,34 @@ class PipNestFallback extends StatelessWidget {
   /// Shadow bleed below the nest, kept from the legacy scene.
   static const double _bleed = 10;
 
+  /// Explicit-slot block height (logical px): the design's 236 px pet slot
+  /// (K03 `.k3-pet` 236). The explicit slot is always exactly this tall so
+  /// the speech bubble above and the hearts below never move.
+  static const double _explicitSlotH = 236;
+
+  /// Explicit-slot bleed below the nest box (logical px). The legacy 10 px
+  /// bleed assumed a square nest; the explicit 236-wide × 188-tall bowl
+  /// (86 px outline, see below) needs 31.4 px below the box to keep the
+  /// 236 block with the nest top at 16.6 (outline 278). Decorative (ground
+  /// shadow paints into it with `Clip.none`); hearts stay put.
+  static const double _explicitBleed = 31.4;
+
   /// Explicit-slot geometry shared by the SVG/avatar fallback, the Rive box
   /// (`PipInNest`'s artboard is letterboxed into the same slot) and the
   /// shared tests, so the paths can never drift apart.
   ///
   /// Returns in-stage offsets (stage top = 0): the nest top, the custom-pip
-  /// box top (its bottom lands exactly `rimOverlap` below the rim), the
-  /// v1-SVG box top (contact-seated, clamped to 0 so it never clips — the
-  /// clamp only ever touches transparent padding), and the stage height.
-  /// K03 (`nestH` 156, `pipH` 152, fledgling contact) lands nest top 70.25,
-  /// custom-pip top 0 and stage height 236.25.
+  /// box top (its bottom lands exactly `rimOverlap` below the rim; for the
+  /// v2 PipAvatar that puts the feet ≈23 px below the rim, inside the bowl),
+  /// the v1-SVG box top (its contact lands ≈23 px below the rim, inside the
+  /// bowl — same feet line, different box due to padding), and the stage
+  /// height. The slot is always [_explicitSlotH] (236) so hearts below never
+  /// move: `nestTop = 236 − nestH − _explicitBleed`, independent of Pip, so
+  /// Pip may extend above the slot (negative tops, transparent padding over
+  /// the speech gap, `Clip.none` paints it) instead of pushing the nest down.
+  /// K03 (`nestH` 188, `pipH` 152, fledgling contact 213/240) lands nest top
+  /// 16.6, custom-pip top −16.8 (box 173…323, feet 301, head 199), v1 top
+  /// −20.9 (contact 301) and stage 236.
   static ({double nestTop, double pipTop, double pipTopSvg, double stageH})
   explicitGeometry({
     required double nestH,
@@ -523,12 +549,12 @@ class PipNestFallback extends StatelessWidget {
     required double contactFrac,
   }) {
     final seat = nestRimTopFraction * nestH + rimOverlap;
-    final nestTop = math.max(_padTop, pipH - seat);
+    final nestTop = _explicitSlotH - nestH - _explicitBleed;
     return (
       nestTop: nestTop,
       pipTop: nestTop + seat - pipH,
-      pipTopSvg: math.max(0, nestTop + feet * nestH - contactFrac * pipH),
-      stageH: nestTop + nestH + _bleed,
+      pipTopSvg: nestTop + nestRimTopFraction * nestH + 23 - contactFrac * pipH,
+      stageH: nestTop + nestH + _explicitBleed,
     );
   }
 
