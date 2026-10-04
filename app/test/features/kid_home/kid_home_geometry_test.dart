@@ -110,9 +110,16 @@ const Key _pixelProbe = ValueKey<String>('k03_meadow_probe');
 Future<void> _pumpForPixels(
   WidgetTester tester, {
   required ThemeMode theme,
+  double bottomInset = 0,
 }) async {
   tester.view.physicalSize = const Size(390 * 3, 844 * 3);
   tester.view.devicePixelRatio = 3;
+  if (bottomInset > 0) {
+    // The design's dock top (y 719) is measured on a device with the OS
+    // home-indicator inset, so the lower content rows are read with it too.
+    tester.view.padding = FakeViewPadding(bottom: bottomInset * 3);
+    tester.view.viewPadding = FakeViewPadding(bottom: bottomInset * 3);
+  }
   addTearDown(tester.view.reset);
   GetIt.instance<ThemeModeController>().selectMode(theme);
   await tester.pumpWidget(
@@ -532,6 +539,243 @@ void main() {
           },
         );
       }
+    }
+  });
+
+  // ITERATION 13 (`shared/kid_meadow`, ORCHESTRATOR_NOTES 02:45): K03's
+  // feature-local in-flow meadow band is GONE. The design paints the lower
+  // content area as the SCREEN background (`components.css` l.25), so
+  // `KidScope` owns it and nothing in the feature paints a hill or a grade.
+  //
+  // Two properties follow from "it is the background", and NEITHER is provable
+  // from the widget tree (the structural pins in `kid_home_view_test.dart`
+  // pass on a band that merely has a different class name):
+  //
+  //  1. the grade must reach EVERY row of the run. A band that compresses the
+  //     design's 321 px run into its own in-flow height stops grading and ends
+  //     flat `kid-meadow` — which is exactly the dark-mode "flat navy" bug the
+  //     orchestrator called out four times (FIXES_8…_10, ORCHESTRATOR_NOTES
+  //     10:52).
+  //  2. it must not MOVE when the quest list scrolls. An in-flow band scrolls
+  //     away from under the cards; the design's meadow is the screen's, so
+  //     row 700 reads the same before and after a scroll to the end. This is
+  //     what catches the band coming back under any name.
+  //
+  // Both are measured on the painted bytes, in BOTH themes, at the design's
+  // absolute rows — the numbers below were read from
+  // `design/screens/{light,dark}/K03-kid-home.png` ÷3 with PIL at x = 10 (the
+  // 20 px gutter, so no card, chip or the dock's ink border is in the sample):
+  //
+  //   y 522  light rgb(242,250,255) · dark rgb( 44, 53,114)  = kid-sky-bottom
+  //   y 523  light rgb(234,247,226) · dark rgb( 37, 51, 89)  = kid-horizon  (hard stop)
+  //   y 600  light rgb(224,244,214) · dark rgb( 36, 57, 82)
+  //   y 700  light rgb(211,239,199) · dark rgb( 33, 64, 72)
+  //   y 718  light rgb(208,238,196) · dark rgb( 33, 65, 71)  = still the run
+  //
+  // Row 719 is the dock's own 3 px ink border and 722+ its surface, so the run
+  // stops at 718. The design's last rows (810…843) are the hill-front tint
+  // below a dock that ENDS at 809 — the green strip the owner rejected
+  // (ORCHESTRATOR_NOTES "OWNER FEEDBACK"), so that band is deliberately NOT
+  // pinned; the bottom-edge group proves the dock surface runs to 844 instead.
+  group('K03 — the meadow is the shared screen background (shared/kid_meadow)', () {
+    const themes = <(String, ThemeMode)>[
+      ('light', ThemeMode.light),
+      ('dark', ThemeMode.dark),
+    ];
+    for (final (themeName, theme) in themes) {
+      // Every row of the design's run, so "the grade reaches the whole lower
+      // screen" is a measured fact rather than a comment about the painter.
+      const runRows = <double>[523, 530, 560, 600, 650, 690, 710, 718];
+      const designRgb = <int, String>{
+        523: 'rgb(234,247,226) · rgb(37,51,89)',
+        530: 'rgb(233,247,225) · rgb(37,52,89)',
+        560: 'rgb(229,246,221) · rgb(37,54,86)',
+        600: 'rgb(224,244,214) · rgb(36,57,82)',
+        650: 'rgb(217,241,207) · rgb(35,60,77)',
+        690: 'rgb(212,240,200) · rgb(34,63,73)',
+        710: 'rgb(209,239,197) · rgb(33,65,71)',
+        718: 'rgb(208,238,196) · rgb(33,65,71)',
+      };
+
+      testWidgets(
+        '$themeName: the 62% hard stop and the whole run to the dock are painted',
+        (tester) async {
+          await setUpTestScope();
+          await _pumpForPixels(tester, theme: theme, bottomInset: 34);
+          final tokens = Theme.of(tester.element(find.byType(NestProgress)))
+              .extension<NestTokens>()!;
+
+          // The horizon stop is HARD: the row above 62 % is still sky-bottom,
+          // row 523 is `kid-horizon` exactly. A band that eased into the
+          // meadow (or started its run somewhere else) breaks this pair.
+          final sky = await _pixelAt(tester, 10, 522);
+          for (final (channel, value, byte) in <(String, double, int)>[
+            ('red', tokens.kidSkyBottom.r, sky[0]),
+            ('green', tokens.kidSkyBottom.g, sky[1]),
+            ('blue', tokens.kidSkyBottom.b, sky[2]),
+          ]) {
+            expect(
+              byte,
+              closeTo(value * 255, 2),
+              reason: 'row 522 is still kid-sky-bottom ($channel)',
+            );
+          }
+
+          for (final y in runRows) {
+            final sampled = await _pixelAt(tester, 10, y);
+            final expected = _designMeadowAt(tokens, y);
+            final got = 'rgb(${sampled[0]},${sampled[1]},${sampled[2]})';
+            expect(sampled[3], 255, reason: 'the meadow at (10, $y) is opaque');
+            for (final (channel, value, byte) in <(String, double, int)>[
+              ('red', expected.r, sampled[0]),
+              ('green', expected.g, sampled[1]),
+              ('blue', expected.b, sampled[2]),
+            ]) {
+              expect(
+                byte,
+                closeTo(value * 255, 2),
+                reason:
+                    '$channel at (10, $y) must follow the shared '
+                    'kid-horizon→kid-meadow grade; got $got '
+                    '(design ${designRgb[y.round()]})',
+              );
+            }
+          }
+
+          // The shared hills must stay BEHIND the dock, exactly as the HTML puts
+          // them (`.meadow`: bottom 0, 136 tall → crest at x 10 ≈ y 764, under
+          // the dock that starts at 719). If the hills were raised, made taller
+          // or pulled up in flow, their flat `kid-meadow` / hill-front tint
+          // would land in the 708…718 window the design paints as the run.
+          //
+          // Green and blue are the discriminating channels: the run sits
+          // 6…23 levels off flat `kid-meadow` across these rows and both
+          // themes, with blue the sturdier of the two (≥12 everywhere; light's
+          // green only 6…7). So the assertion is "at least one channel is well
+          // clear of the flat tone" — a leaked hill scores 0 on both. Red is
+          // not used: dark's run and dark's meadow share a red level (33 vs 30
+          // at row 700), which would be a false alarm rather than a signal.
+          for (final y in <double>[700, 710, 718]) {
+            final sampled = await _pixelAt(tester, 10, y);
+            final flat = _designMeadowAt(
+              tokens,
+              NestDevice.height, // fully graded = kid-meadow
+            );
+            final offGreen = (sampled[1] - flat.g * 255).abs().round();
+            final offBlue = (sampled[2] - flat.b * 255).abs().round();
+            expect(
+              <int>[offGreen, offBlue].reduce((a, b) => a > b ? a : b),
+              greaterThan(8),
+              reason:
+                  'row $y is the graded run in the design, not the flat hill '
+                  'tone: off kid-meadow by green $offGreen / blue $offBlue — '
+                  'the shared hill has leaked above the dock',
+            );
+          }
+
+          await disposeApp(tester);
+        },
+      );
+
+      // The design's meadow is the SCREEN's, so scrolling the quest list must
+      // not move it. An in-flow band does move: after a scroll to the end its
+      // own run would be gone from under the cards and the row would fall back
+      // to a flat tone or to whatever is behind the list.
+      testWidgets('$themeName: scrolling the quests does not move the meadow', (
+        tester,
+      ) async {
+        await setUpTestScope();
+        await _pumpForPixels(tester, theme: theme, bottomInset: 34);
+        final tokens = Theme.of(tester.element(find.byType(NestProgress)))
+            .extension<NestTokens>()!;
+
+        const before = <double>[600, 700];
+        final start = <double, List<int>>{
+          for (final y in before) y: await _pixelAt(tester, 10, y),
+        };
+        // Control for the frame of reference: the progress bar IS in the
+        // scrolling content, so it must end up `offset` px higher. Without this
+        // the "the meadow did not move" rows could be passing simply because
+        // the sample rows track the content instead of the screen.
+        final progressBefore = tester.getTopLeft(find.byType(NestProgress)).dy;
+
+        // The list must actually scroll for this to mean anything: the design
+        // shows 6 cards and only 1.5 fit above the dock.
+        final list = find.byType(Scrollable).first;
+        expect(
+          tester.state<ScrollableState>(list).position.maxScrollExtent,
+          greaterThan(200),
+          reason: 'the quest list has to overflow for the scroll to be a test',
+        );
+        for (var i = 0; i < 12; i++) {
+          await tester.drag(list, const Offset(0, -300));
+          await tester.pump();
+        }
+        // Each drag past the end of the list leaves the content in an
+        // overscroll bounce (~15 px of drag per 300 px of gesture) that a
+        // single `pump` samples mid-flight — the position is already clamped
+        // at `maxScrollExtent` while the bar keeps travelling. Settle the
+        // spring before measuring anything. Safe here (unlike the loading
+        // states, where an endless spinner would never settle) because the
+        // loaded screen is already on the widget tree with its 6 cards.
+        await tester.pumpAndSettle(const Duration(milliseconds: 50));
+        // Read the position AFTER the drags and the settle: the lazily-built
+        // card column can rebuild the scroll view mid-drag, and a reference
+        // captured before it would go stale.
+        final position = tester.state<ScrollableState>(list).position;
+        expect(
+          position.pixels,
+          closeTo(position.maxScrollExtent, 1),
+          reason: 'scrolled to the end of the list',
+        );
+        expect(
+          position.pixels,
+          greaterThan(200),
+          reason:
+              'the content must really have moved, or "the meadow did not '
+              'move" would be vacuous (design: 6 cards, ~1.5 visible)',
+        );
+
+        // The control: the progress bar travelled the full scroll offset, so
+        // the sample rows below really do watch the SCREEN, not the content.
+        expect(
+          tester.getTopLeft(find.byType(NestProgress)).dy,
+          closeTo(progressBefore - position.pixels, 2),
+          reason:
+              'the progress bar is in the scroll view, so it moves by exactly '
+              'the scroll offset (${progressBefore.toStringAsFixed(1)} - '
+              '${position.pixels.toStringAsFixed(1)})',
+        );
+
+        for (final y in before) {
+          final now = await _pixelAt(tester, 10, y);
+          final expected = _designMeadowAt(tokens, y);
+          for (final (channel, value, byte, was)
+              in <(String, double, int, int)>[
+                ('red', expected.r, now[0], start[y]![0]),
+                ('green', expected.g, now[1], start[y]![1]),
+                ('blue', expected.b, now[2], start[y]![2]),
+              ]) {
+            expect(
+              byte,
+              closeTo(value * 255, 2),
+              reason:
+                  '$channel at (10, $y) after scrolling to the end must still '
+                  'be the shared grade — an in-flow meadow band scrolls away '
+                  'with the cards; got rgb(${now[0]},${now[1]},${now[2]})',
+            );
+            expect(
+              byte,
+              closeTo(was, 1),
+              reason:
+                  'the background at row $y did not move when the content '
+                  'scrolled ($channel: $was → $byte)',
+            );
+          }
+        }
+
+        await disposeApp(tester);
+      });
     }
   });
 }

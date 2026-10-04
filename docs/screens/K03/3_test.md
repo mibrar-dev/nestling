@@ -1,160 +1,237 @@
-# K03 Kid home — Stage 3 (TEST), iteration 12
+# K03 Kid home — Stage 3 (TEST), iteration 13
 
 Scope: `kid_home` / `/kid-home`, kid mode. Tests in
 `app/test/features/kid_home/` (`kid_home_view_test.dart`,
-`kid_home_bloc_test.dart`, `k03_bugs_test.dart`, `kid_home_geometry_test.dart`).
+`kid_home_bloc_test.dart`, `kid_home_geometry_test.dart`,
+`kid_home_repository_test.dart`, `k03_bugs_test.dart`).
 Per RULES §1 this stage only touched `app/test/features/kid_home/**` and
 `docs/screens/K03/**` — **no screen code was patched, and no new bug was found,
 so there is nothing new to record as a defect**.
 
 **No simulator was booted, installed on or captured** (SIMULATORS rule: only the
-UI-check stage may, and only `BC440E48-…`).
+UI-check stage may, and only `BC440E48-…`). The UI-check stage had already run
+this iteration before me (`5_ui.md`, `VERDICT: PASS`); I read its report but
+took no screenshots of my own.
 
 ## Verification run (in `app/`, this iteration)
 
-- `dart format --set-exit-if-changed .` → **381 files, 0 changed**.
+- `dart format --set-exit-if-changed .` → **546 files, 0 changed**.
 - `flutter analyze` → **No issues found!** (`analysis_options.yaml` untouched, no
-  new suppressions).
-- `flutter test` (whole app) → **exit 0, `+1936 ~2`** — 1936 pass, 2 skip, 0 fail.
-  Both skips are outside `kid_home` (onboarding P02, pocket-money P12).
-- `flutter test test/features/kid_home/` → **exit 0, `+186 ~1`** — 186 pass,
-  **1 skip** (the bugs stage's parked K03-BUG-16, see below), 0 fail.
+  new suppressions, no `google_fonts` anywhere in the feature's tests).
+- `flutter test` (whole app) → **exit 0, `+3277 ~4`** — 3277 pass, 4 skip, 0
+  fail.
+- `flutter test test/features/kid_home/` → **exit 0, `+346 ~3`** — 346 pass,
+  3 skip, 0 fail (this directory also holds K01's suite).
 
-| File | Iteration 11 | Now |
-| --- | --- | --- |
-| `kid_home_view_test.dart` | 89 | **89** |
-| `kid_home_bloc_test.dart` | 31 | **31** |
-| `k03_bugs_test.dart` | 59 | **59** (+1 parked proof from the bugs stage) |
-| `kid_home_geometry_test.dart` | 6 | **7** (+1 from this stage) |
+| File | Iteration 12 | Now | Δ |
+| --- | --- | --- | --- |
+| `kid_home_view_test.dart` | 89 | **87** | build merged/split some layout pins |
+| `kid_home_bloc_test.dart` | 31 | **38** | build added event-path coverage |
+| `kid_home_geometry_test.dart` | 7 | **11** | **+4 from this stage** |
+| `kid_home_repository_test.dart` | 2 | **2** | — |
+| `k03_bugs_test.dart` | 59 (~1) | **59 (~2)** | stage 6 parked K03-BUG-17 (not mine) |
 
-## What iteration 12 delivered (the surface under test)
+The 3 skips are all parked proofs, not failures: `K03-BUG-16` and
+`K03-BUG-17` (both open, both shared/core-owned, added by other stages to
+`k03_bugs_test.dart`) and one outside `kid_home`.
 
-1. **`shared/speech_tail` (main b1137f3)** turned the bubble's tail from a
-   10.25 px **in-flow** box into a CSS `.speech::after` **overflow**
-   (`NestSpeechBubble` is now a `Stack` with a `Positioned` tail). Correct in
-   itself, but it removed 10.25 px from the pet stage's laid-out height.
-2. **K03 absorbed it with `_kStageToHearts = 21`** (was 10.75) — the only lever
-   the screen has, since the shared stage owns the bubble→pet gap. The rows
-   below the nest are back on the design's numbers; the hero block is now ~10 px
-   high (see "Known shared residual").
-3. **The build moved the geometry pins to the current values** and put the
-   design's number in every `reason` (rim `closeTo(269, 2)` "the design's rim is
-   278 — 10 px high until SHARED_REQUEST #18"), so the pins hold the app where
-   it is *and* document where it must go back to.
-4. **The bugs stage added a parked proof, K03-BUG-16**, asserting the hero art
-   against the design's rows (`flutter test --run-skipped --plain-name
-   K03-BUG-16` → rim 269.02 vs 278).
+## The surface under test this iteration
+
+Two shared changes landed and both are K03's whole delta:
+
+1. **`shared/pet_bubble_gap`** — `NestPetStage` grew `bubbleGap`, and K03 now
+   passes the design's own 14 (`.k3-pet { margin: 14px auto 0 }`,
+   `K03-kid-home.html` l.24) with `_kStageToHearts` back to `NestSpacing.s4`.
+2. **`shared/kid_meadow`** — K03's feature-local in-flow `_MeadowPainter` band
+   is **gone**; `KidScope` paints the design's `.screen.kid` gradient
+   (`components.css` l.25) and the shared `.meadow` hills sit at the bottom
+   exactly where the HTML puts them (`ORCHESTRATOR_NOTES` 15:02 and 02:45).
+
+Change 1 was already pinned by the build's geometry pins (all now exact).
+**Change 2 was pinned only structurally** — a widget-tree test can see the four
+gradient stops and a missing `_MeadowPainter`, but it cannot see whether the
+right pixels are on the glass or whether the grade moves with the content. That
+gap is what this stage closed.
 
 ## Tests added (this stage)
 
-`kid_home_geometry_test.dart`, real Inter/Nunito, 390×844:
+All four are in `kid_home_geometry_test.dart` (real Inter/Nunito via
+`FontLoader`, 390×844 @3x, pixel probes on a `RepaintBoundary`), in a new group
+**`K03 — the meadow is the shared screen background (shared/kid_meadow)`**,
+light + dark:
 
-**`the speech tail is an out-of-flow 9 px ink triangle`**
-- `NestSpeechBubble.height − body.height == 0` — **the tail must not size the
-  bubble.** This is the contract K03's single compensation lever depends on: if
-  the tail goes back in flow, the bubble grows 10.25 px, the block drops, and
-  `_kStageToHearts = 21` over-compensates and pushes the whole column down.
-- the tail's centre column is `tokens.ink` for **4…9 px** below the body's
-  bottom border — `.speech::after` is `bottom: -9px` with a 9 px ink top
-  border, and 5_ui iteration 9 measured the app's tail **10 px too tall**. The
-  count is measured on the rendered bytes (the build's `RepaintBoundary` +
-  `_pixelAt` harness), so "the tail is painted, and no taller than the design"
-  is a pixel fact, not a comment.
+**1 + 2. `$theme: the 62% hard stop and the whole run to the dock are painted`**
+- Row **522** must still be `kid-sky-bottom` and row **523** `kid-horizon`
+  exactly — the stop at 62 % is *hard* in the CSS, so a band that eased into
+  the meadow or started its run somewhere else breaks the pair.
+- Rows **523, 530, 560, 600, 650, 690, 710, 718** each within ±2/255 of the
+  shared grade `kidHorizon → kidMeadow` at `t = (y/844 − 0.62)/0.38`. The
+  iteration-12 group proved two of those rows; this proves the **whole run**, so
+  "the grade reaches every row" is measured rather than assumed. The dark-mode
+  "flat navy" regression (FIXES_8…_10, called out four times) can no longer pass.
+- Rows **700, 710, 718** must be well clear of flat `kid-meadow`: the shared
+  hills are `bottom: 0`, 136 tall, so their crest at x 10 sits at y ≈ 764 —
+  *behind* the dock that starts at 719. If the hills were raised, made taller or
+  pulled up in flow, their flat tone would land in the 708…718 window the design
+  paints as the run. (Threshold `max(Δgreen, Δblue) > 8`; the real margins are
+  Δblue 12…23 and Δgreen 6…10. Red is deliberately not used — dark's run and
+  dark's meadow share a red level, 33 vs 30, which would be a false alarm.)
 
-## Results — measured rows at real fonts (390×844, light)
+**3 + 4. `$theme: scrolling the quests does not move the meadow`**
+- The design's meadow is the **screen's**, so it must not move with the content.
+  Pixels at (10, 600) and (10, 700) are sampled, the list is dragged to its end,
+  then both rows are sampled again: each must still equal the shared grade, and
+  must be unchanged within 1/255.
+- Anti-vacuity guards, because "it did not move" is worthless if nothing moved:
+  `maxScrollExtent > 200` and the final offset is the clamped end; **and** the
+  progress bar — which sits in the *same* scroll column as an in-flow band would
+  — is asserted to have moved by exactly `pixels`. So in one frame the content
+  travels 474 px while the background rows do not move by a single level. An
+  in-flow band cannot pass this: it moves with `pixels`, which is precisely what
+  the control measures.
+
+## Results — the shared grade vs the design PNGs
+
+Design values read from `design/screens/{light,dark}/K03-kid-home.png` ÷3 with
+PIL at x = 10 (the 20 px gutter, so no card, chip or dock border is in the
+sample). "grade" is the token lerp my test pins to ±2:
+
+| row | light grade | light design | dark grade | dark design |
+| --- | --- | --- | --- | --- |
+| 523 | (234, 247, 226) | (234, 247, 226) | (37, 51, 89) | (37, 51, 89) |
+| 530 | (233, 247, 225) | (233, 247, 225) | (37, 51, 88) | (37, 52, 89) |
+| 560 | (229, 245, 220) | (229, 246, 221) | (36, 54, 85) | (37, 54, 86) |
+| 600 | (224, 243, 214) | (224, 244, 214) | (35, 57, 82) | (36, 57, 82) |
+| 650 | (217, 241, 206) | (217, 241, 207) | (34, 60, 77) | (35, 60, 77) |
+| 690 | (212, 239, 200) | (212, 240, 200) | (33, 63, 73) | (34, 63, 73) |
+| 710 | (209, 238, 197) | (209, 239, 197) | (33, 64, 71) | (33, 65, 71) |
+| 718 | (208, 238, 196) | (208, 238, 196) | (33, 65, 70) | (33, 65, 71) |
+
+**Every row agrees with the design within 1 level** (the PNG's own 8-bit
+rounding of the CSS lerp), in both themes — the shared background is exact, not
+approximate. 5_ui measured the same two anchor rows on the device (light
+(223,242,213) vs design (223,243,214) at y 600; dark (34,55,81) vs (35,56,81)),
+which agrees.
+
+Rows below 719 are deliberately **not** pinned. The design PNG's own dock ends
+at y 809 and rows 810…843 are the hill-front tint under a drawn home pill — the
+green strip the **owner rejected** (`ORCHESTRATOR_NOTES`, "OWNER FEEDBACK").
+The bottom-edge group proves the app instead paints the dock surface to 844.
+
+## Results — geometry rows at real fonts (390×844, unchanged by this stage)
 
 | row | measured | design | Δ |
 | --- | --- | --- | --- |
-| speech bubble | 125…170 (45 tall) | 125…169 (44) | +1 (own band's tolerance) |
-| **pet slot (hero block)** | **178…414** | **183…419** | **−5 (high)** |
-| nest rim (box × 95/240) | **269.02** | 278 | **−8.98** |
-| bowl bottom | 355 | 364 | −9 |
-| Pip feet (box − 21.2) | **292.02** | 301 | −8.98 |
-| hearts row centre | **448.00** | 448 | **0.00** |
-| section row centre | 493.8 | 494 | −0.2 |
-| progress bar | 526.8…542.8 | 527…542 | −0.2 / +0.8 |
-| card 1 painted top | 558.8 | 559 | −0.2 |
-| cards 2…6 painted tops | 658.8 · 758.8 · 858.8 · 958.8 · 1062.8 | 12 px painted gaps | 0.0 each |
-| dock painted top | 719.0 | ≈720 | −1.0 |
+| speech bubble | 125…169 | 125…169 (`.k3-pet` margin 14) | **0.0** |
+| **pet slot box** | **183…419** | **183…419** | **0.0** |
+| nest rim | 274.0 | 278 | −4 (shared, #18(b)) |
+| Pip feet | 297 | 301 | −4 (shared, #18(b)) |
+| hearts row centre | 448.0 | 448 | **0.0** |
+| "Today's quests" chip centre | 494 | 494 | 0.0 |
+| progress bar | 527…542 | 527…542 | **0.0** |
+| card 1 painted top | 559 | 559 | **0.0** |
+| cards 2…6 | 12 px painted gaps | `.k3-quests { gap: 12px }` | 0.0 each |
+| dock painted top | 719 | ≈720 | −1.0 |
 
-Everything **below** the hero block is inside the ±2 px band, including all six
-card tops and the dock. The hero block is 9 px high (the shared gap 8 vs the
-design's 14, SHARED_REQUEST #18), which the build's pins hold and the bugs
-stage's parked proof fails on.
-
-All 186 runnable K03 tests pass; nothing else moved (layout matrix light + dark ×
-320/390/430 × 1.0/1.3, layout invariants on painted rects, PERIODS, bottom-edge
-and alignment owner rules, navigation, labels, tap targets, the accessibility
-matrix, the PipAvatar mandate and its bowl seat, the completion/celebration
-state machine, the shapes group, quest order).
+The hero block's rows are now **exact** — `bubbleGap: 14` + `s4` closed the 9 px
+the iteration-12 report carried. The only hero deviation left is the 4 px inside
+the box (shared `PipNestFallback._explicitBleed`), pinned by the build at 274
+and by stage 6 as the open K03-BUG-16.
 
 ## Bugs found
 
 **None new.** No test I added or inherited failed, and no K03 code misbehaved.
 
-### Known shared residual (already filed twice — not a new finding)
+### Known shared residuals (other stages' findings, not mine)
 
-**The hero art sits ~9 px above the design's rows.** Measured above: rim 269.02
-vs 278, bowl bottom 355 vs 364, Pip feet 292.02 vs 301. Cause: the shared
-`NestPetStage` lays the bubble→pet gap out as `NestSpacing.s2` (8) where the
-design's `.k3-pet` has `margin: 14px auto 0` — **SHARED_REQUEST #18**, named in
-the geometry pins' reasons and in the bugs stage's K03-BUG-16. K03 cannot edit
-`core/` (RULES §1), and the screen's only lever is the gap *below* the nest,
-which is exactly what `_kStageToHearts = 21` now carries (and which the build
-documents reverting to `NestSpacing.s4` when #18 lands). The UI VERDICT RULE's
-±2 px judgement on this belongs to the UI-check stage; from the test side it is
-already pinned on both sides — the build at the current values, the bugs stage as
-a parked proof at the design's values, and my new tail pin at the contract that
-would otherwise make the compensation silently wrong.
+- **K03-BUG-16** — the nest/Pip sit 4 px high inside the pet box (one private
+  constant in `core/`: `PipNestFallback._explicitBleed` 31.4 vs the design's
+  27.4). SHARED_REQUEST #18(b). Pinned at the current value by the build's
+  geometry pins and at the design's value by the parked proof.
+- **K03-BUG-17** (added by stage 6 while I worked) — the nest **bowl** is
+  squashed: the HTML draws `nest.svg` at its intrinsic ratio in the 236-tall
+  `.k3-pet` box (a ~108 px bowl; `K03-kid-home.html` l.25), the app stretches it
+  into the mandated `nestHeight: 188` (`BoxFit.fill`) for 86.2. SHARED_REQUEST
+  #18(c). Not a K03 file; K03 may not edit `core/`.
+- **Dark pet glow** — a shared component (`shared/pet_glow`), not K03's.
+
+### Housekeeping (not a finding)
+
+The UI-check stage left its scratch probe behind:
+`app/test/features/kid_home/_scratch_probe_test.dart` ("TEMPORARY pixel probe
+for stage 6 iteration 13. Deleted before commit."), untracked, mtime 13:12. It
+duplicated the speech-tail ink measurement that
+`kid_home_geometry_test.dart` already pins. It was inside my §1 path and inside
+the orchestrator's standing "delete the scratch probe test so analyze is clean"
+instruction, so I removed it. No stage code was involved.
 
 ## Owner rules re-checked
 
-- **BOTTOM EDGE:** the K03-BUG-10 proofs (light + dark, 34 px inset) pass; the
-  real-font dock pin re-confirms the painted surface runs 719 → 844 in one
-  piece, and the tail change did not move it.
-- **ALIGNMENT:** gutters and shared card/bar/dock edges pass; the pet slot is on
-  the axis at 320/390/430 with no clipping; dock labels cannot wrap; the six
-  cards keep 12 px painted gaps.
+- **BOTTOM EDGE:** unchanged and green — dock surface painted from 719 to the
+  physical edge in both themes (light `#FFFFFF`, dark `#1F1C2E`), with the OS
+  inset and with a top inset. My new hill pin additionally proves the *shared
+  hills* cannot leak into 700…718 above the dock, which is the one way this
+  iteration's change could have produced a green strip.
+- **ALIGNMENT:** unaffected by this change (nothing in the dock or gutters
+  moved); gutters, card/bar/dock edges, the pet slot's axis at 320/390/430 and
+  the 12 px card rhythm all still pass.
+- **DATA OVER MOCKS / PERIODS:** quest counts and quest order come from the DB
+  ("4 done today", "4 of 6"); the daily/weekly/once and new-period proofs are
+  green. No design number is hard-coded anywhere I touched.
+- **COPY:** re-verified character-by-character against the HTML source. The file
+  contains only two non-ASCII characters (`—` and `·`, both in `<title>`);
+  `Let's do some quests!` and `Today's quests` use **straight** apostrophes
+  (U+0027), and so does the app. No curly quotes were invented.
 
 ## Rule coverage
 
 | Rule | Status on K03 |
 | --- | --- |
-| PIP | Mandated `PipAvatar` in every state, seated in the bowl (feet 23 px below the rim) — **its row is the shared residual above** |
-| UI VERDICT RULE | Every row below the hero pinned within ±2 px at real fonts; the hero's 9 px delta is measured, named and pinned on both sides |
-| BOTTOM EDGE / ALIGNMENT | Proven by tests (above) |
-| PERIODS + DATA OVER MOCKS | Counts from the DB; daily/weekly/once + new-period proofs green; quest order pinned as documented |
-| COPY | Re-verified against the HTML source (straight apostrophes, en dash, middle dot) |
+| KID BACKGROUND | The shared hills and gradient are now pinned on **pixels** in both themes — 8 rows of the run, the 62 % hard stop, and the "hills stay behind the dock" window; structure still pinned in `kid_home_view_test.dart` |
+| PIP | `PipAvatar` in every state from the child's own row, seated in the bowl (its row is K03-BUG-16/17's shared residual) |
+| UI VERDICT RULE | Every row below the hero within ±2 px at real fonts; the hero block's box is now exact, the 4 px inside it is named and pinned on both sides |
+| BOTTOM EDGE / ALIGNMENT | Proven by tests, plus the new no-hill-above-the-dock pin |
+| PERIODS + DATA OVER MOCKS | Counts from the DB; new-period proofs green; order pinned as documented |
+| COPY | Straight apostrophes confirmed against the source; en dash and middle dot left alone |
 | FONTS / LETTER SPACING | No `google_fonts`; every rendered string asserts `letterSpacing == 0` |
 | CHIP ROWS (`NestChipWrap`) | Not applicable: K03's chips are the non-interactive `KidStatusChip` |
-| UI CHECK MEASURES SHAPES | Painted rects, pixel bytes (meadow grade **and** the new tail), outline/feet geometry, chip/tile/check/bubble boxes |
+| UI CHECK MEASURES SHAPES | Painted rects and pixel bytes — the meadow grade, the hill window, the tail, the card/check/chip boxes |
 | BALANCED HEADINGS | The only `.kid-title` heading renders through `NestBalancedText` |
-| ACCESSIBILITY ACTIONS | Iteration 9's matrix still green (tap action on every control, real effect, none on non-controls) |
-| CHILD ORDER | No child list here; pinned at the repository level (K03-BUG-12) |
+| ACCESSIBILITY ACTIONS | Unchanged and green — tap action on every control, real effect on `performAction`, none on non-controls, ≥56 kid / ≥44 parent targets |
+| CHILD ORDER | No child list here; pinned at the repository level |
 | TRIAL | No test writes `subscription_status` |
 | SIMULATORS | None booted by this stage |
 
 ## Harness notes (carry forward)
 
-- **Font-load timing is NOT a geometry factor here.** The plausible explanation
-  for the 269-vs-278 disagreement (fonts loaded in `setUpAll` vs inside the test
-  body) was measured and ruled out: all three configurations — fonts in
-  `setUpAll`, fonts inside the body, and with the bottom inset emulated — give
-  the identical rows (rim 269.02, feet 292.02, hearts 448.00). The 9 px is the
-  screen's, not the harness's.
-- `.speech::after` geometry to keep in mind: `bottom: -9px; left: 50%; border:
-  9px solid transparent; border-top-color: ink; border-bottom: 0` → an 18 px
-  wide, ≤9 px tall ink triangle hanging below the body, now painted out of flow.
-- The design's outline fractions are asymmetric (the bowl starts 95/240 down its
-  box, height 110/240) and the v2 Pip's feet sit 21.2 px above the bottom of its
-  152 px box; `PipNestFallback.nestRimTopFraction` is 95/240.
-- The design's arithmetic, for reference: 125 + 44 bubble + 14 (`.k3-pet`
-  margin) = pet box 183…419, then `s4` 16 → hearts row 435, centre 448.
+- **Overscroll bounce must be settled before measuring.** Dragging past the end
+  of the quest list leaves the content ~15 px further out per 300 px gesture
+  while `position.pixels` stays clamped at `maxScrollExtent` (474). A single
+  `pump` after each drag samples that mid-flight frame: the progress bar
+  measured −107 instead of 53. `pumpAndSettle` lands it on 53.0 exactly
+  (527 − 474). This is ordinary iOS bouncing physics, not a defect — but any
+  test that measures after a scroll-to-end **must** settle first.
+- **Don't hold a `ScrollPosition` across drags.** The lazily-built card column
+  can rebuild the scroll view mid-gesture and the captured reference goes stale
+  (`pixels` frozen mid-scroll while the content kept moving). Read
+  `tester.state<ScrollableState>(list).position` *after* the drags.
+- **Choose the discriminating colour channel deliberately.** Dark's graded run
+  (33, 64, 72) and dark's flat `kid-meadow` (30, 74, 58) differ by 3 on red —
+  an assertion on red there would fail on a correct build. Green and blue
+  separate them (6…23 levels).
+- Pixel methodology used here: `RepaintBoundary` + `boundary.toImage()` inside
+  `tester.runAsync`, read at absolute logical coordinates, sampling x = 10 (the
+  gutter). Design truth was read the same way from the PNGs with PIL (÷3). Both
+  agree within 1 level.
+- The design's arithmetic, for reference: bubble 125 + 44 + 14
+  (`.k3-pet { margin: 14px auto 0 }`) = pet box 183…419, then `.scroll > * + *`
+  = `s4` 16 → hearts row 435, centre 448, title 494, progress 527…542, card 1
+  559. Every one of those is now measured, not approximated.
 - Offstage cards have **no semantics node**; scroll a control into view before
   asserting or performing its semantics action. `pushedPath`, not `currentPath`,
-  for `push`ed routes. The design source uses a **straight** apostrophe.
-- Direct Drift work inside `testWidgets` must run inside `tester.runAsync`; never
-  `pumpAndSettle` while a loading spinner is on screen; seed the DB before
-  pumping the route.
+  for `push`ed routes. Direct Drift work inside `testWidgets` must run inside
+  `tester.runAsync`; never `pumpAndSettle` while a loading spinner is on screen
+  (my new scroll test settles only because the loaded screen is already built).
+  Seed the DB before pumping the route.
 
 VERDICT: PASS
