@@ -22,12 +22,19 @@ import 'package:nestling/core/design_system/components/nest_icon.dart';
 ///   `questBedKid` (K04 hero `M2 18v-7 / M2 14h20v4 / …h-9v3 /
 ///   M6 11V8h4v3`), `questDishesKid` (K03 dishwasher
 ///   `rect 3/4/18/16 + M3 10h18 + circle 8/14.5`),
-///   `questReadingKid` (K03 open book `M12 6v14 + M3 4.6… + M21 4.6…`).
+///   `questReadingKid` (K03 open book `M12 6v14 + M3 4.6… + M21 4.6…`),
+///   `questBinsKid` (K09 lidded bin `M6 3h12l-2 5H8Z` +
+///   `M8 8v10a2 2 0 0 0 8 0V8` — the kid designs disagree: K03/K04 draw
+///   no bins row so the kid set fell back to the parent `questBins`;
+///   K09 is where bins appears most prominently, so the kid set now uses
+///   the K09-exact glyph).
 ///
 /// Where a key has only ONE design source, BOTH audiences use it:
 ///
-/// * `bins`/`bin`, `hoover`, `paw`/`pet`: only parent draws them
-///   (K03/K04 show no bins/hoover/paw rows) — both use the parent glyph.
+/// * `hoover`, `paw`/`pet`: only parent draws them
+///   (K03/K04 show no hoover/paw rows) — both use the parent glyph.
+/// * `bins`/`bin`: parent uses the P09-exact `questBins`; kid uses the
+///   K09-exact `questBinsKid` (see above).
 /// * `plate`/`table`, `bag`/`schoolBag`, `leaf`/`plants`, `shirt`/`washing`:
 ///   only P10 draws them — both use the parent look-alike.
 /// * `sofa` (seed `q-living` Tidy the living room): NO design draws it —
@@ -44,7 +51,7 @@ String questIconFor(String key, {required NestAudience audience}) {
       'bed' => NestIcons.questBedKid,
       'dishwasher' => NestIcons.questDishesKid,
       'book' || 'reading' => NestIcons.questReadingKid,
-      'bins' || 'bin' => NestIcons.questBins,
+      'bins' || 'bin' => NestIcons.questBinsKid,
       'hoover' => NestIcons.questHoover,
       'paw' || 'pet' => NestIcons.paw,
       'bag' || 'schoolBag' => NestIcons.schoolBag,
