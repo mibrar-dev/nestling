@@ -38,6 +38,7 @@ export 'package:nestling/core/design_system/components/nest_tab_bar.dart';
 export 'package:nestling/core/design_system/components/nest_text_field.dart';
 export 'package:nestling/core/design_system/components/nest_toast.dart';
 export 'package:nestling/core/design_system/components/nest_toggle.dart';
+export 'package:nestling/core/design_system/components/reward_icons.dart';
 export 'package:nestling/core/design_system/motion/pip_rive.dart';
 export 'package:nestling/core/design_system/theme/kid_meadow.dart';
 export 'package:nestling/core/design_system/theme/kid_scope.dart';

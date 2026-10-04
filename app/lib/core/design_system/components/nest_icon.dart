@@ -64,6 +64,12 @@ abstract final class NestIcons {
   static const String cafe = assets.NestlingIcons.cafe;
   static const String lamp = assets.NestlingIcons.lamp;
   static const String pizza = assets.NestlingIcons.pizza;
+  static const String rewardTv = assets.NestlingIcons.rewardTv;
+  static const String rewardFilm = assets.NestlingIcons.rewardFilm;
+  static const String rewardMoon = assets.NestlingIcons.rewardMoon;
+  static const String rewardCake = assets.NestlingIcons.rewardCake;
+  static const String rewardCoffee = assets.NestlingIcons.rewardCoffee;
+  static const String rewardPlate = assets.NestlingIcons.rewardPlate;
   static const String bag = assets.NestlingIcons.bag;
   static const String phone = assets.NestlingIcons.phone;
   static const String coinSparkle = assets.NestlingIcons.coinSparkle;
