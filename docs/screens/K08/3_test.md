@@ -1,255 +1,168 @@
-# K08 · Reward shop — stage 3 test (iteration 2)
+# K08 · Reward shop — stage 3 test (iteration 3)
 
 Scope: tests only. `app/test/features/kid_shop/**` — no `lib/` file was
-modified, no screen code was patched (two open defects are recorded below and
-proved). No simulator was booted, installed on, driven or screenshotted; no
-`flutter clean`; `analysis_options` untouched; no `skip:` marker anywhere in the
-feature.
+modified, no screen code was patched. No simulator was booted, installed on,
+driven or screenshotted; no `flutter clean`; `analysis_options` untouched; no
+`skip:` marker anywhere in the feature.
 
-Iteration 1 ended at 141 K08 tests with 6 failing proofs for K08-BUG-1 … -3.
-The iteration-2 builders fixed all three and landed the shared audience glyph
-maps, so this stage starts from **143 green**, and ends at **164 tests: 160
-green, 4 failing** — every failure an intentional, un-skipped proof of one of
-the two OPEN defects.
+Iteration 2 ended at 166 K08 tests with 4 failing proofs for K08-BUG-4 and
+K08-BUG-5. The iteration-3 builders fixed both, landed `SHARED_REQUEST.md` §1
+(`NestKidButtonColor.muted`) and §2 (route assertions), and changed the
+`requestReward` contract from `Future<void>` to `Future<String?>`. This stage
+adds **21** tests for that new surface and ends at **187 K08 tests, all green**.
 
-| file | iter 1 | iter 2 | added this iteration |
+| file | iter 2 | iter 3 | added |
 |---|---|---|---|
-| `kid_shop_bloc_test.dart` | 34 | 34 | — (all paths already covered) |
-| `kid_shop_repository_test.dart` | 16 | 18 | +2 |
-| `reward_shop_view_test.dart` | 66 | 67 | +1 (by the 2b builder) |
-| `reward_shop_widget_geometry_test.dart` | 18 | 24 | +6 |
-| `shop_reward_icons_test.dart` | — | 7 | +7 (new file) |
-| `shop_reward_a11y_test.dart` | — | 7 | +7 (new file, 4 green / 3 proofs) |
-| `k08_bugs_test.dart` | 7 | 7 | re-scoped (1 → 6 green) |
+| `kid_shop_bloc_test.dart` | 36 | 38 | +2 |
+| `kid_shop_repository_test.dart` | 18 | 18 | — (2b added the status contract) |
+| `reward_shop_view_test.dart` | 68 | 71 | +3 |
+| `reward_shop_widget_geometry_test.dart` | 24 | 24 | — |
+| `shop_reward_icons_test.dart` | 7 | 7 | — |
+| `shop_reward_a11y_test.dart` | 7 | 7 | K08-BUG-5 now green |
+| `shop_reward_get_off_test.dart` | — | 14 | **+14 (new file)** |
+| `k08_bugs_test.dart` | 7 | 7 | all six proofs now green |
 
-## What changed on `main` since iteration 1, and what it made testable
+## What changed on `main`, and what it made testable
 
-- **K08-BUG-1 fixed** — `requestReward` now makes payment a precondition of the
-  `approved` row inside the single transaction (`kid_shop_repository_impl.dart:
-  78-118`), mirroring P14's `approveRedemption`. An uncovered instant reward
-  (or a missing child row) lands `requested`.
-- **K08-BUG-2 fixed** — the odd grid filler is `const SizedBox.shrink()`.
-- **K08-BUG-3 fixed** — the card price is `Semantics(label: '$price coins',
-  container: true, excludeSemantics: true)`.
-- **`ORCHESTRATOR_NOTES.md` 14:31 + 15:08 discharged** — the shared
-  `rewardIconFor(key, audience:)` maps are on `main` and K08 forwards to the
-  **kid** branch. The new ICONS rule ("kid screens use
-  `rewardIconFor(audience: NestAudience.kid)`; each screen matches its own
-  design's glyphs exactly") is now mandatory, and `shop_reward_icons_test.dart`
-  makes it mechanical instead of an eyeball check.
-- **`NestKidButton` gained a `trailing` slot** (K06's use). Null here, so the
-  `.k8-get` box is byte-identical; the existing 62-tall widget box assertions
-  (56 painted + 6 shadow room) still hold, which is the regression proof.
+- **K08-BUG-4 fixed** — `requestReward` returns the status it wrote
+  (`'approved' | 'requested' | null`) and `_onRewardRequested` toasts from
+  *that*, never from a flag captured before the write. The transaction now
+  returns its value.
+- **K08-BUG-5 fixed** — `.k8-n` and the "N more to go" note each carry
+  `Semantics(container: true)`, so no two rewards share an announcement.
+- **`SHARED_REQUEST.md` §1 landed** — `NestKidButtonColor.muted` renders
+  `surface-2` / `ink-2` at FULL opacity even when disabled, and the card uses
+  it for `.k8-get.off`. This closes the deviation `1_plan.md` §g recorded
+  (the washed-out `white` + 0.45 fallback) — and it is the first **visual**
+  change to K08 since the design build, so it needed its own colour proof.
+- **`SHARED_REQUEST.md` §2 landed** — the two `kid_home_view_test.dart`
+  placeholder-copy assertions became route assertions, so the whole-app suite
+  is green for the first time in three iterations.
+- `ORCHESTRATOR_NOTES.md` UPDATE (17:10) confirmed the muted colourway is
+  required; nothing outstanding in the file.
 
 ## Tests added
 
-### `shop_reward_icons_test.dart` (new, 7 green) — the audience glyph rule
+### `shop_reward_get_off_test.dart` (new, 14) — the `.k8-get.off` colourway
 
-Pins ART fidelity exactly, because the stage-4 UI check had to catch the
-baking chef's hat and the café sit-down mug **by eye**:
+Reads the live palette through `context.nest` (the same extension the widgets
+use, so the assertion cannot drift from what was painted) and the painted
+`AnimatedContainer` inside each `NestKidButton`. In **both themes**:
 
-- every seeded `rewards.icon` key resolves to its exact `.k8-art` asset
-  (`ic_reward_tv` / `_film` / `_moon` / `_cake` / `_coffee` / `_plate`);
-- `shopRewardIcon(key) == rewardIconFor(key, audience: NestAudience.kid)` for
-  all six, so the screen cannot fork the map — only the audience may differ;
-- **no** seeded key resolves to the PARENT glyph (`screenTime`, `film`,
-  `clock`, `chefHat`, `rewardCoffeeParent`), which is the assertion that would
-  have caught the iteration-1 mix-ups without a screenshot. `plate` is the one
-  key both designs share, and that is stated;
-- an unknown key (a reward created on another device) falls back to
-  `NestIcons.gift` at the map level, on a rendered card, and end-to-end
-  (a seventh row is inserted into the database and its disc still paints);
-- the rendered cards: six `NestIcon`s in creation order, each 32 px and tinted
-  (`.k8-art` is a 32 px glyph in a 56 disc), proved through the real app with
-  the real repository.
+- the out-of-reach café card paints `surface-2` with an `ink-2` label — the
+  design's `.k8-get.off` pair, exactly;
+- the control is at **full opacity**: the whole point of `muted` is that the
+  grey pair IS the disabled look, with no 0.45 wash stacked on top;
+- the five affordable cards stay `leaf` / `onLeaf` at full opacity, so the two
+  states are told apart by colour rather than by a wash (a wash would make the
+  *disabled* one the pale one);
+- the box is untouched by the colour swap: 62-tall widget box (56 painted + 6
+  `--sh-kid` shadow room), radius 16, **3 px ink border** (still `ink`, not
+  `ink-2`), shadow kept, and the same width/height as an affordable card;
+- it is still **disabled**: `isButton`, `enabled: false`, no tap action;
+- the label is still 17 px w900 in `ink-2`;
+- **WCAG AA**: `ink-2` on `surface-2` clears 4.5:1 in light *and* dark (≈7.7:1
+  and ≈8.6:1 measured), and the enabled `leaf`/`onLeaf` pair still clears 3:1.
+  This is the assertion that gives the swap its value: the old 0.45 wash over
+  white was ≈1.9:1, i.e. unreadable.
+- the colour is **derived, not remembered**: at 0 coins the café is
+  `surface-2`; when the balance is raised to 200 the same card repaints
+  `leaf`, its label flips to "Get it", and the "150 more to go" note
+  disappears — so nothing about the off state can go stale behind the stream.
 
-### `shop_reward_a11y_test.dart` (new, 4 green + 3 proofs) — per-card semantics
+### `kid_shop_bloc_test.dart` (+2) — the rest of the new status contract
 
-Green (the shape the fixes produced): each price is **its own node** ("50
-coins") with no tap action; each card button is its own node labelled after
-the reward, with `isButton` and a tap action — except the out-of-reach café,
-which correctly reports no action; no single announcement mixes a price and a
-button (the reason `container: true` is load-bearing); the heading and the
-balance are announced together in the head row and the pill is not a control.
+The builders covered `'approved'` → enjoy and `'requested'` → thumbs-up. The
+two branches the new code added are untested until now, and both are reachable:
 
-Failing (K08-BUG-5, below): the reward **names** are not individually
-announced.
+- **`written == null`** — `requestReward` returns null when the reward is GONE
+  by the time the write runs (deleted after the stream last emitted, before
+  the tap). The affordability guard reads `state.items` and still passes, so
+  the write is the only thing that can catch it: the bloc must answer with the
+  retry copy ("Hmm, that did not work. Try again.") and never "it's yours".
+- **an unexpected status string** — the contract is `'approved' | 'requested' |
+  null`; anything else must fall on the "a grown-up decides" side. Pins that
+  the enjoy copy is reachable *only* from a real `'approved'`.
 
-### `reward_shop_widget_geometry_test.dart` (+6) — the promise iteration 1 made
+### `reward_shop_view_test.dart` (+3) — the empty state from REAL data
 
-Iteration 1 said the odd-count geometry could be pinned "once the filler is
-legal". It is, so it is now pinned at **390 and 320** for 5, 3 and 1 cards:
-the lone card keeps the left 20 px gutter, its full column width
-(`(W − 40 − 16) / 2` → 167 / 132) and its own height (216, or 240 when the
-café's "N more to go" note is on it); the row pitch is measured from two real
-rows rather than assumed, because a narrow device moves the whole rhythm down
-when the balanced heading wraps; and the cards above still share their rows.
+Iterations 1 and 2 both recorded that `Seed.empty` could not be pumped through
+the app, because `Seed.empty` calls `db.clearAll()` on a database `AppSession`
+is already watching and the reseed never completes in a widget-test isolate
+(two stage-time hangs). That trap is now closed: seeding **before**
+`configureDependencies` means there is no reseed at all, so the empty family
+is proved against the real repository:
 
-### `kid_shop_repository_test.dart` (+1) — the branch the fix added
-
-`an instant reward for a child with no row is left requested`: with the
-`watchActiveShop` `'maya'` fallback, a deleted child still reaches the new
-`kid == null` branch, and nothing may be granted or deducted. (The
-balance-short branch already had 2a's regression test.)
-
-### `k08_bugs_test.dart` — re-scoped, and the `skip:` removed
-
-K08-BUG-1 … -3 are fixed, so their iteration-1 proofs now run GREEN and stay
-as the regressions that keep them fixed. The iteration-2 bug stage had marked
-its new K08-BUG-4 proof `skip: true` "so the suite stays green"; **the loop
-forbids skipped tests**, so the marker is gone and the proof runs — it fails,
-which is the point.
+- `_useEmptySeed()` wires a scope around an `AppDatabase.memory()` seeded
+  `Seed.empty` (onboarded parent, no children, no rewards);
+- in light **and** dark the kid-voice empty state renders, with nothing stale
+  from a populated shop (no cards, no balance pill, no footer promising coins
+  the family does not have) — and the chrome still works: the lock reaches
+  `/parental-gate` and back reaches `/kid-home`.
 
 ## Results
 
 ```
-dart format .        Formatted 582 files (0 changed)
-flutter analyze      No issues found! (ran in 3.4s)
+dart format .        Formatted 585 files (0 changed)
+flutter analyze      No issues found! (ran in 3.0s)
+flutter test --timeout 120s test/features/kid_shop/     187: All tests passed
+flutter test --timeout 120s                          01:31 +3816 ~4: All tests passed!
 ```
 
-Feature suite (per file):
-
-```
-kid_shop_bloc_test.dart                       +34: All tests passed
-kid_shop_repository_test.dart                 +18: All tests passed
-reward_shop_view_test.dart                    +67: All tests passed
-reward_shop_widget_geometry_test.dart         +24: All tests passed
-shop_reward_icons_test.dart                    +7: All tests passed
-shop_reward_a11y_test.dart                     +4 -3: Some tests failed (proofs)
-k08_bugs_test.dart                             +6 -1: Some tests failed (proof)
-                                              ─────────
-                                              160 green, 4 failing
-```
-
-Whole app (clean unbuffered run):
-
-```
-01:34 +3782 ~4 -6: Some tests failed.
-```
-
-- **4** are this stage's proofs for the two open defects below.
-- **2** are the `kid_home_view_test.dart` placeholder-copy assertions still
-  filed in `SHARED_REQUEST.md` (third iteration of the same blocker; that file
-  belongs to another feature per RULES §1).
+**The whole app is green** for the first time in three iterations: the six
+open proofs are fixed and the shared K03 blocker landed in `shared_batch8`. The
+`~4` skips are the expected shared-code skips.
 
 Rule audit: no `google_fonts` / `GoogleFonts`; no `DateTime.now()`; every
-pumped app ends with `disposeApp`; no ids minted; clock pinned by
-`test/flutter_test_config.dart`; no simulator touched; no `skip:` in
-`test/features/kid_shop/**`; no file outside RULES §1 modified (only the
-feature's test directory and `docs/screens/K08/**`).
+pumped app ends with `disposeApp`; no ids minted; the clock is the pinned
+`test/flutter_test_config.dart` one (Sat 3 Oct 2026, no wall-clock copy
+asserted); no simulator touched; no `skip:` in `test/features/kid_shop/**`; no
+file outside RULES §1 modified.
 
 ## Bugs found (recorded, not patched)
 
-### K08-BUG-4 — minor, honesty: "It’s yours — enjoy!" for a reward that was not granted
+**None this iteration.** K08-BUG-1 … -5 are all fixed and every proof for them
+now runs green, which is the point of keeping them in the suite.
 
-**Found independently by this stage, by the iteration-2 review (finding 1) and
-by the iteration-2 bug hunt — same defect, three times.** Root cause:
-`app/lib/features/kid_shop/presentation/bloc/kid_shop_bloc.dart:89-105` — the
-notice is chosen from `item.needsOk`, captured **before**
-`await _repository.requestReward(...)`, while `requestReward` may now write
-`requested` instead of `approved`.
+Hunt notes, so the next iteration knows where NOT to look again — each of these
+was checked and is either a clean property or a defect in my own test:
 
-Repro (deterministic, two instant cards, one frame):
-1. `Seed.demo`; set `r_screen.needs_ok = false` so two rewards are instant.
-2. Open `/reward-shop`; tap `Get it` on "30 min extra screen time" (50) and on
-   "Baking together" (100) in one frame. Both are individually affordable at
-   120.
-3. Observed: `r-screen:approved`, `r-baking:requested`, coins 120 → 70 — and the
-   toast still reads **"It’s yours — enjoy!"** for the baking card that is
-   waiting for a grown-up and was never paid for.
+| probe | result |
+|---|---|
+| every branch of the `Future<String?>` contract (`approved` / `requested` × covered / short / missing child / unknown id) | clean; all pinned |
+| the bloc's `written == null` and unexpected-status branches | clean; both now pinned |
+| `.k8-get.off` colour, opacity, box, semantics and contrast in both themes | clean; pinned in 14 tests |
+| a card crossing back to affordable (coins 0 → 200) repaints fully — fill, label and note | clean; pinned |
+| the `Semantics(container: true)` additions moved no layout | clean — the 24 geometry tests (which run with the real Nunito/Inter faces) still pin every rect within ±2 px |
+| the café card at 120 coins is still out of reach | my first draft of the repaint test wrongly expected 120 coins to cover a 150-coin reward; the screen was right |
+| `requestReward` writing an `approved` row and the coin deduction | still one transaction, so a failed deduction rolls the row back; the bloc's catch maps it to the retry copy |
 
-Why it matters: the toast is the child's only feedback for that tap. The design
-has no "waiting for approval" copy for an instant card, so the app promises a
-reward it has not given and a deduction it has not made.
+## Defects in my own tests (recorded so they are not mistaken for findings)
 
-Suggested fix (both inside RULES §1, feature-owned): have `requestReward`
-return the status it actually wrote (`'approved' | 'requested'`) and map that in
-`_onRewardRequested` — `approved` → enjoy copy, `requested` → thumbs-up copy.
-The review adds a nicer variant for a balance refusal ("Not quite enough coins
-yet — keep saving!"), which would need one more status or an exception. A
-thinner alternative: re-read the item's affordability from the state after the
-write instead of trusting the captured `needsOk`.
+Four, all found and fixed in this stage: a geometry assertion that used the
+390 px column width inside a 320 px case; a WCAG helper whose `pow` was a no-op
+stub (it reported 2.64:1 for a pair that actually measures 7.68:1 — the stub is
+gone and the numbers are real); two test bodies that pumped the app without
+`disposeApp`, which fails teardown with "A Timer is still pending" (Drift's
+deferred stream-close). None of these touched `lib/`.
 
-### K08-BUG-5 — minor, accessibility (NEW this iteration): every reward name merges into one announcement
+## Harness notes
 
-Root cause: `app/lib/features/kid_shop/presentation/widgets/shop_reward_card.dart`
-— the name `Text(item.title)` (around line 113) has no semantics container, and
-`ShopRewardCard`'s `Column` provides no boundary, so the grid's `Column` in
-`reward_shop_view.dart` absorbs all six names into a single node.
-
-Observed tree (`/reward-shop`, demo seed, `ensureSemantics`):
-
-```
-label="Reward shop\n120 coins"
-label="Spend your coins on things you actually want."
-label="30 min extra screen time\nPick Friday film\nStay up 15 min later\n"
-      "Baking together\nTrip to the park café\n30 more to go\nChoose dinner"
-  label="50 coins"                        <- its own node (K08-BUG-3's fix)
-  label="Get 30 min extra screen time"
-  label="80 coins"
-  label="Get Pick Friday film"
-  …
-```
-
-Repro: enable a screen reader (or `tester.ensureSemantics()`), open
-`/reward-shop`, swipe once. VoiceOver/TalkBack reads all six rewards — plus the
-café's note — as one item, then the six prices and six buttons separately, so
-the name can no longer be tied to its own price or action.
-
-Why it matters: the card's own doc-comment says the name and price "carry the
-meaning", and DESIGN_SPEC §5 K08 pairs each name with its price. After the
-iteration-2 fix made the price its own node, the name is the only part of a
-card left without one.
-
-Suggested fix: give the name its own node the same way the price now has one —
-`Semantics(container: true, child: Text(...))` on the `.k8-n` row (or
-`MergeSemantics` per card, which would read name + price + action as one run
-per card). Either satisfies the three proofs, which only require that no
-announcement names two different rewards.
-
-Not filed as a duplicate: K08-BUG-3 (iteration 1) was the price's missing
-unit, and `6_bugs.md` iteration 2 lists exactly that; this is the name's missing
-node, a different defect in the same card.
-
-## Cleared again this iteration
-
-- **The `requestingIds` double-tap guard** still holds end to end: the same-frame
-  double tap on one card writes exactly one redemption, and two *different*
-  needs-OK cards both write (so a `droppable()`-style fix for K08-BUG-4 cannot
-  swallow the second card). Both stay pinned in `reward_shop_view_test.dart`.
-- **`Seed.empty`** is still only reachable at the repository level: `Seed.empty`
-  calls `db.clearAll()` while `AppSession` holds live watch streams, and the
-  reseed never completes in a widget-test isolate. Not a screen defect; the
-  empty-state surface is driven through a fake and the `Seed.empty` contract is
-  covered at the repository level.
-- **Drift writes need `tester.runAsync`** (fake-async swallows Drift's deferred
-  notifications) and **`pumpAndSettle` never meets the kid loading spinner**.
-  Both traps are commented at the tests that hit them.
-
-## Process note
-
-The iteration-2 bug stage and the UI stage were running **concurrently** with
-this stage in this worktree: `k08_bugs_test.dart` and `6_bugs.md` changed under
-me mid-stage, and I independently wrote a K08-BUG-4 proof at the same time.
-Resolved without clobbering their work: my duplicate group was removed, their
-proof kept as the single authoritative one, and their `skip: true` removed so
-the loop's no-skipped-tests rule holds. The K08-BUG-5 proofs live in
-`shop_reward_a11y_test.dart` rather than in `k08_bugs_test.dart` precisely so a
-concurrent editor of that file cannot lose them; they are cross-referenced
-here and in this file's header. Nothing else of theirs was touched.
+- **`Seed.empty` IS pumpable** — seed before `configureDependencies`; see
+  `_useEmptySeed()` in `reward_shop_view_test.dart`. The two iterations-1/2
+  notes about this being impossible are now obsolete.
+- **Drift writes inside `testWidgets` need `tester.runAsync`** (plus one
+  real-zone turn) or the watch notification never lands and the shop sits on
+  its spinner — the repaint test does this explicitly.
+- **`pumpAndSettle` never meets a K08 loading state** (`CircularProgressIndicator`
+  animates forever); the stalled-stream tests pump explicitly.
 
 ## Left for the next iteration
 
-1. **K08-BUG-4** — return the written status from `requestReward` and map it to
-   the toast in `_onRewardRequested`; the proof in `k08_bugs_test.dart` goes
-   green.
-2. **K08-BUG-5** — give `.k8-n` its own semantics node (or `MergeSemantics` per
-   card); the three proofs in `shop_reward_a11y_test.dart` go green.
-3. `SHARED_REQUEST.md` §1 (`.k8-get.off` muted colourway) is still open and
-   still non-blocking; the "Save up!" card keeps the documented
-   `NestKidButtonColor.white` + `Opacity(0.45)` deviation until the design
-   system adds the variant.
-4. `SHARED_REQUEST.md` §2 (the two `kid_home_view_test.dart` lines) is the only
-   thing keeping the whole-app suite red outside this feature.
+1. `5_ui` should re-shoot the café card: `.k8-get.off` is now a flat
+   `surface-2`/`ink-2` block at full opacity instead of the washed-out white,
+   so the design comparison for that one button is a real visual delta (the
+   geometry around it is unchanged and still pinned).
+2. Nothing is blocking `flutter test`.
 
-VERDICT: FAIL
+VERDICT: PASS

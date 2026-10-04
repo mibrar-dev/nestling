@@ -19,7 +19,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:nestling/app/app.dart';
 import 'package:nestling/app/controllers.dart';
+import 'package:nestling/app/di.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/app_session.dart';
+import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/kid_shop/domain/entities/kid_shop_data.dart';
 import 'package:nestling/features/kid_shop/domain/entities/shop_reward.dart';
@@ -146,6 +149,23 @@ class _FakeKidShopRepository implements KidShopRepository {
 Future<void> _useFakeRepository(KidShopRepository repo) async {
   await GetIt.instance.unregister<KidShopRepository>();
   GetIt.instance.registerSingleton<KidShopRepository>(repo);
+}
+
+/// Wires a scope around a database seeded `Seed.empty` (onboarded parent, no
+/// children, no rewards) — the P08b family, reached for real rather than
+/// faked.
+///
+/// Seeding BEFORE `configureDependencies` is the whole trick: `Seed.empty`
+/// calls `db.clearAll()`, and calling it on a database `AppSession` is already
+/// watching never completes in a widget-test isolate (two iterations of this
+/// stage lost time to that hang). This order has no reseed at all.
+Future<AppDatabase> _useEmptySeed() async {
+  await GetIt.instance.reset();
+  final db = AppDatabase.memory();
+  await Seed.empty(db);
+  await configureDependencies(database: db);
+  await GetIt.instance<AppSession>().refresh();
+  return db;
 }
 
 Future<void> _pumpRoute(
@@ -928,6 +948,47 @@ void main() {
       // The chrome survives so a child can always get back or ask a grown-up.
       expect(find.byType(NestIconButton), findsOneWidget);
       expect(find.byType(NestLockButton), findsOneWidget);
+      await disposeApp(tester);
+    });
+
+    for (final theme in <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      testWidgets(
+        'the REAL Seed.empty family gets that empty state in ${theme.name}',
+        (tester) async {
+          // Driven by the seeded database, not a fake: `Seed.empty` is an
+          // onboarded parent with no children and no rewards, so
+          // `watchActiveShop` emits an empty shop for real.
+          await _useEmptySeed();
+          await _pumpRoute(tester, theme: theme);
+
+          expect(tester.takeException(), isNull);
+          expect(find.text('No rewards yet'), findsOneWidget);
+          expect(
+            find.text('Ask a grown-up to add something coins can buy.'),
+            findsOneWidget,
+          );
+          // Nothing stale from a populated shop: no grid, no balance pill, no
+          // footer promising a coin count the family does not have.
+          expect(find.byType(ShopRewardCard), findsNothing);
+          expect(find.byType(NestCoinPill), findsNothing);
+          expect(find.byType(NestKidButton), findsNothing);
+          // The kid can still leave, and still reach a grown-up.
+          await tester.tap(find.byType(NestLockButton));
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 400));
+          expect(pushedPath(tester), '/parental-gate');
+
+          await disposeApp(tester);
+        },
+      );
+    }
+
+    testWidgets('the real empty family can still go back', (tester) async {
+      await _useEmptySeed();
+      await _pumpRoute(tester);
+      await tester.tap(find.byType(NestIconButton));
+      await tester.pumpAndSettle();
+      expect(currentPath(tester), '/kid-home');
       await disposeApp(tester);
     });
 

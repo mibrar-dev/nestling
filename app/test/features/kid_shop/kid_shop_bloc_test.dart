@@ -158,6 +158,7 @@ class _FakeKidShopRepository implements KidShopRepository {
       await Future<void>.delayed(writeDelay);
     }
     requests.add((childId, rewardId));
+    if (vanishedIds.contains(rewardId)) return null;
     // Mirrors the real repository: the written status, not the requested
     // one. Tests override [writtenStatus] per id for the raced cases the
     // seed cannot produce (an instant reward the balance stops covering).
@@ -167,6 +168,10 @@ class _FakeKidShopRepository implements KidShopRepository {
   /// Per-id override for the status the write produces. Defaults to
   /// `'requested'`; a test sets `'approved'` for the grants it needs.
   final Map<String, String> writtenStatus = <String, String>{};
+
+  /// Ids the write finds GONE (`requestReward` → `null`, nothing written) —
+  /// the reward was deleted after the stream last emitted but before the tap.
+  final Set<String> vanishedIds = <String>{};
 }
 
 /// A bloc already showing the demo shop through a live stream, with every
@@ -450,6 +455,52 @@ void main() {
       verify: (bloc) {
         expect(bloc.state.notice, 'Mum will give it a thumbs-up soon.');
         expect(bloc.state.noticeSeq, 1);
+      },
+    );
+
+    // The `written == null` half of the same branch: `requestReward` writes
+    // nothing and returns null when the reward is GONE by the time the write
+    // runs (deleted after the stream last emitted, before the tap). The
+    // affordability guard still passed — it reads `state.items` — so the only
+    // honest answer is the retry copy, never "it's yours".
+    blocTest<KidShopBloc, KidShopState>(
+      'a reward that vanished before the write toasts the retry copy',
+      build: () {
+        final repo = _FakeKidShopRepository(data: _demoData())
+          ..vanishedIds.add('r-screen');
+        return KidShopBloc(repository: repo);
+      },
+      seed: _loaded,
+      act: (bloc) => bloc.add(const KidShopRewardRequested('r-screen')),
+      expect: () {
+        final loaded = _loaded();
+        return <KidShopState>[
+          loaded.copyWithRequestStarted('r-screen'),
+          loaded.copyWithRequestFinished(
+            'r-screen',
+            'Hmm, that did not work. Try again.',
+          ),
+        ];
+      },
+      verify: (bloc) {
+        expect(bloc.state.requestingIds, isEmpty);
+        expect(bloc.state.noticeSeq, 1);
+      },
+    );
+
+    blocTest<KidShopBloc, KidShopState>(
+      'an unexpected written status never claims the reward is owned',
+      build: () {
+        // Defensive: the contract is 'approved' | 'requested' | null. Anything
+        // else must fall on the "a grown-up decides" side, never "it's yours".
+        final repo = _FakeKidShopRepository(data: _demoData())
+          ..writtenStatus['r-baking'] = 'denied';
+        return KidShopBloc(repository: repo);
+      },
+      seed: _loaded,
+      act: (bloc) => bloc.add(const KidShopRewardRequested('r-baking')),
+      verify: (bloc) {
+        expect(bloc.state.notice, 'Mum will give it a thumbs-up soon.');
       },
     );
 

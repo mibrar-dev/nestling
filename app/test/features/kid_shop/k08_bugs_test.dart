@@ -1,13 +1,9 @@
-// K08 · Reward shop — bug proofs (iteration 1 + iteration 2).
+// K08 · Reward shop — bug proofs (iterations 1–3).
 //
-// The iteration-1 proofs for K08-BUG-1 … -3 are kept here and now run GREEN:
-// iteration 2 fixed all three (atomic payment precondition in `requestReward`,
-// `SizedBox.shrink()` for the odd grid filler, `Semantics(label: 'N coins')`
-// on the card price). The `6_bugs.md` iteration-2 report records the fixes.
-//
-// K08-BUG-4 is the one OPEN bug, and its proof runs UNSKIPPED: the loop
-// forbids leaving `skip:` markers behind, so the defect stays visible in
-// `flutter test` (and in the whole-app run) until a builder fixes it.
+// Every proof below runs UNSKIPPED and GREEN: iteration 2 fixed K08-BUG-1 …
+// -3, iteration 3 fixed K08-BUG-4 and K08-BUG-5, and `6_bugs.md` records each
+// fix against its failing proof. The final group pins the post-fix invariants
+// (the return-status contract and the concurrent-request money invariant).
 //
 //   K08-BUG-1  major  FIXED — an `approved` redemption could be written
 //                     without payment (two affordable cards tapped in one
@@ -18,10 +14,14 @@
 //   K08-BUG-3  minor  FIXED — the card price was announced as a bare number
 //                     ("50") with no unit, while every coin pill says
 //                     "N coins".
-//   K08-BUG-4  minor  OPEN — when K08-BUG-1's payment guard leaves a raced
-//                     instant reward `requested`, the toast still says
-//                     "It’s yours — enjoy!". The row and the coins are right;
-//                     the child-facing copy is not.
+//   K08-BUG-4  minor  FIXED — when K08-BUG-1's payment guard left a raced
+//                     instant reward `requested`, the toast still said
+//                     "It’s yours — enjoy!". `requestReward` now returns the
+//                     written status and the bloc toasts from it.
+//   K08-BUG-5  minor  FIXED — every card's reward name merged into ONE
+//                     semantics node; name and note now carry
+//                     `Semantics(container: true)` (K08-BUG-5's three proofs
+//                     live in `shop_reward_a11y_test.dart`).
 //
 // Root causes, for the record:
 //   K08-BUG-1  app/lib/features/kid_shop/data/kid_shop_repository_impl.dart
@@ -33,9 +33,11 @@
 //   K08-BUG-3  app/lib/features/kid_shop/presentation/widgets/shop_reward_card.dart
 //              `_ShopPrice` — the coin `SvgPicture` was excluded but the number
 //              `Text` carried no label.
-//   K08-BUG-4  the repository writes the real status, but `requestReward`
-//              returns `Future<void>`, so the bloc toasts from the captured
-//              `needsOk` flag and cannot know about the fallback.
+//   K08-BUG-4  the repository wrote the real status but returned
+//              `Future<void>`, so the bloc toasted from the captured
+//              `needsOk` flag and could not see the fallback.
+//   K08-BUG-5  the `.k8-n` name and the `.k8-note` were bare `Text`s, so the
+//              grid's `Column` absorbed all six names into one announcement.
 //
 // NOT a bug (checked and cleared in stage 3, iteration 1): the
 // `requestingIds` double-tap guard on the SAME card. `KidShopBloc
@@ -300,6 +302,74 @@ void main() {
       );
       expect(find.text('Mum will give it a thumbs-up soon.'), findsOneWidget);
       await disposeApp(tester);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Post-fix invariants (iteration 3) — the fixes pinned against refactors
+  // -------------------------------------------------------------------------
+
+  group('K08 fixed-invariant regression', () {
+    test('requestReward returns the status it actually wrote', () async {
+      final db = AppDatabase.memory();
+      addTearDown(db.close);
+      await Seed.demo(db);
+      await makeInstant(db, 'r-screen');
+      final repo = KidShopRepositoryImpl(db: db);
+
+      // Instant and covered → approved and paid.
+      expect(await repo.requestReward('maya', 'r-baking'), 'approved');
+      expect(await coinsOf(db, 'maya'), 20);
+      // Instant but no longer covered → requested, nothing paid.
+      expect(await repo.requestReward('maya', 'r-screen'), 'requested');
+      expect(await coinsOf(db, 'maya'), 20);
+      // Unknown → nothing written.
+      expect(await repo.requestReward('maya', 'r-nope'), isNull);
+
+      final rows = await db.select(db.rewardRedemptions).get();
+      expect(rows.map((r) => '${r.rewardId}:${r.status}'), <String>[
+        'r-baking:approved',
+        'r-screen:requested',
+      ]);
+    });
+
+    test('a burst of concurrent requests keeps the money invariant', () async {
+      final db = AppDatabase.memory();
+      addTearDown(db.close);
+      await Seed.demo(db);
+      for (final id in <String>[
+        'r-screen',
+        'r-film',
+        'r-bedtime',
+        'r-cafe',
+        'r-dinner',
+      ]) {
+        await makeInstant(db, id);
+      }
+      final repo = KidShopRepositoryImpl(db: db);
+
+      // All six prices (530) fired at once against 120 coins: the
+      // transactions serialize on the balance, so the approved set can never
+      // be worth more than the coins actually spent, and the balance can
+      // never go negative.
+      final statuses = await Future.wait(<Future<String?>>[
+        for (final id in <String>[
+          'r-screen',
+          'r-film',
+          'r-bedtime',
+          'r-baking',
+          'r-cafe',
+          'r-dinner',
+        ])
+          repo.requestReward('maya', id),
+      ]);
+
+      expect(await coinsOf(db, 'maya'), greaterThanOrEqualTo(0));
+      expect(await approvedValue(db), 120 - await coinsOf(db, 'maya'));
+      final approved = await (db.select(
+        db.rewardRedemptions,
+      )..where((r) => r.status.equals('approved'))).get();
+      expect(approved.length, statuses.where((s) => s == 'approved').length);
     });
   });
 }
