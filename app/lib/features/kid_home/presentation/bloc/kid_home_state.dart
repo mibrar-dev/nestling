@@ -17,6 +17,9 @@ final class KidHomeState extends Equatable {
     this.profiles = const <KidChild>[],
     this.selectedProfileId,
     this.profilesFailed = false,
+    this.pinChecking = false,
+    this.pinWrongNonce = 0,
+    this.pinPassed = false,
   });
 
   final KidHomeStatus status;
@@ -63,6 +66,20 @@ final class KidHomeState extends Equatable {
   /// healthy roster; every other constructor carries it through.
   final bool profilesFailed;
 
+  /// K02 PIN check in flight (the view disables keys via its local
+  /// `_awaiting` flag; this lets a second submit be dropped too).
+  final bool pinChecking;
+
+  /// Bumps on every wrong PIN so repeats are distinct states (same pattern
+  /// as `actionNonce`): without it the second emit is `==`-equal and the
+  /// view never clears + toasts again.
+  final int pinWrongNonce;
+
+  /// One-shot K02 success signal, consumed by the next home-stream emission
+  /// (same pattern as `justCompletedQuestId`): the view pushes `/kid-home`
+  /// on false→true.
+  final bool pinPassed;
+
   /// Done = `approved` + `done_pending` (live counts from the DB).
   int get doneCount => items
       .where((q) => q.status == 'approved' || q.status == 'done_pending')
@@ -78,6 +95,9 @@ final class KidHomeState extends Equatable {
     String? errorMessage,
     List<KidChild>? profiles,
     bool? profilesFailed,
+    bool? pinChecking,
+    int? pinWrongNonce,
+    bool? pinPassed,
   }) {
     return KidHomeState(
       status: status ?? this.status,
@@ -91,6 +111,9 @@ final class KidHomeState extends Equatable {
       profiles: profiles ?? this.profiles,
       selectedProfileId: selectedProfileId,
       profilesFailed: profilesFailed ?? this.profilesFailed,
+      pinChecking: pinChecking ?? this.pinChecking,
+      pinWrongNonce: pinWrongNonce ?? this.pinWrongNonce,
+      pinPassed: pinPassed ?? this.pinPassed,
     );
   }
 
@@ -108,6 +131,9 @@ final class KidHomeState extends Equatable {
       profiles: profiles,
       selectedProfileId: childId,
       profilesFailed: profilesFailed,
+      pinChecking: pinChecking,
+      pinWrongNonce: pinWrongNonce,
+      pinPassed: pinPassed,
     );
   }
 
@@ -127,6 +153,9 @@ final class KidHomeState extends Equatable {
       justCompletedCoins: justCompletedCoins,
       profiles: profiles,
       profilesFailed: profilesFailed,
+      pinChecking: pinChecking,
+      pinWrongNonce: pinWrongNonce,
+      pinPassed: pinPassed,
     );
   }
 
@@ -141,6 +170,9 @@ final class KidHomeState extends Equatable {
       profiles: profiles,
       selectedProfileId: selectedProfileId,
       profilesFailed: profilesFailed,
+      pinChecking: pinChecking,
+      pinWrongNonce: pinWrongNonce,
+      pinPassed: pinPassed,
     );
   }
 
@@ -156,6 +188,9 @@ final class KidHomeState extends Equatable {
       profiles: profiles,
       selectedProfileId: selectedProfileId,
       profilesFailed: profilesFailed,
+      pinChecking: pinChecking,
+      pinWrongNonce: pinWrongNonce,
+      pinPassed: pinPassed,
     );
   }
 
@@ -174,6 +209,9 @@ final class KidHomeState extends Equatable {
       profiles: profiles,
       selectedProfileId: selectedProfileId,
       profilesFailed: profilesFailed,
+      pinChecking: pinChecking,
+      pinWrongNonce: pinWrongNonce,
+      pinPassed: pinPassed,
     );
   }
 
@@ -182,7 +220,10 @@ final class KidHomeState extends Equatable {
   /// one; a healthy stream also clears transient completion outcomes and
   /// any stale load error (review finding 5). Carries the K01 [profiles]
   /// through untouched, and consumes a pending [selectedProfileId]
-  /// one-shot signal (same pattern as [justCompletedQuestId]).
+  /// one-shot signal (same pattern as [justCompletedQuestId]). The K02
+  /// [pinPassed] one-shot is consumed the same way, while an in-flight
+  /// [pinChecking] and the [pinWrongNonce] count survive (a stream emission
+  /// mid-check must not swallow the pending outcome).
   KidHomeState copyWithLoaded({
     required KidChild? child,
     required List<KidQuest> items,
@@ -193,6 +234,8 @@ final class KidHomeState extends Equatable {
       items: items,
       profiles: profiles,
       profilesFailed: profilesFailed,
+      pinChecking: pinChecking,
+      pinWrongNonce: pinWrongNonce,
     );
   }
 
@@ -216,6 +259,9 @@ final class KidHomeState extends Equatable {
       justCompletedCoins: justCompletedCoins,
       profiles: next,
       selectedProfileId: selectedProfileId,
+      pinChecking: pinChecking,
+      pinWrongNonce: pinWrongNonce,
+      pinPassed: pinPassed,
     );
   }
 
@@ -237,6 +283,9 @@ final class KidHomeState extends Equatable {
       justCompletedQuestId: justCompletedQuestId,
       justCompletedCoins: justCompletedCoins,
       profiles: next,
+      pinChecking: pinChecking,
+      pinWrongNonce: pinWrongNonce,
+      pinPassed: pinPassed,
     );
   }
 
@@ -253,5 +302,8 @@ final class KidHomeState extends Equatable {
     profiles,
     selectedProfileId,
     profilesFailed,
+    pinChecking,
+    pinWrongNonce,
+    pinPassed,
   ];
 }

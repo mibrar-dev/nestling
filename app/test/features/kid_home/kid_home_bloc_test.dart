@@ -232,6 +232,19 @@ class _FakeKidHomeRepository extends KidHomeRepository {
   /// quest was already approved elsewhere), so nothing flips.
   bool completeIsNoop = false;
 
+  /// K02 PIN: the code that verifies (Maya's demo PIN `1234`).
+  String correctPin = '1234';
+
+  /// [verifyPin] throws (wrong-PIN path, stream stays healthy).
+  bool failVerify = false;
+
+  /// When set, [verifyPin] waits on this gate before answering, so a second
+  /// submit can land mid-check (re-entry guard test).
+  Completer<bool>? verifyGate;
+
+  /// Every `verifyPin` call as [childId, pin] pairs.
+  final List<List<String>> verified = <List<String>>[];
+
   /// Watch streams never emit (loading path).
   bool hang = false;
 
@@ -320,7 +333,17 @@ class _FakeKidHomeRepository extends KidHomeRepository {
   List<String> stepsFor(String questId) => const <String>['Step one'];
 
   @override
-  Future<bool> verifyPin(String childId, String pin) async => true;
+  Future<bool> verifyPin(String childId, String pin) async {
+    verified.add(<String>[childId, pin]);
+    if (failVerify) {
+      throw Exception('pin store down');
+    }
+    final gate = verifyGate;
+    if (gate != null) {
+      await gate.future;
+    }
+    return pin == correctPin;
+  }
 
   @override
   Future<void> setActiveChild(String childId) async {
@@ -1227,6 +1250,291 @@ void main() {
       expect(a, b);
       expect(a, isNot(differentChild));
       expect(a, isNot(differentPin));
+    });
+  });
+
+  group('K02 PIN (kid secret code)', () {
+    late _FakeKidHomeRepository repo;
+
+    /// Loaded with a check in flight.
+    final checking = predicate<KidHomeState>(
+      (state) =>
+          state.status == KidHomeStatus.loaded &&
+          state.pinChecking &&
+          !state.pinPassed,
+    );
+
+    /// Loaded with the one-shot success signal.
+    final passed = predicate<KidHomeState>(
+      (state) =>
+          state.status == KidHomeStatus.loaded &&
+          !state.pinChecking &&
+          state.pinPassed,
+    );
+
+    /// Loaded with [nonce] wrong attempts recorded, list kept.
+    Matcher wrong(int nonce) => predicate<KidHomeState>(
+      (state) =>
+          state.status == KidHomeStatus.loaded &&
+          !state.pinChecking &&
+          !state.pinPassed &&
+          state.pinWrongNonce == nonce &&
+          state.doneCount == 4,
+    );
+
+    blocTest<KidHomeBloc, KidHomeState>(
+      'correct PIN emits checking then pinPassed',
+      build: () {
+        repo = _FakeKidHomeRepository();
+        return KidHomeBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        bloc.add(const KidHomePinSubmitted(childId: 'maya', pin: '1234'));
+      },
+      wait: const Duration(milliseconds: 100),
+      expect: () => <Matcher>[
+        _loading,
+        _loadingWithProfiles,
+        _loaded(done: 4, total: 6),
+        checking,
+        passed,
+      ],
+      verify: (bloc) {
+        expect(repo.verified, <List<String>>[
+          <String>['maya', '1234'],
+        ]);
+        expect(bloc.state.items, hasLength(6));
+      },
+    );
+
+    blocTest<KidHomeBloc, KidHomeState>(
+      'wrong PIN bumps pinWrongNonce and keeps the list',
+      build: () {
+        repo = _FakeKidHomeRepository();
+        return KidHomeBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        bloc.add(const KidHomePinSubmitted(childId: 'maya', pin: '9999'));
+      },
+      wait: const Duration(milliseconds: 100),
+      expect: () => <Matcher>[
+        _loading,
+        _loadingWithProfiles,
+        _loaded(done: 4, total: 6),
+        checking,
+        wrong(1),
+      ],
+      verify: (bloc) {
+        expect(bloc.state.status, KidHomeStatus.loaded);
+        expect(bloc.state.errorMessage, isNull);
+        expect(bloc.state.actionError, isNull);
+      },
+    );
+
+    blocTest<KidHomeBloc, KidHomeState>(
+      'two identical wrong attempts both surface (nonce-bumped)',
+      build: () {
+        repo = _FakeKidHomeRepository();
+        return KidHomeBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        bloc.add(const KidHomePinSubmitted(childId: 'maya', pin: '9999'));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        bloc.add(const KidHomePinSubmitted(childId: 'maya', pin: '9999'));
+      },
+      wait: const Duration(milliseconds: 100),
+      expect: () => <Matcher>[
+        _loading,
+        _loadingWithProfiles,
+        _loaded(done: 4, total: 6),
+        checking,
+        wrong(1),
+        checking,
+        wrong(2),
+      ],
+      verify: (bloc) => expect(repo.verified, hasLength(2)),
+    );
+
+    blocTest<KidHomeBloc, KidHomeState>(
+      'a correct retry after a wrong attempt still passes',
+      build: () {
+        repo = _FakeKidHomeRepository();
+        return KidHomeBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        bloc.add(const KidHomePinSubmitted(childId: 'maya', pin: '9999'));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        bloc.add(const KidHomePinSubmitted(childId: 'maya', pin: '1234'));
+      },
+      wait: const Duration(milliseconds: 100),
+      expect: () => <Matcher>[
+        _loading,
+        _loadingWithProfiles,
+        _loaded(done: 4, total: 6),
+        checking,
+        wrong(1),
+        checking,
+        passed,
+      ],
+      verify: (bloc) {
+        // The nonce survives the later success; the next home emission
+        // consumes `pinPassed`, not the wrong count.
+        expect(bloc.state.pinWrongNonce, 1);
+      },
+    );
+
+    blocTest<KidHomeBloc, KidHomeState>(
+      'a verify throw reads as the wrong path, never the failure card',
+      build: () {
+        repo = _FakeKidHomeRepository()..failVerify = true;
+        return KidHomeBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        bloc.add(const KidHomePinSubmitted(childId: 'maya', pin: '1234'));
+      },
+      wait: const Duration(milliseconds: 100),
+      expect: () => <Matcher>[
+        _loading,
+        _loadingWithProfiles,
+        _loaded(done: 4, total: 6),
+        checking,
+        wrong(1),
+      ],
+      verify: (bloc) {
+        expect(bloc.state.status, KidHomeStatus.loaded);
+        expect(bloc.state.errorMessage, isNull);
+        expect(bloc.state.items, hasLength(6));
+      },
+    );
+
+    test(
+      'a second submit mid-check is ignored (double-tap backstop)',
+      () async {
+        repo = _FakeKidHomeRepository()..verifyGate = Completer<bool>();
+        final bloc = KidHomeBloc(repository: repo);
+        final sub = bloc.stream.listen((_) {});
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+        bloc.add(const KidHomePinSubmitted(childId: 'maya', pin: '1234'));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect(bloc.state.pinChecking, isTrue);
+        // Second tap lands while the first check is still in flight.
+        bloc.add(const KidHomePinSubmitted(childId: 'maya', pin: '1234'));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        repo.verifyGate!.complete(true);
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+        expect(repo.verified, hasLength(1));
+        expect(bloc.state.pinPassed, isTrue);
+        expect(bloc.state.pinChecking, isFalse);
+        await sub.cancel();
+        await bloc.close();
+      },
+    );
+
+    test('an interleaved stream emission cannot swallow the outcome', () async {
+      repo = _FakeKidHomeRepository()..verifyGate = Completer<bool>();
+      final bloc = KidHomeBloc(repository: repo);
+      final sub = bloc.stream.listen((_) {});
+      bloc.add(const KidHomeLoadRequested());
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      bloc.add(const KidHomePinSubmitted(childId: 'maya', pin: '1234'));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      // A home emission lands mid-check (e.g. a quest flip elsewhere).
+      repo.pushItems(<KidQuest>[
+        for (final KidQuest quest in repo.items)
+          if (quest.questId == 'q-reading')
+            _withStatus(quest, 'done_pending')
+          else
+            quest,
+      ]);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      repo.verifyGate!.complete(true);
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      // Built from the state at completion time: the fresh list survives
+      // AND the success signal lands.
+      expect(bloc.state.pinPassed, isTrue);
+      expect(bloc.state.doneCount, 5);
+      await sub.cancel();
+      await bloc.close();
+    });
+
+    test('the next home emission consumes pinPassed, not the nonce', () async {
+      repo = _FakeKidHomeRepository();
+      final bloc = KidHomeBloc(repository: repo);
+      final sub = bloc.stream.listen((_) {});
+      bloc.add(const KidHomeLoadRequested());
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      bloc.add(const KidHomePinSubmitted(childId: 'maya', pin: '9999'));
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      expect(bloc.state.pinWrongNonce, 1);
+      bloc.add(const KidHomePinSubmitted(childId: 'maya', pin: '1234'));
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      expect(bloc.state.pinPassed, isTrue);
+      // A healthy emission after the success consumes the one-shot, so the
+      // view cannot navigate twice — same pattern as justCompletedQuestId.
+      repo.pushItems(repo.items);
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      expect(bloc.state.pinPassed, isFalse);
+      expect(bloc.state.pinWrongNonce, 1);
+      expect(bloc.state.pinChecking, isFalse);
+      await sub.cancel();
+      await bloc.close();
+    });
+
+    test('copyWith and completion outcomes carry the K02 PIN channel', () {
+      const loaded = KidHomeState(
+        status: KidHomeStatus.loaded,
+        child: _maya,
+        pinChecking: true,
+        pinWrongNonce: 2,
+        pinPassed: true,
+      );
+      final copied = loaded.copyWith(status: KidHomeStatus.loading);
+      expect(copied.pinChecking, isTrue);
+      expect(copied.pinWrongNonce, 2);
+      expect(copied.pinPassed, isTrue);
+      expect(loaded.withCompletionFailed(Exception('x')).pinWrongNonce, 2);
+      expect(
+        loaded
+            .withCompletionSucceeded(questId: 'q-reading', coins: 10)
+            .pinPassed,
+        isTrue,
+      );
+      expect(loaded.copyWithProfiles(loaded.profiles).pinPassed, isTrue);
+      expect(
+        loaded.copyWithProfilesRecovered(loaded.profiles).pinWrongNonce,
+        2,
+      );
+      expect(loaded.copyWithSelection('leo').pinPassed, isTrue);
+      // A fresh home emission keeps an in-flight check and the wrong count
+      // but consumes the one-shot success.
+      final reloaded = loaded.copyWithLoaded(child: _maya, items: _mayaItems());
+      expect(reloaded.pinChecking, isTrue);
+      expect(reloaded.pinWrongNonce, 2);
+      expect(reloaded.pinPassed, isFalse);
+      // Distinct PIN fields make distinct states.
+      expect(loaded, isNot(loaded.copyWith(pinWrongNonce: 3)));
+      expect(loaded, isNot(const KidHomeState()));
+    });
+
+    test('KidHomePinSubmitted equality covers every field', () {
+      const a = KidHomePinSubmitted(childId: 'maya', pin: '1234');
+      const b = KidHomePinSubmitted(childId: 'maya', pin: '1234');
+      const differentPin = KidHomePinSubmitted(childId: 'maya', pin: '9999');
+      const differentChild = KidHomePinSubmitted(childId: 'leo', pin: '1234');
+      expect(a, b);
+      expect(a, isNot(differentPin));
+      expect(a, isNot(differentChild));
     });
   });
 

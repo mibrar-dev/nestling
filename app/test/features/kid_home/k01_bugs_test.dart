@@ -486,7 +486,10 @@ void main() {
     );
     await _settle(tester);
     expect(pushedPath(tester), '/kid-pin');
-    await tester.pageBack();
+    // K02 (real view, no Material AppBar) — its back control is the
+    // design-system `NestIconButton` labelled `Back`, so `pageBack()`
+    // (tooltip/Cupertino bar) cannot find it.
+    await tester.tap(find.bySemanticsLabel('Back'));
     await _settle(tester);
     expect(pushedPath(tester), '/who-is-playing');
     final bloc = tester
@@ -683,13 +686,25 @@ void main() {
       await _pumpPicker(tester);
       await tester.tap(_tile('maya'));
       await tester.tap(_tile('maya'));
+      // Harness note (see K01-BUG-3): the tile tap runs a real Drift
+      // `setActiveChild` write — drain it, otherwise the pushed route is
+      // still on its loading UI (which has no back control, by design).
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 60)),
+      );
       await _settle(tester);
-      await tester.pageBack();
+      expect(
+        pushedPath(tester),
+        '/kid-pin',
+        reason: 'the tile latch must absorb the second tap',
+      );
+      // K02 (real view, no Material AppBar) — tap its `Back` icon button.
+      await tester.tap(find.bySemanticsLabel('Back'));
       await _settle(tester);
       expect(
         pushedPath(tester),
         '/who-is-playing',
-        reason: 'the tile latch must absorb the second tap',
+        reason: 'the pushed route pops back to the picker',
       );
       await disposeApp(tester);
     });
