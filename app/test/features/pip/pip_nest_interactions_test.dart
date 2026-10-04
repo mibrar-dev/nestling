@@ -29,7 +29,6 @@ import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 import 'package:nestling/features/pip/data/pip_repository_impl.dart';
 import 'package:nestling/features/pip/domain/pip_repository.dart';
 import 'package:nestling/features/pip/presentation/bloc/pip_bloc.dart';
-import 'package:nestling/features/pip/presentation/widgets/pip_care_button.dart';
 import 'package:nestling/features/pip/presentation/widgets/pip_wardrobe_tile.dart';
 
 import '../../test_scope.dart';
@@ -719,10 +718,10 @@ void main() {
               );
 
               expect(find.byKey(const Key('k06-title')), findsOneWidget);
-              expect(find.byType(PipCareButton), findsNWidgets(3));
+              expect(find.byType(NestKidButton), findsNWidgets(3));
               expect(find.byType(PipWardrobeTile), findsNWidgets(4));
               // Kid targets stay kid-sized at every width.
-              for (final button in find.byType(PipCareButton).evaluate()) {
+              for (final button in find.byType(NestKidButton).evaluate()) {
                 final size = button.size!;
                 expect(size.height, greaterThanOrEqualTo(NestDevice.tapKid));
               }

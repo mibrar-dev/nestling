@@ -56,4 +56,17 @@ abstract class PipRepository {
   /// not (K06-BUG-7): only [PipBuyResult.cannotAfford] needs the kind
   /// "not enough coins" toast.
   Future<PipBuyResult> buyItem(String childId, String item);
+
+  /// Care costs, declared on the ABSTRACT contract so the screen renders the
+  /// same numbers the write charges. They were static members of
+  /// `PipRepositoryImpl`, which made the K06 view reach into a Drift file for
+  /// copy-rendering numbers (presentation may not name the impl —
+  /// 4_review.md #3).
+  ///
+  /// Playing is free.
+  static const int feedCostCoins = 5;
+
+  /// Bathing costs 3 coins (the K06 design's Bath button shows a 3-coin
+  /// price).
+  static const int bathCostCoins = 3;
 }

@@ -333,13 +333,14 @@ void main() {
       });
     }
 
-    // Sun hat: NOT named by the note, and `shared/shared_batch7` left it on
-    // `NestIcons.sunHat` reporting that it "already matches the design
-    // geometry". It does not match — same silhouette, different coordinates
-    // plus an extra brim stroke (`m2.413.8h19.2…` vs the design's
-    // `m316h18…`). The fix is a shared asset a screen agent may not edit
-    // (RULES §1), so this stays parked as `SHARED_REQUEST.md` §7 rather than
-    // reddening the suite or being quietly dropped.
+    // Sun hat: the note did not name it and `shared/shared_batch7` left it on
+    // `NestIcons.sunHat` claiming its geometry already matched. It did not —
+    // same silhouette, different coordinates plus an extra brim stroke
+    // (`m2.413.8h19.2…` vs the design's `m316h18…`), which is why K06 could
+    // not close its last design-fidelity major. `shared/k06_glyphs` (5ff0c40)
+    // has since added the design's two paths as `NestIcons.wardrobeSunHat`,
+    // `pipWardrobeIcon('sunhat')` points at it, and the byte proof is LIVE
+    // again (was SHARED_REQUEST.md §7).
     test(
       'ORCHESTRATOR NOTES item 2 (extra): the sunhat glyph is the design path',
       () {
@@ -353,8 +354,7 @@ void main() {
               "glyph from K06-pip.html's .k6-item block verbatim",
         );
       },
-      skip: true,
-    ); // shared asset, see SHARED_REQUEST.md §7.
+    );
   });
 
   group('item 3 — prices come from the database', () {

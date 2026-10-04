@@ -37,8 +37,6 @@ import 'package:nestling/app/controllers.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/design_system/design_system.dart' hide PipStage;
 import 'package:nestling/features/pip/presentation/bloc/pip_bloc.dart';
-import 'package:nestling/features/pip/presentation/widgets/pip_care_button.dart';
-import 'package:nestling/features/pip/presentation/widgets/pip_nest_slot.dart';
 import 'package:nestling/features/pip/presentation/widgets/pip_wardrobe_tile.dart';
 
 import '../../test_scope.dart';
@@ -109,6 +107,29 @@ List<double> _careHeights(WidgetTester tester) => <double>[
     tester.getRect(find.byKey(Key(id))).height,
 ];
 
+/// The PAINTED `.btn-kid` card height of each care button, not the widget box.
+///
+/// Since the shared-component switch (FIXES_3 #1, `PipCareButton` →
+/// `NestKidButton`), the keyed widget is the shared button, and
+/// `NestKidButton` wraps its painted card in `Padding(bottom: gap6)` — the
+/// room its 6 px pressed shadow needs. So the widget box is the design's
+/// 91 px card PLUS 6 translucent px, and the view absorbs those 6 px
+/// (`SizedBox(height: s4 - gap6)`) to keep the pitch after the row at s4.
+/// The design fidelity number is therefore the card, which is what this
+/// measures (owner rule: UI checks compare the visible BACKGROUND rect, not
+/// the padded wrapper).
+List<double> _paintedCareHeights(WidgetTester tester) => <double>[
+  for (final id in const <String>['k06-feed', 'k06-play', 'k06-bath'])
+    tester
+        .getRect(
+          find.descendant(
+            of: find.byKey(Key(id)),
+            matching: find.byType(AnimatedContainer),
+          ),
+        )
+        .height,
+];
+
 void main() {
   late AppDatabase db;
 
@@ -137,16 +158,13 @@ void main() {
           .first;
       final picture = tester.widget<SvgPicture>(art);
       expect(picture.fit, BoxFit.contain);
-      expect(
-        tester.getSize(art),
-        const Size(kPipNestArtWidth, kPipNestArtHeight),
-      );
+      expect(tester.getSize(art), const Size(230, 206));
 
       // The visible art is the square inscribed in the box, centred: 206 wide
       // in a 230 box is 12 px of letterbox on each side.
       final slot = tester.getRect(find.byKey(const Key('k06-pet')));
       expect(
-        slot.width - kPipNestArtHeight,
+        slot.width - 206,
         closeTo(24, _tol),
         reason: 'a uniform 206/240 scale leaves 12 px each side',
       );
@@ -271,17 +289,28 @@ void main() {
       // says 91 (PNG y 502 – 593), so that must not drift.
       await _pumpNest(tester);
 
-      final heights = _careHeights(tester);
+      final painted = _paintedCareHeights(tester);
       expect(
-        heights.first,
+        painted.first,
         closeTo(_designCareHeight, _tol),
-        reason: '$heights',
+        reason: 'painted cards $painted',
       );
       expect(
-        heights.first,
-        closeTo(kPipCareButtonHeight, _tol),
+        painted.first,
+        closeTo(91, _tol),
         reason: 'and the token the widget floors at stays the same number',
       );
+      // The keyed widget box is that same card plus the shared button's
+      // 6 px shadow room — asserted so the compensation stays honest rather
+      // than silently re-tuning the design number.
+      final heights = _careHeights(tester);
+      for (final height in heights) {
+        expect(
+          height,
+          closeTo(_designCareHeight + NestSpacing.gap6, _tol),
+          reason: 'widget boxes $heights must be the card + the 6 px shadow',
+        );
+      }
       await disposeApp(tester);
     });
 
@@ -304,7 +333,7 @@ void main() {
     }
 
     testWidgets('a held press does not change the row height', (tester) async {
-      // `PipCareButton` presses by translating 4 px inside an
+      // `NestKidButton` presses by translating 4 px inside an
       // `AnimatedContainer`. Inside `IntrinsicHeight` + stretch, a press must
       // stay a pure transform: if the animation ever fed back into layout, the
       // held button would resize and the row would lose its one height.
@@ -483,7 +512,7 @@ void main() {
           reason: label,
         );
       }
-      expect(find.byType(PipCareButton), findsNWidgets(3));
+      expect(find.byType(NestKidButton), findsNWidgets(3));
       semantics.dispose();
       await disposeApp(tester);
     });

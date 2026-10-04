@@ -11,16 +11,13 @@
 // either "Owned" in `--leaf-ink` or a coin price. A locked tile swaps to
 // `--surface-2` with a DASHED `--ink-2` border and no shadow.
 //
-// The dashed border is screen-local: Flutter has no dashed BorderSide and the
-// design system ships no dashed-border widget (see
-// docs/screens/K06/SHARED_REQUEST.md). Dash metrics are measured off the
-// design PNG: 6 px dash / 3 px gap on a 3 px stroke, painted as a
-// `CustomPaint.foregroundPainter` so the stroke lands ON the fill, exactly
-// where CSS puts a dashed `border` (a background painter is hidden under the
-// opaque tile fill — K06-BUG-6).
-import 'dart:math' as math;
-
+// The dashed border is shared: `NestDashedBorder` (core/design_system) with
+// the same rounded-rect walk, dash 6 / gap 3, on `borderWidth` (3). It
+// paints as a `CustomPaint.foregroundPainter` so the stroke lands ON the
+// fill, exactly where CSS puts a dashed `border` (a background painter is
+// hidden under the opaque tile fill — K06-BUG-6).
 import 'package:flutter/material.dart';
+import 'package:nestling/core/design_system/components/nest_dashed_border.dart';
 import 'package:nestling/core/design_system/components/nest_icon.dart';
 import 'package:nestling/core/design_system/tokens/nest_tokens.dart';
 import 'package:nestling/core/design_system/tokens/radii.dart';
@@ -48,11 +45,6 @@ const double kPipWardrobeGap = NestSpacing.s3;
 /// with an unbounded height, so the tile pins the same minimum.
 const double kPipWardrobeTileHeight = 116;
 
-/// Dashed `border-style: dashed` on a 3 px stroke, measured off the design
-/// PNG (dash 670→675, gap 676→678 on a straight edge: 6 / 3).
-const double _kDashLength = 6;
-const double _kDashGap = 3;
-
 /// One wardrobe tile: the whole tile is the button.
 class PipWardrobeTile extends StatelessWidget {
   const PipWardrobeTile({
@@ -73,6 +65,99 @@ class PipWardrobeTile extends StatelessWidget {
     final nameColor = owned ? tokens.ink : tokens.ink2;
     final artFill = owned ? tokens.lilacTint : tokens.surface;
 
+    Widget child = Container(
+      constraints: const BoxConstraints(minHeight: kPipWardrobeTileHeight),
+      // The dashed lock paints the same 3 px band a solid border
+      // occupies, so a locked tile reserves it too and both tiles
+      // keep identical content insets (the art circles line up).
+      padding: EdgeInsets.all(owned ? 0 : kid.borderWidth),
+      decoration: BoxDecoration(
+        color: owned ? tokens.surface : tokens.surface2,
+        borderRadius: NestRadii.allL,
+        border: owned
+            ? Border.all(color: tokens.ink, width: kid.borderWidth)
+            : null,
+        boxShadow: owned
+            ? [
+                BoxShadow(
+                  color: tokens.kidShadow.first.color,
+                  offset: const Offset(0, 6),
+                ),
+              ]
+            : null,
+      ),
+      child: Padding(
+        // `.k6-item { padding: 8px 4px }`, measured from the inner
+        // edge of the 3 px border.
+        padding: const EdgeInsets.symmetric(
+          vertical: NestSpacing.s2,
+          horizontal: NestSpacing.s1,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          spacing: NestSpacing.s1,
+          children: [
+            Container(
+              width: kPipWardrobeArtSize,
+              height: kPipWardrobeArtSize,
+              decoration: BoxDecoration(
+                color: artFill,
+                borderRadius: const BorderRadius.all(
+                  Radius.circular(NestRadii.pill),
+                ),
+              ),
+              child: Center(
+                child: NestIcon(
+                  pipWardrobeIcon(item.id),
+                  size: kPipWardrobeIconSize,
+                  color: nameColor,
+                ),
+              ),
+            ),
+            Text(
+              item.title,
+              // `.k6-item-n`: Nunito 800 14 px on an 18 px line.
+              style: NestType.kidBody(color: nameColor).copyWith(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                height: 18 / 14,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (owned)
+              // `.k6-item-p.on { color: var(--leaf-ink) }`.
+              Text(
+                'Owned',
+                style: NestType.buttonKid(color: tokens.leafInk).copyWith(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                  height: 1,
+                ),
+                maxLines: 1,
+                softWrap: false,
+              )
+            else
+              PipCoinAmount(
+                amount: '${item.priceCoins}',
+                color: nameColor,
+                fontWeight: FontWeight.w900,
+              ),
+          ],
+        ),
+      ),
+    );
+
+    // K06-BUG-6 / ORCHESTRATOR_NOTES item 1: a locked tile wears the
+    // design's shared 3 px dashed ink-2 stroke. The fill is opaque, so the
+    // stroke must paint ON it (`foregroundPainter`); a background painter
+    // is completely covered and the tile reads as borderless.
+    if (!owned) {
+      child = NestDashedBorder(child: child);
+    }
+
     return Semantics(
       button: true,
       label: owned
@@ -83,111 +168,7 @@ class PipWardrobeTile extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onPressed,
-        child: CustomPaint(
-          // A locked tile drops `--sh-kid`, so it needs no room below it.
-          //
-          // FOREGROUND, not `painter`: the tile's own `surface-2` fill is
-          // opaque edge to edge, so a background stroke is completely covered
-          // and the locked slot reads as a flat beige card with no border
-          // (K06-BUG-6 = the UI stage's D1 = ORCHESTRATOR_NOTES item 1).
-          // Painting on top of the fill is what CSS `border-style: dashed`
-          // does — the stroke sits inside the border box, over the
-          // background — and it is also over the art circle's white fill,
-          // which never reaches the outer 3 px.
-          foregroundPainter: owned
-              ? null
-              : _DashedBorderPainter(
-                  color: tokens.ink2,
-                  width: kid.borderWidth,
-                  dashLength: _kDashLength,
-                  dashGap: _kDashGap,
-                ),
-          child: Container(
-            constraints: const BoxConstraints(
-              minHeight: kPipWardrobeTileHeight,
-            ),
-            // The dashed lock paints the same 3 px band a solid border
-            // occupies, so a locked tile reserves it too and both tiles
-            // keep identical content insets (the art circles line up).
-            padding: EdgeInsets.all(owned ? 0 : kid.borderWidth),
-            decoration: BoxDecoration(
-              color: owned ? tokens.surface : tokens.surface2,
-              borderRadius: NestRadii.allL,
-              border: owned
-                  ? Border.all(color: tokens.ink, width: kid.borderWidth)
-                  : null,
-              boxShadow: owned
-                  ? [
-                      BoxShadow(
-                        color: tokens.kidShadow.first.color,
-                        offset: const Offset(0, 6),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Padding(
-              // `.k6-item { padding: 8px 4px }`, measured from the inner
-              // edge of the 3 px border.
-              padding: const EdgeInsets.symmetric(
-                vertical: NestSpacing.s2,
-                horizontal: NestSpacing.s1,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                spacing: NestSpacing.s1,
-                children: [
-                  Container(
-                    width: kPipWardrobeArtSize,
-                    height: kPipWardrobeArtSize,
-                    decoration: BoxDecoration(
-                      color: artFill,
-                      borderRadius: const BorderRadius.all(
-                        Radius.circular(NestRadii.pill),
-                      ),
-                    ),
-                    child: Center(
-                      child: NestIcon(
-                        pipWardrobeIcon(item.id),
-                        size: kPipWardrobeIconSize,
-                        color: nameColor,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    item.title,
-                    // `.k6-item-n`: Nunito 800 14 px on an 18 px line.
-                    style: NestType.kidBody(color: nameColor).copyWith(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      height: 18 / 14,
-                    ),
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (owned)
-                    // `.k6-item-p.on { color: var(--leaf-ink) }`.
-                    Text(
-                      'Owned',
-                      style: NestType.buttonKid(color: tokens.leafInk).copyWith(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                        height: 1,
-                      ),
-                      maxLines: 1,
-                      softWrap: false,
-                    )
-                  else
-                    PipCoinAmount(
-                      amount: '${item.priceCoins}',
-                      color: nameColor,
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
+        child: child,
       ),
     );
   }
@@ -220,54 +201,4 @@ class PipWardrobeStrip extends StatelessWidget {
       ],
     );
   }
-}
-
-/// Screen-local dashed border: a 3 px dashed stroke walked along the tile's
-/// `--r-l` rounded rectangle. Flutter has no dashed `BorderSide`, and the
-/// design system has no dashed-border component.
-class _DashedBorderPainter extends CustomPainter {
-  const _DashedBorderPainter({
-    required this.color,
-    required this.width,
-    required this.dashLength,
-    required this.dashGap,
-  });
-
-  final Color color;
-  final double width;
-  final double dashLength;
-  final double dashGap;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    final outer = rect.deflate(width / 2);
-    final path = Path()
-      ..addRRect(
-        RRect.fromRectAndRadius(
-          outer,
-          Radius.circular(math.max(0, NestRadii.l - width / 2)),
-        ),
-      );
-    final metrics = path.computeMetrics();
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = width;
-    for (final metric in metrics) {
-      var distance = 0.0;
-      while (distance < metric.length) {
-        final end = math.min(distance + dashLength, metric.length);
-        canvas.drawPath(metric.extractPath(distance, end), paint);
-        distance = end + dashGap;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) =>
-      oldDelegate.color != color ||
-      oldDelegate.width != width ||
-      oldDelegate.dashLength != dashLength ||
-      oldDelegate.dashGap != dashGap;
 }

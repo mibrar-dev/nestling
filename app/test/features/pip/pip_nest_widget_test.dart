@@ -24,9 +24,7 @@ import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nestling/core/design_system/design_system.dart';
-import 'package:nestling/features/pip/presentation/widgets/pip_care_button.dart';
 import 'package:nestling/features/pip/presentation/widgets/pip_growth_card.dart';
-import 'package:nestling/features/pip/presentation/widgets/pip_nest_slot.dart';
 import 'package:nestling/features/pip/presentation/widgets/pip_wardrobe_tile.dart';
 
 import '../../test_scope.dart';
@@ -100,14 +98,7 @@ void main() {
 
     // `.k6-pet`: its own `margin: 9px auto 0` (not the s4 sibling margin).
     final pet = tester.getRect(find.byKey(const Key('k06-pet')));
-    _expectRect(
-      pet,
-      80,
-      title.bottom + 9,
-      kPipSlotWidth,
-      kPipSlotHeight,
-      'pet slot',
-    );
+    _expectRect(pet, 80, title.bottom + 9, 230, 206, 'pet slot');
 
     // `.k6-grow`: 3 px border, 12x14 padding, 30/10/16/8/20 of content.
     final grow = tester.getRect(find.byType(PipGrowthCard));
@@ -120,16 +111,42 @@ void main() {
       'growth card',
     );
 
-    // `.k6-care`: three equal columns with 12 px gaps, 90 tall.
-    final care = tester.getRect(find.byType(PipCareButton).first);
+    // `.k6-care`: three equal columns with 12 px gaps.
+    //
+    // The visible painted care button (the 91 px design band) is the
+    // AnimatedContainer inside the shared NestKidButton's key; the outer
+    // NestKidButton rectangle additionally carries the shared 6 px bottom
+    // gap to make space for the pressed / shadowed state.
+    final care = tester.getRect(
+      find
+          .descendant(
+            of: find.byType(NestKidButton).first,
+            matching: find.byType(AnimatedContainer),
+          )
+          .first,
+    );
     expect(care.top, closeTo(grow.bottom + NestSpacing.s4, _tol));
-    expect(care.height, closeTo(kPipCareButtonHeight, _tol));
+    expect(care.height, closeTo(91, _tol));
     expect(care.left, closeTo(_side, _tol));
     // (350 - 2 × 12) / 3 = 108.67 at the design width.
     expect(care.width, closeTo((_width - 2 * _side - 2 * 12) / 3, _tol));
-    final play = tester.getRect(find.byType(PipCareButton).at(1));
+    final play = tester.getRect(
+      find
+          .descendant(
+            of: find.byType(NestKidButton).at(1),
+            matching: find.byType(AnimatedContainer),
+          )
+          .first,
+    );
     expect(play.left, closeTo(care.right + 12, _tol));
-    final bath = tester.getRect(find.byType(PipCareButton).at(2));
+    final bath = tester.getRect(
+      find
+          .descendant(
+            of: find.byType(NestKidButton).at(2),
+            matching: find.byType(AnimatedContainer),
+          )
+          .first,
+    );
     expect(bath.left, closeTo(play.right + 12, _tol));
     expect(bath.right, closeTo(_width - _side, _tol));
 
@@ -222,17 +239,14 @@ void main() {
             matching: find.byType(SvgPicture),
           )
           .first;
-      expect(
-        tester.getSize(nest),
-        const Size(kPipNestArtWidth, kPipNestArtHeight),
-      );
+      expect(tester.getSize(nest), const Size(230, 206));
       // The art box is the slot box, sharing its bottom edge — the design's
       // `bottom: 0`.
       final slot = tester.getRect(find.byKey(const Key('k06-pet')));
       expect(tester.getRect(nest).bottom, closeTo(slot.bottom, _tol));
       expect(
         tester.getRect(nest).left,
-        closeTo(slot.center.dx - kPipNestArtWidth / 2, _tol),
+        closeTo(slot.center.dx - 230 / 2, _tol),
       );
       await disposeApp(tester);
     },

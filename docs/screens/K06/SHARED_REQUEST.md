@@ -1,12 +1,16 @@
-# Shared request — K06 two shared-component gaps
+# Shared request — K06 shared-component gaps (all RESOLVED, iteration 4)
 
-Two K06 layout needs cannot be expressed by the shared design system as it
-stands on `main`. Both were solved screen-locally inside
-`app/lib/features/pip/presentation/widgets/` (allowed by RULES §1), with the
-design's own numbers and no invented values. Landing these would let K07 (and
-any future kid screen) delete the forks.
+> **STATUS UPDATE — stage 2b, iteration 4: every section below is now
+> RESOLVED and nothing is outstanding.** §1/§2/§3 landed on `main` as
+> `shared/shared_batch7` and K06 has ADOPTED them (the local forks
+> `pip_nest_slot.dart`, `pip_care_button.dart` and `_DashedBorderPainter`
+> are deleted — `4_review.md` #1). §5 (glyphs) and §6 (prices) were already
+> adopted at iteration 3. §7 (the sun-hat glyph) landed as
+> `shared/k06_glyphs` (commit `5ff0c40`) and is adopted too, with its parked
+> proof un-skipped and green. §8 carries the only remaining item, which is
+> purely documentary.
 
-## 1. `NestPetStage` cannot express the K06 pet slot
+## 1. RESOLVED (adopted on `main` as shared_batch7) — `NestPetStage` cannot express the K06 pet slot
 
 Need: K06's design slot is 230 × 206 with the nest `<img>` **230 × 206** at
 `bottom: 0` (HTML line 22) and `PipAvatar` 134 tall at `bottom: 81`
@@ -37,7 +41,7 @@ Files: `core/design_system/components/nest_pet_stage.dart`,
 Blocks: no. K06 works around it; the fork is marked `TODO(K06)`-style in the
 widget's header comment.
 
-## 2. `NestKidButton` has no third ("trailing") row
+## 2. RESOLVED (adopted on `main` as shared_batch7) — `NestKidButton` has no third ("trailing") row
 
 Need: `.k6-care .btn-kid` stacks three rows in a column — 24 px icon, the
 17/20 label, then the coin price (`.k6-coin`, 16 px coin + 14 px digits) or the
@@ -53,7 +57,7 @@ icon/label pair (K06 passes `gap: 3` already).
 
 Blocks: no.
 
-## 3. Minor: no dashed-border widget
+## 3. RESOLVED (adopted on `main` as shared_batch7) — Minor: no dashed-border widget
 
 `.k6-item.locked` is a 3 px dashed `--ink-2` border on `--surface-2` with no
 shadow. Flutter has no dashed `BorderSide` and the design system has no
@@ -111,7 +115,7 @@ merge conflict there is textual, not a design conflict.
 
 ---
 
-## 5 — Wardrobe glyphs are the design's glyphs (ORCHESTRATOR_NOTES 11:30, item 2)
+## 5 — DONE (adopted) — Wardrobe glyphs are the design's glyphs (ORCHESTRATOR_NOTES 11:30, item 2)
 
 Need: replace two shared `core/design_system` icon assets whose art is a
 **look-alike**, not the K06 design glyph. The wardrobe tiles paint
@@ -220,7 +224,7 @@ the old 40/120 as its premise; Stage 2 iteration 3 re-based them all to read
 the seeded row instead (see `2_build.md` FIX 2). The `K06-BATCH7` proof that was
 parked precisely for this is live again and green.
 
-## 7 — OPEN: the sun-hat glyph is still a look-alike (the third tile batch 7 left behind)
+## 7 — RESOLVED (`shared/k06_glyphs`, `5ff0c40`; adopted + proof un-skipped): the sun-hat glyph was a look-alike (the third tile batch 7 left behind)
 
 Need: `app/assets/icons/ic_sun_hat.svg` should draw the design's sun-hat paths
 from `K06-pip.html` line 74 —
@@ -258,3 +262,24 @@ deterministic — the oracle is the HTML, read at test time):
 flutter test test/features/pip/pip_orchestrator_notes_test.dart --run-skipped \
   --plain-name sunhat
 ```
+
+Adoption note (stage 2b, iteration 4): `pipWardrobeIcon('sunhat')` now returns
+`NestIcons.wardrobeSunHat` (`assets/icons/ic_wardrobe_sun_hat.svg`), and the
+parked byte proof in `pip_orchestrator_notes_test.dart` ("ORCHESTRATOR NOTES
+item 2 (extra): the sunhat glyph is the design path") is LIVE — no `skip:` is
+left anywhere in `test/features/pip/`. The Feed and Play care glyphs moved to
+the same batch's `NestIcons.kidFeed` / `NestIcons.kidPlay` (exact
+`K06-pip.html` `.k6-care` paths, confirmed against both design PNGs);
+`NestIcons.bubbles` already matched Bath.
+
+## 8 — OPEN (documentation only, no runtime effect) — `DESIGN_SPEC.md` §5 K06 quotes superseded numbers
+
+`4_review.md` #6: §5 K06's prose still says "280px stage 3" and "72px tiles".
+The HTML/PNG oracle is `.k6-pet` **230 × 206** (a square `nest.svg`
+letterboxed with `BoxFit.contain`, `pipBottom: 81`) and four `flex:1` tiles of
+(350 − 3 × 12) / 4 = **78.5** at 390 px, shrinking with the width
+(SPACING_SPEC §10.2). K06 follows the measured PNG — the iteration-3 UI stage
+measured every structural row at Δ 0 — so no screen code changes; the spec
+text is what will mislead the next K* screen that copies it. Outside this
+screen's editable set (RULES §1 allows `docs/screens/K06/**` only), hence
+filed rather than amended.

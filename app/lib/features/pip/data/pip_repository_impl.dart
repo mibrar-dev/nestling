@@ -14,13 +14,6 @@ class PipRepositoryImpl implements PipRepository {
 
   final AppDatabase _db;
 
-  /// Feeding Pip costs 5 coins.
-  static const int feedCostCoins = 5;
-
-  /// Bathing Pip costs 3 coins (K06 design: the Bath button shows a
-  /// 3-coin price; playing stays free).
-  static const int bathCostCoins = 3;
-
   /// Design order for the K06 wardrobe strip (never alphabetical — the DB
   /// query itself sorts by item, so the mapping re-sorts explicitly).
   static const List<String> wardrobeOrder = <String>[
@@ -101,13 +94,15 @@ class PipRepositoryImpl implements PipRepository {
   }
 
   @override
-  Future<void> feed(String childId) => _care(childId, cost: feedCostCoins);
+  Future<void> feed(String childId) =>
+      _care(childId, cost: PipRepository.feedCostCoins);
 
   @override
   Future<void> play(String childId) => _care(childId);
 
   @override
-  Future<void> bathe(String childId) => _care(childId, cost: bathCostCoins);
+  Future<void> bathe(String childId) =>
+      _care(childId, cost: PipRepository.bathCostCoins);
 
   Future<void> _care(String childId, {int cost = 0}) async {
     // Atomic conditional write (K06-BUG-1): a read-modify-write here loses

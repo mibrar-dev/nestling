@@ -16,6 +16,7 @@ import 'package:nestling/core/design_system/tokens/spacing.dart';
 import 'package:nestling/core/design_system/tokens/typography.dart';
 import 'package:nestling/features/pip/domain/entities/pip_nest.dart';
 import 'package:nestling/features/pip/domain/entities/pip_profile.dart';
+import 'package:nestling/features/pip/presentation/widgets/pip_look.dart';
 
 /// `<img src="pip-stage-4.svg" width="30" height="30">` in `.k6-grow-top`.
 const double kPipGrowthAvatarSize = 30;

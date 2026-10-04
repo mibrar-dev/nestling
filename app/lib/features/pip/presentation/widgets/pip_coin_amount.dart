@@ -25,6 +25,7 @@ class PipCoinAmount extends StatelessWidget {
     required this.color,
     super.key,
     this.fontSize = 14,
+    this.fontWeight = FontWeight.w800,
   });
 
   /// Digits only — the coin art carries the "coins" meaning.
@@ -36,6 +37,10 @@ class PipCoinAmount extends StatelessWidget {
 
   /// `.k6-coin` sets `font-size:14`; kept a parameter so nothing forks it.
   final double fontSize;
+
+  /// Weight of the digits. The care row's `.k6-coin` is w800; the locked
+  /// tiles' `.k6-item-p` carries the design's w900 (4_review #5).
+  final FontWeight fontWeight;
 
   @override
   Widget build(BuildContext context) {
@@ -58,11 +63,9 @@ class PipCoinAmount extends StatelessWidget {
           Flexible(
             child: Text(
               amount,
-              style: NestType.buttonKid(color: color).copyWith(
-                fontSize: fontSize,
-                fontWeight: FontWeight.w800,
-                height: 1,
-              ),
+              style: NestType.buttonKid(
+                color: color,
+              ).copyWith(fontSize: fontSize, fontWeight: fontWeight, height: 1),
               maxLines: 1,
               softWrap: false,
               overflow: TextOverflow.ellipsis,

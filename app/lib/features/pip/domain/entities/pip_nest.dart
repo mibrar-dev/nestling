@@ -21,14 +21,3 @@ class PipNest extends Equatable {
   @override
   List<Object?> get props => <Object?>[profile, items];
 }
-
-/// Display name for a Pip stage. Pip's own copy — do NOT import the
-/// kid_home/family helpers: 1 Egg, 2 Hatchling, 3 Fledgling, 4 Songbird.
-String pipStageName(int stage) {
-  return switch (stage) {
-    1 => 'Egg',
-    2 => 'Hatchling',
-    4 => 'Songbird',
-    _ => 'Fledgling',
-  };
-}

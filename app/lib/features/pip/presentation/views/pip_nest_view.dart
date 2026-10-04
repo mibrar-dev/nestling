@@ -7,7 +7,7 @@
 //                  = s4 (16) — except `.k6-pet`, whose own `margin: 9px auto 0`
 //                  wins, so the pet slot sits 9 px under the title
 //   .k6-name       "Pip · Fledgling" (kid-title, `text-wrap: balance`)
-//   .k6-pet        230 x 206 slot  (see widgets/pip_nest_slot.dart)
+//   .k6-pet        230 x 206 slot  (see core/design_system NestPetStage)
 //   .k6-grow       growth card, 3 px ink border, lilac tint, sh-kid
 //   .k6-care       Feed 5 / Play Free / Bath 3
 //   .k6-sec        "Pip's wardrobe"
@@ -25,19 +25,17 @@ import 'package:nestling/core/design_system/design_system.dart' hide PipStage;
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 import 'package:nestling/features/kid_home/kid_home_routes.dart';
 import 'package:nestling/features/parental_gate/parental_gate_routes.dart';
-import 'package:nestling/features/pip/data/pip_repository_impl.dart';
 import 'package:nestling/features/pip/domain/entities/pip_nest.dart';
 import 'package:nestling/features/pip/domain/entities/pip_stage.dart'
     show PipStage;
+import 'package:nestling/features/pip/domain/pip_repository.dart';
 import 'package:nestling/features/pip/presentation/bloc/pip_bloc.dart';
 import 'package:nestling/features/pip/presentation/bloc/pip_event.dart';
 import 'package:nestling/features/pip/presentation/bloc/pip_state.dart';
-import 'package:nestling/features/pip/presentation/widgets/pip_care_button.dart';
 import 'package:nestling/features/pip/presentation/widgets/pip_coin_amount.dart';
 import 'package:nestling/features/pip/presentation/widgets/pip_free_pill.dart';
 import 'package:nestling/features/pip/presentation/widgets/pip_growth_card.dart';
 import 'package:nestling/features/pip/presentation/widgets/pip_look.dart';
-import 'package:nestling/features/pip/presentation/widgets/pip_nest_slot.dart';
 import 'package:nestling/features/pip/presentation/widgets/pip_wardrobe_tile.dart';
 
 /// `.k6-top { padding: 0 20px 4px }`.
@@ -221,56 +219,30 @@ class _PipTopRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
+    return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        _BackButton(key: Key('k06-back')),
-        _GateLockButton(key: Key('k06-lock')),
+        NestIconButton(
+          key: const Key('k06-back'),
+          icon: NestIcons.back,
+          semanticLabel: 'Back',
+          size: NestDevice.tapKid,
+          iconSize: 26,
+          backgroundColor: Colors.transparent,
+          borderColor: Colors.transparent,
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(KidHomeRoutePaths.home);
+            }
+          },
+        ),
+        const _GateLockButton(key: Key('k06-lock')),
       ],
     );
   }
 }
-
-class _BackButton extends StatelessWidget {
-  const _BackButton({super.key});
-
-  void _goBack(BuildContext context) {
-    // Pop when there is something to pop, otherwise land on kid home.
-    if (context.canPop()) {
-      context.pop();
-    } else {
-      context.go(KidHomeRoutePaths.home);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = context.nest;
-    return Semantics(
-      button: true,
-      label: 'Back',
-      onTap: () => _goBack(context),
-      excludeSemantics: true,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => _goBack(context),
-        child: SizedBox.square(
-          // `.nav-back.lg { width: 56px; height: 56px; border-radius: 18px }`
-          dimension: NestDevice.tapKid,
-          child: Center(
-            child: SizedBox.square(
-              dimension: _kBackIconSize,
-              child: NestIcon(NestIcons.back, color: tokens.ink),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// `<svg width="26" height="26">` inside `.nav-back.lg`.
-const double _kBackIconSize = 26;
 
 /// `.lock-btn.lg` with the K03 one-gate-per-gesture tap guard.
 class _GateLockButton extends StatefulWidget {
@@ -349,15 +321,27 @@ class _PipNestBody extends StatelessWidget {
                   ),
                   const SizedBox(height: _kPetTopMargin),
                   Center(
-                    child: PipNestSlot(
-                      key: const Key('k06-pet'),
-                      semanticLabel:
-                          'Pip the ${pipStageName(stage)}, stage $stage of 4',
-                      pip: PipAvatar(
-                        style: pipLook.style,
-                        skin: pipLook.skin,
-                        accessory: pipLook.accessory,
-                        stage: stage,
+                    child: SizedBox(
+                      width: 230,
+                      height: 206,
+                      child: NestPetStage(
+                        key: const Key('k06-pet'),
+                        pip: PipAvatar(
+                          style: pipLook.style,
+                          skin: pipLook.skin,
+                          accessory: pipLook.accessory,
+                          stage: stage,
+                        ),
+                        nestWidth: 230,
+                        nestHeight: 206,
+                        fixedPipHeight: 134,
+                        slotHeight: 206,
+                        pipBottom: 81,
+                        nestFit: BoxFit.contain,
+                        showGlow: false,
+                        showGroundShadow: false,
+                        semanticLabel:
+                            'Pip the ${pipStageName(stage)}, stage $stage of 4',
                       ),
                     ),
                   ),
@@ -378,7 +362,13 @@ class _PipNestBody extends StatelessWidget {
                   const SizedBox(height: NestSpacing.s4),
                   _CareRow(nest: nest),
                   if (nest.items.isNotEmpty) ...[
-                    const SizedBox(height: NestSpacing.s4),
+                    // Each shared NestKidButton carries an internal
+                    // `Padding(bottom: gap6)` (required for its pressed /
+                    // shadowed paint), so the row's painted box is 91 px
+                    // followed by 6 translucent px. Absorbing that 6 here
+                    // keeps the visual pitch after the row exactly s4 (16),
+                    // matching the design's 91 row height.
+                    const SizedBox(height: NestSpacing.s4 - NestSpacing.gap6),
                     Text(
                       // HTML line 71: `<div class="k6-sec">Pip's wardrobe
                       // </div>` — a LITERAL ASCII apostrophe (0x27), verified
@@ -477,17 +467,19 @@ class _CareRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = context.nest;
     final coins = nest.profile.coins;
-    final canFeed = coins >= PipRepositoryImpl.feedCostCoins;
-    final canBathe = coins >= PipRepositoryImpl.bathCostCoins;
+    // The care costs come from the abstract repository, so the prices the
+    // buttons draw are the numbers the write charges (4_review.md #3) — the
+    // view no longer names the Drift impl.
+    final canFeed = coins >= PipRepository.feedCostCoins;
+    final canBathe = coins >= PipRepository.bathCostCoins;
 
     // `.k6-care` is a flex row, so `align-items: stretch` gives all three
     // `.btn-kid` columns ONE height — the tallest. A plain `Row` inside the
-    // unbounded `ListView` cannot stretch (and each button is only floored at
-    // `kPipCareButtonHeight`), so at text scale 1.3 Play's 19 px `.k6-free`
-    // pill grew to 101 px while Feed and Bath stayed at 96 (K06-BUG-5).
-    // `IntrinsicHeight` supplies the row's tight height; `stretch` then hands
+    // unbounded `ListView` cannot stretch, so at text scale 1.3 Play's 19 px
+    // `.k6-free` pill grew to 101 px while Feed and Bath stayed at 96
+    // (K06-BUG-5). `IntrinsicHeight` supplies the row's tight height;
+    // `stretch` then hands
     // it to every column. At the design's scale 1.0 nothing changes: the
     // tallest intrinsic height is Play's 91 px, which is exactly the design.
     return IntrinsicHeight(
@@ -496,17 +488,25 @@ class _CareRow extends StatelessWidget {
         spacing: NestSpacing.s3,
         children: [
           Expanded(
-            child: PipCareButton(
+            child: NestKidButton(
               key: const Key('k06-feed'),
               label: 'Feed',
-              color: tokens.peach,
-              foreground: tokens.onWarm,
+              color: NestKidButtonColor.peach,
               semanticLabel:
-                  'Feed Pip, costs ${PipRepositoryImpl.feedCostCoins} coins',
-              icon: NestIcon(NestIcons.feedBowl, color: tokens.onWarm),
+                  'Feed Pip, costs ${PipRepository.feedCostCoins} coins',
+              icon: NestIcon(NestIcons.kidFeed, color: context.nest.onWarm),
+              axis: Axis.vertical,
+              gap: NestSpacing.gap3,
+              minHeight: 88,
+              fontSize: 17,
+              wrapLabel: false,
+              contentPadding: const EdgeInsets.symmetric(
+                vertical: NestSpacing.s2,
+                horizontal: NestSpacing.s1,
+              ),
               trailing: PipCoinAmount(
-                amount: '${PipRepositoryImpl.feedCostCoins}',
-                color: tokens.onWarm,
+                amount: '${PipRepository.feedCostCoins}',
+                color: context.nest.onWarm,
               ),
               onPressed: canFeed
                   ? () => context.read<PipBloc>().add(
@@ -516,13 +516,21 @@ class _CareRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: PipCareButton(
+            child: NestKidButton(
               key: const Key('k06-play'),
               label: 'Play',
-              color: tokens.sky,
-              foreground: tokens.onAccent,
+              color: NestKidButtonColor.sky,
               semanticLabel: 'Play with Pip, free',
-              icon: NestIcon(NestIcons.ball, color: tokens.onAccent),
+              icon: NestIcon(NestIcons.kidPlay, color: context.nest.onAccent),
+              axis: Axis.vertical,
+              gap: NestSpacing.gap3,
+              minHeight: 88,
+              fontSize: 17,
+              wrapLabel: false,
+              contentPadding: const EdgeInsets.symmetric(
+                vertical: NestSpacing.s2,
+                horizontal: NestSpacing.s1,
+              ),
               trailing: const PipFreePill(),
               onPressed: () => context.read<PipBloc>().add(
                 const PipCareRequested(PipCareKind.play),
@@ -530,17 +538,25 @@ class _CareRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: PipCareButton(
+            child: NestKidButton(
               key: const Key('k06-bath'),
               label: 'Bath',
-              color: tokens.surface,
-              foreground: tokens.ink,
+              color: NestKidButtonColor.white,
               semanticLabel:
-                  'Bathe Pip, costs ${PipRepositoryImpl.bathCostCoins} coins',
-              icon: NestIcon(NestIcons.bubbles, color: tokens.ink),
+                  'Bathe Pip, costs ${PipRepository.bathCostCoins} coins',
+              icon: NestIcon(NestIcons.bubbles, color: context.nest.ink),
+              axis: Axis.vertical,
+              gap: NestSpacing.gap3,
+              minHeight: 88,
+              fontSize: 17,
+              wrapLabel: false,
+              contentPadding: const EdgeInsets.symmetric(
+                vertical: NestSpacing.s2,
+                horizontal: NestSpacing.s1,
+              ),
               trailing: PipCoinAmount(
-                amount: '${PipRepositoryImpl.bathCostCoins}',
-                color: tokens.ink,
+                amount: '${PipRepository.bathCostCoins}',
+                color: context.nest.ink,
               ),
               onPressed: canBathe
                   ? () => context.read<PipBloc>().add(

@@ -11,8 +11,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/features/pip/data/pip_repository_impl.dart';
-import 'package:nestling/features/pip/domain/entities/pip_nest.dart';
 import 'package:nestling/features/pip/domain/pip_repository.dart';
+// `pipStageName` is presentation copy and lives next to the other Pip-look
+// helpers in the feature's widget layer (4_review.md #2), not in domain/.
+import 'package:nestling/features/pip/presentation/widgets/pip_look.dart';
 
 Future<void> _setMayaCoins(AppDatabase db, int coins) async {
   await (db.update(db.children)..where((c) => c.id.equals('maya'))).write(

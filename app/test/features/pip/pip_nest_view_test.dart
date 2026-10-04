@@ -19,7 +19,6 @@ import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 import 'package:nestling/features/pip/presentation/views/pip_nest_view.dart';
-import 'package:nestling/features/pip/presentation/widgets/pip_care_button.dart';
 import 'package:nestling/features/pip/presentation/widgets/pip_coin_amount.dart';
 import 'package:nestling/features/pip/presentation/widgets/pip_free_pill.dart';
 import 'package:nestling/features/pip/presentation/widgets/pip_growth_card.dart';
@@ -145,7 +144,7 @@ void main() {
   testWidgets('care row shows Feed 5, Play Free and Bath 3', (tester) async {
     await _pumpNest(tester);
 
-    expect(find.byType(PipCareButton), findsNWidgets(3));
+    expect(find.byType(NestKidButton), findsNWidgets(3));
     expect(find.text('Feed'), findsOneWidget);
     expect(find.text('Play'), findsOneWidget);
     expect(find.text('Bath'), findsOneWidget);
@@ -334,7 +333,7 @@ void main() {
         await _pumpNest(tester, width: width, textScale: textScale);
 
         expect(find.text('Pip $_middot Fledgling'), findsOneWidget);
-        expect(find.byType(PipCareButton), findsNWidgets(3));
+        expect(find.byType(NestKidButton), findsNWidgets(3));
         expect(find.byType(PipWardrobeTile), findsNWidgets(4));
         expect(tester.takeException(), isNull);
         await disposeApp(tester);

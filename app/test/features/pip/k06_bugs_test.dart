@@ -45,7 +45,6 @@ import 'package:nestling/features/pip/data/pip_repository_impl.dart';
 import 'package:nestling/features/pip/presentation/bloc/pip_bloc.dart';
 import 'package:nestling/features/pip/presentation/bloc/pip_event.dart';
 import 'package:nestling/features/pip/presentation/bloc/pip_state.dart';
-import 'package:nestling/features/pip/presentation/widgets/pip_care_button.dart';
 import 'package:nestling/features/pip/presentation/widgets/pip_wardrobe_tile.dart';
 
 import '../../test_scope.dart';
@@ -316,10 +315,13 @@ void main() {
       (tester) async {
         // `.k6-item.locked` paints a 3 px dashed `ink-2` border (HTML source
         // + both design PNGs; the UI stage's D1 measures the same in the
-        // simulator). The screen-local `_DashedBorderPainter` is attached as
-        // `CustomPaint.painter`, which paints BEHIND the child — and the
-        // child Container's opaque `surface-2` decoration then covers the
-        // whole tile, border band included, so no border is visible.
+        // simulator). The bug was the screen-local `_DashedBorderPainter`,
+        // attached as `CustomPaint.painter` — which paints BEHIND the child,
+        // so the child Container's opaque `surface-2` decoration covered the
+        // whole tile, border band included, and no border was visible.
+        // Iteration 4 deleted that fork: the tile now uses the shared
+        // `NestDashedBorder`, so the proof asserts the shared component's own
+        // painted stroke instead.
         await setUpTestScope();
         await _pumpPipForPixels(tester);
         final owned = tester.getRect(find.byKey(const Key('k06-ward-scarf')));
@@ -570,7 +572,7 @@ void main() {
         tester.element(find.byType(Navigator).first),
       );
       expect(media.width, 320, reason: 'the probe must run at a real 320 px');
-      expect(find.byType(PipCareButton), findsNWidgets(3));
+      expect(find.byType(NestKidButton), findsNWidgets(3));
       expect(find.byType(PipWardrobeTile), findsNWidgets(4));
       expect(tester.takeException(), isNull);
       await disposeApp(tester);
