@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -387,5 +389,226 @@ void main() {
         ParentalGateState(status: ParentalGateStatus.loaded),
       ],
     );
+  });
+
+  group('ParentalGateBloc retry, re-entry and guards after unlock', () {
+    // Live `settings` watch: a broadcast controller stands in for the
+    // settings row so a test can flip the gate off mid-session. It is closed
+    // without awaiting (a broadcast controller never blocks on close).
+    late StreamController<List<ParentalGateChallenge>> settings;
+    var gateOn = true;
+    setUp(() {
+      settings = StreamController<List<ParentalGateChallenge>>.broadcast();
+      gateOn = true;
+    });
+    tearDown(() {
+      unawaited(settings.close());
+    });
+
+    blocTest<ParentalGateBloc, ParentalGateState>(
+      'a second LoadRequested recovers from failure (the Try again path)',
+      build: () {
+        final repo = MockParentalGateRepository();
+        var subscriptions = 0;
+        when(repo.watchItems).thenAnswer((_) {
+          subscriptions++;
+          return subscriptions == 1
+              ? Stream<List<ParentalGateChallenge>>.error(Exception('boom'))
+              : Stream.value(const <ParentalGateChallenge>[_sevenSix]);
+        });
+        return ParentalGateBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const ParentalGateLoadRequested());
+        await bloc.stream.firstWhere(
+          (s) => s.status == ParentalGateStatus.failure,
+        );
+        // Exactly what the view's ghost `Try again` button adds.
+        bloc.add(const ParentalGateLoadRequested());
+      },
+      expect: () => [
+        const ParentalGateState(status: ParentalGateStatus.loading),
+        predicate<ParentalGateState>(
+          (s) =>
+              s.status == ParentalGateStatus.failure &&
+              (s.errorMessage ?? '').contains('boom'),
+        ),
+        // `copyWith` cannot clear a field, so the stale error text rides
+        // along in the state. It is never drawn (the view only reads
+        // `errorMessage` while failing), so the matchers below assert just
+        // what the screen actually depends on.
+        predicate<ParentalGateState>(
+          (s) => s.status == ParentalGateStatus.loading,
+        ),
+        predicate<ParentalGateState>(
+          (s) =>
+              s.status == ParentalGateStatus.loaded && s.challenge == _sevenSix,
+        ),
+      ],
+      verify: (bloc) {
+        expect(bloc.state.status, ParentalGateStatus.loaded);
+        expect(bloc.state.challenge, _sevenSix);
+      },
+    );
+
+    blocTest<ParentalGateBloc, ParentalGateState>(
+      'digits and delete are ignored once unlocked',
+      build: () => blocWithChallenge(MockParentalGateRepository()),
+      act: (bloc) async {
+        bloc.add(const ParentalGateLoadRequested());
+        await bloc.stream.firstWhere(
+          (s) => s.status == ParentalGateStatus.loaded,
+        );
+        bloc
+          ..add(const ParentalGateDigitEntered('4'))
+          ..add(const ParentalGateDigitEntered('2'));
+        await bloc.stream.firstWhere((s) => s.unlocked);
+        // Both are absorbed: the gate is already open.
+        bloc
+          ..add(const ParentalGateDigitEntered('7'))
+          ..add(const ParentalGateDeletePressed());
+      },
+      expect: () => const <ParentalGateState>[
+        ParentalGateState(status: ParentalGateStatus.loading),
+        ParentalGateState(
+          status: ParentalGateStatus.loaded,
+          items: <ParentalGateChallenge>[_sevenSix],
+        ),
+        ParentalGateState(
+          status: ParentalGateStatus.loaded,
+          items: <ParentalGateChallenge>[_sevenSix],
+          entered: '4',
+        ),
+        ParentalGateState(
+          status: ParentalGateStatus.loaded,
+          items: <ParentalGateChallenge>[_sevenSix],
+          entered: '42',
+          unlocked: true,
+        ),
+      ],
+    );
+
+    blocTest<ParentalGateBloc, ParentalGateState>(
+      'acknowledging without an unlock emits nothing',
+      build: () => blocWithChallenge(MockParentalGateRepository()),
+      act: (bloc) async {
+        bloc.add(const ParentalGateLoadRequested());
+        await bloc.stream.firstWhere(
+          (s) => s.status == ParentalGateStatus.loaded,
+        );
+        bloc.add(const ParentalGateUnlockAcknowledged());
+      },
+      expect: () => const <ParentalGateState>[
+        ParentalGateState(status: ParentalGateStatus.loading),
+        ParentalGateState(
+          status: ParentalGateStatus.loaded,
+          items: <ParentalGateChallenge>[_sevenSix],
+        ),
+      ],
+    );
+
+    blocTest<ParentalGateBloc, ParentalGateState>(
+      'two wrong answers count two attempts and clear both times',
+      build: () => blocWithChallenge(MockParentalGateRepository()),
+      act: (bloc) async {
+        bloc.add(const ParentalGateLoadRequested());
+        await bloc.stream.firstWhere(
+          (s) => s.status == ParentalGateStatus.loaded,
+        );
+        bloc
+          ..add(const ParentalGateDigitEntered('4'))
+          ..add(const ParentalGateDigitEntered('3'));
+        await bloc.stream.firstWhere((s) => s.attempts == 1);
+        bloc
+          ..add(const ParentalGateDigitEntered('5'))
+          ..add(const ParentalGateDigitEntered('5'));
+      },
+      expect: () => const <ParentalGateState>[
+        ParentalGateState(status: ParentalGateStatus.loading),
+        ParentalGateState(
+          status: ParentalGateStatus.loaded,
+          items: <ParentalGateChallenge>[_sevenSix],
+        ),
+        ParentalGateState(
+          status: ParentalGateStatus.loaded,
+          items: <ParentalGateChallenge>[_sevenSix],
+          entered: '4',
+        ),
+        ParentalGateState(
+          status: ParentalGateStatus.loaded,
+          items: <ParentalGateChallenge>[_sevenSix],
+          attempts: 1,
+        ),
+        ParentalGateState(
+          status: ParentalGateStatus.loaded,
+          items: <ParentalGateChallenge>[_sevenSix],
+          entered: '5',
+          attempts: 1,
+        ),
+        ParentalGateState(
+          status: ParentalGateStatus.loaded,
+          items: <ParentalGateChallenge>[_sevenSix],
+          attempts: 2,
+        ),
+      ],
+    );
+
+    blocTest<ParentalGateBloc, ParentalGateState>(
+      'a settings change mid-session re-emits loaded with the new list',
+      build: () {
+        final repo = MockParentalGateRepository();
+        // Seeds with the current switch value, then forwards every change —
+        // exactly how `watchItems()` reads the Drift settings row.
+        when(repo.watchItems).thenAnswer(
+          (_) => Stream<List<ParentalGateChallenge>>.multi((controller) {
+            controller.add(
+              gateOn
+                  ? const <ParentalGateChallenge>[_sevenSix]
+                  : const <ParentalGateChallenge>[],
+            );
+            settings.stream.listen(controller.add);
+          }),
+        );
+        return ParentalGateBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const ParentalGateLoadRequested());
+        await bloc.stream.firstWhere(
+          (s) => s.status == ParentalGateStatus.loaded,
+        );
+        // P16 flips the switch off: the live list empties and the view
+        // passes straight through.
+        gateOn = false;
+        settings.add(const <ParentalGateChallenge>[]);
+      },
+      expect: () => const <ParentalGateState>[
+        ParentalGateState(status: ParentalGateStatus.loading),
+        ParentalGateState(
+          status: ParentalGateStatus.loaded,
+          items: <ParentalGateChallenge>[_sevenSix],
+        ),
+        ParentalGateState(status: ParentalGateStatus.loaded),
+      ],
+    );
+  });
+
+  group('ParentalGateChallenge word map across the whole range', () {
+    test('every product the gate can produce has a spelled-out question', () {
+      for (var a = 2; a <= 9; a++) {
+        for (var b = 2; b <= 9; b++) {
+          final challenge = ParentalGateChallenge(
+            id: '$a-$b',
+            title: 'Grown-ups only',
+            detail: 'This keeps settings and purchases safe.',
+            a: a,
+            b: b,
+          );
+          expect(challenge.question, isNot(contains(RegExp(r'\d'))));
+          expect(challenge.answer, a * b);
+          // 4..81 ⇒ the design's 56×64 boxes are always 1 or 2 wide.
+          expect(challenge.answer.toString().length, inInclusiveRange(1, 2));
+        }
+      }
+    });
   });
 }
