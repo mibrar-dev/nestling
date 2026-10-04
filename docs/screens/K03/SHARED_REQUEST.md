@@ -26,25 +26,18 @@
    (`bool.fromEnvironment(...) || String.fromEnvironment(...) == '1'`).
    The `K03-BUG-7` proof passes under `=1` and the still-frame path is
    taken; `shot.sh` frames are deterministic again. No action needed.
-6. PARTLY LANDED (review finding 1c, iteration 5; revisited iteration 8):
-   `KidScope` grew `meadowHeight` / `meadowBottom` / `meadowColor`
-   (`core/design_system/theme/kid_scope.dart`, shared batch `7eaa1f7`), so
-   the *parameter* half is done — but K03 still paints its own in-flow band
-   (`_MeadowPainter`, still `TODO(K03)`) because what the design draws is
-   the SCREEN background gradient (`components.css` l.25
-   `linear-gradient(180deg, kid-sky-top 0%, kid-sky-bottom 62%,
-   kid-horizon 62%, kid-meadow 100%)`), and two pieces of it are still
-   missing in `core/`: (a) the flat horizontal 62 % horizon stop —
-   `KidScope`'s hill SVG has a curved crest, so no height parameter
-   reproduces a straight horizon line; (b) the horizon→meadow grade, since
-   `KidScope`'s background has only two stops (`kidSkyTop` →
-   `kidSkyBottom`). Iteration 8's interim fix grades K03's local band to
-   `tokens.kidMeadow` over the design's own 321 px run, so both themes now
-   match the PNGs; request re-scoped to the two missing gradient stops.
-   Files: `app/lib/core/design_system/theme/kid_scope.dart`,
-   `app/lib/core/design_system/components/nest_pet_stage.dart`'s hill asset
-   owner (`meadowHill`).
-   Blocks: no (local panel stays until the flat stop lands).
+6. **DONE (iteration 13, `shared/kid_meadow` on main):** both missing pieces
+   landed — `KidScope` now paints the four-stop
+   `kidSkyTop 0 % → kidSkyBottom 62 % → kidHorizon 62 % → kidMeadow 100 %`
+   gradient (the flat horizontal 62 % horizon stop) plus the dark stars, and the
+   exact two-path 390×136 hills pinned to the screen bottom. K03 deleted its
+   feature-local band (`_MeadowPainter`, the `_kCrest*` constants, the
+   `CustomPaint` wrapper and its `TODO(K03)`) and now relies on `KidScope` alone,
+   exactly where the HTML places the background; the painted grades at (10, 600)
+   and (10, 700) in both themes still match the PNGs
+   (`kid_home_geometry_test.dart`), and `kid_home_view_test.dart`'s meadow group
+   now pins the shared gradient stops and the hills' geometry instead of the
+   removed painter. Closed — no further action.
 7. DONE on main (Stage 2b iteration 6 verified): `NestType.kidName`,
    `NestType.kidCaption` and `NestType.kidChipLabel` exist
    (`app/lib/core/design_system/tokens/typography.dart:128,134,138`) with the
@@ -332,48 +325,48 @@ No schema/DI/token changes needed. No new assets needed (all icons +
     Files: `app/lib/core/design_system/components/nest_pet_stage.dart`
     (`NestSpeechBubble`'s `Positioned(bottom: …)`).
     Blocks: no (3 px, overflow only, zero layout impact).
-18. OPEN (iteration 12, measured): **the shared pet stage's speech→pet gap is
-    8 px where the design has 14**, which is why K03's hero block sits 10 px
-    high and needed a magic 21 px stage→hearts gap to put the rows below back.
-    Arithmetic from `design/screens/light/K03-kid-home.png` (÷3) against the app
-    measured at real fonts (`kid_home_geometry_test.dart`):
+18. PARTLY LANDED (iteration 12) → OPEN, 4 px left (iteration 13): **the hero
+    ART sits 4 px above the design; every other row is now exact.**
+    `shared/pet_bubble_gap` (main) added `NestPetStage.bubbleGap`, so K03 now
+    passes the design's own `.k3-pet { margin: 14px auto 0 }` (14) and set
+    `_kStageToHearts` back to the design's `--s4`. Measured at the design's real
+    fonts (`kid_home_geometry_test.dart`, all ±0.5):
 
     | row | design | app now | delta |
     |---|---|---|---|
-    | `.speech` border box | 125…169 (44 tall) | 125…170 (45) | +1 |
-    | `.k3-pet` box (`.k3-stage` flex column) | 183…419 (`margin: 14px auto 0`) | 178…414 (gap 8) | −5 |
-    | visible nest rim | 278 (= pet top + 95) | 269 (= block top + 91) | −9 |
-    | Pip head / feet | 199 / 301 | 190 / 292 | −9 |
-    | hearts centre | 448 | 448 (after `_kStageToHearts` 21) | 0 |
-    | section row / progress / card 1 / dock top | 494 / 527…542 / 559 / 720 | 494 / 527…542 / 559 / 720 | 0 |
+    | `.speech` border box | 125…169 | 125.0…169.0 | 0 |
+    | `.k3-pet` box | 183…419 (`margin: 14px auto 0`) | 183.0…419.0 | 0 |
+    | visible nest rim | 278 (pet top + 95) | 274.0 (pet top + 91.0) | −4 |
+    | bowl bottom | 364 | 360.2 | −4 |
+    | Pip head / feet | 199 / 301 | 194.4 / 297.0 | −4 |
+    | hearts centre / section row / progress / card 1 / dock top | 448 / 494 / 527…542 / 559 / 720 | 448.0 / 494 / 527…542 / 559 / 720 | 0 |
 
-    The shared 236-tall explicit slot is fixed (`_explicitSlotH`), so the only
-    shared knob is the gap the stage puts between its bubble and the scene:
-    `Padding(padding: EdgeInsets.only(bottom: NestSpacing.s2))` in
-    `NestPetStage.build`. Two options, both one-liners:
+    The residual is ONE private constant. `PipNestFallback.explicitGeometry`
+    seats the nest box at `nestTop = _explicitSlotH - nestH - _explicitBleed`
+    = 236 − 188 − 31.4 = **16.6**, so the rim lands 91.0 px below the block top
+    where the design's box puts it 95 px down. Fix (one line, `pip_rive.dart`):
+    **`_explicitBleed` 31.4 → 27.4** — rim 278.0, bowl bottom 364.2, feet 301,
+    head 198.4, every hero row inside the UI VERDICT RULE's ±2 px. K03's pins in
+    `kid_home_geometry_test.dart` are already written as the design's targets
+    minus that 4 px (±0.5), so they move to 278 / 364 / 301 / 198 by changing
+    only those four constants.
 
-    - **(a) minimal** — gap `NestSpacing.s2` → `NestSpacing.gap14` (the design's
-      `.k3-pet { margin: 14px auto 0 }`; `NestSpacing.gap14` already exists).
-      Block 184…420, rim 275, feet 298, head 196 — hero within 3 px — and K03
-      would then set `_kStageToHearts` 21 → 15 to keep the rows below.
-    - **(b) exact (recommended)** — gap 14 **and** `_explicitBleed` 31.4 → 27.4
-      in `PipNestFallback` (`nestTop = _explicitSlotH - nestH - _explicitBleed`),
-      so the rim sits 95 px below the block top, the design's own offset (the
-      design's 260×236 `.nest` puts the rim at 95/240). Rim 279, feet 302,
-      head 200 — every hero row within 1 px — and K03 sets `_kStageToHearts`
-      21 → 15. (Option (c), for full exactness: also make the bubble the
-      design's 44 tall — Nunito's natural line box is 23 in Flutter where the
-      browser's `normal` gives 22 — and the rim lands on 278 with
-      `_kStageToHearts` back to the design's `NestSpacing.s4` 16.)
-
-    K03's side of the revert is written into the view: when (b) lands, set
-    `_kStageToHearts = NestSpacing.s4` and the four hero pins in
-    `kid_home_geometry_test.dart` back to 278 / 364 / 301 / 199. Until then K03
-    keeps `_kStageToHearts = 21` (rows below exact) and pins the hero block
-    where the shared component puts it, with the design's number in each
-    reason.
-    Files: `app/lib/core/design_system/components/nest_pet_stage.dart` (the
-    bubble's bottom padding), `app/lib/core/design_system/motion/pip_rive.dart`
-    (`_explicitBleed`, already the subject of open request #16(a)).
-    Blocks: **yes for the hero block** (the UI VERDICT RULE's ±2 px: nest rim,
-    Pip head and Pip feet are 9-10 px off), no for the rest of the screen.
+    **New measurement this iteration (worth the shared owner's attention):** the
+    design's nest art is NOT the 236×188 box the app paints. Reading
+    `design/screens/light/K03-kid-home.png` ÷3 at x 195 the bowl's ink runs
+    275.3…384.7 (≈109 tall) and the outline's widest row is y 330, x 95.7…294
+    (198.3 wide) — i.e. the same asset with its 202/240 width ratio and its
+    110/240 height ratio **both** at full size, a ~236×236 box bottom-pinned in
+    the 236-tall pet box, which is exactly what the HTML's `.k3-pet .nest`
+    (260×236, `bottom: 0`) draws. The app's 236×188 box therefore squashes the
+    bowl by 22 px. `nestHeight: 236` alone does not fix it — with the current
+    31.4 bleed the rim would land at 183 + 61.9 = 245 (30 px HIGH) — so option
+    **(c)**, `_explicitBleed` → 0 together with `nestHeight: 236`, restores the
+    position *and* the design's ~108 px bowl height (rim 276.4, bowl bottom
+    384.7). That needs the shared owner, since `_explicitBleed` is private and
+    `ORCHESTRATOR_NOTES` 10:14 pins K03 to `nestHeight: 188`.
+    Files: `app/lib/core/design_system/motion/pip_rive.dart` (`_explicitBleed`),
+    `app/lib/core/design_system/components/nest_pet_stage.dart` (the
+    `bubbleGap` default, already landed).
+    Blocks: **yes for the hero art** (UI VERDICT RULE ±2 px: rim, bowl bottom,
+    Pip head and Pip feet are 4 px off), no for every other row of the screen.

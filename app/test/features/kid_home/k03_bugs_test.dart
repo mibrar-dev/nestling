@@ -94,11 +94,13 @@
 // - `shared/speech_tail` (b1137f3) made the bubble tail a CSS-style overflow
 //   `::after`; the shared block got 10.25 px shorter and the build restored
 //   the rows below with `_kStageToHearts = 21`.
-// - K03-BUG-16 (OPEN, major, shared): the hero art itself (nest + Pip) still
-//   sits ~9-10 px above the design — rim 269 vs 278, feet 292 vs 301, head
-//   190 vs 199 — because the shared bubble→pet gap is 8 where the design has
-//   14 (SHARED_REQUEST #18). The geometry pin was re-based to the app's
-//   position by the build; this file carries the design-value proof instead.
+// - K03-BUG-16 (OPEN, Major, shared): the hero ART (nest + Pip) still sits
+//   4 px above the design inside its box — rim 274.0 vs 278, feet 297 vs 301
+//   — after `shared/pet_bubble_gap` put the bubble (125…169) and the pet box
+//   (183…419) exactly on the design. The only cause left is the shared private
+//   `PipNestFallback._explicitBleed` (31.4 vs the design's 27.4):
+//   SHARED_REQUEST #18(b). The geometry pin holds the design's targets MINUS
+//   that constant, tightened to ±0.5, so the residual can only shrink.
 //   Run: `flutter test --run-skipped --plain-name K03-BUG-16`.
 //
 // The suite has exactly one parked proof: K03-BUG-16 (open, shared — the hero
@@ -1599,15 +1601,26 @@ void main() {
   // Iteration-12 proof — UI VERDICT RULE, hero block
   // -------------------------------------------------------------------------
 
-  /// K03-BUG-16 (OPEN, major, shared): the shared `NestSpeechBubble` tail
-  /// became an overflow `::after` (b1137f3), which is correct, but the shared
-  /// `NestPetStage` still lays the bubble→pet gap out as `NestSpacing.s2` (8)
-  /// where the design's `.k3-pet` has `margin: 14px auto 0`. The 236-tall pet
-  /// block is back on its rows below (via `_kStageToHearts`), but the hero art
-  /// itself — nest and Pip — sits ~9-10 px above the design: rim 269 vs 278,
-  /// Pip feet 292 vs 301, head 190 vs 199. The UI VERDICT RULE requires every
-  /// element within ±2 px, so this must FAIL until SHARED_REQUEST #18 lands
-  /// (bubble→pet gap 8 → 14; then `_kStageToHearts` reverts to 16).
+  /// K03-BUG-16 (OPEN, Major, shared — SHARED_REQUEST #18(b)): the hero ART
+  /// (nest + Pip) still sits 4 px above the design inside its box. Everything
+  /// around it is now exact, because `shared/pet_bubble_gap` (main) added
+  /// `NestPetStage.bubbleGap` and K03 passes the design's own 14
+  /// (`.k3-pet { margin: 14px auto 0 }`) with `_kStageToHearts = s4`: bubble
+  /// 125…169, pet box 183…419, hearts 448, title 494, progress 527…542, card 1
+  /// 559, dock 720 — all measured at the design's fonts.
+  ///
+  /// The residual is ONE private constant: the shared explicit slot seats the
+  /// nest box at `_explicitSlotH - nestH - _explicitBleed` = 236 − 188 − 31.4
+  /// = 16.6, so the rim lands at 183 + 91.0 = 274.0 where the design's box
+  /// paints it at 278 (design box top + 95). Measured against
+  /// `design/screens/light/K03-kid-home.png` ÷ 3 the design's bowl ink runs
+  /// 275.3…384.7 at x 195 and its widest row is y 330 (x 95.7…294 = 198
+  /// wide), i.e. the design's nest is the SAME asset in a ~236×236 box, not the
+  /// squashed 236×188 the app paints. K03 can reach neither: `nestHeight: 236`
+  /// with today's 31.4 bleed would put the rim 30 px HIGH, and 188 is the value
+  /// `ORCHESTRATOR_NOTES` 10:14 mandates. One shared change lands it —
+  /// `_explicitBleed` 31.4 → 27.4 (position), or → 0 with `nestHeight: 236`
+  /// (position AND the bowl's ~108 px height, which is what the PNG shows).
   ///
   /// Repro: `flutter test --run-skipped --plain-name K03-BUG-16`.
   testWidgets('K03-BUG-16: the pet hero art sits on the design rows', (

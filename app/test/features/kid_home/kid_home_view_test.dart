@@ -8,7 +8,6 @@
 // Every pumped app ends with `disposeApp` (see test_scope.dart).
 
 import 'dart:async';
-import 'dart:ui' as ui;
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
@@ -328,18 +327,6 @@ Finder _questCardPainted(int index) => find
       }),
     )
     .first;
-
-/// The meadow band behind progress + cards: the full-bleed [CustomPaint] that
-/// wraps the quest list panel (a local painter until the design system owns a
-/// meadow band — SHARED_REQUEST #6).
-Finder _meadowBandFinder() => find.ancestor(
-  of: find.byType(NestProgress),
-  matching: find.byWidgetPredicate(
-    (widget) =>
-        widget is CustomPaint &&
-        widget.painter.runtimeType.toString() == '_MeadowPainter',
-  ),
-);
 
 /// v1 Pip illustrations — the orchestrator forbids them in product screens.
 List<String> _v1PipAssets(WidgetTester tester) =>
@@ -749,132 +736,76 @@ void main() {
     });
   });
 
-  group('K03 meadow band', () {
-    // 5_ui.md finding 2 (dark-only FAIL driver): the band behind progress +
-    // cards must grade from `kidHorizon` at its top to `kidMeadow` — in BOTH
-    // themes, over the DESIGN's gradient span (`components.css` l.25:
-    // kid-horizon at 62 %, kid-meadow at 100 % of 844), or dark renders a
-    // flat navy block (three iterations of deviation 2).
+  group('K03 shared kid background (no local meadow)', () {
+    // Iteration 13 (`shared/kid_meadow`, ORCHESTRATOR_NOTES 02:45): K03's
+    // feature-local `_MeadowPainter` band is GONE. The design paints the
+    // lower content area as the SCREEN background
+    // (`components.css` l.25: `kid-horizon` at 62 %, `kid-meadow` at 100 % of
+    // the design height), so `KidScope` paints it and the shared
+    // `NestMeadow` hills sit at the screen bottom exactly where the HTML's
+    // `.meadow` box is (390x136, bottom 0).
+    //
+    // The PAINTED colours at the design's absolute rows (10, 600) / (10, 700)
+    // in both themes are pinned in `kid_home_geometry_test.dart` — they only
+    // mean anything at the design's real font metrics. What is pinned here is
+    // the structure: the shared gradient stops, the shared hills' geometry, and
+    // the absence of any local painter that could cover them.
     const themes = <(String, ThemeMode)>[
       ('light', ThemeMode.light),
       ('dark', ThemeMode.dark),
     ];
     for (final (themeName, theme) in themes) {
-      testWidgets('$themeName: the band grades horizon → meadow', (
-        tester,
-      ) async {
-        await _pumpRoute(tester, theme: theme);
-        await _revealCards(tester);
-        final tokens = Theme.of(tester.element(find.byType(NestProgress)))
-            .extension<NestTokens>()!;
-        // `_MeadowPainter` is feature-private, so its fields cannot be named
-        // from the test library; reading them through `dynamic` is the only
-        // way to pin the gradient the screen actually paints.
-        final painter = tester.widget<CustomPaint>(_meadowBandFinder()).painter;
-        final top = (painter! as dynamic).top as Color;
-        final bottom = (painter as dynamic).bottom as Color;
-        expect(
-          top,
-          tokens.kidHorizon,
-          reason: 'the band starts at the horizon tone',
-        );
-        expect(
-          bottom,
-          tokens.kidMeadow,
-          reason:
-              'the band must reach the meadow tone, not a half-way blend or '
-              'nothing at all',
-        );
-        // Full-bleed horizontally, behind progress and the card column.
-        final bandRect = tester.getRect(_meadowBandFinder());
-        expect(bandRect.left, 0);
-        expect(bandRect.right, closeTo(NestDevice.width, 0.5));
-        expect(
-          bandRect.top,
-          lessThan(tester.getRect(find.byType(NestProgress)).top),
-        );
-        expect(
-          bandRect.bottom,
-          greaterThan(tester.getRect(find.byType(NestKidQuestCard).first).top),
-        );
-        // The band's top inset is the design's 62 % horizon stop, so the
-        // progress bar still starts `s4` below the section title.
-        expect(
-          tester.getRect(find.byType(NestProgress)).top - bandRect.top,
-          closeTo(NestSpacing.s1, 0.5),
-          reason: 'components.css: kid-horizon 62% → 0.62 x 844 = 523.3',
-        );
-        await disposeApp(tester);
-      });
+      testWidgets(
+        '$themeName: the screen background is the shared kid gradient',
+        (tester) async {
+          await _pumpRoute(tester, theme: theme);
+          await _revealCards(tester);
+          final tokens = Theme.of(tester.element(find.byType(NestProgress)))
+              .extension<NestTokens>()!;
+          final gradient = tester
+              .widgetList<DecoratedBox>(
+                find.descendant(
+                  of: find.byType(KidScope),
+                  matching: find.byType(DecoratedBox),
+                ),
+              )
+              .map((box) => box.decoration)
+              .whereType<BoxDecoration>()
+              .map((box) => box.gradient)
+              .whereType<LinearGradient>()
+              .first;
+          expect(gradient.colors, <Color>[
+            tokens.kidSkyTop,
+            tokens.kidSkyBottom,
+            tokens.kidHorizon,
+            tokens.kidMeadow,
+          ], reason: 'components.css l.25 transcribes these four stops');
+          expect(gradient.stops, <double>[
+            0,
+            0.62,
+            0.62,
+            1,
+          ], reason: 'the 62 % horizon stop is a hard stop in the CSS');
 
-      // The grade must run over the DESIGN's span (523.3 → 844 ≈ 321 px), not
-      // over the band's whole in-flow height (progress + every card), which is
-      // what left dark mode a flat navy block: at 390×844 the band is ≈640
-      // tall, so a whole-height grade has only reached t ≈ 0.31 by the dock.
-      // This samples the painter's real pixels at the dock's top row.
-      testWidgets('$themeName: the painted grade reaches the dock row', (
-        tester,
-      ) async {
-        await _pumpRoute(tester, theme: theme);
-        await _revealCards(tester);
-        final tokens = Theme.of(tester.element(find.byType(NestProgress)))
-            .extension<NestTokens>()!;
-        final bandRect = tester.getRect(_meadowBandFinder());
-        expect(bandRect.height, greaterThan(400));
-        final painter = tester
-            .widget<CustomPaint>(_meadowBandFinder())
-            .painter!;
-        // `components.css` l.25: kid-horizon at 62 % of the design height,
-        // kid-meadow at 100 %; the dock's top border is the design's y 719.
-        const designRun = NestDevice.height * (1 - 0.62); // ≈320.7
-        const intoRun = 719 - 0.62 * NestDevice.height; // ≈195.7
-        const t = intoRun / designRun; // ≈0.61 — where the dock starts
-        final h = bandRect.height.round();
-        final sampled = await tester.runAsync(() async {
-          final recorder = ui.PictureRecorder();
-          (painter as dynamic).paint(
-            Canvas(recorder),
-            Size(NestDevice.width, h.toDouble()),
-          );
-          final image = await recorder.endRecording().toImage(
-            NestDevice.width.toInt(),
-            h,
-          );
-          final data = await image.toByteData();
-          // Sample the row that is `intoRun` px below the BAND's top edge — the
-          // design's y 719 (the dock's top border) when the column is
-          // unscrolled, which is how the band's top is placed on the 62 %
-          // horizon stop. Sampling `t * h` instead would land past the 320.7 px
-          // gradient run and only prove the flat `kidMeadow` clamp.
-          final y = intoRun.round();
-          final at = (y * NestDevice.width.toInt() + 195) * 4;
-          return Color.fromARGB(
-            data!.getUint8(at + 3),
-            data.getUint8(at),
-            data.getUint8(at + 1),
-            data.getUint8(at + 2),
-          );
-        });
-        expect(sampled, isNotNull);
-        final expected = Color.lerp(tokens.kidHorizon, tokens.kidMeadow, t)!;
-        expect(
-          sampled!.r,
-          closeTo(expected.r, 0.03),
-          reason:
-              'the band must reach ~61 % of the horizon→meadow grade by '
-              'the dock top in $themeName mode',
-        );
-        expect(sampled.g, closeTo(expected.g, 0.03));
-        expect(sampled.b, closeTo(expected.b, 0.03));
-        await disposeApp(tester);
-      });
+          // The shared hills: full width, 136 tall, pinned to the physical
+          // bottom (the HTML `.meadow` box), behind the dock's surface.
+          final hills = tester.getRect(find.byType(NestMeadow));
+          expect(hills.left, 0);
+          expect(hills.width, closeTo(NestDevice.width, 0.5));
+          expect(hills.height, closeTo(136, 0.5));
+          expect(hills.bottom, closeTo(NestDevice.height, 0.5));
 
-      // The PAINTED dark-meadow colour at the two absolute rows the
-      // orchestrator named — (10, 600) and (10, 700) — is pinned in
-      // `kid_home_geometry_test.dart`: those are ABSOLUTE screen rows, so the
-      // pin is only meaningful at the design's real font metrics (on this
-      // file's default font the content sits a few px lower and the pin would
-      // read the wrong rows). The gradient itself is pinned here, above.
+          // No feature-local band survives: nothing in the content paints a
+          // CustomPainter behind the progress bar and the cards.
+          final localBand = find.byWidgetPredicate(
+            (widget) =>
+                widget is CustomPaint &&
+                widget.painter.runtimeType.toString() == '_MeadowPainter',
+          );
+          expect(localBand, findsNothing);
+          await disposeApp(tester);
+        },
+      );
     }
   });
 
