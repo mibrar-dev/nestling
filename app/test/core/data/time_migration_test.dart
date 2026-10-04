@@ -22,6 +22,7 @@ import 'package:sqlite3/sqlite3.dart' as sqlite;
 /// to exist.
 const List<String> _v1Ddl = <String>[
   "CREATE TABLE families (id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL DEFAULT 'Nestling', payout_day INTEGER NOT NULL DEFAULT 6, coin_value_pence_per_coin INTEGER NOT NULL DEFAULT 1, pocket_money_mode TEXT NOT NULL DEFAULT 'both')",
+  "CREATE TABLE members (id TEXT NOT NULL PRIMARY KEY, family_id TEXT NOT NULL, name TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'owner', invite_status TEXT NOT NULL DEFAULT 'active')",
   // Pre-creation-order `children` (no `created_at` / `created_at_tz` until
   // schema v3): real v1 databases have this table, so the fixture keeps it
   // and the v3 step backfills it (empty here ⇒ no-op).

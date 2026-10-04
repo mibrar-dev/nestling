@@ -79,9 +79,12 @@ abstract final class NestType {
   static TextStyle fieldLabel({Color? color}) =>
       _inter(13, 18, FontWeight.w600, color: color);
 
-  /// Section label (P16 `.sect`): 13 w700 uppercase ls +6%.
+  /// Section label (P16 `.sect`): 13 w700 uppercase ls +6%, natural 16 px
+  /// line box (shared batch 6: the browser sets no line-height on `.sect`,
+  /// so a 13 px Inter label takes its natural height — measured 16 px at
+  /// scale 1.0 — not the old 18 px pin).
   static TextStyle sectionLabel({Color? color}) =>
-      _inter(13, 18, FontWeight.w700, letterSpacing: 0.78, color: color);
+      _inter(13, 16, FontWeight.w700, letterSpacing: 0.78, color: color);
 
   /// `.chip` label: Inter 14/20 w600.
   static TextStyle chipLabel({Color? color}) =>

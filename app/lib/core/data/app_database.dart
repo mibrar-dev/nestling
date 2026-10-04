@@ -57,6 +57,9 @@ class Members extends Table {
   TextColumn get role => text().withDefault(const Constant('owner'))();
   // active | invited.
   TextColumn get inviteStatus => text().withDefault(const Constant('active'))();
+  // Parent email shown on P16 Settings owner row (schema v7). Null = no
+  // email (invited co-parent shows "Invited · awaiting reply" instead).
+  TextColumn get email => text().nullable()();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -334,7 +337,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   /// v1 → v2: every event instant gains a `…_tz` zone column, `families`
   /// (+ `settings` mirror) gains `time_zone`, and `quests` gains the
@@ -360,6 +363,12 @@ class AppDatabase extends _$AppDatabase {
   /// note shown as the quote on P11 approvals). Null = no note → no quote
   /// line. Nullable `ADD COLUMN` backfills existing rows to NULL, so no
   /// data migration is needed.
+  ///
+  /// v6 → v7: `members` gains nullable `email` (the parent email shown on
+  /// the P16 Settings owner row, e.g. `sarah@example.co.uk`). Null = no
+  /// email → the invited co-parent row shows its invite status instead.
+  /// Nullable `ADD COLUMN` backfills existing rows to NULL, so no data
+  /// migration is needed; the demo seed sets the owner email explicitly.
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onUpgrade: (m, from, to) async {
@@ -437,6 +446,9 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 6) {
         await m.addColumn(questCompletions, questCompletions.kidNote);
+      }
+      if (from < 7) {
+        await m.addColumn(members, members.email);
       }
     },
     beforeOpen: (details) async {
@@ -627,6 +639,21 @@ class AppDatabase extends _$AppDatabase {
     return (select(pipWardrobe)
           ..where((w) => w.childId.equals(childId))
           ..orderBy([(w) => OrderingTerm(expression: w.item)]))
+        .watch();
+  }
+
+  /// Family members in insertion order (Sarah, then James in the demo seed)
+  /// — the core row/query P16 Settings reads for its Family section,
+  /// including the new nullable `members.email` (owner row shows the email,
+  /// the invited co-parent shows its invite status instead). Never
+  /// alphabetical.
+  Stream<List<Member>> watchMembers([String familyId = 'fam1']) {
+    return (select(members)
+          ..where((m) => m.familyId.equals(familyId))
+          ..orderBy([
+            (m) =>
+                OrderingTerm(expression: const CustomExpression<int>('rowid')),
+          ]))
         .watch();
   }
 }
