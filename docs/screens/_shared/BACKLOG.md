@@ -9,3 +9,4 @@
 - Shared `Semantics(label:) > InkWell` pattern leaves an extra node (P16 settings_a11y_test pins it). Audit with the semantics_tap work.
 - P17 minor review items (parental_gate_view.dart: canPop checks, typed-digit style, .gate-note margin, items rebuild filter, dead challenge model, CSS magic numbers → tokens): tidy in the cleanup pass.
 - K02 keeps a feature-local `kidAvatarInitial` (kid_style_helpers.dart:65, used by kid_pin_view.dart:168 + its own test). Replace with shared `nestAvatarInitial` and delete the duplicate.
+- K03 pet stage: nest rim 274 vs design 278 (K03-BUG-16) and bowl-height disagreement (K03-BUG-17; proofs skip-marked in k03_bugs_test.dart, see docs/screens/K03/SHARED_REQUEST.md #18). Re-measure the design PNG and settle it in the shared NestPetStage; un-skip both.
