@@ -181,6 +181,51 @@ class _FakeKidJarRepository implements KidJarRepository {
   }) async {}
 }
 
+/// The same fake, but it keeps every stream it ever handed out so a test can
+/// count LIVE listeners. A production `watchJar` never closes (Drift watch
+/// streams are infinite), so "did the previous subscription get released?" is
+/// only answerable by counting listeners rather than by completion.
+class _CountingKidJarRepository implements KidJarRepository {
+  final List<StreamController<JarSnapshot>> handed =
+      <StreamController<JarSnapshot>>[];
+
+  /// Controllers of the subscriptions the bloc still holds.
+  int get liveListeners =>
+      handed.where((c) => c.hasListener && !c.isClosed).length;
+
+  /// True once [handed] has been closed — the fake's own teardown.
+  void dispose() {
+    for (final c in handed) {
+      unawaited(c.close());
+    }
+  }
+
+  @override
+  Stream<JarSnapshot> watchJar() {
+    final controller = StreamController<JarSnapshot>();
+    // A never-ending watch stream: nothing is ever added and it never closes.
+    handed.add(controller);
+    return controller.stream;
+  }
+
+  @override
+  Future<List<JarEntry>> getItems() async => const <JarEntry>[];
+
+  @override
+  Stream<List<JarEntry>> watchItems() => const Stream<List<JarEntry>>.empty();
+
+  @override
+  Stream<JarSummary> watchSummary(String childId) =>
+      const Stream<JarSummary>.empty();
+
+  @override
+  Future<void> moveToSavings({
+    required String childId,
+    required String goalId,
+    required int amountPence,
+  }) async {}
+}
+
 void main() {
   group('KidJarBloc load (K09)', () {
     blocTest<KidJarBloc, KidJarState>(
@@ -193,6 +238,24 @@ void main() {
         const KidJarState(status: KidJarStatus.loading),
         _mayaLoaded(),
       ],
+    );
+
+    blocTest<KidJarBloc, KidJarState>(
+      'the failed stream reports failure and keeps the error message',
+      build: () {
+        final repo = _FakeKidJarRepository(snapshot: _mayaSnapshot())
+          ..failFirstWatch = true;
+        return KidJarBloc(repository: repo);
+      },
+      act: (bloc) => bloc.add(const KidJarLoadRequested()),
+      verify: (bloc) {
+        expect(bloc.state.status, KidJarStatus.failure);
+        expect(bloc.state.errorMessage, contains('down'));
+        // Nothing from a failed load may reach the screen as data.
+        expect(bloc.state.items, isEmpty);
+        expect(bloc.state.owedPence, 0);
+        expect(bloc.state.goalTargetPence, 0);
+      },
     );
 
     blocTest<KidJarBloc, KidJarState>(
@@ -311,6 +374,81 @@ void main() {
         expect(bloc.state.items, hasLength(9));
       },
     );
+  });
+
+  group('K09-BUG-1 — a reload must not stack a live subscription', () {
+    // The `KidJarBloc` header and `1_plan.md` §b both claim that `emit.forEach`
+    // "cancels the prior subscription" on a reload. It does not: bloc's default
+    // event transformer is CONCURRENT ("By default events are processed
+    // concurrently", bloc 9.2.1 `src/bloc.dart:32`), so each
+    // `KidJarLoadRequested` starts another never-ending handler while the
+    // previous one is still subscribed. The same defect was filed and fixed
+    // for K03 as K03-BUG-15 (`docs/screens/K03/FIXES_7.md:94`), whose fix was a
+    // guarded `StreamSubscription` cancelled at the top of the load handler.
+    //
+    // Reached from `my_jar_view.dart:325` — the failure state's "Try again"
+    // dispatches `KidJarLoadRequested` again, and a Drift watch stream that
+    // errors does not close, so the first handler is still subscribed at that
+    // moment. Each stacked subscription is a live fan-out of THREE Drift
+    // queries (`watchLedger` + `watchGoals` + `watchSetting`,
+    // `kid_jar_repository_impl.dart:43`).
+    test('K09-BUG-1: retry does not stack live stream subscriptions', () async {
+      final repo = _CountingKidJarRepository();
+      addTearDown(repo.dispose);
+      final bloc = KidJarBloc(repository: repo);
+      addTearDown(bloc.close);
+
+      bloc.add(const KidJarLoadRequested());
+      await Future<void>.delayed(Duration.zero);
+      expect(repo.liveListeners, 1);
+
+      // "Try again" (a second load) must REPLACE the first subscription.
+      bloc.add(const KidJarLoadRequested());
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        repo.liveListeners,
+        1,
+        reason:
+            "the second load must cancel the first; bloc's concurrent "
+            'transformer leaves it subscribed',
+      );
+
+      // A third, for the shape of the leak the bugs stage reported for K03.
+      bloc.add(const KidJarLoadRequested());
+      await Future<void>.delayed(Duration.zero);
+      expect(repo.liveListeners, 1);
+    });
+
+    test('K09-BUG-1: a stale subscription can overwrite the reloaded state', () async {
+      final repo = _CountingKidJarRepository();
+      addTearDown(repo.dispose);
+      final bloc = KidJarBloc(repository: repo);
+      addTearDown(bloc.close);
+
+      bloc.add(const KidJarLoadRequested());
+      await Future<void>.delayed(Duration.zero);
+      bloc.add(const KidJarLoadRequested());
+      await Future<void>.delayed(Duration.zero);
+
+      // The CURRENT subscription speaks last, and the state is correct…
+      repo.handed.last.add(_mayaSnapshot());
+      await Future<void>.delayed(Duration.zero);
+      expect(bloc.state.owedPence, 420);
+      expect(bloc.state.childId, 'maya');
+
+      // …but the abandoned first subscription still has the right to emit, and
+      // whatever it says becomes the screen's state.
+      repo.handed.first.add(_leoSnapshot());
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        bloc.state.childId,
+        'maya',
+        reason:
+            'a released subscription must not be able to overwrite the '
+            'snapshot the recovered screen is showing',
+      );
+      expect(bloc.state.owedPence, 420);
+    });
   });
 
   group('KidJarState value semantics', () {
