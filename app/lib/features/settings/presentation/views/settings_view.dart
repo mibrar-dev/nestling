@@ -136,7 +136,7 @@ class _SettingsLoaded extends StatelessWidget {
         ),
         if (state.pendingZone != null) ...<Widget>[
           const SizedBox(height: NestSpacing.s6),
-          _MoveBanner(zone: state.pendingZone!),
+          _MoveBanner(zone: state.pendingZone!, fromZone: state.familyZoneId),
         ],
         const SizedBox(height: NestSpacing.s6),
         const NestSectionLabel(label: 'Family'),
@@ -233,7 +233,7 @@ class _SettingsLoaded extends StatelessWidget {
                                   .copyWith(fontWeight: FontWeight.w600),
                             ),
                           ),
-                          settingsChevron(context),
+                          settingsChevronSmall(context),
                         ],
                       ),
                     ),
@@ -468,14 +468,19 @@ class _ChildRow extends StatelessWidget {
 /// surfaces `pendingZone` while the device zone differs from the stored
 /// family zone and the zone was not dismissed this session.
 class _MoveBanner extends StatelessWidget {
-  const _MoveBanner({required this.zone});
+  const _MoveBanner({required this.zone, required this.fromZone});
 
   final String zone;
+
+  /// The stored family zone — the zone history is recorded in. The sentence
+  /// names it via [shortZoneLabel], never a literal (4_review finding 1).
+  final String fromZone;
 
   @override
   Widget build(BuildContext context) {
     final tokens = context.nest;
     final short = shortZoneLabel(zone);
+    final from = shortZoneLabel(fromZone);
     return Container(
       key: const ValueKey('p16_move_banner'),
       padding: const EdgeInsets.symmetric(
@@ -492,7 +497,7 @@ class _MoveBanner extends StatelessWidget {
         children: <Widget>[
           Text(
             'Looks like you’re in $short now. Switch the family time zone? '
-            'History keeps London times; future days follow $short.',
+            'History keeps $from times; future days follow $short.',
             // `.lockhint` metrics (review finding 4) — one shared call site.
             style: settingsHintStyle(context),
           ),
@@ -553,7 +558,7 @@ class _LockHint extends StatelessWidget {
       child: Row(
         spacing: NestSpacing.gap10,
         children: <Widget>[
-          NestIcon(NestIcons.lock, color: tokens.ink2),
+          NestIcon(NestIcons.lock, color: tokens.ink),
           Expanded(
             child: Text.rich(
               TextSpan(

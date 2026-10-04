@@ -47,11 +47,14 @@ class P16Control {
   final String anchor;
 }
 
-/// Every control P16 renders on the loaded screen. The switch labels are the
-/// design's own `aria-label`s, which differ from the row titles.
+/// Every TAPPABLE control P16 renders on the loaded screen. The switch labels
+/// are the design's own `aria-label`s, which differ from the row titles.
+///
+/// 4_review finding 6: the two static Family rows (`Sarah — you`,
+/// `James — co-parent`) are display-only — `SettingsRow` with `onTap == null`
+/// wraps them in `Semantics(container: true)` with no tap action — so they
+/// are NOT controls and live in their own group below, not here.
 const List<P16Control> kP16Controls = <P16Control>[
-  P16Control('Family', 'Sarah — you', 'Sarah — you'),
-  P16Control('Family', 'James — co-parent', 'James — co-parent'),
   P16Control('Family', 'Invite co-parent', 'Invite co-parent'),
   P16Control('Children', 'Maya · 7–9', 'Maya · 7–9'),
   P16Control('Children', 'Leo · 4–6', 'Leo · 4–6'),
@@ -106,6 +109,108 @@ void main() {
                 '${control.section}: "${control.label}" must announce a name',
           );
         }
+      }
+
+      handle.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('the two static Family rows each announce in their own '
+        'non-tappable node', (tester) async {
+      // 4_review finding 6: `SettingsRow` with `onTap == null` wraps the row
+      // in `Semantics(container: true)` — a plain container, no label, no
+      // onTap — so each static row is its own group and no longer folds
+      // into the Invite co-parent button's node. Plain container only, so
+      // the ACCESSIBILITY-ACTIONS rule (every interactive node keeps its
+      // tap) is untouched.
+      final handle = tester.ensureSemantics();
+      await pumpSettingsApp(tester);
+      await tester.pump();
+
+      List<SemanticsNode> allNodes() {
+        final views = tester.binding.renderViews;
+        final root = views.isEmpty
+            ? null
+            : views.first.owner?.semanticsOwner?.rootSemanticsNode;
+        if (root == null) throw StateError('no semantics tree');
+        final found = <SemanticsNode>[];
+        void visit(SemanticsNode node) {
+          found.add(node);
+          node.visitChildren((child) {
+            visit(child);
+            return true;
+          });
+        }
+
+        visit(root);
+        return found;
+      }
+
+      List<SemanticsNode> announcing(String fragment) => allNodes()
+          .where((node) => node.getSemanticsData().label.contains(fragment))
+          .toList();
+
+      for (final anchor in <String>['Sarah — you', 'James — co-parent']) {
+        await scrollSettingsTo(tester, find.text(anchor));
+      }
+
+      // No TAPPABLE node may carry static-row copy — otherwise the text is
+      // still folding into a button (the old Invite-node merge).
+      expect(
+        p16Announcing(tester, 'Sarah — you'),
+        isEmpty,
+        reason: 'Sarah must not fold into a tappable node',
+      );
+      expect(
+        p16Announcing(tester, 'James — co-parent'),
+        isEmpty,
+        reason: 'James must not fold into a tappable node',
+      );
+
+      final sarah = announcing('Sarah — you')
+          .where(
+            (node) => !node.getSemanticsData().hasAction(SemanticsAction.tap),
+          )
+          .toList();
+      final james = announcing('James — co-parent')
+          .where(
+            (node) => !node.getSemanticsData().hasAction(SemanticsAction.tap),
+          )
+          .toList();
+      expect(sarah, isNotEmpty, reason: 'Sarah needs its own static node');
+      expect(james, isNotEmpty, reason: 'James needs its own static node');
+      expect(
+        identical(sarah.first, james.first),
+        isFalse,
+        reason: 'the two rows must be distinct nodes',
+      );
+      expect(
+        sarah.first.getSemanticsData().label,
+        isNot(contains('James — co-parent')),
+        reason: 'Sarah node must not merge James',
+      );
+      expect(
+        james.first.getSemanticsData().label,
+        isNot(contains('Sarah — you')),
+        reason: 'James node must not merge Sarah',
+      );
+
+      // The Invite row stays operable without static copy (the second
+      // Invite node is the known shared wart documented at the top of this
+      // file: `Semantics(label:, onTap:)` + inner InkWell).
+      final invite = p16Announcing(tester, 'Invite co-parent');
+      expect(invite, isNotEmpty, reason: 'Invite stays operable');
+      for (final node in invite) {
+        expect(
+          node.getSemanticsData().label,
+          isNot(contains('Sarah — you')),
+          reason: 'Invite must not merge Sarah',
+        );
+        expect(
+          node.getSemanticsData().label,
+          isNot(contains('James — co-parent')),
+          reason: 'Invite must not merge James',
+        );
       }
 
       handle.dispose();

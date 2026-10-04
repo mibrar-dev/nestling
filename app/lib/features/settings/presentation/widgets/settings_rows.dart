@@ -111,13 +111,31 @@ class SettingsRow extends StatelessWidget {
         child: row,
       );
     }
-    return row;
+    // 4_review finding 6: a static row gets its own container node so its
+    // text does not fold into the next tappable row's announcement. Plain
+    // container only — no label, no excludeSemantics, no onTap — so the
+    // owner's ACCESSIBILITY-ACTIONS rule is untouched.
+    return Semantics(container: true, child: row);
   }
 }
 
-/// Chevron used as the trailing slot on link rows (`.list-trail`).
-Widget settingsChevron(BuildContext context) =>
-    Text('›', style: NestType.h3(color: context.nest.ink3));
+/// Chevron used as the trailing slot on list rows (`.list-trail`).
+///
+/// `.list-trail` (`components.css:119`) sets only
+/// `color: var(--ink-3); font-weight: 600`, inheriting Inter from `body`
+/// (16 px), so the trail is Inter 16 w600 — not the Nunito 18 w800
+/// `NestType.h3` this used to be (4_review finding 3). P09 already uses the
+/// closer `NestType.bodySmallStrong` for its `›`.
+Widget settingsChevron(BuildContext context) => Text(
+  '›',
+  style: NestType.body(color: context.nest.ink3)
+      .copyWith(fontWeight: FontWeight.w600),
+);
+
+/// Chevron inside the subscription `.linkrow` (`P16-settings.html:9`,
+/// `font-weight: 600; font-size: 15px`): Inter 15 w600.
+Widget settingsChevronSmall(BuildContext context) =>
+    Text('›', style: NestType.bodySmallStrong(color: context.nest.ink3));
 
 /// `.lockhint { font-size:14px; line-height:20px }` regular copy
 /// (`P16-settings.html:10`) — used by the lock-hint row and the move banner.
