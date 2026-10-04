@@ -6,18 +6,19 @@
 // `flutter test --run-skipped <file>` runs them all; each one FAILS until
 // its bug is fixed.
 //
-// ITERATION 3: all seven proofs run live; no `skip: true` in this file.
-// Stage 2a took K06-BUG-1 (lost update in the repository's read-modify-write
-// care path) and K06-BUG-2 (concurrent buys overspending) with atomic
-// conditional writes; stage 2b took K06-BUG-3 (heading apostrophe), K06-BUG-4
-// (nest art box), K06-BUG-5 (equal care-button heights) and K06-BUG-6 (the
-// invisible dashed locked border); the iteration-3 logic builder took
-// K06-BUG-7 (a buy refused by the fresh balance was silent) with the
-// `PipBuyResult` contract + the bloc's `cannotAfford` toast. Iteration 2 added
-// the dark-mode half of the K06-BUG-6 pixel proof and two end-to-end
-// two-thumb burst regressions; iteration 3 adds the end-to-end refusal-toast
-// regression below. The open sun-hat glyph item lives in
-// `pip_orchestrator_notes_test.dart` (shared `SHARED_REQUEST.md` section 7).
+// ITERATION 4: all seven proofs run live; no `skip: true` in this file, and
+// none anywhere in `test/features/pip/`. Stage 2a took K06-BUG-1 (lost update
+// in the repository's read-modify-write care path) and K06-BUG-2 (concurrent
+// buys overspending) with atomic conditional writes; stage 2b took K06-BUG-3
+// (heading apostrophe), K06-BUG-4 (nest art box), K06-BUG-5 (equal care-button
+// heights) and K06-BUG-6 (the invisible dashed locked border); the iteration-3
+// logic builder took K06-BUG-7 (a buy refused by the fresh balance was silent)
+// with the `PipBuyResult` contract + the bloc's `cannotAfford` toast. Iteration
+// 4 deleted the last local design-system forks (care button, pet slot, dashed
+// painter) and switched the sun hat/Feed/Play glyphs to the exact shared
+// assets — the structural probe below guards against a re-fork. Earlier
+// iterations added the dark-mode K06-BUG-6 pixel proof, two end-to-end
+// two-thumb burst regressions and the end-to-end refusal-toast regression.
 //
 // Evidence, repro and suggested fixes for every finding live in
 // docs/screens/K06/6_bugs.md. This stage does not change product code.
@@ -627,6 +628,21 @@ void main() {
         reason: '30 + 60 cannot both fit in 70 coins',
       );
       expect(await _coins(db), ownedWellies ? 40 : 10);
+      await disposeApp(tester);
+    });
+
+    testWidgets('the presentation composes the shared batch-7 components', (
+      tester,
+    ) async {
+      // Iteration-4 regression guard: the local design-system forks this
+      // screen carried (PipCareButton, PipNestSlot, _DashedBorderPainter)
+      // are deleted and the real components are in the tree. A future edit
+      // that re-forks one of them fails here (4_review.md iteration-3 #1).
+      await setUpTestScope();
+      await _pumpPip(tester);
+      expect(find.byType(NestPetStage), findsOneWidget);
+      expect(find.byType(NestKidButton), findsNWidgets(3));
+      expect(find.byType(NestDashedBorder), findsNWidgets(2));
       await disposeApp(tester);
     });
 

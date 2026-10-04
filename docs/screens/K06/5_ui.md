@@ -1,28 +1,27 @@
-# K06 · Pip's nest (`/pip`) — Stage 5 UI check (iteration 3)
+# K06 · Pip's nest (`/pip`) — Stage 5 UI check (iteration 4)
 
 Simulator 604697A9-11DA-462F-9837-396E9CA2493A (390×844), `demo kid maya`.
-Shots: `docs/screens/K06/ui/app_light_3.png`, `app_dark_3.png`.
-Sheets: `cmp_light_3.png`, `cmp_dark_3.png` (design | app | heat-map).
-Context: shared batch 7 (wardrobe glyphs, seed prices 30/60, pet slot
-params, kid-button trailing row, `NestDashedBorder`) merged via main in
-`ed76a69`; iteration-3 build switched the screen onto the shared pieces per
-ORCHESTRATOR_NOTES (13:52). Earlier artefacts (`*_1.png`, `*_2.png`) kept.
+Shots: `docs/screens/K06/ui/app_light_4.png`, `app_dark_4.png`.
+Sheets: `cmp_light_4.png`, `cmp_dark_4.png` (design | app | heat-map).
+Context: iteration-4 build rewrote the view onto the shared pieces
+(`NestDashedBorder`, shared pet-slot params, shared kid-button trailing
+row, `wardrobeScarf/wardrobeWellies` glyphs, seed prices 30/60), so this is
+a full re-check, not a delta check. Earlier artefacts (`*_1..3.png`) kept.
 
-- Light: `mean diff: 2.17%` (3.67 → 2.28 → 2.17) — bands: 0: 1.59, 1: 1.74,
-  2: 2.50, 3: 0.44, 4: 1.21, 5: 2.08, 6: 3.75, 7: 4.06.
-- Dark: `mean diff: 1.87%` (3.01 → 2.00 → 1.87) — bands: 0: 1.52, 1: 1.23,
-  2: 2.20, 3: 0.35, 4: 1.38, 5: 2.04, 6: 3.64, 7: 2.63.
+- Light: `mean diff: 2.13%` — bands: 0: 1.57, 1: 1.74, 2: 2.52, 3: 0.44,
+  4: 1.08, 5: 2.02, 6: 3.60, 7: 4.04.
+- Dark: `mean diff: 1.84%` — bands: 0: 1.57, 1: 1.23, 2: 2.22, 3: 0.35,
+  4: 1.24, 5: 1.98, 6: 3.50, 7: 2.67.
 - Band 2 residual is the allowed Pip-art swap (own `PipAvatar` Mochi·sunny·3
-  vs the v1 illustration per the PIP rule; note item 4 confirms Pip + nest
-  correct). Nest body width matches ±1.5 px/side; slot bottom edge = design
-  exactly (323.7 = 323.7).
-- Band 6/7 residuals are text anti-aliasing + the OS home-indicator pill;
-  no positional component (all edges Δ ≤ 1, see table).
+  vs the v1 illustration per the PIP rule; ORCHESTRATOR_NOTES item 4
+  confirms Pip + nest correct).
+- Band 6/7 residuals are text anti-aliasing, glyph stroke raster and the OS
+  home-indicator pill; no positional component (all edges Δ ≤ 1, see table).
 
 ## Measured y positions, design vs app (logical px, ÷3; ±2 px rule)
 
-Row-edge detector (background-deviation scan, x 20–370, iteration-3 shots;
-identical to iteration 2 — the shared switch moved nothing):
+Row-edge detector (background-deviation scan, x 20–370, iteration-4 shots;
+unchanged from iterations 2–3 — the shared-component rewrite moved nothing):
 
 | Element | Design y | App y | Δ |
 |---|---|---|---|
@@ -50,12 +49,13 @@ Element-by-element vs design (both themes):
   + `Free` pill / `Bath 3`, `Scarf`/`Sun hat` + `Owned`, `Wellies 30` /
   `Crown 60` — exact, no overflow/clipping/ellipsis.
 - Shapes, not only text: growth card 350×114 with 3 px ink border r-l;
-  care buttons 91 tall with full bg rects; Free pill bg rect renders;
-  wardrobe tiles 116 tall with owned solid / locked dashed borders; art
-  circles 52 px. All rects at design edges.
-- Icon choice: scarf flag glyph, sun hat, wellies boot glyph, crown, feed
-  bowl, ball, bubbles — the design's glyphs in all four tiles (2× crop
-  verified light; dark sheet matches).
+  care buttons 91 tall with full bg rects (shared trailing row renders coin
+  5 / Free pill / coin 3 exactly as before); Free pill bg rect renders;
+  wardrobe tiles 116 tall, owned solid + locked dashed (`NestDashedBorder`
+  paints in both themes); art circles 52 px.
+- Icon choice: design scarf flag glyph, sun hat, wellies boot glyph, crown,
+  feed bowl, ball, bubbles — correct in all tiles and buttons, both themes
+  (kid audience glyphs per the ICONS rule; K06 design glyphs match).
 - Colours/radii/shadows: lilac-tint growth card, peach/sky/white care
   buttons, kid shadows, ink borders — light correct; dark correct (peach
   Feed, light-blue Play + dark Free pill, dark Bath, dark cards with light
@@ -67,13 +67,9 @@ slot (PIP rule).
 
 ## Deviations
 
-No numbered product deviations remain. Iteration-1 D1 (missing dashed
-border) fixed in iteration 2 and still painting after the shared
-`NestDashedBorder` switch (3 px edge verified at tile tops, both themes).
-Iteration-2 D2 (look-alike glyphs) closed by shared batch 7 — the design
-glyphs render in-product. Iteration-2 D3 (prices) closed by the seed move to
-30/60 — the tiles show DB values 30/60, matching the design with no
-hard-coded literals.
+No numbered product deviations. The shared-component rewrite preserved every
+measured position and every previously closed item (dashed borders, design
+glyphs, DB prices 30/60 with no hard-coded literals).
 
 UI VERDICT RULE audit: every element within ±2 px (all structural Δ 0,
 section +1). No uniform shift. No visible deviation a designer would reject

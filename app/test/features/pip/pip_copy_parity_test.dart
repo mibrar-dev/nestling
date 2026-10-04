@@ -40,11 +40,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/design_system/components/nest_balanced_text.dart';
 import 'package:nestling/features/pip/data/pip_repository_impl.dart';
 
 import '../../test_scope.dart';
 
 /// Browser entity decoding, in the order a browser applies it (`&amp;` last).
+/// · — HTML `&middot;` (U+00B7), the title's separator.
+const String _middot = '·';
+
 const Map<String, String> _entities = <String, String>{
   '&ndash;': '–',
   '&mdash;': '—',
@@ -142,6 +146,31 @@ void main() {
     );
     expect(caption, 'Nothing here is a chore — it is all just for fun.');
     expect(find.text(caption), findsOneWidget);
+    await disposeApp(tester);
+  });
+
+  testWidgets('the title renders through NestBalancedText, and only it does', (
+    tester,
+  ) async {
+    // BALANCED HEADINGS (orchestrator rule): `.kid-title` sets
+    // `text-wrap: balance`, so the title must render through
+    // `NestBalancedText` — which keeps the same copy, style and maxLines and
+    // breaks the lines the way the design does (no one-word orphan line).
+    //
+    // No other assertion in the K06 suite can see this: swapping the balanced
+    // widget for a plain `Text` leaves every string, rect and measurement in
+    // this file identical, and would only show up as a one-word last line in a
+    // UI screenshot. `.h2`/`.h3`/`.body`/`.caption` must NOT use it.
+    await pumpAppRoute(tester, '/pip');
+
+    expect(find.byType(NestBalancedText), findsOneWidget);
+    final balanced = tester.widget<NestBalancedText>(
+      find.byType(NestBalancedText),
+    );
+    expect(balanced.text, startsWith('Pip $_middot'));
+    expect(balanced.maxLines, 2, reason: "the plan's maxLines 2 for the title");
+    // The title is the only balanced heading on this screen.
+    expect(find.byKey(const Key('k06-section')), findsOneWidget);
     await disposeApp(tester);
   });
 
