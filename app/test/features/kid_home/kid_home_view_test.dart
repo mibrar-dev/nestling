@@ -2003,7 +2003,10 @@ void main() {
       await _pumpRoute(tester);
       await tester.tap(find.text('Pip'));
       await _settleRoute(tester);
-      expect(find.text('K06 Pip nest'), findsOneWidget);
+      // Route assertion, not placeholder copy: K06 replaces the scaffold
+      // title with the real Pip's nest, but the path is stable
+      // (docs/screens/_shared/router_push_test_fix_REPORT.md §5).
+      expect(pushedPath(tester), '/pip');
       await disposeApp(tester);
     });
 
@@ -2067,8 +2070,11 @@ void main() {
     testWidgets('every dock button exposes a tap action and routes', (
       tester,
     ) async {
-      for (final (label, path, screen) in <(String, String, String)>[
-        ('Pip', '/pip', 'K06 Pip nest'),
+      for (final (label, path, screen) in <(String, String, String?)>[
+        // `screen` is the still-placeholder scaffold title of a not-yet-built
+        // destination, and null for a built one: K06 renders the real nest, so
+        // its route below is the contract (never a placeholder view title).
+        ('Pip', '/pip', null),
         ('Shop', '/reward-shop', 'K08 Reward shop'),
         ('My jar', '/my-jar', 'K09 My jar'),
       ]) {
@@ -2087,7 +2093,9 @@ void main() {
         performTap(tester, button);
         await _settleRoute(tester);
         expect(pushedPath(tester), path, reason: 'dock "$label"');
-        expect(find.text(screen), findsOneWidget);
+        if (screen != null) {
+          expect(find.text(screen), findsOneWidget);
+        }
         semantics.dispose();
         await disposeApp(tester);
       }

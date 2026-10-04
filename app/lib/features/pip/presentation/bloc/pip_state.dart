@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:nestling/features/pip/domain/entities/pip_nest.dart';
 import 'package:nestling/features/pip/domain/entities/pip_stage.dart';
 
 enum PipStatus { initial, loading, loaded, failure }
@@ -6,26 +7,75 @@ enum PipStatus { initial, loading, loaded, failure }
 final class PipState extends Equatable {
   const new({
     this.status = PipStatus.initial,
-    this.items = const <PipStage>[],
+    this.nest,
     this.errorMessage,
+    this.actionError,
+    this.actionNonce = 0,
   });
 
   final PipStatus status;
-  final List<PipStage> items;
+
+  /// The nest screen's data; null while loading, on failure, or with no
+  /// active child (the view renders the "Who's playing?" card then).
+  final PipNest? nest;
   final String? errorMessage;
 
-  PipState copyWith({
-    PipStatus? status,
-    List<PipStage>? items,
-    String? errorMessage,
-  }) {
+  /// Last care/wardrobe failure; the nest stays visible and a toast
+  /// explains it. Never used for the load failure path.
+  final String? actionError;
+
+  /// Bumps on every action failure so two identical failures are still
+  /// distinct states: without it the second emit is swallowed.
+  final int actionNonce;
+
+  /// Backwards-compatible wardrobe list for the K06/K07 placeholder views
+  /// (the UI builder replaces them): the nest's items, empty before load.
+  List<PipStage> get items => nest?.items ?? const <PipStage>[];
+
+  PipState toLoading() {
     return PipState(
-      status: status ?? this.status,
-      items: items ?? this.items,
-      errorMessage: errorMessage ?? this.errorMessage,
+      status: PipStatus.loading,
+      nest: nest,
+      errorMessage: errorMessage,
+      actionError: actionError,
+      actionNonce: actionNonce,
+    );
+  }
+
+  /// Healthy nest emission: loaded (even with a null nest — the no-child
+  /// card), clearing transient action outcomes and any stale load error.
+  PipState copyWithLoaded(PipNest? next) {
+    return PipState(status: PipStatus.loaded, nest: next);
+  }
+
+  PipState toFailure(Object error) {
+    return PipState(status: PipStatus.failure, errorMessage: error.toString());
+  }
+
+  /// An action attempt starts: forget the previous outcome so a repeat
+  /// outcome is announced again.
+  PipState withActionStarted() {
+    return PipState(status: status, nest: nest, errorMessage: errorMessage);
+  }
+
+  /// The write failed (or the buy was unaffordable): distinct state per
+  /// failure via [actionNonce].
+  PipState withActionFailed(Object error) {
+    return PipState(
+      status: status,
+      nest: nest,
+      errorMessage: errorMessage,
+      actionError: error.toString(),
+      actionNonce: actionNonce + 1,
     );
   }
 
   @override
-  List<Object?> get props => <Object?>[status, items, errorMessage];
+  List<Object?> get props => <Object?>[
+    status,
+    nest,
+    errorMessage,
+    actionError,
+    actionNonce,
+  ];
 }

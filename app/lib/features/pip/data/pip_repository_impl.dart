@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/stream_combine.dart';
+import 'package:nestling/features/pip/domain/entities/pip_nest.dart';
 import 'package:nestling/features/pip/domain/entities/pip_profile.dart';
 import 'package:nestling/features/pip/domain/entities/pip_stage.dart';
 import 'package:nestling/features/pip/domain/pip_repository.dart';
@@ -13,17 +17,28 @@ class PipRepositoryImpl implements PipRepository {
   /// Feeding Pip costs 5 coins.
   static const int feedCostCoins = 5;
 
+  /// Bathing Pip costs 3 coins (K06 design: the Bath button shows a
+  /// 3-coin price; playing stays free).
+  static const int bathCostCoins = 3;
+
+  /// Design order for the K06 wardrobe strip (never alphabetical — the DB
+  /// query itself sorts by item, so the mapping re-sorts explicitly).
+  static const List<String> wardrobeOrder = <String>[
+    'scarf',
+    'sunhat',
+    'wellies',
+    'crown',
+  ];
+
   @override
   Future<List<PipStage>> getItems() => watchItems().first;
 
   @override
-  Stream<List<PipStage>> watchItems() async* {
-    final state = await (_db.select(
-      _db.appState,
-    )..where((a) => a.id.equals(1))).getSingleOrNull();
-    yield* _db
-        .watchWardrobe(state?.activeChildId ?? 'maya')
-        .map((rows) => rows.map(_toStage).toList());
+  Stream<List<PipStage>> watchItems() {
+    return _switchMap<AppStateData?, List<PipStage>>(
+      _db.watchAppState(),
+      (state) => _watchOrderedStages(state?.activeChildId ?? 'maya'),
+    );
   }
 
   @override
@@ -41,6 +56,29 @@ class PipRepositoryImpl implements PipRepository {
         coins: row.coins,
         happiness: row.happiness,
       );
+    });
+  }
+
+  @override
+  Stream<String?> watchActiveChildId() {
+    return _db.watchAppState().map((state) => state?.activeChildId);
+  }
+
+  @override
+  Stream<PipNest?> watchNest() {
+    return _switchMap<AppStateData?, PipNest?>(_db.watchAppState(), (state) {
+      final id = state?.activeChildId;
+      if (id == null) return Stream<PipNest?>.value(null);
+      return combineLatest2(watchProfile(id), _watchOrderedStages(id)).map((
+        parts,
+      ) {
+        final profile = parts[0] as PipProfile?;
+        if (profile == null) return null;
+        return PipNest(
+          profile: profile,
+          items: (parts[1] as List<dynamic>).cast<PipStage>(),
+        );
+      });
     });
   }
 
@@ -69,7 +107,7 @@ class PipRepositoryImpl implements PipRepository {
   Future<void> play(String childId) => _care(childId);
 
   @override
-  Future<void> bathe(String childId) => _care(childId);
+  Future<void> bathe(String childId) => _care(childId, cost: bathCostCoins);
 
   Future<void> _care(String childId, {int cost = 0}) async {
     final kid = await (_db.select(
@@ -104,6 +142,21 @@ class PipRepositoryImpl implements PipRepository {
     });
   }
 
+  Stream<List<PipStage>> _watchOrderedStages(String childId) {
+    return _db.watchWardrobe(childId).map(_orderedStages);
+  }
+
+  List<PipStage> _orderedStages(List<PipWardrobeData> rows) {
+    final stages = rows.map(_toStage).toList()
+      ..sort((a, b) => _orderIndex(a.id).compareTo(_orderIndex(b.id)));
+    return stages;
+  }
+
+  static int _orderIndex(String item) {
+    final index = wardrobeOrder.indexOf(item);
+    return index < 0 ? wardrobeOrder.length : index;
+  }
+
   PipStage _toStage(PipWardrobeData row) {
     return PipStage(
       id: row.item,
@@ -114,18 +167,57 @@ class PipRepositoryImpl implements PipRepository {
     );
   }
 
+  /// Design names for the K06 wardrobe strip (the DB stores only ids).
   static String _itemName(String item) {
     switch (item) {
       case 'scarf':
-        return 'Cosy scarf';
+        return 'Scarf';
       case 'sunhat':
-        return 'Sunny hat';
+        return 'Sun hat';
       case 'wellies':
-        return 'Muddy wellies';
+        return 'Wellies';
       case 'crown':
-        return 'Star crown';
+        return 'Crown';
       default:
         return item;
     }
   }
+}
+
+/// `switchMap` for never-closing Drift watch streams: every outer emission
+/// cancels the previous inner subscription and forwards the new inner's
+/// events. Same shape as the kid_home helper, kept feature-local (the plan
+/// lets this screen own its data dir; no cross-feature import).
+///
+/// The result never closes while an inner stream is live: the outer stream
+/// completing must NOT close the result, so a `Stream.value(null)` outer
+/// (no active child) still leaves later emissions flowing.
+Stream<S> _switchMap<T, S>(
+  Stream<T> outer,
+  Stream<S> Function(T event) convert,
+) {
+  late final StreamController<S> controller;
+  StreamSubscription<T>? outerSub;
+  StreamSubscription<S>? innerSub;
+  controller = StreamController<S>(
+    onListen: () {
+      outerSub = outer.listen(
+        (event) {
+          unawaited(innerSub?.cancel());
+          innerSub = convert(event).listen(
+            controller.add,
+            onError: controller.addError,
+            // Never close: the next outer emission replaces the inner.
+          );
+        },
+        onError: controller.addError,
+        // Outer done: keep forwarding the live inner (see above).
+      );
+    },
+    onCancel: () async {
+      await innerSub?.cancel();
+      await outerSub?.cancel();
+    },
+  );
+  return controller.stream;
 }
