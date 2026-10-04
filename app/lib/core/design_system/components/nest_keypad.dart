@@ -4,6 +4,21 @@ import 'package:nestling/core/design_system/tokens/nest_tokens.dart';
 import 'package:nestling/core/design_system/tokens/spacing.dart';
 import 'package:nestling/core/design_system/tokens/typography.dart';
 
+/// How wide the keypad grid may grow.
+///
+/// Mirrors CSS: `.keypad` fills its parent as a block-level grid, but
+/// shrink-wraps to its max-content width inside a centred flex column.
+enum NestKeypadFit {
+  /// Grid fills the parent width; the 3 columns split it equally.
+  /// P17 gate card (block-level `.keypad` in the 302px card content box).
+  stretch,
+
+  /// Grid shrink-wraps to [NestKeypad.contentWidth] and centres.
+  /// K02 PIN (`.k2-body{align-items:center}` shrink-wraps the grid to its
+  /// max-content width inside the 350px scroll content box).
+  shrinkWrap,
+}
+
 class NestKeypad extends StatelessWidget {
   const new({
     required this.onKey,
@@ -11,38 +26,54 @@ class NestKeypad extends StatelessWidget {
     super.key,
     this.kid = false,
     this.deleteSemanticLabel = 'Delete',
+    this.fit = NestKeypadFit.stretch,
   });
+
+  /// CSS `.keypad` max-content width: 3x72 keys + 2x10 gaps + 2x24 padding.
+  static const double contentWidth =
+      (NestDevice.tapKid + NestSpacing.s4) * 3 +
+      NestSpacing.gap10 * 2 +
+      NestSpacing.s6 * 2;
 
   final ValueChanged<String> onKey;
   final VoidCallback onDelete;
   final bool kid;
   final String deleteSemanticLabel;
+  final NestKeypadFit fit;
 
   @override
   Widget build(BuildContext context) {
-    // Explicit rows (not a GridView): keys 72, column gap 24, row gap 16.
+    // CSS `.keypad` (components.css:193): grid, `repeat(3, 1fr)`, 10px gaps,
+    // padding 8px 24px 0, 72px keys centred in their cells. Expanded cells
+    // reproduce the 1fr columns at any parent width, so P17 (302px card
+    // content -> 88px pitch) and K02 (284px shrink-wrapped -> 82px pitch)
+    // both fall out of the width the parent provides — verified against
+    // design/screens/light/P17-parental-gate.png (keys 71-143/159-231/
+    // 247-319, centres 107/195/283) and K02-pin.png (77-149/159-231/
+    // 241-313, centres 113/195/277).
     // Nothing in this tree clips, so key shadows always paint in full.
-    // (SPACING_SPEC quotes grid gap 10 / padding 8-24-0; the K02/P17
-    // renders this fixes measure 24px columns / 16px rows.)
     const rows = <List<String>>[
       ['1', '2', '3'],
       ['4', '5', '6'],
       ['7', '8', '9'],
       ['blank', '0', 'delete'],
     ];
-    return Padding(
-      padding: const EdgeInsets.all(NestSpacing.s2),
+    Widget grid = Padding(
+      padding: const EdgeInsets.only(
+        top: NestSpacing.s2,
+        left: NestSpacing.s6,
+        right: NestSpacing.s6,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           for (var r = 0; r < rows.length; r++) ...[
-            if (r > 0) const SizedBox(height: NestSpacing.s4),
+            if (r > 0) const SizedBox(height: NestSpacing.gap10),
             Row(
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 for (var c = 0; c < 3; c++) ...[
-                  if (c > 0) const SizedBox(width: NestSpacing.s6),
-                  _cell(rows[r][c]),
+                  if (c > 0) const SizedBox(width: NestSpacing.gap10),
+                  Expanded(child: Center(child: _cell(rows[r][c]))),
                 ],
               ],
             ),
@@ -50,6 +81,15 @@ class NestKeypad extends StatelessWidget {
         ],
       ),
     );
+    if (fit == NestKeypadFit.shrinkWrap) {
+      grid = Align(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: contentWidth),
+          child: grid,
+        ),
+      );
+    }
+    return grid;
   }
 
   Widget _cell(String slot) {
