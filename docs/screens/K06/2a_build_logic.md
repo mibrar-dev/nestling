@@ -1,91 +1,81 @@
-# K06 · 2a BUILD LOGIC (iteration 1)
+# K06 · 2a BUILD LOGIC (iteration 2)
 
 ## CONTRACT CHANGES
 
-The plan (§2) is the contract; these are the deliberate additions the UI
-builder codes against (all in `presentation/bloc/`):
+None. No state/event shape changed this iteration — the two fixes are
+internal to `PipRepositoryImpl`, and the bloc's public contract
+(`PipCareRequested` / `PipWardrobeBuyRequested` / `PipWardrobeEquipRequested`,
+`PipState` {status, nest, actionError, actionNonce}, `kPipNotEnoughCoins`,
+`pipStageName`, `PipNest.growthFraction`) is exactly as iteration 1 left
+it. The UI builder needs no changes.
 
-- New events `PipNestReceived(PipNest?)` / `PipNestFailed(error)` are
-  bloc-internal (same K03-BUG-15 pattern as `KidHomeDataReceived`): the bloc
-  raises them from its own `watchNest()` subscription so a reload guards on
-  the live subscription instead of stacking handlers. Views never send them.
-  Observable behaviour is exactly the plan: load → loading → loaded(nest),
-  error → failure.
-- New const `kPipNotEnoughCoins = 'Not enough coins yet — keep going!'`
-  (U+2019 ’, U+2014 —) in `pip_bloc.dart`: the unaffordable-buy toast copy
-  from plan §1f. The view shows `state.actionError` verbatim in a toast.
-- `PipState` keeps `errorMessage` (load failure) plus a backwards-compatible
-  `items` getter (`nest?.items ?? []`) so the K06/K07 placeholder views keep
-  compiling until the UI builder replaces them. New code reads `state.nest`.
-- Equip mapping lives in the bloc: `scarf` → accessory `scarf`,
-  `sunhat` → accessory `cap`; `wellies`/`crown` have no accessory node and
-  are a silent no-op (no DB write, no error). If the UI wants an
-  informational toast for those two tiles, add it locally in the view —
-  the bloc deliberately emits nothing.
-- `PipNest.growthFraction` and pip-local `pipStageName(int)` (1 Egg,
-  2 Hatchling, 3 Fledgling, 4 Songbird — do NOT import kid_home/family
-  helpers) live in `domain/entities/pip_nest.dart` for the view to use.
+## FIXES_1 items in this layer — both fixed, proofs un-skipped
 
-## Files changed (logic layer only — no views/widgets touched)
+- **K06-BUG-1 (major) — rapid care taps lost charges.** `_care` was a
+  read-modify-write (SELECT, then `coins: kid.coins - cost`); two
+  overlapping taps both read 120 and both wrote 115. Now one conditional
+  statement: `UPDATE children SET coins = coins - ?,
+  happiness = min(happiness + 1, 5) WHERE id = ? AND coins >= ?`
+  (drift `customUpdate`, notifies `children` watchers). Zero changed rows
+  = unknown child or insufficient coins: silent no-op, never negative.
+  Single-tap behaviour is byte-identical (feed 5 / bath 3 / play free,
+  happiness +1 clamped 0..5).
+- **K06-BUG-2 (major) — concurrent wardrobe buys overspent.** Affordability
+  was checked outside the transaction and the write used the stale read
+  (Wellies 40 + Crown 120 both landed from 120 coins). Now one transaction:
+  re-read the tile, deduct conditionally
+  (`UPDATE children SET coins = coins - ? WHERE id = ? AND coins >= ?`,
+  0 rows = cannot afford, no-op), then claim the tile only while still
+  unowned (`owned = false` in the WHERE); a lost same-item race refunds the
+  deduction inside the same transaction, so a double tap charges exactly
+  once. The bloc's `state.nest` pre-check stays as the fast toast path, but
+  correctness no longer depends on it.
+- Proofs un-skipped in `k06_bugs_test.dart` (BUG-1, BUG-2 only — both pass,
+  verified with `--run-skipped`). BUG-3/4/5/6 stay skipped: views/widgets,
+  the parallel UI builder's layer.
 
-- `app/lib/features/pip/domain/entities/pip_nest.dart` (NEW): `PipNest`
-  {`PipProfile profile`, `List<PipStage> items`} + `growthFraction` +
-  `pipStageName`.
-- `app/lib/features/pip/domain/pip_repository.dart`: added
-  `watchActiveChildId()` and `watchNest()`; care docs now read feed 5 /
-  bath 3 / play free, no-op when unaffordable.
-- `app/lib/features/pip/data/pip_repository_impl.dart`:
-  `bathCostCoins = 3`, `bathe()` uses it (CONFLICT 1); wardrobe mapped to
-  design names Scarf / Sun hat / Wellies / Crown (CONFLICT 4) and re-sorted
-  to explicit scarf/sunhat/wellies/crown order (CONFLICT 3, DB prices kept
-  per CONFLICT 2); `watchNest()` = switchMap(activeChildId) →
-  combineLatest2(profile, ordered wardrobe), null child → null; `watchItems`
-  serves the same ordered strip and now follows child switches; local
-  `_switchMap` helper (feature-local, no cross-feature import, no core edit).
-- `app/lib/features/pip/presentation/bloc/pip_event.dart`: added
-  `PipCareRequested(kind)`, `PipWardrobeBuyRequested(item)`,
-  `PipWardrobeEquipRequested(item)` + internal `PipNestReceived/Failed`.
-- `app/lib/features/pip/presentation/bloc/pip_state.dart`: new shape
-  {status, `PipNest? nest`, errorMessage, actionError, actionNonce} with
-  `toLoading` / `copyWithLoaded` (clears transient outcomes + stale error) /
-  `toFailure` / `withActionStarted` / `withActionFailed` (nonce-bumped).
-- `app/lib/features/pip/presentation/bloc/pip_bloc.dart`: guarded live
-  subscription (reloads ignored while live, released on error/close, so
-  Try-again works); care/buy/equip resolve the child id from the last nest
-  emission (null → ignore); unaffordable buy → `kPipNotEnoughCoins` toast,
-  no DB write; successes need no event (stream re-emits).
-- `app/test/features/pip/pip_repository_test.dart` (NEW, 14 tests):
-  seed truth (Maya mochi/sunny/none/stage 3, 175/250, 0.7), design order +
-  names + DB prices (0/0/40/120), child switching maya → leo → null,
-  feed 5 / play free / bath 3 with +1 happiness, clamp at 5, insufficient
-  no-ops, unknown-child no-op, buy deducts DB price, unaffordable/already-
-  owned no-ops, updateLook scarf/cap, `pipStageName` map.
-- `app/test/features/pip/pip_bloc_test.dart` (NEW, 19 tests): state value
-  semantics, load → loading → loaded with ordered nest, live-reload guard,
-  load failure + retry reloads, feed/bathe/play through the stream, care
-  before load ignored, thrown write → actionError/nonce, affordable buy
-  (two emissions: coins write then owned flag), unaffordable buy → kind
-  toast + no write, equip scarf/cap, wellies/crown no-op.
-- DI/routes (`pip_di.dart`, `pip_routes.dart`): NO change needed —
-  `PipBloc(repository:)` signature is unchanged and both routes already
-  dispatch `PipLoadRequested`.
+## FIXES_1 items NOT in this layer (left for the UI builder)
 
-## Verification (logic-stage scope only — no full-app test, no simulator)
+- BUG-3 heading apostrophe, BUG-4 nest art box, BUG-5 care-button heights,
+  BUG-6/D1 invisible dashed border, ORCHESTRATOR_NOTES item 1 — all
+  `presentation/views|widgets`, untouched here.
+- ORCHESTRATOR_NOTES items 2 (glyphs) and 3 (seed prices): shared-asset /
+  shared-seed concerns, already filed as `SHARED_REQUEST.md` §5/§6 by the
+  test stage; the screen renders whatever the DB holds and hard-codes
+  nothing. Nothing to change in this layer.
 
-- `dart format lib/features/pip test/features/pip` → clean (0 changed).
-- `flutter analyze lib/features/pip test/features/pip` → No issues found.
-- `flutter test test/features/pip/pip_repository_test.dart
-  test/features/pip/pip_bloc_test.dart` → All tests passed (33).
-- Shared regression: `repositories_test.dart` “pip care, wardrobe and
-  look” → passed (feed 115, wellies 40 → 75, look write all unchanged).
+## Files changed
+
+- `app/lib/features/pip/data/pip_repository_impl.dart`: atomic `_care`
+  and atomic `buyItem` (+ claim/refund), as above. Nothing else in the
+  file changed; `watchNest`/ordering/names/costs from iteration 1 intact.
+- `app/test/features/pip/pip_repository_test.dart`: new `atomic writes`
+  group — 5 concurrent feeds land at 95 (not 115), concurrent
+  wellies+crown buys leave scarf + sunhat + exactly one purchase with a
+  non-negative balance, concurrent same-item buys charge exactly once (80).
+- `app/test/features/pip/k06_bugs_test.dart`: removed `skip: true` from
+  the K06-BUG-1 and K06-BUG-2 proofs only.
+
+## Verification (logic-stage scope — no full-app test, no simulator)
+
+- `dart format` on touched dirs → clean.
+- `flutter analyze lib/features/pip test/features/pip/pip_repository_test.dart
+  test/features/pip/k06_bugs_test.dart test/features/pip/pip_bloc_test.dart`
+  → No issues found.
+- `flutter test --timeout 120s test/features/pip/pip_repository_test.dart
+  test/features/pip/pip_bloc_test.dart` → All tests passed (36).
+- `flutter test --timeout 120s test/features/pip/k06_bugs_test.dart
+  test/features/pip/pip_bloc_actions_test.dart` → All tests passed
+  (38 green, 4 skipped — the 4 remaining skips are BUG-3..6, view layer).
+- `--run-skipped --plain-name K06-BUG-1` → passed; `--plain-name K06-BUG-2`
+  → passed.
+- Shared regression `repositories_test.dart` “pip care, wardrobe and look”
+  → passed.
 - No `google_fonts`, no `DateTime.now()`, no new ids, no `core/` or `app/`
-  edits, no views/widgets edits.
+  edits, no views/widgets edits, no simulator.
 
 ## LEFT FOR NEXT ITERATION
 
-- Nothing in the logic layer is unfinished. UI builder owns views/widgets
-  (title, pet slot, growth card, care row, wardrobe grid, caption, loading /
-  failure / no-child states, toasts, navigation) against the contract above.
-- Integrator: run the full `flutter test` + light/dark `shot.sh` UI check.
+- Nothing unfinished in the logic layer. UI builder owns BUG-3/4/5/6 + D1.
 
 VERDICT: PASS

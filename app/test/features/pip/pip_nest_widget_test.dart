@@ -21,6 +21,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show FontLoader, rootBundle;
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/pip/presentation/widgets/pip_care_button.dart';
@@ -203,4 +204,123 @@ void main() {
     }
     await disposeApp(tester);
   });
+
+  testWidgets(
+    'the nest art box is the design 230 x 206 slot box, letterboxed not '
+    'stretched',
+    (tester) async {
+      // `.k6-pet .nest { width:230px; height:206px }` (K06-pip.html). The
+      // design PNG confirms the UNIFORM 206/240 scale: its widest painted row
+      // is logical y 277.7 and spans 163 px (`202 units x 206/240`), where a
+      // 230-stretched box would draw 194 px. Painting it square (K06-BUG-4)
+      // moved the rim ~12 px off the design.
+      await pumpAppRoute(tester, '/pip');
+
+      final nest = find
+          .descendant(
+            of: find.byKey(const Key('k06-pet')),
+            matching: find.byType(SvgPicture),
+          )
+          .first;
+      expect(
+        tester.getSize(nest),
+        const Size(kPipNestArtWidth, kPipNestArtHeight),
+      );
+      // The art box is the slot box, sharing its bottom edge — the design's
+      // `bottom: 0`.
+      final slot = tester.getRect(find.byKey(const Key('k06-pet')));
+      expect(tester.getRect(nest).bottom, closeTo(slot.bottom, _tol));
+      expect(
+        tester.getRect(nest).left,
+        closeTo(slot.center.dx - kPipNestArtWidth / 2, _tol),
+      );
+      await disposeApp(tester);
+    },
+  );
+
+  testWidgets('the three care buttons share one height at text scale 1.3', (
+    tester,
+  ) async {
+    // `.k6-care` is a flex row with the default `align-items: stretch`, so
+    // all three `.btn-kid` columns take the tallest one's height (K06-BUG-5).
+    // `IntrinsicHeight` + `CrossAxisAlignment.stretch` is what supplies it
+    // inside the unbounded `ListView`.
+    tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await pumpAppRoute(tester, '/pip');
+
+    final heights = <double>[
+      for (final id in const <String>['k06-feed', 'k06-play', 'k06-bath'])
+        tester.getRect(find.byKey(Key(id))).height,
+    ];
+    expect(heights.toSet(), hasLength(1), reason: 'measured $heights');
+    // They still share a top and a bottom, i.e. they stay aligned with each
+    // other (owner ALIGNMENT rule).
+    final tops = <double>[
+      for (final id in const <String>['k06-feed', 'k06-play', 'k06-bath'])
+        tester.getRect(find.byKey(Key(id))).top,
+    ];
+    expect(tops.toSet(), hasLength(1), reason: 'measured $tops');
+    await disposeApp(tester);
+  });
+
+  testWidgets(
+    'the locked tiles dash their border IN FRONT of the fill, and every art '
+    'circle still lands on the same inset',
+    (tester) async {
+      // K06-BUG-6: the screen-local dashed stroke used to be a background
+      // `CustomPaint.painter`, so the tile's own opaque `surface-2` fill
+      // covered it completely and the locked slot read as a borderless card
+      // (the UI stage's D1, in both themes). It is a `foregroundPainter` now,
+      // which is also what the pixel proof in `k06_bugs_test.dart` reads.
+      await pumpAppRoute(tester, '/pip');
+
+      for (final id in const <String>['wellies', 'crown']) {
+        final paint = tester.widget<CustomPaint>(
+          find.descendant(
+            of: find.byKey(Key('k06-ward-$id')),
+            matching: find.byType(CustomPaint),
+          ),
+        );
+        expect(
+          paint.foregroundPainter,
+          isNotNull,
+          reason: '$id must stroke its border above the fill',
+        );
+        expect(paint.painter, isNull, reason: '$id has no background painter');
+      }
+
+      // `.k6-item-art`: 52 px circle, and the owned tile's solid border and
+      // the locked tile's reserved dashed band occupy the same 3 px, so the
+      // circles must still share one left inset and one width.
+      Rect artOf(String id) => tester.getRect(
+        find.descendant(
+          of: find.byKey(Key('k06-ward-$id')),
+          matching: find.byWidgetPredicate(
+            (w) =>
+                w is Container &&
+                w.constraints?.maxHeight == kPipWardrobeArtSize &&
+                w.decoration is BoxDecoration,
+          ),
+        ),
+      );
+
+      final ownedArt = artOf('scarf');
+      final ownedTile = tester.getRect(find.byKey(const Key('k06-ward-scarf')));
+      for (final id in const <String>['sunhat', 'wellies', 'crown']) {
+        final art = artOf(id);
+        expect(
+          art.width,
+          closeTo(kPipWardrobeArtSize, _tol),
+          reason: '$id art',
+        );
+        expect(
+          art.left - tester.getRect(find.byKey(Key('k06-ward-$id'))).left,
+          closeTo(ownedArt.left - ownedTile.left, _tol),
+          reason: '$id art circle must sit on the same inset as Scarf',
+        );
+      }
+      await disposeApp(tester);
+    },
+  );
 }

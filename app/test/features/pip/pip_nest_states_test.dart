@@ -314,6 +314,9 @@ void main() {
       expect(find.byKey(const Key('k06-pet')), findsNothing);
       expect(find.byKey(const Key('k06-grow')), findsNothing);
       expect(find.text('Feed'), findsNothing);
+      // `.k6-sec` is the design's ASCII apostrophe, so the curly U+2019 form
+      // that iteration 1 rendered must be absent here too.
+      expect(find.text("Pip's wardrobe"), findsNothing);
       expect(find.text('Pip’s wardrobe'), findsNothing);
       expect(find.byType(CircularProgressIndicator), findsNothing);
       expect(find.byType(NestMeadow), findsOneWidget);
@@ -387,7 +390,7 @@ void main() {
       // Informative text: the title, the growth copy, the caption and the
       // progress bar are not controls.
       expect(
-        hasTap(tester, find.bySemanticsLabel(RegExp('Pip is 70 percent'))),
+        hasTap(tester, find.bySemanticsLabel(RegExp('Pip is 70% of the way'))),
         isFalse,
       );
       expect(hasTap(tester, find.byKey(const Key('k06-caption'))), isFalse);

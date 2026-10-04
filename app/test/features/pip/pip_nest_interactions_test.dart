@@ -585,8 +585,10 @@ void main() {
       expect(find.text('Growing into a Fledgling'), findsOneWidget);
       expect(find.text('60 coins'), findsOneWidget);
       expect(find.text('250 to grow'), findsOneWidget);
+      // The design's own `aria-label` wording ("Pip is 70% of the way to
+      // Songbird"), with the percentage from his row.
       expect(
-        find.bySemanticsLabel(RegExp('Pip is 24 percent')),
+        find.bySemanticsLabel(RegExp('Pip is 24% of the way to')),
         findsOneWidget,
       );
       expect(find.text('Owned'), findsOneWidget);

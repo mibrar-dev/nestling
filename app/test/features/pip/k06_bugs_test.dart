@@ -4,12 +4,15 @@
 // test description (Flutter's `test`/`testWidgets` take a bool skip, so the
 // id cannot live in the skip argument), exactly like the K01/K03 precedent.
 // `flutter test --run-skipped <file>` runs them all; each one FAILS until
-// its bug is fixed. The remaining probes are green and pin the categories
-// that came back clean: child/reward list edges, empty lists, double taps,
-// deep links, restart persistence, dark-mode contrast, real 320 px at text
-// scale 1.3, semantics and live active-child switching.
+// its bug is fixed.
 //
-// Run one proof:
+// ITERATION 2: all six proofs are FIXED and run live — no `skip: true` left in
+// this file. Stage 2a took K06-BUG-1 (lost update in the repository's
+// read-modify-write care path) and K06-BUG-2 (concurrent buys overspending a
+// 120-coin balance) by making both writes atomic and conditional; stage 2b
+// took K06-BUG-3 (heading apostrophe), K06-BUG-4 (nest art box), K06-BUG-5
+// (equal care-button heights) and K06-BUG-6 (the invisible dashed locked
+// border). Run the whole file with `--run-skipped` as a regression check:
 //   flutter test test/features/pip/k06_bugs_test.dart --run-skipped --plain-name K06-BUG-1
 //
 // Evidence, repro and suggested fixes for every finding live in
@@ -158,7 +161,10 @@ Future<int> _darkTopBandPixels(WidgetTester tester, Rect tile) async {
 }
 
 // ---------------------------------------------------------------------------
-// Bug proofs (skipped; each fails under `--run-skipped` until fixed)
+// Bug proofs. All six run live (no `skip:` in this file since iteration 2):
+// K06-BUG-1 / K06-BUG-2 were the logic layer's races (the repository's
+// read-modify-write care path and the non-atomic buy), K06-BUG-3 … K06-BUG-6
+// the UI layer's. Kept as the regression guard for both.
 // ---------------------------------------------------------------------------
 
 void main() {
@@ -187,7 +193,7 @@ void main() {
       await sub.cancel();
       await bloc.close();
       await db.close();
-    }, skip: true);
+    });
 
     test('K06-BUG-2: two quick wardrobe buys must not overspend a 120-coin balance', () async {
       // The bloc pre-check uses the stale `state.nest.profile.coins`, and
@@ -218,7 +224,7 @@ void main() {
       await sub.cancel();
       await bloc.close();
       await db.close();
-    }, skip: true);
+    });
 
     testWidgets(
       "K06-BUG-3: the heading must be the HTML source's ASCII \"Pip's wardrobe\"",
@@ -235,7 +241,6 @@ void main() {
         );
         await disposeApp(tester);
       },
-      skip: true,
     );
 
     testWidgets(
@@ -260,7 +265,6 @@ void main() {
         );
         await disposeApp(tester);
       },
-      skip: true,
     );
 
     testWidgets(
@@ -285,7 +289,6 @@ void main() {
         );
         await disposeApp(tester);
       },
-      skip: true,
     );
 
     testWidgets(
@@ -316,7 +319,6 @@ void main() {
         );
         await disposeApp(tester);
       },
-      skip: true,
     );
   });
 

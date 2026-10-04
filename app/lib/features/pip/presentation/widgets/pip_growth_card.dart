@@ -82,7 +82,11 @@ class PipGrowthCard extends StatelessWidget {
           NestProgress(
             fraction: nest.growthFraction,
             kid: true,
-            semanticLabel: 'Pip is $pct percent of the way to a $nextName',
+            // `.progress.kid` `aria-label="Pip is 70% of the way to
+            // Songbird"` — the design's own words, with the percentage taken
+            // from the database instead of the design's hard-coded 70
+            // (`4_review.md` #11: no "a", no spelled-out "percent").
+            semanticLabel: 'Pip is $pct% of the way to $nextName',
           ),
           const SizedBox(height: NestSpacing.s2),
           Row(

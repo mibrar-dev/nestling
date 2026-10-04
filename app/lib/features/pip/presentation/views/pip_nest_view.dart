@@ -380,7 +380,12 @@ class _PipNestBody extends StatelessWidget {
                   if (nest.items.isNotEmpty) ...[
                     const SizedBox(height: NestSpacing.s4),
                     Text(
-                      'Pip’s wardrobe',
+                      // HTML line 71: `<div class="k6-sec">Pip's wardrobe
+                      // </div>` — a LITERAL ASCII apostrophe (0x27), verified
+                      // with `hexdump` (50 69 70 27 73). Not `&rsquo;`: the
+                      // orchestrator COPY rule makes the source byte the
+                      // oracle (K06-BUG-3, K01's BUG-A precedent).
+                      "Pip's wardrobe",
                       key: const Key('k06-section'),
                       // `.k6-sec`: Nunito 900 20 px on a 26 px line. The
                       // closest shared scale is `kidName` (22/26), so the
@@ -477,65 +482,75 @@ class _CareRow extends StatelessWidget {
     final canFeed = coins >= PipRepositoryImpl.feedCostCoins;
     final canBathe = coins >= PipRepositoryImpl.bathCostCoins;
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      spacing: NestSpacing.s3,
-      children: [
-        Expanded(
-          child: PipCareButton(
-            key: const Key('k06-feed'),
-            label: 'Feed',
-            color: tokens.peach,
-            foreground: tokens.onWarm,
-            semanticLabel:
-                'Feed Pip, costs ${PipRepositoryImpl.feedCostCoins} coins',
-            icon: NestIcon(NestIcons.feedBowl, color: tokens.onWarm),
-            trailing: PipCoinAmount(
-              amount: '${PipRepositoryImpl.feedCostCoins}',
-              color: tokens.onWarm,
-            ),
-            onPressed: canFeed
-                ? () => context.read<PipBloc>().add(
-                    const PipCareRequested(PipCareKind.feed),
-                  )
-                : null,
-          ),
-        ),
-        Expanded(
-          child: PipCareButton(
-            key: const Key('k06-play'),
-            label: 'Play',
-            color: tokens.sky,
-            foreground: tokens.onAccent,
-            semanticLabel: 'Play with Pip, free',
-            icon: NestIcon(NestIcons.ball, color: tokens.onAccent),
-            trailing: const PipFreePill(),
-            onPressed: () => context.read<PipBloc>().add(
-              const PipCareRequested(PipCareKind.play),
+    // `.k6-care` is a flex row, so `align-items: stretch` gives all three
+    // `.btn-kid` columns ONE height — the tallest. A plain `Row` inside the
+    // unbounded `ListView` cannot stretch (and each button is only floored at
+    // `kPipCareButtonHeight`), so at text scale 1.3 Play's 19 px `.k6-free`
+    // pill grew to 101 px while Feed and Bath stayed at 96 (K06-BUG-5).
+    // `IntrinsicHeight` supplies the row's tight height; `stretch` then hands
+    // it to every column. At the design's scale 1.0 nothing changes: the
+    // tallest intrinsic height is Play's 91 px, which is exactly the design.
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: NestSpacing.s3,
+        children: [
+          Expanded(
+            child: PipCareButton(
+              key: const Key('k06-feed'),
+              label: 'Feed',
+              color: tokens.peach,
+              foreground: tokens.onWarm,
+              semanticLabel:
+                  'Feed Pip, costs ${PipRepositoryImpl.feedCostCoins} coins',
+              icon: NestIcon(NestIcons.feedBowl, color: tokens.onWarm),
+              trailing: PipCoinAmount(
+                amount: '${PipRepositoryImpl.feedCostCoins}',
+                color: tokens.onWarm,
+              ),
+              onPressed: canFeed
+                  ? () => context.read<PipBloc>().add(
+                      const PipCareRequested(PipCareKind.feed),
+                    )
+                  : null,
             ),
           ),
-        ),
-        Expanded(
-          child: PipCareButton(
-            key: const Key('k06-bath'),
-            label: 'Bath',
-            color: tokens.surface,
-            foreground: tokens.ink,
-            semanticLabel:
-                'Bathe Pip, costs ${PipRepositoryImpl.bathCostCoins} coins',
-            icon: NestIcon(NestIcons.bubbles, color: tokens.ink),
-            trailing: PipCoinAmount(
-              amount: '${PipRepositoryImpl.bathCostCoins}',
-              color: tokens.ink,
+          Expanded(
+            child: PipCareButton(
+              key: const Key('k06-play'),
+              label: 'Play',
+              color: tokens.sky,
+              foreground: tokens.onAccent,
+              semanticLabel: 'Play with Pip, free',
+              icon: NestIcon(NestIcons.ball, color: tokens.onAccent),
+              trailing: const PipFreePill(),
+              onPressed: () => context.read<PipBloc>().add(
+                const PipCareRequested(PipCareKind.play),
+              ),
             ),
-            onPressed: canBathe
-                ? () => context.read<PipBloc>().add(
-                    const PipCareRequested(PipCareKind.bathe),
-                  )
-                : null,
           ),
-        ),
-      ],
+          Expanded(
+            child: PipCareButton(
+              key: const Key('k06-bath'),
+              label: 'Bath',
+              color: tokens.surface,
+              foreground: tokens.ink,
+              semanticLabel:
+                  'Bathe Pip, costs ${PipRepositoryImpl.bathCostCoins} coins',
+              icon: NestIcon(NestIcons.bubbles, color: tokens.ink),
+              trailing: PipCoinAmount(
+                amount: '${PipRepositoryImpl.bathCostCoins}',
+                color: tokens.ink,
+              ),
+              onPressed: canBathe
+                  ? () => context.read<PipBloc>().add(
+                      const PipCareRequested(PipCareKind.bathe),
+                    )
+                  : null,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -62,6 +62,10 @@ Scaffold(backgroundColor transparent) -> Column:
       inNest false), nestWidth 230, nestHeight for the 230x206 slot,
       fixedPipHeight 134, semanticLabel 'Pip the Fledgling...'). NOTE: K06 slot
       is 230x206, not K03 236x188 — pass K06 numbers, do not copy K03 consts.
+       The nest art box is that same 230x206 (`.k6-pet .nest { width:230px;
+       height:206px; bottom:0 }`), so the square `nest.svg` is letterboxed
+       UNIFORMLY, not stretched — iteration 2 corrected a 230x230 draw
+       (K06-BUG-4).
       PipAvatar keeps design size/position; never v1 pip_stage SVGs
       (orchestrator PIP rule). PNG slot y about 159-365.
    c. Growth card (HTML .k6-grow: lilacTint bg, 3 px ink border, r-l 24,
@@ -90,7 +94,9 @@ Scaffold(backgroundColor transparent) -> Column:
         feed/bath -> onPressed null plus opacity 0.45 (shared NestKidButton
         behaviour). Play never disabled.
       - PNG row y about 549-640.
-   e. Section "Pip's wardrobe" (curly apostrophe U+2019): HTML .k6-sec is
+   e. Section "Pip's wardrobe" (STRAIGHT apostrophe U+0027, corrected in
+       iteration 2 — HTML line 71 is a literal 0x27 per `hexdump`, not
+       `&rsquo;`; see FIXES_1 / K06-BUG-3): HTML .k6-sec is
       20/26 w900 Nunito; closest token kidName is 22/26. Use
       NestType.h3(ink).copyWith(fontSize 20, height 26/20) — 20/26 from HTML,
       tokens only. Left-aligned, maxLines 1 ellipsis. PNG y about 656-682.

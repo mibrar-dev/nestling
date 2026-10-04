@@ -14,7 +14,10 @@
 // The dashed border is screen-local: Flutter has no dashed BorderSide and the
 // design system ships no dashed-border widget (see
 // docs/screens/K06/SHARED_REQUEST.md). Dash metrics are measured off the
-// design PNG: 6 px dash / 3 px gap on a 3 px stroke.
+// design PNG: 6 px dash / 3 px gap on a 3 px stroke, painted as a
+// `CustomPaint.foregroundPainter` so the stroke lands ON the fill, exactly
+// where CSS puts a dashed `border` (a background painter is hidden under the
+// opaque tile fill — K06-BUG-6).
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -82,7 +85,16 @@ class PipWardrobeTile extends StatelessWidget {
         onTap: onPressed,
         child: CustomPaint(
           // A locked tile drops `--sh-kid`, so it needs no room below it.
-          painter: owned
+          //
+          // FOREGROUND, not `painter`: the tile's own `surface-2` fill is
+          // opaque edge to edge, so a background stroke is completely covered
+          // and the locked slot reads as a flat beige card with no border
+          // (K06-BUG-6 = the UI stage's D1 = ORCHESTRATOR_NOTES item 1).
+          // Painting on top of the fill is what CSS `border-style: dashed`
+          // does — the stroke sits inside the border box, over the
+          // background — and it is also over the art circle's white fill,
+          // which never reaches the outer 3 px.
+          foregroundPainter: owned
               ? null
               : _DashedBorderPainter(
                   color: tokens.ink2,

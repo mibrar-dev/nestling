@@ -2,23 +2,28 @@
 //
 // `design/html-source/screens/K06-pip.html`:
 //   .k6-pet        { width:230px; height:206px; margin:9px auto 0 }
-//   .k6-pet .nest  { bottom:0; width:230px }   (nest.svg is square, so the
-//                                               <img> box is 230 x 230 and
-//                                               bleeds 24 px above the slot)
+//   .k6-pet .nest  { left:50%; bottom:0; width:230px; height:206px }
 //   .k6-pet .pip   { bottom:81px; width:134px; height:134px }
+//
+// `.nest` is an `<img>` of a square `viewBox="0 0 240 240"` SVG, so the
+// browser fits the art UNIFORMLY into its 230 x 206 box (default
+// `preserveAspectRatio: xMidYMid meet`): a 206 x 206 nest, 12 px of letterbox
+// either side. Measured off `design/screens/light/K06-pip.png` (÷3), the nest's
+// outermost painted row is logical y 277.7 and spans x 108.3 - 281.3, i.e.
+// 173.0 wide — exactly `202 units x 206/240 = 173.4`, and its widest row sits
+// 78 px above the slot's bottom edge, i.e. `52 + 26 = 78 units` of the 240-tall
+// art. Painting the art 230 x 230 (`BoxFit.fill`) is 12 % too wide and 24 px
+// too tall, and moves the rim ~12 px off the design (K06-BUG-4).
 //
 // WHY THIS IS SCREEN-LOCAL (see docs/screens/K06/SHARED_REQUEST.md): the
 // shared `NestPetStage` explicit-size mode cannot express this slot.
 // `PipNestFallback.explicitGeometry` pins its block to
 // `_explicitSlotH = 236` and seats the pip at
 // `rimTop * nestH + rimOverlap (44.2)` — both tuned to K03's 236 x 188 slot.
-// For K06 that puts the nest 31 px too high and the pip 45 px too high, and
-// no (nestWidth, nestHeight, pipHeight) triple fixes it: keeping the nest
-// square (230, as the design's <img> is) forces the pip box to 120 tall
-// instead of 134. The owner rule ("keep the design's size and position for
-// the Pip slot") wins, so the two shared ASSETS (`nest.svg`, `PipAvatar`) are
-// composed here instead — no pixel values are invented, every number above
-// is the design's own.
+// For K06 that puts the nest 31 px too high and the pip 45 px too high. The
+// owner rule ("keep the design's size and position for the Pip slot") wins, so
+// the two shared ASSETS (`nest.svg`, `PipAvatar`) are composed here instead —
+// no pixel values are invented, every number above is the design's own.
 //
 // K06's design has no `.pet-stage::before` glow (the glow is a `.pet-stage`
 // rule and this screen's markup has no `.pet-stage`), so none is painted.
@@ -30,9 +35,12 @@ import 'package:nestling/core/design_system/assets/nestling_assets.dart';
 const double kPipSlotWidth = 230;
 const double kPipSlotHeight = 206;
 
-/// `.k6-pet .nest { width: 230px; bottom: 0 }` — `nest.svg` is square, so
-/// the design's <img> box is 230 x 230 and paints 24 px above the slot.
-const double kPipNestArtSize = 230;
+/// `.k6-pet .nest { width: 230px; height: 206px; bottom: 0 }` — the design's
+/// `<img>` box, which is exactly the slot's own box. `nest.svg` is square
+/// (`viewBox 0 0 240 240`), so the box holds the art at a uniform 206/240
+/// scale, centred (see the file header).
+const double kPipNestArtWidth = kPipSlotWidth;
+const double kPipNestArtHeight = kPipSlotHeight;
 
 /// `.k6-pet .pip { width: 134px; height: 134px; bottom: 81px }`.
 const double kPipSlotPipHeight = 134;
@@ -56,20 +64,23 @@ class PipNestSlot extends StatelessWidget {
       child: SizedBox(
         width: kPipSlotWidth,
         height: kPipSlotHeight,
-        // The nest art is 24 px taller than the slot and the pip overhangs
-        // it too, so the box must not clip (CSS `overflow` is visible).
+        // The pip overhangs the slot by 9 px (bottom 81 + height 134 > 206),
+        // so the box must not clip (CSS `overflow` is visible).
         child: Stack(
           clipBehavior: Clip.none,
           alignment: Alignment.bottomCenter,
           children: [
             Positioned(
               bottom: 0,
-              width: kPipNestArtSize,
-              height: kPipNestArtSize,
+              width: kPipNestArtWidth,
+              height: kPipNestArtHeight,
               child: SvgPicture.asset(
                 NestlingIllustrations.nest,
-                // The design's <img> stretches the art into its box.
-                fit: BoxFit.fill,
+                // `BoxFit.contain` (the default, and what the design's
+                // `<img>` does): the browser fits the square art uniformly
+                // into the 230 x 206 box, letterboxed 12 px each side.
+                // `fill` would stretch it 12 % wider and 24 px taller than
+                // the design PNG (K06-BUG-4).
                 placeholderBuilder: (_) => const SizedBox.shrink(),
               ),
             ),

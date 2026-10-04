@@ -8,17 +8,27 @@ any future kid screen) delete the forks.
 
 ## 1. `NestPetStage` cannot express the K06 pet slot
 
-Need: K06's design slot is 230 × 206 with the nest `<img>` 230 × 230 at
-`bottom: 0` (so it bleeds 24 px above the slot) and `PipAvatar` 134 tall at
-`bottom: 81` (`design/html-source/screens/K06-pip.html`). The shared explicit
+Need: K06's design slot is 230 × 206 with the nest `<img>` **230 × 206** at
+`bottom: 0` (HTML line 22) and `PipAvatar` 134 tall at `bottom: 81`
+(`design/html-source/screens/K06-pip.html`). The shared explicit
 size mode pins its block to `PipNestFallback._explicitSlotH = 236` and seats
 the pip at `nestRimTopFraction * nestH + rimOverlap` with
 `rimOverlap = 44.2` — both tuned to K03's 236 × 188 slot. Feeding it K06's
-numbers puts the nest 31 px too high and the pip 45 px too high, and no
-(nestWidth, nestHeight, pipHeight) triple fixes it: keeping the nest square
-(230, as the design's `<img>` is) forces the pip box to ~120 tall instead of
-134. With a screen-local 40-line slot (`widgets/pip_nest_slot.dart`) the app
+numbers puts the nest 31 px too high and the pip 45 px too high.
+With a screen-local 40-line slot (`widgets/pip_nest_slot.dart`) the app
 lands the design's slot exactly (measured: x 80, y 150, 230 × 206).
+
+Iteration 1 of this screen drew the nest art **230 × 230** with
+`BoxFit.fill`, on the reading that the design's `<img>` was square and
+"bleeds above the slot". That is wrong on both counts (K06-BUG-4, corrected
+in iteration 2): the CSS says 206 high, and `nest.svg` is a
+`viewBox="0 0 240 240"` document, which a browser fits UNIFORMLY into the
+230 × 206 `<img>` box — a 206 × 206 nest with 12 px of letterbox each side.
+Measured on `design/screens/light/K06-pip.png` (÷3): the nest's widest painted
+row is logical y 277.7 and spans x 108.3 – 281.3, i.e. 173.0 wide =
+`202 units × 206/240`, which is the 206 scale exactly. A shared slot mode
+that honoured an explicit `(width, height)` box for the nest art with
+`BoxFit.contain` would serve this without the screen-local fork.
 
 Files: `core/design_system/components/nest_pet_stage.dart`,
 `core/design_system/motion/pip_rive.dart` (`PipNestFallback.explicitGeometry`,

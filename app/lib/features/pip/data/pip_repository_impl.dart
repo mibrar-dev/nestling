@@ -110,35 +110,65 @@ class PipRepositoryImpl implements PipRepository {
   Future<void> bathe(String childId) => _care(childId, cost: bathCostCoins);
 
   Future<void> _care(String childId, {int cost = 0}) async {
-    final kid = await (_db.select(
-      _db.children,
-    )..where((c) => c.id.equals(childId))).getSingleOrNull();
-    if (kid == null || kid.coins < cost) return;
-    await (_db.update(_db.children)..where((c) => c.id.equals(childId))).write(
-      ChildrenCompanion(
-        coins: Value(kid.coins - cost),
-        happiness: Value((kid.happiness + 1).clamp(0, 5)),
-      ),
+    // Atomic conditional write (K06-BUG-1): a read-modify-write here loses
+    // charges when two taps overlap (both read 120, both write 115), so the
+    // deduction applies to the CURRENT row value in one statement and the
+    // affordability check is part of the write. Zero changed rows means an
+    // unknown child or insufficient coins: a silent no-op, never negative.
+    await _db.customUpdate(
+      'UPDATE children SET coins = coins - ?, '
+      'happiness = min(happiness + 1, 5) '
+      'WHERE id = ? AND coins >= ?',
+      variables: <Variable>[
+        Variable.withInt(cost),
+        Variable.withString(childId),
+        Variable.withInt(cost),
+      ],
+      updates: {_db.children},
     );
   }
 
   @override
   Future<void> buyItem(String childId, String item) async {
-    final row =
-        await (_db.select(_db.pipWardrobe)
-              ..where((w) => w.childId.equals(childId) & w.item.equals(item)))
-            .getSingleOrNull();
-    if (row == null || row.owned) return;
-    final kid = await (_db.select(
-      _db.children,
-    )..where((c) => c.id.equals(childId))).getSingleOrNull();
-    if (kid == null || kid.coins < row.priceCoins) return;
     await _db.transaction(() async {
-      await (_db.update(_db.pipWardrobe)
-            ..where((w) => w.childId.equals(childId) & w.item.equals(item)))
-          .write(const PipWardrobeCompanion(owned: Value(true)));
-      await (_db.update(_db.children)..where((c) => c.id.equals(childId)))
-          .write(ChildrenCompanion(coins: Value(kid.coins - row.priceCoins)));
+      final row =
+          await (_db.select(_db.pipWardrobe)
+                ..where((w) => w.childId.equals(childId) & w.item.equals(item)))
+              .getSingleOrNull();
+      if (row == null || row.owned) return;
+      // Atomic conditional deduction (K06-BUG-2): the affordability check
+      // is part of the write, so two overlapping buys cannot both spend the
+      // same coins. Zero changed rows means insufficient coins: no-op.
+      final paid = await _db.customUpdate(
+        'UPDATE children SET coins = coins - ? WHERE id = ? AND coins >= ?',
+        variables: <Variable>[
+          Variable.withInt(row.priceCoins),
+          Variable.withString(childId),
+          Variable.withInt(row.priceCoins),
+        ],
+        updates: {_db.children},
+      );
+      if (paid == 0) return;
+      // Claim the tile only while still unowned: a same-item double tap
+      // that lost the race refunds instead of charging twice.
+      final claimed =
+          await (_db.update(_db.pipWardrobe)..where(
+                (w) =>
+                    w.childId.equals(childId) &
+                    w.item.equals(item) &
+                    w.owned.equals(false),
+              ))
+              .write(const PipWardrobeCompanion(owned: Value(true)));
+      if (claimed == 0) {
+        await _db.customUpdate(
+          'UPDATE children SET coins = coins + ? WHERE id = ?',
+          variables: <Variable>[
+            Variable.withInt(row.priceCoins),
+            Variable.withString(childId),
+          ],
+          updates: {_db.children},
+        );
+      }
     });
   }
 

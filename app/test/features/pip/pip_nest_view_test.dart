@@ -33,7 +33,10 @@ const String _middot = '·';
 /// — HTML `&mdash;` (U+2014).
 const String _emDash = '—';
 
-/// ’ HTML `&rsquo;` (U+2019), in "Pip's wardrobe".
+// ’ HTML `&rsquo;` (U+2019) — which `.k6-sec` does NOT use: the design
+/// writes a LITERAL apostrophe (0x27) in "Pip's wardrobe", verified with
+/// `hexdump` (50 69 70 27 73). The source byte is the oracle (K06-BUG-3).
+const String _straightQuote = "'";
 const String _rightQuote = '’';
 
 Future<void> _pumpNest(
@@ -99,8 +102,9 @@ void main() {
     // Growth labels come from the row, not the design's hard-coded numbers.
     expect(find.text('175 coins'), findsOneWidget);
     expect(find.text('250 to grow'), findsOneWidget);
-    // `.k6-sec` — right single quote U+2019.
-    expect(find.text('Pip${_rightQuote}s wardrobe'), findsOneWidget);
+    // `.k6-sec` — straight ASCII apostrophe (U+0027), the design's byte.
+    expect(find.text('Pip${_straightQuote}s wardrobe'), findsOneWidget);
+    expect(find.text('Pip${_rightQuote}s wardrobe'), findsNothing);
     // Caption — em dash U+2014.
     expect(
       find.text('Nothing here is a chore $_emDash it is all just for fun.'),

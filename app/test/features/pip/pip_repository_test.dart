@@ -201,6 +201,42 @@ void main() {
     });
   });
 
+  group('atomic writes (K06-BUG-1, K06-BUG-2)', () {
+    test('concurrent feeds each charge the current balance', () async {
+      await Future.wait(<Future<void>>[
+        repo.feed('maya'),
+        repo.feed('maya'),
+        repo.feed('maya'),
+        repo.feed('maya'),
+        repo.feed('maya'),
+      ]);
+      final profile = await repo.watchProfile('maya').first;
+      expect(profile?.coins, 95);
+      expect(profile?.happiness, 5);
+    });
+
+    test('concurrent different-item buys cannot overspend', () async {
+      await Future.wait(<Future<void>>[
+        repo.buyItem('maya', 'wellies'),
+        repo.buyItem('maya', 'crown'),
+      ]);
+      final nest = await repo.watchNest().first;
+      final owned = nest!.items.where((i) => i.owned).length;
+      expect(owned, 3); // scarf + sunhat + exactly one purchase.
+      expect(nest.profile.coins, greaterThanOrEqualTo(0));
+    });
+
+    test('concurrent same-item buys charge exactly once', () async {
+      await Future.wait(<Future<void>>[
+        repo.buyItem('maya', 'wellies'),
+        repo.buyItem('maya', 'wellies'),
+      ]);
+      final nest = await repo.watchNest().first;
+      expect(nest!.items.firstWhere((i) => i.id == 'wellies').owned, isTrue);
+      expect(nest.profile.coins, 80);
+    });
+  });
+
   group('pipStageName', () {
     test('maps every stage (pip-local helper)', () {
       expect(pipStageName(1), 'Egg');

@@ -1,220 +1,222 @@
-# K06 · Pip's nest (`/pip`) — Stage 2 (INTEGRATE, iteration 1)
+# K06 · Pip's nest (`/pip`) — Stage 2 (INTEGRATE, iteration 2)
 
 Job: make the 2a (logic) + 2b (UI) halves compile and pass together. Smallest
 change only — no redesign.
 
 **Outcome: `dart format .` clean (0 changed) · `flutter analyze` → No issues
-found · `flutter test` → 3189 pass / 2 pre-existing skips / 0 fail.** One fix
-was required, and it was *not* in the K06 feature: two K03 tests located the
-pushed `/pip` route by the foundation **placeholder** title `K06 Pip nest`,
-which K06 legitimately replaced (test-only swap to a route assertion, filed as
-`SHARED_REQUEST.md` §4, precedent `P09/SHARED_REQUEST.md` §3).
+found · `flutter test` → 3543 pass / 5 skips / 0 fail.** Iteration 2 needed
+**one** fix, and it was a two-comment correction inside the K06 feature: 2b's
+`k06_bugs_test.dart` header still announced K06-BUG-1/2 as parked after 2a had
+un-skipped and fixed them (the classic artefact of two builders working in one
+worktree). No product code was touched at this stage. Iteration 1's FIX 1 (the
+K03 placeholder-title swap) is still in force and still green.
 
-## 1. Summary of 2a (logic, iteration 1) — `2a_build_logic.md`
+## 1. Summary of 2a (logic, iteration 2) — `2a_build_logic.md`
 
-Contract changes the UI builder coded against, all inside
-`presentation/bloc/`:
+**No contract changes at all** — no state/event shape moved, so the UI half
+needed no rebase. `PipCareRequested` / `PipWardrobeBuyRequested` /
+`PipWardrobeEquipRequested`, `PipState` {status, nest, actionError,
+actionNonce}, `kPipNotEnoughCoins`, `pipStageName`, `PipNest.growthFraction`
+are all exactly as iteration 1 left them.
 
-- **Internal events** `PipNestReceived(PipNest?)` / `PipNestFailed(error)`
-  (the `KidHomeDataReceived` pattern) — raised by the bloc's own
-  `watchNest()` subscription so a reload guards on the live subscription instead
-  of stacking never-ending handlers. Views never send them; observable
-  behaviour is exactly the plan (load → loading → loaded, error → failure).
-- **`const String kPipNotEnoughCoins = 'Not enough coins yet — keep going!'`**
-  in `pip_bloc.dart` — the unaffordable-buy toast copy from plan §1f, so the
-  bloc, the view and the tests share one literal.
-- **`PipState` shape** {status, `PipNest? nest`, errorMessage, actionError,
-  actionNonce} with `toLoading` / `copyWithLoaded` / `toFailure` /
-  `withActionStarted` / `withActionFailed` (nonce-bumped so a repeated failure
-  is still a distinct state).
-- **Equip mapping lives in the bloc**: `scarf → scarf`, `sunhat → cap`;
-  `wellies`/`crown` have no accessory node and are a silent no-op by design, so
-  the *view* owns any informational copy for those two tiles.
-- **`PipState.items` compat getter kept on purpose** — see §3, it is load-bearing
-  for K07, not dead code.
+- **K06-BUG-1 (major, lost update).** `_care` was SELECT-then-write
+  (`coins: kid.coins - cost` from a stale read), so two overlapping taps both
+  read 120 and both wrote 115. Now one conditional statement:
+  `UPDATE children SET coins = coins - ?, happiness = min(happiness + 1, 5)
+  WHERE id = ? AND coins >= ?` (drift `customUpdate`, notifies `children`
+  watchers). Zero rows changed = unknown child or unaffordable: silent no-op,
+  never negative. Single-tap behaviour byte-identical (feed 5 / bath 3 / play
+  free, happiness +1 clamped 0..5).
+- **K06-BUG-2 (major, concurrent buys overspent).** `buyItem` is now one
+  transaction: re-read the tile, deduct conditionally (same atomic write
+  shape), then claim the tile only while still unowned (`owned = false` in the
+  WHERE); a lost same-item race refunds inside the same transaction, so a
+  double tap charges exactly once. The bloc's `state.nest` pre-check stays as
+  the fast toast path, but correctness no longer depends on it.
+- Tests: new `atomic writes` group in `pip_repository_test.dart` (5 concurrent
+  feeds land at 95 not 115; concurrent wellies+crown leave the balance
+  non-negative with exactly one purchase; concurrent same-item buys charge
+  once) and the BUG-1/BUG-2 proofs un-skipped.
 
-Logic-layer files: `domain/entities/pip_nest.dart` (NEW: `PipNest` +
-`growthFraction` + `pipStageName`), `domain/pip_repository.dart`
-(`watchActiveChildId`, `watchNest`), `data/pip_repository_impl.dart`
-(`bathCostCoins = 3`, design wardrobe names/order, `switchMap(activeChildId) →
-combineLatest2(profile, ordered wardrobe)`), the three bloc files, plus 33
-repository/bloc tests.
+## 2. Summary of 2b (UI, iteration 2) — `2b_build_ui.md`
 
-## 2. Summary of 2b (UI, iteration 1) — `2b_build_ui.md`
+| Finding | Fix | Proof |
+|---|---|---|
+| **K06-BUG-6 / `5_ui` D1 / ORCHESTRATOR_NOTES item 1** (major) — locked tiles had no visible dashed border: the screen-local `_DashedBorderPainter` was a `CustomPaint.painter`, i.e. *behind* the tile, and the opaque `surface-2` fill covered it edge to edge | now `foregroundPainter`, which is where CSS paints `border` over `background` | `K06-BUG-6` live + a new painter test |
+| **K06-BUG-4** — nest art box was 230 × 230 with `BoxFit.fill` | the design's own `.k6-pet .nest { width:230px; height:206px; bottom:0 }` box, art letterboxed uniformly (`BoxFit.contain`, the browser's default for an SVG `<img>`) | `K06-BUG-4` live + a slot test |
+| **K06-BUG-5** — care buttons lost equal heights at text scale 1.3 (Play's `Free` pill grew to 101 while Feed/Bath stayed 96) | `IntrinsicHeight` + `CrossAxisAlignment.stretch`, which is what `.k6-care`'s flex row + `align-items: stretch` does | `K06-BUG-5` live + a 1.3× alignment test |
+| **K06-BUG-3 / `4_review.md` #9** — the wardrobe heading drew U+2019 while the HTML source writes ASCII 0x27 | `"Pip's wardrobe"`; `1_plan.md` §1e corrected with the same edit | `K06-BUG-3` live + the byte-level oracle in `pip_copy_parity_test.dart` |
+| **`4_review.md` #11** — progress semantics read "…of the way to **a** Songbird" | `'Pip is $pct% of the way to $nextName'`, the design's own `aria-label`, percentage still from the DB | two semantics assertions moved with it |
 
-| File | Role |
-|---|---|
-| `views/pip_nest_view.dart` | Chrome (status bar, back, parental-gate lock with the K03 `_busy` guard), scroll column, loading / failure / no-child states, toast listener, wardrobe tap handler. |
-| `widgets/pip_nest_slot.dart` | `.k6-pet` — the 230 × 206 slot (design overrides `s4` with `margin: 9px auto 0`). |
-| `widgets/pip_growth_card.dart` | `.k6-grow` — lilac tint, 3 px ink border, next-stage Pip at 30 px, `NestProgress`, the two `.kcap` labels. |
-| `widgets/pip_care_button.dart` | `.k6-care .btn-kid` — 3-row column (icon / label / trailing), press chunk, disabled opacity, Semantics. |
-| `widgets/pip_free_pill.dart` | `.k6-free` "Free" badge. |
-| `widgets/pip_coin_amount.dart` | `.k6-coin` / `.k6-item-p` — coloured `coin.svg` + digits. |
-| `widgets/pip_wardrobe_tile.dart` | `.k6-ward` strip + owned/locked `.k6-item` tiles (screen-local dashed border). |
-| `widgets/pip_look.dart` | Feature-local Pip-look + wardrobe-glyph maps. |
+## 3. Integration check — the seam, verified not trusted
 
-`widgets/pip_placeholder_card.dart` deleted (foundation stub, referenced
-nowhere). Measured geometry (design PNG ÷3, cross-checked with the HTML box
-model, pinned ±1.5 px in `pip_nest_widget_test.dart`): status 0–47 · `.k6-top`
-47–107 · `.k6-name` 107–141 · `.k6-pet` 150–356 · `.k6-grow` 372–486 ·
-`.k6-care` 502–593 · `.k6-sec` 609–635 · `.k6-ward` 651–767 · caption 783–803.
-Two values needed judgement, not transcription: the care button is **91** tall
-(Play's tallest column beats the CSS `min-height: 88`) and the wardrobe tiles
-are **116** tall (the design's flex row stretches owned tiles to the locked
-tiles' coin row; Flutter rows do not stretch under unbounded height, so the tile
-pins the same minimum — without it owned tiles sat 2 px short and their art
-circles 3 px off, a visible ALIGNMENT failure).
-
-## 3. Integration check — the seam between the halves
-
-I verified the merged tree rather than trusting the two notes:
-
-- **No mismatched BLoC states / events / imports / renamed members.**
-  `flutter analyze` is clean across `lib` + `test`, which covers the state and
-  event surfaces the two halves share.
-- **The equip/toast split is honoured.** The bloc emits nothing for
-  `wellies`/`crown` (`pip_bloc.dart:115-120` returns before any write and
-  before `withActionFailed`), and the view supplies the copy in
-  `_onWardrobeTap` (`pip_nest_view.dart:449-450`). Both sides of the contract
-  agree, and `pip_nest_view_test.dart:272-280` proves the owned-Wellies tap
-  toasts and writes nothing.
-- **The view sends only the four public events.** `PipNestReceived` /
-  `PipNestFailed` stay bloc-internal, so the view cannot re-trigger a load —
-  the plan's "never re-add load events" rule holds in the merged code.
-- **`PipState.items` is load-bearing, not legacy.** `pip_evolution_view.dart`
-  (the K07 placeholder, screen not built) still renders `state.items`; 2a kept
-  the getter for exactly that. Left in place — ripping it out would break K07.
-- **No duplicated logic, no orphaned half.** Every handler in `pip_bloc.dart`
-  appears once, and each has test coverage (52 K06 feature tests green).
+- **No mismatched BLoC states/events/imports/renamed members.** 2a changed
+  nothing above the repository, 2b nothing below the view; the only shared file
+  either touched is `pip_orchestrator_notes_test.dart`'s neighbourhood, and
+  `flutter analyze` is clean over `lib` + `test`.
+- **The atomic writes still notify the UI.** Both new `customUpdate` calls pass
+  `updates: {_db.children}` / `{_db.pipWardrobe}`, which is what keeps
+  `watchNest()` (and therefore the bloc, the coin labels and the progress
+  fraction) live after a charge or a purchase — the integration risk this
+  rewrite created, and it is covered: `pip_nest_view_test.dart` still proves
+  feed −5 and buy −price reach the rendered screen.
+- **The equip/toast split from iteration 1 survives.** The bloc still emits
+  nothing for `wellies`/`crown`; the view still owns `kPipNotWearable`.
+- **Copy: I re-derived it from the HTML bytes rather than trusting the notes,
+  because 2b *reversed* a plan-mandated character.** Reading
+  `design/html-source/screens/K06-pip.html` directly: line 71 is
+  `<div class="k6-sec">Pip's wardrobe</div>` — a literal ASCII 0x27 with zero
+  non-ASCII characters in that text node — while the title is `Pip &middot;
+  Fledgling` (U+00B7) and the caption is `Nothing here is a chore &mdash; it is
+  all just for fun.` (U+2014). The app now renders exactly those three: ASCII
+  apostrophe, U+00B7, U+2014. 2b's reversal of `1_plan.md` §1e is correct
+  under the orchestrator COPY rule ("compare copy character-by-character with
+  the HTML source"); plan and code now agree.
+- **ORCHESTRATOR_NOTES (11:30), all four items accounted for:**
+  item 1 **fixed** (BUG-6, dashed border now paints); item 2 **blocked on a
+  shared asset** — see §5; item 3 **DB wins**, no literal price anywhere
+  (`'${item.priceCoins}'` in the tile and its semantics label), filed as
+  `SHARED_REQUEST.md` §6 with both options for the orchestrator; item 4 is
+  informational.
+- **Iteration 1's FIX 1 still in force**: `kid_home_view_test.dart` locates the
+  pushed `/pip` route with `pushedPath(tester) == '/pip'` and no placeholder
+  title anywhere (`grep 'K06 Pip nest'` over the repo returns nothing). The K03
+  suite is green.
 
 ## 4. FIXES
 
-### FIX 1 — two K03 proofs asserted the K06 **placeholder** title (done)
+### FIX 1 — two stale comments in `k06_bugs_test.dart` (done, the only edit)
 
-`flutter test` on the merged tree: `01:32 +3187 ~2 -2: Some tests failed`, both
-in `app/test/features/kid_home/kid_home_view_test.dart` (K03's file, not K06's):
+The two builders worked in parallel in this one worktree, and 2b wrote the
+file header (and the section banner above `main()`) while 2a was still fixing
+the logic races:
 
-- `K03 navigation dock Pip opens /pip` → `Expected: exactly one matching
-  candidate / Found 0 widgets with text "K06 Pip nest"`.
-- `K03 accessibility actions … every dock button exposes a tap action and
-  routes` → same tuple entry.
+```
+- // K06-BUG-1 and K06-BUG-2 are still parked: they are the repository/bloc
+- // lost-update races, which belong to the logic layer (2a) …
++ // Bug proofs. K06-BUG-1 / K06-BUG-2 stay `skip: true` (the logic layer's
++ // races: the repository's read-modify-write and the bloc's stale pre-check);
+```
 
-Cause: both located the pushed route with `find.text('K06 Pip nest')`, the
-foundation stub's `AppBar` title. 2b correctly replaced the stub with the real
-nest (no `AppBar`, per the design), so the only way to keep the suite green was
-to fix the *assertion*, not to put design-wrong copy back on the screen.
+Both statements are now false. Verified before touching them: `grep 'skip:
+true'` in the file matches **no** test declaration, all six proofs are named
+`K06-BUG-1…6`, and
+`flutter test test/features/pip/k06_bugs_test.dart --run-skipped` →
+`00:01 +6: All tests passed!`. The next stage reading that header could
+otherwise have "re-parked" two fixed majors.
 
-Fix (16 lines, test-only, outside RULES §1 deliberately, precedent
-`P09/SHARED_REQUEST.md` §3, shared rule `_shared/HEADER.md` line 6 +
-`router_push_test_fix_REPORT.md` §5 "never a placeholder view title"):
+Fix: both comments rewritten to state that all six proofs are fixed and run
+live, and to record which half took which (2a: BUG-1/2; 2b: BUG-3…6). No
+assertion, no `skip:`, no product code touched — comments only.
 
-1. `dock Pip opens /pip`: `expect(find.text('K06 Pip nest'), findsOneWidget)` →
-   `expect(pushedPath(tester), '/pip')` — the exact style the sibling `lock
-   opens the parental gate` proof in the same file already uses (line 1995),
-   where the shared batch made the same swap for P17.
-2. `every dock button exposes a tap action and routes`: the tuple's third field
-   becomes `String?`; `('Pip', '/pip', null)` asserts the route only, and
-   `find.text(screen)` runs only for the two destinations that are *still*
-   placeholders (`K08 Reward shop`, `K09 My jar`).
-
-No K03 assertion was weakened and no K03 behaviour touched: the `hasTap`
-check, the `performTap` semantics activation and `expect(pushedPath(tester),
-path)` for all three dock buttons are unchanged, and the two `/pip` proofs are
-strictly *stronger* afterwards — a stub rendering the old title can no longer
-satisfy them. Filed in full as `SHARED_REQUEST.md` §4, including the warning
-that the K03 loop may be touching the same lines.
+2b's own note carries the same stale sentence ("Still `skip: true` in
+`k06_bugs_test.dart`"). I did **not** rewrite a builder's note — it is the
+historical record of what that stage observed — and §5 below records the
+resolution instead.
 
 ### FIXES — nothing else
 
-No other integration breakage existed. No import, rename, DI, route or
-`analysis_options` change was needed; `pip_di.dart` / `pip_routes.dart` needed
-nothing because `PipBloc(repository:)` kept its signature and both routes
-already dispatch `PipLoadRequested`.
+No other integration breakage existed: no import, rename, DI, route or
+`analysis_options` change was needed, and `pip_di.dart` / `pip_routes.dart`
+still need nothing because `PipBloc(repository:)` kept its signature.
 
-## 5. Items left for the next stage (not mine to settle)
+## 5. Left for the next stages (not mine to settle)
 
-1. **2b's copy ruling — still open, orchestrator decision.** `kPipNotWearable =
-   'That one is not something Pip can wear.'` is the only string on the screen
-   not in the design (an owned Wellies/Crown tap). 2b asked for ratification or
-   a replacement; I have **not** touched it — inventing copy in an integrate
-   stage would be worse than leaving the flagged string. Needs the orchestrator
-   (or stage 4/5) to rule.
-2. **2b's five `LEFT FOR NEXT ITERATION` items** are stage-3/5 work, not
-   integration: light + dark `shot.sh` UI check (the nest/Pip art inside the
-   230 × 206 slot is the one place a local widget replaces a shared one), the
-   dark band table, `NestProgress`'s kid highlight spanning the whole track
-   (shared component), real-metrics copy-fit tests, and wide-screen behaviour.
-3. **`SHARED_REQUEST.md` §1–§3** (shared `NestPetStage` slot, `NestKidButton`
-   trailing row, dashed-border widget) stay open with the builders' workarounds
-   in place; nothing in this stage changes them.
+1. **ORCHESTRATOR_NOTES item 2 is still blocked on shared assets** (the one
+   mandatory note item not yet met). `NestIcons.scarf` / `.wellies` / `.sunHat`
+   resolve to look-alike `app/assets/icons/*.svg`; RULES §1 forbids a screen
+   agent from editing shared assets and the note forbids substituting a glyph,
+   so `SHARED_REQUEST.md` §5 carries the design's verbatim path data plus a
+   self-updating proof. Its 3 parked proofs fail for exactly that reason and
+   nothing else (verified with `--run-skipped`: the asset's path data vs the
+   HTML's, e.g. scarf `m7.63.6h8.8v13.2…` vs the design `m53h4v18h5z…`).
+2. **`kPipNotWearable`** ("That one is not something Pip can wear.") is still
+   the only on-screen string not in the design — unchanged since iteration 1,
+   still awaiting ratification or a replacement. Not a regression.
+3. **`NestProgress`'s kid highlight spans the whole track** instead of only the
+   filled span (shared component, out of scope for a screen agent).
+4. **The UI check has not been re-run.** Every fix above is asserted in a
+   widget test, but only stage 5 can confirm the rendered result in light and
+   dark. Two band-level things to watch, both from 2b: the wardrobe band (the
+   dashed border now exists in both themes — band 6's heat should shrink) and
+   the pet band (the nest art is ~12 % smaller and ~10 px lower — band 2's
+   diff should shrink).
+5. **One tension I resolved by measurement, for the record.** ORCHESTRATOR_NOTES
+   item 4 says "Pip … and the nest are correct", while stage 6's BUG-4 called
+   the nest art box wrong and 2b changed it. I re-measured both design PNGs
+   myself with a pixel scan of the ink rows rather than picking a side:
+   **light** widest ink row at logical y 277.7, x 108.3–281.3 → **173.3 px**;
+   **dark** y 277.7, x 113.3–276.3 → **163.3 px** (a narrower span only because
+   dark-mode ink on a dark sky loses contrast at the same threshold). Both sit
+   on `202 units × 206/240 = 173.4`, i.e. the 206 scale, and the widest row's
+   height matches `206 × (240 − 150)/240 = 77.3` px above the slot's bottom
+   edge (356) → y 278.7 predicted vs 277.7 measured. So 2b's BUG-4 fix is
+   right, and note item 4 was judging the slot and Pip's placement (both
+   untouched). Stage 5's band-2 numbers are still the final word.
 
 ## 6. Verification
 
-### Skips
+### Skips — all 5 accounted for, none introduced by me
 
-The 2 remaining skips are **pre-existing and not K06's**:
-`test/features/kid_home/k01_bugs_test.dart:566` and
-`test/features/pocket_money/p12_bugs_test.dart:321` (the latter already
-recorded as pre-existing in `docs/screens/K01/2_build.md`). No K06 test file
-contains a `skip:` — verified by grep — and I skipped, disabled or weakened no
-test.
+| Test | Why |
+|---|---|
+| `pip_orchestrator_notes_test.dart` ×3 (item 2: scarf / wellies / sunhat glyph) | parked on shared `app/assets/icons/*.svg` — RULES §1; `SHARED_REQUEST.md` §5 |
+| `kid_home/k01_bugs_test.dart` — K01-BUG-7 | pre-existing, K01's |
+| `pocket_money/p12_bugs_test.dart` — P12-BUG-04 | pre-existing, P12's |
+
+`grep 'skip: true'` across `test/features/pip` matches exactly the three
+documented glyph proofs and no other line. No K06 test was skipped, disabled or
+weakened at this stage; `k06_bugs_test.dart` went from 6 parked proofs to 0.
 
 ### Standing rules checked
 
-- **PIP** — the nest slot and the growth preview both use the active child's
-  own `PipAvatar` from the DB profile; no `pip_stage_*.svg` on this screen.
-- **DATA OVER MOCKS** — growth 175/250 and wardrobe prices 40/120 come from the
-  profile rows, not the HTML's 30/60.
-- **FONTS / CLOCK / IDS** — no `google_fonts`, no `DateTime.now()`, no new rows
-  written by this screen, so no `newId` needed. (Grep-checked the feature.)
-- **KID BACKGROUND / BOTTOM EDGE** — shared `KidScope` + shared 136 px meadow
-  at `bottom: 0`, no bar on this screen, no local hill painted.
-- **BALANCED HEADINGS / LETTER SPACING / CHIP ROWS** — `NestBalancedText` on the
-  `.kid-title` (maxLines 2), no `letterSpacing` added (the K06 CSS sets none), no
-  `Wrap` chip rows on this screen.
-- **ACCESSIBILITY** — 9 controls, each one `Semantics` node with `onTap` on the
-  node itself; the tests assert `hasAction(SemanticsAction.tap)` and drive the
-  real DB through `performAction`.
-- **SIMULATORS** — none booted, installed on, screenshotted or driven. No
-  `flutter clean`. No `analysis_options` change. No images attached.
+- **PIP** — nest slot + growth preview use the active child's own `PipAvatar`
+  from the DB profile; `grep pip_stage_ lib/features/pip` → 0 hits.
+- **DATA OVER MOCKS** — prices render `item.priceCoins`; no price literal
+  anywhere in the tile or the view.
+- **FONTS / CLOCK / IDS** — `grep google_fonts|GoogleFonts` in
+  `lib/features/pip` + `test/features/pip` → 0; `grep DateTime.now()
+  lib/features/pip` → 0; `grep newId(` → 0 (this screen writes no new rows).
+- **KID BACKGROUND / BOTTOM EDGE / ALIGNMENT / CHIP ROWS / LETTER SPACING /
+  BALANCED HEADINGS / ACCESSIBILITY / TRIAL / PERIODS** — untouched this
+  iteration and still satisfied (2b's `IntrinsicHeight` change is an ALIGNMENT
+  improvement; no control was re-wrapped, so the 9 `SemanticsAction.tap`
+  contracts are unchanged).
+- **SIMULATORS** — none booted, installed on, screenshot or driven. No
+  `flutter clean`, no `analysis_options` change, no `google_fonts` added, no
+  image attached (design PNGs read locally, never attached).
 
 ### Verification tails
 
 ```
 $ dart format .
-Formatted 549 files (0 changed) in 1.57 seconds.
+Formatted 566 files (0 changed) in 1.87 seconds.
 
 $ flutter analyze
 Analyzing app...
-No issues found! (ran in 3.9s)
+No issues found! (ran in 3.8s)
 
 $ flutter test --timeout 120s
-01:26 +3189 ~2: All tests passed!
+02:05 +3543 ~5: All tests passed!
+
+$ flutter test --timeout 120s test/features/pip
+00:06 +160 ~3: All tests passed!
+
+$ flutter test --timeout 120s test/features/pip/k06_bugs_test.dart --run-skipped
+00:01 +6: All tests passed!
 ```
 
-Before FIX 1, for the record:
-
-```
-$ flutter test --timeout 120s --reporter expanded
-01:32 +3187 ~2 -2: Some tests failed.
-
-Failing tests:
-  …/kid_home/kid_home_view_test.dart: K03 accessibility actions (VoiceOver/TalkBack) every dock button exposes a tap action and routes
-  …/kid_home/kid_home_view_test.dart: K03 navigation dock Pip opens /pip
-```
-
-K06-owned suites in the green run: `pip_repository_test` 14 · `pip_bloc_test`
-19 · `pip_nest_view_test` · `pip_nest_widget_test` — **52 total, all passing**
-(`flutter test test/features/pip` → `00:02 +52: All tests passed!`).
+The last run is the regression guard for all six iteration-1 bug findings, not a
+skipped suite: every proof passes. The two non-K06 suites that navigate to
+`/pip` (`test/app/routes_smoke_test.dart`, `test/features/kid_home/`) are
+included in the full run above and are green.
 
 ## 7. Files changed by this stage
 
-- `app/test/features/kid_home/kid_home_view_test.dart` — FIX 1 only (16 lines,
-  test-only, documented as an exception in `SHARED_REQUEST.md` §4).
-- `docs/screens/K06/2_build.md` (this file), `docs/screens/K06/SHARED_REQUEST.md`
-  §4 appended.
+- `app/test/features/pip/k06_bugs_test.dart` — FIX 1, two comment blocks.
+- `docs/screens/K06/2_build.md` (this file, supersedes iteration 1's).
 
-No `app/lib/**` file was touched at this stage: the merged logic + UI compiled
-and passed as the two builders left it.
+No `app/lib/**` file was touched: the merged logic + UI compiled and passed as
+the two builders left it.
 
 VERDICT: PASS

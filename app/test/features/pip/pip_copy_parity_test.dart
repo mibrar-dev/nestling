@@ -11,29 +11,25 @@
 // Rule under test: COPY — "use the design's typographic characters exactly…
 // compare copy character-by-character with the HTML source".
 //
-// KNOWN RED, parked with `skip: true` (stage-6 **K06-BUG-3**, corroborated
-// here — see docs/screens/K06/3_test.md): the wardrobe-heading proof below
-// fails because `pip_nest_view.dart:383` draws U+2019 (`’`) where the design
-// source writes the straight ASCII apostrophe U+0027 — the byte `1_plan.md`
-// §1e told the builders to change. Stage 6 files the same defect as its
-// K06-BUG-3, so this proof is parked rather than left red twice over; it
-// flips green the moment the one-character fix lands, with no edit to this
-// file:
+// FIXED in iteration 2 (K06-BUG-3): the wardrobe heading now draws the
+// design's byte — `pip_nest_view.dart` renders a LITERAL ASCII apostrophe
+// (U+0027), where iteration 1 drew U+2019 (`’`) on the instruction of the byte
+// `1_plan.md` §1e misread as `&rsquo;`. §1e is corrected with the same edit.
+// The proof below is live again (its file was edited only to drop
+// `skip: true`); run it alone with:
 //
 //   flutter test test/features/pip/pip_copy_parity_test.dart \
-//     --run-skipped --plain-name "K06-BUG-3"
-//
-// `pip_nest_view_test.dart:92` pins the curly form too, so that assertion
-// moves with the fix.
+//     --plain-name "K06-BUG-3"
 //
 // Deliberately NOT asserted here (documented, not findings):
 //   * the coin prices. `.k6-item-p` says 30/60, the seed says 40/120 and the
 //     DATA OVER MOCKS rule makes the database correct — the NAMES are still
 //     compared.
 //   * the screen-reader strings. The design's `alt` / `aria-label` are
-//     replaced by richer announcements ("Pip the Fledgling, stage 3 of 4",
-//     "Pip is 70 percent of the way to a Songbird"): a11y copy, not visible
-//     copy, and both keep the design's words.
+//     replaced by richer announcements ("Pip the Fledgling, stage 3 of 4");
+//     the progress label now matches the design's own aria-label
+//     ("Pip is 70% of the way to Songbird", with the percentage from the
+//     database): a11y copy, not visible copy.
 //   * `kPipNotEnoughCoins` / `kPipNotWearable`. The design defines no copy for
 //     an unaffordable buy or an owned-but-unwearable tile; both are flagged
 //     for the orchestrator in `2_build.md` §5.
@@ -241,10 +237,10 @@ void main() {
     final matches = find.text(heading).evaluate().length;
     await disposeApp(tester);
 
-    // Fails today (0 matches): the view draws U+2019 at
-    // pip_nest_view.dart:383 where the design writes U+0027.
+    // Fails until the view draws U+0027 at the `.k6-sec` heading
+    // (K06-BUG-3 — fixed in iteration 2).
     expect(matches, 1, reason: 'the heading must be the design byte');
-  }, skip: true); // K06-BUG-3 — parked, see the header.
+  });
 
   testWidgets('every rendered string has no stray ASCII quote or entity', (
     tester,
