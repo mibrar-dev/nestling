@@ -7,6 +7,7 @@
 // it and emits directly.
 
 import 'package:bloc_test/bloc_test.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:nestling/core/data/app_database.dart';
@@ -389,7 +390,264 @@ void main() {
         'GMT-5',
       );
     });
+
+    test('half-hour zones render a zero-padded minute', () {
+      expect(
+        gmtOffsetLabel('Asia/Kolkata', DateTime.utc(2026, 10, 3, 12)),
+        'GMT+5:30',
+      );
+      // Newfoundland is on ADT (-2:30) in October and NST (-3:30) in winter —
+      // the label follows the zone, not a stored offset.
+      expect(
+        gmtOffsetLabel('America/St_Johns', DateTime.utc(2026, 10, 3, 12)),
+        'GMT-2:30',
+      );
+      expect(
+        gmtOffsetLabel('America/St_Johns', DateTime.utc(2026, 1, 15, 12)),
+        'GMT-3:30',
+      );
+    });
+
+    test('an unknown zone falls back to London instead of throwing', () {
+      expect(
+        gmtOffsetLabel('Bogus/Zone', DateTime.utc(2026, 10, 3, 12)),
+        gmtOffsetLabel('Europe/London', DateTime.utc(2026, 10, 3, 12)),
+      );
+    });
   });
+
+  group('SettingsBloc — every remaining event path', () {
+    test('all three toggles in one event flip together', () async {
+      final bloc = await _loadedBloc();
+
+      bloc.add(
+        const SettingsNotificationsChanged(
+          approvals: false,
+          payout: false,
+          summary: false,
+        ),
+      );
+      final flipped = await bloc.stream.firstWhere(
+        (state) =>
+            state.status == SettingsStatus.loaded &&
+            !state.settings!.notifApprovals &&
+            !state.settings!.notifPayout &&
+            !state.settings!.notifSummary,
+      );
+
+      final row = await GetIt.instance<SettingsRepository>()
+          .watchSettings()
+          .first;
+      expect(row.notifApprovals, isFalse);
+      expect(row.notifPayout, isFalse);
+      expect(row.notifSummary, isFalse);
+      expect(flipped.settings!.subscriptionStatus, isNotNull);
+
+      await bloc.close();
+    });
+
+    test('an event with no fields writes nothing and emits nothing', () async {
+      final bloc = await _loadedBloc();
+      final before = bloc.state;
+
+      bloc.add(const SettingsNotificationsChanged());
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(bloc.state, before, reason: 'an empty event is a no-op');
+      final settings = await GetIt.instance<SettingsRepository>()
+          .watchSettings()
+          .first;
+      expect(settings.notifApprovals, isTrue);
+      expect(settings.notifPayout, isTrue);
+      expect(settings.notifSummary, isTrue);
+
+      await bloc.close();
+    });
+
+    test('the payout and summary switches round-trip on their own', () async {
+      final bloc = await _loadedBloc();
+
+      bloc.add(const SettingsNotificationsChanged(payout: false));
+      await bloc.stream.firstWhere(
+        (state) =>
+            state.status == SettingsStatus.loaded &&
+            !state.settings!.notifPayout,
+      );
+      bloc.add(const SettingsNotificationsChanged(summary: false));
+      await bloc.stream.firstWhere(
+        (state) =>
+            state.status == SettingsStatus.loaded &&
+            !state.settings!.notifSummary,
+      );
+
+      final settings = await GetIt.instance<SettingsRepository>()
+          .watchSettings()
+          .first;
+      expect(settings.notifApprovals, isTrue);
+      expect(settings.notifPayout, isFalse);
+      expect(settings.notifSummary, isFalse);
+
+      await bloc.close();
+    });
+
+    test('re-picking the zone already stored changes nothing', () async {
+      final bloc = await _loadedBloc();
+      final before = bloc.state;
+
+      bloc.add(const SettingsTimeZonePicked('Europe/London'));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(bloc.state, before, reason: 'an identical zone emits nothing new');
+      expect(await _storedZone(), 'Europe/London');
+
+      await bloc.close();
+    });
+
+    test('confirming a move with no readable device zone is a no-op', () async {
+      // The default harness has no device zone, so there is nothing to confirm
+      // and nothing may change (no throw, no write, no banner).
+      final bloc = await _loadedBloc();
+
+      bloc.add(const SettingsMoveConfirmed());
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(bloc.state.pendingZone, isNull);
+      expect(bloc.state.errorMessage, isNull);
+      expect(await _storedZone(), 'Europe/London');
+
+      await bloc.close();
+    });
+
+    test(
+      'dismissing a zone that is not the pending one keeps the prompt',
+      () async {
+        final bloc = await _dubaiBloc();
+
+        bloc.add(const SettingsMoveDismissed('Australia/Sydney'));
+        final after = await bloc.stream.first;
+        expect(
+          after.pendingZone,
+          'Asia/Dubai',
+          reason: 'only the dismissed zone stops being offered',
+        );
+        expect(after.dismissedZones, const <String>{'Australia/Sydney'});
+
+        await bloc.close();
+      },
+    );
+
+    test('a dismissal before the load lands is kept, not lost', () async {
+      await setUpTestScope();
+      final bloc = _bloc(
+        zoneService: FamilyZoneService(
+          GetIt.instance<AppDatabase>(),
+          deviceZoneReader: () async => 'Asia/Dubai',
+        ),
+      );
+
+      // Both events before the load's first emission: the dismissal must
+      // survive the state the load then builds.
+      const <SettingsEvent>[
+        SettingsMoveDismissed('Asia/Dubai'),
+        SettingsLoadRequested(),
+      ].forEach(bloc.add);
+      final loaded = await bloc.stream.firstWhere(
+        (state) => state.status == SettingsStatus.loaded,
+      );
+
+      expect(loaded.dismissedZones, const <String>{'Asia/Dubai'});
+      expect(
+        loaded.pendingZone,
+        isNull,
+        reason: 'the banner never appears for a dismissed zone',
+      );
+
+      await bloc.close();
+    });
+
+    test(
+      'a child added while the screen is open joins the roster last',
+      () async {
+        final bloc = await _loadedBloc();
+
+        final database = GetIt.instance<AppDatabase>();
+        await database
+            .into(database.children)
+            .insert(
+              ChildrenCompanion.insert(
+                id: 'noor',
+                familyId: Seed.familyId,
+                nickname: 'Noor',
+                createdAt: Value(DateTime.utc(2026, 10, 3, 9)),
+              ),
+            );
+
+        final grown = await bloc.stream.firstWhere(
+          (state) => state.familyRoster.length == 3,
+        );
+        // CHILD ORDER: creation order, never alphabetical — 'noor' is last
+        // because it was added last, even though N sorts before M nowhere.
+        expect(grown.familyRoster.map((row) => row.id).toList(), <String>[
+          'maya',
+          'leo',
+          'noor',
+        ]);
+        expect(grown.familyRoster.last.nickname, 'Noor');
+        expect(
+          grown.familyRoster.last.pipStageName,
+          'Egg',
+          reason: 'a new child starts at stage 1',
+        );
+
+        await bloc.close();
+      },
+    );
+
+    test('a member invite that is accepted re-renders as active', () async {
+      final bloc = await _loadedBloc();
+      expect(
+        bloc.state.memberRows.last.inviteStatus,
+        'invited',
+        reason: 'James starts as an unanswered invite',
+      );
+
+      final db = GetIt.instance<AppDatabase>();
+      await (db.update(db.members)..where((m) => m.id.equals('james'))).write(
+        const MembersCompanion(inviteStatus: Value('active')),
+      );
+
+      final accepted = await bloc.stream.firstWhere(
+        (state) =>
+            state.memberRows.isNotEmpty &&
+            state.memberRows.last.inviteStatus == 'active',
+      );
+      expect(accepted.memberRows.map((row) => row.id).toList(), <String>[
+        'sarah',
+        'james',
+      ]);
+
+      await bloc.close();
+    });
+  });
+}
+
+/// A loaded bloc on the default (unreadable device zone) harness.
+Future<SettingsBloc> _loadedBloc() async {
+  await setUpTestScope();
+  final bloc = _bloc()..add(const SettingsLoadRequested());
+  await bloc.stream.firstWhere(
+    (state) => state.status == SettingsStatus.loaded,
+  );
+  return bloc;
+}
+
+/// The stored family zone, read straight from the table.
+Future<String> _storedZone() async {
+  final db = GetIt.instance<AppDatabase>();
+  final row = await (db.select(
+    db.families,
+  )..where((f) => f.id.equals(Seed.familyId))).getSingle();
+  return row.timeZone;
 }
 
 /// Fails the first `watchRoster` subscription, then delegates to the real

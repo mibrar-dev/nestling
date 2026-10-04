@@ -45,3 +45,6 @@ P16 only needs to RENDER it — no schema or repository work.
   to fake the device zone without platform channels.
 - `Seed.movedToDubai(db)` flips a seeded DB to Dubai without touching
   stored instants (mirror of `confirmPendingMove`).
+
+## UPDATE (02:20, orchestrator QA of cmp_light_1, 3.58%)
+The early subtitle ellipsis, the mid-row chevron and the ≈ 2 px taller rows are a SHARED NestListRow bug: trailing is `Flexible`, which halves the text width. shared/list_row_trailing is fixing it. Do not work around it locally. Once main has it (merged before your build), re-check that every row matches the design (rows at y 221/281/341…) and that subtitles are full. Fix the other local findings now.

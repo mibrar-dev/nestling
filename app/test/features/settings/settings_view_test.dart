@@ -25,6 +25,7 @@ import 'package:nestling/features/settings/presentation/bloc/settings_event.dart
 import 'package:nestling/features/settings/presentation/views/settings_view.dart';
 
 import '../../test_scope.dart';
+import 'p16_test_support.dart' show p16PinnedNowUtc;
 
 Future<void> _loadBundledFonts() async {
   final inter = FontLoader('Inter')
@@ -170,8 +171,12 @@ void main() {
         ..add(const SettingsLoadRequested());
       await _pumpView(tester, bloc);
 
+      // Pinned, never the wall clock: tests run at Sat 3 Oct 2026 09:41
+      // Europe/London (= 08:41Z, BST) per `test/flutter_test_config.dart`,
+      // and app code must read the clock through `clock.now()`/`appNowUtc()`
+      // rather than `DateTime.now()` (CLOCK rule).
       final expected =
-          'London (${gmtOffsetLabel('Europe/London', DateTime.now().toUtc())})';
+          'London (${gmtOffsetLabel('Europe/London', p16PinnedNowUtc)})';
       await _scrollTo(tester, find.text(expected));
       expect(find.text('Time zone'), findsWidgets);
       expect(find.text(expected), findsOneWidget);
@@ -269,7 +274,7 @@ void main() {
       expect(find.text('Asia/Dubai · Current location'), findsOneWidget);
       expect(
         find.text(
-          'Europe/London · ${gmtOffsetLabel('Europe/London', DateTime.now().toUtc())}',
+          'Europe/London · ${gmtOffsetLabel('Europe/London', p16PinnedNowUtc)}',
         ),
         findsOneWidget,
       );
