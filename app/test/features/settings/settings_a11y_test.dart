@@ -184,6 +184,47 @@ void main() {
       await disposeApp(tester);
     });
 
+    testWidgets('Manage subscription is ONE labelled node with ONE tap action', (
+      tester,
+    ) async {
+      // Iteration 2: the wrapper is `Semantics(excludeSemantics: true)` now
+      // (review finding 8), which is only legal because it passes `onTap:`
+      // itself — the owner ACCESSIBILITY rule. Assert both halves: the inner
+      // InkWell must NOT leak a second node, and the surviving node must still
+      // be operable and must actually navigate.
+      final handle = tester.ensureSemantics();
+      await pumpSettingsApp(tester);
+      await tester.pump();
+      await scrollSettingsTo(tester, find.text('Manage subscription'));
+
+      final nodes = p16Announcing(tester, 'Manage subscription');
+      expect(
+        nodes,
+        hasLength(1),
+        reason:
+            'one announcement per control — got ${nodes.map((node) => node.getSemanticsData().label).toList()}',
+      );
+      final data = nodes.single.getSemanticsData();
+      expect(data.hasAction(SemanticsAction.tap), isTrue);
+      expect(data.label, 'Manage subscription');
+      expect(
+        p16NodeRect(tester, nodes.single).height,
+        greaterThanOrEqualTo(NestDevice.tapParent),
+      );
+
+      await p16ActivateSemantics(tester, nodes.single);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        pushedPath(tester),
+        '/paywall',
+        reason: 'the excluded wrapper still navigates',
+      );
+
+      handle.dispose();
+      await disposeApp(tester);
+    });
+
     testWidgets('a switch is live on its own track', (tester) async {
       await pumpSettingsApp(tester);
       await scrollSettingsTo(tester, find.text('Approvals waiting'));
@@ -209,6 +250,43 @@ void main() {
       // The widget follows the stream, it does not keep local state.
       expect(tester.widget<NestToggle>(toggle).value, before);
 
+      await disposeApp(tester);
+    });
+
+    testWidgets('every section label is announced as a heading', (
+      tester,
+    ) async {
+      // Iteration 2: the labels render through the screen-local `_P16Sect`
+      // rather than the shared `NestSectionLabel`, and the header flag is the
+      // only thing that lets a screen-reader user skim the page by heading.
+      // Address each label directly — a walk of the semantics tree misses
+      // nodes that have not been through a semantics pass yet.
+      final handle = tester.ensureSemantics();
+      await pumpSettingsApp(tester);
+      await tester.pump();
+
+      for (final label in <String>[
+        'FAMILY',
+        'CHILDREN',
+        'SUBSCRIPTION',
+        'TIME ZONE',
+        'NOTIFICATIONS',
+        'PRIVACY',
+        'ABOUT',
+      ]) {
+        await scrollSettingsTo(tester, find.text(label));
+        expect(
+          tester
+              .getSemantics(find.text(label))
+              .getSemanticsData()
+              .flagsCollection
+              .isHeader,
+          isTrue,
+          reason: '"$label" must announce a header',
+        );
+      }
+
+      handle.dispose();
       await disposeApp(tester);
     });
 

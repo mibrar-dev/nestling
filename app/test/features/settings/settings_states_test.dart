@@ -9,6 +9,7 @@
 
 import 'dart:async';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
@@ -141,6 +142,47 @@ void main() {
         findsOneWidget,
         reason: 'the seeded family has the parent gate on',
       );
+
+      await disposeApp(tester);
+    });
+  });
+
+  group('P16 coin pluralisation is data-driven', () {
+    // Iteration 2 (P16-B05): `_ChildRow` pluralises. The bug proof pins the
+    // singular; this pins the whole rule from the DATABASE, so 0 and 2 cannot
+    // regress silently and the copy stays "N coins" for the seeded balances.
+    for (final coins in <int>[0, 1, 2, 120]) {
+      testWidgets('a child with $coins coin(s) reads the right noun', (
+        tester,
+      ) async {
+        await pumpSettingsApp(
+          tester,
+          prepare: (db) =>
+              (db.update(db.children)..where((c) => c.id.equals('leo'))).write(
+                ChildrenCompanion(coins: Value(coins)),
+              ),
+        );
+
+        await scrollSettingsTo(tester, find.text('Leo · 4–6'));
+        expect(
+          find.text(
+            'Pip: Hatchling · ${coins == 1 ? '1 coin' : '$coins coins'}',
+          ),
+          findsOneWidget,
+          reason: 'the roster reads the stored balance ($coins)',
+        );
+
+        await disposeApp(tester);
+      });
+    }
+
+    testWidgets('the seeded balances keep the design copy', (tester) async {
+      await pumpSettingsApp(tester);
+
+      // DATA OVER MOCKS: the demo seed is 120 / 45 (RULES §4).
+      expect(find.text('Pip: Fledgling · 120 coins'), findsOneWidget);
+      await scrollSettingsTo(tester, find.text('Leo · 4–6'));
+      expect(find.text('Pip: Hatchling · 45 coins'), findsOneWidget);
 
       await disposeApp(tester);
     });

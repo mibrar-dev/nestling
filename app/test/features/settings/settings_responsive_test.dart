@@ -40,15 +40,48 @@ Future<void> expectOneGutter(
       reason: 'title left at $where',
     );
   }
-  final labels = find.byType(NestSectionLabel);
-  for (var i = 0; i < labels.evaluate().length; i++) {
+  // Iteration 2: the section labels render through the screen-local
+  // `_P16Sect` (the shared `NestSectionLabel` pins an 18 px line box and
+  // drifted every card by ~2 px), so a `find.byType(NestSectionLabel)` loop
+  // now iterates over NOTHING and asserts nothing. Address the labels by
+  // their rendered copy instead, and require at least one to be on screen —
+  // a finder that matches nothing must never read as "aligned".
+  var seenLabels = 0;
+  for (final label in kP16SectionLabels) {
+    final finder = find.text(label);
+    if (finder.evaluate().isEmpty) continue;
+    seenLabels++;
     expect(
-      tester.getRect(labels.at(i)).left,
+      tester.getRect(finder).left,
       NestSpacing.padSide,
-      reason: 'section label $i left at $where',
+      reason: 'section label "$label" left at $where',
+    );
+  }
+  if (title.evaluate().isNotEmpty) {
+    expect(
+      seenLabels,
+      greaterThan(0),
+      reason: 'a section label is on screen at $where',
     );
   }
 }
+
+/// Stable key for a (theme, text scale) pair — `double.toString()` on the
+/// literal `1` would otherwise disagree with the loop's `1.0`.
+String _scaleKey(ThemeMode theme, double scale) =>
+    '${theme.name}@${scale.toStringAsFixed(1)}';
+
+/// The design's section labels, upper-cased exactly as the screen renders them
+/// (`.sect { text-transform: uppercase }`).
+const List<String> kP16SectionLabels = <String>[
+  'FAMILY',
+  'CHILDREN',
+  'SUBSCRIPTION',
+  'TIME ZONE',
+  'NOTIFICATIONS',
+  'PRIVACY',
+  'ABOUT',
+];
 
 void main() {
   setUpAll(loadP16Fonts);
@@ -147,6 +180,108 @@ void main() {
     }
   }
 
+  testWidgets('the section labels carry the design typography and scale with '
+      'the text scaler', (tester) async {
+    // Iteration 2: the labels render through the screen-local `_P16Sect`
+    // (`.sect`: 13/700 uppercase, `letter-spacing:.06em`, ink-2) instead of
+    // the shared `NestSectionLabel`. The component measures Inter's natural
+    // line box with a one-off `TextPainter`, so what has to hold here is that
+    // the copy is upper-cased, the style is the design's, the label shares the
+    // gutter, and the box grows with the text scaler instead of clipping the
+    // glyphs. The exact pixel height belongs to the UI stage's remeasure.
+    final heights = <String, double>{};
+    for (final theme in <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      for (final scale in <double>[1, 1.3]) {
+        await pumpSettingsApp(tester, textScale: scale, theme: theme);
+        final tokens = p16Tokens(theme);
+
+        // Measured at the top, where the first label is already on screen: the
+        // loop below only ever scrolls DOWN, and `scrollUntilVisible` cannot
+        // walk back up.
+        heights[_scaleKey(theme, scale)] = tester
+            .getRect(find.text('FAMILY'))
+            .height;
+
+        for (final label in kP16SectionLabels) {
+          // The list builds lazily: a label below the fold is not in the tree
+          // yet, so scroll it on before addressing it.
+          await scrollSettingsTo(tester, find.text(label));
+          final finder = find.text(label);
+          expect(
+            finder,
+            findsOneWidget,
+            reason: '"$label" at $theme / scale $scale',
+          );
+          final text = tester.widget<Text>(finder);
+          final style = text.style!;
+          expect(style.fontSize, 13, reason: '"$label" font size');
+          expect(style.fontWeight, FontWeight.w700, reason: '"$label" weight');
+          expect(
+            style.letterSpacing,
+            closeTo(13 * 0.06, 0.001),
+            reason: '"$label" letter-spacing is .06em of 13 px',
+          );
+          expect(style.color, tokens.ink2, reason: '"$label" colour ($theme)');
+          expect(text.maxLines, 1, reason: '"$label" stays on one line');
+          expect(text.overflow, TextOverflow.ellipsis, reason: '"$label"');
+          expect(
+            tester.getRect(finder).left,
+            NestSpacing.padSide,
+            reason: '"$label" shares the 20 px gutter',
+          );
+        }
+
+        await disposeApp(tester);
+      }
+    }
+
+    for (final theme in <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      expect(
+        heights[_scaleKey(theme, 1.3)],
+        closeTo(heights[_scaleKey(theme, 1)]! * 1.3, 0.6),
+        reason:
+            '$theme: the label box must grow with the text scaler (a probe '
+            'measured without the scaler would clip the glyphs)',
+      );
+    }
+  });
+
+  testWidgets('the subscription subcard is a 16 px surface card, not a page '
+      'tint', (tester) async {
+    // `.subcard { background: var(--surface); border-radius: var(--r-m);
+    // box-shadow: var(--sh-1); padding: 14px 16px }` (P16-B06 moved this off
+    // `NestCard.standard`, whose radius is 24).
+    for (final theme in <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      await pumpSettingsApp(tester, theme: theme);
+      final tokens = p16Tokens(theme);
+      final card = find.byKey(const ValueKey('p16_subcard'));
+      expect(card, findsOneWidget, reason: 'one subcard at $theme');
+
+      final decoration =
+          tester.widget<Container>(card).decoration! as BoxDecoration;
+      expect(
+        decoration.color,
+        tokens.surface,
+        reason: 'subcard surface ($theme)',
+      );
+      expect(
+        decoration.borderRadius,
+        NestRadii.allM,
+        reason: 'r-m is 16 px, not NestCard.standard 24, at $theme',
+      );
+      expect(decoration.boxShadow, tokens.cardShadow, reason: 'sh-1 at $theme');
+      expect(
+        tester.widget<Container>(card).padding,
+        const EdgeInsets.symmetric(
+          horizontal: NestSpacing.s4,
+          vertical: NestSpacing.gap14,
+        ),
+        reason: '.subcard padding is 14/16 at $theme',
+      );
+      await disposeApp(tester);
+    }
+  });
+
   testWidgets('row copy stays on one line and ellipsizes instead of wrapping', (
     tester,
   ) async {
@@ -202,38 +337,56 @@ void main() {
     await disposeApp(tester);
   });
 
-  testWidgets('the move banner shares the gutter and stays tappable', (
-    tester,
-  ) async {
-    await pumpSettingsApp(tester, deviceZone: 'Asia/Dubai');
+  for (final theme in <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+    testWidgets(
+      'the move banner shares the gutter and stays tappable ($theme)',
+      (tester) async {
+        await pumpSettingsApp(tester, deviceZone: 'Asia/Dubai', theme: theme);
 
-    final banner = tester.getRect(
-      find.byKey(const ValueKey('p16_move_banner')),
-    );
-    expect(banner.left, NestSpacing.padSide, reason: 'banner left');
-    expect(banner.width, p16DesignSize.width - 2 * NestSpacing.padSide);
-    for (final key in const <String>['p16_move_switch', 'p16_move_not_now']) {
-      final rect = tester.getRect(find.byKey(ValueKey(key)));
-      expect(
-        rect.height,
-        greaterThanOrEqualTo(NestDevice.tapParent),
-        reason: '$key is ${rect.size}',
-      );
-      expect(rect.left, greaterThanOrEqualTo(NestSpacing.padSide));
-      expect(rect.right, lessThanOrEqualTo(370));
-    }
-    // Copy is the orchestrator's sentence, on two rows at most.
-    expect(
-      find.text(
-        'Looks like you’re in Dubai now. Switch the family time zone? '
-        'History keeps London times; future days follow Dubai.',
-      ),
-      findsOneWidget,
-    );
+        final banner = tester.getRect(
+          find.byKey(const ValueKey('p16_move_banner')),
+        );
+        expect(banner.left, NestSpacing.padSide, reason: 'banner left');
+        expect(banner.width, p16DesignSize.width - 2 * NestSpacing.padSide);
+        // The banner is a leaf-tint card in both themes, never the page paper.
+        expect(
+          (tester
+                      .widget<Container>(
+                        find.byKey(const ValueKey('p16_move_banner')),
+                      )
+                      .decoration!
+                  as BoxDecoration)
+              .color,
+          p16Tokens(theme).leafTint,
+          reason: 'banner surface at $theme',
+        );
+        for (final key in const <String>[
+          'p16_move_switch',
+          'p16_move_not_now',
+        ]) {
+          final rect = tester.getRect(find.byKey(ValueKey(key)));
+          expect(
+            rect.height,
+            greaterThanOrEqualTo(NestDevice.tapParent),
+            reason: '$key is ${rect.size}',
+          );
+          expect(rect.left, greaterThanOrEqualTo(NestSpacing.padSide));
+          expect(rect.right, lessThanOrEqualTo(370));
+        }
+        // Copy is the orchestrator's sentence, on two rows at most.
+        expect(
+          find.text(
+            'Looks like you’re in Dubai now. Switch the family time zone? '
+            'History keeps London times; future days follow Dubai.',
+          ),
+          findsOneWidget,
+        );
 
-    expect(tester.takeException(), isNull);
-    await disposeApp(tester);
-  });
+        expect(tester.takeException(), isNull);
+        await disposeApp(tester);
+      },
+    );
+  }
 
   testWidgets('the subscription card keeps the design padding at 320 / 1.3', (
     tester,

@@ -11,11 +11,18 @@
 // screen's title, so this file stays valid when another screen replaces its
 // markup. See `_shared/router_push_test_fix_REPORT.md`.
 
+import 'dart:async';
 import 'dart:ui' show Tristate;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get_it/get_it.dart';
+import 'package:go_router/go_router.dart';
 import 'package:nestling/core/design_system/design_system.dart';
+import 'package:nestling/features/settings/presentation/bloc/settings_bloc.dart';
+import 'package:nestling/features/settings/presentation/bloc/settings_event.dart';
+import 'package:nestling/features/settings/presentation/bloc/settings_session_store.dart';
+import 'package:nestling/features/settings/presentation/bloc/settings_state.dart';
 import 'package:nestling/features/settings/presentation/views/settings_view.dart';
 import 'package:nestling/features/settings/settings_routes.dart';
 
@@ -240,24 +247,13 @@ void main() {
       expect(await settingRows(), isNotEmpty);
 
       await disposeApp(tester);
-      // P16-T01 open (blocker for the destructive action). `showNestModal`
-      // pushes its `Dialog` on the ROOT navigator (`useRootNavigator: true`),
-      // but `settings_view.dart:338` calls `Navigator.of(context).pop(false)`
-      // with the VIEW's context, whose nearest navigator is the go_router
-      // shell's. The pop therefore removes /settings from the shell instead of
-      // the dialog: go_router asserts `currentConfiguration.isNotEmpty`
-      // ("You have popped the last page off of the stack") and the modal never
-      // dismisses. Same for the Delete button at settings_view.dart:346.
-      //
-      // The existing `settings_view_test.dart` cannot see this: it pumps
-      // `SettingsView` as a `MaterialApp` home, where the view's nearest
-      // navigator IS the root navigator the dialog uses, so the pop lands on
-      // the right route. Only the real app at /settings exposes it.
-      //
-      // Fix: dismiss through the dialog's own context — wrap the buttons in a
-      // `Builder` and pop that context's navigator, or
-      // `Navigator.of(context, rootNavigator: true).pop(...)`.
-      // Evidence: docs/screens/P16/3_test.md §Bugs.
+      // P16-T01 (iteration 1 blocker) — FIXED in iteration 2: both buttons now
+      // pop the ROOT navigator (`Navigator.of(context, rootNavigator: true)`),
+      // which is where `showNestModal`'s `Dialog` lives, so the pop closes the
+      // modal instead of removing /settings from the go_router shell. This
+      // proof is live again and asserts the fix does not go green by
+      // accident: the family zone, the children and the settings row are all
+      // still there afterwards, and the path is still /settings.
     });
 
     testWidgets(
@@ -287,6 +283,162 @@ void main() {
       },
       skip: false,
     );
+  });
+
+  group('P16 the zone row is driven by the database', () {
+    testWidgets('picking Dubai re-renders the row as "Dubai (GMT+4)"', (
+      tester,
+    ) async {
+      // The row is not a snapshot of the picker's choice: the bloc re-emits
+      // from `watchFamilyTimeZone`, so the subtitle must follow the write (and
+      // the old one must disappear — two subtitles at once would be a stale
+      // row, not a live one).
+      await pumpSettingsApp(tester);
+      // Scroll the row's TITLE on: both halves of the row are then built, and
+      // the title stays hittable for the tap that opens the sheet.
+      await scrollSettingsTo(tester, find.text('Time zone'));
+      expect(find.text('London (GMT+1)'), findsOneWidget);
+      expect(find.text('Dubai (GMT+4)'), findsNothing);
+
+      await tester.tap(find.text('Time zone'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Dubai').first);
+      await tester.pumpAndSettle();
+      await settleSettings(tester);
+
+      expect(await familyZoneId(), 'Asia/Dubai');
+      expect(find.text('Dubai (GMT+4)'), findsOneWidget);
+      expect(
+        find.text('London (GMT+1)'),
+        findsNothing,
+        reason: 'the old summary must not linger',
+      );
+
+      // Raw IANA ids stay inside the picker (ORCHESTRATOR_NOTES copy rule).
+      expect(find.text('Asia/Dubai'), findsNothing);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('an unknown zone id from the sheet leaves the row alone', (
+      tester,
+    ) async {
+      // `setFamilyTimeZone` validates: the service ignores unknown ids, so the
+      // row must not move.
+      await pumpSettingsApp(tester);
+      await scrollSettingsTo(tester, find.text('Time zone'));
+      await tester.tap(find.text('Time zone'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Karachi').first);
+      await tester.pumpAndSettle();
+      await settleSettings(tester);
+
+      expect(await familyZoneId(), 'Asia/Karachi');
+      expect(find.text('Karachi (GMT+5)'), findsOneWidget);
+      expect(find.text('London (GMT+1)'), findsNothing);
+
+      await disposeApp(tester);
+    });
+  });
+
+  group('P16 session scope — the move prompt is once per session', () {
+    testWidgets('"Not now" survives leaving and re-entering /settings', (
+      tester,
+    ) async {
+      // ORCHESTRATOR_NOTES: the prompt shows "exactly once (until confirmed or
+      // dismissed for the session)". Iteration 2 moved the dismissal into the
+      // DI `SettingsSessionStore`; the bloc-level proof lives in
+      // `settings_bloc_test.dart`, this one proves the ROUTE actually gets
+      // that store (the DI wiring) and that a rebuilt page stays quiet.
+      await pumpSettingsApp(tester, deviceZone: 'Asia/Dubai');
+      expect(find.byKey(const ValueKey('p16_move_banner')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('p16_move_not_now')));
+      await settleSettings(tester);
+      expect(find.byKey(const ValueKey('p16_move_banner')), findsNothing);
+      expect(
+        await familyZoneId(),
+        'Europe/London',
+        reason: '"Not now" writes nothing',
+      );
+
+      // The dismissal reached the session store, never the database.
+      expect(
+        GetIt.instance<SettingsSessionStore>().dismissedZones,
+        contains('Asia/Dubai'),
+      );
+
+      // Leave the route and come back: a `go` rebuilds the page, so this is a
+      // brand-new route-built bloc, not the dismissed one.
+      final routerContext = tester.element(find.byType(Navigator).first);
+      GoRouter.of(routerContext).go('/paywall');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(pushedPath(tester), '/paywall');
+
+      GoRouter.of(routerContext).go(SettingsRoutePaths.settings);
+      await settleSettings(tester);
+      expect(pushedPath(tester), SettingsRoutePaths.settings);
+      expect(
+        find.byKey(const ValueKey('p16_move_banner')),
+        findsNothing,
+        reason: 'the prompt must not come back in the same session',
+      );
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('a bloc built the way the route builds it inherits the '
+        'session dismissal', (tester) async {
+      await pumpSettingsApp(tester, deviceZone: 'Asia/Dubai');
+      await tester.tap(find.byKey(const ValueKey('p16_move_not_now')));
+      await settleSettings(tester);
+
+      // Exactly the route's construction path: `GetIt.instance<SettingsBloc>()`
+      // → `settingsRoute`'s `BlocProvider` → `SettingsLoadRequested`.
+      final fresh = GetIt.instance<SettingsBloc>()
+        ..add(const SettingsLoadRequested());
+      await fresh.stream.firstWhere(
+        (state) => state.status == SettingsStatus.loaded,
+      );
+      expect(
+        fresh.state.pendingZone,
+        isNull,
+        reason: 'the DI store is what the route resolves — no store passed in',
+      );
+      expect(
+        fresh.state.deviceZoneId,
+        'Asia/Dubai',
+        reason: 'the raw device zone survives the dismissal (P16-B01)',
+      );
+
+      unawaited(fresh.close());
+      await disposeApp(tester);
+    });
+
+    testWidgets('the picker still leads with the device zone after a '
+        'dismissal', (tester) async {
+      await pumpSettingsApp(tester, deviceZone: 'Asia/Dubai');
+      await tester.tap(find.byKey(const ValueKey('p16_move_not_now')));
+      await settleSettings(tester);
+
+      await scrollSettingsTo(tester, find.text('Time zone'));
+      await tester.tap(find.text('Time zone'));
+      await tester.pumpAndSettle();
+
+      // ORCHESTRATOR_NOTES: "plus the device zone first when it differs".
+      expect(find.text('Asia/Dubai · Current location'), findsOneWidget);
+      expect(find.text('Dubai'), findsOneWidget, reason: 'one row per zone');
+      expect(
+        find.descendant(
+          of: find.byType(NestBottomSheet),
+          matching: find.text('Dubai'),
+        ),
+        findsOneWidget,
+      );
+
+      await disposeApp(tester);
+    });
   });
 
   group('P16 shell', () {

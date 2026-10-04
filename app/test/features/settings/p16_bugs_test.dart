@@ -1,18 +1,27 @@
-// P16 · Family & settings — adversarial bug proofs (Stage 6, iteration 1).
+// P16 · Family & settings — adversarial bug proofs (Stage 6).
 //
-// Open bugs found this iteration are pinned by the `[P16-Bxx]` tests below.
-// They carry `skip: true` (the bug id is in the test name and the comment
-// above it) so `flutter test` stays green;
+// Iteration 1 found B01–B07. All seven were fixed by the iteration-2 build
+// and their proofs now run **unskipped** (regression guards). Iteration 2
+// added:
+//   * [P16-B08] open (minor) — a double tap that lands while a modal is
+//     closing falls through to the settings row underneath (repro: picker
+//     row double-tap navigates to /privacy).
+//   * [P16-B09] open (minor, shared) — IANA *link* ids (e.g.
+//     Europe/Amsterdam) are treated as unknown by the bundled tz dataset,
+//     so those phones get no move prompt and no picker "Current location"
+//     row; fix belongs in core `family_time.dart` (resolved by
+//     SHARED_REQUEST §5).
+// Both carry `skip: true` so `flutter test` stays green;
 // `flutter test test/features/settings/p16_bugs_test.dart --run-skipped`
-// runs them and proves each one fails (evidence in docs/screens/P16/6_bugs.md).
+// proves both fail (evidence in docs/screens/P16/6_bugs.md).
 //
 // The `verified clean` group holds the attacks that were run and held:
 // deep-link guards (kid mode / onboarding / trial-expiry), back navigation,
 // real-app loading with a real event loop, 0 children and 6 children with
 // long names, coin extremes, 320 px + 1.3 text scale, toggle persistence
-// across a restart, rapid double taps, the accessibility tap contract,
-// Europe/London BST offsets and dark-mode contrast. Every guard runs
-// unskipped.
+// across a restart, rapid double taps on rows/sheets, the accessibility tap
+// contract, Europe/London BST offsets and dark-mode contrast. Every guard
+// runs unskipped.
 
 import 'dart:async';
 import 'dart:io';
@@ -38,6 +47,7 @@ import 'package:nestling/features/settings/presentation/bloc/settings_event.dart
 import 'package:nestling/features/settings/presentation/views/settings_view.dart';
 
 import '../../test_scope.dart';
+import 'p16_test_support.dart';
 
 /// Widget tests do not load the bundled families automatically; the layout
 /// proofs (320 × 1.3 overflow, semantics nodes) need the real metrics.
@@ -208,10 +218,9 @@ void main() {
             '(deviceRows=$deviceRows).',
       );
     },
-    // P16-B01 open (major, matches 4_review finding 1) — after “Not now”
-    // the picker drops the device zone row. Fix: keep the device zone in its
-    // own SettingsState.deviceZoneId field populated by the same one-shot
-    // read, and order the picker by that, not by pendingZone.
+    // P16-B01 fixed in iteration 2 (2a deviceZoneId + 2b picker): the
+    // picker orders by state.deviceZoneId, which survives a dismissal. Live
+    // proof.
     skip: false,
   );
 
@@ -280,10 +289,9 @@ void main() {
             'the home-edge padding. Measured: $overflow',
       );
     },
-    // P16-B03 open (minor) — the zone list overflows the bottom sheet on a
-    // short screen at 1.3 text scale (RenderFlex overflowed by 36 px at
-    // 320×568). Fix: make the sheet child scrollable (shrink-wrapped
-    // ListView inside the sheet) so rows stay reachable.
+    // P16-B03 fixed in iteration 2 (2b): the picker column is a
+    // Flexible + SingleChildScrollView, so it scrolls when capped. Live
+    // proof (320×568 @ 1.3, no overflow).
     skip: false,
   );
 
@@ -349,9 +357,8 @@ void main() {
             '“1 coins”. singular=$singular plural=$plural',
       );
     },
-    // P16-B05 open (minor, cosmetic) — 1 coin renders as "1 coins". Fix:
-    // singular handling in _ChildRow (coins == 1 ? "1 coin" : "<n> coins");
-    // data-over-mocks untouched.
+    // P16-B05 fixed in iteration 2 (2b): `_ChildRow` singularises. Live
+    // proof (Leo at 1 coin reads “1 coin”).
     skip: false,
   );
 
@@ -387,10 +394,8 @@ void main() {
             'the screen use 16. Actual: $radius',
       );
     },
-    // P16-B06 open (major, matches 4_review finding 2) — the subscription
-    // card corners are 24 px instead of the design's 16 px. Fix: render the
-    // subcard with NestRadii.allM + cardShadow (or add a radius override to
-    // NestCard); do not change NestCard's shared defaults.
+    // P16-B06 fixed in iteration 2 (2b): the subcard uses
+    // `NestRadii.allM` + cardShadow. Live proof.
     skip: false,
   );
 
@@ -433,15 +438,93 @@ void main() {
             'dialogOpen=$dialogOpen failure=$failure',
       );
     },
-    // P16-B07 open (major) — both modal buttons
-    // (settings_view.dart:338 Cancel, :346 Delete) call
-    // Navigator.of(context).pop(...) with the SettingsView context, so they
-    // pop the settings page instead of the dialog: GoRouter assertion
-    // “You have popped the last page off of the stack”. The Delete path also
-    // loses its toast. Fix: pop with
-    // Navigator.of(context, rootNavigator: true) — or capture the dialog
-    // builder's context — in both buttons.
+    // P16-B07 fixed in iteration 2 (UI half): both modal buttons pop with
+    // `rootNavigator: true`, so Cancel/Delete close the dialog and the
+    // settings page stays. Live proof.
     skip: false,
+  );
+
+  testWidgets(
+    '[P16-B08] a double tap while the picker closes cannot open another screen',
+    (tester) async {
+      // The real app harness (same scroll positions as the staged probes).
+      await pumpSettingsApp(tester);
+      await scrollSettingsTo(tester, find.text('Time zone'));
+      await tester.tap(find.text('Time zone').first);
+      await tester.pumpAndSettle();
+
+      // Tap the current-zone row, then tap the same spot again 60 ms later —
+      // a normal impatient double tap.
+      final row = find.text('London');
+      await tester.tap(row);
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.tap(row, warnIfMissed: false);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      final failure = tester.takeException();
+      final path = pushedPath(tester);
+      await disposeApp(tester);
+
+      expect(
+        path,
+        '/settings',
+        reason:
+            'P16-B08: the closing sheet stops absorbing pointers before its '
+            'exit animation ends, so a second tap at the same coordinates '
+            'lands on the settings row underneath and navigates away '
+            '(repro: the Privacy section is under the picker rows). '
+            'path=$path failure=$failure',
+      );
+    },
+    // P16-B08 open (minor) — a double tap during a modal’s close animation
+    // falls through to the screen beneath: the picker repro lands on
+    // /privacy; the delete-dialog repro re-opens the dialog. Fix
+    // (screen-local): keep a “modal just closed” guard for ~300 ms and
+    // ignore row taps while it is set (or absorb pointers in the shared
+    // modal/sheet helpers during the exit transition).
+    skip: true,
+  );
+
+  testWidgets(
+    '[P16-B09] the picker shows the device zone for a linked IANA id',
+    (tester) async {
+      await setUpTestScope();
+      // A real phone zone: tzdb lists Europe/Amsterdam as a link to
+      // Europe/Brussels, not as a canonical location.
+      final bloc = _blocWithDeviceZone('Europe/Amsterdam')
+        ..add(const SettingsLoadRequested());
+      await _pumpView(tester, bloc);
+      await _scrollTo(tester, find.text('Time zone'));
+      await tester.tap(find.text('Time zone').first);
+      await tester.pumpAndSettle();
+
+      final deviceRow = find
+          .text('Europe/Amsterdam · Current location')
+          .evaluate()
+          .length;
+      unawaited(bloc.close());
+      await disposeApp(tester);
+
+      expect(
+        deviceRow,
+        1,
+        reason:
+            'P16-B09: the bundled `latest_10y` dataset has 341 locations and '
+            'no IANA links, so `isKnownZoneId("Europe/Amsterdam")` is false, '
+            '`FamilyZoneService.deviceZoneId()` returns null and a Dutch '
+            'phone gets no move prompt and no “Current location” row. '
+            'deviceRow=$deviceRow',
+      );
+    },
+    // P16-B09 open (minor, shared) — linked IANA ids (Europe/Amsterdam,
+    // Asia/Calcutta, US/Pacific, Europe/Kiev, Asia/Saigon, …) are rejected
+    // by `isKnownZoneId`/`normalizeZoneId` (core `family_time.dart:37-78`),
+    // so the device zone is unreadable on those phones. Fix belongs in the
+    // shared layer: resolve backward links to their canonical zone (or ship
+    // the dataset’s links); recorded in SHARED_REQUEST §5. Feature-side no
+    // workaround exists — the raw id never reaches the bloc.
+    skip: true,
   );
 
   // -------------------------------------------------------------------------

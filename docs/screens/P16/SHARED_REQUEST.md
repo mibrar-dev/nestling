@@ -56,6 +56,21 @@ Files: `app/lib/core/data/` schema + migration, `Seed`, and P16's
 `SettingsMemberEntry`/`watchMembers` (feature-owned, will follow).
 Blocks: no.
 
+## 5. IANA link ids are rejected by `isKnownZoneId` (P16-B09, minor)
+
+Need: the bundled `package:timezone` `latest_10y` dataset has 341 locations
+and **no IANA backward links**, so a phone that reports a link id
+(`Europe/Amsterdam` → `Europe/Brussels`, `Asia/Calcutta`, `US/Pacific`,
+`Europe/Kiev`, `Asia/Saigon`, …) reads as an unknown zone:
+`FamilyZoneService.deviceZoneId()` returns null, and the family gets no move
+prompt and no picker “Current location” row (measured: with a reader returning
+`Europe/Amsterdam`, the picker lists London→Sydney only). Resolve links to
+their canonical zone inside `isKnownZoneId`/`normalizeZoneId` (a small alias
+map or a links-complete dataset). No feature-side workaround exists — the raw
+id never reaches the bloc.
+Files: `app/lib/core/data/family_time.dart` (and/or the tz data source).
+Blocks: no.
+
 ## Also worth the orchestrator's attention (not requested here)
 
 - Review 3: `app/test/features/today/today_view_test.dart` lines 525-526 are

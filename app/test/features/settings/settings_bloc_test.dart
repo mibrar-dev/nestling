@@ -75,6 +75,45 @@ void main() {
       expect(state.errorMessage, isNull);
     });
 
+    test('the raw device zone is kept while the banner is dismissed', () {
+      // Iteration 2 (P16-B01): `pendingZone` is the banner input and goes null
+      // on dismissal, but `deviceZoneId` is what the picker orders by — it must
+      // survive, or the "Current location" row vanishes with the prompt.
+      const dismissed = SettingsState(
+        deviceZoneId: 'Asia/Dubai',
+        pendingZone: 'Asia/Dubai',
+      );
+      final cleared = dismissed.copyWith(
+        dismissedZones: const <String>{'Asia/Dubai'},
+        clearPendingZone: true,
+      );
+      expect(cleared.pendingZone, isNull);
+      expect(
+        cleared.deviceZoneId,
+        'Asia/Dubai',
+        reason: 'the picker still needs the device zone after "Not now"',
+      );
+      expect(cleared.copyWith().deviceZoneId, 'Asia/Dubai');
+      expect(
+        const SettingsState().deviceZoneId,
+        isNull,
+        reason: 'no device read yet',
+      );
+    });
+
+    test('states differing only in the device zone are not equal', () {
+      expect(
+        const SettingsState(deviceZoneId: 'Asia/Dubai'),
+        isNot(const SettingsState()),
+        reason: 'props carry the device zone, so the picker sees a change',
+      );
+      expect(
+        const SettingsState(dismissedZones: <String>{'Asia/Dubai'}),
+        const SettingsState(dismissedZones: <String>{'Asia/Dubai'}),
+        reason: 'Equatable compares the Set structurally, not by identity',
+      );
+    });
+
     test('copyWith clears the pending zone only on request', () {
       const dismissed = SettingsState(pendingZone: 'Asia/Dubai');
       expect(dismissed.copyWith().pendingZone, 'Asia/Dubai');
