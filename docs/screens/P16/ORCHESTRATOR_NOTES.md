@@ -58,3 +58,10 @@ The early subtitle ellipsis, the mid-row chevron and the ≈ 2 px taller rows ar
 1. Fix P16-B11 (switch alignment regression from iteration 3): the NestToggle track must sit at the design rect, using the shared NestToggle as-is with no offsets. Then fix B09 and B10, and un-skip all four proofs.
 2. DATA OVER MOCKS: the parent's email must come from the DB (the signed-in parent / members table), not the hard-coded "sarah@example.co.uk". The seed holds that value. If the DB lacks a field, write SHARED_REQUEST.md.
 3. The forks `_P16Sect`, the subcard and `SettingsRow` must use the shared NestSectionLabel / NestCard / NestListRow. If they really differ from the design, record the numbers in SHARED_REQUEST.md and keep the shared ones. Do not fork.
+
+## UPDATE (09:22) — iteration 5: shared batch 6 is on main
+Do exactly what docs/screens/_shared/shared_batch6_REPORT.md "Follow-ups for screens (P16 must change — exact)" lists:
+- revert `_P16Sect` / the subcard / `SettingsRow` to NestSectionLabel / NestCard(radius:, padding:) / NestListRow;
+- read the email from `members.email`;
+- un-skip B09.
+The layout must stay where it is now (it already matches the design). Re-verify with the geometry tests.
