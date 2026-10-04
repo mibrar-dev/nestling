@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -39,7 +40,13 @@ class _KidPinViewState extends State<KidPinView> {
     setState(() => _entered.add(digit));
     if (_entered.length == 4) {
       final child = context.read<KidHomeBloc>().state.child;
-      if (child == null) return;
+      if (child == null) {
+        // Revert the 4th digit instead of leaving 4 dots with no pending
+        // outcome: adding is blocked at length 4, so only Delete would
+        // recover without this edit (review finding 2 / FIXES_1 #2).
+        setState(_entered.removeLast);
+        return;
+      }
       setState(() => _awaiting = true);
       context.read<KidHomeBloc>().add(
         KidHomePinSubmitted(childId: child.id, pin: _entered.join()),
@@ -65,13 +72,22 @@ class _KidPinViewState extends State<KidPinView> {
         if (_noPinHandled) return;
         _noPinHandled = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) context.go(KidHomeRoutePaths.home);
+          // K02-BUG-3: re-check the child at navigation time — a same-turn
+          // swap to a PIN'd child must NOT skip the PIN.
+          final current = context.read<KidHomeBloc>().state;
+          final noPin = current.child;
+          if (mounted && noPin != null && !noPin.pinSet) {
+            context.go(KidHomeRoutePaths.home);
+          }
         });
       },
       child: BlocListener<KidHomeBloc, KidHomeState>(
         listenWhen: (previous, current) =>
             previous.pinPassed != current.pinPassed && current.pinPassed,
         listener: (context, state) {
+          // K02-BUG-4: a wrong-code toast must not outlive the successful
+          // retry that navigates away.
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
           context.go(KidHomeRoutePaths.home);
         },
         child: BlocListener<KidHomeBloc, KidHomeState>(
@@ -137,7 +153,9 @@ class _KidPinBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.nest;
     final nickname = child.nickname;
-    final initial = nickname.isEmpty ? '?' : nickname[0].toUpperCase();
+    final initial = nickname.isEmpty
+        ? '?'
+        : String.fromCharCode(nickname.runes.first).toUpperCase();
     return KidScope(
       child: Scaffold(
         backgroundColor: Colors.transparent,
@@ -228,7 +246,11 @@ class _KidPinBody extends StatelessWidget {
                       Text(
                         'Hi $nickname! Enter your secret code',
                         textAlign: TextAlign.center,
-                        maxLines: 2,
+                        // K02-BUG-2: at 320 px + 1.3 text scale a long
+                        // nickname needs 3 lines — a hard cap of 2 silently
+                        // drops the sentence's tail (RenderParagraph clips
+                        // without an overflow error).
+                        maxLines: 3,
                         // TODO(K02): SHARED_REQUEST #1 — shared
                         // `NestType.kidSay` (Nunito 800, 20/26).
                         style: TextStyle(
@@ -254,11 +276,16 @@ class _KidPinBody extends StatelessWidget {
                       else
                         NestPinDots(total: 4, filled: enteredCount),
                       const SizedBox(height: NestSpacing.s5),
-                      // NOTE(K02): ORCHESTRATOR_NOTES (07:13) — NestKeypad
-                      // pitch is being fixed on main (shared/keypad_grid)
-                      // to match the CSS; do NOT re-space keys locally.
-                      // After the merge, re-check key centres vs design.
-                      NestKeypad(onKey: onKey, onDelete: onDelete, kid: true),
+                      // ORCHESTRATOR_NOTES 07:13 follow-up: the shared
+                      // keypad-grid fix now governs pitch; K02 applies the
+                      // documented shrink-wrap fit (the K02 body is the
+                      // centred `.k2-body` flex column). No local spacing.
+                      NestKeypad(
+                        onKey: onKey,
+                        onDelete: onDelete,
+                        kid: true,
+                        fit: NestKeypadFit.shrinkWrap,
+                      ),
                       const SizedBox(height: NestSpacing.s5),
                       Text(
                         'Forgot it? Just ask a grown-up.',
@@ -276,6 +303,24 @@ class _KidPinBody extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// In-device-safe bottom reserve for the loading/failure fallbacks:
+/// the loaded body's inset, with the 34 px design floor for devices that
+/// report no bottom inset. `NestHomeIndicator` only reserves when the
+/// mock-glyph flag is off, so it doesn't honour the real inset.
+class _BottomInset extends StatelessWidget {
+  const new();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: math.max(
+        MediaQuery.viewPaddingOf(context).bottom,
+        NestDevice.homeH,
       ),
     );
   }
@@ -339,7 +384,7 @@ class _KidLoading extends StatelessWidget {
                 ),
               ),
             ),
-            const NestHomeIndicator(),
+            const _BottomInset(),
           ],
         ),
       ),
@@ -407,7 +452,7 @@ class _KidFailure extends StatelessWidget {
                 ),
               ),
             ),
-            const NestHomeIndicator(),
+            const _BottomInset(),
           ],
         ),
       ),
@@ -457,7 +502,7 @@ class _NoActiveChild extends StatelessWidget {
                 ),
               ),
             ),
-            const NestHomeIndicator(),
+            const _BottomInset(),
           ],
         ),
       ),

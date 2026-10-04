@@ -347,7 +347,6 @@ void main() {
       );
       await disposeApp(tester);
     },
-    skip: true,
   );
 
   // -------------------------------------------------------------------------
@@ -373,7 +372,6 @@ void main() {
       );
       await disposeApp(tester);
     },
-    skip: true,
   );
 
   // -------------------------------------------------------------------------
@@ -399,7 +397,6 @@ void main() {
       expect(find.text('Hi Maya! Enter your secret code'), findsOneWidget);
       await disposeApp(tester);
     },
-    skip: true,
   );
 
   // -------------------------------------------------------------------------
@@ -424,7 +421,6 @@ void main() {
       );
       await disposeApp(tester);
     },
-    skip: true,
   );
 
   // -------------------------------------------------------------------------

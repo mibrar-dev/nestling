@@ -1,83 +1,40 @@
-# 2b BUILD UI — K02 Kid PIN (`kid_home`, iteration 1)
+# 2b BUILD UI — K02 Kid PIN (`kid_home`, iteration 2, FIXES)
 
-## Contract used (from `1_plan.md` + `2a_build_logic.md`, no changes)
+Scope is unchanged: `app/lib/features/kid_home/presentation/views/**` +
+`presentation/widgets/**` for K02, and view/widget-named feature tests. The
+logic contract from `2a_build_logic.md` still stands (no new CONTRACT
+CHANGES).
 
-- Event `KidHomePinSubmitted({childId, pin})`; state `pinChecking`,
-  `pinWrongNonce`, `pinPassed` (all preserved through the constructor
-  family, `copyWithLoaded` resets `pinPassed` only).
-- View contract: dispatch on 4th digit from LOCAL entry state; `BlocListener`
-  pushes `KidHomeRoutePaths.home` on `pinPassed` false→true; on
-  `pinWrongNonce` bump clears entry + `showNestToast("That didn't work.
-  Try again.")`; no-`pinSet` child (Leo) auto-advances once without a
-  dispatch; `verifyPin` never called for Leo (repository auto-passes).
+## FIXES_1.md items — status
 
-## UI items implemented (`presentation/views/kid_pin_view.dart`)
+| item | source | status |
+|---|---|---|
+| K02-BUG-1 — emoji-leading nickname throws in avatar initial | 6_bugs/FIXES_1 #1 | **FIXED**: `kid_pin_view.dart` initial is now `String.fromCharCode(nickname.runes.first).toUpperCase()`; the (k02_bugs_test.dart `K02-BUG-1`) proof now runs un-skipped and passes. The cross-feature part of that fix remains a SHARED_REQUEST (item #3) — other features' sites were not touched (outside RULES §1 scope). |
+| K02-BUG-2 — greeting clips a 20-char nickname at 320×1.3 | 6_bugs/FIXES_1 #2 | **FIXED**: the say line's `maxLines` is now 3 (was a silent-dropping 2) with a comment; un-skipped K02-BUG-2 proof passes. |
+| K02-BUG-3 — no-PIN auto-advance could skip a PIN | 6_bugs/FIXES_1 #3 | **FIXED**: the post-frame callback in the `_noPinHandled` listener now re-reads `KidHomeState.child` via `context.read` and only navigates when the CURRENT child is still a no-PIN child; un-skipped K02-BUG-3 proof passes. |
+| K02-BUG-4 — wrong-code toast outlives a successful retry | 6_bugs/FIXES_1 #4 | **FIXED**: the `pinPassed` listener calls `ScaffoldMessenger.of(context).hideCurrentSnackBar()` before `context.go(home)`; un-skipped K02-BUG-4 proof passes. |
+| 4_review finding 2 — empty-child edge left 4 filled dots, no dispatch | review | **FIXED**: `_onKey` now reverts the 4th digit (`_entered.removeLast`) when the bloc's child is momentarily null, keeping entry editable and editable-only via Delete. |
+| 4_review finding 3 — pill/key shapes not pinned in geometry test | review | **PINNED**: the mark pill's `Container` rect (centre x 195 ±2, height 26 ±2, fully-rounded tint) and all 11 key discs as 72×72 circles are asserted by shape in `kid_pin_view_test.dart`. |
+| 4_review finding 4 — `_KidLoading`/`_KidFailure`/`_NoActiveChild` reserved `NestHomeIndicator()` rather than the real inset | review | **FIXED**: all three now use a shared `_BottomInset` widget that reserves `max(viewPaddingOf(context).bottom, NestDevice.homeH)`. |
+| 5_ui keypad drift (deviations 1–3) | 5_ui.md | **UNCHANGED MODE**: shared drift only; main now carries the keypad fix — this class also fixed the pitch. The intentional K02 follow-up is applied: `NestKeypad(fit: NestKeypadFit.shrinkWrap)` at the call site, matching `.k2-body`'s centred shrink-wrap; no local key spacing. Caption offset then falls out of the shared grid. |
 
-- `KidScope` (shared sky gradient + meadow hills to the edge) →
-  `Scaffold(transparent)` → `Column`: `NestStatusBar`, top bar
-  `Row(0,20,0,6)` with back `NestIconButton` (56, transparent bg/border,
-  iconSize 26, semantics `Back`, deep-link-safe `canPop?pop:go(picker)`)
-  and `NestLockButton` `Grown-ups` (busy-guarded 20-line copy of K03's
-  `_GateLockButton`), then `Expanded` → `ListView` (pad 20/0/20/32):
-  - Avatar: `Container(128, circle, lilacTint)` centred `NestAvatar(s96,
-    lilac)`, `initial = nickname[0].toUpperCase()`.
-  - `.k2-hi` column: mark pill `Container(lilacTint, pill, pad 2/12)` +
-    `Text('NESTLING', Nunito 900 16/22, ink, letterSpacing: 1.28)` — TODO
-    cites `SHARED_REQUEST #1` (`NestType.kidMark`) since the shared scale
-    doesn't exist yet; then say `Hi {nickname}! Enter your secret code`
-    (Nunito 800 20/26, ink, center, `margin-top: 2` → `SizedBox(gap2)`,
-    maxLines 2) with TODO citing `SHARED_REQUEST #1` (`NestType.kidSay`).
-  - `NestPinDots(total: 4, filled: entered)` — label-only; while awaiting
-    the dots announce `Checking your code` (wrapper Semantics), otherwise
-    the free `N of 4 entered` label stands.
-  - `NestKeypad(onKey, onDelete, kid: true)` — TODO cites the
-    07:13 ORCHESTRATOR_NOTES shared keypad-pitch fix (no local re-spacing).
-  - Caption `Forgot it? Just ask a grown-up.` (`NestType.kidCaption`).
-  - Trailing `SizedBox(MediaQuery.viewPaddingOf(context).bottom)` so the
-    meadow shows through to the physical edge (BOTTOM EDGE owner rule).
-  - Local state: `_entered` (≤4), `_awaiting` guard so a mid-check emit
-    cannot desync the keypad; 4th digit dispatches `KidHomePinSubmitted`.
-  - `BlocListener`s: `pinPassed` → `context.go(home)`; `pinWrongNonce`
-    bump → clear `_entered`/`_awaiting=false` + toast.
-  - No-`pinSet` child → postFrame `go(home)` once; loading UI meanwhile;
-    no active child → `_NoActiveChild` (`Who's playing?` + `Choose` →
-    picker); failure → K03 `_KidFailure` copy verbatim + `Try again`
-    re-adds `KidHomeLoadRequested`; loading → K03 `_KidLoading` pattern
-    with `Loading your secret code`.
-- No local hills/meadow, no hard-coded colours; tokens (`context.nest`) +
-  `NestSpacing`/`NestDevice` only. Dark mode: same tree, tokens flip.
+## Touched files
 
-## Tests (`app/test/features/kid_home/kid_pin_view_test.dart`, mine)
+- `app/lib/features/kid_home/presentation/views/kid_pin_view.dart`: K02-BUG-1 rune initial, K02-BUG-2 `maxLines: 3`, K02-BUG-3 listener re-check, K02-BUG-4 toast hide, review finding 2 digit revert, `_BottomInset` in the three fallback states, `NestKeypadFit.shrinkWrap` on the keypad. No other behaviour change.
+- `app/test/features/kid_home/k02_bugs_test.dart`: the four parked `skip: true` proofs for K02-BUG-1/2/3/4 are now un-skipped and ALL PASS — no test was deleted or weakened, and the un-skip was explicitly ordered by this brief.
+- `app/test/features/kid_home/kid_pin_view_test.dart`: geometry/shapes group now pins the mark pill rect and the 72×72 key discs (review finding 3); otherwise unchanged from iteration 1's coverage.
+- `app/lib/features/kid_home/presentation/bloc/**`, domain/, data/: untouched by this stage (logic builder's contract still matches; no new event/state fields).
 
-- Layout matrix light/dark × 320/390/430 × scale 1.0/1.3: copy, no `£`,
-  no-overflow, loader-wrapped font metrics.
-- Geometry (390/light, real fonts): avatar disc rect 128 at ~131/109,
-  mark text 16/ls 1.28, four 18px dot circles in the dots row.
-- Semantics: Back/Grown-ups/Digit N/Delete all have `SemanticsAction.tap`;
-  digit `performAction` fills a dot; dots free label carries no tap action.
-- Flows: correct `1234` → `/kid-home`; wrong `9999` → toast + cleared dots
-  + still `/kid-pin`, retry works; 5th digit ignored; delete-on-empty no-op;
-  back-to-back 4th-digit taps → one verify call; Leo (no PIN)
-  auto-advances; `Seed`-less active child → chooser → `/who-is-playing`;
-  hanging stream → loading label; broken stream → failure card → `Try again`
-  recovers. `disposeApp` after every pump; pinned clock inherited.
+## Gates this iteration (app/)
 
-## Notes / left for next iteration
+- `flutter analyze` on `lib/features/kid_home` + the two test files I touched → **No issues found**.
+- `flutter test test/features/kid_home/kid_pin_view_test.dart` → **46/46 pass**.
+- `flutter test test/features/kid_home/k02_bugs_test.dart` → **25/25 pass** (all four formerly-skipped bug proofs included).
+- `dart format` clean on all three files.
+- Integration (whole-app `flutter test` + simulator + UI check) is the integrator's stage — not run here.
 
-- 5 `info`-level analyzer nits live in `kid_home_bloc_test.dart` (the
-  LOGIC builder's file): leading underscored locals + one unneeded type
-  annotation. Phase-out belongs to 2a.
-- The keypad pitch should be re-checked against the design once the
-  shared keypad-grid fix lands on main (ORCHESTRATOR_NOTES 07:13).
-- `NestType.kidSay` / `NestType.kidMark` (SHARED_REQUEST #1) are TODOed
-  at the call sites with local metric-matched styles until shared.
+## LEFT FOR NEXT ITERATION
 
-## Verification this iteration
-
-- `flutter analyze lib/features/kid_home/presentation/views/kid_pin_view.dart`
-  → No issues found.
-- `flutter test test/features/kid_home/kid_pin_view_test.dart` → 22/22 pass.
-- `dart format` clean on both files (2 changed on first pass, now formatted).
-- Full `flutter test` + simulator checkpoints belong to the integrator stage.
+- Nothing in my UI scope. Remaining open items are shared-owned: NestType.kidSay/kidMark (SHARED_REQUEST #1) and the grapheme-safe avatar-initial helper across the other features' seven sites (SHARED_REQUEST #3). The shared keypad-pitch fix is already on main in this tree and was applied at the K02 call site.
 
 VERDICT: PASS

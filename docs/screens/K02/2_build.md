@@ -1,145 +1,136 @@
-# 2 BUILD (INTEGRATE) — K02 Kid PIN (`kid_home`, iteration 1)
+# 2 BUILD (INTEGRATE) — K02 Kid PIN (`kid_home`, iteration 2)
 
-Merge of the two halves built in parallel. This stage changed no design, no
-copy, no geometry — only what the merge of 2a + 2b broke.
+Merge of the two FIXES builders on top of the iteration-1 checkpoint
+(`6d9d559`) with `main` already merged (`c094fd5`, which brought the shared
+keypad grid `b1bfb4e`/`9cac0c6`). This stage changed **no product code and no
+test**: the two halves compiled, analysed and passed as merged, so the only
+work was running the gates and checking the merge for regressions.
 
-## Summary of 2a (logic)
+## Summary of 2a (logic) — FIXES_1 triage, no code change
 
-`app/lib/features/kid_home/presentation/bloc/`:
+`presentation/bloc/**`, `domain/**`, `data/**` untouched this iteration.
 
-- `kid_home_event.dart`: `KidHomePinSubmitted({childId, pin})`.
-- `kid_home_state.dart`: `pinChecking=false`, `pinWrongNonce=0`,
-  `pinPassed=false` threaded through every constructor; `copyWithLoaded`
-  preserves checking/nonce and resets `pinPassed` (one-shot, mirrors
-  `justCompletedQuestId`).
-- `kid_home_bloc.dart`: `_onPinSubmitted` — re-entry guard while
-  `pinChecking`, `await repo.verifyPin`, outcome built from the state at
-  completion time, repository throw reads as the wrong path.
-- Tests: 9 bloc tests (`K02 PIN` group) + DB-backed `K02 PIN verification`
-  repository tests. No DI/route/schema/seed change.
+- 3_test's three new bloc proofs (`kid_home_bloc_test.dart:1540-1605`: event
+  child-id passthrough, wrong attempt preserves the failure card, pre-load
+  submit resolves) all pass against the iteration-1 handler unmodified — the
+  handler already implements exactly those semantics, so **no logic-layer
+  defect existed** and nothing was patched.
+- The four `skip: true` bug proofs all live in `k02_bugs_test.dart` (view
+  layer) and root in `presentation/views/kid_pin_view.dart` or shared `core/`
+  → nothing to un-skip in the logic layer.
+- Review findings 1–4 and 5_ui deviations 1–3 are view/test/shared-owned.
+- `main` merge impact on the layer: none (`presentation/bloc/` unchanged since
+  the iteration-1 checkpoint).
 
-## Summary of 2b (UI)
+## Summary of 2b (UI) — FIXES_1 applied
 
-`app/lib/features/kid_home/presentation/views/kid_pin_view.dart`: `KidScope` →
-transparent `Scaffold` → status bar + top bar (back `NestIconButton`
-`Back`, `NestLockButton` `Grown-ups`) + `ListView` body (128 lilac avatar
-disc, `NESTLING` mark pill ls 1.28, `Hi {nickname}! Enter your secret
-code`, `NestPinDots`, `NestKeypad(kid: true)`, `Forgot it? Just ask a
-grown-up.`, transparent home-indicator reserve so the shared meadow runs
-to the physical edge). Local `_entered`/`_awaiting` entry state, 4th digit
-dispatches, `BlocListener`s for pass (`go(home)`) / wrong (clear + toast),
-no-PIN child auto-advance, `_KidLoading` / `_KidFailure` / `_NoActiveChild`
-per plan §(d). 22 widget tests in `kid_pin_view_test.dart`.
+`app/lib/features/kid_home/presentation/views/kid_pin_view.dart`:
 
-## FIXES
+| fix | change |
+|---|---|
+| K02-BUG-1 (major) | avatar initial is now `String.fromCharCode(nickname.runes.first).toUpperCase()` — no unpaired-surrogate throw |
+| K02-BUG-2 | greeting `maxLines: 2 → 3` so 320 px + 1.3 scale cannot silently drop the tail |
+| K02-BUG-3 | the post-frame auto-advance re-reads `KidHomeState.child` and only `go(home)` while the current child is still `!pinSet` (PIN bypass closed) |
+| K02-BUG-4 | `ScaffoldMessenger.of(context).hideCurrentSnackBar()` before `context.go(home)` — the wrong-code toast can no longer outlive a successful retry |
+| review finding 2 | `_onKey` reverts the 4th digit (`_entered.removeLast`) when the bloc's child is momentarily null, so the keypad can't sit at 4 filled dots with no pending outcome |
+| review finding 4 | new `_BottomInset` (`max(viewPadding.bottom, NestDevice.homeH)`) replaces `const NestHomeIndicator()` in `_KidLoading` / `_KidFailure` / `_NoActiveChild` |
+| 5_ui deviations 1–3 (ORCHESTRATOR_NOTES 07:13 follow-up) | `NestKeypad(..., fit: NestKeypadFit.shrinkWrap)` at the call site — the shared pitch now governs; **no local key spacing** |
 
-### Done
+Tests: the four parked `skip: true` proofs in `k02_bugs_test.dart` are
+un-skipped and pass (the diff is exactly four removed `skip: true,` lines —
+no assertion was deleted or weakened); `kid_pin_view_test.dart` additionally
+pins the mark pill's background rect (centre x 195, h 26, pill radius) and
+all 11 key discs as 72×72 (review finding 3), plus a new design-anchor test
+(`1_plan.md` anchors: grid x 77–313 pitch 82, key rows 393/475/557/639,
+caption 731, say 285, dots 331, back/lock top 47) which now passes **after**
+the shared keypad fix — the drift that failed 5_ui at the pixel level is now
+pinned at the unit level.
 
-1. **Analyzer nits in `kid_home_bloc_test.dart` (2b's handover item).**
-   `flutter analyze` printed 5 `info` issues: `omit_local_variable_types` ×2
-   and `no_leading_underscores_for_local_identifiers` ×3 on the K02
-   matchers. Renamed `_checking`/`_passed`/`_wrong` → `checking`/`passed`/
-   `wrong` and dropped the two redundant `Matcher` annotations
-   (`kid_home_bloc_test.dart:1260,1268,1276` + their 11 use sites). No
-   behaviour change — same predicates, same expectations.
-2. **Two K01 tests broke on the real K02 view (`k01_bugs_test.dart`).**
-   `K01-BUG-3 regression: the same tile navigates again` and
-   `rapid same-tile double tap pushes exactly one route` used
-   `tester.pageBack()`, which resolves only `find.byTooltip('Back')` or
-   `CupertinoNavigationBarBackButton` — i.e. the Material `AppBar` back
-   button of the old placeholder `KidPinView`. K02's real top bar is the
-   design-system `NestIconButton`, whose accessible name is a `Semantics`
-   label, not a `Tooltip` (`nest_icon_button.dart` has no tooltip, and
-   `core/design_system/**` is off-limits per RULES §1). Smallest fix that
-   keeps each proof's intent: tap the real control the way the rest of the
-   file already does (`find.bySemanticsLabel('Grown-ups')` at line 701) —
-   `await tester.tap(find.bySemanticsLabel('Back'))`.
-3. **`rapid same-tile double tap` also needed the harness drain.** Without
-   it the pushed `/kid-pin` route was still on its loading UI (no back
-   control — by design: K02's `_KidLoading` is byte-for-byte K03's pattern,
-   status bar + lock + spinner). Added the sibling test's documented
-   `tester.runAsync` drain of the real Drift `setActiveChild` write, an
-   explicit `expect(pushedPath, '/kid-pin')` (this is now what proves
-   "exactly one route" — the original `pageBack()`+picker assertion could
-   not distinguish no-push from one-push), then the back tap and the
-   unchanged `'/who-is-playing'` landing.
+## FIXES_1 items — done / left
 
-No imports, renames, BLoC states/events or contract mismatches were found
-between the halves: 2b coded against exactly the names 2a shipped, and the
-whole `kid_home` feature suite (K01 + K02 + repo + bloc + shared state
-consumers) passes together.
+| item | owner | status |
+|---|---|---|
+| 3_test: 3 new bloc proofs | 2a | **done** (pass unmodified — no defect) |
+| K02-BUG-1 emoji nickname crash | 2b | **done** (view fix + un-skipped proof) |
+| K02-BUG-2 greeting clip at 320×1.3 | 2b | **done** |
+| K02-BUG-3 no-PIN auto-advance PIN bypass | 2b | **done** |
+| K02-BUG-4 toast outlives a retry | 2b | **done** |
+| review 1 `SHARED_REQUEST.md` missing | 3_test | **done** (file exists with 3 items) |
+| review 2 empty-child edge, 4 stuck dots | 2b | **done** |
+| review 3 pill/key shapes unpinned | 2b | **done** |
+| review 4 `NestHomeIndicator` reserve | 2b | **done** (`_BottomInset`) |
+| 5_ui dev. 1–3 keypad pitch + caption | 2b (shared fix on main) | **done** at the call site; the pixel re-shoot + band table is stage 5's job, not the integrator's |
+| SHARED_REQUEST #1 `NestType.kidSay` / `kidMark` | orchestrator | **left (open, shared)** — still `TODO(K02)` at `kid_pin_view.dart:233,254` with metric-matched local styles |
+| SHARED_REQUEST #3 grapheme-safe initial helper (7 sites, 4 features) | orchestrator | **left (open, shared)** — K02's own site fixed locally; the other features are out of RULES §1 scope |
 
-### Left / for the next iteration
+Nothing was left for this stage.
 
-- **`NestKeypad` fit opt-in (ORCHESTRATOR_NOTES 07:13, mandatory).** The
-  shared `shared/keypad_grid` fix (main `b1bfb4e`, "10px gaps, 8-24-0
-  padding, 1fr columns + shrinkWrap fit for K02") has **not** reached this
-  worktree: `screen/K02` was last merged from main at `e01420a`, before
-  `9cac0c6`/`7d37756`. This tree's `nest_keypad.dart` still has the old
-  24px column / 16px row gaps and no `NestKeypadFit`, so the K02 call site
-  stays `NestKeypad(onKey:, onDelete:, kid: true)` and carries the
-  `NOTE(K02)` TODO. Once the loop merges main, the UI stage must (a) pass
-  `fit: NestKeypadFit.shrinkWrap` at the K02 call site (the shared doc
-  comment names K02 as the shrink-wrap consumer) and (b) re-measure the key
-  centres against the design (77/195/277 px x, rows 393/475/557/639).
-  Not written here on purpose: the enum does not exist in this worktree, so
-  the call would not compile and this stage's gate is analyze-clean.
-  `kid_pin_view_test.dart` pins no keypad y/pitch values, so the merge
-  cannot break it — verified.
-- `SHARED_REQUEST #1` (`NestType.kidSay`, `NestType.kidMark`) still
-  TODOed at the call sites with metric-matched local styles; unchanged by
-  this stage.
+## Integration check (what I verified beyond the gates)
 
-## Rule spot-checks on the merged result
+- **No contract mismatch**: 2b's view changes use only members 2a's contract
+  already exposed (`context.read<KidHomeBloc>().state.child`, `KidHomePinSubmitted`);
+  no import, rename or state/event change crossed the halves.
+- **No skip/ignore added** (`rg "skip: true" test/` → 2 hits, both pre-existing
+  sibling parks: `k01_bugs_test.dart:569` K01-BUG-7 and `p12_bugs_test.dart:321`
+  — matching the `~2` in the run). `analysis_options.yaml` untouched.
+- **Rule spot-checks on the merged diff**: no `GoogleFonts`; no
+  `DateTime.now()`; no `subscription_status` write; no hard-coded colour or
+  raw size (only tokens `NestSpacing`/`NestDevice` and `math.max` on the real
+  inset); no local hills/meadow (all four states in the shared `KidScope`);
+  no `pip_stage_*.svg`; copy unchanged and ASCII-exact vs
+  `design/html-source/screens/K02-pin.html` (`maxLines: 3` changes wrapping,
+  not characters).
+- **Keypad mandate honoured**: the pitch fix is consumed, not re-implemented —
+  no local key spacing anywhere in the view.
+- **Scope**: only `app/lib/features/kid_home/presentation/views/kid_pin_view.dart`,
+  `app/test/features/kid_home/{k02_bugs_test,kid_pin_view_test}.dart` and
+  `docs/screens/K02/**` changed this iteration. No `core/`, no `app/`, no other
+  feature, no `tools/screens/`. **No simulator was booted, installed on,
+  screenshot or driven by this stage.**
+- The scratch probe `test/features/kid_home/zz_measure_test.dart` (left by
+  another stage) disappeared from the tree during this stage; the numbers
+  below are from a final run on the tree without it.
 
-- PIP: K02's failure card shows `PipAvatar(style: mochi, stage: 1)` —
-  correct, because the bloc only enters `failure` when `state.child == null`
-  (`kid_home_bloc.dart:225`), so the child's own Pip is unknowable there;
-  identical to K03's fallback branch. K02 has no `pip_stage_*.svg` usage.
-- Bottom edge: no bar on K02; the trailing `SizedBox(viewPadding.bottom)`
-  paints nothing, so the shared meadow reaches the physical edge.
-- Alignment/gutters: 20 px everywhere, avatar/dots/keypad centred on x 195.
-- Copy: ASCII exactly as the HTML source — `Hi Maya! Enter your secret
-  code`, `NESTLING`, `Forgot it? Just ask a grown-up.`,
-  `That didn't work. Try again.`
-- No `GoogleFonts`, no `DateTime.now()`, no `subscription_status` write,
-  no hard-coded colours/sizes in the merged files.
-- Scope: only `app/lib/features/kid_home/**`, `app/test/features/kid_home/**`
-  and `docs/screens/K02/**` touched.
+## Gates (`app/`)
 
-## Gates
-
-`cd app && dart format .`
+`dart format .`
 
 ```
-Formatted 522 files (0 changed) in 2.15 seconds.
+Formatted 524 files (0 changed) in 1.96 seconds.
 ```
 
-`cd app && flutter analyze`
+`flutter analyze`
 
 ```
 Analyzing app...
-No issues found! (ran in 10.9s)
+No issues found! (ran in 7.7s)
 ```
 
-`cd app && flutter test`
+`flutter test` (whole app)
 
 ```
-01:41 +2916 ~2 -2: .../test/features/onboarding/value_tour_view_test.dart: P02 value tour — owner rule: alignment dark 430dp: 20px gutters on every edge
-01:41 +2917 ~2 -2: ... P02 value tour — owner rule: alignment card content shares one inner left edge
-01:41 +2918 ~2 -2: Some tests failed.
-Failing tests:
-  .../test/features/kid_home/k01_bugs_test.dart: K01-BUG-3 regression: the same tile navigates again
-  .../test/features/kid_home/k01_bugs_test.dart: edge-case probes rapid same-tile double tap pushes exactly one route
+02:05 +2976 ~2: .../value_tour_view_test.dart: P02 value tour — owner rule: alignment dark 430dp: 20px gutters on every edge
+02:05 +2977 ~2: .../value_tour_view_test.dart: P02 value tour — owner rule: alignment card content shares one inner left edge
+02:05 +2978 ~2: All tests passed!
 ```
 
-(after FIXES 1–3)
+2978 pass, 2 skipped (the pre-existing sibling parks above), 0 failures.
+
+`flutter test test/features/kid_home` (feature, K01+K02+K03 shared bloc)
 
 ```
-01:45 +2914 ~2: .../test/pip_avatar_test.dart: PipAvatar falls back to the static SVG under reduced motion
-01:46 +2920 ~2: All tests passed!
+00:15 +423 ~1: All tests passed!
 ```
 
-2920 pass, 2 skipped (pre-existing skips), 0 failures.
+(the `~1` is K01-BUG-7)
+
+`flutter test` on the four K02-owned files (view, bugs, bloc, repository)
+
+```
+00:06 +127: All tests passed!
+```
+
+**Integration fixes required: none.** The merged halves compiled, analysed
+clean and passed together as delivered.
 
 VERDICT: PASS

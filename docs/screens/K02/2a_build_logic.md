@@ -1,70 +1,80 @@
-# 2a BUILD LOGIC — K02 Kid PIN (`kid_home`, iteration 1)
+# 2a BUILD LOGIC — K02 Kid PIN (`kid_home`, iteration 2)
 
 ## CONTRACT CHANGES
 
-None. Event/state names are exactly per `1_plan.md` §(b), which the UI
-builder codes against:
+None. Event/state names remain exactly per `1_plan.md` §(b):
 
 - Event: `KidHomePinSubmitted({required childId, required pin})`
 - State: `pinChecking=false`, `pinWrongNonce=0`, `pinPassed=false`
-- View contract: dispatch on 4th digit; `BlocListener` pushes
-  `KidHomeRoutePaths.home` on `pinPassed` false→true; on a `pinWrongNonce`
-  bump clears entry + `showNestToast("That didn't work. Try again.")`.
-  No-PIN child (`child.pinSet == false`) auto-advances without dispatching.
+- Semantics the UI builder relies on (all pinned by tests, unchanged):
+  handler uses the event's own `childId` (never re-resolves the active
+  child); a wrong attempt on a failed load keeps `status == failure`
+  (retry card survives); a submit before the load lands still resolves
+  (`status` stays `initial`, `pinPassed` flips).
 
-## Files changed (logic layer only — no views/widgets touched)
+## FIXES_1 triage — items in the logic layer
 
-- `app/lib/features/kid_home/presentation/bloc/kid_home_event.dart`
-  - Added `KidHomePinSubmitted({childId, pin})` (Equatable props cover both).
-- `app/lib/features/kid_home/presentation/bloc/kid_home_state.dart`
-  - Added `pinChecking`, `pinWrongNonce`, `pinPassed` (defaults
-    `false`/`0`/`false`); added to `props`.
-  - `copyWith` accepts all three; every other constructor
-    (`copyWithSelection`, `copyWithSelectionHandled`,
-    `withCompletionStarted/Failed/Succeeded`, `copyWithProfiles`,
-    `copyWithProfilesRecovered`) carries them through.
-  - `copyWithLoaded` preserves `pinChecking`/`pinWrongNonce` and resets
-    `pinPassed=false` (one-shot consumption, mirrors
-    `justCompletedQuestId`).
-- `app/lib/features/kid_home/presentation/bloc/kid_home_bloc.dart`
-  - Registered `on<KidHomePinSubmitted>(_onPinSubmitted)`; handler ignores
-    re-entry while `pinChecking`, emits checking, awaits
-    `repo.verifyPin`, builds the outcome from the state at completion time
-    (interleaved stream emission cannot swallow it). Repository throw reads
-    as the wrong path (nonce bump, list kept, no failure card).
-- `app/test/features/kid_home/kid_home_bloc_test.dart`
-  - Fake: `correctPin='1234'`, `failVerify`, `verifyGate` (mid-check
-    re-entry/interleave tests), `verified` call record.
-  - New `K02 PIN` group, 9 tests: correct→checking→passed; wrong→nonce 1
-    + list kept; two wrongs→nonce 1,2; wrong-then-correct passes;
-    throw→wrong path; mid-check re-submit ignored (1 verify call);
-    interleaved emission preserves list AND outcome; next emission consumes
-    `pinPassed` not the nonce; constructor carry-through + equality.
-- `app/test/features/kid_home/kid_home_repository_test.dart`
-  - New `K02 PIN verification` group (DB-backed, Seed.demo): Maya accepts
-    `1234`, rejects `9999`/`''`; Leo (null hash) auto-passes any code.
+Logic layer = `domain/**`, `data/**`, `presentation/bloc/**`, DI/route
+registration, and `test/features/kid_home/` files whose names contain
+`bloc`/`cubit`/`repository`/`data`. Result: **no logic-layer defect**;
+no product-code edit was needed this iteration.
 
-No DI / route / schema / seed change (plan §(b): `verifyPin` and
-`child.pinSet` already exist; route already provides the bloc). No domain
-or data change needed. No shared touch — no `SHARED_REQUEST`.
+- **3_test's 3 bloc tests** (`kid_home_bloc_test.dart:1540-1605`, added by
+  the test stage to my owned file): event-child-id passthrough, wrong
+  attempt preserves the failure card, pre-load submit resolves. All three
+  pass against the iteration-1 handler unmodified — the handler already
+  implements exactly these semantics. No fix required.
+- **Skipped bug tests**: the 4 `skip: true` proofs live in
+  `k02_bugs_test.dart` (a view-layer file, outside my owned set) and all
+  four bugs sit in `presentation/views/kid_pin_view.dart` or shared
+  `core/` (`NestKeypad` pitch, `nest_toast`, grapheme-safe initial
+  helper). There is **no skipped test and no open bug in the logic
+  layer**, so there is nothing to un-skip or fix here. K02-BUG-1..4 are
+  the UI builder's (one-line view fixes per `6_bugs.md`) + the
+  orchestrator's (SHARED_REQUEST #2/#3, both already filed in
+  `docs/screens/K02/SHARED_REQUEST.md` by the test stage).
+- **4_review findings 1–4**: #1 (SHARED_REQUEST.md missing) was resolved
+  by the test stage — the file exists with all three items; nothing in
+  my layer to record. #2 (4th-digit null-child revert), #3 (pill/key
+  shape rects in `kid_pin_view_test.dart`), #4 (`NestHomeIndicator`
+  reserve) are all view/test files owned by the UI builder.
+- **5_ui deviations 1–3** (keypad pitch + downstream caption shift):
+  shared `NestKeypad` fix already on `main` (`b1bfb4e`) and merged into
+  this branch (`c094fd5`); the remaining call-site follow-up
+  (`fit: NestKeypadFit.shrinkWrap` at `kid_pin_view.dart:261`) is a view
+  edit — UI builder's. Per ORCHESTRATOR_NOTES (07:13) and the plan,
+  K02 takes the component as-is; no local logic change.
+- **Main merge (`c094fd5`) impact on my layer**: none — `git log` shows
+  no change to `presentation/bloc/` since the iteration-1 checkpoint;
+  analyze + owned tests re-verified green on the merged tree (below).
 
-## Items done (plan §(b), all)
+## Files changed (this iteration)
 
-1. `KidHomePinSubmitted` event — done.
-2. State fields + `copyWith` threading + `withCompletion*` preservation +
-   `copyWithLoaded` consumption semantics — done.
-3. Handler with re-entry guard, catch→wrong path, completion-time state —
-   done.
-4. Bloc + repository tests for the PIN paths — done (52/52 pass across the
-   two owned files; `flutter analyze lib/features/kid_home` → No issues
-   found; `dart format` clean).
-5. No `google_fonts`, no `DateTime.now()` in touched files; clock N/A (no
-   dates on this screen).
+None in `app/`. The iteration-1 logic implementation
+(`kid_home_event.dart` + `KidHomePinSubmitted`,
+`kid_home_state.dart` + `pinChecking`/`pinWrongNonce`/`pinPassed`
+threaded through every constructor and `props`,
+`kid_home_bloc.dart` + `_onPinSubmitted` with re-entry guard and
+completion-time outcome) stands as-is. Only this stage file is
+written/overwritten.
+
+## Gates (run on the merged tree, `app/`)
+
+| gate | command | result |
+|---|---|---|
+| analyze | `flutter analyze lib/features/kid_home` | No issues found! |
+| test (owned files) | `flutter test test/features/kid_home/kid_home_bloc_test.dart test/features/kid_home/kid_home_repository_test.dart` | +55: All tests passed! (52 iteration-1 + 3 test-stage PIN tests) |
+| format | `dart format --set-exit-if-changed --output=none lib/features/kid_home test/.../kid_home_bloc_test.dart test/.../kid_home_repository_test.dart` | 0 changed |
+| scope | `git status`/`git diff` | no `app/` modification by this stage; no views/widgets touched; no simulator used |
+
+No `google_fonts`, no `DateTime.now()` in the layer; clock N/A.
 
 ## LEFT FOR NEXT ITERATION
 
-- Nothing in the logic layer. UI builder owns the view per plan §§(a,c–e)
-  and `kid_pin_view_test.dart`; integrator owns full `flutter test`,
-  screenshots, and the UI check.
+- Nothing in the logic layer. Open work is UI-builder-owned
+  (K02-BUG-1..4 view fixes, review findings 2–4, keypad `shrinkWrap`
+  call-site + re-measure) and orchestrator-owned (SHARED_REQUEST #1
+  `kidSay`/`kidMark`, #3 grapheme helper). Integrator owns full
+  `flutter test`, screenshots, and the UI check.
 
 VERDICT: PASS

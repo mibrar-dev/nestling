@@ -213,6 +213,33 @@ void main() {
       final mark = tester.widget<Text>(find.text('NESTLING'));
       expect(mark.style?.letterSpacing, 1.28);
       expect(mark.style?.fontSize, 16);
+      // The pill's BACKGROUND rect, not just where the text lands (P05
+      // lesson, review finding 3): tinted, fully-rounded, centred, 26 tall.
+      final pill = find.byWidgetPredicate((w) {
+        final d = w is Container ? w.decoration : null;
+        return d is BoxDecoration &&
+            d.shape != BoxShape.circle &&
+            d.borderRadius != null;
+      });
+      expect(pill, findsOneWidget);
+      final pillRect = tester.getRect(pill);
+      expect(pillRect.center.dx, closeTo(195, 2));
+      expect(pillRect.height, closeTo(26, 2));
+      // Every key disc is the design's 72×72 kid circle (SHAPES, not text).
+      final keyDiscs = find.descendant(
+        of: find.byType(NestKeypad),
+        matching: find.byWidgetPredicate((w) {
+          if (w is! Ink) return false;
+          final d = w.decoration;
+          return d is BoxDecoration && d.shape == BoxShape.circle;
+        }),
+      );
+      expect(keyDiscs, findsNWidgets(11));
+      for (var i = 0; i < 11; i++) {
+        final rect = tester.getRect(keyDiscs.at(i));
+        expect(rect.width, 72);
+        expect(rect.height, 72);
+      }
       // Two key taps → two filled dots among the four 18px circles.
       await _enterPin(tester, '12');
       final dotFinder = find.descendant(
@@ -785,6 +812,58 @@ void main() {
   // Layout invariants that hold across the shared keypad-pitch fix.
   // -------------------------------------------------------------------------
   group('K02 layout invariants', () {
+    testWidgets('the screen lands on the 1_plan.md design anchors (390/1.0)', (
+      tester,
+    ) async {
+      // With the shared keypad-grid fix on main (b1bfb4e, ORCHESTRATOR_NOTES
+      // 07:13) and `fit: NestKeypadFit.shrinkWrap` at the call site, K02 is
+      // pixel-exact against the design HTML again — grid x 77–313, key rows
+      // 393/475/557/639, caption 731. These are the anchors `1_plan.md` lists
+      // (cross-checked against the PNG by pixel scan); a regression in the
+      // shared pitch or in K02's spacing fails here instead of at the UI gate.
+      await _pumpRoute(tester);
+      final keys = _keyFinder();
+      for (var col = 0; col < 3; col++) {
+        expect(
+          tester.getRect(keys.at(col)).left,
+          closeTo(77 + 82 * col, 2),
+          reason: 'column $col',
+        );
+      }
+      for (var row = 0; row < 4; row++) {
+        // Rows 1-3 hold 1-9 (indexes 0-8); row 4 holds `0` then `Delete`.
+        final index = row < 3 ? row * 3 : 9;
+        expect(
+          tester.getRect(keys.at(index)).top,
+          closeTo(393 + 82 * row, 2),
+          reason: 'row ${row + 1}',
+        );
+      }
+      expect(
+        tester.getRect(keys.at(10)).top,
+        closeTo(639, 2),
+        reason: 'Delete',
+      );
+      expect(
+        tester.getRect(find.text('Forgot it? Just ask a grown-up.')).top,
+        closeTo(731, 2),
+      );
+      expect(
+        tester.getRect(find.text('Hi Maya! Enter your secret code')).top,
+        closeTo(285, 2),
+      );
+      expect(tester.getRect(find.byType(NestPinDots)).top, closeTo(331, 2));
+      expect(
+        tester.getRect(find.bySemanticsLabel('Back').first).top,
+        closeTo(47, 2),
+      );
+      expect(
+        tester.getRect(find.bySemanticsLabel('Grown-ups').first).top,
+        closeTo(47, 2),
+      );
+      await disposeApp(tester);
+    });
+
     testWidgets('keys are centred, evenly pitched and inside the gutters', (
       tester,
     ) async {
