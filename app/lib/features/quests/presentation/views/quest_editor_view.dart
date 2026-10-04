@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/family/domain/entities/family_child.dart';
 import 'package:nestling/features/family/domain/family_repository.dart';
@@ -539,7 +540,7 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
       // template's id (`idea-bed`) must never be written (review finding 2).
       id: _isEdit
           ? widget.initialQuest!.id
-          : 'q-${DateTime.now().millisecondsSinceEpoch}',
+          : 'q-${appNowUtc().millisecondsSinceEpoch}',
       title: _title.text.trim(),
       // `Quest.detail` is not a column — the repository recomputes
       // `'{repeat} · {coins} coins'` on every read — so the view carries no

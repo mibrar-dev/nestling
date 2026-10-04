@@ -1,90 +1,74 @@
-# P09 — 2a build, logic chunk (FIXES_3 iteration)
+# P09 — 2a build, logic chunk (FIXES_4 iteration)
 
 ## CONTRACT CHANGES (UI builder: read first)
 
-One behaviour change at the bloc boundary (review finding 4 — carried
-twice, now fixed). Everything else is additive or docs:
+No shape changes. One behaviour fix inside the existing contract, plus two
+flagged items that are yours or the loop's — not mine:
 
-- **NEW: `QuestsBloc.saveFailedMessage`
-  (`'Could not save the quest. Try again.'`).** All three editor handlers
-  now emit `editorError: _editorError(error)`: an `ArgumentError` (today
-  only the coins range guard — a programmer error unreachable from the
-  clamped editor) maps to the parent-safe copy and the technical detail
-  goes to `dart:developer log(name: 'quests')`; every other failure
-  (offline, disk full) still surfaces the repository message, so the
-  states suite's toast pins are untouched. If you assert on failure copy,
-  assert the constant — never a Dart `toString()`.
-- No event/state/route shape changes. `watchCoinValuePencePerCoin`, the
-  1..100 write guard, `QuestsEditorQuery.{questId,legacyQuestId,ideaId}`
-  all stand.
+- **FIXED (P09-TEST-6 / BUG-P09-13): `_checkCoins` throws `ArgumentError`
+  unconditionally.** The `assert` is gone: in debug it fired first and its
+  file-path/line-number text leaked through `editorError` into the toast,
+  defeating the finding-4 mapping. Release behaviour is unchanged. The
+  interface doc (finding 8, fixed last iteration) is updated to match —
+  "throws `ArgumentError` in all builds". Verified end to end with a
+  throwaway replication of the parked proof (real repo + real bloc,
+  9999 coins → `editorError == saveFailedMessage`; file deleted after the
+  run). The bugs stage has already un-skipped the proof (`p09_bugs_test.dart`
+  carries zero `skip: true` now).
+- **CLOCK rule — one violation in the feature, not in this layer:**
+  `quest_editor_view.dart:542` mints new ids with
+  `DateTime.now().millisecondsSinceEpoch`. My layer (`domain/`, `data/`,
+  `bloc/`, routes) has no `DateTime.now()` anywhere. Replacing it (e.g.
+  `clock.now()`) is a view edit — yours if the orchestrator wants the rule
+  applied to id minting too.
+- **KID BACKGROUND rule:** n/a — P09 is a parent screen, no meadow anywhere.
 
-Deliberately NOT changed (documented, not deferred silently):
+Out of layer, documented (do not act on these here):
 
-- **BUG-P09-9/10/12** (toggle compensation, hit-slop clipping, legacy
-  glyphs): view-side only — `quest_editor_view.dart`,
-  `quest_editor_widgets.dart` + geometry assertions. Nothing in
-  `domain/`/`data/`/`bloc/` satisfies any of them.
-- **BUG-P09-11** (9899 taps to repair 9999): the jump-to-boundary /
-  `Use 100` repair is stepper/handler logic in the view. The repo guard
-  stays as the last line of defence.
-- **Review findings 1b/1c/1d, 2, 3** (stale test lookups, icon switch,
-  card padding): view + view-test files — the parallel builder's.
-- **Review finding 7** (stale `DESIGN_SPEC` tile size): `docs/` is
-  off-limits — orchestrator doc pass, as the review itself says.
-- **Review finding 9** (view DI degradation): view-side, marked optional.
-- **`family_time_test` core failure** (FIXES_3 observation): `test/core/`,
-  RULES §1 forbids — needs the core owner.
-- The five BUG-P09-6/7/8 proofs stay skipped in `p09_bugs_test.dart`
-  (not this layer's file); un-skipping is the bugs stage's after the view
-  halves above land.
+- **Stale proof — BUG-P09-5 regressed by the P15 merge, not by P09.**
+  `p09_bugs_test.dart` "q-bed assigned to deleted Leo shows no selected
+  pill" fails (Expected 1, Actual 0) with AND without this iteration's
+  diff (proven via stash). Root cause: the merged `FamilyRepository.
+  removeChild` (P15-BUG-6) now cascade-deletes the removed child's quests,
+  so `q-bed` no longer exists when the editor opens `?id=q-bed` — the
+  "Quest not found" screen has no pills at all. The proof's premise
+  (orphan survives deletion) is void; the view fallback itself is intact
+  for directly-planted orphans. Repair belongs to the proof (plant the
+  orphan id straight into Drift instead of `removeChild`), i.e. the bugs
+  stage's file — not `family/` (shared), not the view, not this layer.
+- **Core `family_time_test` zone failure**: still `test/core/`, still
+  off-limits; `SHARED_REQUEST.md` §7 stands.
 
-## Files changed
+## Files changed (logic layer only)
 
-Logic layer (`domain/`, `data/`, `bloc/`, tests matching
-bloc/cubit/repository/data):
-
-- `app/lib/features/quests/presentation/bloc/quests_bloc.dart` —
-  `saveFailedMessage`, `_editorError` mapper, all three editor handlers
-  use it (load path untouched).
-- `app/lib/features/quests/domain/quests_repository.dart` — finding 8:
-  the create/update doc now promises `AssertionError` in debug /
-  `ArgumentError` in release (the behaviour was already that; only the
-  comment lied).
-- `app/test/features/quests/quest_editor_bloc_test.dart` — the BUG-P09-4
-  path test now pins failure + exactly `saveFailedMessage` + absence of
-  `Invalid argument` (status mapping unchanged).
-
-Requested doc corrections (screen's own docs dir, RULES §1; no code):
-
-- `docs/screens/P09/SHARED_REQUEST.md` — finding 5: §2/§4/§5/§6 retitled
-  `— RESOLVED on main (shared/shared_batch5)` in §1's style (toggle 51×31,
-  quest icons, stepper U+2212, textfield s3/12 all verified on disk;
-  bodies + P09-local follow-ups kept).
-- `docs/screens/P09/FIXES_2.md:77` — finding 6: `NestIcons.basket` →
-  `NestIcons.dishwasher` (`questDishes` once the icon switch lands). The
-  cited `3_test.md:74` contains no basket reference (stale pointer; other
-  mentions are accurate revert/measurement records, untouched).
+- `app/lib/features/quests/data/quests_repository_impl.dart` — assert
+  removed from `_checkCoins` (+ comment rewritten to say why).
+- `app/lib/features/quests/domain/quests_repository.dart` — create/update
+  contract now promises unconditional `ArgumentError`.
+- `app/test/features/quests/quests_repository_test.dart` (my file) — the
+  two range-rejection tests now expect `throwsArgumentError` (debug and
+  release agree by construction now).
+- Nothing else: bloc/events/state/routes/DI untouched; no `google_fonts`;
+  no shared-file edits → no new `SHARED_REQUEST.md`.
 
 ## Verification (logic layer only)
 
 - `flutter analyze lib/features/quests test/features/quests` → No issues
   found.
-- Feature scope in split runs (one full-dir run SIGKILLs this machine):
-  102 + 84 + 118 + 80 pass; `~7` skips = the BUG-P09-6/7/8 proofs + P12-BUG-05.
-  The 3 failures in the view/geometry group are the pre-existing,
-  documented BUG-P09-9 rects (approval 68 vs 72, track +4/−2, due card
-  −4y) failing identically before this iteration — view-side fix, not
-  this layer (no save-failure path is exercised by those tests).
-- `dart format --set-exit-if-changed` on all touched files → clean.
+- Logic + contract-consumer suites: 106/106 (bloc, repository, states,
+  P10 bloc, coin-rules, data-integrity) and 91/91 (view, a11y, copy,
+  robustness, geometry, hit-area) — the BUG-P09-9 rects are green again
+  after 2b's compensation removal.
+- Library + bugs groups: all green except the stale BUG-P09-5 proof
+  above (pre-existing, mechanism fully explained, outside this layer).
+- `dart format --set-exit-if-changed` on touched files → clean.
 - Whole-app `flutter test` and any simulator deliberately NOT run
   (integrator / stage 5 own them); no simulator was booted.
 
 ## LEFT FOR NEXT ITERATION
 
-- Nothing unfinished in the logic layer. UI builder halves: findings
-  1–3 (test lookups, card padding + Transform, four `quest*` icons),
-  BUG-P09-9/10/11/12, BUG-P09-6/7/8 view repairs; then the bugs stage
-  un-skips. Open elsewhere: stage 5 re-shoot after the icon/toggle
-  switch; core `family_time_test` owner.
+- Nothing unfinished in the logic layer. Open elsewhere: the stale
+  BUG-P09-5 proof (bugs stage), core zone test (core owner), stage 5
+  re-shoot, CLOCK-rule call on the view's id mint (orchestrator/UI).
 
 VERDICT: PASS

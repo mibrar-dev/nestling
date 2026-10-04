@@ -413,7 +413,7 @@ void main() {
       for (final coins in <int>[0, 101, 9999]) {
         await expectLater(
           repo.createQuest(draftWithCoins('q-bad-$coins', coins)),
-          throwsA(isA<AssertionError>()),
+          throwsArgumentError,
         );
         expect(
           await repo.getQuest('q-bad-$coins'),
@@ -431,7 +431,7 @@ void main() {
 
       await expectLater(
         repo.updateQuest(draftWithCoins('q-test-hoover', 9999)),
-        throwsA(isA<AssertionError>()),
+        throwsArgumentError,
       );
 
       final back = await repo.getQuest('q-test-hoover');

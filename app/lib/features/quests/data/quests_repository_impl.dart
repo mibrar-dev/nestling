@@ -89,16 +89,15 @@ class QuestsRepositoryImpl implements QuestsRepository {
     return (_db.delete(_db.quests)..where((q) => q.id.equals(id))).go();
   }
 
-  /// Rejects out-of-range coins BEFORE touching Drift (BUG-P09-4). Assert
-  /// for debug, [ArgumentError] for release — same shape as pocket_money's
-  /// `setMode`/`setPayoutDay` validation. The bloc surfaces the message via
-  /// `editorStatus.failure` + `editorError` (toast), so a corrupt stored
-  /// value fails loudly instead of being silently rewritten.
+  /// Rejects out-of-range coins BEFORE touching Drift (BUG-P09-4). Throws
+  /// [ArgumentError] unconditionally — deliberately no `assert` first: an
+  /// assert would fire first in debug (P09-TEST-6) and its text, file path
+  /// and line number would leak into the toast through `editorError`,
+  /// defeating the parent-safe mapping in `QuestsBloc._editorError`. The
+  /// bloc surfaces the message via `editorStatus.failure` + `editorError`
+  /// (toast), so a corrupt stored value fails loudly instead of being
+  /// silently rewritten.
   void _checkCoins(int coins) {
-    assert(
-      coins >= minCoins && coins <= maxCoins,
-      'Quest coins must be 1..100, got $coins',
-    );
     if (coins < minCoins || coins > maxCoins) {
       throw ArgumentError.value(coins, 'coins', 'Quest coins must be 1..100');
     }

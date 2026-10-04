@@ -65,7 +65,8 @@
 //                     switch to questBed / questDishes / questHoover /
 //                     questBins (Book and Paw are unchanged)
 //
-// Iteration-4 proof (BUG-P09-13), `skip: true` until fixed:
+// Iteration-4 proof (BUG-P09-13) is fixed: the assert-first `_checkCoins` is
+// gone and the bloc maps ArgumentError to the parent-safe copy in every mode.
 //
 //   BUG-P09-13 minor  the parent-safe save-failure copy (review finding 4)
 //                     is dead in debug builds: `QuestsRepositoryImpl
@@ -296,18 +297,29 @@ void main() {
     testWidgets('q-bed assigned to deleted Leo shows no selected pill', (
       tester,
     ) async {
-      await setUpTestScope();
-      await GetIt.instance<FamilyRepository>().removeChild('leo');
+      final db = await setUpTestScope();
+      // The orphan is planted straight into Drift: `FamilyRepository
+      // .removeChild` now cascade-deletes the removed child's quests
+      // (P15-BUG-6, merged), which takes `q-bed` with it and turns this proof
+      // into a "Quest not found" screen that has no pills at all. What is
+      // under test is the state the app can be left in — a quest whose
+      // `assigneeChildId` names a child the roster no longer lists — so the
+      // child row goes and the quest row is deliberately kept.
+      await (db.delete(db.children)..where((c) => c.id.equals('leo'))).go();
       await pumpAppRoute(tester, '${QuestsRoutePaths.editor}?id=q-bed');
 
-      // The quest still points at the deleted `leo` row. No pill matches,
-      // so the row shows nothing selected, and Save writes the orphan id
-      // back (there is no fallback to `Anyone`).
-      final selected = tester
-          .widgetList<QuestPersonPill>(find.byType(QuestPersonPill))
-          .where((pill) => pill.selected)
-          .length;
-      expect(selected, 1);
+      // The quest still points at the deleted `leo` row. Exactly one pill is
+      // still selected — the `Anyone` fallback — and Save clears the orphan
+      // id instead of writing it back.
+      final pills = tester.widgetList<QuestPersonPill>(
+        find.byType(QuestPersonPill),
+      );
+      expect(pills.where((pill) => pill.selected).length, 1);
+      expect(
+        pills.singleWhere((pill) => pill.selected).label,
+        'Anyone',
+        reason: 'the orphan id falls back to Anyone',
+      );
       await disposeApp(tester);
     });
   });
@@ -591,7 +603,7 @@ void main() {
   // -- iteration 4 proof ----------------------------------------------------
   group('BUG-P09-13 — the parent-safe save copy is dead in debug', () {
     test(
-      'the real range guard leaks the raw assert text into the toast',
+      'the real range guard shows the product copy, not the assert text',
       () async {
         await setUpTestScope();
         final bloc = QuestsBloc(repository: GetIt.instance<QuestsRepository>());
@@ -615,7 +627,6 @@ void main() {
         await sub.cancel();
         await bloc.close();
       },
-      skip: true,
     );
   });
 
