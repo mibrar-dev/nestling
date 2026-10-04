@@ -76,8 +76,14 @@ class _KidPinViewState extends State<KidPinView> {
           // swap to a PIN'd child must NOT skip the PIN.
           final current = context.read<KidHomeBloc>().state;
           final noPin = current.child;
-          if (mounted && noPin != null && !noPin.pinSet) {
-            context.go(KidHomeRoutePaths.home);
+          if (mounted) {
+            if (noPin != null && !noPin.pinSet) {
+              context.go(KidHomeRoutePaths.home);
+            } else {
+              // Declined (K02-BUG-3): release the latch so a LATER no-PIN
+              // state can advance again (K02-BUG-5).
+              setState(() => _noPinHandled = false);
+            }
           }
         });
       },

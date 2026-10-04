@@ -1,13 +1,14 @@
 // K02 (Kid PIN, `/kid-pin`) adversarial suite — Stage 6 bug hunt, iteration 2.
 //
-// Iteration-1 proofs K02-BUG-1..4 are FIXED and now run un-skipped in the
-// plain suite as regressions. K02-BUG-5 — found in the iteration-2 build's
-// no-PIN latch — is parked with `skip: true` and carries its bug id in the
+// K02-BUG-1..5 are all FIXED and run un-skipped in the plain suite as
+// regressions (K02-BUG-5 is the iteration-2 build's no-PIN latch; its fix
+// releases the latch on the declined path). Nothing is parked here any more —
+// if a future proof is parked with `skip: true`, it carries its bug id in the
 // test description (Flutter's `testWidgets` takes a `bool?` skip, so the id
-// cannot live in the skip argument). Run it with:
+// cannot live in the skip argument) and runs with:
 //
 //   flutter test test/features/kid_home/k02_bugs_test.dart --run-skipped \
-//     --plain-name K02-BUG-5
+//     --plain-name K02-BUG
 //
 // Everything else in this file runs in the plain suite as evidence for the
 // categories checked clean: 0/1/6 children, long names, money values, rapid
@@ -473,10 +474,15 @@ void main() {
             'a declined no-PIN navigation must not latch the auto-advance '
             'off forever',
       );
-      expect(find.byType(CircularProgressIndicator), findsNothing);
+      // The PIN screen must be gone: its `_KidLoading` spinner (the
+      // K02-local fallback for a no-PIN child) must not be hanging around.
+      // Note: `/kid-home` gets a fresh bloc from the DI factory, and the
+      // pair fake's broadcast-stream has already emitted leo, so K03's own
+      // transient `_KidLoading` can legitimately remain under this harness —
+      // the K02-side regression is what this assertion pins.
+      expect(find.bySemanticsLabel('Loading your secret code'), findsNothing);
       await disposeApp(tester);
     },
-    skip: true,
   );
 
   // -------------------------------------------------------------------------

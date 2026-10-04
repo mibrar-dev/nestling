@@ -1,136 +1,139 @@
-# 2 BUILD (INTEGRATE) — K02 Kid PIN (`kid_home`, iteration 2)
+# 2 BUILD (INTEGRATE) — K02 Kid PIN (`kid_home`, iteration 3)
 
-Merge of the two FIXES builders on top of the iteration-1 checkpoint
-(`6d9d559`) with `main` already merged (`c094fd5`, which brought the shared
-keypad grid `b1bfb4e`/`9cac0c6`). This stage changed **no product code and no
-test**: the two halves compiled, analysed and passed as merged, so the only
-work was running the gates and checking the merge for regressions.
+Merge of the two FIXES_2 builders on top of the iteration-2 checkpoint
+(`f8cf213`) with `main` already merged (`a967441`). The halves compiled,
+analysed and passed as merged, so the only work was running the gates,
+re-checking the merge for regressions, and one stale-comment correction.
 
-## Summary of 2a (logic) — FIXES_1 triage, no code change
+## Summary of 2a (logic) — no code change
 
-`presentation/bloc/**`, `domain/**`, `data/**` untouched this iteration.
+`presentation/bloc/**`, `domain/**`, `data/**` untouched; the iteration-1
+contract (`KidHomePinSubmitted`, `pinChecking`/`pinWrongNonce`/`pinPassed`)
+still holds and no new contract was needed.
 
-- 3_test's three new bloc proofs (`kid_home_bloc_test.dart:1540-1605`: event
-  child-id passthrough, wrong attempt preserves the failure card, pre-load
-  submit resolves) all pass against the iteration-1 handler unmodified — the
-  handler already implements exactly those semantics, so **no logic-layer
-  defect existed** and nothing was patched.
-- The four `skip: true` bug proofs all live in `k02_bugs_test.dart` (view
-  layer) and root in `presentation/views/kid_pin_view.dart` or shared `core/`
-  → nothing to un-skip in the logic layer.
-- Review findings 1–4 and 5_ui deviations 1–3 are view/test/shared-owned.
-- `main` merge impact on the layer: none (`presentation/bloc/` unchanged since
-  the iteration-1 checkpoint).
+FIXES_2 triage found **no logic-layer defect**: the `k02_bugs_test.dart` hang
+(ORCHESTRATOR_NOTES 10:32) was already fixed by the test stage in a
+view-layer file; K02-BUG-5's latch is the view-local `_noPinHandled` flag, so
+no bloc/state change can fix it without a view edit; K02-TEST-BUG-A's sibling
+`profile_tile.dart:96` / `kid_home_view.dart:364` sites and the permanent fix
+are SHARED_REQUEST #3 (orchestrator-owned, `core/`); the new view tests and
+the un-skipped K02-BUG-1..4 proofs are all in view-layer files.
 
-## Summary of 2b (UI) — FIXES_1 applied
+## Summary of 2b (UI) — FIXES_2 applied
 
-`app/lib/features/kid_home/presentation/views/kid_pin_view.dart`:
+- **K02-BUG-5 [minor, latent] — the latch was never released.** The
+  iteration-2 K02-BUG-3 fix declined the auto-advance but left
+  `_noPinHandled == true`, so when a no-PIN child returned, K02 stayed on its
+  `_KidLoading` spinner forever (the `!pinSet` branch renders loading, so
+  there were no keys to advance with). One targeted statement on the decline
+  path in `kid_pin_view.dart`: `setState(() => _noPinHandled = false)`. The
+  navigation branch is untouched, so K02-BUG-3's PIN-bypass protection still
+  holds (pinned by its own un-skipped proof).
+- **K02-BUG-5 proof un-skipped** — `k02_bugs_test.dart` no longer carries any
+  `skip: true`; K02-BUG-1..5 all run in the plain suite.
+- **False-positive assertion retargeted** — the closing probe
+  `find.byType(CircularProgressIndicator) == findsNothing` cannot hold in this
+  harness (after `go('/kid-home')` the route supplies a fresh bloc whose
+  broadcast-stream subscription has already consumed the fake's leo/maya
+  emissions, so K03's own transient `_KidLoading` is legitimately mounted).
+  It now pins the K02-side regression directly:
+  `find.bySemanticsLabel('Loading your secret code') == findsNothing`, while
+  the primary proof (`currentPath == '/kid-home'`) stays 20 lines above. The
+  change narrows the assertion to the screen under test instead of dropping
+  it.
+- **Stale file header (this stage, mine)** — `k02_bugs_test.dart:3-10` still
+  said K02-BUG-5 "is parked with `skip: true`" after the merge removed the
+  park. Reworded to state BUG-1..5 all run un-skipped and to keep the
+  `--run-skipped --plain-name K02-BUG` recipe as a conditional note for a
+  future parked proof. Comment only — no assertion touched.
 
-| fix | change |
-|---|---|
-| K02-BUG-1 (major) | avatar initial is now `String.fromCharCode(nickname.runes.first).toUpperCase()` — no unpaired-surrogate throw |
-| K02-BUG-2 | greeting `maxLines: 2 → 3` so 320 px + 1.3 scale cannot silently drop the tail |
-| K02-BUG-3 | the post-frame auto-advance re-reads `KidHomeState.child` and only `go(home)` while the current child is still `!pinSet` (PIN bypass closed) |
-| K02-BUG-4 | `ScaffoldMessenger.of(context).hideCurrentSnackBar()` before `context.go(home)` — the wrong-code toast can no longer outlive a successful retry |
-| review finding 2 | `_onKey` reverts the 4th digit (`_entered.removeLast`) when the bloc's child is momentarily null, so the keypad can't sit at 4 filled dots with no pending outcome |
-| review finding 4 | new `_BottomInset` (`max(viewPadding.bottom, NestDevice.homeH)`) replaces `const NestHomeIndicator()` in `_KidLoading` / `_KidFailure` / `_NoActiveChild` |
-| 5_ui deviations 1–3 (ORCHESTRATOR_NOTES 07:13 follow-up) | `NestKeypad(..., fit: NestKeypadFit.shrinkWrap)` at the call site — the shared pitch now governs; **no local key spacing** |
+Mandatory notes: 10:32 hang — `k02_bugs_test.dart` finishes in **3 s**
+(was 1 h+); 07:13 keypad pitch — still the shared component with
+`fit: NestKeypadFit.shrinkWrap`, no local key spacing.
 
-Tests: the four parked `skip: true` proofs in `k02_bugs_test.dart` are
-un-skipped and pass (the diff is exactly four removed `skip: true,` lines —
-no assertion was deleted or weakened); `kid_pin_view_test.dart` additionally
-pins the mark pill's background rect (centre x 195, h 26, pill radius) and
-all 11 key discs as 72×72 (review finding 3), plus a new design-anchor test
-(`1_plan.md` anchors: grid x 77–313 pitch 82, key rows 393/475/557/639,
-caption 731, say 285, dots 331, back/lock top 47) which now passes **after**
-the shared keypad fix — the drift that failed 5_ui at the pixel level is now
-pinned at the unit level.
-
-## FIXES_1 items — done / left
+## FIXES_2 items — done / left
 
 | item | owner | status |
 |---|---|---|
-| 3_test: 3 new bloc proofs | 2a | **done** (pass unmodified — no defect) |
-| K02-BUG-1 emoji nickname crash | 2b | **done** (view fix + un-skipped proof) |
-| K02-BUG-2 greeting clip at 320×1.3 | 2b | **done** |
-| K02-BUG-3 no-PIN auto-advance PIN bypass | 2b | **done** |
-| K02-BUG-4 toast outlives a retry | 2b | **done** |
-| review 1 `SHARED_REQUEST.md` missing | 3_test | **done** (file exists with 3 items) |
-| review 2 empty-child edge, 4 stuck dots | 2b | **done** |
-| review 3 pill/key shapes unpinned | 2b | **done** |
-| review 4 `NestHomeIndicator` reserve | 2b | **done** (`_BottomInset`) |
-| 5_ui dev. 1–3 keypad pitch + caption | 2b (shared fix on main) | **done** at the call site; the pixel re-shoot + band table is stage 5's job, not the integrator's |
-| SHARED_REQUEST #1 `NestType.kidSay` / `kidMark` | orchestrator | **left (open, shared)** — still `TODO(K02)` at `kid_pin_view.dart:233,254` with metric-matched local styles |
-| SHARED_REQUEST #3 grapheme-safe initial helper (7 sites, 4 features) | orchestrator | **left (open, shared)** — K02's own site fixed locally; the other features are out of RULES §1 scope |
+| `k02_bugs_test.dart` hang (10:32) | 3_test | **done** (multi-cycle pumps complete; file runs in 3 s) |
+| K02-BUG-5 latch never released | 2b | **done** (decline-path `setState`) + proof un-skipped and green |
+| K02-BUG-5 false-positive CPI assertion | 2b | **done** (retargeted to the K02 loading semantics label) |
+| 3_test's new view tests (47 → 54) + un-skipped BUG-1..4 / review #2 #4 / keypad proofs | 3_test | **done** |
+| 3_test's 3 bloc proofs | 2a | **done** (pass unmodified) |
+| K02-TEST-BUG-A sibling sites (`profile_tile.dart:96`, `kid_home_view.dart:364`) | orchestrator (SHARED_REQUEST #3) | **left (shared, `core/`)** — out of RULES §1 for a screen agent |
+| SHARED_REQUEST #1 `NestType.kidSay` / `kidMark` | orchestrator | **left (open, shared)** — still `TODO(K02)` at the call site |
 
-Nothing was left for this stage.
+Nothing was left for this stage. No integration fixes were required: no
+contract mismatch, no import/rename break, no failing test.
 
-## Integration check (what I verified beyond the gates)
+## Integration check (beyond the gates)
 
-- **No contract mismatch**: 2b's view changes use only members 2a's contract
-  already exposed (`context.read<KidHomeBloc>().state.child`, `KidHomePinSubmitted`);
-  no import, rename or state/event change crossed the halves.
-- **No skip/ignore added** (`rg "skip: true" test/` → 2 hits, both pre-existing
-  sibling parks: `k01_bugs_test.dart:569` K01-BUG-7 and `p12_bugs_test.dart:321`
-  — matching the `~2` in the run). `analysis_options.yaml` untouched.
+- **TEST TIMEOUTS rule** — every run above used `--timeout 120s`; no test file
+  approaches it (whole suite 1 m 34 s wall).
+- **No new skips / no weakened assertions** — `rg "skip: true" test/` returns
+  2 executable hits, both pre-existing sibling parks
+  (`k01_bugs_test.dart:569` K01-BUG-7, `p12_bugs_test.dart:321`), matching the
+  `~2` in the run. `k02_bugs_test.dart` now has zero parks. Every K02 test
+  count grew, none shrank (140 across the four K02-owned files vs 127 in
+  iteration 2). `analysis_options.yaml` untouched.
 - **Rule spot-checks on the merged diff**: no `GoogleFonts`; no
-  `DateTime.now()`; no `subscription_status` write; no hard-coded colour or
-  raw size (only tokens `NestSpacing`/`NestDevice` and `math.max` on the real
-  inset); no local hills/meadow (all four states in the shared `KidScope`);
-  no `pip_stage_*.svg`; copy unchanged and ASCII-exact vs
-  `design/html-source/screens/K02-pin.html` (`maxLines: 3` changes wrapping,
-  not characters).
-- **Keypad mandate honoured**: the pitch fix is consumed, not re-implemented —
-  no local key spacing anywhere in the view.
-- **Scope**: only `app/lib/features/kid_home/presentation/views/kid_pin_view.dart`,
-  `app/test/features/kid_home/{k02_bugs_test,kid_pin_view_test}.dart` and
-  `docs/screens/K02/**` changed this iteration. No `core/`, no `app/`, no other
-  feature, no `tools/screens/`. **No simulator was booted, installed on,
-  screenshot or driven by this stage.**
-- The scratch probe `test/features/kid_home/zz_measure_test.dart` (left by
-  another stage) disappeared from the tree during this stage; the numbers
-  below are from a final run on the tree without it.
+  `DateTime.now()`; no `subscription_status` write; no new id creation (IDS
+  rule N/A); the new `setState` is view-local state only — no bloc, no
+  navigation, no token/colour/size change; copy untouched; no local hills or
+  meadow; no `pip_stage_*.svg`.
+- **Scope**: `app/lib/features/kid_home/presentation/views/kid_pin_view.dart`
+  (1 statement + comment), `app/test/features/kid_home/k02_bugs_test.dart`
+  (1 removed `skip: true`, 1 retargeted assertion, header comment),
+  `docs/screens/K02/**`. No `core/`, no `app/`, no other feature, no
+  `tools/screens/`. **No simulator was booted, installed on, screenshot or
+  driven by this stage.**
 
 ## Gates (`app/`)
 
 `dart format .`
 
 ```
-Formatted 524 files (0 changed) in 1.96 seconds.
+Formatted 540 files (0 changed) in 1.62 seconds.
 ```
 
 `flutter analyze`
 
 ```
 Analyzing app...
-No issues found! (ran in 7.7s)
+No issues found! (ran in 3.0s)
 ```
 
-`flutter test` (whole app)
+`flutter test --timeout 120s` (whole app)
 
 ```
-02:05 +2976 ~2: .../value_tour_view_test.dart: P02 value tour — owner rule: alignment dark 430dp: 20px gutters on every edge
-02:05 +2977 ~2: .../value_tour_view_test.dart: P02 value tour — owner rule: alignment card content shares one inner left edge
-02:05 +2978 ~2: All tests passed!
+01:29 +3234 ~2: .../value_tour_view_test.dart: P02 value tour — owner rule: alignment dark 320dp: 20px gutters on every edge
+01:29 +3235 ~2: ... P02 value tour — owner rule: alignment dark 390dp: 20px gutters on every edge
+01:29 +3236 ~2: ... P02 value tour — owner rule: alignment dark 430dp: 20px gutters on every edge
+01:29 +3237 ~2: All tests passed!
 ```
 
-2978 pass, 2 skipped (the pre-existing sibling parks above), 0 failures.
+3237 pass, 2 skipped (the pre-existing sibling parks), 0 failures, 1 m 34 s wall.
 
-`flutter test test/features/kid_home` (feature, K01+K02+K03 shared bloc)
+`flutter test --timeout 120s test/features/kid_home/k02_bugs_test.dart` (the
+10:32 hang item)
 
 ```
-00:15 +423 ~1: All tests passed!
+00:03 +31: All tests passed!
+```
+
+`flutter test --timeout 120s test/features/kid_home`
+
+```
+00:11 +436 ~1: All tests passed!
 ```
 
 (the `~1` is K01-BUG-7)
 
-`flutter test` on the four K02-owned files (view, bugs, bloc, repository)
+`flutter test --timeout 120s` on the four K02-owned files (view, bugs, bloc,
+repository)
 
 ```
-00:06 +127: All tests passed!
+00:05 +140: All tests passed!
 ```
-
-**Integration fixes required: none.** The merged halves compiled, analysed
-clean and passed together as delivered.
 
 VERDICT: PASS

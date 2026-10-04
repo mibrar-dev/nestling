@@ -1,4 +1,4 @@
-# 2a BUILD LOGIC — K02 Kid PIN (`kid_home`, iteration 2)
+# 2a BUILD LOGIC — K02 Kid PIN (`kid_home`, iteration 3)
 
 ## CONTRACT CHANGES
 
@@ -6,47 +6,46 @@ None. Event/state names remain exactly per `1_plan.md` §(b):
 
 - Event: `KidHomePinSubmitted({required childId, required pin})`
 - State: `pinChecking=false`, `pinWrongNonce=0`, `pinPassed=false`
-- Semantics the UI builder relies on (all pinned by tests, unchanged):
-  handler uses the event's own `childId` (never re-resolves the active
-  child); a wrong attempt on a failed load keeps `status == failure`
-  (retry card survives); a submit before the load lands still resolves
-  (`status` stays `initial`, `pinPassed` flips).
+- Semantics the UI builder relies on (unchanged, pinned by tests):
+  handler uses the event's own `childId`; a wrong attempt on a failed
+  load keeps `status == failure`; a pre-load submit still resolves;
+  re-entry while `pinChecking` is dropped; the outcome is built from the
+  state at completion time.
 
-## FIXES_1 triage — items in the logic layer
+## FIXES_2 triage — items in the logic layer
 
 Logic layer = `domain/**`, `data/**`, `presentation/bloc/**`, DI/route
 registration, and `test/features/kid_home/` files whose names contain
 `bloc`/`cubit`/`repository`/`data`. Result: **no logic-layer defect**;
 no product-code edit was needed this iteration.
 
-- **3_test's 3 bloc tests** (`kid_home_bloc_test.dart:1540-1605`, added by
-  the test stage to my owned file): event-child-id passthrough, wrong
-  attempt preserves the failure card, pre-load submit resolves. All three
-  pass against the iteration-1 handler unmodified — the handler already
-  implements exactly these semantics. No fix required.
-- **Skipped bug tests**: the 4 `skip: true` proofs live in
-  `k02_bugs_test.dart` (a view-layer file, outside my owned set) and all
-  four bugs sit in `presentation/views/kid_pin_view.dart` or shared
-  `core/` (`NestKeypad` pitch, `nest_toast`, grapheme-safe initial
-  helper). There is **no skipped test and no open bug in the logic
-  layer**, so there is nothing to un-skip or fix here. K02-BUG-1..4 are
-  the UI builder's (one-line view fixes per `6_bugs.md`) + the
-  orchestrator's (SHARED_REQUEST #2/#3, both already filed in
-  `docs/screens/K02/SHARED_REQUEST.md` by the test stage).
-- **4_review findings 1–4**: #1 (SHARED_REQUEST.md missing) was resolved
-  by the test stage — the file exists with all three items; nothing in
-  my layer to record. #2 (4th-digit null-child revert), #3 (pill/key
-  shape rects in `kid_pin_view_test.dart`), #4 (`NestHomeIndicator`
-  reserve) are all view/test files owned by the UI builder.
-- **5_ui deviations 1–3** (keypad pitch + downstream caption shift):
-  shared `NestKeypad` fix already on `main` (`b1bfb4e`) and merged into
-  this branch (`c094fd5`); the remaining call-site follow-up
-  (`fit: NestKeypadFit.shrinkWrap` at `kid_pin_view.dart:261`) is a view
-  edit — UI builder's. Per ORCHESTRATOR_NOTES (07:13) and the plan,
-  K02 takes the component as-is; no local logic change.
-- **Main merge (`c094fd5`) impact on my layer**: none — `git log` shows
-  no change to `presentation/bloc/` since the iteration-1 checkpoint;
-  analyze + owned tests re-verified green on the merged tree (below).
+- **The `k02_bugs_test.dart` hang** (ORCHESTRATOR_NOTES 10:32, multi-cycle
+  pumps leaking `AppSession`'s Drift watch into the fake-async queue):
+  already fixed by the test stage (complete cycles via fresh
+  `setUpTestScope()`); that file is a view-layer test file outside my
+  owned set. Nothing to do here. My owned files finish in ~4 s.
+- **K02-BUG-5 (new, parked, `skip: true`)** — read the proof
+  (`k02_bugs_test.dart:449-480`) and the mechanism
+  (`kid_pin_view.dart:36,72-73`): the latch is the view-local
+  `_noPinHandled` flag. Leo→Maya in one turn sets it before the BUG-3
+  re-check declines; when Leo returns, the flag is still set and the
+  auto-advance never re-fires. The correct fix is view-local (reset
+  `_noPinHandled` on the declined path) in `presentation/views/**`,
+  which the UI builder owns and I must not touch. No bloc/state change
+  can fix a view-local flag without a view edit anyway, so there is no
+  logic-layer half to take. **Left for the UI builder** (un-skip +
+  proof live in their file).
+- **K02-TEST-BUG-A (avatar-initial crash class on K01/K03)** —
+  `presentation/widgets/profile_tile.dart:96` and
+  `presentation/views/kid_home_view.dart:364` are both UI-builder-owned
+  paths; the permanent fix is SHARED_REQUEST #3 (`core/`,
+  orchestrator-owned, already filed). Not my layer.
+- **New view tests** (`kid_pin_view_test.dart` 47→54) and the un-skipped
+  regression proofs for K02-BUG-1..4 / review #2 / #4 / keypad pitch —
+  all in view-layer files. Nothing in my owned files was added or
+  required.
+- **SHARED_REQUEST #1 / #3** stay open with the orchestrator (`core/`
+  typography + grapheme helper). No logic-layer item to record.
 
 ## Files changed (this iteration)
 
@@ -58,23 +57,24 @@ threaded through every constructor and `props`,
 completion-time outcome) stands as-is. Only this stage file is
 written/overwritten.
 
-## Gates (run on the merged tree, `app/`)
+## Gates (merged tree, `app/`)
 
 | gate | command | result |
 |---|---|---|
 | analyze | `flutter analyze lib/features/kid_home` | No issues found! |
-| test (owned files) | `flutter test test/features/kid_home/kid_home_bloc_test.dart test/features/kid_home/kid_home_repository_test.dart` | +55: All tests passed! (52 iteration-1 + 3 test-stage PIN tests) |
+| test (owned files) | `flutter test --timeout 120s test/features/kid_home/kid_home_bloc_test.dart test/features/kid_home/kid_home_repository_test.dart` | +55: All tests passed! |
 | format | `dart format --set-exit-if-changed --output=none lib/features/kid_home test/.../kid_home_bloc_test.dart test/.../kid_home_repository_test.dart` | 0 changed |
-| scope | `git status`/`git diff` | no `app/` modification by this stage; no views/widgets touched; no simulator used |
+| scope | `git status --short -- app/` | empty — no `app/` modification by this stage; no views/widgets touched; no simulator used |
 
-No `google_fonts`, no `DateTime.now()` in the layer; clock N/A.
+No `google_fonts`, no `DateTime.now()` in the layer; new rows: none
+(IDS rule N/A); clock N/A.
 
 ## LEFT FOR NEXT ITERATION
 
 - Nothing in the logic layer. Open work is UI-builder-owned
-  (K02-BUG-1..4 view fixes, review findings 2–4, keypad `shrinkWrap`
-  call-site + re-measure) and orchestrator-owned (SHARED_REQUEST #1
-  `kidSay`/`kidMark`, #3 grapheme helper). Integrator owns full
+  (K02-BUG-5 `_noPinHandled` reset + un-skip, K02-TEST-BUG-A sibling
+  sites alongside the orchestrator's shared helper) and
+  orchestrator-owned (SHARED_REQUEST #1, #3). Integrator owns full
   `flutter test`, screenshots, and the UI check.
 
 VERDICT: PASS
