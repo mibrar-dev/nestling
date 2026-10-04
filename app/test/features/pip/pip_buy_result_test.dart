@@ -390,9 +390,12 @@ void main() {
 
         expect(
           harness.states.map((s) => s.actionNonce),
-          // `loading`(0) -> `loaded`(0) is the load, then refusal, reset,
-          // refusal: one bump per failed attempt, one reset between them.
-          <int>[0, 0, 1, 0, 1],
+          // `loading`(0) -> `loaded`(0) -> `loaded`(0) is the load: K07 added a
+          // second subscription (`watchEvolution`), so the one load now emits
+          // one healthy state per stream, both at nonce 0. Then refusal,
+          // reset, refusal: one bump per failed attempt, one reset between
+          // them.
+          <int>[0, 0, 0, 1, 0, 1],
           reason: 'reset per attempt, bump per failure',
         );
         expect(_toasts(harness.states), 2);

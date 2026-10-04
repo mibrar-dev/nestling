@@ -80,8 +80,14 @@ class PipNestView extends StatelessWidget {
               return const _PipFailure();
             case PipStatus.loaded:
               final nest = state.nest;
-              if (nest == null) return const _NoActiveChild();
-              return _PipNestBody(nest: nest);
+              if (nest != null) return _PipNestBody(nest: nest);
+              // K07 shares this bloc, so `loaded` can also arrive from the
+              // OTHER stream: an evolution emission with no nest means the nest
+              // stream is the one that failed while a child is known. Asking
+              // "Who's playing?" there would send a real child to the picker,
+              // so the failure card (with its retry) stands in.
+              if (state.evolution != null) return const _PipFailure();
+              return const _NoActiveChild();
           }
         },
       ),

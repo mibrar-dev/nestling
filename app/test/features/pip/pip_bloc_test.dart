@@ -5,12 +5,15 @@
 // care/wardrobe writes stream back in with no extra events, and failures
 // surface on the `actionError`/`actionNonce` toast channel.
 
+import 'dart:async';
+
 import 'package:bloc_test/bloc_test.dart';
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/features/pip/data/pip_repository_impl.dart';
+import 'package:nestling/features/pip/domain/entities/pip_evolution.dart';
 import 'package:nestling/features/pip/domain/entities/pip_nest.dart';
 import 'package:nestling/features/pip/domain/entities/pip_profile.dart';
 import 'package:nestling/features/pip/domain/pip_repository.dart';
@@ -53,7 +56,7 @@ class _RefusingBuyRepository extends PipRepositoryImpl {
 
 /// Repository whose nest stream errors on listen (load-failure path) until
 /// released, so the failure card's "Try again" can be exercised.
-class _FailingNestRepository extends PipRepositoryImpl {
+class _FailingNestRepository extends _EvolutionSilentRepository {
   _FailingNestRepository({required super.db});
 
   bool failNest = true;
@@ -63,6 +66,20 @@ class _FailingNestRepository extends PipRepositoryImpl {
     if (failNest) return Stream<PipNest?>.error(Exception('nest down'));
     return super.watchNest();
   }
+}
+
+/// K06 nest-path repository: the K07 evolution stream stays silent (never
+/// emits), so the exact load/care/wardrobe sequences below read exactly as
+/// before. Evolution behaviour itself is covered in
+/// `pip_evolution_bloc_test.dart` with controlled fakes.
+class _EvolutionSilentRepository extends PipRepositoryImpl {
+  _EvolutionSilentRepository({required super.db});
+
+  final StreamController<PipEvolution?> _silent =
+      StreamController<PipEvolution?>.broadcast();
+
+  @override
+  Stream<PipEvolution?> watchEvolution() => _silent.stream;
 }
 
 Matcher _loadedWithCoins(int coins) => predicate<PipState>(
@@ -139,7 +156,7 @@ void main() {
   group('PipBloc load', () {
     blocTest<PipBloc, PipState>(
       'load emits loading then loaded with Maya nest in design order',
-      build: () => PipBloc(repository: PipRepositoryImpl(db: db)),
+      build: () => PipBloc(repository: _EvolutionSilentRepository(db: db)),
       act: (bloc) => bloc.add(const PipLoadRequested()),
       wait: const Duration(milliseconds: 100),
       expect: () => <Matcher>[
@@ -157,7 +174,7 @@ void main() {
 
     blocTest<PipBloc, PipState>(
       'a second load while live is ignored (no stacked subscription)',
-      build: () => PipBloc(repository: PipRepositoryImpl(db: db)),
+      build: () => PipBloc(repository: _EvolutionSilentRepository(db: db)),
       act: (bloc) async {
         bloc
           ..add(const PipLoadRequested())
@@ -211,7 +228,7 @@ void main() {
   group('PipBloc care', () {
     blocTest<PipBloc, PipState>(
       'feed deducts 5 coins and the stream emits the new profile',
-      build: () => PipBloc(repository: PipRepositoryImpl(db: db)),
+      build: () => PipBloc(repository: _EvolutionSilentRepository(db: db)),
       act: (bloc) async {
         bloc.add(const PipLoadRequested());
         await Future<void>.delayed(const Duration(milliseconds: 30));
@@ -228,7 +245,7 @@ void main() {
 
     blocTest<PipBloc, PipState>(
       'bathe deducts 3 coins',
-      build: () => PipBloc(repository: PipRepositoryImpl(db: db)),
+      build: () => PipBloc(repository: _EvolutionSilentRepository(db: db)),
       act: (bloc) async {
         bloc.add(const PipLoadRequested());
         await Future<void>.delayed(const Duration(milliseconds: 30));
@@ -296,7 +313,7 @@ void main() {
   group('PipBloc wardrobe', () {
     blocTest<PipBloc, PipState>(
       'affordable buy marks owned and deducts the DB price',
-      build: () => PipBloc(repository: PipRepositoryImpl(db: db)),
+      build: () => PipBloc(repository: _EvolutionSilentRepository(db: db)),
       act: (bloc) async {
         bloc.add(const PipLoadRequested());
         await Future<void>.delayed(const Duration(milliseconds: 30));
