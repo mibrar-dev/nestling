@@ -1,138 +1,153 @@
-# K04 — Stage 2 build, integration (iteration 3)
+# K04 — Stage 2 build, integration (iteration 4)
 
 Scope: make the combined 2a (logic) + 2b (UI) result compile, analyze clean and
-pass the full suite. One small corrective edit was needed (a stale test name and
-its failure reason, see FIXES-4); everything else merged without conflict.
+pass the full suite. **No `lib/**` change was needed at all this stage** — the
+mandated work was the ICONS regression guard, which is test work. I closed the
+one item both builders explicitly handed to the integrator.
 
-Inputs: `2a_build_logic.md` (iter 3), `2b_build_ui.md` (iter 3 section),
-`1_plan.md`, `FIXES_2.md`, `3_test.md`, `5_ui.md`, `6_bugs.md`,
-`ORCHESTRATOR_NOTES.md` (14:28 + 15:08), `SHARED_REQUEST.md`, `RULES.md`.
+Inputs: `2a_build_logic.md` (iter 4), `2b_build_ui.md` (iter 4 section),
+`1_plan.md`, `FIXES_3.md`, `3_test.md` (iter 3), `6_bugs.md`, `5_ui.md`,
+`ORCHESTRATOR_NOTES.md` (14:28 + 15:08 + **16:38**), `SHARED_REQUEST.md`,
+`RULES.md`.
 
-Iteration 2 closed `test=FAIL ui=FAIL`: one open Minor bug (K04-BUG-4) parked
-behind `skip: true`, and one open Major UI deviation (hero glyph) that `3_test.md`
-explicitly refused to hand a green tick over.
+Iteration 3 closed `ui=PASS` but `test=FAIL` for two reasons: K04-BUG-5 was open
+behind a `skip: true`, and the ICONS audience regression guard the test stage
+owed was never written (`3_test.md` stated plainly that it delivered 0 new
+cases).
 
 ## What landed
 
-### From 2a (logic) — no files changed
+### From 2a (logic) — `kid_home_repository_test.dart` only, no `lib/`
 
-Re-verified plan §b and FIXES_2: no new events, no repository/DI/route change, no
-icon logic in `domain/`/`data/`/`bloc` to migrate. **No CONTRACT CHANGES**, so 2b
-coded against a contract that landed intact — again no merge adaptation.
+No logic-layer change and **no CONTRACT CHANGES**, so 2b coded against a contract
+that landed intact — no merge adaptation. 2a added a `K04 ICONS audience guard —
+data premise` group (2 cases) pinning what the logic layer owns: the database
+actually serves the icon keys the guard reasons about (`bed`/`dishwasher`/`book`
+present, every stored key in `questIconKeys`), and `questIconFor` splits the
+audiences on exactly those keys. Read from the DB, no seed value hard-coded.
 
-2a's FIXES_2 triage, all confirmed correct from my side:
-- K04-BUG-4 is a one-argument fix at the view call site (UI-owned), or a shared
-  default in `core/` (forbidden). Correctly triaged out of this layer.
-- The hero glyph's root cause is the shared batch-5 asset. Correctly triaged out.
-- The new ICONS rule needs nothing from this layer — icon mapping lives in views
-  + shared core.
+### From 2b (UI) — `quest_detail_view_icon_audience_test.dart` (new, 4 cases)
 
-### From 2b (UI) — `quest_detail_view.dart` + `k04_bugs_test.dart`
+`app/lib/**` untouched: iteration 3 already landed
+`questIconFor(raw, audience: NestAudience.kid)` in `quest_detail_view.dart:85`,
+and the ruling on the only open UI item (K04-BUG-5) is *accept*, which is a
+no-op for the view. The new file closes the hole `FIXES_3` identified — that the
+old K04-BUG-3 proof hard-codes four ids → four assets and would still pass if
+`_iconFor` were reverted to `audience: parent` **and the list edited in step**:
 
-- **K04-BUG-4 (Minor, fixed).** `NestBalancedText(quest.title, maxLines: 3)`
-  passes `overflow: TextOverflow.ellipsis`, so an over-cap title cuts with an
-  ellipsis instead of mid-word clip. The skipped proof is un-skipped and passes.
-  This was the skip `3_test.md`'s FAIL verdict turned on — the suite is no
-  longer green over a hidden failure.
-- **ICONS ruling (`ORCHESTRATOR_NOTES` 15:08, now mandatory).** The iteration-2
-  local mirror of P09's table is gone; `_iconFor` now delegates to the shared
-  single source `questIconFor(raw, audience: NestAudience.kid)`, byte-identical
-  in behaviour to K03's `_iconFor`. No `core/**` edit was needed — the shared
-  helper and its kid assets landed on main before this iteration.
+1. reads the live rows and pushes `/quest-detail` for **every** seeded quest,
+   asserting the rendered 64 px `NestIcon.assetName` equals
+   `questIconFor(item.icon, audience: kid)`, and for divergent keys that it is
+   **not** the parent asset. It asserts its own premise (the rows must cover
+   `bed`/`dishwasher`/`book`) so the "≠ parent" arm cannot pass vacuously.
+2. proves the glyph is **column-driven, not id-driven** — a fake repo with two
+   same-title rows differing only in `icon` must swap the hero glyph.
+3. asserts the divergence premise against the shared table itself (kid ≠ parent
+   for `bed`/`dishwasher`/`book`/`reading`; identical for
+   `bins`/`hoover`/`plate`/`paw`/`bag`).
+4. records the K04-BUG-5 acceptance.
+
+2b also reported a hang it introduced and fixed — awaiting a real Drift stream
+inside `testWidgets` deadlocked at the 120 s timeout; fixed with exactly one
+`tester.runAsync` cycle and `GoRouter.pop()` instead of tapping back (a finder
+must not disambiguate K04's back button from the home screen mid-transition).
+Per the brief, a test that can hang is a bug, so calling that out is right.
 
 ## FIXES — every item, done or left
 
 ### DONE
 
-- **K04-BUG-1 (Major, iter 2) —** invisible over-cap title. Fixed in the shared
-  `NestBalancedText`; both proofs live.
-- **K04-BUG-2 (Minor, iter 2) —** mismatched `extra` swapped in a different
-  quest. Fixed in `_resolveQuest`; proof live.
-- **K04-BUG-3 (Major, mandated, iter 2) —** wrong hero glyph. Fixed, then
-  re-pointed this iteration at the kid assets per the 15:08 ruling; proof live.
-- **K04-BUG-4 (Minor, iter 3) —** over-cap title clipped instead of ellipsised.
-  Fixed at the call site; proof un-skipped and live.
-- **The hero Major from `5_ui.md` deviation 1 is resolved at code level.**
-  `5_ui.md` reported `ic_quest_bed.svg` rendering as "a plain hollow rounded
-  rectangle with no bed cues — unrecognizable as a bed". `questIconFor('bed',
-  audience: kid)` returns `NestIcons.questBedKid`, and I verified
-  `assets/icons/ic_quest_bed_kid.svg` path data against the K04 HTML:
-  - HTML `.k4-tile` (`K04-quest-detail.html:40`): `M2 18v-7` / `M2 14h20v4` /
-    `M22 18v-4a3 3 0 0 0-3-3h-9v3` / `M6 11V8h4v3`
-  - asset: **identical**, all four paths.
-  So the hero is now the design's own drawing, with the headboard post, pillow
-  bump, base and legs `5_ui.md` asked for. **Needs a stage-5 re-shot to confirm
-  the FAIL clears** — I cannot verify pixels from here (stage 2 must not boot a
-  simulator).
-- **K04 has zero skipped tests.** All five proofs (BUG-1 unit + widget, BUG-2,
-  BUG-3, BUG-4) run in the default suite: `k04_bugs_test.dart` → 14/14 passing,
-  no `~`. The 4 repo-wide skips are K01 ×1, K03 ×2, P12 ×1 — other screens.
-- **Format.** `dart format .` → 579 files, **0 changed**.
+- **ICONS audience regression guard (mandated, 16:38) — delivered by 2b, then
+  verified independently by me.** 2b reported a mutation test; I re-ran it rather
+  than take it on trust — flipped `_iconFor` to `audience: parent`, ran the
+  guard, reverted:
+  ```
+  Expected: 'assets/icons/ic_quest_dishes_kid.svg'
+    Actual: 'assets/icons/ic_quest_dishes.svg'
+  q-dishwasher (icon "dishwasher") must render the kid asset
+  Expected: 'assets/icons/ic_quest_bed_kid.svg'
+    Actual: 'assets/icons/ic_quest_bed.svg'
+  ```
+  Both failing cases fire, with the asset name in the message — exactly the
+  5_ui Major mix-up. `git diff --stat lib/` was empty again after the revert, so
+  no mutation residue.
+- **K04-BUG-5 — CLOSED AS ACCEPTED (mine; both builders handed it over).**
+  `ORCHESTRATOR_NOTES` 16:38 is mandatory: *"ACCEPT the shared kid glyph at 2
+  (one consistent kid set; invisible at 64 px). Close the proof as accepted. Do
+  not ship a variant."* The parked proof at `k04_bugs_test.dart:383` asserted
+  `stroke-width="1.8"`, so un-skipping it unchanged would have failed *by the
+  ruling itself* — 2b correctly declined to edit it (outside its declared
+  `view`/`widget` test slice) and named the exact fix. I applied it:
+  - the K04 tile path data assertions are **kept** (`M2 18v-7`,
+    `M22 18v-4a3 3 0 0 0-3-3h-9v3`) — the headboard/pillow/legs drawing must
+    survive the acceptance;
+  - `html` still must contain the design's lone `1.8`, so the design's real
+    value stays **recorded** rather than erased;
+  - the shipped asset must now contain `stroke-width="2"` **and must NOT**
+    contain `1.8` — a mixed 1.8/2 file would break K03 and hide the difference,
+    so this is strictly stronger than the old single assertion;
+  - `skip: true` removed; header comment rewritten to cite the ruling, so the
+    acceptance is recorded rather than silently re-litigated by the next agent.
+- **K04 now has ZERO skipped tests** — for the first time in this loop. All six
+  proofs run in the default suite (BUG-1 unit + widget, BUG-2, BUG-3, BUG-4,
+  BUG-5). This was the specific reason `3_test.md` returned FAIL: a green suite
+  that partly consisted of a skipped test whose body failed. The 4 repo-wide
+  skips are K01 ×1, K03 ×2, P12 ×1 — other screens, none mine.
+- **Format.** `dart format .` → 580 files, **0 changed**.
 
-### FIXES-4 (mine, this stage)
+### LEFT — needs the orchestrator
 
-- **K04-BUG-3's proof still named the P09 glyphs it no longer asserts.** After
-  iteration 3 re-pointed the expected assets to `questBedKid` /
-  `questDishesKid`, the test name, its section comment and its `reason:` string
-  all still said "P09 design glyphs" / "must use the batch-5 P09 design glyph".
-  The assertions are correct but the documentation contradicts them, which is a
-  trap for the next agent: someone reading "must use the P09 glyph" would
-  reasonably revert `questBedKid` back to `questBed` and re-break the hero.
-  Renamed the test to `K04-BUG-3: the hero tile uses the kid design glyphs`,
-  rewrote the section comment to cite 14:28 superseded-by-15:08, and corrected
-  the `reason:` string to name both rejected sets (pre-batch-5 parent **and**
-  P09-only) and the 64 px arch symptom. **No assertion touched.**
-
-### LEFT — outstanding, needs the orchestrator
-
-- **`SHARED_REQUEST.md` is still unresolved.** `git diff main` confirms
+- **`SHARED_REQUEST.md` is still unresolved.** `git diff main` shows
   `nest_balanced_text.dart` still differs from `main` by 22 insertions: the
-  K04-BUG-1 fix is committed on this branch but **not yet upstreamed**. This is
-  the same item I flagged in iteration 2. Two parts are still shared work:
-  the component fix itself, and — per `6_bugs.md` — the permanent regression
-  test belonging **next to the component** rather than in a screen test file.
-- **Stage-5 re-shot** of `/quest-detail` in light + dark to confirm the hero
-  Major clears and no new drift appears.
+  K04-BUG-1 fix (invisible over-cap heading) is committed on this branch but
+  **not upstreamed**. Flagged in iterations 2, 3 and now 4. Two parts remain
+  shared work: the component fix, and — per `6_bugs.md` — the permanent
+  regression test that belongs **next to the component**, not in a screen file.
+- **Stage-5 UI re-check** is not owed as a *new* capture — iteration 3 closed
+  `ui=PASS` — but nothing in `kid_home/` changed since, and the K04-BUG-5
+  acceptance is a documented ~0.5 px hero-stroke delta that stage 5 may wish to
+  record against its measured mean diff.
+- **K03's `_iconFor`** carries the same mapping this screen just cleaned up. The
+  audience helper is now the single source for both, so this is informational
+  rather than outstanding — noted only so the orchestrator knows K04 no longer
+  needs a parallel fix.
 
-### LEFT — accepted deviation, unchanged
+### LEFT — accepted deviations, unchanged
 
-- **Steps render unticked on arrival** while the design PNG shows two ticked.
-  `1_plan.md` §d approved this (v1 keeps no per-quest step storage); `5_ui.md`
-  deviation 2 ACCEPTed it. Only the dot fill differs.
-- **Bottom edge** — the dark design PNG shows a meadow strip under the bar; the
-  app does not. Owner rule overrides the designs; `5_ui.md` deviation 4 ACCEPTed
-  it and the matrix test pins `bottom == 844` structurally (bar is the body
-  `Column`'s last child).
-- **Pip art** — `PipAvatar` from Maya's DB row instead of the v1
-  `pip-stage-3.svg`; PIP rule override, ACCEPTed as deviation 3.
-- **The cheer Pip + speech bubble merge into one semantics node**
-  (`"Pip cheering you on\nPip is doing a happy dance!"`). Both strings are the
-  HTML's verbatim copy and the announcement is correct. Splitting them needs a
-  shared-component change.
+- Steps render unticked on arrival (`1_plan.md` §d; `5_ui.md` deviation 2).
+- Bottom edge: no meadow strip under the bar — owner rule overrides the dark
+  design PNG (`5_ui.md` deviation 4); matrix test pins `bottom == 844`
+  structurally.
+- Pip art is `PipAvatar` from Maya's DB row, not the v1 `pip-stage-3.svg`
+  (`5_ui.md` deviation 3).
+- The cheer Pip + speech bubble merge into one semantics node; both strings are
+  the HTML's verbatim copy and the announcement is correct. Splitting them needs
+  a shared-component change.
 
 ### NOT FINDINGS (per orchestrator rule)
 
 - Uncommitted work, branch position, merge order — loop/orchestrator state. Note
-  main *was* merged before this build (`aaf3c32`), which is why the suite moved
-  3626 → 3707; every new test passes, so K04 and merged main agree.
-- `3_test.md`'s "no `SHARED_REQUEST.md` needed" line is now stale — one exists
-  and is live; recorded above.
+  the branch is **not** behind main this round: `git diff main` on the K04
+  feature/test files is empty apart from the documented shared-file item.
+- `5_ui.md`'s note that stage 2b "must not run the whole-app suite" is a stage
+  rule for the builders; the integrator's brief requires it, and it was run.
 
 ## Orchestrator-rule audit (re-verified on the merged tree)
 
 | rule | result |
 |---|---|
-| **ICONS (new, this iteration)** | K04 `_iconFor` → `questIconFor(raw, audience: NestAudience.kid)`, identical to K03. No local icon table remains. Remaining `NestIcons.*` uses are UI chrome (back chevron, check glyph in the done ring and the primary button), not quest/reward glyphs; the coin pill owns its own glyph, so `rewardIconFor` is correctly not used here. |
+| **ICONS** | `_iconFor` → `questIconFor(raw, audience: NestAudience.kid)`; no local icon table; guard proven to bite by mutation. Remaining `NestIcons.*` uses are chrome (back chevron, check glyph ×2). |
 | no `google_fonts` / `GoogleFonts.*` | clean |
 | no `DateTime.now()` in feature | clean |
 | no `subscription_status` write | clean |
 | no hard-coded `Color(0x…)` | clean — tokens only |
 | PIP rule | `PipAvatar` from the child's DB row; no `pip_stage_*.svg` |
-| BALANCED HEADINGS | title is `NestBalancedText`, `maxLines: 3`, now with `overflow: ellipsis` |
-| bottom edge / alignment | in-flow bar over `SafeArea(top:false)`; matrix test pins gutters at 320/390/430 in both themes |
+| BALANCED HEADINGS | title `NestBalancedText`, `maxLines: 3`, `overflow: ellipsis` |
+| bottom edge / alignment | in-flow bar over `SafeArea(top:false)`; matrix pins gutters at 320/390/430 in both themes |
 | accessibility | every control exposes `SemanticsAction.tap`; step rows pass `onTap:` on the wrapper because they also `excludeSemantics` |
 | copy | unchanged this iteration; char-by-char vs HTML verified in iteration 1 |
-| RULES §1 scope | `kid_home/presentation/**`, `kid_home` tests, `docs/screens/K04/**`. No `core/**` edit this iteration. |
+| **no test skipped / weakened / deleted** | the one edit re-purposed a skipped proof against the mandated accepted value and strengthened it (added a negative assertion); nothing was deleted |
+| RULES §1 scope | `kid_home` tests + `docs/screens/K04/**` only. No `lib/`, no `core/**`, no `assets/**`. |
 | `analysis_options.yaml` | untouched, no ignores |
 | simulators | none booted |
 
@@ -140,36 +155,38 @@ coded against a contract that landed intact — again no merge adaptation.
 
 ```
 $ dart format .
-Formatted 579 files (0 changed) in 1.88 seconds.
+Formatted 580 files (0 changed) in 2.41 seconds.
 
 $ flutter analyze
 Analyzing app...
-No issues found! (ran in 3.0s)
+No issues found! (ran in 8.8s)
 
 $ flutter test --timeout 120s
-01:29 +3707 ~4: All tests passed!
+01:28 +3714 ~4: All tests passed!
 
 $ flutter test --timeout 120s test/features/kid_home
-00:13 +545 ~3: All tests passed!
+00:14 +552 ~3: All tests passed!
 
 $ flutter test --timeout 120s test/features/kid_home/k04_bugs_test.dart
-00:01 +14: All tests passed!        # 0 skips — all five bug proofs live
+00:02 +15: All tests passed!        # 0 skips — all six bug proofs live
 ```
 
 The 4 whole-suite skips are K01/K03/P12 parked proofs (other screens). The Drift
 "AppDatabase multiple times" warning is pre-existing harness noise. Full-suite
-wall clock 1 min 29 s.
+wall clock 1 min 28 s. `dart format`/`flutter analyze` were re-run after the
+mutation revert to confirm no residue.
 
 ## Verdict
 
 `dart format` changed nothing, `flutter analyze` printed **No issues found!**
-with no ignores, and the **full 3707-test suite passed**. All five K04 bug proofs
-now run un-skipped, so the green suite no longer hides a failure — which was
-the specific reason `3_test.md` returned FAIL last iteration. The one edit I made
-was a stale-name correction in a passing test; no assertion changed.
+with no ignores, and the **full 3714-test suite passed**. The ICONS audience
+guard the test stage owed is delivered and I verified independently that it
+fails on the exact regression it exists to catch. The mandatory K04-BUG-5
+acceptance is closed as a live pinning test rather than a skip, so **K04 now has
+zero skipped tests** — the green suite no longer hides anything, which was the
+reason `3_test.md` returned FAIL last round.
 
-Two items remain open for the orchestrator: the `SHARED_REQUEST.md` upstream of
-the `NestBalancedText` fix (plus its component-level regression test), and a
-stage-5 re-shot to confirm the hero-glyph Major clears in pixels.
+One item remains genuinely open and is not mine to land: the `SHARED_REQUEST.md`
+upstream of the `NestBalancedText` fix, plus its component-level regression test.
 
 VERDICT: PASS

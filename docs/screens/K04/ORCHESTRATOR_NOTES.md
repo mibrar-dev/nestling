@@ -4,3 +4,8 @@ The quest hero icon must be the design's glyph. For the 'bed' quest it is the fl
 
 ## UPDATE (15:08) — icons per audience (shared/audience_glyphs)
 Kid screens use the KID design glyphs via questIconFor/rewardIconFor(audience: kid). This is being added on main. Not a finding meanwhile; switch once main has it.
+
+## UPDATE (16:38) — iteration 4
+- K04-BUG-5 (stroke 2 vs 1.8): ORCHESTRATOR DECISION, ACCEPT the shared kid glyph at 2 (one consistent kid set; invisible at 64 px). Close the proof as accepted. Do not ship a variant.
+- Add the ICONS audience regression test: the quest-detail hero for each seeded quest key resolves through questIconFor(audience: kid) and differs from the parent glyph where the designs differ.
+Nothing else to change.

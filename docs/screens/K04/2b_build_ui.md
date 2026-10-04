@@ -234,4 +234,140 @@ Verification: `flutter analyze` clean;
 The remaining 5_ui.md MAJOR needs a stage-5 re-shot; nothing in `kid_home/`
 left that can change it.
 
+## Iteration 4 — FIXES_3 remediation (2026-10-04)
+
+Re-read first, as the brief requires: `2a_build_logic.md` (**CONTRACT CHANGES:
+None** — event/state shapes unchanged, no new bloc API), `ORCHESTRATOR_NOTES.md`
+(16:38 items) and `FIXES_3.md`.
+
+### Files changed
+
+- `app/test/features/kid_home/quest_detail_view_icon_audience_test.dart`
+  (**new**, 4 cases) — the rendered-glyph half of the ICONS guard that
+  `FIXES_3` owed to iteration 4.
+- **`app/lib/**`: no change at all.** `git diff --stat lib/` is empty this
+  stage: iteration 3 had already landed `questIconFor(…, audience: kid)` in
+  `quest_detail_view.dart:85`, and the orchestrator's ruling for the only
+  open UI item (K04-BUG-5) is *accept*, which is a no-op for the view.
+
+### FIXES_3 triage — every item
+
+1. **ICONS audience-difference regression guard — DELIVERED.**
+   `FIXES_3` ("The gap I left") designed it; this stage wrote it. It closes
+   the hole the old `k04_bugs_test.dart` K04-BUG-3 proof could not: that proof
+   hard-codes four ids → four assets and would still pass if `_iconFor` were
+   reverted to `audience: parent` and the list edited in step. The new file
+   asserts the rule structurally, from the database (DATA OVER MOCKS — no seed
+   value is written in the test):
+   - **case 1** reads the live rows (`repository.getItems()`) for Maya, pushes
+     `/quest-detail` with `extra {'questId','childId'}` for **every** row, and
+     asserts the rendered 64 px `NestIcon.assetName` equals
+     `questIconFor(item.icon, audience: NestAudience.kid)`. For the divergent
+     keys it *additionally* asserts the asset is **not**
+     `questIconFor(item.icon, audience: NestAudience.parent)`. It first asserts
+     its own premise — the live rows must cover `bed`/`dishwasher`/`book` — so
+     the "not the parent asset" arm cannot pass vacuously.
+   - **case 2** proves the glyph is **column-driven, not id-driven**: a feature
+     -local fake repository with two rows that share a title and id shape but
+     carry different `icon` values must swap the hero glyph.
+   - **case 3** asserts the premise both cases rest on *against the shared
+     table*: kid ≠ parent for `bed`/`dishwasher`/`book`/`reading`, and identical
+     for `bins`/`hoover`/`plate`/`paw`/`bag`.
+   - **case 4** records the K04-BUG-5 acceptance (below).
+2. **K04-BUG-5 (Minor, was OPEN) — NO UI CHANGE, by ruling.** `ORCHESTRATOR_NOTES`
+   16:38 decides: accept the shared kid glyph at `stroke-width="2"` and do not
+   ship a K04 variant. That is a no-op for `lib/**` (the view already renders
+   `NestIcons.questBedKid`) and `app/assets/**` + `core/**` are outside my
+   slice anyway. Case 4 of the new test file now pins what is shipped, so the
+   acceptance is *recorded* instead of silently re-litigated: the kid asset's
+   four paths are the K04 HTML tile drawing (`M2 18v-7`, `M2 14h20v4`,
+   `M22 18v-4a3 3 0 0 0-3-3h-9v3`, `M6 11V8h4v3`), the parent P09 flat frame is
+   explicitly *not* among them, the HTML does carry the lone `1.8`, and the
+   shared asset ships the accepted `2`. Changing it again needs an orchestrator
+   ruling, and the failure message says so.
+   **Flag for the orchestrator / test stage:** the parked copy of that proof at
+   `app/test/features/kid_home/k04_bugs_test.dart:383` is still `skip: true`.
+   I did **not** edit it: that filename contains neither `view` nor `widget`, so
+   it is outside my declared test slice (2a reported the same). Un-skipping it
+   unchanged would fail *by the ruling itself* — it asserts
+   `stroke-width="1.8"`. The one-line close is to assert the accepted `2`
+   (as case 4 does) and drop the skip.
+3. **K04-BUG-1…4 — unchanged and still green** (fixes landed in iterations
+   2–3; the whole `test/features/kid_home` suite is below).
+4. Nothing else in `FIXES_3` was a UI item.
+
+### A hang I introduced and then fixed (the brief's "a test that can hang is a bug")
+
+My first draft of the new test **deadlocked**: `flutter test --timeout 120s`
+ended with `every DB-seeded quest renders its kid-audience glyph (did not
+complete)` after the full 120 s. Cause: awaiting a real Drift stream
+(`getItems()` → `watchItems().first`) directly inside `testWidgets`, where the
+fake clock never advances the watch's scheduling timer. Fixed the way
+`k02_bugs_test.dart` documents it: **exactly one** `tester.runAsync` cycle for
+that read (a second cycle in one `testWidgets` deadlocks the binding's
+reentrant lock), and `GoRouter.pop()` instead of tapping the back button, so a
+finder never has to disambiguate K04's back button from the home screen
+underneath an in-flight route transition. The whole file now runs in ~1 s.
+
+### Proof the new guard actually bites (not just "it passes")
+
+Mutation test: flip `quest_detail_view.dart`'s `_iconFor` to
+`questIconFor(raw, audience: NestAudience.parent)`, re-run, then revert
+(`git diff --stat lib/` empty again afterwards):
+
+```
+Expected: 'assets/icons/ic_quest_dishes_kid.svg'
+  Actual: 'assets/icons/ic_quest_dishes.svg'
+  q-dishwasher (icon "dishwasher") must render the kid asset
+00:00 +0 -1: every DB-seeded quest renders its kid-audience glyph [E]
+Expected: 'assets/icons/ic_quest_bed_kid.svg'
+  Actual: 'assets/icons/ic_quest_bed.svg'
+00:01 +0 -2: the hero glyph is column-driven, not id-driven [E]
+00:01 +1 -2: Some tests failed.
+```
+
+Exactly the regression 5_ui called Major is caught, with the asset name in the
+failure message.
+
+### Verification runs (this stage, no simulator)
+
+```
+$ flutter analyze lib/features/kid_home test/features/kid_home/quest_detail_view_icon_audience_test.dart
+No issues found! (ran in 3.1s)
+
+$ flutter test --timeout 120s test/features/kid_home/quest_detail_view_icon_audience_test.dart
+00:01 +4: All tests passed!
+
+$ flutter test --timeout 120s test/features/kid_home
+00:14 +551 ~4: All tests passed!
+```
+
+`dart format` clean. The 4 skips are pre-existing and belong to
+`k01_bugs_test.dart:569`, `k03_bugs_test.dart:1682/1750` and the K04-BUG-5
+park described above — none of them is mine to un-skip. Whole-app
+`flutter test` and the simulator were **not** run (integrator's job, and stage
+2b's rule).
+
+### Owner rules re-checked on the files I touched
+
+- No hard-coded colours/sizes, no re-implemented components (the new file
+  imports only the shared `design_system.dart`, so it also re-asserts the
+  audience contract at the one place it can break).
+- No `google_fonts`/`GoogleFonts`, no `DateTime.now`, no `subscription_status`,
+  no `name[0]` in the new test.
+- Every test that pumps the app ends with `disposeApp(tester)` (drift's
+  deferred stream-close timer); the one case that pumps nothing does not.
+
+## LEFT FOR NEXT ITERATION
+
+- `k04_bugs_test.dart:383` — close the K04-BUG-5 proof against the accepted
+  state (assert `2`, drop the skip). Owned by the test/orchestrator stage, not
+  by 2b; the exact replacement assertion now lives in
+  `quest_detail_view_icon_audience_test.dart` if it can be copied across.
+- Stage 5's UI check (light + dark `shot.sh` for `/quest-detail`, `compare.py`
+  against both design PNGs) is still owed and was **not** run here — no
+  simulator is booted outside stage 5. The geometry test predicts an exact
+  match at 390×844; the device capture has to confirm it, especially the
+  meadow/sky colours behind the bar and the dark tokens.
+
 VERDICT: PASS

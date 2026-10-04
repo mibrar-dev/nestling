@@ -31,19 +31,24 @@
 //   site now passes `overflow: TextOverflow.ellipsis`; the proof below runs
 //   un-skipped.
 //
-// * K04-BUG-5 (MINOR, OPEN — iteration 3 finding) — the hero bed glyph's
-//   stroke width. `ic_quest_bed_kid.svg` is byte-exact to K03's bed row
-//   (stroke-width 2), but K04's own tile in
+// * K04-BUG-5 (was MINOR, iteration 3 finding — CLOSED AS ACCEPTED, iter 4) —
+//   the hero bed glyph's stroke width. `ic_quest_bed_kid.svg` is byte-exact to
+//   K03's bed row (stroke-width 2), but K04's own tile in
 //   `design/html-source/screens/K04-quest-detail.html` draws the same paths
 //   at `stroke-width="1.8"` — the only 1.8 in the whole design corpus. At the
 //   64 px hero slot that is 5.33 px vs the design's 4.8 px strokes (~0.5 px
 //   / 1.6 device px heavier), against the ICONS rule "each screen matches its
 //   own design's glyphs exactly". One shared asset cannot be exact for both
-//   K03 (2) and K04 (1.8); the orchestrator must either accept the 0.5 px or
-//   give K04 a 1.8 variant (and update
-//   `test/design_system/audience_glyphs_test.dart:73`, which asserts 2 and
-//   claims the asset is "the exact K03/K04 bed glyph"). Run:
-//   `flutter test --run-skipped --plain-name K04-BUG-5`.
+//   K03 (2) and K04 (1.8).
+//   ORCHESTRATOR RULING (`ORCHESTRATOR_NOTES.md` 16:38, mandatory): ACCEPT the
+//   one shared kid glyph at 2 — one consistent kid set, and a 1.8 variant is
+//   invisible at 64 px. Do NOT ship a variant. The proof below therefore
+//   PINS THE ACCEPTED STATE instead of the superseded 1.8 expectation: the
+//   K04 tile path data must survive, the design's lone 1.8 stays recorded,
+//   and the shipped asset must be the accepted 2 (never a mixed 1.8). It runs
+//   un-skipped, so the acceptance is recorded rather than silently
+//   re-litigated by the next agent. Changing the stroke again needs a new
+//   orchestrator ruling.
 //
 // Checked clean (kept as evidence; they run in the plain suite):
 //   * an over-cap title renders at FULL width (the new K04-BUG-1 path) with
@@ -361,26 +366,35 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
-  // K04-BUG-5 — the hero bed glyph's stroke width vs the K04 tile
+  // K04-BUG-5 — CLOSED AS ACCEPTED (ORCHESTRATOR_NOTES 16:38): the hero bed
+  // glyph ships on the one shared kid stroke, not a K04-only 1.8 variant.
   // -------------------------------------------------------------------------
 
-  test('K04-BUG-5: the kid bed glyph must match the K04 hero tile stroke', () {
+  test('K04-BUG-5: the hero bed glyph pins the accepted shared kid stroke', () {
     final asset = File('assets/icons/ic_quest_bed_kid.svg').readAsStringSync();
     final html = File('../design/html-source/screens/K04-quest-detail.html')
         .readAsStringSync();
     // The K04 tile is the only `stroke-width="1.8"` in the design corpus.
+    // Recorded, not asserted as shipped: the ruling accepts 2.
     expect(html, contains('stroke-width="1.8"'));
-    // Path data must stay the K04 tile drawing (already correct).
+    // Path data must stay the K04 tile drawing (headboard post/pillow/legs).
     expect(asset, contains('M2 18v-7'));
     expect(asset, contains('M22 18v-4a3 3 0 0 0-3-3h-9v3'));
     expect(
       asset,
-      contains('stroke-width="1.8"'),
+      contains('stroke-width="2"'),
       reason:
-          'the 64 px hero must draw the 1.8 design stroke (4.8 px); the '
-          'shared K03-exact asset uses 2 (5.33 px) and K04 never redraws it',
+          'accepted shared kid stroke (K03-exact). Changing it needs an '
+          'orchestrator ruling (K04-BUG-5), not a screen edit',
     );
-  }, skip: true); // skip: K04-BUG-5 (open)
+    expect(
+      asset,
+      isNot(contains('stroke-width="1.8"')),
+      reason:
+          'the shared asset must be the one consistent kid glyph at 2 — a '
+          'mixed 1.8/2 file would break K03 and hide the K04 difference',
+    );
+  });
 
   // -------------------------------------------------------------------------
   // Checked clean — navigation, persistence, period, overflow, dark edge
