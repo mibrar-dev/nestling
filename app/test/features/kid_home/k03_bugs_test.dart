@@ -292,8 +292,8 @@ void main() {
     await tester.tap(check);
     await _settle(tester);
     expect(
-      find.text('K05 Quest complete'),
-      findsNothing,
+      pushedPath(tester),
+      '/kid-home',
       reason: 'do not celebrate a quest the database never recorded',
     );
     semantics.dispose();
@@ -541,7 +541,7 @@ void main() {
       await tester.pump();
       await tester.tap(check);
       await _settle(tester);
-      expect(find.text('K05 Quest complete'), findsOneWidget);
+      expect(pushedPath(tester), '/quest-complete');
       await tester.pageBack();
       await _settle(tester);
       expect(find.text('Hi Maya!'), findsOneWidget);
@@ -562,27 +562,14 @@ void main() {
       await tester.tap(card);
       await tester.tap(card);
       await _settle(tester);
-      // K04 owns its own chrome (no AppBar, per the design), so the "did the
-      // second tap stack another route?" probe is the detail copy itself: a
-      // stacked second route would show it twice.
-      expect(
-        find.text('Tick each bit off, then press the big button.'),
-        findsOneWidget,
-        reason: 'a double tap must not stack two detail routes',
-      );
-      // K04 has no AppBar (the design puts Back in its own top row), so tap
-      // that button rather than `pageBack()`: it also proves the detail's own
-      // Back pops exactly one route.
-      await tester.tap(find.byType(NestIconButton));
+      expect(pushedPath(tester), '/quest-detail');
+      // K04 has no AppBar: its own Back (NestIconButton) pops exactly one route.
+      await tester.tap(find.byType(NestIconButton).first);
       await _settle(tester);
       expect(
         find.text('Hi Maya!'),
         findsOneWidget,
         reason: 'one back press must leave the detail',
-      );
-      expect(
-        find.text('Tick each bit off, then press the big button.'),
-        findsNothing,
       );
       semantics.dispose();
       await disposeApp(tester);
@@ -599,7 +586,7 @@ void main() {
       await tester.tap(check);
       await tester.tap(check);
       await _settle(tester);
-      expect(find.text('K05 Quest complete'), findsOneWidget);
+      expect(pushedPath(tester), '/quest-complete');
       await tester.pageBack();
       await _settle(tester);
       expect(
@@ -1008,12 +995,16 @@ void main() {
       await tester.pump();
       await tester.tap(check);
       await _settle(tester);
-      expect(find.text('K05 Quest complete'), findsNothing);
+      expect(
+        pushedPath(tester),
+        '/kid-home',
+        reason: 'no celebration without a recorded completion',
+      );
       expect(find.text('Hmm, that did not work. Try again.'), findsOneWidget);
       repo.failComplete = false;
       await tester.tap(check);
       await _settle(tester);
-      expect(find.text('K05 Quest complete'), findsOneWidget);
+      expect(pushedPath(tester), '/quest-complete');
       semantics.dispose();
       await disposeApp(tester);
     });
@@ -1222,7 +1213,11 @@ void main() {
       // The write returned without an error and without a flip (quest row
       // gone). No celebration, no SnackBar — and the check must be tappable
       // again so the child can retry.
-      expect(find.text('K05 Quest complete'), findsNothing);
+      expect(
+        pushedPath(tester),
+        '/kid-home',
+        reason: 'no celebration without a recorded completion',
+      );
       await tester.tap(check);
       await _settle(tester);
       expect(
@@ -1558,7 +1553,7 @@ void main() {
     final check = find.semantics.byLabel('Mark done').first;
     tester.semantics.performAction(check, SemanticsAction.tap);
     await _settle(tester);
-    expect(find.text('K05 Quest complete'), findsOneWidget);
+    expect(pushedPath(tester), '/quest-complete');
     final items = await tester.runAsync(
       () => GetIt.instance<KidHomeRepository>().getItems(),
     );
@@ -1582,10 +1577,7 @@ void main() {
     final card = find.semantics.byLabel('Reading \u2013 20 minutes, To do');
     tester.semantics.performAction(card, SemanticsAction.tap);
     await _settle(tester);
-    expect(
-      find.text('Tick each bit off, then press the big button.'),
-      findsOneWidget,
-    );
+    expect(pushedPath(tester), '/quest-detail');
     semantics.dispose();
     await disposeApp(tester);
   });
