@@ -117,8 +117,22 @@ GoRouter buildAppRouter(
             !_onboardingLocations.contains(location)) {
           return OnboardingRoutePaths.welcome;
         }
+        // Kid mode + expired trial: kids never see the paywall. Every
+        // location funnels to the gate, which is EXEMPT here (like the
+        // onboarding branch above exempts it) — otherwise /paywall is
+        // parent-only in kid mode and the guard ping-pongs
+        // /paywall => /parental-gate => /paywall (GoException redirect
+        // loop). Passing the gate flips to parent mode, where the trial
+        // branch below sends the parent to /paywall.
         if (onboarded &&
             session.trialExpired &&
+            appMode.isKid &&
+            location != ParentalGateRoutePaths.gate) {
+          return ParentalGateRoutePaths.gate;
+        }
+        if (onboarded &&
+            session.trialExpired &&
+            !appMode.isKid &&
             location != PaywallRoutePaths.paywall) {
           return PaywallRoutePaths.paywall;
         }
