@@ -9,11 +9,11 @@
 // accessor after a push, so these tests assert that.
 //
 // Every assertion here is a ROUTER LOCATION, never a view string. The old
-// version asserted placeholder titles (`find.text('P02 Value tour')`), which
-// only exist on the foundation's placeholder views (`AppBar(title: Text(
-// '<screen id> <name>'))`); it therefore broke on every screen branch that
-// replaced its placeholder — P02 first. Routes are shared and stable, screen
-// agents must not change them.
+// version asserted placeholder titles (for example the P02 value-tour
+// title), which only exist on the foundation's placeholder views
+// (`AppBar(title: Text('<screen id> <name>'))`); it therefore broke on every
+// screen branch that replaced its placeholder — P02 first. Routes are shared
+// and stable, screen agents must not change them.
 //
 // P08 reaches P09 (`/quest-editor`) and P11 (`/approvals`) with `push` so the
 // OS back button returns to `/today`; P09/P11 must therefore return with
