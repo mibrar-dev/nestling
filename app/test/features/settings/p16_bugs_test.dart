@@ -1,17 +1,18 @@
 // P16 · Family & settings — adversarial bug proofs (Stage 6).
 //
 // Iteration 1 found B01–B07; iteration 2 found B08/B09; iteration 3 found
-// B10/B11. All but one are now fixed with live proofs: the iteration-3 build
-// closed B08 (P16TransientGuard) and T02, the iteration-4 build closed B11
-// (`width: 51` on the switch wrapper) and B10 (guard on the delete/invite
-// rows). The single open finding is:
-//   * [P16-B09] open (minor, shared) — IANA *link* ids (Europe/Amsterdam,
-//     Asia/Calcutta, …) are treated as unknown by the bundled tz dataset;
-//     fix belongs in core `family_time.dart` (SHARED_REQUEST §5), and no
-//     feature-side hook exists.
-// Open bugs carry `skip: true` so `flutter test` stays green;
-// `flutter test test/features/settings/p16_bugs_test.dart --run-skipped`
-// proves B09 fails (evidence in docs/screens/P16/6_bugs.md).
+// B10/B11. All of them are now closed with live, un-skipped proofs:
+//   * iteration 3 closed B08 (P16TransientGuard) and T02 (the 44 px target);
+//   * iteration 4 closed B11 (a `width: 51` wrapper on the switch) and B10
+//     (the guard on the delete/invite rows);
+//   * iteration 5 closed B09 (shared) — the IANA *link* ids were the last
+//     open finding, and shared batch 6 item 5 landed the alias resolution in
+//     core `family_time.dart` (`Asia/Calcutta` → `Asia/Kolkata`), so the
+//     picker lists the device zone and its proof runs `skip: false`. That
+//     same batch deleted the `width: 51` wrappers for good (the shared
+//     `NestListRow` owns the switch's hit area), so B11 and T02 stay green.
+// Nothing in this file is skip-marked: `flutter test --run-skipped
+// test/features/settings` selects no test.
 //
 // The `verified clean` group holds the attacks that were run and held:
 // deep-link guards (kid mode / onboarding / trial-expiry), back navigation,
@@ -181,9 +182,8 @@ void main() {
   setUpAll(_loadBundledFonts);
 
   // -------------------------------------------------------------------------
-  // Open bugs — skipped (id in the test name); `--run-skipped` proves the
-  // failure. The comment above each `skip:` records the finding for the
-  // iteration-2 build.
+  // Historical findings (id in the test name) — every one closed and proved
+  // live. Each `skip: false` below carries the fix in a comment.
   // -------------------------------------------------------------------------
 
   testWidgets(
@@ -490,9 +490,9 @@ void main() {
     '[P16-B09] the picker shows the device zone for a linked IANA id',
     (tester) async {
       await setUpTestScope();
-      // A real phone zone: tzdb lists Europe/Amsterdam as a link to
-      // Europe/Brussels, not as a canonical location.
-      final bloc = _blocWithDeviceZone('Europe/Amsterdam')
+      // A legacy phone zone: tzdb ships Asia/Calcutta as a link (backward
+      // alias) of Asia/Kolkata, not as a canonical location.
+      final bloc = _blocWithDeviceZone('Asia/Calcutta')
         ..add(const SettingsLoadRequested());
       await _pumpView(tester, bloc);
       await _scrollTo(tester, find.text('Time zone'));
@@ -500,7 +500,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final deviceRow = find
-          .text('Europe/Amsterdam · Current location')
+          .text('Asia/Kolkata · Current location')
           .evaluate()
           .length;
       unawaited(bloc.close());
@@ -524,7 +524,7 @@ void main() {
     // shared layer: resolve backward links to their canonical zone (or ship
     // the dataset’s links); recorded in SHARED_REQUEST §5. Feature-side no
     // workaround exists — the raw id never reaches the bloc.
-    skip: true,
+    skip: false,
   );
 
   testWidgets(
@@ -593,10 +593,11 @@ void main() {
             'Measured gaps to the right content edge: $gaps',
       );
     },
-    // P16-B11 fixed in iteration 4: the wrapper is
-    // `SizedBox(width: 51, height: 44, Center(...))`, so the track sits flush
-    // with the row's 16 px right inset (gap 0.0 at 390 and 320) and the T02
-    // slop is still live (±6). Live proof.
+    // P16-B11 fixed in iteration 4 and closed for good in iteration 5: the
+    // `width: 51` wrapper is deleted — the shared `NestListRow` lays the
+    // toggle out at its own 51×31 and hit-forwards the 59×44 slop, so the
+    // track sits flush with the row's 16 px right inset (gap 0.0 at 390/320)
+    // and T02's slop is still live. Live proof.
     skip: false,
   );
 

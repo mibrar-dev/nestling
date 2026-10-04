@@ -9,6 +9,7 @@ class SettingsMemberEntry extends Equatable {
     required this.name,
     required this.role,
     required this.inviteStatus,
+    this.email,
   });
 
   final String id;
@@ -20,6 +21,11 @@ class SettingsMemberEntry extends Equatable {
   /// `active` | `invited`.
   final String inviteStatus;
 
+  /// `members.email` (schema v7, nullable). Null for an invited co-parent,
+  /// which shows its invite status instead — DATA OVER MOCKS: the owner row
+  /// subtitle is read from the database, never hard-coded.
+  final String? email;
+
   @override
-  List<Object?> get props => <Object?>[id, name, role, inviteStatus];
+  List<Object?> get props => <Object?>[id, name, role, inviteStatus, email];
 }

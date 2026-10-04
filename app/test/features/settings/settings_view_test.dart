@@ -110,6 +110,9 @@ void main() {
       // Exact glyphs: em dash —, middle dot ·, ampersand &.
       expect(find.text('Family & settings'), findsOneWidget);
       expect(find.text('Sarah — you'), findsOneWidget);
+      // The owner subtitle is `members.email` read from the database (DATA
+      // OVER MOCKS, ORCHESTRATOR_NOTES 08:12 item 2 / shared batch 6 item 4)
+      // — the seed's value here, and the view follows it when it changes.
       expect(find.text('sarah@example.co.uk'), findsOneWidget);
       expect(find.text('James — co-parent'), findsOneWidget);
       expect(find.text('Invited · awaiting reply'), findsOneWidget);

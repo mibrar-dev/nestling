@@ -16,6 +16,12 @@ import 'package:nestling/features/settings/presentation/widgets/p16_transient_gu
 import 'package:nestling/features/settings/presentation/widgets/settings_rows.dart';
 import 'package:nestling/features/settings/presentation/widgets/zone_picker_sheet.dart';
 
+/// `.linkrow { min-height: 52px }` (`P16-settings.html:9`) — the
+/// subscription card's "Manage subscription" row. Screen-local because the
+/// 4pt grid has no 52 (the only other 52 on the platform is
+/// `NestPager.stage`, a different metric); filed in SHARED_REQUEST.md §7.
+const double _linkRowMinHeight = 52;
+
 /// P16 · Family & settings (`/settings`, parent mode).
 ///
 /// Layout follows `design/html-source/screens/P16-settings.html`: a scroll
@@ -56,44 +62,6 @@ class SettingsView extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// The design's `.sect` label: 13/700 uppercase with the browser's natural
-/// line-height. `NestSectionLabel` pins 18/13, which adds ~2 px per
-/// section and drifts every card below it (stage-5 UI finding 2). This
-/// pins Inter's computed natural height with a one-off TextPainter
-/// probe instead.
-class _P16Sect extends StatelessWidget {
-  const _P16Sect({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = context.nest;
-    final base = NestType.sectionLabel(color: tokens.ink2);
-    final probe = TextPainter(
-      text: TextSpan(
-        text: label.toUpperCase(),
-        style: TextStyle(
-          fontFamily: 'Inter',
-          fontSize: base.fontSize,
-          fontWeight: base.fontWeight,
-          letterSpacing: base.letterSpacing,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    return Semantics(
-      header: true,
-      child: Text(
-        label.toUpperCase(),
-        style: base.copyWith(height: probe.height / base.fontSize!),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
       ),
     );
   }
@@ -171,7 +139,7 @@ class _SettingsLoaded extends StatelessWidget {
           _MoveBanner(zone: state.pendingZone!),
         ],
         const SizedBox(height: NestSpacing.s6),
-        const _P16Sect(label: 'Family'),
+        const NestSectionLabel(label: 'Family'),
         const SizedBox(height: NestSpacing.s2),
         NestList(
           children: <Widget>[
@@ -190,7 +158,7 @@ class _SettingsLoaded extends StatelessWidget {
           ],
         ),
         const SizedBox(height: NestSpacing.s6),
-        const _P16Sect(label: 'Children'),
+        const NestSectionLabel(label: 'Children'),
         const SizedBox(height: NestSpacing.s2),
         NestList(
           children: <Widget>[
@@ -207,21 +175,16 @@ class _SettingsLoaded extends StatelessWidget {
           ],
         ),
         const SizedBox(height: NestSpacing.s6),
-        const _P16Sect(label: 'Subscription'),
+        const NestSectionLabel(label: 'Subscription'),
         const SizedBox(height: NestSpacing.s2),
-        // `.subcard` pins `border-radius: var(--r-m)` (16) where
-        // NestCard.standard would draw 24 — render it with the same
-        // construction but the design's radius (P16-B06).
-        Container(
-          key: const ValueKey('p16_subcard'),
+        // `.subcard` pins `border-radius: var(--r-m)` (16) and
+        // `padding:14px 16px` (`P16-settings.html:7`); `NestCard.standard`
+        // draws 24, so the shared card takes the design's override.
+        NestCard(
+          radius: NestRadii.m,
           padding: const EdgeInsets.symmetric(
             horizontal: NestSpacing.s4,
             vertical: NestSpacing.gap14,
-          ),
-          decoration: BoxDecoration(
-            color: tokens.surface,
-            borderRadius: NestRadii.allM,
-            boxShadow: tokens.cardShadow,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -232,7 +195,8 @@ class _SettingsLoaded extends StatelessWidget {
                 style: NestType.body(color: tokens.ink)
                     .copyWith(fontWeight: FontWeight.w700, height: 20 / 16),
               ),
-              const SizedBox(height: 2),
+              // `.subcard .b { margin-top: 2px }`
+              const SizedBox(height: NestSpacing.gap2),
               Text(
                 'Renews 18 Oct 2027 · Covers the whole family',
                 style: NestType.caption(color: tokens.ink2),
@@ -249,7 +213,8 @@ class _SettingsLoaded extends StatelessWidget {
                     () => context.push(PaywallRoutePaths.paywall),
                   ),
                   child: SizedBox(
-                    height: 52,
+                    // `.linkrow { min-height: 52px }`
+                    height: _linkRowMinHeight,
                     child: Row(
                       children: <Widget>[
                         Expanded(
@@ -269,7 +234,7 @@ class _SettingsLoaded extends StatelessWidget {
           ),
         ),
         const SizedBox(height: NestSpacing.s6),
-        const _P16Sect(label: 'Time zone'),
+        const NestSectionLabel(label: 'Time zone'),
         const SizedBox(height: NestSpacing.s2),
         NestList(
           children: <Widget>[
@@ -283,68 +248,43 @@ class _SettingsLoaded extends StatelessWidget {
           ],
         ),
         const SizedBox(height: NestSpacing.s6),
-        const _P16Sect(label: 'Notifications'),
+        const NestSectionLabel(label: 'Notifications'),
         const SizedBox(height: NestSpacing.s2),
         NestList(
           children: <Widget>[
-            SettingsRow(
+            NestListRow(
               title: 'Approvals waiting',
-              // P16-T02: 6 px vertical padding so the content box is
-              // 56 − 12 = 44, plus the 44-high wrapper so the toggle's
-              // overhang is inside a box the hit pipeline honors (the
-              // padding alone does not restore the slop).
-              padding: const EdgeInsets.fromLTRB(12, 6, 16, 6),
-              trailing: SizedBox(
-                width: 51,
-                height: 44,
-                child: Center(
-                  child: NestToggle(
-                    value: settings?.notifApprovals ?? true,
-                    semanticLabel: 'Approvals waiting notifications',
-                    onChanged: (v) => P16TransientGuard.run(
-                      () => context.read<SettingsBloc>().add(
-                        SettingsNotificationsChanged(approvals: v),
-                      ),
-                    ),
+              trailing: NestToggle(
+                value: settings?.notifApprovals ?? true,
+                semanticLabel: 'Approvals waiting notifications',
+                onChanged: (v) => P16TransientGuard.run(
+                  () => context.read<SettingsBloc>().add(
+                    SettingsNotificationsChanged(approvals: v),
                   ),
                 ),
               ),
             ),
-            SettingsRow(
+            NestListRow(
               title: 'Payout day reminder',
               subtitle: 'Friday before Saturday payout',
-              padding: const EdgeInsets.fromLTRB(12, 6, 16, 6),
-              trailing: SizedBox(
-                width: 51,
-                height: 44,
-                child: Center(
-                  child: NestToggle(
-                    value: settings?.notifPayout ?? true,
-                    semanticLabel: 'Payout day reminder',
-                    onChanged: (v) => P16TransientGuard.run(
-                      () => context.read<SettingsBloc>().add(
-                        SettingsNotificationsChanged(payout: v),
-                      ),
-                    ),
+              trailing: NestToggle(
+                value: settings?.notifPayout ?? true,
+                semanticLabel: 'Payout day reminder',
+                onChanged: (v) => P16TransientGuard.run(
+                  () => context.read<SettingsBloc>().add(
+                    SettingsNotificationsChanged(payout: v),
                   ),
                 ),
               ),
             ),
-            SettingsRow(
+            NestListRow(
               title: 'Weekly family summary',
-              padding: const EdgeInsets.fromLTRB(12, 6, 16, 6),
-              trailing: SizedBox(
-                width: 51,
-                height: 44,
-                child: Center(
-                  child: NestToggle(
-                    value: settings?.notifSummary ?? true,
-                    semanticLabel: 'Weekly family summary',
-                    onChanged: (v) => P16TransientGuard.run(
-                      () => context.read<SettingsBloc>().add(
-                        SettingsNotificationsChanged(summary: v),
-                      ),
-                    ),
+              trailing: NestToggle(
+                value: settings?.notifSummary ?? true,
+                semanticLabel: 'Weekly family summary',
+                onChanged: (v) => P16TransientGuard.run(
+                  () => context.read<SettingsBloc>().add(
+                    SettingsNotificationsChanged(summary: v),
                   ),
                 ),
               ),
@@ -352,7 +292,7 @@ class _SettingsLoaded extends StatelessWidget {
           ],
         ),
         const SizedBox(height: NestSpacing.s6),
-        const _P16Sect(label: 'Privacy'),
+        const NestSectionLabel(label: 'Privacy'),
         const SizedBox(height: NestSpacing.s2),
         NestList(
           children: <Widget>[
@@ -382,7 +322,7 @@ class _SettingsLoaded extends StatelessWidget {
         const SizedBox(height: NestSpacing.s4),
         _LockHint(on: settings?.kidGateEnabled ?? true),
         const SizedBox(height: NestSpacing.s6),
-        const _P16Sect(label: 'About'),
+        const NestSectionLabel(label: 'About'),
         const SizedBox(height: NestSpacing.s2),
         NestList(
           children: <Widget>[
@@ -464,10 +404,16 @@ class _MemberRow extends StatelessWidget {
     final title = isOwner
         ? '${member.name} — you'
         : '${member.name} — co-parent';
-    final subtitle = isOwner
-        ? 'sarah@example.co.uk'
+    // DATA OVER MOCKS: the subtitle is the database row, never a literal.
+    // The owner shows `members.email`; an invited co-parent has none and shows
+    // its invite status instead.
+    final email = member.email;
+    final subtitle = email != null && email.isNotEmpty
+        ? email
         : (member.inviteStatus == 'invited'
               ? 'Invited · awaiting reply'
+              : isOwner
+              ? 'Owner'
               : 'Active');
     final initial = member.name.isEmpty
         ? '?'
@@ -525,7 +471,10 @@ class _MoveBanner extends StatelessWidget {
     final short = shortZoneLabel(zone);
     return Container(
       key: const ValueKey('p16_move_banner'),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      padding: const EdgeInsets.symmetric(
+        horizontal: NestSpacing.gap14,
+        vertical: NestSpacing.s3,
+      ),
       decoration: BoxDecoration(
         color: tokens.leafTint,
         borderRadius: NestRadii.allM,
@@ -537,8 +486,10 @@ class _MoveBanner extends StatelessWidget {
           Text(
             'Looks like you’re in $short now. Switch the family time zone? '
             'History keeps London times; future days follow $short.',
-            style: NestType.body(color: tokens.ink)
-                .copyWith(fontSize: 14, height: 20 / 14),
+            // `.lockhint` metrics: 14/20 (`NestType.chipLabel` carries that
+            // line box; only the weight differs — the hint is regular text).
+            style: NestType.chipLabel(color: tokens.ink)
+                .copyWith(fontWeight: FontWeight.w400),
           ),
           const SizedBox(height: NestSpacing.s3),
           Row(
@@ -585,7 +536,11 @@ class _LockHint extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.nest;
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      // `.lockhint { padding:12px 14px; gap:10px }`
+      padding: const EdgeInsets.symmetric(
+        horizontal: NestSpacing.gap14,
+        vertical: NestSpacing.s3,
+      ),
       decoration: BoxDecoration(
         color: tokens.surface2,
         borderRadius: NestRadii.allM,
@@ -597,8 +552,8 @@ class _LockHint extends StatelessWidget {
           Expanded(
             child: Text.rich(
               TextSpan(
-                style: NestType.body(color: tokens.ink)
-                    .copyWith(fontSize: 14, height: 20 / 14),
+                style: NestType.chipLabel(color: tokens.ink)
+                    .copyWith(fontWeight: FontWeight.w400),
                 children: <InlineSpan>[
                   const TextSpan(text: 'Kid mode needs parent gate — '),
                   TextSpan(

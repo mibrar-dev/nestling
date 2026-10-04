@@ -1,12 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 
-/// Settings list row with a custom leading widget (avatar) or danger title.
+/// Settings list row for the two slots the shared `NestListRow` cannot
+/// render yet (SHARED_REQUEST.md §6):
 ///
-/// `NestListRow` only ships a 40 px icon tile as its leading slot, so P16's
-/// Family/Children avatars and its no-leading danger row use this mirror of
-/// the shared row's exact metrics (same padding, min-height 56, title/body
-/// styles, token values — never hard-coded).
+///  * a custom `leading` widget — P16's Family/Children rows use a 32 px
+///    `NestAvatar` where the design's `.list-row` carries `<span class="avatar
+///    s32">` (`P16-settings.html:18-27`), while `NestListRow` only builds a
+///    40 px icon tile from `leadingAsset`;
+///  * a danger title — `.dangerlink { color:var(--danger); font-weight:700 }`
+///    (`P16-settings.html:40`).
+///
+/// Everything else is the shared row's exact metrics (padding 12/10/16/10,
+/// min-height 56, title `bodyStrong` w600 height 22/16, `caption` subtitle,
+/// 12 px gaps, token values — never hard-coded). When §6 lands this widget
+/// disappears and the call sites pass `leading:`/`titleColor:` instead.
+///
+/// The toggle rows, the link rows and the zone-picker rows already use the
+/// shared `NestListRow` (shared batch 6): the 51×44 wrappers that grew those
+/// rows 56 → 64 and clipped `NestToggle`'s horizontal hit slop are gone.
 class SettingsRow extends StatelessWidget {
   const new({
     required this.title,
@@ -18,7 +30,6 @@ class SettingsRow extends StatelessWidget {
     this.trailing,
     this.onTap,
     this.semanticLabel,
-    this.padding,
   });
 
   final String title;
@@ -29,9 +40,6 @@ class SettingsRow extends StatelessWidget {
   final Widget? trailing;
   final VoidCallback? onTap;
   final String? semanticLabel;
-
-  /// Row content padding; defaults to `NestListRow`'s (12/10/16/10).
-  final EdgeInsetsGeometry? padding;
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +52,7 @@ class SettingsRow extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: padding ?? const EdgeInsets.fromLTRB(12, 10, 16, 10),
+          padding: const EdgeInsets.fromLTRB(12, 10, 16, 10),
           child: Row(
             spacing: NestSpacing.s3,
             children: [
@@ -75,11 +83,13 @@ class SettingsRow extends StatelessWidget {
                   ],
                 ),
               ),
-              // `.list-trail` cap, mirroring shared main's fix (the
-              // trail never joins the flex distribution).
+              // `.list-trail { flex-shrink: 0 }` cap, mirroring the shared
+              // row: the trail never joins the flex distribution.
               if (tail != null)
                 ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 120),
+                  constraints: const BoxConstraints(
+                    maxWidth: NestListRow.trailMaxWidth,
+                  ),
                   child: tail,
                 ),
             ],

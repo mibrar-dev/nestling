@@ -148,14 +148,14 @@ void main() {
   });
 
   group('P16 DATA OVER MOCKS — the parent e-mail', () {
-    // ORCHESTRATOR_NOTES (08:12, "LAST pass") item 2: the parent's e-mail must
-    // come from the database, and states "the seed holds that value". It does
-    // not: no table in the schema has an e-mail column, which the integrator
-    // measured and recorded in SHARED_REQUEST.md §4. The ruling's own fallback
-    // ("if the DB lacks a field, write SHARED_REQUEST.md") is what applies, so
-    // the two tests below record the situation instead of asserting a
-    // DB-driven value that cannot exist yet.
-    testWidgets('TRIPWIRE: `members` still has no e-mail column', (
+    // ORCHESTRATOR_NOTES (08:12) item 2: the parent's e-mail must come from
+    // the database. Iterations 2–4 could not honour it — no column held an
+    // e-mail, so the row carried the literal `sarah@example.co.uk` and this
+    // group was a *tripwire* (red the moment a column appeared). Shared batch 6
+    // item 4 landed `members.email` (schema v7, nullable, seeded for the owner
+    // only), so the tripwire now asserts the opposite — the column is there and
+    // the row reads it — and the row follows the database in both halves.
+    testWidgets('the owner subtitle is `members.email`, not a literal', (
       tester,
     ) async {
       final database = GetIt.instance<AppDatabase>();
@@ -164,20 +164,9 @@ void main() {
           .get();
       final names = columns.map((row) => row.read<String>('name')).toList();
 
-      expect(
-        names,
-        isNot(contains('email')),
-        reason:
-            'the members table now HAS an email column, so '
-            'ORCHESTRATOR_NOTES (08:12) item 2 is satisfiable: replace the '
-            'hard-coded `sarah@example.co.uk` in settings_view.dart with a '
-            'repository read (members.email for the owner row) and update the '
-            'four tests that assert the literal. Until then this tripwire is '
-            'the only thing standing between the ruling and silence.',
-      );
-      // The rest of the owner row IS database-driven, and stays that way
-      // (`role` is what decides "— you" vs "— co-parent"). SQL column names
-      // are snake_case; the drift column names are camelCase.
+      // The rest of the owner row is database-driven too (`role` is what
+      // decides "— you" vs "— co-parent"). SQL column names are snake_case;
+      // the drift column names are camelCase.
       expect(
         names,
         containsAll(<String>[
@@ -186,34 +175,57 @@ void main() {
           'name',
           'role',
           'invite_status',
+          'email',
         ]),
       );
 
       await disposeApp(tester);
     });
 
-    testWidgets('the owner row shows the seeded name with the literal e-mail', (
+    testWidgets('the owner row follows the seeded name AND e-mail', (
       tester,
     ) async {
-      // The other half of the ruling: the NAME must come from the database
-      // (DATA OVER MOCKS), so change the seed and the row follows. The
-      // subtitle beside it is the documented exception.
+      // DATA OVER MOCKS end to end: rename the owner and change the e-mail in
+      // the database and the row follows both. No placeholder copy is left for
+      // a future seed to override.
       await pumpSettingsApp(
         tester,
         prepare: (db) =>
             (db.update(db.members)..where((m) => m.id.equals('sarah'))).write(
-              const MembersCompanion(name: Value('Sam')),
+              const MembersCompanion(
+                name: Value('Sam'),
+                email: Value('sam@example.co.uk'),
+              ),
             ),
       );
 
       expect(find.text('Sam — you'), findsOneWidget);
-      expect(
-        find.text('sarah@example.co.uk'),
-        findsOneWidget,
-        reason:
-            'documented placeholder copy (SHARED_REQUEST.md §4): no column '
-            'holds an e-mail, so this cannot be DB-driven yet',
+      expect(find.text('sam@example.co.uk'), findsOneWidget);
+      expect(find.text('sarah@example.co.uk'), findsNothing);
+      // The invited co-parent has no e-mail, so it keeps its invite status.
+      expect(find.text('Invited · awaiting reply'), findsOneWidget);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('an owner row with no e-mail falls back to "Owner"', (
+      tester,
+    ) async {
+      await pumpSettingsApp(
+        tester,
+        prepare: (db) =>
+            (db.update(db.members)..where((m) => m.id.equals('sarah'))).write(
+              const MembersCompanion(email: Value(null)),
+            ),
       );
+
+      expect(find.text('Sarah — you'), findsOneWidget);
+      expect(
+        find.text('Owner'),
+        findsOneWidget,
+        reason: 'role-derived subtitle, never a hard-coded address',
+      );
+      expect(find.text('sarah@example.co.uk'), findsNothing);
 
       await disposeApp(tester);
     });

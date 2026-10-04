@@ -6,7 +6,6 @@ import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/settings/presentation/bloc/settings_bloc.dart';
 import 'package:nestling/features/settings/presentation/bloc/settings_event.dart';
 import 'package:nestling/features/settings/presentation/widgets/p16_transient_guard.dart';
-import 'package:nestling/features/settings/presentation/widgets/settings_rows.dart';
 
 /// Curated zone list from ORCHESTRATOR_NOTES. Raw IANA ids appear only in
 /// the picker's row subtitles — never on the settings list itself.
@@ -87,7 +86,7 @@ class _ZoneRow extends StatelessWidget {
     final subtitle = isDevice
         ? '$zoneId · Current location'
         : '$zoneId · ${gmtOffsetLabel(zoneId, appNowUtc())}';
-    return SettingsRow(
+    return NestListRow(
       title: shortZoneLabel(zoneId),
       subtitle: subtitle,
       trailing: isCurrent

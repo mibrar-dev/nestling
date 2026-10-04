@@ -146,6 +146,7 @@ class SettingsRepositoryImpl implements SettingsRepository {
       name: row.name,
       role: row.role,
       inviteStatus: row.inviteStatus,
+      email: row.email,
     );
   }
 }

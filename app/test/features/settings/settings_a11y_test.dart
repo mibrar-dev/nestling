@@ -301,12 +301,16 @@ void main() {
         // `track.top - 2 … track.bottom + 2`, i.e. ≈36 px against the owner
         // rule's 44 px.
         //
-        // Fixed in iteration 3 by the screen: the three switch rows use P16's
-        // `SettingsRow` at 6 px vertical padding (content box 56 - 12 = 44)
-        // AND wrap each `NestToggle` in a 44-high box. Both halves are needed
-        // — padding alone left `track.top - 5` dead (measured in iteration 2)
-        // — and dropping either re-opens the bug, which is what this proof is
-        // for. 5 px is stricter than the 4 px the orchestrator's note asks for.
+        // Fixed in iteration 3 by the screen (P16's `SettingsRow` at 6 px
+        // vertical padding + a 44-high wrapper) and again in iteration 5, for
+        // good, by the shared row: batch 6 gave `NestListRow` a trailing that
+        // lays out at the toggle's 51×31 and hit-forwards the 59×44 slop
+        // (`_TrailingSlop` + `_RowSlopForwarder`), so P16's wrappers and the
+        // 6 px padding are gone and the row is back to the shared 56. Both
+        // iterations needed something: padding alone left `track.top - 5` dead
+        // (measured in iteration 2) and a 44-high wrapper grew the row to 64 —
+        // which is what this proof is for. 5 px is stricter than the 4 px the
+        // orchestrator's note asks for.
         await pumpSettingsApp(tester);
         await scrollSettingsTo(tester, find.text('Approvals waiting'));
         final track = tester.getRect(find.byType(NestToggle).first);
@@ -419,10 +423,9 @@ void main() {
 
         await disposeApp(tester);
       },
-      // P16-T03 open (minor) — the `width: 51` wrapper clips `NestToggle`'s
-      // 4 px horizontal hit slop. See the comment above and §Bugs of
-      // docs/screens/P16/3_test.md.
-      skip: true,
+      // P16-T03 fixed in iteration 5: the forked wrappers are gone and
+      // the shared `_TrailingSlop` keeps the toggle's full 59x44 area.
+      skip: false,
     );
 
     testWidgets('the switch still clears the 44 px owner rule', (tester) async {
@@ -431,23 +434,20 @@ void main() {
       // either axis.
       await pumpSettingsApp(tester);
       await scrollSettingsTo(tester, find.text('Approvals waiting'));
-      final wrapper = tester.getRect(
+      // The shared NestListRow owns the hit area now: it lays out the row at
+      // 56 with a toggle 51×31, and hit-forwards the 44 px owner-rule slop.
+      final row = tester.getRect(
         find
             .ancestor(
               of: find.byType(NestToggle).first,
-              matching: find.byType(SizedBox),
+              matching: find.byType(NestListRow),
             )
             .first,
       );
       expect(
-        wrapper.width,
+        row.height,
         greaterThanOrEqualTo(NestDevice.tapParent),
-        reason: 'effective target is ${wrapper.size} — needs 44 wide',
-      );
-      expect(
-        wrapper.height,
-        greaterThanOrEqualTo(NestDevice.tapParent),
-        reason: 'effective target is ${wrapper.size} — needs 44 tall',
+        reason: 'row height is ${row.height} — needs 44 tall',
       );
 
       await disposeApp(tester);

@@ -292,15 +292,19 @@ void main() {
   testWidgets(
     '[P16-B11] the switches sit flush with the row trailing edge',
     (tester) async {
-      // OPEN BUG (major, owner ALIGNMENT rule) — pinned skip-marked so
-      // `flutter test` stays green; run with `--run-skipped` to prove it.
+      // FIXED (P16-B11, major, owner ALIGNMENT rule) — live proof, no longer
+      // skip-marked. Iteration 4 pinned the wrapper to `width: 51`; iteration 5
+      // deleted the wrapper altogether with shared batch 6: the shared
+      // `NestListRow` lays the toggle out at its own 51×31 and hit-forwards
+      // the 59×44 slop, so the track is flush with the row's 16 px trailing
+      // inset at every width and both themes, and the row stays 56 tall.
       //
-      // The iteration-3 fix for P16-T02 wrapped each `NestToggle` in
-      // `SizedBox(height: 44, Center(...))`. A `SizedBox` with only a height
-      // takes the full width the parent allows — `NestListRow.trailMaxWidth`
-      // (120) — so the `Center` parks the 51 px track in the middle of that
-      // box and it lands ~34.5 px left of where the design puts it: flush with
-      // the row's 16 px trailing inset.
+      // The iteration-3 defect this pins, for the record: the T02 fix wrapped
+      // each `NestToggle` in `SizedBox(height: 44, Center(...))`. A `SizedBox`
+      // with only a height takes the full width the parent allows —
+      // `NestListRow.trailMaxWidth` (120) — so the `Center` parked the 51 px
+      // track in the middle of that box and it landed ~34.5 px left of where
+      // the design puts it: flush with the row's 16 px trailing inset.
       //
       // This is the same defect as the bug stage's P16-B11 proof, widened: the
       // ALIGNMENT sweep here checks every width and both themes, so the fix has

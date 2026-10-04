@@ -5,7 +5,16 @@ a `SHARED_REQUEST.md` and none existed, and four "LEFT" items from
 `FIXES_1.md` had no carrier. Docs only — no code in this branch depends on any
 of it landing.
 
-## 1. `NestToggle` / `NestListRow` cannot deliver a 44 px tap target (P16-T02, major)
+> **Status after shared batch 6 (iteration 5):** §§1–5 all LANDED and are
+> closed. §1 → the shared `NestListRow` keeps 56 with a 51×31 toggle and
+> hit-forwards the 44 px slop. §2 → `NestSectionLabel` is 13/16. §3 →
+> `NestCard(radius:, padding:)`. §4 → `members.email` (schema v7). §5 → IANA
+> links resolve to canonical. P16's local `_P16Sect`, the subcard fork and the
+> `SizedBox(width: 51, height: 44)` switch wrappers are deleted, and both
+> remaining proofs (B09, T03) run un-skipped. **§6 is the one open request** —
+> it is what still keeps `SettingsRow` alive on this screen.
+
+## 1. `NestToggle` / `NestListRow` cannot deliver a 44 px tap target (P16-T02, major) — LANDED (batch 6)
 
 Need: a switch row's live hit area is ~36 px (measured `track.top − 2` →
 `track.bottom + 2`), below the owner 44 px rule. Iteration 2 re-measured with
@@ -22,7 +31,7 @@ Files: `app/lib/core/design_system/components/nest_toggle.dart`,
 Blocks: **no** — P16's a11y proof stays `skip: true` with its writeup until it
 lands; nothing else waits on it.
 
-## 2. `NestSectionLabel`'s 18 px line box vs the browser's natural line height
+## 2. `NestSectionLabel`'s 18 px line box vs the browser's natural line height — LANDED (batch 6)
 
 Need: the shared section label pins an 18 px line box while the design CSS lets
 a 13 px Inter label take its natural line height (~15.7 px). `5_ui` measured
@@ -35,7 +44,7 @@ Files: `app/lib/core/design_system/components/nest_section_label.dart` (or the
 typography token it pins).
 Blocks: no.
 
-## 3. `NestCard` has no radius override
+## 3. `NestCard` has no radius override — LANDED (batch 6)
 
 Need: `NestCard.standard` always decorates with `NestRadii.allL` (24 px), but
 the design's `.subcard` pins `border-radius: var(--r-m)` (16 px,
@@ -52,7 +61,7 @@ defect together.
 Files: `app/lib/core/design_system/components/nest_card.dart`.
 Blocks: no.
 
-## 4. `members` has no email column (review 6)
+## 4. `members` has no email column (review 6) — LANDED (batch 6)
 
 Need: P16's owner row renders `sarah@example.co.uk` as hard-coded copy because
 `members` is `id, familyId, name, role, inviteStatus` — there is nothing to
@@ -94,7 +103,16 @@ Note the ruling also affects four P16 tests that assert the literal string
 (`settings_view_test.dart:113`, `settings_responsive_test.dart:365`), so
 whichever way it goes, those follow the shared decision.
 
-## 5. IANA link ids are rejected by `isKnownZoneId` (P16-B09, minor)
+**RESOLVED (shared batch 6) — option 2 above is what shipped.** `members.email`
+now exists (schema v7, nullable) and `Seed` writes `sarah@example.co.uk`
+(`seed.dart:83,127,180`). The measurement above is kept as the record of how the
+gap was found: the 08:12 ruling was written against a tree that had no email
+column anywhere, and batch 6 made its premise true. Nothing here suggests the
+ruling was mistaken — only that it described the destination, not the tree it
+was written on. P16 now reads the address from the database and falls back to
+the role/invite copy when it is NULL, so no address is ever invented.
+
+## 5. IANA link ids are rejected by `isKnownZoneId` (P16-B09, minor) — LANDED (batch 6)
 
 Need: the bundled `package:timezone` `latest_10y` dataset has 341 locations
 and **no IANA backward links**, so a phone that reports a link id
@@ -107,6 +125,48 @@ their canonical zone inside `isKnownZoneId`/`normalizeZoneId` (a small alias
 map or a links-complete dataset). No feature-side workaround exists — the raw
 id never reaches the bloc.
 Files: `app/lib/core/data/family_time.dart` (and/or the tz data source).
+Blocks: no.
+
+## 6. `NestListRow` has no custom `leading` slot and no title-colour override — OPEN (the last fork)
+
+Need: two optional params on the shared row, both of which P16's design already
+uses and both of which the row cannot express today.
+
+**(a) `leading` widget.** The design's Family and Children rows carry a 32 px
+avatar as the leading slot —
+`<span class="avatar s32 a-leaf">S</span>` (`P16-settings.html:18-20, 24-25`),
+avatar 32, 12 px gap, row min-height 56 (which a 32 leading leaves at 56: 32 +
+20 padding < 56, so nothing shifts). `NestListRow` only builds its leading from
+`leadingAsset` as a **40 px icon tile** (`NestTileTint`), so four rows (Sarah,
+James, Maya, Leo) cannot use it. `NestQuestCard` already solves exactly this
+with `final Widget? leading` + `?leadingWidget` in its `Row`
+(`nest_quest_card.dart:41,61`) — the same two-line change in
+`nest_list_row.dart` covers it.
+
+**(b) danger title.** `.dangerlink { color:var(--danger); font-weight:700 }`
+(`P16-settings.html:40`) for `Delete family account`; the shared row pins
+`bodyStrong` w600 in `ink`. A `titleColor` (or `titleStyle`) override does it.
+
+Measured cost of not having them: P16 keeps `SettingsRow`
+(`presentation/widgets/settings_rows.dart`), a 100-line mirror of the shared
+row's metrics that now has **one** job — the four avatar rows and the one
+danger row. When (a) and (b) land, `SettingsRow` and its 4 call sites delete
+and P16 uses `NestListRow` everywhere, like the 11 other shared-row screens.
+Nothing blocks on this (the screen is correct and its tests are green); it is
+fork debt, and every future design-system change to `NestListRow` silently
+diverges from those five rows until it is paid.
+
+Files: `app/lib/core/design_system/components/nest_list_row.dart`.
+Blocks: no.
+
+## 7. The 4pt grid has no 52 (`.linkrow` min-height) — OPEN, cosmetic
+
+Need: `.linkrow { min-height:52px }` (`P16-settings.html:9`) has no token.
+P16 uses a documented screen-local `const double _linkRowMinHeight = 52` in
+`settings_view.dart`. `NestPager.stage` is also 52 but is a different metric
+(P02's progress-stage circle), so reusing it would be a lie. One line in
+`spacing.dart` (`static const double gap52 = 52;`, or a named
+`NestLinkRow.minHeight`) would let the value move to the token layer.
 Blocks: no.
 
 ## Also worth the orchestrator's attention (not requested here)
