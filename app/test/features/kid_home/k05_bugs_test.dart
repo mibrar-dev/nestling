@@ -4,27 +4,31 @@
 // navigation, persistence, a11y actions, layout, dark-mode contrast and
 // rapid-tap guards all pass the probes in this file):
 //
-// * K05-BUG-1 (MINOR, open) — a 1-coin quest celebrates as "+1 coins" and
+// * K05-BUG-1 (MINOR, fixed in iteration 2) — a 1-coin quest celebrated as
+//   "+1 coins" and
 //   announces "1 coins earned". The quest editor's minimum reward is 1
 //   (`quest_editor_view.dart:333 _minCoins = 1`), so the path is reachable.
 //   The growth card next door already handles the singular ("Pip needs
 //   1 more coin to grow"), so the pill is the only place the grammar slips.
 //   Proofs below: `K05-BUG-1a` (visible copy) and `K05-BUG-1b` (semantics).
 //
-// * K05-BUG-2 (MINOR, open) — at 249 of 250 lifetime coins the card shows
+// * K05-BUG-2 (MINOR, fixed in iteration 2) — at 249 of 250 lifetime coins the
+//   card showed
 //   "Pip needs 1 more coin to grow" and "249 of 250 coins", yet the progress
 //   node announces "Pip is 100% of the way to Songbird": `(0.996 * 100)
 //   .round()` rounds the last coin away. The bar itself is 99.6 % filled, so
 //   the announced 100 % contradicts the two visible lines. Proof below.
 //
-// * K05-BUG-3 (MINOR, open) — at 320 px wide with the 1.3× accessibility
+// * K05-BUG-3 (MINOR, fixed in iteration 2) — at 320 px wide with the 1.3×
+//   accessibility
 //   text scale (the app shell's supported maximum), the growth card's count
 //   row gives each of "175 of 250 coins" and "Next: Songbird" 117 px and
 //   BOTH ellipsise ("175 of 250 coi…" / "Next: Songbi…"). The data is still
 //   reachable by VoiceOver, but the visible line loses the numbers. Proof
 //   below.
 //
-// * K05-BUG-4 (MINOR, open) — a double-barrelled UK nickname such as
+// * K05-BUG-4 (MINOR, fixed in iteration 2) — a double-barrelled UK nickname
+//   such as
 //   "Maximilian-Alexander" makes the hero need 3 natural lines at the
 //   design's 40/44; the view's `maxLines: 2` ellipsises the name even at
 //   390 px / 1.0× ("Brilliant," / "Maximilian-Alexan…"). The design's h1 has
@@ -196,7 +200,6 @@ void main() {
       );
       await disposeApp(tester);
     },
-    skip: true,
   );
 
   testWidgets('K05-BUG-1b: the 1-coin pill announces "1 coin earned", not '
@@ -213,7 +216,7 @@ void main() {
     );
     semantics.dispose();
     await disposeApp(tester);
-  }, skip: true);
+  });
 
   // -------------------------------------------------------------------------
   // K05-BUG-2 — 249/250 announces 100 %
@@ -248,7 +251,7 @@ void main() {
     );
     semantics.dispose();
     await disposeApp(tester);
-  }, skip: true);
+  });
 
   // -------------------------------------------------------------------------
   // K05-BUG-3 — the count row ellipsises at 320 px / 1.3×
@@ -279,7 +282,7 @@ void main() {
       reason: '"Next: Songbird" ellipsises at the same size (~136 px needed)',
     );
     await disposeApp(tester);
-  }, skip: true);
+  });
 
   // -------------------------------------------------------------------------
   // K05-BUG-4 — long UK names lose the hero to the 2-line cap
@@ -325,7 +328,6 @@ void main() {
       );
       await disposeApp(tester);
     },
-    skip: true,
   );
 
   // -------------------------------------------------------------------------

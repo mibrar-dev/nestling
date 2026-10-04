@@ -35,8 +35,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
-// `hide PipMood`: the barrel exports the v1 `PipMood` from `pip_rive.dart`,
-// which collides with the v2 one this screen uses (same shape as K04).
 import 'package:nestling/core/design_system/assets/nestling_assets.dart'
     as nest_assets;
 // `hide PipMood`: the barrel exports the v1 `PipMood` from `pip_rive.dart`,
@@ -65,6 +63,12 @@ const double _kPipSlot = 218;
 /// `.k5-pip` tilt. `−8°` in radians; the rotation is visual only, so it does
 /// not change any measured rect (Transform paints, never lays out).
 const double _kPipTilt = -8 * 3.141592653589793 / 180;
+
+/// `.k5-pip { margin: 14px 0 2px }` — Pip's own top margin. Kept separate
+/// from the card's `padding` even though both are 14: the two CSS
+/// declarations are unrelated, so a future card-padding edit must not move
+/// Pip.
+const double _kPipMarginTop = NestSpacing.gap14;
 
 /// `.k5-card-top img`: the growth card's 32 px Pip.
 const double _kMiniPipSlot = 32;
@@ -349,7 +353,7 @@ class _QuestCompleteBody extends StatelessWidget {
                   // `.k5-stage`: the burst is `position:absolute` behind Pip,
                   // so the stage is exactly Pip's margin box.
                   SizedBox(
-                    height: _kPipSlot + _kCardPadV + NestSpacing.gap2,
+                    height: _kPipSlot + _kPipMarginTop + NestSpacing.gap2,
                     child: Stack(
                       alignment: Alignment.topCenter,
                       children: [
@@ -385,7 +389,7 @@ class _QuestCompleteBody extends StatelessWidget {
                         Padding(
                           // `.k5-pip { margin: 14px 0 2px }`.
                           padding: const EdgeInsets.only(
-                            top: _kCardPadV,
+                            top: _kPipMarginTop,
                             bottom: NestSpacing.gap2,
                           ),
                           child: Transform.rotate(
@@ -415,19 +419,25 @@ class _QuestCompleteBody extends StatelessWidget {
                   // `.scroll > * + *` 16 px rhythm.
                   const SizedBox(height: _kHeroGap),
                   // `.kid-hero` is `text-wrap: balance`, so the heading breaks
-                  // like the design instead of orphaning a word.
+                  // like the design instead of orphaning a word. The design's
+                  // h1 has no line cap; 3 lines keep a double-barrelled UK
+                  // nickname whole (K05-BUG-4) while "Brilliant, Maya!" stays
+                  // the design's single 44 px line.
                   NestBalancedText(
                     'Brilliant, ${child.nickname}!',
                     style: NestType.kidHero(color: tokens.ink),
-                    maxLines: 2,
+                    maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: NestSpacing.s4),
                   Center(
                     child: NestCoinPill(
-                      amount: '+$coins coins',
+                      // The quest editor's floor is 1 coin (K05-BUG-1): a
+                      // one-coin quest reads "+1 coin", never "+1 coins".
+                      amount: '+$coins ${coins == 1 ? 'coin' : 'coins'}',
                       size: NestCoinPillSize.large,
-                      semanticLabel: '$coins coins earned',
+                      semanticLabel:
+                          '$coins ${coins == 1 ? 'coin' : 'coins'} earned',
                     ),
                   ),
                   const SizedBox(height: NestSpacing.s4),
@@ -510,14 +520,17 @@ class _GrowthCard extends StatelessWidget {
     final nextName = pipStageName((child.pipStage + 1).clamp(1, 4));
     final next = 'Next: $nextName';
     final fraction = kidPipGrowthFraction(total);
-    final percent = (fraction * 100).round();
+    // Floor, never round, while the bar is short of the threshold: 249/250
+    // must not announce "100%" next to "1 more coin to grow" (K05-BUG-2).
+    final percent = fraction >= 1 ? 100 : (fraction * 100).floor();
     // The card's THREE text lines are one announcement (plan §e), so they
     // collapse into a single labelled node. `NestProgress` sits OUTSIDE that
     // node and keeps its own `role=img` label (the design's `aria-label`) as
-    // a separate node, so nothing is announced twice.
+    // a separate node, so nothing is announced twice — which is also why the
+    // card label stops at "Next …" (the progress node carries the figure).
     final cardText = Semantics(
       container: true,
-      label: '$headline. $count. Next $nextName. $percent percent.',
+      label: '$headline. $count. Next $nextName.',
       excludeSemantics: true,
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -550,29 +563,72 @@ class _GrowthCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: _kCountGapTop),
-          // `.k5-count { display:flex; justify-content:space-between }`.
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            spacing: NestSpacing.s2,
-            children: [
-              Flexible(
-                child: Text(
-                  count,
-                  style: NestType.kidCaption(color: tokens.ink2),
+          // `.k5-count { display:flex; justify-content:space-between }` — the
+          // design's one line whenever both labels fit (390/1.0: count from
+          // x 39, "Next: …" pinned right at 351). At the supported 320 px /
+          // 1.3× size one line gives each label 117 px while the text needs
+          // ~150, so the labels stack instead of ellipsising (K05-BUG-3);
+          // the decision measures the labels with the live text scaler.
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final style = NestType.kidCaption(color: tokens.ink2);
+              final scaler = MediaQuery.textScalerOf(context);
+              double labelWidth(String text) {
+                final painter = TextPainter(
+                  text: TextSpan(text: text, style: style),
+                  textDirection: Directionality.of(context),
+                  textScaler: scaler,
                   maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              Flexible(
-                child: Text(
-                  next,
-                  style: NestType.kidCaption(color: tokens.ink2),
-                  textAlign: TextAlign.right,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
+                )..layout();
+                return painter.width;
+              }
+
+              final oneLine =
+                  labelWidth(count) + NestSpacing.s2 + labelWidth(next) <=
+                  constraints.maxWidth;
+              if (oneLine) {
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  spacing: NestSpacing.s2,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        count,
+                        style: style,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Flexible(
+                      child: Text(
+                        next,
+                        style: style,
+                        textAlign: TextAlign.right,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    count,
+                    style: style,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    next,
+                    style: style,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),
