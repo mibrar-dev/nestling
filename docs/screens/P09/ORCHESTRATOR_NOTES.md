@@ -22,3 +22,6 @@ Integrator: switch the icon picker to `NestIcons.questBed / questDishes / questH
 
 ## UPDATE (00:25, orchestrator QA of cmp_light_4, 1.37%) — iteration 5: one item
 The layout and icons match the design. Fix ONLY P09-TEST-6 (3_test.md): in debug builds the coin guard's assert text leaks into the toast. The toast must show the product copy only, in debug and release, with a test. The family_time_test failure is fixed on main (it is merged before the build). Change nothing else.
+
+## UPDATE (09:27) — BUG-P09-14 (quest id from the clock)
+Fix it: never derive ids from the clock. shared/unique_ids is adding `newId(prefix)` (uuid) in core. Once main has it (merged before your build), use `newId('q')` for new quests. Un-skip the BUG-14 proof: create two quests in a row under the pinned clock and both must exist. Raw SQL/exception text must never reach the toast.

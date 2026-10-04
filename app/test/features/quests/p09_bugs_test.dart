@@ -76,6 +76,17 @@
 //                     release the assert is stripped and the ArgumentError
 //                     maps correctly. Latent today (the clamped editor never
 //                     sends an out-of-range value), defensive path only.
+//
+// Iteration-5 proof (BUG-P09-14), `skip: true` until fixed:
+//
+//   BUG-P09-14 major  the new-quest id is `q-<appNowUtc().ms>` — a timestamp
+//                     from the app clock, which the CLOCK rule pins in every
+//                     test. Both creates in one session mint the same id, so
+//                     the second insert hits the primary key: the editor
+//                     stays open with a raw SQL error toast and no second
+//                     quest exists. Production is masked only because the
+//                     real clock advances between separate save flows; the
+//                     id must be unique by construction.
 
 import 'dart:async';
 import 'dart:math' as math;
@@ -629,6 +640,47 @@ void main() {
       },
     );
   });
+
+  // -- iteration 5 proof ----------------------------------------------------
+  group(
+    'BUG-P09-14 — a second quest cannot be created in the same session',
+    () {
+      testWidgets('the pinned clock makes both creates share one id', (
+        tester,
+      ) async {
+        await pumpAppRoute(tester, QuestsRoutePaths.editor);
+        await tester.enterText(find.byType(TextField).first, 'Quest A');
+        await tester.pump();
+        await tester.tap(find.text('Save'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(currentPath(tester), QuestsRoutePaths.library);
+
+        // A second create in the same session, via P10's `+ Add`.
+        await tester.tap(find.text('+ Add').first);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.enterText(find.byType(TextField).first, 'Quest B');
+        await tester.pump();
+        await tester.tap(find.text('Save'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pump(const Duration(milliseconds: 300));
+
+        // `appNowUtc()` is pinned by the CLOCK rule, so both creates mint
+        // `q-<same ms>`; the second insert hits the primary key, the editor
+        // stays open and the toast carries the raw SQL error.
+        expect(find.text('New quest'), findsNothing);
+        final items = await tester.runAsync(() => _repo.getItems());
+        expect(
+          items!.map((quest) => quest.title),
+          containsAll(<String>['Quest A', 'Quest B']),
+        );
+        await disposeApp(tester);
+      }, skip: true);
+    },
+  );
 
   // -- attacks that hold ----------------------------------------------------
   group('attacks that hold (not skipped)', () {

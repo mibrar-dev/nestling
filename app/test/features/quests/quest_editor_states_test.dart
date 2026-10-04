@@ -17,6 +17,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
@@ -548,6 +549,44 @@ void main() {
       expect(find.byType(QuestLibraryView), findsOneWidget);
       expect(find.byType(QuestSavePill), findsNothing);
       expect(find.text('New quest'), findsNothing);
+      await disposeApp(tester);
+    });
+
+    testWidgets('the new id is minted from the APP clock, not the wall clock', (
+      tester,
+    ) async {
+      // CLOCK rule (ORCHESTRATOR_NOTES, iteration 5): app code never calls
+      // `DateTime.now()`. `flutter test` runs with the pinned story instant
+      // (Sat 3 Oct 2026 09:41 London = 08:41Z), so a wall-clock id would be
+      // ~16 hours off this value — this assertion is what catches a revert.
+      await pumpAppRoute(tester, QuestsRoutePaths.editor);
+      await tester.enterText(find.byType(TextField).first, 'Clock check');
+      await tester.pump();
+      await tester.tap(find.text('Save'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final saved = await tester.runAsync(
+        () => GetIt.instance<QuestsRepository>().getItems(),
+      );
+      final created = saved!.firstWhere(
+        (quest) => quest.title == 'Clock check',
+      );
+      expect(
+        created.id,
+        'q-${appNowUtc().millisecondsSinceEpoch}',
+        reason:
+            'the id must come from appNowUtc() (the story anchor), '
+            'not DateTime.now()',
+      );
+      // It is NOT the wall clock: the anchor is a fixed instant and the real
+      // clock has moved on since (the date rolled over during iteration 5).
+      expect(
+        created.id,
+        isNot('q-${DateTime.now().millisecondsSinceEpoch}'),
+        reason: 'a wall-clock id would fail this, which is the point',
+      );
       await disposeApp(tester);
     });
 

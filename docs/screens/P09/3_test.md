@@ -1,185 +1,180 @@
-# P09 — stage 3 · TEST (iteration 4)
+# P09 — stage 3 · TEST (iteration 5)
 
 Scope: `app/test/features/quests/**` only. No screen code, no shared code and
 no `tools/` touched; `flutter clean` never run; no simulator booted, installed
 on, screenshotted or driven; no `skip:` added, no test weakened, no
 `analysis_options.yaml` change; `google_fonts` appears nowhere.
 
-Iteration 3 closed with three red assertions and four open findings. Stage 2
-has since applied the mandated integrator change (batch-5 glyphs, `toggleTrack
-Offset` deleted, the approval card back to 72) and fixed BUG-P09-9/10/11/12.
-This stage reviews what that did to its suites, adds eight tests for the new
-behaviour, and records one bug that is still live.
+A single-item iteration: ORCHESTRATOR_NOTES 00:25 says *fix ONLY P09-TEST-6,
+change nothing else*. Stage 2 fixed it at the source, so this stage's job was
+to verify the fix, guard it against regression, close the gaps the new code
+opened, and keep hunting.
 
-## 1. Review of the mechanical test changes (six assertions, in my files)
-
-Stage 2 touched five of this feature's test files. I reviewed each diff in
-`git diff 8dec9b2..8022be3`:
-
-| File | Change | Verdict |
-|---|---|---|
-| `quest_editor_coin_rules_test.dart:187` | `−` on 9999 now expects **100 / `= 100p at payout`** instead of 9998 (BUG-P09-11's repair jump) | correct — the behaviour changed by design; the test still asserts the *number* and the *helper* |
-| `quest_editor_data_integrity_test.dart:227` | glyph list → `questBed / questDishes / questHoover / book / questBins / paw` | correct — exactly batch 5's mapping, design order preserved |
-| `quest_editor_bloc_test.dart:~180` | an `ArgumentError` now maps to `QuestsBloc.saveFailedMessage` and must NOT contain `Invalid argument` | correct and stronger |
-| `quest_editor_view_geometry_test.dart:325-343` | the toggle pins become the **track** (51×31 at 303 / 620.5 / 354 / 651.5), the 59×44 box assertions go | correct — this is what ORCHESTRATOR_NOTES 23:03 asked for |
-| `quest_editor_view_test.dart` | toggle-rect pins + the a11y toggle lookup | correct |
-
-Nothing was weakened: the design values in the geometry file (card 72, track
-303→354 / 620.5→651.5) are the ones now asserted, and the glyph/labels
-expectations moved to the shared batch's real paths.
-
-## 2. Tests added (8 new, 3 files)
-
-| File | Before → after | New tests |
-|---|---|---|
-| `quest_editor_toggle_hit_area_test.dart` (**new**) | — → 4 | the toggle's 59×44 tap area at **real** metrics |
-| `quest_editor_coin_rules_test.dart` | 12 → 15 | the repair jump's full contract (3) |
-| `quest_editor_states_test.dart` | 20 → 21 | a programmer error shows the parent-safe copy only |
-
-### 2.1 `quest_editor_toggle_hit_area_test.dart` — closing my own blind spot
-
-Iteration 3's report recorded (P09-TEST-5) that my slop test could not see
-BUG-P09-10: it ran in a suite whose widget-test font wraps
-`Coins land after your thumbs-up` onto two lines, so the approval row was ~76
-high instead of the design's 40 — and a 59×44 hit slop cannot be clipped by a
-row that is already taller. A test that cannot fail is not a test.
-
-This file loads the same bundled Inter/Nunito faces
-`quest_editor_view_geometry_test.dart` uses, asserts the premise (the card is
-the design's 72 and the sub-line really is one 18 px line), and then proves the
-slop at the design's metrics: taps **5 px above/below the track and 2 px right
-of it** (the exact offsets the bug report used), plus the whole slop —
-±6.5 vertical, ±4 horizontal, and all four **corners**, where a clipped box
-fails first. All pass, so 2b's fix (the toggle is now a `Positioned` sibling
-of the padded row rather than a child of it) is verified where it matters.
-
-### 2.2 The repair jump (BUG-P09-11) — three tests, not one
-
-The stepper now jumps to the valid band instead of stepping 9899 times. The
-updated test only pins the landing value; the contract is bigger:
-
-- **The jump lands exactly on the boundary and unlocks the save** — 9999 →
-  100, `= 100p at payout`, the `Coins must be 1–100` caption disappears, the
-  Save pill comes back, and the stored row is 100. (One short of the boundary
-  would leave the save blocked, which is why "exactly" is the assertion.)
-- **The jump is a one-shot repair** — the second `−` gives 99 and `+` gives 100
-  again, so it cannot degenerate into a mode where every tap jumps.
-- **An in-range value never jumps** — walked to 100 and to 1 the ordinary way,
-  both ends step by exactly one and the save stays available. This is the guard
-  against a fix that jumps whenever it can.
-
-### 2.3 Parent-safe save copy, end to end
-
-`_FaultyRepository` grew a `writeError` parameter so a test can inject a
-specific error. With an `ArgumentError` reaching the bloc, the toast carries
-`QuestsBloc.saveFailedMessage` and **neither** `Invalid argument` **nor** the
-coins range detail is on screen; the parent stays on the editor and Save is
-live again. (The sibling test pins the other half: an operational failure
-still shows the repository's own message.) See §4 for what this does *not*
-cover.
-
-## 3. Results
+## 1. Gates — all green
 
 ```
 $ dart format --set-exit-if-changed .
-Formatted 497 files (0 changed) in 1.39 seconds.          (exit 0)
+Formatted 534 files (0 changed) in 3.78 seconds.          (exit 0)
 
 $ flutter analyze
 Analyzing app...
-No issues found! (ran in 2.6s)
+No issues found! (ran in 5.8s)
 
 $ flutter test test/features/quests/
-00:15 +411: All tests passed!          # 0 skipped — every parked proof is fixed
+00:26 +409 ~1: All tests passed!
 
 $ flutter test
-00:56 +2625 ~1 -1: Some tests failed.
-  test/core/family_time_test.dart: seed + repository zone plumbing ›
-    kid_home completions are stamped with the family zone
+01:25 +3098 ~3: All tests passed!
 ```
 
-Per file (all green): states 21, coin-rules 15, data-integrity 23,
-toggle-hit-area 4, robustness 17, copy 8, a11y 15, bloc 7, view 42,
-view-geometry 5, bugs 30 (~1 = the parked BUG-P09-13 proof, another stage's
-file).
+Per file: states 22, coin-rules 15, data-integrity 23, toggle-hit-area 4,
+robustness 22, copy 8, a11y 15, bloc 7, view 42, view-geometry 5, bugs 31.
+
+- **P09-TEST-6 is closed and proven.** `_checkCoins` now throws
+  `ArgumentError.value(...)` unconditionally (no `assert` first), and
+  `p09_bugs_test.dart`'s BUG-P09-13 proof — real repository, real bloc, 9999
+  coins, asserting `saveFailedMessage` and the absence of any
+  `Failed assertion:` text — is **un-skipped and green**.
+- **23:55's known red is gone.** `test/core/family_time_test.dart` was fixed on
+  `main` and merged (`5ca5a1c`); my iteration-4 `SHARED_REQUEST.md` §7 is
+  closed by the core owner.
+- The `~3` skips are the repo's pre-existing ones (`p12_bugs_test.dart:321`,
+  `k01_bugs_test.dart:566`, and stage 6's parked BUG-P09-14). This feature has
+  **no** skip of its own that stage 2 did not author.
+
+## 2. Review of the mechanical changes (stage 2, this iteration)
+
+| File | Change | Verdict |
+|---|---|---|
+| `p09_bugs_test.dart` BUG-P09-13 | un-skipped, retitled, real repo + real bloc | correct — it is the regression guard for this iteration's mandated fix |
+| `p09_bugs_test.dart` BUG-P09-5 | the proof's premise died with `main` (P15-BUG-6 cascade-deletes the removed child's quests), so it now deletes the **child row straight into Drift** and keeps the quest | correct and **tighter**: it went from "one pill selected" to `pills.singleWhere((p) => p.selected).label == 'Anyone'`, which is the actual contract. My own data-integrity tests plant the same orphan state and were unaffected. |
+| `quests_repository_test.dart` | the two range-rejection tests now expect `throwsArgumentError` | correct — that is what the guard throws in both modes now |
+
+Nothing weakened; the design values (card 72, track 303→354 / 620.5→651.5) are
+still the ones asserted.
+
+## 3. Tests added (6 new, 2 files)
+
+### 3.1 The CLOCK contract, asserted behaviourally (states, +1)
+
+The new rule is "app code never calls `DateTime.now()`; use
+`clock.now()` / `appNowUtc()`". A grep proves the absence; this proves the
+*behaviour*: the id a new quest is stored under is exactly
+`q-${appNowUtc().millisecondsSinceEpoch}`, and explicitly **not**
+`q-${DateTime.now().millisecondsSinceEpoch}`. Because `flutter test` pins the
+story instant (Sat 3 Oct 2026 08:41Z) and the wall clock has moved on since
+(the date rolled over during this iteration), a revert to `DateTime.now()`
+fails this assertion rather than passing quietly.
+
+### 3.2 The approval toggle's placement on every surface (robustness, +5)
+
+BUG-P09-10's fix made the switch a `Positioned(top: 20.5, right: s4)` sibling
+of the padded row — a structure that had never been tested at any width or
+scale other than the design frame. Five new cases (320/390/430 × 1.0, plus 390
+and 320 at scale 1.3) assert the invariants that must hold wherever the text
+block wraps: the track stays inside the card's 16 px content box, is flush to
+the content edge exactly as the design has it, never overlaps the sub-line,
+and the title and the switch share one row without colliding. All five pass.
+§4.3 is what they found at the same time.
 
 ## 4. Bugs found
 
-### P09-TEST-6 — major — in debug builds the coin guard leaks its assert text into the toast
+### P09-TEST-7 (major) — a second quest cannot be created in the same session — **same as stage 6's BUG-P09-14**
 
-- File: the error is produced at
-  `app/lib/features/quests/data/quests_repository_impl.dart:99`
-  (`assert(coins >= minCoins && coins <= maxCoins, 'Quest coins must be
-  1..100, got $coins')`) and mis-mapped at
-  `app/lib/features/quests/presentation/bloc/quests_bloc.dart:123-129`
-  (`_editorError` maps **only** `ArgumentError`).
-- What happens: `flutter test` — and every debug build of the app — runs with
-  asserts on, so the guard throws `_AssertionError`, whose type is not
-  `ArgumentError`. The mapping misses, `error.toString()` becomes
-  `editorError`, and the **parent is shown the raw assert string**. Measured
-  first-hand in a throwaway probe on this tree (real repository, `coins:
-  9999`):
+- File: `app/lib/features/quests/presentation/views/quest_editor_view.dart:543`
+  — `id: 'q-${appNowUtc().millisecondsSinceEpoch}'`.
+- Repro (measured, this tree): save a quest → from the library tap `+ Add` →
+  save again. Both creates mint `q-1791016860000`, because `appNowUtc()` is
+  *frozen* at the anchor instant (`core/data/app_clock.dart`), so the second
+  insert hits the primary key. After the second save:
   ```
-  type = _AssertionError
-  toString = 'package:nestling/features/quests/data/quests_repository_impl.dart':
-             Failed assertion: line 99 pos 7: 'coins >= minCoins && coins <= maxCoins':
-             Quest coins must be 1..100, got 9999
-  is ArgumentError = false
+  path after 2nd save: /quest-editor          ← the parent stays (correct)
+  toast text: [SqliteException(1555): while executing statement,
+               UNIQUE constraint failed: quests.id, constraint failed (code 1555)]
+  rows = [q-1791016860000:First quest]        ← the second quest is not stored
+  after retry: path=/quest-editor  toast=[…same SqliteException…]
   ```
-  That is a source path, an assert message and an internal range in a toast a
-  parent reads — the opposite of review finding 4's "parent-safe copy", and it
-  contradicts the doc comment on `_editorError`, which claims the coins guard
-  throws an `ArgumentError` (that is only true in release).
-- Repro: any quest write whose coins are outside 1..100 in a debug build (the
-  editor clamps before dispatching, so today this is reachable only from a
-  future caller that bypasses the clamp — which is precisely why the last line
-  of defence should not leak).
-- **Not patched** (stage 3 records). Fix direction for whoever owns it: either
-  make `_checkCoins` throw the `ArgumentError` unconditionally (the assert then
-  only adds noise for the same condition), or widen `_editorError` to treat
-  `AssertionError` as a programmer error too. Stage 6 parked the same defect as
-  **BUG-P09-13** (`p09_bugs_test.dart:592`, `skip: true`); my probe is an
-  independent reproduction that also supplies the exact string.
-- Note for whoever reads my §2.3 test as coverage: it injects an
-  `ArgumentError` directly, so it proves the **release** mapping only. In this
-  repository the real guard can never produce that type under `flutter test`.
+  The retry produces the identical failure, so while the clock is pinned there
+  is **no way out**. Before the CLOCK rule this could not happen inside a test
+  (the wall clock advanced between the two saves); in production it needs two
+  saves within the same millisecond.
+- **Not patched** (stage 3 records). Fix direction: make the id unique by
+  construction rather than by clock resolution — e.g. a monotonic counter, or
+  an `Uuid`-style random suffix, with the timestamp kept for ordering.
+- Stage 6 filed the identical defect as **BUG-P09-14** with a parked proof
+  (`p09_bugs_test.dart:645`, the feature's only `skip:`). This is an
+  independent reproduction, not a second report; the retry detail is new.
 
-### Resolved since iteration 3 (all four of that report's findings)
+### P09-TEST-8 (major, broader than P09-TEST-6) — any non-`ArgumentError` save failure reaches the parent verbatim
 
-| Was | Now |
-|---|---|
-| P09-TEST-3 — approval card 68 vs the design's 72 | card back to 72, track on 303→354 / 620.5→651.5, pinned in the geometry file **and** re-pinned in the new hit-area file |
-| P09-TEST-4 — an out-of-range reward needed 9899 taps | one tap jumps to the boundary, unlocks Save and stores it; the jump is proven to be a one-shot |
-| P09-TEST-5 — my slop test was font-dependent | closed: real-font file, premise asserted, taps at 5/2 and at all four slop corners |
-| P09-TEST-1/2 — the U+002D minus, the emoji-nickname crash | fixed on `main`/iteration 2 and covered by the copy audit and three nickname tests |
+- File: `app/lib/features/quests/presentation/bloc/quests_bloc.dart:123-129`
+  — `_editorError` maps **only** `ArgumentError` to
+  `saveFailedMessage`; everything else is `return error.toString()`.
+- Evidence: the P09-TEST-7 repro shows the parent reading
+  `SqliteException(1555): while executing statement, UNIQUE constraint failed:
+  quests.id, constraint failed (code 1555)` in a toast — a SQL statement
+  failure with a driver error code.
+- Why it matters beyond that repro: iteration 5's mandated fix closed this
+  hole for **one** error type (the coins guard). A storage failure — the most
+  likely real-world save failure on a phone — is still a driver diagnostic on
+  screen, which is what review finding 4 asked to end. My own states test
+  asserts the *other* half of the current contract (an operational
+  `StateError('disk full')` shows the repository's message), so the intended
+  behaviour is currently ambiguous in the tests as well as in the code.
+- **Not patched.** Fix direction: treat anything that is not a recognised
+  operational error as a programmer/infra error — surface `saveFailedMessage`
+  and move `error.toString()` to the `log(name: 'quests')` call that already
+  exists in that method — and pin the operational cases explicitly
+  (disk full / offline keep their own parent-safe copy, not the exception
+  text).
+- Not filed by stage 6; BUG-P09-14's description mentions the raw SQL toast as
+  part of the id collision, so this is the same class generalised.
 
-### Observation, outside this screen's scope (unchanged, one day older)
+### P09-TEST-9 (minor, new) — the switch rides high whenever the text wraps
 
-`test/core/family_time_test.dart:319` fails: after `Seed.movedToDubai(db)` the
-`q-plants` completion is inserted a second time, so `.single` throws. Stage 2
-traced it precisely (2_build.md §5): the seed stamps that completion at
-`2026-10-03T06:00Z`, and once the machine clock passed Dubai midnight
-(2026-10-03 20:00Z) `countsForCurrentPeriod('daily', …)` is false, so the
-repository inserts instead of updating. It is `app/test/core/**` — off-limits
-under RULES §1 — and `SHARED_REQUEST.md` §7 carries the three one-line fixes
-for the core owner. Today is now **4 Oct** locally, so the trap is armed; it
-will arm again for the London half at 23:00Z. Not P09's to fix, and not caused
-by anything in this feature (`git diff main -- app/test/core app/lib/core
-app/lib/features/kid_home` is empty).
+- File: `app/lib/features/quests/presentation/views/quest_editor_view.dart`
+  — `Positioned(top: QuestEditorMetrics.approvalTrackTopInCard /* 20.5 */,
+  right: NestSpacing.s4, …)` in the approval card's `Stack`.
+- `20.5` is the design frame's *centred* offset: 16 px padding + the
+  `(40 − 31) / 2` that the design's 40-high text block leaves. The CSS rule it
+  approximates is `.switchrow { align-items: center }`, so the offset is a
+  measurement of one frame rather than the rule, and it does not survive a
+  taller text block.
+- Measured on this tree (widget-test font, so the wrap is even more generous
+  than the real one):
+
+  | width / scale | card height | track centre vs text-block centre |
+  |---|---|---|
+  | 390 / 1.0 | 112 | **20 px high** |
+  | 320 / 1.0 | 130 | **29 px high** |
+  | 390 / 1.3 | 159 | **43.5 px high** |
+  | 320 / 1.3 | 159 | **43.5 px high** |
+
+  The switch stays inside the card, never covers the sub-line and stays fully
+  operable (the five new tests in §3.2 prove exactly that), so this is a
+  visual-alignment deviation only — but it is the owner's ALIGNMENT rule
+  ("nothing a few px off") and it is visible on a 320 px phone and at the
+  app's maximum text scale.
+- **Not patched.** Fix direction: `Positioned.fill` + `Align(centerRight)`
+  with the same 16 px right inset — that reproduces the design frame's
+  `y 620.5` exactly (16 + (40 − 31) / 2) *and* centres on every other metric,
+  and it keeps the 59×44 slop unclipped, which is why the slop was moved out
+  of the row in the first place.
 
 ## 5. Notes for the next stages
 
-- **Nothing in this feature's suite is coupled to a pending change any more.**
-  The remaining coupling is the *bug* above (one assertion in
-  `p09_bugs_test.dart`, another stage's file, parked and waiting on the fix).
-- **`buildWhen`** (review 7) and the `ValueListenableBuilder` (review 4) remain
-  untested: both are performance properties with no observable contract.
-- **Observation, unreachable today:** `QuestEditorView.didChangeDependencies`
-  fetches `?id=` once (`if (_loadedQuest != null) return`), so going straight
-  from `/quest-editor?id=a` to `?id=b` on the same `State` would keep showing
-  quest `a`. Every in-app path pushes a new page, so nothing reaches it — but a
-  future "switch to another quest from this screen" affordance would inherit
-  it.
-- Every widget test here ends with `disposeApp(tester)`, and every semantics
-  handle is disposed **inside** the test body.
+- **One park and one fix are all that stand between this suite and green**:
+  BUG-P09-14 (P09-TEST-7, parked by stage 6) and P09-TEST-8/P09-TEST-9 above.
+- The next iteration's single-item brief should be P09-TEST-7 + -8 (they are
+  one story: the save path's error handling), with -9 as the alignment tail.
+- **Still deliberately untested:** `buildWhen` (review 7) and the
+  `ValueListenableBuilder` (review 4) — performance properties with no
+  observable contract.
+- **Still-unreachable observation:** `QuestEditorView.didChangeDependencies`
+  fetches `?id=` once, so `/quest-editor?id=a` → `?id=b` on the same `State`
+  would keep showing `a`. Every in-app path pushes a new page, so nothing
+  reaches it.
+- Every widget test ends with `disposeApp(tester)`, and every semantics handle
+  is disposed **inside** the test body.
 
 VERDICT: FAIL

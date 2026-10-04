@@ -237,6 +237,66 @@ void main() {
     });
   });
 
+  group('P09 robustness — approval toggle placement', () {
+    setUp(setUpTestScope);
+
+    // BUG-P09-10's fix made the switch a `Positioned(top: 20.5, right: s4)`
+    // sibling of the padded row, so its 59x44 tap area escapes the row's
+    // bounds. 20.5 is the design frame's *centred* offset (16 padding + the
+    // (40 - 31) / 2 the 40-high text block leaves), so these invariants must
+    // hold on every surface the app supports, not only the design's.
+    for (final (width, scale) in const <(double, double)>[
+      (320, 1),
+      (390, 1),
+      (430, 1),
+      (390, 1.3),
+      (320, 1.3),
+    ]) {
+      testWidgets(
+        '$width wide at scale $scale: inside the card, never over text',
+        (tester) async {
+          await pumpAppRoute(tester, QuestsRoutePaths.editor);
+          await _resize(tester, width, scale);
+          expect(tester.takeException(), isNull);
+
+          final card = tester.getRect(find.byType(NestCard).at(1));
+          final track = tester.getRect(find.byType(NestToggle));
+          final title = tester.getRect(find.text('Needs my approval'));
+          final sub = tester.getRect(
+            find.text('Coins land after your thumbs-up'),
+          );
+
+          // Inside the card's 16 px content box on both sides (ALIGNMENT).
+          expect(
+            track.left,
+            greaterThanOrEqualTo(card.left + NestSpacing.s4 - 0.01),
+            reason: 'the track must not leave the left gutter @$width/$scale',
+          );
+          expect(
+            track.right,
+            closeTo(card.right - NestSpacing.s4, 0.01),
+            reason: 'flush to the content edge, like the design @$width/$scale',
+          );
+          expect(track.top, greaterThanOrEqualTo(card.top));
+
+          // Never over the text: the switch is the card's right column.
+          expect(
+            track.overlaps(sub),
+            isFalse,
+            reason: 'the track must not cover the sub-line @$width/$scale',
+          );
+          expect(
+            title.right,
+            lessThanOrEqualTo(track.left + 0.01),
+            reason:
+                'title and switch share one row without overlapping @$width/$scale',
+          );
+          await disposeApp(tester);
+        },
+      );
+    }
+  });
+
   group('P09 robustness — tap targets', () {
     setUp(setUpTestScope);
 
