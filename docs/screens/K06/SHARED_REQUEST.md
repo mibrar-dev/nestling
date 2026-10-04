@@ -98,3 +98,88 @@ Files (outside RULES §1, deliberate): `app/test/features/kid_home/kid_home_view
 Blocks: no. **The orchestrator should know:** if the K03 loop is running, this
 file is the only place its branch and this one touch the same lines, and the
 merge conflict there is textual, not a design conflict.
+
+---
+
+## 5 — Wardrobe glyphs are the design's glyphs (ORCHESTRATOR_NOTES 11:30, item 2)
+
+Need: replace two shared `core/design_system` icon assets whose art is a
+**look-alike**, not the K06 design glyph. The wardrobe tiles paint
+`NestIcons.scarf` / `NestIcons.wellies` / `NestIcons.sunHat`, which resolve to
+`assets/icons/ic_scarf.svg`, `assets/icons/ic_wellies.svg`,
+`assets/icons/ic_sun_hat.svg`. A screen agent may not edit anything under
+`app/lib/core/**` (RULES §1), and the note forbids substituting a glyph — so
+the fix has to land on the shared asset, from the design's own path data.
+
+Design glyphs, copied verbatim from `design/html-source/screens/K06-pip.html`
+`.k6-ward` (the `<svg viewBox="0 0 24 24" … stroke-width="2">` inside each
+`.k6-item`):
+
+```html
+<!-- Scarf (line 73) -->  <path d="M5 3h4v18H5z"/><path d="M11 3h4v5a2 2 0 0 1-4 0z"/><path d="M7 9v6"/>
+<!-- Sun hat (line 74) --> <path d="M3 16h18l-1.6 2.4H4.6z"/><path d="M7 16a5 5 0 0 1 10 0z"/>
+<!-- Wellies (line 75) --> <path d="M8 3v8l-2 4.2A3 3 0 0 0 8.7 20h5.6A2.4 2.4 0 0 0 16.6 15l-2.6-4V3z"/><path d="M6 3h4M14 3h4"/>
+<!-- Crown (line 76) -->  <path d="M4 8l3.6 3L12 5l4.4 6L20 8l-1.6 9H5.6z"/><path d="M6 20h12"/>
+```
+
+Measured differences (asset path data vs the design, whitespace/case
+normalised):
+
+| Tile | Asset today | Design | Verdict |
+|---|---|---|---|
+| Scarf | `M7.6 3.6h8.8v13.2l-1.7 2.4H9.3L7.6 16.8Z` + two bars + three fringe ticks (a fringed blanket) | two vertical strokes, a flag, one tick | **different glyph** (named in the note) |
+| Wellies | `M6.8 5.1h4.4v8.1h3.9a3.1 3.1 0 0 1 3.1 3.1v.4a2.4 2.4 0 0 1-2.4 2.4H8.9a2.1 2.1 0 0 1-2.1-2.1Z` + 2 strokes | boot/flask body + the two top ticks `M6 3h4M14 3h4` | **different glyph** (named in the note) |
+| Sun hat | `M2.4 13.8h19.2l-1.6 2.8H4Z` + `M6.8 13.8a5.2 7 0 0 1 10.4 0Z` + an extra `M7.4 11.6h9.2` | `M3 16h18l-1.6 2.4H4.6z` + `M7 16a5 5 0 0 1 10 0z` | same idea, different coordinates + an extra stroke (not named in the note) |
+| Crown | `M4 8l3.6 3L12 5l4.4 6L20 8l-1.6 9H5.6zm2 12h12` | `M4 8…H5.6z` + `M6 20h12` | **same geometry** (implicit lineto; `m2 12h12` ≡ `M6 20h12` after `z`) — leave it alone |
+
+Files: `app/assets/icons/ic_scarf.svg`, `app/assets/icons/ic_wellies.svg`,
+`app/assets/icons/ic_sun_hat.svg` (shared design-system assets), plus their
+declarations in `app/lib/core/design_system/assets/nestling_assets.dart` if
+the file names change.
+
+Blocks: **no** for K06 — the screen renders today and the fix is cosmetic. But
+it blocks the note's item 2, which is a mandatory iteration-2 target.
+
+Proof (parked, deterministic):
+`app/test/features/pip/pip_orchestrator_notes_test.dart` —
+"ORCHESTRATOR NOTES item 2: the scarf / wellies / sunhat glyph is the design
+path". Each compares the asset's path data against the path data read out of
+`K06-pip.html` at test time, so the oracle can never drift:
+
+```
+flutter test test/features/pip/pip_orchestrator_notes_test.dart --run-skipped
+```
+
+## 6 — Wardrobe prices: the seed says 40/120, the design says 30/60
+(ORCHESTRATOR_NOTES 11:30, item 3)
+
+Need: decide the single source of truth for `pip_wardrobe.priceCoins`. The
+K06 design (HTML lines 75–76 and `design/screens/light/K06-pip.png`) shows
+**Wellies 30 / Crown 60**; `Seed._wardrobeDemo`
+(`app/lib/core/data/seed.dart:605-613`) writes **40 / 120** for Maya and
+30/40/120 for Leo. The note says the seed mirrors the designs and asks for a
+request rather than a hard-coded price; the DATA OVER MOCKS rule says the
+database is correct and the design number is the mock. Both rules agree on the
+mechanics — **never hard-code a price in the view**, render
+`watchWardrobe(item).priceCoins` — and disagree only on which row is right.
+
+This is a shared `core/data/seed.dart` change plus a schema-value question, so
+it cannot be fixed inside `features/pip/**` (RULES §1).
+
+Options for the orchestrator:
+1. change the seed to 30/60 to match the designs (and re-check any other screen
+   that renders these prices), or
+2. change the design source + both PNGs to 40/120 and keep the seed.
+
+K06 renders the seeded value today: `PipWardrobeTile` shows `'${item.priceCoins}'`
+and the semantics label `'<Name>, <price> coins'` — no literal anywhere. Tests
+that pin this behaviour, so a seed change flips them honestly rather than
+silently:
+`pip_nest_view_test.dart` ("wardrobe renders design names, owned state and DB
+prices", "every control exposes SemanticsAction.tap", "an affordable wardrobe
+tap buys…", "buying an affordable item spends the DB price"),
+`pip_repository_test.dart`, `pip_orchestrator_notes_test.dart` item 3 (which
+also proves the price follows the row: it re-seeds Crown to 7 and expects 7).
+Files: `app/lib/core/data/seed.dart` (or `design/html-source/screens/K06-pip.html`
++ `design/screens/{light,dark}/K06-pip.png`).
+Blocks: no.

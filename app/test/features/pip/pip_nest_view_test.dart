@@ -42,13 +42,24 @@ Future<void> _pumpNest(
   double width = NestDevice.width,
   double textScale = 1,
 }) async {
-  tester.view.physicalSize = Size(width * 3, NestDevice.height * 3);
-  tester.view.devicePixelRatio = 3;
-  addTearDown(tester.view.reset);
   tester.platformDispatcher.textScaleFactorTestValue = textScale;
   addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
   GetIt.instance<ThemeModeController>().selectMode(theme);
   await pumpAppRoute(tester, '/pip', theme: theme);
+  // `pumpAppRoute` pins 390x844 ITSELF, so a surface set before the pump is
+  // silently overwritten and the whole width matrix used to run at 390. The
+  // requested surface is therefore applied AFTER the pump, then re-laid out,
+  // and the size is asserted so this can never rot again (stage 6's note in
+  // `6_bugs.md`, "test-infrastructure (minor, test-only)").
+  tester.view.physicalSize = Size(width * 3, NestDevice.height * 3);
+  tester.view.devicePixelRatio = 3;
+  addTearDown(tester.view.reset);
+  await tester.pump();
+  expect(
+    tester.view.physicalSize.width / tester.view.devicePixelRatio,
+    width,
+    reason: 'the fit matrix must really run at $width logical px',
+  );
 }
 
 Future<int> _coins(AppDatabase db) async {
