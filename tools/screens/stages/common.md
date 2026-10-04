@@ -29,3 +29,4 @@ ORCHESTRATOR RULES (override the design PNGs where they conflict):
 - IDS: new rows get ids from `newId(prefix)` (core/data/ids.dart, uuid). Never derive an id from the clock.
 - TEST TIMEOUTS: always run flutter test with a per-test timeout (`flutter test --timeout 120s …`). A test that can hang is a bug, so fix it. Never wait on a background test run for more than 10 minutes.
 - AVATAR INITIALS: use `nestAvatarInitial(name)` (grapheme-safe). Never `name[0]`.
+- ICONS: kid screens use questIconFor/rewardIconFor(audience: NestAudience.kid) and kid glyphs; parent screens use audience: parent. Each screen matches its own design's glyphs exactly.
