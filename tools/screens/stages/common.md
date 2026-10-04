@@ -26,3 +26,4 @@ ORCHESTRATOR RULES (override the design PNGs where they conflict):
 - UI VERDICT RULE: a UI check may only PASS when every element is within ±2 px of the design position (excluding OS status-bar glyphs and DB-driven content). A uniform vertical shift of the whole screen is a FAIL, even if each element "looks the same". Report the measured y of the screen title, the first control and each card top, design versus app.
 - CLOCK: app code never calls DateTime.now(); use clock.now() / appNowUtc() (package:clock). Tests are pinned to Sat 3 Oct 2026 09:41 London; never assert real-wall-clock copy.
 - KID BACKGROUND: every K screen gets the sky gradient and the meadow hills from the shared kid scope (core/design_system/theme/kid_meadow.dart). Never paint local hills or meadow, and use the shared one exactly as the HTML places it (bottom 0, 390×136).
+- IDS: new rows get ids from `newId(prefix)` (core/data/ids.dart, uuid). Never derive an id from the clock.
