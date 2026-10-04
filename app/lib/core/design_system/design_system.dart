@@ -12,6 +12,7 @@ export 'package:nestling/core/design_system/components/nest_chip.dart';
 export 'package:nestling/core/design_system/components/nest_chip_wrap.dart';
 export 'package:nestling/core/design_system/components/nest_chrome.dart';
 export 'package:nestling/core/design_system/components/nest_coin_pill.dart';
+export 'package:nestling/core/design_system/components/nest_dashed_border.dart';
 export 'package:nestling/core/design_system/components/nest_day_picker.dart';
 export 'package:nestling/core/design_system/components/nest_empty_state.dart';
 export 'package:nestling/core/design_system/components/nest_fab.dart';

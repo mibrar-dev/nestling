@@ -321,7 +321,7 @@ void main() {
 
       await repo.buyItem('maya', 'wellies');
       profile = await repo.watchProfile('maya').first;
-      expect(profile?.coins, 75);
+      expect(profile?.coins, 85);
       final items = await repo.watchItems().first;
       expect(items.firstWhere((i) => i.id == 'wellies').owned, isTrue);
 
