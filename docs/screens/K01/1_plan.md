@@ -7,7 +7,12 @@ Sources: `design/html-source/screens/K01-profile-picker.html`,
 
 ## 0. Copy (character-exact from the HTML source)
 
-- Title: `Who's playing?` — U+2019 right single quotation mark, NOT ASCII `'`.
+- Title: `Who's playing?` — ASCII apostrophe U+0027, exactly as the HTML
+  source holds it (`<h1 …>Who's playing?</h1>`, raw byte `0x27`; corrected
+  iteration 3 — this line previously asserted U+2019 without citing the
+  source, which shipped BUG-A. The repo convention is "match your own HTML
+  source": `&rsquo;` screens ship U+2019, straight-`'` screens like K01/K03
+  ship ASCII. Pinned by `k01_copy_parity_test.dart`, 13/13 green.)
 - Sub: `Tap your face to start`
 - Tiles: `Maya` / `Age 7–9`, `Leo` / `Age 4–6` — U+2013 EN DASH (`&ndash;`), NOT hyphen.
 - Caption: `Grown-ups: tap the lock to get back to your dashboard.` — ASCII hyphen in `Grown-ups`.

@@ -142,6 +142,7 @@ class KidHomeBloc extends Bloc<KidHomeEvent, KidHomeState> {
             ? KidHomeStatus.failure
             : state.status,
         errorMessage: event.error.toString(),
+        profilesFailed: true,
       ),
     );
   }
@@ -168,6 +169,11 @@ class KidHomeBloc extends Bloc<KidHomeEvent, KidHomeState> {
     KidHomeProfileSelected event,
     Emitter<KidHomeState> emit,
   ) async {
+    // K01-BUG-6: one selection in flight = max one persisted child per
+    // burst. The view already gates dispatches with a screen-level busy
+    // flag; the bloc state-gate drops a stale-second event too, so
+    // `app_state` always names the child whose route the picker pushed.
+    if (state.selectedProfileId != null) return;
     try {
       await _repository.setActiveChild(event.childId);
       emit(state.copyWithSelection(event.childId));

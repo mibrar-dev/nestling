@@ -401,7 +401,7 @@ void main() {
           'be dropped together with its navigation',
     );
     await disposeApp(tester);
-  }, skip: true);
+  });
 
   // -------------------------------------------------------------------------
   // K01-BUG-3 — STILL OPEN (iteration 2): the same tile does not navigate
@@ -424,6 +424,11 @@ void main() {
   ) async {
     await _pumpPicker(tester);
     await tester.tap(_tile('maya'));
+    // Tile taps run a real Drift `setActiveChild` write (harness note:
+    // drain real async with runAsync, not only `Future.pump`).
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 60)),
+    );
     await _settle(tester);
     expect(pushedPath(tester), '/kid-pin');
     await tester.pageBack();
@@ -441,6 +446,9 @@ void main() {
           'selection emit), so the equal re-selection is dropped by the bloc',
     );
     await tester.tap(_tile('maya'));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 80)),
+    );
     await _settle(tester);
     expect(
       pushedPath(tester),
@@ -448,7 +456,7 @@ void main() {
       reason: 'K01-BUG-3: a repeated selection must navigate again',
     );
     await disposeApp(tester);
-  }, skip: true);
+  });
 
   // -------------------------------------------------------------------------
   // K01-BUG-5 (FIXED, iteration 2 build) — Try again recovers from a

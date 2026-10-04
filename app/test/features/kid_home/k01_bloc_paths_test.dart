@@ -18,10 +18,17 @@
 //   • K01-BUG-5: a profiles-caused failure recovers to `loaded` (with the
 //     stale load error cleared) on the next healthy roster, without a new
 //     home emission; Try again shows `loading` while only the roster
-//     restarts (review findings 1–3)
+//     restarts (review findings 1–3); a home-caused failure is never
+//     masked by a healthy roster
+//   • K01-BUG-6 (fixed): a burst persists only the first selection — a
+//     selection arriving while another is unconsumed returns early without
+//     writing, so `app_state` always names the pushed route's child
 //   • K01-BUG-3: `KidHomeSelectionHandled` consumes a pending selection so
 //     tapping the same tile after coming back emits distinctly again; a
 //     no-op when nothing is pending
+//   • review finding 2: `profilesFailed` tracks the roster outage (set on
+//     the error path, cleared by any healthy roster) so the view can gate
+//     its failure-card heal instead of re-deriving it
 
 import 'dart:async';
 
@@ -450,6 +457,37 @@ void main() {
     );
 
     blocTest<KidHomeBloc, KidHomeState>(
+      'the outage flag tracks the roster stream health',
+      build: () {
+        repo = _RosterFake();
+        return KidHomeBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+        expect(bloc.state.profilesFailed, isFalse);
+        repo.failRosterNow(Exception('one bad tick'));
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        expect(
+          bloc.state.profilesFailed,
+          isTrue,
+          reason: 'review finding 2: the view gates its heal on this flag',
+        );
+        // The error path released the subscription, so the retry re-opens
+        // the stream first — a push into the dead broadcast would go
+        // nowhere, exactly as in production.
+        bloc.add(const KidHomeProfilesRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        repo.pushRoster(const <KidChild>[maya, leo]);
+      },
+      wait: const Duration(milliseconds: 150),
+      verify: (bloc) {
+        expect(bloc.state.profilesFailed, isFalse);
+        expect(bloc.state.status, KidHomeStatus.loaded);
+      },
+    );
+
+    blocTest<KidHomeBloc, KidHomeState>(
       'a home-caused failure is NOT masked by a healthy roster',
       build: () {
         repo = _RosterFake()
@@ -481,12 +519,15 @@ void main() {
   });
 
   group('K01 — selection handled (K01-BUG-3)', () {
-    // K01-BUG-6 (open). The view single-flights its NAVIGATION
+    // K01-BUG-6 (fixed iteration 3). The view single-flights its NAVIGATION
     // (`_navPending`), so only the first selection of a gesture burst pushes
-    // a route — but `_onProfileSelected` has no in-flight guard, so every
-    // selection still runs its `setActiveChild` write. `app_state` therefore
-    // ends up naming a child the user never arrived at. This is the bloc-side
-    // root cause, pinned where the fix will land.
+    // a route — and since iteration 3 the bloc single-flights the WRITES the
+    // same way: a selection that arrives while another is still unconsumed
+    // belongs to the same burst and returns early without writing, so
+    // `app_state` always names the child whose route was pushed. The pending
+    // selection clears via `KidHomeSelectionHandled` (dispatched after the
+    // push starts) or via the next home emission, so a genuinely later tap
+    // is never dropped.
     //
     // Written as a plain `test`, not a `blocTest`: `blocTest(skip:)` takes an
     // int RETRY count, not a marker, so a bug proof there would run (and fail)
@@ -513,11 +554,38 @@ void main() {
               'the user is authenticating as maya while the app state says '
               '"${fake.selected.last}".',
         );
+        expect(
+          bloc.state.selectedProfileId,
+          'maya',
+          reason: 'the surviving selection is the first of the burst',
+        );
       },
-      skip:
-          'K01-BUG-6 open: the picker single-flights its navigation but not '
-          'its writes, so app_state can name a child whose route was never '
-          'pushed (see docs/screens/K01/6_bugs.md)',
+    );
+
+    blocTest<KidHomeBloc, KidHomeState>(
+      'a burst selection dropped by single-flight leaves no trace',
+      build: () {
+        repo = _RosterFake();
+        return KidHomeBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+        bloc
+          ..add(const KidHomeProfileSelected(childId: 'maya', pinSet: true))
+          ..add(const KidHomeProfileSelected(childId: 'leo', pinSet: false));
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        // The burst is over and the view pushed Maya's route: consume it,
+        // then prove the picker is usable again with a later tap.
+        bloc.add(const KidHomeSelectionHandled());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        bloc.add(const KidHomeProfileSelected(childId: 'leo', pinSet: false));
+      },
+      wait: const Duration(milliseconds: 200),
+      verify: (bloc) {
+        expect(repo.selected, <String>['maya', 'leo']);
+        expect(bloc.state.selectedProfileId, 'leo');
+      },
     );
 
     blocTest<KidHomeBloc, KidHomeState>(
@@ -623,6 +691,40 @@ void main() {
         'maya',
         'leo',
       ]);
+      expect(recovered.profilesFailed, isFalse);
+    });
+
+    test('the outage flag is set on error and cleared by health', () {
+      const fresh = KidHomeState();
+      expect(fresh.profilesFailed, isFalse);
+      final failed = fresh.copyWith(
+        status: KidHomeStatus.failure,
+        errorMessage: 'Exception: profiles down',
+        profilesFailed: true,
+      );
+      expect(failed.profilesFailed, isTrue);
+      // Every other constructor carries it (a dropped flag would let the
+      // view heal a home-caused failure card off a stale roster).
+      expect(failed.copyWith().profilesFailed, isTrue);
+      expect(
+        failed.copyWithLoaded(child: maya, items: _items()).profilesFailed,
+        isTrue,
+      );
+      expect(
+        failed.withCompletionFailed(Exception('x')).profilesFailed,
+        isTrue,
+      );
+      // Any healthy roster clears it — plain receipt and recovery alike.
+      expect(
+        failed.copyWithProfiles(const <KidChild>[maya]).profilesFailed,
+        isFalse,
+      );
+      expect(
+        failed.copyWithProfilesRecovered(const <KidChild>[maya]).profilesFailed,
+        isFalse,
+      );
+      // And it takes part in equality, so the view rebuilds on the flip.
+      expect(failed, isNot(failed.copyWithProfiles(const <KidChild>[maya])));
     });
   });
 

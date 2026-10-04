@@ -1,189 +1,167 @@
-# K01 · Who's playing? — Stage 2 (INTEGRATE, iteration 2)
+# K01 · Who's playing? — Stage 2 (INTEGRATE, iteration 3)
 
 Job: make the 2a (logic) + 2b (UI) halves compile and pass together. Smallest
-change only — no redesign. Base is now `cb3f06a` (main merged), so the stale
-date-skew that reddened iteration 1 is gone and this is a true merge check.
+change only — no redesign.
 
-**Outcome: `dart format` clean · `flutter analyze` → No issues found ·
-`flutter test` → 2857 pass / 3 skip / 0 fail.** One mechanical fix was needed
-(FIX-1); no production code was changed.
+**Outcome: `dart format` clean (0 changed) · `flutter analyze` → No issues found
+· `flutter test` → 2882 pass / 1 skip / 0 fail. Zero fixes required** — this
+iteration needed no integration edit at all. Base `21c68f4` contains main.
 
-## 1. Summary of 2a (logic, iteration 2) — `2a_build_logic.md`
+## 1. Summary of 2a (logic, iteration 3) — `2a_build_logic.md`
 
-Feature `kid_home` non-UI layer, all additive to the iteration-1 contract.
-No `domain/**` or `data/**` change was needed this pass.
+Additive to the iteration-2 contract; no `domain/**` or `data/**` change needed.
 
-- **New event `KidHomeSelectionHandled`** — clears a pending
-  `selectedProfileId`, no-op when none; navigation stays out of the bloc.
-  Publishes a one-line *view half-line* for 2b (dispatch right after
-  `context.push(...)`) so K01-BUG-3 (a tile goes dead after returning from a
-  kid route, because the `==`-equal re-emit is dropped) can be closed end to
-  end without touching iteration-1 behaviour until it is dispatched.
-- **New state constructors** `copyWithSelectionHandled()` and
-  `copyWithProfilesRecovered(next)` — additive; **no field or `props` change**,
-  so no existing equality semantics move.
-- **BUG-5 / review findings 1–3 (bloc side)** — `_profilesFailed` release flag;
-  a healthy roster after a profiles-caused outage restores `loaded` and clears
-  the stale `errorMessage` **only while the home stream is live**, so a roster
-  arriving over a dead home stream cannot mask the failure card; Try-again
-  emits `loading` when it restarts only the roster.
-- **Deliberately not done:** no ignore-while-pending for selection bursts. 2a
-  judged that a bloc-side latch would silently drop legitimate cross-tile
-  retaps against the current view, so K01-BUG-2 stays a view-side screen latch
-  (the `_GateLockButton` `_busy` pattern). Correct call — left as-is.
-- **Tests** `k01_bloc_paths_test.dart` +7 (recovery without a home re-emit and
-  `homeSubscriptions == 1`, spinner capture, home-failure never masked,
-  handled clears pending, re-selection emits distinctly, handled no-op,
-  constructor/equality).
+- **K01-BUG-6 single-flight (bloc).** `_onProfileSelected` returns early —
+  *before* writing — when `selectedProfileId` is still unconsumed. 2a's
+  reasoning: handlers are sequential, so a transient `_selecting` flag is
+  useless (event 2 starts only after event 1 completes); the pending one-shot
+  **is** the guard. It clears via `KidHomeSelectionHandled` or the next home
+  emission, so genuinely later taps are never dropped.
+- **Review finding 2 (bloc).** New state field `profilesFailed` (default
+  `false`, in `props`, carried by all eight constructors, set on the profiles
+  error path, cleared by any healthy roster).
+- **`1_plan.md` §0 apostrophe corrected** to the shipped ASCII form with the
+  BUG-A history note, so the plan no longer contradicts
+  `k01_copy_parity_test.dart`.
+- **Tests** `k01_bloc_paths_test.dart`: BUG-6 reproducer un-skipped, plus
+  dropped-burst-leaves-no-trace, outage-flag stream-health, and
+  constructor/equality.
+- **Deliberately not done:** no bloc-side BUG-2 latch (superseded by the BUG-6
+  guard + the view latch pairing).
 
-## 2. Summary of 2b (UI, iteration 2) — `2b_build_ui.md`
+## 2. Summary of 2b (UI, iteration 3) — `2b_build_ui.md`
 
-FIXES_1 items, UI/layout/copy only.
+- **K01-BUG-3 (dead tile after back)** — the view half-line is now in
+  `ProfilePickerView`: `KidHomeSelectionHandled()` dispatched immediately after
+  the push starts. Parked widget proof un-skipped. 2b also found the proof had
+  been parking on a **harness artifact** (`tester.pump` doesn't drain the real
+  Drift `setActiveChild` write) and fixed the proof with
+  `tester.runAsync(... Future.delayed ...)` — the same pattern as stage 3's
+  `_settleAfterWrite`. Good catch: that was a bad test, not a bad product.
+- **K01-BUG-6** — prevented at two layers: the view's selection gate moved from
+  the `BlocListener` into tile dispatch (`_ProfilePickerViewState._select`), so
+  both the normal row and `_OverflowTileRow` route every tap through one
+  `_busy`-armed path; plus the bloc state-gate.
+- **Stage-4 finding 2** — the `profiles.isNotEmpty → reload` view heal
+  **removed**; the bloc's `copyWithProfilesRecovered` already restores
+  `loaded`, so no masking branch is needed.
+- Zero `skip:` blocks left on this screen.
 
-- **BUG-1 (3+ children collapse the tile row)** — `_PickerLoaded` branches:
-  ≤2 profiles keep the full-width `Expanded` row (167 @390 / 132 @320); 3+ get
-  `_OverflowTileRow`, a horizontal scroll where each tile keeps the two-up
-  width instead of being squashed. Three parked tests un-skipped and green.
-- **BUG-2 (burst double-nav)** — screen-level `_navPending` latch in
-  `ProfilePickerView` (now a `StatefulWidget`), released on pop or on a
-  selection failure. One push per gesture burst.
-- **BUG-4 (empty nickname ⇒ unlabelled tile)** — `ProfileTile` falls back to
-  the spoken label `Kid`; test un-skipped and green.
-- **BUG-5 (Try again cannot recover)** — healed at the view layer.
-- **D1 + D2 (tiles +16.5 px, caption +34 px low)** — caption bottom reserve
-  is now `NestSpacing.s8` + `NestDevice.homeH` (34), because the in-app
-  `NestHomeIndicator` reserves no space (P01 BUG-2); the flex-centred band
-  re-centres on the design values.
-- **BUG-A (apostrophe)** — title repointed to ASCII `'`, byte-identical to the
-  HTML source; five test files repointed to match.
-- Matrix bottom-edge/meadow pixel probes updated for the landed shared
-  two-tone meadow.
+## 3. Integration check — the real risk this iteration
 
-### Integration quality of the merge
+Both builders independently edited **the same two bloc lines**, which is the
+first genuine seam in three iterations:
 
-Clean. The 2a/2b split held: 2a owns bloc/event/state + `*_bloc_*`/
-`*_repository_*` tests, 2b owns views/widgets + `*_view*`/`*_matrix*`/`*_copy*`
-tests, and the shared contract was published through 2a's CONTRACT CHANGES
-before 2b coded against it. 2a explicitly recorded the one transient seam —
-it observed `profile_picker_view.dart:253` failing to compile with
-`_OverflowTileRow` undefined, which was 2b's BUG-1 edit still in flight, and
-confirmed via `git diff` that the file was not its own. By the time this
-stage ran, 2b had landed it. **No mismatched BLoC states, events, imports or
-renamed members existed**, so the only fix required was formatting.
+| Change | 2a | 2b | Result |
+|---|---|---|---|
+| `_onProfileSelected` early-return on pending | yes | yes | **converged to one implementation** |
+| `profilesFailed: true` on the error path | yes (field existed) | yes (field was never set) | **converged; field now actually written** |
 
-## 3. FIXES
+2b flagged the overlap itself and asked for it to be acknowledged. I verified
+the merged result rather than trusting that:
 
-### FIX-1 — DONE · `dart format .` reformatted one shared, unformatted file
+- `_onProfileSelected` and `_onProfilesFailed` are each present **exactly
+  once**, with a single coherent comment and a single guard — no duplicated
+  branch, no orphaned earlier version, no dead early-return.
+- The two builders' complementary halves of finding 2 actually fit:
+  2a added the `profilesFailed` **field**, 2b added the **write** that 2a's
+  note said was missing ("the state flag existed but was never set"). Neither
+  half is wasted, and the union is the correct fix.
+- All of it is covered by `k01_bloc_paths_test.dart` (23/23).
 
-`dart format .` reported `521 files (1 changed)` and reformatted
-`app/test/design_system/list_row_trailing_test.dart` — three
-`pumpNest(tester, Center(child: p16Row()))` calls collapsed from the 5-line
-dangling-arg form onto one line.
+**No mismatched BLoC states, events, imports or renamed members. No
+duplicated bloc logic. No fix was needed.**
 
-This file is **shared** (RULES §1: not mine) and was introduced by shared
-commit `79fe455` *"Shared: NestListRow trailing takes intrinsic width at right
-edge"*. I verified it is unformatted **in `main` itself** by extracting
-`git show main:…` to a scratch file and running the formatter on it — it
-reports `1 changed` there too. So the drift is inherited from the merge base,
-not introduced by 2a or 2b, and it will re-appear on every branch until it is
-fixed at the source.
+## 4. FIXES
 
-Kept, for two reasons: `dart format .` clean is an explicit done-criterion
-(RULES §7.1) and `flutter analyze`/`flutter test` both key off the formatted
-tree; and the change is purely mechanical whitespace with no semantic effect
-(the three call sites are byte-identical modulo line breaks). Reverting would
-leave the mandated `dart format .` reporting a change on every subsequent run.
-**Flagged for the orchestrator:** the durable fix is to land the reformat on
-`main` (or via a shared batch) so screen branches stop inheriting it. It is a
-whitespace-only diff and safe to take as-is.
+- **None required.** I made no code change this iteration.
+- **Nothing left deferred by me.** Both `LEFT FOR NEXT ITERATION` items in the
+  builders' notes are test-stage/orchestrator items, not integration work:
+  2b asks that its two bloc lines be acknowledged by the logic chunk — done
+  here in §3 — and notes a future "loading while a prior selection hangs"
+  shimmer is out of scope (state stays `loading`).
 
-### FIXES left / not done
+### `profilesFailed` is state-only — deliberate, not dead code
 
-- **Nothing deferred by me.** No new breakage was introduced, so there was
-  nothing else to fix.
-- **2 skips left parked by the builders (not mine to force):**
-  `k01_bugs_test.dart:341` (K01-BUG-2) and `:382` (K01-BUG-3). Both are
-  pre-existing `skip: true` from the test stage, both are documented in
-  2a/2b as needing an **orchestrator ruling**, and 2b states the BUG-2
-  assertion semantics are genuinely ambiguous:
-  > the stage-3/6 parked assertion expects top-route absence of `K02 Kid PIN`,
-  > i.e. it demands routes go to `/kid-home` for a simultaneous-tap burst;
-  > the FIXES_1-suggested screen-level latch pins one push to the *first*
-  > selection instead. Both collapse stacking, but the test only accepts one
-  > reading.
-  Un-skipping either would require choosing between two defensible product
-  behaviours — that is a ruling, not an integration fix, so I left both parked
-  rather than silently picking one. The third skip is the pre-existing
-  repo-wide one. Un-skipping belongs to the test stage once the ruling lands.
-- **Not touched by design:** no production code was edited this stage.
+Worth recording because it looks like an oversight: `profilesFailed` is
+written by the bloc and carried through every constructor, but **no view reads
+it**. That is 2b's resolution of 2a's *suggested* view half-line: instead of
+gating a heal on the flag, 2b **deleted the masking branch entirely** and let
+the bloc's `copyWithProfilesRecovered` do the restore, so a genuine dead-home
+failure always surfaces its card. The flag is still exercised (7 assertions in
+`k01_bloc_paths_test.dart`, incl. constructor/equality), so it is not dead
+code, and `flutter analyze` raises nothing. Both approaches are defensible;
+2b's is the smaller surface. Left exactly as-is — ripping the field out would
+be a redesign, and it is a plausible future guard for K02–K05.
 
-## 4. Mandatory orchestrator items — checked, satisfied
+## 5. Verification
 
-`ORCHESTRATOR_NOTES.md` (02:33) is mandatory; all three items verified:
+### Skips
 
-| Item | Status |
-|---|---|
-| **D1** cards 16.5 px low (design top 297.7, app 314.3) | Fixed by 2b — caption bottom reserve now `s8 + homeH(34)`; flex band re-centres |
-| **D2** caption top 747 | Fixed by 2b — same reserve change |
-| **D3/D4** meadow hills | **Shared**, explicitly *not* a K01 finding; `shared/kid_meadow` is merged into this base (`b677697`/`cd09e71`), and 2b repointed the matrix pixel probes at `kidHillFront(kidMeadow, surface)` |
-| **D5** Leo's own Pip | Already correct; unchanged |
+`k01_bugs_test.dart` and `k01_bloc_paths_test.dart` now contain **zero**
+`skip:` blocks — 2b's claim verified. The single remaining repo-wide skip is
+`test/features/pocket_money/p12_bugs_test.dart:321`, **pre-existing and not
+K01's** (that file is untouched by this branch). No test was skipped or
+disabled by me.
 
-Plus the two standing rules that touch this screen's code:
+### Mandatory orchestrator items
 
-- **KID BACKGROUND** — K01 renders via the shared `KidScope`
-  (`profile_picker_view.dart:150`, `_PickerChrome`). I grepped both K01 files
-  for `CustomPaint` / `hill` / `meadow` / `gradient`: **zero local hill or
-  meadow painting**; the only hit is a doc comment on `_PickerChrome`. The
-  `_MeadowPainter` in the tree lives in `kid_home_view.dart` (K03's screen,
-  out of K01 scope), not in K01.
-- **COPY / BUG-A** — 2b repointed the title to ASCII `'` to match
-  `K01-profile-picker.html` byte-for-byte. I am deliberately **not**
-  re-litigating this here: it is the builders'/test-stage's call to make
-  against the source and it is fully covered by `k01_copy_parity_test.dart`
-  (13 pass), which is the byte-level authority. Flagging only that it reverses
-  iteration 1's U+2019 choice and 2a's note that house convention across P02/
-  P03/P04/P07 renders typographically — the orchestrator may want to confirm
-  which authority wins, but it is not an integration defect.
+`ORCHESTRATOR_NOTES.md` (02:33, unchanged since iteration 2) — all still
+satisfied after this iteration's edits: **D1** (cards 16.5 px low) and **D2**
+(caption top 747) fixed by 2b in iteration 2 and untouched since;
+**D3/D4** remain correctly delegated to the shared `kid_meadow`; **D5** (Leo's
+own Pip) correct.
 
-## 5. Rule spot-checks (no findings)
+### Standing rules
 
-- **google_fonts** — absent from `lib/features/kid_home` and
-  `test/features/kid_home`.
-- **CLOCK** — no `DateTime.now()` in the K01 code paths; `kid_home_repository_impl`
-  is on `appNowUtc()` now that `main`'s `test_clock` commit is merged.
-- **CHILD ORDER** — tiles render `state.profiles` in repo creation order.
-- **PIP** — per-child `PipAvatar` from DB; no v1 `pip_stage_*.svg`.
-- **Bottom edge / alignment** — no bar on this screen, so no coloured strip;
-  matrix probes cover it.
+- **KID BACKGROUND** — K01 renders through the shared `KidScope`
+  (`profile_picker_view.dart:163`). Grep for `CustomPaint`/`hill`/`meadow`/
+  `gradient` across both K01 files: the only hit is the doc comment on
+  `_PickerChrome`. **No local hill or meadow painting.**
+- **CHILD ORDER** — no `sort` anywhere in the picker view; tiles render
+  `state.profiles` in repo creation order.
+- **FONTS** — no `google_fonts` / `GoogleFonts.*` in `kid_home`; the single
+  grep hit is the word inside a comment asserting its absence.
+- **LETTER SPACING** — none added in `profile_picker_view.dart` /
+  `profile_tile.dart`.
+- **CLOCK** — **zero** `DateTime.now()` in `lib/features/kid_home`; main's
+  `test_clock` commit is merged, so the K03 period math runs on `appNowUtc()`.
+  (2a disclosed the two pre-existing calls as orchestrator territory — that is
+  now moot on this base.)
+- **BOTTOM EDGE / ALIGNMENT** — unchanged by this iteration; matrix probes
+  (58/58) cover both.
 - **No simulator** used (stage 2 is not 5_ui); no `flutter clean`; no
-  `analysis_options` change; no test skipped by me; no images attached.
+  `analysis_options` change; no images attached.
+
+### Iteration-2 carry-over resolved
+
+The shared `list_row_trailing_test.dart` reformat I flagged last pass is now
+**committed upstream** (`e195954` "checkpoint after build (iteration 2)"), so
+`dart format .` reports **0 changed** — the drift no longer re-appears on this
+branch. My iteration-2 flag for a durable shared fix is closed.
 
 ## 6. Verification tails
 
 ```
 $ dart format .
-Formatted 521 files (1 changed) in 2.24 seconds.     # the 1 = FIX-1, re-run is clean
+Formatted 521 files (0 changed) in 2.25 seconds.
 
 $ flutter analyze
 Analyzing app...
-No issues found! (ran in 4.3s)
+No issues found! (ran in 5.0s)
 
 $ flutter test
-02:41 +2857 ~3: All tests passed!
+01:20 +2882 ~1: All tests passed!
 ```
 
-The K01-owned suites 2b listed are all green in that run:
-`k01_bugs_test` (18 pass, 2 skip), `k01_copy_parity_test` (13),
-`k01_copy_fit_test` (7), `k01_profile_picker_matrix_test` (46),
-`k01_profile_picker_view_test` (13), `k01_profile_picker_geometry_test` (4),
-`k01_bloc_paths_test` (19), `kid_home_view_test` (87).
+K01-owned suites, all green in that run:
+`k01_bugs_test` 23/23 · `k01_bloc_paths_test` 23/23 ·
+`k01_profile_picker_matrix_test` 58/58 · `k01_profile_picker_view_test` 13/13 ·
+`k01_profile_picker_geometry_test` 8/8 · `k01_copy_parity_test` 13/13 ·
+`k01_copy_fit_test` 7/7 · `kid_home_bloc_test` 38/38 · `kid_home_view_test` 87/87.
 
 ## 7. Files changed by this stage
 
-- `app/test/design_system/list_row_trailing_test.dart` — FIX-1, whitespace-only
-  `dart format` normalisation of a shared file that is already unformatted on
-  `main` (flagged in §3 for a durable shared fix).
-
-No other file touched. No production code changed in this stage.
+**None.** No code, test or doc outside this stage file was touched.
 
 VERDICT: PASS

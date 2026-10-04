@@ -16,6 +16,7 @@ final class KidHomeState extends Equatable {
     this.justCompletedCoins,
     this.profiles = const <KidChild>[],
     this.selectedProfileId,
+    this.profilesFailed = false,
   });
 
   final KidHomeStatus status;
@@ -53,6 +54,15 @@ final class KidHomeState extends Equatable {
   /// `justCompletedQuestId`). Never drives navigation inside the bloc.
   final String? selectedProfileId;
 
+  /// K01 roster outage flag (review finding 2, iteration 2): true while the
+  /// last profiles-stream outcome was an error that released the
+  /// subscription. Lets the view tell a profiles-caused failure (heal once
+  /// the roster is back) from a home-stream failure with a stale roster
+  /// (keep the failure card) instead of re-deriving it from
+  /// `profiles.isNotEmpty`. Set on the profiles error path, cleared by any
+  /// healthy roster; every other constructor carries it through.
+  final bool profilesFailed;
+
   /// Done = `approved` + `done_pending` (live counts from the DB).
   int get doneCount => items
       .where((q) => q.status == 'approved' || q.status == 'done_pending')
@@ -67,6 +77,7 @@ final class KidHomeState extends Equatable {
     List<KidQuest>? items,
     String? errorMessage,
     List<KidChild>? profiles,
+    bool? profilesFailed,
   }) {
     return KidHomeState(
       status: status ?? this.status,
@@ -79,6 +90,7 @@ final class KidHomeState extends Equatable {
       justCompletedCoins: justCompletedCoins,
       profiles: profiles ?? this.profiles,
       selectedProfileId: selectedProfileId,
+      profilesFailed: profilesFailed ?? this.profilesFailed,
     );
   }
 
@@ -95,6 +107,7 @@ final class KidHomeState extends Equatable {
       justCompletedCoins: justCompletedCoins,
       profiles: profiles,
       selectedProfileId: childId,
+      profilesFailed: profilesFailed,
     );
   }
 
@@ -113,6 +126,7 @@ final class KidHomeState extends Equatable {
       justCompletedQuestId: justCompletedQuestId,
       justCompletedCoins: justCompletedCoins,
       profiles: profiles,
+      profilesFailed: profilesFailed,
     );
   }
 
@@ -126,6 +140,7 @@ final class KidHomeState extends Equatable {
       errorMessage: errorMessage,
       profiles: profiles,
       selectedProfileId: selectedProfileId,
+      profilesFailed: profilesFailed,
     );
   }
 
@@ -140,6 +155,7 @@ final class KidHomeState extends Equatable {
       actionNonce: actionNonce + 1,
       profiles: profiles,
       selectedProfileId: selectedProfileId,
+      profilesFailed: profilesFailed,
     );
   }
 
@@ -157,6 +173,7 @@ final class KidHomeState extends Equatable {
       justCompletedCoins: coins,
       profiles: profiles,
       selectedProfileId: selectedProfileId,
+      profilesFailed: profilesFailed,
     );
   }
 
@@ -175,13 +192,16 @@ final class KidHomeState extends Equatable {
       child: child,
       items: items,
       profiles: profiles,
+      profilesFailed: profilesFailed,
     );
   }
 
   /// Loaded emission from the profiles stream: same child + items, new
   /// roster. Never touches the load status, the load error or the pending
   /// selection — the home stream owns the status, and the selection is
-  /// consumed by `KidHomeSelectionHandled` or [copyWithLoaded]. (A roster
+  /// consumed by `KidHomeSelectionHandled` or [copyWithLoaded]. A healthy
+  /// roster always clears the outage flag (the constructor default
+  /// `profilesFailed: false` is the point, not an omission). (A roster
   /// that arrives after a profiles-caused outage goes through
   /// [copyWithProfilesRecovered] instead.)
   KidHomeState copyWithProfiles(List<KidChild> next) {
@@ -205,7 +225,8 @@ final class KidHomeState extends Equatable {
   /// completion channel (`actionError`/`justCompleted…`) is carried
   /// through — only the load failure is forgiven. Used only when the home
   /// subscription is still live; when the home stream itself is down the
-  /// failure stands until it recovers.
+  /// failure stands until it recovers. The outage flag clears via the
+  /// constructor default (`profilesFailed: false`).
   KidHomeState copyWithProfilesRecovered(List<KidChild> next) {
     return KidHomeState(
       status: KidHomeStatus.loaded,
@@ -231,5 +252,6 @@ final class KidHomeState extends Equatable {
     justCompletedCoins,
     profiles,
     selectedProfileId,
+    profilesFailed,
   ];
 }

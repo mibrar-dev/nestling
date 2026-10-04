@@ -25,9 +25,23 @@ class ProfilePickerView extends StatefulWidget {
 }
 
 class _ProfilePickerViewState extends State<ProfilePickerView> {
-  /// Single-flight guard (K01-BUG-2): two fingers down before either up
-  /// must not push two different kid screens for one gesture burst.
-  bool _navPending = false;
+  /// Single-flight guard (K01-BUG-2 and K01-BUG-6 in one): the flag is
+  /// armed BEFORE a selection event is dispatched, so a two-finger
+  /// same-burst on two different tiles produces exactly one
+  /// `KidHomeProfileSelected` event — therefore one DB write and one
+  /// navigation, whose targets always agree. Released when the pushed
+  /// route pops (or on a selection failure toast).
+  bool _busy = false;
+
+  /// The one path for a tile tap (both the normal and the >2 overflow
+  /// row use it): armed once per in-flight selection.
+  void _select(KidChild child) {
+    if (_busy) return;
+    _busy = true;
+    context.read<KidHomeBloc>().add(
+      KidHomeProfileSelected(childId: child.id, pinSet: child.pinSet),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,8 +50,6 @@ class _ProfilePickerViewState extends State<ProfilePickerView> {
           previous.selectedProfileId != current.selectedProfileId &&
           current.selectedProfileId != null,
       listener: (context, state) {
-        if (_navPending) return;
-        _navPending = true;
         final id = state.selectedProfileId!;
         KidChild? tapped;
         for (final profile in state.profiles) {
@@ -47,7 +59,7 @@ class _ProfilePickerViewState extends State<ProfilePickerView> {
           }
         }
         if (tapped == null) {
-          _navPending = false;
+          _busy = false;
           return;
         }
         unawaited(
@@ -58,9 +70,13 @@ class _ProfilePickerViewState extends State<ProfilePickerView> {
               )
               .whenComplete(() {
                 // Back on the picker: allow the next selection burst.
-                if (mounted) setState(() => _navPending = false);
+                if (mounted) setState(() => _busy = false);
               }),
         );
+        // K01-BUG-3 end-to-end: consume the one-shot so a repeat tap on
+        // the same tile after back emits a distinct state and navigates
+        // again (the bloc emitted nothing without this call site).
+        context.read<KidHomeBloc>().add(const KidHomeSelectionHandled());
       },
       child: BlocListener<KidHomeBloc, KidHomeState>(
         listenWhen: (previous, current) =>
@@ -68,7 +84,7 @@ class _ProfilePickerViewState extends State<ProfilePickerView> {
                 previous.actionNonce != current.actionNonce) &&
             current.actionError != null,
         listener: (context, state) {
-          _navPending = false;
+          _busy = false;
           showNestToast(context, 'Hmm, that did not work. Try again.');
         },
         child: BlocBuilder<KidHomeBloc, KidHomeState>(
@@ -78,15 +94,16 @@ class _ProfilePickerViewState extends State<ProfilePickerView> {
               case KidHomeStatus.loading:
                 return const _PickerLoading();
               case KidHomeStatus.failure:
-                // K01-BUG-5 heal at the view level: only the roster
-                // stream failed, and its retry re-arrived — restore the
-                // picker even though `copyWithProfiles` keeps status.
-                if (state.profiles.isNotEmpty) {
-                  return _PickerLoaded(profiles: state.profiles);
-                }
+                // The iteration-2 bloc restores `loaded` when the
+                // profiles-only failure recovers, so the failure case
+                // here is always terminal-until-retry: nothing leaks
+                // a stale roster over a dead home stream.
                 return const _PickerFailure();
               case KidHomeStatus.loaded:
-                return _PickerLoaded(profiles: state.profiles);
+                return _PickerLoaded(
+                  profiles: state.profiles,
+                  onTileTapped: _select,
+                );
             }
           },
         ),
@@ -99,9 +116,10 @@ class _ProfilePickerViewState extends State<ProfilePickerView> {
 /// tile below the compact minimum — each tile keeps the design width
 /// (two-up share at 390 = 167) and the row scrolls horizontally instead.
 class _OverflowTileRow extends StatelessWidget {
-  const new({required this.profiles});
+  const new({required this.profiles, required this.onTileTapped});
 
   final List<KidChild> profiles;
+  final ValueChanged<KidChild> onTileTapped;
 
   @override
   Widget build(BuildContext context) {
@@ -121,12 +139,7 @@ class _OverflowTileRow extends StatelessWidget {
                   child: ProfileTile(
                     key: ProfileTile.keyFor(child),
                     child: child,
-                    onSelected: () => context.read<KidHomeBloc>().add(
-                      KidHomeProfileSelected(
-                        childId: child.id,
-                        pinSet: child.pinSet,
-                      ),
-                    ),
+                    onSelected: () => onTileTapped(child),
                   ),
                 ),
             ],
@@ -259,9 +272,10 @@ class _PickerFailure extends StatelessWidget {
 }
 
 class _PickerLoaded extends StatelessWidget {
-  const new({required this.profiles});
+  const new({required this.profiles, required this.onTileTapped});
 
   final List<KidChild> profiles;
+  final ValueChanged<KidChild> onTileTapped;
 
   @override
   Widget build(BuildContext context) {
@@ -318,7 +332,10 @@ class _PickerLoaded extends StatelessWidget {
                                 textAlign: TextAlign.center,
                               )
                             : profiles.length > 2
-                            ? _OverflowTileRow(profiles: profiles)
+                            ? _OverflowTileRow(
+                                profiles: profiles,
+                                onTileTapped: onTileTapped,
+                              )
                             : Row(
                                 spacing: NestSpacing.s4,
                                 children: [
@@ -327,13 +344,7 @@ class _PickerLoaded extends StatelessWidget {
                                       child: ProfileTile(
                                         key: ProfileTile.keyFor(child),
                                         child: child,
-                                        onSelected: () =>
-                                            context.read<KidHomeBloc>().add(
-                                              KidHomeProfileSelected(
-                                                childId: child.id,
-                                                pinSet: child.pinSet,
-                                              ),
-                                            ),
+                                        onSelected: () => onTileTapped(child),
                                       ),
                                     ),
                                 ],

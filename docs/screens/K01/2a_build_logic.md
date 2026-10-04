@@ -1,126 +1,118 @@
-# K01 · Stage 2a — BUILD, LOGIC CHUNK (iteration 2)
+# K01 · Stage 2a — BUILD, LOGIC CHUNK (iteration 3)
 
 Scope: ONLY the non-UI layer of feature `kid_home` for K01
 (`domain/**`, `data/**`, `presentation/bloc/**`, plus owned tests:
 files matching `bloc`/`cubit`/`repository`/`data`).
-Views/widgets belong to the UI builder — untouched by this stage
-(their `profile_picker_view.dart` is mid-write for BUG-1 as this is
-written and does not compile yet; that breakage is theirs, not mine).
+Views/widgets belong to the UI builder — untouched by this stage.
 
 ## CONTRACT CHANGES
 
-Additive only — every existing name keeps its shape; the UI builder
-codes the two view half-lines below against these:
+Additive only — no existing name changed shape; two items need the
+view half-lines below (BUG-3 dispatch was already specified in
+iteration 2 and is now MANDATORY for BUG-6 safety):
 
-1. **New event `KidHomeSelectionHandled`** (clears a pending
-   `selectedProfileId`, no-op when none; navigation stays out of the
-   bloc). VIEW HALF-LINE (fixes K01-BUG-3 end to end): in the picker's
-   `BlocListener(selectedProfileId)`, right after
-   `unawaited(context.push(...))`, dispatch
-   `context.read<KidHomeBloc>().add(const KidHomeSelectionHandled());`.
-   Until then behaviour is byte-identical to iteration 1 (no
-   regression: the event is simply never sent).
-2. **New state constructors `copyWithSelectionHandled()` and
-   `copyWithProfilesRecovered(next)`** (both additive; `props`
-   unchanged — no new fields, so no existing equality changes).
-3. **BUG-5 behaviour change** (bloc-side only, no view change needed):
-   a healthy roster after a profiles-caused outage restores `loaded`
-   and clears the stale load error while the home stream is live; Try
-   again shows `loading` while only the roster restarts.
-4. Deliberately NOT in the bloc (would regress with the current view):
-   no ignore-while-pending for bursts — K01-BUG-2 stays a view-side
-   screen-level latch (same `_busy` pattern as `_GateLockButton`: set
-   before `push`, clear on pop return).
+1. **BUG-6 single-flight (bloc done):** `_onProfileSelected` now
+   returns early — without writing — when `selectedProfileId` is
+   still unconsumed (same burst). Sequential handlers make a
+   transient `_selecting` flag useless (event 2 starts only after
+   event 1 completes), so the pending one-shot IS the guard. The
+   pending clears via `KidHomeSelectionHandled` or the next home
+   emission, so genuinely later taps are never dropped.
+   VIEW HALF (mandatory pairing): dispatch
+   `context.read<KidHomeBloc>().add(const KidHomeSelectionHandled());`
+   right after `unawaited(context.push(...))` in the picker's
+   selection listener (review finding 1, demanded by stages 4+6).
+   Without it, a cross-tile retap after a stuck pending selection
+   would now be ignored (previously it navigated) — the flag can
+   only be unwedged by the dispatch or a home re-emit.
+2. **Review finding 2 (bloc done):** new state field
+   `profilesFailed` (default `false`, in `props`, carried by every
+   constructor; set on the profiles error path, cleared by any
+   healthy roster). VIEW HALF: gate the failure-card heal on it —
+   e.g. render `_PickerLoaded` on `failure` only when
+   `!state.profilesFailed` (profiles-caused outage, roster back),
+   never on a home-stream failure with a stale roster. Current
+   `profiles.isNotEmpty` check masks exactly that card.
+3. No other shape changes (`KidHomeSelectionHandled`,
+   `copyWithSelectionHandled`, `copyWithProfilesRecovered` all
+   iteration-2, unchanged).
 
-## FIXES_1.md — item-by-item (logic layer only)
+## FIXES_2.md — item-by-item (logic layer only)
 
-- **BUG-B / review finding 1 / K01-BUG-5 (major) — FIXED (logic).**
-  `_onProfilesReceived` now restores `loaded` via the new
-  `copyWithProfilesRecovered` when the recovery follows a
-  profiles-caused error (`_profilesFailed` flag) while the home
-  subscription is still live; a roster arriving over a dead home
-  stream does NOT mask the failure card. Try again
-  (`KidHomeLoadRequested`) emits `loading` when it restarts only the
-  roster (review finding 3). Regression test added (profiles-failure
-  → Try again → recovery asserts `loaded` with `homeSubscriptions ==
-  1`, exactly as the review asked).
-- **Review finding 2 (minor) — FIXED.** Recovery clears the stale
-  `errorMessage`; any healthy roster after a profiles error clears it.
-- **K01-BUG-3 (major) — LOGIC HALF DONE, view half-line pending.**
-  `KidHomeSelectionHandled` + `copyWithSelectionHandled` implemented
-  and proven (re-selection after handled emits distinctly and writes
-  again; no-op when nothing pending). The skipped widget test also
-  needs the view dispatch above, so its `skip:` stays until the UI
-  builder lands that line — flagged for the test stage, not forced.
-- **BUG-A (apostrophe) — NOT MINE.** One-character view change
-  (`profile_picker_view.dart:210`) plus test-file updates outside my
-  owned set. No orchestrator ruling found in `ORCHESTRATOR_NOTES.md`;
-  left for the UI builder. My layer ships no copy.
-- **K01-BUG-1 (3+ children) — NOT MINE.** Tiles-band layout, view
-  only (UI builder is writing `_OverflowTileRow` now).
-- **K01-BUG-2 (burst double nav) — NOT MINE (bloc side deliberately
-  untouched).** A bloc ignore-while-pending would silently drop
-  legitimate cross-tile retaps against the current view; the
-  suggested screen-level latch is view-only. No logic change.
-- **K01-BUG-4 (empty nickname) — NOT MINE.** Label fallback lives in
-  `ProfileTile` (view); core DB is off-limits for validation.
-- **5_ui D1/D2, ORCHESTRATOR_NOTES D1/D2 — NOT MINE** (view layout);
-  **D3/D4 meadow — shared** (`shared/kid_meadow`), untouched.
-- **CLOCK rule:** my code adds no clock calls. The two pre-existing
-  `DateTime.now().toUtc()` in `kid_home_repository_impl.dart`
-  (K03 period math) are untouched: not a FIXES_1 item, and changing
-  the time source under 200 green tests is integrator/orchestrator
-  territory. Disclosed, not deferred.
-- **Skipped bug tests:** none un-skipped by this stage. BUG-5's
-  widget probe cannot run while the view is mid-write (compile
-  error, verified); BUG-3's needs the view dispatch. Both are proven
-  at bloc level in owned files; un-skip belongs to the test stage
-  once the view compiles. `k01_bugs_test.dart` not touched.
+- **K01-BUG-6 (major, NEW — FIXED + un-skipped in owned file).**
+  Burst selections now persist only the first child: the second
+  `KidHomeProfileSelected` finds the one-shot pending and returns
+  before its `setActiveChild`, so `app_state` always names the
+  pushed route's child. Parked reproducer
+  (`k01_bloc_paths_test.dart`, plain `test` per the blocTest-skip
+  note) un-skipped and green, plus a follow-up test proving a
+  dropped burst selection leaves no trace and the next tap works.
+  The `k01_bugs_test.dart` widget probe stays skipped (not my file;
+  needs the view half-line above — with it, single route + agreeing
+  DB; test stage to un-skip).
+- **K01-BUG-3 (re-classified — logic half complete, still needs the
+  view dispatch).** The `KidHomeSelectionHandled` event, handler and
+  consume path exist and are proven (re-selection after handled
+  emits distinctly and writes again; no-op when nothing pending).
+  Nothing in `lib/` dispatches it yet — that one line is the UI
+  builder's (review finding 1). The harness debate (artifact vs
+  race) changes nothing logic-side: the dispatch removes the
+  ordering dependence either way. Skipped widget probe untouched
+  (not my file; still red without the dispatch).
+- **Review finding 2 (minor — logic half done).** `profilesFailed`
+  exposed from state with full transition tests (set on error,
+  carried everywhere, cleared by any healthy roster, in equality).
+  View gating is UI builder's (CONTRACT CHANGES §2).
+- **Review finding 4 (minor — done).** `1_plan.md` §0 corrected to
+  the shipped ASCII apostrophe with the BUG-A history note, so the
+  plan no longer contradicts `k01_copy_parity_test.dart` (13/13).
+  No orchestrator ruling exists; the record now matches reality.
+- **Review finding 5 (list_row_trailing, another feature) — NOT
+  MINE.** Explicitly out of the K01 surface; left for main.
+- **BUG-A / BUG-1 / BUG-2 / BUG-4 / D1–D4 / KID BACKGROUND — NOT
+  MINE.** All view or shared; verified fixed per FIXES_2 §4 except
+  as noted. BUG-2's bloc alternative deliberately NOT implemented
+  (superseded by the BUG-6 guard + view latch pairing above).
+- **CLOCK rule:** no clock calls added; the two pre-existing
+  `DateTime.now().toUtc()` in the K03 period math are untouched
+  (not a FIXES item; changing the time source is orchestrator
+  territory). No `google_fonts`, no `letterSpacing` anywhere new.
 
 ## Files changed (logic layer)
 
-- `app/lib/features/kid_home/presentation/bloc/kid_home_event.dart`
-  — added `KidHomeSelectionHandled` (+ contract docs).
-- `app/lib/features/kid_home/presentation/bloc/kid_home_state.dart`
-  — added `copyWithSelectionHandled()` /
-  `copyWithProfilesRecovered(next)`; `selectedProfileId` docs now
-  name both consume paths. No field/prop changes.
 - `app/lib/features/kid_home/presentation/bloc/kid_home_bloc.dart`
-  — registered the handler; `_profilesFailed` release flag;
-  recovery restore in `_onProfilesReceived`; Try-again `loading`
-  when only the roster restarts (gated on home-live so the
-  home-failure retry sequence is unchanged).
+  — pending-selection early return in `_onProfileSelected` (+ docs).
+- `app/lib/features/kid_home/presentation/bloc/kid_home_state.dart`
+  — `profilesFailed` field + `copyWith` param + carry-through in all
+  eight constructors + `props`. `copyWithProfiles` /
+  `copyWithProfilesRecovered` clear it via the constructor default.
 - `app/test/features/kid_home/k01_bloc_paths_test.dart` (owned) —
-  `_RosterFake` gains additive `homeChildNull` / `failHome` flags;
-  header list extended; new groups (7 tests): BUG-5 Try-again
-  recovery without a home re-emit, Try-again spinner capture,
-  home-caused failure never masked, handled clears pending,
-  re-selection emits distinctly (BUG-3 mechanism), handled no-op,
-  constructor/equality unit test.
-- Did NOT touch: `domain/**`, `data/**` (nothing needed),
-  `presentation/views/**`, `presentation/widgets/**`,
-  `k01_bugs_test.dart` (skips intact), any other feature.
+  un-skipped the BUG-6 reproducer (now passing); new tests:
+  dropped-burst-leaves-no-trace, outage-flag stream-health
+  tracking, outage-flag constructor/equality unit test; header
+  covered-list updated. (`domain/**`, `data/**` needed nothing.)
+- `docs/screens/K01/1_plan.md` — §0 apostrophe correction only.
+- Did NOT touch: `presentation/views/**`,
+  `presentation/widgets/**`, `k01_bugs_test.dart` (all skips
+  intact), any other feature, shared code.
 
 ## Verification (this stage only — no simulator, no full-app run)
 
-- `flutter analyze` on domain + data + bloc + DI/routes + the three
-  owned test files → No issues found. `dart format` clean.
+- `flutter analyze` on domain + data + bloc + the three owned test
+  files → No issues found. `dart format` clean.
 - `flutter test k01_bloc_paths + kid_home_bloc + kid_home_repository`
-  → 59/59 pass (52 existing + 7 new).
-- Whole-feature `analyze` shows exactly one error, in
-  `profile_picker_view.dart:253` (`_OverflowTileRow` undefined) —
-  the UI builder's in-flight BUG-1 edit, confirmed not mine
-  (`git diff` shows their view/widgets changes vs my bloc+tests).
-- No `google_fonts`, no `letterSpacing`, no new `DateTime.now`;
-  no `flutter clean`, no simulator use.
+  → 63/63 pass (59 + un-skipped BUG-6 + 3 new).
+- Feature-wide analyze shows only the UI builder's in-flight view
+  error (`_OverflowTileRow`, BUG-1 work) — verified theirs via
+  `git diff`, untouched.
+- No `flutter clean`, no simulator use.
 
 ## LEFT FOR NEXT ITERATION
 
-- UI builder: `KidHomeSelectionHandled` dispatch (1 line, CONTRACT
-  CHANGES §1) + BUG-2 screen latch + BUG-1 overflow row (in
-  progress) + BUG-A one-character ruling/fix + BUG-4 label fallback.
-- Test stage: un-skip BUG-5 widget probe once the view compiles
-  (logic proven), then BUG-3 probe once the dispatch lands.
+- UI builder: Handled dispatch (mandatory, §1) + failure-heal gate
+  on `state.profilesFailed` (§2) + finish BUG-1 row.
+- Test stage: un-skip BUG-6 widget probe (logic proven; needs the
+  dispatch) and BUG-3 probe (needs the dispatch), once green.
 - Nothing unfinished in the logic layer itself.
 
 VERDICT: PASS
