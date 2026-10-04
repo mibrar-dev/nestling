@@ -83,8 +83,47 @@
 //   real-font geometry pin now asserts the painted outline (198×86), rim 278
 //   and Pip's feet 301. No new bugs found in this stage.
 //
-// The suite has NO skipped tests: every proof below runs in the plain suite.
-// (If you add one, do not park it to get green — see RULES.)
+// Iteration-11 work (UI VERDICT RULE corroboration):
+// - The real-font geometry pin now also pins the progress bar's bordered box
+//   to the design's y 527…542 (alongside hearts 448 and card-1 559), so the
+//   ±2 px position rule has a regression net below the pet block too.
+//   UI iteration 10 measured the whole geometry chain EXACT and reported
+//   PASS.
+//
+// Iteration-12 work:
+// - `shared/speech_tail` (b1137f3) made the bubble tail a CSS-style overflow
+//   `::after`; the shared block got 10.25 px shorter and the build restored
+//   the rows below with `_kStageToHearts = 21`.
+// - K03-BUG-16 (OPEN, Major, shared): the hero ART (nest + Pip) still sits
+//   4 px above the design inside its box — rim 274.0 vs 278, feet 297 vs 301
+//   — after `shared/pet_bubble_gap` put the bubble (125…169) and the pet box
+//   (183…419) exactly on the design. The only cause left is the shared private
+//   `PipNestFallback._explicitBleed` (31.4 vs the design's 27.4):
+//   SHARED_REQUEST #18(b). The geometry pin holds the design's targets MINUS
+//   that constant, tightened to ±0.5, so the residual can only shrink.
+//   Run: `flutter test --run-skipped --plain-name K03-BUG-16`.
+//
+// Iteration-13 work (bubble gap + shared meadow landed):
+// - `shared/pet_bubble_gap` is applied: K03 passes `bubbleGap: 14` and
+//   `_kStageToHearts` is back to the design's `s4`. Measured at real fonts
+//   (`kid_home_geometry_test.dart`, ±0.5): bubble 125.0…169.0, pet box
+//   183.0…419.0, hearts 448.0, title row 494, progress 527…542, card 1 at
+//   559 — all exact. K03-BUG-16's position residual dropped 9 → 4 px.
+// - K03-BUG-17 (NEW, OPEN, Major, shared): the nest BOWL is vertically
+//   squashed. The design draws `nest.svg` at its intrinsic 240×240 ratio in
+//   the 236-tall `.k3-pet` box (browser `contain`: art 236×236, bottom 0):
+//   at x 195 the bowl's ink runs 275.3…384.3 — a **108 px** bowl. The app
+//   stretches the same art into the mandated `nestHeight: 188`
+//   (`BoxFit.fill`), so the bowl paints 198.6 × **86.2** (rim 274.0, bottom
+//   360.2): 22 px flatter, and the ground shadow lifts with it. Measured at
+//   real fonts, columns x=110/280: design outer-arc stroke 302…310,
+//   app 294…301. Proof: `K03-BUG-17` (skipped).
+//   Run: `flutter test --run-skipped --plain-name K03-BUG-17`.
+//
+// The suite has two parked proofs: K03-BUG-16 (position) and K03-BUG-17
+// (bowl height) — both open, both shared (SHARED_REQUEST #18 options (b)/(c)).
+// Everything else runs in the plain suite; do not park a proof just to get
+// green (see RULES).
 //
 // Probes that pass are kept as evidence for the "checked, clean" categories
 // (contrast, overflow, persistence, money rounding, deep links).
@@ -97,6 +136,7 @@ import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
+import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
@@ -1574,6 +1614,123 @@ void main() {
     semantics.dispose();
     await disposeApp(tester);
   });
+
+  // -------------------------------------------------------------------------
+  // Iteration-12 proof — UI VERDICT RULE, hero block
+  // -------------------------------------------------------------------------
+
+  /// K03-BUG-16 (OPEN, Major, shared — SHARED_REQUEST #18(b)): the hero ART
+  /// (nest + Pip) still sits ~4 px above the design inside its box. Everything
+  /// around it is now exact, because `shared/pet_bubble_gap` (main) added
+  /// `NestPetStage.bubbleGap` and K03 passes the design's own 14
+  /// (`.k3-pet { margin: 14px auto 0 }`) with `_kStageToHearts = s4`: bubble
+  /// 125…169, pet box 183…419, hearts 448, title 494, progress 527…542, card 1
+  /// 559, dock 720 — all measured at the design's fonts.
+  ///
+  /// The residual is ONE private constant: the shared explicit slot seats the
+  /// nest box at `_explicitSlotH - nestH - _explicitBleed` = 236 − 188 − 31.4
+  /// = 16.6, so the rim lands at 183 + 91.0 = 274.0 where the orchestrator's
+  /// reference has it at 278 (the PNG's own outer stroke measures
+  /// 275.3…279.0 at x 195 — the design's back rim is behind Pip there; the
+  /// clean arcs at x 110/280 measure 302…310). K03 cannot fix it: any
+  /// `nestHeight` > 188 drives `nestTop` negative and lifts the rim tens of px,
+  /// and 188 is the value `ORCHESTRATOR_NOTES` 10:14 mandates. One shared
+  /// change lands it — `_explicitBleed` 31.4 → 27.4 (position), or → 0 with
+  /// `nestHeight: 236` (position AND the bowl's ~108 px height; K03-BUG-17).
+  ///
+  /// Repro: `flutter test --run-skipped --plain-name K03-BUG-16`.
+  testWidgets('K03-BUG-16: the pet hero art sits on the design rows', (
+    tester,
+  ) async {
+    await loadBundledFonts();
+    await pumpAppRoute(tester, '/kid-home');
+    final nest = tester.getRect(
+      find
+          .byWidgetPredicate(
+            (w) =>
+                w is SvgPicture &&
+                (w.bytesLoader as SvgAssetLoader).assetName.contains('nest'),
+          )
+          .first,
+    );
+    final rimY = nest.top + PipNestFallback.nestRimTopFraction * nest.height;
+    expect(
+      rimY,
+      closeTo(278, 2),
+      reason:
+          "the orchestrator's reference rim is y 278; the app paints 274.0 "
+          'until SHARED_REQUEST #18(b) (shared `_explicitBleed` 31.4 → 27.4)',
+    );
+    await disposeApp(tester);
+  }, skip: true);
+
+  // -------------------------------------------------------------------------
+  // Iteration-13 proof — UI VERDICT RULE, the nest bowl's SHAPE
+  // -------------------------------------------------------------------------
+
+  /// K03-BUG-17 (NEW, OPEN, Major, shared — SHARED_REQUEST #18 option (c)):
+  /// the nest bowl is vertically squashed ~22 px.
+  ///
+  /// The design rasterises `nest.svg` at its intrinsic 240×240 ratio inside
+  /// the 236-tall `.k3-pet` box (browser `contain`): art 236×236, bottom 0 at
+  /// the slot's bottom (419), so the box top is 183 and the bowl's outer
+  /// stroke (art 95…205) paints at
+  /// `183 + 95/240×236 = 276.4 … 183 + 205/240×236 = 384.6` — a **108.2 px**
+  /// bowl. The PNG confirms: at x=195 the bowl's ink runs 275.3…384.3 (the
+  /// rim stroke is behind Pip; the clean side arcs at x 110/280 run
+  /// 302…310 and 350…358, and the outer bowl fill/stroke continues to
+  /// 384.3).
+  ///
+  /// The app stretches the same art into the mandated 236×188 box
+  /// (`BoxFit.fill`), so the same art paints a 198.6 × **86.2** bowl:
+  /// `nest.top + 95/240×188 = 274.0` to `nest.top + 205/240×188 = 360.2`.
+  /// The side arcs land at x=110 294…300 (design 302…310) and x=280 295…301
+  /// (design 302…310). User-visible: the design's deep bowl reads as a flat
+  /// plate — well outside the UI VERDICT RULE's ±2 px.
+  ///
+  /// Root cause is shared: `_explicitBleed` 31.4 + the explicit slot's
+  /// `nestTop = 236 − nestH − bleed`. The fix is option (c): shared
+  /// `_explicitBleed` → 0 AND K03 `nestHeight` 188 → 236 (`nestTop` then 0,
+  /// art scale 236/240, bowl 108.2 tall at 276.4…384.6); the 236 px stage and
+  /// every row below are unchanged. K03 cannot do it alone (with today's
+  /// bleed, `nestHeight: 236` puts the rim at 245, 30 px high) and
+  /// `ORCHESTRATOR_NOTES` 10:14 pins 188.
+  ///
+  /// Repro: `flutter test --run-skipped --plain-name K03-BUG-17`.
+  testWidgets('K03-BUG-17: the nest bowl keeps the design painted height', (
+    tester,
+  ) async {
+    await loadBundledFonts();
+    await pumpAppRoute(tester, '/kid-home');
+    final nest = tester.getRect(
+      find
+          .byWidgetPredicate(
+            (w) =>
+                w is SvgPicture &&
+                (w.bytesLoader as SvgAssetLoader).assetName.contains('nest'),
+          )
+          .first,
+    );
+    // The bowl's outer stroke spans art 95…205 of the 240-space art.
+    final bowlHeight = nest.height * 110 / 240;
+    expect(
+      bowlHeight,
+      closeTo(108.2, 2),
+      reason:
+          'the design paints a 108 px bowl (276.4…384.6); the app paints '
+          '${bowlHeight.toStringAsFixed(1)} (274.0…360.2) — the 236×188 '
+          'BoxFit.fill squash, SHARED_REQUEST #18 option (c)',
+    );
+    final bowlBottom = nest.top + nest.height * 205 / 240;
+    expect(
+      bowlBottom,
+      closeTo(384.6, 2),
+      reason:
+          'the design bowl bottom is y 384.6; the app paints '
+          '${bowlBottom.toStringAsFixed(1)} — 24 px high',
+    );
+    await disposeApp(tester);
+  }, skip: true);
 }
 
 // ---------------------------------------------------------------------------
@@ -1707,6 +1864,22 @@ List<String> _svgAssetNames(WidgetTester tester) => tester
     .whereType<SvgAssetLoader>()
     .map((loader) => loader.assetName)
     .toList();
+
+/// Loads the bundled faces so geometry matches a device run (same loader as
+/// `kid_home_geometry_test.dart`).
+Future<void> loadBundledFonts() async {
+  final inter = FontLoader('Inter')
+    ..addFont(rootBundle.load('assets/fonts/Inter-Regular.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-Medium.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-SemiBold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-Bold.ttf'));
+  final nunito = FontLoader('Nunito')
+    ..addFont(rootBundle.load('assets/fonts/Nunito-Bold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Nunito-ExtraBold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Nunito-Black.ttf'));
+  await inter.load();
+  await nunito.load();
+}
 
 /// Streams error on listen (load-failure state probe).
 class _FailLoadRepository extends KidHomeRepository {

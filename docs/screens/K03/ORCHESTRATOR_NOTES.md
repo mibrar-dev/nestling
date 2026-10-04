@@ -90,3 +90,15 @@ The pet block is now right in light mode.
 1. DARK MEADOW (K03-local, 4th time): the lower content area behind the quest cards must use `--kid-meadow` dark `#1E4A3A` (light `#BFE8B0`, already correct). In the design, dark goes from navy at ≈ y 523 (sheet y 607) to teal-green behind the progress bar and the cards. The app is still flat navy. Use the token (add `kidMeadow` to tokens if missing: SHARED_REQUEST only if it is truly absent), and pin the colour at (10, 600) and (10, 700) in dark.
 2. The dark pet glow (a hard lilac disc) is SHARED. Branch shared/pet_glow is fixing it; not a K03 finding.
 3. Quest order and "4 done today" come from the DB (not findings).
+
+## UPDATE (14:37) — iteration 12: verification only
+The only failure (the speech-bubble tail) was fixed on main by shared/speech_tail, which also updated kid_home_geometry_test.dart and kid_home_view_test.dart for the new tail. After the merge, do NOT change view code. If the merge conflicts in those two test files, keep main's tail assertions and keep your meadow assertions. Then re-verify. Nothing else to change.
+
+## UPDATE (15:02) — iteration 13: use the design's own spacing
+main has shared/pet_bubble_gap: `NestPetStage(bubbleGap: …)` and a speech bubble exactly 44 tall.
+- Pass `bubbleGap: 14` (`.k3-pet` margin-top) and set `_kStageToHearts` back to `NestSpacing.s4` (16). Delete the long workaround comment.
+- Targets: bubble 125…169, pet box 183…419, hearts centre 448, title 494, card 1 at 559. Pin these in kid_home_geometry_test.dart (±0.5).
+- Change nothing else.
+
+## UPDATE (02:45) — the shared kid meadow is on main (shared/kid_meadow)
+Iteration 13 (polish): besides the bubble gap, REPLACE K03's own in-flow meadow band (kid_home_view.dart ~l.134-137, 550-599) with the shared kid background, as docs/screens/_shared/kid_meadow_REPORT.md says. Keep the dark meadow colours the design shows, and pin them in a test.
