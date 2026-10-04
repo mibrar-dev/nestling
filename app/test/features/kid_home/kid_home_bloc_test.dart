@@ -1536,6 +1536,73 @@ void main() {
       expect(a, isNot(differentPin));
       expect(a, isNot(differentChild));
     });
+
+    blocTest<KidHomeBloc, KidHomeState>(
+      "the check passes the event's own child id to the repository",
+      build: () {
+        repo = _FakeKidHomeRepository();
+        return KidHomeBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        // Maya is the active child, but the event carries its own id: the
+        // handler must not re-resolve it (the view is the only caller and it
+        // already has the row).
+        bloc.add(const KidHomePinSubmitted(childId: 'leo', pin: '1234'));
+      },
+      wait: const Duration(milliseconds: 100),
+      expect: () => <Matcher>[
+        _loading,
+        _loadingWithProfiles,
+        _loaded(done: 4, total: 6),
+        checking,
+        passed,
+      ],
+      verify: (bloc) => expect(repo.verified, <List<String>>[
+        <String>['leo', '1234'],
+      ]),
+    );
+
+    test(
+      'a wrong attempt never turns the failure card into a loaded screen',
+      () async {
+        repo = _FakeKidHomeRepository()..failLoad = true;
+        final bloc = KidHomeBloc(repository: repo);
+        final sub = bloc.stream.listen((_) {});
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+        expect(bloc.state.status, KidHomeStatus.failure);
+        bloc.add(const KidHomePinSubmitted(childId: 'maya', pin: '9999'));
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+        // The PIN outcome rides on the state; the status is untouched, so a
+        // failed load keeps its retry card and a wrong code still nudges.
+        expect(bloc.state.status, KidHomeStatus.failure);
+        expect(bloc.state.pinWrongNonce, 1);
+        expect(bloc.state.pinPassed, isFalse);
+        expect(bloc.state.pinChecking, isFalse);
+        await sub.cancel();
+        await bloc.close();
+      },
+    );
+
+    test('a submit before the load lands still resolves its outcome', () async {
+      repo = _FakeKidHomeRepository();
+      final bloc = KidHomeBloc(repository: repo);
+      final sub = bloc.stream.listen((_) {});
+      // No `KidHomeLoadRequested`: the check must not depend on a loaded
+      // child (the view dispatches from the row it already holds).
+      bloc.add(const KidHomePinSubmitted(childId: 'maya', pin: '1234'));
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      expect(bloc.state.pinPassed, isTrue);
+      expect(bloc.state.pinChecking, isFalse);
+      expect(bloc.state.status, KidHomeStatus.initial);
+      expect(repo.verified, <List<String>>[
+        <String>['maya', '1234'],
+      ]);
+      await sub.cancel();
+      await bloc.close();
+    });
   });
 
   // -------------------------------------------------------------------------

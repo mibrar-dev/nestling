@@ -1,8 +1,21 @@
 // K02 Kid PIN (`/kid-pin`) view tests: layout matrix, design geometry,
 // semantics actions, PIN submit outcomes, no-PIN auto-advance, and the
 // loading/failure states. Every pumped app ends with `disposeApp`.
+//
+// Stage 3 (test) added the groups below the original five:
+//   * `K02 tap targets`        — ACCESSIBILITY ACTIONS / RULES §8 (>= 56 kid)
+//   * `K02 every tap …`       — every control reaches the right route
+//   * `K02 entry announcements` — dots / in-flight / entry-limit semantics
+//   * `K02 layout invariants`  — gutters, centring, dark parity, bottom edge
+//   * `K02 design-copy parity` — bytes read from `K02-pin.html`, never typed
+// Keypad PITCH is deliberately not pinned: ORCHESTRATOR_NOTES (07:13) has the
+// shared `NestKeypad` grid fix on main (`shared/keypad_grid`), so these tests
+// assert version-independent invariants (72 px keys, uniform pitch, centred,
+// inside the gutters) and stay green across the merge.
 
 import 'dart:async';
+import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
@@ -14,11 +27,16 @@ import 'package:nestling/app/app.dart';
 import 'package:nestling/app/controllers.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
+import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
+import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_child.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_home_data.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_quest.dart';
 import 'package:nestling/features/kid_home/domain/kid_home_repository.dart';
+import 'package:nestling/features/kid_home/kid_home_routes.dart';
+import 'package:nestling/features/kid_home/presentation/views/kid_pin_view.dart';
+import 'package:nestling/features/parental_gate/parental_gate_routes.dart';
 
 import '../../test_scope.dart';
 
@@ -393,5 +411,819 @@ void main() {
       expect(find.text('Hi Maya! Enter your secret code'), findsOneWidget);
       await disposeApp(tester);
     });
+
+    testWidgets(
+      'an empty family (Seed.empty) shows the chooser, not a keypad',
+      (tester) async {
+        // `Seed.empty` = onboarded parent, no children (the P08b shape).
+        final db = await setUpTestScope(seedDemo: false);
+        await Seed.empty(db);
+        await GetIt.instance<AppSession>().refresh();
+        await _pumpRoute(tester);
+        expect(find.text("Who's playing?"), findsOneWidget);
+        expect(find.byType(NestKeypad), findsNothing);
+        expect(find.byType(NestPinDots), findsNothing);
+        await tester.tap(find.text('Choose'));
+        await tester.pumpAndSettle();
+        expect(currentPath(tester), KidHomeRoutePaths.picker);
+        await disposeApp(tester);
+      },
+    );
   });
+
+  // -------------------------------------------------------------------------
+  // ACCESSIBILITY ACTIONS + RULES §8 — tap targets. K02 is a kid screen, so
+  // every control must keep the 56 px kid minimum (`.lock-btn.lg` /
+  // `.nav-back.lg` are 56 in the design; keypad keys are 72).
+  // -------------------------------------------------------------------------
+  group('K02 tap targets', () {
+    testWidgets('digits, Delete, Back and the lock are all >= 56 px', (
+      tester,
+    ) async {
+      await _pumpRoute(tester);
+      for (final label in <String>[
+        for (var i = 0; i <= 9; i++) 'Digit $i',
+        'Delete',
+        'Back',
+        'Grown-ups',
+      ]) {
+        final rect = tester.getRect(find.bySemanticsLabel(label).first);
+        expect(
+          rect.width,
+          greaterThanOrEqualTo(NestDevice.tapKid),
+          reason: '$label width',
+        );
+        expect(
+          rect.height,
+          greaterThanOrEqualTo(NestDevice.tapKid),
+          reason: '$label height',
+        );
+      }
+      // The design's two 56 px controls match the token exactly.
+      expect(
+        tester.getSize(find.byType(NestIconButton).first),
+        const Size(NestDevice.tapKid, NestDevice.tapKid),
+      );
+      expect(
+        tester.getSize(find.byType(NestLockButton).first),
+        const Size(NestDevice.tapKid, NestDevice.tapKid),
+      );
+      await disposeApp(tester);
+    });
+
+    testWidgets('the key discs are 72 px squares (design .keypad button)', (
+      tester,
+    ) async {
+      await _pumpRoute(tester);
+      final keys = _keyFinder();
+      expect(keys, findsNWidgets(11)); // 1-9, 0, Delete
+      for (var i = 0; i < 11; i++) {
+        final rect = tester.getRect(keys.at(i));
+        expect(rect.width, 72, reason: 'key $i width');
+        expect(rect.height, 72, reason: 'key $i height');
+      }
+      await disposeApp(tester);
+    });
+
+    testWidgets('the chooser and retry buttons keep the kid minimum', (
+      tester,
+    ) async {
+      // No active child -> `Choose`.
+      final db = GetIt.instance<AppDatabase>();
+      await tester.runAsync(() async {
+        await (db.update(db.appState)..where((a) => a.id.equals(1))).write(
+          const AppStateCompanion(activeChildId: Value<String?>(null)),
+        );
+        await GetIt.instance<AppSession>().refresh();
+      });
+      await _pumpRoute(tester);
+      final choose = tester.getRect(
+        find.ancestor(
+          of: find.text('Choose'),
+          matching: find.byType(NestKidButton),
+        ),
+      );
+      expect(choose.height, greaterThanOrEqualTo(NestDevice.tapKid));
+      expect(choose.width, greaterThanOrEqualTo(NestDevice.tapKid));
+      expect(
+        tester.getSize(find.text('Choose')).height,
+        lessThan(choose.height),
+      );
+      await disposeApp(tester);
+      await setUpTestScope();
+
+      // Failing stream -> `Try again`.
+      final real = GetIt.instance<KidHomeRepository>();
+      final stub = _PinStub()..loadFail = true;
+      await GetIt.instance.unregister<KidHomeRepository>();
+      GetIt.instance.registerSingleton<KidHomeRepository>(
+        _WrappingRepo(real, stub),
+      );
+      await _pumpRoute(tester);
+      final retry = tester.getRect(
+        find.ancestor(
+          of: find.text('Try again'),
+          matching: find.byType(NestKidButton),
+        ),
+      );
+      expect(retry.height, greaterThanOrEqualTo(NestDevice.tapKid));
+      expect(retry.width, greaterThanOrEqualTo(NestDevice.tapKid));
+      await disposeApp(tester);
+    });
+
+    testWidgets('the keypad blank slot is not announced as a control', (
+      tester,
+    ) async {
+      await _pumpRoute(tester);
+      expect(find.bySemanticsLabel(RegExp('blank')), findsNothing);
+      // Every announced control in the keypad is a labelled button: 11 taps,
+      // nothing unnamed (the 12th cell is the decorative blank).
+      expect(
+        _keyFinder(),
+        findsNWidgets(11),
+        reason: 'no extra/unnamed keypad button',
+      );
+      await disposeApp(tester);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Every tap reaches the right route (ACCESSIBILITY ACTIONS: `performAction`
+  // must drive the real navigation, not only a label).
+  // -------------------------------------------------------------------------
+  group('K02 every tap reaches its route', () {
+    testWidgets('Back by tap and by VoiceOver both land on the picker', (
+      tester,
+    ) async {
+      await _pumpRoute(tester);
+      final back = tester.getSemantics(find.bySemanticsLabel('Back').first);
+      back.owner!.performAction(back.id, SemanticsAction.tap);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(currentPath(tester), KidHomeRoutePaths.picker);
+      await disposeApp(tester);
+
+      await setUpTestScope();
+      await _pumpRoute(tester);
+      await tester.tap(find.bySemanticsLabel('Back'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(currentPath(tester), KidHomeRoutePaths.picker);
+      await disposeApp(tester);
+    });
+
+    testWidgets('Back pops a K02 that K01 pushed', (tester) async {
+      await _pumpRoute(tester, route: KidHomeRoutePaths.picker);
+      await tester.tap(find.byKey(const ValueKey<String>('k01-tile-maya')));
+      // The tile tap runs a real Drift `setActiveChild` write — drain it or
+      // the pushed route is still on its loading UI (K01-BUG-3 harness note).
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 60)),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(pushedPath(tester), KidHomeRoutePaths.pin);
+      expect(find.text('Hi Maya! Enter your secret code'), findsOneWidget);
+      await tester.tap(find.bySemanticsLabel('Back'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(pushedPath(tester), KidHomeRoutePaths.picker);
+      await disposeApp(tester);
+    });
+
+    testWidgets('the lock opens the grown-up gate and keeps the typed code', (
+      tester,
+    ) async {
+      await _pumpRoute(tester);
+      await tester.tap(find.bySemanticsLabel('Digit 1'));
+      await tester.pump();
+      final lock = tester.getSemantics(
+        find.bySemanticsLabel('Grown-ups').first,
+      );
+      lock.owner!.performAction(lock.id, SemanticsAction.tap);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(pushedPath(tester), ParentalGateRoutePaths.gate);
+      await tester.pageBack();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(pushedPath(tester), KidHomeRoutePaths.pin);
+      expect(
+        find.bySemanticsLabel(RegExp('1 of 4 entered')),
+        findsOneWidget,
+        reason: 'the half-typed code survives the gate detour',
+      );
+      await disposeApp(tester);
+    });
+
+    testWidgets('a rapid lock double tap pushes exactly one gate', (
+      tester,
+    ) async {
+      await _pumpRoute(tester);
+      await tester.tap(find.bySemanticsLabel('Grown-ups'));
+      await tester.tap(find.bySemanticsLabel('Grown-ups'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(pushedPath(tester), ParentalGateRoutePaths.gate);
+      // One pop lands back on the PIN screen; a second gate would leave the
+      // gate on top and the finder below would find nothing.
+      await tester.pageBack();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(pushedPath(tester), KidHomeRoutePaths.pin);
+      expect(find.text('Hi Maya! Enter your secret code'), findsOneWidget);
+      await disposeApp(tester);
+    });
+
+    testWidgets('the lock works in the loading state too', (tester) async {
+      final real = GetIt.instance<KidHomeRepository>();
+      final stub = _PinStub()..hangLoad = true;
+      await GetIt.instance.unregister<KidHomeRepository>();
+      GetIt.instance.registerSingleton<KidHomeRepository>(
+        _WrappingRepo(real, stub),
+      );
+      await _pumpRoute(tester);
+      expect(find.byType(NestKeypad), findsNothing);
+      await tester.tap(find.bySemanticsLabel('Grown-ups'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(pushedPath(tester), ParentalGateRoutePaths.gate);
+      await disposeApp(tester);
+    });
+
+    testWidgets('the accepted code leaves the PIN screen for good', (
+      tester,
+    ) async {
+      await _pumpRoute(tester);
+      await _enterPin(tester, '1234');
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(currentPath(tester), KidHomeRoutePaths.home);
+      expect(
+        find.byType(KidPinView),
+        findsNothing,
+        reason: 'a correct code replaces the stack; Back must not return here',
+      );
+      await disposeApp(tester);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Entry announcements + entry limits.
+  // -------------------------------------------------------------------------
+  group('K02 entry announcements and limits', () {
+    testWidgets('the dots count up, then announce the in-flight check', (
+      tester,
+    ) async {
+      final stub = _PinStub()..hang = true;
+      await _patchVerify(stub);
+      await _pumpRoute(tester);
+      for (var i = 1; i <= 3; i++) {
+        await tester.tap(find.bySemanticsLabel('Digit $i').first);
+        await tester.pump();
+        expect(
+          find.bySemanticsLabel(RegExp('$i of 4 entered')),
+          findsOneWidget,
+        );
+      }
+      await tester.tap(find.bySemanticsLabel('Digit 4'));
+      await tester.pump();
+      expect(stub.verifyCalls, 1);
+      expect(stub.lastPin, '1234');
+      // While the check runs the dots announce the check itself, and the
+      // counting label is gone (no double announcement).
+      expect(
+        find.bySemanticsLabel(RegExp('Checking your code')),
+        findsOneWidget,
+      );
+      expect(find.bySemanticsLabel(RegExp('4 of 4 entered')), findsNothing);
+      // Keys are inert mid-check: the code cannot grow past four digits.
+      await tester.tap(find.bySemanticsLabel('Digit 9'));
+      await tester.pump();
+      expect(stub.verifyCalls, 1);
+      await disposeApp(tester);
+    });
+
+    testWidgets('a wrong attempt re-arms the keypad for a fresh code', (
+      tester,
+    ) async {
+      final stub = _PinStub()..nextOk = false;
+      await _patchVerify(stub);
+      await _pumpRoute(tester);
+      await _enterPin(tester, '1234');
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(stub.verifyCalls, 1);
+      expect(find.bySemanticsLabel(RegExp('0 of 4 entered')), findsOneWidget);
+      stub.nextOk = true;
+      await tester.tap(find.bySemanticsLabel('Digit 1'));
+      await tester.pump();
+      expect(find.bySemanticsLabel(RegExp('1 of 4 entered')), findsOneWidget);
+      await _enterPin(tester, '234');
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(stub.verifyCalls, 2);
+      expect(stub.lastPin, '1234');
+      expect(currentPath(tester), KidHomeRoutePaths.home);
+      await disposeApp(tester);
+    });
+
+    testWidgets('a verifyPin error nudges like a wrong code, never the card', (
+      tester,
+    ) async {
+      final stub = _PinStub()..fail = true;
+      await _patchVerify(stub);
+      await _pumpRoute(tester);
+      await _enterPin(tester, '1234');
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(currentPath(tester), KidHomeRoutePaths.pin);
+      expect(find.text("That didn't work. Try again."), findsOneWidget);
+      expect(
+        find.text('Oh no! Pip got lost.'),
+        findsNothing,
+        reason: 'the home stream is healthy; this is not the failure card',
+      );
+      expect(find.bySemanticsLabel(RegExp('0 of 4 entered')), findsOneWidget);
+      // The nudge is announced (live region) — screen readers must hear it.
+      final toast = tester.getSemantics(
+        find.bySemanticsLabel(RegExp("That didn't work. Try again.")).first,
+      );
+      expect(toast.getSemanticsData().flagsCollection.isLiveRegion, isTrue);
+      // Still usable: the next attempt goes through.
+      stub
+        ..fail = false
+        ..nextOk = true;
+      await _enterPin(tester, '1234');
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(stub.verifyCalls, 2);
+      expect(currentPath(tester), KidHomeRoutePaths.home);
+      await disposeApp(tester);
+    });
+
+    testWidgets('a no-PIN child auto-advances without any verify call', (
+      tester,
+    ) async {
+      final stub = _PinStub();
+      await _patchVerify(stub);
+      final db = GetIt.instance<AppDatabase>();
+      await tester.runAsync(() async {
+        await (db.update(db.appState)..where((a) => a.id.equals(1))).write(
+          const AppStateCompanion(activeChildId: Value<String?>('leo')),
+        );
+        await GetIt.instance<AppSession>().refresh();
+      });
+      await _pumpRoute(tester);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(currentPath(tester), KidHomeRoutePaths.home);
+      expect(
+        stub.verifyCalls,
+        0,
+        reason: 'no PIN to check: the repository auto-passes, no dispatch',
+      );
+      await disposeApp(tester);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Layout invariants that hold across the shared keypad-pitch fix.
+  // -------------------------------------------------------------------------
+  group('K02 layout invariants', () {
+    testWidgets('keys are centred, evenly pitched and inside the gutters', (
+      tester,
+    ) async {
+      for (final width in const <double>[320, 390, 430]) {
+        await _pumpRoute(tester, width: width);
+        final keys = _keyFinder();
+        final rects = <Rect>[
+          for (var i = 0; i < keys.evaluate().length; i++)
+            tester.getRect(keys.at(i)),
+        ];
+        final centre = width / 2;
+        // The grid as a whole sits on the column centre (its keys are of
+        // course spread across it).
+        final gridLeft = rects.map((r) => r.left).reduce(math.min);
+        final gridRight = rects.map((r) => r.right).reduce(math.max);
+        expect(
+          ((gridLeft + gridRight) / 2 - centre).abs(),
+          lessThanOrEqualTo(1),
+          reason: 'keypad centred at ${width}px',
+        );
+        for (final rect in rects) {
+          expect(
+            rect.left,
+            greaterThanOrEqualTo(NestSpacing.padSide),
+            reason: 'left gutter at ${width}px',
+          );
+          expect(
+            rect.right,
+            lessThanOrEqualTo(width - NestSpacing.padSide),
+            reason: 'right gutter at ${width}px',
+          );
+        }
+        // Uniform row pitch (three equal steps down the four rows).
+        final tops = <double>[
+          rects[0].top,
+          rects[3].top,
+          rects[6].top,
+          rects[9].top,
+        ];
+        final pitches = <double>[
+          for (var i = 1; i < tops.length; i++) tops[i] - tops[i - 1],
+        ];
+        for (final pitch in pitches) {
+          expect(pitch, closeTo(pitches.first, 0.5));
+        }
+        // Uniform column pitch within a row.
+        expect(
+          rects[1].left - rects[0].left,
+          closeTo(rects[2].left - rects[1].left, 0.5),
+        );
+        expect(
+          rects[10].left - rects[9].left,
+          closeTo(rects[1].left - rects[0].left, 0.5),
+          reason: 'row 4 keeps the same column pitch as rows 1-3',
+        );
+        await disposeApp(tester);
+        await setUpTestScope();
+      }
+    });
+
+    testWidgets('headings, pill, dots and caption share the 20 px gutters', (
+      tester,
+    ) async {
+      await _pumpRoute(tester);
+      final markPill = find.ancestor(
+        of: find.text('NESTLING'),
+        matching: find.byWidgetPredicate(
+          (w) =>
+              w is Container &&
+              w.decoration is BoxDecoration &&
+              (w.decoration! as BoxDecoration).borderRadius ==
+                  BorderRadius.circular(999),
+        ),
+      );
+      for (final finder in <Finder>[
+        find.text('Hi Maya! Enter your secret code'),
+        markPill,
+        find.byType(NestPinDots),
+        find.text('Forgot it? Just ask a grown-up.'),
+        find.byType(NestKeypad),
+      ]) {
+        final rect = tester.getRect(finder.first);
+        expect(
+          (rect.center.dx - 195).abs(),
+          lessThanOrEqualTo(1),
+          reason: 'centred on the 390 px column: $finder',
+        );
+        expect(
+          rect.left,
+          greaterThanOrEqualTo(NestSpacing.padSide - 1),
+          reason: 'left gutter: $finder',
+        );
+        expect(
+          rect.right,
+          lessThanOrEqualTo(390 - NestSpacing.padSide + 1),
+          reason: 'right gutter: $finder',
+        );
+      }
+      // The pill keeps its CSS shape: 22 px line box + 2 px padding a side.
+      expect(tester.getSize(markPill.first).height, 26);
+      expect(tester.getSize(markPill.first).width, greaterThan(0));
+      await disposeApp(tester);
+    });
+
+    testWidgets('the pill and the key discs are pinned as SHAPES', (
+      tester,
+    ) async {
+      // SHAPES rule: compare the visible BACKGROUND/BORDER rect, never just
+      // where the text lands (the P05 lesson). The mark pill's tinted
+      // background and its pill radius are asserted here, not inferred from
+      // the Text style.
+      await _pumpRoute(tester);
+      final tokens = NestContext(tester.element(find.text('NESTLING'))).nest;
+      final pill = tester.widget<Container>(
+        find
+            .ancestor(
+              of: find.text('NESTLING'),
+              matching: find.byWidgetPredicate(
+                (w) =>
+                    w is Container &&
+                    w.decoration is BoxDecoration &&
+                    (w.decoration! as BoxDecoration).borderRadius ==
+                        BorderRadius.circular(999),
+              ),
+            )
+            .first,
+      );
+      final decoration = pill.decoration! as BoxDecoration;
+      expect(decoration.color, tokens.lilacTint, reason: '.mark background');
+      expect(
+        decoration.borderRadius,
+        BorderRadius.circular(999),
+        reason: '.mark border-radius',
+      );
+      expect(
+        tester
+            .getSize(
+              find
+                  .ancestor(
+                    of: find.text('NESTLING'),
+                    matching: find.byWidgetPredicate(
+                      (w) =>
+                          w is Container &&
+                          w.decoration is BoxDecoration &&
+                          (w.decoration! as BoxDecoration).borderRadius ==
+                              BorderRadius.circular(999),
+                    ),
+                  )
+                  .first,
+            )
+            .width,
+        tester.getSize(find.text('NESTLING')).width + 2 * NestSpacing.s3,
+        reason: '.mark padding 0 12',
+      );
+
+      // Every key disc: 72 circle, kid ink border, kid shadow (light) —
+      // the same tones for all eleven cells, blank excluded.
+      final kid = NestContext(tester.element(find.byType(NestKeypad))).nestKid;
+      final inks = find.descendant(
+        of: find.byType(NestKeypad),
+        matching: find.byType(Ink),
+      );
+      expect(inks, findsNWidgets(11));
+      for (var i = 0; i < inks.evaluate().length; i++) {
+        final box =
+            (tester.widget<Ink>(inks.at(i)).decoration as BoxDecoration?)!;
+        expect(box.shape, BoxShape.circle, reason: 'key $i');
+        expect(tester.getSize(inks.at(i)).width, 72, reason: 'key $i');
+        expect(box.color, tokens.surface, reason: 'key $i fill');
+        expect(
+          box.border,
+          Border.all(color: tokens.ink, width: kid.borderWidth),
+          reason: 'key $i kid border',
+        );
+      }
+      await disposeApp(tester);
+    });
+
+    testWidgets('dark mode keeps the light geometry and flips the tokens', (
+      tester,
+    ) async {
+      Future<Map<String, Rect>> capture(ThemeMode theme) async {
+        await _pumpRoute(tester, theme: theme);
+        final markPill = find.ancestor(
+          of: find.text('NESTLING'),
+          matching: find.byWidgetPredicate(
+            (w) =>
+                w is Container &&
+                w.decoration is BoxDecoration &&
+                (w.decoration! as BoxDecoration).borderRadius ==
+                    BorderRadius.circular(999),
+          ),
+        );
+        return <String, Rect>{
+          'back': tester.getRect(find.bySemanticsLabel('Back').first),
+          'lock': tester.getRect(find.bySemanticsLabel('Grown-ups').first),
+          'say': tester.getRect(find.text('Hi Maya! Enter your secret code')),
+          'mark': tester.getRect(markPill.first),
+          'dots': tester.getRect(find.byType(NestPinDots)),
+          'keypad': tester.getRect(find.byType(NestKeypad)),
+          'caption': tester.getRect(
+            find.text('Forgot it? Just ask a grown-up.'),
+          ),
+        };
+      }
+
+      final light = await capture(ThemeMode.light);
+      await disposeApp(tester);
+      await setUpTestScope();
+      final dark = await capture(ThemeMode.dark);
+      await disposeApp(tester);
+      await setUpTestScope();
+
+      for (final key in light.keys) {
+        expect(
+          dark[key],
+          light[key],
+          reason: 'dark must not move $key (only tones differ)',
+        );
+      }
+    });
+
+    testWidgets('the filled/empty dot and disc tones follow the theme', (
+      tester,
+    ) async {
+      for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+        await _pumpRoute(tester, theme: theme);
+        await tester.tap(find.bySemanticsLabel('Digit 1'));
+        await tester.pump();
+        final dots = find.descendant(
+          of: find.byType(NestPinDots),
+          matching: find.byWidgetPredicate(
+            (w) =>
+                w is DecoratedBox &&
+                w.decoration is BoxDecoration &&
+                (w.decoration as BoxDecoration).shape == BoxShape.circle,
+          ),
+        );
+        final filled =
+            tester.widget<DecoratedBox>(dots.at(0)).decoration as BoxDecoration;
+        final empty =
+            tester.widget<DecoratedBox>(dots.at(1)).decoration as BoxDecoration;
+        final tokens = NestContext(tester.element(find.byType(NestPinDots)))
+            .nest;
+        expect(filled.color, tokens.ink, reason: 'filled dot = ink');
+        expect(empty.color, tokens.surface, reason: 'empty dot = surface');
+        expect(
+          tokens.isDark,
+          theme == ThemeMode.dark,
+          reason: 'the test really switched theme',
+        );
+        // The 128 disc paints the theme's lilac tint (one visual disc).
+        final disc = find.ancestor(
+          of: find.byType(NestAvatar),
+          matching: find.byType(Container),
+        );
+        final decoration =
+            tester.widget<Container>(disc.first).decoration! as BoxDecoration;
+        expect(decoration.color, tokens.lilacTint);
+        await disposeApp(tester);
+        await setUpTestScope();
+      }
+    });
+
+    testWidgets('no bottom bar: the shared meadow reaches the physical edge', (
+      tester,
+    ) async {
+      await _pumpRoute(tester);
+      final meadow = tester.getRect(find.byType(NestMeadow).first);
+      expect(meadow.height, NestMeadowGeometry.defaultHeight);
+      expect(meadow.width, 390, reason: 'full width');
+      expect(meadow.bottom, 844, reason: 'pinned to the physical edge');
+      expect(
+        tester.widget<Scaffold>(find.byType(Scaffold).last).backgroundColor,
+        Colors.transparent,
+        reason: 'no opaque strip may hide the meadow (BOTTOM EDGE rule)',
+      );
+      expect(find.byType(NestBottomCta), findsNothing);
+      await disposeApp(tester);
+    });
+
+    testWidgets('the failure card shows PipAvatar, never a v1 illustration', (
+      tester,
+    ) async {
+      final real = GetIt.instance<KidHomeRepository>();
+      final stub = _PinStub()..loadFail = true;
+      await GetIt.instance.unregister<KidHomeRepository>();
+      GetIt.instance.registerSingleton<KidHomeRepository>(
+        _WrappingRepo(real, stub),
+      );
+      await _pumpRoute(tester);
+      expect(find.byType(PipAvatar), findsOneWidget);
+      final source = _libSource(
+        'features/kid_home/presentation/views/kid_pin_view.dart',
+      ).readAsStringSync();
+      expect(source.contains('pip_stage_'), isFalse);
+      expect(source.contains('google_fonts'), isFalse);
+      expect(source.contains('GoogleFonts'), isFalse);
+      await disposeApp(tester);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // COPY — the design bytes are READ from `K02-pin.html`, never transcribed,
+  // so this group can never approve whatever the app happens to draw.
+  // -------------------------------------------------------------------------
+  group('K02 design-copy parity', () {
+    testWidgets('mark, greeting and caption are the design bytes', (
+      tester,
+    ) async {
+      final html = _designSource('K02-pin.html').readAsStringSync();
+      final mark = _decodeEntities(
+        _capture(html, '<div class="mark">([^<]*)</div>'),
+      );
+      final say = _decodeEntities(
+        _capture(html, '<div class="say">([^<]*)</div>'),
+      );
+      final caption = _decodeEntities(
+        _capture(html, '<p class="kcap"[^>]*>([^<]*)</p>'),
+      );
+
+      // The greeting's name is DB-driven (DATA OVER MOCKS); every other byte
+      // has to match the source exactly.
+      KidChild? child;
+      await tester.runAsync(() async {
+        child = await GetIt.instance<KidHomeRepository>()
+            .watchActiveChild()
+            .first;
+      });
+      await _pumpRoute(tester);
+      expect(find.text(mark), findsOneWidget);
+      expect(
+        find.text(say.replaceFirst('Maya', child!.nickname)),
+        findsOneWidget,
+      );
+      expect(find.text(caption), findsOneWidget);
+      // K02's copy is plain ASCII in the design, so a curly apostrophe or
+      // en dash anywhere on this screen is a drift from the source.
+      for (final rendered in <String>[
+        mark,
+        say.replaceFirst('Maya', child!.nickname),
+        caption,
+      ]) {
+        expect(
+          rendered.runes.every((rune) => rune < 0x80),
+          isTrue,
+          reason: 'design copy is ASCII: "$rendered"',
+        );
+      }
+      // The design carries no error copy: the wrong-code nudge is app-only.
+      expect(html.contains('try again'), isFalse);
+      await disposeApp(tester);
+    });
+
+    testWidgets('the icon-button labels are the design aria-labels', (
+      tester,
+    ) async {
+      final html = _designSource('K02-pin.html').readAsStringSync();
+      await _pumpRoute(tester);
+      for (final label in const <String>['Back', 'Grown-ups', 'Delete']) {
+        expect(
+          html.contains('aria-label="$label"'),
+          isTrue,
+          reason: 'design aria-label for $label',
+        );
+        expect(find.bySemanticsLabel(label), findsOneWidget);
+      }
+      await disposeApp(tester);
+    });
+  });
+}
+
+/// The eleven announced keypad controls, in tree order
+/// (1-9, then `0`, then `Delete`; the blank cell is excluded).
+Finder _keyFinder() => find.descendant(
+  of: find.byType(NestKeypad),
+  matching: find.bySemanticsLabel(RegExp(r'^(Digit [0-9]|Delete)$')),
+);
+
+/// The design source for [name], located by walking up from the package root.
+File _designSource(String name) {
+  var dir = Directory.current.absolute;
+  for (var depth = 0; depth < 5; depth++) {
+    final candidate = File('${dir.path}/design/html-source/screens/$name');
+    if (candidate.existsSync()) return candidate;
+    final parent = dir.parent;
+    if (parent.path == dir.path) break;
+    dir = parent;
+  }
+  throw StateError(
+    'design/html-source/screens/$name not found above '
+    '${Directory.current.path}',
+  );
+}
+
+/// A `lib/` source file, located the same way.
+File _libSource(String relative) {
+  var dir = Directory.current.absolute;
+  for (var depth = 0; depth < 5; depth++) {
+    final candidate = File('${dir.path}/lib/$relative');
+    if (candidate.existsSync()) return candidate;
+    final parent = dir.parent;
+    if (parent.path == dir.path) break;
+    dir = parent;
+  }
+  throw StateError('lib/$relative not found above ${Directory.current.path}');
+}
+
+/// First capture group of [pattern] in [source] — fails loudly when the
+/// design markup changes shape (the copy must never be transcribed here).
+String _capture(String source, String pattern) {
+  final match = RegExp(pattern).firstMatch(source);
+  if (match == null) {
+    throw StateError('design source no longer matches /$pattern/');
+  }
+  return match.group(1)!;
+}
+
+const Map<String, String> _htmlEntities = <String, String>{
+  '&ndash;': '–',
+  '&mdash;': '—',
+  '&rsquo;': '’',
+  '&lsquo;': '‘',
+  '&ldquo;': '“',
+  '&rdquo;': '”',
+  '&hellip;': '…',
+  '&nbsp;': ' ',
+  '&middot;': '·',
+  '&amp;': '&',
+  '&quot;': '"',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&#9003;': '⌫',
+};
+
+String _decodeEntities(String raw) {
+  var out = raw;
+  _htmlEntities.forEach((entity, character) {
+    out = out.replaceAll(entity, character);
+  });
+  return out;
 }
