@@ -25,6 +25,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:nestling/app/controllers.dart';
 import 'package:nestling/core/design_system/design_system.dart';
+import 'package:nestling/core/design_system/motion/pip_avatar.dart';
+import 'package:nestling/features/parental_gate/domain/entities/parental_gate_challenge.dart';
 import 'package:nestling/features/parental_gate/domain/parental_gate_repository.dart';
 
 import '../../test_scope.dart';
@@ -46,6 +48,7 @@ const List<double> designKeyRowCentres = <double>[380, 462, 544, 626];
 const double designCancelCentre = 702; // ghost button 674…730
 const double designCaptionCentre = 749; // caption line box 740…758
 const double designBackdropHeaderTop = 55; // `.kb-top` under the 47 status bar
+const double designKeypadSlotTop = 336; // digits 320 + `.keypad` margin-top 16
 
 Future<void> _loadBundledFonts() async {
   final inter = FontLoader('Inter')
@@ -256,65 +259,164 @@ void main() {
   });
 
   group('ORCHESTRATOR_NOTES design pins (390×844, light, textScale 1.0)', () {
-    testWidgets('every band sits within ±2 px of the design PNG', (
+    /// Collects every band that misses the design by more than ±2 px so one
+    /// run reports the whole list instead of stopping at the first.
+    List<String> driftCollector() {
+      final drifts = <String>[];
+      return drifts;
+    }
+
+    void check(
+      List<String> drifts,
+      String what,
+      double actual,
+      double expected,
+    ) {
+      final delta = actual - expected;
+      if (delta.abs() > 2) {
+        drifts.add(
+          '$what: app ${actual.toStringAsFixed(1)} vs design '
+          '${expected.toStringAsFixed(1)} (Δ${delta.toStringAsFixed(1)})',
+        );
+      }
+    }
+
+    testWidgets('the card anchor and every band above the keypad match', (
       tester,
     ) async {
       GetIt.instance<AppModeController>().selectMode(AppMode.kid);
       GetIt.instance<ThemeModeController>().selectMode(ThemeMode.light);
       await pumpAppRoute(tester, '/parental-gate');
 
-      final drifts = <String>[];
-      void check(String what, double actual, double expected) {
-        final delta = actual - expected;
-        if (delta.abs() > 2) {
-          drifts.add(
-            '$what: app ${actual.toStringAsFixed(1)} vs design '
-            '${expected.toStringAsFixed(1)} (Δ${delta.toStringAsFixed(1)})',
-          );
-        }
-      }
-
-      // 2. Card frame.
+      final drifts = driftCollector();
+      // 2. Card frame — the design anchors the card at y 66 (it is NOT
+      // vertically centred; centring only coincided while the card was the
+      // design's height).
       final modal = tester.getRect(find.byType(NestModal));
-      check('card top', modal.top, designModalTop);
-      check('card bottom', modal.bottom, designModalBottom);
-      check('card height', modal.height, designModalBottom - designModalTop);
-      check('card left', modal.left, 24);
-      check('card width', modal.width, 342);
+      check(drifts, 'card top', modal.top, designModalTop);
+      check(drifts, 'card left', modal.left, 24);
+      check(drifts, 'card width', modal.width, 342);
 
-      // 3. Title / instruction / question line centres.
+      // The lock tile starts the CSS chain: pad-top 24 → 90.
+      final lock = _boxesOfSize(tester, 52, 52).single;
+      check(drifts, 'lock tile top', lock.top, 90);
+      check(drifts, 'lock tile bottom', lock.bottom, 142);
+
+      // 3. Title / instruction / question line centres, i.e. the CSS rhythm
+      // 52 → +12 → h2/28 → +8 → body-s/22 → +4 → h3/24.
+      final lockBottom = lock.bottom;
       check(
+        drifts,
         'title "Grown-ups only" centre',
         _lineCentre(tester, 'Grown-ups only'),
         designTitleCentre,
       );
       check(
+        drifts,
+        'title gap below the lock tile',
+        _lineCentre(tester, 'Grown-ups only') - (lockBottom + 28 / 2),
+        12,
+      );
+      check(
+        drifts,
         'instruction centre',
         _lineCentre(tester, 'Type the answer in numbers:'),
         designInstructionCentre,
       );
       // The question is DB-driven, so find it by its "times" wording rather
       // than by the design's example.
+      final question = tester.getRect(find.textContaining('times'));
       check(
+        drifts,
         'question centre',
-        tester.getRect(find.textContaining('times')).center.dy,
+        question.center.dy,
         designQuestionCentre,
       );
+      check(
+        drifts,
+        'question gap below the instruction',
+        question.top -
+            (_lineCentre(tester, 'Type the answer in numbers:') + 11),
+        4,
+      );
 
-      // 4. Answer boxes.
+      // 4. Answer boxes: 256…320 (`.digits { margin-top: 16 }` after the h3
+      // line box), 56 wide, 12 gap, centred in the 342 card.
       final digits = _boxesOfSize(tester, 56, 64);
       expect(digits, isNotEmpty);
-      check('answer boxes centre', digits.first.center.dy, designDigitsCentre);
+      check(
+        drifts,
+        'answer boxes centre',
+        digits.first.center.dy,
+        designDigitsCentre,
+      );
+      check(drifts, 'answer boxes left', digits.first.left, 133);
+      check(
+        drifts,
+        'answer boxes gap',
+        digits[1].left - digits.first.right,
+        NestSpacing.s3,
+      );
 
-      // 5. Keypad row centres.
-      final rows = <double>[];
-      for (final box in _renderBoxes(tester, _keyInks())) {
-        rows.add(paintedRect(box).center.dy);
-      }
-      final rowCentres = (rows.toSet().toList()..sort());
+      // 5a. Keypad row 1 — the first row is still P17's to place
+      // (`.gate .keypad { margin-top: 16 }` + the grid's 8 px pad-top).
+      final rowCentres = _keyRowCentres(tester);
       expect(rowCentres, hasLength(designKeyRowCentres.length));
-      for (var i = 0; i < rowCentres.length; i++) {
+      check(
+        drifts,
+        'keypad row 1 centre',
+        rowCentres.first,
+        designKeyRowCentres.first,
+      );
+      check(
+        drifts,
+        'keypad slot top',
+        tester.getRect(find.byType(NestKeypad)).top,
+        designKeypadSlotTop,
+      );
+
+      // ORCHESTRATOR_NOTES item 1 / 5_ui deviation 2: the dimmed kid header
+      // starts below the 47 px status-bar reserve, not under the OS clock.
+      expect(find.byType(NestStatusBar), findsOneWidget);
+      check(
+        drifts,
+        'dimmed backdrop header top',
+        tester.getRect(find.text('Hi Maya!')).top,
+        designBackdropHeaderTop,
+      );
+
+      expect(
+        drifts,
+        isEmpty,
+        reason:
+            'P17 geometry drifts from the design PNG (UI VERDICT RULE ±2 px):\n'
+            '  ${drifts.join('\n  ')}',
+      );
+      await disposeApp(tester);
+    });
+
+    testWidgets('the bands below the keypad match the design', (tester) async {
+      GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+      GetIt.instance<ThemeModeController>().selectMode(ThemeMode.light);
+      await pumpAppRoute(tester, '/parental-gate');
+
+      final drifts = driftCollector();
+      final modal = tester.getRect(find.byType(NestModal));
+      check(drifts, 'card bottom', modal.bottom, designModalBottom);
+      check(
+        drifts,
+        'card height',
+        modal.height,
+        designModalBottom - designModalTop,
+      );
+
+      // 5b. Keypad rows 2–4. Row 1 already lands on the design; every later
+      // row drifts by the shared component's row gap.
+      final rowCentres = _keyRowCentres(tester);
+      expect(rowCentres, hasLength(designKeyRowCentres.length));
+      for (var i = 1; i < rowCentres.length; i++) {
         check(
+          drifts,
           'keypad row ${i + 1} centre',
           rowCentres[i],
           designKeyRowCentres[i],
@@ -328,30 +430,34 @@ void main() {
           matching: find.byType(NestButton),
         ),
       );
-      check('"Back to Pip" centre', cancel.center.dy, designCancelCentre);
       check(
+        drifts,
+        '"Back to Pip" centre',
+        cancel.center.dy,
+        designCancelCentre,
+      );
+      check(
+        drifts,
         'caption centre',
         _lineCentre(tester, 'This keeps settings and purchases safe.'),
         designCaptionCentre,
-      );
-
-      // ORCHESTRATOR_NOTES item 1 / 5_ui deviation 2: the dimmed kid header
-      // starts below the 47 px status-bar reserve, not under the OS clock.
-      check(
-        'dimmed backdrop header top',
-        tester.getRect(find.text('Hi Maya!')).top,
-        designBackdropHeaderTop,
       );
 
       expect(
         drifts,
         isEmpty,
         reason:
-            'P17 geometry drifts from the design PNG (UI VERDICT RULE ±2 px):\n'
-            '  ${drifts.join('\n  ')}\n'
-            '5_ui + ORCHESTRATOR_NOTES: anchor the card at the design top (66) '
-            'instead of centring it, reserve the status-bar height above the '
-            'kid backdrop, and restore the HTML keypad gaps.',
+            'Everything below the keypad is off by the shared component, not '
+            'by P17: the shared NestKeypad '
+            '(app/lib/core/design_system/components/nest_keypad.dart) '
+            'hard-codes a 16 px row gap and 8 px padding '
+            'all round where the CSS grid is `gap: 10; padding: 8 24 0`, so '
+            "it renders 352 tall against the design's 326 (+26) and each "
+            'row lands +6 low. No call-site change can move row 2 (it is '
+            'already 6 px low inside the component). Blocked on core — see '
+            'docs/screens/P17/SHARED_REQUEST.md #3 and the TODO(P17) at the '
+            'NestKeypad call site.\n'
+            'Measured drifts:\n  ${drifts.join('\n  ')}',
       );
       await disposeApp(tester);
     });
@@ -362,32 +468,29 @@ void main() {
       GetIt.instance<AppModeController>().selectMode(AppMode.kid);
       await pumpAppRoute(tester, '/parental-gate');
 
-      final rows = <double>[];
-      for (final box in _renderBoxes(tester, _keyInks())) {
-        rows.add(paintedRect(box).center.dy);
-      }
-      final rowCentres = (rows.toSet().toList()..sort());
       final pitches = <double>[
-        for (var i = 1; i < rowCentres.length; i++)
-          rowCentres[i] - rowCentres[i - 1],
+        for (var i = 1; i < _keyRowCentres(tester).length; i++)
+          _keyRowCentres(tester)[i] - _keyRowCentres(tester)[i - 1],
       ];
+      expect(pitches, hasLength(3));
       for (final pitch in pitches) {
         expect(
           pitch,
           moreOrLessEquals(82, epsilon: 0.5),
-          reason: '.keypad gap 10 + key 72 ⇒ row pitch 82',
+          reason:
+              '.keypad gap 10 + key 72 ⇒ row pitch 82. Shared NestKeypad uses '
+              '16 (SHARED_REQUEST #3).',
         );
       }
 
       // `.keypad { grid-template-columns: repeat(3, 1fr); gap: 10 }` inside the
       // 302-wide card content resolves to a 88 px column pitch at 390 (keys
       // 71…143 / 159…231 / 247…319).
-      final columns = <double>[];
-      for (final box in _renderBoxes(tester, _keyInks())) {
-        columns.add(paintedRect(box).left);
-      }
-      columns.sort();
-      final lefts = columns.toSet().toList()..sort();
+      final lefts = <double>{
+        for (final box in _renderBoxes(tester, _keyInks()))
+          paintedRect(box).left,
+      }.toList()..sort();
+      expect(lefts, hasLength(3));
       expect(
         lefts[1] - lefts[0],
         moreOrLessEquals(88, epsilon: 0.5),
@@ -395,5 +498,181 @@ void main() {
       );
       await disposeApp(tester);
     });
+
+    testWidgets('the keypad is never laid out under unbounded width', (
+      tester,
+    ) async {
+      GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+      GetIt.instance<ThemeModeController>().selectMode(ThemeMode.light);
+      await pumpAppRoute(tester, '/parental-gate');
+
+      // Merge-readiness guard for the shared keypad. The merged
+      // `shared/keypad_grid` NestKeypad reproduces CSS `repeat(3, 1fr)` with
+      // `Expanded` cells (ORCHESTRATOR_NOTES 07:13). `FittedBox` hands its
+      // child UNBOUNDED constraints, so a keypad wrapped in one must be given
+      // an explicit width or the gate throws
+      // "RenderFlex children have non-zero flex but incoming width
+      // constraints are unbounded" on its first frame — verified with a
+      // minimal Expanded-grid probe.
+      //
+      // Fix at the call site: at the design width the CSS `.keypad` is a
+      // block-level grid, so render `NestKeypad(kid: true)` directly in the
+      // 302 px card content (no FittedBox); for narrower cards wrap a
+      // WIDTH-BOUNDED instance, e.g.
+      // `FittedBox(fit: BoxFit.scaleDown, child: SizedBox(width: 280,
+      // child: NestKeypad(fit: NestKeypadFit.shrinkWrap)))` — 232/280 keeps the
+      // painted key at 59.7 px, above the 56 px kid minimum.
+      final fitted = find.ancestor(
+        of: find.byType(NestKeypad),
+        matching: find.byType(FittedBox),
+      );
+      if (fitted.evaluate().isNotEmpty) {
+        final child = tester.widget<FittedBox>(fitted.first).child;
+        expect(
+          child,
+          isA<SizedBox>().having((box) => box.width, 'width', isNotNull),
+          reason:
+              'a FittedBox passes unbounded width to its child; an Expanded '
+              'keypad grid needs an explicit width or it throws a layout '
+              'assertion once shared/keypad_grid lands',
+        );
+      }
+      // Whatever the wrapper, the painted geometry must still be the design's.
+      expect(_keyRowCentres(tester), hasLength(4));
+      await disposeApp(tester);
+    });
+
+    testWidgets('the backdrop row centres its items like `.kb-top`', (
+      tester,
+    ) async {
+      GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+      GetIt.instance<ThemeModeController>().selectMode(ThemeMode.light);
+      await pumpAppRoute(tester, '/parental-gate');
+
+      // `.kb-top { display:flex; align-items:center; gap:12px; padding-top:8px }`
+      // under the 47 px status bar ⇒ the row is y 55…99 (the 44 px avatar sets
+      // the cross size) and the greeting (h1 28/34) and the coin pill (36) are
+      // centred inside it.
+      final avatar = tester.getRect(find.byType(NestAvatar));
+      expect(avatar.top, moreOrLessEquals(55, epsilon: 0.5));
+      expect(avatar.height, moreOrLessEquals(44, epsilon: 0.5));
+
+      final greeting = tester.getRect(find.text('Hi Maya!'));
+      final pill = tester.getRect(find.byType(NestCoinPill));
+      expect(
+        greeting.center.dy,
+        moreOrLessEquals(avatar.center.dy, epsilon: 1),
+        reason:
+            'CSS align-items: centre — the greeting is 5 px high in the app '
+            '(55…89 instead of 60…94) because the row uses '
+            'CrossAxisAlignment.start. One-line fix: drop that argument (the '
+            'default is centre). Dimmed scenery, so cosmetic, but it is a '
+            'measurable CSS-truth deviation in the only backdrop pixels the '
+            'card does not cover.',
+      );
+      expect(
+        pill.center.dy,
+        moreOrLessEquals(avatar.center.dy, epsilon: 1),
+        reason: 'the coin pill is centred in the same 44 px row',
+      );
+      // `.kb-top { gap: 12px }` between the avatar and the greeting.
+      expect(greeting.left - avatar.right, moreOrLessEquals(12, epsilon: 0.5));
+      await disposeApp(tester);
+    });
+
+    testWidgets("the dimmed backdrop shows the child's own Pip in the slot", (
+      tester,
+    ) async {
+      GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+      GetIt.instance<ThemeModeController>().selectMode(ThemeMode.light);
+      await pumpAppRoute(tester, '/parental-gate');
+
+      // PIP rule: the DB look (Maya = Mochi · sunny · stage 3), never the v1
+      // pip_stage_*.svg. The card covers the slot on screen, so this is the
+      // only place the rule can be checked.
+      final pip = tester.widget<PipAvatar>(find.byType(PipAvatar));
+      expect(pip.style, PipStyle.mochi);
+      expect(pip.skin, PipSkin.sunny);
+      expect(pip.stage, 3);
+      expect(pip.accessory, PipAccessory.none);
+      expect(pip.size, 200);
+
+      // `.kb-pet { margin-top: 26px }` after the 44 px header row ⇒ y 125…325,
+      // centred in the 390 canvas.
+      final slot = tester.getRect(find.byType(PipAvatar));
+      expect(slot.top, moreOrLessEquals(125, epsilon: 0.5));
+      expect(slot.height, moreOrLessEquals(200, epsilon: 0.5));
+      expect(slot.center.dx, moreOrLessEquals(195, epsilon: 0.5));
+
+      // Exactly one Pip in the scene, and it is the DS component (a v1
+      // `pip_stage_*.svg` would leave `find.byType(PipAvatar)` empty).
+      expect(find.byType(PipAvatar), findsOneWidget);
+      await disposeApp(tester);
+    });
+
+    testWidgets('the loading placeholders keep the loaded card height', (
+      tester,
+    ) async {
+      GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+      GetIt.instance<ThemeModeController>().selectMode(ThemeMode.light);
+      await pumpAppRoute(tester, '/parental-gate');
+      final loaded = tester.getRect(find.byType(NestModal));
+      await disposeApp(tester);
+
+      // Same screen, a stream that never emits: the frame must not jump.
+      await setUpTestScope();
+      await GetIt.instance.unregister<ParentalGateRepository>();
+      GetIt.instance.registerSingleton<ParentalGateRepository>(
+        _HangingRepository(),
+      );
+      GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+      GetIt.instance<ThemeModeController>().selectMode(ThemeMode.light);
+      await pumpAppRoute(tester, '/parental-gate');
+      final loading = tester.getRect(find.byType(NestModal));
+
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(
+        (loaded.height - loading.height).abs(),
+        lessThanOrEqualTo(6),
+        reason:
+            'the loading placeholders stand in for the instruction + question '
+            'lines, so the card may differ by at most the missing 4 px gap',
+      );
+      expect(loading.top, moreOrLessEquals(loaded.top, epsilon: 0.5));
+      await disposeApp(tester);
+    });
   });
+}
+
+/// Painted centre-y of each keypad row, top to bottom.
+List<double> _keyRowCentres(WidgetTester tester) => <double>{
+  for (final box in _renderBoxes(tester, _keyInks()))
+    paintedRect(box).center.dy,
+}.toList()..sort();
+
+/// Emits nothing, so the gate stays in its loading state.
+class _HangingRepository extends ParentalGateRepository {
+  @override
+  Future<List<ParentalGateChallenge>> getItems() async =>
+      const <ParentalGateChallenge>[];
+
+  @override
+  Stream<List<ParentalGateChallenge>> watchItems() =>
+      const Stream<List<ParentalGateChallenge>>.empty();
+
+  @override
+  Stream<bool> watchGateEnabled() => Stream<bool>.value(true);
+
+  @override
+  Future<void> setGateEnabled({required bool enabled}) async {}
+
+  @override
+  ParentalGateChallenge challengeFor(DateTime utc) =>
+      const ParentalGateChallenge(
+        id: 'hanging',
+        title: 'Grown-ups only',
+        detail: 'This keeps settings and purchases safe.',
+        a: 7,
+        b: 6,
+      );
 }

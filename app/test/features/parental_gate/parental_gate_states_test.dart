@@ -9,6 +9,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:nestling/app/app.dart';
@@ -189,6 +190,79 @@ void main() {
       );
       expect(cancel.height, greaterThanOrEqualTo(NestDevice.tapKid));
       expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+  });
+
+  group('kid background (shared KID BACKGROUND rule)', () {
+    for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      testWidgets('the gate sits on the shared KidScope — ${theme.name}', (
+        tester,
+      ) async {
+        await _pump(tester, theme: theme);
+
+        // The sky gradient + two-tone meadow hills come from the shared scope
+        // (core/design_system/theme/kid_meadow.dart), never from the screen.
+        expect(find.byType(KidScope), findsOneWidget);
+        final scope = tester.getRect(find.byType(KidScope));
+        expect(scope.left, 0);
+        expect(scope.top, 0);
+        expect(scope.right, NestDevice.width);
+        expect(scope.bottom, NestDevice.height);
+
+        // Every meadow/sky illustration on the screen belongs to that scope —
+        // a locally painted hill would show up outside it.
+        final all = find.byType(SvgPicture).evaluate().length;
+        final inScope = find
+            .descendant(
+              of: find.byType(KidScope),
+              matching: find.byType(SvgPicture),
+            )
+            .evaluate()
+            .length;
+        expect(inScope, greaterThan(0), reason: 'the scope paints the hills');
+        expect(all, inScope, reason: 'P17 must not paint its own meadow/hills');
+        await disposeApp(tester);
+      });
+    }
+
+    testWidgets('the scrim dims the whole kid screen down to the edge', (
+      tester,
+    ) async {
+      await _pump(tester);
+      final barrier = _paintedRects(tester, find.byType(ColoredBox)).where(
+        (r) => r.width == NestDevice.width && r.height == NestDevice.height,
+      );
+      expect(barrier, isNotEmpty);
+      expect(
+        barrier.first,
+        const Rect.fromLTWH(0, 0, NestDevice.width, NestDevice.height),
+        reason:
+            'BOTTOM EDGE + ORCHESTRATOR_NOTES item 1: the barrier owns every '
+            'edge — no bright strip at the status bar, none under the card',
+      );
+      await disposeApp(tester);
+    });
+  });
+
+  group('text scale 1.3 needs the internal scroll on the tallest card', () {
+    testWidgets('390 × 1.3 scrolls the card instead of clipping it', (
+      tester,
+    ) async {
+      await _pump(tester, textScale: 1.3);
+      // The card is anchored at the design top, so at the maximum supported
+      // text scale it is taller than the slot below it: the plan's fallback is
+      // an internal SingleChildScrollView (no overflow error, no clipping).
+      expect(find.byType(SingleChildScrollView), findsOneWidget);
+      final modal = tester.getRect(find.byType(NestModal));
+      expect(modal.top, moreOrLessEquals(66, epsilon: 0.5));
+      expect(tester.takeException(), isNull);
+      // The caption is the last element: it must still be reachable.
+      expect(
+        find.text('This keeps settings and purchases safe.'),
+        findsOneWidget,
+      );
+      expect(find.text('Back to Pip'), findsOneWidget);
       await disposeApp(tester);
     });
   });

@@ -1,95 +1,103 @@
-# P17 Parental gate — QA code review (stage 4, iteration 1)
+# P17 Parental gate — QA code review (stage 4, iteration 2)
 
-Scope reviewed: `git diff main...HEAD` limited to
-`app/lib/features/parental_gate/**`,
-`app/test/features/parental_gate/**`,
-`app/test/core/family_time_test.dart`,
-`docs/screens/P17/**`,
-`docs/screens/_shared/family_time_test_fix_REPORT.md`.
-Verified: `dart format` clean, `flutter analyze` → No issues found,
-`flutter test test/features/parental_gate` → +38 All tests passed!.
+Scope reviewed: `git diff main...HEAD` — parentals_gate feature, its
+tests, `docs/screens/P17/**` (+ the pre-existing `docs/screens/_shared`
+report carried on this branch). Branch state: merge of main included;
+orchestrator iteration-2 targets recorded in
+`docs/screens/P17/ORCHESTRATOR_NOTES.md`.
 
-Architecture: feature-first respected — domain (entity + abstract repo)
-untouched; BLoC owns all gate logic; routes/DI per feature reused as-is.
-No new cross-feature imports beyond route constants and the documented
-`PipAvatar` motion import.
+Verified this iteration: `flutter analyze` → No issues found;
+`dart format --output=none --set-exit-if-changed lib test` → only
+`app/test/design_system/list_row_trailing_test.dart` differs, which is
+traced to main's history (commit 79fe455, present at the branch's
+merge-base, NOT in P17's diff) — observation only, not a P17 edit.
+`flutter test test/features/parental_gate` → +90 ~1 -2: the two reds are
+the ORCHESTRATOR_NOTES geometry pins that fail solely because shared
+`NestKeypad` drifts from the CSS grid — already filed as
+`SHARED_REQUEST.md` #3 with `TODO(P17)` at the call site. All 90 other
+tests pass, including the new repository/London-day and bloc
+reset-on-challenge-change tests.
 
-Design-system: `NestModal`, `NestKeypad(kid: true)`, `NestButton.ghost`,
-`NestAvatar`, `NestCoinPill`, `KidScope`, `NestTokens` only; no hard-coded
-colours (`Colors.transparent` only), no `google_fonts`, no extra
-`letterSpacing`, no v1 pip SVGs.
+## Iteration-1 findings — disposition
 
-Spec copy (DESIGN_SPEC §5 P17) matches the HTML character-for-character:
-`Grown-ups only`, `Type the answer in numbers:`, `Back to Pip`,
-`This keeps settings and purchases safe.`, dialog label `Parental gate`,
-UK spelling, DB-derived question (`three times nine` on the pinned seed day).
+1. `app/test/core/family_time_test.dart` + `docs/screens/_shared/…` outside
+   RULES §1 — still only covered by the `_shared` report; not cross-linked
+   from `SHARED_REQUEST.md`. **Still open (minor).**
+2. Backdrop reads `AppDatabase`/`AppSession` via GetIt
+   (`parental_gate_view.dart:316-317`) — **still open (minor)**; line
+   refs shifted after the iteration-2 edit.
+3. `AppDatabase.memory()` per `challengeFor` test — **FIXED**: one
+   `setUpAll` instance now serves the whole group (file lines 10-17).
+4. Caret on the first empty digit box only — **FIXED**: every empty box
+   now renders the leaf caret, matching the HTML `.digit.empty::after`.
+5. Loading placeholder drift — **FIXED**: placeholders now 22/24 px for
+   the instruction/one-line question instead of 20/34.
+6. Challenge keyed to the UTC day — **FIXED** (`P17-BUG-2`):
+   `challengeFor` reads `toFamilyZone(utc, defaultFamilyZoneId)` and the
+   id strings use the London date; repository doc comment updated.
 
-Accessibility: modal `Semantics(label: 'Parental gate',
-explicitChildNodes: true)`; digits group announces
-`Answer, {n} of {total} entered`; all 13 interactive nodes expose
-`SemanticsAction.tap` and `performAction` drives real state; wrong answer
-live-announced `That wasn’t right — try again` with no danger styling;
-backdrop `ExcludeSemantics` (non-interactive, so no `onTap` needed); no
-`excludeSemantics: true` wrapper on an actionable control without `onTap`.
-Text-scale 1.3 at 390 and 320×844 overflow-tested.
+## Iteration-2 code changes — review
 
-Performance: `buildWhen`/`listenWhen` bound rebuilds; no timers or
-animation controllers; disabled gate renders `SizedBox.shrink()`; keypad
-slot uses `FittedBox(scaleDown)` instead of scaling text; the
-`StreamBuilder` child resolves in one emission and re-subscribes only on
-session refresh — no rebuild storm.
-
-Error handling / Children's Code: failure state with `Try again` +
-`Back to Pip`; loading placeholders avoid frame jumps; no analytics, ads,
-or tracking; the gate is a protective feature for kid mode.
+- `parental_gate_bloc.dart:20-44` — clearing the stale `errorMessage`
+  on every load emit, and resetting `entered/attempts/unlocked` only when
+  the challenge id actually changes (`P17-BUG-3`) is correct; a
+  same-challenge re-emit (e.g. unrelated settings write) preserves the
+  in-progress entry. Equatable/copyWith shape updated consistently.
+- `parental_gate_state.dart` `clearError` — `copyWith` now clears the
+  error when asked; permanent fields can't resurrect it. Fine.
+- `parental_gate_view.dart:39-56` — `_unlock` pops the route BEFORE
+  flipping app mode in the `canPop` branch (avoids the router's
+  refreshListenable restoring `/parental-gate` mid-pop), and pops to
+  parent mode FIRST in the `/today` redirect branch. The rationale
+  comment is accurate; behaviour is unchanged outwardly.
+- `parental_gate_view.dart:108-131` — the modal is now anchored at the
+  design's y 66 (`Padding.fromLTRB(s6, 66, s6, 0)` +
+  `ConstrainedBox(minHeight: maxHeight - 66)` +
+  `Align(topCenter)`), replacing the centred layout that produced the
+  uniform vertical shift. Overflow still handled by the scroll view.
+- `parental_gate_view.dart:359-362` — `NestStatusBar` now reserves the
+  status-bar height behind the backdrop header (resolves the iteration-1
+  "Hi Maya!" under the clock). Padding is `fromLTRB(28, NestSpacing.s2,
+  28, 0)`.
+- `_GateLoading` placeholder heights updated (22/24).
+- `_DigitsRow` caret on every empty box (see above).
+- `NestKeypad` call site carries `TODO(P17)` + SHARED_REQUEST #3: keys
+  are 72×72 with a 16 px shared row gap where the CSS grid is 72 + 10,
+  so the card is 26 px too tall — pinned red in the geometry test until
+  the shared component lands (RULES §2: no local fork).
+- P17-BUG-1 (kid mode + expired trial ⇒ `/paywall` ↔ `/parental-gate`
+  redirect loop) is a shared `router.dart` defect; reproduced, filed in
+  SHARED_REQUEST with a skip-marked proof (`P17-BUG-1` in
+  `p17_bugs_test.dart`), P17 correctly did not patch shared code.
 
 ## Findings
 
-1. **minor** — `app/test/core/family_time_test.dart` (and new
-   `docs/screens/_shared/family_time_test_fix_REPORT.md`) are edits
-   outside RULES §1 (`app/test/features/<feature>/**` + feature dirs
-   only). The fix is test-only, documented, and its suite is green
-   (`+547`), so no product impact. **Fix:** if this was
-   orchestrator-dispatched, append a line to
-   `docs/screens/P17/SHARED_REQUEST.md` citing the `_shared` report so
-   the inbox explains the shared-path edit.
+1. **minor** (process) — Same as iteration-1 #1: the
+   `family_time_test.dart` edit + `_shared` report sit on this branch
+   outside RULES §1 without a line in `SHARED_REQUEST.md`. Fix: cite the
+   `_shared` report from `SHARED_REQUEST.md` (or have the orchestrator
+   absorb it on `main`).
 
-2. **minor** — `parental_gate_view.dart:286-292`: the backdrop reads
-   `AppDatabase`/`AppSession` directly via GetIt instead of the feature's
-   repository/bloc. The `AppModeController`/`AppSession` GetIt reads have
-   precedent (P07 paywall), but the `watchChildren` stream bypasses the
-   repository contract the rest of the app follows. **Fix:** expose the
-   active-child backdrop data via `ParentalGateRepository` (or have the
-   bloc own the child stream) and bind the view to bloc state.
+2. **minor** — `parental_gate_view.dart:316-317`: `_GateBackdrop` still
+   reads `AppDatabase`/`AppSession` via GetIt instead of receiving the
+   child stream through `ParentalGateRepository`/bloc. Fix: move the
+   active-child watch behind the feature repository (or the bloc) and
+   bind the backdrop to bloc state, matching the rest of the app.
 
-3. **minor** — `app/test/features/parental_gate/parental_gate_repository_test.dart:11,19,26`:
-   `AppDatabase.memory()` is instantiated once per `challengeFor` test to
-   call a pure method, tripping Drift's "database class created multiple
-   times" warning in the test output. **Fix:** create one memory DB per
-   file (`setUp`) or call `challengeFor` on a single shared instance.
+3. **note (not actionable by P17)** — Two geometry tests stay red until
+   shared `NestKeypad` adopts the CSS grid (72×72 keys, 10 px row gap,
+   `padding: 8px 24px 0`); already tracked in `SHARED_REQUEST.md` #3 and
+   `TODO(P17)` at `parental_gate_view.dart` keypad slot. No screen-local
+   fix remains.
 
-4. **minor** — `parental_gate_view.dart:455-461` (`_DigitsRow`): the
-   leaf caret renders only on the first empty box
-   (`i == entered.length`), while the HTML source's `.digit.empty::after`
-   paints the caret on *every* empty box (initial state would show two
-   carets in the HTML, one in the app). **Fix:** drop the
-   `i == entered.length` guard to paint every empty box, or confirm with
-   design that first-empty-only is the intent and leave a comment.
+4. **note (not actionable by P17)** — `app/test/design_system/list_row_trailing_test.dart`
+   fails `dart format` check; it is inherited from main's merge-base
+   (79fe455), not part of P17's diff. The orchestrator should re-run
+   format on main.
 
-5. **minor** — `parental_gate_view.dart:485-486` (`_GateLoading`): the
-   placeholder heights (20/34/64/352) match the *filled* layout, but a
-   one-line question occupies ~28 px vs the 34 px placeholder, so the
-   keypad slot shifts ~6 px when data arrives. **Fix:** size the
-   question placeholder to the real one-line `NestType.h3` height (28)
-   or reuse the same measuring row the loaded state uses.
+Children's Code re-check: no analytics/ads/trackers; gate copy and
+url-free; no child data leaves the device. Confirmed.
 
-6. **note (no action)** — `parental_gate_repository_impl.dart:22` uses
-   `DateTime.now().toUtc()` (pre-existing on main, unchanged in this
-   diff) and keys the challenge to the UTC day, not the Europe/London
-   day. Worth a shared follow-up via SHARED_REQUEST; not blocking P17.
-
-No blocker or major findings. Tests, analyze, and format are green;
-P17's own 38 tests pass; K03's known gate-copy failures are documented
-in `docs/screens/P17/SHARED_REQUEST.md` for the orchestrator/K03.
+No blocker or major screen-local findings.
 
 VERDICT: PASS

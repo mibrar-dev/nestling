@@ -66,6 +66,12 @@ Files: `app/lib/app/router.dart` (shared — P17 may not edit under RULES §1).
 Blocks: no — P17 lands with the proof skip-marked and the screen itself is
 unaffected while the trial is live (demo seed is `active`).
 
+**Status, iteration 2: STILL UNFIXED.** After the iteration-2 `main` merge,
+`app/lib/app/router.dart` is byte-identical to `main` (`git diff main --
+app/lib/app/router.dart` is empty) and the trial-expired branch
+(`router.dart:120-124`) still has no kid-mode guard, so the loop reproduces.
+Proof `P17-BUG-1` stays skip-marked.
+
 ---
 
 # Shared request — P17 NestKeypad gaps do not match either design (24/16 vs the CSS grid)
@@ -128,3 +134,32 @@ too tall each (18) plus the 8 px bottom padding the CSS drops (8).
 shared component, so nothing P17 does around the keypad moves it, and forking a
 local keypad is forbidden (plan §g). Marked in code with `TODO(P17)` at the
 `NestKeypad` call site in `parental_gate_view.dart` per RULES §2.
+
+---
+
+## Status update (3_test, iteration 2) — request #3 is LANDED on main
+
+`main` now carries the fix: `9cac0c6 Merge shared/keypad_grid` (branch
+`shared/keypad_grid`, "NestKeypad matches CSS .keypad grid (10px gaps,
+8-24-0 padding, 1fr columns) + shrinkWrap fit for K02"). Confirmed by reading
+`main:app/lib/core/design_system/components/nest_keypad.dart`: `Expanded` cells,
+row gap `NestSpacing.gap10`, `padding: EdgeInsets.only(top: 8, left: 24,
+right: 24)`, `NestKeypadFit.stretch` as the default and
+`contentWidth = 3×72 + 2×10 + 2×24 = 280` for `shrinkWrap`. That is exactly the
+contract `parental_gate_geometry_test.dart` pins (row pitch 82, column pitch
+88), so **no shared change is outstanding** — this request can be closed once
+the merge reaches the screen branch.
+
+Two things belong to P17 when it does (recorded in `3_test.md` §3.3, not
+actionable here):
+
+1. the gate's `SizedBox(width: 296) > FittedBox(scaleDown) > NestKeypad`
+   wrapper passes **unbounded** width to the child, which the new
+   `Expanded`-based grid cannot lay out (`RenderFlex children have non-zero
+   flex but incoming width constraints are unbounded`). At the design width the
+   CSS `.keypad` is block-level, so the `FittedBox` should go; narrower cards
+   need a width-bounded `shrinkWrap` instance inside it (verified patterns B
+   and C in `3_test.md` §3.3);
+2. once merged, re-run `flutter test test/features/parental_gate` — the two
+   keypad pins in `parental_gate_geometry_test.dart` should go green with no
+   P17 change.

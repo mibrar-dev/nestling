@@ -277,6 +277,43 @@ void main() {
       await disposeApp(tester);
     });
 
+    testWidgets('every empty box carries the leaf caret (CSS ::after)', (
+      tester,
+    ) async {
+      final challenge = await liveChallenge(tester);
+      final total = challenge.answer.toString().length;
+      GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+      await pumpAppRoute(tester, '/parental-gate');
+      final tokens = tester.element(find.byType(NestModal)).nest;
+      final semantics = tester.ensureSemantics();
+
+      // `.digit.empty::after { width:3px; height:24px; background:var(--leaf) }`
+      // paints EVERY empty box, not only the next one to fill.
+      expect(_carets(tester), hasLength(total));
+      for (final caret in _carets(tester)) {
+        expect(caret.color, tokens.leaf);
+        expect((caret.borderRadius! as BorderRadius).topLeft.x, 2);
+      }
+
+      await semanticsTap(tester, 'Digit 1');
+      // One box filled ⇒ one caret fewer; the rest keep theirs.
+      expect(_carets(tester), hasLength(total - 1));
+
+      await semanticsTap(tester, 'Delete');
+      expect(_carets(tester), hasLength(total));
+
+      // Filling the answer leaves no caret (and unlocks, which is covered by
+      // the navigation group) — a one-digit answer is the only way to assert
+      // the empty state without leaving the screen.
+      if (total == 1) {
+        await typeAnswer(tester, '${challenge.answer}');
+        await tester.pump();
+        expect(_carets(tester), isEmpty);
+      }
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+
     testWidgets('semantics taps fill, delete empties, delete is safe empty', (
       tester,
     ) async {
@@ -615,6 +652,21 @@ void main() {
       await disposeApp(tester);
     });
   });
+}
+
+/// The 3×24 leaf carets (`.digit.empty::after`) inside the answer boxes.
+List<BoxDecoration> _carets(WidgetTester tester) {
+  final carets = <BoxDecoration>[];
+  for (final element in find.byType(Container).evaluate()) {
+    final decoration = (element.widget as Container).decoration;
+    if (decoration is! BoxDecoration) continue;
+    final box = element.renderObject! as RenderBox;
+    final size = box.size;
+    if ((size.width - 3).abs() > 0.5) continue;
+    if ((size.height - 24).abs() > 0.5) continue;
+    carets.add(decoration);
+  }
+  return carets;
 }
 
 /// The 56×64 digit boxes, left to right, as `Container`s with their

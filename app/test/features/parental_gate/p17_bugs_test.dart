@@ -1,20 +1,24 @@
-// P17 parental gate — adversarial bug hunt (Stage 6, iteration 1).
+// P17 parental gate — adversarial bug hunt (Stage 6, iteration 2).
 //
-// Bug proofs are `skip:`-marked with their bug id so the suite stays green
-// until the fix lands (P07 iteration-4 precedent). Each `skip:` reason names
-// the bug, the evidence and the suggested fix location. To run one proof,
-// remove its `skip:` argument.
+// Iteration-2 result: P17-BUG-2 (UTC-vs-London challenge day) and P17-BUG-3
+// (stale entry after a challenge change) are FIXED — their proofs now run
+// green (builders unskipped them). P17-BUG-1 (shared router redirect loop on
+// an expired kid-mode trial) and P17-BUG-4 (backdrop header top-aligns its
+// items) are still open and stay `skip:`-marked so the suite stays green;
+// unskip one to see the failure.
 //
-// The green tests below are the clean probes from the same hunt: rapid double
-// activation, system back, pushed-gate unlock, failure retry/leave, child-data
-// edges (0/6 children, long UK name, 9999 coins, 320 px + 1.3 scale) and
-// stream changes after the gate closes. No simulator was used.
+// The green tests below are the clean probes from both hunts: rapid double
+// activation, system back, pushed-gate unlock (gate must actually dismiss),
+// disabled-gate pass-through, failure retry/leave, child-data edges (0/1/6
+// children, long UK name, 9999 coins, 320 px + 1.3 scale), Leo's own Pip from
+// the DB, BST boundaries for the challenge day, and stream changes after the
+// gate closes. No simulator was used.
 //
 // Database-backed: `setUpTestScope` + Seed.demo; loading/failure probes use a
 // feature-local fake repository swapped in before pumping. Every pumped app
 // ends with `disposeApp` (test_scope.dart). Real async (trial-expiry writes,
-// row reads) runs through `tester.runAsync` because a pending Drift stream
-// timer would otherwise stall FakeAsync.
+// challenge reads) runs through `tester.runAsync` because a pending Drift
+// stream timer would otherwise stall FakeAsync.
 
 import 'dart:async';
 
@@ -29,6 +33,8 @@ import 'package:nestling/app/controllers.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/seed.dart';
+import 'package:nestling/core/design_system/design_system.dart';
+import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 import 'package:nestling/features/parental_gate/data/parental_gate_repository_impl.dart';
 import 'package:nestling/features/parental_gate/domain/entities/parental_gate_challenge.dart';
 import 'package:nestling/features/parental_gate/domain/parental_gate_repository.dart';
@@ -142,8 +148,9 @@ Future<void> _expireTrial(WidgetTester tester) async {
   });
 }
 
-/// Drives the P17-BUG-3 proof: load a challenge, type a digit, swap the
-/// challenge mid-entry and assert the stale digit is still there.
+/// Drives the P17-BUG-3 regression: load a challenge, type a digit, swap the
+/// challenge mid-entry and assert the reset (the entry belonged to the old
+/// question).
 ///
 /// Kept as a helper with a parameter receiver (like the existing
 /// `addAfterLoaded`) so `cascade_invocations` does not fire on the local.
@@ -174,7 +181,7 @@ void main() {
     await setUpTestScope();
   });
 
-  group('bug proofs (P17-BUG-1 still open; P17-BUG-2/3 fixed iteration 2)', () {
+  group('bug proofs (P17-BUG-1 shared + P17-BUG-4 open; BUG-2/3 fixed in iteration 2)', () {
     // P17-BUG-1 (major, shared): app/lib/app/router.dart redirects an expired
     // kid-mode trial to /paywall, which is parent-only in kid mode and
     // redirects back to /parental-gate — a redirect loop. Unskipping this
@@ -215,6 +222,35 @@ void main() {
       await bloc.close();
       await controller.close();
     });
+
+    // P17-BUG-4 (minor, screen-local): `.kb-top { align-items: center }` but
+    // the app's header Row passes `CrossAxisAlignment.start`, so the greeting
+    // and coin pill sit 5 px / 4 px high in the 44 px row (greeting centre 72
+    // vs the avatar's 77). The dimmed header is the only backdrop strip the
+    // card does not cover; 5_ui pins the same deviation in
+    // `parental_gate_geometry_test.dart` ('the backdrop row centres its items
+    // like `.kb-top`'). One-line fix: drop the `crossAxisAlignment` argument
+    // (the default is centre).
+    testWidgets('P17-BUG-4: the backdrop header centres its items', (
+      tester,
+    ) async {
+      GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+      await pumpAppRoute(tester, '/parental-gate');
+      final avatar = tester.getRect(find.byType(NestAvatar));
+      final greeting = tester.getRect(find.text('Hi Maya!'));
+      final pill = tester.getRect(find.byType(NestCoinPill));
+      expect(
+        greeting.center.dy,
+        moreOrLessEquals(avatar.center.dy, epsilon: 1),
+        reason: 'CSS .kb-top align-items: center',
+      );
+      expect(
+        pill.center.dy,
+        moreOrLessEquals(avatar.center.dy, epsilon: 1),
+        reason: 'CSS .kb-top align-items: center',
+      );
+      await disposeApp(tester);
+    }, skip: true);
   });
 
   group('clean probes (green)', () {
@@ -252,17 +288,26 @@ void main() {
       await disposeApp(tester);
     });
 
-    testWidgets('correct answer on a pushed gate returns to kid home as '
-        'parent', (tester) async {
+    testWidgets('correct answer on a pushed gate dismisses it as parent', (
+      tester,
+    ) async {
       final semantics = tester.ensureSemantics();
       await _pushGateFromKidHome(tester);
       expect(pushedPath(tester), '/parental-gate');
       final challenge = await _liveChallenge(tester);
       await _typeAnswer(tester, '${challenge.answer}');
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 600));
+      // Let the async AppSession write + refresh land (5 × 100 ms, the
+      // stage-3 §3.1 fixture).
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
       expect(GetIt.instance<AppModeController>().mode, AppMode.parent);
       expect(currentPath(tester), '/kid-home');
+      // The pushed route must actually be gone — asserting only `currentPath`
+      // (the declarative location) hid the iteration-1 resurrect bug.
+      expect(pushedPath(tester), '/kid-home');
+      expect(find.byType(NestModal), findsNothing);
       expect(tester.takeException(), isNull);
       semantics.dispose();
       await disposeApp(tester);
@@ -387,6 +432,75 @@ void main() {
       expect(find.text('Back to Pip'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await disposeApp(tester);
+    });
+
+    testWidgets('disabled gate pushed from kid home passes through', (
+      tester,
+    ) async {
+      final db = GetIt.instance<AppDatabase>();
+      await tester.runAsync(
+        () =>
+            (db.update(db.settings)
+                  ..where((s) => s.familyId.equals(Seed.familyId)))
+                .write(const SettingsCompanion(kidGateEnabled: Value(false))),
+      );
+      final semantics = tester.ensureSemantics();
+      await _pushGateFromKidHome(tester);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(GetIt.instance<AppModeController>().mode, AppMode.parent);
+      expect(pushedPath(tester), '/kid-home');
+      expect(find.byType(NestModal), findsNothing);
+      expect(tester.takeException(), isNull);
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('one child (Leo) renders his own Pip from the database', (
+      tester,
+    ) async {
+      final session = GetIt.instance<AppSession>();
+      await tester.runAsync(() async {
+        await session.setActiveChild('leo');
+        await session.refresh();
+      });
+      GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+      await pumpAppRoute(tester, '/parental-gate');
+      expect(find.text('Hi Leo!'), findsOneWidget);
+      final pip = tester.widget<PipAvatar>(find.byType(PipAvatar));
+      expect(pip.style, PipStyle.bolt);
+      expect(pip.skin, PipSkin.sky);
+      expect(pip.stage, 2);
+      expect(pip.accessory, PipAccessory.none);
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    test('the challenge day is stable across BST boundaries', () {
+      final repo = ParentalGateRepositoryImpl(db: AppDatabase.memory());
+      ParentalGateChallenge at(DateTime utc) => repo.challengeFor(utc);
+      // BST ends Sun 25 Oct 2026 02:00 London: 00:30 BST (23:30Z on the 24th)
+      // and 12:00 GMT (12:00Z) are the same London day.
+      expect(
+        at(DateTime.utc(2026, 10, 24, 23, 30)).id,
+        at(DateTime.utc(2026, 10, 25, 12)).id,
+      );
+      // BST starts Sun 29 Mar 2026 01:00 London: 00:30 GMT (00:30Z) and
+      // 12:00 BST (11:00Z) are the same London day.
+      expect(
+        at(DateTime.utc(2026, 3, 29, 0, 30)).id,
+        at(DateTime.utc(2026, 3, 29, 11)).id,
+      );
+      // London midnight flips the challenge (23:30 vs 00:30 London).
+      expect(
+        at(DateTime.utc(2026, 10, 3, 22, 30)).id,
+        isNot(at(DateTime.utc(2026, 10, 3, 23, 30)).id),
+      );
+      // GMT winter is UTC-aligned.
+      expect(
+        at(DateTime.utc(2027, 1, 15, 0, 30)).id,
+        at(DateTime.utc(2027, 1, 15, 12)).id,
+      );
     });
   });
 }

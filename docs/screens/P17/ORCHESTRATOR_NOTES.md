@@ -9,3 +9,6 @@ Measured in logical px at 390×844 (design → app):
 6. "Back to Pip" centre: design 702 (app 716). Footnote: design 748 (app 762).
 7. The random question and the typed digits are runtime state (not findings).
 Pin 2–6 in a real-font geometry test, plus a scrim test that the barrier covers (0,0) to the full size.
+
+## UPDATE (07:13) — the keypad layout is SHARED
+NestKeypad's pitch (rows 88 / cols 96 vs design 82 / 88) is being fixed on shared/keypad_grid to match CSS `.keypad`. Do not re-space keys locally. After main has it (merged before your build), re-check the key centres against the design.
