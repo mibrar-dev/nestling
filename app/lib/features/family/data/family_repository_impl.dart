@@ -1,11 +1,11 @@
 import 'dart:async';
 
-import 'package:clock/clock.dart';
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/family_time.dart'
     hide countsForCurrentPeriod;
+import 'package:nestling/core/data/ids.dart';
 import 'package:nestling/core/data/london_time.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/data/stream_combine.dart';
@@ -315,7 +315,7 @@ class FamilyRepositoryImpl implements FamilyRepository {
     required String avatarColour,
     int weeklyBasePence = 0,
   }) {
-    final id = 'child-${clock.now().toUtc().millisecondsSinceEpoch}';
+    final id = newId('child');
     return _db
         .into(_db.children)
         .insert(
@@ -443,7 +443,7 @@ class FamilyRepositoryImpl implements FamilyRepository {
 
   @override
   Future<void> inviteCoParent(String name) {
-    final id = 'coparent-${clock.now().toUtc().millisecondsSinceEpoch}';
+    final id = newId('coparent');
     return _db
         .into(_db.members)
         .insert(

@@ -72,7 +72,7 @@ void main() {
         );
 
         // The user-visible effect: one back press must leave the editor.
-        await tester.pageBack();
+        await tester.binding.handlePopRoute();
         await tester.pumpAndSettle();
         expect(currentPath(tester), QuestsRoutePaths.library);
 
@@ -99,7 +99,7 @@ void main() {
           reason: 'a double-tap must not stack two editor routes',
         );
 
-        await tester.pageBack();
+        await tester.binding.handlePopRoute();
         await tester.pumpAndSettle();
         expect(currentPath(tester), QuestsRoutePaths.library);
 

@@ -80,6 +80,7 @@ abstract final class Seed {
             id: 'sarah',
             familyId: familyId,
             name: 'Sarah',
+            email: const Value('sarah@example.co.uk'),
           ),
         );
     await _settingsDemo(db);
@@ -123,6 +124,7 @@ abstract final class Seed {
             id: 'sarah',
             familyId: familyId,
             name: 'Sarah',
+            email: const Value('sarah@example.co.uk'),
           ),
         );
     await _childrenDemo(db);
@@ -175,6 +177,7 @@ abstract final class Seed {
             id: 'sarah',
             familyId: familyId,
             name: 'Sarah',
+            email: const Value('sarah@example.co.uk'),
           ),
         );
     await db
@@ -186,6 +189,8 @@ abstract final class Seed {
             name: 'James',
             role: const Value('co-parent'),
             inviteStatus: const Value('invited'),
+            // No email: the P16 design shows "Invited · awaiting reply",
+            // not an address, for the co-parent row (absent == NULL).
           ),
         );
   }

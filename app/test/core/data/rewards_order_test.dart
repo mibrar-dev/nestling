@@ -26,6 +26,7 @@ const List<String> _v4Ddl = <String>[
   'CREATE TABLE families (id TEXT NOT NULL PRIMARY KEY)',
   'CREATE TABLE settings (family_id TEXT NOT NULL PRIMARY KEY)',
   'CREATE TABLE app_state (id INTEGER NOT NULL PRIMARY KEY)',
+  "CREATE TABLE members (id TEXT NOT NULL PRIMARY KEY, family_id TEXT NOT NULL, name TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'owner', invite_status TEXT NOT NULL DEFAULT 'active')",
   "CREATE TABLE rewards (id TEXT NOT NULL PRIMARY KEY, family_id TEXT NOT NULL, title TEXT NOT NULL, icon TEXT NOT NULL DEFAULT 'gift', coin_price INTEGER NOT NULL, needs_ok INTEGER NOT NULL DEFAULT 1)",
   'CREATE TABLE quest_completions (id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT)',
 ];
