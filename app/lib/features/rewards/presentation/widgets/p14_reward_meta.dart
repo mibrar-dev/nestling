@@ -1,18 +1,15 @@
 import 'package:nestling/core/design_system/components/nest_icon.dart';
 import 'package:nestling/core/design_system/components/nest_list_row.dart';
+import 'package:nestling/core/design_system/components/reward_icons.dart';
 import 'package:nestling/features/rewards/domain/entities/reward.dart';
 
 /// Tile art + tint for one reward (P14 `.icon-tile`).
 ///
-/// The map keys are the `icon` strings `Seed.demo()` writes to the
-/// `rewards` table (`app/lib/core/data/seed.dart`); the values follow the
-/// `nestling_assets.dart` P14 annotations:
-///
-/// * `moon` → [NestIcons.clock] — the catalog names `clock` "Reward: stay up
-///   15 min later (P14)" and `moon` the K08 glyph, so the P14 card paints the
-///   clock the design draws.
-/// * `plate` → [NestIcons.pizza] and `cake` → [NestIcons.chefHat] are the
-///   closest glyphs in the 24 px line catalog.
+/// The ART is the shared single source `rewardIconFor` in
+/// `core/design_system/components/reward_icons.dart` — exact `K08-shop.html`
+/// `.k8-art` glyphs, kid wins where K08 and P14 disagree (see that file).
+/// The TINT stays screen-private (P14 `.icon-tile tint-*`); K08 paints every
+/// disc `coinTint`/`coinInk` instead.
 ///
 /// Unknown strings (a reward created on another device) fall back to a
 /// neutral gift tile rather than dropping the art slot.
@@ -23,13 +20,21 @@ class RewardIconSpec {
   final NestTileTint tint;
 }
 
-const Map<String, RewardIconSpec> rewardIconSpecs = <String, RewardIconSpec>{
-  'tv': RewardIconSpec(NestIcons.screenTime, NestTileTint.sky),
-  'film': RewardIconSpec(NestIcons.film, NestTileTint.lilac),
-  'moon': RewardIconSpec(NestIcons.clock, NestTileTint.peach),
-  'cake': RewardIconSpec(NestIcons.chefHat, NestTileTint.coin),
-  'coffee': RewardIconSpec(NestIcons.cafe, NestTileTint.leaf),
-  'plate': RewardIconSpec(NestIcons.pizza, NestTileTint.leaf),
+const Map<String, NestTileTint> _rewardIconTints = <String, NestTileTint>{
+  'tv': NestTileTint.sky,
+  'film': NestTileTint.lilac,
+  'moon': NestTileTint.peach,
+  'cake': NestTileTint.coin,
+  'coffee': NestTileTint.leaf,
+  'plate': NestTileTint.leaf,
+};
+
+/// Legacy per-key art map, kept for backward compatibility (screen agents may
+/// still import it). Values equal `rewardIconFor(key)` — the single source is
+/// `rewardIconFor`; do not extend this map, add keys there instead.
+final Map<String, RewardIconSpec> rewardIconSpecs = <String, RewardIconSpec>{
+  for (final entry in _rewardIconTints.entries)
+    entry.key: RewardIconSpec(rewardIconFor(entry.key), entry.value),
 };
 
 /// Neutral fallback tile (P14 §1): `NestIcons.gift` on `surface-2`/`ink`.
@@ -38,8 +43,11 @@ const RewardIconSpec rewardIconFallback = RewardIconSpec(
   NestTileTint.neutral,
 );
 
-RewardIconSpec rewardIconSpec(String icon) =>
-    rewardIconSpecs[icon] ?? rewardIconFallback;
+RewardIconSpec rewardIconSpec(String icon) {
+  final tint = _rewardIconTints[icon];
+  if (tint == null) return rewardIconFallback;
+  return RewardIconSpec(rewardIconFor(icon), tint);
+}
 
 /// `aria-label` subject for each seeded row, copied verbatim from
 /// `P14-rewards.html`'s `aria-label="Needs approval for …"` attributes.

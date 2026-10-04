@@ -6,21 +6,29 @@ import 'package:nestling/core/data/family_zone_service.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/data/stream_combine.dart';
 import 'package:nestling/features/settings/domain/entities/app_settings.dart';
+import 'package:nestling/features/settings/domain/entities/settings_child_entry.dart';
 import 'package:nestling/features/settings/domain/entities/settings_item.dart';
+import 'package:nestling/features/settings/domain/entities/settings_member_entry.dart';
 import 'package:nestling/features/settings/domain/settings_repository.dart';
 
 /// Drift-backed [SettingsRepository].
 class SettingsRepositoryImpl implements SettingsRepository {
-  new({required this._db});
+  new({required this._db, FamilyZoneService? zoneService})
+    : _zoneService = zoneService ?? FamilyZoneService(_db);
 
   final AppDatabase _db;
+
+  /// Family-zone writer. Injected so the DI singleton's configuration is
+  /// honoured; direct constructions fall back to a local instance (review
+  /// finding 6 — the repository must not build its own service inline).
+  final FamilyZoneService _zoneService;
 
   @override
   Future<List<SettingsItem>> getItems() => watchItems().first;
 
   @override
   Stream<List<SettingsItem>> watchItems() {
-    return watchSettings().map(_rows);
+    return watchSettings().map(settingsItemsFor);
   }
 
   @override
@@ -43,6 +51,24 @@ class SettingsRepositoryImpl implements SettingsRepository {
             (parts[1] as AppStateData?)?.subscriptionStatus ?? 'trial',
       );
     });
+  }
+
+  @override
+  Stream<List<SettingsChildEntry>> watchRoster() {
+    // CHILD ORDER ruling: creation order via the shared helper (`createdAt`,
+    // then `rowid` for same-second ties) — Maya before Leo — never
+    // alphabetical.
+    return _db
+        .watchChildren(Seed.familyId)
+        .map((rows) => rows.map(_toChildEntry).toList());
+  }
+
+  @override
+  Stream<List<SettingsMemberEntry>> watchMembers() {
+    // Insertion order (`rowid`) — Sarah before James — via the shared core
+    // query (review finding 5: no feature-local raw SQL for this). The
+    // default family id is `Seed.familyId`.
+    return _db.watchMembers().map((rows) => rows.map(_toMemberEntry).toList());
   }
 
   @override
@@ -78,7 +104,7 @@ class SettingsRepositoryImpl implements SettingsRepository {
 
   @override
   Future<void> setFamilyTimeZone(String zoneId) =>
-      FamilyZoneService(_db).setFamilyTimeZone(zoneId);
+      _zoneService.setFamilyTimeZone(zoneId);
 
   @override
   Stream<String> watchFamilyTimeZone() => _db.watchFamilyZoneId();
@@ -103,47 +129,24 @@ class SettingsRepositoryImpl implements SettingsRepository {
     );
   }
 
-  List<SettingsItem> _rows(AppSettings s) {
-    String onOff({required bool value}) => value ? 'On' : 'Off';
-    return <SettingsItem>[
-      SettingsItem(
-        id: 'subscription',
-        title: 'Nestling Annual',
-        detail: s.subscriptionStatus == 'active'
-            ? 'Active · renews yearly'
-            : 'Trial · then £29.99/year',
-        enabled: true,
-      ),
-      SettingsItem(
-        id: 'notif-approvals',
-        title: 'Approvals waiting',
-        detail: onOff(value: s.notifApprovals),
-        enabled: s.notifApprovals,
-      ),
-      SettingsItem(
-        id: 'notif-payout',
-        title: 'Payout day reminder',
-        detail: onOff(value: s.notifPayout),
-        enabled: s.notifPayout,
-      ),
-      SettingsItem(
-        id: 'notif-summary',
-        title: 'Weekly family summary',
-        detail: onOff(value: s.notifSummary),
-        enabled: s.notifSummary,
-      ),
-      SettingsItem(
-        id: 'kid-gate',
-        title: 'Kid mode needs parent gate',
-        detail: onOff(value: s.kidGateEnabled),
-        enabled: s.kidGateEnabled,
-      ),
-      const SettingsItem(
-        id: 'version',
-        title: 'Version 1.0.0',
-        detail: 'Help & feedback',
-        enabled: true,
-      ),
-    ];
+  SettingsChildEntry _toChildEntry(ChildrenData row) {
+    return SettingsChildEntry(
+      id: row.id,
+      nickname: row.nickname,
+      ageBand: row.ageBand,
+      pipStageName: settingsPipStageName(row.pipStage),
+      coins: row.coins,
+      avatarColour: row.avatarColour,
+    );
+  }
+
+  SettingsMemberEntry _toMemberEntry(Member row) {
+    return SettingsMemberEntry(
+      id: row.id,
+      name: row.name,
+      role: row.role,
+      inviteStatus: row.inviteStatus,
+      email: row.email,
+    );
   }
 }

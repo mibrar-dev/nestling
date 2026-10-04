@@ -1,5 +1,7 @@
 import 'package:nestling/features/settings/domain/entities/app_settings.dart';
+import 'package:nestling/features/settings/domain/entities/settings_child_entry.dart';
 import 'package:nestling/features/settings/domain/entities/settings_item.dart';
+import 'package:nestling/features/settings/domain/entities/settings_member_entry.dart';
 
 /// Family & settings (P16), backed by Drift. `watchItems()` derives the
 /// section rows from [AppSettings] so the screen always shows live values.
@@ -8,6 +10,14 @@ abstract class SettingsRepository {
   Stream<List<SettingsItem>> watchItems();
 
   Stream<AppSettings> watchSettings();
+
+  /// Children roster in creation order (Maya then Leo — CHILD ORDER ruling,
+  /// never alphabetical) for the P16 Children section.
+  Stream<List<SettingsChildEntry>> watchRoster();
+
+  /// Family `members` rows in insertion order (Sarah then James) for the P16
+  /// Family section.
+  Stream<List<SettingsMemberEntry>> watchMembers();
 
   Future<void> setPocketMoneyMode(String mode);
   Future<void> setPayoutDay(int day);

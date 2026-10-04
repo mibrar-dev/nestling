@@ -45,3 +45,26 @@ P16 only needs to RENDER it — no schema or repository work.
   to fake the device zone without platform channels.
 - `Seed.movedToDubai(db)` flips a seeded DB to Dubai without touching
   stored instants (mirror of `confirmPendingMove`).
+
+## UPDATE (02:20, orchestrator QA of cmp_light_1, 3.58%)
+The early subtitle ellipsis, the mid-row chevron and the ≈ 2 px taller rows are a SHARED NestListRow bug: trailing is `Flexible`, which halves the text width. shared/list_row_trailing is fixing it. Do not work around it locally. Once main has it (merged before your build), re-check that every row matches the design (rows at y 221/281/341…) and that subtitles are full. Fix the other local findings now.
+
+## UPDATE (06:58) — iteration 3
+1. Do NOT fork shared components. Revert `_P16Sect` to the shared `NestSectionLabel`, and the subcard to `NestCard`. If the shared label or card does not match the design, write SHARED_REQUEST.md with the measured numbers and the orchestrator will fix the shared one.
+2. P16-T02: the switch must have a 44×44 tap target. NestToggle on main now has a 51×31 track plus hit slop, so give it room: no tight parent that clips the hit area. Prove taps 4 px outside the track toggle it.
+3. Close P16-B08/B09 (un-skip them; they must pass).
+
+## UPDATE (08:12) — iteration 4 (LAST pass)
+1. Fix P16-B11 (switch alignment regression from iteration 3): the NestToggle track must sit at the design rect, using the shared NestToggle as-is with no offsets. Then fix B09 and B10, and un-skip all four proofs.
+2. DATA OVER MOCKS: the parent's email must come from the DB (the signed-in parent / members table), not the hard-coded "sarah@example.co.uk". The seed holds that value. If the DB lacks a field, write SHARED_REQUEST.md.
+3. The forks `_P16Sect`, the subcard and `SettingsRow` must use the shared NestSectionLabel / NestCard / NestListRow. If they really differ from the design, record the numbers in SHARED_REQUEST.md and keep the shared ones. Do not fork.
+
+## UPDATE (09:22) — iteration 5: shared batch 6 is on main
+Do exactly what docs/screens/_shared/shared_batch6_REPORT.md "Follow-ups for screens (P16 must change — exact)" lists:
+- revert `_P16Sect` / the subcard / `SettingsRow` to NestSectionLabel / NestCard(radius:, padding:) / NestListRow;
+- read the email from `members.email`;
+- un-skip B09.
+The layout must stay where it is now (it already matches the design). Re-verify with the geometry tests.
+
+## UPDATE (12:52) — iteration 6
+P16-T04: replace both hand-rolled avatar initials with the shared `nestAvatarInitial` (now on main). Close the review findings in FIXES_5.md. Nothing else: the layout is done.

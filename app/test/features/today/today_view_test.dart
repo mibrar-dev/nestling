@@ -530,8 +530,12 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
-      expect(find.text('P16 Settings'), findsOneWidget);
-      expect(_currentUri(tester, find.text('P16 Settings')).path, '/settings');
+      // Assert the location, not a placeholder view title: P16 replaced its
+      // foundation `AppBar('P16 Settings')` with the real screen
+      // (`Family & settings`). `pushedPath` reads `GoRouter.state`, which is
+      // built from the full match list and therefore reflects exactly what the
+      // Navigator renders. See `_shared/router_push_test_fix_REPORT.md`.
+      expect(pushedPath(tester), '/settings');
 
       await disposeApp(tester);
     });

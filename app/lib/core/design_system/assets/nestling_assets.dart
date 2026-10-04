@@ -247,6 +247,45 @@ abstract final class NestlingIcons {
   /// Screens: K08.
   static const String pizza = 'assets/icons/ic_pizza.svg';
 
+  /// Shared reward glyphs — exact `K08-shop.html` `.k8-art` paths, one per
+  /// `rewards.icon` seed key (`tv`, `film`, `moon`, `cake`, `coffee`,
+  /// `plate`). The single source is `rewardIconFor` in
+  /// `core/design_system/components/reward_icons.dart`; these constants are
+  /// its targets. Old look-alikes (`screenTime`, `film`, `filmStrip`,
+  /// `clock`, `moon`, `chefHat`, `cafe`, `pizza`) are untouched.
+  /// Screens: P14, K08.
+  static const String rewardTv = 'assets/icons/ic_reward_tv.svg';
+
+  /// Shared reward glyph: pick Friday film — exact K08 film-strip
+  /// (`rect 2.5/4/19/16` + side sprockets). Distinct from [film] (P14 play
+  /// triangle); P14 now uses this (kid wins where the designs differ).
+  /// Screens: P14, K08.
+  static const String rewardFilm = 'assets/icons/ic_reward_film.svg';
+
+  /// Shared reward glyph: stay up 15 min later — exact K08 crescent moon.
+  /// Distinct from [clock] (P14 clock); P14 now uses this.
+  /// Screens: P14, K08.
+  static const String rewardMoon = 'assets/icons/ic_reward_moon.svg';
+
+  /// Shared reward glyph: baking together — exact K08 basket/bucket
+  /// (arch handle + trapezoid body + top tick). Distinct from [chefHat]
+  /// (P14 three-lobe hat) and [basket] (slatted laundry basket).
+  /// Screens: P14, K08.
+  static const String rewardCake = 'assets/icons/ic_reward_cake.svg';
+
+  /// Shared reward glyph: park café trip — exact K08 takeaway cup
+  /// (domed lid + tapered body, no handle/steam/saucer). Distinct from
+  /// [cafe] (sit-down mug) and the P14 dome+box+legs glyph.
+  /// Screens: P14, K08.
+  static const String rewardCoffee = 'assets/icons/ic_reward_coffee.svg';
+
+  /// Shared reward glyph: choose dinner — exact K08 plain triangle + three
+  /// stroked dots (no crust band, dots are outlines). Distinct from [pizza]
+  /// (crust band + filled dots). P14 has no dinner row in its HTML; the seed
+  /// `plate` key uses this K08 glyph on both screens.
+  /// Screens: P14, K08.
+  static const String rewardPlate = 'assets/icons/ic_reward_plate.svg';
+
   /// Shopping bag. P12 history row, K03 dock 'Shop'. Also the canonical bag for K08 baking.
   /// Screens: P12, K03.
   static const String bag = 'assets/icons/ic_bag.svg';
@@ -303,6 +342,18 @@ abstract final class NestlingIcons {
   /// K06 wardrobe: crown (locked).
   /// Screens: K06.
   static const String crown = 'assets/icons/ic_crown.svg';
+
+  /// K06 design glyph: scarf, exact `K06-pip.html` `.k6-ward` paths
+  /// (`M5 3h4v18H5z` + flag + tick). Distinct from [scarf] (fringed blanket
+  /// look-alike); K06 must switch its wardrobe tile to this.
+  /// Screens: K06.
+  static const String wardrobeScarf = 'assets/icons/ic_wardrobe_scarf.svg';
+
+  /// K06 design glyph: wellies, exact `K06-pip.html` `.k6-ward` paths
+  /// (boot body + `M6 3h4M14 3h4` top ticks). Distinct from [wellies]
+  /// (profile look-alike); K06 must switch its wardrobe tile to this.
+  /// Screens: K06.
+  static const String wardrobeWellies = 'assets/icons/ic_wardrobe_wellies.svg';
 }
 
 /// Illustrations - `flutter/assets/illustrations/*.svg`. Keep their colours; they are
