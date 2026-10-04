@@ -1,133 +1,107 @@
-# K08 · Reward shop — QA code review (stage 4, iteration 1)
+# K08 · Reward shop — QA code review (stage 4, iteration 2)
 
-Review of `git diff main...HEAD` (kid_shop feature, its tests, docs/screens/K08)
-against docs/ARCHITECTURE.md, docs/screens/RULES.md, docs/DESIGN_SPEC.md §5 K08,
-docs/design/SPACING_SPEC.md, the shared design system, and the orchestrator rulings.
-~1,550 lines of K08 code/tests, no shared files touched.
-
-## Scope compliance (RULES §1)
-
-- Only `app/lib/features/kid_shop/**`, `app/test/features/kid_shop/**`,
-  `docs/screens/K08/**` changed. No edits to `app/lib/core/**`, `app/lib/app/**`,
-  another feature's directory, or `tools/screens/**`. VERIFY VIA:
-  `git diff main...HEAD --stat` — 100% feature-local.
-- The one cross-directory need (`watchShop` kept on `KidShopRepositoryImpl` for the
-  shared `test/core/data/repositories_test.dart`) is documented in the repo impl
-  doc-comment and keeps the public interface exactly per 1_plan §(b). Correct call.
-- `SHARED_REQUEST.md` exists with the two known items filed (kid-button off variant;
-  stale K03 placeholder-copy assertions).
-- No `analysis_options` weakening, no `google_fonts`/`GoogleFonts`, no `flutter clean`,
-  no `DateTime.now()` in app code (clock via `appNowUtc()`), test timeouts documented
-  (`--timeout 120s`), seeds pinned to Sat 3 Oct 2026.
+Review of `git diff main...HEAD` after the iteration-2 build (merge of
+`main` brought `shared/audience_glyphs` — K08 now forwards to
+`rewardIconFor(audience: NestAudience.kid)`; the K08-BUG-1/2/3 fixes plus the
+`.k8-get.off` UI state were applied). Scope clean: delta is `kid_shop` feature
+code, `test/features/kid_shop/**`, and `docs/screens/K08/**` only.
 
 ## Architecture (docs/ARCHITECTURE.md)
 
-- Feature-first: domain holds entities + the abstract repository only;
-  `KidShopData` is a pure Equatable value object; no use-case classes added.
-- One bloc (`KidShopBloc`), one repository, DI/routes unchanged (bloc/repo
-  registrations still match). Views wrap a single route (`RewardShopView`).
-- The rewritten load handler fixes a real latent deadlock the old code had
-  (`await emit.forEach` on a never-completing watch stream) using the K03-BUG-15
-  subscription-guard pattern; reload-while-live is ignored, error releases the
-  subscription so the failure card's "Try again" can re-subscribe, and `close()`
-  cancels it. Correct.
+- Feature-first shape maintained: domain = `KidShopData` entity + abstract
+  `KidShopRepository` (`watchActiveShop`/`requestReward`); data holds the Drift
+  impl; presentation holds one bloc per screen with
+  Initial/Loading/Loaded/Failure; routes/DI still per-feature, no cross-feature
+  nesting. VERDICT: PASS on structure.
+- BLoC: guarded manual subscription (K03-BUG-15), `close()` cancels `_sub`;
+  `KidShopDataReceived`/`KidShopStreamFailed` internal events only.
+  `KidShopRewardRequested` still rejects unknown/unaffordable/duplicate ids.
+- Iteration-2 repository fix mirrors P14's `approveRedemption` pattern:
+  balance-check-then-write inside one transaction. Data invariant restored.
+- `watchShop` kept on the impl (documented) for the shared foundation test.
 
-## Design system usage
+## RULES / design system / spec
 
-- All colours/typography/radii/shadows via tokens (`context.nest`, `NestType`,
-  `NestSpacing`, `NestRadii`, `tokens.kidShadow`); no hex/`Color(` literals;
-  shared `KidScope` + `NestMeadowPainter` for sky/hills exactly as the CSS places
-  them (bottom 0, 390×136); no local hills.
-- CSS-derived magic sizes (56 chevron row, 26 back icon, 56/32 art, 20 coin, …)
-  carry a comment citing the HTML line — acceptable within this codebase's spec
-  style. Buttons/pills/empty states are the shared `Nest*` components.
+- Edited only allowed paths (verified `--name-status`).
+- No hard-coded colours/sizes/fonts in K08 UI — tokens everywhere;
+  `NestKidButton`, `NestCoinPill`, `NestEmptyState`, `KidScope`,
+  `NestBalancedText`, `NestIconButton` reused, not re-implemented.
+- `shop_reward_icons.dart` is now a thin forwarder to shared
+  `rewardIconFor(..., audience: NestAudience.kid)` — satisfies the ICONS
+  orchestrator ruling; both audience branches match their own design SVGs.
+- §5 K08 copy verified char-by-char against the HTML: "Reward shop", intro,
+  "Get it"/"Save up!", "N more to go" format, footer with live balance;
+  DB-driven six rewards in creation order; no hard-coded design numbers.
+- UK spelling/formatting in copy. BALANCED headings via `NestBalancedText` —
+  kept from iteration 1, unchanged.
 
-## Findings
+## Accessibility
 
-1. **minor — assistive voice reads a bare price number.** `_ShopPrice` renders
-   `SvgPicture(coin)` + `Text('$price')` with the icon `ExcludeSemantics`d and no
-   label on the text (`app/lib/features/kid_shop/presentation/widgets/shop_reward_card.dart:189-217`).
-   VoiceOver therefore announces only "50"/"150" with no unit. Contrasts with
-   `NestCoinPill` which labels `'$amount coins'`
-   (`app/lib/core/design_system/components/nest_coin_pill.dart:64`) and with
-   P14's explicit `priceLabel = 'Price in coins'`
-   (`app/lib/features/rewards/presentation/widgets/p14_reward_meta.dart:107`).
-   Fix: give the row `Semantics(label: '$price coins')` (merging the two children
-   and already excluding the icon), and keep `Text` out of the a11y tree via
-   `excludeSemantics`/explicit merge. Same for the "N more to go" note if present.
-
-2. **minor — `.k8-get.off` deviates from the design.** The unaffordable "Save up!"
-   button uses `NestKidButtonColor.white` + `onPressed: null`, so the whole control
-   is wrapped at `Opacity(0.45)` (`app/lib/core/design_system/components/nest_kid_button.dart`,
-   `enabled ? 1 : 0.45`), whereas the design wants a flat, full-strength
-   `surface-2`/`ink-2` block (`K08-shop.html:29-30`). Already tracked as
-   non-blocking in `docs/screens/K08/SHARED_REQUEST.md` §1 with a one-line swap
-   plan. Recording here so the deviation survives to the UI check; not a reason
-   to block iteration 1.
-
-3. **note (not a K08 finding) — two stale assertions in another feature.**
-   `app/test/features/kid_home/kid_home_view_test.dart:2001` and `:2059/2077`
-   still assert the old placeholder copy `'K08 Reward shop'` and fail on this
-   branch. It is outside K08's editable surface and filed in
-   `SHARED_REQUEST.md` §2 with a 2-line fix (route assertion, already used at
-   :1982-1983). No K08 code change can or should satisfy it.
-
-## Design spec §5 K08 compliance
-
-- Title "Reward shop", coin-pill balance, intro line, two-column grid (167 @390,
-  16 gutter), per-card icon/name/price/button, "Get it" vs "Save up!", single
-  "N more to go" note on the unaffordable card, and the footer line are all
-  present and character-identical to `design/html-source/screens/K08-shop.html`
-  (verified: "Spend your coins on things you actually want.", "You have … coins.
-  Pip is helping you save!", "more to go", curly apostrophes/em dash in the
-  toast copy "It’s yours — enjoy!", "Mum will give it a thumbs-up soon.").
-- Data over mocks honoured: six rewards in creation order from the DB
-  (`r-screen, r-film, r-bedtime, r-baking, r-cafe, r-dinner`), DB title
-  "Trip to the park café" wins over the HTML's "Park café trip", live coin
-  balance, `affordable` computed from the child row — no hard-coded design
-  numbers in app code.
-- Non-shaming disabled style ("Save up!", full-opacity-intent note, no lock
-  badge) matches the spec's intent. PIP rule N/A (no Pip slot; footer is text).
-- Bottom edge: no bar of its own, list scrolls over the shared meadow to the
-  physical edge, no strip — owner rule satisfied. 20 px gutters consistent
-  (top row, list, footer); geometry test asserts 201/433/665 rows, 167 columns,
-  56 pt buttons, centred art.
-
-## Accessibility (§8)
-
-- Every enabled control exposes `SemanticsAction.tap` and tapping performs the
-  real behaviour (view tests assert `hasAction(...)` for Back / Grown-ups /
-  "Get <title>" and disabled `enabled: false`, no-tap for "Save up for …").
-- Excluded art/icons are non-interactive; no `excludeSemantics` wrapper without
-  `onTap`. Kid target sizes ≥56 via `--tap-kid` equivalents. Findings 1 is the
-  only gap.
+- BUG-3 fix verified: `_ShopPrice` now `Semantics(label: '$price coins',
+  container: true, excludeSemantics: true)` around the row
+  (`shop_reward_card.dart:198-231`), so each card announces "50 coins"
+  instead of a bare "50". Tests assert the unit.
+- All buttons expose tap actions; "Save up!" disabled state reports
+  `enabled: false` with no tap action (correct per §8).
+- Decorative art is `ExcludeSemantics`; no `excludeSemantics` wrapper
+  without `onTap`.
 
 ## Performance / lifecycle
 
-- One stream subscription per bloc (guarded reload), cancelled on error and on
-  `close()`; `_switchMap` cancels inner on every outer emission and both on
-  cancel. No `Timer`/animation controllers; `DISABLE_ANIMATIONS` respected via
-  the shared motion fallbacks (unused here anyway). Chrome (`KidScope`, status
-  bar, top row) is a separate widget from the `BlocBuilder` body — no rebuild
-  storm; toast via `BlocListener` keyed on `noticeSeq`, survives stream
-  emissions, no repeated toasts of identical text because the sequence bumps.
+- Streams disposed on cancel/error/close; `_switchMap` cancels both on
+  `onCancel`; BlocBuilder scope is the routed body only; toast via
+  `BlocListener` keyed on `noticeSeq`. BUG-2 crash fixed — grid no longer
+  nests `Expanded(Spacer())`; odd counts lay out (`const SizedBox.shrink()`).
 
-## Error handling
+## Error handling / data integrity
 
-- Repository lookup failures → failure body with "Try again" re-subscribe;
-  `requestReward` misses → honest toast, spinners cleared, no silent success.
-  View handles loading / loaded / empty / failure in every chrome state.
+- Stream failure → explicit failure body + retry; request failure →
+  honest toast. BUG-1 fix: unpaid instant purchases no longer write
+  `approved`; an uncovered `KidShopRewardRequested` now writes a `requested`
+  row inside the same transaction instead of an unpaid `approved` row.
+
+## Findings
+
+1. **minor** — Instant purchase feedback can mismatch the stored row. When
+   the repo downgrades an uncovered instant tap to `requested`
+   (`kid_shop_repository_impl.dart:88-112`), the bloc still answers with the
+   instant-purchase copy "It’s yours — enjoy!"
+   (`kid_shop_bloc.dart:103-104`). The kid hears "it's yours" while the row
+   actually needs parental approval. Fix: have `requestReward` return the
+   resulting status (`'approved' | 'requested' | 'requested_only'`) (a tiny
+   API addition stays inside RULES §1 — domain-owned contract), and map it in
+   `_onRewardRequested`: `approved` → enjoy copy, `requested` → thumbs-up
+   copy, balance-refused → a "Not quite enough coins yet — keep saving!"
+   toast.
+
+2. **minor** — `app/test/features/kid_shop/k08_bugs_test.dart:3-27` header
+   comment still describes K08-BUG-1/2/3 as failing "on this tree". Those
+   fixes have landed and the same tests pass as regression proofs. Fix:
+   update the header to state they ran failing in iteration 1 and now guard
+   the fixed behavior.
+
+3. **note (recorded deviation, tracked)** — `.k8-get.off` still uses
+   `NestKidButtonColor.white` + `onPressed: null`, so the disabled "Save
+   up!" is the whitened 0.45-opacity variant rather than the design's flat
+   `surface-2`/`ink-2` block. Filed in `docs/screens/K08/SHARED_REQUEST.md`;
+   swap is one prop once the design-system owner adds the muted variant.
+
+4. **note (cross-feature, shared-owned)** — two stale placeholder-copy
+   assertions remain in `app/test/features/kid_home/kid_home_view_test.dart`
+   (:2001 and the table row in the :2059 group). Outside K08's editable
+   path; fix is filed in `SHARED_REQUEST.md`.
 
 ## Children's Code
 
-- Kid mode screen: no analytics, ads, remote loads, or external storage; a tap
-  only inserts a `reward_redemptions` row via the feature repository.
+- No analytics, ads, tracking pixels, or external loads in kid mode; taps
+  only insert `reward_redemptions` rows via the feature repository. PASS.
 
-## Verdict
+## Verification evidence
 
-No blocker or major findings. Two minor items (1: price a11y label; 2: filed
-off-variant deviation) and one cross-feature note (3) recorded. K08 code is
-feature-local, spec-faithful, and fully covered by the 53 kid_shop tests plus
-the shared-suite confirmations logged in `2_build.md`.
+- `flutter analyze` → "No issues found!" (no ignores, no weakened
+  analysis_options).
+- `flutter test --timeout 120s test/features/kid_shop/` → all pass
+  (143 tests, incl. the BUG-1/2/3 regression proofs).
+- No simulator used in this stage; no code edited per stage instructions.
 
 VERDICT: PASS

@@ -38,6 +38,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:nestling/app/app.dart';
 import 'package:nestling/app/controllers.dart';
+import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/kid_shop/presentation/widgets/shop_reward_card.dart';
 
@@ -74,8 +75,10 @@ Future<void> loadBundledFonts() async {
 void main() {
   setUpAll(loadBundledFonts);
 
+  late AppDatabase db;
+
   setUp(() async {
-    await setUpTestScope();
+    db = await setUpTestScope();
   });
 
   Future<void> pumpShop(WidgetTester tester, {double width = 390}) async {
@@ -430,6 +433,71 @@ void main() {
       );
       await disposeApp(tester);
     });
+  });
+
+  group('K08 odd reward counts (K08-BUG-2 regression geometry)', () {
+    // The trailing CSS-grid cell is an inert filler now, so an odd count lays
+    // out exactly like an even one: the lone card keeps its column width, its
+    // left gutter and its own height (the grid's `align-items: stretch` no
+    // longer has a row-mate to stretch to).
+    const cases = <int, List<String>>{
+      5: <String>['r-screen', 'r-film', 'r-bedtime', 'r-baking', 'r-cafe'],
+      3: <String>['r-screen', 'r-film', 'r-bedtime'],
+      1: <String>['r-screen'],
+    };
+
+    for (final entry in cases.entries) {
+      for (final width in <double>[390, 320]) {
+        testWidgets('${entry.key} cards lay out at ${width.toInt()} px', (
+          tester,
+        ) async {
+          await (db.delete(
+            db.rewards,
+          )..where((r) => r.id.isNotIn(entry.value))).go();
+          await pumpShop(tester, width: width);
+
+          expect(tester.takeException(), isNull);
+          expect(find.byType(ShopRewardCard), findsNWidgets(entry.key));
+
+          // Rows keep the 16 px gap; a lone card starts the row it is in, so its top
+          // is the first card's top plus one row pitch per row before it. The
+          // pitch is measured, not assumed, because a narrow device moves the
+          // whole rhythm down (the balanced heading wraps to two lines).
+          final first = tester.getRect(card(0));
+          final rowsBefore = (entry.key - 1) ~/ 2;
+          // Row pitch = card height (216) + `.k8-grid` gap (16). Measured from
+          // two real rows rather than assumed, because a narrow device moves
+          // the whole rhythm down (the balanced heading wraps to two lines).
+          var pitch = 232.0;
+          if (entry.key > 2) {
+            pitch = tester.getRect(card(2)).top - first.top;
+            expect(pitch, closeTo(232, 2), reason: 'row pitch: 216 + 16');
+          }
+          final lone = tester.getRect(card(entry.key - 1));
+          final hasNote = entry.value.last == 'r-cafe';
+          final cardHeight = hasNote ? 240.0 : 216.0;
+          expect(lone.top, closeTo(first.top + rowsBefore * pitch, 2));
+          expect(lone.height, closeTo(cardHeight, 2));
+          expect(lone.left, closeTo(_gutter, 0.5));
+          expect(
+            lone.width,
+            closeTo((width - 2 * _gutter - _colGap) / 2, 1),
+            reason: 'the lone card still fills its own column',
+          );
+
+          // Every row above it is the plain 216 (or 240 with a note) card.
+          for (var i = 0; i + 1 < entry.key; i += 2) {
+            final rowTop = tester.getRect(card(i)).top;
+            expect(
+              tester.getRect(card(i + 1)).top,
+              closeTo(rowTop, 0.5),
+              reason: 'cards $i and ${i + 1} share a row',
+            );
+          }
+          await disposeApp(tester);
+        });
+      }
+    }
   });
 
   group('K08 footer and scroll tail', () {

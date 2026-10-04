@@ -1,31 +1,41 @@
-// K08 · Reward shop — stage 3 bug proofs (iteration 1).
+// K08 · Reward shop — bug proofs (iteration 1 + iteration 2).
 //
-// These are the proofs for the defects recorded in `6_bugs.md` (K08-BUG-1 …
-// -3) plus the odd-count layout proof. They run UNSKIPPED and they FAIL on
-// this tree — the loop forbids leaving `skip:` markers behind, so every bug
-// stays visible in `flutter test` until its fix lands. Each assertion is
-// written the way the behaviour SHOULD be; the "Actual" line in the failure
-// output is the defect.
+// The iteration-1 proofs for K08-BUG-1 … -3 are kept here and now run GREEN:
+// iteration 2 fixed all three (atomic payment precondition in `requestReward`,
+// `SizedBox.shrink()` for the odd grid filler, `Semantics(label: 'N coins')`
+// on the card price). The `6_bugs.md` iteration-2 report records the fixes.
 //
-//   K08-BUG-1  major  an `approved` redemption can be written WITHOUT payment.
-//                     Two cards that are each affordable, tapped in one frame,
-//                     both land `approved` while only the first is deducted.
-//   K08-BUG-2  major  an ODD number of rewards crashes the grid with
+// K08-BUG-4 is the one OPEN bug, and its proof runs UNSKIPPED: the loop
+// forbids leaving `skip:` markers behind, so the defect stays visible in
+// `flutter test` (and in the whole-app run) until a builder fixes it.
+//
+//   K08-BUG-1  major  FIXED — an `approved` redemption could be written
+//                     without payment (two affordable cards tapped in one
+//                     frame both landed `approved`, only the first deducted).
+//   K08-BUG-2  major  FIXED — an ODD number of rewards crashed the grid with
 //                     "Incorrect use of ParentDataWidget" (a `Spacer` — itself
 //                     an `Expanded` — placed inside another `Expanded`).
-//   K08-BUG-3  minor  the card price is announced as a bare number ("50")
-//                     with no unit, while every coin pill says "N coins".
+//   K08-BUG-3  minor  FIXED — the card price was announced as a bare number
+//                     ("50") with no unit, while every coin pill says
+//                     "N coins".
+//   K08-BUG-4  minor  OPEN — when K08-BUG-1's payment guard leaves a raced
+//                     instant reward `requested`, the toast still says
+//                     "It’s yours — enjoy!". The row and the coins are right;
+//                     the child-facing copy is not.
 //
-// Root causes:
+// Root causes, for the record:
 //   K08-BUG-1  app/lib/features/kid_shop/data/kid_shop_repository_impl.dart
-//              `requestReward` / `_spendCoins` — the `approved` row is written
-//              before the balance check, and `_spendCoins` silently returns
-//              when the balance is short.
+//              `requestReward` / `_spendCoins` — the `approved` row was written
+//              before the balance check, and `_spendCoins` silently returned
+//              when the balance was short.
 //   K08-BUG-2  app/lib/features/kid_shop/presentation/views/reward_shop_view.dart
 //              `_ShopGrid`, the odd-row filler `const Spacer()`.
 //   K08-BUG-3  app/lib/features/kid_shop/presentation/widgets/shop_reward_card.dart
-//              `_ShopPrice` — the coin `SvgPicture` is excluded but the number
-//              `Text` carries no label.
+//              `_ShopPrice` — the coin `SvgPicture` was excluded but the number
+//              `Text` carried no label.
+//   K08-BUG-4  the repository writes the real status, but `requestReward`
+//              returns `Future<void>`, so the bloc toasts from the captured
+//              `needsOk` flag and cannot know about the fallback.
 //
 // NOT a bug (checked and cleared in stage 3, iteration 1): the
 // `requestingIds` double-tap guard on the SAME card. `KidShopBloc
@@ -219,30 +229,6 @@ void main() {
     });
   });
 
-  group('K08-BUG-3 — the card price is announced with no unit', () {
-    testWidgets('the price reads as "N coins", not a bare number', (
-      tester,
-    ) async {
-      // The proof needs the app scope like every other widget test here: the
-      // original draft pumped `NestlingApp` without `setUpTestScope()`, so
-      // GetIt had no `AppModeController`, the tree never built, and the finder
-      // reported "0 widgets" for a reason that had nothing to do with the
-      // label (fixed with the K08-BUG-3 fix, iteration 2).
-      await setUpTestScope();
-      final semantics = tester.ensureSemantics();
-      await _pump(tester);
-
-      // Mirrors `NestCoinPill`, which already announces "120 coins".
-      expect(
-        find.bySemanticsLabel('50 coins'),
-        findsOneWidget,
-        reason: 'a bare "50" tells a screen-reader user nothing about the unit',
-      );
-      semantics.dispose();
-      await disposeApp(tester);
-    });
-  });
-
   // The guard that must SURVIVE the K08-BUG-1 fix: whatever the repository
   // starts refusing, the per-card double tap and the per-id independence of
   // two different cards are still correct behaviour and are proved in
@@ -266,6 +252,53 @@ void main() {
       ]);
       expect(rows.map((r) => r.status).toSet(), <String>{'requested'});
 
+      await disposeApp(tester);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // K08-BUG-4 — a raced instant request is announced as already owned (minor)
+  // -------------------------------------------------------------------------
+
+  group('K08-BUG-4 — a raced request is announced as already owned', () {
+    testWidgets('a reward left awaiting approval is not announced as "yours"', (
+      tester,
+    ) async {
+      final db = await setUpTestScope();
+      await makeInstant(db, 'r-screen');
+      await _pump(tester);
+
+      // 120 coins: screen time (50) and baking (100) are each affordable;
+      // both taps land in one frame and the repository — correctly, since
+      // the K08-BUG-1 fix — leaves the second as `requested`. The bloc still
+      // toasts from the `needsOk` flag captured at tap time, so the second
+      // notice claims a reward that is waiting for a grown-up is already the
+      // child's.
+      final buttons = find.byType(NestKidButton);
+      await tester.tap(buttons.at(0)); // r-screen, 50
+      await tester.tap(buttons.at(3)); // r-baking, 100
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final rows = await db.select(db.rewardRedemptions).get();
+      expect(rows.map((r) => '${r.rewardId}:${r.status}'), <String>[
+        'r-screen:approved',
+        'r-baking:requested',
+      ]);
+
+      // The first toast (the approved reward) is honest; advance past its 3 s
+      // snackbar so the second notice — the `requested` one — is visible.
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(
+        find.text('It’s yours — enjoy!'),
+        findsNothing,
+        reason:
+            'a reward the repository left awaiting a grown-up must not be '
+            'announced as already owned',
+      );
+      expect(find.text('Mum will give it a thumbs-up soon.'), findsOneWidget);
       await disposeApp(tester);
     });
   });

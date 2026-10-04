@@ -378,6 +378,26 @@ void main() {
       },
     );
 
+    test(
+      'an instant reward for a child with no row is left requested',
+      () async {
+        final repo = KidShopRepositoryImpl(db: db);
+        // `watchActiveShop` falls back to the literal 'maya', so a family whose
+        // child row has gone still reaches this branch. Nothing may be granted
+        // or deducted for a child that does not exist.
+        await repo.requestReward('nobody', 'r-baking');
+
+        final rows = await redemptionsFor('r-baking');
+        expect(rows, hasLength(1));
+        expect(
+          rows.single.status,
+          'requested',
+          reason: 'no child row means no payment, so no approved row',
+        );
+        expect((await child('maya')).coins, 120, reason: 'nobody else moved');
+      },
+    );
+
     test('unknown reward is a no-op', () async {
       final repo = KidShopRepositoryImpl(db: db);
 
