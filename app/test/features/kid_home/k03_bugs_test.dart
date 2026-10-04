@@ -563,7 +563,8 @@ void main() {
       await tester.tap(card);
       await _settle(tester);
       expect(pushedPath(tester), '/quest-detail');
-      await tester.pageBack();
+      // K04 has no AppBar: its own Back (NestIconButton) pops exactly one route.
+      await tester.tap(find.byType(NestIconButton).first);
       await _settle(tester);
       expect(
         find.text('Hi Maya!'),

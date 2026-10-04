@@ -72,13 +72,21 @@ class NestBalancedText extends StatelessWidget {
     // Twelve halvings narrow 390 dp to well under half a pixel.
     for (var i = 0; i < 12; i++) {
       final mid = (lo + hi) / 2;
+      // K04-BUG-1: probe with the NATURAL line count, not the maxLines-capped
+      // one. The capped probe reports `maxLines` for any text that does not
+      // fit, at every width, so the search collapsed to ~0 px and the heading
+      // rendered as a 0.1 px-wide clipped gap. With the natural count the
+      // search finds the narrowest width that still lays out in [lineCount]
+      // natural lines (or, when the text can never fit [lineCount] lines,
+      // keeps shrinking to [lo]≈0 — callers must bail out first, and
+      // [build] does: it returns full-width text whenever the natural count
+      // exceeds its maxLines cap).
       final lines = lineCountFor(
         text: text,
         style: style,
         maxWidth: mid,
         textDirection: textDirection,
         textScaler: textScaler,
-        maxLines: maxLines,
       );
       if (lines <= lineCount) {
         hi = mid;
@@ -121,6 +129,19 @@ class NestBalancedText extends StatelessWidget {
           maxLines: maxLines,
         );
         if (minLines <= 1) return _text();
+        // K04-BUG-1: when the natural layout needs MORE lines than the
+        // maxLines cap allows, the heading can never balance within the cap
+        // and the width probe would collapse to ~0 px. Render full width
+        // instead (the Text's own maxLines ellipsis keeps it honest).
+        final naturalLines = lineCountFor(
+          text: text,
+          style: style,
+          maxWidth: maxWidth,
+          textDirection: direction,
+          textScaler: scaler,
+        );
+        final cap = maxLines;
+        if (cap != null && naturalLines > cap) return _text();
         final width = balancedWidthFor(
           text: text,
           style: style,
