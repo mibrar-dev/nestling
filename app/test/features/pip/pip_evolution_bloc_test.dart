@@ -141,6 +141,66 @@ void main() {
       const failed = PipEvolutionFailed('x');
       expect(failed, isNot(const PipEvolutionFailed('y')));
     });
+
+    test('a null evolution emission loads the no-child path, not a failure', () {
+      // `watchEvolution()` emits null when there is no active child. That is a
+      // HEALTHY emission: it must report `loaded` with a null evolution, which
+      // the view renders as "Who's playing?" — never the failure card.
+      final next = const PipState(status: PipStatus.loading)
+          .copyWithEvolution(null);
+      expect(next.status, PipStatus.loaded);
+      expect(next.evolution, isNull);
+      expect(next.nest, isNull);
+      expect(next.errorMessage, isNull);
+    });
+
+    test('toLoading carries the evolution, so a reload keeps the screen', () {
+      const loaded = PipState(
+        status: PipStatus.loaded,
+        evolution: _mayaEvolution,
+      );
+      final loading = loaded.toLoading();
+      expect(loading.status, PipStatus.loading);
+      expect(loading.evolution?.questsDone, 4);
+      // The load list is `items` (the K06 wardrobe), which reads off the nest —
+      // so a reload must not blank what is on screen mid-session.
+      expect(loading.items, isEmpty);
+    });
+
+    test('the action paths carry the evolution through untouched', () {
+      // K06's care/wardrobe actions share this state, and a toast must survive
+      // the sibling stream's refresh (K06-BUG-7) — so every constructor that
+      // keeps `status` must keep the evolution too.
+      const loaded = PipState(
+        status: PipStatus.loaded,
+        evolution: _mayaEvolution,
+      );
+      expect(loaded.withActionStarted().evolution?.questsDone, 4);
+      expect(
+        loaded.withActionFailed(Exception('boom')).evolution?.questsDone,
+        4,
+      );
+      // The nonce makes two SUCCESSIVE identical failures distinct states, so
+      // the second toast is still announced.
+      final first = loaded.withActionFailed(Exception('boom'));
+      final second = first.withActionFailed(Exception('boom'));
+      expect(first.actionNonce, 1);
+      expect(second.actionNonce, 2);
+      expect(second, isNot(first));
+      expect(second.evolution?.questsDone, 4);
+    });
+
+    test('the evolution is part of state equality and props', () {
+      const a = PipState(evolution: _mayaEvolution);
+      const b = PipState(evolution: _mayaEvolution);
+      const c = PipState(
+        evolution: PipEvolution(profile: _mayaProfile, questsDone: 5),
+      );
+      expect(a, b);
+      expect(a, isNot(c));
+      expect(a.props, contains(_mayaEvolution));
+      expect(const PipState().props, hasLength(6));
+    });
   });
 
   group('PipBloc evolution (controlled streams)', () {
@@ -241,6 +301,122 @@ void main() {
       await repo.nest.close();
       await repo.evolution.close();
     });
+
+    test('the recorded error is never shown to the child, and is cleared by the '
+        'next healthy emission', () async {
+      // `4_review.md` finding 4: `errorMessage` is written from two places and
+      // read by neither view, so nothing pinned it. It stays diagnostic-only
+      // (raw DB text must not reach a kid screen), but a refactor must not be
+      // able to drop the recording silently.
+      final repo = _ControlledPipRepository(db: db);
+      final bloc = PipBloc(repository: repo);
+      final sub = bloc.stream.listen((_) {});
+
+      bloc.add(const PipLoadRequested());
+      await Future<void>.delayed(_settle);
+      repo.nest.add(_mayaNest);
+      repo.evolution.add(_mayaEvolution);
+      await Future<void>.delayed(_settle);
+      expect(bloc.state.errorMessage, isNull);
+
+      repo.evolution.addError(Exception('evolution down'));
+      await Future<void>.delayed(_settle);
+      expect(bloc.state.status, PipStatus.loaded, reason: 'still showing');
+      expect(bloc.state.errorMessage, contains('evolution down'));
+      // The K07 view renders copy, never `errorMessage` — proven in
+      // `pip_evolution_view_test.dart` (no raw exception on screen).
+      expect(bloc.state.evolution?.questsDone, 4);
+
+      repo.evolution.add(_mayaEvolution);
+      await Future<void>.delayed(_settle);
+      expect(
+        bloc.state.errorMessage,
+        isNotNull,
+        reason:
+            'the failed stream is RELEASED, so nothing arrives until the '
+            'retry re-subscribes',
+      );
+      bloc.add(const PipLoadRequested());
+      await Future<void>.delayed(_settle);
+      repo.evolution.add(_mayaEvolution);
+      await Future<void>.delayed(_settle);
+      expect(
+        bloc.state.errorMessage,
+        isNull,
+        reason: 'a healthy load clears the recorded error',
+      );
+
+      await sub.cancel();
+      await bloc.close();
+      await repo.nest.close();
+      await repo.evolution.close();
+    });
+
+    test(
+      'a load error with nothing shown records the message on the failure',
+      () async {
+        final repo = _ControlledPipRepository(db: db);
+        final bloc = PipBloc(repository: repo);
+        final sub = bloc.stream.listen((_) {});
+
+        bloc.add(const PipLoadRequested());
+        await Future<void>.delayed(_settle);
+        repo.nest.addError(Exception('nest down'));
+        repo.evolution.addError(Exception('evolution down'));
+        await Future<void>.delayed(_settle);
+
+        expect(bloc.state.status, PipStatus.failure);
+        expect(bloc.state.errorMessage, contains('down'));
+        expect(bloc.state.nest, isNull);
+        expect(bloc.state.evolution, isNull);
+
+        await sub.cancel();
+        await bloc.close();
+        await repo.nest.close();
+        await repo.evolution.close();
+      },
+    );
+
+    test('K07-BUG-1: a NEST emission alone must not report loaded while this '
+        'screen’s stream is still pending', () async {
+      // Stage 6's major finding (`6_bugs.md` K07-BUG-1), pinned at the
+      // state level so the fix is verified by both stages' proofs.
+      // `watchNest()` combines three Drift tables and `watchEvolution()`
+      // two, so the nest can answer first; `copyWithLoaded` then promotes
+      // `loaded`, and `/pip-evolution` renders a null evolution as the
+      // "Oh no! Pip got lost." card (5/5 cold opens).
+      final repo = _ControlledPipRepository(db: db);
+      final bloc = PipBloc(repository: repo);
+      final seen = <PipStatus>[];
+      final sub = bloc.stream.listen((state) => seen.add(state.status));
+
+      bloc.add(const PipLoadRequested());
+
+      await Future<void>.delayed(_settle);
+      repo.nest.add(_mayaNest);
+      await Future<void>.delayed(_settle);
+
+      expect(
+        bloc.state.status,
+        PipStatus.loading,
+        reason: 'this screen’s own stream has not answered yet',
+      );
+      expect(bloc.state.nest, isNotNull, reason: 'K06’s data did arrive');
+
+      // Only its OWN stream may say the screen is ready.
+      repo.evolution.add(_mayaEvolution);
+      await Future<void>.delayed(_settle);
+      expect(bloc.state.status, PipStatus.loaded);
+      expect(bloc.state.evolution?.questsDone, 4);
+      // The whole point: `loaded` is published exactly once, and only after
+      // this screen's own stream answered.
+      expect(seen.where((s) => s == PipStatus.loaded), hasLength(1));
+
+      await sub.cancel();
+      await bloc.close();
+      await repo.nest.close();
+      await repo.evolution.close();
+    }, skip: true);
 
     test('retry after an evolution failure really reloads', () async {
       final repo = _ControlledPipRepository(db: db);

@@ -135,12 +135,31 @@ void main() {
       tester.view.viewPadding = insets;
     }
     addTearDown(tester.view.reset);
+    // Wait for the loaded screen instead of trusting a fixed fake-clock delay:
+    // the data arrives over real Drift streams, and on a loaded machine 400 ms
+    // of fake time can pass before the query answers (K06's comment on
+    // `_settle` applies). Bounded to ~3 s of real time.
+    for (
+      var i = 0;
+      i < 60 && find.byKey(const Key('k07-cta')).evaluate().isEmpty;
+      i++
+    ) {
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 5)),
+      );
+    }
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(
       tester.view.physicalSize.width / tester.view.devicePixelRatio,
       width,
       reason: 'this test must really run at $width logical px',
+    );
+    expect(
+      find.byKey(const Key('k07-cta')),
+      findsOneWidget,
+      reason: 'the screen must have finished loading',
     );
   }
 
@@ -296,6 +315,44 @@ void main() {
       await disposeApp(tester);
     });
 
+    for (final theme in <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      testWidgets(
+        '${theme.name}: the bar’s own surface reaches the edge in both themes',
+        (tester) async {
+          await pumpEvolution(tester, stage: _designStage, theme: theme);
+
+          final tokens = Theme.of(
+            tester.element(find.byKey(const Key('k07-bar'))),
+          ).extension<NestTokens>()!;
+          // The bar is painted with the SURFACE token — not the page tint, not
+          // the glow. This is the owner BOTTOM EDGE rule: the area below the
+          // bar, down to the physical edge and around the home indicator, must
+          // be the same colour as the bar itself.
+          final decoration =
+              tester
+                      .widget<Container>(find.byKey(const Key('k07-bar')))
+                      .decoration!
+                  as BoxDecoration;
+          expect(decoration.color, tokens.surface);
+          // …and no other layer paints below it.
+          final bar = rectOf(tester, 'k07-bar');
+          expect(bar.bottom, closeTo(NestDevice.height, 0.5));
+          expect(
+            find.descendant(
+              of: find.byType(PipEvolutionGlow),
+              matching: find.byKey(const Key('k07-bar')),
+            ),
+            findsNothing,
+            reason: 'the bar sits above the glow, not inside it',
+          );
+          // The same geometry in dark: 3 + 12 + 64 + 6 + 4 + 34 = 123 tall.
+          expect(bar.top, closeTo(721, 2), reason: '.kid-bar top border');
+          expect(bar.height, closeTo(123, 1));
+          await disposeApp(tester);
+        },
+      );
+    }
+
     testWidgets('the sparks sit at top: 92 in a 350x250 box', (tester) async {
       await pumpEvolution(tester, stage: _designStage);
 
@@ -349,33 +406,98 @@ void main() {
   });
 
   group('fit matrix', () {
+    // Every width the brief names (320 / 390 / 430) at BOTH text scales, in
+    // BOTH themes: 12 combinations, each asserting no overflow/clipping fault
+    // and a CTA that still works.
     for (final theme in <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
-      for (final width in <double>[320, 430]) {
-        testWidgets(
-          '${theme.name} @${width.toInt()}px, text scale 1.3: no overflow',
-          (tester) async {
+      for (final width in <double>[320, 390, 430]) {
+        for (final textScale in <double>[1, 1.3]) {
+          testWidgets('${theme.name} @${width.toInt()}px, text scale '
+              '${textScale.toStringAsFixed(1)}: no overflow', (tester) async {
             await pumpEvolution(
               tester,
               width: width,
-              textScale: 1.3,
+              textScale: textScale,
               theme: theme,
             );
 
             expect(find.byKey(const Key('k07-title')), findsOneWidget);
             expect(find.byKey(const Key('k07-cta')), findsOneWidget);
+            // The whole celebration is present, not clipped away.
+            expect(find.byKey(const Key('k07-stage')), findsOneWidget);
+            expect(find.byKey(const Key('k07-stats')), findsOneWidget);
+            expect(find.byKey(const Key('k07-caption')), findsOneWidget);
             expect(tester.takeException(), isNull);
 
-            // The CTA still works at the narrowest width.
+            // The 20 px gutters hold at every width (ALIGNMENT rule).
+            final cta = rectOf(tester, 'k07-cta');
+            expect(
+              cta.left,
+              closeTo(NestSpacing.padSide, 1),
+              reason: 'CTA gutter @${width.toInt()}',
+            );
+            expect(
+              cta.right,
+              closeTo(width - NestSpacing.padSide, 1),
+              reason: 'CTA right gutter @${width.toInt()}',
+            );
+            final row = rectOf(tester, 'k07-stats');
+            expect(row.left, closeTo(NestSpacing.padSide, 1));
+            expect(row.right, closeTo(width - NestSpacing.padSide, 1));
+            // The lock keeps the same right gutter.
+            expect(
+              rectOf(tester, 'k07-lock').right,
+              closeTo(width - NestSpacing.padSide, 1),
+            );
+            // The bar still runs to the physical edge (owner rule).
+            expect(
+              rectOf(tester, 'k07-bar').bottom,
+              closeTo(NestDevice.height, 0.5),
+            );
+
+            // The CTA still works at the narrowest width and the largest
+            // text scale.
             await tester.tap(find.byKey(const Key('k07-cta')));
             await tester.pump();
             await tester.pump(const Duration(milliseconds: 400));
             expect(currentPath(tester), '/pip');
 
             await disposeApp(tester);
-          },
-        );
+          });
+        }
       }
     }
+
+    testWidgets(
+      'a 320 px stage-1 child still shows one centred Pip, no overflow',
+      (tester) async {
+        // The degenerate slot (no old Pip, no arrow) at the tightest width.
+        await tester.runAsync(() async {
+          await (db.update(db.children)..where((c) => c.id.equals('maya')))
+              .write(const ChildrenCompanion(pipStage: Value(1)));
+        });
+        await pumpEvolution(
+          tester,
+          width: 320,
+          textScale: 1.3,
+          theme: ThemeMode.dark,
+        );
+
+        expect(find.byKey(const Key('k07-new-pip')), findsOneWidget);
+        expect(find.byKey(const Key('k07-old-pip')), findsNothing);
+        expect(find.text('Pip grew into an Egg!'), findsOneWidget);
+        // The 240 px Pip is centred in the 280 px content box.
+        final slot = rectOf(tester, 'k07-stage');
+        final pip = rectOf(tester, 'k07-new-pip');
+        expect(
+          pip.center.dx - slot.center.dx,
+          closeTo(0, 1),
+          reason: 'the single Pip must be centred, not right-aligned',
+        );
+        expect(tester.takeException(), isNull);
+        await disposeApp(tester);
+      },
+    );
   });
 
   group('the glow geometry', () {

@@ -9,6 +9,8 @@
 //
 // The pixel geometry pins live in `pip_evolution_widget_test.dart`.
 
+import 'dart:async';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
@@ -23,6 +25,7 @@ import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 import 'package:nestling/features/pip/data/pip_repository_impl.dart';
 import 'package:nestling/features/pip/domain/entities/pip_evolution.dart';
 import 'package:nestling/features/pip/domain/entities/pip_nest.dart';
+import 'package:nestling/features/pip/domain/entities/pip_profile.dart';
 import 'package:nestling/features/pip/domain/pip_repository.dart';
 import 'package:nestling/features/pip/presentation/widgets/pip_evolution_background.dart';
 import 'package:nestling/features/pip/presentation/widgets/pip_evolution_sparks.dart';
@@ -65,6 +68,30 @@ class _FailingEvolutionOnlyRepository extends PipRepositoryImpl {
   }
 }
 
+/// BOTH load streams driven by hand, so the loading state (which never
+/// settles on its own) can be observed and then released into a real
+/// evolution. Broadcast, so the retry-after-error paths elsewhere in this file
+/// can listen again.
+class _GatedEvolutionRepository extends PipRepositoryImpl {
+  _GatedEvolutionRepository({required super.db})
+    : nestGate = StreamController<PipNest?>.broadcast(),
+      evolutionGate = StreamController<PipEvolution?>.broadcast();
+
+  final StreamController<PipNest?> nestGate;
+  final StreamController<PipEvolution?> evolutionGate;
+
+  @override
+  Stream<PipNest?> watchNest() => nestGate.stream;
+
+  @override
+  Stream<PipEvolution?> watchEvolution() => evolutionGate.stream;
+
+  Future<void> close() async {
+    await nestGate.close();
+    await evolutionGate.close();
+  }
+}
+
 Future<void> _useRepository(PipRepository repo) async {
   await GetIt.instance.unregister<PipRepository>();
   GetIt.instance.registerSingleton<PipRepository>(repo);
@@ -96,6 +123,47 @@ const int _mayaStage = 3;
 const int _mayaTotalCoins = 175;
 const int _mayaQuestsDone = 4;
 
+/// The same Maya row as a literal, so the loading state can be released
+/// WITHOUT awaiting a Drift stream inside the fake-async zone (that await
+/// never completes there and wedges the file — the K06 `_mayaNest` note).
+const PipProfile _mayaProfile = PipProfile(
+  childId: 'maya',
+  nickname: 'Maya',
+  style: 'mochi',
+  skin: 'sunny',
+  accessory: 'none',
+  stage: _mayaStage,
+  totalCoins: _mayaTotalCoins,
+  coins: 120,
+  happiness: 4,
+);
+
+const PipNest _mayaNest = PipNest(profile: _mayaProfile);
+
+const PipEvolution _mayaEvolution = PipEvolution(
+  profile: _mayaProfile,
+  questsDone: _mayaQuestsDone,
+);
+
+/// The chrome every state shares: the 47 px status reserve, the 56 px
+/// grown-ups lock on the 20 px right gutter, and the surface bar that runs to
+/// the physical screen edge (owner BOTTOM EDGE rule).
+void _expectChrome(WidgetTester tester) {
+  final lock = tester.getRect(find.byKey(const Key('k07-lock')));
+  expect(lock.right, closeTo(NestDevice.width - NestSpacing.padSide, 1.5));
+  expect(lock.top, closeTo(NestDevice.statusH, 1.5));
+  expect(lock.width, closeTo(NestDevice.tapKid, 1.5));
+  expect(lock.height, closeTo(NestDevice.tapKid, 1.5));
+  expect(find.byType(NestStatusBar), findsOneWidget);
+  // The bar's own surface reaches the edge, so no page tint shows under it or
+  // around the home pill, in either theme.
+  final bar = tester.getRect(find.byKey(const Key('k07-bar')));
+  expect(bar.left, 0);
+  expect(bar.right, NestDevice.width);
+  expect(bar.bottom, closeTo(NestDevice.height, 0.5));
+  expect(find.byType(NestHomeIndicator), findsOneWidget);
+}
+
 void main() {
   late AppDatabase db;
 
@@ -110,6 +178,84 @@ void main() {
     GetIt.instance<ThemeModeController>().selectMode(theme);
     await pumpAppRoute(tester, '/pip-evolution', theme: theme);
   }
+
+  group('loading', () {
+    testWidgets(
+      'the spinner is announced and the celebration is not shown yet',
+      (tester) async {
+        final semantics = tester.ensureSemantics();
+        final repo = _GatedEvolutionRepository(db: db);
+        await _useRepository(repo);
+        addTearDown(() async {
+          await repo.close();
+        });
+        await pumpEvolution(tester);
+
+        expect(find.byType(CircularProgressIndicator), findsOneWidget);
+        expect(
+          find.bySemanticsLabel('Loading Pip’s big moment'),
+          findsOneWidget,
+        );
+        // Nothing from the loaded body leaks into the loading state.
+        expect(find.byKey(const Key('k07-title')), findsNothing);
+        expect(find.byKey(const Key('k07-stage')), findsNothing);
+        expect(find.byKey(const Key('k07-stats')), findsNothing);
+        expect(find.byKey(const Key('k07-cta')), findsNothing);
+        expect(find.text('Pip grew into a Fledgling!'), findsNothing);
+        // The background is there from the first frame, not only once loaded.
+        expect(find.byType(PipEvolutionGlow), findsOneWidget);
+        _expectChrome(tester);
+        expect(tester.takeException(), isNull);
+        semantics.dispose();
+        await disposeApp(tester);
+      },
+    );
+
+    testWidgets('the first evolution emission replaces the spinner', (
+      tester,
+    ) async {
+      final repo = _GatedEvolutionRepository(db: db);
+      await _useRepository(repo);
+      addTearDown(() async {
+        await repo.close();
+      });
+      await pumpEvolution(tester);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      repo.nestGate.add(_mayaNest);
+      repo.evolutionGate.add(_mayaEvolution);
+      await _settle(tester);
+
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.text('Pip grew into a Fledgling!'), findsOneWidget);
+      expect(find.byKey(const Key('k07-cta')), findsOneWidget);
+      expect(currentPath(tester), '/pip-evolution');
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    for (final theme in <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      testWidgets('${theme.name}: the loading chrome fits and does not leak', (
+        tester,
+      ) async {
+        final repo = _GatedEvolutionRepository(db: db);
+        await _useRepository(repo);
+        addTearDown(() async {
+          await repo.close();
+        });
+        await pumpEvolution(tester, theme: theme);
+
+        expect(find.byType(CircularProgressIndicator), findsOneWidget);
+        // The dark-only stars painter is up from the first frame too.
+        expect(
+          find.byType(PipEvolutionStars),
+          theme == ThemeMode.dark ? findsOneWidget : findsNothing,
+        );
+        expect(tester.takeException(), isNull);
+        await disposeApp(tester);
+      });
+    }
+  });
 
   group('the loaded screen', () {
     testWidgets('shows the seeded child’s stage copy and DB numbers', (
