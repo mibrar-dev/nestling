@@ -197,9 +197,9 @@ class _QuestLibraryBodyState extends State<QuestLibraryBody> {
               meta: quest.detail,
               iconAsset: questIconAsset(quest.icon),
               tint: questTileTintFor(quest.icon),
-              // TODO(P10): P09 does not read a `?id=` query param yet, so
-              // the editor opens blank. Same feature, no shared change.
-              onTap: () => pushTo(QuestsRoutePaths.editor),
+              // P09 reads `?id=` (its query contract, `QuestsEditorQuery`), so
+              // the row opens the editor in edit mode, pre-filled from the row.
+              onTap: () => pushTo('${QuestsRoutePaths.editor}?id=${quest.id}'),
             ),
           ),
       ]);
@@ -239,8 +239,9 @@ class _QuestLibraryBodyState extends State<QuestLibraryBody> {
       tint: meta?.tint ?? NestTileTint.neutral,
       addSemanticLabel: 'Add ${idea.title}',
       onAdd: () => pushTo(
-        // TODO(P10): P09 does not read `?idea=` yet — it opens the editor
-        // blank until it does. Same feature, no shared change needed.
+        // P09 reads `?idea=` (`QuestsEditorQuery.ideaId`): the editor seeds the
+        // new quest from this template's title, icon, coins, repeat rule and
+        // approval flag instead of opening blank.
         '${QuestsRoutePaths.editor}?idea=${idea.id}',
       ),
     );

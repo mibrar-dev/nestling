@@ -7,6 +7,24 @@ import 'package:nestling/features/quests/domain/entities/quest.dart';
 
 import '../../test_scope.dart';
 
+/// P09 editor backing store: every field the form edits must round-trip
+/// verbatim through Drift (`title`, `icon`, `coins`, `repeatRule`, `days`,
+/// `dueLabel`, `dueTimeLocal`, `needsApproval`, `assigneeChildId`).
+const _draft = Quest(
+  id: 'q-test-hoover',
+  title: 'Hoover the stairs',
+  detail: 'Weekly · 15 coins',
+  icon: 'hoover',
+  coins: 15,
+  repeatRule: 'weekly',
+  days: '6',
+  dueLabel: 'Before tea (5pm)',
+  dueTimeLocal: '17:00',
+  needsApproval: true,
+  assigneeChildId: 'maya',
+  active: true,
+);
+
 void main() {
   group('QuestsRepository watchItems (P10 Active tab)', () {
     test(
@@ -198,6 +216,239 @@ void main() {
       final db = await setUpTestScope();
       final impl = QuestsRepositoryImpl(db: db);
       expect(await impl.getQuest('no-such-quest'), isNull);
+    });
+  });
+
+  group('QuestsRepository editor (P09)', () {
+    test('demo seed pins the q-hoover edit fixture', () async {
+      final db = await setUpTestScope();
+      final repo = QuestsRepositoryImpl(db: db);
+
+      final hoover = await repo.getQuest('q-hoover');
+      expect(hoover, isNotNull);
+      expect(hoover!.title, 'Hoover the stairs');
+      expect(hoover.icon, 'hoover');
+      expect(hoover.assigneeChildId, 'maya');
+      expect(hoover.repeatRule, 'weekly');
+      expect(hoover.active, isTrue);
+    });
+
+    test('create then getQuest round-trips every editor field', () async {
+      final db = await setUpTestScope();
+      final repo = QuestsRepositoryImpl(db: db);
+
+      await repo.createQuest(_draft);
+      final back = await repo.getQuest('q-test-hoover');
+
+      expect(back, isNotNull);
+      expect(back!.title, 'Hoover the stairs');
+      expect(back.icon, 'hoover');
+      expect(back.coins, 15);
+      expect(back.repeatRule, 'weekly');
+      expect(back.days, '6');
+      expect(back.dueLabel, 'Before tea (5pm)');
+      expect(back.dueTimeLocal, '17:00');
+      expect(back.needsApproval, isTrue);
+      expect(back.assigneeChildId, 'maya');
+      expect(back.active, isTrue);
+    });
+
+    test(
+      'create appends to the watched list (no reload event needed)',
+      () async {
+        final db = await setUpTestScope();
+        final repo = QuestsRepositoryImpl(db: db);
+        expect(await repo.getItems(), hasLength(12));
+
+        final emissions = <List<Quest>>[];
+        final sub = repo.watchItems().listen(emissions.add);
+        addTearDown(sub.cancel);
+        await pumpEventQueue();
+
+        await repo.createQuest(_draft);
+        await pumpEventQueue();
+
+        expect(emissions.length, greaterThan(1));
+        expect(emissions.last, hasLength(13));
+        expect(emissions.last.map((q) => q.id), contains('q-test-hoover'));
+      },
+    );
+
+    test('update persists title, coins, days and approval', () async {
+      final db = await setUpTestScope();
+      final repo = QuestsRepositoryImpl(db: db);
+      await repo.createQuest(_draft);
+
+      await repo.updateQuest(
+        const Quest(
+          id: 'q-test-hoover',
+          title: 'Hoover the stairs properly',
+          detail: 'Daily · 20 coins',
+          icon: 'hoover',
+          coins: 20,
+          repeatRule: 'daily',
+          days: '',
+          dueLabel: 'Before bed (7:30pm)',
+          dueTimeLocal: '19:30',
+          needsApproval: false,
+          assigneeChildId: null,
+          active: true,
+        ),
+      );
+
+      final back = await repo.getQuest('q-test-hoover');
+      expect(back, isNotNull);
+      expect(back!.title, 'Hoover the stairs properly');
+      expect(back.coins, 20);
+      expect(back.repeatRule, 'daily');
+      expect(back.days, isEmpty);
+      expect(back.dueLabel, 'Before bed (7:30pm)');
+      expect(back.dueTimeLocal, '19:30');
+      expect(back.needsApproval, isFalse);
+      expect(back.assigneeChildId, isNull);
+    });
+
+    test('delete removes the quest; unknown id reads null', () async {
+      final db = await setUpTestScope();
+      final repo = QuestsRepositoryImpl(db: db);
+
+      expect(await repo.getQuest('no-such-quest'), isNull);
+
+      await repo.createQuest(_draft);
+      expect(await repo.getQuest('q-test-hoover'), isNotNull);
+
+      await repo.deleteQuest('q-test-hoover');
+      expect(await repo.getQuest('q-test-hoover'), isNull);
+      expect(await repo.getItems(), hasLength(12));
+    });
+
+    test('ideas() are the static P10 templates, never stored', () async {
+      final db = await setUpTestScope();
+      final repo = QuestsRepositoryImpl(db: db);
+
+      expect(repo.ideas(), hasLength(10));
+      expect(repo.ideas().map((q) => q.id), contains('idea-hoover'));
+      // Templates are not rows: the table still holds the 12 live quests.
+      expect(
+        (await repo.getItems()).where((q) => q.id.startsWith('idea-')),
+        isEmpty,
+      );
+    });
+
+    test('Seed.familyId scopes every write', () async {
+      final db = await setUpTestScope();
+      final repo = QuestsRepositoryImpl(db: db);
+
+      await repo.createQuest(_draft);
+      final row = await (db.select(
+        db.quests,
+      )..where((q) => q.id.equals('q-test-hoover'))).getSingle();
+      expect(row.familyId, Seed.familyId);
+    });
+  });
+
+  group('QuestsRepository coin rate (BUG-P09-1)', () {
+    test('demo seed rate is 1p per coin', () async {
+      final db = await setUpTestScope();
+      final repo = QuestsRepositoryImpl(db: db);
+
+      expect(await repo.watchCoinValuePencePerCoin().first, 1);
+    });
+
+    test('a 2p-per-coin family reads 30p of helper math', () async {
+      // The exact BUG-P09-1 repro at repo level: the rate is written to the
+      // `families` row and the stream must follow it (15 coins × 2p = 30p).
+      final db = await setUpTestScope();
+      final repo = QuestsRepositoryImpl(db: db);
+
+      await (db.update(db.families)..where((f) => f.id.equals(Seed.familyId)))
+          .write(const FamiliesCompanion(coinValuePencePerCoin: Value(2)));
+
+      expect(await repo.watchCoinValuePencePerCoin().first, 2);
+    });
+
+    test('the rate stream re-emits when the family row changes', () async {
+      final db = await setUpTestScope();
+      final repo = QuestsRepositoryImpl(db: db);
+      final rates = <int>[];
+      final sub = repo.watchCoinValuePencePerCoin().listen(rates.add);
+      addTearDown(sub.cancel);
+      await pumpEventQueue();
+      expect(rates.last, 1);
+
+      Future<void> setRate(int rate) =>
+          (db.update(db.families)..where((f) => f.id.equals(Seed.familyId)))
+              .write(FamiliesCompanion(coinValuePencePerCoin: Value(rate)));
+
+      await setRate(2);
+      await pumpEventQueue();
+      await setRate(1);
+      await pumpEventQueue();
+
+      expect(rates.last, 1);
+      expect(rates, contains(2));
+    });
+  });
+
+  group('QuestsRepository coins range (BUG-P09-4)', () {
+    Quest draftWithCoins(String id, int coins) => Quest(
+      id: id,
+      title: 'Out-of-range probe',
+      detail: 'Weekly · $coins coins',
+      icon: 'hoover',
+      coins: coins,
+      repeatRule: 'weekly',
+      days: '6',
+      dueLabel: 'Before tea (5pm)',
+      dueTimeLocal: '17:00',
+      needsApproval: true,
+      assigneeChildId: 'maya',
+      active: true,
+    );
+
+    test('create rejects 0, 101 and 9999 and writes nothing', () async {
+      final db = await setUpTestScope();
+      final repo = QuestsRepositoryImpl(db: db);
+
+      for (final coins in <int>[0, 101, 9999]) {
+        await expectLater(
+          repo.createQuest(draftWithCoins('q-bad-$coins', coins)),
+          throwsArgumentError,
+        );
+        expect(
+          await repo.getQuest('q-bad-$coins'),
+          isNull,
+          reason: 'rejected row $coins must leave the table untouched',
+        );
+      }
+      expect(await repo.getItems(), hasLength(12));
+    });
+
+    test('update rejects out-of-range and keeps the stored row', () async {
+      final db = await setUpTestScope();
+      final repo = QuestsRepositoryImpl(db: db);
+      await repo.createQuest(_draft);
+
+      await expectLater(
+        repo.updateQuest(draftWithCoins('q-test-hoover', 9999)),
+        throwsArgumentError,
+      );
+
+      final back = await repo.getQuest('q-test-hoover');
+      expect(back, isNotNull);
+      expect(back!.coins, 15);
+      expect(back.title, 'Hoover the stairs');
+    });
+
+    test('boundaries 1 and 100 are accepted', () async {
+      final db = await setUpTestScope();
+      final repo = QuestsRepositoryImpl(db: db);
+
+      await repo.createQuest(draftWithCoins('q-min', 1));
+      await repo.createQuest(draftWithCoins('q-max', 100));
+
+      expect((await repo.getQuest('q-min'))!.coins, 1);
+      expect((await repo.getQuest('q-max'))!.coins, 100);
     });
   });
 }
