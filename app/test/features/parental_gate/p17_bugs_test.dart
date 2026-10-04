@@ -1,12 +1,19 @@
-// P17 parental gate — adversarial bug hunt (Stage 6, iteration 3; proofs
-// updated in iteration 4).
+// P17 parental gate — adversarial bug hunt (Stage 6, iteration 4).
 //
 // Result: P17-BUG-1 (shared router redirect loop on an expired kid-mode trial)
 // was FIXED on `main` by shared/kid_trial_gate, and P17-BUG-2 / BUG-3
-// (iteration 1) and P17-BUG-4 (iteration 2) were fixed in P17. All four proofs
-// now run green as regression tests; the suite has no skips.
+// (iteration 1) and P17-BUG-4 (iteration 2) were fixed in P17. All their
+// proofs now run green as regression tests, and the suite has no skips.
 //
-// The green tests below are the clean probes from all three hunts: rapid
+// P17-BUG-5 (found and fixed this stage, test integrity): the un-skipped
+// P17-BUG-1 proof was VACUOUS — `_expireTrial` aged the trial from the real
+// wall clock, but `AppSession` now defaults to `appNowUtc` (pinned to Sat
+// 3 Oct 2026 08:41Z in tests), so the trial never expired and the proof passed
+// on the plain kid-reachable gate. The helper now ages from `session.nowUtc`
+// and asserts `trialExpired`, and a new end-to-end probe pins the shared flow
+// (kid + expired → gate → unlock → /paywall).
+//
+// The green tests below are the clean probes from all four hunts: rapid
 // double activation, system back, pushed-gate unlock (gate must actually
 // dismiss), disabled-gate pass-through, failure retry/leave, child-data edges
 // (0/1/6 children, long UK name, 9999 coins, 320 px + 1.3 scale), Leo's own
@@ -188,7 +195,14 @@ Future<void> _pushGateFromKidHome(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 400));
 }
 
-/// Persists an expired 14-day trial and refreshes the session (real async).
+/// Persists an aged 14-day trial **relative to the app clock** (pinned to
+/// Sat 3 Oct 2026 08:41Z in tests) and refreshes the session (real async).
+///
+/// P17-BUG-5: this used to subtract 15 days from the real wall clock, but
+/// `AppSession` now defaults to `appNowUtc`; with the pinned clock the trial
+/// never actually expired (Sep 19 09:17Z + 14d > Oct 3 08:41Z), so the
+/// P17-BUG-1 proof passed on the plain kid-reachable gate. Ageing from
+/// `session.nowUtc` makes the trial genuinely expired.
 Future<void> _expireTrial(WidgetTester tester) async {
   final db = GetIt.instance<AppDatabase>();
   final session = GetIt.instance<AppSession>();
@@ -196,13 +210,16 @@ Future<void> _expireTrial(WidgetTester tester) async {
     await (db.update(db.appState)..where((a) => a.id.equals(1))).write(
       AppStateCompanion(
         subscriptionStatus: const Value('trial'),
-        trialStart: Value(
-          DateTime.now().toUtc().subtract(const Duration(days: 15)),
-        ),
+        trialStart: Value(session.nowUtc.subtract(const Duration(days: 15))),
       ),
     );
     await session.refresh();
   });
+  expect(
+    session.trialExpired,
+    isTrue,
+    reason: 'P17-BUG-5: the trial must actually be expired for this proof',
+  );
 }
 
 /// Drives the P17-BUG-3 regression: load a challenge, type a digit, swap the
@@ -238,14 +255,15 @@ void main() {
     await setUpTestScope();
   });
 
-  group('bug proofs (P17-BUG-1/2/3/4 — all FIXED)', () {
+  group('bug proofs (P17-BUG-1/2/3/4/5 — all FIXED)', () {
     // P17-BUG-1 (major, shared): app/lib/app/router.dart used to redirect an
     // expired kid-mode trial to /paywall, which is parent-only in kid mode and
     // redirects back to /parental-gate — a redirect loop that stuck every kid
     // route. `main` merged the fix (shared/kid_trial_gate, ORCHESTRATOR_NOTES
     // 09:48): kid mode + expired trial goes to the gate, and the gate is
     // exempt from that redirect, so the proof now runs as a plain regression
-    // test.
+    // test. P17-BUG-5: the helper must age the trial against the pinned app
+    // clock, otherwise this proof is vacuous.
     testWidgets('P17-BUG-1: kid mode + expired trial renders the gate', (
       tester,
     ) async {
@@ -371,6 +389,32 @@ void main() {
       semantics.dispose();
       await disposeApp(tester);
     });
+
+    testWidgets(
+      'expired kid trial: kid home funnels to the gate, unlock pays',
+      (tester) async {
+        await _expireTrial(tester);
+        GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+        await pumpAppRoute(tester, '/kid-home');
+        await tester.pump(const Duration(milliseconds: 400));
+        // shared/kid_trial_gate: every kid location funnels to the gate.
+        expect(currentPath(tester), '/parental-gate');
+        expect(find.text('Grown-ups only'), findsOneWidget);
+        final semantics = tester.ensureSemantics();
+        final challenge = await _liveChallenge(tester);
+        await _typeAnswer(tester, '${challenge.answer}');
+        for (var i = 0; i < 5; i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
+        // Passing the gate flips to parent mode, where the trial branch pays.
+        expect(GetIt.instance<AppModeController>().mode, AppMode.parent);
+        expect(currentPath(tester), '/paywall');
+        expect(find.text('Grown-ups only'), findsNothing);
+        expect(tester.takeException(), isNull);
+        semantics.dispose();
+        await disposeApp(tester);
+      },
+    );
 
     testWidgets('failure: Try again reloads, Back to Pip leaves', (
       tester,

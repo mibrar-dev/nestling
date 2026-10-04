@@ -25,6 +25,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:nestling/app/controllers.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/seed.dart';
@@ -757,14 +758,138 @@ void main() {
         findsOneWidget,
       );
 
+      debugPrint('M4 pumped route');
       final challenge = await liveChallenge(tester);
+      debugPrint('M5 challenge read');
       await typeAnswer(tester, '${challenge.answer}');
+      debugPrint('M6 answered');
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       expect(GetIt.instance<AppModeController>().mode, AppMode.parent);
       expect(currentPath(tester), '/today');
       semantics.dispose();
       await disposeApp(tester);
+    });
+  });
+  group('expired trial in kid mode (ORCHESTRATOR_NOTES 09:48)', () {
+    /// Ages the trial row **relative to the app's own clock**, never the wall
+    /// clock: `appNowUtc()` is the pinned instant the tests run against, so a
+    /// `DateTime.now()`-based 15-days-ago write would be only ~13.5 days old
+    /// against the pin and the trial would not be expired at all.
+    Future<void> expireTrial(WidgetTester tester) async {
+      final db = GetIt.instance<AppDatabase>();
+      final session = GetIt.instance<AppSession>();
+      await tester.runAsync(() async {
+        await (db.update(db.appState)..where((a) => a.id.equals(1))).write(
+          AppStateCompanion(
+            subscriptionStatus: const Value('trial'),
+            trialStart: Value(appNowUtc().subtract(const Duration(days: 20))),
+          ),
+        );
+        await session.refresh();
+      });
+      expect(session.trialExpired, isTrue, reason: 'the fixture must be aged');
+    }
+
+    testWidgets('kid mode funnels to the gate instead of looping', (
+      tester,
+    ) async {
+      await expireTrial(tester);
+      GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+      await pumpAppRoute(tester, '/kid-home');
+      await tester.pump(const Duration(milliseconds: 400));
+
+      // Decision: "in kid mode with an expired trial, everything goes to the
+      // gate, the gate is exempt". The old guard ping-ponged
+      // /paywall => /parental-gate => /paywall and rendered go_router's error
+      // page instead of the screen.
+      expect(currentPath(tester), '/parental-gate');
+      expect(find.text('Grown-ups only'), findsOneWidget);
+      expect(find.textContaining('redirect loop'), findsNothing);
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    testWidgets('the gate hands the parent to the paywall after unlocking', (
+      tester,
+    ) async {
+      await expireTrial(tester);
+      final challenge = await liveChallenge(tester);
+      GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+      // Entered on a kid screen, as in the product (K03's lock pushes it).
+      await pumpAppRoute(tester, '/kid-home');
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(currentPath(tester), '/parental-gate');
+      final semantics = tester.ensureSemantics();
+
+      await typeAnswer(tester, '${challenge.answer}');
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+
+      // Decision: "the parent sees the paywall after the gate" — the kid-mode
+      // exemption is only for the gate, so flipping to parent mode puts the
+      // aged trial straight in front of the parent.
+      expect(GetIt.instance<AppModeController>().mode, AppMode.parent);
+      expect(currentPath(tester), '/paywall');
+      expect(tester.takeException(), isNull);
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('a live trial is untouched by the gate (no paywall detour)', (
+      tester,
+    ) async {
+      // Seed.demo is an 'active' subscriber, so kid mode + /kid-home must stay
+      // on kid home: the gate is a lock the kid opens deliberately, not a
+      // trial interceptor.
+      final session = GetIt.instance<AppSession>();
+      expect(session.trialExpired, isFalse);
+      GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+      await pumpAppRoute(tester, '/kid-home');
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(currentPath(tester), '/kid-home');
+      expect(find.text('Grown-ups only'), findsNothing);
+      await disposeApp(tester);
+    });
+  });
+
+  group('persistence (IDS + TRIAL rules)', () {
+    testWidgets('a gate session writes only app_mode, never the trial row', (
+      tester,
+    ) async {
+      // Read the pre-unlock state through `AppSession` — the session is the
+      // app's public window on the row, and a `tester.runAsync` DB query
+      // issued after the unlock deadlocks behind `_unlock`'s in-flight write
+      // (see 3_test §5), so the assertions stay on the sync getters.
+      final session = GetIt.instance<AppSession>();
+      await tester.runAsync(session.refresh);
+      final statusBefore = session.subscriptionStatus;
+      final childBefore = session.activeChildId;
+
+      final challenge = await liveChallenge(tester);
+      GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+      await pumpAppRoute(tester, '/parental-gate');
+      final semantics = tester.ensureSemantics();
+
+      await typeAnswer(tester, '${challenge.answer}');
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(GetIt.instance<AppModeController>().mode, AppMode.parent);
+      semantics.dispose();
+      await disposeApp(tester);
+
+      // The new IDS rule: row ids come from `newId(prefix)`, never the clock.
+      // P17 creates no rows at all — the challenge id is a date-derived
+      // identity for the live question, not a row id — so a gate session may
+      // only flip `app_mode`. The TRIAL rule says the same of
+      // `subscription_status`: never written from here.
+      expect(session.appMode, 'parent', reason: 'the one write the gate makes');
+      expect(session.subscriptionStatus, statusBefore);
+      expect(session.activeChildId, childBefore);
+      expect(session.onboardingComplete, isTrue);
+      expect(session.trialExpired, isFalse);
     });
   });
 }
