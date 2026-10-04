@@ -9,13 +9,20 @@
 //
 // This file loads the same bundled Inter/Nunito faces
 // `quest_editor_view_geometry_test.dart` uses, so the row is the design's
-// 16/22 + 13/18 = 40 high and the slop has to survive it. The fix (2b) moved
-// the toggle out of that row into a `Positioned` sibling of the padded row, so
-// every tap inside the CSS `::before` box lands: 4 px either side of the
-// 51×31 track, 6.5 px above and below it, and the 5 px / 2 px offsets the
-// bug report used.
+// 16/22 + 13/18 = 40 high and the slop has to survive it.
+//
+// Iteration 6 rebuilt the shape to centre the track by layout (P09-TEST-9)
+// while keeping BUG-P09-10's slop, and the code comment at that call site
+// records why it is delicate: `RenderBox.hitTest` rejects any position outside
+// a box's own size, so EVERY box between the card and the track must contain
+// the 59×44 area. A tight `Positioned.fill` + `Padding` region lost the 2 px
+// right tap; a tight vertical inset lost both 5 px taps. So the slop proofs
+// run on every surface the app supports, not just the design frame — at 320 dp
+// and at scale 1.3 the card is much taller and the centring maths is different,
+// which is exactly where that class of regression hides.
 
 import 'package:flutter/services.dart' show FontLoader, rootBundle;
+import 'package:flutter/widgets.dart' show Size;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/quests/quests_routes.dart';
@@ -42,6 +49,19 @@ Future<void> _loadBundledFonts() async {
     ..addFont(rootBundle.load('assets/fonts/Nunito-Black.ttf'));
   await inter.load();
   await nunito.load();
+}
+
+/// Resizes the surface and settles a frame.
+Future<void> _resize(
+  WidgetTester tester,
+  double width, [
+  double scale = 1,
+]) async {
+  tester.view.physicalSize = Size(width * 3, 844 * 3);
+  tester.platformDispatcher.textScaleFactorTestValue = scale;
+  addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 200));
 }
 
 void main() {
@@ -76,19 +96,28 @@ void main() {
     await disposeApp(tester);
   });
 
-  testWidgets('a tap 5 px above/below the track and 2 px right of it lands', (
-    tester,
-  ) async {
-    await pumpAppRoute(tester, QuestsRoutePaths.editor);
+  for (final (width, scale) in const <(double, double)>[
+    (390, 1),
+    (320, 1),
+    (390, 1.3),
+    (320, 1.3),
+  ]) {
+    testWidgets(
+      'at $width wide, scale $scale: a tap 5 px above/below and 2 px aside lands',
+      (tester) async {
+        await pumpAppRoute(tester, QuestsRoutePaths.editor);
+        await _resize(tester, width, scale);
 
-    // Exactly the offsets BUG-P09-10 reported: outside the track, inside the
-    // `::before` box.
-    expect(await toggleAt(tester, const Offset(0, -5)), isTrue);
-    expect(await toggleAt(tester, const Offset(0, 5)), isTrue);
-    expect(await toggleAt(tester, const Offset(2, 0)), isTrue);
-    expect(await toggleAt(tester, const Offset(-2, 0)), isTrue);
-    await disposeApp(tester);
-  });
+        // Exactly the offsets BUG-P09-10 reported: outside the track, inside the
+        // `::before` box.
+        expect(await toggleAt(tester, const Offset(0, -5)), isTrue);
+        expect(await toggleAt(tester, const Offset(0, 5)), isTrue);
+        expect(await toggleAt(tester, const Offset(2, 0)), isTrue);
+        expect(await toggleAt(tester, const Offset(-2, 0)), isTrue);
+        await disposeApp(tester);
+      },
+    );
+  }
 
   testWidgets('the whole 59×44 slop around the 51×31 track is tappable', (
     tester,

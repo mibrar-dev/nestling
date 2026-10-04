@@ -1,21 +1,23 @@
-# P09 — stage 6 · FIND BUGS (iteration 5)
+# P09 — stage 6 · FIND BUGS (iteration 6)
 
-Tree: `5f7def6` (“P09: checkpoint after build (iteration 5)”, clock migration)
-+ the proof below. No screen code was changed — the brief forbids fixing here.
+Tree: `dfc7011` (“P09: checkpoint after build (iteration 6)”, unique-ids
+migration + toggle re-centring) + the verification below. No screen code was
+changed — the brief forbids fixing here.
 
-Adversarial area sweep (iteration 5): the thirteen earlier proofs re-run, then
-new probes over the clock migration (`appNowUtc()` in the id, the pinned test
-clock, the assert-free coin guard) and the usual edge set — 0 / 1 / 6
-children, emoji-leading and long UK names, £0.00 / £999.99 / 9999 coins,
-rapid double taps, back navigation and deep links, Drift restart persistence,
-the parent/kid guard, dark-mode contrast, 320 dp × text scale 1.3, async
-gaps, Europe/London wall-clock storage and integer-pence money.
+Adversarial area sweep (iteration 6): the fourteen earlier proofs re-run,
+then new probes over the iteration-6 changes — `newId('q')` uuid ids (IDS
+rule), the re-centred approval toggle (`LayoutBuilder`, P09-TEST-9), the
+clock pinning — and the usual edge set: 0 / 1 / 6 children, emoji-leading and
+long UK names, £0.00 / £999.99 / 9999 coins, rapid double taps, back
+navigation and deep links (including the new uuid id format), Drift restart
+persistence, the parent/kid guard, dark-mode contrast, 320 dp × text scale
+1.3, async gaps, Europe/London wall-clock storage and integer-pence money.
 
-All proofs live in `app/test/features/quests/p09_bugs_test.dart`. The one
-iteration-5 proof is `skip: true` so the suite stays green; run it with
-`--run-skipped`. Every probe in the “attacks that hold” group runs unskipped.
+**No new bugs found this iteration.** All fourteen findings from iterations
+1–5 are fixed, and every proof now runs unskipped: the file has **32 passing
+tests, 0 skips** (19 proofs + 13 probes).
 
-## Earlier findings — all FIXED, proofs unskipped and green
+## All findings — fixed and proven
 
 | id | what was wrong | fix | proof |
 |---|---|---|---|
@@ -28,103 +30,34 @@ iteration-5 proof is `skip: true` so the suite stays green; run it with
 | BUG-P09-7 | alias tile tap rewrote the stored key | selected tile’s tap is inert | green |
 | BUG-P09-8 | emoji nickname threw a UTF-16 paint error | `_initial` takes the first grapheme | green |
 | BUG-P09-9 | card 68 / track 307,618.5 after batch 5 | uniform padding + no Transform | green |
-| BUG-P09-10 | 59×44 hit slop clipped by the 40-high row | Stack-overlaid `Positioned` toggle | green |
+| BUG-P09-10 | 59×44 hit slop clipped by the 40-high row | Stack-overlaid toggle, full-slop stack | green |
 | BUG-P09-11 | 9999 needed 9899 taps to repair | first step jumps to the boundary | green |
 | BUG-P09-12 | legacy glyphs on four tiles | `questBed/questDishes/questHoover/questBins` | green |
-| BUG-P09-13 | debug range guard leaked raw assert text | `_checkCoins` throws `ArgumentError` only; bloc maps it | green (unskipped this iteration) |
+| BUG-P09-13 | debug range guard leaked raw assert text | `_checkCoins` throws `ArgumentError` only | green |
+| BUG-P09-14 | clock-derived id collided under the pinned clock | `newId('q')` (uuid v4, IDS rule) | green |
 
-All thirteen proofs run unskipped in the file (31 passing tests: 18 proofs +
-13 probes).
+## Iteration-6 verification (measured at HEAD)
 
-## Summary — iteration 5
-
-| id | severity | one-liner | failing test |
-|---|---|---|---|
-| BUG-P09-14 | **major** | the new-quest id is a timestamp from the pinnable app clock, so under the CLOCK rule’s pinned test clock every create mints the same `q-<ms>`: a second quest in the same session hits the primary key, the editor stays open with a raw SQL toast, and no second quest exists | `BUG-P09-14 — a second quest cannot be created in the same session` › `the pinned clock makes both creates share one id` |
-
----
-
-## BUG-P09-14 — major — a second quest cannot be created in the same session
-
-**Where:** `quest_editor_view.dart:543` —
-`id: _isEdit ? widget.initialQuest!.id : 'q-${appNowUtc().millisecondsSinceEpoch}'`.
-
-**Why it is wrong:** the id is a millisecond timestamp from `appNowUtc()`,
-which the new CLOCK rule pins in every test to **Sat 3 Oct 2026 08:41 UTC**
-(`test/flutter_test_config.dart` + `app_clock.dart`: with
-`Seed.anchorOverride` set, `appNowUtc()` returns a fixed instant —
-`q-1791016860000`). The id therefore stops being unique: the second create
-in a session inserts the same primary key, Drift throws a UNIQUE violation,
-`editorStatus.failure` fires, the editor stays open and the toast carries the
-raw SQL error (not an `ArgumentError`, so the parent-safe mapping does not
-cover it). The parent flow — create one quest, then create another — is
-broken in the loop’s standard environment. Production is masked only because
-the real clock advances between two separate save flows (navigation + typing
-take more than a millisecond); the id must be unique by construction, not by
-timing.
-
-**Repro (proven):**
-```dart
-// editor: type 'Quest A', Save → lands on /quests, row q-1791016860000
-await tester.tap(find.text('+ Add').first);       // P10 Ideas → editor
-await tester.enterText(find.byType(TextField).first, 'Quest B');
-await tester.tap(find.text('Save'));              // same pinned id
-expect(find.text('New quest'), findsNothing);     // actual: editor still open
-expect(items.map((q) => q.title),
-    containsAll(['Quest A', 'Quest B']));         // actual: only 'Quest A'
-```
-A scratch run confirms both symptoms: the editor remains mounted and the DB
-holds only `q-1791016860000:Quest A`. (The failure is not the `+ Add`
-harness — the same collision reproduces across an app restart, where the
-second app instance over the same DB creates `q-1791016860000` again.)
-
-**Suggested fix:** make the id unique independently of clock resolution, e.g.
-append a random suffix —
-`'q-${appNowUtc().millisecondsSinceEpoch}-${Random().nextInt(1 << 32)}'`
-(`dart:math`; no `uuid` dependency exists) — or a process/database sequence
-counter. A test that creates two quests in one session (or across a restart)
-then passes. If a deterministic id is wanted for tests, a per-test counter
-seeded from the DB row count is also fine; a bare timestamp is not.
-
----
-
-## Observations (not filed)
-
-* **Clock pinning fixed the iteration-4 date-rollover failures.** The
-  whole-app suite is fully green again (`+3097 ~3`, 3 pre-existing skips):
-  the kid_home/approvals/today period tests that failed on the real-date
-  rollover (Sun 4 Oct) now see the pinned Sat 3 Oct 09:41 London instant.
-* **`family_repository_impl.dart:41`** still calls `DateTime.now()` in its
-  anchor fallback (`Seed.anchorOverride?.toUtc() ?? DateTime.now().toUtc()`)
-  — a CLOCK-rule violation in the *family* feature (P05’s loop), not P09;
-  noted for the orchestrator, not filed here.
-* **Post-repair stepper re-entry** (9999 → 100, then `+` → 101) remains the
-  BUG-P09-4 “stored value stays reachable” contract; recoverable in one tap,
-  nothing written out of range — unchanged from iteration 4.
-
-## Attacks that hold (probes, unskipped — 13 tests)
-
-- **Rapid double taps:** double-tap `Delete quest` → one confirm modal;
-  double-tap `Due by` → one option sheet; double-tap `Cancel`, a due-sheet
-  row and `Keep it` never pop a second route; double-tap **Save** is guarded
-  (one quest, one write).
-- **Restart persistence:** save → dispose the app → new `NestlingApp` over
-  the same Drift DB → the quest is on the library’s Active tab.
-- **Parent/kid guard:** kid mode + `/quest-editor` (plain and with `?id=`)
-  lands on `/parental-gate`.
-- **320 dp × text scale 1.3**, new and edit mode: no overflow/exception.
-- **One-child family:** the new quest defaults to that child.
-- **Six children with long names** at 320 × 1.3: pills wrap in creation
-  order, `Anyone` last.
-- **Dark mode:** the Save pill’s `--surface` on `--leaf` keeps ≥ 4.5:1.
-- **Back navigation:** a quest pushed from Today (`?questId=`) → Cancel
-  returns to `/today`.
-- **Zone/BST:** with the family moved to `Asia/Dubai`, the due time is still
-  the wall-clock `17:00`.
-- **A11y actions:** due-sheet rows and delete-confirm buttons expose
-  `SemanticsAction.tap`; `performAction(tap)` moves the real state/DB.
-- **`?idea=` prefill, both-keys URL, emoji nicknames, blocked saves,
-  parent-safe failure copy** are covered green by the feature suites.
+* **Unique ids (BUG-P09-14 / IDS rule).** A create mints
+  `q-<uuid v4>` (`newId('q')`, `core/data/ids.dart`; e.g.
+  `q-1341e444-faff-475b-a897-cba5e8429068`). Two creates in one session both
+  persist (the rewritten proof: plain editor create, then P10 `+ Add` create —
+  both rows exist, the editor closes after each). A scratch probe also
+  confirmed a deep link with the new uuid id
+  (`/quest-editor?id=q-1341e444-…`) opens edit mode with the stored title and
+  the `Delete quest` affordance.
+* **Toggle centring (P09-TEST-9).** At 390×1.0 / 390×1.3 / 320×1.0 / 320×1.3
+  the track is centred on the card by layout (centre delta **0.00** at every
+  metric; right gap 16.00), and the 59×44 hit area works at every metric
+  (taps 5 px above, 5 px below and 2 px right of the track all flip it).
+  The 1.0 rect remains the design’s `303 / 620.5 / 51 / 31`.
+* **Clock pinning.** The whole-app suite is fully green again; the
+  iteration-4 real-date-rollover failures are gone.
+* **Everything else** (13 unskipped probes): double-tap Delete/Due-by/Cancel/
+  due-row/Keep-it; restart persistence; kid-mode guard plain + `?id=`;
+  320 dp × 1.3 new + edit; one-child default; six children with long names;
+  dark-mode Save-pill contrast; Today → Cancel → Today; Dubai wall-clock due
+  time; due-sheet and delete-modal `performAction(tap)`.
 
 ## Verification
 
@@ -134,20 +67,21 @@ Formatted 1 file (0 changed)
 $ flutter analyze test/features/quests/p09_bugs_test.dart
 No issues found!
 $ flutter test test/features/quests/p09_bugs_test.dart
-00:04 +31 ~1: All tests passed!        # 18 fixed proofs + 13 probes
-$ flutter test test/features/quests/p09_bugs_test.dart --run-skipped
-+31 -1: Some tests failed              # BUG-P09-14 fails as documented
+00:04 +32: All tests passed!           # 19 proofs + 13 probes, 0 skips
 $ flutter test test/features/quests
-00:28 +404 ~1: All tests passed!
+00:27 +418: All tests passed!
 $ flutter test
-02:39 +3097 ~3: All tests passed!
+03:03 +3129 ~2: All tests passed!
 ```
 
 No simulator was booted, installed on, screenshotted or driven; `flutter
 clean` was never run; no `// ignore:` and no shared file was touched.
 
 **Out of scope (process, not findings):** the worktree also carries other
-stages’ uncommitted work (briefs, review/UI notes, other test files, UI
-PNGs); it was left untouched.
+stages’ uncommitted work (briefs, review/UI notes, a toggle hit-area test
+being expanded). One whole-app run raced a mid-write edit of
+`quest_editor_toggle_hit_area_test.dart` and reported a transient load
+failure; the file passes standalone (+7) and the settled tree-wide run is
+green. Not a P09 finding.
 
-VERDICT: FAIL
+VERDICT: PASS

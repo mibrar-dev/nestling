@@ -1,25 +1,26 @@
-# P09 — 5_ui · UI check (iteration 5, stage 5)
+# P09 — 5_ui · UI check (iteration 6, stage 5)
 
 Route `/quest-editor`, simulator 604697A9-11DA-462F-9837-396E9CA2493A (390×844).
-Shots: `docs/screens/P09/ui/app_light_5.png`, `app_dark_5.png` (seed demo,
-parent, maya, `DISABLE_ANIMATIONS=1`). Compare sheets: `cmp_light_5.png`,
-`cmp_dark_5.png`. All px below are logical (design px ÷ 3). Status-bar glyphs
-excluded per orchestrator STATUS BAR rule. Per ORCHESTRATOR_NOTES.md 00:25
-(QA of cmp_light_4): layout and icons match the design; the single iter-5
-item is P09-TEST-6 (coin-guard assert text leaking into the toast — a
-test-stage matter, no toast is visible in these shots, out of scope here).
-No Pip on this screen; no `NestChip` rows, no `text-wrap: balance`, no
-`letter-spacing` (correctly absent).
+Shots: `docs/screens/P09/ui/app_light_6.png`, `app_dark_6.png` (seed demo,
+parent, maya, `DISABLE_ANIMATIONS=1`). Compare sheets: `cmp_light_6.png`,
+`cmp_dark_6.png`. All px below are logical (design px ÷ 3). Status-bar glyphs
+excluded per orchestrator STATUS BAR rule. Since iter4 the only merged
+change is shared/unique_ids (quest ids via `newId`, no visual surface), and
+ORCHESTRATOR_NOTES.md adds no new UI item for this pass (09:27 covers
+BUG-P09-14 id generation — data layer, not pixels; P09-TEST-6 remains
+test-stage scope). No Pip on this screen; no `NestChip` rows, no
+`text-wrap: balance`, no `letter-spacing` (correctly absent).
 
 ## Mean diff
 
-- Light: **1.38 %** (bands 0–7: 1.70 / 0.91 / 0.69 / 1.62 / 0.65 / 1.47 /
-  0.97 / 2.99; iter4 was 1.37 % — unchanged).
-- Dark: **1.21 %** (bands: 1.65 / 0.94 / 0.61 / 1.56 / 0.70 / 1.55 / 0.92 /
-  1.71; iter4 was 1.21 % — unchanged).
-- Band-7 light residue is the OS home-indicator pill + card-shadow
-  softness (1.89 with the pill zone masked). Home zone is paper in both
-  images, so the OWNER bottom-edge rule passes in both themes.
+- Light: **1.29 %** (bands 0–7: 1.66 / 0.91 / 0.69 / 1.62 / 0.65 / 1.47 /
+  0.97 / 2.32; iter5 was 1.38 % — same within capture noise; band 7 fell
+  2.99 → 2.32 on home-pill rendering variance alone).
+- Dark: **1.19 %** (bands: 1.64 / 0.94 / 0.61 / 1.56 / 0.70 / 1.55 / 0.92 /
+  1.56; iter5 was 1.21 % — unchanged).
+- Residue is text antialiasing, card-shadow softness, and the OS
+  home-indicator pill. Home zone is paper in both images (y = 800/830 at
+  x = 195: identical 251,247,240), so the OWNER bottom-edge rule passes.
 
 ## Measured y (design vs app, logical px, top edge)
 
@@ -48,19 +49,18 @@ shift.
 | `Due by` title ink top (x 37.3 both) | 722.3 | 722.3 | 0 |
 
 Shape check: every pill, tile, segmented thumb, day cell, stepper block,
-card and the Save pill rect Δ ≤ 2 px (nearly all 0); dark-mode card edges
-identical to light. Icon tiles: whole-tile MAE bed 1.4 / dishes 2.5 /
-hoover 10.9 / book 4.1 / bins 2.2 / paw 1.9 — iter4 proved the hoover
-residue is sub-pixel selected-ring raster (interior glyph pixels 1073 vs
-1053, bg tint identical, path-identical asset), not a shape deviation.
-Side gutters exactly 20 both themes. No overflow, clipping, or ellipsis
-faults. Child order Maya → Leo → Anyone. Copy matches the HTML source
-character-for-character.
+card and Save pill rect Δ ≤ 2 px (nearly all 0). Icon tiles: whole-tile
+MAE bed 1.4 / dishes 2.5 / hoover 10.9 / book 4.1 / bins 2.2 / paw 1.9 —
+iter4 dissected the hoover residue (interior glyph pixels 1073 vs 1053,
+identical bg tint, path-identical asset; remainder is ≤ 0.7 px
+selected-ring raster, outer rect identical). Side gutters exactly 20 both
+themes. No overflow, clipping, or ellipsis faults. Child order
+Maya → Leo → Anyone. Copy matches the HTML source character-for-character.
 
 ## Deviations
 
-None. No visible deviation a designer would reject; no regression from
-iter4 (all numbers identical within raster noise). P09-TEST-6 is noted
-for the test stage and is not verifiable from UI screenshots.
+None. No visible deviation a designer would reject; numbers identical to
+the passing iter4/iter5 within raster noise. The unique_ids merge has no
+visual surface; BUG-P09-14 and P09-TEST-6 are non-visual stages' scope.
 
 VERDICT: PASS

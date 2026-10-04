@@ -603,6 +603,59 @@ void main() {
       await disposeApp(tester);
     });
 
+    testWidgets('three creates in one session get three distinct uuid ids', (
+      tester,
+    ) async {
+      // Generalises the BUG-P09-14 proof from two rows to three, and from
+      // "both survive" to "the ids are distinct AND well-formed": a mint that
+      // reused a fixed suffix, or that fell back to a counter seeded from the
+      // clock, would pass a two-row check and fail this one.
+      await pumpAppRoute(tester, QuestsRoutePaths.editor);
+      for (var i = 0; i < 3; i++) {
+        final title = 'Quest $i';
+        if (i > 0) {
+          // Back to a fresh editor the way a parent does: the library's
+          // `+ Add` pushes `/quest-editor?idea=…`.
+          await tester.tap(find.text('+ Add').first);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 300));
+        }
+        await tester.enterText(find.byType(TextField).first, title);
+        await tester.pump();
+        await tester.tap(find.text('Save'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(pushedPath(tester), QuestsRoutePaths.library, reason: title);
+      }
+
+      final saved = await tester.runAsync(
+        () => GetIt.instance<QuestsRepository>().getItems(),
+      );
+      final created = <String, String>{
+        for (final quest in saved!)
+          if (quest.title.startsWith('Quest ')) quest.title: quest.id,
+      };
+      expect(created, hasLength(3), reason: 'all three rows persisted');
+      expect(
+        created.values.toSet(),
+        hasLength(3),
+        reason: 'three creates must mint three different ids',
+      );
+      for (final entry in created.entries) {
+        expect(
+          entry.value,
+          matches(
+            RegExp(
+              r'^q-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+            ),
+          ),
+          reason: '${entry.key} → ${entry.value}',
+        );
+      }
+      await disposeApp(tester);
+    });
+
     testWidgets('a successful create lands on `/quests`', (tester) async {
       await pumpAppRoute(tester, QuestsRoutePaths.editor);
       await tester.enterText(find.byType(TextField).first, 'Feed the cat');
