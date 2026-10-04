@@ -1211,7 +1211,11 @@ void main() {
       await _settleRoute(tester);
       expect(find.text('Hmm, that did not work. Try again.'), findsOneWidget);
       // A failed write never celebrates (K03-BUG-2).
-      expect(find.text('K05 Quest complete'), findsNothing);
+      expect(
+        pushedPath(tester),
+        '/kid-home',
+        reason: 'a failed write never celebrates',
+      );
       expect(repo.completed, <List<String>>[
         <String>['maya', 'q-reading'],
       ]);
@@ -1660,7 +1664,7 @@ void main() {
       await tester.tap(check);
       await _settleRoute(tester);
       // The new completion celebrates, so the home is offstage until back.
-      expect(find.text('K05 Quest complete'), findsOneWidget);
+      expect(pushedPath(tester), '/quest-complete');
       await tester.pageBack();
       await _settleRoute(tester);
       expect(
@@ -1849,8 +1853,8 @@ void main() {
       await tester.pump();
       await tester.tap(card);
       await _settleRoute(tester);
-      expect(find.text('K04 Quest detail'), findsOneWidget);
-      final state = GoRouter.of(tester.element(find.text('K04 Quest detail')))
+      expect(pushedPath(tester), '/quest-detail');
+      final state = GoRouter.of(tester.element(find.byType(Navigator).first))
           .state;
       expect(state.uri.path, '/quest-detail');
       final extra = state.extra! as Map<String, Object?>;
@@ -1869,8 +1873,8 @@ void main() {
       await tester.pump();
       await tester.tap(check);
       await _settleRoute(tester);
-      expect(find.text('K05 Quest complete'), findsOneWidget);
-      final state = GoRouter.of(tester.element(find.text('K05 Quest complete')))
+      expect(pushedPath(tester), '/quest-complete');
+      final state = GoRouter.of(tester.element(find.byType(Navigator).first))
           .state;
       expect(state.uri.path, '/quest-complete');
       final extra = state.extra! as Map<String, Object?>;
@@ -1913,7 +1917,7 @@ void main() {
       await _settleRoute(tester);
       // No completion action on the check; the card beneath opens detail
       // and the pending-approval count is untouched.
-      expect(find.text('K04 Quest detail'), findsOneWidget);
+      expect(pushedPath(tester), '/quest-detail');
       final pending = await tester.runAsync(
         () => GetIt.instance<AppDatabase>()
             .watchPendingApprovals(Seed.familyId)
@@ -1938,7 +1942,7 @@ void main() {
       await tester.tap(check);
       await _settleRoute(tester);
       expect(repo.completed, hasLength(1));
-      expect(find.text('K05 Quest complete'), findsOneWidget);
+      expect(pushedPath(tester), '/quest-complete');
       semantics.dispose();
       await disposeApp(tester);
     });
@@ -1957,7 +1961,11 @@ void main() {
       await tester.tap(check);
       await _settleRoute(tester);
       expect(find.text('Hmm, that did not work. Try again.'), findsOneWidget);
-      expect(find.text('K05 Quest complete'), findsNothing);
+      expect(
+        pushedPath(tester),
+        '/kid-home',
+        reason: 'a failed write never celebrates',
+      );
       // Let the SnackBar go, then retry the same check: the failure reset
       // must release the tap guard.
       await tester.pump(const Duration(seconds: 5));
@@ -1967,7 +1975,7 @@ void main() {
       await tester.pump();
       await tester.tap(check);
       await _settleRoute(tester);
-      expect(find.text('K05 Quest complete'), findsOneWidget);
+      expect(pushedPath(tester), '/quest-complete');
       expect(repo.completed, hasLength(2));
       semantics.dispose();
       await disposeApp(tester);
@@ -1990,7 +1998,7 @@ void main() {
       await _pumpRoute(tester);
       await tester.tap(find.text('Pip'));
       await _settleRoute(tester);
-      expect(find.text('K06 Pip nest'), findsOneWidget);
+      expect(pushedPath(tester), '/pip');
       await disposeApp(tester);
     });
 
@@ -1998,7 +2006,7 @@ void main() {
       await _pumpRoute(tester);
       await tester.tap(find.text('Shop'));
       await _settleRoute(tester);
-      expect(find.text('K08 Reward shop'), findsOneWidget);
+      expect(pushedPath(tester), '/reward-shop');
       await disposeApp(tester);
     });
 
@@ -2006,7 +2014,7 @@ void main() {
       await _pumpRoute(tester);
       await tester.tap(find.text('My jar'));
       await _settleRoute(tester);
-      expect(find.text('K09 My jar'), findsOneWidget);
+      expect(pushedPath(tester), '/my-jar');
       await disposeApp(tester);
     });
   });
@@ -2054,10 +2062,12 @@ void main() {
     testWidgets('every dock button exposes a tap action and routes', (
       tester,
     ) async {
-      for (final (label, path, screen) in <(String, String, String)>[
-        ('Pip', '/pip', 'K06 Pip nest'),
-        ('Shop', '/reward-shop', 'K08 Reward shop'),
-        ('My jar', '/my-jar', 'K09 My jar'),
+      // Route assertion, not placeholder copy: real screens replace the
+      // scaffold titles, but the paths are stable.
+      for (final (label, path) in <(String, String)>[
+        ('Pip', '/pip'),
+        ('Shop', '/reward-shop'),
+        ('My jar', '/my-jar'),
       ]) {
         final semantics = tester.ensureSemantics();
         await _pumpRoute(tester);
@@ -2074,7 +2084,6 @@ void main() {
         performTap(tester, button);
         await _settleRoute(tester);
         expect(pushedPath(tester), path, reason: 'dock "$label"');
-        expect(find.text(screen), findsOneWidget);
         semantics.dispose();
         await disposeApp(tester);
       }
@@ -2090,8 +2099,8 @@ void main() {
       expect(hasTap(tester, card), isTrue);
       performTap(tester, card);
       await _settleRoute(tester);
-      expect(find.text('K04 Quest detail'), findsOneWidget);
-      final state = GoRouter.of(tester.element(find.text('K04 Quest detail')))
+      expect(pushedPath(tester), '/quest-detail');
+      final state = GoRouter.of(tester.element(find.byType(Navigator).first))
           .state;
       expect(state.extra, isA<Map<String, Object?>>());
       expect((state.extra! as Map<String, Object?>)['childId'], 'maya');
@@ -2125,7 +2134,7 @@ void main() {
       expect(repo.completed, <List<String>>[
         <String>['maya', 'q-reading'],
       ]);
-      expect(find.text('K05 Quest complete'), findsOneWidget);
+      expect(pushedPath(tester), '/quest-complete');
       semantics.dispose();
       await disposeApp(tester);
     });

@@ -6,7 +6,13 @@ import 'package:nestling/core/design_system/tokens/spacing.dart';
 import 'package:nestling/core/design_system/tokens/typography.dart';
 
 /// Colourways for [NestKidButton].
-enum NestKidButtonColor { leaf, coin, sky, peach, lilac, white }
+///
+/// `muted` is the K08 `.k8-get.off` colourway: `surface-2` fill with an
+/// `ink-2` label at FULL opacity (not the 0.45 disabled wash), keeping the
+/// same 3 px ink border, `sh-kid` shadow and label. It is used for the
+/// unaffordable card's "Save up!" button with `onPressed: null`, so it
+/// keeps disabled semantics (`enabled: false`, no tap action).
+enum NestKidButtonColor { leaf, coin, sky, peach, lilac, white, muted }
 
 /// Chunky kid-mode button with a press-down chunky-shadow animation.
 ///
@@ -14,7 +20,8 @@ enum NestKidButtonColor { leaf, coin, sky, peach, lilac, white }
 /// never fork the widget: K06 `.k6-care` uses column axis, gap 3, min-h 88,
 /// padding `8px 4px`, 17/20 label; K03 `.k3-dock` uses column axis, gap 4,
 /// min-h 66, 17/20 label, padding `0 6px`; K08 `.k8-get` uses min-h 56,
-/// radius 16, 17px label.
+/// radius 16, 17px label, and `.k8-get.off` uses [NestKidButtonColor.muted]
+/// (surface-2 / ink-2 at full opacity) with `onPressed: null`.
 class NestKidButton extends StatefulWidget {
   const new({
     required this.label,
@@ -108,6 +115,9 @@ class _NestKidButtonState extends State<NestKidButton> {
       case NestKidButtonColor.white:
         background = tokens.surface;
         foreground = tokens.ink;
+      case NestKidButtonColor.muted:
+        background = tokens.surface2;
+        foreground = tokens.ink2;
     }
 
     final Widget? prefix;
@@ -135,7 +145,9 @@ class _NestKidButtonState extends State<NestKidButton> {
       enabled: enabled,
       onTap: enabled ? widget.onPressed : null,
       child: Opacity(
-        opacity: enabled ? 1 : 0.45,
+        // `muted` (K08 `.k8-get.off`) renders at full opacity even when
+        // disabled: the grey surface-2 / ink-2 pair IS the disabled look.
+        opacity: enabled || widget.color == NestKidButtonColor.muted ? 1 : 0.45,
         child: Padding(
           padding: const EdgeInsets.only(bottom: NestSpacing.gap6),
           child: SizedBox(

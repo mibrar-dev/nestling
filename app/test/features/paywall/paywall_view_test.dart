@@ -401,8 +401,9 @@ void main() {
         surface: const Size(390, 844),
       );
 
-      // The screen is the paywall, not a placeholder.
-      expect(find.text('P07 Paywall'), findsNothing);
+      // Route assertion, not placeholder copy: the real screen replaces
+      // the scaffold title, but the path is stable.
+      expect(currentPath(tester), '/paywall');
       expect(find.byType(NestStatusBar), findsOneWidget);
       expect(find.text(_title), findsOneWidget);
 

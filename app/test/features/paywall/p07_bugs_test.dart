@@ -166,8 +166,9 @@ void main() {
     ) async {
       await _pumpPaywallWithSeed(tester, Seed.fresh);
 
-      // Not the foundation placeholder.
-      expect(find.text('P07 Paywall'), findsNothing);
+      // Route assertion, not placeholder copy: the real screen replaces
+      // the scaffold title, but the path is stable.
+      expect(currentPath(tester), '/paywall');
 
       // Nav + hero.
       expect(find.byType(NestStatusBar), findsOneWidget);
