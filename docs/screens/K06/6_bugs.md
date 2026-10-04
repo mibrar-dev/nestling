@@ -1,260 +1,204 @@
-# K06 · Pip's nest — Stage 6 bug hunt (iteration 1)
+# K06 · Pip's nest — Stage 6 bug hunt (iteration 2)
 
-Adversarial pass over `/pip` on the iteration-1 build (`37c341e`, build
-checkpoint; `main` merged). Everything below is proved by
-`app/test/features/pip/k06_bugs_test.dart`, which runs against the real
-in-memory Drift database (`Seed.demo`), the real repository and the real
-`PipBloc` — no product code was changed by this stage.
+Re-audit of the iteration-2 build (`a7da86b`, `main` merged). All six
+iteration-1 findings are **FIXED** and their proofs now run live in
+`app/test/features/pip/k06_bugs_test.dart`; this pass re-verified them
+end-to-end, added two new green two-thumb regressions and one dark-mode pixel
+proof, and filed **one new minor finding (K06-BUG-7)**. One **major** stays
+open — the Scarf/Wellies glyph assets (`ORCHESTRATOR_NOTES` item 2 /
+`5_ui.md` D2), shared-owned and escalated — so this stage's verdict is FAIL
+until that shared change merges. No product code was changed by this stage.
+Iteration 1's full write-ups are preserved in `FIXES_1.md`.
 
 ```
-flutter analyze test/features/pip/k06_bugs_test.dart   → No issues found!
+flutter analyze test/features/pip/k06_bugs_test.dart    → No issues found!
 flutter test --timeout 120s test/features/pip/k06_bugs_test.dart
-  → +14 ~6: All tests passed!            (six proofs parked)
+  → +23 ~1: All tests passed!               (K06-BUG-7 parked)
 
 flutter test --timeout 120s --run-skipped test/features/pip/k06_bugs_test.dart
-  → +14 -6: 6 deterministic failures     (K06-BUG-1 … K06-BUG-6)
-```
+  → +23 -1: only K06-BUG-7 fails            (expected the kind toast, got null)
 
-The six parked proofs fail exactly as recorded below; each carries its bug
-id in the test description (`skip: true`, so the normal suite stays green).
-Run one proof with:
-
-```
-flutter test test/features/pip/k06_bugs_test.dart --run-skipped --plain-name K06-BUG-1
+flutter test --timeout 120s test/features/pip/
+  → +180 ~4: All tests passed!
+     (~4 = K06-BUG-7 + the three parked glyph proofs of
+      pip_orchestrator_notes_test.dart, item 2 below)
 ```
 
 ## Status of every finding
 
 | # | Severity | Status |
 |---|---|---|
-| K06-BUG-1 | **major** | OPEN — rapid care taps lose charges (5 taps can cost 5 coins) |
-| K06-BUG-2 | **major** | OPEN — concurrent wardrobe buys overspend (160 coins of goods from 120) |
-| K06-BUG-3 | minor | OPEN — heading apostrophe U+2019 vs HTML ASCII 0x27 |
-| K06-BUG-4 | minor | OPEN — nest art box 230×230 vs the design's 206-high nest |
-| K06-BUG-5 | minor | OPEN — care buttons unequal height at text scale 1.3 |
-| K06-BUG-6 | **major** | OPEN — locked tiles' dashed border is painted but invisible (5_ui D1) |
+| K06-BUG-1 | major (iter 1) | **FIXED (2a), verified live** — atomic conditional `_care`; burst now 110, 5-burst 95, feed+bath 112, never negative |
+| K06-BUG-2 | major (iter 1) | **FIXED (2a), verified live** — transactional conditional `buyItem`; wellies+crown leaves exactly one owned, balance never negative |
+| K06-BUG-3 | minor (iter 1) | **FIXED (2b), verified live** — `"Pip's wardrobe"` ASCII 0x27 |
+| K06-BUG-4 | minor (iter 1) | **FIXED (2b), verified live** — nest box 230×206, `BoxFit.contain`; PNG width measurement (173 px) matches |
+| K06-BUG-5 | minor (iter 1) | **FIXED (2b), verified live** — `IntrinsicHeight` + stretch; heights equal at scale 1.3, 91 px at 1.0 |
+| K06-BUG-6 | major (iter 1) | **FIXED (2b), verified live** — `foregroundPainter`; dark + light pixel proofs green |
+| K06-BUG-7 | **minor (new)** | **OPEN** — a buy refused by the fresh balance is silent (no kind toast) |
+| ORCH item 2 · glyphs / `5_ui` D2 | **major (design fidelity, shared-blocked)** | **OPEN** — `SHARED_REQUEST.md` §5 filed; 3 parked proofs; needs shared assets |
+| ORCH item 3 · prices | data ruling (not a screen bug) | OPEN request — `SHARED_REQUEST.md` §6; screen renders the seeded row (DATA OVER MOCKS) |
 
-Three majors ⇒ **VERDICT: FAIL**. K06-BUG-6 is the same defect the UI stage
-files as D1 (now with a deterministic widget proof); K06-BUG-3 is the same
-copy item as `4_review.md` finding 9.
-
----
-
-## K06-BUG-1 — major — rapid care taps lose charges
-
-**Mechanism.** `PipRepositoryImpl._care`
-(`app/lib/features/pip/data/pip_repository_impl.dart:112-123`) is a
-read-modify-write: it `SELECT`s the child, then writes
-`coins: kid.coins - cost` from that snapshot. `PipBloc` handles events
-concurrently (bloc 9's default transformer), so two taps in one burst both
-read 120 and both write 115.
-
-**Evidence (all measured, real DB + real bloc).**
-
-- `Future.wait([repo.feed('maya'), repo.feed('maya')])` → **115**, not 110.
-- Five concurrent feeds → **115** — five taps, one 5-coin charge.
-- Bloc burst (`PipCareRequested(feed)` twice in one turn) → **115**.
-- Timezone/period rules are not involved; this is a plain lost update.
-
-**Repro.** Open `/pip` with the demo seed (120 coins) and tap Feed twice as
-fast as the UI allows (or two-finger tap). One charge lands; the second is
-lost. Same for Feed+Bath (probe: 117, not 112). On a device the DB
-round-trip widens the window; in the test the two handlers overlap
-deterministically.
-
-**Failing test.** `K06-BUG-1: two rapid Feed taps must spend 10 coins, not 5`
-(expected 110, actual 115).
-
-**Suggested fix.** Make the write atomic instead of read-then-write: one
-conditional `UPDATE children SET coins = coins - :cost,
-happiness = min(happiness + 1, 5) WHERE id = :id AND coins >= :cost`
-(drift `customUpdate`/`UpdateStatement` inside a transaction) and treat
-`updated == 0` as the insufficient-coins no-op; or serialize care writes per
-child. Return value must not depend on a stale read.
+**One open major remains** — the Scarf/Wellies glyphs (`5_ui.md` iteration 2,
+D2: "the UI check cannot pass until the shared assets land on main and are
+merged in"; `ORCHESTRATOR_NOTES` item 2, mandatory). The screen-side action
+prescribed by that note — `SHARED_REQUEST.md` §5 with the design path data —
+is complete; the fix is a shared-asset swap, so this stage stays **FAIL**
+until it lands. K06-BUG-7 is minor; item 3 is a data ruling, not a screen
+bug.
 
 ---
 
-## K06-BUG-2 — major — concurrent wardrobe buys overspend
+## ORCH item 2 / `5_ui` D2 — major — wardrobe Scarf and Wellies glyphs are look-alikes
 
-**Mechanism.** Two layers of check-then-act:
+**Mechanism.** The locked/owned wardrobe tiles paint `NestIcons.scarf` and
+`NestIcons.wellies`, which resolve to the shared
+`assets/icons/ic_scarf.svg` / `ic_wellies.svg` — a fringed-blanket and a
+different boot — not the design's inline glyphs in `K06-pip.html` (`.k6-ward`
+lines 73–76). `sunhat` is the same idea at different coordinates with an
+extra stroke; `crown` matches.
 
-1. `PipBloc._onBuyRequested` (`pip_bloc.dart:85-105`) pre-checks
-   `nest.profile.coins`, which is the cached stream state; a second tap in
-   the same burst still sees 120.
-2. `PipRepositoryImpl.buyItem` (`pip_repository_impl.dart:126-143`) checks
-   `kid.coins < row.priceCoins` **outside** its transaction, then writes
-   `coins: kid.coins - row.priceCoins` from the stale read inside it.
+**Evidence.** `pip_orchestrator_notes_test.dart` item 2 compares the asset
+path data with the path data read from the HTML at test time; scarf, wellies
+and sunhat fail deterministically under `--run-skipped` (verified this
+pass). `5_ui.md` iteration 2 measures the same in both themes (D2, major).
 
-**Evidence.** With the demo seed (120 coins) and both tiles locked:
+**Failing tests (test stage, parked).**
+`ORCHESTRATOR NOTES item 2: the scarf / wellies / sunhat glyph is the design
+path` — run with
+`flutter test test/features/pip/pip_orchestrator_notes_test.dart --run-skipped`.
 
-- `Future.wait([buyItem(wellies · 40), buyItem(crown · 120)])` →
-  **both owned, coins 0**. 160 coins of goods left a 120-coin balance.
-- Bloc burst (`PipWardrobeBuyRequested('wellies')` +
-  `PipWardrobeBuyRequested('crown')` in one turn) → same: both owned,
-  coins 0. A fixed build can only ever mark one of the two owned.
-- The single-item races are benign by luck (a second same-item buy re-writes
-  the same stale values), which is why the existing single-buy tests stay
-  green.
-
-**Repro.** Tap Wellies and Crown near-simultaneously (kid double-thumb);
-both purchases complete although only one can be afforded.
-
-**Failing test.** `K06-BUG-2: two quick wardrobe buys must not overspend a
-120-coin balance` (expected 1 owned, actual 2).
-
-**Suggested fix.** One transaction that does the affordability *as part of
-the write*: `UPDATE children SET coins = coins - :price WHERE id = :id AND
-coins >= :price`; only mark `pip_wardrobe.owned = true` when that update
-changed one row, and re-read `owned` inside the same transaction. The bloc
-pre-check may stay as a fast toast path, but correctness must not depend on
-it.
+**Suggested fix.** Replace the three shared assets (or their declarations)
+with the design's path data — already quoted verbatim in
+`SHARED_REQUEST.md` §5. No `features/pip/**` change is needed or permitted
+(RULES §1); once the assets merge, the parked proofs flip green and the UI
+re-check can pass.
 
 ---
 
-## K06-BUG-3 — minor — heading apostrophe is U+2019, HTML source is ASCII
+## K06-BUG-7 — minor — a refused purchase is silent
 
-**Mechanism.** `pip_nest_view.dart:383` renders `'Pip’s wardrobe'` (curly
-U+2019). `design/html-source/screens/K06-pip.html` line 71 is
-`<div class="k6-sec">Pip's wardrobe</div>` — ASCII `0x27` (verified with
-`hexdump`: `50 69 70 27 73`). Both design PNGs render the straight glyph
-(cropped and read at 2× during this pass). Orchestrator COPY
-rule: character-exact vs the HTML source; K01 fixed the identical class of
-bug to ASCII.
+**Mechanism.** `PipBloc._onBuyRequested` pre-checks the *cached*
+`state.nest.profile.coins`. When two tiles are tapped in one burst the cache
+is stale for the second, so both pass the pre-check. The iteration-2 atomic
+`buyItem` correctly refuses the one the fresh balance cannot afford — but it
+returns `Future<void>`, so the bloc cannot tell "refused" from "bought" and
+emits nothing. The child gets no feedback for that tap; the tile simply stays
+locked until the stream refresh explains why.
 
-**Failing test.** `K06-BUG-3: the heading must be the HTML source's ASCII
-"Pip's wardrobe"` (finds 0 widgets).
+**Evidence (real DB + real bloc, measured).** With the demo seed (120 coins)
+and both tiles locked, a burst of `PipWardrobeBuyRequested('wellies')` +
+`PipWardrobeBuyRequested('crown')`:
 
-**Suggested fix.** Change the string to `"Pip's wardrobe"` and update the
-assertions that pin U+2019: `pip_nest_view_test.dart` line 92 (+ the
-`_rightQuote` helper at line 37) and `pip_nest_states_test.dart` line 307
-(which currently asserts the curly string is absent). `1_plan.md` §1e also
-records U+2019 and should be corrected.
+- exactly one item ends owned (the money fix works), and
+- `bloc.state.actionError == null` — the kind refusal copy never fires.
 
----
+`1_plan.md` §1f requires a locked-tile failure to surface
+`'Not enough coins yet — keep going!'`. It does for the *stale pre-check*
+path (an item visibly unaffordable) and no longer for the race path.
 
-## K06-BUG-4 — minor — the nest art is drawn 230×230, the design's nest is 206 high
+**Repro.** Two-thumb burst on Wellies and Crown from 120 coins: one buys,
+the other does nothing with no toast. Tap the unaffordable tile again — now
+that the stream has updated, the toast appears, so the gap is one silent
+tap in a race.
 
-**Mechanism.** `pip_nest_slot.dart:35` sets
-`kPipNestArtSize = 230` and line 65-75 positions the nest 230×230 with
-`BoxFit.fill`. The HTML says `.k6-pet .nest { width:230px; height:206px }`
-(line 22), and the design PNG's rendered nest is a **uniform 206 scale**:
-measured from `design/screens/light/K06-pip.png`, the nest's widest row
-(y≈277) is 173 px wide = the SVG's 202-unit outer ellipse × 206/240; the app
-draws the same ellipse 202 × 230/240 = **193.6 px** wide (≈10 px per side)
-and its rim top sits ~14 px higher. Dark PNG agrees: its widest brown fill
-row measures 163 px, while a 230-scale box would draw that 196-unit ellipse
-at 196 × 230/240 = 188 px (the 206 scale predicts 168 px).
+**Failing test.** `K06-BUG-7: a buy refused by the fresh balance must still
+be announced` (parked, `skip: true`; expects `kPipNotEnoughCoins`, gets
+`null`).
 
-**Repro.** Compare the pet slot in `cmp_light_1.png` (UI stage already
-records the pet band as the highest-diff band): the nest bowl is visibly
-larger/stretched versus the design.
+```
+flutter test test/features/pip/k06_bugs_test.dart --run-skipped --plain-name K06-BUG-7
+```
 
-**Failing test.** `K06-BUG-4: the nest art box must be 230 x 206, not
-230 x 230` (expected `Size(230, 206)`, actual `Size(230, 230)`).
-
-**Suggested fix.** The PNG is the UI comparison target and shows a uniform
-206×206 nest; the HTML says 230×206. Either way the current 230 height is
-wrong — draw the nest at the PNG's scale (206 wide, centred at x195, bottom
-of the slot) and keep the widget-test pin. If the designer confirms the
-horizontal stretch is intended, use exactly 230×206 per the CSS. Also update
-the `SHARED_REQUEST.md`/plan wording that describes the design as a
-"230 × 230" nest.
+**Suggested fix.** Give the repository a result: `Future<bool> buyItem(...)`
+(or a small enum: `bought | cannotAfford | alreadyOwned`) in
+`domain/pip_repository.dart` + `data/pip_repository_impl.dart` (both inside
+RULES §1). The impl already knows (`paid == 0` ⇒ cannot afford; `row.owned`
+⇒ already owned). In `PipBloc._onBuyRequested`, when the result is
+`cannotAfford`, emit `state.withActionFailed(kPipNotEnoughCoins)`; success
+stays event-free (the stream re-emits). Keep the cached pre-check as the
+fast path.
 
 ---
 
-## K06-BUG-5 — minor — care buttons lose their equal heights at text scale 1.3
+## Iteration-1 fixes re-verified (live proofs, no skips)
 
-**Mechanism.** `.k6-care` is a flex row, so all three `.btn-kid` columns
-stretch to the tallest. `_CareRow` (`pip_nest_view.dart:480-483`) uses a
-Flutter `Row` with `crossAxisAlignment: start`; each button's height is only
-floored at `kPipCareButtonHeight = 91`. At scale 1.3 the Play button's 13 px
-`Free` pill grows faster than the coin rows, so Play becomes 101 px while
-Feed/Bath stay 96 px (measured; 390 and 320 px agree).
+- **K06-BUG-1** — two rapid Feed taps now spend 10 (110); five spend 25 (95);
+  feed+bath spend 8 (112); the price is inclusive (5 coins → exactly one
+  Feed); a burst below the balance charges only what fits; happiness clamps
+  at 5; unknown child is a no-op. Single-write behaviour is unchanged.
+- **K06-BUG-2** — wellies+crown from 120 leaves exactly one purchase; the
+  balance never goes negative; same-item bursts charge once; the 40-coin
+  tile is buyable at exactly 40 and not at 39; an unknown item/child is a
+  no-op; equip is untouched.
+- **K06-BUG-3** — the section heading is byte-equal to the HTML source's
+  ASCII apostrophe; the byte-level oracle in `pip_copy_parity_test.dart`
+  (which re-reads the HTML) is green too.
+- **K06-BUG-4** — the nest `SvgPicture` render box is 230×206 at the slot's
+  bottom; `contain` paints the art uniformly at the PNG's 206 scale (the
+  UI stage's re-run confirms pixels; the app no longer draws the 230-scale
+  194 px ellipse).
+- **K06-BUG-5** — care buttons share one height at scale 1.3 (and one top);
+  at scale 1.0 the row is still the design's 91 px.
+- **K06-BUG-6** — the locked tiles' dashed `ink-2` border is painted over
+  the fill; the top-band pixel probe counts border pixels in **light** (dark
+  on light) and in **dark** (light on dark). Owned controls stay visible in
+  both themes.
 
-**Failing test.** `K06-BUG-5: at text scale 1.3 the three care buttons share
-one height` (measured `{96.0, 101.0}`).
+## New regression cover added this pass (green)
 
-**Suggested fix.** Wrap the care row in `IntrinsicHeight` and use
-`CrossAxisAlignment.stretch`, or size all three buttons to the tallest (the
-row already computes one line box for each child).
+- **Two-thumb care burst** — `Feed` + `Bath` fired from two simultaneous
+  gestures: 120 → 112 (every tap charges against the current balance).
+- **Two-thumb buy burst** — `Wellies` + `Crown` from two gestures: exactly
+  one owned, balance consistent with the winner (80, or 0 if Crown won).
+- **Dark-mode dashed border** — the K06-BUG-6 pixel proof now covers the
+  night theme as well.
 
----
-
-## K06-BUG-6 — major — the locked wardrobe tiles' dashed border is invisible
-
-**Mechanism.** `pip_wardrobe_tile.dart:83-115` attaches the screen-local
-`_DashedBorderPainter` as `CustomPaint.painter`, which paints **behind** the
-child. The child `Container` then paints an opaque `surface-2` decoration
-over the same rect (its 3 px padding is inside that decoration), so the
-dashed `ink-2` border is fully occluded. Only the owned tiles show an edge,
-because their border is part of `BoxDecoration.border`.
-
-**Evidence (widget pixel probe, light, demo seed).** Along the tiles' top
-border band (y = tile.top + 1, full width): the owned Scarf tile has **23
-dark pixels** (solid ink border); the locked Wellies tile has **0** — the
-band is `surface-2` fill edge-to-edge. Matches `5_ui.md` D1 (simulator
-pixels, both themes) and is ORCHESTRATOR_NOTES iteration-2 target #1.
-
-**Failing test.** `K06-BUG-6: locked wardrobe tiles paint the 3 px dashed ink
-border` (owned control passes; locked count is 0).
-
-**Suggested fix.** Paint the dashed stroke **above** the fill: pass the
-painter as `CustomPaint.foregroundPainter` (keep the 3 px inset/padding), or
-draw the border in a foreground layer/Stack over the container. Keep the
-pixel probe as the regression proof.
-
----
-
-## Probes that came back clean (green, in the suite)
+## Categories re-checked clean (green, in the suite)
 
 | Area | Result |
 |---|---|
 | 0 children (`Seed.empty`) | "Who's playing?" + Choose renders; no crash |
-| 6 children + long UK nickname (`Maximilian-Alexander`) | active child's nest unchanged; K06 shows no child name |
+| 6 children + long UK nickname | active child's nest unchanged; K06 shows no child name |
 | Empty wardrobe | heading + strip omitted, caption kept |
 | 9999 coins / 9999 lifetime coins | label renders, progress clamps to 1.0, no overflow |
-| 3 coins | Feed disabled (`enabled:false`, no tap action); Bath operable and spends 3 → 0 |
-| Deep-link `/pip` Back | lands on `/kid-home` (no stack to pop) |
+| 3 coins | Feed disabled (`enabled:false`, no tap); Bath operable (3 → 0) |
+| Deep-link `/pip` Back | lands on `/kid-home` |
 | Grown-ups burst | one gate route; back returns to `/pip` |
-| Restart | file-backed Drift reopen keeps care spend (75) and the Wellies purchase |
+| Restart (file-backed Drift reopen) | care spend (75) + Wellies purchase persist |
 | Live active-child switch | one subscription follows maya → leo → none |
 | Stale active child id (`ghost`) | `watchNest` emits null (no-child state) |
 | Leo active | `Pip · Hatchling`, `PipAvatar` bolt / sky / stage 2 |
-| Real 320 px @ 1.3× | renders with no overflow (width asserted 320) |
+| Real 320 px @ 1.3× | renders with no overflow |
 | Dark-mode contrast | 10 K06 pairs all ≥ 4.5:1 |
 | Copy characters | middle dot U+00B7, em dash U+2014 exact |
 
 ## Notes (not product findings)
 
-- **Test-infrastructure (minor, test-only):** `pip_nest_view_test.dart`'s
-  `_pumpNest(width:)` sets the view size *before* `pumpAppRoute`, which pins
-  390×844 — so the "320px/430px @ scale" matrix actually runs at 390
-  (reproduced: `MediaQuery.sizeOf` = 390 after a 320 setup; my suite's
-  `_pumpPip` re-applies the width after the pump). The real 320×1.3 layout is
-  clean (probe above), so this is a vacuous-test issue, not an overflow bug.
-  Suggested next-iteration fix: set the size after `pumpAppRoute` in
-  `_pumpNest`.
-- **Ghost active child id under widget-test fake async:** a drift
-  `watchSingleOrNull` query with zero rows does not deliver its initial null
-  on `tester.pump` alone, so a widget test of `active_child_id='ghost'` sits
-  on the spinner. The real async path emits null (plain test green) and the
-  device shows the no-child card — deliberately NOT filed as a bug.
-- **Non-design copy:** the not-wearable toast `kPipNotWearable` and the
-  not-enough-coins toast are the only strings not in the HTML; both are
-  plan-mandated and already flagged in `4_review.md` #10 for ratification.
-- **Progress semantics article:** "Pip is N percent of the way to a
-  Songbird" vs the design aria "…to Songbird" (`4_review.md` #11) —
-  screen-reader-only wording; noted, not numbered.
-- **ORCHESTRATOR_NOTES items 2 and 3** (wardrobe glyphs; seed prices 30/60
-  vs the rendered DB 40/120) are iteration-2 build targets: the notes ask for
-  a `SHARED_REQUEST.md` for the missing design glyphs and for the seed
-  prices. The screen correctly renders whatever the DB holds, so neither is a
-  K06 screen defect *and* neither is hard-coded here.
-- **Timezone (BST) and money rounding:** K06 shows no dates/times and no £
-  amounts; coins are integers end-to-end (`seed`, repo, view). Nothing on
-  this screen can fail those categories.
-- **Parent/kid mode guard:** `/pip` is reachable in parent mode by design
-  (the router only blocks kid → parent-only, `router.dart:83-141`); no path
-  from K06 reaches parent-only content without the parental gate. No bypass.
+- **ORCHESTRATOR_NOTES item 2 (glyphs)** — verified open and blocking: the
+  three parked proofs in `pip_orchestrator_notes_test.dart` fail
+  deterministically under `--run-skipped` (scarf / wellies / sunhat asset
+  paths ≠ the design paths read from `K06-pip.html`; crown matches), and
+  `5_ui.md` iteration 2 rates it D2 major ("the UI check cannot pass until
+  the shared assets land on main and are merged in"). The screen's only
+  permitted action per the note is `SHARED_REQUEST.md` §5, which is filed;
+  the remaining work is the shared `assets/icons/*.svg` replacement and its
+  merge. This is the report's one open major and the reason for the FAIL
+  verdict.
+- **ORCHESTRATOR_NOTES item 3 (prices)** — the screen renders
+  `item.priceCoins` with no literal (proved by re-seeding Crown to 7 and
+  seeing 7); the seed-vs-design conflict is `SHARED_REQUEST.md` §6. DATA
+  OVER MOCKS keeps the DB authoritative until the orchestrator rules.
+- **`kPipNotWearable`** ("That one is not something Pip can wear.") is still
+  the one on-screen string the design does not define; awaits ratification
+  (`4_review.md` #10). Not a regression.
+- **`NestProgress`'s kid highlight spans the whole track** — shared
+  component, out of the screen's scope (`2b_build_ui.md` item 5).
+- **Ghost active child id under widget-test fake async** — carried over from
+  iteration 1: the real async path emits null (plain test green); the
+  screen's device behaviour is the no-child card. Deliberately not a bug.
+- **Timezone (BST) and money rounding** — K06 shows no dates/times and no £
+  amounts; coins are integers end-to-end. Nothing to fail on this screen.
+- **Parent/kid mode guard** — `/pip` remains reachable in parent mode by
+  design; no path from K06 reaches parent-only content without the gate.
 
 VERDICT: FAIL

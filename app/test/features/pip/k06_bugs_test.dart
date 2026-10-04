@@ -1,4 +1,4 @@
-// K06 (Pip's nest) adversarial suite — Stage 6 bug hunt, iteration 1.
+// K06 (Pip's nest) adversarial suite — Stage 6 bug hunt.
 //
 // Bug proofs are skipped with `skip: true` and carry their bug id in the
 // test description (Flutter's `test`/`testWidgets` take a bool skip, so the
@@ -6,14 +6,17 @@
 // `flutter test --run-skipped <file>` runs them all; each one FAILS until
 // its bug is fixed.
 //
-// ITERATION 2: all six proofs are FIXED and run live — no `skip: true` left in
-// this file. Stage 2a took K06-BUG-1 (lost update in the repository's
-// read-modify-write care path) and K06-BUG-2 (concurrent buys overspending a
-// 120-coin balance) by making both writes atomic and conditional; stage 2b
-// took K06-BUG-3 (heading apostrophe), K06-BUG-4 (nest art box), K06-BUG-5
-// (equal care-button heights) and K06-BUG-6 (the invisible dashed locked
-// border). Run the whole file with `--run-skipped` as a regression check:
-//   flutter test test/features/pip/k06_bugs_test.dart --run-skipped --plain-name K06-BUG-1
+// ITERATION 2: all six iteration-1 proofs are FIXED and run live. Stage 2a
+// took K06-BUG-1 (lost update in the repository's read-modify-write care
+// path) and K06-BUG-2 (concurrent buys overspending a 120-coin balance) by
+// making both writes atomic and conditional; stage 2b took K06-BUG-3
+// (heading apostrophe), K06-BUG-4 (nest art box), K06-BUG-5 (equal
+// care-button heights) and K06-BUG-6 (the invisible dashed locked border).
+// This iteration also adds: the dark-mode half of the K06-BUG-6 pixel
+// proof, two green end-to-end two-thumb burst regressions (care and
+// wardrobe), and the one parked iteration-2 finding, K06-BUG-7 (a buy
+// refused by the fresh balance is silent — no kind toast).
+//   flutter test test/features/pip/k06_bugs_test.dart --run-skipped --plain-name K06-BUG-7
 //
 // Evidence, repro and suggested fixes for every finding live in
 // docs/screens/K06/6_bugs.md. This stage does not change product code.
@@ -113,14 +116,17 @@ double _contrast(Color a, Color b) {
 const Key _pixelProbe = ValueKey<String>('k06_pixel_probe');
 
 /// Pumps `/pip` inside a [RepaintBoundary] so painted pixels can be sampled.
-Future<void> _pumpPipForPixels(WidgetTester tester) async {
+Future<void> _pumpPipForPixels(
+  WidgetTester tester, {
+  ThemeMode theme = ThemeMode.light,
+}) async {
   tester.view.physicalSize = const Size(
     NestDevice.width * 3,
     NestDevice.height * 3,
   );
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
-  GetIt.instance<ThemeModeController>().selectMode(ThemeMode.light);
+  GetIt.instance<ThemeModeController>().selectMode(theme);
   await tester.pumpWidget(
     const RepaintBoundary(
       key: _pixelProbe,
@@ -131,15 +137,21 @@ Future<void> _pumpPipForPixels(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 200));
 }
 
-/// Number of dark pixels along the tile's top border band (y = top + 1):
-/// the 3 px ink stroke of a painted border reads dark, the surface fill does
-/// not. Scans the full width so a dashed stroke is caught regardless of the
-/// dash phase.
-Future<int> _darkTopBandPixels(WidgetTester tester, Rect tile) async {
+/// Number of border-band pixels along the tile's top border band
+/// (y = top + 1): the 3 px stroke of a painted border reads differently from
+/// the surface fill. Light theme: the `ink-2` stroke is dark on the light
+/// `surface-2` fill → [bright] false counts it. Dark theme: `ink-2` is light
+/// on the dark fill → [bright] true. Scans the full width so a dashed stroke
+/// is caught regardless of the dash phase.
+Future<int> _topBandPixels(
+  WidgetTester tester,
+  Rect tile, {
+  required bool bright,
+}) async {
   final boundary = tester.renderObject<RenderRepaintBoundary>(
     find.byKey(_pixelProbe),
   );
-  var dark = 0;
+  var hits = 0;
   await tester.runAsync(() async {
     final image = await boundary.toImage();
     final data = (await image.toByteData())!;
@@ -154,25 +166,27 @@ Future<int> _darkTopBandPixels(WidgetTester tester, Rect tile) async {
       final g = data.getUint8(o + 1) / 255;
       final b = data.getUint8(o + 2) / 255;
       final l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-      if (l < 0.4) dark++;
+      if (bright ? l > 0.6 : l < 0.4) hits++;
     }
   });
-  return dark;
+  return hits;
 }
 
 // ---------------------------------------------------------------------------
-// Bug proofs. All six run live (no `skip:` in this file since iteration 2):
-// K06-BUG-1 / K06-BUG-2 were the logic layer's races (the repository's
-// read-modify-write care path and the non-atomic buy), K06-BUG-3 … K06-BUG-6
-// the UI layer's. Kept as the regression guard for both.
+// Bug proofs. The six iteration-1 proofs run live as the regression guard
+// (K06-BUG-1 / K06-BUG-2 the logic layer's races, K06-BUG-3 … K06-BUG-6 the
+// UI layer's). K06-BUG-7 is parked with `skip: true` until the buy-feedback
+// gap is fixed.
 // ---------------------------------------------------------------------------
 
 void main() {
   group('K06 bug proofs', () {
     test('K06-BUG-1: two rapid Feed taps must spend 10 coins, not 5', () async {
-      // `_care` reads the child row, then writes `kid.coins - cost` from
-      // the STALE read. The bloc processes events concurrently (bloc 9
-      // default), so two taps in a burst both read 120 and both write 115.
+      // Regression for the fixed lost update: `_care` used to read the
+      // child row, then write `kid.coins - cost` from that stale read, and
+      // the bloc processes events concurrently (bloc 9 default), so two
+      // taps in a burst both read 120 and both wrote 115. It is one
+      // conditional UPDATE now; the burst must charge both taps.
       final db = AppDatabase.memory();
       await Seed.demo(db);
       final bloc = PipBloc(repository: PipRepositoryImpl(db: db));
@@ -196,10 +210,11 @@ void main() {
     });
 
     test('K06-BUG-2: two quick wardrobe buys must not overspend a 120-coin balance', () async {
-      // The bloc pre-check uses the stale `state.nest.profile.coins`, and
-      // `buyItem` re-checks affordability outside its transaction. Two
-      // taps (Wellies 40 + Crown 120) both read 120 and both succeed:
-      // 160 coins of goods leave a 120-coin balance at 0, never negative.
+      // Regression for the fixed overspend: the bloc pre-check still uses
+      // the cached `state.nest.profile.coins`, and `buyItem` used to
+      // re-check affordability outside its transaction, so both taps
+      // (Wellies 40 + Crown 120) succeeded from a 120-coin balance. The
+      // atomic transaction now lets exactly one through.
       final db = AppDatabase.memory();
       await Seed.demo(db);
       final bloc = PipBloc(repository: PipRepositoryImpl(db: db));
@@ -308,17 +323,84 @@ void main() {
         );
 
         expect(
-          await _darkTopBandPixels(tester, owned),
+          await _topBandPixels(tester, owned, bright: false),
           greaterThan(0),
           reason: 'control: the owned tile must show its solid ink border',
         );
         expect(
-          await _darkTopBandPixels(tester, locked),
+          await _topBandPixels(tester, locked, bright: false),
           greaterThan(0),
           reason: 'the locked tile must show the dashed ink-2 border',
         );
         await disposeApp(tester);
       },
+    );
+
+    testWidgets(
+      'K06-BUG-6 (dark): locked wardrobe tiles paint the dashed border too',
+      (tester) async {
+        // Same proof in the night theme: `ink-2` is light on the dark
+        // `surface-2` fill, so the band scan counts bright pixels instead.
+        await setUpTestScope();
+        await _pumpPipForPixels(tester, theme: ThemeMode.dark);
+        final owned = tester.getRect(find.byKey(const Key('k06-ward-scarf')));
+        final locked = tester.getRect(
+          find.byKey(const Key('k06-ward-wellies')),
+        );
+        expect(
+          await _topBandPixels(tester, owned, bright: true),
+          greaterThan(0),
+          reason: 'control: the owned tile border is visible in dark mode',
+        );
+        expect(
+          await _topBandPixels(tester, locked, bright: true),
+          greaterThan(0),
+          reason: 'the locked tile dashed border must be visible in dark mode',
+        );
+        await disposeApp(tester);
+      },
+    );
+
+    test(
+      'K06-BUG-7: a buy refused by the fresh balance must still be announced',
+      () async {
+        // Since the iteration-2 atomics, `buyItem` refuses a purchase the
+        // blocs stale pre-check cannot see (the sibling tap spent the coins
+        // first). The refusal is silent: `buyItem` returns void, so the bloc
+        // never emits `kPipNotEnoughCoins` and the child gets no feedback
+        // for the second tile (1_plan.md section 1f: locked-tile failure ->
+        // kind toast). The money is safe; the feedback is missing.
+        final db = AppDatabase.memory();
+        await Seed.demo(db);
+        final bloc = PipBloc(repository: PipRepositoryImpl(db: db));
+        final sub = bloc.stream.listen((_) {});
+        bloc.add(const PipLoadRequested());
+        await _waitFor(() => bloc.state.status == PipStatus.loaded);
+
+        bloc
+          ..add(const PipWardrobeBuyRequested('wellies'))
+          ..add(const PipWardrobeBuyRequested('crown'));
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+
+        final wellies = await _owned(db, 'wellies');
+        final crown = await _owned(db, 'crown');
+        expect(
+          <bool>[wellies, crown].where((b) => b).length,
+          1,
+          reason: 'one of 40 + 120 fits in 120 coins',
+        );
+        expect(
+          bloc.state.actionError,
+          kPipNotEnoughCoins,
+          reason:
+              'the refused purchase must announce "Not enough coins yet — '
+              'keep going!"; measured ${bloc.state.actionError}',
+        );
+        await sub.cancel();
+        await bloc.close();
+        await db.close();
+      },
+      skip: true,
     );
   });
 
@@ -482,6 +564,53 @@ void main() {
       expect(find.byType(PipCareButton), findsNWidgets(3));
       expect(find.byType(PipWardrobeTile), findsNWidgets(4));
       expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    testWidgets('a two-thumb care burst charges every tap (feed + bath)', (
+      tester,
+    ) async {
+      // Iteration-2 regression: the two recognizers fire in one turn and the
+      // atomic `_care` must charge each one against the current balance.
+      final db = await setUpTestScope();
+      await _pumpPip(tester);
+      final feed = await tester.startGesture(
+        tester.getCenter(find.byKey(const Key('k06-feed'))),
+      );
+      final bath = await tester.startGesture(
+        tester.getCenter(find.byKey(const Key('k06-bath'))),
+      );
+      await feed.up();
+      await bath.up();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(await _coins(db), 112, reason: '120 - 5 - 3');
+      await disposeApp(tester);
+    });
+
+    testWidgets('a two-thumb buy burst cannot overspend (wellies + crown)', (
+      tester,
+    ) async {
+      // Iteration-2 regression: both tiles pass the stale in-bloc
+      // affordability pre-check; the transaction may only let one through.
+      final db = await setUpTestScope();
+      await _pumpPip(tester);
+      final wellies = await tester.startGesture(
+        tester.getCenter(find.byKey(const Key('k06-ward-wellies'))),
+      );
+      final crown = await tester.startGesture(
+        tester.getCenter(find.byKey(const Key('k06-ward-crown'))),
+      );
+      await wellies.up();
+      await crown.up();
+      await tester.pump(const Duration(milliseconds: 600));
+      final ownedWellies = await _owned(db, 'wellies');
+      final ownedCrown = await _owned(db, 'crown');
+      expect(
+        <bool>[ownedWellies, ownedCrown].where((b) => b).length,
+        1,
+        reason: '40 + 120 cannot both fit in 120 coins',
+      );
+      expect(await _coins(db), ownedWellies ? 80 : 0);
       await disposeApp(tester);
     });
 

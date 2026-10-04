@@ -7,7 +7,11 @@
 // `pip_nest_states_test.dart` and the pixel geometry in
 // `pip_nest_widget_test.dart`. In-memory Drift + `Seed.demo` throughout; every
 // test ends with `disposeApp` INSIDE the test body (RULES §7.1).
-
+//
+// ORCHESTRATOR_NOTES 13:52: `shared/shared_batch7` moves the seed's wardrobe
+// prices to the design's 30/60. The seeded 40/120 asserted below (and the
+// balances derived from them) are this branch's values; they move together
+// with that merge — `docs/screens/K06/3_test.md` §6 lists every place.
 import 'dart:math' as math;
 
 import 'package:drift/drift.dart' hide isNotNull, isNull;

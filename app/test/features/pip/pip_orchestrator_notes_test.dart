@@ -22,6 +22,15 @@
 //   `SHARED_REQUEST.md` §6; the test side pins that the *rendered* price is
 //   the seeded one (DATA OVER MOCKS) and never a literal.
 //
+// ITERATION 2 / ORCHESTRATOR_NOTES 13:52: §1/§2/§3/§5/§6 are being fixed on
+// `shared/shared_batch7` — "the prices (the seed moves to 30/60) … they are not
+// K06 findings meanwhile". So the sanctioned end-state is the DESIGN's 30/60,
+// and the parked proof at the end of the item-3 group goes green by itself
+// when that batch merges — no edit to this file. The green assertions in that
+// group keep today's seeded 40/120, because that is still what this branch's
+// seed holds; they move together with the batch (the numbers are listed in
+// `docs/screens/K06/3_test.md` §6).
+//
 // Item 4 · "Pip and the nest are correct" — no action, and nothing here
 //   constrains the nest art box (note this: it contradicts stage 6's
 //   K06-BUG-4; the orchestrator ruling wins, see docs/screens/K06/3_test.md).
@@ -85,6 +94,25 @@ List<String> _paths(String svgSource) =>
         .toList();
 
 String _norm(String pathData) => pathData.replaceAll(' ', '').toLowerCase();
+
+/// The `.k6-item-p` numbers of the design's LOCKED tiles, in `.k6-ward` order
+/// (Wellies 30, Crown 60), entity-free and straight from the source.
+List<String> _designLockedPrices() {
+  final ward = _html.split('<div class="k6-ward">').last.split('</div>').first;
+  final out = <String>[];
+  for (final tile in RegExp(
+    '<button class="k6-item([^"]*)"[^>]*>(.*?)</button>',
+    dotAll: true,
+  ).allMatches(ward)) {
+    if (!tile.group(1)!.contains('locked')) continue;
+    final price = RegExp(
+      '<span class="k6-item-p[^"]*">(.*?)</span>',
+      dotAll: true,
+    ).firstMatch(tile.group(2)!)!.group(1)!;
+    out.add(RegExp('[0-9]+').firstMatch(price)!.group(0)!);
+  }
+  return out;
+}
 
 /// The shared asset the tile actually paints, resolved through the very same
 /// constant the tile uses — never a guessed file name (`ic_sunhat.svg` does
@@ -279,6 +307,28 @@ void main() {
       expect(find.bySemanticsLabel('Crown, 120 coins'), findsOneWidget);
       await disposeApp(tester);
     });
+
+    testWidgets('K06-BATCH7: the rendered price is the DESIGN number', (
+      tester,
+    ) async {
+      // Parked: shared_batch7 moves the seed to the design's numbers
+      // (ORCHESTRATOR_NOTES 13:52), and this proof goes green with no edit
+      // here. Until then DATA OVER MOCKS makes the seeded 40/120 the correct
+      // render, which the two green tests above pin.
+      //
+      // `.k6-item-p` in the design's `.k6-ward`, read from the source: the two
+      // locked tiles carry 30 and 60.
+      final designPrices = _designLockedPrices();
+      expect(designPrices, <String>['30', '60']);
+
+      await pumpAppRoute(tester, '/pip');
+      for (final price in designPrices) {
+        expect(find.text(price), findsOneWidget, reason: 'design price $price');
+      }
+      expect(find.bySemanticsLabel('Wellies, 30 coins'), findsOneWidget);
+      expect(find.bySemanticsLabel('Crown, 60 coins'), findsOneWidget);
+      await disposeApp(tester);
+    }, skip: true); // ORCHESTRATOR_NOTES 13:52 · shared_batch7 — parked.
 
     testWidgets('a re-seeded price renders without a code change', (
       tester,
