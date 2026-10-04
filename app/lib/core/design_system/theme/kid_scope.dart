@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import 'package:nestling/core/design_system/assets/nestling_assets.dart'
-    as nest_assets;
+import 'package:nestling/core/design_system/theme/kid_meadow.dart';
 import 'package:nestling/core/design_system/tokens/nest_tokens.dart';
 import 'package:nestling/core/design_system/tokens/typography.dart';
 
-/// Kid-mode scope: sky gradient background with an SVG meadow hill,
-/// [NestKidTheme] metrics, Nunito-first text and ink icons.
+/// Kid-mode scope: exact `.screen.kid` background with kid metrics.
 ///
-/// Day/night follows the ambient brightness. The background is a single
-/// vertical sky gradient plus the meadow hill illustration pinned to the
-/// bottom (tinted with the meadow token) — no rectangular colour blocks,
-/// so no visible seam.
+/// The background transcribes `components.css:25` verbatim:
+/// `linear-gradient(180deg, kid-sky-top 0%, kid-sky-bottom 62%,
+/// kid-horizon 62%, kid-meadow 100%)` (plus the dark-only `--kid-stars`
+/// layer), with the exact two-path `.meadow` hills ([NestMeadowPainter])
+/// pinned to the physical bottom of the scope (full width, 136 tall,
+/// `preserveAspectRatio="none"` stretch).
+///
+/// All three layers sit behind content (z 0) and never intercept taps
+/// (`IgnorePointer`, like the CSS `pointer-events:none`). A bottom bar in
+/// the content (kid dock, bottom CTA) paints opaquely above them, so the
+/// owner rule — bar surface runs to the physical edge — still holds.
 class KidScope extends StatelessWidget {
   const new({
     required this.child,
@@ -32,8 +36,8 @@ class KidScope extends StatelessWidget {
   /// 0 (pinned to the edge, per the bottom-edge owner rule).
   final double meadowBottom;
 
-  /// Hill tone. Defaults to `kidMeadow`; K03's in-flow band measured
-  /// `kidHorizon` on both design PNGs.
+  /// `.hill-back` tone. Defaults to `kidMeadow`; the `.hill-front` overlay
+  /// is always [kidHillFront] of this over the surface.
   final Color? meadowColor;
 
   /// The shared bottom-hill height (`meadow_hill.svg` at 136 px).
@@ -51,35 +55,49 @@ class KidScope extends StatelessWidget {
     // flows into a `ThemeExtension<dynamic>` list or a spread. Collecting into
     // a `List<Object?>` and casting once at the end sidesteps that entirely.
     final merged = <Object?>[...theme.extensions.values, kid];
+    final back = meadowColor ?? colors.kidMeadow;
+    final front = kidHillFront(back, colors.surface);
     return Theme(
       data: theme.copyWith(extensions: merged.cast<ThemeExtension<dynamic>>()),
       child: Stack(
         children: [
           Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: <Color>[colors.kidSkyTop, colors.kidSkyBottom],
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  // `background-color` under the gradient, as in the CSS.
+                  color: colors.kidSkyBottom,
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: <Color>[
+                      colors.kidSkyTop,
+                      colors.kidSkyBottom,
+                      colors.kidHorizon,
+                      colors.kidMeadow,
+                    ],
+                    stops: const <double>[
+                      0,
+                      NestMeadowGeometry.horizonStop,
+                      NestMeadowGeometry.horizonStop,
+                      1,
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
+          if (tokens.isDark)
+            const Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(painter: NestKidStarsPainter()),
+              ),
+            ),
           Positioned(
             left: 0,
             right: 0,
             bottom: meadowBottom,
-            child: SvgPicture.asset(
-              nest_assets.NestlingIllustrations.meadowHill,
-              fit: BoxFit.fill,
-              height: meadowHeight,
-              colorFilter: ColorFilter.mode(
-                meadowColor ?? colors.kidMeadow,
-                BlendMode.srcIn,
-              ),
-              placeholderBuilder: (_) => const SizedBox.shrink(),
-            ),
+            child: NestMeadow(height: meadowHeight, back: back, front: front),
           ),
           DefaultTextStyle(
             style: NestType.kidBody(color: colors.ink),
