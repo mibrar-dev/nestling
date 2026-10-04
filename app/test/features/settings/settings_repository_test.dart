@@ -96,6 +96,22 @@ void main() {
       expect((await repository.watchSettings().first).notifApprovals, isTrue);
     });
 
+    test('writes stamp updatedAt with the app clock (CLOCK rule)', () async {
+      await repository.setNotifications(approvals: false);
+
+      // Pinned by flutter_test_config (Sat 3 Oct 2026): the write timestamp
+      // comes from appNowUtc(), never the wall clock.
+      const pinned = '2026-10-03 08:41:00.000Z';
+      final settingRow = await (db.select(
+        db.settings,
+      )..where((s) => s.familyId.equals(Seed.familyId))).getSingle();
+      expect(settingRow.updatedAt?.toUtc().toString(), pinned);
+      final familyRow = await (db.select(
+        db.families,
+      )..where((f) => f.id.equals(Seed.familyId))).getSingle();
+      expect(familyRow.updatedAt?.toUtc().toString(), pinned);
+    });
+
     test('setFamilyTimeZone stores the zone and mirrors settings', () async {
       await repository.setFamilyTimeZone('Asia/Dubai');
 

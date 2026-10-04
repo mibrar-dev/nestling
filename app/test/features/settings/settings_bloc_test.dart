@@ -13,6 +13,7 @@ import 'package:get_it/get_it.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/family_zone_service.dart';
 import 'package:nestling/core/data/seed.dart';
+import 'package:nestling/features/settings/data/settings_repository_impl.dart';
 import 'package:nestling/features/settings/domain/entities/app_settings.dart';
 import 'package:nestling/features/settings/domain/entities/settings_child_entry.dart';
 import 'package:nestling/features/settings/domain/entities/settings_item.dart';
@@ -20,6 +21,7 @@ import 'package:nestling/features/settings/domain/entities/settings_member_entry
 import 'package:nestling/features/settings/domain/settings_repository.dart';
 import 'package:nestling/features/settings/presentation/bloc/settings_bloc.dart';
 import 'package:nestling/features/settings/presentation/bloc/settings_event.dart';
+import 'package:nestling/features/settings/presentation/bloc/settings_session_store.dart';
 import 'package:nestling/features/settings/presentation/bloc/settings_state.dart';
 
 import '../../test_scope.dart';
@@ -67,6 +69,7 @@ void main() {
       expect(state.familyRoster, isEmpty);
       expect(state.memberRows, isEmpty);
       expect(state.familyZoneId, 'Europe/London');
+      expect(state.deviceZoneId, isNull);
       expect(state.pendingZone, isNull);
       expect(state.dismissedZones, isEmpty);
       expect(state.errorMessage, isNull);
@@ -256,6 +259,7 @@ void main() {
       final bloc = await _dubaiBloc();
 
       expect(bloc.state.pendingZone, 'Asia/Dubai');
+      expect(bloc.state.deviceZoneId, 'Asia/Dubai');
       expect(bloc.state.familyZoneId, 'Europe/London');
 
       await bloc.close();
@@ -290,6 +294,13 @@ void main() {
         (state) => state.dismissedZones.contains('Asia/Dubai'),
       );
       expect(dismissed.pendingZone, isNull);
+      expect(
+        dismissed.deviceZoneId,
+        'Asia/Dubai',
+        reason:
+            'the device zone survives dismissal: the picker orders by '
+            'deviceZoneId, not by the banner-only pendingZone (P16-B01)',
+      );
 
       // The family zone is untouched …
       final repository = GetIt.instance<SettingsRepository>();
@@ -309,6 +320,71 @@ void main() {
 
       await bloc.close();
     });
+  });
+
+  group('SettingsBloc — session dismissals (P16-B02)', () {
+    test('a dismissal survives a rebuilt bloc via the session store', () async {
+      await setUpTestScope();
+      final db = GetIt.instance<AppDatabase>();
+      final zoneService = FamilyZoneService(
+        db,
+        deviceZoneReader: () async => 'Asia/Dubai',
+      );
+      final store = SettingsSessionStore();
+      SettingsBloc makeBloc() => SettingsBloc(
+        repository: SettingsRepositoryImpl(db: db),
+        zoneService: zoneService,
+        sessionStore: store,
+      );
+
+      // First visit: the banner is up, then dismissed.
+      final blocA = makeBloc()..add(const SettingsLoadRequested());
+      await blocA.stream.firstWhere(
+        (state) =>
+            state.status == SettingsStatus.loaded && state.pendingZone != null,
+      );
+      blocA.add(const SettingsMoveDismissed('Asia/Dubai'));
+      await blocA.stream.firstWhere(
+        (state) => state.dismissedZones.contains('Asia/Dubai'),
+      );
+      await blocA.close();
+
+      // Same session, rebuilt bloc: the prompt stays hidden, the device
+      // zone stays known for the picker.
+      final blocB = makeBloc()..add(const SettingsLoadRequested());
+      final loadedB = await blocB.stream.firstWhere(
+        (state) => state.status == SettingsStatus.loaded,
+      );
+      expect(loadedB.pendingZone, isNull);
+      expect(loadedB.deviceZoneId, 'Asia/Dubai');
+      expect(loadedB.dismissedZones, const <String>{'Asia/Dubai'});
+      expect(loadedB.familyZoneId, 'Europe/London');
+
+      await blocB.close();
+    });
+
+    test(
+      'a bloc without a store falls back to the session singleton',
+      () async {
+        await setUpTestScope();
+        final store = GetIt.instance<SettingsSessionStore>();
+        store.dismissedZones.add('Asia/Dubai');
+
+        final bloc = _bloc(
+          zoneService: FamilyZoneService(
+            GetIt.instance<AppDatabase>(),
+            deviceZoneReader: () async => 'Asia/Dubai',
+          ),
+        )..add(const SettingsLoadRequested());
+        final loaded = await bloc.stream.firstWhere(
+          (state) => state.status == SettingsStatus.loaded,
+        );
+        expect(loaded.pendingZone, isNull);
+        expect(loaded.deviceZoneId, 'Asia/Dubai');
+
+        await bloc.close();
+      },
+    );
   });
 
   group('SettingsBloc — stream failure and retry', () {

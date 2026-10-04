@@ -256,6 +256,11 @@ void main() {
       // own `SettingsRow` at a 6 px vertical padding, so the content box is
       // 44 px and the whole slop is live. Evidence:
       // docs/screens/P16/3_test.md §Bugs.
+      // P16-T02 — ownership of the 44 px slop is the shared
+      // `NestToggle` + `NestListRow` combination (the 3_test report's
+      // screen-local padding suggestion does not restore the slop for
+      // a title-only row: measured again in iteration 2 that track.top−5
+      // still flips nothing). Run with --run-skipped to prove.
       skip: true,
     );
   });

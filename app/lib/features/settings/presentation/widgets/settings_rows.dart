@@ -18,6 +18,7 @@ class SettingsRow extends StatelessWidget {
     this.trailing,
     this.onTap,
     this.semanticLabel,
+    this.padding,
   });
 
   final String title;
@@ -28,6 +29,9 @@ class SettingsRow extends StatelessWidget {
   final Widget? trailing;
   final VoidCallback? onTap;
   final String? semanticLabel;
+
+  /// Row content padding; defaults to `NestListRow`'s (12/10/16/10).
+  final EdgeInsetsGeometry? padding;
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +44,7 @@ class SettingsRow extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 16, 10),
+          padding: padding ?? const EdgeInsets.fromLTRB(12, 10, 16, 10),
           child: Row(
             spacing: NestSpacing.s3,
             children: [
@@ -71,7 +75,13 @@ class SettingsRow extends StatelessWidget {
                   ],
                 ),
               ),
-              if (tail != null) Flexible(child: tail),
+              // `.list-trail` cap, mirroring shared main's fix (the
+              // trail never joins the flex distribution).
+              if (tail != null)
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 120),
+                  child: tail,
+                ),
             ],
           ),
         ),

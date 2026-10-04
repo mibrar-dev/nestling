@@ -258,7 +258,7 @@ void main() {
       // `Builder` and pop that context's navigator, or
       // `Navigator.of(context, rootNavigator: true).pop(...)`.
       // Evidence: docs/screens/P16/3_test.md §Bugs.
-    }, skip: true);
+    });
 
     testWidgets(
       '[P16-T01] Delete confirms, toasts and never touches the database',
@@ -285,7 +285,7 @@ void main() {
 
         await disposeApp(tester);
       },
-      skip: true,
+      skip: false,
     );
   });
 

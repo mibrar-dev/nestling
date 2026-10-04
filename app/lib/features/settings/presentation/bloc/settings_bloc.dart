@@ -1,15 +1,16 @@
 import 'dart:async';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:get_it/get_it.dart';
 import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/family_zone_service.dart';
 import 'package:nestling/core/data/stream_combine.dart';
 import 'package:nestling/features/settings/domain/entities/app_settings.dart';
 import 'package:nestling/features/settings/domain/entities/settings_child_entry.dart';
-import 'package:nestling/features/settings/domain/entities/settings_item.dart';
 import 'package:nestling/features/settings/domain/entities/settings_member_entry.dart';
 import 'package:nestling/features/settings/domain/settings_repository.dart';
 import 'package:nestling/features/settings/presentation/bloc/settings_event.dart';
+import 'package:nestling/features/settings/presentation/bloc/settings_session_store.dart';
 import 'package:nestling/features/settings/presentation/bloc/settings_state.dart';
 
 /// `GMT+4` / `GMT+0` label for [zoneId] at [nowUtc] (BST renders `GMT+1`).
@@ -26,8 +27,12 @@ String gmtOffsetLabel(String zoneId, DateTime nowUtc) {
 }
 
 class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
-  new({required this._repository, required this._zoneService})
-    : super(const SettingsState()) {
+  new({
+    required this._repository,
+    required this._zoneService,
+    SettingsSessionStore? sessionStore,
+  }) : _sessionStore = sessionStore ?? _lookupSessionStore(),
+       super(const SettingsState()) {
     on<SettingsLoadRequested>(_onLoadRequested);
     on<SettingsNotificationsChanged>(_onNotificationsChanged);
     on<SettingsTimeZonePicked>(_onTimeZonePicked);
@@ -38,15 +43,41 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   final SettingsRepository _repository;
   final FamilyZoneService _zoneService;
 
+  /// Session-scoped dismissal store (P16-B02): every `/settings` visit builds
+  /// a new bloc, but "Not now" hides the prompt for the whole session.
+  final SettingsSessionStore _sessionStore;
+
+  /// The DI-registered session store when present (the app and every
+  /// `setUpTestScope` harness register one), otherwise a fresh store — so
+  /// direct constructions in unit tests stay hermetic while route-built
+  /// blocs share the session.
+  static SettingsSessionStore _lookupSessionStore() {
+    final sl = GetIt.instance;
+    if (sl.isRegistered<SettingsSessionStore>()) {
+      return sl<SettingsSessionStore>();
+    }
+    return SettingsSessionStore();
+  }
+
   /// The route dispatches exactly one load event; its single `emit.forEach`
   /// subscription covers settings, the family zone, both roster streams and
-  /// the one-shot move prompt (RULES §4: blocs subscribe with `emit.forEach`
+  /// the one-shot move input (RULES §4: blocs subscribe with `emit.forEach`
   /// — never re-add load events to refresh).
   Future<void> _onLoadRequested(
     SettingsLoadRequested event,
     Emitter<SettingsState> emit,
   ) async {
-    emit(state.copyWith(status: SettingsStatus.loading));
+    // Merge session dismissals first: a rebuilt bloc (new `/settings` visit)
+    // inherits "Not now" zones from the session store (P16-B02).
+    emit(
+      state.copyWith(
+        status: SettingsStatus.loading,
+        dismissedZones: <String>{
+          ...state.dismissedZones,
+          ..._sessionStore.dismissedZones,
+        },
+      ),
+    );
     await emit.forEach<List<dynamic>>(
       combineLatest3(
         combineLatest2(
@@ -54,27 +85,27 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
           _repository.watchFamilyTimeZone(),
         ),
         combineLatest2(_repository.watchRoster(), _repository.watchMembers()),
-        _watchPendingMove(),
+        _watchMoveInput(),
       ).transform(_closeOnError),
       onData: (parts) {
         final head = parts[0] as List<dynamic>;
         final roster = parts[1] as List<dynamic>;
         final settings = head[0] as AppSettings;
         final familyZoneId = head[1] as String;
-        final pending = parts[2] as String?;
+        final move = parts[2] as ({String? device, String? pending});
         final visible =
-            pending == null || state.dismissedZones.contains(pending)
+            move.pending == null || state.dismissedZones.contains(move.pending)
             ? null
-            : pending;
+            : move.pending;
         // Built directly (not via copyWith) so the banner clears to null
         // explicitly; session dismissals are preserved across re-emits.
         return SettingsState(
           status: SettingsStatus.loaded,
-          items: settingsItemsFor(settings),
           settings: settings,
           familyRoster: (roster[0] as List<SettingsChildEntry>).toList(),
           memberRows: (roster[1] as List<SettingsMemberEntry>).toList(),
           familyZoneId: familyZoneId,
+          deviceZoneId: move.device,
           pendingZone: visible,
           dismissedZones: state.dismissedZones,
         );
@@ -119,6 +150,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     SettingsMoveDismissed event,
     Emitter<SettingsState> emit,
   ) {
+    _sessionStore.dismissedZones.add(event.zone);
     emit(
       state.copyWith(
         dismissedZones: <String>{...state.dismissedZones, event.zone},
@@ -128,12 +160,16 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   }
 
   /// One-shot device-zone read, re-evaluated against every family-zone
-  /// emission: the banner shows the device zone while it differs from the
-  /// stored family zone, and clears itself once they agree.
-  Stream<String?> _watchPendingMove() async* {
+  /// emission. `device` is the raw device zone (the picker's first row,
+  /// P16-B01) while `pending` is non-null only while it differs from the
+  /// stored family zone (the banner input).
+  Stream<({String? device, String? pending})> _watchMoveInput() async* {
     final device = await _zoneService.deviceZoneId();
     await for (final family in _zoneService.watchFamilyZone()) {
-      yield device == null || device == family ? null : device;
+      yield (
+        device: device,
+        pending: device == null || device == family ? null : device,
+      );
     }
   }
 }

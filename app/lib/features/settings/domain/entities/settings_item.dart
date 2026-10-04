@@ -22,9 +22,9 @@ class SettingsItem extends Equatable {
   List<Object?> get props => <Object?>[id, title, detail, enabled];
 }
 
-/// Legacy P16 placeholder rows derived from the given [AppSettings]. The repository uses
-/// this for `watchItems()` and the bloc reuses it so the pre-redesign view
-/// keeps rendering while the P16 UI builder replaces it.
+/// Legacy P16 placeholder rows derived from the given [AppSettings]. The
+/// repository uses this for `watchItems()` (pinned by the shared
+/// `repositories_test` settings group); the view no longer renders these.
 List<SettingsItem> settingsItemsFor(AppSettings s) {
   String onOff({required bool value}) => value ? 'On' : 'Off';
   return <SettingsItem>[

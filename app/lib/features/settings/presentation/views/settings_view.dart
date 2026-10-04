@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/family/family_routes.dart';
@@ -59,6 +60,44 @@ class SettingsView extends StatelessWidget {
   }
 }
 
+/// The design's `.sect` label: 13/700 uppercase with the browser's natural
+/// line-height. `NestSectionLabel` pins 18/13, which adds ~2 px per
+/// section and drifts every card below it (stage-5 UI finding 2). This
+/// pins Inter's computed natural height with a one-off TextPainter
+/// probe instead.
+class _P16Sect extends StatelessWidget {
+  const _P16Sect({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.nest;
+    final base = NestType.sectionLabel(color: tokens.ink2);
+    final probe = TextPainter(
+      text: TextSpan(
+        text: label.toUpperCase(),
+        style: TextStyle(
+          fontFamily: 'Inter',
+          fontSize: base.fontSize,
+          fontWeight: base.fontWeight,
+          letterSpacing: base.letterSpacing,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    return Semantics(
+      header: true,
+      child: Text(
+        label.toUpperCase(),
+        style: base.copyWith(height: probe.height / base.fontSize!),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+}
+
 class _SettingsLoading extends StatelessWidget {
   const _SettingsLoading();
 
@@ -110,10 +149,7 @@ class _SettingsLoaded extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.nest;
     final settings = state.settings;
-    final zoneSummary = settingsZoneSummary(
-      state.familyZoneId,
-      DateTime.now().toUtc(),
-    );
+    final zoneSummary = settingsZoneSummary(state.familyZoneId, appNowUtc());
     return ListView(
       padding: const EdgeInsets.fromLTRB(
         NestSpacing.padSide,
@@ -134,7 +170,7 @@ class _SettingsLoaded extends StatelessWidget {
           _MoveBanner(zone: state.pendingZone!),
         ],
         const SizedBox(height: NestSpacing.s6),
-        const NestSectionLabel(label: 'Family'),
+        const _P16Sect(label: 'Family'),
         const SizedBox(height: NestSpacing.s2),
         NestList(
           children: <Widget>[
@@ -152,7 +188,7 @@ class _SettingsLoaded extends StatelessWidget {
           ],
         ),
         const SizedBox(height: NestSpacing.s6),
-        const NestSectionLabel(label: 'Children'),
+        const _P16Sect(label: 'Children'),
         const SizedBox(height: NestSpacing.s2),
         NestList(
           children: <Widget>[
@@ -167,12 +203,21 @@ class _SettingsLoaded extends StatelessWidget {
           ],
         ),
         const SizedBox(height: NestSpacing.s6),
-        const NestSectionLabel(label: 'Subscription'),
+        const _P16Sect(label: 'Subscription'),
         const SizedBox(height: NestSpacing.s2),
-        NestCard(
+        // `.subcard` pins `border-radius: var(--r-m)` (16) where
+        // NestCard.standard would draw 24 — render it with the same
+        // construction but the design's radius (P16-B06).
+        Container(
+          key: const ValueKey('p16_subcard'),
           padding: const EdgeInsets.symmetric(
             horizontal: NestSpacing.s4,
-            vertical: 14,
+            vertical: NestSpacing.gap14,
+          ),
+          decoration: BoxDecoration(
+            color: tokens.surface,
+            borderRadius: NestRadii.allM,
+            boxShadow: tokens.cardShadow,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -193,6 +238,7 @@ class _SettingsLoaded extends StatelessWidget {
                 child: Semantics(
                   button: true,
                   label: 'Manage subscription',
+                  excludeSemantics: true,
                   onTap: () => context.push(PaywallRoutePaths.paywall),
                   child: SizedBox(
                     height: 52,
@@ -215,7 +261,7 @@ class _SettingsLoaded extends StatelessWidget {
           ),
         ),
         const SizedBox(height: NestSpacing.s6),
-        const NestSectionLabel(label: 'Time zone'),
+        const _P16Sect(label: 'Time zone'),
         const SizedBox(height: NestSpacing.s2),
         NestList(
           children: <Widget>[
@@ -228,7 +274,7 @@ class _SettingsLoaded extends StatelessWidget {
           ],
         ),
         const SizedBox(height: NestSpacing.s6),
-        const NestSectionLabel(label: 'Notifications'),
+        const _P16Sect(label: 'Notifications'),
         const SizedBox(height: NestSpacing.s2),
         NestList(
           children: <Widget>[
@@ -266,7 +312,7 @@ class _SettingsLoaded extends StatelessWidget {
           ],
         ),
         const SizedBox(height: NestSpacing.s6),
-        const NestSectionLabel(label: 'Privacy'),
+        const _P16Sect(label: 'Privacy'),
         const SizedBox(height: NestSpacing.s2),
         NestList(
           children: <Widget>[
@@ -292,7 +338,7 @@ class _SettingsLoaded extends StatelessWidget {
         const SizedBox(height: NestSpacing.s4),
         _LockHint(on: settings?.kidGateEnabled ?? true),
         const SizedBox(height: NestSpacing.s6),
-        const NestSectionLabel(label: 'About'),
+        const _P16Sect(label: 'About'),
         const SizedBox(height: NestSpacing.s2),
         NestList(
           children: <Widget>[
@@ -335,7 +381,8 @@ class _SettingsLoaded extends StatelessWidget {
                   key: const ValueKey('p16_delete_cancel'),
                   label: 'Cancel',
                   variant: NestButtonVariant.ghost,
-                  onPressed: () => Navigator.of(context).pop(false),
+                  onPressed: () =>
+                      Navigator.of(context, rootNavigator: true).pop(false),
                 ),
               ),
               Expanded(
@@ -343,7 +390,8 @@ class _SettingsLoaded extends StatelessWidget {
                   key: const ValueKey('p16_delete_confirm'),
                   label: 'Delete',
                   variant: NestButtonVariant.dangerGhost,
-                  onPressed: () => Navigator.of(context).pop(true),
+                  onPressed: () =>
+                      Navigator.of(context, rootNavigator: true).pop(true),
                 ),
               ),
             ],
@@ -402,7 +450,8 @@ class _ChildRow extends StatelessWidget {
         : child.nickname.characters.first.toUpperCase();
     return SettingsRow(
       title: '${child.nickname} · ${child.ageBand.replaceAll('-', '–')}',
-      subtitle: 'Pip: ${child.pipStageName} · ${child.coins} coins',
+      subtitle:
+          'Pip: ${child.pipStageName} · ${child.coins == 1 ? '1 coin' : '${child.coins} coins'}',
       leading: NestAvatar(
         initial: initial,
         size: NestAvatarSize.s32,

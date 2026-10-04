@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/settings/presentation/bloc/settings_bloc.dart';
@@ -41,27 +42,29 @@ class _ZonePickerList extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<SettingsBloc>().state;
     final familyZone = state.familyZoneId;
-    // Device zone hint: the bloc surfaces it as `pendingZone` while it
-    // differs from the family zone (dismissed banner still yields null, so
-    // dismissed device zones no longer lead the list — fine for a
-    // session-local dismissal).
-    final device = state.pendingZone;
+    // Device zone comes from its own field (kept after a banner dismissal);
+    // `pendingZone` is the banner-only input and is null once dismissed.
+    final device = state.deviceZoneId;
     final rows = <String>[
       if (device != null && device != familyZone) device,
       for (final id in kSettingsZoneChoices)
         if (id != device || id == familyZone) id,
     ];
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final id in rows)
-          _ZoneRow(
-            zoneId: id,
-            isDevice: id == device && id != familyZone,
-            isCurrent: id == familyZone,
-          ),
-      ],
+    return Flexible(
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final id in rows)
+              _ZoneRow(
+                zoneId: id,
+                isDevice: id == device && id != familyZone,
+                isCurrent: id == familyZone,
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -82,7 +85,7 @@ class _ZoneRow extends StatelessWidget {
     final tokens = context.nest;
     final subtitle = isDevice
         ? '$zoneId · Current location'
-        : '$zoneId · ${gmtOffsetLabel(zoneId, DateTime.now().toUtc())}';
+        : '$zoneId · ${gmtOffsetLabel(zoneId, appNowUtc())}';
     return SettingsRow(
       title: shortZoneLabel(zoneId),
       subtitle: subtitle,

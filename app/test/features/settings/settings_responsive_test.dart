@@ -99,11 +99,11 @@ void main() {
                 );
                 expect(list.width, gutter, reason: 'list $l width');
               }
-              final cards = find.byType(NestCard);
+              final cards = find.byKey(const ValueKey('p16_subcard'));
               for (var c = 0; c < cards.evaluate().length; c++) {
-                final card = tester.getRect(cards.at(c));
-                expect(card.left, NestSpacing.padSide, reason: 'card $c left');
-                expect(card.width, gutter, reason: 'card $c width');
+                final rect = tester.getRect(cards.at(c));
+                expect(rect.left, NestSpacing.padSide, reason: 'card $c left');
+                expect(rect.width, gutter, reason: 'card $c width');
               }
               if (i == 2) break;
               await tester.drag(settingsScrollable(), const Offset(0, -320));
@@ -244,10 +244,8 @@ void main() {
       textScale: 1.3,
     );
 
-    final card = find.byType(NestCard).first;
-    // `.subcard { padding: 14px 16px }` — the card's own padding, not the
-    // design system's default 16.
-    expect(tester.widget<NestCard>(card).padding, isNotNull);
+    final card = find.byKey(const ValueKey('p16_subcard'));
+    expect(card, findsOneWidget);
     final title = tester.getRect(find.text('Nestling Annual · £29.99/year'));
     final cardRect = tester.getRect(card);
     expect(title.left, cardRect.left + NestSpacing.s4, reason: '16 px inset');

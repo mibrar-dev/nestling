@@ -1,79 +1,74 @@
-# P16 Settings — 2a build, logic chunk (iteration 1)
+# P16 Settings — 2a build, logic chunk (iteration 2)
 
 Scope: non-UI layer only — `domain/**`, `data/**`, `presentation/bloc/**`,
-`settings_di.dart`, and `bloc`/`repository` unit tests. No view/widget file
-touched.
+`settings_di.dart`, plus unit/bloc tests and un-skipping the logic-layer bug
+proofs in `FIXES_1.md`. No view/widget file touched (one comment-only edit to
+`p16_bugs_test.dart` to un-skip the fixed B02 proof).
+
+Iteration 1 is superseded except where noted; the contract below is current.
+
+## CONTRACT CHANGES ( additive, one removal)
+
+1. **Added `SettingsState.deviceZoneId: String?`** — the raw device zone from
+   the bloc's one-shot read, kept regardless of dismissal. The zone picker
+   must order by this field (device row first when non-null and ≠
+   `familyZoneId`), not by `pendingZone` (review finding 1 / P16-B01 logic
+   half). `pendingZone` semantics are unchanged (banner-only).
+2. **Added `SettingsSessionStore`** (`presentation/bloc/
+   settings_session_store.dart`, DI lazy singleton): holds session
+   `dismissedZones`. `SettingsBloc` takes an optional `sessionStore` (defaults
+   to the DI singleton when registered, else a fresh store, so direct unit
+   constructions stay hermetic). Load merges the store into state; dismiss
+   writes the store and emits (P16-B02).
+3. **Removed `SettingsState.items`** (review finding 5): no consumer — the
+   replaced view never read it and no settings test referenced it. Kept:
+   `SettingsItem`, `settingsItemsFor` (still serve repository `watchItems()`,
+   pinned by the shared `repositories_test` settings group), and
+   `getItems`/`watchItems` signatures (unchanged behaviour).
 
 ## Files changed
 
-- `app/lib/features/settings/domain/entities/settings_child_entry.dart` (new):
-  `SettingsChildEntry` (`id`, `nickname`, `ageBand` raw e.g. `7-9`,
-  `pipStageName`, `coins`, `avatarColour`) + `settingsPipStageName(stage)`
-  (`1 Egg`, `2 Hatchling`, `3 Fledgling`, `4 Songbird`, unknown → `Fledgling`).
-- `app/lib/features/settings/domain/entities/settings_member_entry.dart` (new):
-  `SettingsMemberEntry` (`id`, `name`, `role`, `inviteStatus`).
-- `app/lib/features/settings/domain/entities/settings_item.dart` (extended):
-  added pure `settingsItemsFor(AppSettings)`; the legacy `_rows` body moved
-  here unchanged so repo and bloc share it (old view keeps compiling).
-- `app/lib/features/settings/domain/settings_repository.dart` (extended):
-  added `watchRoster()` + `watchMembers()`. All existing members untouched.
-- `app/lib/features/settings/data/settings_repository_impl.dart` (extended):
-  `watchRoster()` via `_db.watchChildren` (creation order, Maya→Leo);
-  `watchMembers()` via `members` ordered by `rowid` (Sarah→James);
-  `watchItems()` now maps `settingsItemsFor` (identical output).
-- `app/lib/features/settings/presentation/bloc/settings_event.dart`
-  (extended): kept `SettingsLoadRequested`; added
-  `SettingsNotificationsChanged({approvals?, payout?, summary?})`,
-  `SettingsTimeZonePicked(zoneId)` (positional),
-  `SettingsMoveConfirmed()`, `SettingsMoveDismissed(zone)` (positional).
-- `app/lib/features/settings/presentation/bloc/settings_state.dart`
-  (extended): kept `status`/`items`/`errorMessage`; added
-  `settings: AppSettings?`, `familyRoster`, `memberRows`,
-  `familyZoneId` (default `Europe/London`), `pendingZone: String?`,
-  `dismissedZones: Set<String>` (default `{}`). `copyWith` gains
-  `clearPendingZone` so the banner can clear to null explicitly.
-- `app/lib/features/settings/presentation/bloc/settings_bloc.dart`
-  (rewritten): `SettingsBloc({repository, zoneService})`; one `emit.forEach`
-  over `combineLatest3(watchSettings+watchFamilyTimeZone,
-  watchRoster+watchMembers, _watchPendingMove)` with the house
-  `_closeOnError`. Write handlers never emit (streams re-emit); only
-  `SettingsMoveDismissed` emits (no stream backs it). `_watchPendingMove`
-  is a one-shot device-zone read re-evaluated per family-zone emission.
-  Also exports `gmtOffsetLabel(zoneId, nowUtc)` (`GMT+4`, `GMT+0`, BST→`GMT+1`).
-- `app/lib/features/settings/settings_di.dart` (extended): injects shared
-  `FamilyZoneService` (registered in `app/di.dart` before this runs).
-- `app/test/features/settings/settings_repository_test.dart` (new, 9 tests).
-- `app/test/features/settings/settings_bloc_test.dart` (new, 14 tests).
+- `presentation/bloc/settings_session_store.dart` (new).
+- `presentation/bloc/settings_state.dart`: +`deviceZoneId`, −`items`
+  (ctor/copyWith/props/docs).
+- `presentation/bloc/settings_bloc.dart`: `_watchMoveInput()` yields
+  `(device, pending)`; load merges the session store; dismiss writes it;
+  `settingsItemsFor` import dropped.
+- `settings_di.dart`: registers/passes `SettingsSessionStore`.
+- `domain/entities/settings_item.dart`: doc refresh (repo-owned helper now).
+- `test/.../settings_bloc_test.dart`: device assertions (banner + surviving
+  dismissal), new `session dismissals` group (shared-store rebuild + DI
+  fallback), initial-state `deviceZoneId` check.
+- `test/.../settings_repository_test.dart`: new CLOCK test — writes stamp
+  `updatedAt` with `appNowUtc()` (pinned `2026-10-03 08:41Z`).
+- `test/.../p16_bugs_test.dart`: un-skipped `[P16-B02]` only (comment swap).
 
-## Items done (plan §b + §f logic half)
+## FIXES_1 triage (logic layer only)
 
-- Roster/members streams with child order (Maya→Leo) and member order
-  (Sarah→James); Pip stage names `Fledgling`/`Hatchling` from seed stages.
-- Zone pick/confirm/dismiss event plumbing; unknown ids ignored (no emit);
-  `confirmPendingMove` stores the device zone; dismiss is bloc-local only.
-- `gmtOffsetLabel` + `shortZoneLabel` reuse (no new shared helper).
-- Failure path: stream error → `failure` + `Retry` (`SettingsLoadRequested`)
-  resubscribes to recovery.
-- Verified: `flutter analyze` on my layer → No issues found; `dart format`
-  applied; `flutter test test/features/settings` → 23/23 pass; shared
-  `repositories_test` settings group + `family_time_test` zone test still
-  pass. No `google_fonts` anywhere. No simulator used.
-
-## CONTRACT CHANGES
-
-None. Event/state/entity names and shapes match `1_plan.md` exactly; the UI
-builder can code against the plan. One placement note: the plan put the
-GMT-offset formatter in "feature widgets", which is the UI builder's layer —
-it lives in `settings_bloc.dart` as `gmtOffsetLabel` instead (pure,
-tested here); feel free to re-export or relocate it when the view lands.
+- **P16-B01 (logic half done)**: `deviceZoneId` populated and tested; proof
+  still fails (`--run-skipped` re-checked) because the picker still reads
+  `pendingZone` — UI builder's half, in their layer. Left skipped.
+- **P16-B02 (done)**: session store; proof passes `--run-skipped` and in-suite;
+  un-skipped. My bloc tests cover the rebuild + fallback paths.
+- **P16-B04 (repo part already clean)**: no `DateTime.now()` in
+  domain/data/bloc (the two `_write` stamps already use `appNowUtc()` from a
+  main merge); remaining offender is `zone_picker_sheet.dart:85` (UI layer).
+  Left skipped.
+- **Review 1 (logic half done)**: same as B01. **Review 4 (repo part done)**:
+  same as B04. **Review 5 (done)**: `state.items` deleted as above.
+- **Not mine (views/shared, untouched)**: P16-T01/B07, P16-T02, B03, B05,
+  B06, review 2/3/6/7/8, navigation/a11y skips, email/schema items.
+- Verified: `flutter analyze lib/features/settings test/features/settings`
+  → No issues found; `dart format` applied; my files 37/37 pass;
+  `p16_bugs_test.dart` +14 ~6 green. Full `test/features/settings` reads
+  +94 ~10 −2 — both failures are in `settings_a11y_test` and reproduce with
+  my changes stashed (parallel UI-builder view edits in flight), not this
+  layer. No simulator used.
 
 ## LEFT FOR NEXT ITERATION
 
-- Nothing in the logic layer. UI builder owns views/widgets, widget tests,
-  copy audit and the stage-5 UI check.
-- Observed (not mine, not a finding): parallel UI-builder files
-  `presentation/widgets/settings_rows.dart` / `zone_picker_sheet.dart`
-  exist untracked in this worktree; `settings_rows.dart:47` carries a
-  `use_null_aware_elements` info — left for the UI builder.
+- UI builder: picker orders by `state.deviceZoneId` (un-skips B01);
+  `zone_picker_sheet.dart:85` → `appNowUtc()` (un-skips B04); all views-layer
+  FIXES items (T01/T02/B03/B05/B06/B07, review 2/3/6/7/8).
 
 VERDICT: PASS

@@ -212,7 +212,7 @@ void main() {
     // the picker drops the device zone row. Fix: keep the device zone in its
     // own SettingsState.deviceZoneId field populated by the same one-shot
     // read, and order the picker by that, not by pendingZone.
-    skip: true,
+    skip: false,
   );
 
   testWidgets(
@@ -250,11 +250,9 @@ void main() {
             '(bannerShown=$bannerShown).',
       );
     },
-    // P16-B02 open (minor) — dismissal is bloc-local but a new /settings
-    // visit builds a new bloc, so the prompt re-appears in the same session.
-    // Fix: keep one SettingsBloc for the session (or hoist dismissedZones
-    // into a session-scoped store).
-    skip: true,
+    // P16-B02 fixed in iteration 2 (logic half): "Not now" dismissals live
+    // in the session-scoped SettingsSessionStore, so a rebuilt bloc inherits
+    // them and the prompt stays hidden for the session.
   );
 
   testWidgets(
@@ -286,7 +284,7 @@ void main() {
     // short screen at 1.3 text scale (RenderFlex overflowed by 36 px at
     // 320×568). Fix: make the sheet child scrollable (shrink-wrapped
     // ListView inside the sheet) so rows stay reachable.
-    skip: true,
+    skip: false,
   );
 
   test(
@@ -320,8 +318,9 @@ void main() {
     // zone_picker_sheet.dart:85, settings_repository_impl.dart:114/125).
     // Fix after the main merge: swap them for appNowUtc()
     // (lib/core/data/app_clock.dart).
-    skip:
-        'P16-B04 open — see the comment above; appNowUtc() arrives with main.',
+    // P16-B04 FIXED in iteration 2: views use appNowUtc(); the repo
+    // writes appNowUtc(); no DateTime.now() remains in feature code.
+    skip: false,
   );
 
   testWidgets(
@@ -353,7 +352,7 @@ void main() {
     // P16-B05 open (minor, cosmetic) — 1 coin renders as "1 coins". Fix:
     // singular handling in _ChildRow (coins == 1 ? "1 coin" : "<n> coins");
     // data-over-mocks untouched.
-    skip: true,
+    skip: false,
   );
 
   testWidgets(
@@ -392,7 +391,7 @@ void main() {
     // card corners are 24 px instead of the design's 16 px. Fix: render the
     // subcard with NestRadii.allM + cardShadow (or add a radius override to
     // NestCard); do not change NestCard's shared defaults.
-    skip: true,
+    skip: false,
   );
 
   testWidgets(
@@ -442,7 +441,7 @@ void main() {
     // loses its toast. Fix: pop with
     // Navigator.of(context, rootNavigator: true) — or capture the dialog
     // builder's context — in both buttons.
-    skip: true,
+    skip: false,
   );
 
   // -------------------------------------------------------------------------
