@@ -102,6 +102,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:nestling/app/app.dart';
 import 'package:nestling/app/controllers.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/env_flags.dart';
@@ -309,11 +310,9 @@ void main() {
     'done today',
     (tester) async {
       final db = GetIt.instance<AppDatabase>();
-      final thirtyHoursAgo = DateTime.now().toUtc().subtract(
-        const Duration(hours: 30),
-      );
+      final thirtyHoursAgo = appNowUtc().subtract(const Duration(hours: 30));
       expect(
-        toLondon(thirtyHoursAgo).day == toLondon(DateTime.now().toUtc()).day,
+        toLondon(thirtyHoursAgo).day == toLondon(appNowUtc()).day,
         isFalse,
         reason: '30h always crosses a London calendar day',
       );
@@ -841,7 +840,7 @@ void main() {
         'to_do; at the start it counts', () async {
       final db = GetIt.instance<AppDatabase>();
       final repo = KidHomeRepositoryImpl(db: db);
-      final dayStart = londonDayStartUtc(DateTime.now().toUtc());
+      final dayStart = londonDayStartUtc(appNowUtc());
       await (db.delete(
         db.questCompletions,
       )..where((c) => c.questId.equals('q-reading'))).go();
@@ -877,7 +876,7 @@ void main() {
       () async {
         final db = GetIt.instance<AppDatabase>();
         final repo = KidHomeRepositoryImpl(db: db);
-        final weekStart = londonWeekStartUtc(DateTime.now().toUtc());
+        final weekStart = londonWeekStartUtc(appNowUtc());
         await (db.delete(
           db.questCompletions,
         )..where((c) => c.questId.equals('q-bins'))).go();
@@ -932,9 +931,7 @@ void main() {
               familyId: Seed.familyId,
               status: const Value('approved'),
               coins: const Value(10),
-              createdAt: Value(
-                DateTime.now().toUtc().subtract(const Duration(days: 400)),
-              ),
+              createdAt: Value(appNowUtc().subtract(const Duration(days: 400))),
             ),
           );
       final items = await repo.getItems();

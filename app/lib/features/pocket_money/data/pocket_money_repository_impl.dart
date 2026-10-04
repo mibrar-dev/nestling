@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:drift/drift.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/seed.dart';
@@ -187,7 +188,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
         'P06 mode must be weekly | per_quest | both',
       );
     }
-    final now = DateTime.now().toUtc();
+    final now = appNowUtc();
     final zone = await _db.familyZoneId();
     await _db.transaction(() async {
       await (_db.update(
@@ -218,7 +219,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
     if (day < 1 || day > 7) {
       throw ArgumentError.value(day, 'day', 'P06 payout day must be 1..7');
     }
-    final now = DateTime.now().toUtc();
+    final now = appNowUtc();
     final zone = await _db.familyZoneId();
     await _db.transaction(() async {
       await (_db.update(
@@ -299,7 +300,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
             type: 'gift',
             amountPence: amountPence,
             note: Value(note),
-            date: Value(DateTime.now().toUtc()),
+            date: Value(appNowUtc()),
             dateTz: Value(zone),
           ),
         );
@@ -321,7 +322,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
             type: 'spend',
             amountPence: -amountPence.abs(),
             note: Value(note),
-            date: Value(DateTime.now().toUtc()),
+            date: Value(appNowUtc()),
             dateTz: Value(zone),
           ),
         );
@@ -334,7 +335,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
     int savingsMovePence = 0,
     String? goalId,
   }) async {
-    final now = DateTime.now().toUtc();
+    final now = appNowUtc();
     final zone = await _db.familyZoneId();
     await _db.transaction(() async {
       await _db

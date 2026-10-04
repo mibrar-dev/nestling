@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/pin_hash.dart' as pin_hash;
@@ -67,7 +68,7 @@ class KidHomeRepositoryImpl implements KidHomeRepository {
     ).map((parts) {
       final quests = parts[0] as List<Quest>;
       final completions = parts[1] as List<QuestCompletion>;
-      final now = DateTime.now().toUtc();
+      final now = appNowUtc();
       final zone = normalizeZoneId(parts[2] as String);
       final mine = quests.where((q) => q.assigneeChildId == childId).toList()
         ..sort((a, b) => a.title.compareTo(b.title));
@@ -155,7 +156,7 @@ class KidHomeRepositoryImpl implements KidHomeRepository {
                   ),
                 ]))
               .get();
-      final now = DateTime.now().toUtc();
+      final now = appNowUtc();
       final inPeriod = existing
           .where(
             (c) => countsForCurrentPeriod(

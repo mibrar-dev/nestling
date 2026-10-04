@@ -1,4 +1,6 @@
+import 'package:clock/clock.dart';
 import 'package:drift/drift.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/seed.dart';
@@ -75,7 +77,7 @@ class FamilyRepositoryImpl implements FamilyRepository {
     required String avatarColour,
     int weeklyBasePence = 0,
   }) {
-    final id = 'child-${DateTime.now().toUtc().millisecondsSinceEpoch}';
+    final id = 'child-${clock.now().toUtc().millisecondsSinceEpoch}';
     return _db
         .into(_db.children)
         .insert(
@@ -93,7 +95,7 @@ class FamilyRepositoryImpl implements FamilyRepository {
             // creation order, so a newly added child sorts last. `now`, not
             // the column default, so the instant is also exact on databases
             // migrated to v3 (whose `ADD COLUMN` placeholder default is 0).
-            createdAt: Value(DateTime.now().toUtc()),
+            createdAt: Value(appNowUtc()),
             createdAtTz: const Value(defaultFamilyZoneId),
           ),
         );
@@ -124,7 +126,7 @@ class FamilyRepositoryImpl implements FamilyRepository {
 
   @override
   Future<void> inviteCoParent(String name) {
-    final id = 'coparent-${DateTime.now().toUtc().millisecondsSinceEpoch}';
+    final id = 'coparent-${clock.now().toUtc().millisecondsSinceEpoch}';
     return _db
         .into(_db.members)
         .insert(
