@@ -71,4 +71,19 @@ void main() {
       expect(back.activeChildId, 'maya');
     });
   });
+
+  group('K02 PIN verification', () {
+    test('Maya accepts 1234 and rejects anything else', () async {
+      final repo = KidHomeRepositoryImpl(db: db);
+      expect(await repo.verifyPin('maya', '1234'), isTrue);
+      expect(await repo.verifyPin('maya', '9999'), isFalse);
+      expect(await repo.verifyPin('maya', ''), isFalse);
+    });
+
+    test('Leo has no PIN so any code auto-passes', () async {
+      final repo = KidHomeRepositoryImpl(db: db);
+      expect(await repo.verifyPin('leo', '1234'), isTrue);
+      expect(await repo.verifyPin('leo', '0000'), isTrue);
+    });
+  });
 }

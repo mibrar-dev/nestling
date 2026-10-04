@@ -2317,4 +2317,32 @@ void main() {
       await disposeApp(tester);
     });
   });
+
+  group('K03 avatar initial (grapheme-safe)', () {
+    testWidgets('a nickname opening with an emoji still builds the frame', (
+      tester,
+    ) async {
+      // K02-TEST-BUG-A (SHARED_REQUEST #3): `nickname[0]` indexes UTF-16 code
+      // units, so a name opening with a non-BMP character handed `toUpperCase()`
+      // an unpaired surrogate and the whole screen failed to build — a major,
+      // not a cosmetic bug, and P05 accepts such a name.
+      await tester.runAsync(() async {
+        final db = GetIt.instance<AppDatabase>();
+        await (db.update(db.children)..where((c) => c.id.equals('maya'))).write(
+          const ChildrenCompanion(nickname: Value('🐝 Bee')),
+        );
+        await GetIt.instance<AppSession>().refresh();
+      });
+      await _pumpRoute(tester);
+      expect(tester.takeException(), isNull);
+      // The emoji IS the initial (grapheme-safe, not a placeholder), and the
+      // name still reads in full.
+      expect(
+        tester.widget<NestAvatar>(find.byType(NestAvatar).first).initial,
+        '🐝',
+      );
+      expect(find.text('Hi 🐝 Bee!'), findsOneWidget);
+      await disposeApp(tester);
+    });
+  });
 }

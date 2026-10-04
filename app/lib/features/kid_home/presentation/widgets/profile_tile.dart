@@ -91,9 +91,7 @@ class _ProfileTileState extends State<ProfileTile> {
                       children: [
                         ExcludeSemantics(
                           child: NestAvatar(
-                            initial: child.nickname.isEmpty
-                                ? '?'
-                                : child.nickname[0].toUpperCase(),
+                            initial: nestAvatarInitial(child.nickname),
                             size: avatarSize,
                             color: avatarColorOf(child.avatarColour),
                           ),

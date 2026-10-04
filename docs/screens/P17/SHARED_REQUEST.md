@@ -1,0 +1,221 @@
+# Shared request — P17 K03 tests still assert the placeholder gate title
+
+Need: P17 replaced the v1 scaffold screen (`AppBar(title: Text('P17 Parental gate'))`,
+`'No items yet'`) with the real gate (design copy `Grown-ups only`). Seven K03
+(`kid_home`) tests still assert the scaffold string after tapping the lock, so
+they now fail. They must assert real gate copy instead — e.g.
+`find.text('Grown-ups only')` plus `find.text('Type the answer in numbers:')` —
+which also proves the real gate rendered rather than a stub. P17 may not edit
+`app/test/features/kid_home/**` (RULES §1), so this is orchestrator/K03 work.
+Do NOT restore the placeholder title in the view: it is not design copy and it
+would fail P17's own copy test.
+
+Failing tests (all `app/test/features/kid_home/`):
+- `k03_bugs_test.dart` — `performAction(tap) on the lock opens the gate` (line 1534)
+- `k03_bugs_test.dart` — `K03-BUG-9: double-tapping the lock stacks two gate routes` (line 1062)
+- `kid_home_view_test.dart` — `K03 navigation lock opens the parental gate` (line 1988)
+- `kid_home_view_test.dart` — `K03 grown-ups lock (every kid state) loaded home: the lock opens the parental gate` (line 1242)
+- `kid_home_view_test.dart` — `… loading state: the lock is reachable and opens the gate` (line 1258)
+- `kid_home_view_test.dart` — `… failure state: the lock still opens the parental gate` (line 1274)
+- `kid_home_view_test.dart` — `… no active child: the lock still opens the parental gate` (line 1289)
+
+Failure text: `Expected: exactly one matching candidate / Actual:
+_TextWidgetFinder:<Found 0 widgets with text "P17 Parental gate": []>`.
+
+Files: `app/test/features/kid_home/k03_bugs_test.dart`,
+`app/test/features/kid_home/kid_home_view_test.dart` (tests only — no product
+code change needed anywhere).
+
+Blocks: yes for `flutter test` on main once P17 lands; the P17 screen itself is
+complete — its own suite is **106 pass / 1 skip / 0 red** (the 1 skip is
+P17-BUG-1, request #2).
+
+**Status, iteration 2: STILL UNFIXED.** Re-measured after the iteration-2 main
+merge — the same 7 assertions fail with the same
+`Found 0 widgets with text "P17 Parental gate"` text; the K03 files still carry
+the scaffold title at `k03_bugs_test.dart:1059,1531` and
+`kid_home_view_test.dart:1247,1263,1279,1294,1993`. One-line fix each:
+`expect(find.text('Grown-ups only'), findsOneWidget);`.
+
+**Status, iteration 3: STILL UNFIXED, and now 8 reds — a new 8th failure with a
+second symptom of the same cause.** `k01_bugs_test.dart` › `edge-case probes
+rapid lock double tap pushes exactly one gate` (line 697) asserts the *back
+button*: after the double tap its `expect(pushedPath(tester),
+'/parental-gate')` PASSES — so the gate opens correctly — then it fails on
+`await tester.pageBack()` with
+
+```
+Expected: exactly one matching candidate
+  Actual: _TypeWidgetFinder:<Found 0 widgets with type "CupertinoNavigationBarBackButton": []>
+   Which: means none were found but one was expected
+One back button expected on screen
+```
+
+Cause: the v1 scaffold's `AppBar` supplied an automatic back button; the design
+has none — P17 is a full-bleed card whose only exit control is `Back to Pip`,
+and the HTML source has no back arrow. Proven both ways this iteration: with the
+v1 scaffold view checked out temporarily the test is **green**
+(`00:01 +1: All tests passed!`), and with the real view it fails. The view was
+restored byte-identical afterwards (`diff -q` clean).
+
+Fix: replace `tester.pageBack()` with a real exit — tap
+`find.text('Back to Pip')` (or its semantics label), then assert
+`pushedPath(tester) == '/who-is-playing'`, which also pins the design's own
+cancel path. Do **not** add an AppBar back button to the gate to satisfy the
+test: it would break the design and the 11 design pins.
+
+All 8 reds are in `app/test/features/kid_home/**`, which P17 may not edit under
+RULES §1. With these one-line-per-site fixes the whole suite is green.
+
+**Status, iteration 4: RESOLVED on `main` (shared/kid_trial_gate, `0d7aa52`)**
+— `main`'s commit message is "kid tests assert routes", i.e. the kid_home tests
+now assert the real gate's route/copy. P17 did not touch those tests (RULES §1)
+and did not run the whole-app suite this stage (the integrator does).
+
+---
+
+# Shared request — P17 kid-mode + expired-trial redirect loop (/paywall ↔ /parental-gate)
+
+Need: with the 14-day trial aged out (`AppSession.trialExpired == true`,
+shared_batch3) in **kid mode**, `app/lib/app/router.dart` sends every
+location to `/paywall`. `/paywall` is parent-only in kid mode, so the same
+redirect sends it to `/parental-gate`; the gate then hits the trial-expired
+branch again — `GoException: redirect loop detected /paywall =>
+/parental-gate => /paywall`. The app renders go_router's error page
+(`Page Not Found`), so kid mode cannot be used at all after expiry: the
+gate, kid home and every kid route are stuck. Reproduced with the demo DB
+row flipped to an aged trial in `P17-BUG-1` of
+`app/test/features/parental_gate/p17_bugs_test.dart` (skip-marked;
+unskipping shows the error-page text). `router.dart` is identical on `main`,
+so this is live independent of P17.
+
+Suggested fix (router.dart, shared): do not apply the paywall redirect in
+kid mode (`if (!appMode.isKid && onboarded && session.trialExpired &&
+location != PaywallRoutePaths.paywall) …`), or exempt
+`ParentalGateRoutePaths.gate` from the trial-expired branch exactly as the
+onboarding branch already exempts it. Kids cannot pay; the gate is the only
+route to parent mode, where the paywall then fires correctly.
+
+Files: `app/lib/app/router.dart` (shared — P17 may not edit under RULES §1).
+
+Blocks: no — P17 lands with the proof skip-marked and the screen itself is
+unaffected while the trial is live (demo seed is `active`).
+
+**Status, iteration 3: STILL UNFIXED.** After the iteration-3 `main` merge,
+`app/lib/app/router.dart` is still byte-identical to `main` (`git diff main --
+app/lib/app/router.dart` is empty) and the trial-expired branch
+(`router.dart:120-124`) still has no kid-mode guard, so the loop reproduces.
+Proof `P17-BUG-1` stays skip-marked. The P17 feature suite is otherwise fully
+green (106 pass / 1 skip).
+
+**Status, iteration 4: RESOLVED on `main` (shared/kid_trial_gate, `0d7aa52`).**
+`router.dart` now sends kid mode + `trialExpired` to
+`ParentalGateRoutePaths.gate` and exempts the gate from that branch, exactly as
+suggested above. Proof `P17-BUG-1` is **un-skipped and green** (it now also
+asserts no router error page and `currentPath == '/parental-gate'`). The P17
+feature suite has **0 skips**. This request can be closed.
+
+---
+
+# Shared request — P17 NestKeypad gaps do not match either design (24/16 vs the CSS grid)
+
+Need: `NestKeypad` (`app/lib/core/design_system/components/nest_keypad.dart`)
+hard-codes a 24 px **column** gap and a 16 px **row** gap. The CSS it mirrors
+(`components.css:193`) is
+`.keypad { display:grid; grid-template-columns: repeat(3,1fr); gap:10px;
+padding:8px 24px 0; justify-items:center }`, so the rendered **column pitch is
+container-driven** and the **row pitch is always 82** (72 + gap 10). Measured
+from the design PNGs (÷3, ink bands):
+
+| Design | key columns (x) | column pitch | key rows (y) | row pitch |
+|---|---|---|---|---|
+| P17 (`P17-parental-gate.png`, card content 302 wide) | 71 / 159 / 247 | **88** | 344 / 426 / 508 / 590 | **82** |
+| K02 (`K02-pin.png`, wider container) | 77 / 159 / 241 | **82** | 393 / 475 / 557 / 639 | **82** |
+
+`NestKeypad` produces column pitch 96 and row pitch 88 at every width, so it
+matches **neither** screen. The in-code comment ("the K02/P17 renders this
+fixes measure 24px columns / 16px rows") is not what those renders show.
+
+Consequence on P17 (all measured, all in
+`app/test/features/parental_gate/parental_gate_geometry_test.dart`, which now
+pins the HTML pitches): keys drift +8 px horizontally on the outer columns,
++6 px per row; the card grows from the design's 712 px to 738 px, so the card
+top sits 13 px high and `Back to Pip` + the caption land 26 px low.
+
+Files: `app/lib/core/design_system/components/nest_keypad.dart` (shared — P17
+may not edit under RULES §1).
+
+Suggested fix: reproduce the CSS grid instead of a fixed gap — three equal
+flex columns per row with the 72 px key centred (`Expanded` + `Center`, or
+`Row` with `Expanded` children), row gap `NestSpacing.gap10` (10) and the
+design's `padding: EdgeInsets.only(top: 8)`. That makes the column pitch fall
+out of the available width, which is what P17 (88) and K02 (82) each need.
+
+Blocks: yes for the P17 design pins in ORCHESTRATOR_NOTES items 5/2 — the card
+cannot return to its 712 px design height while the keypad is 26 px too tall.
+P17 can fix the screen-local half (anchor the card at the design top 66 and
+restore the CSS vertical gaps) without this, but the keypad drift stays.
+
+**Status, iteration 2: STILL BLOCKING — 2 reds in the P17 suite.**
+`parental_gate_geometry_test.dart` › `ORCHESTRATOR_NOTES design pins (390×844,
+light, textScale 1.0)` fails with exactly:
+
+```
+card height: app 738.0 vs design 712.0 (Δ26.0)
+keypad row 2 centre: app 468.0 vs design 462.0 (Δ6.0)
+keypad row 3 centre: app 556.0 vs design 544.0 (Δ12.0)
+keypad row 4 centre: app 644.0 vs design 626.0 (Δ18.0)
+"Back to Pip" centre: app 728.0 vs design 702.0 (Δ26.0)
+caption centre: app 775.0 vs design 749.0 (Δ26.0)
+```
+
+and `… the keypad follows the HTML grid gap (pitch 82)` with
+`Expected: 82.0 (±0.5) / Actual: <88.0>`. The card top is now correct (66) and
+row 1 matches, so the whole Δ26 traces to the keypad: 3 internal row gaps 6 px
+too tall each (18) plus the 8 px bottom padding the CSS drops (8).
+**No call-site change can fix it** — row 2's centre is already +6 *inside* the
+shared component, so nothing P17 does around the keypad moves it, and forking a
+local keypad is forbidden (plan §g). Marked in code with `TODO(P17)` at the
+`NestKeypad` call site in `parental_gate_view.dart` per RULES §2.
+
+**RESOLVED on main — iteration 3, this request can be closed.**
+`9cac0c6 Merge shared/keypad_grid` ("NestKeypad matches CSS .keypad grid (10px
+gaps, 8-24-0 padding, 1fr columns) + shrinkWrap fit for K02") landed in this
+worktree via `e70760c`. Re-measured in the integrated build at 390×844 light,
+textScale 1.0, bundled fonts loaded: card 66…778 (Δ0), keypad row centres
+380/462/544/626 (Δ0), row pitch 82 (Δ0), column pitch 88 (Δ0), `Back to Pip` 702
+(Δ0), caption 749 (Δ0) — every ORCHESTRATOR_NOTES item 2–6 pin green, both
+geometry tests green. No P17-local re-spacing was made; the `TODO(P17)` comment
+this integrator added at the call site in iteration 2 was replaced by 2b's
+documented call-site compatibility work (direct render at the design width,
+`SizedBox(contentWidth) + FittedBox(scaleDown) + NestKeypadFit.shrinkWrap` for
+narrower cards), so nothing stale was left behind.
+
+---
+
+## Status update (3_test, iteration 2) — request #3 is LANDED on main
+
+`main` now carries the fix: `9cac0c6 Merge shared/keypad_grid` (branch
+`shared/keypad_grid`, "NestKeypad matches CSS .keypad grid (10px gaps,
+8-24-0 padding, 1fr columns) + shrinkWrap fit for K02"). Confirmed by reading
+`main:app/lib/core/design_system/components/nest_keypad.dart`: `Expanded` cells,
+row gap `NestSpacing.gap10`, `padding: EdgeInsets.only(top: 8, left: 24,
+right: 24)`, `NestKeypadFit.stretch` as the default and
+`contentWidth = 3×72 + 2×10 + 2×24 = 280` for `shrinkWrap`. That is exactly the
+contract `parental_gate_geometry_test.dart` pins (row pitch 82, column pitch
+88), so **no shared change is outstanding** — this request can be closed once
+the merge reaches the screen branch.
+
+Two things belong to P17 when it does (recorded in `3_test.md` §3.3, not
+actionable here):
+
+1. the gate's `SizedBox(width: 296) > FittedBox(scaleDown) > NestKeypad`
+   wrapper passes **unbounded** width to the child, which the new
+   `Expanded`-based grid cannot lay out (`RenderFlex children have non-zero
+   flex but incoming width constraints are unbounded`). At the design width the
+   CSS `.keypad` is block-level, so the `FittedBox` should go; narrower cards
+   need a width-bounded `shrinkWrap` instance inside it (verified patterns B
+   and C in `3_test.md` §3.3);
+2. once merged, re-run `flutter test test/features/parental_gate` — the two
+   keypad pins in `parental_gate_geometry_test.dart` should go green with no
+   P17 change.
