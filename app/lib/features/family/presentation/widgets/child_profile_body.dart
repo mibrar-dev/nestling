@@ -105,7 +105,7 @@ class _HeroCard extends StatelessWidget {
       child: Column(
         children: <Widget>[
           NestAvatar(
-            initial: nickname.isEmpty ? '?' : nickname[0].toUpperCase(),
+            initial: nestAvatarInitial(nickname),
             size: NestAvatarSize.s64,
             color: avatarColourFor(child.avatarColour),
             // No semantic label: the initial is the first letter of the name

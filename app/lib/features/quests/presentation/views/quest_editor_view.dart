@@ -849,18 +849,11 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
     );
   }
 
-  /// The first **grapheme**, not the first UTF-16 code unit (BUG-P09-8).
-  /// `substring(0, 1)` slices a surrogate pair in half, and a lone surrogate
-  /// is not well-formed UTF-16: Flutter's paragraph builder throws
-  /// `ArgumentError: string is not well-formed UTF-16` while painting the pill,
-  /// so an emoji-leading nickname (`😀 Sam`, which P05 accepts) failed to draw
-  /// the screen at all. `String.characters` is the same accessor P06 uses for
-  /// the same job (`pocket_money_setup_view.dart:684`).
+  /// The first grapheme, not the first UTF-16 code unit (BUG-P09-8,
+  /// K02-BUG-1). Delegates to the shared helper so an emoji-leading
+  /// nickname (`😀 Sam`, which P05 accepts) never fails to draw.
   static String _initial(String nickname) {
-    if (nickname.isEmpty) {
-      return '?';
-    }
-    return nickname.characters.first.toUpperCase();
+    return nestAvatarInitial(nickname);
   }
 
   static NestAvatarColor _avatarColour(String colour) {
