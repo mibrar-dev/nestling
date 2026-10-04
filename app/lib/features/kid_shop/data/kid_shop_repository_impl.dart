@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/data/stream_combine.dart';
+import 'package:nestling/features/kid_shop/domain/entities/kid_shop_data.dart';
 import 'package:nestling/features/kid_shop/domain/entities/shop_reward.dart';
 import 'package:nestling/features/kid_shop/domain/kid_shop_repository.dart';
 
@@ -12,41 +15,57 @@ class KidShopRepositoryImpl implements KidShopRepository {
 
   final AppDatabase _db;
 
+  /// The active child's shop: `app_state.activeChildId` (demo seed: `maya`)
+  /// fans out to exactly one rewards query (creation order — the K08 list
+  /// order, never price order) plus that child's row, so coins and the list
+  /// always arrive atomically.
   @override
-  Future<List<ShopReward>> getItems() => watchItems().first;
-
-  @override
-  Stream<List<ShopReward>> watchItems() async* {
-    final state = await (_db.select(
-      _db.appState,
-    )..where((a) => a.id.equals(1))).getSingleOrNull();
-    yield* watchShop(state?.activeChildId ?? 'maya');
+  Stream<KidShopData> watchActiveShop() {
+    return _switchMap<AppStateData?, KidShopData>(
+      _db.watchAppState(),
+      (state) => _shopFor(state?.activeChildId ?? 'maya'),
+    );
   }
 
-  @override
-  Stream<List<ShopReward>> watchShop(String childId) {
+  /// Per-child shop stream: rewards in creation order (the K08 list order)
+  /// with `affordable` resolved against that child's coins.
+  Stream<KidShopData> _shopFor(String childId) {
     return combineLatest2(
-      _db.watchRewards(Seed.familyId),
+      _db.watchRewardsInCreationOrder(Seed.familyId),
       _db.watchChild(childId),
     ).map((parts) {
       final rewards = parts[0] as List<Reward>;
       final kid = parts[1] as ChildrenData?;
       final coins = kid?.coins ?? 0;
-      return rewards
-          .map(
-            (r) => ShopReward(
-              id: r.id,
-              title: r.title,
-              detail: '${r.coinPrice} coins',
-              icon: r.icon,
-              coinPrice: r.coinPrice,
-              needsOk: r.needsOk,
-              affordable: coins >= r.coinPrice,
-            ),
-          )
-          .toList();
+      return KidShopData(
+        childId: childId,
+        coins: coins,
+        items: rewards
+            .map(
+              (r) => ShopReward(
+                id: r.id,
+                title: r.title,
+                detail: '${r.coinPrice} coins',
+                icon: r.icon,
+                coinPrice: r.coinPrice,
+                needsOk: r.needsOk,
+                affordable: coins >= r.coinPrice,
+              ),
+            )
+            .toList(),
+      );
     });
   }
+
+  /// Items for an explicit child, without the active-child fan-out.
+  ///
+  /// Not part of [KidShopRepository]: K08 reads [watchActiveShop] only. Kept
+  /// on the implementation because the foundation's shared
+  /// `test/core/data/repositories_test.dart` covers affordability and the
+  /// request/approve round trip through it, and that test is shared code this
+  /// screen must not edit.
+  Stream<List<ShopReward>> watchShop(String childId) =>
+      _shopFor(childId).map((data) => data.items);
 
   @override
   Future<void> requestReward(String childId, String rewardId) async {
@@ -85,4 +104,41 @@ class KidShopRepositoryImpl implements KidShopRepository {
       ChildrenCompanion(coins: Value(kid.coins - coins)),
     );
   }
+}
+
+/// `switchMap` for never-closing Drift watch streams: every outer emission
+/// cancels the previous inner subscription and forwards the new inner's
+/// events. ([Stream.asyncExpand] cannot be used here — it pauses the outer
+/// subscription until the current inner *closes*, and watch streams never
+/// close, so an active-child switch after the first emission would stall
+/// forever.) Feature-local copy of the `kid_home` helper: no shared edits,
+/// no cross-feature import.
+Stream<S> _switchMap<T, S>(
+  Stream<T> outer,
+  Stream<S> Function(T event) convert,
+) {
+  late final StreamController<S> controller;
+  StreamSubscription<T>? outerSub;
+  StreamSubscription<S>? innerSub;
+  controller = StreamController<S>(
+    onListen: () {
+      outerSub = outer.listen(
+        (event) {
+          unawaited(innerSub?.cancel());
+          innerSub = convert(event).listen(
+            controller.add,
+            onError: controller.addError,
+            // Never close: the next outer emission replaces the inner.
+          );
+        },
+        onError: controller.addError,
+        // Outer done: keep forwarding the live inner.
+      );
+    },
+    onCancel: () async {
+      await innerSub?.cancel();
+      await outerSub?.cancel();
+    },
+  );
+  return controller.stream;
 }

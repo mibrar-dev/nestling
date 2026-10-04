@@ -1,0 +1,353 @@
+// K08 · Reward shop — design geometry at the design's real font metrics.
+//
+// `flutter_test`'s default font is much wider than the bundled Nunito, so this
+// lives in its own file: loading the real faces changes every text metric on
+// the screen. Same isolation (and the same reason) as K03's
+// `kid_home_geometry_test.dart`. Behaviour/copy live in
+// `reward_shop_view_test.dart`.
+//
+// What is pinned is the design's own arithmetic, cross-checked pixel by pixel
+// against `design/screens/light/K08-shop.png` ÷3 (measured with a script over
+// the PNG, not eyeballed):
+//
+//   status reserve      47
+//   back box            x 20…76,   y 47…103   (56, transparent)
+//   lock box            x 314…370, y 47…103   (56, surface + line)
+//   coin pill           x 276…370, y 109…149  (94 × 40, `.coin-pill.big`)
+//   title line box      y 112…146             (34, centred in the 40 row)
+//   intro line          y 165…185             (20, `.kcap`)
+//   grid row 1          y 201…417  (216)      columns x 20…187 / 203…370 (167)
+//   grid row 2          y 433…649  (216)
+//   grid row 3          y 665…905  (240)      café note adds 6 + 18, and CSS
+//                                              grid stretch makes the dinner
+//                                              card 240 too
+//   card content box    x 23…184               (border 3 + padding 10)
+//   art circle          y 214…270  (56, centre y 242)
+//   name box            y 276…316  (min 40)    2 lines = 38, centred → 277
+//   price row           y 322…342  (20)        label 16 → 324
+//   button              y 348…404  (56)        + the widget's own 6 px shadow
+//                                              room, 404…410, inside the card
+//
+// Run directly:
+//   flutter test test/features/kid_shop/reward_shop_widget_geometry_test.dart
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show FontLoader, rootBundle;
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:get_it/get_it.dart';
+import 'package:nestling/app/app.dart';
+import 'package:nestling/app/controllers.dart';
+import 'package:nestling/core/design_system/design_system.dart';
+import 'package:nestling/features/kid_shop/presentation/widgets/shop_reward_card.dart';
+
+import '../../test_scope.dart';
+
+const String _route = '/reward-shop';
+
+/// Grid geometry at 390 wide (`.k8-grid`: two columns, `--s4` gap, 20 px
+/// gutters).
+const double _colWidth = 167;
+const double _colGap = 16;
+const double _gutter = 20;
+
+/// Loads the bundled faces so the metrics match a device run.
+Future<void> loadBundledFonts() async {
+  final inter = FontLoader('Inter')
+    ..addFont(rootBundle.load('assets/fonts/Inter-Regular.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-Medium.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-SemiBold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-Bold.ttf'));
+  final nunito = FontLoader('Nunito')
+    ..addFont(rootBundle.load('assets/fonts/Nunito-Bold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Nunito-ExtraBold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Nunito-Black.ttf'));
+  await inter.load();
+  await nunito.load();
+}
+
+void main() {
+  setUpAll(loadBundledFonts);
+
+  setUp(() async {
+    await setUpTestScope();
+  });
+
+  Future<void> pumpShop(WidgetTester tester) async {
+    tester.view.physicalSize = const Size(390 * 3, 844 * 3);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    GetIt.instance<ThemeModeController>().selectMode(ThemeMode.light);
+    await tester.pumpWidget(const NestlingApp(initialRoute: _route));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+  }
+
+  Finder card(int index) => find.byType(ShopRewardCard).at(index);
+
+  group('K08 chrome geometry', () {
+    testWidgets('back and lock boxes sit in the 47…103 top row', (
+      tester,
+    ) async {
+      await pumpShop(tester);
+      expect(tester.takeException(), isNull);
+      // `.k8-top` starts straight under the status reserve and is 56 + 6 tall.
+      expect(
+        tester.getRect(find.byType(NestIconButton)),
+        const Rect.fromLTRB(_gutter, 47, _gutter + 56, 103),
+      );
+      expect(
+        tester.getRect(find.byType(NestLockButton)),
+        const Rect.fromLTRB(390 - _gutter - 56, 47, 390 - _gutter, 103),
+      );
+      await disposeApp(tester);
+    });
+
+    testWidgets('the coin pill is the 94 × 40 big pill at y 109', (
+      tester,
+    ) async {
+      await pumpShop(tester);
+      expect(tester.takeException(), isNull);
+      // Measured: x 276.0…370.0, y 109.0…149.0 in the light PNG ÷3.
+      expect(
+        tester.getRect(find.byType(NestCoinPill)),
+        const Rect.fromLTRB(276, 109, 370, 149),
+      );
+      await disposeApp(tester);
+    });
+
+    testWidgets('the title and the intro keep their design rows', (
+      tester,
+    ) async {
+      await pumpShop(tester);
+      expect(tester.takeException(), isNull);
+      // 28/34 heading, centred in the 40-tall head row (109…149).
+      expect(tester.getRect(find.text('Reward shop')).top, closeTo(112, 2));
+      expect(tester.getRect(find.text('Reward shop')).height, closeTo(34, 2));
+      // `.kcap` 15/20: 149 + 16 = 165, one line.
+      final intro = tester.getRect(
+        find.text('Spend your coins on things you actually want.'),
+      );
+      expect(intro.top, closeTo(165, 2));
+      expect(intro.height, closeTo(20, 2));
+      await disposeApp(tester);
+    });
+  });
+
+  group('K08 grid geometry', () {
+    testWidgets('two 167 columns with a 16 gap and 20 gutters', (tester) async {
+      await pumpShop(tester);
+      expect(tester.takeException(), isNull);
+      for (final index in <int>[0, 2, 4]) {
+        expect(
+          tester.getRect(card(index)).left,
+          closeTo(_gutter, 0.5),
+          reason: 'card $index left gutter',
+        );
+        expect(
+          tester.getRect(card(index)).width,
+          closeTo(_colWidth, 1),
+          reason: 'card $index width',
+        );
+        expect(
+          tester.getRect(card(index + 1)).left -
+              tester.getRect(card(index)).right,
+          closeTo(_colGap, 0.5),
+          reason: 'card $index gap',
+        );
+        expect(
+          tester.getRect(card(index + 1)).right,
+          closeTo(390 - _gutter, 0.5),
+          reason: 'card $index right gutter',
+        );
+      }
+      await disposeApp(tester);
+    });
+
+    testWidgets('card rows land at 201, 433 and 665', (tester) async {
+      await pumpShop(tester);
+      expect(tester.takeException(), isNull);
+      for (final index in <int>[0, 1]) {
+        expect(
+          tester.getRect(card(index)).top,
+          closeTo(201, 2),
+          reason: 'row 1 card $index top',
+        );
+        expect(
+          tester.getRect(card(index)).height,
+          closeTo(216, 2),
+          reason: 'row 1 card $index height',
+        );
+        expect(
+          tester.getRect(card(index)).bottom,
+          closeTo(417, 2),
+          reason: 'row 1 card $index bottom',
+        );
+      }
+      for (final index in <int>[2, 3]) {
+        expect(
+          tester.getRect(card(index)).top,
+          closeTo(433, 2),
+          reason: 'row 2 card $index top',
+        );
+        expect(
+          tester.getRect(card(index)).height,
+          closeTo(216, 2),
+          reason: 'row 2 card $index height',
+        );
+      }
+      // The café card carries the "30 more to go" note (+6 gap, +18 line) and
+      // the grid stretches its row-mate to match.
+      expect(tester.getRect(card(4)).top, closeTo(665, 2));
+      expect(tester.getRect(card(4)).height, closeTo(240, 2));
+      expect(tester.getRect(card(5)).top, closeTo(665, 2));
+      expect(tester.getRect(card(5)).height, closeTo(240, 2));
+      await disposeApp(tester);
+    });
+
+    testWidgets('the note sits between the price and the button', (
+      tester,
+    ) async {
+      await pumpShop(tester);
+      expect(tester.takeException(), isNull);
+      // Row 3 card top 665 + border 3 + padding 10 + art 56 + 6 + name 40 + 6
+      // + price 20 + 6 = 812: the note lands exactly where the plain card's
+      // button starts, and pushes this card's button down by 24 (6 + 18).
+      final note = tester.getRect(find.text('30 more to go'));
+      expect(note.top, closeTo(812, 2));
+      expect(note.height, closeTo(18, 2));
+      final button = tester.getRect(
+        find.descendant(of: card(4), matching: find.byType(NestKidButton)),
+      );
+      expect(button.top, closeTo(836, 2));
+      expect(button.top - note.bottom, closeTo(6, 2));
+      expect(tester.getRect(card(4)).bottom, closeTo(905, 2));
+      await disposeApp(tester);
+    });
+  });
+
+  group('K08 card internals', () {
+    testWidgets('the art disc is 56 and centred on the card', (tester) async {
+      await pumpShop(tester);
+      expect(tester.takeException(), isNull);
+      // The 32 px glyph sits centred in the 56 px `coin-tint` circle, so its
+      // own rect pins the circle: 242 = 214 + 28.
+      for (final (index, centreY) in <(int, double)>[
+        (0, 242),
+        (1, 242),
+        (2, 474),
+        (3, 474),
+        (4, 706),
+        (5, 706),
+      ]) {
+        final icon = tester.getRect(
+          find.descendant(of: card(index), matching: find.byType(NestIcon)),
+        );
+        expect(icon.size, const Size.square(32), reason: 'card $index glyph');
+        expect(
+          icon.center.dy,
+          closeTo(centreY, 2),
+          reason: 'card $index art centre',
+        );
+        expect(
+          icon.center.dx,
+          closeTo(
+            index.isEven ? 20 + _colWidth / 2 : 390 - _gutter - _colWidth / 2,
+            1,
+          ),
+          reason: 'card $index art centre x',
+        );
+      }
+      await disposeApp(tester);
+    });
+
+    testWidgets('two-line names and one-line names share the 40 row', (
+      tester,
+    ) async {
+      await pumpShop(tester);
+      expect(tester.takeException(), isNull);
+      // "30 min extra screen time" wraps to two 19 px lines (38), centred in
+      // the 40 px `.k8-n` box at 276…316.
+      final two = tester.getRect(find.text('30 min extra screen time'));
+      expect(two.height, closeTo(38, 2));
+      expect(two.top, closeTo(277, 2));
+      // "Pick Friday film" is one line, centred on the same box.
+      final one = tester.getRect(find.text('Pick Friday film'));
+      expect(one.height, closeTo(19, 2));
+      expect(one.center.dy, closeTo(296, 2));
+      expect(one.center.dx, closeTo(286.5, 2));
+      await disposeApp(tester);
+    });
+
+    testWidgets('the price row is 20 tall with a 16 label', (tester) async {
+      await pumpShop(tester);
+      expect(tester.takeException(), isNull);
+      final price = tester.getRect(find.text('50'));
+      expect(price.height, closeTo(16, 2));
+      expect(price.top, closeTo(324, 2));
+      // The `.k8-p` row is `inline-flex` + centred: coin (20) + 4 gap + label.
+      // The ROW is centred on the card, not the label.
+      final coin = tester.getRect(
+        find.descendant(
+          of: card(0),
+          matching: find.byWidgetPredicate(
+            (widget) => widget is SvgPicture && widget.width == 20,
+          ),
+        ),
+      );
+      expect(coin.height, closeTo(20, 2));
+      expect((coin.left + price.right) / 2, closeTo(103.5, 1));
+      await disposeApp(tester);
+    });
+
+    testWidgets('the Get it button is 56 tall and full width', (tester) async {
+      await pumpShop(tester);
+      expect(tester.takeException(), isNull);
+      // `NestKidButton` reserves 6 px below the visible button for `--sh-kid`,
+      // so its widget box is 62 tall: the painted button occupies 348…404 and
+      // the shadow band 404…410 — both inside the card's white area, exactly
+      // as the CSS draws it.
+      final button = tester.getRect(
+        find.descendant(of: card(0), matching: find.byType(NestKidButton)),
+      );
+      expect(button.left, closeTo(33, 1));
+      expect(button.top, closeTo(348, 2));
+      expect(button.width, closeTo(141, 1));
+      expect(button.height, closeTo(62, 2));
+      // Right column: 216…357.
+      final right = tester.getRect(
+        find.descendant(of: card(1), matching: find.byType(NestKidButton)),
+      );
+      expect(right.left, closeTo(216, 1));
+      expect(right.top, closeTo(348, 2));
+      await disposeApp(tester);
+    });
+  });
+
+  group('K08 footer and scroll tail', () {
+    testWidgets('the footer is centred and follows the last row by 16', (
+      tester,
+    ) async {
+      await pumpShop(tester);
+      expect(tester.takeException(), isNull);
+      const footer = 'You have 120 coins. Pip is helping you save!';
+      // It sits below the fold (design y 921) and the list is lazy, so it is
+      // built only once the list moves.
+      final list = find.byType(Scrollable).first;
+      for (var i = 0; i < 10 && find.text(footer).evaluate().isEmpty; i++) {
+        await tester.drag(list, const Offset(0, -200));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      final rect = tester.getRect(find.text(footer));
+      expect(rect.height, closeTo(20, 2));
+      expect(rect.center.dx, closeTo(195, 1));
+      // The tail is 58 px (`--home-h` 34 + `--s6` 24), so the list can scroll
+      // the footer clear of the home indicator.
+      final scrollable = tester.widget<Scrollable>(list);
+      expect(scrollable.controller, isNotNull);
+      expect(scrollable.controller!.position.maxScrollExtent, greaterThan(0));
+      await disposeApp(tester);
+    });
+  });
+}
