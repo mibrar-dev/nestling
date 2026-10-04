@@ -9,6 +9,8 @@ abstract class ParentalGateRepository {
   Stream<bool> watchGateEnabled();
   Future<void> setGateEnabled({required bool enabled});
 
-  /// Today's challenge. Tests pass an explicit date.
+  /// Today's challenge for the UTC instant [utc]. The calendar day is read
+  /// in the family zone (Europe/London), so the question is stable across
+  /// one London day. Tests pass an explicit instant.
   ParentalGateChallenge challengeFor(DateTime utc);
 }

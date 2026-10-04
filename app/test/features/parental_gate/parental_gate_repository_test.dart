@@ -8,8 +8,15 @@ import '../../test_scope.dart';
 
 void main() {
   group('ParentalGateRepository.challengeFor', () {
+    // 4_review.md finding 3: challengeFor is pure, so one memory database
+    // serves the whole group instead of one per test (quiets Drift's
+    // "database class created multiple times" debug warning).
+    late ParentalGateRepositoryImpl repo;
+    setUpAll(() {
+      repo = ParentalGateRepositoryImpl(db: AppDatabase.memory());
+    });
+
     test('the plan fixture date gives seven times six', () {
-      final repo = ParentalGateRepositoryImpl(db: AppDatabase.memory());
       final challenge = repo.challengeFor(DateTime.utc(2026, 1, 6));
       expect(challenge.question, 'seven times six');
       expect(challenge.answer, 42);
@@ -18,14 +25,12 @@ void main() {
     });
 
     test('the pinned demo day gives three times nine', () {
-      final repo = ParentalGateRepositoryImpl(db: AppDatabase.memory());
       final challenge = repo.challengeFor(DateTime.utc(2026, 10, 3));
       expect(challenge.question, 'three times nine');
       expect(challenge.answer, 27);
     });
 
     test('the challenge is stable all day and deterministic per date', () {
-      final repo = ParentalGateRepositoryImpl(db: AppDatabase.memory());
       final morning = repo.challengeFor(DateTime.utc(2026, 10, 3, 6, 30));
       final evening = repo.challengeFor(DateTime.utc(2026, 10, 3, 21, 45));
       expect(morning.a, evening.a);
@@ -34,7 +39,6 @@ void main() {
     });
 
     test('a one-digit product yields a one-digit answer (2 Feb 2026)', () {
-      final repo = ParentalGateRepositoryImpl(db: AppDatabase.memory());
       final challenge = repo.challengeFor(DateTime.utc(2026, 2, 2));
       expect(challenge.question, 'two times two');
       expect(challenge.answer, 4);
@@ -42,11 +46,37 @@ void main() {
     });
 
     test('the entity carries the design copy in title and detail', () {
-      final repo = ParentalGateRepositoryImpl(db: AppDatabase.memory());
       final challenge = repo.challengeFor(DateTime.utc(2026, 10, 3));
       expect(challenge.title, 'Grown-ups only');
       expect(challenge.detail, 'This keeps settings and purchases safe.');
       expect(challenge.id, '2026-10-3');
+    });
+
+    test(
+      'the challenge follows the Europe/London day, not UTC (P17-BUG-2)',
+      () {
+        // London 00:30 BST, 4 Oct 2026 == 23:30 UTC, 3 Oct.
+        final afterLondonMidnight = repo.challengeFor(
+          DateTime.utc(2026, 10, 3, 23, 30),
+        );
+        // London 12:00 BST, 4 Oct 2026 == 11:00 UTC.
+        final sameLondonMidday = repo.challengeFor(
+          DateTime.utc(2026, 10, 4, 11),
+        );
+        expect(afterLondonMidnight.id, '2026-10-4');
+        expect(afterLondonMidnight.id, sameLondonMidday.id);
+        expect(afterLondonMidnight.question, sameLondonMidday.question);
+        expect(afterLondonMidnight.question, 'four times nine');
+      },
+    );
+
+    test('one UTC date can span two London challenge days', () {
+      // 00:30Z 3 Oct is 01:30 BST 3 Oct; 23:30Z 3 Oct is 00:30 BST 4 Oct.
+      final early = repo.challengeFor(DateTime.utc(2026, 10, 3, 0, 30));
+      final late = repo.challengeFor(DateTime.utc(2026, 10, 3, 23, 30));
+      expect(early.id, '2026-10-3');
+      expect(late.id, '2026-10-4');
+      expect(late.id, isNot(early.id));
     });
   });
 

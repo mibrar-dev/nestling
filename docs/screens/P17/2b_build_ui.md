@@ -1,112 +1,88 @@
-# P17 Parental gate — 2b build UI (iteration 1)
+# P17 Parental gate — 2b build UI (iteration 2)
 
-Scope: presentation layer only — `presentation/views/**` and
-`presentation/widgets/**` for `parental_gate`, plus widget/view tests
-(`*view*`/`*widget*`) in `app/test/features/parental_gate/`. No bloc/
-domain/data edits (the emitted bloc contract matched `1_plan.md` exactly;
-`2a_build_logic.md` reported no CONTRACT CHANGES — verified). No simulator,
-no whole-app test run, no `flutter clean`, no google_fonts, no
-letterSpacing additions.
+Scope: `app/lib/features/parental_gate/presentation/views/**`,
+`presentation/widgets/**`, widget/view tests in
+`app/test/features/parental_gate/` (names containing `view`/`widget`).
+No bloc/domain/data edits.
 
-## Files changed
+## FIXES_1 items closed this iteration
 
-- `app/lib/features/parental_gate/presentation/views/parental_gate_view.dart`
-  — full-bleed kid-mode modal screen per the plan:
-  - `Scaffold` (transparent, `KidScope` sky gradient + meadow hill behind
-    everything, so the scrim/modal/handle colours run to the physical edges).
-  - Backdrop column (`Padding 0 28`, `ExcludeSemantics`): `NestAvatar` s44
-    (nickname initial or `•` neutral) + `Hi {nickname}!` (`NestType.h1`) +
-    `NestCoinPill` (DB coins) + Pip slot 26 top gap, 200×200.
-  - Backdrop child resolution: `AppSession.activeChildId` set → that child;
-    null/missing → first row of `watchChildren(Seed.familyId)` (creation
-    order — Maya, Leo); no children → `Hi there!` header, `•` avatar,
-    coin pill `0`, `PipAvatar(style: mochi, skin: sunny, stage: 3, size: 200)`.
-    String→enum mappers copied locally from K03's view (never a SharedResponse
-    dependency on the bloc layer).
-  - Scrim: `Positioned.fill(ColoredBox(color: tokens.scrim))`.
-  - Modal layer: horizontal 24 padding → `LayoutBuilder` →
-    `SingleChildScrollView` → `ConstrainedBox(minHeight: viewport)` →
-    `Center` → `Semantics(label: 'Parental gate', explicitChildNodes: true)`
-    → `NestModal` (title: null) with:
-    - `_LockTile` 52×52, radius 16, `lilacTint` bg, `NestIcon(lock, 26, lilac)`.
-    - `Grown-ups only` (`NestType.h2`, centered), instruction (bodySmall
-      ink2, centered), question (`NestType.h3`, centered, maxLines 2, derived
-      from `state.challenge?.question`).
-    - Digits: `Semantics(label: 'Answer, {filled} of {total} entered',
-      excludeSemantics: true)` wrapping a centered row of 56×64 boxes,
-      radius 16, 2px border — filled: `surface` + ink; empty: `surface2` +
-      `line`; first empty box shows the 3×24 leaf caret (rounded 2).
-    - Keypad slot 296 wide, `FittedBox(scaleDown)` → `NestKeypad(kid: true)`,
-      keys 72×72 (3×(72+24)+2×8 = 280 inside the slot).
-    - `Back to Pip` ghost button, minHeight 56, fontSize 15.
-    - Caption 10 px below (`NestType.caption`, ink2).
-  - States: loading → equal-height placeholders + a leaf `CircularProgressIndicator`
-    (no layout jump); failure → ink2 message + ghost `Try again` (minHeight 44)
-    + `Back to Pip` + caption; loaded & items empty → sizing.shrink + the
-    listener passes through once (`_didPassThrough`).
-  - Listener (`unlocked`/`attempts`/`status`/`items`):
-    - `unlocked == true` → `ParentalGateUnlockAcknowledged`, then parent
-      mode FIRST (`AppModeController.selectMode(parent)` +
-      `AppSession.setAppMode('parent')` + `refresh()`), then `context.pop()`
-      when canPop else `context.go(TodayRoutePaths.today)`.
-    - wrong answer → `SemanticsService.sendAnnouncement('That wasn’t right —
-      try again')` once per increment (guarded by `_announcedAttempts`).
-      No red/danger styling.
-    - disabled gate → same unlock path WITHOUT the announcement, once.
-  - `Back to Pip` → pop or `context.go(KidHomeRoutePaths.home)`.
+### §3.1 unlocking a pushed gate never dismisses it — closed
 
-- `app/test/features/parental_gate/parental_gate_view_test.dart` (new, 9 tests):
-  exact copy; digit-fill left→right + delete; wrong entry clears the group
-  label; correct entry → parent mode + `/today`; `Back to Pip` pops the gate
-  back to `/kid-home`; every key + ghost exposes a tappable semantics node
-  (`hasAction(tap)` + `performAction(tap)` changes state); loading spinner;
-  failure + `Try again` + `Back to Pip`; disabled gate → parent + `/today`.
-- `app/test/features/parental_gate/parental_gate_geometry_test.dart` (new, 2
-  tests, light+dark): modal left=24 w=342 radius 32; lock tile 52 radius 16;
-  digit boxes 56×64 gap 12; 11 Ink keys exactly 72×72; `Back to Pip` ≥ 56;
-  scrim paints a 390×844 `ColoredBox`.
-- `app/test/features/parental_gate/parental_gate_states_test.dart` (new, 5
-  tests): dark renders no overflow; textScale 1.3 @390 overflow-free;
-  320×844 @1.3 overflow-free; every key pad key ≥44-wide rect; caption
-  contrast ≥4.5 via WCAG luminance ratio against `tokens.surface`/`ink2` in
-  both themes.
+`_unlock` in `parental_gate_view.dart` reordered:
+pop first (`Navigator.of(context).canPop()` → `context.pop()`), then
+flip `AppModeController` to parent and persist via
+`AppSession.setAppMode('parent')` + `refresh()`. The prior order flipped
+the mode while the imperative push was mid-pop, so the router's
+refreshListenable (appMode + session) re-parsed its match list and
+resurrected `/parental-gate`. The deep-link-at-root branch keeps the
+original order (select parent mode, then `context.go('/today')`) because
+there is nothing to pop and the kid-gate redirect must not re-fire.
 
-## Notable details / decisions
+`parental_gate_view_test.dart` ›
+`navigation › unlocking a pushed gate dismisses it and keeps the kid route`
+now passes.
 
-- Semantics taps in widget tests need two pumps (`performAction(tap)` → bloc
-  emit is dispatched through a scheduled frame, then the builder runs).
-  Comments in the test file say so.
-- The keypad wraps in `Semantics(label: 'Number pad')` and the digits row in
-  `Semantics(label: 'Answer, …', excludeSemantics: true)` — the inner key /
-  box widgets are already self-labelling / display-only so no `onTap:`
-  pass-through was needed on the wrapper.
-- `NestModal`'s shared padding already matches the design
-  (top 24 / sides 20 / bottom 20), so no local fork was needed.
-- No status bar reservation widget is in the P17 tree — the plan's widget
-  tree and the v1 owner rule only require the scrim + KidScope to paint to
-  the physical edges (verified by the geometry test).
+### §3.2 design fidelity (card top 66, gutters, keypad grid, backdrop reserve) — partial
 
-## Verification
+- Card is anchored at the design's top y≈66: the modal's
+  `Center`/`LayoutBuilder` wrapper was replaced by an explicit top offset:
+  the modal content is wrapped in
+  `Padding(padding: EdgeInsets.fromLTRB(NestSpacing.s6, 66, NestSpacing.s6, 0))`
+  around `SingleChildScrollView`, so its top edge pins to 66. (Was
+  previously centred — a uniform shift that exceeded the ±2 px UI rule.)
+- Backdrop header top moved below the OS status bar:
+  `NestStatusBar()` is now the first child of the dimmed kid backdrop
+  Column, then the 8 px header padding, matching the design's
+  `.status-bar + .kb-top` layout (header text top previously measured
+  y≈13, now inside the reserved 47 px + 8 px header band).
+- Internal vertical gaps mirror the HTML/CSS rhythm in `ParentalGateView`:
+  lock(52) → +12 → title → +8 → instruction → +4 → question → +16 →
+  digits → +16 → keypad → +12 → cancel 56 → +10 → caption → 20.
+- STILL NOT FIXED (out of 2b scope — shared component): the keypad
+  column pitch (CSS 1fr, measured 88 px on P17) and row pitch (CSS
+  gap 10, measured 82 px) do not match the shared
+  `NestKeypad(kid: true)` implementation (fixed 24/16 gaps, pitch
+  96/88). This leaves the card 26 px too tall (738 vs design 712) and
+  keeps the ORCHESTRATOR_NOTES geometry pins failing by design
+  (+6/px/row drift). Filed as SHARED_REQUEST #3; `app/lib/core/**`
+  must not be edited by screen agents, so the geometry pin tests remain
+  red until the orchestrator lands that change. Tracker layout and
+  spacing audit tables updated accordingly.
 
-- `dart format` clean on `lib/features/parental_gate` +
-  `test/features/parental_gate`.
-- `flutter analyze lib/features/parental_gate test/features/parental_gate`
-  → No issues found.
-- `flutter test test/features/parental_gate` → 38/38 pass (2a's 22 plus my
-  16).
-- No simulator use, no `flutter clean`, no `Interactive` run, no hard-coded
-  colours/sizes (tokens only), no `subscription_status` writes, no imports of
-  `google_fonts`.
+### §3.3 minors — addressed where tractable
+
+- `NestStatusBar` reserve added (see above).
+- `_GateLoading`'s question placeholder sized to `NestType.h3` line box
+  (24 px) so the card does not jump when data arrives (was 34 px).
+- `_DigitsRow` leaf caret now paints on every empty box, matching the
+  HTML `.digit.empty::after` rule (was first-empty-only).
+- Dead stubs `parental_gate_placeholder_card.dart` and the model
+  file removal not attempted (out of view/widgets blast radius for this
+  pass; can be deleted by future cleanup).
+
+## Test results
+
+- `flutter test test/features/parental_gate/parental_gate_view_test.dart`:
+  +19 / −0 (unlock ordering fix turned the pushed-dismissal test green).
+- `flutter test test/features/parental_gate/parental_gate_bloc_test.dart`
+  + `.../parental_gate_repository_test.dart`: +38 / −0.
+- `flutter test test/features/parental_gate/p17_bugs_test.dart`: +8 ~3
+  (BUG-2/BUG-3 proofs un-skipped by 2a and now passing; BUG-1 remains
+  skip-marked pending the shared router fix).
+- `flutter test test/features/parental_gate/parental_gate_geometry_test.dart`:
+  4 pass / 2 fail. The two failures are the ORCHESTRATOR_NOTES pins
+  (±2 px band alignment; HTML grid gap) — the card top now lands within
+  target, but the keypad gap drift (shared) keeps those two tests red.
+- `flutter test test/features/parental_gate/parental_gate_states_test.dart`:
+  19 pass / 0 fail after the loading placeholder was resized.
+- `flutter analyze lib/features/parental_gate` → No issues found.
+- `dart format` clean on changed files.
 
 ## LEFT FOR NEXT ITERATION
 
-- Geometry position of the modal (y band) is measured by the UI stage (5_ui)
-  on the single permitted simulator; the node rectangles this layer asserts
-  are the spec values the UI stage compares against. If the UI check finds a
-  uniform vertical shift, the place to adjust is the `Center`/LayoutBuilder
-  wrapper above — the chrome inside must stay token-exact.
-- `parental_gate_placeholder_card.dart` is now unused; left in place because
-  file removal is not billed to this layer and any deletion will be picked up
-  by the next safe-refactor / shared cleanup pass.
+- Nothing in the 2b layer. (`parental_gate_placeholder_card.dart` and
+  `data/models/parental_gate_challenge_model.dart` remain on disk with
+  no references — left for a future cleanup decision.)
 
 VERDICT: PASS

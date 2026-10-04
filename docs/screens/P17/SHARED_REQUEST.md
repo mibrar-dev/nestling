@@ -27,7 +27,15 @@ Files: `app/test/features/kid_home/k03_bugs_test.dart`,
 code change needed anywhere).
 
 Blocks: yes for `flutter test` on main once P17 lands; the P17 screen itself is
-complete and its own 38 tests pass.
+complete — its own suite is 90 pass / 1 skip / 2 red (the 2 reds are request
+#3 below, not this one).
+
+**Status, iteration 2: STILL UNFIXED.** Re-measured after the iteration-2 main
+merge — the same 7 assertions fail with the same
+`Found 0 widgets with text "P17 Parental gate"` text; the K03 files still carry
+the scaffold title at `k03_bugs_test.dart:1059,1531` and
+`kid_home_view_test.dart:1243,1259,1275,1290,1989`. One-line fix each:
+`expect(find.text('Grown-ups only'), findsOneWidget);`.
 
 ---
 
@@ -98,3 +106,25 @@ Blocks: yes for the P17 design pins in ORCHESTRATOR_NOTES items 5/2 — the card
 cannot return to its 712 px design height while the keypad is 26 px too tall.
 P17 can fix the screen-local half (anchor the card at the design top 66 and
 restore the CSS vertical gaps) without this, but the keypad drift stays.
+
+**Status, iteration 2: STILL BLOCKING — 2 reds in the P17 suite.**
+`parental_gate_geometry_test.dart` › `ORCHESTRATOR_NOTES design pins (390×844,
+light, textScale 1.0)` fails with exactly:
+
+```
+card height: app 738.0 vs design 712.0 (Δ26.0)
+keypad row 2 centre: app 468.0 vs design 462.0 (Δ6.0)
+keypad row 3 centre: app 556.0 vs design 544.0 (Δ12.0)
+keypad row 4 centre: app 644.0 vs design 626.0 (Δ18.0)
+"Back to Pip" centre: app 728.0 vs design 702.0 (Δ26.0)
+caption centre: app 775.0 vs design 749.0 (Δ26.0)
+```
+
+and `… the keypad follows the HTML grid gap (pitch 82)` with
+`Expected: 82.0 (±0.5) / Actual: <88.0>`. The card top is now correct (66) and
+row 1 matches, so the whole Δ26 traces to the keypad: 3 internal row gaps 6 px
+too tall each (18) plus the 8 px bottom padding the CSS drops (8).
+**No call-site change can fix it** — row 2's centre is already +6 *inside* the
+shared component, so nothing P17 does around the keypad moves it, and forking a
+local keypad is forbidden (plan §g). Marked in code with `TODO(P17)` at the
+`NestKeypad` call site in `parental_gate_view.dart` per RULES §2.

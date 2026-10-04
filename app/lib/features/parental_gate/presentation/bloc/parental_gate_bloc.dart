@@ -18,11 +18,31 @@ class ParentalGateBloc extends Bloc<ParentalGateEvent, ParentalGateState> {
     ParentalGateLoadRequested event,
     Emitter<ParentalGateState> emit,
   ) async {
-    emit(state.copyWith(status: ParentalGateStatus.loading));
+    emit(state.copyWith(status: ParentalGateStatus.loading, clearError: true));
     await emit.forEach<List<ParentalGateChallenge>>(
       _repository.watchItems(),
-      onData: (items) =>
-          state.copyWith(status: ParentalGateStatus.loaded, items: items),
+      onData: (items) {
+        final nextId = items.isEmpty ? null : items.first.id;
+        if (nextId != state.challenge?.id) {
+          // A new challenge (or the gate toggled): the typed digits and the
+          // attempt count belonged to the old question, and the unlock
+          // one-shot with it — reset all three (P17-BUG-3). A same-challenge
+          // re-emit (an unrelated settings write) keeps the entry.
+          return state.copyWith(
+            status: ParentalGateStatus.loaded,
+            items: items,
+            entered: '',
+            attempts: 0,
+            unlocked: false,
+            clearError: true,
+          );
+        }
+        return state.copyWith(
+          status: ParentalGateStatus.loaded,
+          items: items,
+          clearError: true,
+        );
+      },
       onError: (error, _) => state.copyWith(
         status: ParentalGateStatus.failure,
         errorMessage: error.toString(),

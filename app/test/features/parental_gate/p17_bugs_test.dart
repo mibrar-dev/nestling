@@ -174,7 +174,7 @@ void main() {
     await setUpTestScope();
   });
 
-  group('open bugs (skip-marked proofs)', () {
+  group('bug proofs (P17-BUG-1 still open; P17-BUG-2/3 fixed iteration 2)', () {
     // P17-BUG-1 (major, shared): app/lib/app/router.dart redirects an expired
     // kid-mode trial to /paywall, which is parent-only in kid mode and
     // redirects back to /parental-gate — a redirect loop. Unskipping this
@@ -194,49 +194,27 @@ void main() {
       await disposeApp(tester);
     }, skip: true);
 
-    test(
-      'P17-BUG-2: the challenge follows the Europe/London day (BST)',
-      () {
-        final repo = ParentalGateRepositoryImpl(db: AppDatabase.memory());
-        // London 00:30 BST, 4 Oct 2026 == 23:30 UTC, 3 Oct.
-        final afterLondonMidnight = repo.challengeFor(
-          DateTime.utc(2026, 10, 3, 23, 30),
-        );
-        // London 12:00 BST, 4 Oct 2026 == 11:00 UTC.
-        final sameLondonMidday = repo.challengeFor(
-          DateTime.utc(2026, 10, 4, 11),
-        );
-        expect(afterLondonMidnight.id, sameLondonMidday.id);
-        expect(afterLondonMidnight.question, sameLondonMidday.question);
-      },
-      skip:
-          'P17-BUG-2 (minor): challengeFor() keys the day off the UTC '
-          'calendar date (utc.day + utc.month * 31, id from utc y/m/d) while '
-          "the app's day is Europe/London, so during BST the question "
-          'changes at 01:00 London, not at the London day boundary (and a '
-          'gate left open never re-keys at all). Also flagged by 4_review.md '
-          'finding 6. Fix in parental_gate_repository_impl.dart: derive the '
-          'day from toFamilyZone(now, defaultFamilyZoneId).',
-    );
+    test('P17-BUG-2: the challenge follows the Europe/London day (BST)', () {
+      final repo = ParentalGateRepositoryImpl(db: AppDatabase.memory());
+      // London 00:30 BST, 4 Oct 2026 == 23:30 UTC, 3 Oct.
+      final afterLondonMidnight = repo.challengeFor(
+        DateTime.utc(2026, 10, 3, 23, 30),
+      );
+      // London 12:00 BST, 4 Oct 2026 == 11:00 UTC.
+      final sameLondonMidday = repo.challengeFor(DateTime.utc(2026, 10, 4, 11));
+      expect(afterLondonMidnight.id, sameLondonMidday.id);
+      expect(afterLondonMidnight.question, sameLondonMidday.question);
+    });
 
-    test(
-      'P17-BUG-3: a challenge change resets the typed entry',
-      () async {
-        final repo = MockParentalGateRepository();
-        final controller = StreamController<List<ParentalGateChallenge>>();
-        when(repo.watchItems).thenAnswer((_) => controller.stream);
-        final bloc = ParentalGateBloc(repository: repo);
-        await _staleEntryProof(bloc, controller);
-        await bloc.close();
-        await controller.close();
-      },
-      skip:
-          'P17-BUG-3 (minor): the watchItems onData handler copyWith keeps '
-          'entered/attempts when the challenge object changes, so stale '
-          'digits stay in the boxes against the new answer. Reset entered '
-          '(and attempts) when items.first.id changes in '
-          'parental_gate_bloc.dart.',
-    );
+    test('P17-BUG-3: a challenge change resets the typed entry', () async {
+      final repo = MockParentalGateRepository();
+      final controller = StreamController<List<ParentalGateChallenge>>();
+      when(repo.watchItems).thenAnswer((_) => controller.stream);
+      final bloc = ParentalGateBloc(repository: repo);
+      await _staleEntryProof(bloc, controller);
+      await bloc.close();
+      await controller.close();
+    });
   });
 
   group('clean probes (green)', () {

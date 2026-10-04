@@ -44,11 +44,12 @@ final class ParentalGateState extends Equatable {
     String? entered,
     int? attempts,
     bool? unlocked,
+    bool clearError = false,
   }) {
     return ParentalGateState(
       status: status ?? this.status,
       items: items ?? this.items,
-      errorMessage: errorMessage ?? this.errorMessage,
+      errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       entered: entered ?? this.entered,
       attempts: attempts ?? this.attempts,
       unlocked: unlocked ?? this.unlocked,

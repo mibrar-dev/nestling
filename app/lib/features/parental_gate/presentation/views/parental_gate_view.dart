@@ -37,13 +37,22 @@ class _ParentalGateViewState extends State<ParentalGateView> {
     context.read<ParentalGateBloc>().add(
       const ParentalGateUnlockAcknowledged(),
     );
-    // Parent mode FIRST so the router's kid-gate redirect stops firing.
-    GetIt.instance<AppModeController>().selectMode(AppMode.parent);
-    final session = GetIt.instance<AppSession>();
-    unawaited(session.setAppMode('parent').then((_) => session.refresh()));
-    if (Navigator.of(context).canPop()) {
+    final canPop = Navigator.of(context).canPop();
+    if (canPop) {
+      // Pop FIRST, then rotate into parent mode (Stage-3 §3.1: flipping
+      // the mode and starting the async session write while the imperative
+      // route is mid-pop makes the router's refreshListenable restore the
+      // /parental-gate route — the gate never closed).
       context.pop();
+      GetIt.instance<AppModeController>().selectMode(AppMode.parent);
+      final session = GetIt.instance<AppSession>();
+      unawaited(session.setAppMode('parent').then((_) => session.refresh()));
     } else {
+      // Parent mode FIRST so the router's kid-gate redirect stops firing
+      // when we `go` to a parent-only route.
+      GetIt.instance<AppModeController>().selectMode(AppMode.parent);
+      final session = GetIt.instance<AppSession>();
+      unawaited(session.setAppMode('parent').then((_) => session.refresh()));
       context.go(TodayRoutePaths.today);
     }
   }
@@ -96,17 +105,28 @@ class _ParentalGateViewState extends State<ParentalGateView> {
               Positioned.fill(child: ExcludeSemantics(child: _GateBackdrop())),
               // 2. Full-bleed scrim to every edge.
               Positioned.fill(child: ColoredBox(color: context.nest.scrim)),
-              // 3. Centred modal.
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: NestSpacing.s6),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    return SingleChildScrollView(
+              // 3. Modal anchored at the design's y 66 (NOT centred — the
+              // centring path was producing a uniform shift). The
+              // LayoutBuilder/ConstrainedBox pair that measured the viewport
+              // stays — it is how the unpositioned slot on the gate Stack
+              // learns its width/height; the top offset now comes from the
+              // Padding above the scroll view instead of the center.
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      NestSpacing.s6,
+                      66,
+                      NestSpacing.s6,
+                      0,
+                    ),
+                    child: SingleChildScrollView(
                       child: ConstrainedBox(
                         constraints: BoxConstraints(
-                          minHeight: constraints.maxHeight,
+                          minHeight: constraints.maxHeight - 66,
                         ),
-                        child: Center(
+                        child: Align(
+                          alignment: Alignment.topCenter,
                           child: Semantics(
                             label: 'Parental gate',
                             explicitChildNodes: true,
@@ -199,6 +219,16 @@ class _ParentalGateViewState extends State<ParentalGateView> {
                                                   width: 296,
                                                   child: FittedBox(
                                                     fit: BoxFit.scaleDown,
+                                                    // TODO(P17): shared NestKeypad
+                                                    // hard-codes a 16px row gap +
+                                                    // 8px bottom padding where the CSS
+                                                    // grid is gap 10 / padding 8-24-0, so
+                                                    // this slot is 26px taller than the
+                                                    // design and every band below it
+                                                    // drifts (+6/row). Needs the shared
+                                                    // component (core) — see
+                                                    // docs/screens/P17/SHARED_REQUEST.md
+                                                    // #3. Do not fork a local keypad.
                                                     child: NestKeypad(
                                                       kid: true,
                                                       onKey: (digit) => context
@@ -267,9 +297,9 @@ class _ParentalGateViewState extends State<ParentalGateView> {
                           ),
                         ),
                       ),
-                    );
-                  },
-                ),
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -326,10 +356,13 @@ class _GateBackdropBody extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SizedBox(height: NestSpacing.s2),
+        // OS draws the real status bar; reserve its height instead, then
+        // the `kb-top` header starts at design y 55.
+        const NestStatusBar(),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 28),
+          padding: const EdgeInsets.fromLTRB(28, NestSpacing.s2, 28, 0),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             spacing: NestSpacing.s3,
             children: [
               NestAvatar(
@@ -454,16 +487,14 @@ class _DigitsRow extends StatelessWidget {
               child: Center(
                 child: i < entered.length
                     ? Text(entered[i], style: NestType.h1(color: tokens.ink))
-                    : (i == entered.length
-                          ? Container(
-                              width: 3,
-                              height: 24,
-                              decoration: BoxDecoration(
-                                color: tokens.leaf,
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            )
-                          : null),
+                    : Container(
+                        width: 3,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: tokens.leaf,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
               ),
             ),
           ),
@@ -482,8 +513,8 @@ class _GateLoading extends StatelessWidget {
       children: [
         // Equal-height placeholders for the instruction/question lines,
         // so the modal frame does not jump when data arrives.
-        const SizedBox(height: 20),
-        const SizedBox(height: 34),
+        const SizedBox(height: 22),
+        const SizedBox(height: 24),
         const SizedBox(height: NestSpacing.s4),
         const SizedBox(height: 64),
         const SizedBox(height: NestSpacing.s4),

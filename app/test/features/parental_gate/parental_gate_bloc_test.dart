@@ -20,6 +20,15 @@ const _sevenSix = ParentalGateChallenge(
   b: 6,
 );
 
+/// A second fixed challenge (3 × 9 = 27) for challenge-swap tests.
+const _threeNine = ParentalGateChallenge(
+  id: '2026-10-4',
+  title: 'Grown-ups only',
+  detail: 'This keeps settings and purchases safe.',
+  a: 3,
+  b: 9,
+);
+
 ParentalGateBloc blocWithChallenge(MockParentalGateRepository repo) {
   when(
     repo.watchItems,
@@ -433,21 +442,24 @@ void main() {
               s.status == ParentalGateStatus.failure &&
               (s.errorMessage ?? '').contains('boom'),
         ),
-        // `copyWith` cannot clear a field, so the stale error text rides
-        // along in the state. It is never drawn (the view only reads
-        // `errorMessage` while failing), so the matchers below assert just
-        // what the screen actually depends on.
+        // The retry clears the stale failure text (clearError): the loading
+        // and loaded states below carry no errorMessage. The view only reads
+        // `errorMessage` while failing, so either way it never draws stale.
         predicate<ParentalGateState>(
-          (s) => s.status == ParentalGateStatus.loading,
+          (s) =>
+              s.status == ParentalGateStatus.loading && s.errorMessage == null,
         ),
         predicate<ParentalGateState>(
           (s) =>
-              s.status == ParentalGateStatus.loaded && s.challenge == _sevenSix,
+              s.status == ParentalGateStatus.loaded &&
+              s.challenge == _sevenSix &&
+              s.errorMessage == null,
         ),
       ],
       verify: (bloc) {
         expect(bloc.state.status, ParentalGateStatus.loaded);
         expect(bloc.state.challenge, _sevenSix);
+        expect(bloc.state.errorMessage, isNull);
       },
     );
 
@@ -589,6 +601,94 @@ void main() {
         ),
         ParentalGateState(status: ParentalGateStatus.loaded),
       ],
+    );
+
+    blocTest<ParentalGateBloc, ParentalGateState>(
+      'a new challenge resets the typed entry and attempts (P17-BUG-3)',
+      build: () {
+        final repo = MockParentalGateRepository();
+        when(repo.watchItems).thenAnswer(
+          (_) => Stream<List<ParentalGateChallenge>>.multi((controller) {
+            controller.add(const <ParentalGateChallenge>[_sevenSix]);
+            settings.stream.listen(controller.add);
+          }),
+        );
+        return ParentalGateBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const ParentalGateLoadRequested());
+        await bloc.stream.firstWhere(
+          (s) => s.status == ParentalGateStatus.loaded,
+        );
+        bloc
+          ..add(const ParentalGateDigitEntered('4'))
+          ..add(const ParentalGateDigitEntered('3'));
+        await bloc.stream.firstWhere((s) => s.attempts == 1);
+        // A new question arrives mid-entry (any settings write re-emits the
+        // watch): the stale digits belonged to the old answer.
+        settings.add(const <ParentalGateChallenge>[_threeNine]);
+      },
+      expect: () => const <ParentalGateState>[
+        ParentalGateState(status: ParentalGateStatus.loading),
+        ParentalGateState(
+          status: ParentalGateStatus.loaded,
+          items: <ParentalGateChallenge>[_sevenSix],
+        ),
+        ParentalGateState(
+          status: ParentalGateStatus.loaded,
+          items: <ParentalGateChallenge>[_sevenSix],
+          entered: '4',
+        ),
+        ParentalGateState(
+          status: ParentalGateStatus.loaded,
+          items: <ParentalGateChallenge>[_sevenSix],
+          attempts: 1,
+        ),
+        // Same boxes, new challenge: entry cleared, attempts reset.
+        ParentalGateState(
+          status: ParentalGateStatus.loaded,
+          items: <ParentalGateChallenge>[_threeNine],
+        ),
+      ],
+    );
+
+    blocTest<ParentalGateBloc, ParentalGateState>(
+      'a same-challenge re-emit keeps the typed entry',
+      build: () {
+        final repo = MockParentalGateRepository();
+        when(repo.watchItems).thenAnswer(
+          (_) => Stream<List<ParentalGateChallenge>>.multi((controller) {
+            controller.add(const <ParentalGateChallenge>[_sevenSix]);
+            settings.stream.listen(controller.add);
+          }),
+        );
+        return ParentalGateBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const ParentalGateLoadRequested());
+        await bloc.stream.firstWhere(
+          (s) => s.status == ParentalGateStatus.loaded,
+        );
+        bloc.add(const ParentalGateDigitEntered('4'));
+        await bloc.stream.firstWhere((s) => s.entered == '4');
+        // An unrelated settings write re-emits the identical challenge:
+        // the half-typed answer must survive (and emit nothing new).
+        settings.add(const <ParentalGateChallenge>[_sevenSix]);
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      },
+      expect: () => const <ParentalGateState>[
+        ParentalGateState(status: ParentalGateStatus.loading),
+        ParentalGateState(
+          status: ParentalGateStatus.loaded,
+          items: <ParentalGateChallenge>[_sevenSix],
+        ),
+        ParentalGateState(
+          status: ParentalGateStatus.loaded,
+          items: <ParentalGateChallenge>[_sevenSix],
+          entered: '4',
+        ),
+      ],
+      verify: (bloc) => expect(bloc.state.entered, '4'),
     );
   });
 
