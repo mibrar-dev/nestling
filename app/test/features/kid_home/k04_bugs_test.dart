@@ -17,13 +17,15 @@
 //   q-tidy / first-item fallbacks only run on a true direct launch. The
 //   proof below runs un-skipped.
 //
-// * K04-BUG-3 (was MAJOR, FIXED iter 2, mandated, verified) —
-//   `ORCHESTRATOR_NOTES.md` (14:28): the hero tile must use the P09 batch-5
-//   design glyphs (`questBed`/`questDishes`/`questHoover`/`questBins`), not
-//   the pre-batch-5 set. `_iconFor` now mirrors P09's key/alias table
-//   exactly. The proof below runs un-skipped.
+// * K04-BUG-3 (was MAJOR, FIXED iter 2, iter 3 supersedes) — the hero tile
+//   now resolves through the shared `questIconFor(key, audience:
+//   NestAudience.kid)` single source (ORCHESTRATOR_NOTES 15:08), so the bed
+//   hero is the K04-faithful `questBedKid` (headboard post/pillow/legs),
+//   dishwasher the K03/K04 `questDishesKid`, and `hoover`/`bins` keep the
+//   shared parent glyphs. The proof below asserts the kid assets and runs
+//   un-skipped.
 //
-// * K04-BUG-4 (MINOR, OPEN — iteration 2 finding) — a title whose natural
+// * K04-BUG-4 (MINOR, FIXED — iteration 3) — a title whose natural
 //   layout needs MORE than the 3 allowed lines is now rendered full width
 //   but with `TextOverflow.clip`: the third line is cut off mid-word with no
 //   ellipsis, so the child cannot tell the title continues. The component's
@@ -257,15 +259,19 @@ void main() {
   );
 
   // -------------------------------------------------------------------------
-  // K04-BUG-3 — hero tile must use the P09 design glyphs (ORCHESTRATOR_NOTES)
+  // K04-BUG-3 — hero tile must use this screen's own KID design glyphs
+  // (ORCHESTRATOR_NOTES 14:28, superseded for audiences by the 15:08
+  // `questIconFor(audience: NestAudience.kid)` ruling). Iteration 3 moved
+  // the proof from the P09 batch-5 glyphs to the K04-faithful kid set, so the
+  // expected assets below are `questBedKid` / `questDishesKid`.
   // -------------------------------------------------------------------------
 
-  testWidgets('K04-BUG-3: the hero tile uses the P09 design glyphs', (
+  testWidgets('K04-BUG-3: the hero tile uses the kid design glyphs', (
     tester,
   ) async {
     const expected = <String, String>{
-      'q-tidy': NestIcons.questBed,
-      'q-dishwasher': NestIcons.questDishes,
+      'q-tidy': NestIcons.questBedKid,
+      'q-dishwasher': NestIcons.questDishesKid,
       'q-hoover': NestIcons.questHoover,
       'q-bins': NestIcons.questBins,
     };
@@ -281,8 +287,10 @@ void main() {
         tile.assetName,
         glyph,
         reason:
-            '$questId must use the batch-5 P09 design glyph; the mandate '
-            'rejects the pre-batch-5 icon set',
+            '$questId must use the kid design glyph from the shared '
+            'questIconFor(kid) table; the mandate rejects the pre-batch-5 '
+            'parent icon set AND the P09-only glyphs (which render as a '
+            'plain arch at the 64 px hero size)',
       );
       await tester.tap(find.byType(NestIconButton));
       await _settle(tester);
@@ -312,7 +320,7 @@ void main() {
           'TextOverflow.clip stops mid-word with no sign the text continues',
     );
     await disposeApp(tester);
-  }, skip: true); // skip: K04-BUG-4 (open)
+  });
 
   testWidgets('an over-cap title renders at full width (K04-BUG-1 fix)', (
     tester,

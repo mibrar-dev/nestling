@@ -151,11 +151,13 @@ next main merge.
 
 ## Bugs found
 
-1. **K04-BUG-4 — OPEN, Minor.** `quest_detail_view.dart:577` — over-cap title is
+1. **K04-BUG-4 — FIXED (iteration 3, 2026-10-04), Minor.** `quest_detail_view.dart:577` — over-cap title is
    clipped instead of ellipsised (`TextOverflow.clip` is `NestBalancedText`'s
    default and the call passes no `overflow:`). Repro + failing proof in
    `6_bugs.md`; verified still failing above. Not patched, per the brief.
-2. **Not a new bug, but verdict-relevant:** `5_ui.md` `VERDICT: FAIL` with an
+2. **Not a new bug, but verdict-relevant:** iteration 3 switched the hero to
+   `questIconFor(audience: kid)` → `questBedKid`, which is the K04 HTML hero
+   glyph; stage 5 should re-shoot to confirm the old FAIL clears. `5_ui.md` `VERDICT: FAIL` with an
    open Major on the hero tile glyph (`ic_quest_bed.svg` renders as a plain arch
    at the 64/120 px hero size). Root cause is shared-asset, not screen code;
    `core/**` is off-limits to a screen agent. Flagged so a green test stage is

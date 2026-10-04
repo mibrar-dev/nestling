@@ -208,5 +208,30 @@ tests are now un-skipped and passing:
 
 All four previously skipped proofs in `app/test/features/kid_home/k04_bugs_test.dart`
 are now un-skipped and passing; full `test/features/kid_home` run is green.
+## Iteration 3 — FIXES_2 remediation (2026-10-04)
+
+- **K04-BUG-4 (Minor, FIXED):** the over-cap title path in
+  `quest_detail_view.dart` (`NestBalancedText`) now passes
+  `overflow: TextOverflow.ellipsis`. The previously skipped proof
+  `K04-BUG-4: an over-cap title must ellipsise, not clip` is un-skipped and
+  passes (asserts `title.overflow == TextOverflow.ellipsis` and
+  `maxLines == 3`).
+- **Icon audience ruling (ORCHESTRATOR_NOTES 15:08, mandated this round):**
+  the local `_iconFor` in `quest_detail_view.dart` now delegates to the shared
+  single source `questIconFor(key, audience: NestAudience.kid)`, mirroring
+  K03's `_iconFor` byte-for-behaviour. Side effect that clears 5_ui.md's
+  verdict-driving MAJOR: the K04 hero now renders `ic_quest_bed_kid.svg` —
+  verified the asset's path data is the K04 HTML hero drawing
+  (`M2 18v-7 / M2 14h20v4 / …h-9v3 / M6 11V8h4v3`), not the P09 flat arch.
+  `k04_bugs_test.dart` BUG-3 expectations updated to the kid assets
+  (`questBedKid` / `questDishesKid` / `questHoover` / `questBins`) and the
+  file header notes the iter-2 → iter-3 supersede. No `core/**` edits needed —
+  the shared asset already existed on main.
+
+Verification: `flutter analyze` clean;
+`flutter test --timeout 120s test/features/kid_home` → 545 passed, ~3 skipped
+(pre-existing skips in K01/K02/K03 files, none from K04), 0 failed.
+The remaining 5_ui.md MAJOR needs a stage-5 re-shot; nothing in `kid_home/`
+left that can change it.
 
 VERDICT: PASS

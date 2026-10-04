@@ -73,23 +73,16 @@ const double _kBarGap = NestSpacing.s1;
 /// outside the app.
 const String _kDesignQuestId = 'q-tidy';
 
-/// Glyph per `KidQuest.icon`. Mirrors P09's editor mapping exactly
-/// (`quest_editor_view.dart` `_questIcons`), per the orchestrator ruling
-/// (ORCHESTRATOR_NOTES 14:28 / K04-BUG-3): `bed` is the flat
-/// `questBed` design glyph, NOT the pre-batch-5 `bedSit`. Aliases resolve
-/// the same way P09's tiles do (`sofa`→questBed, `plate`→questDishes,
-/// `bins/shirt/bag`→questBins, `leaf`→paw). Unknown keys fall back to
-/// `questCard`. Kept local so this screen never edits another screen's view.
+/// Glyph per `KidQuest.icon` — the KID designs' glyphs
+/// (`K03-kid-home.html` / `K04-quest-detail.html`) via the shared single
+/// source `questIconFor(key, audience: NestAudience.kid)`. Supersedes the
+/// iteration-2 local mirror of P09's table: the 15:08 ruling moved every
+/// kid screen to the per-audience helper, which for the hero key uses the
+/// K04-hero-faithful `questBedKid` (with headboard post/pillow/legs) instead
+/// of the P09 flat frame. Where K03/K04 draw no row for a key, the parent
+/// glyph is shared for both audiences (see `quest_icons.dart`).
 String _iconFor(String raw) {
-  return switch (raw) {
-    'bed' || 'sofa' => NestIcons.questBed,
-    'dishwasher' || 'plate' => NestIcons.questDishes,
-    'hoover' => NestIcons.questHoover,
-    'book' => NestIcons.book,
-    'bin' || 'bins' || 'shirt' || 'bag' => NestIcons.questBins,
-    'paw' || 'leaf' => NestIcons.paw,
-    _ => NestIcons.questCard,
-  };
+  return questIconFor(raw, audience: NestAudience.kid);
 }
 
 /// Done = `approved` + `done_pending` (same rule as K03's card).
@@ -588,6 +581,10 @@ class _QuestDetailBodyState extends State<_QuestDetailBody> {
                     quest.title,
                     style: NestType.kidTitle(color: tokens.ink),
                     maxLines: 3,
+                    // K04-BUG-4: when a DB-driven title needs more lines
+                    // than the cap, cut with an ellipsis, never mid-word
+                    // (the component default is TextOverflow.clip).
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: NestSpacing.s4),
                   Center(
