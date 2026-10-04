@@ -99,3 +99,6 @@ main has shared/pet_bubble_gap: `NestPetStage(bubbleGap: …)` and a speech bubb
 - Pass `bubbleGap: 14` (`.k3-pet` margin-top) and set `_kStageToHearts` back to `NestSpacing.s4` (16). Delete the long workaround comment.
 - Targets: bubble 125…169, pet box 183…419, hearts centre 448, title 494, card 1 at 559. Pin these in kid_home_geometry_test.dart (±0.5).
 - Change nothing else.
+
+## UPDATE (02:45) — the shared kid meadow is on main (shared/kid_meadow)
+Iteration 13 (polish): besides the bubble gap, REPLACE K03's own in-flow meadow band (kid_home_view.dart ~l.134-137, 550-599) with the shared kid background, as docs/screens/_shared/kid_meadow_REPORT.md says. Keep the dark meadow colours the design shows, and pin them in a test.
