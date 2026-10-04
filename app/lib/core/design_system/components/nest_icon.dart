@@ -91,6 +91,9 @@ abstract final class NestIcons {
   static const String crown = assets.NestlingIcons.crown;
   static const String wardrobeScarf = assets.NestlingIcons.wardrobeScarf;
   static const String wardrobeWellies = assets.NestlingIcons.wardrobeWellies;
+  static const String wardrobeSunHat = assets.NestlingIcons.wardrobeSunHat;
+  static const String kidFeed = assets.NestlingIcons.kidFeed;
+  static const String kidPlay = assets.NestlingIcons.kidPlay;
 }
 
 /// Token-colourable SVG icon.
