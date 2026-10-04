@@ -23,6 +23,12 @@ class KidHomeBloc extends Bloc<KidHomeEvent, KidHomeState> {
 
   final KidHomeRepository _repository;
 
+  /// K04 detail checklist (K04 plan §b): `stepsFor` is a pure sync function
+  /// of `questId`, so the view reads it through this presentation-supporting
+  /// getter instead of touching the repository (views never use GetIt
+  /// directly). No event, no state change.
+  List<String> stepsFor(String questId) => _repository.stepsFor(questId);
+
   /// The live home subscription, or null when no load is streaming.
   /// Guards `_onLoadRequested` (K03-BUG-15): `watchHome()` never completes
   /// and the bloc transformer is concurrent, so an unguarded reload — e.g.
