@@ -1,128 +1,110 @@
-# K01 · Who's playing? — Stage 6 bug hunt (iteration 2)
+# K01 · Who's playing? — Stage 6 bug hunt (iteration 3)
 
-Adversarial pass over `/who-is-playing` on the iteration-2 build
-(`e195954`, main merged). Every proof lives in
+Adversarial pass over `/who-is-playing` on the iteration-3 build
+(`b9ba00a`, main merged). Every proof lives in
 `app/test/features/kid_home/k01_bugs_test.dart` and runs against the real
 in-memory Drift database (Seed.demo), the real repository, or a
-feature-local fake for the failure paths. No screen code was changed by
-this stage.
+feature-local fake. No screen code was changed by this stage.
 
 ```
 flutter test test/features/kid_home/k01_bugs_test.dart
-  → +21 ~2: All tests passed!       (2 proofs parked for the open bugs)
+  → +23 ~1: All tests passed!        (K01-BUG-7 parked, minor)
 
 flutter test --run-skipped test/features/kid_home/k01_bugs_test.dart
-  → 2 deterministic failures: K01-BUG-3, K01-BUG-6
+  → 1 deterministic failure: K01-BUG-7
 ```
 
-## Status of the iteration-1 findings
+## Status of every finding
 
-| # | Severity | Iteration-2 status |
+| # | Severity | Status |
 |---|---|---|
-| K01-BUG-1 | major | **FIXED and verified** — `_OverflowTileRow` keeps 167 px tiles and scrolls |
-| K01-BUG-2 | major | **FIXED and verified** — one burst pushes exactly one route |
-| K01-BUG-3 | major | **STILL OPEN** — the new `KidHomeSelectionHandled` event is never dispatched |
-| K01-BUG-4 | minor | **FIXED and verified** — blank nickname falls back to `Kid` |
-| K01-BUG-5 | major | **FIXED and verified** — profiles retry restores the picker |
-| K01-BUG-6 | major | **NEW, open** — the pushed route and the persisted active child disagree |
+| K01-BUG-1 | major | **FIXED (iter 2), re-verified** — `_OverflowTileRow`: 167 px tiles, scrolls, discs circular |
+| K01-BUG-2 | major | **FIXED (iter 2), re-verified** — one burst pushes exactly one route |
+| K01-BUG-3 | major | **FIXED (iter 3), verified** — the listener dispatches `KidHomeSelectionHandled`; a tile navigates again after back |
+| K01-BUG-4 | minor | **FIXED (iter 2), re-verified** — blank nickname falls back to `Kid` |
+| K01-BUG-5 | major | **FIXED (iter 2), re-verified** — profiles retry restores the picker |
+| K01-BUG-6 | major | **FIXED (iter 3), verified** — route child and persisted active child always agree |
+| K01-BUG-7 | minor | **OPEN** — a latent orphaned-selection lock (no shipped flow reaches it) |
 
-Also fixed this pass (tracked by the other stages, re-verified here):
-5_ui D1/D2 — tiles and caption now sit at the design y (simulator 297.3 /
-639.3 / caption ink 747; a widget-level regression probe compares the
-corner-corrected design box: design centre 468.8, height 361.8), and the
-title apostrophe now matches the HTML source (ASCII `'`).
-
----
-
-## K01-BUG-3 — major — STILL OPEN — a tile is dead after returning from a kid route
-
-The iteration-2 build added `KidHomeSelectionHandled`, its handler
-(`kid_home_bloc.dart:154-159`), `copyWithSelectionHandled()` and updated
-comments that say the picker "pushes the route, then dispatches"
-`KidHomeSelectionHandled`. **No call site dispatches it.** `grep -rn
-"KidHomeSelectionHandled" lib/` finds only the event definition, the state
-doc-comment, the state method, and the bloc registration — never
-`context.read<KidHomeBloc>().add(...)` in `profile_picker_view.dart` or
-anywhere else. The mechanism is dead code.
-
-**Repro (unchanged from iteration 1, re-confirmed on e195954):** Seed.demo
-has `activeChildId == 'maya'`. Tap Maya → `/kid-pin`; back to the picker;
-the picker's bloc still holds `selectedProfileId == 'maya'` (asserted);
-tap Maya again → the path stays `/who-is-playing` — no navigation, no
-toast. The equal `copyWithSelection('maya')` is dropped by the bloc.
-
-**Failing test:** `K01-BUG-3: tapping the same tile after back does nothing`
-(skipped; the first assertion pins the mechanism, the second the missed
-navigation).
-
-**Suggested fix (one line, in the picker's listener):** after
-`context.push(...)` starts, dispatch
-`context.read<KidHomeBloc>().add(const KidHomeSelectionHandled())` — or
-consume the one-shot inside the bloc when the route push is acknowledged.
-The bloc half already exists; only the view call site is missing.
-
-## K01-BUG-6 — major — NEW — the pushed route and the persisted active child disagree
-
-The new `_navPending` guard (K01-BUG-2 fix) single-flights the
-**navigation**, but both `KidHomeProfileSelected` events still reach the
-bloc: each awaits its own `setActiveChild` write and then emits. The first
-emission pushes its route and sets the guard; the second emission is
-swallowed — **but its write has already landed**, so `app_state` names the
-other child. Every selection in the burst writes; only one navigates.
-
-**Repro (deterministic, 3/3 runs):** two fingers down on Maya and Leo
-before either up. Top route `/kid-pin` (Maya, whose PIN `1234` the child
-would be asked for), `activeChildId == 'leo'`. When K02 finishes its PIN
-flow, `watchHome` resolves `app_state.activeChildId` — the kid lands on
-Leo's home after authenticating as Maya. The inverse order is symmetric
-(`/kid-home` for Leo with `activeChildId == 'maya'`); the tapped route's
-child and the persisted child can never agree while both writes run.
-
-**Failing test:** `K01-BUG-6: route child and active child disagree`
-(skipped). Measured: `opened maya (/kid-pin) but persisted leo`.
-
-**Suggested fix:** drop the second selection’s **write** together with its
-navigation — e.g. a synchronous `bool _selecting` in `KidHomeBloc` set
-before the first `await` in `_onProfileSelected` and cleared on
-completion/handled/failure, so concurrent events return early; or have the
-picker disable all tiles with `IgnorePointer` for the burst. Combine with
-the BUG-3 fix so the flag can never wedge.
+Also green: 5_ui iteration 3 PASS (tile top 297.3 vs design 297.7, caption
+ink 747 vs 747, gutters, dark mode, bottom edge, meadow), and the
+`1_plan.md` §0 copy record now matches the HTML source (ASCII apostrophe);
+my copy probe agrees.
 
 ---
 
-## Iteration-2 regression checks (green, unskipped)
+## K01-BUG-7 — minor — OPEN — an orphaned selection locks every tile
 
-- **BUG-1** (4 proofs): 3 children keep 167 px tiles; 4+ children keep the
-  avatar/pet discs circular; 6 children keep 167 px tiles and the row
-  scrolls (the 6th tile is off the gutter until dragged, then reachable);
-  a scrolled-to extra child (`Omar`) still selects and navigates to
-  `/kid-home` with `activeChildId == 'omar'`.
-- **BUG-2**: a two-finger burst pushes exactly one kid route and one
-  Navigator pop returns to `/who-is-playing`.
-- **BUG-5**: profiles-only failure → Try again → the recovered roster
-  replaces the failure card and the title renders.
-- **D1/D2**: widget probe (real bundled fonts) — tile centre 468.5 vs
-  design 468.8, caption box top 738 (simulator ink row 747); 5_ui
-  iteration 2 measured the simulator at 297.3/639.3/747 vs 297.7/640.0/747.
-- **BUG-4**: an empty nickname renders the tile label `Kid, Age …`
-  instead of an empty accessible name.
-- **Copy**: the title is now the HTML source's ASCII `"Who's playing?"`
-  (en dashes in the ages, ASCII hyphen in `Grown-ups` unchanged).
-- Unchanged iteration-1 probes still green: 0 children / 1 child / long
-  UK name at 320×1.3 / empty age band / no money or dates / same-tile and
-  lock double taps / deep links kid+parent / restart persistence / 16
-  contrast pairs / title-sub-caption fit at 320×1.3 / tap semantics.
+**Mechanism.** `_ProfilePickerViewState` arms `_busy` before dispatching a
+selection and releases it on the pop, on a failure toast, or when the
+listener cannot resolve the pending profile
+(`profile_picker_view.dart`: `if (tapped == null) { _busy = false; return; }`
+— this early return is the only path that releases `_busy` **without**
+dispatching `KidHomeSelectionHandled`). In that window the bloc's one-shot
+`selectedProfileId` stays set. The next tap arms `_busy` again, the bloc's
+gate (`if (state.selectedProfileId != null) return;`) drops the event
+silently, and `_busy` is never released: every further tap is swallowed
+with no navigation and no feedback — a permanently dead picker.
 
-## Process notes (not K01 findings)
+**Repro (deterministic, widget test with a fake repo):** the roster loses
+the tapped child while its selection write is still in flight
+(`_RosterSwapRepository` drops Maya during `setActiveChild`), the empty
+state renders, then Maya returns. The next tap on Maya leaves the path at
+`/who-is-playing` instead of `/kid-pin`; measured exactly in the test.
 
-- `app/test/features/kid_home/zz_scratch_measure_test.dart` (untracked,
-  another stage's file, header says "deleted before commit") currently has
-  one failing/timing-out test and 9 analyzer infos; while it exists, a
-  whole-repo `flutter analyze` is red. `k01_bugs_test.dart` itself is
-  analyzer-clean (`dart analyze` → No issues found).
-- `k01_profile_picker_matrix_test.dart` et al. finished green
-  (`flutter test test/features/kid_home/` → +310 ~2 −1, where the single
-  failure is the scratch file above and the 2 skips are this file's open
-  bugs).
+**Reachability:** today no shipped flow writes the `children` table while
+the picker holds a selection — parent add/remove (P05/P15) lives on other
+routes, and v1 has no sync/import — so this is a latent hardening hole, not
+a user-visible defect. That is why it is minor, not major.
 
-VERDICT: FAIL
+**Failing test:** `K01-BUG-7: an orphaned selection locks every tile`
+(skipped with `skip: true`; bug id in the test description).
+
+**Suggested fix (small):** dispatch
+`context.read<KidHomeBloc>().add(const KidHomeSelectionHandled())` before
+the `tapped == null` return (or clear the one-shot in the bloc when no
+profile matches), and reset the view’s `_busy` whenever a selection is
+dropped. A bloc-level selection flag set before the first `await` would
+close the whole class.
+
+---
+
+## Verified fixed this pass
+
+- **K01-BUG-3** — `profile_picker_view.dart:74-78` now dispatches
+  `KidHomeSelectionHandled` right after `context.push` starts, so the
+  one-shot is consumed instead of relying on the racy home-stream emission.
+  The drained regression (tap Maya → `/kid-pin` → back → `selectedProfileId`
+  null → tap Maya → `/kid-pin`) is green.
+- **K01-BUG-6** — `_busy` is armed *before* the selection event is
+  dispatched, so a two-finger burst yields one `KidHomeProfileSelected` (one
+  write, one route); the bloc gate is a second belt. The burst repro now
+  asserts route child == persisted `activeChildId` (was `opened maya
+  (/kid-pin) but persisted leo`) and passes.
+- **K01-BUG-1** (4 proofs) — 3 children keep 167 px tiles; 4+ keep the
+  discs circular; 6 keep 167 px and scroll; a scrolled-to extra child
+  selects and navigates.
+- **K01-BUG-2** — one burst, one route; one Navigator pop returns to the
+  picker.
+- **K01-BUG-5** — profiles-only failure → Try again → roster restores the
+  loaded picker.
+- **Unchanged probes still green:** 0 children / 1 child / long UK name at
+  320×1.3 / empty age band / no money or dates / same-tile and lock double
+  taps / deep links kid+parent / restart persistence / 16 dark-contrast
+  pairs / title-sub-caption fit at 320×1.3 / tap semantics / D1+D2 geometry
+  regression (corner-corrected design centre 468.8 and caption box 738).
+
+## Notes (not bugs, for awareness)
+
+- **Review iteration 3, finding 1 (minor):** `KidHomeState.profilesFailed`
+  is now write-only in product code — the bloc tracks the same fact with
+  its local `_profilesFailed` and the view no longer reads the state field
+  (the iteration-2 view heal was removed). Harmless dead public state;
+  either surface it or drop it in a later cleanup.
+- **Review iteration 3, finding 3:** the bloc gate drops a second in-flight
+  selection silently — correct when the first is pending (the view’s
+  `_busy` prevents it in practice).
+- `k01_bugs_test.dart` is analyzer-clean and `dart format`-clean; the
+  concurrent stage’s `zz_scratch_measure_test.dart` has been deleted.
+
+VERDICT: PASS

@@ -519,6 +519,18 @@ void main() {
   });
 
   group('K01 — selection handled (K01-BUG-3)', () {
+    // NOTE — the "selection names a child the roster no longer holds" wedge is
+    // NOT parked here on purpose. I reached it independently first and wrote a
+    // bloc-level proof (dispatch `KidHomeProfileSelected(childId: 'ghost')`,
+    // then a legitimate tap, which the `selectedProfileId` gate drops), but
+    // that layer is the wrong place to pin it green: the fix is in the VIEW
+    // (`profile_picker_view.dart:61-79` returns on `tapped == null` without
+    // dispatching `KidHomeSelectionHandled`), so a bloc-only proof would stay
+    // red after the correct fix landed. Stage 6 filed it as **K01-BUG-7**
+    // (minor, latent) with a widget-level proof through the real view —
+    // `k01_bugs_test.dart` "K01-BUG-7: an orphaned selection locks every
+    // tile" — which is the canonical reproducer. See 3_test.md §5.
+    //
     // K01-BUG-6 (fixed iteration 3). The view single-flights its NAVIGATION
     // (`_navPending`), so only the first selection of a gesture burst pushes
     // a route — and since iteration 3 the bloc single-flights the WRITES the

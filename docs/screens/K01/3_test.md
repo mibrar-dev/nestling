@@ -1,221 +1,192 @@
-# K01 · Who's playing? — Stage 3 (TEST, iteration 2)
+# K01 · Who's playing? — Stage 3 (TEST, iteration 3)
 
 Route `/who-is-playing` · feature `kid_home` · branch `screen/K01` · base
-`e195954` (main merged, iteration-2 build). No production code edited: every
-finding is recorded, not patched (RULES §1 keeps this stage inside
-`app/test/features/kid_home/**` and `docs/screens/K01/**`).
+`b9ba00a` (main merged; iteration-3 build: K01-BUG-3 wired, K01-BUG-6 bloc
+gate, `profilesFailed`, `1_plan.md` copy correction). No production code
+edited — every finding is recorded, not patched (RULES §1 keeps this stage
+inside `app/test/features/kid_home/**` and `docs/screens/K01/**`).
 
-**Headline:** iteration 1's BUG-A (the title apostrophe) is **fixed and green** —
-`k01_copy_parity_test.dart` went 11/2 → **13/13** with no test edit, exactly as
-promised. D1/D2, BUG-1 and BUG-2 are verified and now pinned. One new real bug
-is confirmed (K01-BUG-6, found independently and already filed by stage 6), and
-one open finding is **re-classified**: K01-BUG-3's repro is a harness artifact,
-so what is really left there is a latent race plus dead code, not a dead tile.
+**Headline:** iteration 2's K01-BUG-6 and K01-BUG-3 are **fixed and green**, and
+the two previously-parked proofs in `k01_bugs_test.dart` now run live and pass.
+I added 4 tests for the code paths the iteration-3 build introduced, found **no
+new reachable defect**, and independently reached the one latent hardening hole
+in the new guards — which stage 6 filed concurrently as **K01-BUG-7 (minor,
+latent)** with a better-layered proof than mine, so I removed my duplicate.
 
-## 1. Tests added this iteration (16)
+## 1. Tests added this iteration (4)
 
 | File | was → is | Added |
 |---|---|---|
-| `k01_profile_picker_geometry_test.dart` | 4 → **8** | +4 D1/D2 vertical-rhythm pins (real bundled fonts) |
-| `k01_profile_picker_matrix_test.dart` | 46 → **58** | +12: drained-navigation group (5), 3+ children (4), KID BACKGROUND (3) |
-| `k01_bloc_paths_test.dart` | 19 → **20** | +1 parked K01-BUG-6 reproducer at the bloc's root cause |
-| `k01_copy_parity_test.dart` | 13 → 13 | unchanged — BUG-A fixed by the view, not by the test |
-| `k01_copy_fit_test.dart` | 7 → 7 | unchanged |
+| `k01_profile_picker_matrix_test.dart` | 58 → **62** | +4 covering the iteration-3 `_select` gate |
+| `k01_bloc_paths_test.dart` | 23 → **23** | net 0: wrote a latent-risk proof, then **removed it** — see §5 |
+| `k01_profile_picker_geometry_test.dart` | 8 → 8 | unchanged |
+| `k01_copy_parity_test.dart` / `k01_copy_fit_test.dart` / `k01_profile_picker_view_test.dart` | 13 / 7 / 13 | unchanged |
 
-### 1.1 D1/D2 — the vertical rhythm is now pinned to the design PNG
+Everything the iteration-2 report promised as a regression pin is still green:
+D1/D2 vertical rhythm (0 px), BUG-A copy parity, the two-tone meadow, the
+overflow row, and the drained-navigation group.
 
-Design values read from `design/screens/light/K01-profile-picker.png` ÷3 as
-first/last dark ink rows (±0.5 anti-alias), asserted at ±2 px:
+### 1.1 The iteration-3 guard, exercised in its risky orderings
 
-| Element | Design | App | Δ |
-|---|---|---|---|
-| title line box | 123…157 | 123…157 | 0 |
-| sub line box | 173…199 | 173…199 | 0 |
-| tiles band (border box) | 288.5…648.5 | 288.5…648.5 | **0** |
-| caption box | 738…778 | 738…778 | **0** |
-| gap below the caption | 32 + 34 (`--s8` + `--home-h`) | 32 + 34 | 0 |
+The build moved the single-flight out of the `BlocListener` into `_select`
+(armed **before** the dispatch) and added a matching `selectedProfileId` gate in
+the bloc. Two guards that both "drop" events are exactly the shape that wedges
+when they disagree, so the new tests are about **orderings**, not single taps:
 
-Iteration 1 measured +16.5 / +34 and derived the cause in §4 of that report:
-`NestHomeIndicator` reserves nothing in-app (P01 BUG-2) while the design's
-`.screen.kid` reserves `--home-h: 34`, and the `flex: 1` band centres the
-difference. The build's fix (a `SizedBox(NestDevice.homeH)` under the caption)
-lands the band on the design to within 0.5 px, which is what my iteration-1
-arithmetic predicted (288.5). The pins are now in the suite so a future
-regression of either number fails immediately.
-
-### 1.2 The harness correction that matters most
-
-A tile tap is `await repository.setActiveChild(...)` then the bloc's `emit`, and
-that write is **real Drift I/O**. `tester.pump` advances only the fake clock, so
-without draining real async the future never completes, **no state is ever
-emitted, and every tile looks dead** — for reasons that have nothing to do with
-the screen. Measured on this build:
-
-| Sequence | undrained (`pump` only) | drained (`runAsync` + `pump`) |
-|---|---|---|
-| states emitted | **1** (`maya`) | 4 (`maya, null, maya, null`) |
-| tap Maya → back → tap Maya | no navigation | `/kid-pin` |
-| tap Leo after back | no navigation | `/kid-home` |
-
-`k01_profile_picker_matrix_test.dart` now has a `_settleAfterWrite` helper and a
-group, *navigation that depends on the DB write*, whose five tests all go
-through it. Green 5/5 repeat runs. Every navigation assertion in that file that
-depends on the write was moved onto it.
-
-## 2. Re-classified finding — K01-BUG-3 is not what the parked test says
-
-`6_bugs.md` (iteration 2) lists K01-BUG-3 as **STILL OPEN, major**, with the
-repro "tap Maya → `/kid-pin` → back → `selectedProfileId` is still `'maya'` →
-tap Maya again → nothing happens", re-confirmed on `e195954`.
-
-**That repro is a harness artifact.** The undrained row of the table above is
-exactly it. With the write drained the picker's one-shot IS cleared — by the
-`app_state` watch, which re-emits on the `UPDATE` that `setActiveChild` always
-issues — and the repeated tap navigates again, 5 runs out of 5.
-
-What is genuinely true, and what I would keep open:
-
-1. **`KidHomeSelectionHandled` is dead code** (I agree with stage 6). `grep` finds
-   the event, the handler (`kid_home_bloc.dart:154`), `copyWithSelectionHandled()`
-   and three doc-comments that say the picker "dispatches" it — and no call site
-   anywhere. So the intended fix was never wired.
-2. **The one-shot's clearing is a race**, not a guarantee. It relies on the
-   `app_state` re-emission landing *after* the selection emit. Observed order is
-   always `sel → null` here; if a platform ever delivers them the other way round,
-   `copyWithLoaded` clears first and `copyWithSelection` re-arms, leaving the
-   tile dead. Dispatching `KidHomeSelectionHandled` after the push removes the
-   dependence entirely — which makes that one-line call still the right fix, just
-   for a different (and less dramatic) reason than "the tile is dead today".
-
-So: **keep the fix, downgrade the severity, drop the repro.** The parked
-`K01-BUG-3` proof in `k01_bugs_test.dart` should be replaced by the drained form
-now in `k01_profile_picker_matrix_test.dart` (group *navigation that depends on
-the DB write*, first test), which is green and states the same contract.
-
-## 3. New real bug confirmed — K01-BUG-6 (major)
-
-Found independently before reading stage 6's report; the mechanism and the
-numbers agree exactly (`opened maya (/kid-pin) but persisted leo`).
-
-**Files:** `app/lib/features/kid_home/presentation/views/profile_picker_view.dart:39`
-(`if (_navPending) return;` — inside the `BlocListener`) and
-`app/lib/features/kid_home/presentation/bloc/kid_home_bloc.dart:159-171`
-(`_onProfileSelected` has no in-flight guard).
-
-**Repro (deterministic, 3/3):** two fingers down on Maya and Leo before either
-up → top route `/kid-pin` (Maya, `pinSet`) while `app_state.activeChildId` is
-`'leo'`. The view single-flights the **navigation**; the bloc still runs
-**every** `setActiveChild`. The user is asked for Maya's PIN and then lands in
-Leo's home. Symmetric in reverse order.
-
-**My parked reproducer is at the bloc's root cause**, so the fix has a green
-target:
-`k01_bloc_paths_test.dart` → *K01-BUG-6: a burst persists only the child whose
-route is pushed* (`skip:` with the bug id).
-
-```
-flutter test --run-skipped \
-  test/features/kid_home/k01_bloc_paths_test.dart --plain-name "K01-BUG-6"
-# Expected: ['maya']
-#   Actual: ['maya', 'leo']
-```
-
-It is written as a plain `test`, **not** a `blocTest`, because `blocTest(skip:)`
-takes an `int` RETRY count in bloc_test 10.0.0 — a bug proof there runs and
-fails in the green suite instead of parking. Worth knowing before someone parks
-the next one there.
-
-The green anchors around it are in `k01_profile_picker_matrix_test.dart`: a
-single tap always leaves `activeChildId` on the route's child, and a burst
-pushes exactly one route (one Navigator pop returns to the picker).
-
-## 4. Verified fixed (iteration 1's findings)
-
-| # | Evidence (mine) |
+| Test | What it pins |
 |---|---|
-| **BUG-A** copy | `k01_copy_parity_test.dart` 13/13 — the title now equals the HTML source byte for byte (ASCII `'`), ages keep U+2013, caption keeps its ASCII hyphen. No test edit was needed. |
-| **BUG-1** 3+ children | +4 tests: at 320/390/430 every tile keeps the **two-up** width (167 @390), height ≥ 336, the pet disc stays a circle, and the third child is reachable by horizontal scroll and navigates to `/kid-home` with `activeChildId == 'nina'`. |
-| **BUG-2** burst stacking | latch-agnostic detector: one burst, one Navigator pop back to `/who-is-playing`. Green. (Which child *wins* the burst stays a product question, not a stacking question.) |
-| **BUG-5** Try again | `the failure card… retry` and `the failure retry is reachable by its semantics tap action` both green. |
-| **D1/D2** | §1.1 — 0 px. |
-| **D3/D4** meadow | +2 painted-pixel tests: `y=770` is exactly `kidMeadow` (hill-back), `y=843` is exactly `kidHillFront(kidMeadow, surface)` (hill-front), light and dark, with a 34 px OS inset. A flat single hill fails the first probe. |
-| **KID BACKGROUND** | +1 structural test: exactly one `KidScope`, and the one `NestMeadow` lives inside it — K01 paints no hills of its own. |
+| *a burst right after a completed round-trip still writes once* | tap → back → **burst**: `_busy` and the one-shot are both back to their post-pop state; the second burst must still navigate and persist exactly the routed child. This is the ordering where an unreleased latch shows up. |
+| *a burst after a rejected write still writes once* | a failed `setActiveChild` releases `_busy` via the toast path; the next burst must be fully applied, not half-applied. |
+| *a burst on the overflow row persists only the routed child* | 2b noted both rows now route through `_select`, but **nothing proved the 3+ children row does**. A burst with three tiles must push one route, persist one child, and one Navigator pop must return to the picker. |
+| *a scrolled-in overflow tile is still a 56px accessible button* | ACCESSIBILITY rule on new UI: a tile that only exists after a horizontal scroll still has `SemanticsAction.tap` and a ≥56 px target. (An off-stage control has **no** semantics node — a K03 iteration-1 lesson — so the test scrolls it in first.) |
 
-Plus one new invariant nobody had: **after a rejected `setActiveChild`, the next
-selection still works** (the `_navPending` latch must be released by the
-failure). Green.
+`_burst` and `_routeChild` were generalised in the matrix file so a burst can
+name any set of children and the route's owning child is derived from the
+design's own contract (`pinSet ? /kid-pin : /kid-home`) rather than hard-coded
+per test.
 
-## 5. Results
+## 2. Re-verified — every earlier finding
+
+| # | Status | Evidence |
+|---|---|---|
+| **BUG-A** copy | fixed | `k01_copy_parity_test.dart` 13/13 — title byte-identical to the HTML source (ASCII `'`), ages U+2013, caption ASCII hyphen |
+| **BUG-1** 3+ children | fixed | 320/390/430 two-up width, discs circular, third child reachable + navigates, overflow-row burst (§1.1) |
+| **BUG-2** burst stacking | fixed | one pop returns to the picker, on both rows |
+| **BUG-3** dead tile after back | fixed | `k01_bugs_test.dart` "K01-BUG-3 regression" now un-skipped and passing; my drained equivalent in the matrix group also green |
+| **BUG-4** empty nickname | fixed | stage 6's proof green |
+| **BUG-5** Try again | fixed | failure → retry → roster green |
+| **BUG-6** route child ≠ persisted child | fixed | stage 6's proof un-skipped and passing; my ordering tests (§1.1) green |
+| **D1/D2** vertical rhythm | fixed | geometry pins 288.5 / 738 / 32+34, ±2 px |
+| **D3/D4** meadow | fixed | `y=770` = hill-back, `y=843` = hill-front, light + dark |
+| **5_ui** iteration 3 | **PASS** | "no visible deviation a designer would reject" — agrees with my geometry pins |
+
+## 3. Results
 
 ```
 flutter analyze                      → No issues found!
 dart format test/features/kid_home/  → 0 changed
-flutter test test/features/kid_home/ → +326 ~3: All tests passed!
-flutter test (whole app)             → +2876 ~4 -0: All tests passed!
+flutter test test/features/kid_home/ → +336 ~1: All tests passed!
+flutter test (whole app)             → +2886 ~2: All tests passed!
 ```
-
-Per file:
 
 | File | Result |
 |---|---|
 | `k01_copy_parity_test.dart` | +13 |
 | `k01_copy_fit_test.dart` | +7 |
 | `k01_profile_picker_geometry_test.dart` | +8 |
-| `k01_profile_picker_matrix_test.dart` | +58 |
-| `k01_bloc_paths_test.dart` | +20 ~1 |
+| `k01_profile_picker_matrix_test.dart` | +62 |
+| `k01_bloc_paths_test.dart` | +23 |
 | `k01_profile_picker_view_test.dart` | +13 |
-| `k01_bugs_test.dart` (stage 6's) | +21 ~2 |
+| `k01_bugs_test.dart` (stage 6's) | +23 ~1 |
 
-The three skips are all parked open-bug proofs: two in `k01_bugs_test.dart`
-(K01-BUG-3, K01-BUG-6) and my K01-BUG-6 bloc reproducer. Nothing in the suite
-fails. The `quest_library_a11y_actions_test` flake that red the whole suite in
-iteration 1 did not recur.
+The single skip is stage 6's parked **K01-BUG-7** proof (§5).
 
-## 6. Bugs found this iteration
+One note on the run itself: an early full-suite run reported a failure in
+`pocket_money/pocket_money_setup_view_geometry_test.dart` (P06 — another
+screen's file). It passes in isolation and did not recur in three subsequent
+full runs, so it was a flake from stages 4/5/6 editing the tree concurrently,
+not a K01 regression.
 
-- **K01-BUG-6 (major, open, real)** — §3. Confirmed independently; the parked
-  reproducer is in my bloc file at the root cause.
-- **K01-BUG-3 (re-classified)** — §2. Dead code confirmed; the "dead tile" repro
-  withdrawn as a harness artifact; a latent ordering race remains and the fix
-  should stay (as belt-and-braces).
-- Nothing else. No new copy, geometry, alignment, accessibility, bottom-edge or
-  dark-mode defect surfaced at 320/390/430 × light/dark × 1.0/1.3.
+## 4. Bugs found this iteration
+
+**None.** No new reachable defect in the screen at 320/390/430 × light/dark ×
+text scale 1.0/1.3, across copy, geometry, alignment, accessibility, tap
+targets, routing, the three non-loaded states, or the shared background.
+
+## 5. The one latent hole (not filed as a K01 bug — stage 6 owns it as K01-BUG-7)
+
+The iteration-3 build introduced two "drop the event" guards:
+
+- `ProfilePickerView._select` arms `_busy` **before** dispatching
+  (`profile_picker_view.dart:38-44`), released on the push's `whenComplete` or
+  by the failure toast.
+- `_onProfileSelected` returns early while `selectedProfileId` is pending
+  (`kid_home_bloc.dart:172-176`).
+
+There is one window where both stay armed: the listener resolves the pending
+profile against `state.profiles` and, if the id is **not there**, returns at
+`profile_picker_view.dart:61-64` **without** dispatching
+`KidHomeSelectionHandled`. The one-shot stays set, the bloc gate then drops
+every later selection, and `_busy` was re-armed by the tap that got dropped —
+the picker is dead with no feedback.
+
+I reached this independently before reading stage 6's file, and wrote a proof
+for it, then **deleted my proof**:
+
+- it belongs to **stage 6's** bug-file and their bug id;
+- more importantly, a **bloc-level** proof is the wrong layer to pin green. The
+  fix is in the view (clear the one-shot on the not-found branch too, or don't
+  arm `_busy` until the id resolves), so my proof would have stayed red after
+  the correct fix landed. Theirs — `k01_bugs_test.dart`, *K01-BUG-7: an
+  orphaned selection locks every tile* — drives the real view and goes green on
+  the real fix.
+
+Severity **minor / latent** is right: the view only ever dispatches an id it
+just read off the roster, so the trigger needs the roster to change between a
+tap and the listener (a parent editing the family, or the next sync/import/roster
+write). No shipped flow does that while K01 holds a selection.
+
+I left a short comment at that spot in `k01_bloc_paths_test.dart` pointing at
+K01-BUG-7 so the next reader knows the case exists and why it is not pinned
+here.
+
+## 6. Also checked, clean
+
+- **Copy** — `k01_copy_parity_test.dart` reads the HTML source (never
+  transcribed) and compares byte-for-byte: title ASCII `'`, `Age 7–9` /
+  `Age 4–6` with U+2013, caption with its ASCII hyphen, lock `aria-label`, both
+  pet `alt` texts. `1_plan.md` §0 now agrees with the source, so the
+  plan-vs-test contradiction from iteration 1 is closed.
+- **Letter spacing** — every rendered string asserts `0`.
+- **CHILD ORDER** — tiles render `state.profiles` in repository creation order;
+  the 3-child tests place `Nina` last and find her last.
+- **PIP** — per-child `PipAvatar` from the DB row, no `pip_stage_*.svg`.
+- **KID BACKGROUND** — exactly one `KidScope`, and the single `NestMeadow` lives
+  inside it; K01 paints no hills of its own.
+- **Bottom edge** — no bar on this screen; the meadow reaches the physical edge
+  with a 34 px OS inset, light and dark.
+- **CLOCK / FONTS** — no `DateTime.now()`, no `google_fonts`, in feature code
+  or feature tests.
+- **`profilesFailed`** — stage 4 finding 1 (write-only in product code) is real
+  but not a test-stage item; 2a's two tests pin set/clear and constructor
+  behaviour, and the field is in `props`, so equality is honest either way.
 
 ## 7. Harness notes for the next stages
 
-- **Drain real async after any tap that writes to the database.** `pump` alone
-  makes the whole picker look dead. `k01_profile_picker_matrix_test.dart`'s
-  `_settleAfterWrite` is the pattern:
+- **Drain real async after any tap that writes to the database.**
+  `tester.pump` alone never completes the Drift `setActiveChild` future, so no
+  state is emitted and the whole picker looks dead. Pattern:
   `await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 60)))`
-  then `_settle(tester)`.
-- **`blocTest(skip:)` is an int retry count** (bloc_test 10.0.0), not a marker.
-  Park a bug proof with a plain `test(..., skip: '<bug id>')`.
-- `testWidgets(skip:)` is `bool` in this SDK too; `test(skip:)` takes a reason
-  string. There is no skip-with-reason for widget tests.
-- The three italicised constants in `k01_copy_parity_test.dart`, `_title` in my
-  matrix file and `_copy` in `k01_copy_fit_test.dart` all carry the ASCII `'`
-  now — if a fix ever flips the title back, all three go red together.
+  then pump — `k01_profile_picker_matrix_test.dart`'s `_settleAfterWrite`. Both
+  my iteration-2 report and 2b's notes needed this; it is now the house pattern.
+- **`blocTest(skip:)` is an `int` RETRY count** (bloc_test 10.0.0), not a
+  marker — a bug proof parked there runs and fails in the green suite. Use a
+  plain `test(..., skip: '<bug id>')`, which takes a reason string.
+  `testWidgets(skip:)` is `bool` in this SDK; there is no skip-with-reason for
+  widget tests.
 - Bottom-edge pixel probes must sample where nothing is painted. At the
-  iteration-2 geometry the caption is at 738…778, so `y ∈ {770, 838, 843}` are
+  iteration-3 geometry the caption is at 738…778, so `y ∈ {770, 838, 843}` are
   safe and `y ≈ 800` lands on the caption's glyphs.
-- `NestMeadow` is mounted by `KidScope`, which sits INSIDE
-  `ProfilePickerView`'s build — so "K01 must not mount its own meadow" has to be
-  asserted as a COUNT (`find.byType(NestMeadow)` == 1, and it is a descendant of
-  `KidScope`), not as "no `NestMeadow` below `ProfilePickerView`".
-- **Process note:** stages 4, 5 and 6 have been running in this worktree while
-  this stage works; `k01_bugs_test.dart` and `6_bugs.md` changed under me
-  mid-pass (stage 6's iteration-2 rewrite landed at 04:15). I touched only my
-  four files — the `k01_bugs_test.dart` entry in `git status` is stage 6's own
-  rewrite (+168/−65, no `skip:` lines among them), not mine. The
-  `zz_scratch_measure_test.dart` scratch that stage 6 flagged as making the
-  whole-repo analyze red has been deleted.
+- `NestMeadow` is mounted by `KidScope`, which sits **inside**
+  `ProfilePickerView`'s build — "K01 must not mount its own meadow" has to be a
+  COUNT (`find.byType(NestMeadow)` == 1, and a descendant of `KidScope`), not
+  "no `NestMeadow` below `ProfilePickerView`".
+- A tile's name/age/pip semantics **merge into the tile button node**, so
+  `getSemantics(find.text('Maya'))` returns the button. Assert "no tap action"
+  only outside a control; assert the tile's label and `isButton` instead.
+- Off-stage controls have no semantics node — scroll a control into view before
+  asserting or performing its semantics action.
+- **Process note:** stages 4, 5 and 6 ran concurrently again this iteration
+  (`k01_bugs_test.dart`, `4_review.md`, `5_ui.md` all changed under me). I
+  touched only my three files and left `k01_bugs_test.dart` to stage 6.
 
 ## 8. Verdict basis
 
-`flutter analyze` clean, `dart format` clean, and every test I own passes — but
-this stage confirmed **K01-BUG-6**, a real defect where the picker single-flights
-its navigation while the bloc persists *every* selected child, leaving
-`app_state` naming a child whose route was never pushed. It is recorded, not
-patched, per the brief, so stage 3 cannot pass.
+`flutter analyze` clean, `dart format` clean, every test in the app passing
+(`+2886 ~2 −0`), every K01 finding from the previous two iterations verified
+fixed, and **no new bug found** this iteration. The one latent hardening hole in
+the new guards is recorded, correctly rated, and already owned by stage 6 as
+K01-BUG-7 with a proof at the right layer — it is not a reachable defect and not
+mine to re-file. Stage 3 passes.
 
-VERDICT: FAIL
+VERDICT: PASS

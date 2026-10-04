@@ -1,4 +1,4 @@
-// K01 (profile picker) adversarial suite — Stage 6 bug hunt, iteration 1.
+// K01 (profile picker) adversarial suite — Stage 6 bug hunt, iteration 3.
 //
 // Every proof below is backed by the real in-memory Drift database (or a
 // file-backed one for the restart probe). Bug proofs are skipped with
@@ -14,6 +14,7 @@
 // Run one proof:
 //   flutter test test/features/kid_home/k01_bugs_test.dart --plain-name K01-BUG-1
 
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -166,6 +167,67 @@ class _ProfilesFailOnceRepository implements KidHomeRepository {
 
   @override
   Future<void> setActiveChild(String childId) async {}
+
+  @override
+  Future<void> completeQuest(String childId, String questId) async {}
+}
+
+/// The seed's Maya row, for fake repositories.
+const KidChild _mayaChild = KidChild(
+  id: 'maya',
+  nickname: 'Maya',
+  ageBand: '7-9',
+  avatarColour: 'lilac',
+  coins: 120,
+  pipStyle: 'mochi',
+  pipSkin: 'sunny',
+  pipAccessory: 'none',
+  pipStage: 3,
+  happiness: 0,
+  pinSet: true,
+);
+
+/// K01-BUG-7 fake: the roster is a controllable stream. `setActiveChild`
+/// lands a roster change while its own write is still in flight, so the
+/// tapped child disappears from `state.profiles` before the selection emit
+/// — the one window where the view cannot resolve the pending selection.
+class _RosterSwapRepository implements KidHomeRepository {
+  final StreamController<List<KidChild>> _roster =
+      StreamController<List<KidChild>>.broadcast();
+  final List<String> writes = <String>[];
+
+  void emitRoster(List<KidChild> children) => _roster.add(children);
+
+  @override
+  Stream<List<KidChild>> watchProfiles() => _roster.stream;
+
+  @override
+  Future<void> setActiveChild(String childId) async {
+    writes.add(childId);
+    // K01-BUG-7: drop the tapped child out of the roster while the write
+    // is still pending, then let the profiles emission win the race.
+    _roster.add(const <KidChild>[]);
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+  }
+
+  @override
+  Stream<KidHomeData> watchHome() =>
+      Stream<KidHomeData>.value(const KidHomeData(child: null));
+
+  @override
+  Future<List<KidQuest>> getItems() async => const <KidQuest>[];
+
+  @override
+  Stream<List<KidQuest>> watchItems() => const Stream<List<KidQuest>>.empty();
+
+  @override
+  Stream<KidChild?> watchActiveChild() => Stream<KidChild?>.value(null);
+
+  @override
+  List<String> stepsFor(String questId) => const <String>[];
+
+  @override
+  Future<bool> verifyPin(String childId, String pin) async => true;
 
   @override
   Future<void> completeQuest(String childId, String questId) async {}
@@ -338,10 +400,10 @@ void main() {
   // -------------------------------------------------------------------------
   // K01-BUG-2 (FIXED, iteration 2 build) — one burst, one route.
   //
-  // The picker now single-flights its navigation (`_navPending`), so the
-  // second selection in a two-finger burst no longer stacks a second route.
-  // K01-BUG-6 right after covers the half that is still open: the guard
-  // drops the second navigation but not the second `setActiveChild` write.
+  // The picker single-flights the whole selection (navigation AND write in
+  // iteration 3), so a two-finger burst on two tiles pushes exactly one kid
+  // route. K01-BUG-6 right after pins the other half: the route child and
+  // the persisted active child agree.
   // -------------------------------------------------------------------------
 
   testWidgets('K01-BUG-2 regression: one two-finger burst pushes one route', (
@@ -370,15 +432,13 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
-  // K01-BUG-6 — the pushed route and the persisted active child disagree
+  // K01-BUG-6 (FIXED, iteration 3 build) — the route child and the persisted
+  // active child always agree.
   //
-  // `_navPending` guards the *navigation*, but both `KidHomeProfileSelected`
-  // events still reach the bloc: each awaits its own `setActiveChild` write
-  // and emits. The first emission pushes its route; the second is swallowed
-  // by the guard — but its write has already landed, so `app_state` names
-  // the OTHER child. Result: the kid authenticates as the routed child (e.g.
-  // Maya's PIN, route extra `childId: maya`) and then lands on the other
-  // child's home, because `watchHome` resolves `app_state.activeChildId`.
+  // The picker now arms `_busy` BEFORE dispatching, so a two-finger burst
+  // produces exactly one `KidHomeProfileSelected` event — one write, one
+  // navigation — and the bloc's `selectedProfileId` gate drops a stale
+  // second event as a second belt.
   // -------------------------------------------------------------------------
 
   testWidgets('K01-BUG-6: route child and active child disagree', (
@@ -404,22 +464,17 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
-  // K01-BUG-3 — STILL OPEN (iteration 2): the same tile does not navigate
-  // twice in a row.
+  // K01-BUG-3 (FIXED, iteration 3 build) — a tile navigates again after
+  // coming back.
   //
-  // `selectedProfileId` is a one-shot that only clears on the next home
-  // stream emission (`copyWithLoaded`, or the new `KidHomeSelectionHandled`).
-  // The iteration-2 build added the event and its handler
-  // (kid_home_bloc.dart:154-159) but NO CALL SITE dispatches it: the view's
-  // `BlocListener` still only pushes. After `setActiveChild` the home
-  // stream's clear emission races ahead of the selection emit, the one-shot
-  // stays set, the second tap emits an `==`-equal state, the bloc drops it
-  // and the tile is dead with no feedback. Fix: `context.read<KidHomeBloc>()
-  // .add(const KidHomeSelectionHandled())` in the picker's listener right
-  // after `context.push` (or make the bloc single-flight the selection).
+  // The picker's listener now dispatches `KidHomeSelectionHandled` right
+  // after starting the push, so the one-shot cannot wedge even when the
+  // home stream's clear emission races ahead of it. The proof drains the
+  // real Drift write (harness note: `tester.pump` alone never completes the
+  // `setActiveChild` future) and then re-taps the same tile.
   // -------------------------------------------------------------------------
 
-  testWidgets('K01-BUG-3: tapping the same tile after back does nothing', (
+  testWidgets('K01-BUG-3 regression: the same tile navigates again', (
     tester,
   ) async {
     await _pumpPicker(tester);
@@ -441,9 +496,8 @@ void main() {
       bloc.state.selectedProfileId,
       isNull,
       reason:
-          'K01-BUG-3 mechanism: the one-shot is still set when the picker '
-          "comes back (the home stream's clear emission races ahead of the "
-          'selection emit), so the equal re-selection is dropped by the bloc',
+          'K01-BUG-3: the handled event must consume the one-shot before the '
+          'picker is visible again',
     );
     await tester.tap(_tile('maya'));
     await tester.runAsync(
@@ -457,6 +511,59 @@ void main() {
     );
     await disposeApp(tester);
   });
+
+  // -------------------------------------------------------------------------
+  // K01-BUG-7 — minor — an orphaned selection locks every tile
+  //
+  // `_busy` is armed before the selection event is dispatched and released
+  // on the pop, on a failure toast, or when the listener cannot resolve the
+  // pending profile (`tapped == null` — it returns without dispatching
+  // `KidHomeSelectionHandled`). In that last window the one-shot stays set:
+  // the bloc's `selectedProfileId` gate then silently drops every subsequent
+  // `KidHomeProfileSelected`, and the view's `_busy` was re-armed by the tap
+  // that was dropped, so the picker is dead with no feedback. Today no
+  // shipped flow changes the roster while the picker holds a selection, so
+  // this is a latent hardening hole (the next sync/import/roster write
+  // reaches it), not a user-visible defect.
+  // -------------------------------------------------------------------------
+
+  testWidgets('K01-BUG-7: an orphaned selection locks every tile', (
+    tester,
+  ) async {
+    final repo = _RosterSwapRepository();
+    await _useFakeRepository(repo);
+    await _pumpPicker(tester);
+    repo.emitRoster(const <KidChild>[_mayaChild]);
+    await _settle(tester);
+    expect(_tile('maya'), findsOneWidget);
+
+    // Tap while the roster is about to change: `setActiveChild` drops Maya
+    // from the roster before the selection emit, so the listener cannot
+    // resolve the pending profile.
+    await tester.tap(_tile('maya'));
+    await _settle(tester);
+    expect(
+      find.text('Ask a grown-up to add your profile.'),
+      findsOneWidget,
+      reason: 'the roster swap landed before the selection was routed',
+    );
+
+    // Maya comes back; the next tap is the user's retry on a live picker.
+    repo.emitRoster(const <KidChild>[_mayaChild]);
+    await _settle(tester);
+    expect(_tile('maya'), findsOneWidget);
+    await tester.tap(_tile('maya'));
+    await _settle(tester);
+    expect(
+      pushedPath(tester),
+      '/kid-pin',
+      reason:
+          'K01-BUG-7: the orphaned selection is still pending, so the bloc '
+          'gate drops this tap and the view’s `_busy` stays armed — every '
+          'further tap is swallowed with no feedback',
+    );
+    await disposeApp(tester);
+  }, skip: true);
 
   // -------------------------------------------------------------------------
   // K01-BUG-5 (FIXED, iteration 2 build) — Try again recovers from a

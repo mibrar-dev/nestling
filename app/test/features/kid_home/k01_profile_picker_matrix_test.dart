@@ -261,20 +261,35 @@ Future<void> _addChild(WidgetTester tester, String id, String nickname) async {
   );
 }
 
-/// Two fingers DOWN on Maya and Leo before either UP — both taps belong to
-/// the picker even though the first selection pushes a route in between.
-void _burst(WidgetTester tester) {
-  final maya = TestPointer(7);
-  final leo = TestPointer(8);
-  tester.binding.handlePointerEvent(
-    maya.down(tester.getCenter(find.byKey(_mayaTile))),
-  );
-  tester.binding.handlePointerEvent(
-    leo.down(tester.getCenter(find.byKey(_leoTile))),
-  );
-  tester.binding.handlePointerEvent(maya.up());
-  tester.binding.handlePointerEvent(leo.up());
+/// Two fingers DOWN on [ids] before either UP — every tap belongs to the
+/// picker even though the first selection pushes a route in between.
+void _burst(WidgetTester tester, [List<String>? ids]) {
+  final targets = ids ?? const <String>['maya', 'leo'];
+  final pointers = <TestPointer>[
+    for (var i = 0; i < targets.length; i++) TestPointer(7 + i),
+  ];
+  for (var i = 0; i < targets.length; i++) {
+    tester.binding.handlePointerEvent(
+      pointers[i].down(
+        tester.getCenter(
+          find.byKey(ValueKey<String>('k01-tile-${targets[i]}')),
+        ),
+      ),
+    );
+  }
+  for (final pointer in pointers) {
+    tester.binding.handlePointerEvent(pointer.up());
+  }
 }
+
+/// The child whose route the picker is showing: the design's own contract is
+/// `pinSet ? /kid-pin : /kid-home`, so Maya (pinSet) owns `/kid-pin` and Leo
+/// (no PIN) owns `/kid-home`.
+String? _routeChild(String path) => switch (path) {
+  '/kid-pin' => 'maya',
+  '/kid-home' => 'leo',
+  _ => null,
+};
 
 void main() {
   setUp(() async {
@@ -959,6 +974,69 @@ void main() {
       );
       await disposeApp(tester);
     });
+
+    // K01-BUG-6 lives in the ORDER of the two guards: `_busy` is armed before
+    // the dispatch and the bloc drops a pending selection. Both are released
+    // on the pushed route's pop, so the interesting orderings are "burst
+    // immediately after coming back" and "burst after a rejected write".
+    testWidgets(
+      'a burst right after a completed round-trip still writes once',
+      (tester) async {
+        await _pump(tester);
+        await _settleAfterWrite(tester);
+        await tester.tap(find.byKey(_mayaTile));
+        await _settleAfterWrite(tester);
+        expect(pushedPath(tester), '/kid-pin');
+        await _popRoute(tester);
+        expect(await _activeChildId(tester), 'maya');
+
+        _burst(tester, <String>['leo', 'maya']);
+        await _settleAfterWrite(tester);
+        await tester.pump(const Duration(seconds: 2));
+        final top = pushedPath(tester);
+        expect(
+          _routeChild(top),
+          isNotNull,
+          reason: 'the second burst must still navigate (top $top)',
+        );
+        expect(
+          await _activeChildId(tester),
+          _routeChild(top),
+          reason:
+              'the persisted child must still be the one whose route is on '
+              'screen, even as the second burst of a session',
+        );
+        await disposeApp(tester);
+      },
+    );
+
+    testWidgets('a burst after a rejected write still writes once', (
+      tester,
+    ) async {
+      final roster = (await tester.runAsync(_demoRoster)) ?? const <KidChild>[];
+      await _useFakeRepository(
+        _FakeKidHomeRepository()
+          ..failSelectOnce = true
+          ..profiles = roster,
+      );
+      await _pump(tester);
+      await _settleAfterWrite(tester);
+      await tester.tap(find.byKey(_mayaTile));
+      await _settleAfterWrite(tester);
+      expect(pushedPath(tester), '/who-is-playing', reason: 'write rejected');
+
+      _burst(tester);
+      await _settleAfterWrite(tester);
+      await tester.pump(const Duration(seconds: 2));
+      final top = pushedPath(tester);
+      expect(_routeChild(top), isNotNull, reason: 'the burst must navigate');
+      expect(
+        await _activeChildId(tester),
+        _routeChild(top),
+        reason: 'a failed write must not leave the next burst half-applied',
+      );
+      await disposeApp(tester);
+    });
   });
 
   group('K01 — 3+ children keep the design tile (K01-BUG-1)', () {
@@ -1032,6 +1110,74 @@ void main() {
       expect(await _activeChildId(tester), 'nina');
       await disposeApp(tester);
     });
+
+    // The single-flight guard now lives in `_select`, which BOTH rows share.
+    // Nothing proved the overflow row goes through it, so a burst with three
+    // children is asserted here: one event, one write, one navigation, and the
+    // persisted child must be the one on screen.
+    testWidgets('a burst on the overflow row persists only the routed child', (
+      tester,
+    ) async {
+      await _addChild(tester, 'nina', 'Nina');
+      await _pump(tester);
+      expect(find.byType(ProfileTile), findsNWidgets(3));
+      _burst(tester);
+      await _settleAfterWrite(tester);
+      await tester.pump(const Duration(seconds: 2));
+      final top = pushedPath(tester);
+      expect(
+        _routeChild(top),
+        isNotNull,
+        reason: 'the overflow row must navigate exactly one route (top $top)',
+      );
+      expect(
+        await _activeChildId(tester),
+        _routeChild(top),
+        reason:
+            'the 3+ children row must apply the same single-flight guard as '
+            'the two-up row, or a burst writes twice',
+      );
+      await _popRoute(tester);
+      expect(
+        pushedPath(tester),
+        '/who-is-playing',
+        reason: 'one pop must return to the picker — no stacked route',
+      );
+      await disposeApp(tester);
+    });
+
+    testWidgets(
+      'a scrolled-in overflow tile is still a 56px accessible button',
+      (tester) async {
+        final semantics = tester.ensureSemantics();
+        await _addChild(tester, 'nina', 'Nina');
+        await _pump(tester);
+        await tester.drag(
+          find.byType(SingleChildScrollView).last,
+          const Offset(-400, 0),
+        );
+        await tester.pump();
+        final tile = find.byKey(const ValueKey('k01-tile-nina'));
+        expect(tile, findsOneWidget);
+        expect(
+          tester.getSize(tile).height,
+          greaterThanOrEqualTo(NestDevice.tapKid),
+          reason: 'the kid minimum applies to scrolled-in tiles too',
+        );
+        // An off-stage control has no semantics node, so scroll it in first
+        // (a K03 iteration-1 lesson) before asserting the action.
+        expect(
+          tester
+              .getSemantics(tile)
+              .getSemanticsData()
+              .hasAction(SemanticsAction.tap),
+          isTrue,
+          reason: 'a scrolled-in tile must still be operable by VoiceOver',
+        );
+        semantics.dispose();
+        await disposeApp(tester);
+      },
+    );
   });
 
   group('K01 — the shared kid background (KID BACKGROUND rule)', () {

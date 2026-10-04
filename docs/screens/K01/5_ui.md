@@ -1,19 +1,19 @@
-# K01 · Who's playing? — Stage 5 (UI CHECK, iteration 2)
+# K01 · Who's playing? — Stage 5 (UI CHECK, iteration 3)
 
 Route `/who-is-playing` · mode kid · seed demo · child maya · simulator BC440E48-B3A3-43BC-971B-0EF5DB621874 (390×844).
-No code edited in this stage. ORCHESTRATOR_NOTES.md applied: D3/D4 meadow hills are shared (not K01 findings); D5 Leo's own Pip is correct.
+No code edited in this stage. ORCHESTRATOR_NOTES.md applied: meadow hills are shared (not K01 findings); Leo's own Pip is correct.
 
 ## Captures
 
-- `bash tools/screens/shot.sh "$PWD/app" /who-is-playing "$PWD/docs/screens/K01/ui/app_light_2.png" BC440E48-B3A3-43BC-971B-0EF5DB621874 light demo kid maya` → `docs/screens/K01/ui/app_light_2.png`
-- Same with `dark` → `docs/screens/K01/ui/app_dark_2.png`
-- `python3 tools/screens/compare.py design/screens/light/K01-profile-picker.png docs/screens/K01/ui/app_light_2.png docs/screens/K01/ui/cmp_light_2.png`
-- `python3 tools/screens/compare.py design/screens/dark/K01-profile-picker.png docs/screens/K01/ui/app_dark_2.png docs/screens/K01/ui/cmp_dark_2.png`
-- Compare images READ (not attached): `docs/screens/K01/ui/cmp_light_2.png`, `docs/screens/K01/ui/cmp_dark_2.png`.
+- `bash tools/screens/shot.sh "$PWD/app" /who-is-playing "$PWD/docs/screens/K01/ui/app_light_3.png" BC440E48-B3A3-43BC-971B-0EF5DB621874 light demo kid maya` → `docs/screens/K01/ui/app_light_3.png`
+- Same with `dark` → `docs/screens/K01/ui/app_dark_3.png`
+- `python3 tools/screens/compare.py design/screens/light/K01-profile-picker.png docs/screens/K01/ui/app_light_3.png docs/screens/K01/ui/cmp_light_3.png`
+- `python3 tools/screens/compare.py design/screens/dark/K01-profile-picker.png docs/screens/K01/ui/app_dark_3.png docs/screens/K01/ui/cmp_dark_3.png`
+- Compare images READ (not attached): `docs/screens/K01/ui/cmp_light_3.png`, `docs/screens/K01/ui/cmp_dark_3.png`.
 
 ## Mean diff + bands
 
-Light: mean diff 1.53% (was 6.10% in iteration 1)
+Light: mean diff 1.53%
 
 ```
 band  y-range    diff%
@@ -27,11 +27,11 @@ band  y-range    diff%
   7    738-844    1.20%
 ```
 
-Dark: mean diff 1.32% (was 5.62%)
+Dark: mean diff 1.32%
 
 ```
 band  y-range    diff%
-  0      0-105    1.57%
+  0      0-105    1.58%
   1    105-211    0.28%
   2    211-316    0.86%
   3    316-422    0.14%
@@ -41,7 +41,7 @@ band  y-range    diff%
   7    738-844    1.19%
 ```
 
-Band 0 ≈ status-bar glyphs (OS-drawn, ignored). Band 5 = pet-circle/Pip-art zone (DB-driven art, see D5). All layout bands (1–4, 6–7) ≤ 1.2%.
+Band 0 ≈ status-bar glyphs (OS-drawn, ignored). Band 5 = pet-circle/Pip-art zone (DB-driven art, see D1). All layout bands (1–4, 6–7) ≤ 1.2%.
 
 ## Measured positions (logical px, ÷3; design vs app)
 
@@ -57,7 +57,7 @@ Band 0 ≈ status-bar glyphs (OS-drawn, ignored). Band 5 = pet-circle/Pip-art zo
 | Caption first text row (x=195 gap) | 747.0 | 747.0 | 746.7 | 747.0 | PASS |
 | Meadow top at left gutter (x=30) | 646.3 | 645.7 | ~646 | 645.7 | PASS |
 
-D1 (tiles +16.5 px) and D2 (caption +34 px) from iteration 1 are fixed. Tile height unchanged (342.3 vs 342.0); the band now sits exactly on the design.
+Iteration-1 findings D1 (tiles +16.5 px) and D2 (caption +34 px) remain fixed; no regression.
 
 ## Element-by-element
 
@@ -74,11 +74,10 @@ D1 (tiles +16.5 px) and D2 (caption +34 px) from iteration 1 are fixed. Tile hei
 
 ## Deviations (design value → app value + fix)
 
-1. D5 — Pip artwork differs (INTENTIONAL, not a defect — PIP orchestrator rule overrides the design PNGs; DB-driven content is excluded from the ±2 px verdict). Design shows v1 fledgling (Maya, green wings) and yellow hatchling in shell (Leo); app correctly renders each child's OWN `PipAvatar` (Maya Mochi·sunny·stage 3, Leo Bolt·sky·stage 2). This accounts for band 5 residual (6.85% light / 5.09% dark). No fix.
-2. D6 — Sky-gradient tint differs by ~5 units mid-screen (negligible interpolation variance). No fix.
+1. D1 — Pip artwork differs (INTENTIONAL, not a defect — PIP orchestrator rule overrides the design PNGs; DB-driven content is excluded from the ±2 px verdict). Design shows v1 fledgling (Maya, green wings) and yellow hatchling in shell (Leo); app correctly renders each child's OWN `PipAvatar` (Maya Mochi·sunny·stage 3, Leo Bolt·sky·stage 2). This accounts for the band-5 residual (6.85% light / 5.09% dark). No fix.
+2. D2 — Sky-gradient tint differs by ~5 units mid-screen (negligible interpolation variance). No fix.
 3. Band-0 residual (~1.6%) is status-bar glyphs only (OS-drawn). No fix.
 4. Faint text outlines in the diff heat-map are font anti-aliasing only. No fix.
-5. D1/D2 (iteration 1: tiles +16.5 px, caption +34 px) — FIXED this pass, verified above. D3/D4 (meadow) — shared per ORCHESTRATOR_NOTES, and the shared fix has landed (two-tone hills now render); no local action.
 
 No visible deviation a designer would reject remains.
 
