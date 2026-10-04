@@ -1,267 +1,424 @@
-# K09 · My jar — QA code review (stage 4, iteration 1)
+# K09 · My jar — QA code review (stage 4, iteration 2)
 
-Scope: `git diff main...HEAD` (26 files, +3135/−75) reviewed against
-`docs/ARCHITECTURE.md`, `docs/screens/RULES.md`, `docs/DESIGN_SPEC.md` §5 K09
-(line 206), `docs/design/SPACING_SPEC.md`, the orchestrator rulings in the stage
-brief and the design sources (`design/html-source/screens/K09-jar.html`,
-`design/screens/{light,dark}/K09-jar.png`). No code was edited. No simulator was
-booted, installed on or driven (stage 5 only). PNGs were read with the file
-reader / a pixel probe, never attached.
+Scope: `git diff main...HEAD` (51 files; the code under review is
+`app/lib/features/kid_jar/{data,domain,presentation}/**` + the six tracked
+`app/test/features/kid_jar/*.dart`) against `docs/ARCHITECTURE.md`,
+`docs/screens/RULES.md`, `docs/DESIGN_SPEC.md` §5 K09 (`DESIGN_SPEC.md:206`),
+`docs/design/SPACING_SPEC.md`, `1_plan.md`, the orchestrator rules in the stage
+brief (incl. `ORCHESTRATOR_NOTES.md` 18:47) and the design sources
+(`design/html-source/screens/K09-jar.html`, `components.css`,
+`design/screens/{light,dark}/K09-jar.png` and the already-captured stage-5 shots
+`ui/app_{light,dark}_2.png`).
+**No code was edited in this stage.** **No simulator was booted, installed on,
+screenshot or driven** — every measurement below comes from a pixel probe I ran
+myself over the design PNGs and the stage-5 shots (÷3 to logical px; no image
+attached) and from `flutter test`.
 
-## Scope + hygiene — clean
+**Result: no blocker, no major — nine minor findings, none of which needs
+shared code.**
 
-`git diff main...HEAD --name-only` touches only
-`app/lib/features/kid_jar/{data,domain,presentation}/**`,
-`app/test/features/kid_jar/**` and `docs/screens/K09/**` — inside RULES §1.
-Nothing in `app/lib/core/**`, `app/lib/app/**`, another feature or
-`tools/screens/**`. `SHARED_REQUEST.md` and `ORCHESTRATOR_NOTES.md` are both
-absent (correct — see finding 1 for the one that is now needed).
+Iteration 1's six findings: **1 fixed** (the K09-BUG-3 proof's GetIt ordering —
+it now pumps first and uses the database that pump returns) and **5 still open**,
+re-proven here under new numbers: glyph size → finding 4, subscription guard →
+finding 1, formatter layering → finding 5, `NestProgress` gloss hand-off →
+finding 6, unbounded row value → finding 2. Two **new** defects are filed as
+findings 3 (`moveToSavings` on an unresolvable goal) and 8 (stale weekday
+label).
 
-Independent re-verification of the committed diff:
+## Gates run in this stage
 
-- `flutter analyze lib/features/kid_jar` + the four committed test files →
-  **No issues found!**
-- `flutter test --timeout 120s` on the four committed `kid_jar` files →
-  **40/40 pass** (00:05). `test/core/data/repositories_test.dart` is unaffected
-  by the snapshot refactor (build stage: 22/22).
-- No `DateTime.now()` and no `google_fonts` / `GoogleFonts.*` anywhere in
-  `app/lib/features/kid_jar` or `app/test/features/kid_jar` (the only two hits
-  are the words inside comments). Clock is `appNowUtc()` /
-  `londonWeekStartUtc()`; ids come from the DB, none derived from the clock.
-- Every pumped widget test ends with `disposeApp(tester)`. The Drift
-  "created the database class multiple times" warning in
-  `my_jar_view_geometry_test.dart:69` is Drift's multi-in-memory-DB notice for
-  the 320/390/430 loop, matching the repo-wide pattern; it does not fail.
+| gate | command | result |
+|---|---|---|
+| scope | `git diff main...HEAD --name-only` | only `app/lib/features/kid_jar/**`, `app/test/features/kid_jar/**`, `docs/screens/K09/**` — inside RULES §1 |
+| shared code | `git log main..HEAD --name-only -- app/lib/core app/lib/app` | **empty** — no shared file is committed on this branch |
+| format | `dart format --output=none --set-exit-if-changed lib/features/kid_jar test/features/kid_jar` | every tracked file clean (only the four untracked `_probe_h*` scratch files would change; they have since been deleted) |
+| analyse (lib) | `flutter analyze lib/features/kid_jar` | **No issues found!** |
+| analyse (tests) | `flutter analyze test/features/kid_jar` | 74 issues at first reading — 72 in untracked `_probe*` scratch files, **2 in the committed `k09_bugs_test.dart`** → finding 7. Re-run at the end of this stage: **No issues found!** — the concurrent stage had already fixed it (see finding 7) |
+| tests | `flutter test --timeout 120s` on the six tracked files | **`00:05 +124 ~2: All tests passed!`** |
+| bug proofs | `flutter test --timeout 120s --run-skipped` on the parked proofs | K09-BUG-7 and K09-BUG-8 run **red** → findings 1 and 3 |
+| suppressions | `grep -rn "ignore_for_file\|// ignore:" lib/features/kid_jar` | none |
+| fonts | `grep -rn "google_fonts\|GoogleFonts" lib/features/kid_jar test/features/kid_jar` | none |
+| tracking | `grep -rn "letterSpacing" lib/features/kid_jar` | none — `NestType`'s 0 default untouched |
+| clock | `grep -rn "DateTime.now()" lib/features/kid_jar` | none — `appNowUtc()` / `londonWeekStartUtc()` only |
+| children's code | `grep -rn "print(\|debugPrint\|analytics\|http\|Socket\|Uri.parse" lib/features/kid_jar` | none — nothing leaves the device |
+
+## Independent measurements (my own pixel probe, design vs stage-5 shot)
+
+| element | design | app | Δ |
+|---|---|---|---|
+| goal card top border | y 465.0–467.7 | y 465.0–467.7 | 0 |
+| progress track borders | 557.0–558.7 / 571.0–572.7 | same | 0 |
+| goal card bottom border | 615.0–617.7 | 615.0–617.7 | 0 |
+| history card top border | 676.0–678.7 | 676.0–678.7 | 0 |
+| “What went in” ink rows | 640.0–652.7 | 641.3–653.7 | 1.3 ✓ |
+| “coming on …” ink colour (light) | `#1E1B3A` | `#1E1B3A` | 0 |
+| “coming on …” ink colour (dark) | `#28316B` | `#272F69` | ≤1 per channel (antialias) |
+| `.kcap` goal captions (light) | `#4A4668` | `#4A4668` | 0 |
+| jar lid / glass / coin / outline (light **and** dark designs) | `#7C6CF2` / `#F2FAFF` / `#F4B400` / `#1E1B3A` | identical in both app shots | 0 |
+
+The caption line measuring `#4A4668` (`--ink-2`) while the “coming on” line
+measures `#1E1B3A` (`--ink`) is independent confirmation of the cascade ruling
+behind K09-BUG-2, and the four identical jar samples in *both* themes confirm
+that keeping the transcribed palette fixed (rather than re-theming it) is exactly
+what the dark design does. The title band differs only inside the OS status-bar
+strip (excluded by the STATUS BAR rule).
 
 ## Findings
 
-No blocker. No major. Six minor.
+No blocker. No major. Nine minor.
 
-### 1. minor — `NestProgress`'s kid gloss spans the whole track, not the fill (shared code)
+### 1. minor — K09-BUG-7: a load dispatched in the same tick as `close()` leaks the subscription and then throws inside the stream callback
 
-`app/lib/core/design_system/components/nest_progress.dart:43-58` — the kid
-variant paints the white 55 % gloss in a `Stack` with
-`Positioned(left: s1, right: s1)`, i.e. across the **entire** track width, not
-inside the `FractionallySizedBox` fill.
+`app/lib/features/kid_jar/presentation/bloc/kid_jar_bloc.dart:35-47`
 
-Measured on `design/screens/dark/K09-jar.png` at log y 562: the fill (leaf
-`#3CC98A`) runs x 43.7…229.3 and the gloss (leaf + 55 % white, `#A7E7CA`) runs
-x 45.3…227.7 — it stops at the fill's right edge, exactly like
-`components.css:160` (`span::after` inside `span`). In the app the track is
-`--surface` `#1F1C2E` in dark, so a 55 %-white band will render over the empty
-38 % of the bar (≈ x 232…345) where the design shows plain dark surface. In
-light mode it is invisible (white on white), which is why the light PNG looks
-clean.
+```dart
+final previous = _jarSub;
+_jarSub = null;
+await previous?.cancel();                      // ← the handler suspends here
+emit(state.copyWith(status: KidJarStatus.loading));
+_jarSub = _repository.watchJar().listen(        // ← subscribes, possibly after close()
+  (snapshot) => add(KidJarSnapshotReceived(snapshot)), …);
+```
 
-This is **not** K09 code and K09 may not edit `core/**` (RULES §1), and it
-reuses `NestProgress` exactly as the "never re-implement components" rule
-requires — so it is not a defect in this diff. `kid_home_view.dart:495` and
-`pip_growth_card.dart:83` already ship the same `kid: true` bar, so the
-deviation is pre-existing app-wide.
+The K09-BUG-1 guard (`await` the old subscription *before* subscribing) opened
+a suspension point. If `close()` lands inside that `await`, it cancels nothing
+(`_jarSub` is already null) and the handler then subscribes to `watchJar()`
+**after** the bloc is closed: the four-query Drift fan-out is never released and
+its first emission calls `add(…)` on a closed bloc.
 
-Fix (shared, one line): move the gloss inside the fill, e.g. wrap the fill
-`Container` in a `Stack` and put the `Positioned` gloss there, or clip the
-gloss to `FractionallySizedBox(widthFactor: f)`.
+**Proof (mine, run red):**
+`flutter test --timeout 120s --run-skipped --plain-name "K09-BUG-7: add-then-close releases the subscription" test/features/kid_jar/k09_bugs_test.dart`
+→ `Expected: <0> Actual: <1>` (one live subscription left behind), and the
+companion proof throws `Bad state: Cannot add new events after calling close`.
 
-**Action:** file `docs/screens/K09/SHARED_REQUEST.md` for it, and in stage 5 do
-**not** attribute this band to K09 — it will show in the dark comparison and is
-not fixable in this branch.
+**Fix (three lines, keeps the K09-BUG-1 behaviour):**
 
-### 2. minor — an over-saved goal would tell the child a false "£X to go"
+```dart
+await previous?.cancel();
+if (isClosed) return;
+final sub = _repository.watchJar().listen(…);
+if (isClosed) { unawaited(sub.cancel()); return; }
+_jarSub = sub;
+```
 
-`app/lib/features/kid_jar/presentation/widgets/jar_goal_card.dart:37`
-(`int get remainingPence => targetPence - savedPence;`) combined with
-`jar_amounts.dart:16` (`jarPounds` applies `.abs()`) means `savedPence >
-targetPence` renders a positive "£1.20 to go" — a claim that is simply untrue on
-a screen whose whole job is to tell a child their money is safe. The demo seed
-(1550/2499) never hits it, which is why no test catches it.
+Then drop the two `skip:` markers on `K09-BUG-7` / `K09-BUG-7b`.
 
-Fix: `int get remainingPence => targetPence > savedPence ? targetPence - savedPence : 0;`
-and add a `JarGoalCard` widget test with `savedPence: 2600, targetPence: 2499`
-asserting `£0.00 to go` (and no overflow). Do **not** "fix" it by dropping
-`.abs()` in `jarPounds` — a negative hero would break the `£x.xx` contract.
+### 2. minor — the history row's amount is laid out unbounded, so a large amount overflows the card instead of ellipsising
 
-### 3. minor — the money formatter is split across layers, and one of the two homes is in the wrong folder
+`app/lib/features/kid_jar/presentation/widgets/jar_history_card.dart:224-230`
 
-- `app/lib/features/kid_jar/domain/entities/jar_snapshot.dart:30` —
-  `formatJarAmount(pence)` is *presentation* formatting (`+£3.80` / `+12p`)
-  sitting in a domain entity file. ARCHITECTURE §"Per-feature contract" says
-  `domain/` is "entities + abstract `<feature>_repository.dart` ONLY".
-- `app/lib/features/kid_jar/presentation/widgets/jar_amounts.dart` — a file in
-  `presentation/widgets/` ("feature-private widgets") that contains **no
-  widget**; its only member is `jarPounds`, the sibling formatter doing the
-  same job for `£x.xx`.
+`Row(children: [disc, gap, Expanded(Column), gap, Text(value, softWrap: false)])`
+— Flutter lays non-flexible `Row` children out with an **unbounded** main-axis
+width, so the value never shrinks. The sibling goal card already does this
+correctly with `Flexible` + ellipsis (`jar_goal_card.dart:98-118`).
 
-Two formatters for one screen, one of them misfiled. Fix: fold both into one
-feature-private formatter next to the entity that produces the pence
-(`jar_snapshot.dart`, or a `JarMoney` class in the same file), delete
-`jar_amounts.dart`, and update the two call sites
-(`my_jar_view.dart`, `jar_goal_card.dart`). Pure refactor, no visual change.
+**Proof (mine, reproduced from the stage-6 scratch probe):** one
+`gift`/`123456789`p row renders `+£1234567.89`; at 320 px × 1.3 scale the
+screen reports `A RenderFlex overflowed by 95 pixels on the right`. (At 390 ×
+1.0 it happens to fit, and the goal card with the same magnitude at 320 × 1.3
+is clean — so this is the row, not the card.)
 
-### 4. minor — `watchJar()`'s doc comment contradicts the code it documents
+**Fix:** wrap it like the goal card —
+`Flexible(child: Text(formatJarAmount(entry.amountPence), style: valueStyle(tokens.leafInk), maxLines: 1, overflow: TextOverflow.ellipsis))`,
+dropping `softWrap: false`.
 
-`app/lib/features/kid_jar/data/kid_jar_repository_impl.dart:28-30` says the
-stream "fans out to exactly one entries query plus one summary query". It does
-not: `_jarFor` (line 39-59) opens **one** `watchLedger` subscription and derives
-both the list and the summary from it — which the comment eight lines below
-(line 40-42) states correctly. The atomicity argument only holds for the version
-that is actually implemented, so the wrong sentence is the one a future editor
-would trust. Fix: make lines 28-30 say "one `watchLedger` query that feeds both
-the list and the summary" and drop the redundant restatement at line 40.
+### 3. minor — K09-BUG-8: `moveToSavings` writes a `savings_move` row when the goal cannot be resolved, so the pence silently vanish
 
-### 5. minor — `watchItems()` silently changed meaning for the sibling screen
+`app/lib/features/kid_jar/data/kid_jar_repository_impl.dart:142-174`
 
-`kid_jar_repository_impl.dart:23-26` now serves **money-in rows only** with
-`This/Last {weekday}` details; it used to serve every ledger row with
-`formatDay(...)`. `PayoutDayView` (K10) shares `KidJarBloc`
-(`kid_jar_routes.dart`, unchanged) and renders `state.items`, so K10's data
-changes shape. Nothing shipped is broken — K10 is still the foundation
-placeholder — and the new behaviour is documented in the doc comment, but K10's
-own loop has not been told.
+The K09-BUG-4 cap kept the old `goal == null → remainder = requested` branch:
 
-Fix: no code change; add one line to `docs/screens/K09/2_build.md` (or the
-handover section) naming K10 so the K10 loop does not assume the old contract.
+```dart
+final goal = await (…where((g) => g.id.equals(goalId))).getSingleOrNull();  // id only
+final remainder = goal == null ? requested : goal.targetPence - goal.savedPence;
+if (remainder <= 0) return;
+await _db.into(_db.ledgerEntries).insert(… type: 'savings_move', amountPence: move …);
+if (goal != null) { …credit the goal… }
+```
 
-### 6. minor — the loading frame's label is not a live region
+With an unresolvable `goalId` the insert still runs and nothing is credited: a
+`savings_move` is in neither `_moneyInTypes` nor `_summarize`'s totals, so the
+money leaves the jar and appears nowhere — no figure moves, no row appears, no
+error is raised. The lookup filters on `id` alone, so a goal id belonging to
+**another child** credits that child's goal with this child's money.
 
-`app/lib/features/kid_jar/presentation/views/my_jar_view.dart:290-293` —
-`Semantics(label: MyJarCopy.loading, child: CircularProgressIndicator(...))`
-with the default `container: false` and no `liveRegion: true`. The frame swaps
-in silently for a screen reader, so a child waiting on a slow stream gets no
-announcement.
+**Proof (mine, run red):** `moveToSavings(childId: 'maya', goalId:
+'goal-does-not-exist', amountPence: 500)` inserts
+`LedgerEntry(type: savings_move, amountPence: 500)` and leaves `goal-lego`
+untouched at 1550.
 
-Fix: `Semantics(liveRegion: true, container: true, label: …)`, and assert
-`tester.getSemantics(find.byType(CircularProgressIndicator))` carries the label
-in the loading-state test.
+**Fix:** one guard before any write —
+`if (goal == null || goal.childId != childId) return;` — and then let
+`remainder` be `targetPence - savedPence` unconditionally. Latent: the method has
+no caller yet (it is the K10 hand-off), which is why this is minor and not
+major — but K10 will call it.
+
+### 4. minor — the history disc glyphs render at `NestIcon`'s default 24 px, not the design's 22 px
+
+`app/lib/features/kid_jar/presentation/widgets/jar_history_card.dart:201`
+(`NestIcon(_glyph, color: tint.$2)`) and `:102-106` (the empty row). `NestIcon`
+defaults to `size = 24`; all three `.k9-ico` glyphs in
+`K09-jar.html:85,90,95` are `<svg viewBox="0 0 24 24" width="22" height="22">`
+and `1_plan.md` §a says the same (“Size 22 in 40 disc”). Measured on the light
+shots: row-1 disc ink 17×17 design vs 18×18 app, row-2 bins ink 13×19 vs 14×21.
+Inside the ±2 px UI tolerance (stage 5's PASS stands) but a real deviation from
+the design and from the screen's own plan; the app gets it right elsewhere
+(`kid_home/…/quest_detail_view.dart:825`, `kid_shop/…/shop_reward_card.dart:201`).
+
+**Fix:** `NestIcon(_glyph, size: _glyphSize, color: tint.$2)` with
+`static const double _glyphSize = 22;` beside `_discSize = 40`, documented with
+`K09-jar.html:34/85`. Centred in a 40 px disc, so nothing else moves.
+
+### 5. minor — the money formatter is split across two layers, one of them in the wrong folder
+
+- `app/lib/features/kid_jar/domain/entities/jar_snapshot.dart:30-37` —
+  `formatJarAmount` is presentation formatting (`+£3.80` / `+12p`) in a
+  **domain entity** file. `ARCHITECTURE.md:71`: `domain/` is “entities +
+  abstract `<feature>_repository.dart` ONLY”.
+- `app/lib/features/kid_jar/presentation/widgets/jar_amounts.dart` — a file
+  under `presentation/widgets/` (`ARCHITECTURE.md:75` “feature-private
+  widgets”) that contains **no widget**; its only member is `jarPounds`, the
+  sibling formatter doing the same job for `£x.xx`.
+
+**Fix:** one feature-private `JarMoney` (both methods) beside the entity that
+produces the pence, delete `jar_amounts.dart`, update the five call sites
+(`my_jar_view.dart:185`, `jar_goal_card.dart:100,111,132`,
+`jar_history_card.dart:226`). Pure refactor. Both format shapes must stay — the
+row says `+12p`, the card says `£0.00`.
+
+### 6. minor — the `NestProgress` kid-gloss hand-off is only half-filed, and the spec says both halves
+
+`app/lib/core/design_system/components/nest_progress.dart:44-62` (shared — K09
+may not edit it; RULES §1) against `components.css:160` and
+`SPACING_SPEC.md:229-230`, which put the gloss **inside the fill**
+(`.progress.kid > span::after { top: 2px; left/right: 4px; height: 4px }`).
+The shared component puts it in a `Stack` over the **track**, so:
+
+| | design | app |
+|---|---|---|
+| gloss rows (dark shots) | 561–564 (2 px below the fill's top) | 559–562 (2 px below the *bar's* top) |
+| gloss x span | 43…229 (inside the 62 % fill) | 43…341 (whole track) |
+
+`SHARED_REQUEST.md` describes only the horizontal half (“stop at the fill's
+right edge”), so a fix applied straight from it leaves the 2 px vertical offset
+in place. `5_ui.md:45` also records “progress fill 62% + gloss — pixel-identical
+in crops”, which the probe contradicts for the gloss (the fill itself is
+identical). Not a K09 defect and not fixable here — a documentation gap in a file
+K09 *may* edit.
+
+**Fix:** add the vertical dimension to `SHARED_REQUEST.md` — “measure `top: 2`
+from the **fill**, not from the bar; putting the gloss inside the fill’s
+`Container` as a `Positioned(top: 2, left: 4, right: 4, height: 4)` fixes both
+deltas and is clipped by the pill radius” — and correct the `5_ui.md` row.
+
+### 7. minor — `flutter analyze` was not clean on the branch's own test path (fixed in flight while this stage ran)
+
+`app/test/features/kid_jar/k09_bugs_test.dart:330` and `:348` as committed —
+two `cascade_invocations` infos (`await (db.update(db.savingsGoals)..where(…))
+.write(…)` duplicates the `db` receiver), which fails RULES §7’s “`flutter
+analyze` → No issues found (no ignores)” gate. `flutter analyze
+test/features/kid_jar` reported 74 issues when I started; 72 were in the then
+untracked `_probe*` scratch files, these 2 were not. **A concurrent stage
+corrected both while this review was running and
+`flutter analyze test/features/kid_jar` now reports “No issues found!”**, so
+this is closed as long as the loop commits that change. Recorded because the
+defect was in the committed file, not in uncommitted work, when I found it.
+
+### 8. minor — the row's weekday sub-line is time-dependent but only recomputed on a database emission
+
+`app/lib/features/kid_jar/data/kid_jar_repository_impl.dart:63` —
+`londonWeekStartUtc(appNowUtc())` is evaluated inside the `map` of
+`combineLatest4`, so “This Saturday” / “Last Saturday” only refreshes when the
+ledger, goals, setting or quests change. Nothing re-emits when the London week
+rolls over.
+
+**Proof (mine):** with the pinned anchor moved from Sat 3 Oct to Mon 5 Oct and
+**no** DB write, the list still reads “This Saturday” for the 3 Oct pocket-money
+row, where `londonWeekStartUtc` says it must read “Last Saturday”; the label only
+corrects on the next write. A fresh open is always correct, so this is latent and
+minor — but it is a kid-facing statement about when money arrives, and two
+screens can disagree depending on whether a write happened.
+
+**Fix:** compute the week start where the label is read (a getter on the state,
+or re-emit on resume / on a clock tick), so the copy cannot go stale.
+
+### 9. minor — an unsourced magic size in the failure frame
+
+`app/lib/features/kid_jar/presentation/views/my_jar_view.dart:316` —
+`NestIcon(NestIcons.jar, size: 96, color: tokens.ink3)`. `96` is not a token and
+has no CSS source (the design has no failure frame), so it is the one literal in
+the feature that is neither design-derived nor documented. Cosmetic.
+
+**Fix:** either name it as a documented constant the way the other per-frame
+sizes are (`_failureArtSize`, with a comment saying the design has no error
+frame), or follow `1_plan.md` §d and drop the art for the kid-voice line plus the
+retry control.
 
 ## Verified correct (no finding)
 
-- **Architecture.** One bloc per feature, `BlocProvider` + `KidJarLoadRequested`
-  at the route (`kid_jar_routes.dart`), DI in `kid_jar_di.dart`, both untouched
-  and both already correct. Domain = entities (`JarEntry`, `JarSummary`, new
-  `JarSnapshot`) + abstract `KidJarRepository` only; no use-case classes, no
-  extra folders, no utils dump, all imports `package:nestling/...`.
-  `watchJar()` is on the abstract interface, not smuggled past it.
-- **Design-system reuse.** `KidScope`, `NestStatusBar`, `NestIconButton`,
-  `NestLockButton`, `NestProgress`, `NestKidButton`, `NestIcon`,
-  `NestBalancedText`, `SvgPicture.asset(NestlingIllustrations.coin)`. Every
-  colour/size/radius/font comes from tokens (`NestSpacing`, `NestDevice`,
-  `NestRadii`, `NestTokens.colors`, `context.nestKid.borderWidth`,
-  `tokens.kidShadow`, `NestType.kidTitle/kidHero/kidBody/kidCaption`). The only
-  literals are per-design geometry constants (`_backIconSize = 26`,
-  `_artSize = 34`, `_rowMinHeight = 60`, `_discSize = 40`, `_dividerInset = 66`,
-  the `fontSize`/`height` `copyWith`s), each with the HTML line it comes from —
-  the sanctioned call-site pattern.
-- **The transcribed jar palette is right in BOTH themes.** `_JarPalette`
-  hard-codes the SVG's own fills, which the rules otherwise forbid — but the
-  design does the same, and I sampled both PNGs: light *and* dark show lid
-  `#7C6CF2`, glass `#F2FAFF`, coin mass `#E09700`, coins `#F4B400`, outline
-  `#1E1B3A` (dark sky is `#F3F0FA` behind it). Only the ground ellipse follows
-  `tokens.groundShadow`. The 200×236 → 186×220 letterbox maths
-  (`scale 0.93`, `offsetY 0.26`, `save`/`restore` balanced, coins clipped to the
-  fill *and* the glass) reproduces the design's own geometry.
-- **Geometry, measured off the PNG.** Ink bands read from
-  `design/screens/light/K09-jar.png` agree with the code's asserted boxes:
-  goal card exactly **465…618** (h 153 — and the CSS box model closes on it:
-  3 + 14 + 34 + 12 + 23 + 6 + 16 + 8 + 20 + 14 + 3), list top **676**, progress
-  **557…573 × x 39…351**, title ink 112.67…138, jar ink 153.33…354 (= box top
-  151), amount ink 383.67…412.33 centred on 194.8, "coming on" ink 429.33…445.33,
-  "What went in" ink 638.67…653, row-1 disc **689…729**, divider **739…741 ×
-  x 89…367**. The scroll viewport really is 107…810 (below 810 the PNG is meadow
-  green `#CCEDC0` with the home pill at 825…830), which is what
-  `SafeArea(bottom: true)` gives. Internal gutters check out too: goal card
-  content at x 39 / 351 (design ink 39.67 / 350.33), coin art 43.67…68.33,
-  goal title ink from 84.33 (box 83 = 39 + 34 + 10).
-- **Spacing.** The 10 px title→jar gap is the design's `.jar { margin: 10px auto 0 }`
-  winning the cascade over `.scroll > * + *` (equal specificity, later rule) —
-  not an off-by-6. Every other separator is `s4`/`s3`/`s2`/`gap2`/`gap6`/`gap10`
-  exactly as the CSS box model computes. 20 px gutters on both sides at 320/390/430,
-  cards and heading share one left edge.
-- **`_JarEntryRow`'s 8 px before the value looks like a deviation** (`.k9-row`
-  is `gap: 12px`) but is visually inert: the middle child is `Expanded`, so the
-  value's box is pinned to the row's content edge (353) and the gap is absorbed
-  — confirmed against the design, where `.k9-main { flex: 1 }` gives the same.
-  Recorded so nobody "corrects" it to 12 in isolation.
-- **Copy.** Character-exact against `K09-jar.html:45-101`: `My jar`, `Back`,
-  `Grown-ups`, `coming on Saturday`, `What went in`, `£4.20`, `Lego Friends set`,
+- **The three mandatory ORCHESTRATOR_NOTES items (18:47), re-derived by me.**
+  1. Quest-bonus rows go through `questIconFor(iconKey, audience: NestAudience.kid)`
+     (`jar_history_card.dart:13`), and the kid table maps `bins` → `questBinsKid`,
+     the K09-exact lidded bin (`quest_icons.dart:54`) — not the parent
+     `NestIcons.questBins`. The repository supplies `iconKey` by joining the
+     ledger `note` to `quests.title` in creation order
+     (`kid_jar_repository_impl.dart:54-60, 206-208`).
+  2. Pocket money uses `NestIcons.jarPocketMoney`; the gift uses
+     `NestIcons.gift`, whose asset I read: `ic_gift.svg` draws
+     `rect 3/9/18/12 rx2` + `M3 13h18` + `M12 9v12` + both bow loops — exactly
+     `K09-jar.html:95` — so the note's “no `jarGift` file” is satisfied.
+  3. “coming on Saturday” paints `--ink` (`my_jar_view.dart:232-238`), proven in
+     pixels above, and the `.kcap` captions still use `--ink-2`.
+- **Architecture / layering.** One bloc per screen; `BlocProvider` +
+  `KidJarLoadRequested` at the route, DI in `kid_jar_di.dart` (both untouched by
+  this diff and both correct); `domain/` = three entities + the abstract
+  `KidJarRepository` only, with `watchJar()` on the interface rather than
+  smuggled past it; no use-case classes, no extra folders, all imports
+  `package:nestling/…`. (Finding 5 is the only layering slip.)
+- **Design-system reuse; no re-implementation.** `KidScope` (with exactly one
+  shared `NestMeadow`, asserted as a *count* in
+  `my_jar_view_states_test.dart:221-248`, pinned 0…390 × 136 at the bottom),
+  `NestStatusBar`, `NestIconButton`, `NestLockButton`, `NestProgress`,
+  `NestKidButton`, `NestIcon`, `NestBalancedText`, `questIconFor`,
+  `NestIcons.jarPocketMoney` / `gift`, `SvgPicture.asset(NestlingIllustrations.coin)`.
+  Every colour and size is a token (`NestSpacing`, `NestDevice`, `NestRadii`,
+  `context.nest` / `.nestKid`, `tokens.kidShadow`, `NestType.*`); the only
+  literals are per-design geometry constants (`_backIconSize = 26`, `_artSize =
+  34`, `_rowMinHeight = 60`, `_discSize = 40`, `_dividerInset = 66`, the 2 px
+  divider via `NestSpacing.gap2`, the `fontSize`/`height` `copyWith`s), each
+  carrying its `K09-jar.html:NN` line. `Colors.transparent` on the back button
+  matches `kid_home_view.dart:166` and `kid_pin_view.dart:190`. The six
+  transcribed `_JarPalette` colours are the inline SVG's own fills and have
+  precedent in shared illustration code (`pip_avatar.dart:60-63`); only
+  `groundShadow` follows the theme token, which my probe confirms is what the
+  dark design shows.
+- **Geometry** (`my_jar_view_geometry_test.dart`, ±2 per the UI VERDICT RULE,
+  0.01 for edge alignment — not weakened): back `(20,47,56,56)`, lock
+  `(314,47,56,56)`, title `(20,107,350,34)`, jar `(102,151,186,220)`, amount
+  top 377 h 44 centred, “coming on” top 423 h 26, goal card `(20,465,350,153)`,
+  progress `(39,557,312,16)`, heading `(20,634,350,26)`, list top 676, disc
+  `(37,689,40,40)`, divider `(89,739,278,2)` (= card left 20 + border 3 + the
+  design's 66), gutters 20 at 320/390/430 with cards and headings on one left
+  edge. My probe above agrees with every one of these.
+- **Spacing.** The 10 px title→jar gap is the design’s `.jar { margin: 10px auto 0 }`
+  beating `.scroll > * + *`, not an off-by-six; every other separator comes from
+  the same box model; 20 px gutters on both sides, cards on one edge (owner
+  ALIGNMENT rule). The scroll tail is the design’s `--s8` alone because
+  `SafeArea` already consumes the 34 px home inset (K09-BUG-6's fix, proved with
+  a real inset: footer bottom 778 = 810 − 32).
+- **Copy — character-exact** against `K09-jar.html:45-101`: `My jar`, `Back`,
+  `Grown-ups`, `coming on Saturday`, `What went in`, `Lego Friends set`,
   `£15.50`, `£9.49 to go`, `of £24.99`, `62% there!`, `Pocket money`,
-  `Quest bonus`, `From Mum`, `+12p`, `+£10.00`,
-  `Mum keeps the real money. This jar just shows how well you have done.` —
-  no straight quotes, no hyphen where the design has none. Non-design copy
-  (loading / error / empty) is kid-voice UK English.
-- **Cascade rulings held up.** `<span class="kid-hero money">` really is
-  **w700**, not w900: `.money` (`components.css:155`) and `.kid-hero`
-  (`:37`) are both (0,1,0) and `.money` comes later. And `.k9-v` *is* w900
-  because the screen's own `<style>` block loads after `components.css`. So the
-  hero's `fontWeight.w700` and the values' `w900` are both right.
-- **`NestBalancedText`** on both `.kid-title` headings (`:47`, `:82`) — including
-  the screen-local 20/26 override — and plain `Text` on the goal card's bare
-  `h2` and on `.kid-body`/`.kcap`, i.e. never on a body/caption.
-- **Letter spacing** is 0 everywhere (`NestType` default), nothing added back.
-- **DATA OVER MOCKS.** Seed wins on every number: `+£3.00` where the design's
-  example row says `+£3.80`, nine rows where the design shows three, and the
-  test says why. `_relativeDay` gives `This Saturday` for the anchored
-  weekly base and `Last Sunday` for the previous week — correct under the
-  PERIODS ruling (`londonWeekStartUtc` / `toLondon`, no wall clock).
-- **Row filter.** Only `{weekly_base, quest_bonus, gift}` reach the jar;
-  `payout`/`spend`/`savings_move` never do, and the `_summarize` `break` on the
-  first `payout` still computes owed from the newest rows. `watchLedger` is
-  already date-desc, so newest-first holds.
-- **No Pip on K09** (the design shows a jar, not Pip), so the PIP rule does not
-  bite; the screen takes no `pip_style`/`stage`.
-- **Bottom edge.** K09 has no bar, so the shared meadow (KidScope, bottom 0,
-  full width, 136) runs to the physical edge; nothing paints a coloured strip
-  and the OS draws the home indicator.
-- **Child order / £ / coins.** No child list on this screen (so no ordering
-  risk); K09 is the one sanctioned £ screen.
-- **Semantics.** Both controls expose `SemanticsAction.tap` and the tests
-  assert it *and* `performAction` (the lock really pushes `/parental-gate`).
-  No `Semantics(excludeSemantics: true)` wrapper hides a control — the one
-  wrapper in the view is on a non-interactive amount/label pair. Rows correctly
-  claim **no** tap (a test asserts `isFalse`, and the empty-row host repeats
-  it). Header on the title, `image: true` + design label on the jar, progress
-  carries the design's `62% of the Lego Friends set saved` + a value.
-- **Performance.** `BlocBuilder` sits inside `Expanded`, so a snapshot emission
-  rebuilds the body only — chrome and `KidScope` never re-run. The painter's
-  `shouldRepaint` compares `fillFraction` and `groundShadow`. One `watchLedger`
-  subscription per child (not two racing ones). `_switchMap` cancels the inner
-  subscription on `onCancel`, so the Drift stream is disposed with the bloc;
-  its documented deviation from `asyncExpand` (which would deadlock on
-  never-closing watch streams) is correct and explained.
-- **Error handling.** The old placeholder rendered `state.errorMessage` to a
-  child; the new failure frame shows kid copy plus a `Try again` that re-adds
-  `KidJarLoadRequested`, and `copyWithLoaded` clears the stale error on the
-  first healthy emission while the retry spinner carries it (K03 precedent,
-  and tested).
-- **Children's Code.** No analytics, ads, tracking, network calls, `debugPrint`
-  or PII output anywhere in the diff; nothing leaves the device; no red, no
-  nagging, no streak or loss framing.
+  `Quest bonus`, `From Mum`, `+12p`, `Mum keeps the real money. This jar just
+  shows how well you have done.` — no straight quotes, no substituted dashes or
+  ellipsis, no US spelling (UK `Mum`, UK `colour` in the tests). Non-design copy
+  (loading / error / retry / empty) is kid-voice UK English. The gift note parse
+  `(added by Mum)` → `From Mum` matches the seed’s real note.
+- **Cascade rulings hold.** `.money` (`components.css:155`) sits after
+  `.kid-hero` (`:37`) at equal specificity, so the hero is **w700** (implemented);
+  `.k9-amts b` (0,1,1) beats `.money` so the card figures are w900 (implemented);
+  `.k9-v` (screen `<style>`, loaded after `components.css`) wins over `.money`
+  at equal specificity → w900 (implemented). `.k9-when` sets no colour and
+  inherits `.screen`’s `--ink` — the pixel evidence above is what proves it.
+- **Balanced headings / tracking.** `NestBalancedText` on both `.kid-title`
+  headings; plain `Text` on the goal card’s bare `h2`, on the hero number (the
+  house pattern for a single-token amount, cf. `money_ledger_view.dart:361-370`)
+  and on `.kid-body`/`.kcap` — never on a body or caption. No `letterSpacing`
+  anywhere.
+- **DATA OVER MOCKS.** Seed wins on every number: `+£3.00` where the design’s
+  example row says `+£3.80`, nine rows where the design shows three, “This
+  Saturday” where the design says “Last Saturday”. The seed ledger order was
+  dumped and checked by hand: owed = 300 + 12 + 40 + 40 + 28 = **420p = £4.20**,
+  goal 1550/2499 → 62 % and `£9.49 to go`, `payoutDay` 6 → `Saturday`, and
+  `_summarize`’s `break` on the first `payout` correctly excludes the rows older
+  than 26 Sep. Only `{weekly_base, quest_bonus, gift}` reach the list
+  (`_moneyInTypes`), `watchLedger` is already date-desc so newest-first holds, and
+  the demo seed has no duplicate timestamps (checked) so the `break` is
+  unambiguous.
+- **Robustness already fixed.** Owed is floored at 0 so a signed correction can
+  never be shown as positive money coming; `remainingPence` is clamped so a
+  reached goal reads `£0.00 to go` and never contradicts its own `100% there!`;
+  `moveToSavings` caps at the goal remainder inside the transaction, with the
+  ledger row and the goal write agreeing on `move`.
+- **Accessibility.** Both controls expose `SemanticsAction.tap`, are 56 × 56,
+  keep their `aria-label`s, and the tests `performAction` them (the lock really
+  pushes `/parental-gate`). History rows and the empty row correctly claim **no**
+  tap (asserted `isFalse`). The three `excludeSemantics: true` nodes in the diff
+  are all non-controls (the amount+weekday sentence, the jar `image: true` label,
+  the shared progress bar) — none wraps a control, so the
+  “must pass `onTap:`” rule is satisfied. The title is a header, the loading frame
+  is a `liveRegion`, the failure frame’s `Try again` reaches the real reload
+  (`repo.watches == 2`).
+- **Performance.** `BlocBuilder` sits inside `Expanded`, so an emission rebuilds
+  the body only — chrome and `KidScope` never re-run; equal states compare equal.
+  One `watchJar()` subscription per load, released on error, on reload and in
+  `close()` (except finding 1’s window); `_switchMap` cancels the inner stream on
+  `onCancel` and documents why `asyncExpand` cannot be used with never-closing
+  Drift streams; the painter repaints only on fill/theme change; the list is a
+  `Column` inside a `SingleChildScrollView` over ≤ a few dozen rows; `const`
+  where `const` (`NestStatusBar`, `_JarTopRow`, `_GateLockButton`, the spacer and
+  separator `SizedBox`es). No rebuild storms.
+- **Error handling.** The failure frame keeps the chrome and the sky/meadow,
+  shows kid copy plus a working retry, and `copyWithLoaded` clears a stale error
+  on the first healthy emission while the retry keeps it visible. No error text,
+  id or stack ever reaches the child.
+- **Children’s Code.** No analytics, ads, tracking, network, logging or PII
+  output anywhere in the diff; nothing leaves the device; no red, no nagging, no
+  streak/loss framing; the failure copy is a plain “Try again”, never blame.
 
-## Observations (loop-owned, explicitly NOT findings)
+## Hand-off note for K10 (not a finding)
 
-Per the orchestrator's PROCESS ITEMS rule these are uncommitted-work facts, not
-blockers/majors — recorded only so the loop does not trip over them.
+`/payout-day` (`PayoutDayView`) still reads `KidJarState.items`, and both
+`KidJarState.items` and `KidJarRepository.watchItems()` are now the **money-in**
+list (`{weekly_base, quest_bonus, gift}`) for the *active* child, derived from
+`watchJar()`. K10 needs the full ledger (including `payout` rows) for a chosen
+child, so its loop will need its own stream — either a `watchLedgerFor(childId)`
+on the interface or a `KidJarState` field carrying the payout rows. Flagged so
+K10 is not surprised by the narrowed contract; nothing to change here.
 
-Four **untracked** files appeared in `app/test/features/kid_jar/` *during* this
-stage (18:34–18:38, i.e. after this stage's marker) and are not part of
-`git diff main...HEAD`: `_probe_probe_test.dart`, `_probe_probe2_test.dart`,
-`_scratch_probe_test.dart`, `my_jar_view_states_test.dart`. They make
-`flutter analyze` over the whole `app/` report 20 info-level issues (18
-`document_ignores` + 2 `deprecated_member_use` + `eol_at_end_of_file` in the
-states test, plus 5 real compile-level infos — 3
-`undefined_identifier`/`non_type_as_type_argument`/`unchecked_use_of_nullable_value`
-— in the scratch probes). The committed diff analyzes clean on its own
-(`No issues found!`). The loop should delete the `_probe*`/`_scratch*` files and
-either land `my_jar_view_states_test.dart` lint-free (RULES §7 forbids ignores)
-or drop it, before the stage-5 build.
+## Process items (loop-owned, explicitly NOT findings)
+
+Per the PROCESS ITEMS rule these are uncommitted-work facts, recorded so the
+loop does not trip over them — none is a blocker or a major:
+
+- A concurrent **stage 3 / stage 6** was editing the tree throughout this
+  review: five tracked test files are modified and six `_probe*_test.dart`
+  scratch files were present when I started. **They have since been deleted**
+  (the directory is back to the six tracked files) and `flutter analyze` and
+  `dart format` are both clean again — but the loop must confirm nothing
+  `_probe*`/`_scratch*` is committed: four of those probes were red on purpose
+  and, between them, they were 72 of the 74 analyze issues.
+- Stage 6 has parked four red proofs with `skip:` (K09-BUG-7 ×2, K09-BUG-8 ×2).
+  That is its documented pattern; findings 1 and 3 say to un-skip them with the
+  fixes. Note that `flutter test test/features/kid_jar` ran past 15 minutes at
+  one point during this stage — if that is not just contention with the
+  concurrent agent, it is a hanging test and the TEST TIMEOUTS rule applies
+  (“a test that can hang is a bug, so fix it”).
+- The branch is behind `main` past the loop’s own merge at `532ba70`; the loop
+  owns commit and merge order.
+- `5_ui.md` records simulator `E7D5555E-…`; the brief now names only
+  `604697A9-11DA-462F-9837-396E9CA2493A` for stage 5. Noted for the
+  orchestrator, not a code finding.
 
 ## Verdict
 
-The diff is faithful to the design source (copy, cascade, spacing, geometry all
-re-derived from the PNG and the HTML), reuses the shared design system instead of
-re-implementing it, keeps the feature-first layering, and disposes its streams.
-Nothing found rises above minor; none of the six is a blocker or a major, and
-finding 1 is the only one that needs a hand-off (`SHARED_REQUEST.md`) rather
-than an in-branch fix.
+The iteration-2 diff does what it was asked to do. The three orchestrator-mandated
+items in `ORCHESTRATOR_NOTES.md` (18:47) are implemented and now proven three ways
+— code, tests and my own pixel probe. The design structure, the copy and the
+layout are faithful: my independent measurement puts the goal card, the progress
+bar, the goal card’s bottom border and the history card’s top border on the
+design’s exact rows in both themes, and the heading within 1.3 px. The layering is
+feature-first, every colour and size is a token, streams are released, and the
+child-facing copy is character-exact UK English with no analytics, no red and
+nothing leaving the device.
+
+Nothing found rises above minor, and every one of the nine is fixable inside
+`app/lib/features/kid_jar/**` or `docs/screens/K09/**` — finding 6 is itself the
+hand-off for the one shared-code defect it reports. None of them contradicts the
+design’s structure, the copy, the architecture or the Children’s Code rules. The
+next iteration should take findings 1–4 (one `isClosed` guard, one `Flexible`, one
+goal-lookup guard, one `size: 22`), un-skip the K09-BUG-7/8 proofs with those
+fixes, tighten finding 6's request with its vertical dimension, and make the
+weekday label refresh (finding 8).
 
 VERDICT: PASS

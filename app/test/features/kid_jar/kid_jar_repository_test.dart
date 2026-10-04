@@ -13,6 +13,7 @@ import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/features/kid_jar/data/kid_jar_repository_impl.dart';
 import 'package:nestling/features/kid_jar/domain/entities/jar_snapshot.dart';
+import 'package:nestling/features/kid_jar/domain/entities/jar_summary.dart';
 
 const Set<String> _moneyInTypes = <String>{
   'weekly_base',
@@ -48,6 +49,16 @@ class _JarEmissions {
   }
 
   Future<void> cancel() => _sub.cancel();
+}
+
+/// Bounded wait for a stream-driven condition, so a stream that never emits
+/// fails the test fast instead of hanging until the suite timeout.
+Future<void> _pumpUntil(bool Function() done, {required String reason}) async {
+  for (var i = 0; i < 30; i++) {
+    if (done()) return;
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+  fail('$reason did not arrive within 300 ms');
 }
 
 void main() {
@@ -279,6 +290,173 @@ void main() {
       expect(next.summary.owedPence, 420);
       expect(jar.errors, isEmpty);
     });
+
+    // `watchGoals` is part of the same atomic `combineLatest4`, so a saving
+    // moves the card, the progress fraction and the jar fill without a
+    // reload. Nothing proved that join before: the only goal-writing test
+    // called `moveToSavings` directly and read the table, never the stream.
+    test('a goal saving re-emits the figures the card renders', () async {
+      final first = await jar.next();
+      expect(first.summary.goalSavedPence, 1550);
+      expect(first.summary.goalTargetPence, 2499);
+
+      await (db.update(db.savingsGoals)..where((g) => g.id.equals('goal-lego')))
+          .write(const SavingsGoalsCompanion(savedPence: Value(2000)));
+
+      final next = await jar.next();
+      expect(next.summary.goalSavedPence, 2000);
+      expect(next.summary.goalTargetPence, 2499);
+      expect(next.summary.goalTitle, 'Lego Friends set');
+      // A goal row is not money in the jar: the list and the owed total must
+      // not move with it.
+      expect(next.items, hasLength(9));
+      expect(next.summary.owedPence, 420);
+      expect(jar.errors, isEmpty);
+    });
+
+    // Same join, third leg: the weekday in `coming on <weekday>` is the family
+    // setting, so a parent changing the payout day must re-emit the snapshot
+    // (the child's view is a live screen, not a one-shot load).
+    test(
+      'a payout-day change re-emits the weekday the hero announces',
+      () async {
+        expect((await jar.next()).summary.nextPayoutDay, 'Saturday');
+
+        await (db.update(db.settings)
+              ..where((s) => s.familyId.equals(Seed.familyId)))
+            .write(const SettingsCompanion(payoutDay: Value(1)));
+
+        expect((await jar.next()).summary.nextPayoutDay, 'Monday');
+        expect(jar.errors, isEmpty);
+      },
+    );
+  });
+
+  group('KidJarRepository gift notes without a giver', () {
+    // The seeded gift note is `Birthday money (added by Mum)`. A gift can
+    // arrive with no note at all, and both halves of the row must still read
+    // as a gift rather than as an empty line (`_giftTitle` / `_giftSub`).
+    Future<void> insertGift(String note, int pence, int hour) {
+      return db
+          .into(db.ledgerEntries)
+          .insert(
+            LedgerEntriesCompanion.insert(
+              familyId: Seed.familyId,
+              childId: 'maya',
+              type: 'gift',
+              amountPence: pence,
+              note: Value(note),
+              date: Value(DateTime.utc(2026, 10, 3, hour)),
+              dateTz: const Value('Europe/London'),
+            ),
+          );
+    }
+
+    test(
+      'a note with no giver keeps the title and falls back for the sub',
+      () async {
+        await insertGift('New scooter', 500, 9);
+        final repo = KidJarRepositoryImpl(db: db);
+        final snapshot = await repo.watchJar().first;
+
+        expect(snapshot.items.first.title, 'New scooter');
+        expect(snapshot.items.first.detail, 'Gift');
+        expect(snapshot.items.first.type, 'gift');
+      },
+    );
+
+    test('an empty note falls back on both halves', () async {
+      await insertGift('', 250, 9);
+      final repo = KidJarRepositoryImpl(db: db);
+      final snapshot = await repo.watchJar().first;
+
+      expect(snapshot.items.first.title, 'Gift');
+      expect(snapshot.items.first.detail, 'Gift');
+      // A gift is money in, but never part of what is owed at the payout.
+      expect(formatJarAmount(snapshot.items.first.amountPence), '+£2.50');
+      expect(snapshot.summary.owedPence, 420);
+    });
+  });
+
+  group('KidJarRepository list + summary API (the interface K10 reads)', () {
+    // `watchJar` is the K09 screen stream, but the repository interface also
+    // publishes the three older members K10 (payout day) consumes. Nothing in
+    // the feature suite exercised them, so a change to their mapping would
+    // have gone unnoticed.
+    test('watchItems() follows the active child like watchJar does', () async {
+      final repo = KidJarRepositoryImpl(db: db);
+
+      final maya = await repo.watchItems().first;
+      expect(maya, hasLength(9));
+      expect(maya.first.type, 'weekly_base');
+
+      await setActiveChild('leo');
+
+      final leo = await repo.watchItems().first;
+      expect(leo, hasLength(5));
+      expect(leo.first.amountPence, 150);
+      expect(
+        leo.map((item) => item.type),
+        everyElement(isIn(_moneyInTypes)),
+        reason: 'the list API is the money-in filter too, not the raw ledger',
+      );
+    });
+
+    test('getItems() is the first emission of the same list', () async {
+      final repo = KidJarRepositoryImpl(db: db);
+
+      final oneShot = await repo.getItems();
+      final streamed = await repo.watchItems().first;
+
+      expect(oneShot, streamed, reason: 'getItems() is watchItems().first');
+      expect(
+        await repo.getItems(),
+        isNotEmpty,
+        reason: 'a convenience read must not come back empty',
+      );
+    });
+
+    test('watchSummary() reads the child it is asked for, not the active '
+        'one', () async {
+      final repo = KidJarRepositoryImpl(db: db);
+      // Maya is the active child, yet Leo's summary is what is asked for.
+      final leo = await repo.watchSummary('leo').first;
+      expect(leo.childId, 'leo');
+      expect(leo.owedPence, 210);
+      expect(leo.goalTargetPence, 0);
+      expect(leo.goalSavedPence, 0);
+
+      final maya = await repo.watchSummary('maya').first;
+      expect(maya.childId, 'maya');
+      expect(maya.owedPence, 420);
+      expect(maya.goalTitle, 'Lego Friends set');
+    });
+
+    test('watchSummary() re-emits when the period total moves', () async {
+      final repo = KidJarRepositoryImpl(db: db);
+      final seen = <JarSummary>[];
+      final sub = repo.watchSummary('leo').listen(seen.add);
+      addTearDown(sub.cancel);
+      await _pumpUntil(() => seen.isNotEmpty, reason: 'the first summary');
+
+      await db
+          .into(db.ledgerEntries)
+          .insert(
+            LedgerEntriesCompanion.insert(
+              familyId: Seed.familyId,
+              childId: 'leo',
+              type: 'quest_bonus',
+              amountPence: 10,
+              note: const Value('Feed the cat'),
+              date: Value(DateTime.utc(2026, 10, 3, 9)),
+              dateTz: const Value('Europe/London'),
+            ),
+          );
+
+      await _pumpUntil(() => seen.length >= 2, reason: 'the re-emission');
+      expect(seen.first.owedPence, 210);
+      expect(seen.last.owedPence, 220);
+    });
   });
 
   group('formatJarAmount', () {
@@ -345,6 +523,49 @@ void main() {
 
       expect(snapshot.items.first.title, 'Unicorn parade');
       expect(snapshot.items.first.iconKey, isEmpty);
+    });
+
+    test("a quest icon change re-emits the row's icon key", () async {
+      final repo = KidJarRepositoryImpl(db: db);
+      String keyOf(JarSnapshot snapshot) => snapshot.items
+          .firstWhere((item) => item.title == 'Hoover the stairs')
+          .iconKey;
+      var snapshot = await repo.watchJar().first;
+      expect(keyOf(snapshot), 'hoover');
+
+      // The quest lookup is part of the atomic snapshot (combineLatest4), so
+      // editing the quest must flow to the rendered row without a reload.
+      await (db.update(db.quests)
+            ..where((q) => q.title.equals('Hoover the stairs')))
+          .write(const QuestsCompanion(icon: Value('book')));
+
+      snapshot = await repo.watchJar().first;
+      expect(keyOf(snapshot), 'book');
+    });
+
+    test('duplicate quest titles resolve to the first created', () async {
+      // A second 'Hoover the stairs' created after the seed's: the join
+      // keeps the first in (createdAt, id) order (`putIfAbsent`).
+      await db
+          .into(db.quests)
+          .insert(
+            QuestsCompanion.insert(
+              id: 'q-duplicate-hoover',
+              familyId: Seed.familyId,
+              title: 'Hoover the stairs',
+              icon: const Value('book'),
+              createdAt: Value(DateTime.utc(2030)),
+            ),
+          );
+      final repo = KidJarRepositoryImpl(db: db);
+      final snapshot = await repo.watchJar().first;
+
+      expect(
+        snapshot.items
+            .firstWhere((item) => item.title == 'Hoover the stairs')
+            .iconKey,
+        'hoover',
+      );
     });
   });
 

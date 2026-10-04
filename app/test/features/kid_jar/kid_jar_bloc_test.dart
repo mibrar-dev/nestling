@@ -498,6 +498,50 @@ void main() {
     });
   });
 
+  group('KidJarBloc internal events', () {
+    // The two events the guarded subscription re-enters the bloc with
+    // (K09-BUG-1). Views never dispatch them, but every state path they can
+    // produce is pinned directly here as well as through the fake stream.
+    blocTest<KidJarBloc, KidJarState>(
+      'a snapshot event loads every jar field',
+      build: () => KidJarBloc(
+        repository: _FakeKidJarRepository(snapshot: _mayaSnapshot()),
+      ),
+      act: (bloc) => bloc.add(KidJarSnapshotReceived(_mayaSnapshot())),
+      expect: () => <KidJarState>[_mayaLoaded()],
+    );
+
+    blocTest<KidJarBloc, KidJarState>(
+      'a stream-failure event reports the failure and its message',
+      build: () => KidJarBloc(
+        repository: _FakeKidJarRepository(snapshot: _mayaSnapshot()),
+      ),
+      act: (bloc) => bloc.add(const KidJarStreamFailed('jar is down')),
+      expect: () => <KidJarState>[
+        const KidJarState(
+          status: KidJarStatus.failure,
+          errorMessage: 'jar is down',
+        ),
+      ],
+    );
+
+    test('internal events compare by payload', () {
+      expect(const KidJarStreamFailed('x'), const KidJarStreamFailed('x'));
+      expect(
+        const KidJarStreamFailed('x'),
+        isNot(const KidJarStreamFailed('y')),
+      );
+      expect(
+        KidJarSnapshotReceived(_mayaSnapshot()),
+        KidJarSnapshotReceived(_mayaSnapshot()),
+      );
+      expect(
+        KidJarSnapshotReceived(_mayaSnapshot()),
+        isNot(KidJarSnapshotReceived(_leoSnapshot())),
+      );
+    });
+  });
+
   group('KidJarBloc guarded subscription (K09-BUG-1)', () {
     test('close() releases the live subscription', () async {
       final repo = _CountingKidJarRepository();

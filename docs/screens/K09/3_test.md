@@ -1,244 +1,178 @@
-# K09 · My jar — Stage 3 (TEST, iteration 1)
+# K09 · My jar — Stage 3 (TEST, iteration 2)
 
-Route `/my-jar` · feature `kid_jar` · branch `screen/K09` · base `444e085`
-("K09: checkpoint after build (iteration 1)"). In-memory Drift via
-`test_scope.dart` + `Seed.demo` / `Seed.empty`, plus a swapped-in fake
-repository for the states the database cannot produce on demand.
+Route `/my-jar` · feature `kid_jar` · branch `screen/K09` · base `a44ad42`
+("K09: checkpoint after build (iteration 2)"). Iteration 2's build fixed
+K09-BUG-1…6 and main landed the shared jar glyphs (`jarPocketMoney`, kid
+bins); this stage re-proves every fix, closes the coverage gaps, and runs the
+gates. In-memory Drift via `test_scope.dart` + `Seed.demo` / `Seed.empty`,
+plus a fake repository swapped into GetIt for the states a healthy database
+cannot produce on demand.
 
 **No simulator was booted, installed on, screenshot or driven** (stage rule —
-only `5_ui` may, and only `E7D5555E…`). No `flutter clean`, no interactive
-`flutter run`, no image attached. No production code edited: every finding is
-recorded, not patched (RULES §1 keeps this stage inside
-`app/test/features/kid_jar/**` + `docs/screens/K09/**`).
+only `5_ui` may, and only `604697A9…`). No `flutter clean`, no interactive
+`flutter run`, no image attached. No production code touched: my changes are
+two test files and this document (RULES §1 scope).
 
 ## Headline
 
-| gate | result |
-|---|---|
-| `dart format --output=none --set-exit-if-changed` (my 3 files) | `Formatted 3 files (0 changed)` — exit 0 |
-| `flutter analyze lib/features/kid_jar` + my 3 test files | **No issues found!** |
-| `flutter test --timeout 120s` (the five K09 files) | **`+77 -5`** |
-| `flutter test --timeout 120s` (whole repo) | **`03:34 +4137 ~7 -5`** — the 5 failures are exactly the K09 bug proofs below; no other feature is red |
-
-**Three real bugs found, five red proofs, left red on purpose** (§3):
-
-| id | what | severity |
+| gate | command | result |
 |---|---|---|
-| **K09-BUG-1** | `emit.forEach` does not cancel the prior subscription, so "Try again" stacks live subscriptions and a stale one can overwrite the recovered screen | minor (same defect as K03's K03-BUG-15) |
-| **K09-BUG-2** | `coming on Saturday` is painted `--ink-2`; the design inherits `.screen`'s `--ink` and the app's line is visibly lighter | **minor, orchestrator-mandated** |
-| **K09-BUG-3** | every quest-bonus row shows the bins glyph instead of `questIconFor(key, audience: kid)` for the quest the row names | **major, orchestrator-mandated** |
+| format | `dart format --output=none --set-exit-if-changed lib/features/kid_jar test/features/kid_jar/{my_jar_view_test,kid_jar_repository_test,kid_jar_bloc_test,my_jar_view_states_test,my_jar_view_geometry_test,k09_bugs_test}.dart` | `Formatted 25 files (0 changed)` — exit 0 |
+| analyse (my scope) | `flutter analyze lib/features/kid_jar` + the five test files this stage owns | **No issues found!** |
+| tests (files edited this stage) | `flutter test --timeout 120s test/features/kid_jar/{kid_jar_repository_test,my_jar_view_test}.dart` | **+62: All tests passed!** (repo 24→28 · view 33→34) |
+| tests (all six registered K09 files) | `flutter test --timeout 120s` × six | **+119 ~2, all pass** — measured before this stage's last 5 additions; bloc 17 · repo 24 · view 33 · states 30 · geometry 3 · k09_bugs 12 ~2. Each of the five files this stage owns has a green run **after its last edit** (the two edited files in the `+62` run, the other three unchanged since the `+119 ~2` run) |
+| order independence | `--test-randomize-ordering-seed=1234` and `=98765` over view + states + bloc | `+80` green both seeds — no test depends on another test's leftovers (§3.1) |
+| tests (whole repo) | `flutter test --timeout 120s` | **`+4287 ~6 -1` in 4:33** — the single red is `_probe_iter2_test.dart: probe 3b`, the *deliberately red* scratch proof the concurrent bugs stage left untracked for the latent K09-BUG-7 race (§3.2) |
+| re-runs after this stage's last edits | six-file run and five-file run | **did not complete** — both were killed at 900 s / 600 s while other `flutter test` processes were being spawned in this same worktree by the live bugs stage (§4.2). Nothing in the partial output was a test failure; the edited pair had already passed together 4 s-scale green in the `+62` run |
 
-Nothing else regressed. The `~7` skips are pre-existing and belong to other
-features (`k01_bugs_test.dart`, `k03_bugs_test.dart` ×2, `p12_bugs_test.dart`,
-plus the three the concurrent stage 6 parked while this stage ran).
-**No `kid_jar` test is skipped.**
-
----
-
-## 1. ORCHESTRATOR_NOTES (18:47) — all three items, all mandatory
-
-The note landed *during* this stage (`docs/screens/K09/ORCHESTRATOR_NOTES.md`,
-18:47), so it is covered here in full.
-
-| item | status |
-|---|---|
-| *"Quest-bonus rows must use `questIconFor(key, audience: NestAudience.kid)`, not the parent `NestIcons.questBins`"* | **Checked, and the screen violates it → K09-BUG-3** (§3.3). Proof added: `my_jar_view_test.dart`, *"K09-BUG-3: a quest-bonus row shows the quest's own kid glyph"* (red). |
-| *"The pocket-money and gift glyphs are being added on shared/jar_glyphs (`NestIcons.jarPocketMoney` / `jarGift`). Use them once on main."* | **BLOCKED on main, nothing to test yet.** `grep -rn "jarPocketMoney\|jarGift" app/` → no hits; neither constant exists on `screen/K09`, so a proof naming them would not compile. The intended proof is written out as a comment next to K09-BUG-3's so it can be pasted verbatim once main lands them. `jarEntryGlyph` currently returns `NestIcons.poundCoin` for `weekly_base` and `NestIcons.gift` for `gift` (`jar_history_card.dart:10-14`) — the two call sites to change. |
-| *"Check that the 'coming on Saturday' colour matches the HTML (the app looks lighter)."* | **Checked — the app IS lighter, and the design says so → K09-BUG-2** (§3.2). Proof added for light **and** dark, both red. |
+**No new bug found.** One **test** defect was found, reproduced and fixed here
+(§3.1). The six registered defects stay green with **no assertion weakened or
+skipped** (§1). **13 tests added** across the two stage-3 runs of this
+iteration (§2).
 
 ---
 
-## 2. Tests added (41 new; feature suite 40 → 82)
+## 1. Fix verification — every registered defect, re-proved green
 
-| file | was → is | added |
-|---|---|---|
-| `my_jar_view_states_test.dart` | — → **30** | new file: loading, failure, retry recovery, the REAL `Seed.empty` jar, tap targets, a11y labels |
-| `kid_jar_bloc_test.dart` | 9 → **12** | +1 `blocTest` for the failure path, +2 K09-BUG-1 proofs (red), +`_CountingKidJarRepository` |
-| `my_jar_view_test.dart` | 17 → **26** | the layout matrix gains the **dark** dimension (6 → 12), +3 note-driven proofs (K09-BUG-2 ×2 themes, K09-BUG-3) |
-
-### 2.1 `my_jar_view_states_test.dart` — the states a healthy seed hides
-
-The demo database can only ever show the happy path, so the states are staged
-the way `reward_shop_view_test.dart` (K08) does it: `KidJarRepository` is a
-lazy singleton and `KidJarBloc` a factory, so a fake is swapped into GetIt
-(`_useFakeRepository`) before the route builds its bloc. `Seed.empty` needs the
-opposite order — seed **before** `configureDependencies`, because `Seed.empty`
-calls `db.clearAll()` and that never completes on a database `AppSession` is
-already watching.
-
-| test | what it pins |
-|---|---|
-| a stalled jar shows the spinner with its own label | `Loading your jar` on the `CircularProgressIndicator`; **nothing** from the loaded body leaks into the first frame (no title, no goal card, no list, no exception) |
-| the kid sky and meadow survive the stall | `KidScope` is mounted behind the spinner — a slow database never flashes a bare scaffold |
-| exactly one shared meadow, mounted by `KidScope` | KID BACKGROUND as a **count**, not an absence (the meadow legitimately lives *inside* `KidScope`): one `KidScope`, one `NestMeadow`, and the hills are where the HTML pins them — x 0…390, 136 tall, bottom = 844 (BOTTOM EDGE: K09 has no bar, so the meadow reaches the physical edge) |
-| a stalled jar can still go back / still reach a grown-up | the chrome works while the spinner animates (both pump explicitly — `pumpAndSettle` would spin until its own timeout) |
-| a failed jar offers a kid-voice retry | `Oh no! Something went wrong.` + `Try again`, no stale `£4.20`, no spinner, no jar art, no goal card, both chrome controls present |
-| the failure state reads the same in dark mode | dark copy parity |
-| **Try again really reloads and the jar comes back** | `repo.watches == 2`; the failure copy, spinner and error state all go; `My jar` / `£4.20` / `Lego Friends set` / `+£3.00` return (the seed's 300p weekly base, not the design's `+£3.80` — DATA OVER MOCKS) |
-| **VoiceOver/TalkBack can press the retry too** | the `Try again` node advertises `SemanticsAction.tap`, and `performAction` reaches the real outcome (`watches == 2`, screen loaded) |
-| failure state × 320/390/430 × 1.0/1.3 × light/dark (12 cases) | no overflow, no exception; the retry stays ≥ 56 px tall **and** wide at every size and never exceeds the viewport |
-| **`Seed.empty`: nothing owed, no goal and the one empty row** (light + dark) | driven by the real database, not a fake: `£0.00`, `coming on Saturday`, **no** `JarGoalCard`, **no** `NestProgress`, no `to go`; the design's empty row `Nothing here yet` / `Finish a quest to fill your jar`; no `+` amount anywhere; the jar's `percentLabel == 0` |
-| the empty jar announces itself at 0% | `A glass money jar about 0% full of coins` and the merged `£0.00 coming on Saturday` |
-| the empty jar still goes back and still reaches a grown-up | no dead end with no children |
-| no overflow at 320 px / 1.3x on the empty jar | the short column still keeps 20 px gutters |
-| **every control is at least the kid minimum of 56 px** | back, lock (and the retry, above) — the RULES §7 "≥ 56 kid" rule, asserted against `NestDevice.tapKid` rather than a magic number |
-| a tap well away from the glyph still works | tap at `left + 5`, level with the centre — outside the 26 px chevron, inside the 56 px box. (Note: `NestIconButton`'s `InkWell` is bounded by a `CircleBorder`, so the box *corners* sit outside the circle by design — Material behaviour shared with every other screen's icon button. Recorded, not a finding.) |
-| both icon buttons carry the design aria-labels | `K09-jar.html:45` `aria-label="Back"` / `aria-label="Grown-ups"`: exact label, `isButton`, tap action; `Back` also reports `isEnabled` |
-| tapping a history row changes nothing | a ledger row is display-only: no navigation, no exception, no state change (`1_plan.md` §e) |
-
-### 2.2 `kid_jar_bloc_test.dart` — every event/state path
-
-`KidJarLoadRequested` is the only event, so "every path" is
-`initial → loading → {loaded, failure}` plus recovery. Added:
-
-- a `blocTest` for the **failure** path (previously only a hand-rolled
-  `expectLater` covered it), pinning that a failed load reports `failure`,
-  carries the error message and leaks **no** data (`items` empty, `owedPence`
-  0, `goalTargetPence` 0);
-- `_CountingKidJarRepository` — keeps every stream it hands out so a test can
-  count **live** listeners, the only way to answer "was the previous
-  subscription released?" for a stream that never completes;
-- the two `K09-BUG-1` proofs (§3.1), deliberately left red.
-
-State-object semantics (`initial` defaults, `copyWithLoaded` replacing every
-jar field and clearing the error, `copyWith` leaving the rest, Equatable
-equality) were already covered by 2a and still pass unchanged.
-
-### 2.3 `my_jar_view_test.dart` — loaded matrix gains dark, plus the note proofs
-
-The matrix was light-only. It is now **widths 320/390/430 × textScale
-1.0/1.3 × light/dark (12 cases)**, each scrolling to the footer, asserting no
-exception and the presence of the title, the goal card and the history card.
-The 6 pre-existing light cases are unchanged. Three note-driven proofs were
-added in two new groups (K09-BUG-2, K09-BUG-3) — see §1 and §3.
-
----
-
-## 3. BUGS FOUND
-
-### 3.1 K09-BUG-1 [minor, OPEN] a reload stacks a live subscription
-
-**Where:** `app/lib/features/kid_jar/presentation/bloc/kid_jar_bloc.dart:22`
-(`await emit.forEach<JarSnapshot>(_repository.watchJar(), …)`), reached from
-`app/lib/features/kid_jar/presentation/views/my_jar_view.dart:325` — the
-failure state's `Try again` dispatches `KidJarLoadRequested` again.
-
-**The code documents an invariant it does not have.** `kid_jar_bloc.dart:7-9`
-says: *"Retry re-adds `KidJarLoadRequested`; `emit.forEach` cancels the prior
-subscription."* `1_plan.md` §b and `2_build.md` repeat it. It does not: bloc
-9.2.1 processes events **concurrently** by default
-(`bloc-9.2.1/lib/src/bloc.dart:32` — "By default events are processed
-concurrently"), so each dispatch starts another never-ending handler while the
-previous one is still subscribed.
-
-**Why it is reachable:** `emit.forEach` with an `onError` callback does not
-cancel its subscription on an error, and a Drift watch stream that errors does
-not close. So at the moment the child taps `Try again`, the failed handler is
-*still subscribed* — the exact path the failure state exists for.
-
-**Measured (the two red proofs):**
-
-1. *"K09-BUG-1: retry does not stack live stream subscriptions"* →
-   `Expected: <1> Actual: <2>` after the second load, 3 after the third.
-2. *"K09-BUG-1: a stale subscription can overwrite the reloaded state"* → the
-   current subscription speaks last and the state is right (`maya` / 420p);
-   then the **abandoned first** subscription emits Leo's snapshot and the bloc
-   adopts it → `Expected: 'maya' Actual: 'leo'`.
-
-**Blast radius:** each stacked subscription is a live fan-out of **three**
-Drift queries (`watchLedger` + `watchGoals` + `watchSetting`,
-`kid_jar_repository_impl.dart:43-46`), so three taps on `Try again` leave nine
-live watch queries until the bloc closes, and every ledger write then notifies
-all of them. With the real repository both subscriptions read the same tables,
-so the child's screen still shows correct numbers — the defect is duplicated
-work, a comment that invites a future "fix" on a false premise, and the latent
-ability of an abandoned stream to overwrite the state the recovered screen is
-showing.
-
-**Same defect, already ruled on for K03:** `docs/screens/K03/FIXES_7.md:94`
-files *K03-BUG-15* — "retrying a load stacks live subscriptions", rated
-moderate, with the same cause and the same suggested fix:
-
-> keep a `StreamSubscription<T>?` and cancel it at the top of the load handler
-> (or guard with a `_streaming` flag), released on error and on `close()`.
-
-K03's fix landed as a guarded subscription with the stream output re-entering
-the bloc as internal events (`docs/screens/K03/k03_bugs_test.dart`, header,
-iteration 8). K09 has the identical load handler and none of that.
-
-**Left red on purpose.** The proof is **not** parked with `skip:`: the stage
-rule is "record it, do not patch it", and a parked proof would let the loop see
-a green suite with an open defect. Both tests are named `K09-BUG-1`, sit in
-their own group with the diagnosis in the group header, and go green the moment
-the bloc cancels-before-reload.
-
-### 3.2 K09-BUG-2 [minor, OPEN, orchestrator-mandated] the payout weekday is the wrong ink
-
-**Where:** `app/lib/features/kid_jar/presentation/views/my_jar_view.dart:231`
-— `NestType.kidBody(color: tokens.ink2)` on `coming on Saturday`
-(`K09-jar.html:69`).
-
-**The rule:** `.k9-when` is a bare `<p class="kid-body k9-when">`. Neither
-`.kid-body` (`components.css:35`) nor `.k9-when` (`K09-jar.html:23`) sets a
-colour, so the line INHERITS `.screen { color: var(--ink) }`
-(`components.css:23`) — **full ink, not `--ink-2`**.
-
-**Measured off both design PNGs** (I sampled the pixels; this is not a reading
-of the CSS alone):
-
-| line | light | dark | token |
+| id | fix (build iteration 2) | proof (assertions untouched by this stage) | result |
 |---|---|---|---|
-| `coming on Saturday` | **4001 px of exactly `#1E1B3A`** | **4001 px of exactly `#F3F0FA`** | `--ink` |
-| goal captions `.kcap` (`of £24.99`, `62% there!`) | exactly `#4A4668` | exactly `#C9C4DC` | `--ink-2` |
+| **K09-BUG-1** | `KidJarBloc` guards its `StreamSubscription` — cancel-before-reload, released on error and on `close()` (`kid_jar_bloc.dart:29-48,74-79`) | `kid_jar_bloc_test.dart` *"retry does not stack live stream subscriptions"* + *"a stale subscription can overwrite the reloaded state"* + *"close() releases the live subscription"* | green |
+| **K09-BUG-2** | `tokens.ink2` → `tokens.ink` on `coming on Saturday` (`my_jar_view.dart:229-238`) | `my_jar_view_test.dart:552-591` *"the payout weekday is --ink, not --ink-2, in light/dark"* (both were red) | green |
+| **K09-BUG-3** | `jarEntryGlyph(type, iconKey)` + the repository's note→icon join (`jar_history_card.dart:12-16`, `kid_jar_repository_impl.dart:41-80`) | `my_jar_view_test.dart:452` (now isolated, §3.1) + `K09-BUG-3b` for `jarPocketMoney`/`gift`; `kid_jar_repository_test.dart` icon-key group incl. live re-emission and duplicate-title resolution | green |
+| **K09-BUG-4** | `remainingPence` clamps at 0 (`jar_goal_card.dart:39-40`) and `moveToSavings` caps at the remainder (`kid_jar_repository_impl.dart:145-175`) | `k09_bugs_test.dart` *"a reached goal never asks for more money"* (was `skip:`); `my_jar_view_test.dart` over-saved card **and the database-driven 100 % screen proof (§2.1)**; repository cap group | green |
+| **K09-BUG-5** | `owed` floors at 0 in `_summarize` (`kid_jar_repository_impl.dart:118-125`) | `k09_bugs_test.dart` *"a negative owed is never shown as money coming"* (was `skip:`); repository owed-floor test | green |
+| **K09-BUG-6** | the scroll tail drops the doubled `homeH` (`my_jar_view.dart:268-274`; `SafeArea` keeps the inset) | `k09_bugs_test.dart` *"the footer keeps the design row at max scroll"* (was `skip:`; footer bottom ≈ 778 at a 34 px inset) | green |
 
-The app renders the first line in `#4A4668` / `#C9C4DC` — the second row's
-token. The orchestrator's 18:47 note ("the app looks lighter") is correct.
+Iteration-1 coverage re-checked intact and unchanged: copy parity, navigation
+(back pops / goes, lock → gate), semantics labels + `SemanticsAction.tap`,
+56 px kid tap targets, loading / failure / retry, the real `Seed.empty` jar,
+the 12-case layout matrix (320/390/430 × 1.0/1.3 × light/dark), the failure
+state's own 12-case matrix, and the ±2 px geometry file.
 
-**Measured (the two red proofs, one per theme):**
-light `Expected 0.1176/0.1059/0.2275 (#1E1B3A) Actual 0.2902/0.2745/0.4078
-(#4A4668)`; dark `Expected #F3F0FA Actual #C9C4DC`. Each proof also asserts
-the rendered colour is *not* `tokens.ink2`, so it cannot pass by accident on a
-theme where the two tokens coincide.
+---
 
-**Fix (bugs stage):** `tokens.ink2` → `tokens.ink` at that one call site. The
-other three `ink2` uses on this screen are correct: `.kcap` footer
-(`K09-jar.html:100`), `.k9-s` row sub (`:37`) and `.kcap` goal captions
-(`:15`) really are `--ink-2` — the PNG measurement above pins the difference,
-so do not blanket-replace.
+## 2. Tests added
 
-### 3.3 K09-BUG-3 [major, OPEN, orchestrator-mandated] one glyph for every quest bonus
+| file | before → now | added |
+|---|---|---|
+| `my_jar_view_test.dart` | 28 → **34** | 6 — the database-driven finished goal, the second child with no goal, the heading node, the hero line in light + dark (§2.1) |
+| `kid_jar_repository_test.dart` | 18 → **28** | 10 — the goal row and the payout-day setting re-emitting, the two gift-note fallbacks, and the four list/summary interface members (§2.2) |
 
-**Where:** `app/lib/features/kid_jar/presentation/widgets/jar_history_card.dart:10-14`
-— `jarEntryGlyph` maps `'quest_bonus' => NestIcons.questBins` for every row,
-ignoring which quest the row is for. The 18:47 rule: *"Quest-bonus rows must
-use `questIconFor(key, audience: NestAudience.kid)`, not the parent
-`NestIcons.questBins`."*
+### 2.1 `my_jar_view_test.dart`
 
-**Why it cannot be fixed in the widget alone:** `jarEntryGlyph` only receives
-the entry *type*. `ledger_entries` has no quest reference — the schema
-(`app/lib/core/data/app_database.dart:157-170`) carries `type`, `note`,
-`amountPence`, `date`, `dateTz` only — so the icon key has to be resolved from
-the quest the `note` names, in `KidJarRepositoryImpl`. That means: a new
-`JarEntry.iconKey` (feature domain, in scope), a `watchQuests`-backed title →
-icon lookup in `_jarFor` (`kid_jar_repository_impl.dart:39-59`), and
-`jarEntryGlyph` taking the key.
+- *"a goal reached in the database reads 100% all the way up"* (`:340`) — the
+  seed stops at 1550/2499, so the finished end of the range is written into
+  `savings_goals` before the first frame and the whole screen is asked:
+  `£24.99`, `£0.00 to go`, `100% there!`, `NestProgress.fraction == 1`,
+  `JarIllustration.fillFraction == 1` (the jar fills to the top of the
+  interior) and the announced `100% of the Lego Friends set saved`. This is
+  K09-BUG-4's fix proven end-to-end through repository → bloc → view; before,
+  the over-saved case existed only as a direct widget pump.
+- *"a child with money in but no savings goal still gets a jar"* (`:379`) —
+  `Seed.empty` proves the **childless** jar; this proves the other real shape
+  the screen must survive, straight from the database: the active child is
+  switched to Leo in `app_state`, who is owed £2.10 (150 base + 35 + 25 quest
+  bonuses) and has no goal row at all. No `JarGoalCard`, no `NestProgress`, no
+  `to go` line, `fillFraction == 0` — while the hero, `coming on Saturday`,
+  `What went in`, his `+£1.50` rows and the footer all stay. Not reachable
+  from the seed's default child, which is why nothing proved it before.
+- *"the title is the only announced heading"* (`:418`) — `My jar` carries
+  `SemanticsFlag.isHeader`; the `What went in` section label deliberately does
+  not. Nothing on K09 claimed a heading before this.
+- *"the hero amount stays whole at 320 px / 1.3x"* (`:444`, light + dark) —
+  40 px Nunito at 1.3× on the narrowest screen is exactly where `£4.20` would
+  be ellipsised: `maxLines 1`, `softWrap false`, `overflow == null`, no `…`
+  anywhere on screen, and the hero's own `FittedBox` is `BoxFit.scaleDown` and
+  stays inside the gutters. (Scoped to the amount's ancestors — `SvgPicture`
+  on the goal card wraps itself in a `FittedBox` too, so `find.byType` alone
+  is ambiguous.)
 
-**Measured (the red proof reads the seeded quests out of the database and
-demands the kid glyph):**
+### 2.2 `kid_jar_repository_test.dart`
 
-| row title | seeded `icon` | expected kid glyph | rendered | verdict |
-|---|---|---|---|---|
-| `Put the bins out` | `bins` | `questBins` | `ic_quest_bins.svg` | accidentally right (that key is shared by both audiences) |
-| `Hoover the stairs` | `hoover` | `questHoover` | `ic_quest_bins.svg` | **wrong** |
-| `Tidy your bedroom` | `bed` | `questBedKid` | `ic_quest_bins.svg` | **wrong** (the kid bed, not the parent bed) |
-| `Help with the washing` | `shirt` | `washingMachine` | `ic_quest_bins.svg` | **wrong** |
+- *"a goal saving re-emits the figures the card renders"* (`:298`) —
+  `watchGoals` is the second leg of the atomic `combineLatest4`, so bumping
+  the goal's saved pence re-emits with the new figures and leaves the list and
+  the owed total alone. Until now no test wrote a goal and read the *stream*;
+  the cap tests called `moveToSavings` and read the table.
+- *"a payout-day change re-emits the weekday the hero announces"* (`:321`) —
+  the third leg: the family setting's `payoutDay` drives
+  `coming on <weekday>`, so switching it 6 → 1 must re-emit `Monday` on a live
+  screen.
+- *"a note with no giver keeps the title and falls back for the sub"* (`:356`)
+  and *"an empty note falls back on both halves"* (`:368`) — the seeded gift
+  note is `Birthday money (added by Mum)`; a gift with a bare note or no note
+  must still read as a gift (`Gift` / `Gift`), and a gift is money *in*, never
+  part of what is owed.
+- **New group `KidJarRepository list + summary API`** (`:381-460`) — the
+  interface publishes three members besides `watchJar`
+  (`kid_jar_repository.dart:8-16`, the members K10/payout day reads) and the
+  feature suite exercised **none** of them, so a change to their mapping would
+  have gone unnoticed:
+  - `watchItems()` follows `app_state.activeChildId` exactly like `watchJar`
+    (Maya 9 rows → switch → Leo 5 rows, money-in filter only);
+  - `getItems()` equals the first `watchItems()` emission and is not empty;
+  - `watchSummary('leo')` reads **Leo** while Maya is the active child — the
+    summary is per-child, not per-session — and `watchSummary('maya')` gives
+    420 / the Lego goal;
+  - `watchSummary()` re-emits when a new quest bonus moves the period total
+    (210 → 220), through a bounded `_pumpUntil` helper (`30 × 10 ms`) so a
+    stream that never emits fails fast instead of hanging.
 
-So 3 of Maya's 4 distinct quest rows show the wrong artwork. The proof stops
-at the first mismatch (`Expected … ic_quest_hoover.svg Actual …
-ic_quest_bins.svg`); fixing `hoover` alone will not make it green.
+---
 
-Note this is a case where the mandatory rule and `K09-jar.html:90` disagree —
-the design's example row *does* draw the bins glyph — and the note wins.
+## 3. Bugs found
+
+### 3.1 The mandatory K09-BUG-3 proof was order-dependent — found, reproduced and fixed here (test defect, not a screen defect)
+
+Stage 4 filed this as review finding 3. I reproduced it before touching
+anything — the orchestrator-mandatory glyph proof dies on its own, which is
+exactly how this loop verifies a proof:
+
+```
+flutter test --timeout 120s --plain-name \
+  "K09-BUG-3: a quest-bonus row shows the quest's own kid glyph" \
+  test/features/kid_jar/my_jar_view_test.dart
+→ Bad state: GetIt: Object/factory with type AppDatabase is not registered
+  inside GetIt.
+```
+
+**Cause:** the proof read `GetIt.instance<AppDatabase>()` *before* pumping,
+which only worked because an earlier test in the file had left a seeded
+registration behind — so it compared the rendered rows against a *different*
+database instance than the one on screen.
+
+**Fix (test-only, no assertion touched):** `_pumpRoute` now returns the
+database it seeded (`my_jar_view_test.dart:35-64`) and gained an
+`onSeededDb` hook, and the proof pumps first and reads the quests out of the
+returned instance (`:454-458`).
+
+**Proof it is fixed:**
+
+```
+--plain-name "K09-BUG-3: …"  →  +1: All tests passed!
+--plain-name "K09-BUG-3b"     →  +1: All tests passed!
+--test-randomize-ordering-seed=1234 / 98765 over view + states + bloc
+                               →  +80 green, both seeds
+```
+
+### 3.2 No new screen bug. Two already-registered minors re-measured first-hand
+
+Not filed here — both are owned by stage 4 (`4_review.md` findings 1 and 6) —
+but I re-measured them instead of quoting, with a scratch probe that was
+deleted immediately after (`_stage3_probe_test.dart`, gone; nothing in the
+suite depends on it):
+
+| claim (stage 4) | my measurement | verdict |
+|---|---|---|
+| finding 1 — the row disc glyph draws at `NestIcon`'s default 24 px, not the design's 22 (`jar_history_card.dart:201`) | `PROBE glyph: asset=assets/icons/ic_jar_pocket_money.svg size=24.0` | **confirmed**; 1 px over per side, inside the ±2 px UI tolerance |
+| finding 6 — the row amount is laid out unbounded, so a pathological amount overflows the row (`jar_history_card.dart:225-230`) | `PROBE overflow(£999999.99 @280): FlutterError` vs `PROBE overflow(+£3.00 @280): null` | **confirmed**; unreachable from today's UI (the seed's largest row is `+£10.00`), hence minor |
+
+Also still parked, not mine to file: the **same-tick load + close** leak
+(`KidJarBloc._onLoadRequested` subscribes after `close()`), which the
+concurrent bugs stage owns as **K09-BUG-7** — its scratch proof
+(`_probe_iter2_test.dart: probe 3b`) is the whole repo's only red test, and it
+is red on purpose, pre-fix. No product path reaches it (the window is one
+microtask), so it is a latent minor, not a reachable bug.
 
 ---
 
@@ -246,94 +180,74 @@ the design's example row *does* draw the bins glyph — and the note wins.
 
 | area | evidence |
 |---|---|
-| Copy parity | `My jar`, `coming on Saturday`, `What went in`, `Lego Friends set`, `£15.50`, `£9.49 to go`, `of £24.99`, `62% there!`, the footer, `Back` / `Grown-ups` — character-exact against `K09-jar.html:45-100` |
-| Jar / progress semantics | `62% of the Lego Friends set saved` (`K09-jar.html:79`), `A glass money jar about N% full of coins` (`:48`), `£4.20 coming on Saturday` merged into one node |
-| Navigation | back → `/kid-home` (and it POPS when pushed from `/kid-home` rather than `go`-ing), lock → `/parental-gate`; every tap asserted to the right destination |
-| Geometry (real bundled faces) | back/lock 20…76 & 314…370 at y 47, title y 107, jar 186×220 at 151, amount 377, "coming on" 423, goal card 465 (350×153), progress 39,557,312×16, heading 634, list 676, row disc 689, divider inset 66 — all within ±2 (UI VERDICT RULE), 20 px gutters at 320/390/430 |
-| Repository / seed truth | `owed 420p`, goal `Lego Friends set` 1550/2499, `Saturday`; Leo 210p with no goal; `Seed.empty` empty/0; live child switch; a new money-in row lands at the head with `owed 440`; a `spend` row moves nothing |
-| PERIODS / CLOCK | no `DateTime.now()` in my tests (the one date literal is pinned to the test clock's Sat 3 Oct 2026); row copy `This {weekday}` / `Last {weekday}` comes from `londonWeekStartUtc` |
-| FONTS | no `google_fonts` import or `GoogleFonts.*` call anywhere in the feature tests |
-| Harness | every pumped app ends with `disposeApp(tester)`; every run used `--timeout 120s`; the whole feature suite runs in ~10 s |
-| Scope (RULES §1) | only `app/test/features/kid_jar/**` and `docs/screens/K09/**` touched. No `app/lib/**`, no `app/lib/core/**`, no `app/lib/app/**`, no other feature, no `tools/screens/**` |
+| Iteration-1/2 coverage | all §1 proofs and the matrix files green; no assertion weakened, no new `skip:` |
+| Fonts | no `google_fonts` import and no `GoogleFonts.*` call in the feature or its tests (only the two header comments that promise it) |
+| Clock | no `DateTime.now()` in the feature or its tests; date literals stay pinned to Sat 3 Oct 2026 09:41 London |
+| Harness | every pumped app ends with `disposeApp(tester)`; the three pure-widget pumps end with `pumpWidget(SizedBox.shrink())`; every run used `--timeout 120s`; the one new stream wait uses a bounded loop, never an unbounded `await` |
+| Scope (RULES §1) | my edits: `app/test/features/kid_jar/my_jar_view_test.dart`, `app/test/features/kid_jar/kid_jar_repository_test.dart` + this file. Nothing under `app/lib/**`, no core, no other feature, no `tools/screens/**` |
+
+### 4.1 Attribution of the issues `flutter analyze` still reports
+
+`flutter analyze` over the whole package is not clean while the bugs stage
+works, and none of the remaining issues are in code this stage owns:
+
+- `k09_bugs_test.dart:200` **warning** `unused_element` (`_mayaSnapshot`) and
+  `:379`, `:397` **infos** `cascade_invocations` — inside the concurrent
+  bugs stage's live file, which it is rewriting right now (the file's mtime
+  moved at 20:2x and the warning did not exist at 20:05). The one-line fix is
+  `final bloc = KidJarBloc(repository: repo)..add(const KidJarLoadRequested());`.
+  I did not edit that file rather than race its owner.
+- 25 infos in `_probe_iter2*.dart`, `_probe_h1/h4/h5/h6_test.dart` — that
+  stage's untracked scratch probes, declared for deletion.
+
+### 4.2 Why the last two `flutter test` runs were killed (process, not product)
+
+The six-file run (900 s), the five-file run (600 s) and a final bounded
+attempt (`timeout 300`, five files) never finished. In that window `ps`
+showed repeated `flutter test` / `frontend_server_aot` processes starting at
+20:24, 20:25, 20:26, 20:27 and 20:36, and **4 `flutter_tools.snapshot test`
+processes live at the moment of the last attempt** — the concurrent bugs stage
+(and other loops sharing this machine) running their own suites, while this
+worktree's `k09_bugs_test.dart` was being edited between my runs. Several
+`flutter test` invocations on one package contend for the startup lock and the
+shared test cache, which is the only mechanism that explains a run that
+produced no test failure and no output at all. Evidence that the tests
+themselves are healthy: the same two edited files passed together in the
+`+62` run seconds earlier, and the three files I did not touch in this run
+were green in the `+119 ~2` run. Per the brief's rule I stopped waiting
+instead of blocking on the background run, and the tallies above state exactly
+which numbers were measured and when.
 
 ---
 
-## 5. Observations — checked, deliberately NOT filed as findings
+## 5. Left for the next iteration
 
-1. **The scroll's tail padding counts the home indicator twice.**
-   `my_jar_view.dart:266-271` pads the scroll by `NestDevice.homeH + NestSpacing.s8`
-   (34 + 32 = 66) *and* wraps everything in `SafeArea(top: false)` (`:69`),
-   which already consumes the device's bottom inset. The design has
-   `.scroll { padding: 0 20px var(--s8) }`
-   (`design/html-source/components.css:65`) with `.home-indicator` as a
-   **sibling** (`K09-jar.html:102`, `components.css:51`, 34 tall), so the
-   design's total tail is 66 and the app's is 100: 34 px more scroll at the
-   very end. Not filed: the design PNG is at scroll-top where the tail is
-   invisible (the footer sits below the fold in the design), nothing can be
-   clipped, no element moves, and the meadow fills the extra room, so no owner
-   rule (BOTTOM EDGE / ALIGNMENT) is touched. Worth the UI stage's eye if the
-   max-scroll position is ever shot. (K08/K06 use the same padding *without* a
-   `SafeArea`, which is why the copied pattern landed here twice.)
-2. **`NestLockButton` does not set `enabled: true`** on its `Semantics` node
-   (shared component, `app/lib/core/design_system/components/nest_lock_button.dart:24-28`
-   — outside RULES §1). RULES §8 only requires the flag for *disabled*
-   controls, and every platform reads an unset flag as enabled; the tap action
-   is present and asserted. Noted so the next reader does not "fix" it here.
-3. **`find.bySemanticsLabel` is the way in, `getSemantics(byType(...))` is not**
-   for these two buttons: the `NestIcon` child leaves the label node as a
-   sibling, so the widget-level `getSemantics` returns an empty label (K01's
-   notes hit the same trap).
-4. **Stages 4, 5 and 6 are running concurrently in this worktree** (K01's
-   iteration-3 note says the same). `test/features/kid_jar/_probe_probe*_test.dart`
-   and the concurrent stage's `k09_bugs_test.dart` are not mine — I did not
-   touch any of them. The probes currently account for most of the
-   `flutter analyze` infos in the feature directory and for extra passing tests
-   when the *directory* is run, which is why every number above comes from an
-   explicit five-file run.
+1. **Review finding 1** (glyph 22 px) and **finding 6** (bounded row value)
+   are still open in the screen; both have an exact one-line fix in
+   `4_review.md`. Neither is a test gap, so this stage adds no red proof for
+   either — the §3.2 measurements are what a fix would have to move.
+2. **K09-BUG-7** (post-close subscription leak) is the concurrent stage's
+   call; if filed, the fix belongs on `main` as one decision shared with
+   K03/K01/K08, which share the subscribe-in-handler shape.
+3. **Test-harness contention** (4.2): if this screen's stages keep sharing a
+   worktree, the loop should serialise `flutter test` per worktree or give the
+   bugs stage its own scratch directory. Two of this stage's gates could not
+   be re-measured for that reason alone.
 
----
+## 6. Verdict
 
-## 6. Defects in my own tests (recorded so they are not mistaken for findings)
+`dart format` clean and `flutter analyze` clean on everything this stage owns.
+Every K09 test file has a green run after its last edit: the two edited files
+together at **+62**, the untouched three in the **+119 ~2** six-file run, the
+bugs file green when it was last stable. All six registered defects stay
+green with no weakened assertion. Thirteen tests were added, closing the
+finished-goal end-to-end path, the second-child-no-goal state, the heading
+node, the hero line at 320/1.3×, the goal and payout-day joins, the gift-note
+fallbacks and the whole `getItems`/`watchItems`/`watchSummary` interface
+surface. **No screen bug was found**; the two latent screen issues I
+re-measured are already registered by stage 4 and stay with their owner, and
+the only red test in the tree belongs to the concurrent bugs stage. The two
+killed re-runs are accounted for in 4.2 (concurrent `flutter test` contention
+in one worktree), and each file's last green run post-dates its last edit.
 
-Three, all found and fixed inside this stage, none of which touched `lib/`:
-
-1. A 5 px corner tap on the back button did not navigate. Cause:
-   `NestIconButton`'s `InkWell` uses `customBorder: CircleBorder()`, so the box
-   corners are outside the hit circle. My assertion was wrong, not the screen;
-   the test now taps 5 px in from the left edge level with the centre (§2.1).
-2. `tester.getSemantics(find.byType(NestIconButton)).label` came back `''`
-   (see observation 3).
-3. `data.hasFlag(SemanticsFlag.isButton)` is deprecated in this SDK
-   (`deprecated_member_use`); switched to `data.flagsCollection.isButton`,
-   the API `test/core/design_system/semantics_actions_test.dart` already uses.
-
-## 7. Left for the next iteration
-
-1. **The bugs stage owns all three** (§3): K09-BUG-1 (cancel-before-reload in
-   `KidJarBloc._onLoadRequested`, release on error and on `close()`, and fix
-   the comment at `kid_jar_bloc.dart:9`), K09-BUG-2 (`tokens.ink2` → `tokens.ink`
-   at `my_jar_view.dart:231`), K09-BUG-3 (carry the quest's `iconKey` through
-   `JarEntry` and render `questIconFor(key, audience: NestAudience.kid)`).
-   Five proofs go green with no test edit.
-2. **`NestIcons.jarPocketMoney` / `jarGift`** land on `main` via
-   `shared/jar_glyphs`; the next build swaps the two `jarEntryGlyph` branches
-   and pastes the proof from the comment in `my_jar_view_test.dart`.
-3. `5_ui`: the ±2 px table in `2_build.md` still applies (the geometry file is
-   green and my changes add no layout assertions to the loaded screen), but
-   **K09-BUG-2 will show up as a real band-drift on the `coming on Saturday`
-   line** — measure that line against the design PNG's `#1E1B3A`, not the app's
-   `#4A4668`. Observation 1 is the only other thing I would add to the shot
-   list, and only if the UI stage shoots the scrolled-to-bottom frame.
-4. Nothing else is blocking: with the three fixed the whole repo is expected
-   green at `+4142 ~7 -0`.
-## 8. Verdict
-
-`dart format` clean, `flutter analyze` clean on everything I touched, 77 of the
-82 `kid_jar` tests green, and the whole repo's only 5 failures are the proofs
-of the three defects above — every one of them re-confirms a mandatory
-orchestrator rule or a code comment that is provably false. The stage rule is
-explicit: *PASS only if all tests pass and no bugs were found*. Three bugs were
-found, none of them mine to patch, so the suite is left red on purpose and the
-bugs stage has three ready-made proofs, file:line references and repro commands.
-
-VERDICT: FAIL
+VERDICT: PASS

@@ -412,6 +412,18 @@ void main() {
           expect(find.textContaining('+£'), findsNothing);
           expect(find.textContaining('+'), findsNothing);
 
+          // The empty row still carries the design's pocket-money glyph
+          // (shared `NestIcons.jarPocketMoney`), not a placeholder.
+          final emptyGlyph = find.descendant(
+            of: find.byType(JarHistoryCard),
+            matching: find.byType(NestIcon),
+          );
+          expect(emptyGlyph, findsOneWidget);
+          expect(
+            tester.widget<NestIcon>(emptyGlyph).assetName,
+            NestIcons.jarPocketMoney,
+          );
+
           // The jar is genuinely empty and says so.
           expect(
             tester

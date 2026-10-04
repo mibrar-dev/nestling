@@ -11,6 +11,7 @@
 // Every pumped app ends with `disposeApp` (test_scope.dart). No
 // `DateTime.now`, no `google_fonts`, no simulator.
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -31,17 +32,24 @@ import '../../test_scope.dart';
 
 const String _route = '/my-jar';
 
-Future<void> _pumpRoute(
+/// Pumps the app over a freshly seeded in-memory database and returns it, so
+/// a proof can read the rows the screen renders out of the SAME instance the
+/// app is running on instead of whatever a previous test happened to leave
+/// behind in GetIt. [onSeededDb] runs after the seed and before the first
+/// frame, for the tests that need the database to differ from the seed.
+Future<AppDatabase> _pumpRoute(
   WidgetTester tester, {
   double width = 390,
   double textScale = 1,
   ThemeMode theme = ThemeMode.light,
   String route = _route,
+  Future<void> Function(AppDatabase db)? onSeededDb,
 }) async {
   await GetIt.instance.reset();
   final db = AppDatabase.memory();
   await configureDependencies(database: db);
   await Seed.demo(db);
+  await onSeededDb?.call(db);
   await GetIt.instance<AppSession>().refresh();
   tester.view.physicalSize = Size(width * 3, 844 * 3);
   tester.view.devicePixelRatio = 3;
@@ -52,6 +60,7 @@ Future<void> _pumpRoute(
   await tester.pumpWidget(NestlingApp(initialRoute: route));
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 200));
+  return db;
 }
 
 /// The list is lazy and the footer sits below the fold, so the scroll has to
@@ -322,6 +331,146 @@ void main() {
     });
   });
 
+  group('K09 database-driven goal, headings and the hero line', () {
+    // The goal figures are DATA, not design mocks: the child's goal row is
+    // what the card, the progress bar, the jar fill and the announced
+    // percentage all read. The seed stops at 1550/2499 (62 %), so the
+    // finished end of the range is written straight into the database and the
+    // whole screen is asked what it says (K09-BUG-4's screen-level shape).
+    testWidgets('a goal reached in the database reads 100% all the way up', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await _pumpRoute(
+        tester,
+        onSeededDb: (db) async {
+          await (db.update(db.savingsGoals)
+                ..where((g) => g.id.equals('goal-lego')))
+              .write(const SavingsGoalsCompanion(savedPence: Value(2499)));
+        },
+      );
+
+      expect(find.text('£24.99'), findsOneWidget);
+      expect(find.text('£0.00 to go'), findsOneWidget);
+      expect(find.text('100% there!'), findsOneWidget);
+      expect(
+        tester.widget<NestProgress>(find.byType(NestProgress)).fraction,
+        closeTo(1, 0.0001),
+      );
+      expect(
+        tester
+            .widget<JarIllustration>(find.byType(JarIllustration))
+            .fillFraction,
+        closeTo(1, 0.0001),
+        reason: 'a full jar must fill to the top of the interior',
+      );
+      expect(
+        find.bySemanticsLabel('100% of the Lego Friends set saved'),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+
+    // `Seed.empty` proves the CHILDLESS jar; this proves the child who has money
+    // in the jar but no savings goal at all — the other real shape the screen
+    // has to survive, driven by the database rather than a fake.
+    testWidgets('a child with money in but no savings goal still gets a jar', (
+      tester,
+    ) async {
+      await _pumpRoute(
+        tester,
+        onSeededDb: (db) async {
+          await (db.update(db.appState)..where((a) => a.id.equals(1))).write(
+            const AppStateCompanion(activeChildId: Value('leo')),
+          );
+        },
+      );
+
+      // Leo is owed £2.10 (150 base + 35 + 25 quest bonuses, `Seed.demo`).
+      expect(find.text('£2.10'), findsOneWidget);
+      expect(find.text('coming on Saturday'), findsOneWidget);
+      // No goal means no card, no bar, no "to go" line and an empty jar — but
+      // the hero, the weekday, the list and the footer all stay.
+      expect(find.byType(JarGoalCard), findsNothing);
+      expect(find.byType(NestProgress), findsNothing);
+      expect(find.textContaining('to go'), findsNothing);
+      expect(
+        tester
+            .widget<JarIllustration>(find.byType(JarIllustration))
+            .fillFraction,
+        0,
+      );
+      expect(find.text('What went in'), findsOneWidget);
+      expect(
+        find.text('+£1.50'),
+        findsWidgets,
+        reason: "Leo's weekly base, this week and last (both 150p)",
+      );
+      expect(find.byType(JarHistoryCard), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    // The title is the screen's only heading: a screen reader must be able to
+    // jump straight to it, and no other node on K09 may claim to be one.
+    testWidgets('the title is the only announced heading', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await _pumpRoute(tester);
+
+      final title = tester.getSemantics(find.text('My jar')).getSemanticsData();
+      expect(title.label, 'My jar');
+      expect(title.flagsCollection.isHeader, isTrue);
+      expect(
+        tester
+            .getSemantics(find.text('What went in'))
+            .getSemanticsData()
+            .flagsCollection
+            .isHeader,
+        isFalse,
+        reason: 'the section label is a plain kid-title, not a heading node',
+      );
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+
+    // The hero is the one line that must never wrap or truncate: 40 px Nunito
+    // at 1.3x on the narrowest supported screen is exactly where an
+    // ellipsised `£4.20` would hide the amount. `FittedBox(scaleDown)` is the
+    // sanctioned answer (`1_plan.md` §e).
+    for (final theme in <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      testWidgets(
+        'the hero amount stays whole at 320 px / 1.3x in ${theme.name}',
+        (tester) async {
+          await _pumpRoute(tester, width: 320, textScale: 1.3, theme: theme);
+
+          expect(tester.takeException(), isNull);
+          final amount = tester.widget<Text>(find.text('£4.20'));
+          expect(amount.maxLines, 1);
+          expect(amount.softWrap, isFalse);
+          expect(amount.overflow, isNull, reason: 'no ellipsis on the hero');
+          expect(find.textContaining('…'), findsNothing);
+
+          // Scale-down, not clip: the hero's own fitted box stays inside the
+          // gutters. (Scoped to the amount — `SvgPicture` on the goal card
+          // wraps itself in a `FittedBox` too, so `find.byType` is ambiguous.)
+          final heroBox = find.ancestor(
+            of: find.text('£4.20'),
+            matching: find.byType(FittedBox),
+          );
+          expect(heroBox, findsOneWidget);
+          expect(tester.widget<FittedBox>(heroBox).fit, BoxFit.scaleDown);
+          expect(
+            tester.getRect(heroBox).width,
+            lessThanOrEqualTo(320 - 2 * NestSpacing.padSide),
+          );
+          await disposeApp(tester);
+        },
+      );
+    }
+  });
+
   group('ORCHESTRATOR_NOTES 18:47 — mandatory history glyphs', () {
     // "Quest-bonus rows must use questIconFor(key, audience: NestAudience.kid),
     // not the parent NestIcons.questBins." (docs/screens/K09/ORCHESTRATOR_NOTES.md)
@@ -331,16 +480,22 @@ void main() {
     // quest the note names. This proof reads the seeded quests straight out of
     // the database (data over mocks) and demands the rendered disc glyph be the
     // KID glyph of that quest — not one glyph for every quest bonus.
+    //
+    // The database it reads is the one `_pumpRoute` returns — the same
+    // instance the app runs on. Reading GetIt *before* the pump only worked
+    // while an earlier test in this file left a seeded registration behind,
+    // so this proof died the moment the loop ran it on its own, the way bug
+    // proofs are verified (`--plain-name`):
+    //   Bad state: GetIt: Object/factory with type AppDatabase is not
+    //   registered inside GetIt.            (review finding 3)
     testWidgets(
       "K09-BUG-3: a quest-bonus row shows the quest's own kid glyph",
       (tester) async {
-        final db = GetIt.instance<AppDatabase>();
+        final db = await _pumpRoute(tester);
         final quests = await db.select(db.quests).get();
         final keyForTitle = <String, String>{
           for (final quest in quests) quest.title: quest.icon,
         };
-
-        await _pumpRoute(tester);
 
         for (final title in <String>[
           'Put the bins out',
@@ -414,6 +569,23 @@ void main() {
         reason: 'the design gift (`K09-jar.html:95`) is the shared gift asset',
       );
       await disposeApp(tester);
+    });
+
+    // The pure mapping under those discs: every entry type resolves to its
+    // design glyph, and an unknown quest key falls back to the resolver's own
+    // `questCard` — never to the parent bins glyph the screen used before
+    // K09-BUG-3.
+    test('jarEntryGlyph maps every type and falls back like the resolver', () {
+      expect(
+        jarEntryGlyph('quest_bonus', 'hoover'),
+        questIconFor('hoover', audience: NestAudience.kid),
+      );
+      expect(jarEntryGlyph('quest_bonus', 'bins'), NestIcons.questBinsKid);
+      expect(jarEntryGlyph('quest_bonus', ''), NestIcons.questCard);
+      expect(jarEntryGlyph('quest_bonus', 'nonsense'), NestIcons.questCard);
+      expect(jarEntryGlyph('gift', ''), NestIcons.gift);
+      expect(jarEntryGlyph('weekly_base', ''), NestIcons.jarPocketMoney);
+      expect(jarEntryGlyph('anything_else', ''), NestIcons.jarPocketMoney);
     });
   });
 
