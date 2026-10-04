@@ -268,6 +268,46 @@ void main() {
       await disposeApp(tester);
     });
 
+    testWidgets('the two named tiles render the batch-7 assets, not the '
+        'look-alikes', (tester) async {
+      // The byte proofs below read whatever `pipWardrobeIcon(id)` returns, so
+      // on their own they would still pass if the screen pointed at the old
+      // look-alike files. This pins the ACTUAL asset each named tile paints,
+      // by file name, which is what "do not substitute" means in practice.
+      await pumpAppRoute(tester, '/pip');
+
+      const expected = <String, String>{
+        'scarf': 'assets/icons/ic_wardrobe_scarf.svg',
+        'wellies': 'assets/icons/ic_wardrobe_wellies.svg',
+      };
+      // The look-alikes batch 7 replaced (a fringed blanket, a boot).
+      const superseded = <String>[
+        'assets/icons/ic_scarf.svg',
+        'assets/icons/ic_wellies.svg',
+      ];
+
+      for (final entry in expected.entries) {
+        final asset = tester
+            .widget<NestIcon>(
+              find
+                  .descendant(
+                    of: find.byKey(Key('k06-ward-${entry.key}')),
+                    matching: find.byType(NestIcon),
+                  )
+                  .first,
+            )
+            .assetName;
+        expect(asset, entry.value, reason: '${entry.key} tile');
+        expect(
+          superseded,
+          isNot(contains(asset)),
+          reason: '${entry.key} must not fall back to the look-alike',
+        );
+        expect(File(asset).existsSync(), isTrue, reason: '$asset exists');
+      }
+      await disposeApp(tester);
+    });
+
     // Crown is deliberately NOT in this set: its asset draws the design's two
     // subpaths, written with an implicit lineto after the moveto and with the
     // second path relative (`m2 12h12` ≡ `M6 20h12`, since `z` puts the
@@ -378,13 +418,25 @@ void main() {
       // The strongest form of "do not hard-code": move the row and the tile
       // follows. (The design/seed mismatch itself is `SHARED_REQUEST.md` §6.)
       final db = GetIt.instance<AppDatabase>();
+      final before =
+          await (db.select(db.pipWardrobe)..where(
+                (w) => w.childId.equals('maya') & w.item.equals('crown'),
+              ))
+              .getSingle();
       await (db.update(db.pipWardrobe)
             ..where((w) => w.childId.equals('maya') & w.item.equals('crown')))
           .write(const PipWardrobeCompanion(priceCoins: Value(7)));
       await pumpAppRoute(tester, '/pip');
 
       expect(find.text('7'), findsOneWidget);
-      expect(find.text('120'), findsNothing);
+      // The PREVIOUS value is read from the row, not typed: this file's own
+      // rule is that a price is never a literal (batch 7 moved these rows from
+      // 40/120 to 30/60 and every literal here had to be re-based).
+      expect(
+        find.text('${before.priceCoins}'),
+        findsNothing,
+        reason: 'the old price is gone from the tile',
+      );
       expect(find.bySemanticsLabel('Crown, 7 coins'), findsOneWidget);
       await disposeApp(tester);
     });

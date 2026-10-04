@@ -6,17 +6,18 @@
 // `flutter test --run-skipped <file>` runs them all; each one FAILS until
 // its bug is fixed.
 //
-// ITERATION 2: all six iteration-1 proofs are FIXED and run live. Stage 2a
-// took K06-BUG-1 (lost update in the repository's read-modify-write care
-// path) and K06-BUG-2 (concurrent buys overspending a 120-coin balance) by
-// making both writes atomic and conditional; stage 2b took K06-BUG-3
-// (heading apostrophe), K06-BUG-4 (nest art box), K06-BUG-5 (equal
-// care-button heights) and K06-BUG-6 (the invisible dashed locked border).
-// This iteration also adds: the dark-mode half of the K06-BUG-6 pixel
-// proof, two green end-to-end two-thumb burst regressions (care and
-// wardrobe), and the one parked iteration-2 finding, K06-BUG-7 (a buy
-// refused by the fresh balance is silent — no kind toast).
-//   flutter test test/features/pip/k06_bugs_test.dart --run-skipped --plain-name K06-BUG-7
+// ITERATION 3: all seven proofs run live; no `skip: true` in this file.
+// Stage 2a took K06-BUG-1 (lost update in the repository's read-modify-write
+// care path) and K06-BUG-2 (concurrent buys overspending) with atomic
+// conditional writes; stage 2b took K06-BUG-3 (heading apostrophe), K06-BUG-4
+// (nest art box), K06-BUG-5 (equal care-button heights) and K06-BUG-6 (the
+// invisible dashed locked border); the iteration-3 logic builder took
+// K06-BUG-7 (a buy refused by the fresh balance was silent) with the
+// `PipBuyResult` contract + the bloc's `cannotAfford` toast. Iteration 2 added
+// the dark-mode half of the K06-BUG-6 pixel proof and two end-to-end
+// two-thumb burst regressions; iteration 3 adds the end-to-end refusal-toast
+// regression below. The open sun-hat glyph item lives in
+// `pip_orchestrator_notes_test.dart` (shared `SHARED_REQUEST.md` section 7).
 //
 // Evidence, repro and suggested fixes for every finding live in
 // docs/screens/K06/6_bugs.md. This stage does not change product code.
@@ -623,6 +624,34 @@ void main() {
         1,
         reason: '30 + 60 cannot both fit in 70 coins',
       );
+      expect(await _coins(db), ownedWellies ? 40 : 10);
+      await disposeApp(tester);
+    });
+
+    testWidgets('a refused buy still shows the kind toast end-to-end', (
+      tester,
+    ) async {
+      // Iteration-3 regression (K06-BUG-7): the tile that loses the race must
+      // announce the plan's kind refusal through the real view, not just in
+      // the bloc state. 70 coins afford only one of Wellies (30)/Crown (60).
+      final db = await setUpTestScope();
+      await (db.update(db.children)..where((c) => c.id.equals('maya'))).write(
+        const ChildrenCompanion(coins: Value(70)),
+      );
+      await _pumpPip(tester);
+      final wellies = await tester.startGesture(
+        tester.getCenter(find.byKey(const Key('k06-ward-wellies'))),
+      );
+      final crown = await tester.startGesture(
+        tester.getCenter(find.byKey(const Key('k06-ward-crown'))),
+      );
+      await wellies.up();
+      await crown.up();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text(kPipNotEnoughCoins), findsOneWidget);
+      final ownedWellies = await _owned(db, 'wellies');
+      final ownedCrown = await _owned(db, 'crown');
+      expect(<bool>[ownedWellies, ownedCrown].where((b) => b).length, 1);
       expect(await _coins(db), ownedWellies ? 40 : 10);
       await disposeApp(tester);
     });
