@@ -19,7 +19,7 @@ import 'dart:math' as math;
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
@@ -1234,6 +1234,175 @@ void main() {
       await disposeApp(tester);
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Iteration 2 — the FIXES_1 build. Each of these pins what a fix PROMISES,
+  // so a regression lands here instead of at the UI gate:
+  //   * K02-BUG-2's `maxLines: 3` must not reflow the design's single line;
+  //   * review #4's `_BottomInset` must honour the real inset in all three
+  //     fallback states, with the 34 px design floor;
+  //   * SHARED_REQUEST #1 (`NestType.kidSay` / `kidMark`) must land without
+  //     moving a metric or the one letter-spacing case K02 owns.
+  // -------------------------------------------------------------------------
+  group('K02 iteration 2 fixes', () {
+    testWidgets('the greeting keeps the design single line at 390/1.0', (
+      tester,
+    ) async {
+      await _pumpRoute(tester);
+      final greeting = find.text('Hi Maya! Enter your secret code');
+      // The design's `.say` is one 26 px line for the seeded nickname.
+      expect(
+        tester.getSize(greeting).height,
+        closeTo(26, 1),
+        reason: 'one line, not two',
+      );
+      expect(
+        tester.renderObject<RenderParagraph>(greeting).didExceedMaxLines,
+        isFalse,
+      );
+      // K02-BUG-2's fix stays: the cap is 3, so a long name cannot be cut.
+      expect(tester.widget<Text>(greeting).maxLines, 3);
+      await disposeApp(tester);
+    });
+
+    testWidgets('the longest legal nickname is never clipped', (tester) async {
+      // P05 accepts 24 characters; at the narrowest width and the largest
+      // accessibility scale the sentence must still fit inside the cap.
+      // `setUpTestScope` re-seeds the demo DB, so the nickname is re-applied
+      // on every pass of the matrix.
+      Future<void> useLongName() async {
+        await tester.runAsync(() async {
+          final db = GetIt.instance<AppDatabase>();
+          await (db.update(
+            db.children,
+          )..where((c) => c.id.equals('maya'))).write(
+            const ChildrenCompanion(nickname: Value('Maximilian-Alexander-Jr')),
+          );
+          await GetIt.instance<AppSession>().refresh();
+        });
+      }
+
+      const greeting = 'Hi Maximilian-Alexander-Jr! Enter your secret code';
+      for (final width in const <double>[320, 390, 430]) {
+        for (final scale in const <double>[1, 1.3]) {
+          await useLongName();
+          await _pumpRoute(tester, width: width, textScale: scale);
+          expect(
+            tester
+                .renderObject<RenderParagraph>(find.text(greeting))
+                .didExceedMaxLines,
+            isFalse,
+            reason: 'nickname must not be cut at ${width.toInt()}px / $scale',
+          );
+          expect(tester.takeException(), isNull);
+          await disposeApp(tester);
+          await setUpTestScope();
+        }
+      }
+    });
+
+    testWidgets('only .mark carries tracking, and both type styles match CSS', (
+      tester,
+    ) async {
+      await _pumpRoute(tester);
+      // LETTER SPACING (orchestrator known case): `.mark` is 1.28 at the call
+      // site, every other string is 0. Sweeping the whole visible text tree
+      // catches a stray tracking value anywhere on the screen.
+      final tracked = <double, List<String>>{};
+      for (final element in find.byType(Text).evaluate()) {
+        final text = element.widget as Text;
+        final spacing = text.style?.letterSpacing;
+        if (spacing == null) continue;
+        tracked
+            .putIfAbsent(spacing, () => <String>[])
+            .add(text.data ?? '<rich text>');
+      }
+      expect(tracked.keys, everyElement(anyOf(0, 1.28)));
+      expect(tracked[1.28], <String>[
+        'NESTLING',
+      ], reason: '1.28 belongs to .mark only (.08em x 16)');
+
+      // SHARED_REQUEST #1: `NestType.kidSay` / `NestType.kidMark` are still
+      // open, so the local call-site styles are pinned to the CSS metrics —
+      // landing the shared entries must not move a single number.
+      final mark = tester.widget<Text>(find.text('NESTLING')).style!;
+      expect(mark.fontFamily, 'Nunito');
+      expect(mark.fontWeight, FontWeight.w900, reason: '.mark weight');
+      expect(mark.fontSize, 16);
+      expect(mark.height, closeTo(22 / 16, 0.001), reason: '.mark 16/22');
+      final say = tester
+          .widget<Text>(find.text('Hi Maya! Enter your secret code'))
+          .style!;
+      expect(say.fontFamily, 'Nunito');
+      expect(say.fontWeight, FontWeight.w800, reason: '.say weight');
+      expect(say.fontSize, 20);
+      expect(say.height, closeTo(26 / 20, 0.001), reason: '.say 20/26');
+      expect(say.letterSpacing, 0);
+      await disposeApp(tester);
+    });
+
+    testWidgets('the loading state reserves the real bottom inset', (
+      tester,
+    ) async {
+      final measured = await _insetProbes(
+        tester,
+        prepare: (_) => _registerRepo(_PinStub()..hangLoad = true),
+        probe: find.byType(CircularProgressIndicator),
+      );
+      _expectInsetFloor(measured);
+    });
+
+    testWidgets('the failure card reserves the real bottom inset', (
+      tester,
+    ) async {
+      final measured = await _insetProbes(
+        tester,
+        prepare: (_) => _registerRepo(_PinStub()..loadFail = true),
+        probe: find.text('Try again'),
+      );
+      _expectInsetFloor(measured);
+    });
+
+    testWidgets('the chooser reserves the real bottom inset', (tester) async {
+      final measured = await _insetProbes(
+        tester,
+        // `setUp` already seeded the scope; only the active-child pointer
+        // has to change (a null child renders the chooser).
+        prepare: (tester) async {
+          final db = GetIt.instance<AppDatabase>();
+          await tester.runAsync(() async {
+            await (db.update(db.appState)..where((a) => a.id.equals(1))).write(
+              const AppStateCompanion(activeChildId: Value<String?>(null)),
+            );
+            await GetIt.instance<AppSession>().refresh();
+          });
+        },
+        probe: find.text('Choose'),
+      );
+      _expectInsetFloor(measured);
+    });
+
+    testWidgets('a wrong-code nudge cannot outlive the successful retry', (
+      tester,
+    ) async {
+      final stub = _PinStub()..nextOk = false;
+      await _patchVerify(stub);
+      await _pumpRoute(tester);
+      await _enterPin(tester, '9999');
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.text("That didn't work. Try again."), findsOneWidget);
+      stub.nextOk = true;
+      await _enterPin(tester, '1234');
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(currentPath(tester), KidHomeRoutePaths.home);
+      expect(
+        find.text("That didn't work. Try again."),
+        findsNothing,
+        reason: 'the child must not read "try again" after the code worked',
+      );
+      await disposeApp(tester);
+    });
+  });
 }
 
 /// The eleven announced keypad controls, in tree order
@@ -1242,6 +1411,64 @@ Finder _keyFinder() => find.descendant(
   of: find.byType(NestKeypad),
   matching: find.bySemanticsLabel(RegExp(r'^(Digit [0-9]|Delete)$')),
 );
+
+/// Registers [stub] as the app's `KidHomeRepository` for this test.
+Future<void> _registerRepo(_PinStub stub) async {
+  final real = GetIt.instance<KidHomeRepository>();
+  await GetIt.instance.unregister<KidHomeRepository>();
+  GetIt.instance.registerSingleton<KidHomeRepository>(
+    _WrappingRepo(real, stub),
+  );
+}
+
+/// Review #4: the fallback states reserve `max(viewPadding.bottom, 34)` — the
+/// real inset with the design's 34 px floor. [prepare] runs ONCE (before any
+/// pump: a Drift write inside `tester.runAsync` after a fresh `setUpTestScope`
+/// never completes, because the scope's own pending work is fake-async), then
+/// `/kid-pin` is pumped three times with a bottom inset of 20, 34 and 60
+/// logical px and the [probe]'s vertical centre is measured each time.
+///
+/// The scope deliberately survives between measurements — the screen is
+/// re-pumped, not re-seeded, so what is compared is purely the inset.
+Future<Map<double, double>> _insetProbes(
+  WidgetTester tester, {
+  required Future<void> Function(WidgetTester tester) prepare,
+  required Finder probe,
+}) async {
+  await prepare(tester);
+  final measured = <double, double>{};
+  for (final inset in const <double>[20, 34, 60]) {
+    await _pumpRoute(tester);
+    final physical = inset * 3;
+    tester.view.padding = FakeViewPadding(bottom: physical);
+    tester.view.viewPadding = FakeViewPadding(bottom: physical);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    measured[inset] = tester.getRect(probe.first).center.dy;
+    // BOTTOM EDGE: whatever the inset, the shared meadow keeps reaching the
+    // physical edge — no strip may appear below the fallback content.
+    expect(
+      tester.getRect(find.byType(NestMeadow).first).bottom,
+      844,
+      reason: 'meadow pinned to the physical edge at inset $inset',
+    );
+    await disposeApp(tester);
+  }
+  addTearDown(() {
+    tester.view.resetPadding();
+    tester.view.resetViewPadding();
+  });
+  return measured;
+}
+
+/// The two assertions every `_insetProbes` measurement must satisfy: below the
+/// 34 px floor the layout does not move, above it the centred block follows
+/// the real inset exactly (half of the extra reserve, the block being
+/// centred).
+void _expectInsetFloor(Map<double, double> measured) {
+  expect(measured[20], closeTo(measured[34]!, 0.5));
+  expect(measured[60], closeTo(measured[34]! - 13, 1));
+}
 
 /// The design source for [name], located by walking up from the package root.
 File _designSource(String name) {

@@ -1,18 +1,20 @@
-// K02 (Kid PIN, `/kid-pin`) adversarial suite — Stage 6 bug hunt, iteration 1.
+// K02 (Kid PIN, `/kid-pin`) adversarial suite — Stage 6 bug hunt, iteration 2.
 //
-// Four proofs in this file FAIL against the current build. They are parked
-// with `skip: true` and carry their bug id in the test description (Flutter's
-// `testWidgets` takes a `bool?` skip, so the id cannot live in the skip
-// argument). Run them with:
+// Iteration-1 proofs K02-BUG-1..4 are FIXED and now run un-skipped in the
+// plain suite as regressions. K02-BUG-5 — found in the iteration-2 build's
+// no-PIN latch — is parked with `skip: true` and carries its bug id in the
+// test description (Flutter's `testWidgets` takes a `bool?` skip, so the id
+// cannot live in the skip argument). Run it with:
 //
 //   flutter test test/features/kid_home/k02_bugs_test.dart --run-skipped \
-//     --plain-name K02-BUG-1
+//     --plain-name K02-BUG-5
 //
-// Every other test in this file runs in the plain suite as evidence for the
+// Everything else in this file runs in the plain suite as evidence for the
 // categories checked clean: 0/1/6 children, long names, money values, rapid
 // double taps (digits/back/lock), deep links and back navigation, restart
 // persistence, mode guards, dark contrast, 320 px + 1.3 scale overflow,
-// async gaps, BST/GMT clock independence and accessibility actions.
+// async gaps, BST/GMT clock independence, the shared keypad grid and
+// accessibility actions.
 //
 // Findings and suggested fixes: docs/screens/K02/6_bugs.md.
 
@@ -132,6 +134,26 @@ Future<void> _insertChild(
           pinHash: pin == null ? const Value.absent() : Value(hashPin(pin)),
         ),
       );
+}
+
+/// Seeds [name] as Maya's nickname, pumps the PIN screen and asserts the
+/// avatar initial is whole and crash-free. One cycle per test: chaining
+/// several `runAsync` cycles inside a single `testWidgets` deadlocks the
+/// binding's runAsync lock (learned the hard way in this file).
+Future<void> _assertInitial(WidgetTester tester, String name) async {
+  await tester.runAsync(() async {
+    await _setNickname('maya', name);
+    await GetIt.instance<AppSession>().refresh();
+  });
+  await _pump(tester);
+  final avatar = tester.widget<NestAvatar>(find.byType(NestAvatar));
+  expect(avatar.initial, isNotEmpty, reason: 'blank initial for "$name"');
+  expect(
+    tester.takeException(),
+    isNull,
+    reason: 'the initial for "$name" must not throw',
+  );
+  await disposeApp(tester);
 }
 
 /// The visible `Text` strings, sorted — a cheap whole-screen text snapshot.
@@ -321,11 +343,11 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
-  // K02-BUG-1 — major — an emoji-leading nickname throws in the avatar
+  // K02-BUG-1 — major — FIXED iteration 2 — regression proof (un-skipped)
   // -------------------------------------------------------------------------
 
   testWidgets(
-    'K02-BUG-1: a nickname starting with an emoji throws in the avatar '
+    'K02-BUG-1 regression: an emoji-leading nickname renders its whole '
     'initial',
     (tester) async {
       await tester.runAsync(() async {
@@ -343,18 +365,18 @@ void main() {
       expect(
         avatar.initial,
         '🐝',
-        reason: 'nickname[0] slices a surrogate pair in half',
+        reason: 'the initial must be the first rune, not half a surrogate pair',
       );
       await disposeApp(tester);
     },
   );
 
   // -------------------------------------------------------------------------
-  // K02-BUG-2 — minor — the greeting clips at 320 px + 1.3 scale
+  // K02-BUG-2 — minor — FIXED iteration 2 — regression proof (un-skipped)
   // -------------------------------------------------------------------------
 
   testWidgets(
-    'K02-BUG-2: a 20-char nickname clips the greeting at 320 px + 1.3 scale',
+    'K02-BUG-2 regression: a 20-char nickname fits at 320 px + 1.3 scale',
     (tester) async {
       await tester.runAsync(() async {
         await _setNickname('maya', 'Maximilian-Alexander');
@@ -367,20 +389,20 @@ void main() {
         para.didExceedMaxLines,
         isFalse,
         reason:
-            'the maxLines: 2 greeting must not silently drop the end of the '
-            'sentence on a 320 px screen at the 1.3 accessibility scale',
+            'the greeting must not silently drop the end of the sentence on '
+            'a 320 px screen at the 1.3 accessibility scale',
       );
       await disposeApp(tester);
     },
   );
 
   // -------------------------------------------------------------------------
-  // K02-BUG-3 — minor — the no-PIN auto-advance can bypass a PIN
+  // K02-BUG-3 — minor — FIXED iteration 2 — regression proof (un-skipped)
   // -------------------------------------------------------------------------
 
   testWidgets(
-    'K02-BUG-3: a no-PIN child followed by a PIN child in one stream turn '
-    'navigates home without the PIN',
+    'K02-BUG-3 regression: a no-PIN child then a PIN child keeps the PIN '
+    'screen',
     (tester) async {
       final fake = _StreamPairRepo();
       await _useFake(fake);
@@ -400,12 +422,12 @@ void main() {
   );
 
   // -------------------------------------------------------------------------
-  // K02-BUG-4 — minor — the wrong-code toast outlives a successful retry
+  // K02-BUG-4 — minor — FIXED iteration 2 — regression proof (un-skipped)
   // -------------------------------------------------------------------------
 
   testWidgets(
-    'K02-BUG-4: the wrong-code toast is still visible on /kid-home after a '
-    'correct retry',
+    'K02-BUG-4 regression: the wrong-code toast is gone after a correct '
+    'retry',
     (tester) async {
       await _pump(tester);
       await _enter(tester, '9999');
@@ -421,6 +443,40 @@ void main() {
       );
       await disposeApp(tester);
     },
+  );
+
+  // -------------------------------------------------------------------------
+  // K02-BUG-5 — minor (latent) — the no-PIN latch is never released when its
+  // navigation is declined (introduced by the iteration-2 fix for K02-BUG-3)
+  // -------------------------------------------------------------------------
+
+  testWidgets(
+    'K02-BUG-5: a no-PIN child after a PIN child is stuck on the loading '
+    'spinner',
+    (tester) async {
+      final fake = _StreamPairRepo();
+      await _useFake(fake);
+      await _pump(tester);
+      // First pair: the re-check declines the no-PIN navigation (BUG-3 fix).
+      fake.home.add(const KidHomeData(child: _leo));
+      fake.home.add(const KidHomeData(child: _maya));
+      await _settle(tester);
+      expect(currentPath(tester), '/kid-pin');
+      expect(find.text('Hi Maya! Enter your secret code'), findsOneWidget);
+      // The no-PIN child returns: the latch must release and advance.
+      fake.home.add(const KidHomeData(child: _leo));
+      await _settle(tester);
+      expect(
+        currentPath(tester),
+        '/kid-home',
+        reason:
+            'a declined no-PIN navigation must not latch the auto-advance '
+            'off forever',
+      );
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      await disposeApp(tester);
+    },
+    skip: true,
   );
 
   // -------------------------------------------------------------------------
@@ -484,16 +540,23 @@ void main() {
     testWidgets('a 20-char UK name fits at 390/1.0, 390/1.3 and 320/1.0', (
       tester,
     ) async {
-      await tester.runAsync(() async {
-        await _setNickname('maya', 'Maximilian-Alexander');
-        await GetIt.instance<AppSession>().refresh();
-      });
       const greeting = 'Hi Maximilian-Alexander! Enter your secret code';
       for (final (double width, double scale) in const <(double, double)>[
         (390, 1),
         (390, 1.3),
         (320, 1),
       ]) {
+        // Every cycle is COMPLETE: fresh GetIt scope + re-seeded DB, the
+        // nickname re-applied inside `runAsync`, then pump and dispose. A
+        // cycle that reuses the previous scope leaves AppSession's live Drift
+        // watch pending in the fake-async queue, and the NEXT test's
+        // `tester.runAsync` then waits on that queue forever — which is how
+        // this file used to hang for an hour (ORCHESTRATOR_NOTES 10:32).
+        await setUpTestScope();
+        await tester.runAsync(() async {
+          await _setNickname('maya', 'Maximilian-Alexander');
+          await GetIt.instance<AppSession>().refresh();
+        });
         await _pump(tester, width: width, textScale: scale);
         final para = tester.renderObject<RenderParagraph>(find.text(greeting));
         expect(
@@ -503,6 +566,51 @@ void main() {
         );
         await disposeApp(tester);
       }
+    });
+
+    testWidgets('a 24-char UK name (P05 max) fits at 320/1.3 and 390/1.3', (
+      tester,
+    ) async {
+      const greeting = 'Hi Maximilian-Alexander-XX! Enter your secret code';
+      for (final (double width, double scale) in const <(double, double)>[
+        (320, 1.3),
+        (390, 1.3),
+      ]) {
+        // Complete cycle per pass — see the note in the 20-char test above.
+        await setUpTestScope();
+        await tester.runAsync(() async {
+          await _setNickname('maya', 'Maximilian-Alexander-XX');
+          await GetIt.instance<AppSession>().refresh();
+        });
+        await _pump(tester, width: width, textScale: scale);
+        final para = tester.renderObject<RenderParagraph>(find.text(greeting));
+        expect(
+          para.didExceedMaxLines,
+          isFalse,
+          reason: '24-char name clipped at ${width.toInt()}px scale $scale',
+        );
+        await disposeApp(tester);
+      }
+    });
+
+    testWidgets('non-BMP and composed initials render whole and crash-free', (
+      tester,
+    ) async {
+      // One cycle per test: several runAsync→pump→dispose cycles inside a
+      // single testWidgets deadlocks the binding (reentrant runAsync lock).
+      await _assertInitial(tester, '🇬🇧 Ben');
+    });
+
+    testWidgets('an astral math initial renders whole and crash-free', (
+      tester,
+    ) async {
+      await _assertInitial(tester, '𝒜da');
+    });
+
+    testWidgets('a composed Latin initial renders whole and crash-free', (
+      tester,
+    ) async {
+      await _assertInitial(tester, 'Åsa');
     });
 
     testWidgets('9999 coins / 999.99 base never leak onto the PIN screen', (
@@ -523,6 +631,44 @@ void main() {
       expect(find.textContaining('9999'), findsNothing);
       expect(find.textContaining('999.99'), findsNothing);
       expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Shared keypad grid (probe — pass): ORCHESTRATOR_NOTES 07:13 follow-up
+  // -------------------------------------------------------------------------
+
+  group('K02 shared keypad grid (probe)', () {
+    testWidgets('key circles match the design grid at 390', (tester) async {
+      await _pump(tester);
+      final circles = find.descendant(
+        of: find.byType(NestKeypad),
+        matching: find.byWidgetPredicate(
+          (w) =>
+              w is Ink &&
+              w.decoration is BoxDecoration &&
+              (w.decoration! as BoxDecoration).shape == BoxShape.circle,
+        ),
+      );
+      // 11 keys: 1..9, 0, delete (the blank slot paints no circle).
+      expect(circles, findsNWidgets(11));
+      final rects = <Rect>[
+        for (var i = 0; i < 11; i++) tester.getRect(circles.at(i)),
+      ];
+      for (final rect in rects) {
+        expect(rect.width, 72);
+        expect(rect.height, 72);
+      }
+      // Columns 1/2/3 centres: design 113 / 195 / 277.
+      expect(rects[0].center.dx, closeTo(113, 0.5));
+      expect(rects[1].center.dx, closeTo(195, 0.5));
+      expect(rects[2].center.dx, closeTo(277, 0.5));
+      // Row tops: design 393 / 475 / 557 / 639.
+      expect(rects[0].top, closeTo(393, 0.5));
+      expect(rects[3].top, closeTo(475, 0.5));
+      expect(rects[6].top, closeTo(557, 0.5));
+      expect(rects[9].top, closeTo(639, 0.5));
       await disposeApp(tester);
     });
   });
@@ -639,7 +785,11 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
       expect(find.text("That didn't work. Try again."), findsOneWidget);
       await disposeApp(tester);
-      // Same DB, fresh app instance — a restart.
+      // A restart: a fresh app instance on a freshly seeded scope (Maya still
+      // has PIN 1234). Re-seeding also keeps AppSession's watch from carrying
+      // pending fake-async work into the next cycle — see ORCHESTRATOR_NOTES
+      // (10:32) on the hour-long hang this file had.
+      await setUpTestScope();
       await tester.pumpWidget(const NestlingApp(initialRoute: '/kid-pin'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
@@ -803,6 +953,10 @@ void main() {
         isFalse,
       );
       await disposeApp(tester);
+      // Fresh scope between the two clocks (see ORCHESTRATOR_NOTES 10:32):
+      // reusing the previous one leaves AppSession's Drift watch pending and
+      // wedges the next `runAsync`.
+      await setUpTestScope();
       // 15 Jan 2026 12:00 UTC is GMT; the story day is BST. K02 has no
       // dates, so the whole visible text tree must be byte-identical.
       await withClock(Clock.fixed(DateTime.utc(2026, 1, 15, 12)), () async {
