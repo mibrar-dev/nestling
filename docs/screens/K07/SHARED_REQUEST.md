@@ -62,3 +62,33 @@ Files: `app/lib/features/pip/presentation/bloc/pip_event.dart`,
 `app/lib/features/pip/pip_routes.dart` (both in-feature) — the shared part is
 only the ARCHITECTURE ruling itself.
 Blocks: **no** (deferred to a later K07 iteration or to the feature owner).
+
+## 3. `tools/screens/shot.sh` can save a pre-first-frame capture (added by `5_ui.md`, iteration 2)
+
+Need: the harness waits for the app's **process** (1 s), then takes captures
+1 s apart and keeps the first two with identical md5. Because the run uses
+`--no-resident`, the tool has already exited by then and Flutter may not have
+painted, so the two "identical" captures can both be the pre-frame state — which
+on this simulator is the **previous launch's image**. Measured on 2026-10-04,
+three identical commands, no code change in between: `THEME=light` → saved a
+**dark** frame, `THEME=dark` → saved a **light** frame, `THEME=light` → correct.
+The first `compare.py` run therefore reported a bogus **71.31 %** mean diff for
+K07 light and would have failed a screen that actually passes. A wrong-theme
+capture is silent: `shot.sh` reports "stable frame saved".
+
+Two changes, both in shared tooling (RULES §1 bars a screen agent from editing
+`tools/screens/**`):
+
+- wait for the app's **first frame**, not just the process — e.g. `sleep 5`+
+  after `READY`, or poll until a capture differs from the pre-launch frame;
+- require stability across **≥ 3** captures ≥ 2 s apart rather than 2 captures
+  1 s apart.
+
+Until then the workaround (verified for this stage's accepted shots) is: same
+flags, `sleep 8` after `READY`, 5 captures 3 s apart, keep the first repeated
+md5, then **assert the frame's identity** (sample the background and the CTA
+face) before saving the PNG. Iteration 1's note stands too: the output path must
+be absolute, because `shot.sh` `cd`s into the app dir before copying.
+
+Files: `tools/screens/shot.sh`.
+Blocks: **no** (K07's iteration-2 UI check was completed with the workaround).

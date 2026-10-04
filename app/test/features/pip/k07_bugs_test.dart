@@ -1,9 +1,10 @@
 // K07 (Pip evolves, `/pip-evolution`) — Stage 6 adversarial bug proofs.
 //
-// ITERATION 2. No product code changed in this stage (RULES §1: a bug hunt may
-// add only `app/test/features/pip/**` and `docs/screens/K07/**`); iteration
-// 1's K07-BUG-1/2 are re-measured against the current tree and still fail, so
-// they keep their ids and proofs. K07-BUG-3 is new.
+// ITERATION 2 (second pass, after the iteration-2 build 34abefa). No product
+// code is changed by this stage (RULES §1: a bug hunt may add only
+// `app/test/features/pip/**` and `docs/screens/K07/**`). Iteration 1's four
+// bugs were FIXED by that build, so their proofs are un-skipped and green here;
+// the hunt re-measured every one of them rather than assuming the fix.
 //
 // Every `testWidgets`/`test` carrying a `K07-BUG-n` id FAILS by design, so the
 // suite stays green: each is parked with `skip: true` (Flutter's `test` takes a
@@ -19,18 +20,27 @@
 //
 // Hunt matrix (the brief's list) and where each item is pinned:
 //   0 children / no active child ....... `control: no active child…`
-//   a child picked afterwards .......... `control: the no-child card…` (new)
-//   1 child, 6 children, ghost child .... control + K07-BUG-1
-//   active-child switch (Maya -> Leo) .. `control: switching…` (new)
+//                                            (plus `Seed.empty()` in the
+//                                            view/a11y/contract suites)
+//   a child picked afterwards .......... `control: the no-child card…`
+//   1 child, 6 children, ghost child .... `control: one child, six children…`
+//   active-child switch (Maya -> Leo) .. `control: switching…`
 //   long UK name, 9999 coins ............ control (passing)
-//   repeated quest completion .......... K07-BUG-3 (new)
-//   rapid double taps ................... controls (passing)
+//   pip_stage 0 / 5 / 99 ............... `control: pip_stage 0, 5 and 99…`
+//   0 / 999999999 coins, 0 / 1 quests ... `control: 0 and 999999999 coins…`
+//   repeated quest completion .......... K07-BUG-3 (fixed; both proofs green)
+//   rapid double taps ................... `control: a rapid double tap…` (CTA,
+//                                            lock, retry, no-child Choose)
 //   back nav / deep link / gate ......... controls (passing)
-//   Drift persistence across reopen ..... covered in iteration 1 (cleared)
-//   dark-mode contrast .................. cleared in iteration 1
-//   text scale 1.3 + width 320 .......... K07-BUG-2 + control
-//   async gaps (stream still in flight) . K07-BUG-1, K07-BUG-2,
-//                                           `control: a late emission after…` (new)
+//   Drift persistence across reopen ..... `control: the screen's numbers…`
+//   parent/kid mode guard ............... `control: kid mode with an EXPIRED…`
+//                                            + `control: PARENT mode may open…`
+//   dark-mode contrast .................. cleared in iteration 1; the DARK
+//                                            SPARKLE palette is K07-BUG-5
+//   text scale 1.3 + width 320 .......... K07-BUG-2 (fixed) + the 280..844 px
+//                                            matrix at text scale 2.0
+//   async gaps (stream still in flight) . K07-BUG-1 (fixed) +
+//                                           `control: a late emission after…`
 //   timezone / money rounding ........... n/a — K07 reads no clock and no £
 //                                          (lifetime integer counters only)
 //
@@ -39,19 +49,30 @@
 // table is one a live watch is sitting on (measured: an INSERT into
 // `quest_completions` with `watchCompletionsForChild` live hangs at the
 // `await db.insert`, and `--timeout` cannot fire inside the fake-async zone).
-// So K07-BUG-3's widget proof writes BEFORE the first pump, and its second
-// proof is a plain real-async `test` with no widget tree at all.
+// So every write in this file happens BEFORE the first pump, and the
+// repository-level proof is a plain real-async `test` with no widget tree.
+// A real Drift READ inside a `testWidgets` body needs `tester.runAsync` too
+// (`watchEvolution().first` deadlocks otherwise).
+//
+// THEME NOTE (why K07-BUG-5 pumps the app shell instead of a bare MaterialApp):
+// `context.nest` is `Theme.of(context).extension<NestTokens>()!`, so a painter
+// wrapped in its own `MaterialApp(theme: NestTheme.dark())` can resolve the
+// LIGHT palette while the real screen resolves the dark one. Every palette
+// proof here goes through `pumpAppRoute`, which is what the device runs.
 
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:drift/drift.dart' show Value;
+import 'package:drift/native.dart' show NativeDatabase;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:nestling/app/controllers.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
+import 'package:nestling/core/data/ids.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/pip/data/pip_repository_impl.dart';
@@ -61,6 +82,7 @@ import 'package:nestling/features/pip/domain/pip_repository.dart';
 import 'package:nestling/features/pip/presentation/bloc/pip_bloc.dart';
 import 'package:nestling/features/pip/presentation/bloc/pip_event.dart';
 import 'package:nestling/features/pip/presentation/bloc/pip_state.dart';
+import 'package:nestling/features/pip/presentation/widgets/pip_evolution_copy.dart';
 import 'package:nestling/features/pip/presentation/widgets/pip_evolution_sparks.dart';
 
 import '../../test_scope.dart';
@@ -166,8 +188,12 @@ Future<void> _pumpEvolution(
 
 /// Resizes the surface AFTER `pumpAppRoute` (which forces 390x844) and lets
 /// the tree rebuild — the established K06/K07 width-matrix pattern.
-Future<void> _resize(WidgetTester tester, double width) async {
-  tester.view.physicalSize = Size(width * 3, 844 * 3);
+Future<void> _resize(
+  WidgetTester tester,
+  double width, {
+  double height = 844,
+}) async {
+  tester.view.physicalSize = Size(width * 3, height * 3);
   tester.view.devicePixelRatio = 3;
   await _settle(tester);
 }
@@ -297,6 +323,78 @@ Future<_SparkleBox> _sparkleBox(WidgetTester tester) async {
   }
   expect(top, lessThan(1 << 30), reason: 'sparkle 1 must be painted');
   return (top: top, bottom: bottom, widest: widest, left: left, right: right);
+}
+
+/// One painted colour, read back from the layer's OWN rasteriser.
+///
+/// The samples are taken in the design's own `viewBox` coordinates
+/// (`K07-evolution.html:35-46`) at points that are solid by construction: each
+/// sparkle's waist/middle is fill, and `(13, 49)` is inside sparkle 1's
+/// left-point stroke, which the 3 px `--ink` stroke covers completely. Sampling
+/// pixels is the only honest way to read a `CustomPainter`'s palette back, and
+/// Skia's software raster is deterministic, so these numbers reproduce run to
+/// run.
+///
+/// NOT pumped inside a bare `MaterialApp(theme: NestTheme.dark())`: the proof
+/// goes through the real app shell (`pumpAppRoute`), which is what the device
+/// runs and the only place `context.nest` is the live theme's tokens.
+Future<Map<String, int>> _sparkPalette(
+  WidgetTester tester, {
+  required ThemeMode theme,
+}) async {
+  GetIt.instance<ThemeModeController>().selectMode(theme);
+  await pumpAppRoute(tester, '/pip-evolution', theme: theme);
+  await _settle(tester);
+  final painter = tester
+      .widget<CustomPaint>(
+        find
+            .descendant(
+              of: find.byType(PipEvolutionSparks),
+              matching: find.byType(CustomPaint),
+            )
+            .first,
+      )
+      .painter!;
+  const size = EvolutionSparksGeometry.artSize;
+  final recorder = ui.PictureRecorder();
+  painter.paint(Canvas(recorder), size);
+  final picture = recorder.endRecording();
+  final rgba = (await tester.runAsync(() async {
+    final image = await picture.toImage(
+      size.width.toInt(),
+      size.height.toInt(),
+    );
+    final data = (await image.toByteData())!;
+    image.dispose();
+    return data.buffer.asUint8List();
+  }))!;
+
+  /// RGB of one painted pixel, alpha dropped: every sample below is a solid
+  /// fill or a solid stroke pixel, so alpha is 255 and only the RGB is the
+  /// contract. `rawRgba`: R, G, B, A in that order.
+  int at(int x, int y) {
+    final i = (y * size.width.toInt() + x) * 4;
+    return (rgba[i] << 16) | (rgba[i + 1] << 8) | rgba[i + 2];
+  }
+
+  return <String, int>{
+    // `<g stroke="#1E1B3A">`, sampled on sparkle 1's left point (13, 49).
+    'stroke': at(13, 49),
+    // `fill="#7C6CF2"` on sparkle 1's waist.
+    'lilac': at(32, 49),
+    // `fill="#1F9D63"` on sparkle 2's waist.
+    'success': at(312, 43),
+    // `fill="#F4B400"` on sparkle 3's waist.
+    'coin': at(18, 167),
+    // `fill="#FF8A5B"` on sparkle 4's waist.
+    'peach': at(334, 169),
+    // `<circle cx="86" cy="10" r="7" fill="#F4B400">`, centre.
+    'coinDot': at(86, 10),
+    // `<circle cx="268" cy="8" r="6" fill="#3D7FF0">`, centre. The design's hex
+    // is NOT a token in either theme (`5_ui.md` D5), so this sample is reported
+    // by the controls and never asserted here.
+    'skyDot': at(268, 8),
+  };
 }
 
 void main() {
@@ -841,6 +939,413 @@ void main() {
         reason: 'the merged stat sentence carries the DB number',
       );
 
+      await disposeApp(tester);
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // ITERATION 2's own hunt: the matrix items iteration 1 cleared but never
+  // pinned, plus the one item iteration 1's tree did not have — the dark-mode
+  // sparkle palette the orchestrator has since ruled on (ORCHESTRATOR_NOTES
+  // 23:55, D4). Nothing in this block changes the screen (RULES §1).
+  // ---------------------------------------------------------------------------
+
+  testWidgets(
+    'K07-BUG-5: in DARK the sparkles are stroked and filled from the DARK '
+    "theme's tokens, so all four sparkles and every dot get a light ring on the "
+    "night sky — the design's `svg.sparks` is a fixed, theme-invariant palette",
+    (tester) async {
+      final dark = await _sparkPalette(tester, theme: ThemeMode.dark);
+      await disposeApp(tester);
+
+      // `K07-evolution.html:36` — `<g stroke="#1E1B3A" stroke-width="3">`, the
+      // one colour the dark design PNG paints around every sparkle and dot.
+      expect(
+        dark['stroke'],
+        0x1E1B3A,
+        reason:
+            'the design strokes the whole `<g>` with the literal #1E1B3A in '
+            'BOTH themes; the app stroked with the dark theme ink token '
+            '(#F3F0FA), which is the white ring `5_ui.md` D4 / cmp_dark_2.png '
+            'photographed. Sample was #${dark['stroke']!.toRadixString(16)}',
+      );
+      // The four accent fills that DO exist as light tokens: the design's
+      // literals are those tokens' light values, so resolving from
+      // `NestColors.light` satisfies both "tokens only" and PNG parity.
+      expect(
+        dark['lilac'],
+        0x7C6CF2,
+        reason: 'sparkle 1 `fill="#7C6CF2"` is theme-invariant',
+      );
+      expect(
+        dark['success'],
+        0x1F9D63,
+        reason: 'sparkle 2 `fill="#1F9D63"` is theme-invariant',
+      );
+      expect(
+        dark['coin'],
+        0xF4B400,
+        reason: 'sparkle 3 `fill="#F4B400"` is theme-invariant',
+      );
+      expect(
+        dark['peach'],
+        0xFF8A5B,
+        reason: 'sparkle 4 `fill="#FF8A5B"` is theme-invariant',
+      );
+
+      // The whole layer must be theme-invariant, which is the property the
+      // design's inline SVG has by construction (it never references a theme
+      // variable). Comparing the two rasters covers every entry at once, so a
+      // future accent added to `_sparks` cannot slip past the list above.
+      final light = await _sparkPalette(tester, theme: ThemeMode.light);
+      await disposeApp(tester);
+      expect(
+        dark,
+        light,
+        reason:
+            'every `svg.sparks` colour is an inline hex, so the dark layer '
+            'must be pixel-identical to the light one (sky dot aside: '
+            '${light['skyDot']} vs ${dark['skyDot']} — the #3D7FF0 hex is '
+            'not a token in either theme, which is 5_ui.md D5, a design-source '
+            'bug, and not this screen to fix)',
+      );
+    },
+    skip: true,
+  );
+
+  testWidgets(
+    'control: in LIGHT the sparks layer already matches the HTML literals '
+    'exactly (the same sampler, so the dark proof cannot pass for the wrong '
+    'reason)',
+    (tester) async {
+      final light = await _sparkPalette(tester, theme: ThemeMode.light);
+      expect(light['stroke'], 0x1E1B3A);
+      expect(light['lilac'], 0x7C6CF2);
+      expect(light['success'], 0x1F9D63);
+      expect(light['coin'], 0xF4B400);
+      expect(light['peach'], 0xFF8A5B);
+      expect(light['coinDot'], 0xF4B400);
+      await disposeApp(tester);
+    },
+  );
+
+  test("control: the screen's numbers survive a database reopen (Drift "
+      'persistence — nothing on K07 is cached in memory)', () async {
+    final dir = Directory.systemTemp.createTempSync('k07_bugs_reopen');
+    addTearDown(() {
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
+    final file = File('${dir.path}/nestling.db');
+
+    var database = AppDatabase(NativeDatabase(file));
+    await Seed.demo(database);
+    await database.customStatement(
+      'UPDATE children SET pip_stage = 4, pip_total_coins = 260 '
+      "WHERE id = 'maya'",
+    );
+    await database.close();
+
+    database = AppDatabase(NativeDatabase(file));
+    addTearDown(database.close);
+    final repo = PipRepositoryImpl(db: database);
+    final seen = <PipEvolution?>[];
+    final sub = repo.watchEvolution().listen(seen.add);
+    await _waitFor(() => seen.isNotEmpty);
+
+    expect(seen.last!.questsDone, 4);
+    expect(seen.last!.questsFinishedCount, 4);
+    expect(seen.last!.profile.stage, 4);
+    expect(seen.last!.profile.totalCoins, 260);
+    await sub.cancel();
+  });
+
+  testWidgets(
+    'control: pip_stage 0, 5 and 99 are clamped into the 1..4 artboards and '
+    'the copy follows the clamped stage',
+    (tester) async {
+      // A bad `pip_stage` must not hit `PipAvatar`'s `stage >= 1 && stage <= 4`
+      // assert (a crash on a kid screen) nor invent a fifth stage name.
+      for (final stage in <int>[0, 5, 99]) {
+        await tester.runAsync(() async {
+          await (db.update(db.children)..where((c) => c.id.equals('maya')))
+              .write(ChildrenCompanion(pipStage: Value(stage)));
+          await GetIt.instance<AppSession>().refresh();
+        });
+        await _pumpEvolution(tester);
+        expect(tester.takeException(), isNull, reason: 'pip_stage=$stage');
+
+        final expected = stage.clamp(1, 4);
+        expect(
+          tester.widget<Text>(find.byKey(const Key('k07-stat-stage'))).data,
+          '$expected',
+          reason: 'the stat card shows the clamped stage',
+        );
+        final title = evolutionTitle(expected);
+        expect(find.text(title), findsOneWidget, reason: 'pip_stage=$stage');
+        expect(find.text(evolutionCta(expected)), findsOneWidget);
+        await disposeApp(tester);
+        db = await setUpTestScope();
+      }
+    },
+  );
+
+  testWidgets(
+    'control: 0 and 999999999 coins, and 0 or 1 completions, keep the numbers '
+    'and the singular sub honest',
+    (tester) async {
+      await tester.runAsync(() async {
+        await (db.update(db.children)..where((c) => c.id.equals('maya'))).write(
+          const ChildrenCompanion(pipTotalCoins: Value(0)),
+        );
+        await db.delete(db.questCompletions).go();
+        await GetIt.instance<AppSession>().refresh();
+      });
+      await _pumpEvolution(tester);
+      expect(
+        tester.widget<Text>(find.byKey(const Key('k07-stat-coins'))).data,
+        '0',
+      );
+      expect(
+        tester.widget<Text>(find.byKey(const Key('k07-stat-quests'))).data,
+        '0',
+      );
+      // `4_review.md` finding 2 owns this copy: `evolutionSub(0)` is "Because
+      // you helped 0 times" today. Pinned HERE as the behaviour under review,
+      // not as the desired copy — when finding 2's fix lands this assertion
+      // moves with it.
+      expect(find.text(evolutionSub(0)), findsOneWidget);
+      await disposeApp(tester);
+
+      db = await setUpTestScope();
+      await tester.runAsync(() async {
+        await (db.update(db.children)..where((c) => c.id.equals('maya'))).write(
+          const ChildrenCompanion(pipTotalCoins: Value(999999999)),
+        );
+        await db.delete(db.questCompletions).go();
+        await db
+            .into(db.questCompletions)
+            .insert(
+              QuestCompletionsCompanion.insert(
+                questId: 'q-bins',
+                childId: 'maya',
+                familyId: Seed.familyId,
+                status: const Value('approved'),
+                coins: const Value(15),
+                createdAt: Value(Seed.utc(10, 3, 8, 30)),
+                createdAtTz: const Value('Europe/London'),
+              ),
+            );
+        await GetIt.instance<AppSession>().refresh();
+      });
+      await _pumpEvolution(tester);
+      expect(
+        tester.widget<Text>(find.byKey(const Key('k07-stat-coins'))).data,
+        '999999999',
+        reason: 'a 9-digit coin total must survive the card, not be elided',
+      );
+      expect(
+        find.text(evolutionSub(1)),
+        findsOneWidget,
+        reason: 'one completion reads "Because you helped 1 time"',
+      );
+      expect(
+        tester.widget<Text>(find.byKey(const Key('k07-stat-quests'))).data,
+        '1',
+      );
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    },
+  );
+
+  testWidgets(
+    'control: one child, six children and a deleted sibling all keep the '
+    'ACTIVE child on screen (the roster never leaks onto K07)',
+    (tester) async {
+      await tester.runAsync(() async {
+        // Leo is deleted: Maya must still render, and nothing may ask for the
+        // picker while an active child exists.
+        await (db.delete(db.children)..where((c) => c.id.equals('leo'))).go();
+        await GetIt.instance<AppSession>().refresh();
+      });
+      await _pumpEvolution(tester);
+      expect(find.text('Pip grew into a Fledgling!'), findsOneWidget);
+      expect(find.text("Who's playing?"), findsNothing);
+      await disposeApp(tester);
+
+      db = await setUpTestScope();
+      await tester.runAsync(() async {
+        for (var i = 0; i < 4; i++) {
+          await db
+              .into(db.children)
+              .insert(
+                ChildrenCompanion.insert(
+                  id: newId('child'),
+                  familyId: Seed.familyId,
+                  nickname: 'Extra$i',
+                  ageBand: const Value('7-9'),
+                  pipStage: const Value(2),
+                  pipTotalCoins: const Value(10),
+                  createdAt: Value(Seed.utc(9, 20, 8)),
+                  createdAtTz: const Value('Europe/London'),
+                ),
+              );
+        }
+        await GetIt.instance<AppSession>().refresh();
+      });
+      await _pumpEvolution(tester);
+      // Six children exist; K07 is about whoever is playing, so the card and
+      // the hero are still Maya's, not the newest row's.
+      expect(find.text('Pip grew into a Fledgling!'), findsOneWidget);
+      expect(
+        tester.widget<Text>(find.byKey(const Key('k07-stat-quests'))).data,
+        '4',
+      );
+      expect(
+        tester
+            .getSemantics(find.byKey(const Key('k07-new-pip')))
+            .getSemanticsData()
+            .label,
+        "Maya's Pip, a fledgling",
+      );
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    },
+  );
+
+  testWidgets('control: no overflow from a 280x360 phone to an 844x390 landscape at '
+      'text scale 2.0, and the caption stays above the bar', (tester) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await _pumpEvolution(tester);
+
+    for (final size in <Size>[
+      const Size(280, 360),
+      const Size(320, 568),
+      const Size(390, 844),
+      const Size(768, 1024),
+      const Size(844, 390),
+    ]) {
+      await _resize(tester, size.width, height: size.height);
+      expect(
+        tester.takeException(),
+        isNull,
+        reason:
+            'no overflow at ${size.width.toInt()}x${size.height.toInt()} '
+            'at text scale 2.0',
+      );
+      expect(
+        find.byKey(const Key('k07-cta')),
+        findsOneWidget,
+        reason: 'the CTA is never dropped at ${size.width.toInt()} px',
+      );
+      // The caption is the LAST line of the design's copy, so on a surface
+      // where the column is taller than the viewport it must be REACHABLE by
+      // scrolling and must come to rest above the bar — never painted under
+      // the bar's opaque surface. Scrolled deterministically (a synthetic drag
+      // cannot be trusted at 280x360, where the grown Pip owns the centre).
+      final caption = tester.getRect(find.byKey(const Key('k07-caption')));
+      final barTop = tester.getRect(find.byKey(const Key('k07-bar'))).top;
+      final position = tester
+          .state<ScrollableState>(
+            find
+                .descendant(
+                  of: find.byKey(const Key('k07-scroll')),
+                  matching: find.byType(Scrollable),
+                )
+                .first,
+          )
+          .position;
+      expect(
+        position.maxScrollExtent,
+        greaterThanOrEqualTo(caption.bottom - barTop),
+        reason:
+            'the caption needs ${(caption.bottom - barTop).toStringAsFixed(1)} px '
+            'of scroll at ${size.width.toInt()}x${size.height.toInt()} but the '
+            'column only scrolls ${position.maxScrollExtent.toStringAsFixed(1)} px, '
+            'so the last line of copy is unreachable',
+      );
+      position.jumpTo(position.maxScrollExtent);
+      await _settle(tester);
+      final scrolled = tester.getRect(find.byKey(const Key('k07-caption')));
+      expect(
+        scrolled.bottom,
+        lessThanOrEqualTo(barTop + 1),
+        reason:
+            'scrolled to the end, the caption still reaches '
+            '${(scrolled.bottom - barTop).toStringAsFixed(1)} px into the bar at '
+            '${size.width.toInt()}x${size.height.toInt()}',
+      );
+    }
+    await disposeApp(tester);
+  });
+
+  testWidgets(
+    'control: kid mode with an EXPIRED trial cannot reach /pip-evolution '
+    '(the gate redirect holds)',
+    (tester) async {
+      // `Seed.empty()` is the shared "onboarded parent, no children, trial
+      // running" state — it owns `subscription_status`. This test only ages
+      // `trial_start`, so expiry still flows through `AppSession` and nothing
+      // writes `subscription_status` (the TRIAL rule).
+      await tester.runAsync(() async {
+        await Seed.empty(db);
+        await (db.update(db.appState)..where((a) => a.id.equals(1))).write(
+          AppStateCompanion(trialStart: Value(DateTime.utc(2026))),
+        );
+        await GetIt.instance<AppSession>().refresh();
+      });
+      expect(GetIt.instance<AppSession>().trialExpired, isTrue);
+      GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+      await pumpAppRoute(tester, '/pip-evolution');
+      await _settle(tester);
+
+      expect(currentPath(tester), '/parental-gate');
+      expect(find.byKey(const Key('k07-title')), findsNothing);
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    },
+  );
+
+  testWidgets(
+    'control: PARENT mode may open /pip-evolution (it is not on the parentOnly '
+    'list, which is intended — a grown-up may inspect the child moment)',
+    (tester) async {
+      GetIt.instance<AppModeController>().selectMode(AppMode.parent);
+      await pumpAppRoute(tester, '/pip-evolution');
+      await _settle(tester);
+
+      expect(currentPath(tester), '/pip-evolution');
+      expect(find.text('Pip grew into a Fledgling!'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    },
+  );
+
+  testWidgets(
+    'control: a rapid double tap on "Try again" re-subscribes once per tap and '
+    'never stacks two live subscriptions',
+    (tester) async {
+      final repo = _FailingRepository(db: db, failFast: true);
+      await _useRepository(repo);
+      await _pumpEvolution(tester);
+      expect(find.byKey(const Key('k07-retry')), findsOneWidget);
+      expect(repo.evolutionCalls, 1);
+
+      // Two taps inside one frame: `failFast` means each attempt dies in a
+      // microtask and clears the subscription, so each tap may open exactly one
+      // new stream — never two for one tap, and never a stuck pair.
+      await tester.tap(find.byKey(const Key('k07-retry')));
+      await tester.tap(find.byKey(const Key('k07-retry')), warnIfMissed: false);
+      await _settle(tester);
+
+      expect(
+        repo.evolutionCalls,
+        3,
+        reason: 'one re-subscription per tap (1 initial + 2 taps)',
+      );
+      expect(find.byKey(const Key('k07-retry')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await repo.closeGates();
       await disposeApp(tester);
     },
   );
