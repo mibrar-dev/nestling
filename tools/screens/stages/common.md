@@ -27,3 +27,4 @@ ORCHESTRATOR RULES (override the design PNGs where they conflict):
 - CLOCK: app code never calls DateTime.now(); use clock.now() / appNowUtc() (package:clock). Tests are pinned to Sat 3 Oct 2026 09:41 London; never assert real-wall-clock copy.
 - KID BACKGROUND: every K screen gets the sky gradient and the meadow hills from the shared kid scope (core/design_system/theme/kid_meadow.dart). Never paint local hills or meadow, and use the shared one exactly as the HTML places it (bottom 0, 390×136).
 - IDS: new rows get ids from `newId(prefix)` (core/data/ids.dart, uuid). Never derive an id from the clock.
+- TEST TIMEOUTS: always run flutter test with a per-test timeout (`flutter test --timeout 120s …`). A test that can hang is a bug, so fix it. Never wait on a background test run for more than 10 minutes.
