@@ -73,18 +73,14 @@ const double _kStageToHearts = NestSpacing.s4;
 /// `kid_home_view_test.dart` name the same reserve the same way.
 const double _kQuestCardShadowRoom = NestSpacing.gap6;
 
-/// Icon tile glyph per `KidQuest.icon` (K03 glyph per `nestling_assets.dart`).
+/// Icon tile glyph per `KidQuest.icon` — the KID designs' glyphs
+/// (`K03-kid-home.html` / `K04-quest-detail.html`) via the shared single
+/// source `questIconFor(key, audience: NestAudience.kid)`. Where K03/K04
+/// draw no row for the key (bins, hoover, paw, bag, leaf, shirt, sofa,
+/// plate), the parent glyph is shared for both audiences (see
+/// `quest_icons.dart`).
 String _iconFor(String raw) {
-  return switch (raw) {
-    'dishwasher' => NestIcons.dishwasher,
-    'book' => NestIcons.book,
-    'bed' => NestIcons.bedSit,
-    'bins' => NestIcons.bin,
-    'hoover' => NestIcons.hoover,
-    'plate' => NestIcons.table,
-    'table' => NestIcons.table,
-    _ => NestIcons.questCard,
-  };
+  return questIconFor(raw, audience: NestAudience.kid);
 }
 
 bool _isDone(KidQuest item) =>

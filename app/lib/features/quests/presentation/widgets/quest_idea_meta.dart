@@ -50,7 +50,7 @@ const Map<String, QuestIdeaMeta> kQuestIdeaMeta = <String, QuestIdeaMeta>{
     category: 'Bedroom',
     minAge: 4,
     tint: NestTileTint.peach,
-    iconAsset: NestIcons.bed,
+    iconAsset: NestIcons.questBed,
   ),
   'idea-table': QuestIdeaMeta(
     category: 'Kitchen',
@@ -62,19 +62,19 @@ const Map<String, QuestIdeaMeta> kQuestIdeaMeta = <String, QuestIdeaMeta>{
     category: 'Outdoors',
     minAge: 8,
     tint: NestTileTint.leaf,
-    iconAsset: NestIcons.bin,
+    iconAsset: NestIcons.questBins,
   ),
   'idea-dishwasher': QuestIdeaMeta(
     category: 'Kitchen',
     minAge: 7,
     tint: NestTileTint.sky,
-    iconAsset: NestIcons.dishwasher,
+    iconAsset: NestIcons.questDishes,
   ),
   'idea-hoover': QuestIdeaMeta(
     category: 'Bedroom',
     minAge: 9,
     tint: NestTileTint.lilac,
-    iconAsset: NestIcons.hoover,
+    iconAsset: NestIcons.questHoover,
   ),
   'idea-pet': QuestIdeaMeta(
     category: 'Pets',
@@ -135,39 +135,13 @@ List<Quest> filterQuestIdeas(
 ///
 /// The repository idea keys (`plate`, `bins`, `bag`, …) do not map 1:1 onto
 /// asset names, so both the ideas map ([kQuestIdeaMeta]) and the live-quest
-/// rows resolve through a key switch.
+/// rows resolve through a key switch. This is the PARENT audience glyph
+/// (P09/P10/P08 HTML) via the shared single source
+/// `questIconFor(key, audience: NestAudience.parent)` — kept as a thin
+/// wrapper so existing callers and tests keep compiling during the merge
+/// window.
 String questIconAsset(String icon) {
-  switch (icon) {
-    case 'dishwasher':
-      return NestIcons.dishwasher;
-    case 'book':
-    case 'reading':
-      return NestIcons.book;
-    case 'bins':
-    case 'bin':
-      return NestIcons.bin;
-    case 'bed':
-      return NestIcons.bed;
-    case 'hoover':
-      return NestIcons.hoover;
-    case 'paw':
-    case 'pet':
-      return NestIcons.paw;
-    case 'bag':
-    case 'schoolBag':
-      return NestIcons.schoolBag;
-    case 'leaf':
-    case 'plants':
-      return NestIcons.sprout;
-    case 'shirt':
-    case 'washing':
-      return NestIcons.washingMachine;
-    case 'plate':
-    case 'table':
-      return NestIcons.table;
-    default:
-      return NestIcons.questCard;
-  }
+  return questIconFor(icon, audience: NestAudience.parent);
 }
 
 /// `.icon-tile` tint for a live quest's icon key.

@@ -17,32 +17,12 @@ import 'package:nestling/features/today/presentation/bloc/today_event.dart';
 import 'package:nestling/features/today/presentation/bloc/today_state.dart';
 
 /// Seed `quests.icon` → token-colourable [NestIcons] asset.
+///
+/// The PARENT audience glyph (P08/P09/P10 HTML) via the shared single source
+/// `questIconFor(key, audience: NestAudience.parent)` — kept as a thin
+/// wrapper so existing callers keep compiling during the merge window.
 String todayIconFor(String icon) {
-  switch (icon) {
-    case 'dishwasher':
-      return NestIcons.dishwasher;
-    case 'book':
-      return NestIcons.book;
-    case 'bins':
-    case 'bin':
-      return NestIcons.bin;
-    case 'bed':
-      return NestIcons.bed;
-    case 'hoover':
-      return NestIcons.hoover;
-    case 'paw':
-      return NestIcons.paw;
-    case 'bag':
-      return NestIcons.bag;
-    case 'leaf':
-      return NestIcons.sprout;
-    case 'shirt':
-      return NestIcons.washingMachine;
-    case 'plate':
-      return NestIcons.table;
-    default:
-      return NestIcons.questCard;
-  }
+  return questIconFor(icon, audience: NestAudience.parent);
 }
 
 /// `.icon-tile` tint per quest icon (HTML `tint-*` classes on P08).

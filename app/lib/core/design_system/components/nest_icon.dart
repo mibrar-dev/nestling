@@ -37,6 +37,9 @@ abstract final class NestIcons {
   static const String questDishes = assets.NestlingIcons.questDishes;
   static const String questHoover = assets.NestlingIcons.questHoover;
   static const String questBins = assets.NestlingIcons.questBins;
+  static const String questBedKid = assets.NestlingIcons.questBedKid;
+  static const String questDishesKid = assets.NestlingIcons.questDishesKid;
+  static const String questReadingKid = assets.NestlingIcons.questReadingKid;
   static const String book = assets.NestlingIcons.book;
   static const String bookOpen = assets.NestlingIcons.bookOpen;
   static const String paw = assets.NestlingIcons.paw;
@@ -69,6 +72,8 @@ abstract final class NestIcons {
   static const String rewardMoon = assets.NestlingIcons.rewardMoon;
   static const String rewardCake = assets.NestlingIcons.rewardCake;
   static const String rewardCoffee = assets.NestlingIcons.rewardCoffee;
+  static const String rewardCoffeeParent =
+      assets.NestlingIcons.rewardCoffeeParent;
   static const String rewardPlate = assets.NestlingIcons.rewardPlate;
   static const String bag = assets.NestlingIcons.bag;
   static const String phone = assets.NestlingIcons.phone;
@@ -86,6 +91,9 @@ abstract final class NestIcons {
   static const String crown = assets.NestlingIcons.crown;
   static const String wardrobeScarf = assets.NestlingIcons.wardrobeScarf;
   static const String wardrobeWellies = assets.NestlingIcons.wardrobeWellies;
+  static const String wardrobeSunHat = assets.NestlingIcons.wardrobeSunHat;
+  static const String kidFeed = assets.NestlingIcons.kidFeed;
+  static const String kidPlay = assets.NestlingIcons.kidPlay;
 }
 
 /// Token-colourable SVG icon.
