@@ -161,15 +161,67 @@ void main() {
         'coffee',
         'plate',
       });
-      expect(rewardIconFor('tv'), NestIcons.rewardTv);
-      expect(rewardIconFor('film'), NestIcons.rewardFilm);
-      expect(rewardIconFor('moon'), NestIcons.rewardMoon);
-      expect(rewardIconFor('cake'), NestIcons.rewardCake);
-      expect(rewardIconFor('coffee'), NestIcons.rewardCoffee);
-      expect(rewardIconFor('plate'), NestIcons.rewardPlate);
+      // Kid audience: exact K08 glyphs (historical behaviour).
+      expect(
+        rewardIconFor('tv', audience: NestAudience.kid),
+        NestIcons.rewardTv,
+      );
+      expect(
+        rewardIconFor('film', audience: NestAudience.kid),
+        NestIcons.rewardFilm,
+      );
+      expect(
+        rewardIconFor('moon', audience: NestAudience.kid),
+        NestIcons.rewardMoon,
+      );
+      expect(
+        rewardIconFor('cake', audience: NestAudience.kid),
+        NestIcons.rewardCake,
+      );
+      expect(
+        rewardIconFor('coffee', audience: NestAudience.kid),
+        NestIcons.rewardCoffee,
+      );
+      expect(
+        rewardIconFor('plate', audience: NestAudience.kid),
+        NestIcons.rewardPlate,
+      );
+      // Parent audience: exact P14 glyphs (plate shares the K08 glyph).
+      expect(
+        rewardIconFor('tv', audience: NestAudience.parent),
+        NestIcons.screenTime,
+      );
+      expect(
+        rewardIconFor('film', audience: NestAudience.parent),
+        NestIcons.film,
+      );
+      expect(
+        rewardIconFor('moon', audience: NestAudience.parent),
+        NestIcons.clock,
+      );
+      expect(
+        rewardIconFor('cake', audience: NestAudience.parent),
+        NestIcons.chefHat,
+      );
+      expect(
+        rewardIconFor('coffee', audience: NestAudience.parent),
+        NestIcons.rewardCoffeeParent,
+      );
+      expect(
+        rewardIconFor('plate', audience: NestAudience.parent),
+        NestIcons.rewardPlate,
+      );
       // Unknown keys fall back to the neutral gift glyph.
-      expect(rewardIconFor('waffle'), NestIcons.gift);
-      expect(rewardIconFor(''), NestIcons.gift);
+      expect(
+        rewardIconFor('waffle', audience: NestAudience.kid),
+        NestIcons.gift,
+      );
+      expect(rewardIconFor('', audience: NestAudience.kid), NestIcons.gift);
+      expect(
+        rewardIconFor('waffle', audience: NestAudience.parent),
+        NestIcons.gift,
+      );
+      expect(rewardIconFor('', audience: NestAudience.parent), NestIcons.gift);
     });
 
     test(
@@ -188,12 +240,17 @@ void main() {
             'plate',
           });
           for (final row in rows) {
-            final asset = rewardIconFor(row.icon);
-            expect(
-              File('assets/${asset.replaceFirst('assets/', '')}').existsSync(),
-              isTrue,
-              reason: 'missing asset for icon `${row.icon}` → $asset',
-            );
+            for (final audience in NestAudience.values) {
+              final asset = rewardIconFor(row.icon, audience: audience);
+              expect(
+                File('assets/${asset.replaceFirst('assets/', '')}')
+                    .existsSync(),
+                isTrue,
+                reason:
+                    'missing asset for icon `${row.icon}` '
+                    '(${audience.name}) → $asset',
+              );
+            }
           }
         } finally {
           await db.close();
@@ -214,12 +271,15 @@ void main() {
         final spec = rewardIconSpec(entry.key);
         expect(
           spec.asset,
-          rewardIconFor(entry.key),
+          rewardIconFor(entry.key, audience: NestAudience.parent),
           reason: 'P14 art for `${entry.key}` must come from rewardIconFor',
         );
         expect(spec.tint, entry.value);
         // Legacy map agrees (backward compat, same single source).
-        expect(rewardIconSpecs[entry.key]!.asset, rewardIconFor(entry.key));
+        expect(
+          rewardIconSpecs[entry.key]!.asset,
+          rewardIconFor(entry.key, audience: NestAudience.parent),
+        );
       }
       // Unknown keys fall back to the neutral gift tile.
       final fallback = rewardIconSpec('waffle');

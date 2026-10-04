@@ -1,32 +1,24 @@
+import 'package:nestling/core/design_system/components/audience.dart';
 import 'package:nestling/core/design_system/components/nest_icon.dart';
 
 /// Shared reward glyphs — the single source for `rewards.icon` keys.
 ///
-/// Every seeded reward key (`Seed.demo` in `app/lib/core/data/seed.dart`:
-/// `tv`, `film`, `moon`, `cake`, `coffee`, `plate`) resolves here to the
-/// design's EXACT glyph, taken verbatim from
-/// `design/html-source/screens/K08-shop.html` (`.k8-art`).
+/// Each screen matches its OWN design (orchestrator audience ruling):
 ///
-/// Where K08 and P14 disagree, the kid design wins (task ruling) and BOTH
-/// screens use it — P14's parent cards adopt the K08 drawing:
+/// * kid (`NestAudience.kid`): exact `K08-shop.html` `.k8-art` glyphs
+///   (`ic_reward_*`).
+/// * parent (`NestAudience.parent`): exact `P14-rewards.html` glyphs —
+///   `screenTime` (P14 TV `rect 2/4/20/13 rx 2`, 0.5 px from the K08 TV),
+///   `film` (P14 play triangle `rect 3/5/18/14 rx 3 + m10 9…`),
+///   `clock` (P14 clock `circle r 9 + M12 7v5l3 2`),
+///   `chefHat` (P14 three-lobe hat, byte-identical to `ic_chef_hat.svg`
+///   modulo syntax),
+///   `rewardCoffeeParent` (P14 dome + box + legs, new file — neither the
+///   K08 takeaway cup nor the old `ic_cafe.svg` sit-down mug matches it).
 ///
-/// * `tv`: same TV concept; K08 `rect 2.5/4/19/13 rx 2.5` vs P14
-///   `rect 2/4/20/13 rx 2`. Trivial 0.5 px coord difference; kid wins.
-/// * `film`: K08 film-strip (side sprockets) vs P14 play triangle.
-///   Different concept; kid wins.
-/// * `moon`: K08 crescent moon vs P14 clock (circle + hands).
-///   Different concept; kid wins.
-/// * `cake` (Baking together): K08 basket/bucket (arch handle + trapezoid
-///   body + top tick) vs P14 three-lobe chef hat. Different object;
-///   kid wins.
-/// * `coffee` (park café): K08 takeaway cup (domed lid + tapered body, no
-///   handle/steam/saucer) vs P14 dome + box + legs storefront/cloche.
-///   Different drawing; kid wins. Neither matches the old `ic_cafe.svg`
-///   sit-down mug (handle + steam + saucer) — that file is untouched.
-/// * `plate` (Choose dinner): only K08 draws it — plain triangle + three
-///   stroked outline dots. P14's HTML has no dinner row; the seed `plate`
-///   key uses this K08 glyph on both screens. Distinct from the old
-///   `ic_pizza.svg` (crust band + filled dots) — that file is untouched.
+/// `plate` (Choose dinner) has only ONE design source: P14's HTML lists
+/// five rewards then `+ New reward` (no dinner row), so K08's plain
+/// triangle + three stroked dots is used for BOTH audiences.
 ///
 /// P14 keeps its own per-key tile tints in
 /// `features/rewards/presentation/widgets/p14_reward_meta.dart`; this map
@@ -35,7 +27,18 @@ import 'package:nestling/core/design_system/components/nest_icon.dart';
 ///
 /// Unknown keys (a reward created on another device) fall back to the
 /// neutral gift glyph, matching the P14 fallback contract.
-String rewardIconFor(String key) {
+String rewardIconFor(String key, {required NestAudience audience}) {
+  if (audience == NestAudience.parent) {
+    return switch (key) {
+      'tv' => NestIcons.screenTime,
+      'film' => NestIcons.film,
+      'moon' => NestIcons.clock,
+      'cake' => NestIcons.chefHat,
+      'coffee' => NestIcons.rewardCoffeeParent,
+      'plate' => NestIcons.rewardPlate,
+      _ => NestIcons.gift,
+    };
+  }
   return switch (key) {
     'tv' => NestIcons.rewardTv,
     'film' => NestIcons.rewardFilm,
