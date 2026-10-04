@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/family_time.dart';
@@ -55,13 +56,13 @@ const _mockSummaries = <ChildDaySummary>[
 ];
 
 String _expectedGreeting() {
-  final london = toFamilyZone(DateTime.now().toUtc(), 'Europe/London');
+  final london = toFamilyZone(appNowUtc(), 'Europe/London');
   return '${dayPartForHour(london.hour)}, Sarah';
 }
 
 String _expectedDateLine(int happyDays) {
   final day = happyDays == 1 ? 'day' : 'days';
-  return '${formatDay(DateTime.now().toUtc(), 'Europe/London')} · Happy week: $happyDays $day';
+  return '${formatDay(appNowUtc(), 'Europe/London')} · Happy week: $happyDays $day';
 }
 
 /// Pumps [TodayView] directly (no router, no shell) over [bloc].

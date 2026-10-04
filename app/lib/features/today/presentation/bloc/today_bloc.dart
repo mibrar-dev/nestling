@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/london_time.dart';
 import 'package:nestling/core/data/stream_combine.dart';
 import 'package:nestling/features/today/domain/entities/child_day_summary.dart';
@@ -53,7 +54,7 @@ class TodayBloc extends Bloc<TodayEvent, TodayState> {
         for (final s in summaries) {
           if (s.happyDays > happyDays) happyDays = s.happyDays;
         }
-        final now = DateTime.now().toUtc();
+        final now = appNowUtc();
         return state.copyWith(
           status: TodayStatus.loaded,
           items: items,
