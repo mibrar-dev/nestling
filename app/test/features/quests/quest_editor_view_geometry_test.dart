@@ -447,4 +447,51 @@ void main() {
       await disposeApp(tester);
     });
   });
+
+  // P09-TEST-9 — the switch is centred on the CARD, not pinned to one
+  // measured frame. `.switchrow { align-items: center }` centres the 51x31
+  // track in the row, and the card's padding is symmetric (16/16), so the
+  // track's midpoint must equal the card's midpoint at EVERY metric — the
+  // design frame included (72-high card → 20.5 card-local → 620.5 global).
+  // The removed `Positioned(top: 20.5)` matched the design frame and rode
+  // 20 / 29 / 43.5 px high on the three cases below.
+  group('P09 approval toggle is centred at every metric', () {
+    for (final (width, scale) in <(double, double)>[
+      (390, 1),
+      (320, 1),
+      (390, 1.3),
+      (320, 1.3),
+    ]) {
+      testWidgets('${width.toInt()} wide, text scale $scale', (tester) async {
+        await pumpAppRoute(tester, QuestsRoutePaths.editor);
+        tester.view.physicalSize = Size(width * 3, NestDevice.height * 3);
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+
+        final card = tester.getRect(find.byType(NestCard).at(1));
+        final track = tester.getRect(find.byType(NestToggle));
+        final sub = tester.getRect(
+          find.text('Coins land after your thumbs-up'),
+        );
+
+        expect(
+          track.center.dy,
+          closeTo(card.center.dy, 1),
+          reason:
+              'the track is ${track.center.dy - card.center.dy} px off the '
+              "card's midpoint @$width/$scale",
+        );
+        // Still flush to the content edge and clear of the sub-line.
+        expect(track.right, closeTo(card.right - NestSpacing.s4, 0.01));
+        expect(track.left, greaterThanOrEqualTo(card.left + NestSpacing.s4));
+        expect(track.overlaps(sub), isFalse);
+        // And it must not leave the card, which the taller frames grow.
+        expect(track.top, greaterThanOrEqualTo(card.top));
+        expect(track.bottom, lessThanOrEqualTo(card.bottom));
+        await disposeApp(tester);
+      });
+    }
+  });
 }

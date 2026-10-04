@@ -613,16 +613,22 @@ void main() {
 
       final toggle = rectOf(find.byType(NestToggle));
       // Batch5 laid-out box: the 51x31 track IS the widget box, landed flush
-      // to the content edge (right edge 354), vertically centred in the row's
-      // 40 via the overlaid Positioned offset ((40-31)/2).
+      // to the content edge (right edge 354), vertically centred on the card —
+      // `.switchrow { align-items: center }` with the card's symmetric 16/16
+      // padding, so the track's midpoint is the CARD's midpoint at every
+      // metric (P09-TEST-9). On the design frame (72-high card) that is
+      // 620.5 + 15.5 = 636 = 600 + 36, the value pinned below. Under this
+      // file's widget-test font the sub-line wraps and the card grows, so the
+      // old fixed `Positioned(top: 20.5)` put the switch up to 43.5 px high
+      // while this assertion still compared against a 72-high card.
       expect(toggle.right, 354);
       expect(toggle.width, 51);
       expect(toggle.height, 31);
+      expect(toggle.center.dy, approval.center.dy);
       expect(
-        toggle.center.dy,
-        approval.top + 36,
-      ); // centre of the 40-row at 636
-      expect(toggle.top, closeTo(approval.top + 20.5, 0.51));
+        toggle.top,
+        closeTo(approval.top + (approval.height - 31) / 2, 0.01),
+      );
 
       final due = rectOf(find.byType(NestCard).at(2));
       expect(due.top - approval.bottom, 12); // [684]

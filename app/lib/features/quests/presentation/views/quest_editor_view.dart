@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
-import 'package:nestling/core/data/app_clock.dart';
+import 'package:nestling/core/data/ids.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/family/domain/entities/family_child.dart';
 import 'package:nestling/features/family/domain/family_repository.dart';
@@ -538,9 +538,12 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
     final quest = Quest(
       // A `?idea=` seed is a CREATE, so the new row gets a fresh id — the
       // template's id (`idea-bed`) must never be written (review finding 2).
-      id: _isEdit
-          ? widget.initialQuest!.id
-          : 'q-${appNowUtc().millisecondsSinceEpoch}',
+      // Minted with `newId` (uuid), never from the clock (IDS rule,
+      // ORCHESTRATOR_NOTES 09:27): a millisecond stamp collides whenever two
+      // creates land in the same millisecond — always, under the pinned test
+      // clock — and the duplicate primary key left the editor open with a raw
+      // SQL error toast instead of a second quest (BUG-P09-14).
+      id: _isEdit ? widget.initialQuest!.id : newId('q'),
       title: _title.text.trim(),
       // `Quest.detail` is not a column — the repository recomputes
       // `'{repeat} · {coins} coins'` on every read — so the view carries no
@@ -1025,23 +1028,49 @@ class _QuestEditorSheetState extends State<_QuestEditorSheet> {
                 // The slot the toggle occupies visually; the widget itself is
                 // the [Positioned] sibling below, which is how its full 59x44
                 // tap area escapes the row's 40-high hit test (BUG-P09-10).
-                const SizedBox(width: 51),
+                const SizedBox(width: QuestEditorMetrics.approvalTrackWidth),
               ],
             ),
           ),
-          // The track is the toggle's own laid-out box. The row is driven by
-          // the text block (16/22 + 13/18 = 40), so the track — centred in
-          // the row's 40 — sits 4.5 px from the row's top: card-local top
-          // 16(padding) + 4.5 = 20.5 (`QuestEditorMetrics.approvalTrackTopInCard`,
-          // the same half offset the CSS gives). Vertically and left/right it
-          // lands at 303 / 620.5 / 51 / 31, the design rect (`uta:hex`-verified).
-          Positioned(
-            top: QuestEditorMetrics.approvalTrackTopInCard,
-            right: NestSpacing.s4,
-            child: NestToggle(
-              value: _needsApproval,
-              semanticLabel: 'Needs my approval',
-              onChanged: (value) => setState(() => _needsApproval = value),
+          // The track is the toggle's own laid-out box, centred the way
+          // `.switchrow { align-items: center }` centres it. The old
+          // `Positioned(top: 20.5)` measured ONE frame — the design's centred
+          // 72-high card — so the track rode 20/29/43.5 px high as soon as the
+          // sub-line wrapped (320 dp, text scale 1.3) (P09-TEST-9). The
+          // full-card `LayoutBuilder` turns the card's own height into the
+          // top offset, so the switch is centred BY LAYOUT at every metric:
+          // (72 − 31) / 2 = 20.5 card-local → 620.5 globally, the design rect.
+          //
+          // The toggle stays a DIRECT loose-slot child of a Stack that covers
+          // the whole slop, because `RenderBox.hitTest` rejects any position
+          // outside a box's own size: every box between here and the track
+          // must contain the 59×44 `.toggle::before` area (4 px past the track
+          // on each side) or those taps are silently eaten (BUG-P09-10).
+          // Measured while fixing it: a tight `Positioned.fill` + `Padding`
+          // region lost the 2 px-right tap, a tight vertical inset lost both
+          // 5 px taps, and a `SizedBox` cannot reserve the inset at all
+          // because it sizes to its child (the track landed flush to the card
+          // edge at 319→370).
+          Positioned.fill(
+            child: LayoutBuilder(
+              builder: (context, constraints) => Stack(
+                clipBehavior: Clip.none,
+                children: <Widget>[
+                  Positioned(
+                    top:
+                        (constraints.maxHeight -
+                            QuestEditorMetrics.approvalTrackHeight) /
+                        2,
+                    right: NestSpacing.s4,
+                    child: NestToggle(
+                      value: _needsApproval,
+                      semanticLabel: 'Needs my approval',
+                      onChanged: (value) =>
+                          setState(() => _needsApproval = value),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

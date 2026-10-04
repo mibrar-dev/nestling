@@ -552,13 +552,17 @@ void main() {
       await disposeApp(tester);
     });
 
-    testWidgets('the new id is minted from the APP clock, not the wall clock', (
+    testWidgets('the new id comes from `newId`, never from a clock', (
       tester,
     ) async {
-      // CLOCK rule (ORCHESTRATOR_NOTES, iteration 5): app code never calls
-      // `DateTime.now()`. `flutter test` runs with the pinned story instant
-      // (Sat 3 Oct 2026 09:41 London = 08:41Z), so a wall-clock id would be
-      // ~16 hours off this value — this assertion is what catches a revert.
+      // IDS rule (ORCHESTRATOR_NOTES 09:27) + BUG-P09-14: ids are minted by
+      // `newId(prefix)` (uuid v4), never derived from a clock. A millisecond
+      // stamp collides whenever two creates land in the same millisecond —
+      // which is every create under the pinned story instant — and the
+      // duplicate primary key left the editor open with a raw SQL error toast.
+      // `p09_bugs_test.dart`'s BUG-P09-14 proof creates two quests and checks
+      // both survive; this test pins the SHAPE, so a revert to either
+      // `DateTime.now()` or `appNowUtc()` fails here on its own.
       await pumpAppRoute(tester, QuestsRoutePaths.editor);
       await tester.enterText(find.byType(TextField).first, 'Clock check');
       await tester.pump();
@@ -575,17 +579,26 @@ void main() {
       );
       expect(
         created.id,
-        'q-${appNowUtc().millisecondsSinceEpoch}',
-        reason:
-            'the id must come from appNowUtc() (the story anchor), '
-            'not DateTime.now()',
+        matches(
+          RegExp(
+            r'^q-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+          ),
+        ),
+        reason: "the id must be newId('q') — a uuid v4, prefix q",
       );
-      // It is NOT the wall clock: the anchor is a fixed instant and the real
-      // clock has moved on since (the date rolled over during iteration 5).
+      // Both clock shapes this screen has used are rejected explicitly, so
+      // the reason is legible in the failure rather than in a regex.
       expect(
         created.id,
         isNot('q-${DateTime.now().millisecondsSinceEpoch}'),
-        reason: 'a wall-clock id would fail this, which is the point',
+        reason: 'a wall-clock id is a timestamp, not a uuid',
+      );
+      expect(
+        created.id,
+        isNot('q-${appNowUtc().millisecondsSinceEpoch}'),
+        reason:
+            'the pinned story instant is the same for every create — '
+            'that collision is exactly BUG-P09-14',
       );
       await disposeApp(tester);
     });

@@ -77,16 +77,16 @@
 //                     maps correctly. Latent today (the clamped editor never
 //                     sends an out-of-range value), defensive path only.
 //
-// Iteration-5 proof (BUG-P09-14), `skip: true` until fixed:
+// Iteration-5 proof (BUG-P09-14) is fixed: the id is minted by `newId('q')`
+// (uuid v4, IDS rule), so it is unique by construction and never clock-derived.
 //
-//   BUG-P09-14 major  the new-quest id is `q-<appNowUtc().ms>` — a timestamp
+//   BUG-P09-14 major  the new-quest id was `q-<appNowUtc().ms>` — a timestamp
 //                     from the app clock, which the CLOCK rule pins in every
-//                     test. Both creates in one session mint the same id, so
-//                     the second insert hits the primary key: the editor
-//                     stays open with a raw SQL error toast and no second
-//                     quest exists. Production is masked only because the
-//                     real clock advances between separate save flows; the
-//                     id must be unique by construction.
+//                     test. Both creates in one session minted the same id, so
+//                     the second insert hit the primary key: the editor stayed
+//                     open with a raw SQL error toast and no second quest
+//                     existed. Production was masked only because the real
+//                     clock advanced between separate save flows.
 
 import 'dart:async';
 import 'dart:math' as math;
@@ -645,9 +645,7 @@ void main() {
   group(
     'BUG-P09-14 — a second quest cannot be created in the same session',
     () {
-      testWidgets('the pinned clock makes both creates share one id', (
-        tester,
-      ) async {
+      testWidgets('two creates in one session both persist', (tester) async {
         await pumpAppRoute(tester, QuestsRoutePaths.editor);
         await tester.enterText(find.byType(TextField).first, 'Quest A');
         await tester.pump();
@@ -668,17 +666,37 @@ void main() {
         await tester.pump(const Duration(milliseconds: 300));
         await tester.pump(const Duration(milliseconds: 300));
 
-        // `appNowUtc()` is pinned by the CLOCK rule, so both creates mint
-        // `q-<same ms>`; the second insert hits the primary key, the editor
-        // stays open and the toast carries the raw SQL error.
-        expect(find.text('New quest'), findsNothing);
+        // Ids come from `newId('q')` (uuid), which is unique by construction rather
+        // than by timing (IDS rule, ORCHESTRATOR_NOTES 09:27). The pinned story
+        // instant means every create in this session is the SAME instant, so a
+        // clock-derived id would collide here: the second insert hit the
+        // primary key, the editor stayed open and the toast carried the raw
+        // SQL error. Both quests must now exist.
+        expect(
+          find.text('New quest'),
+          findsNothing,
+          reason: 'the second save must succeed, not strand the editor',
+        );
+        expect(
+          find.textContaining('UNIQUE constraint failed'),
+          findsNothing,
+          reason: 'no raw SQL text may reach the parent (IDS rule)',
+        );
         final items = await tester.runAsync(() => _repo.getItems());
         expect(
           items!.map((quest) => quest.title),
           containsAll(<String>['Quest A', 'Quest B']),
         );
+        // The two ids are genuinely distinct, not merely both present.
+        final created = items
+            .where(
+              (quest) => quest.title == 'Quest A' || quest.title == 'Quest B',
+            )
+            .map((quest) => quest.id)
+            .toList();
+        expect(created.toSet(), hasLength(2));
         await disposeApp(tester);
-      }, skip: true);
+      });
     },
   );
 

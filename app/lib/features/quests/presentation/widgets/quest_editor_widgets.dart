@@ -32,14 +32,20 @@ abstract final class QuestEditorMetrics {
   /// tap minimum (matches `.list-row`'s 56 minimum).
   static const double dueRowMinHeight = 56;
 
-  /// The approval card is 600→672 (72) with 16 px internal padding, so the
-  /// content row starts at 616. `NestToggle`'s laid-out box IS the 51×31
-  /// track (batch5), and that track is vertically centred in the row's 40 —
-  /// card-local top = 16 + (40−31)/2 = 20.5, i.e. 620.5 globally, the
-  /// design rect measured on the P09 PNG. The toggle is overlaid at this
-  /// exact position (BUG-P09-9: the old `toggleTrackOffset` compensation is
-  /// deleted — the batch5 widget already aligns by layout).
-  static const double approvalTrackTopInCard = 20.5;
+  /// `.switchrow { align-items: center }` — the approval card is 600→672 (72)
+  /// with 16 px internal padding, and `NestToggle`'s laid-out box IS the
+  /// 51×31 track (batch5). The track is therefore centred in the card by
+  /// layout, not by a measured offset: (72 − 31) / 2 = 20.5 card-local →
+  /// 620.5 globally, 303→354 horizontally (the design rect measured on the
+  /// P09 PNG). The former `approvalTrackTopInCard = 20.5` constant is gone
+  /// with it: a fixed `Positioned` top pinned that one frame and rode high
+  /// whenever the sub-line wrapped (P09-TEST-9).
+  ///
+  /// [approvalTrackWidth] and [approvalTrackHeight] are the same rect's size —
+  /// `.toggle` is 51×31 in `components.css` (the height is what the centred
+  /// top offset divides out of the card's height).
+  static const double approvalTrackWidth = 51;
+  static const double approvalTrackHeight = 31;
 }
 
 /// `.switchrow .tt` — 16/22 w600. The scale's [NestType.bodyStrong] is

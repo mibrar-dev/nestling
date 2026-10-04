@@ -1,74 +1,72 @@
-# P09 — 2a build, logic chunk (FIXES_4 iteration)
+# P09 — 2a build, logic chunk (FIXES_5 iteration)
 
 ## CONTRACT CHANGES (UI builder: read first)
 
-No shape changes. One behaviour fix inside the existing contract, plus two
-flagged items that are yours or the loop's — not mine:
+No shape changes, no behaviour changes in this layer. Three routed items:
 
-- **FIXED (P09-TEST-6 / BUG-P09-13): `_checkCoins` throws `ArgumentError`
-  unconditionally.** The `assert` is gone: in debug it fired first and its
-  file-path/line-number text leaked through `editorError` into the toast,
-  defeating the finding-4 mapping. Release behaviour is unchanged. The
-  interface doc (finding 8, fixed last iteration) is updated to match —
-  "throws `ArgumentError` in all builds". Verified end to end with a
-  throwaway replication of the parked proof (real repo + real bloc,
-  9999 coins → `editorError == saveFailedMessage`; file deleted after the
-  run). The bugs stage has already un-skipped the proof (`p09_bugs_test.dart`
-  carries zero `skip: true` now).
-- **CLOCK rule — one violation in the feature, not in this layer:**
-  `quest_editor_view.dart:542` mints new ids with
-  `DateTime.now().millisecondsSinceEpoch`. My layer (`domain/`, `data/`,
-  `bloc/`, routes) has no `DateTime.now()` anywhere. Replacing it (e.g.
-  `clock.now()`) is a view edit — yours if the orchestrator wants the rule
-  applied to id minting too.
-- **KID BACKGROUND rule:** n/a — P09 is a parent screen, no meadow anywhere.
+- **BUG-P09-14 (unique ids) is blocked on shared code + your one-liner.**
+  `ORCHESTRATOR_NOTES.md` 09:27 orders `newId('q')` from
+  `shared/unique_ids` — that helper exists nowhere in `app/lib` yet (the
+  batch has not landed), and the minting site is your line
+  (`quest_editor_view.dart:543`, still `'q-${appNowUtc()...}'`). Nothing
+  in `domain/`/`data/`/`bloc/` can mint the id: events carry complete
+  entities and the repo must not silently rewrite primary keys. When the
+  helper lands, swap the mint, and in the same commit update the CLOCK
+  test in `quest_editor_states_test.dart` (§3.1) — it asserts the stored
+  id EQUALS `q-<appNowUtc ms>` exactly, so a random suffix breaks it by
+  design. The parked BUG-P09-14 proof stays skipped until then (not this
+  layer's file).
+- **P09-TEST-8 (verbatim non-ArgumentError failures): no safe bloc change
+  exists — do not rewire `_editorError`.** Mapping everything-unknown to
+  generic would break the states suite's pinned offline/disk-full
+  passthrough (another stage's assertions); mapping one more concrete
+  type (e.g. `SqliteException`) is drift-leaking whack-a-mole. The only
+  reachable producer of a raw-SQL toast was the id collision, which dies
+  with the BUG-P09-14 fix above. A broader taxonomy (own copy for
+  operational errors) needs orchestrator copy + cross-stage test edits.
+- **CLOCK/KID-BACKGROUND rules:** my layer has no `DateTime.now()`,
+  no meadow, nothing kid-mode. The feature's sole `DateTime.now()`
+  was already migrated to `appNowUtc()` (view line above).
 
-Out of layer, documented (do not act on these here):
+## Files changed
 
-- **Stale proof — BUG-P09-5 regressed by the P15 merge, not by P09.**
-  `p09_bugs_test.dart` "q-bed assigned to deleted Leo shows no selected
-  pill" fails (Expected 1, Actual 0) with AND without this iteration's
-  diff (proven via stash). Root cause: the merged `FamilyRepository.
-  removeChild` (P15-BUG-6) now cascade-deletes the removed child's quests,
-  so `q-bed` no longer exists when the editor opens `?id=q-bed` — the
-  "Quest not found" screen has no pills at all. The proof's premise
-  (orphan survives deletion) is void; the view fallback itself is intact
-  for directly-planted orphans. Repair belongs to the proof (plant the
-  orphan id straight into Drift instead of `removeChild`), i.e. the bugs
-  stage's file — not `family/` (shared), not the view, not this layer.
-- **Core `family_time_test` zone failure**: still `test/core/`, still
-  off-limits; `SHARED_REQUEST.md` §7 stands.
-
-## Files changed (logic layer only)
-
-- `app/lib/features/quests/data/quests_repository_impl.dart` — assert
-  removed from `_checkCoins` (+ comment rewritten to say why).
-- `app/lib/features/quests/domain/quests_repository.dart` — create/update
-  contract now promises unconditional `ArgumentError`.
-- `app/test/features/quests/quests_repository_test.dart` (my file) — the
-  two range-rejection tests now expect `throwsArgumentError` (debug and
-  release agree by construction now).
-- Nothing else: bloc/events/state/routes/DI untouched; no `google_fonts`;
-  no shared-file edits → no new `SHARED_REQUEST.md`.
+None in `domain/`, `data/`, `bloc/`, DI, routes, or my tests. This
+iteration's FIXES_5 items are: a view one-liner blocked on shared code
+(BUG-P09-14), a taxonomy question with no safe change (P09-TEST-8), a
+view layout item (P09-TEST-9), and skipped proofs in files outside this
+layer's names. Editing any of them from here would be scope violation.
 
 ## Verification (logic layer only)
 
 - `flutter analyze lib/features/quests test/features/quests` → No issues
   found.
-- Logic + contract-consumer suites: 106/106 (bloc, repository, states,
-  P10 bloc, coin-rules, data-integrity) and 91/91 (view, a11y, copy,
-  robustness, geometry, hit-area) — the BUG-P09-9 rects are green again
-  after 2b's compensation removal.
-- Library + bugs groups: all green except the stale BUG-P09-5 proof
-  above (pre-existing, mechanism fully explained, outside this layer).
-- `dart format --set-exit-if-changed` on touched files → clean.
+- Split feature runs: 107 + 96 + 80 + 95 pass; bugs file 30 pass, 1 skip
+  (BUG-P09-14 parked), 1 fail — see below. `dart format` clean.
 - Whole-app `flutter test` and any simulator deliberately NOT run
   (integrator / stage 5 own them); no simulator was booted.
 
+## One failing proof, routed (not this layer)
+
+`p09_bugs_test.dart` BUG-P09-10 "2 px right of the track flips the
+toggle" taps absolute (356, 635.5) — truly 2 px past the track's right
+edge (354) — and the toggle does not flip. Ruled out from this side:
+my layer has no hit-test mechanism; the batch-6 `NestCard` change is an
+additive optional-`radius` param with identical defaults; geometry rects
+are exact (card 72, track 303/620.5/51/31), so this is hit-test routing,
+not layout. Asymmetry note for the owner: the vertical overhang probes
+(5 px above/below, truly outside the track) pass — only the right
+overhang misses. Coverage gap in the same area: `quest_editor_toggle_
+hit_area_test.dart` computes all probes as offsets from the track
+*centre* (±2/±4/±6.5 on a 51×31 box), so none of them ever leaves the
+track — the bugs proof is the only true slop probe on x. View-side
+and shared-hit-slop forensics belong to the UI builder/integrator
+(Stack sibling? `Positioned(right: s4)` clipping the slop's right
+overhang?); the test file is not mine to edit.
+
 ## LEFT FOR NEXT ITERATION
 
-- Nothing unfinished in the logic layer. Open elsewhere: the stale
-  BUG-P09-5 proof (bugs stage), core zone test (core owner), stage 5
-  re-shoot, CLOCK-rule call on the view's id mint (orchestrator/UI).
+- Nothing unfinished in the logic layer. Open elsewhere: BUG-P09-14
+  (shared `newId` → view one-liner + CLOCK-test update + un-skip),
+  BUG-P09-10 right-overhang forensics, P09-TEST-8/9, stage 5 re-shoot.
 
 VERDICT: PASS
