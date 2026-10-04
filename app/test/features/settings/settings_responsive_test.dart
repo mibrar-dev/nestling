@@ -409,6 +409,108 @@ void main() {
     await disposeApp(tester);
   });
 
+  group('P16 hint typography — `.lockhint` is 14/20 (review finding 4)', () {
+    // `.lockhint { font-size: 14px; line-height: 20px }`
+    // (`P16-settings.html:11`). Both places that render that copy used to reach
+    // for `NestType.chipLabel(...).copyWith(fontWeight: w400)` — the right line
+    // box from the wrong token, so a chip-label weight or size change would
+    // silently move hint text — and they now share one `settingsHintStyle()`.
+    // The style is asserted as the CSS VALUES (not a pixel measurement: the UI
+    // stage owns ±2 px) and then once as a rendered line box, so a declared
+    // style that never reaches the render still fails.
+    //
+    // This survives the follow-up the build filed for a real `NestType.hint`
+    // token (§9): a token that lands on 14/20 satisfies every assertion here.
+    Finder hintCopy() => find.byWidgetPredicate(
+      (w) =>
+          w is Text &&
+          w.textSpan?.toPlainText() == 'Kid mode needs parent gate — On',
+    );
+
+    /// The style a piece of hint copy is rendered with.
+    ///
+    /// The lock hint is a `Text.rich` (the design bolds "On"), so its style
+    /// lives on the span; the banner copy is a plain `Text`, so its style lives
+    /// on the widget. Reading the wrong one is a null check, not a silent pass.
+    TextStyle? hintStyleOf(Text text) =>
+        text.textSpan != null ? text.textSpan!.style : text.style;
+
+    void expectLockHintStyle(TextStyle style, String where) {
+      expect(style.fontSize, 14, reason: '$where is Inter 14');
+      expect(
+        style.height,
+        closeTo(20 / 14, 0.001),
+        reason: '$where has a 20 px line box on a 14 px size',
+      );
+    }
+
+    testWidgets('the lock hint renders the design 14/20', (tester) async {
+      await pumpSettingsApp(tester);
+      await scrollSettingsTo(tester, hintCopy());
+
+      expectLockHintStyle(
+        hintStyleOf(tester.widget<Text>(hintCopy()))!,
+        'the lock hint',
+      );
+      // The declared line box has to reach the RENDER, not just the style: the
+      // copy occupies whole 20 px lines, whether it takes one line or wraps.
+      // (A declared style that never lands is the other half of a token swap,
+      // and a pixel-count assertion is the only thing that catches it.)
+      expect(
+        _isWholeLineBoxes(tester.getRect(hintCopy()).height, 20),
+        isTrue,
+        reason: 'the declared 20 px line box has to reach the render',
+      );
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the move banner renders the same 14/20, at both scales', (
+      tester,
+    ) async {
+      // The banner carries a different message but the same `.lockhint` metrics,
+      // and it is the only place the style is visible at a raised text scale —
+      // a token swap that changed the size would be caught here first.
+      for (final scale in const <double>[1, 1.3]) {
+        await pumpSettingsApp(
+          tester,
+          deviceZone: 'Asia/Dubai',
+          textScale: scale,
+        );
+        expect(
+          find.byKey(const ValueKey('p16_move_banner')),
+          findsOneWidget,
+          reason:
+              'the banner shows when the device zone differs (scale $scale)',
+        );
+
+        final bannerCopy = find.descendant(
+          of: find.byKey(const ValueKey('p16_move_banner')),
+          matching: find.byType(Text),
+        );
+        expect(
+          tester.widget<Text>(bannerCopy.first).style!.fontSize,
+          14,
+          reason:
+              'the banner copy is Inter 14 at scale $scale — the style is '
+              'scaled by the framework, not re-declared',
+        );
+        expect(
+          _isWholeLineBoxes(
+            tester.getRect(bannerCopy.first).height,
+            20 * scale,
+          ),
+          isTrue,
+          reason:
+              'the banner copy occupies whole 20 px line boxes, and the '
+              'line box scales with the text scale ($scale)',
+        );
+
+        await disposeApp(tester);
+      }
+    });
+  });
+
   for (final theme in <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
     testWidgets(
       'the move banner shares the gutter and stays tappable ($theme)',
@@ -511,4 +613,13 @@ void main() {
 
     await disposeApp(tester);
   });
+}
+
+/// Whether [height] is a whole number of [lineBox]-high lines.
+///
+/// Sub-pixel text layout makes an exact multiple fragile by a hair, so the
+/// remainder is allowed to sit within a fraction of a pixel of either end.
+bool _isWholeLineBoxes(double height, double lineBox) {
+  final remainder = height % lineBox;
+  return remainder < 0.5 || (lineBox - remainder) < 0.5;
 }

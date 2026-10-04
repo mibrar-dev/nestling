@@ -272,6 +272,43 @@ void main() {
     });
   });
 
+  group('P16 CHILD ORDER (owner rule) — the order children were added', () {
+    // Owner rule: children are listed in the order they were ADDED (Maya, then
+    // Leo), never alphabetically, in every screen and repository. This
+    // iteration the repository stopped hand-writing its member SQL and delegates
+    // to the shared `AppDatabase.watchMembers()` (review finding 5), so the
+    // ordering now lives in a file outside the feature — and nothing in this
+    // suite pinned it. `Sarah`/`James` are the same rule for adults: the seed
+    // inserts the owner first, and a query that ordered by name would silently
+    // swap them (James < Sarah).
+    //
+    // Measured as GEOMETRY, not as list order: the assertion is about what a
+    // parent sees top-to-bottom, so it survives a scroll offset and it fails if
+    // anything sorts the rows on the way to the screen.
+    testWidgets('Maya is above Leo, and the owner above the co-parent', (
+      tester,
+    ) async {
+      await pumpSettingsApp(tester);
+
+      await scrollSettingsTo(tester, find.text('Maya · 7–9'));
+      expect(
+        tester.getTopLeft(find.text('Maya · 7–9')).dy,
+        lessThan(tester.getTopLeft(find.text('Leo · 4–6')).dy),
+        reason: 'Maya was added first and must be listed first',
+      );
+
+      await scrollSettingsUpTo(tester, find.text('Sarah — you'));
+      expect(
+        tester.getTopLeft(find.text('Sarah — you')).dy,
+        lessThan(tester.getTopLeft(find.text('James — co-parent')).dy),
+        reason:
+            'the owner was seeded first — not alphabetically (James < Sarah)',
+      );
+
+      await disposeApp(tester);
+    });
+  });
+
   group('P16 dark mode', () {
     testWidgets('renders every section on the dark paper', (tester) async {
       await pumpSettingsApp(tester, theme: ThemeMode.dark);

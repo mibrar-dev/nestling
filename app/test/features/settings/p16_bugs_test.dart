@@ -517,13 +517,10 @@ void main() {
             'deviceRow=$deviceRow',
       );
     },
-    // P16-B09 open (minor, shared) — linked IANA ids (Europe/Amsterdam,
-    // Asia/Calcutta, US/Pacific, Europe/Kiev, Asia/Saigon, …) are rejected
-    // by `isKnownZoneId`/`normalizeZoneId` (core `family_time.dart:37-78`),
-    // so the device zone is unreadable on those phones. Fix belongs in the
-    // shared layer: resolve backward links to their canonical zone (or ship
-    // the dataset’s links); recorded in SHARED_REQUEST §5. Feature-side no
-    // workaround exists — the raw id never reaches the bloc.
+    // P16-B09 fixed in iteration 5 (shared batch 6): core `family_time.dart`
+    // resolves IANA backward links (`Asia/Calcutta` → `Asia/Kolkata`) before
+    // validation, so the device zone is readable again and the picker lists
+    // it first. Live proof.
     skip: false,
   );
 

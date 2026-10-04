@@ -91,6 +91,75 @@ void main() {
       await disposeApp(tester);
     });
 
+    testWidgets('the link row is tappable across its whole 52 px height, and '
+        'its ink resolves to a Material inside the card', (tester) async {
+      // Review finding 3 (iteration 6): this subcard has no `onTap`, so
+      // `NestCard` takes its plain `Container` branch — a bare `Container`
+      // carries no `Material`, so the link row's `InkWell` resolved its ink to
+      // the Scaffold's `Material`, i.e. BEHIND the card's opaque `surface`, and
+      // the row painted no ripple at all. The row now supplies its own ink
+      // surface, as `NestListRow`/`SettingsRow` do everywhere else.
+      //
+      // The ripple itself is paint, and this stage owns no simulator, so what is
+      // pinned is the two things that caused it and the thing a user can feel:
+      //   1. the whole row is the hit area, not just the words — the link row is
+      //      `.linkrow { min-height: 52px }` and its lower band is empty, so a
+      //      tap there must still navigate;
+      //   2. the ink the row paints into is a Material INSIDE the card. If the
+      //      local one is ever dropped, it resolves to the Scaffold's again
+      //      and the test fails with the mechanism named, rather than leaving
+      //      an invisible-ripple defect to a manual glance.
+      await pumpSettingsApp(tester);
+
+      await scrollSettingsTo(tester, find.text('Manage subscription'));
+      final card = subscriptionCard();
+      final rowInk = find.descendant(of: card, matching: find.byType(InkWell));
+      expect(
+        rowInk,
+        findsOneWidget,
+        reason: 'the link row brings one ink well',
+      );
+      final rowRect = tester.getRect(rowInk);
+      expect(
+        rowRect.height,
+        52,
+        reason: '`.linkrow { min-height: 52px }` — a parent row, over 44',
+      );
+
+      // `Material.of` returns the nearest `Material`'s data, so the comparison
+      // is made against the rest of the card — the plan title, which sits
+      // OUTSIDE the link row and still resolves to the Scaffold's Material. If
+      // the row's local Material is ever dropped, both resolve to the same
+      // surface again and this fails naming the mechanism, instead of leaving an
+      // invisible ripple to a manual glance.
+      final rowSurface = Material.of(tester.element(rowInk));
+      final cardSurface = Material.of(
+        tester.element(find.text('Nestling Annual · £29.99/year')),
+      );
+      expect(rowSurface, isNotNull, reason: 'some Material must resolve');
+      expect(
+        identical(rowSurface, cardSurface),
+        isFalse,
+        reason:
+            "the row's ink must resolve to its own Material inside the card, "
+            "not to the Scaffold's behind the card's opaque surface",
+      );
+
+      // The empty lower band of the row — 6 px above its bottom edge, which is
+      // below the label's line box, so no glyph is under the tap.
+      await tester.tapAt(Offset(rowRect.left + 12, rowRect.bottom - 6));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(
+        pushedPath(tester),
+        '/paywall',
+        reason: 'the full-height row is the tap target, not just its text',
+      );
+
+      await disposeApp(tester);
+    });
+
     for (final row in const <String>['Download our data', 'Privacy Notice']) {
       testWidgets('the privacy row opens the privacy screen ($row)', (
         tester,

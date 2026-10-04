@@ -1,108 +1,114 @@
-# P16 · Family & settings — Stage 6 adversarial bug hunt (iteration 5)
+# P16 · Family & settings — Stage 6 adversarial bug hunt (iteration 6)
 
 Route `/settings` · feature `settings` · parent mode · design
 `design/html-source/screens/P16-settings.html` + light/dark PNGs
-(1170×2532 ÷ 3). This stage changed **nothing** in `app/lib/**`; it added no
-tests (the iteration-5 build had already unskipped every proof) and rewrote
-this report. No simulator was booted, installed on, screenshotted or driven.
+(1170×2532 ÷ 3). This stage changed **nothing** in `app/lib/**`; it refreshed
+one stale proof comment in `app/test/features/settings/p16_bugs_test.dart`
+(B09) and rewrote this report. No simulator was booted, installed on,
+screenshotted or driven.
 
-Tree tested: iteration-5 checkpoint `d5a05fa` (`main` merged at `0a4ac23`,
-shared batch 6 in-tree) plus the concurrent test stage's iteration-5 pass,
-which pinned one new minor (P16-T04) during this run.
+Tree tested: iteration-6 checkpoint `7189047` (`main` merged at `ee5841b`;
+the shared `nestAvatarInitial` is in-tree) plus the concurrent test stage's
+iteration-6 edits, which were still landing during the run.
 
 ## Result
 
-**No open major bugs; one open minor, found by the test stage.**
-Everything from iterations 1–4 (B01–B11, T01–T03) is fixed with live proofs,
-the 09:22 mandate (un-fork, email from the DB, B09) is done, and this
-iteration's adversarial re-attack of the shared-component consumption found
-no new defects. Verdict: **PASS**.
+**No open bugs in the screen.** Every finding from iterations 1–5 is fixed
+with a live, un-skipped proof; the iteration-6 mandate (T04 + the FIXES_5
+review findings) is independently verified below; no new defect was found in
+the changed code. Verdict: **PASS**.
 
 | id | severity | status | proof |
 |---|---|---|---|
-| P16-T04 | minor | **open (new, test stage)** | `settings_a11y_test.dart` `[P16-T04] the initial trims a leading space and falls back to "?" for a whitespace-only name` (skipped; fails under `--run-skipped`) |
-| P16-B09 | minor | fixed iter-5 | `[P16-B09] …` unskipped, green |
-| P16-B10/B11 | major/minor | fixed iter-4, no regression | live |
-| P16-T01/T02/T03, B01–B08 | — | fixed, no regression | live |
-| P16-T02 | major | fixed iter-3 | live |
+| P16-T04 | minor | fixed iter-6 | `settings_a11y_test.dart` `[P16-T04] …` — live, green |
+| review 2 (guard swallowed switch flips) | major | fixed iter-6 | verified by probe (below) + suite |
+| review 1 (`nestAvatarInitial`) | major | fixed iter-6 | same change as T04 |
+| review 3 (ripple behind the card) | minor | fixed iter-6 | verified by probe (below) |
+| review 4/5/6 (hint style, `watchMembers`, DI zone service) | minor | fixed iter-6 | verified by probe/code + suite |
+| P16-B01…B11, T01–T03 | — | fixed iter-1…5, no regression | all live |
 
-P16 now has **one** skipped test (T04, above); my own file has **zero**.
+P16 has **zero** skip-marked tests (second iteration running); my file has
+zero.
 
-## P16-T04 · minor · avatar initials do not trim
+## Iteration-6 changes, independently verified
 
-`settings_view.dart:418-420` (member) and `:440-442` (child) treat a
-whitespace-only nickname as non-empty, so `' Maya'` renders a **space** as
-its avatar initial and `'   '` renders a blank avatar instead of `'?'`. The
-new shared `nestAvatarInitial` (on `main`) trims and supplies the `'?'`
-fallback; the helper is absent from this worktree, but the trim itself is a
-local one-liner.
+**P16-T04 / review 1 — shared `nestAvatarInitial`.** Both call sites now use
+the helper (`settings_view.dart:434,455`); no `.characters.first` and no
+`package:characters` import remain in the feature. Measured on the Leo row:
 
-**Repro/proof:** set Leo's nickname to `' Maya'` / `'   '`; the Leo row's
-`NestAvatar.initial` is a space. Proof:
-`settings_a11y_test.dart` `[P16-T04] …` (`skip: true`;
-`flutter test test/features/settings/settings_a11y_test.dart --run-skipped`
-fails as designed).
-
-**Suggested fix:** trim before both the empty check and the first grapheme
-(`final t = name.trim(); initial = t.isEmpty ? '?' : t.characters.first.toUpperCase();`),
-or swap in `nestAvatarInitial(name)` once `main` is merged (the integrator's
-two one-liners). Not a crash — `.characters.first` is already grapheme-safe;
-an emoji nickname renders correctly (verified).
-
-## Iteration-5 changes, independently verified
-
-**The un-fork is metric-preserving** (checkpoint `d5a05fa`; probes on the
-real app):
-
-| check | measured |
+| nickname | avatar initial |
 |---|---|
-| `_P16Sect`/subcard/`SettingsRow` refs gone; shared components used | `NestSectionLabel` ×7, `NestCard(radius: 16, padding: 14×16)`, switch/link/picker rows plain `NestListRow` |
-| switch track vs row right content edge (B11) | gap **0.0** at 390 and 320; rows **56** |
-| section label height | 16.0 @1.0, 21.0 @1.3 (13/16 shared) — no clipping |
-| subcard | `NestCard.radius=16.0`, padding `EdgeInsets(16, 14, 16, 14)`; inner `Material` restored (ripple fix) |
-| 320×844 @1.3 dark | no overflow, gap 0, row 56 |
-| picker at 320×568 @1.3 (B03) | still scrolls; proof green |
+| `' Maya'` | `M` (was a space) |
+| `'   '` | `?` (was a space) |
+| `''` | `?` |
+| `'Maya'` | `M` |
+| `'🐻 Bo'` | `🐻` (grapheme-safe) |
 
-**Shared-row hit slop is correct** (`NestListRow._TrailingSlop` +
-`_RowSlopForwarder`): centre, ±5 px vertical and ±4 px horizontal taps flip
-the switch; a tap over the title (80 px left of the track) and taps 15 px
-above/below do **not** — no false toggles from the padding retry.
+**Review 2 (major) — the guard no longer swallows switch flips.** The three
+`NestToggle.onChanged` handlers dispatch straight to the bloc; the fence
+remains on the rows that open a modal/route (10 call sites). Measured:
+open the picker → pick a zone → tap the Approvals switch **100 ms later**:
+`before=true after=false flipped=true`. Same after the delete dialog closes.
+The B08/B10 double-tap proofs (rows) stay green, so the fall-through is still
+fenced where it can actually re-fire something.
 
-**DATA OVER MOCKS:** Sarah's subtitle reads `members.email`; updating the DB
-row updates the screen live; `NULL` email falls back to `Owner` (owner) or
-`Invited · awaiting reply` (invited co-parent) — no invented address.
+**Review 3 (minor) — the link row's own ink surface.** `Material(color:
+Colors.transparent, child: InkWell(…))` wraps the manage row. Ground truth:
+`Material.of(inkWell)` is **not** identical to `Material.of(planTitle)`
+(the ripple no longer resolves to the Scaffold's Material behind the card),
+the InkWell rect is 52 px high (647–699), and a tap in its empty lower band
+still navigates to `/paywall`.
 
-**P16-B09:** with a reader returning the link `Asia/Calcutta`, the picker
-leads with the canonical `Asia/Kolkata · Current location` (batch 6's link
-resolution). Proof green.
+**Review 4 (minor) — one hint style.** `settingsHintStyle()` =
+Inter 14/20 **w400** (measured), used by both the lock hint and the move
+banner; `SHARED_REQUEST.md` §9 asks for a real `NestType.hint`.
 
-**Emoji nickname:** `'🐻 Bo'` renders its row and avatar without exception.
+**Review 5/6 (minor) —** `watchMembers` delegates to the shared
+`AppDatabase.watchMembers()`; `SettingsRepositoryImpl` takes the injected
+`FamilyZoneService` (DI singleton) instead of building its own. Both layers'
+tests green.
 
-**New rules:** every run used `--timeout 120s` (foreground, all under
-10 min); no id is minted on this screen (`newId` N/A); no simulator touched.
+**New rules:** AVATAR INITIALS compliant (helper used, no `name[0]`);
+every run used `flutter test --timeout 120s` (foreground, all under
+10 minutes); no id is minted on this screen (`newId` N/A); no simulator.
 
 ## Open shared/carried items (not screen bugs)
 
-1. `nestAvatarInitial` swap (T04's clean form) waits on the next `main`
-   merge — the helper is absent from this worktree.
-2. `SettingsRow` still renders five rows (avatar leading + danger title) —
-   `SHARED_REQUEST.md` §6; `.linkrow` 52 px — §7.
-3. `P16TransientGuard`'s process-wide static lifetime — needs a shared
-   variant (review 6).
-4. Legacy `SettingsItem`/`watchItems()`/`getItems()` stay until the shared
-   `repositories_test` settings group stops calling them.
+* `SHARED_REQUEST` §6 (`NestListRow.leading` widget + danger title) — the
+  `SettingsRow` mirror survives for five rows until it lands.
+* §7 `.linkrow` 52 px literal; §8 fence the modal/sheet exit at the shared
+  helpers; §9 `NestType.hint`.
+* Legacy `SettingsItem`/`watchItems()`/`getItems()` — the shared
+  `repositories_test` settings group still calls `watchItems()`.
+* Shared `NestListRow`'s no-`onTap` branch announces the Family list as one
+  node; shared `NestButton` wraps "Cancel" at 320 @1.3; subcard bottom edge
+  +2.0 px (within the ±2 px rule, tracked).
+
+## Observations (concurrent stages, not findings)
+
+1. The test stage's scratch `zz_probe_test.dart` was mid-flight at the
+   snapshot: it holds 6 `document_ignores` infos and its `subcard layout`
+   probe is currently red. It declares itself temporary; the settings suite
+   is otherwise `+149` and the navigation test's ripple assertion passed
+   after the test stage's own edit.
+2. My full-suite run had one failure — `pocket_money/p13_iter2_audit_test.dart`
+   — which passes in isolation (external flake/behind-`main` noise, not P16).
+   The build checkpoint's full suite was `+3528 ~2` green.
 
 ## Gates (snapshot, `app/`, `--timeout 120s`)
 
 ```
-$ dart format .                     # 553 files, 0 changed
-$ flutter analyze                   # No issues found!
+$ dart format .                     # 565 files, 0 changed
+$ flutter analyze                   # clean for lib + P16 files; the only
+                                    # issues (6 infos) are in the concurrent
+                                    # test stage's scratch zz_probe_test.dart
 $ flutter test --timeout 120s test/features/settings/p16_bugs_test.dart
                                     # +24: all pass, 0 skips
 $ flutter test --timeout 120s test/features/settings
-                                    # +141 ~1 (the one skip is P16-T04)
-$ flutter test --timeout 120s       # +3278 ~3: all non-skipped green;
-                                    # skips = P16-T04 + K01's + P12's
+                                    # +149 -1 — the 1 red is the test stage's
+                                    # scratch probe above, not a P16 test
+$ flutter test --timeout 120s       # +3538 ~2 -1 — the 1 red is P13's test
+                                    # (passes alone); skips are K01 + P12
 ```
 
 VERDICT: PASS

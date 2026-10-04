@@ -212,4 +212,98 @@ void main() {
       await disposeApp(tester);
     });
   });
+
+  group('P16TransientGuard — what it must NOT fence (review finding 2)', () {
+    // Review iteration 6 (major): every `NestToggle.onChanged` handler used to
+    // wrap its write in `P16TransientGuard.run`. Notifications sits immediately
+    // below the zone picker, so the natural sequence — open the picker, pick a
+    // zone, flip a switch — put the user's very next tap inside the 300 ms
+    // window and the switch did not move, with no feedback to explain it. The
+    // three wrappers are gone; the guard is only on rows that open a route or a
+    // dialog. A switch flip cannot re-fire itself, so the double-tap
+    // fall-through the guard exists for (B08/B10) can never apply to one — the
+    // same reasoning that already exempted the move banner's buttons above.
+    //
+    // Two proofs, because the two ways this could rot are different:
+    //   1. the end-to-end sequence, which is the actual user path;
+    //   2. the invariant with the guard armed deliberately — the same armed
+    //      state must fence a ROW and still let a SWITCH through, which pins
+    //      the boundary rather than one call site.
+
+    testWidgets('the switch below the picker is live on the very next tap', (
+      tester,
+    ) async {
+      await pumpSettingsApp(tester);
+      // Both controls in view before the sheet opens, so nothing scrolls while
+      // the guard window is open (`ensureVisible` would jump the scroll offset
+      // without a frame, but the row has to be built first).
+      await scrollSettingsTo(tester, find.text('Time zone'));
+      final toggle = find.byType(NestToggle).first;
+      await tester.ensureVisible(toggle);
+      expect(toggle, findsOneWidget);
+
+      await tester.tap(find.text('Time zone'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Karachi'));
+      // ONE frame: `_ZoneRow.onTap` arms the guard synchronously before popping,
+      // so the window is open here — this is the state the review called broken.
+      await tester.pump();
+      expect(
+        P16TransientGuard.suppressing,
+        isTrue,
+        reason: 'the sheet really did close inside the window',
+      );
+
+      final before = (await settingRows()).single.notifApprovals;
+      await tester.tap(toggle);
+      await settleSettings(tester);
+
+      expect(
+        (await settingRows()).single.notifApprovals,
+        !before,
+        reason:
+            'a switch flip inside the guard window must still reach the DB — '
+            'the user cannot tell a fenced switch from a broken one',
+      );
+      expect(
+        tester.widget<NestToggle>(find.byType(NestToggle).first).value,
+        !before,
+        reason: 'and the track must show the new state, not snap back',
+      );
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('armed: a row tap is fenced and a switch flip is not', (
+      tester,
+    ) async {
+      await pumpSettingsApp(tester);
+      final toggle = find.byType(NestToggle).first;
+      await scrollSettingsTo(tester, find.text('Download our data'));
+      await tester.ensureVisible(toggle);
+      final before = (await settingRows()).single.notifApprovals;
+
+      // Armed exactly the way a closing sheet arms it.
+      P16TransientGuard.suppressShortly();
+
+      await tester.tap(find.text('Download our data'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(
+        pushedPath(tester),
+        '/settings',
+        reason: 'the guard still fences a row that would navigate (B08)',
+      );
+
+      await tester.tap(toggle);
+      await settleSettings(tester);
+      expect(
+        (await settingRows()).single.notifApprovals,
+        !before,
+        reason: 'the same armed window must NOT swallow a switch flip',
+      );
+
+      await disposeApp(tester);
+    });
+  });
 }
