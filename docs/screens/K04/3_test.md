@@ -1,161 +1,165 @@
-# K04 Quest detail — Stage 3 test (iteration 2)
+# K04 Quest detail — Stage 3 test (iteration 3)
 
-Scope: close the coverage gaps iteration 1 declared, then re-run
-`flutter analyze` + `flutter test`. Inputs: `1_plan.md` §f, `RULES.md`,
-`ORCHESTRATOR_NOTES.md` (14:28 + 15:08 updates), `6_bugs.md`, `5_ui.md`.
+Scope: add the coverage the new **ICONS** rule requires, re-verify the suite, and
+report bugs. Inputs: `ORCHESTRATOR_NOTES.md` (14:28 + 15:08), `6_bugs.md`,
+`k04_bugs_test.dart` header (stage 6, iteration 3), `RULES.md`.
 **No simulator was booted, installed on or driven** (stage 5 only).
 
-## Verdict up front: FAIL
+## Verdict: FAIL
 
-The brief's bar is *"PASS only if all tests pass **and no bugs were found**"*.
-The first half holds; the second does not. There is a **known, open, currently
-failing bug on this screen — K04-BUG-4** — and its regression proof is
-`skip: true`, so a green suite partly reflects a hidden failure. I verified that
-independently rather than taking stage 6's word for it:
+Two independent reasons, one of which is an outright incomplete deliverable:
+
+1. **A real bug is open on this screen — K04-BUG-5 (Minor).** The brief's bar is
+   *"PASS only if all tests pass **and no bugs were found**"*. I re-ran its proof
+   un-skipped and it fails today (output below). I did **not** patch the screen.
+2. **This stage did not deliver its main new test.** I wrote **no new tests this
+   iteration** — see the honesty note below. The ICONS audience coverage is still
+   missing.
+
+Everything that exists is green: `flutter analyze` clean, **3707** suite tests
+pass. But a green suite is not a pass here, because one green is a *skipped* test
+whose body currently fails.
+
+## Honesty note — what I did and did not do
+
+I investigated, verified and reported, but I did **not** write the icon test I had
+planned. Concretely, this iteration produced **0 new test cases**; the 69 K04
+cases are unchanged from iteration 2. I had established everything needed to
+write it (see "The gap I left" below for the finished design), then ran out of
+stage before writing the file. I am stating that plainly rather than dressing up
+the verification work as test coverage — a report claiming I added icon tests
+would be false.
+
+## What I did verify this iteration (real runs)
+
+```
+$ flutter analyze
+No issues found! (ran in 3.4s)
+
+$ flutter test --timeout 120s test/features/kid_home
+00:13 +545 ~3: All tests passed!
+
+$ flutter test --timeout 120s
+01:37 +3707 ~5: All tests passed!
+```
+
+The shared `questIconFor(key, audience:)` helper that iteration 2 flagged as
+absent **has landed** (`core/design_system/components/quest_icons.dart`, plus
+`components/audience.dart` with `enum NestAudience { parent, kid }`), and the
+view was migrated: `quest_detail_view.dart:85` is now
+
+```dart
+String _iconFor(String raw) {
+  return questIconFor(raw, audience: NestAudience.kid);
+}
+```
+
+That satisfies the ICONS rule's *substance* for this screen (kid audience), and
+`k04_bugs_test.dart`'s K04-BUG-3 proof asserts the kid assets un-skipped. So the
+code is right; what is missing is my own independent regression guard.
+
+Also verified: the **K04-BUG-4 fix landed** and its proof is now **un-skipped**
+(the skip is gone from the file). Re-running it confirms the fix is real:
 
 ```
 $ flutter test --timeout 120s --run-skipped --plain-name K04-BUG-4 \
     test/features/kid_home/k04_bugs_test.dart
-Expected: TextOverflow:<TextOverflow.ellipsis>
-  Actual:   TextOverflow:<TextOverflow.clip>
+00:00 +1: All tests passed!
+```
+
+Skip inventory for K04 is now exactly one: `k04_bugs_test.dart:383`
+(`// skip: K04-BUG-5 (open)`). Iteration 2's K04-BUG-4 skip is closed.
+
+## Bug found / open — K04-BUG-5 (Minor, OPEN, shared asset)
+
+**Where:** `app/assets/icons/ic_quest_bed_kid.svg` (shared asset; `core/**` and
+assets are off-limits to a screen agent under RULES §1).
+
+**What:** the hero bed glyph's stroke width. The shipped asset is byte-exact to
+K03's bed row at `stroke-width="2"`, but K04's own tile in
+`design/html-source/screens/K04-quest-detail.html` draws the *same* paths at
+`stroke-width="1.8"` — the only 1.8 in the design corpus. At the 64 px hero slot
+that renders 5.33 px strokes against the design's 4.8 px, ~0.5 logical px
+(1.6 device px) heavier, against the ICONS rule "each screen matches its own
+design's glyphs exactly". One shared asset cannot be exact for K03 (2) and
+K04 (1.8) simultaneously.
+
+**Repro:** open `/quest-detail` for Maya's `q-tidy` ("Tidy your bedroom") and
+compare the hero tile glyph's stroke weight against
+`design/screens/light/K04-quest-detail.png` at the same 64 px slot.
+
+**Failing proof** — verified by me, not taken on trust:
+
+```
+$ flutter test --timeout 120s --run-skipped --plain-name K04-BUG-5 \
+    test/features/kid_home/k04_bugs_test.dart
+Expected: contains 'stroke-width="1.8"'
+  Actual: '<svg … stroke-width="2" viewBox="0 0 24 24">…'
 00:00 +0 -1: Some tests failed.
 ```
 
-Per the brief I did **not** patch the screen. `6_bugs.md` records it as Minor
-(`NestBalancedText(quest.title, … maxLines: 3)` in `quest_detail_view.dart:577`
-passes no `overflow:`, and the component defaults to `TextOverflow.clip`, so a
-title needing more than 3 lines is cut mid-word with no ellipsis). The fix is
-one argument at that call site, or a shared default — the orchestrator decides.
+**Resolution is the orchestrator's**, not a screen change: either accept the
+0.5 px, or publish a K04-specific 1.8 variant — which also means updating
+`test/design_system/audience_glyphs_test.dart:73`, which currently asserts `2` and
+claims the asset is "the exact K03/K04 bed glyph". That claim is what makes this
+a genuine conflict rather than a nitpick. Not patched, per the brief.
 
-A second, larger reason this stage cannot PASS: the UI check `5_ui.md` is
-**`VERDICT: FAIL`** with an open **Major** — the hero tile glyph. That is not a
-test finding of mine, but it means the screen is not in a shippable state, and a
-test stage should not hand a green tick over the top of it.
+## The gap I left — ICONS audience-difference coverage (owed to iteration 4)
 
-## Tests added this iteration (47 new cases)
+The existing K04-BUG-3 proof is good but has a specific hole: it hard-codes four
+quest ids and four expected assets, so it would still pass if someone reverted
+`_iconFor` to the **parent** table for the three keys where the audiences differ
+and the hard-coded list happened to be edited in step — it never asserts the
+*distinction*. The regression 5_ui flagged as Major was precisely "the screen
+silently used the wrong audience's glyphs".
 
-### `quest_detail_bloc_test.dart` — NEW, 9 cases
-Closes the "bloc_test for every event/state path" and `stepsFor` gaps with a
-scripted repository (fresh streams per `watchHome()`, like Drift).
+Design for the missing test (Maya's seed covers **all three** divergent keys, so
+this is provable end-to-end on real data):
 
-- `LoadRequested` walks initial → **loading → loaded → loaded+profiles**. The
-  third emission is the profiles roster, which `_onLoadRequested` starts
-  alongside the home stream; my first expectation wrongly listed two states and
-  failed, which is how the two-subscription contract got pinned rather than
-  assumed.
-- The load guard ignores a reload while the stream is live (`watchHomeCalls == 1`
-  after two loads) — K03-BUG-15, the guard `Try again` depends on.
-- A load **after** a stream failure really re-subscribes (`watchHomeCalls == 2`,
-  status back to `loaded`) — the K04 failure card's whole recovery path.
-- `QuestCompleted` celebrates once on the flip, carrying `justCompletedCoins: 15`
-  into the K05 extra.
-- A failing write raises `actionError` + bumps `actionNonce`, and **no**
-  celebration fires.
-- A quest vanishing mid-flight never lets a recycled id celebrate.
-- `stepsFor` delegates, never throws for an unknown id, and is readable before
-  any load event; **plus one case against the real seeded Drift DB** asserting
-  `q-tidy`'s three steps in seed order — the checklist column the whole screen
-  hangs off that single call.
+- `quest_icons.dart` diverges between audiences for exactly `bed`
+  (`questBedKid` vs `questBed`), `dishwasher` (`questDishesKid` vs
+  `questDishes`) and `book`/`reading` (`questReadingKid` vs `book`); `bins`,
+  `hoover`, `paw`, `bag`, `leaf`, `shirt`, `plate` are shared.
+- Maya's seeded quests map to those keys: `q-tidy`→`bed`,
+  `q-dishwasher`→`dishwasher`, `q-reading`→`book`, plus `q-bins`→`bins`,
+  `q-hoover`→`hoover`, `q-table`→`plate`.
+- So: read each quest's `icon` **from the database** (DATA OVER MOCKS — do not
+  hard-code the seed), assert the rendered 64 px `NestIcon.assetName` equals
+  `questIconFor(icon, audience: NestAudience.kid)`, and for the three divergent
+  keys additionally assert it is **not** `questIconFor(icon, audience:
+  NestAudience.parent)`.
+- Then prove it is column-driven rather than id-driven, with a fake repo holding
+  quests whose icon keys map to different glyphs.
 
-### `quest_detail_matrix_test.dart` — NEW, 19 cases
-Closes the **dark-mode** and **430 px** gaps: `{light, dark} × {320, 390, 430} ×
-{1.0, 1.3}` on the real seeded DB.
+I had confirmed the seed's icon keys and the divergence table; the file was not
+written.
 
-- No overflow, copy intact, and **ALIGNMENT** enforced per cell: the steps card
-  and both buttons share 20 px gutters at *every* width (`card.left == 20`,
-  `card.right == width - 20`), and the tile / pill / cheer row re-centre on the
-  new midpoint.
-- **BOTTOM EDGE** in both modes: bar rect is `left 0 … right width`,
-  `bottom == 844`, filled with that theme's `surface` token — plus a
-  *structural* proof that the bar is the body `Column`'s **last child**, so
-  nothing can paint below it or around the home pill. Note the dark design PNG
-  **does** show a meadow strip under the bar; the owner rule overrides the
-  designs and the app correctly does not reproduce it.
-- Dark is genuinely dark: `surface == 0xFF1F1C2E` vs light `0xFFFFFFFF`, on both
-  the bar and the card, so a light-mode colour leak or a swapped theme fails.
-- Dark interactions still work: `I did it!` → `/quest-complete`, a step toggles
-  to the **dark** `leaf` token, bottom `Back` → `/kid-home`.
+## Iteration-2 gaps — all still closed
 
-### `quest_detail_touch_targets_test.dart` — NEW, 10 cases
-Closes the tap-target gap as a *rule* rather than a side effect of the geometry
-test: `{320, 390, 430} × {1.0, 1.3}`, asserting every control's rendered box is
-≥ `NestDevice.tapKid` (56) tall and ≥ `tapParent` (44) wide — back and lock
-exactly 56×56, step rows ≥ 60, both bar buttons ≥ 56.
-
-Reachability is proven separately, which is the part a size assertion misses: a
-step toggles when tapped in the **empty 140 px right of its painted label**,
-on the ring itself, and 5 px inside its top edge; and the lock's
-`performAction(SemanticsAction.tap)` really pushes `/parental-gate`.
-
-### `quest_detail_view_test.dart` — EXTENDED, 19 → 28 cases
-- **`Seed.empty` on the real repository** (no fake): onboarded parent, no
-  children, no active child → `Who's playing?`, no quest, no coin pill, chrome
-  intact, `Choose` → `/who-is-playing`.
-- The four non-loaded states (loading, failure, missing quest, no child) each
-  re-pumped at the tightest cell **320 px @ 1.3×** in **both themes** — 8 cases.
-  The `PipAvatar(140)` failure card and the wide buttons were the overflow risks.
-
-## Results (real runs)
-
-```
-$ dart format test/features/kid_home/
-$ flutter analyze
-No issues found! (ran in 4.0s)
-
-$ flutter test --timeout 120s test/features/kid_home/quest_detail_*.dart
-00:02 +69: All tests passed!          # 9 bloc + 19 matrix + 10 targets + 28 view + 3 geometry
-
-$ flutter test --timeout 120s test/features/kid_home
-00:12 +544 ~4: All tests passed!
-
-$ flutter test --timeout 120s
-01:32 +3675 ~5: All tests passed!
-```
-
-K04 now has **69** cases across five files (was 22). The suite-wide count moved
-3415 → 3675: ~48 are mine and the rest came from other screens' tests landing
-in this worktree between iterations — not a K04 change.
-
-The 5 skips include the **K04-BUG-4 proof**, which is the skip this verdict
-turns on. The Drift "AppDatabase multiple times" warning is pre-existing harness
-noise. `analysis_options.yaml` was not touched and nothing outside
-`app/test/features/kid_home/**` + `docs/screens/K04/**` was written.
-
-## Iteration-1 gaps — status
-
-| gap | status |
-|---|---|
-| Dark mode uncovered | **closed** — 19-case matrix, colours from tokens + structural bottom-edge proof |
-| Width 430 uncovered | **closed** — all three widths in the matrix and the target rules |
-| Tap targets implicit | **closed** — size rule at 6 cells + edge-reachability probes |
-| `stepsFor` untested | **closed** — 4 cases incl. the real seeded DB |
-| `quest_detail_copy_parity_test.dart` absent | **not a gap** — copy parity is a group in the view test; no coverage lost, left as is to avoid churn |
-| Non-loaded states at 320 @ 1.3× / dark | **closed** — 8 new cases |
+Dark mode, width 430, tap targets, `stepsFor`, and the non-loaded states at
+320 px @ 1.3× in both themes remain covered by the iteration-2 files
+(`quest_detail_matrix_test.dart`, `quest_detail_touch_targets_test.dart`,
+`quest_detail_bloc_test.dart`, `quest_detail_view_test.dart`); nothing regressed.
+`quest_detail_copy_parity_test.dart` remains intentionally absent — copy parity
+lives as a group in the view test, so no coverage is lost.
 
 ## Not findings / process
 
-Per the orchestrator rules these are not reported as blockers: the uncommitted
-stage 4/5/6 artefacts in the worktree (`4_review.md`, `5_ui.md`, `6_bugs.md`,
-`k04_bugs_test.dart`, `ui/*.png`) and merge order — all handled by the loop.
-
-`ORCHESTRATOR_NOTES.md` 15:08 asks kid screens to switch to the shared
-`questIconFor/rewardIconFor(audience: kid)` once it lands on main. Verified in
-this worktree: `grep -rn questIconFor app/lib/` returns **0 hits** — only the
-unrelated single-argument `rewardIconFor(String key)` exists. The note's own
-wording is "not a finding meanwhile", so no K04 change was made and no test was
-written against a helper that does not exist. It should be picked up after the
-next main merge.
+Per the orchestrator rules these are not reported as blockers: uncommitted stage
+artefacts in the worktree and merge order. `analysis_options.yaml` untouched; no
+test skipped, weakened or deleted by me; nothing written outside
+`app/test/features/kid_home/**` and `docs/screens/K04/**` this iteration (in fact
+nothing at all — see the honesty note).
 
 ## Bugs found
 
-1. **K04-BUG-4 — OPEN, Minor.** `quest_detail_view.dart:577` — over-cap title is
-   clipped instead of ellipsised (`TextOverflow.clip` is `NestBalancedText`'s
-   default and the call passes no `overflow:`). Repro + failing proof in
-   `6_bugs.md`; verified still failing above. Not patched, per the brief.
-2. **Not a new bug, but verdict-relevant:** `5_ui.md` `VERDICT: FAIL` with an
-   open Major on the hero tile glyph (`ic_quest_bed.svg` renders as a plain arch
-   at the 64/120 px hero size). Root cause is shared-asset, not screen code;
-   `core/**` is off-limits to a screen agent. Flagged so a green test stage is
-   not read as sign-off.
+1. **K04-BUG-5 — OPEN, Minor.** `ic_quest_bed_kid.svg` `stroke-width="2"` vs
+   K04's design `1.8`; proof verified failing above. Needs an orchestrator
+   decision (accept, or ship a K04 variant + update
+   `audience_glyphs_test.dart:73`).
+2. **Not a screen bug, but blocking sign-off:** the ICONS audience-difference
+   regression guard this stage was supposed to add does not exist. Until it does,
+   a future revert to `audience: parent` would be caught only by the hard-coded
+   list in `k04_bugs_test.dart`, not by a rule-based assertion.
 
 VERDICT: FAIL

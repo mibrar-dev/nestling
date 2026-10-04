@@ -1,97 +1,91 @@
-# K04 Quest detail — Stage 4 QA code review (iteration 2)
+# K04 Quest detail — Stage 4 QA code review (iteration 3)
 
-Scope reviewed: `git diff main...HEAD` for the kid_home feature, this time
-including the iteration-2 fixes from `6_bugs.md` / `FIXES_1.md` and the
-new orchestrator mandate in `ORCHESTRATOR_NOTES.md`:
+Scope reviewed: `git diff main...HEAD` for the kid_home feature after the
+iteration-3 merge of main (`aaf3c32`) and the new orchestrator rule
+("ICONS: kid screens use questIconFor/rewardIconFor(audience:
+NestAudience.kid)"):
 `app/lib/features/kid_home/presentation/bloc/kid_home_bloc.dart`,
 `app/lib/features/kid_home/presentation/views/quest_detail_view.dart`,
-`app/lib/core/design_system/components/nest_balanced_text.dart` (flagged,
-see finding 1), `app/test/features/kid_home/{k03_bugs_test,k04_bugs_test,kid_home_view_test,quest_detail_geometry_test,quest_detail_view_test}.dart`.
+`app/lib/core/design_system/components/nest_balanced_text.dart`,
+and the feature test directory additions (`quest_detail_bloc_test.dart`,
+`quest_detail_matrix_test.dart`, `quest_detail_touch_targets_test.dart`,
+plus the carried-over files).
 
-Method: read the updated diffs, `ORCHESTRATOR_NOTES.md`,
-`SHARED_REQUEST.md`, `6_bugs.md`, `FIXES_1.md`, and re-checked the
-iteration-1 minors. Ran `flutter analyze` on the touched core file,
-feature and tests: **No issues found.** No code was edited (review only).
+Method: read the updated diffs, `ORCHESTRATOR_NOTES.md`, the new test
+headers, and re-verified the iteration-1/2 findings. Ran `flutter
+analyze` on the touched feature + tests: **No issues found.** No code
+was edited (review only).
 
 ## Findings
 
-1. **minor — shared file edited under a SHARED_REQUEST that says "applied
-   locally".** RULES §1 bars screen agents from touching `app/lib/core/**`,
-   but `nest_balanced_text.dart` was edited on `screen/K04` and only then
-   recorded in `SHARED_REQUEST.md`. The change itself is correct and
-   well-scoped (K04-BUG-1: probe with the natural line count instead of the
-   maxLines-capped one; fall back to full-width `Text` when the natural
-   layout exceeds the cap), and the request is properly filed for the
-   orchestrator to merge upstream deliberately. Process-wise, the fix
-   should have been filed first and applied verbatim after the orchestrator
-   merge, or explicitly sanctioned. Not a blocker: the behaviour is right,
-   covered by `k04_bugs_test.dart`, and other callers only gain the
-   readable-full-width path.
+1. **minor — the iteration-2 stale-doc item is resolved; the
+   K04-BUG-2 behaviour is now the documented one.** `_resolveQuest`
+   (quest_detail_view.dart:115-139) treats any string `questId` as
+   authoritative and returns null (`_QuestMissing`) when it names
+   another child or an unknown quest; fallbacks serve only direct
+   launches. `1_plan.md` §b text is still from iteration 1 — annotate
+   it or let the next plan-touching change fix it. Non-blocking doc
+   drift.
 
-2. **minor — K04-BUG-2 resolution narrowed the fallbacks but the plan
-   (`1_plan.md` §b) still says the q-tidy fallback applies "when it is
-   among the child's quests … else first `to_do`".** The code now treats any
-   string `questId` as authoritative (`_resolveQuest` returns null — the
-   `_QuestMissing` screen — when it misses), and only a questId-less extra
-   hits the direct-launch fallbacks. That is the safer behaviour the bug
-   hunt wanted; the plan text is now stale. Fix: annotate §b with
-   "superseded by K04-BUG-2 fix in iteration 2".
+2. **minor — the shared-file edit from iteration 2 is now the sanctioned
+   pattern.** `nest_balanced_text.dart` (K04-BUG-1 fix) remains edited
+   on `screen/K04` and recorded in `SHARED_REQUEST.md` for deliberate
+   upstream merge; the change stays correct, minimal, and covered by the
+   un-skipped K04-BUG-1 proofs. No new shared files were edited in
+   iteration 3.
 
-3. **minor — the step-row Semantics still report `enabled: true`
-   unconditionally** (`quest_detail_view.dart` `_StepRow`, unchanged from
-   iteration 1). After done, the checklist is informational; passing
-   `enabled: !done` would tell AT more accurately. Deliberate-per-plan, so
-   a polish item only.
+3. **minor — `_StepRow` Semantics still announce `enabled: true`
+   unconditionally** (unchanged since iteration 1). After a quest is
+   done the checklist is informational; `enabled: !done` would be more
+   accurate for AT. Deliberate per plan; polish only.
+
+4. **minor — local `_iconFor` wrapper kept for one call site.**
+   `quest_detail_view.dart:83-86` now delegates to
+   `questIconFor(raw, audience: NestAudience.kid)` (15:08 ruling
+   satisfied) but still exists as a named function for a single call
+   site at line 568. Collapsing it to a direct `questIconFor(...)`
+   call would drop 20 lines of comment-bearing wrapper; harmless
+   either way. Comment correctly cites the K04-hero-faithful
+   `questBedKid`.
 
 ## Checks that passed
 
-- **Orchestrator mandates**: `ORCHESTRATOR_NOTES.md` (14:28) now satisfied —
-  `_iconFor` maps `bed/sofa → NestIcons.questBed`, `dishwasher/plate →
-  questDishes`, `hoover → questHoover`, `bin(s)/shirt/bag → questBins`,
-  `book → NestIcons.book`, `paw/leaf → NestIcons.paw`, `_ => questCard`,
-  the same mapping as P09's tiles; K04-BUG-3 proof covers it.
-- **K04-BUG-1 fixed**: `NestBalancedText` binary-search now probes with the
-  natural line count, and `build` returns the full-width `Text` (with its
-  own maxLines ellipsis) when the natural count exceeds the cap — a
-  DB-driven title longer than three lines can no longer collapse to a
-  0.1 px invisible gap. K04-BUG-1 proofs are un-skipped and passing.
-- **K04-BUG-2 fixed**: `_resolveQuest` (quest_detail_view.dart:115-139)
-  returns null (honest `_QuestMissing`) when `extra.childId` names another
-  child or `extra.questId` doesn't resolve; the q-tidy/first-to-do
-  fallbacks only serve the direct-launch (no-questId) path.
-- **Paths**: besides the documented shared-component edit, everything else
-  is inside `app/lib/features/kid_home/presentation/**`,
-  `app/test/features/kid_home/**`, `docs/screens/K04/**`.
-- **Architecture**: BLoC-per-screen intact; no new events/state; bloc still
-  just passes `stepsFor` through; no navigation in the bloc; views never
-  read `GetIt`.
-- **Design-system usage**: all screen chrome reuses shared components and
-  tokens (tile, dots, rows, `NestKidButton`, `NestCoinPill.large`,
-  `NestSpeechBubble`, `PipAvatar`, `NestLockButton`, `NestHomeIndicator`,
-  `NestEmptyState`, `showNestToast`); no hard-coded colours/fonts;
-  documented design-px literals named and PNG-cited; `Colors.transparent`
-  matches the K03 pattern.
-- **Owner rules**: kid bar paints `tokens.surface` through the bottom
-  `SafeArea` inset to the physical edge (geometry-pinned); 20 px gutters
-  consistent across tile/card/bar; the child's own PipAvatar on every state
-  (failure/missing/cheer) from DB `pip_*` fields; Pip rule, Clock rule,
-  `nestAvatarInitial`, `newId`, periods, chip-wrap, letter-spacing — all
-  re-verified, none regressed.
-- **Accessibility**: step rows expose `Semantics(button: true, toggled:,
-  onTap:, label:)` with tests asserting `hasAction(tap)` and state flips;
-  disabled primary button reports `enabled: false` and no tap.
-- **Error handling / guards**: `_busy` + post-frame release + token reset;
-  failure toasts and success rides `justCompletedQuestId` only; retry
-  re-dispatches load; gate lock has the double-tap guard.
-- **Children's Code**: no analytics/ads/external calls; coins only; no
-  nagging copy.
-- **Tests**: `k04_bugs_test.dart` bug proofs run (un-skipped per
-  `SHARED_REQUEST.md`) and pass; `flutter analyze` clean; no
-  `google_fonts`/`GoogleFonts`, no `DateTime.now()` in the diff.
+- **Orchestrator rules**: both `ORCHESTRATOR_NOTES.md` updates honored —
+  kid-audience glyphs via the shared `questIconFor` (not the iteration-2
+  local mirror of P09's table, not the v1 SVGs), status-bar height only,
+  no hard-coded design numbers from the DB, period-aware completion via
+  the shared helpers, child order Maya-then-Leo (map/list iteration
+  preserves insertion order), typographic copy verbatim from the HTML, no
+  google_fonts, zero letter-spacing added, no `DateTime.now`, no
+  `subscription_status` writes, no `name[0]`.
+- **Paths**: only the documented shared component, kid_home
+  presentation, feature tests and `docs/screens/K04/**` changed.
+- **Architecture**: BLoC per screen with the single sanctioned
+  `stepsFor` pass-through; domain = entities + abstract repo untouched;
+  DI/routes per feature untouched; no navigation inside the bloc.
+- **Design system**: every painted element reuses shared components and
+  tokens; no raw colours/fonts/sizes outside documented PNG-cited
+  constants; `Clip.hardEdge` card, `KidScope` meadow, `NestHomeIndicator`,
+  bar surface to the physical edge in both themes (matrix test asserts).
+- **Accessibility**: step rows and buttons expose tap actions and
+  toggled state; tests prove `hasAction(SemanticsAction.tap)` and that
+  performAction drives real state/DB; touch-target test enforces the
+  ≥56 kid rule across 320/390/430 × 1.0/1.3.
+- **Performance**: pure/sync `stepsFor` once per build, local `Set`
+  tick state, post-frame latch, no animation controllers, const
+  subtrees for loading/failure; the 12-pump matrix test shows no
+  layout exception and no timer leaks (disposeApp used).
+- **Error handling**: loading/failure/empty/no-child/missing states all
+  render, `Try again` re-dispatches load, failure toasts, success rides
+  the completion channel only.
+- **Children's Code**: kid mode has no analytics, ads, external links or
+  £; coin copy only.
+- **Tests**: `flutter analyze` clean; `k04_bugs_test.dart` proofs
+  un-skipped and passing; new bloc/matrix/touch-target suites cover the
+  iteration-2 gaps flagged in the iteration-1 review.
 
 ## Verdict
 
-No blocker/major findings. Three minor items (shared-file process note,
-stale plan §b text, optional `enabled` semantics).
+No blocker/major findings. Four minor doc/polish items.
 
 VERDICT: PASS

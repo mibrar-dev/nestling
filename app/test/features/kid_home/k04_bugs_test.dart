@@ -1,6 +1,7 @@
-// K04 (quest detail) adversarial bug hunt — Stage 6, iteration 2.
+// K04 (quest detail) adversarial bug hunt — Stage 6, iteration 3.
 //
-// Findings in this file (iteration 1 fixed + verified, one new Minor):
+// Iterations 1–2 findings all FIXED and verified; iteration 3 found one new
+// Minor (K04-BUG-5, glyph stroke width):
 //
 // * K04-BUG-1 (was MAJOR, FIXED iter 2, verified) — a quest title filling all
 //   3 allowed lines used to render INVISIBLE (~0.1 px wide): the balanced
@@ -25,21 +26,28 @@
 //   shared parent glyphs. The proof below asserts the kid assets and runs
 //   un-skipped.
 //
-// * K04-BUG-4 (MINOR, FIXED — iteration 3) — a title whose natural
-//   layout needs MORE than the 3 allowed lines is now rendered full width
-//   but with `TextOverflow.clip`: the third line is cut off mid-word with no
-//   ellipsis, so the child cannot tell the title continues. The component's
-//   full-width path documents "the Text's own maxLines ellipsis keeps it
-//   honest", but `NestBalancedText` defaults `overflow` to `TextOverflow.clip`
-//   and K04 never overrides it; the design CSS has no max-lines at all.
-//   Fix (screen-local, allowed by RULES §1): pass
-//   `overflow: TextOverflow.ellipsis` at the K04 call site (or default the
-//   component to ellipsis whenever `maxLines != null`). Run:
-//   `flutter test --run-skipped --plain-name K04-BUG-4`.
+// * K04-BUG-4 (was MINOR, FIXED iter 3, verified) — an over-cap title used
+//   to be cut with `TextOverflow.clip` (mid-word, no ellipsis). The K04 call
+//   site now passes `overflow: TextOverflow.ellipsis`; the proof below runs
+//   un-skipped.
+//
+// * K04-BUG-5 (MINOR, OPEN — iteration 3 finding) — the hero bed glyph's
+//   stroke width. `ic_quest_bed_kid.svg` is byte-exact to K03's bed row
+//   (stroke-width 2), but K04's own tile in
+//   `design/html-source/screens/K04-quest-detail.html` draws the same paths
+//   at `stroke-width="1.8"` — the only 1.8 in the whole design corpus. At the
+//   64 px hero slot that is 5.33 px vs the design's 4.8 px strokes (~0.5 px
+//   / 1.6 device px heavier), against the ICONS rule "each screen matches its
+//   own design's glyphs exactly". One shared asset cannot be exact for both
+//   K03 (2) and K04 (1.8); the orchestrator must either accept the 0.5 px or
+//   give K04 a 1.8 variant (and update
+//   `test/design_system/audience_glyphs_test.dart:73`, which asserts 2 and
+//   claims the asset is "the exact K03/K04 bed glyph"). Run:
+//   `flutter test --run-skipped --plain-name K04-BUG-5`.
 //
 // Checked clean (kept as evidence; they run in the plain suite):
-//   * an over-cap title renders at FULL width (the new K04-BUG-1 path) at
-//     390 and at 320 px / 1.3x text with no overflow exception;
+//   * an over-cap title renders at FULL width (the new K04-BUG-1 path) with
+//     an ellipsis at 390 and at 320 px / 1.3x text, no overflow exception;
 //   * deleting the shown quest mid-view falls to the "Pick a quest" state;
 //   * double-tapping either Back pops exactly one route (no stacked pops);
 //   * a deep link with `Seed.empty` (no children) offers the picker;
@@ -59,6 +67,7 @@
 // one row, one celebration — same guard pattern K03-BUG-11 mandated.
 
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:drift/drift.dart' show Value;
@@ -350,6 +359,28 @@ void main() {
       await disposeApp(tester);
     }
   });
+
+  // -------------------------------------------------------------------------
+  // K04-BUG-5 — the hero bed glyph's stroke width vs the K04 tile
+  // -------------------------------------------------------------------------
+
+  test('K04-BUG-5: the kid bed glyph must match the K04 hero tile stroke', () {
+    final asset = File('assets/icons/ic_quest_bed_kid.svg').readAsStringSync();
+    final html = File('../design/html-source/screens/K04-quest-detail.html')
+        .readAsStringSync();
+    // The K04 tile is the only `stroke-width="1.8"` in the design corpus.
+    expect(html, contains('stroke-width="1.8"'));
+    // Path data must stay the K04 tile drawing (already correct).
+    expect(asset, contains('M2 18v-7'));
+    expect(asset, contains('M22 18v-4a3 3 0 0 0-3-3h-9v3'));
+    expect(
+      asset,
+      contains('stroke-width="1.8"'),
+      reason:
+          'the 64 px hero must draw the 1.8 design stroke (4.8 px); the '
+          'shared K03-exact asset uses 2 (5.33 px) and K04 never redraws it',
+    );
+  }, skip: true); // skip: K04-BUG-5 (open)
 
   // -------------------------------------------------------------------------
   // Checked clean — navigation, persistence, period, overflow, dark edge
