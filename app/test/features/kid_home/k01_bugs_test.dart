@@ -702,7 +702,16 @@ void main() {
       await tester.tap(find.bySemanticsLabel('Grown-ups'));
       await _settle(tester);
       expect(pushedPath(tester), '/parental-gate');
-      await tester.pageBack();
+      // The real P17 gate has no AppBar back button — its only exit is
+      // "Back to Pip" (the design's own cancel path to /who-is-playing).
+      // Tap it when present; the scaffold fallback (main today) still
+      // pops via the AppBar back button.
+      final backToPip = find.text('Back to Pip');
+      if (backToPip.evaluate().isNotEmpty) {
+        await tester.tap(backToPip);
+      } else {
+        await tester.pageBack();
+      }
       await _settle(tester);
       expect(pushedPath(tester), '/who-is-playing');
       await disposeApp(tester);
