@@ -93,11 +93,22 @@ Future<void> pumpSettingsApp(
     );
   }
   await pumpAppRoute(tester, SettingsRoutePaths.settings, theme: theme);
-  P16TransientGuard.reset();
+  _resetTransientGuard();
   _applySurface(tester, size: size, textScale: textScale);
   await tester.pump();
   await settleSettings(tester);
 }
+
+/// Clears the static tap guard before the first frame.
+///
+/// `P16TransientGuard` is process-wide state (a `static DateTime?`), so a test
+/// that closes a modal leaves a 300 ms suppression window behind for the NEXT
+/// test in the same isolate — which would silently swallow that test's first row
+/// tap and look like a broken screen. Both pumps call this; iteration 3 added
+/// it to [pumpSettingsSurface] as well, since that pump had been left out when
+/// the guard landed (every test using it so far only reads the screen, so
+/// nothing failed).
+void _resetTransientGuard() => P16TransientGuard.reset();
 
 /// Lets the real database deliver the bloc's watched streams.
 ///
@@ -125,6 +136,7 @@ Future<void> pumpSettingsSurface(
   double textScale = 1.0,
   ThemeMode theme = ThemeMode.light,
 }) async {
+  _resetTransientGuard();
   _applySurface(tester, size: size, textScale: textScale);
   await tester.pumpWidget(
     MaterialApp(
@@ -185,6 +197,38 @@ Future<void> scrollSettingsTo(WidgetTester tester, Finder finder) async {
   await tester.scrollUntilVisible(
     finder,
     240,
+    scrollable: settingsScrollable(),
+  );
+  await tester.pumpAndSettle();
+}
+
+/// The subscription card, found through its own copy rather than a widget key.
+///
+/// ORCHESTRATOR_NOTES (06:58) item 1 orders the local subcard fork reverted to
+/// the shared `NestCard`, and the integrator deliberately deferred that. Both
+/// shells render a `Container`, so addressing the card by copy keeps this suite
+/// measuring the DESIGN in either world: the design numbers (16 px radius,
+/// 14/16 padding) are what the assertions below carry, and a bare
+/// `NestCard` — `NestRadii.allL` 24 px, `all(16)` padding — fails them with a
+/// legible design message instead of "found 0 widgets with key".
+Finder subscriptionCard() => find
+    .ancestor(
+      of: find.text('Nestling Annual · £29.99/year'),
+      matching: find.byType(Container),
+    )
+    .first;
+
+/// Scrolls the settings list back UP until [finder] is on screen.
+///
+/// [`scrollSettingsTo`] walks down only (`scrollUntilVisible` maps a positive
+/// delta to a downward drag), so anything above the current offset — the move
+/// banner, the title — has to come back with this. A negative delta is what
+/// flips the direction.
+Future<void> scrollSettingsUpTo(WidgetTester tester, Finder finder) async {
+  if (finder.hitTestable().evaluate().isNotEmpty) return;
+  await tester.scrollUntilVisible(
+    finder,
+    -240,
     scrollable: settingsScrollable(),
   );
   await tester.pumpAndSettle();

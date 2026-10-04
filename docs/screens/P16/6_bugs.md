@@ -1,194 +1,173 @@
-# P16 · Family & settings — Stage 6 adversarial bug hunt (iteration 2)
+# P16 · Family & settings — Stage 6 adversarial bug hunt (iteration 3)
 
 Route `/settings` · feature `settings` · parent mode · design
 `design/html-source/screens/P16-settings.html` + light/dark PNGs
-(1170×2532 ÷ 3). This stage changed **nothing** in `app/lib/**`; it updated
-`app/test/features/settings/p16_bugs_test.dart` (B01–B07 proofs unskipped as
-regression guards + two new skipped proofs, B08/B09) and this report. No
-simulator was booted, installed on, screenshotted or driven. Tests are pinned
-to Sat 3 Oct 2026 by `test/flutter_test_config.dart`.
+(1170×2532 ÷ 3). This stage changed **nothing** in `app/lib/**`; it added two
+open-bug proofs to `app/test/features/settings/p16_bugs_test.dart` (P16-B10,
+P16-B11) and this report. No simulator was booted, installed on, screenshotted
+or driven.
 
-Tree tested: iteration-2 checkpoint `29b2e2d` with `main` merged in (the
-shared `list_row_trailing` fix and `appNowUtc` are in-tree). The concurrent
-iteration-2 test/review/UI stages had finished their pass by the snapshot
-(`4_review.md` iteration 2 PASS, `5_ui.md` iteration 2 PASS, settings suite
-green, `flutter analyze` clean).
+Tree tested: iteration-3 checkpoint `7160fff` plus the concurrent test stage's
+files that landed during the run (`p16_transient_guard_test.dart`, updated
+`settings_a11y_test.dart`). `main` has moved on since the checkpoint (keypad
+merge) but has not been merged into this branch — process item, not a finding.
 
 ## Result
 
-* **All seven iteration-1 findings (P16-B01…B07) are fixed**, each pinned by
-  a proof that now runs **unskipped and green** (regression guard).
-* **One major remains open: P16-T02** (carried from `3_test`, shared request
-  §1). My independent measurement is *stronger* than the recorded one: taps
-  1 px above/below the switch track are already dead — the effective target
-  is exactly the 51×31 track, against the 44 px owner/spec minimum.
-* **Two new minors:** P16-B08 (double tap during a modal's close falls
-  through to the row underneath) and P16-B09 (IANA *link* ids like
-  `Europe/Amsterdam` are treated as unknown — shared, request §5).
-* Verdict: **FAIL** — T02 is a major and is still open.
+* **P16-T02 is fixed.** The three switch rows now give the toggle room
+  (`SettingsRow` 6 px vertical padding + a 44-high wrapper): taps ±6 px
+  outside the 51×31 track flip the switch, ±7 miss, rows stay 56 px. Proof
+  live and green (`settings_a11y_test.dart`).
+* **P16-B08 is fixed for its picker repro** (`P16TransientGuard`, 300 ms,
+  `clock.now()`), but the guard **does not fence the delete row** — filed as
+  **P16-B10** below.
+* **P16-B09 remains open** (minor, shared): the fix is genuinely unreachable
+  from the feature (raw id never reaches the bloc); `SHARED_REQUEST.md` §5
+  carries it.
+* **P16-B11 is new and major:** the T02 wrapper's `Center` expands into the
+  120 px trail cap, so all three switches render **34.5 px left** of the
+  design's right-edge position (they matched in iteration 2). The owner
+  ALIGNMENT/UI rules make this a UI-verdict failure.
+* Verdict: **FAIL** — B11 is a major, open.
 
 | id | severity | status | proof |
 |---|---|---|---|
-| P16-T02 | **major** | open (carried, shared §1) | `settings_a11y_test.dart` `[P16-T02] a switch is live 5 px above and 5 px below its track` (skipped; fails with `--run-skipped`) |
-| P16-B08 | minor | **open (new)** | `[P16-B08] a double tap while the picker closes cannot open another screen` (skipped) |
-| P16-B09 | minor | **open (new, shared §5)** | `[P16-B09] the picker shows the device zone for a linked IANA id` (skipped) |
-| P16-B01 | major | fixed iter-2 | `[P16-B01] …` unskipped, green |
-| P16-B02 | minor | fixed iter-2 | `[P16-B02] …` unskipped, green |
-| P16-B03 | minor | fixed iter-2 | `[P16-B03] …` unskipped, green |
-| P16-B04 | minor | fixed iter-2 | `[P16-B04] …` unskipped, green |
-| P16-B05 | minor | fixed iter-2 | `[P16-B05] …` unskipped, green |
-| P16-B06 | major | fixed iter-2 | `[P16-B06] …` unskipped, green |
-| P16-B07 | blocker | fixed iter-2 | `[P16-B07] …` unskipped, green |
+| P16-B11 | **major** | **open (new)** | `[P16-B11] the three switches sit on the row’s right edge` (skipped) |
+| P16-B10 | minor | **open (new)** | `[P16-B10] a double tap on Cancel cannot re-open the delete dialog` (skipped) |
+| P16-B09 | minor | open (carried, shared §5) | `[P16-B09] the picker shows the device zone for a linked IANA id` (skipped) |
+| P16-T02 | major | **fixed iter-3** | `settings_a11y_test.dart` `[P16-T02] …` unskipped, green |
+| P16-B08 | minor | fixed iter-3 (picker repro) | `[P16-B08] …` unskipped, green |
+| P16-B01…B07 | — | fixed iter-1/2 | all unskipped, green |
 
-## P16-T02 · major · the switch tap target is 51×31, not 44 px
+## P16-B11 · major · the switches moved 34.5 px off the right edge
 
-`NestToggle` is designed as a 51×31 track with a 59×44 hit area
-(`_ToggleHitSlop`, `nest_toggle.dart:96-169`), but the hit never reaches it
-inside P16's rows. The row is
-`ConstrainedBox(minHeight 56) > Material > InkWell > Padding(12,10,16,10) >
-Row > ConstrainedBox(maxWidth 120) > NestToggle`; the Row's content box is
-36 px, the `ConstrainedBox` around the toggle shrink-wraps to 51×31, and both
-gate hits by their own size before `_ToggleHitSlop` runs.
+**What.** The T02 fix wraps each toggle in
+`SizedBox(height: 44, child: Center(child: NestToggle(...)))`
+(`settings_view.dart`, Notifications rows). `SettingsRow` caps its trailing
+at `NestListRow.trailMaxWidth` (120 px). A `Center` with a finite max width
+**expands** to it, so the wrapper becomes 120 px wide and centres the 51 px
+track inside it: 34.5 px left of the row's right content edge.
 
-**Measured this iteration** (`probe F2`, `/settings`, Notifications):
+**Measured** (real app, `probe Q`, 390×844 and 320×844):
 
-| tap | centre | top−5 | top−3 | top−2 | top−1 | bottom+1 | +2 | +3 | +5 |
-|---|---|---|---|---|---|---|---|---|---|
-| flips? | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| row | track | row box | gap to row.right − 16 |
+|---|---|---|---|
+| Approvals waiting | 268.5–319.5 | 20–370 | **34.5** |
+| Payout day reminder | 268.5–319.5 | 20–370 | **34.5** |
+| Weekly family summary | 268.5–319.5 | 20–370 | **34.5** |
+| at 320 px | 198.5–249.5 | 20–300 | **34.5** |
 
-Hit-test path at `track.top − 1` (`probe F3`) contains the row's
-`RenderPointerListener/_RenderInkFeatures/RenderFlex` chain and **no toggle
-render object**; only the exact 51×31 track reaches
-`RenderSemanticsGestureHandler`. Effective target = the track.
+The design (`components.css:107` `.list-row` padding `10px 16px 10px 12px`,
+`:136` `.toggle` 51×31 `flex-shrink: 0`) puts the track's right edge flush at
+the row's 16 px right padding — x 303–354 at 390 wide, which iteration 2
+matched and the UI stage's iteration-2 remeasure accepted.
 
-**Repro:** real app at `/settings` → Notifications → tap 5 px above the
-Approvals track: the DB value does not change.
+**Failing proof:** `[P16-B11] the three switches sit on the row’s right edge`
+(skipped) — `Actual: [34.5, 34.5, 34.5]`, expected ≤ 2.
 
-**Failing proof:** `settings_a11y_test.dart:216`
-`[P16-T02] a switch is live 5 px above and 5 px below its track`
-(`skip: true`; `flutter test test/features/settings/settings_a11y_test.dart
---run-skipped` fails: `Expected: <false> Actual: <true>`).
-
-**Suggested fix.** The shared fix (SHARED_REQUEST §1) is the clean one: make
-the slop live at a box that spans the row, or give `NestListRow` a row-native
-44 px minimum tap height. A **screen-local recipe is verified to work** if the
-shared change is not merged first: render the three switch rows with P16's
-`SettingsRow` at 6 px vertical padding *and* wrap each `NestToggle` in a
-44-high box —
+**Suggested fix (screen-local, one line):** make the wrapper shrink-wrap
+horizontally so the trailing stays 51 px wide, e.g.
 
 ```dart
-SizedBox(height: 44, child: Center(child: NestToggle(...)))
+SizedBox(width: 51, height: 44, child: Center(child: NestToggle(...)))
+// or: Align(widthFactor: 1, child: SizedBox(height: 44, child: NestToggle(...)))
 ```
 
-so both the Row (44 px) and the wrapper contain the hit point while the row
-stays 56 px. A synthetic replica of the row with that recipe made taps
-±6 px live (padding alone does not work — the `ConstrainedBox` around the
-toggle still gates).
+Then the track's right edge is the row's content edge again and the text
+column gets its 69 px back. Re-run the T02 proof after the change (the ±5/±6
+slop must stay live).
 
-## P16-B08 · minor · double tap during a modal close falls through
+## P16-B10 · minor · the guard does not fence the delete row
 
-**Repro (real app).** `/settings` → tap **Time zone** → the picker opens →
-tap the current-zone row (`London`) → tap the same spot again 60 ms later
-(an impatient double tap). The closing sheet stops absorbing pointers before
-its exit animation ends, so the second tap lands on the settings row beneath
-(the Privacy section at that scroll position) and navigates to `/privacy`.
-The same defect on the delete dialog: double-tap **Cancel** 20–260 ms apart
-re-opens the dialog (the tap falls through to the “Delete family account”
-row); double-tap **Delete** shows the toast *and* re-opens the dialog.
-Same-frame double taps are fine (the second pop is absorbed).
+**What.** `P16TransientGuard` fences the picker/nav/toggle rows but not
+`_confirmDelete`'s row (Delete family account) nor the Invite co-parent row.
+The B08 fall-through therefore still reaches them:
 
-**Failing proof:** `[P16-B08] a double tap while the picker closes cannot
-open another screen` (skipped) — measured `path=/privacy`, expected
-`/settings`.
+* `/settings` → Delete family account → **Cancel**, then tap Cancel again
+  60 ms later → the second tap falls through to the delete row and the dialog
+  **re-opens** (`dialog=1`). Same with Delete (toast + re-open).
+* Picker double tap on a row whose screen position overlaps the delete row
+  (repro: **New York**) → the delete dialog opens (`dialog=1`).
 
-**Suggested fix (screen-local):** keep a “modal just closed” guard
-(e.g. timestamp set when `showNestModal`/`showNestBottomSheet` completes) and
-ignore row taps for ~300 ms; or absorb pointers during a route's exit
-transition in the shared modal/sheet helpers.
+**Failing proof:** `[P16-B10] a double tap on Cancel cannot re-open the delete
+dialog` (skipped) — `dialog=1`, expected 0.
 
-## P16-B09 · minor · linked IANA ids read as “unknown zone”
+**Suggested fix:** wrap the delete row's and the invite row's `onTap` in
+`P16TransientGuard.run`, exactly like every other row.
 
-**Repro.** A phone reporting `Europe/Amsterdam` (a tzdb *link* to
-`Europe/Brussels`) gets no move prompt and no picker “Current location” row:
-the bundled `package:timezone` `latest_10y` dataset has 341 locations and no
-backward links, so `isKnownZoneId('Europe/Amsterdam')` is false and
-`FamilyZoneService.deviceZoneId()` returns null. Same for `Asia/Calcutta`,
-`US/Pacific`, `Europe/Kiev`, `Asia/Saigon`, … Canonical ids (`Europe/Berlin`,
-`Asia/Kolkata`, `Australia/Sydney`) work.
+## P16-B09 · minor · linked IANA ids (carried, shared)
 
-**Failing proof:** `[P16-B09] the picker shows the device zone for a linked
-IANA id` (skipped) — measured `deviceRow=0`, expected 1.
+Unchanged from iteration 2: `Europe/Amsterdam` (a tzdb link) reads as an
+unknown zone, so those phones get no move prompt and no “Current location”
+row. ORCHESTRATOR_NOTES item 3 asks for B09 to be closed, but there is no
+feature-side hook — `FamilyZoneService.deviceZoneId()` returns null before
+the feature sees anything. Fix belongs in `isKnownZoneId`/`normalizeZoneId`
+(core `family_time.dart:37-78`), filed as `SHARED_REQUEST.md` §5. The proof
+stays skipped with the reason inline.
 
-**Suggested fix:** resolve backward links to their canonical zone inside
-`isKnownZoneId`/`normalizeZoneId` (`app/lib/core/data/family_time.dart:37-78`)
-— shared, recorded as SHARED_REQUEST §5. No feature-side workaround exists:
-the raw id never reaches the bloc.
+## Mandatory-item status (`ORCHESTRATOR_NOTES` 06:58)
+
+1. **Revert `_P16Sect` → `NestSectionLabel`, subcard → `NestCard` — NOT
+   actioned.** The iteration-3 build deliberately left the three local forks
+   and flagged the sequencing: the shared label's 18 px line box and
+   `NestCard`'s 24 px radius are exactly what the design does not match, so
+   reverting today re-opens the iteration-1 UI drift (`5_ui` measured +1–2 px
+   per section). `SHARED_REQUEST.md` §2/§3 carry the measured numbers; the
+   reverts become safe once the shared components land. Compliance item for
+   the orchestrator, not a screen bug.
+2. **44×44 switch target — done.** T02's proof taps 5 px outside the track
+   and passes; my measurement shows ±6 live / ±7 dead.
+3. **B08 — done** (picker repro). **B09 — blocked** (see above).
 
 ## Verified clean this iteration
 
-* **Iteration-1 regressions:** all B01–B07 proofs green unskipped — picker
-  keeps the device zone after “Not now”; dismissal survives a rebuilt bloc
-  (session store); picker scrolls at 320×568 @1.3; no `DateTime.now()` in
-  feature code; “1 coin” singular; subcard r-m 16; delete dialog Cancel
-  closes the dialog and keeps `/settings`.
-* **New attacks held:** same-frame double taps on the picker row open one
-  sheet and never double-pop the branch; the picker at 320×568 @1.3 (light
-  and dark) scrolls to every row and Sydney writes; the move banner at
-  320 @1.3 lays out (20 px gutters, no overflow); the delete dialog at
-  320×568 @1.3 does not overflow; canonical-but-unlisted device zones
-  (`Europe/Berlin`) lead the picker; toggle state survives a restart;
-  all 13 controls expose a tap action and activation writes the DB; BST
-  boundary offsets (`GMT+1`→`GMT+0`); dark-mode text pairs ≥ 4.5:1; 6
-  children/long names/0 & 9999 coins at 320 @1.3 dark; deep-link guards
-  (kid → gate, onboarding → welcome, trial → paywall); Back pops a pushed
-  `/settings`.
-* **UI iteration 2** independently re-measured the fixed rows/subcard and
-  passed (`5_ui.md`); the shared `list_row_trailing` fix resolved the
-  iteration-1 truncation.
+* T02: ±6 px outside the track flips the switch, ±7 does not; rows stay 56 px
+  at 390 and 320; no overflow at 320 @1.3.
+* B08: the picker double tap no longer navigates (London/Paris/Karachi/Sydney
+  repros stay on `/settings`); the guard window arithmetic and release are
+  pinned by the test stage's `p16_transient_guard_test.dart` under an
+  advancing clock, and `pumpSettingsApp` resets the static between tests.
+* The guard fences rows only: the move banner's Switch / Not now still work
+  right after a sheet closes (test stage's proof).
+* All iteration-1/2 regression guards still green in
+  `p16_bugs_test.dart` (21 unskipped tests): deep links, back nav, empty
+  seed, 6 children/long names/coin extremes at 320 @1.3 dark, persistence,
+  same-frame double taps, a11y contract, BST offsets, dark contrast.
+* `dart format .` 0 changed; `flutter analyze` No issues found; settings
+  suite `+131 ~3` on re-run; full suite green apart from the two flakes
+  below.
 
 ## Observations (not numbered)
 
-1. At 320×568 @1.3 the delete dialog's **Cancel** label wraps to two lines
-   while **Delete** stays one line (buttons 62 px vs 52 px). Cosmetic, inside
-   the `NestButton` wrap-by-design contract; a smaller `horizontalPadding`
-   for dialog buttons would even them out.
-2. The subcard's `Manage subscription` `InkWell` paints its ripple on the
-   Scaffold's Material *behind* the card (no local `Material` between the
-   decorated `Container` and the ink) — pre-existing pattern, cosmetic.
-3. T02's shared request text records “~36 px (live `track.top − 2`)”; the
-   iteration-2 measurement above shows even ±1 px is dead, i.e. exactly
-   51×31. The shared fix is unaffected; the write-up is conservative.
+1. **Two one-off flakes while the concurrent test stage was editing:** the
+   guard file's “the move banner stays operable right after a sheet closes”
+   failed in one full-settings run, then passed 3/3 in isolation and on the
+   suite re-run; `[P16-B01]` failed in one `--run-skipped` run while the tree
+   was mid-edit and passed in the next two. Both are timing-sensitive
+   (`scrollSettingsTo` + `pumpAndSettle`), not product races.
+2. `payout_view_test.dart` (P13, another feature) failed once in the full
+   suite and passes alone — behind-main noise while the branch is unmerged
+   (process item).
+3. `settings_a11y_test.dart`'s T02 block still opens “P16-T02 open (major…)”
+   before saying “FIXED in iteration 3” — stale comment, noted by the build.
+4. The B08/B09 header block in `p16_bugs_test.dart` was refreshed this
+   iteration; B09's skip is now the only one besides the new B10/B11.
 
-## Gates (snapshot, `app/`, ~05:45)
+## Gates (snapshot, `app/`)
 
 ```
-$ dart format .                     # 524 files, 0 changed
+$ dart format .                     # 0 changed
 $ flutter analyze                   # No issues found!
 $ flutter test test/features/settings/p16_bugs_test.dart
-                                    # +20 ~2 (B08/B09 skipped)
+                                    # +21 ~3 (B09/B10/B11 skipped)
 $ flutter test test/features/settings/p16_bugs_test.dart --run-skipped
-                                    # +20 -2 — both open proofs fail with the
+                                    # +21 -3 — all three proofs fail with the
                                     # messages recorded above
-$ flutter test test/features/settings/settings_a11y_test.dart --run-skipped
-                                    # +5 -1 — the T02 proof fails as recorded
 $ flutter test test/features/settings
-                                    # +120 ~3: all non-skipped green
-$ flutter test                      # +2848 ~4: all non-skipped green
+                                    # +131 ~3 on the final run (one flake on
+                                    # an earlier parallel run, see obs 1)
+$ flutter test                      # +2857 ~4; two one-off failures, both
+                                    # green in isolation (obs 1-2)
 ```
-
-The four skips are exactly: P16-T02, P16-B08, P16-B09 and the pre-existing
-`pocket_money/p12_bugs_test.dart` skip (another feature).
-
-## Appendix — iteration-1 findings, all closed
-
-| id | severity | fixed in | live proof |
-|---|---|---|---|
-| P16-B01 | major | 2a `deviceZoneId` + 2b picker ordering | `[P16-B01] the picker keeps the device zone after “Not now”` |
-| P16-B02 | minor | 2a `SettingsSessionStore` | `[P16-B02] “Not now” hides the move prompt for the whole session` |
-| P16-B03 | minor | 2b `Flexible` + `SingleChildScrollView` | `[P16-B03] the zone picker scrolls instead of overflowing on 320×568 @1.3` |
-| P16-B04 | minor | 2b `appNowUtc()` + main merge for the repo | `[P16-B04] feature code never calls DateTime.now()` |
-| P16-B05 | minor | 2b singular copy | `[P16-B05] a single coin reads “1 coin”, not “1 coins”` |
-| P16-B06 | major | 2b local `allM` surface container | `[P16-B06] the subscription card uses the design’s 16 px corner radius` |
-| P16-B07 | blocker | 2b `rootNavigator: true` pops | `[P16-B07] Cancel closes the delete dialog, never the settings page` |
 
 VERDICT: FAIL

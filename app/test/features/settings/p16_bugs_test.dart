@@ -1,19 +1,21 @@
 // P16 · Family & settings — adversarial bug proofs (Stage 6).
 //
-// Iteration 1 found B01–B07. All seven were fixed by the iteration-2 build
-// and their proofs now run **unskipped** (regression guards). Iteration 2
-// added:
-//   * [P16-B08] open (minor) — a double tap that lands while a modal is
-//     closing falls through to the settings row underneath (repro: picker
-//     row double-tap navigates to /privacy).
-//   * [P16-B09] open (minor, shared) — IANA *link* ids (e.g.
-//     Europe/Amsterdam) are treated as unknown by the bundled tz dataset,
-//     so those phones get no move prompt and no picker "Current location"
-//     row; fix belongs in core `family_time.dart` (resolved by
-//     SHARED_REQUEST §5).
-// Both carry `skip: true` so `flutter test` stays green;
+// Iteration 1 found B01–B07; iteration 2 found B08/B09. The iteration-3
+// build fixed B08's picker repro (P16TransientGuard) and T02, and this
+// iteration adds two residuals found by re-attacking that fix:
+//   * [P16-B09] open (minor, shared) — IANA *link* ids (Europe/Amsterdam,
+//     Asia/Calcutta, …) are treated as unknown by the bundled tz dataset;
+//     fix belongs in core `family_time.dart` (SHARED_REQUEST §5).
+//   * [P16-B10] open (minor) — the guard does not fence the delete row (and
+//     the Invite row), so a double tap on Cancel still re-opens the delete
+//     dialog, and a picker double tap on a row over the delete row (New
+//     York) opens it too.
+//   * [P16-B11] open (major, alignment) — the T02 wrapper's `Center` expands
+//     into the 120 px trail cap, so the three switches render 34.5 px left of
+//     the design's right-edge position.
+// Open bugs carry `skip: true` so `flutter test` stays green;
 // `flutter test test/features/settings/p16_bugs_test.dart --run-skipped`
-// proves both fail (evidence in docs/screens/P16/6_bugs.md).
+// proves each fails (evidence in docs/screens/P16/6_bugs.md).
 //
 // The `verified clean` group holds the attacks that were run and held:
 // deep-link guards (kid mode / onboarding / trial-expiry), back navigation,
@@ -21,7 +23,8 @@
 // long names, coin extremes, 320 px + 1.3 text scale, toggle persistence
 // across a restart, rapid double taps on rows/sheets, the accessibility tap
 // contract, Europe/London BST offsets and dark-mode contrast. Every guard
-// runs unskipped.
+// runs unskipped. (The guard's 300 ms window itself is pinned by the test
+// stage's `p16_transient_guard_test.dart`.)
 
 import 'dart:async';
 import 'dart:io';
@@ -480,12 +483,10 @@ void main() {
             'path=$path failure=$failure',
       );
     },
-    // P16-B08 open (minor) — a double tap during a modal’s close animation
-    // falls through to the screen beneath: the picker repro lands on
-    // /privacy; the delete-dialog repro re-opens the dialog. Fix
-    // (screen-local): keep a “modal just closed” guard for ~300 ms and
-    // ignore row taps while it is set (or absorb pointers in the shared
-    // modal/sheet helpers during the exit transition).
+    // P16-B08 fixed in iteration 3 (UI half): `P16TransientGuard` suppresses
+    // row taps for 300 ms after a modal/sheet close, so the picker
+    // fall-through no longer navigates. Live proof for this repro; the
+    // unfenced rows are pinned separately as P16-B10.
     skip: false,
   );
 
@@ -527,6 +528,82 @@ void main() {
     // shared layer: resolve backward links to their canonical zone (or ship
     // the dataset’s links); recorded in SHARED_REQUEST §5. Feature-side no
     // workaround exists — the raw id never reaches the bloc.
+    skip: true,
+  );
+
+  testWidgets(
+    '[P16-B10] a double tap on Cancel cannot re-open the delete dialog',
+    (tester) async {
+      await pumpSettingsApp(tester);
+      await scrollSettingsTo(tester, find.text('Delete family account'));
+      await tester.tap(find.text('Delete family account'));
+      await tester.pumpAndSettle();
+
+      // Impatient double tap on Cancel: the first closes the dialog, the
+      // second falls through to the row underneath (Delete family account).
+      final cancel = find.byKey(const ValueKey('p16_delete_cancel'));
+      await tester.tap(cancel);
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.tap(cancel, warnIfMissed: false);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      final dialog = find.text('Delete family account?').evaluate().length;
+      await disposeApp(tester);
+      expect(
+        dialog,
+        0,
+        reason:
+            'P16-B10: the B08 guard fences the picker/nav rows but NOT the '
+            'delete row, so the Cancel double tap falls through to it and '
+            're-opens the dialog (dialog=$dialog). The same hole lets a '
+            'picker double tap on a row whose coordinates land on the '
+            'delete row (repro: New York) open the dialog.',
+      );
+    },
+    // P16-B10 open (minor) — `_confirmDelete`'s row onTap (and the Invite
+    // co-parent toast row) never route through `P16TransientGuard.run`, so
+    // the B08 fall-through still reaches them. Fix: wrap both row handlers
+    // in `P16TransientGuard.run`, like every other row.
+    skip: true,
+  );
+
+  testWidgets(
+    '[P16-B11] the three switches sit on the row’s right edge',
+    (tester) async {
+      await pumpSettingsApp(tester);
+      await scrollSettingsTo(tester, find.text('Weekly family summary'));
+
+      final gaps = <double>[];
+      final count = find.byType(NestToggle).evaluate().length;
+      for (var i = 0; i < count; i++) {
+        final finder = find.byType(NestToggle).at(i);
+        final track = tester.getRect(finder);
+        final row = tester.getRect(
+          find.ancestor(of: finder, matching: find.byType(Padding)).first,
+        );
+        // The row's right content edge is its 16 px right padding inset;
+        // the design puts the switch flush with it (iteration 2 matched).
+        gaps.add((row.right - 16) - track.right);
+      }
+      await disposeApp(tester);
+      expect(
+        gaps,
+        everyElement(lessThanOrEqualTo(2.0)),
+        reason:
+            'P16-B11: the T02 wrapper `SizedBox(height: 44, Center(...))` '
+            'lets the Center expand into `NestListRow.trailMaxWidth` (120), '
+            'centring the 51 px track 34.5 px left of the design position. '
+            'Measured gaps to the right content edge: $gaps',
+      );
+    },
+    // P16-B11 open (major, alignment/UI) — the T02 fix regressed the three
+    // switches to x 268.5–319.5 where the design (and iteration 2) has them
+    // at 303–354 (390 wide; same 34.5 px gap at 320). Fix: make the wrapper
+    // shrink-wrap horizontally, e.g.
+    // `SizedBox(width: 51, height: 44, child: Center(child: toggle))` or
+    // `Align(widthFactor: 1, child: SizedBox(height: 44, child: toggle))`,
+    // so the trailing stays 51 px wide and flush with the row's 16 px inset.
     skip: true,
   );
 

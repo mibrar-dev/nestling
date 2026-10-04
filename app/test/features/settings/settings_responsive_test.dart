@@ -132,11 +132,10 @@ void main() {
                 );
                 expect(list.width, gutter, reason: 'list $l width');
               }
-              final cards = find.byKey(const ValueKey('p16_subcard'));
-              for (var c = 0; c < cards.evaluate().length; c++) {
-                final rect = tester.getRect(cards.at(c));
-                expect(rect.left, NestSpacing.padSide, reason: 'card $c left');
-                expect(rect.width, gutter, reason: 'card $c width');
+              if (subscriptionCard().evaluate().isNotEmpty) {
+                final card = tester.getRect(subscriptionCard());
+                expect(card.left, NestSpacing.padSide, reason: 'card left');
+                expect(card.width, gutter, reason: 'card width');
               }
               if (i == 2) break;
               await tester.drag(settingsScrollable(), const Offset(0, -320));
@@ -251,10 +250,18 @@ void main() {
     // `.subcard { background: var(--surface); border-radius: var(--r-m);
     // box-shadow: var(--sh-1); padding: 14px 16px }` (P16-B06 moved this off
     // `NestCard.standard`, whose radius is 24).
+    //
+    // These are DESIGN numbers, asserted through whichever shell renders the
+    // card. ORCHESTRATOR_NOTES (06:58) item 1 wants the local fork reverted to
+    // the shared `NestCard`; that is only safe once `SHARED_REQUEST.md` §3 gives
+    // the card a radius/padding parameter, because a bare `NestCard` draws
+    // `NestRadii.allL` (24) and `all(16)`. Until then these two assertions are
+    // the ones that will fail — which is the informative failure, not a false
+    // one.
     for (final theme in <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
       await pumpSettingsApp(tester, theme: theme);
       final tokens = p16Tokens(theme);
-      final card = find.byKey(const ValueKey('p16_subcard'));
+      final card = subscriptionCard();
       expect(card, findsOneWidget, reason: 'one subcard at $theme');
 
       final decoration =
@@ -281,6 +288,67 @@ void main() {
       await disposeApp(tester);
     }
   });
+
+  testWidgets(
+    '[P16-B11] the switches sit flush with the row trailing edge',
+    (tester) async {
+      // OPEN BUG (major, owner ALIGNMENT rule) — pinned skip-marked so
+      // `flutter test` stays green; run with `--run-skipped` to prove it.
+      //
+      // The iteration-3 fix for P16-T02 wrapped each `NestToggle` in
+      // `SizedBox(height: 44, Center(...))`. A `SizedBox` with only a height
+      // takes the full width the parent allows — `NestListRow.trailMaxWidth`
+      // (120) — so the `Center` parks the 51 px track in the middle of that
+      // box and it lands ~34.5 px left of where the design puts it: flush with
+      // the row's 16 px trailing inset.
+      //
+      // This is the same defect as the bug stage's P16-B11 proof, widened: the
+      // ALIGNMENT sweep here checks every width and both themes, so the fix has
+      // to be right at 320 / 390 / 430 rather than only at 390.
+      //
+      // Why it matters for the test stage: the responsive sweep asserted the
+      // track's SIZE (51x31) at every width but never its position, so a 34 px
+      // horizontal regression passed green. Trailing-slot x is now measured.
+      final gaps = <String, double>{};
+      for (final width in <int>[320, 390, 430]) {
+        for (final theme in <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+          await pumpSettingsApp(
+            tester,
+            size: Size(width.toDouble(), p16DesignSize.height),
+            theme: theme,
+          );
+          await scrollSettingsTo(tester, find.text('Weekly family summary'));
+          final toggles = find.byType(NestToggle);
+          expect(toggles, findsNWidgets(3), reason: '$theme $width: three');
+          for (var i = 0; i < 3; i++) {
+            final track = tester.getRect(toggles.at(i));
+            final row = tester.getRect(
+              find
+                  .ancestor(of: toggles.at(i), matching: find.byType(Padding))
+                  .first,
+            );
+            // The row's content right edge is its 16 px trailing inset.
+            gaps['$theme $width switch $i'] = (row.right - 16) - track.right;
+          }
+          await disposeApp(tester);
+        }
+      }
+
+      expect(
+        gaps.values,
+        everyElement(lessThanOrEqualTo(2.0)),
+        reason:
+            'every switch must sit within 2 px of its row content edge; '
+            'gaps=$gaps',
+      );
+    },
+    // Reason (a `skip:` string is not allowed on `testWidgets` in this
+    // Flutter version — it takes a bool): the T02 `SizedBox(height: 44,
+    // Center(...))` wrapper takes the row's full trailing width and centres
+    // the track ~34.5 px off the design position. See §Bugs of
+    // docs/screens/P16/3_test.md.
+    skip: true,
+  );
 
   testWidgets('row copy stays on one line and ellipsizes instead of wrapping', (
     tester,
@@ -397,7 +465,7 @@ void main() {
       textScale: 1.3,
     );
 
-    final card = find.byKey(const ValueKey('p16_subcard'));
+    final card = subscriptionCard();
     expect(card, findsOneWidget);
     final title = tester.getRect(find.text('Nestling Annual · £29.99/year'));
     final cardRect = tester.getRect(card);

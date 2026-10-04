@@ -1,14 +1,14 @@
-# P16 Settings — 5_ui (iteration 2)
+# P16 Settings — 5_ui (iteration 3)
 
 Route `/settings` · parent mode · child maya · seed demo · simulator 604697A9-11DA-462F-9837-396E9CA2493A (390×844).
-Shots: `docs/screens/P16/ui/app_light_2.png`, `app_dark_2.png` (absolute OUT path — relative fails because `shot.sh` cds into `app/` before copying).
-Compares: `cmp_light_2.png`, `cmp_dark_2.png`.
+Shots: `docs/screens/P16/ui/app_light_3.png`, `app_dark_3.png` (absolute OUT path — relative fails because `shot.sh` cds into `app/` before copying).
+Compares: `cmp_light_3.png`, `cmp_dark_3.png`.
 
-Mean diff: light **1.15%** (was 3.58%), dark **0.97%** (was 3.32%).
+Mean diff: light **1.06%**, dark **0.98%** (iteration 2: 1.15% / 0.97%).
 
-Band table (light): 0–105: 1.77 · 105–211: 0.27 · 211–316: 0.24 · 316–422: 0.33 · 422–527: 0.18 · 527–633: 0.48 · 633–738: 1.90 · 738–844: 4.00.
-Band table (dark): 0–105: 1.71 · 105–211: 0.27 · 211–316: 0.24 · 316–422: 0.33 · 422–527: 0.18 · 527–633: 0.49 · 633–738: 1.73 · 738–844: 2.77.
-(Band 0 = real OS status bar 04:56/04:57 vs design 9:41 — ignored per STATUS BAR rule. Band 7 = shared tab-bar chrome + OS home area — see §4.)
+Band table (light): 0–105: 1.76 · 105–211: 0.27 · 211–316: 0.24 · 316–422: 0.33 · 422–527: 0.18 · 527–633: 0.48 · 633–738: 1.90 · 738–844: 3.33.
+Band table (dark): 0–105: 1.74 · 105–211: 0.27 · 211–316: 0.24 · 316–422: 0.33 · 422–527: 0.18 · 527–633: 0.49 · 633–738: 1.73 · 738–844: 2.89.
+(Band 0 = real OS status bar 07:48/07:49 vs design 9:41 — ignored per STATUS BAR rule. Band 7 = shared tab-bar chrome + OS home area — see §3.)
 
 ## Measured Y (logical px, design light vs app light, same script on both)
 
@@ -22,24 +22,17 @@ Band table (dark): 0–105: 1.71 · 105–211: 0.27 · 211–316: 0.24 · 316–
 | Children card top | 365.0 | 365.0 | 0 |
 | SUBSCRIPTION label | 572.3–581.7 | 572.7–581.7 | 0 |
 | Subcard top | 593.0 | 593.0 | 0 |
-| Subcard title / "Manage subscription" text | 611.3–624.7 / 666.0–679.7 | 611.3–624.7 / 667.0–680.7 | 0 / +1 |
 | Subcard bottom edge | 710.7 | 712.7 | +2.0 |
 | Tab bar top | 727.0 | 727.0 | 0 |
 
-## Iteration-1 deviations — all fixed
+## Deviations
 
-1. Truncation FIXED: "Pip: Fledgling · 120 coins", "Pip: Hatchling · 45 coins", "Nickname + age band only" render in full in both themes; chevrons sit at the right edge (x≈352) as designed.
-2. Vertical drift FIXED: children card +4.0 → +0.3, subcard top +6.0 → 0, labels exact.
-3. Family card top +2.0 → 0.
+1. (Minor, P16-owned, at tolerance boundary, unchanged from iteration 2) Subcard bottom edge +2.0 px (710.7 → 712.7, unanimous over 32 sampled columns); subcard top exact, interior text within ≤1 px. Invisible in side-by-side inspection; within the ±2 px rule. Suspected title/subtitle line-box rounding; tracked via the shared label follow-up in `SHARED_REQUEST.md` §2.
+2. No other deviations: full subtitles in both themes ("Pip: Fledgling · 120 coins", "Pip: Hatchling · 45 coins", "Nickname + age band only"), chevrons at the right edge (x≈352), copy char-exact (—, –, ·, &, ›, £), child order Maya then Leo, avatar colours, plus tiles, green "Manage subscription", 20 px gutters, edge-aligned cards/bars, Family tab active, dark-mode tokens correct, no unwanted ellipsis/overflow/clipping, radii and shadows per spec.
 
-## Remaining notes (none designer-rejectable)
+## Shared observations (not P16-editable, for orchestrator)
 
-1. (Minor, P16-owned, at tolerance boundary) Subcard bottom edge +2.0 px (710.7 → 712.7, unanimous over 32 sampled columns); interior text matches to ≤1 px, card top exact. Invisible in side-by-side inspection; within the ±2 px rule. Likely title/subtitle line-box rounding (20/18 vs browser natural); left for the shared label follow-up in `SHARED_REQUEST.md` §2.
-2. (Shared shell, orchestrator-owned, carried from iteration 1) Money tab icon glyph differs from the design (banknote vs wallet). `SHARED_REQUEST.md` "worth attention" bullet; P16 cannot edit shell chrome per RULES §1.
-3. Bottom edge complies with the OWNER RULE in both themes (bar surface sampled to y=841.7, no strip), overriding the design's paper strip.
-
-## What matches
-
-Copy char-exact (—, –, ·, &, ›, £); child order Maya then Leo; section order; avatar colours (S leaf, J sky, M lilac, L peach); plus tiles; leaf-tint Invite tile; green "Manage subscription"; 20 px gutters; cards/bars edge-aligned; Family tab active; dark-mode tokens; no unwanted ellipsis/overflow/clipping; radii and shadows per spec (subcard r-m per `SHARED_REQUEST.md` §3).
+3. Money tab icon glyph differs from the design (banknote vs wallet) — shared shell chrome, carried from iterations 1–2; P16 cannot edit per RULES §1.
+4. Bottom edge complies with the OWNER RULE in both themes (bar surface runs to the physical edge, no strip), overriding the design's paper strip.
 
 VERDICT: PASS

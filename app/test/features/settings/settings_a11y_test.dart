@@ -29,6 +29,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nestling/core/design_system/design_system.dart';
+import 'package:nestling/features/settings/presentation/widgets/settings_rows.dart';
 
 import '../../test_scope.dart';
 import 'p16_test_support.dart';
@@ -293,15 +294,21 @@ void main() {
     testWidgets(
       '[P16-T02] a switch is live 5 px above and 5 px below its track',
       (tester) async {
-        // OPEN BUG — pinned skip-marked so `flutter test` stays green; run
-        // `flutter test test/features/settings --run-skipped` to prove it.
+        // LIVE GUARD (was an open bug, iterations 1-2). `NestToggle` reaches
+        // 6.5 px above/below its 31 px track via `_ToggleHitSlop`, but
+        // `NestListRow`'s `EdgeInsets.fromLTRB(12, 10, 16, 10)` put the
+        // switch inside a 36 px content box and a padded ancestor forwards no
+        // hit outside its own box — measured live range was
+        // `track.top - 2 … track.bottom + 2`, i.e. ≈36 px against the owner
+        // rule's 44 px.
         //
-        // `NestToggle` reaches 6.5 px above/below its 31 px track, but
-        // `NestListRow`'s `EdgeInsets.fromLTRB(12, 10, 16, 10)` leaves the
-        // toggle inside a 36 px content box, and a padded ancestor never
-        // forwards a hit outside its own box. Measured here: live from
-        // track.top - 2 to track.bottom + 2, i.e. an effective target of
-        // ~36 px against the owner rule's 44 px.
+        // Fixed in iteration 3 by the screen: the three switch rows use P16's
+        // `SettingsRow` at 6 px vertical padding (content box 56 - 12 = 44)
+        // AND wrap each `NestToggle` in `SizedBox(height: 44, Center(…))`.
+        // Both halves are needed — padding alone left `track.top - 5` dead
+        // (measured in iteration 2) — and dropping either re-opens the bug,
+        // which is what this proof is for. 5 px is stricter than the 4 px the
+        // orchestrator's note asks for.
         await pumpSettingsApp(tester);
         await scrollSettingsTo(tester, find.text('Approvals waiting'));
         final track = tester.getRect(find.byType(NestToggle).first);
@@ -323,22 +330,42 @@ void main() {
           reason: '5 px below the track must flip it back',
         );
 
+        // The mechanism, pinned so the next reader can see why the taps work:
+        // the switch row is still a 56 px design row (same as every other row
+        // on the page), it uses the 6 px vertical padding that makes the
+        // content box 44, and each toggle keeps the design's 51x31 track.
+        final toggle = find.byType(NestToggle).first;
+        final row = find
+            .ancestor(of: toggle, matching: find.byType(SettingsRow))
+            .first;
+        expect(
+          tester.getRect(row).height,
+          56,
+          reason: 'the switch row keeps the design 56 px row height',
+        );
+        expect(
+          tester.widget<SettingsRow>(row).padding,
+          const EdgeInsets.fromLTRB(12, 6, 16, 6),
+          reason: '6 px vertical padding is half of the 44 px fix',
+        );
+        expect(track.size, const Size(51, 31), reason: 'the design track');
+        // …and the 44-high box the slop needs is really there.
+        expect(
+          tester.getRect(toggle).height,
+          31,
+          reason: 'NestToggle lays out at the track, not at the hit box',
+        );
+        final hitBox = tester.getRect(
+          find.ancestor(of: toggle, matching: find.byType(SizedBox)).first,
+        );
+        expect(
+          hitBox.height,
+          44,
+          reason: 'the 44-high wrapper is the other half of the fix',
+        );
+
         await disposeApp(tester);
       },
-      // P16-T02 open (major, owner rule: parent tap targets ≥ 44 px).
-      // `NestListRow`'s 10 px vertical padding leaves `NestToggle` inside a
-      // 36 px content box, and a padded ancestor forwards no hit outside its
-      // own box, so the switch's 6.5 px slop is clipped to ~2.5 px. Measured:
-      // live from track.top − 2 to track.bottom + 2.
-      // Fix (screen-local is enough): render the three switch rows with P16's
-      // own `SettingsRow` at a 6 px vertical padding, so the content box is
-      // 44 px and the whole slop is live. Evidence:
-      // docs/screens/P16/3_test.md §Bugs.
-      // P16-T02 FIXED in iteration 3 (verified recipe): the three switch
-      // rows use `SettingsRow` with 6 px vertical padding (content box
-      // 56 − 12 = 44) and each `NestToggle` is wrapped in
-      // `SizedBox(height: 44, Center(...))`, so the slop is live
-      // ±6 px. Removing either half re-opens the bug.
       skip: false,
     );
   });
