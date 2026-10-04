@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:drift/drift.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/seed.dart';
@@ -187,7 +188,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
         'P06 mode must be weekly | per_quest | both',
       );
     }
-    final now = DateTime.now().toUtc();
+    final now = appNowUtc();
     final zone = await _db.familyZoneId();
     await _db.transaction(() async {
       await (_db.update(
@@ -218,7 +219,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
     if (day < 1 || day > 7) {
       throw ArgumentError.value(day, 'day', 'P06 payout day must be 1..7');
     }
-    final now = DateTime.now().toUtc();
+    final now = appNowUtc();
     final zone = await _db.familyZoneId();
     await _db.transaction(() async {
       await (_db.update(
@@ -299,7 +300,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
             type: 'gift',
             amountPence: amountPence,
             note: Value(note),
-            date: Value(DateTime.now().toUtc()),
+            date: Value(appNowUtc()),
             dateTz: Value(zone),
           ),
         );
@@ -321,7 +322,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
             type: 'spend',
             amountPence: -amountPence.abs(),
             note: Value(note),
-            date: Value(DateTime.now().toUtc()),
+            date: Value(appNowUtc()),
             dateTz: Value(zone),
           ),
         );
@@ -334,7 +335,17 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
     int savingsMovePence = 0,
     String? goalId,
   }) async {
-    final now = DateTime.now().toUtc();
+    // Nothing was handed over, nothing is recorded: a ticked child who owes
+    // £0.00 must not leave a `Paid … £0.00` row in the ledger (review #3).
+    if (amountPence <= 0) return;
+    // The savings move can never exceed the money actually paid: £1.00
+    // against a £0.50 payout would conjure 50p the jar never held
+    // (P13-BUG-02). The view clamps with `min(100, owed)`; this is the
+    // backstop for any caller that does not.
+    final movePence = savingsMovePence > 0 && goalId != null
+        ? savingsMovePence.clamp(0, amountPence)
+        : 0;
+    final now = appNowUtc();
     final zone = await _db.familyZoneId();
     await _db.transaction(() async {
       await _db
@@ -350,7 +361,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
               dateTz: Value(zone),
             ),
           );
-      if (savingsMovePence > 0 && goalId != null) {
+      if (movePence > 0 && goalId != null) {
         await _db
             .into(_db.ledgerEntries)
             .insert(
@@ -358,7 +369,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
                 familyId: Seed.familyId,
                 childId: childId,
                 type: 'savings_move',
-                amountPence: savingsMovePence.abs(),
+                amountPence: movePence,
                 note: const Value('Jar → savings goal'),
                 date: Value(now),
                 dateTz: Value(zone),
@@ -372,7 +383,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
             _db.savingsGoals,
           )..where((g) => g.id.equals(goalId))).write(
             SavingsGoalsCompanion(
-              savedPence: Value(goal.savedPence + savingsMovePence.abs()),
+              savedPence: Value(goal.savedPence + movePence),
             ),
           );
         }

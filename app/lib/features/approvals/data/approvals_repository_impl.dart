@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/seed.dart';
@@ -66,7 +67,7 @@ class ApprovalsRepositoryImpl implements ApprovalsRepository {
     // are atomic, so two concurrent/racing calls credit exactly once — the
     // loser updates 0 rows and returns before touching the ledger. Same
     // shape as `completeQuest` (K03-BUG-1 precedent).
-    final now = DateTime.now().toUtc();
+    final now = appNowUtc();
     final zone = await _db.familyZoneId();
     await _db.transaction(() async {
       final claimed =
@@ -118,7 +119,7 @@ class ApprovalsRepositoryImpl implements ApprovalsRepository {
         .write(
           QuestCompletionsCompanion(
             status: const Value('not_yet'),
-            decidedAt: Value(DateTime.now().toUtc()),
+            decidedAt: Value(appNowUtc()),
             decidedAtTz: Value(zone),
           ),
         );

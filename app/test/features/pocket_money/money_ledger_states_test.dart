@@ -510,8 +510,10 @@ void main() {
         '/payout',
         reason: 'the ledger is a tab root: it must push, not go',
       );
-      // Back returns to the ledger with its state intact.
-      await tester.pageBack();
+      // Back returns to the ledger with its state intact. P13's real
+      // `/payout` renders no app bar (the design has none), so the platform
+      // back button is driven directly instead of a back-widget lookup.
+      await tester.binding.handlePopRoute();
       await _settle(tester);
       expect(currentPath(tester), '/money');
       expect(find.text('Maya is owed'), findsOneWidget);

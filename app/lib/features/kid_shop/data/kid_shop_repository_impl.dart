@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/data/stream_combine.dart';
@@ -54,7 +55,7 @@ class KidShopRepositoryImpl implements KidShopRepository {
     )..where((r) => r.id.equals(rewardId))).getSingleOrNull();
     if (reward == null) return;
     final status = reward.needsOk ? 'requested' : 'approved';
-    final now = DateTime.now().toUtc();
+    final now = appNowUtc();
     final zone = await _db.familyZoneId();
     await _db.transaction(() async {
       await _db

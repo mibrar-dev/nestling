@@ -13,6 +13,7 @@
 // the seed uses Sat 3 Oct 2026 (and Sat 26 Sep 2026 for "last Saturday") and
 // every weekday label renders correctly via `family_time.dart`.
 
+import 'package:clock/clock.dart';
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/family_time.dart';
@@ -32,7 +33,7 @@ abstract final class Seed {
   static DateTime get anchorDay {
     final override = anchorOverride;
     if (override != null) return override;
-    final london = toFamilyZone(DateTime.now().toUtc(), defaultFamilyZoneId);
+    final london = toFamilyZone(clock.now().toUtc(), defaultFamilyZoneId);
     return DateTime.utc(london.year, london.month, london.day);
   }
 
@@ -89,7 +90,7 @@ abstract final class Seed {
             id: const Value(1),
             onboardingComplete: const Value(true),
             subscriptionStatus: const Value('trial'),
-            trialStart: Value(DateTime.now().toUtc()),
+            trialStart: Value(clock.now().toUtc()),
             appMode: const Value('parent'),
           ),
         );

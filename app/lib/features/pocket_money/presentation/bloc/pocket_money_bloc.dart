@@ -15,6 +15,7 @@ class PocketMoneyBloc extends Bloc<PocketMoneyEvent, PocketMoneyState> {
     on<PocketMoneyChildSelected>(_onChildSelected);
     on<PocketMoneyAddMoneySubmitted>(_onAddMoneySubmitted);
     on<PocketMoneySpendingSubmitted>(_onSpendingSubmitted);
+    on<PocketMoneyPayoutSubmitted>(_onPayoutSubmitted);
   }
 
   final PocketMoneyRepository _repository;
@@ -25,6 +26,15 @@ class PocketMoneyBloc extends Bloc<PocketMoneyEvent, PocketMoneyState> {
   /// stream still reports the old day (P06-BUG-02). Cleared on every load
   /// emission, when the stream has caught up.
   int? _pendingDay;
+
+  /// Child ids with a payout write still in flight (P13-BUG-01). Bloc
+  /// handlers overlap (see `_requestedBase` above), so a second tap before
+  /// the ledger stream proves the first write would otherwise dispatch the
+  /// same `recordPayout` again — a duplicate `payout` row, a doubled
+  /// `savings_move` and a twice-credited goal. Entries are dropped when the
+  /// write settles (success or failure), so a retry after a failure stays
+  /// reachable (P13-BUG-04).
+  final Set<String> _payoutInFlight = <String>{};
 
   /// Latest requested weekly base per child, recorded synchronously when a
   /// step event arrives (before the first await). Step handlers can overlap:
@@ -231,6 +241,47 @@ class PocketMoneyBloc extends Bloc<PocketMoneyEvent, PocketMoneyState> {
     } on Object catch (error) {
       if (emit.isDone) return;
       emit(state.copyWith(errorMessage: _submitErrorMessage(error)));
+    }
+  }
+
+  Future<void> _onPayoutSubmitted(
+    PocketMoneyPayoutSubmitted event,
+    Emitter<PocketMoneyState> emit,
+  ) async {
+    // P13 "Mark as paid": write-through, mirroring the P12 add/spend
+    // submits — the `watchLedgerData` stream re-emits with the new `payout`
+    // row (plus the optional `savings_move` + goal bump). A failed submit
+    // keeps the loaded sheet and surfaces the message for the view's
+    // `NestToast` (no full-screen swap).
+    //
+    // Non-reentrant per child (P13-BUG-01): the view dispatches one event
+    // per ticked child, and a second tap while the first write is still in
+    // flight dispatches the same event again. The synchronous `Set.add`
+    // runs in event order, so the duplicate is dropped before its write —
+    // while a ticked sibling still proceeds. The entry is dropped in
+    // `finally`, so a retry after a failure (P13-BUG-04) stays reachable.
+    if (!_payoutInFlight.add(event.childId)) return;
+    try {
+      // A repeated identical failure must stay visible: without this, the
+      // retry emits an equal state, Bloc suppresses it and the view's
+      // `listenWhen` never fires (P13-BUG-04). Clearing first turns the
+      // repeat into null → message again. On the happy path the message is
+      // already null, so `copyWith` is equal and nothing emits — the
+      // write-through stays silent.
+      if (state.errorMessage != null) {
+        emit(state.copyWith(clearErrorMessage: true));
+      }
+      await _repository.recordPayout(
+        childId: event.childId,
+        amountPence: event.amountPence,
+        savingsMovePence: event.savingsMovePence,
+        goalId: event.goalId,
+      );
+    } on Object catch (error) {
+      if (emit.isDone) return;
+      emit(state.copyWith(errorMessage: _submitErrorMessage(error)));
+    } finally {
+      _payoutInFlight.remove(event.childId);
     }
   }
 }

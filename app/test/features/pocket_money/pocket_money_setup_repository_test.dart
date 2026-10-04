@@ -7,6 +7,7 @@
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/features/pocket_money/data/pocket_money_repository_impl.dart';
@@ -150,16 +151,16 @@ void main() {
     });
 
     test('stamps one UTC instant on both rows', () async {
-      final before = DateTime.now().toUtc();
+      final before = appNowUtc();
       await repository.setMode('weekly');
-      final after = DateTime.now().toUtc();
+      final after = appNowUtc();
 
       final family = await familyRow();
       final settings = await settingsRow();
       final familyStamp = family.updatedAt!;
       final settingsStamp = settings.updatedAt!;
       // NOTE: drift reads `DateTime` columns back in local time, so the UTC
-      // contract belongs to the write site (`DateTime.now().toUtc()` in the
+      // contract belongs to the write site (`appNowUtc()` in the
       // impl); what the repository must guarantee here is that BOTH rows move
       // to the same fresh instant in one transaction.
       expect(familyStamp, settingsStamp);

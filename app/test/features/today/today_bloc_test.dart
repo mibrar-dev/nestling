@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/features/today/domain/entities/child_day_summary.dart';
 import 'package:nestling/features/today/domain/entities/today_item.dart';
@@ -91,7 +92,7 @@ void main() {
       },
       act: (bloc) => bloc.add(const TodayLoadRequested()),
       expect: () {
-        final london = toFamilyZone(DateTime.now().toUtc(), 'Europe/London');
+        final london = toFamilyZone(appNowUtc(), 'Europe/London');
         return [
           const TodayState(status: TodayStatus.loading),
           TodayState(
@@ -101,7 +102,7 @@ void main() {
             pendingCount: 2,
             greeting: dayPartForHour(london.hour),
             dateLine:
-                '${formatDay(DateTime.now().toUtc(), 'Europe/London')} · Happy week: 4 days',
+                '${formatDay(appNowUtc(), 'Europe/London')} · Happy week: 4 days',
             happyDays: 4,
           ),
         ];
@@ -336,39 +337,43 @@ void main() {
         ),
       ],
     );
-    test('date line uses the singular "1 day" for a one-day happy week', () async {
-      final repo = MockTodayRepository();
-      when(repo.watchItems).thenAnswer((_) => Stream.value(_items));
-      when(repo.watchSummaries).thenAnswer(
-        (_) => Stream.value(const <ChildDaySummary>[
-          ChildDaySummary(
-            childId: 'maya',
-            nickname: 'Maya',
-            avatarColour: 'lilac',
-            pipStage: 3,
-            done: 1,
-            total: 2,
-            coins: 120,
-            ageYears: 9,
-            happyDays: 1,
-          ),
-        ]),
-      );
-      when(repo.watchParentName).thenAnswer((_) => Stream.value('Sarah'));
-      when(repo.watchPayoutDay).thenAnswer((_) => Stream.value(6));
-      when(repo.watchPendingCount).thenAnswer((_) => Stream.value(0));
-      final bloc = TodayBloc(repository: repo)..add(const TodayLoadRequested());
+    test(
+      'date line uses the singular "1 day" for a one-day happy week',
+      () async {
+        final repo = MockTodayRepository();
+        when(repo.watchItems).thenAnswer((_) => Stream.value(_items));
+        when(repo.watchSummaries).thenAnswer(
+          (_) => Stream.value(const <ChildDaySummary>[
+            ChildDaySummary(
+              childId: 'maya',
+              nickname: 'Maya',
+              avatarColour: 'lilac',
+              pipStage: 3,
+              done: 1,
+              total: 2,
+              coins: 120,
+              ageYears: 9,
+              happyDays: 1,
+            ),
+          ]),
+        );
+        when(repo.watchParentName).thenAnswer((_) => Stream.value('Sarah'));
+        when(repo.watchPayoutDay).thenAnswer((_) => Stream.value(6));
+        when(repo.watchPendingCount).thenAnswer((_) => Stream.value(0));
+        final bloc = TodayBloc(repository: repo)
+          ..add(const TodayLoadRequested());
 
-      final loaded = await bloc.stream.firstWhere(
-        (s) => s.status == TodayStatus.loaded,
-      );
+        final loaded = await bloc.stream.firstWhere(
+          (s) => s.status == TodayStatus.loaded,
+        );
 
-      expect(loaded.happyDays, 1);
-      expect(
-        loaded.dateLine,
-        '${formatDay(DateTime.now().toUtc(), 'Europe/London')} · Happy week: 1 day',
-      );
-    });
+        expect(loaded.happyDays, 1);
+        expect(
+          loaded.dateLine,
+          '${formatDay(appNowUtc(), 'Europe/London')} · Happy week: 1 day',
+        );
+      },
+    );
   });
 
   group('dayPartForHour', () {
