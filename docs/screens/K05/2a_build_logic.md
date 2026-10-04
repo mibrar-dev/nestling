@@ -64,4 +64,16 @@
   + `kid_growth.dart` helpers + `pipStageName(child.pipStage + 1)` for
   `Next: …`. Integrator runs the full suite + goldens.
 
+## Iteration 2 (FIXES_1.md empty — verification only)
+
+- `FIXES_1.md` contains no items, so no logic-layer change was needed.
+- Confirmed the UI build consumed the iteration-1 contract as written
+  (`pipTotalCoins` defaulted, helpers in `domain/entities/kid_growth.dart`;
+  `2b_build_ui.md:5`). No event/state shape change requested or made.
+- Re-ran after the main merge: `flutter analyze lib/features/kid_home` →
+  No issues found; `flutter test --timeout 120s
+  kid_home_repository_test kid_home_bloc_test` → All tests passed (62).
+- `git status`: this layer's files unchanged since iteration 1; no
+  views/widgets/core edits. No simulator use.
+
 VERDICT: PASS
