@@ -21,6 +21,7 @@ import 'package:nestling/features/kid_home/presentation/bloc/kid_home_state.dart
 const KidChild _leo = KidChild(
   id: 'leo',
   nickname: 'Leo',
+  ageBand: '4-6',
   avatarColour: 'mint',
   coins: 60,
   pipStyle: 'bolt',
@@ -34,6 +35,7 @@ const KidChild _leo = KidChild(
 const KidChild _maya = KidChild(
   id: 'maya',
   nickname: 'Maya',
+  ageBand: '7-9',
   avatarColour: 'lilac',
   coins: 120,
   pipStyle: 'mochi',
@@ -156,6 +158,15 @@ final Matcher _loading = predicate<KidHomeState>(
   (state) => state.status == KidHomeStatus.loading,
 );
 
+/// Loading with the K01 roster already arrived: on a fresh load the
+/// profiles stream emits before the combined home stream, so every load
+/// passes through `loading` (empty roster) then `loading` (roster shown)
+/// before `loaded`. Named so the sequence reads deliberately.
+final Matcher _loadingWithProfiles = predicate<KidHomeState>(
+  (state) =>
+      state.status == KidHomeStatus.loading && state.profiles.length == 2,
+);
+
 final Matcher _failure = predicate<KidHomeState>(
   (state) =>
       state.status == KidHomeStatus.failure && state.errorMessage != null,
@@ -200,10 +211,19 @@ class _FakeKidHomeRepository extends KidHomeRepository {
   KidChild? child;
   List<KidQuest> _items;
 
+  /// K01 roster in creation order (Maya, then Leo — never re-sorted).
+  List<KidChild> profiles = <KidChild>[_maya, _leo];
+
   /// The items watch stream errors on listen (load-failure path). Only one
   /// source errors so the bloc surfaces a single failure state, like a real
   /// query failure.
   bool failLoad = false;
+
+  /// The profiles watch stream errors on listen (profiles-load failure).
+  bool failProfiles = false;
+
+  /// [setActiveChild] throws (selection actionError path).
+  bool failSelect = false;
 
   /// [completeQuest] throws (actionError path).
   bool failComplete = false;
@@ -216,10 +236,13 @@ class _FakeKidHomeRepository extends KidHomeRepository {
   bool hang = false;
 
   final List<List<String>> completed = <List<String>>[];
+  final List<String> selected = <String>[];
   final StreamController<List<KidQuest>> _itemsPushed =
       StreamController<List<KidQuest>>.broadcast();
   final StreamController<KidChild?> _childPushed =
       StreamController<KidChild?>.broadcast();
+  final StreamController<List<KidChild>> _profilesPushed =
+      StreamController<List<KidChild>>.broadcast();
 
   /// Subscription counts (review finding 4, iteration 5): a load must watch
   /// the child row exactly once, no matter how many list updates follow.
@@ -236,6 +259,17 @@ class _FakeKidHomeRepository extends KidHomeRepository {
   void pushChild(KidChild? value) {
     child = value;
     _childPushed.add(value);
+  }
+
+  void pushProfiles(List<KidChild> value) {
+    profiles = value;
+    _profilesPushed.add(value);
+  }
+
+  /// Fails the live profiles stream mid-session: with a roster already
+  /// shown the list must be kept, like the items mid-session probe below.
+  void failProfilesNow(Object error) {
+    _profilesPushed.addError(error);
   }
 
   /// Fails the live items stream mid-session (review finding 6,
@@ -262,8 +296,14 @@ class _FakeKidHomeRepository extends KidHomeRepository {
 
   @override
   Stream<List<KidChild>> watchProfiles() async* {
-    final kid = child;
-    yield <KidChild>[?kid];
+    if (hang) {
+      return;
+    }
+    if (failProfiles) {
+      throw Exception('profiles down');
+    }
+    yield profiles;
+    yield* _profilesPushed.stream;
   }
 
   @override
@@ -281,6 +321,14 @@ class _FakeKidHomeRepository extends KidHomeRepository {
 
   @override
   Future<bool> verifyPin(String childId, String pin) async => true;
+
+  @override
+  Future<void> setActiveChild(String childId) async {
+    selected.add(childId);
+    if (failSelect) {
+      throw Exception('select failed');
+    }
+  }
 
   @override
   Future<void> completeQuest(String childId, String questId) async {
@@ -446,7 +494,11 @@ void main() {
       },
       act: (bloc) => bloc.add(const KidHomeLoadRequested()),
       wait: const Duration(milliseconds: 100),
-      expect: () => <Matcher>[_loading, _loaded(done: 4, total: 6)],
+      expect: () => <Matcher>[
+        _loading,
+        _loadingWithProfiles,
+        _loaded(done: 4, total: 6),
+      ],
     );
 
     blocTest<KidHomeBloc, KidHomeState>(
@@ -471,6 +523,7 @@ void main() {
       wait: const Duration(milliseconds: 100),
       expect: () => <Matcher>[
         _loading,
+        _loadingWithProfiles,
         _loaded(done: 4, total: 6),
         _loaded(done: 5, total: 6),
         // A cleared child arrives WITH an empty list (atomic home emission),
@@ -488,7 +541,11 @@ void main() {
       },
       act: (bloc) => bloc.add(const KidHomeLoadRequested()),
       wait: const Duration(milliseconds: 100),
-      expect: () => <Matcher>[_loading, _loaded(done: 0, total: 0)],
+      expect: () => <Matcher>[
+        _loading,
+        _loadingWithProfiles,
+        _loaded(done: 0, total: 0),
+      ],
       verify: (bloc) => expect(bloc.state.fraction, 0),
     );
 
@@ -512,7 +569,7 @@ void main() {
       },
       act: (bloc) => bloc.add(const KidHomeLoadRequested()),
       wait: const Duration(milliseconds: 100),
-      expect: () => <Matcher>[_loading, _failure],
+      expect: () => <Matcher>[_loading, _loadingWithProfiles, _failure],
     );
 
     blocTest<KidHomeBloc, KidHomeState>(
@@ -530,6 +587,7 @@ void main() {
       wait: const Duration(milliseconds: 150),
       expect: () => <Matcher>[
         _loading,
+        _loadingWithProfiles,
         _failure,
         _loading,
         _loaded(done: 4, total: 6),
@@ -561,6 +619,7 @@ void main() {
       wait: const Duration(milliseconds: 100),
       expect: () => <Matcher>[
         _loading,
+        _loadingWithProfiles,
         _loaded(done: 4, total: 6),
         // The celebration signal rides the flip emission itself.
         _celebrating('q-reading', coins: 10),
@@ -603,6 +662,7 @@ void main() {
       wait: const Duration(milliseconds: 100),
       expect: () => <Matcher>[
         _loading,
+        _loadingWithProfiles,
         _loaded(done: 4, total: 6),
         _celebrating('q-reading', coins: 10),
         predicate<KidHomeState>(
@@ -632,7 +692,11 @@ void main() {
         );
       },
       wait: const Duration(milliseconds: 100),
-      expect: () => <Matcher>[_loading, _loaded(done: 4, total: 6)],
+      expect: () => <Matcher>[
+        _loading,
+        _loadingWithProfiles,
+        _loaded(done: 4, total: 6),
+      ],
       verify: (bloc) {
         expect(repo.completed, hasLength(1));
         expect(bloc.state.justCompletedQuestId, isNull);
@@ -703,6 +767,7 @@ void main() {
       wait: const Duration(milliseconds: 100),
       expect: () => <Matcher>[
         _loading,
+        _loadingWithProfiles,
         _loaded(done: 4, total: 6),
         _failed,
         // The second attempt resets the previous outcome first, so the
@@ -742,6 +807,7 @@ void main() {
       wait: const Duration(milliseconds: 100),
       expect: () => <Matcher>[
         _loading,
+        _loadingWithProfiles,
         _loaded(done: 4, total: 6),
         _failed,
         _reset,
@@ -943,6 +1009,7 @@ void main() {
       wait: const Duration(milliseconds: 100),
       expect: () => <Matcher>[
         _loading,
+        _loadingWithProfiles,
         _loaded(done: 4, total: 6),
         _celebrating('q-reading', coins: 10),
         // Already done on arrival: no second celebration, list kept.
@@ -977,6 +1044,7 @@ void main() {
       wait: const Duration(milliseconds: 100),
       expect: () => <Matcher>[
         _loading,
+        _loadingWithProfiles,
         _loaded(done: 4, total: 6),
         // No failure card: the child keeps the list they were looking at.
         predicate<KidHomeState>(
@@ -992,6 +1060,174 @@ void main() {
         expect(bloc.state.items, hasLength(6));
       },
     );
+  });
+
+  group('K01 profiles (picker roster + selection)', () {
+    late _FakeKidHomeRepository repo;
+
+    blocTest<KidHomeBloc, KidHomeState>(
+      'load delivers the roster Maya-first alongside the home',
+      build: () {
+        repo = _FakeKidHomeRepository();
+        return KidHomeBloc(repository: repo);
+      },
+      act: (bloc) => bloc.add(const KidHomeLoadRequested()),
+      wait: const Duration(milliseconds: 100),
+      verify: (bloc) {
+        expect(bloc.state.profiles.map((child) => child.id).toList(), <String>[
+          'maya',
+          'leo',
+        ], reason: 'children are listed in creation order, never alphabetical');
+        expect(bloc.state.profiles.first.ageBand, '7-9');
+        expect(bloc.state.profiles.last.ageBand, '4-6');
+      },
+    );
+
+    blocTest<KidHomeBloc, KidHomeState>(
+      'a profiles-only retry while home is live restarts just that stream',
+      build: () {
+        repo = _FakeKidHomeRepository()..failProfiles = true;
+        return KidHomeBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        repo.failProfiles = false;
+        bloc.add(const KidHomeProfilesRequested());
+      },
+      wait: const Duration(milliseconds: 150),
+      verify: (bloc) {
+        expect(bloc.state.profiles.map((child) => child.id).toList(), <String>[
+          'maya',
+          'leo',
+        ]);
+        // The home subscription was never stacked: one child + one items
+        // watch for the whole sequence (K03-BUG-15 applies to both streams).
+        expect(repo.activeChildSubscriptions, 1);
+        expect(repo.itemsSubscriptions, 1);
+      },
+    );
+
+    blocTest<KidHomeBloc, KidHomeState>(
+      'selecting a profile writes app_state and emits selectedProfileId',
+      build: () {
+        repo = _FakeKidHomeRepository();
+        return KidHomeBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        bloc.add(const KidHomeProfileSelected(childId: 'leo', pinSet: false));
+      },
+      wait: const Duration(milliseconds: 100),
+      verify: (bloc) {
+        expect(repo.selected, <String>['leo']);
+        expect(bloc.state.selectedProfileId, 'leo');
+        // The roster and the home list survive the selection emit.
+        expect(bloc.state.profiles.map((child) => child.id).toList(), <String>[
+          'maya',
+          'leo',
+        ]);
+        expect(bloc.state.items, hasLength(6));
+      },
+    );
+
+    blocTest<KidHomeBloc, KidHomeState>(
+      'a failed selection keeps the roster and records actionError',
+      build: () {
+        repo = _FakeKidHomeRepository()..failSelect = true;
+        return KidHomeBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        bloc.add(const KidHomeProfileSelected(childId: 'maya', pinSet: true));
+      },
+      wait: const Duration(milliseconds: 100),
+      verify: (bloc) {
+        expect(repo.selected, <String>['maya']);
+        expect(bloc.state.selectedProfileId, isNull);
+        expect(bloc.state.actionError, contains('select failed'));
+        expect(bloc.state.actionNonce, 1);
+        expect(bloc.state.profiles, hasLength(2));
+        expect(bloc.state.items, hasLength(6));
+      },
+    );
+
+    blocTest<KidHomeBloc, KidHomeState>(
+      'a mid-session profiles error keeps the shown roster',
+      build: () {
+        repo = _FakeKidHomeRepository();
+        return KidHomeBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        repo.failProfilesNow(Exception('one bad tick'));
+      },
+      wait: const Duration(milliseconds: 100),
+      verify: (bloc) {
+        expect(bloc.state.status, KidHomeStatus.loaded);
+        expect(bloc.state.profiles.map((child) => child.id).toList(), <String>[
+          'maya',
+          'leo',
+        ]);
+      },
+    );
+
+    test('copyWith and completion outcomes carry the K01 roster', () {
+      final loaded = KidHomeState(
+        status: KidHomeStatus.loaded,
+        child: _maya,
+        items: _mayaItems(),
+        profiles: const <KidChild>[_maya, _leo],
+      );
+      expect(
+        loaded.copyWith(status: KidHomeStatus.loading).profiles,
+        hasLength(2),
+      );
+      expect(
+        loaded.copyWithLoaded(child: _maya, items: _mayaItems()).profiles,
+        hasLength(2),
+        reason: 'a quest completion emit must not blank the picker',
+      );
+      expect(
+        loaded.withCompletionFailed(Exception('x')).profiles,
+        hasLength(2),
+      );
+      expect(
+        loaded
+            .withCompletionSucceeded(questId: 'q-reading', coins: 10)
+            .profiles,
+        hasLength(2),
+      );
+      final selected = loaded.copyWithSelection('leo');
+      expect(selected.selectedProfileId, 'leo');
+      expect(selected.profiles, hasLength(2));
+      // One-shot: the next home emission consumes the selection.
+      expect(
+        selected
+            .copyWithLoaded(child: _leo, items: _mayaItems())
+            .selectedProfileId,
+        isNull,
+      );
+    });
+
+    test('KidHomeProfileSelected equality covers every field', () {
+      const a = KidHomeProfileSelected(childId: 'maya', pinSet: true);
+      const b = KidHomeProfileSelected(childId: 'maya', pinSet: true);
+      const differentChild = KidHomeProfileSelected(
+        childId: 'leo',
+        pinSet: true,
+      );
+      const differentPin = KidHomeProfileSelected(
+        childId: 'maya',
+        pinSet: false,
+      );
+      expect(a, b);
+      expect(a, isNot(differentChild));
+      expect(a, isNot(differentPin));
+    });
   });
 
   // -------------------------------------------------------------------------
