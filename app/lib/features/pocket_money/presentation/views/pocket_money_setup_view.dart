@@ -679,9 +679,7 @@ class _WeeklyBaseRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final initial = child.nickname.isEmpty
-        ? '?'
-        : child.nickname.characters.first.toUpperCase();
+    final initial = nestAvatarInitial(child.nickname);
     final avatar = NestAvatar(
       initial: initial,
       size: NestAvatarSize.s32,

@@ -397,7 +397,7 @@ class _GateBackdropBody extends StatelessWidget {
     final kid = child;
     final rawName = kid?.nickname ?? '';
     final nickname = rawName.isEmpty ? null : rawName;
-    final initial = nickname == null ? '•' : nickname[0].toUpperCase();
+    final initial = nestAvatarInitial(nickname ?? '', fallback: '•');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
