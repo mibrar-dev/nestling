@@ -12,6 +12,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
+import 'package:nestling/features/family/domain/entities/child_profile.dart';
 import 'package:nestling/features/family/domain/entities/family_child.dart';
 import 'package:nestling/features/family/domain/entities/family_member.dart';
 import 'package:nestling/features/family/domain/family_repository.dart';
@@ -182,6 +183,10 @@ void main() {
       when(repo.watchItems).thenAnswer((_) => Stream.value(_members));
       when(repo.watchChildren)
           .thenAnswer((_) => Stream.value(const <FamilyChild>[]));
+      // P15: the load also subscribes to the selected-child profile, which
+      // P05 screens never read — a null profile keeps these proofs neutral.
+      when(repo.watchProfile)
+          .thenAnswer((_) => Stream<ChildProfile?>.value(null));
       var calls = 0;
       _stubGatedAddChild(repo, gate, () => calls++);
       final bloc = FamilyBloc(repository: repo)
@@ -213,6 +218,10 @@ void main() {
         when(repo.watchItems).thenAnswer((_) => Stream.value(_members));
         when(repo.watchChildren)
             .thenAnswer((_) => Stream.value(const <FamilyChild>[]));
+        // P15: the load also subscribes to the selected-child profile,
+        // which P05 screens never read — a null profile keeps this neutral.
+        when(repo.watchProfile)
+            .thenAnswer((_) => Stream<ChildProfile?>.value(null));
         var calls = 0;
         _stubGatedAddChild(repo, gate, () => calls++);
         final bloc = FamilyBloc(repository: repo)
@@ -257,6 +266,10 @@ void main() {
         });
         when(repo.watchChildren)
             .thenAnswer((_) => Stream.value(const <FamilyChild>[]));
+        // P15: the load also subscribes to the selected-child profile,
+        // which P05 screens never read — a null profile keeps this neutral.
+        when(repo.watchProfile)
+            .thenAnswer((_) => Stream<ChildProfile?>.value(null));
         final bloc = FamilyBloc(repository: repo)
           ..add(const FamilyLoadRequested());
 
@@ -292,6 +305,10 @@ void main() {
         when(repo.watchItems).thenAnswer((_) => Stream.value(_members));
         when(repo.watchChildren)
             .thenAnswer((_) => Stream.value(const <FamilyChild>[]));
+        // P15: the load also subscribes to the selected-child profile,
+        // which P05 screens never read — a null profile keeps this neutral.
+        when(repo.watchProfile)
+            .thenAnswer((_) => Stream<ChildProfile?>.value(null));
         _stubGatedAddChild(repo, gate, () {});
         final bloc = FamilyBloc(repository: repo)
           ..add(const FamilyLoadRequested());
