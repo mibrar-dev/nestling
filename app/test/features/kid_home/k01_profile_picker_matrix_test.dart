@@ -13,6 +13,8 @@
 
 import 'dart:async';
 
+import 'package:drift/drift.dart' show Value;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -50,6 +52,12 @@ class _FakeKidHomeRepository implements KidHomeRepository {
   List<KidChild> profiles = const <KidChild>[];
   bool hangLoad;
   int failTimes;
+
+  /// Reject only the FIRST `setActiveChild`, so a test can watch the picker
+  /// recover from a rejected tap without swapping the repository (the bloc
+  /// captures its repository at construction, so re-registering in GetIt would
+  /// not reach it).
+  bool failSelectOnce = false;
   bool failSelect = false;
 
   final List<String> activeChildWrites = <String>[];
@@ -89,6 +97,10 @@ class _FakeKidHomeRepository implements KidHomeRepository {
   @override
   Future<void> setActiveChild(String childId) async {
     activeChildWrites.add(childId);
+    if (failSelectOnce) {
+      failSelectOnce = false;
+      throw Exception('nope');
+    }
     if (failSelect) throw Exception('nope');
   }
 
@@ -143,6 +155,22 @@ class _Wrapped extends StatelessWidget {
 Future<void> _settle(WidgetTester tester) async {
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 400));
+}
+
+/// `_settle` PLUS a real-async drain.
+///
+/// A tile tap is `await repository.setActiveChild(...)` followed by the
+/// bloc's `emit`, and that write is real Drift I/O. `tester.pump` only
+/// advances the fake clock, so without the drain the future never completes,
+/// NO state is emitted, and the screen looks "dead" for reasons that have
+/// nothing to do with the screen. Every navigation assertion in this file
+/// that depends on the write goes through here; see the group at the end
+/// ("navigation that depends on the DB write") for the proof.
+Future<void> _settleAfterWrite(WidgetTester tester) async {
+  await tester.runAsync(
+    () => Future<void>.delayed(const Duration(milliseconds: 60)),
+  );
+  await _settle(tester);
 }
 
 /// Pops the imperatively-pushed route. `tester.pageBack()` needs a back
@@ -203,6 +231,49 @@ void _expectPixelNear(List<int> actual, Color expected, String reason) {
     );
   }
   expect(actual[3], 255, reason: '$reason must be opaque');
+}
+
+/// The active child the database holds right now.
+Future<String?> _activeChildId(WidgetTester tester) async {
+  final db = GetIt.instance<AppDatabase>();
+  final rows = await tester.runAsync(() => db.select(db.appState).get());
+  return rows?.single.activeChildId;
+}
+
+/// Inserts an extra child straight into the seeded family, so the picker has
+/// 3+ tiles — the roster the design never shows and the iteration-2 build had
+/// to survive.
+Future<void> _addChild(WidgetTester tester, String id, String nickname) async {
+  final db = GetIt.instance<AppDatabase>();
+  await tester.runAsync(
+    () => db
+        .into(db.children)
+        .insert(
+          ChildrenCompanion.insert(
+            id: id,
+            familyId: Seed.familyId,
+            nickname: nickname,
+            ageBand: const Value('7-9'),
+            avatarColour: const Value('sky'),
+            pipStage: const Value(1),
+          ),
+        ),
+  );
+}
+
+/// Two fingers DOWN on Maya and Leo before either UP — both taps belong to
+/// the picker even though the first selection pushes a route in between.
+void _burst(WidgetTester tester) {
+  final maya = TestPointer(7);
+  final leo = TestPointer(8);
+  tester.binding.handlePointerEvent(
+    maya.down(tester.getCenter(find.byKey(_mayaTile))),
+  );
+  tester.binding.handlePointerEvent(
+    leo.down(tester.getCenter(find.byKey(_leoTile))),
+  );
+  tester.binding.handlePointerEvent(maya.up());
+  tester.binding.handlePointerEvent(leo.up());
 }
 
 void main() {
@@ -768,5 +839,245 @@ void main() {
       reason: 'the mock clock is gallery-only; the OS draws the real bar',
     );
     await disposeApp(tester);
+  });
+
+  // -------------------------------------------------------------------------
+  // Iteration 2 — the paths the build added
+  // -------------------------------------------------------------------------
+
+  group('K01 — navigation that depends on the DB write (real async drained)', () {
+    // These three are the harness-corrected forms of the navigation checks.
+    // `setActiveChild` is real Drift I/O: pumping frames alone never completes
+    // the future inside `_onProfileSelected`, so the bloc emits nothing and
+    // EVERY tile looks dead. Measured on this build: undrained, tapping Maya
+    // then Leo then Maya produced exactly ONE emitted state and zero
+    // navigation; drained, all three navigate.
+    testWidgets('BUG-3 repro: Maya, back, Maya again navigates twice', (
+      tester,
+    ) async {
+      await _pump(tester);
+      await _settleAfterWrite(tester);
+      await tester.tap(find.byKey(_mayaTile));
+      await _settleAfterWrite(tester);
+      expect(pushedPath(tester), '/kid-pin');
+      await _popRoute(tester);
+      expect(pushedPath(tester), '/who-is-playing');
+      await tester.tap(find.byKey(_mayaTile));
+      await _settleAfterWrite(tester);
+      await tester.pump(const Duration(seconds: 2));
+      expect(
+        pushedPath(tester),
+        '/kid-pin',
+        reason:
+            'a repeated selection of the SAME child must navigate again: '
+            '`setActiveChild` re-emits the app_state watch, and '
+            'copyWithLoaded clears the one-shot',
+      );
+      expect(await _activeChildId(tester), 'maya');
+      await disposeApp(tester);
+    });
+
+    testWidgets('back, then the OTHER child also navigates', (tester) async {
+      await _pump(tester);
+      await _settleAfterWrite(tester);
+      await tester.tap(find.byKey(_mayaTile));
+      await _settleAfterWrite(tester);
+      expect(pushedPath(tester), '/kid-pin');
+      await _popRoute(tester);
+      await tester.tap(find.byKey(_leoTile));
+      await _settleAfterWrite(tester);
+      await tester.pump(const Duration(seconds: 2));
+      expect(pushedPath(tester), '/kid-home', reason: 'Leo has no PIN');
+      expect(await _activeChildId(tester), 'leo');
+      await disposeApp(tester);
+    });
+
+    testWidgets('a single tap leaves the DB on the route’s child', (
+      tester,
+    ) async {
+      await _pump(tester);
+      await _settleAfterWrite(tester);
+      await tester.tap(find.byKey(_leoTile));
+      await _settleAfterWrite(tester);
+      expect(pushedPath(tester), '/kid-home');
+      // The anchor for K01-BUG-6: with ONE tap the DB and the visible route
+      // agree. The burst case is the open bug (see 6_bugs.md).
+      expect(await _activeChildId(tester), 'leo');
+      await disposeApp(tester);
+    });
+
+    testWidgets('a two-finger burst pushes exactly one route (BUG-2)', (
+      tester,
+    ) async {
+      await _pump(tester);
+      await _settleAfterWrite(tester);
+      _burst(tester);
+      await _settleAfterWrite(tester);
+      await tester.pump(const Duration(seconds: 2));
+      // Stacking detector, agnostic about WHICH child won the burst: one
+      // back must land on the picker. (Which one wins is a product ruling,
+      // not a stacking question — see 2b_build_ui.md.)
+      var pops = 0;
+      while (pushedPath(tester) != '/who-is-playing' && pops < 5) {
+        tester.state<NavigatorState>(find.byType(Navigator).first).pop();
+        await _settleAfterWrite(tester);
+        pops++;
+      }
+      expect(
+        pops,
+        1,
+        reason: 'one burst, one route: $pops pops were needed to get back',
+      );
+      await disposeApp(tester);
+    });
+
+    testWidgets('the screen keeps working after a failed write too', (
+      tester,
+    ) async {
+      final roster = (await tester.runAsync(_demoRoster)) ?? const <KidChild>[];
+      await _useFakeRepository(
+        _FakeKidHomeRepository()
+          ..failSelectOnce = true
+          ..profiles = roster,
+      );
+      await _pump(tester);
+      await _settleAfterWrite(tester);
+      await tester.tap(find.byKey(_mayaTile));
+      await _settleAfterWrite(tester);
+      expect(find.text('Hmm, that did not work. Try again.'), findsOneWidget);
+      expect(pushedPath(tester), '/who-is-playing');
+
+      // The single-flight latch must be released by the failure, or the
+      // picker would never navigate again.
+      await tester.tap(find.byKey(_leoTile));
+      await _settleAfterWrite(tester);
+      await tester.pump(const Duration(seconds: 2));
+      expect(
+        pushedPath(tester),
+        '/kid-home',
+        reason: 'after a rejected write the next selection must still work',
+      );
+      await disposeApp(tester);
+    });
+  });
+
+  group('K01 — 3+ children keep the design tile (K01-BUG-1)', () {
+    for (final width in const <double>[320, 390, 430]) {
+      testWidgets('${width.toInt()}px: every tile stays two-up wide', (
+        tester,
+      ) async {
+        await _addChild(tester, 'nina', 'Nina');
+        await _pump(tester, width: width);
+        final tiles = find.byType(ProfileTile);
+        expect(tiles, findsNWidgets(3));
+        // The design's two-up share, not a share of three.
+        final expected = (width - 2 * NestSpacing.padSide - NestSpacing.s4) / 2;
+        for (var i = 0; i < 3; i++) {
+          expect(
+            tester.getSize(tiles.at(i)).width,
+            closeTo(expected, 1),
+            reason: 'tile $i must keep the two-up width, not shrink',
+          );
+          expect(tester.getSize(tiles.at(i)).height, greaterThanOrEqualTo(336));
+        }
+        // The pet disc is a CIRCLE at every tile (the iteration-1 bug squashed
+        // it into an ellipse).
+        for (var i = 0; i < 3; i++) {
+          final rect = tester.getRect(
+            find
+                .descendant(
+                  of: tiles.at(i),
+                  matching: find.byWidgetPredicate(
+                    (w) =>
+                        w is Container &&
+                        w.decoration is BoxDecoration &&
+                        (w.decoration! as BoxDecoration).shape ==
+                            BoxShape.circle &&
+                        (w.decoration! as BoxDecoration).color != null,
+                  ),
+                )
+                .last,
+          );
+          expect(rect.width, closeTo(rect.height, 0.5), reason: 'tile $i pet');
+        }
+        expect(tester.takeException(), isNull);
+        await disposeApp(tester);
+      });
+    }
+
+    testWidgets('the third child is reachable by scroll and navigates', (
+      tester,
+    ) async {
+      await _addChild(tester, 'nina', 'Nina');
+      await _pump(tester);
+      expect(find.byKey(const ValueKey('k01-tile-nina')), findsOneWidget);
+      final before = tester.getTopLeft(
+        find.byKey(const ValueKey('k01-tile-nina')),
+      );
+      expect(
+        before.dx,
+        greaterThan(390 - NestSpacing.padSide),
+        reason: 'the third tile starts off the right gutter',
+      );
+      await tester.drag(
+        find.byType(SingleChildScrollView).last,
+        const Offset(-400, 0),
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('k01-tile-nina')));
+      await _settleAfterWrite(tester);
+      await tester.pump(const Duration(seconds: 2));
+      // Nina is a plain seeded row: no PIN hash, so no PIN screen.
+      expect(pushedPath(tester), '/kid-home');
+      expect(await _activeChildId(tester), 'nina');
+      await disposeApp(tester);
+    });
+  });
+
+  group('K01 — the shared kid background (KID BACKGROUND rule)', () {
+    // D3/D4 regression: the meadow must be the shared TWO-TONE hill (hill-back
+    // `kid-meadow`, then `color-mix(kid-meadow 80%, surface)` = `kidHillFront`
+    // for hill-front), pinned to the physical bottom edge. A flat single-hill
+    // band fails the y=770 probe.
+    for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      testWidgets('${_themeName(theme)}: two-tone hills reach the edge', (
+        tester,
+      ) async {
+        await _pump(tester, theme: theme, bottomInset: 34, pixels: true);
+        final colors = theme == ThemeMode.light
+            ? NestColors.light
+            : NestColors.dark;
+        // x = 8 is inside the meadow but outside every card and every glyph.
+        _expectPixelNear(
+          await _pixelAt(tester, 8, 770),
+          colors.kidMeadow,
+          '.hill-back must be visible above .hill-front',
+        );
+        _expectPixelNear(
+          await _pixelAt(tester, 8, 843),
+          kidHillFront(colors.kidMeadow, colors.surface),
+          '.hill-front must own the bottom row',
+        );
+        await disposeApp(tester);
+      });
+    }
+
+    testWidgets('K01 paints no meadow of its own', (tester) async {
+      await _pump(tester);
+      // The screen is built on the shared `KidScope`, and the hills are
+      // mounted by that scope — exactly once. If K01 ever hand-rolled a sky,
+      // a gradient or a second hills block, these counts move.
+      expect(find.byType(KidScope), findsOneWidget);
+      expect(find.byType(NestMeadow), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(KidScope),
+          matching: find.byType(NestMeadow),
+        ),
+        findsOneWidget,
+        reason: 'the one hills block belongs to KidScope',
+      );
+      await disposeApp(tester);
+    });
   });
 }

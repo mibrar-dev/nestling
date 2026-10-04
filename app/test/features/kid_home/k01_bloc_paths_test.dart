@@ -481,6 +481,45 @@ void main() {
   });
 
   group('K01 — selection handled (K01-BUG-3)', () {
+    // K01-BUG-6 (open). The view single-flights its NAVIGATION
+    // (`_navPending`), so only the first selection of a gesture burst pushes
+    // a route — but `_onProfileSelected` has no in-flight guard, so every
+    // selection still runs its `setActiveChild` write. `app_state` therefore
+    // ends up naming a child the user never arrived at. This is the bloc-side
+    // root cause, pinned where the fix will land.
+    //
+    // Written as a plain `test`, not a `blocTest`: `blocTest(skip:)` takes an
+    // int RETRY count, not a marker, so a bug proof there would run (and fail)
+    // in the green suite.
+    test(
+      'K01-BUG-6: a burst persists only the child whose route is pushed',
+      () async {
+        final fake = _RosterFake();
+        final bloc = KidHomeBloc(repository: fake);
+        addTearDown(bloc.close);
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+        bloc
+          ..add(const KidHomeProfileSelected(childId: 'maya', pinSet: true))
+          ..add(const KidHomeProfileSelected(childId: 'leo', pinSet: false));
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        expect(
+          fake.selected,
+          <String>['maya'],
+          reason:
+              'K01-BUG-6: the picker pushes exactly one route (the first '
+              'selection, here maya), so exactly one child may be persisted. '
+              'Both writes landed, so the database names ${fake.selected} — '
+              'the user is authenticating as maya while the app state says '
+              '"${fake.selected.last}".',
+        );
+      },
+      skip:
+          'K01-BUG-6 open: the picker single-flights its navigation but not '
+          'its writes, so app_state can name a child whose route was never '
+          'pushed (see docs/screens/K01/6_bugs.md)',
+    );
+
     blocTest<KidHomeBloc, KidHomeState>(
       'handled consumes a pending selection without touching the roster',
       build: () {

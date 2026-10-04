@@ -198,4 +198,108 @@ void main() {
       await disposeApp(tester);
     });
   });
+
+  // -------------------------------------------------------------------------
+  // D1 + D2 (stage 5's ±2 px rule) — the tiles band and the caption sit on the
+  // design's y, not 16.5 / 34 px below it.
+  //
+  // Design values are read from `design/screens/light/K01-profile-picker.png`
+  // ÷3 as the first/last dark ink row of each element (anti-alias makes them
+  // ±0.5):
+  //   title ink  128.3…154.0   → line box 123…157 (28/34)
+  //   sub ink    179.3…195.0   → line box 173…199 (18/26)
+  //   tiles ink  289.0…648.7   → border box 288.5…648.5 (h 360)
+  //   caption ink 742.3…755.3 + 762.3…772.7 → box 738…778 (two 20px lines)
+  //
+  // The arithmetic behind the fix, so a future regression explains itself:
+  // the design's `.scroll` is `844 − 47 (--status-h) − 60 (.k1-top)
+  // − 34 (--home-h) = 703` tall. `NestHomeIndicator` reserves nothing in the
+  // running app (P01 BUG-2), so the picker carries `SizedBox(NestDevice.homeH)`
+  // under the caption itself. Without that 34 px the `flex: 1` band centres
+  // 17 px lower (half of it above, half below) and the caption 34 px lower.
+  // -------------------------------------------------------------------------
+
+  group('K01 — D1/D2: the vertical rhythm matches the design PNG', () {
+    testWidgets('title and sub line boxes are the design boxes', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/who-is-playing');
+      final title = tester.getRect(find.text("Who's playing?"));
+      expect(title.top, closeTo(123, 2), reason: 'design line box 123…157');
+      expect(title.bottom, closeTo(157, 2));
+      expect(title.height, closeTo(34, 1), reason: '.kid-title is 28/34');
+
+      final sub = tester.getRect(find.text('Tap your face to start'));
+      expect(sub.top, closeTo(173, 2), reason: 'design line box 173…199');
+      expect(sub.bottom, closeTo(199, 2));
+      expect(sub.height, closeTo(26, 1), reason: '.kid-body is 18/26');
+      await disposeApp(tester);
+    });
+
+    testWidgets('the tiles band sits at the design y (not +16.5)', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/who-is-playing');
+      for (final key in const <ValueKey<String>>[
+        ValueKey('k01-tile-maya'),
+        ValueKey('k01-tile-leo'),
+      ]) {
+        final rect = tester.getRect(find.byKey(key));
+        expect(
+          rect.top,
+          closeTo(288.5, 2),
+          reason: '$key: the design draws the tile top border at 289.0',
+        );
+        expect(
+          rect.bottom,
+          closeTo(648.5, 2),
+          reason: '$key: the design draws the tile bottom border at 648.7',
+        );
+        expect(
+          rect.height,
+          closeTo(360, 2),
+          reason: '360 = 3+20+96+8+32+8+20+8+10+132+20+3 from .k1-tile',
+        );
+      }
+      await disposeApp(tester);
+    });
+
+    testWidgets('the caption sits at the design y (not +34)', (tester) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/who-is-playing');
+      final caption = tester.getRect(
+        find.text('Grown-ups: tap the lock to get back to your dashboard.'),
+      );
+      expect(
+        caption.top,
+        closeTo(738, 2),
+        reason: 'design line box 738…778 (ink 742.3 first row)',
+      );
+      expect(caption.bottom, closeTo(778, 2));
+      expect(caption.height, closeTo(40, 1), reason: 'two 20px lines');
+      await disposeApp(tester);
+    });
+
+    testWidgets('the gap below the caption is the design’s 32 + 34', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      await pumpAppRoute(tester, '/who-is-playing');
+      final caption = tester.getRect(
+        find.text('Grown-ups: tap the lock to get back to your dashboard.'),
+      );
+      // `--s8` (32, `.scroll` padding-bottom) + `--home-h` (34).
+      expect(
+        844 - caption.bottom,
+        closeTo(NestSpacing.s8 + NestDevice.homeH, 1),
+        reason:
+            'the design reserves 32 below the caption and 34 more for the '
+            'home indicator; the in-app NestHomeIndicator reserves nothing, '
+            'so the view owns that 34 (D1/D2 fix)',
+      );
+      await disposeApp(tester);
+    });
+  });
 }

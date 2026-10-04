@@ -98,6 +98,18 @@ Future<void> _insertChild(
 
 Finder _tile(String id) => find.byKey(ValueKey<String>('k01-tile-$id'));
 
+/// Two fingers DOWN on Maya and Leo before either UP: both taps belong to
+/// the picker even though the first selection pushes a route in between
+/// (K01-BUG-2 / K01-BUG-6).
+void _burstMayaAndLeo(WidgetTester tester) {
+  final maya = TestPointer(7);
+  final leo = TestPointer(8);
+  tester.binding.handlePointerEvent(maya.down(tester.getCenter(_tile('maya'))));
+  tester.binding.handlePointerEvent(leo.down(tester.getCenter(_tile('leo'))));
+  tester.binding.handlePointerEvent(maya.up());
+  tester.binding.handlePointerEvent(leo.up());
+}
+
 /// Swaps the registered repository for a feature-local fake.
 Future<void> _useFakeRepository(KidHomeRepository repo) async {
   await GetIt.instance.unregister<KidHomeRepository>();
@@ -217,20 +229,15 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
-  // K01-BUG-1 — three or more children break the tile row
+  // K01-BUG-1 (FIXED, iteration 2 build) — 3+ children keep the design tile.
   //
-  // `_PickerLoaded` lays every profile out in a fixed `Row` of `Expanded`
-  // cards. Two children give the design's 167 px tiles; a third shrinks each
-  // tile to 106 px (content 86 px) and a sixth to 45 px (content 25 px).
-  // The compact metrics then no longer fit: the 96 px pet disc is clamped to
-  // 86×96 (an ellipse), the 64 px avatar to 25×64, and the 80 px Pip is
-  // squeezed into 25 px. The design has no answer for 3+ children, but a
-  // family app must stay usable — the tiles band needs to scroll or wrap at
-  // a minimum tile width instead of shrinking without bound.
+  // `_OverflowTileRow` now keeps each tile at the two-up design share
+  // ((350−16)/2 = 167 at 390) and scrolls horizontally, so the compact
+  // metrics always fit. The proofs below were the red halves in iteration 1.
   // -------------------------------------------------------------------------
 
-  group('K01-BUG-1 — 3+ children collapse the tile row', () {
-    testWidgets('a third child shrinks every tile below the compact minimum', (
+  group('K01-BUG-1 regression — 3+ children keep the design tile width', () {
+    testWidgets('a third child keeps every tile at the two-up width', (
       tester,
     ) async {
       await tester.runAsync(() async {
@@ -242,20 +249,17 @@ void main() {
       final widths = <double>[
         for (var i = 0; i < 3; i++) tester.getSize(tiles.at(i)).width,
       ];
-      // Compact mode needs 96 px of content (pet disc) + 20 px padding.
       expect(
-        widths.every((w) => w >= 132),
+        widths.every((w) => (w - 167).abs() < 1),
         isTrue,
         reason:
-            'K01-BUG-1: 3 children shrink the tiles to $widths; the design '
-            'tile is 167 wide and compact mode needs at least 132',
+            'K01-BUG-1: 3 children must keep the design tile width 167, '
+            'got $widths',
       );
       await disposeApp(tester);
     });
 
-    testWidgets('at 4+ children the pet disc/avatar stop being circles', (
-      tester,
-    ) async {
+    testWidgets('4+ children keep both discs circular', (tester) async {
       await tester.runAsync(() async {
         await _insertChild('nina', 'Nina');
         await _insertChild('omar', 'Omar');
@@ -275,7 +279,7 @@ void main() {
       await disposeApp(tester);
     });
 
-    testWidgets('six children leave 45 px slivers (design tile: 167)', (
+    testWidgets('six children keep the design tile width and scroll', (
       tester,
     ) async {
       await tester.runAsync(() async {
@@ -286,68 +290,133 @@ void main() {
       await _pumpPicker(tester);
       final tiles = find.byType(ProfileTile);
       expect(tiles, findsNWidgets(6));
-      final widths = <double>[
-        for (var i = 0; i < 6; i++) tester.getSize(tiles.at(i)).width,
-      ];
+      for (var i = 0; i < 6; i++) {
+        expect(tester.getSize(tiles.at(i)).width, closeTo(167, 1));
+      }
+      // The band scrolls: the sixth tile is off the right gutter until the
+      // row is dragged.
       expect(
-        widths.every((w) => w >= 132),
-        isTrue,
-        reason: 'K01-BUG-1: six children shrink the tiles to $widths',
+        tester.getTopLeft(tiles.at(5)).dx,
+        greaterThan(390 - NestSpacing.padSide),
       );
+      await tester.drag(
+        find.byType(SingleChildScrollView).last,
+        const Offset(-600, 0),
+      );
+      await tester.pump();
+      expect(
+        tester.getTopLeft(tiles.at(5)).dx,
+        lessThan(390 - NestSpacing.padSide),
+        reason: 'the sixth tile must become reachable by horizontal scroll',
+      );
+      await disposeApp(tester);
+    });
+
+    testWidgets('a scrolled-to extra child still selects and navigates', (
+      tester,
+    ) async {
+      await tester.runAsync(() async {
+        await _insertChild('nina', 'Nina', ageBand: '7-9');
+        await _insertChild('omar', 'Omar', ageBand: '4-6');
+      });
+      await _pumpPicker(tester);
+      await tester.drag(
+        find.byType(SingleChildScrollView).last,
+        const Offset(-400, 0),
+      );
+      await tester.pump();
+      await tester.tap(_tile('omar'));
+      await _settle(tester);
+      expect(pushedPath(tester), '/kid-home');
+      final db = GetIt.instance<AppDatabase>();
+      final rows = await tester.runAsync(() => db.select(db.appState).get());
+      expect(rows?.single.activeChildId, 'omar');
       await disposeApp(tester);
     });
   });
 
   // -------------------------------------------------------------------------
-  // K01-BUG-2 — two quick taps on two tiles stack two routes
+  // K01-BUG-2 (FIXED, iteration 2 build) — one burst, one route.
   //
-  // Each tile has its own `_busy` latch, so a tap on Maya does not stop a tap
-  // on Leo in the same gesture burst. Both `KidHomeProfileSelected` events
-  // write `app_state` and both one-shot `selectedProfileId` emissions reach
-  // the picker's `BlocListener`, which pushes `/kid-pin` AND `/kid-home` on
-  // top of each other. One back press then lands on the other child's route
-  // instead of the picker (and the last DB write wins the active child).
+  // The picker now single-flights its navigation (`_navPending`), so the
+  // second selection in a two-finger burst no longer stacks a second route.
+  // K01-BUG-6 right after covers the half that is still open: the guard
+  // drops the second navigation but not the second `setActiveChild` write.
   // -------------------------------------------------------------------------
 
-  testWidgets('K01-BUG-2: tapping Maya then Leo stacks two kid routes', (
+  testWidgets('K01-BUG-2 regression: one two-finger burst pushes one route', (
     tester,
   ) async {
     await _pumpPicker(tester);
-    // Two fingers, both DOWN before either UP: both taps belong to the
-    // picker even though the first selection pushes a route in between.
-    final maya = TestPointer(7);
-    final leo = TestPointer(8);
-    tester.binding.handlePointerEvent(
-      maya.down(tester.getCenter(_tile('maya'))),
-    );
-    tester.binding.handlePointerEvent(leo.down(tester.getCenter(_tile('leo'))));
-    tester.binding.handlePointerEvent(maya.up());
-    tester.binding.handlePointerEvent(leo.up());
+    _burstMayaAndLeo(tester);
     await _settle(tester);
     await tester.pump(const Duration(seconds: 2));
     final top = pushedPath(tester);
+    expect(
+      top == '/kid-pin' || top == '/kid-home',
+      isTrue,
+      reason: 'the burst must land on exactly one kid route, got $top',
+    );
+    tester.state<NavigatorState>(find.byType(Navigator).first).pop();
+    await _settle(tester);
+    expect(
+      pushedPath(tester),
+      '/who-is-playing',
+      reason:
+          'K01-BUG-2: a second route is stacked under $top; one pop must '
+          'return to the picker',
+    );
+    await disposeApp(tester);
+  });
+
+  // -------------------------------------------------------------------------
+  // K01-BUG-6 — the pushed route and the persisted active child disagree
+  //
+  // `_navPending` guards the *navigation*, but both `KidHomeProfileSelected`
+  // events still reach the bloc: each awaits its own `setActiveChild` write
+  // and emits. The first emission pushes its route; the second is swallowed
+  // by the guard — but its write has already landed, so `app_state` names
+  // the OTHER child. Result: the kid authenticates as the routed child (e.g.
+  // Maya's PIN, route extra `childId: maya`) and then lands on the other
+  // child's home, because `watchHome` resolves `app_state.activeChildId`.
+  // -------------------------------------------------------------------------
+
+  testWidgets('K01-BUG-6: route child and active child disagree', (
+    tester,
+  ) async {
+    await _pumpPicker(tester);
+    _burstMayaAndLeo(tester);
+    await _settle(tester);
+    await tester.pump(const Duration(seconds: 2));
+    final top = pushedPath(tester);
+    final routed = top == '/kid-pin' ? 'maya' : 'leo';
     final db = GetIt.instance<AppDatabase>();
     final rows = await tester.runAsync(() => db.select(db.appState).get());
     expect(
-      find.text('K02 Kid PIN', skipOffstage: false),
-      findsNothing,
+      rows?.single.activeChildId,
+      routed,
       reason:
-          'K01-BUG-2: Maya and Leo were tapped in one two-finger burst; both '
-          'selections pushed (top $top, active child '
-          '${rows?.single.activeChildId}), so the PIN screen and the home '
-          'screen are stacked on the picker for a single gesture burst',
+          'K01-BUG-6: the picker opened $routed ($top) but persisted '
+          '${rows?.single.activeChildId}; the second selection’s write must '
+          'be dropped together with its navigation',
     );
     await disposeApp(tester);
   }, skip: true);
 
   // -------------------------------------------------------------------------
-  // K01-BUG-3 — the same tile does not navigate twice in a row
+  // K01-BUG-3 — STILL OPEN (iteration 2): the same tile does not navigate
+  // twice in a row.
   //
   // `selectedProfileId` is a one-shot that only clears on the next home
-  // stream emission (`copyWithLoaded`). When the home stream does not
-  // re-emit after `setActiveChild` (nothing changed for that child), the
-  // second selection emits an `==`-equal state, the bloc drops it, and the
-  // tile is dead with no feedback.
+  // stream emission (`copyWithLoaded`, or the new `KidHomeSelectionHandled`).
+  // The iteration-2 build added the event and its handler
+  // (kid_home_bloc.dart:154-159) but NO CALL SITE dispatches it: the view's
+  // `BlocListener` still only pushes. After `setActiveChild` the home
+  // stream's clear emission races ahead of the selection emit, the one-shot
+  // stays set, the second tap emits an `==`-equal state, the bloc drops it
+  // and the tile is dead with no feedback. Fix: `context.read<KidHomeBloc>()
+  // .add(const KidHomeSelectionHandled())` in the picker's listener right
+  // after `context.push` (or make the bloc single-flight the selection).
   // -------------------------------------------------------------------------
 
   testWidgets('K01-BUG-3: tapping the same tile after back does nothing', (
@@ -382,18 +451,15 @@ void main() {
   }, skip: true);
 
   // -------------------------------------------------------------------------
-  // K01-BUG-5 — Try again cannot recover from a profiles-only failure
-  //
-  // The failure card can be shown when `watchProfiles` errors while the home
-  // stream is healthy (it emits `KidHomeData(child: null)` and then stays
-  // quiet). `KidHomeLoadRequested` only restarts the home stream when
-  // `_homeSub == null` (kid_home_bloc.dart:52) and `copyWithProfiles` never
-  // touches `status`, so a successful profiles retry still leaves
-  // `KidHomeStatus.failure`: the retry spins up a working roster the child
-  // can never see. Stage 4 finding 1 proved here as a failing test.
+  // K01-BUG-5 (FIXED, iteration 2 build) — Try again recovers from a
+  // profiles-only failure. `_profilesFailed` + `copyWithProfilesRecovered`
+  // (kid_home_bloc.dart) restore `loaded` when the roster returns while the
+  // home stream is still live, and the view heals a failure with a
+  // non-empty roster as a second belt. The test below was the red half in
+  // iteration 1 (also stage-4 review finding 1).
   // -------------------------------------------------------------------------
 
-  testWidgets('K01-BUG-5: Try again cannot recover from a profiles failure', (
+  testWidgets('K01-BUG-5 regression: Try again recovers the roster', (
     tester,
   ) async {
     await _useFakeRepository(_ProfilesFailOnceRepository());
@@ -406,8 +472,8 @@ void main() {
       find.text('Oh no! Pip got lost.'),
       findsNothing,
       reason:
-          'K01-BUG-5: the profiles stream recovered but the failure card '
-          'stayed; `copyWithProfiles` must restore the loaded state',
+          'K01-BUG-5: a recovered roster must replace the failure card '
+          '(`copyWithProfilesRecovered` restores `loaded`)',
     );
     expect(find.text("Who's playing?"), findsOneWidget);
     await disposeApp(tester);
@@ -661,6 +727,43 @@ void main() {
           reason: '“$copy” loses words at 320 px + 1.3 text scale',
         );
       }
+      await disposeApp(tester);
+    });
+
+    testWidgets('D1/D2 regression: tiles and caption sit at the design y', (
+      tester,
+    ) async {
+      // 5_ui measured the tile border top at design 297.7 / app 314.3 and the
+      // caption first row at design 747 / app 781. The build added the 34 px
+      // bottom reserve (NestDevice.homeH); the box positions below use the
+      // PNG's own border-ink rows ÷3.
+      await _pumpPicker(tester);
+      final tile = tester.getRect(_tile('maya'));
+      // 5_ui samples the tile border at logical x=30, which is 9 px inside
+      // the tile's left edge (x=21). On the r32 corner that chord starts
+      // 9.75 px below the true top edge (r − √(r² − (r−9)²) with r=32), so
+      // the design readings translate to: top 297.7→287.9, bottom
+      // 640.0→649.8, centre 468.8, height 361.8. The widget rect is the
+      // true box, so compare against the corrected design.
+      expect(
+        tile.center.dy,
+        closeTo(468.8, 2),
+        reason: 'design tile centre 468.8 (5_ui D1 chords, corner-corrected)',
+      );
+      expect(
+        tile.height,
+        closeTo(361.8, 2.5),
+        reason: 'design tile height 361.8 (5_ui D1 chords, corner-corrected)',
+      );
+      final caption = tester.getRect(
+        find.text('Grown-ups: tap the lock to get back to your dashboard.'),
+      );
+      // 15/20 caption box: 738…778; first ink row 747 (5_ui D2, simulator).
+      expect(
+        caption.top,
+        closeTo(738, 2),
+        reason: 'design caption box top 738 (first ink row 747)',
+      );
       await disposeApp(tester);
     });
   });

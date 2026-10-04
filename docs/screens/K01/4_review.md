@@ -1,76 +1,83 @@
-# K01 · Who's playing? — Stage 4 QA code review (iteration 1)
+# K01 · Who's playing? — Stage 4 QA code review (iteration 2)
 
-Reviewed `git diff main...HEAD` for screen K01. Scope checked:
-feature-first layering (entity → abstract repo → impl → bloc → view),
-RULES.md §1 edit surface, design-system reuse (no hard-coded
-colours/sizes/fonts), DESIGN_SPEC §5 K01 copy, accessibility, performance,
-error handling, Children's Code. Analyzer clean (`No issues found!`),
-all 57 K01-owned tests pass.
+Reviewed the cumulative `git diff main...HEAD` after the iteration-2
+build (K01-BUG-1..5 fixes, D1/D2 home-reserve, shared kid background).
+Analyzer: `No issues found!`. `flutter test test/features/kid_home/`:
+307 passed, 2 skipped.
 
 ## Findings
 
-1. **major** — the failure card's *Try again* cannot recover from a
-   profiles-stream failure. `profile_picker_view.dart` dispatches
-   `KidHomeLoadRequested`, but `KidHomeBloc._onLoadRequested`
-   (app/lib/features/kid_home/presentation/bloc/kid_home_bloc.dart:47-67)
-   only re-subscribes and emits `loading` when `_homeSub == null`. In the
-   failing case the home subscription is still live, so no loading state
-   and no home restart happen; `_ensureProfilesSub()` restarts the
-   profiles stream, and `_onProfilesReceived`
-   (kid_home_bloc.dart:92-97) emits `copyWithProfiles`, which by design
-   never touches `status`. If the failure card was shown because the
-   profiles stream errored while `state.child == null` (K01 entry with no
-   active child — `watchHome()` emits `KidHomeData(child: null)` when
-   `activeChildId` is null, kid_home_repository_impl.dart:43-45), the
-   state stays `KidHomeStatus.failure` forever: the watch stream has
-   already delivered its value and will not re-emit without a DB write,
-   and the only write path (`setActiveChild`) is unreachable behind the
-   failure card. The comment at kid_home_bloc.dart:99-105 says a healthy
-   emission restores `loaded` "via `copyWithLoaded`", but that requires
-   a home-stream emission that is not guaranteed. **Fix:** in
-   `_onProfilesReceived` restore the loaded state when the failure was
-   caused by the profiles roster, e.g.
-   `emit(state.copyWithProfiles(event.profiles).copyWith(status:
-   state.status == KidHomeStatus.failure ? KidHomeStatus.loaded :
-   state.status))`, and/or have Try again restart the profiles stream
-   with an explicit `loading` emit. Add a regression test that drives
-   profiles-failure → Try again → profiles-recovery and asserts
-   `KidHomeStatus.loaded` without a new home emission.
+1. **major** — K01-BUG-3 is not actually fixed in product code. The
+   `KidHomeSelectionHandled` event exists and the bloc consumes it
+   (kid_home_bloc.dart:146-157, kid_home_state.dart:105-117), but nothing
+   in `lib/` ever dispatches it — `_ProfilePickerViewState`'s selection
+   listener (app/lib/features/kid_home/presentation/views/profile_picker_view.dart:35-63)
+   pushes the route and never sends the event. The one-shot
+   `selectedProfileId` therefore still clears only via a home-stream
+   emission, and a repeated tap on the same tile is dropped by the
+   `listenWhen: previous.selectedProfileId != current.selectedProfileId`
+   guard. Proof: `flutter test --run-skipped --plain-name K01-BUG-3
+   app/test/features/kid_home/k01_bugs_test.dart` fails —
+   `bloc.state.selectedProfileId` is still `'maya'` after back and the
+   second tap never navigates. **Fix:** in the listener, right after
+   starting the push, dispatch
+   `context.read<KidHomeBloc>().add(const KidHomeSelectionHandled());`
+   (the handler keeps navigation out of the bloc), then un-skip the
+   proof test. The current unit tests in
+   `k01_bloc_paths_test.dart:495/527/556` only dispatch the event by
+   hand, which is why suite-green hid this.
 
-2. **minor** — `KidHomeState.copyWithProfiles`
-   (app/lib/features/kid_home/presentation/bloc/kid_home_state.dart:166)
-   carries a stale `errorMessage` through a recovered profiles stream;
-   clearing it alongside the status restore in finding 1 keeps the state
-   honest for the toast/retry UI that reads `errorMessage`.
+2. **minor** — the K01-BUG-5 view-level heal masks the wrong failure.
+   `profile_picker_view.dart:80-85` renders `_PickerLoaded` whenever
+   `state.status == failure && state.profiles.isNotEmpty`, but the bloc
+   deliberately keeps `failure` when the *home* stream died while a
+   stale roster is present (kid_home_bloc.dart:171-174 checks
+   `state.child == null`, and `_onProfilesReceived` only restores
+   `loaded` when `_homeSub != null`). In that case the picker shows the
+   roster instead of "Oh no! Pip got lost.". **Fix:** gate the heal on
+   the profiles-caused outage only — e.g. expose a
+   `KidHomeState.loadErrorFrom`/`profilesFailed` flag from the bloc
+   instead of re-deriving it from `profiles.isNotEmpty`.
 
-3. **minor** — Try again on the K01 failure card shows no spinner when
-   the home subscription is still live (the `loading` emit is inside the
-   `_homeSub == null` guard, kid_home_bloc.dart:50), so the tapped
-   failure card just sits there until the next emission. Folded into the
-   finding 1 fix.
+3. **minor** — skipped proofs are now stale in both directions.
+   `k01_bugs_test.dart:341` (K01-BUG-2) still asserts the pre-fix
+   double navigation and fails now that `_navPending` works; invert it
+   to assert single-flight (one top route) or drop it. K01-BUG-1/4/5
+   proofs were converted to passing tests — this one wasn't.
+   (`--run-skipped` currently reports exactly BUG-2 + BUG-3 failing.)
 
-## Non-findings (checked, OK)
+4. **minor** — title copy regressed from the plan's curly apostrophe to
+   ASCII (`"Who's playing?"`, profile_picker_view.dart:278). All current
+   K01 tests and `k01_copy_parity_test.dart` pass because they were
+   updated to the fixture's ASCII, but `1_plan.md` §0 and the stage-2
+   convention note (P02/P03/P04/P07 all ship U+2019) say the opposite.
+   **Fix:** get the explicit orchestrator ruling recorded; whichever
+   wins, update `1_plan.md` §0 vs `k01_copy_parity_test.dart` so the
+   record stops contradicting itself.
 
-- No navigation in the bloc; tile tap goes through
-  `selectedProfileId` → `BlocListener` → `context.push` with
-  `{'childId': id}` extra, matching the K02 contract.
-- CHILD ORDER respected: `watchProfiles` in DB creation order, no sort.
-- PIP rule respected: per-child `PipAvatar(style/skin/accessory/stage)`
-  from the DB row; no `pip_stage_*.svg` in the picker.
-- Copy matches the design; the one U+2019 vs ASCII deviation in the HTML
-  fixture is a pre-agreed convention (all Dart screens use U+2019).
-- No hard-coded colours/sizes/fonts; typography, radii, spacing,
-  shadows, tints all from tokens; `NestBalancedText` used for the
-  `.kid-title`; no `letterSpacing` additions; no `google_fonts`.
-- Bottom-edge rule: no bottom bar on this screen, meadow runs to the
-  edge — consistent with the design.
-- Lock button → `/parental-gate`, guarded `_busy`; tiles and lock expose
-  `SemanticsAction.tap` and tests perform the tap action.
-- No `DateTime.now()` in K01 code; no analytics/ads/child-data leakage
-  in kid mode; new tests pinned via `test/flutter_test_config.dart`.
-- `KidChild.ageBand` added additively; all copyWith/withCompletion*
-  constructors carry `profiles`/`selectedProfileId` through.
-- The stale `DateTime.now()` hits in K03/today code and the branch
-  being behind main are process items, not findings.
+5. **minor** — out-of-scope edit:
+   `app/test/design_system/list_row_trailing_test.dart` (formatting
+   only) was touched in this branch despite RULES.md §1 limiting K01 to
+   `kid_home`. Harmless formatter sweep; fold it into a main update
+   instead of this branch.
+
+## Re-verified clean this pass
+
+- K01-BUG-1: `_OverflowTileRow` keeps tiles at the design width
+  (`(maxWidth - s4)/2` = 167 @390, 132 @320) and scrolls horizontally;
+  the ellipse-clamp defect is gone.
+- K01-BUG-4: empty nickname falls back to label `Kid`
+  (profile_tile.dart:53-55).
+- K01-BUG-5: bloc restores `loaded` via `copyWithProfilesRecovered`
+  (kid_home_state.dart:206-221) and clears the stale load error; Try
+  again now emits `loading` when the home subscription is still live
+  (kid_home_bloc.dart:73-79). Both skipped-proof repro paths pass once
+  the view-masking in finding 2 is accounted for.
+- Streams cancelled on `close()`; `_profilesFailed` flag cleared on
+  every healthy roster; no `DateTime.now()`/`google_fonts`/tracking
+  additions; D1/D2 fix uses `NestDevice.homeH` and the shared
+  `KidScope`/`kid_meadow` (no local hills — per the new
+  ORCHESTRATOR_NOTES); CHILD ORDER and per-child `PipAvatar` intact;
+  two-finger navigation single-flighted by `_navPending`.
 
 VERDICT: FAIL
