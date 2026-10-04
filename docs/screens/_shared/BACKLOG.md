@@ -8,3 +8,4 @@
 - NestListRow: static (non-interactive) rows in a list merge into the next interactive row's semantics announcement (P16 Family list → Invite button). Each row should be its own semantics node.
 - Shared `Semantics(label:) > InkWell` pattern leaves an extra node (P16 settings_a11y_test pins it). Audit with the semantics_tap work.
 - P17 minor review items (parental_gate_view.dart: canPop checks, typed-digit style, .gate-note margin, items rebuild filter, dead challenge model, CSS magic numbers → tokens): tidy in the cleanup pass.
+- K02 keeps a feature-local `kidAvatarInitial` (kid_style_helpers.dart:65, used by kid_pin_view.dart:168 + its own test). Replace with shared `nestAvatarInitial` and delete the duplicate.
