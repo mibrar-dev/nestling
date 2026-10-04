@@ -1,48 +1,44 @@
-// K04 (quest detail) adversarial bug hunt — Stage 6, iteration 1.
+// K04 (quest detail) adversarial bug hunt — Stage 6, iteration 2.
 //
-// Findings in this file:
+// Findings in this file (iteration 1 fixed + verified, one new Minor):
 //
-// * K04-BUG-1 (MAJOR, fixed) — a quest title that fills all 3 allowed lines
-//   renders INVISIBLE. `NestBalancedText` computes its balanced width with
-//   `maxLines: 3` applied to the probe painter, so a text whose natural
-//   layout needs 3+ lines never reports more than 3 lines at any width and
-//   the binary search collapses to ~0 px (measured: 0.085 px unit, 0.1 px in
-//   the widget). The heading is then laid out 0.1 px wide and clipped: the
-//   screen shows an empty 102 px gap where the quest title should be. The
-//   title is DB-driven (P09 has no length cap), so a parent can create such
-//   a quest. Run: `flutter test --run-skipped --plain-name K04-BUG-1`.
-//   Root cause is in the shared component, but K04's `maxLines: 3` call
-//   site is where it renders. Suggested fix: in `NestBalancedText.build`,
-//   count lines with `maxLines: null`; when that count exceeds `maxLines`,
-//   skip balancing and return `_text()` at full width (the design has no
-//   max-lines, so a full-width, ellipsised heading is the honest render).
+// * K04-BUG-1 (was MAJOR, FIXED iter 2, verified) — a quest title filling all
+//   3 allowed lines used to render INVISIBLE (~0.1 px wide): the balanced
+//   width probe applied `maxLines` to its line-count painter, so the search
+//   collapsed to ~0 px. Fixed in the shared `NestBalancedText`
+//   (`SHARED_REQUEST.md`): the probe counts NATURAL lines, and `build`
+//   returns the full-width `Text` when the natural count exceeds the cap.
+//   The two proofs below now run un-skipped.
 //
-// * K04-BUG-2 (MINOR, fixed) — a route `extra` that names another child
-//   (`{'questId': 'q-bed', 'childId': 'leo'}` while Maya is playing) silently
-//   swaps in a DIFFERENT quest (the q-tidy fallback) instead of the
-//   "Pick a quest" state, contradicting the view's own doc comment ("an id
-//   that no longer resolves is an unknown quest, NOT a licence to show a
-//   different one"). Unreachable via K03 (which always passes the active
-//   child), only via a crafted push/deep-link. Run:
-//   `flutter test --run-skipped --plain-name K04-BUG-2`.
-//   Suggested fix: when the extra supplies a String `questId` and it does
-//   not resolve for the active child, return null (missing state); use the
-//   q-tidy/first-item fallbacks only when no `questId` was supplied.
+// * K04-BUG-2 (was MINOR, FIXED iter 2, verified) — a route `extra` naming
+//   another child used to silently swap in a different quest (the q-tidy
+//   fallback). `_resolveQuest` now returns null (→ "Pick a quest") for any
+//   explicit `questId` that does not resolve for the playing child; the
+//   q-tidy / first-item fallbacks only run on a true direct launch. The
+//   proof below runs un-skipped.
 //
-// * K04-BUG-3 (MAJOR, fixed, mandated) — `ORCHESTRATOR_NOTES.md` (14:28 QA):
-//   "The quest hero icon must be the design's glyph. For the 'bed' quest it
-//   is the flat bed (shared `NestIcons.questBed`, added in batch 5 from the
-//   P09 HTML), not the current bed-with-figure icon." K04's `_iconFor` still
-//   returns the pre-batch-5 glyphs (`bedSit`, `dishwasher`, `hoover`, `bin`),
-//   so the hero tile diverges from both the P09 design mapping and the
-//   mandate. Run: `flutter test --run-skipped --plain-name K04-BUG-3`.
-//   Suggested fix: mirror P09's key/alias table
-//   (`quest_editor_view.dart` `_questIcons`): bed/sofa → `questBed`,
-//   dishwasher/plate → `questDishes`, hoover → `questHoover`,
-//   bin/bins/shirt/bag → `questBins`, book → `book`, paw/leaf → `paw`,
-//   anything else → `questCard`.
+// * K04-BUG-3 (was MAJOR, FIXED iter 2, mandated, verified) —
+//   `ORCHESTRATOR_NOTES.md` (14:28): the hero tile must use the P09 batch-5
+//   design glyphs (`questBed`/`questDishes`/`questHoover`/`questBins`), not
+//   the pre-batch-5 set. `_iconFor` now mirrors P09's key/alias table
+//   exactly. The proof below runs un-skipped.
+//
+// * K04-BUG-4 (MINOR, OPEN — iteration 2 finding) — a title whose natural
+//   layout needs MORE than the 3 allowed lines is now rendered full width
+//   but with `TextOverflow.clip`: the third line is cut off mid-word with no
+//   ellipsis, so the child cannot tell the title continues. The component's
+//   full-width path documents "the Text's own maxLines ellipsis keeps it
+//   honest", but `NestBalancedText` defaults `overflow` to `TextOverflow.clip`
+//   and K04 never overrides it; the design CSS has no max-lines at all.
+//   Fix (screen-local, allowed by RULES §1): pass
+//   `overflow: TextOverflow.ellipsis` at the K04 call site (or default the
+//   component to ellipsis whenever `maxLines != null`). Run:
+//   `flutter test --run-skipped --plain-name K04-BUG-4`.
 //
 // Checked clean (kept as evidence; they run in the plain suite):
+//   * an over-cap title renders at FULL width (the new K04-BUG-1 path) at
+//     390 and at 320 px / 1.3x text with no overflow exception;
+//   * deleting the shown quest mid-view falls to the "Pick a quest" state;
 //   * double-tapping either Back pops exactly one route (no stacked pops);
 //   * a deep link with `Seed.empty` (no children) offers the picker;
 //   * a completed quest stays disabled after a fresh app pump (same DB);
@@ -82,9 +78,16 @@ import '../../test_scope.dart';
 
 /// A realistic P09 quest name (59 chars) that fills all three 28 px lines at
 /// the 350 px content width with the bundled Nunito — the exact condition
-/// that collapses the balanced-width probe to ~0 px.
+/// that collapsed the balanced-width probe to ~0 px (K04-BUG-1).
 const String _longTitle =
     'Tidy up the playroom and put all the toys back in the boxes';
+
+/// A title whose natural layout needs MORE than the 3 allowed lines: the
+/// K04-BUG-1 fix renders it full width (K04-BUG-4 proves how it overflows).
+const String _overCapTitle =
+    'A very long quest title that should wrap to three lines without '
+    'overflowing the card and then keeps on going for a while longer '
+    'and longer still until the title is far too long';
 
 Future<void> _pump(
   WidgetTester tester, {
@@ -288,6 +291,59 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
+  // K04-BUG-4 — an over-cap title is clipped, not ellipsised
+  // -------------------------------------------------------------------------
+
+  testWidgets('K04-BUG-4: an over-cap title must ellipsise, not clip', (
+    tester,
+  ) async {
+    await _insertQuest(tester, id: 'q-bug4', title: _overCapTitle);
+    await _pump(tester, route: KidHomeRoutePaths.home);
+    _pushDetail(tester, questId: 'q-bug4', childId: 'maya');
+    await _settle(tester);
+
+    final title = tester.widget<Text>(find.text(_overCapTitle));
+    expect(title.maxLines, 3);
+    expect(
+      title.overflow,
+      TextOverflow.ellipsis,
+      reason:
+          'a title cut at the 3-line cap must show an ellipsis; '
+          'TextOverflow.clip stops mid-word with no sign the text continues',
+    );
+    await disposeApp(tester);
+  }, skip: true); // skip: K04-BUG-4 (open)
+
+  testWidgets('an over-cap title renders at full width (K04-BUG-1 fix)', (
+    tester,
+  ) async {
+    await _insertQuest(tester, id: 'q-overcap', title: _overCapTitle);
+    for (final (width, scale) in <(double, double)>[(390, 1), (320, 1.3)]) {
+      await _pump(
+        tester,
+        route: KidHomeRoutePaths.home,
+        width: width,
+        textScale: scale,
+      );
+      _pushDetail(tester, questId: 'q-overcap', childId: 'maya');
+      await _settle(tester);
+      final size = tester.getSize(find.text(_overCapTitle));
+      expect(
+        size.width,
+        greaterThan(width - 2 * 20 - 5),
+        reason: '${width}px/${scale}x: the title must span the content width',
+      );
+      expect(
+        size.height,
+        greaterThan(3 * 34 - 10),
+        reason: '${width}px/${scale}x: three 34 px lines are reserved',
+      );
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    }
+  });
+
+  // -------------------------------------------------------------------------
   // Checked clean — navigation, persistence, period, overflow, dark edge
   // -------------------------------------------------------------------------
 
@@ -309,6 +365,26 @@ void main() {
       await tester.tap(find.byType(NestIconButton));
       await _settle(tester);
       expect(pushedPath(tester), KidHomeRoutePaths.home);
+      await disposeApp(tester);
+    });
+
+    testWidgets('deleting the shown quest mid-view shows Pick a quest', (
+      tester,
+    ) async {
+      await _pump(tester, route: KidHomeRoutePaths.home);
+      _pushDetail(tester, questId: 'q-tidy', childId: 'maya');
+      await _settle(tester);
+      expect(find.text('Tidy your bedroom'), findsOneWidget);
+
+      await tester.runAsync(() async {
+        final db = GetIt.instance<AppDatabase>();
+        await (db.delete(db.quests)..where((q) => q.id.equals('q-tidy'))).go();
+      });
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Tidy your bedroom'), findsNothing);
+      expect(find.text('Pick a quest'), findsOneWidget);
+      expect(tester.takeException(), isNull);
       await disposeApp(tester);
     });
 

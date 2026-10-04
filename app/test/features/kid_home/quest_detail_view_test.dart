@@ -21,6 +21,8 @@ import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nestling/app/app.dart';
 import 'package:nestling/app/controllers.dart';
+import 'package:nestling/core/data/app_session.dart';
+import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_child.dart';
@@ -163,16 +165,27 @@ Future<void> _pump(
   String route = KidHomeRoutePaths.detail,
   double width = 390,
   double textScale = 1,
+  ThemeMode theme = ThemeMode.light,
 }) async {
   tester.view.physicalSize = Size(width * 3, 844 * 3);
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
   tester.platformDispatcher.textScaleFactorTestValue = textScale;
   addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-  GetIt.instance<ThemeModeController>().selectMode(ThemeMode.light);
+  GetIt.instance<ThemeModeController>().selectMode(theme);
   await tester.pumpWidget(NestlingApp(initialRoute: route));
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 200));
+}
+
+/// Re-seeds the in-memory database with `Seed.empty` — an onboarded parent with
+/// NO children and no active child — over the REAL repository (no fake). This
+/// is the production-shaped way to reach the "Who's playing?" branch instead of
+/// only ever seeing it through a scripted fake.
+Future<void> _useEmptySeed() async {
+  final db = await setUpTestScope(seedDemo: false);
+  await Seed.empty(db);
+  await GetIt.instance<AppSession>().refresh();
 }
 
 /// Bounded route pumps: `pumpAndSettle` is avoided because a still-loading
@@ -574,6 +587,82 @@ void main() {
       expect(find.text('Tidy your bedroom'), findsOneWidget);
       await disposeApp(tester);
     });
+  });
+
+  group('K04 quest detail — the other states on a real empty seed', () {
+    testWidgets('Seed.empty (no children) asks who is playing', (tester) async {
+      // The production-shaped version of the no-child branch: an onboarded
+      // parent, no children rows, no active child — real Drift repository, no
+      // fake. K04 must not crash or show a quest; it prompts for a player.
+      await _useEmptySeed();
+      await _pump(tester);
+      expect(find.text("Who's playing?"), findsOneWidget);
+      expect(find.text('Tidy your bedroom'), findsNothing);
+      expect(find.byType(NestCoinPill), findsNothing);
+      // The chrome is still there, so nothing jumps once a child is chosen.
+      expect(find.byType(NestIconButton), findsOneWidget);
+      expect(find.byType(NestLockButton), findsOneWidget);
+
+      await tester.tap(find.text('Choose'));
+      await _settleRoute(tester);
+      expect(pushedPath(tester), KidHomeRoutePaths.picker);
+      await disposeApp(tester);
+    });
+  });
+
+  group('K04 quest detail — the non-loaded states are layout-safe', () {
+    // Iteration 1 covered these states light-only at 390. The `PipAvatar(140)`
+    // on the failure card and the three wide buttons are the overflow risks, so
+    // each state is re-pumped at the tightest cell (320 @ 1.3x) and in dark.
+    Future<void> expectNoOverflow(WidgetTester tester, String label) async {
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: '$label must not overflow',
+      );
+    }
+
+    for (final theme in <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      testWidgets('loading: 320px @ 1.3x in ${theme.name}', (tester) async {
+        await _useFakeRepository(_FakeKidHomeRepository(hang: true));
+        await _pump(tester, width: 320, textScale: 1.3, theme: theme);
+        expect(find.byType(CircularProgressIndicator), findsOneWidget);
+        await expectNoOverflow(tester, 'loading ${theme.name}');
+        await disposeApp(tester);
+      });
+
+      testWidgets('failure: 320px @ 1.3x in ${theme.name}', (tester) async {
+        await _useFakeRepository(_FakeKidHomeRepository(failLoad: true));
+        await _pump(tester, width: 320, textScale: 1.3, theme: theme);
+        expect(find.text('Oh no! Pip got lost.'), findsOneWidget);
+        expect(find.text('Try again'), findsOneWidget);
+        expect(find.byType(PipAvatar), findsOneWidget);
+        await expectNoOverflow(tester, 'failure ${theme.name}');
+        await disposeApp(tester);
+      });
+
+      testWidgets('missing quest: 320px @ 1.3x in ${theme.name}', (
+        tester,
+      ) async {
+        await _useFakeRepository(_FakeKidHomeRepository());
+        await _pump(tester, width: 320, textScale: 1.3, theme: theme);
+        expect(find.text('Pick a quest'), findsOneWidget);
+        expect(find.text('Back home'), findsOneWidget);
+        await expectNoOverflow(tester, 'missing ${theme.name}');
+        await disposeApp(tester);
+      });
+
+      testWidgets('no active child: 320px @ 1.3x in ${theme.name}', (
+        tester,
+      ) async {
+        await _useFakeRepository(_FakeKidHomeRepository(child: null));
+        await _pump(tester, width: 320, textScale: 1.3, theme: theme);
+        expect(find.text("Who's playing?"), findsOneWidget);
+        expect(find.text('Choose'), findsOneWidget);
+        await expectNoOverflow(tester, 'no child ${theme.name}');
+        await disposeApp(tester);
+      });
+    }
   });
 
   group('K04 quest detail — copy parity', () {

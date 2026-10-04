@@ -1,142 +1,161 @@
-# K04 Quest detail — Stage 3 test (iteration 1)
+# K04 Quest detail — Stage 3 test (iteration 2)
 
-Scope: exercise `/quest-detail` (`kid_home`) with the in-memory Drift harness.
-Inputs: `docs/screens/K04/1_plan.md` §f, `docs/screens/RULES.md`,
-`docs/screens/K04/2_build.md`, orchestrator rules.
-`docs/screens/K04/ORCHESTRATOR_NOTES.md` does not exist — no extra mandates.
+Scope: close the coverage gaps iteration 1 declared, then re-run
+`flutter analyze` + `flutter test`. Inputs: `1_plan.md` §f, `RULES.md`,
+`ORCHESTRATOR_NOTES.md` (14:28 + 15:08 updates), `6_bugs.md`, `5_ui.md`.
+**No simulator was booted, installed on or driven** (stage 5 only).
 
-**No simulator was booted, installed on, or driven in this stage** (orchestrator
-rule: stage 5 only). All evidence below is from `flutter analyze` / `flutter test`.
+## Verdict up front: FAIL
 
-## Honest summary up front
-
-This stage **verified** the K04 test surface that already existed (19 view cases +
-3 geometry cases, all green, full 3415-test suite green, analyze clean) and found
-**no screen bug**. It did **not** deliver the full coverage matrix the brief
-mandates: **dark mode, the 430 px width and explicit ≥ 56 px tap-target
-assertions have no K04 test at all.** That is an under-delivery by this stage, not
-a finding against the screen. The gap list is in "Coverage gaps owed to iteration
-2" below, with the exact test to write for each. No test was weakened, skipped or
-deleted to make this look complete.
-
-## Tests in place (written by stage 2, verified by this stage)
-
-### `app/test/features/kid_home/quest_detail_view_test.dart` — 19 cases
-
-Runs the happy path against the **real seeded Drift DB** (`setUpTestScope()` →
-`Seed.demo`, which has Maya, `q-tidy` at 15 coins and the three steps). The states
-a healthy DB cannot produce use a feature-local `_FakeKidHomeRepository`
-registered over the real one.
-
-| group | cases | what it pins |
-|---|---|---|
-| the design quest | 2 | title, `+15` + pill semantics `Plus 15 coins`, hint copy, all three steps, cheer bubble, both buttons, Pip slot exactly 64×64, dot 0–2 start on `surface` (unticked), and the Pip fed from the child row (`mochi`/`sunny`/stage 3) |
-| the checklist | 3 | tap ticks→unticks the ring and flips the `, ticked` / `, not ticked` label; `performAction(SemanticsAction.tap)` drives the **same** real state (dot fill + label); every control labelled `Back`, `Grown-ups`, `I did it!` and the three steps exposes `hasAction(tap)` — and *every* node carrying a duplicated label (`Back` twice) is checked |
-| completing | 3 | same-frame double tap dispatches **exactly one** `completeQuest` then pushes `/quest-complete`; a failing write toasts `Hmm, that did not work. Try again.` and stays; a `done_pending` quest reports `hasAction(tap) == false` + `enabled: false` and dispatches nothing |
-| navigation | 4 | bottom `Back` → `go(/kid-home)` on a direct launch; top back → pops when pushed from home; lock → `/parental-gate`; route `extra {'questId','childId'}` selects that quest and not the design quest |
-| the other states | 5 | unknown `questId` → `Pick a quest` + `Back home` → `/kid-home`; empty items → same; no active child → `Who's playing?` → `/who-is-playing`; silent stream → spinner + `Loading quest` **with the top row already present** (no chrome jump); broken stream → `Oh no! Pip got lost.` and `Try again` really re-dispatches and renders the quest |
-| copy parity | 1 | the eight load-bearing strings resolve by semantics label; the cheer line + `Pip cheering you on` present; a blot asserts **no** `‘’“”–—…` in any `Text` |
-| resilience | 1 | 320 px @ 1.3× text: `takeException() isNull`, title/steps/button still present |
-
-### `app/test/features/kid_home/quest_detail_geometry_test.dart` — 3 cases
-
-Loads the bundled Inter/Nunito faces first (on the default test font the title
-wraps and every rect below it moves — same isolation as the K03 geometry test).
-Pins absolute logical rects against `design/screens/light/K04-quest-detail.png`
-÷3: back/lock 56×56 @ y 47 with lock right edge 370; tile 120×120 @ (135, 109)
-centred on 195; title top 233 / height 34; pill 94×40 @ y 283; hint @ y 339;
-**steps card 350×186 @ y 375** (measured as the painted background rect, per the
-UI-check rule); rows 60 border-box with dividers at y 438/498 bleeding to
-`card ± 3`; dot 40×40 @ x 37 and step text @ x 89; Pip 64 @ y 583, bubble
-x 113…353 @ y 593; bar `bottom == 844` and height 163 with painted buttons
-350×64, 10 apart, 15 below the bar top and 10 of bottom air. One case asserts the
-card's radius 24 / 3 px ink border / non-empty shadow. One re-checks 320 px @ 1.3.
-
-Every pumped app in all 22 cases ends with `disposeApp(tester)` — 22 drains for 22
-cases, so no "A Timer is still pending" teardown failure.
-
-## Results (this stage, real runs)
+The brief's bar is *"PASS only if all tests pass **and no bugs were found**"*.
+The first half holds; the second does not. There is a **known, open, currently
+failing bug on this screen — K04-BUG-4** — and its regression proof is
+`skip: true`, so a green suite partly reflects a hidden failure. I verified that
+independently rather than taking stage 6's word for it:
 
 ```
-$ flutter analyze
-Analyzing app...
-No issues found! (ran in 5.0s)
+$ flutter test --timeout 120s --run-skipped --plain-name K04-BUG-4 \
+    test/features/kid_home/k04_bugs_test.dart
+Expected: TextOverflow:<TextOverflow.ellipsis>
+  Actual:   TextOverflow:<TextOverflow.clip>
+00:00 +0 -1: Some tests failed.
+```
 
-$ flutter test --timeout 120s test/features/kid_home/quest_detail_view_test.dart \
-      test/features/kid_home/quest_detail_geometry_test.dart
-00:02 +22: All tests passed!
+Per the brief I did **not** patch the screen. `6_bugs.md` records it as Minor
+(`NestBalancedText(quest.title, … maxLines: 3)` in `quest_detail_view.dart:577`
+passes no `overflow:`, and the component defaults to `TextOverflow.clip`, so a
+title needing more than 3 lines is cut mid-word with no ellipsis). The fix is
+one argument at that call site, or a shared default — the orchestrator decides.
+
+A second, larger reason this stage cannot PASS: the UI check `5_ui.md` is
+**`VERDICT: FAIL`** with an open **Major** — the hero tile glyph. That is not a
+test finding of mine, but it means the screen is not in a shippable state, and a
+test stage should not hand a green tick over the top of it.
+
+## Tests added this iteration (47 new cases)
+
+### `quest_detail_bloc_test.dart` — NEW, 9 cases
+Closes the "bloc_test for every event/state path" and `stepsFor` gaps with a
+scripted repository (fresh streams per `watchHome()`, like Drift).
+
+- `LoadRequested` walks initial → **loading → loaded → loaded+profiles**. The
+  third emission is the profiles roster, which `_onLoadRequested` starts
+  alongside the home stream; my first expectation wrongly listed two states and
+  failed, which is how the two-subscription contract got pinned rather than
+  assumed.
+- The load guard ignores a reload while the stream is live (`watchHomeCalls == 1`
+  after two loads) — K03-BUG-15, the guard `Try again` depends on.
+- A load **after** a stream failure really re-subscribes (`watchHomeCalls == 2`,
+  status back to `loaded`) — the K04 failure card's whole recovery path.
+- `QuestCompleted` celebrates once on the flip, carrying `justCompletedCoins: 15`
+  into the K05 extra.
+- A failing write raises `actionError` + bumps `actionNonce`, and **no**
+  celebration fires.
+- A quest vanishing mid-flight never lets a recycled id celebrate.
+- `stepsFor` delegates, never throws for an unknown id, and is readable before
+  any load event; **plus one case against the real seeded Drift DB** asserting
+  `q-tidy`'s three steps in seed order — the checklist column the whole screen
+  hangs off that single call.
+
+### `quest_detail_matrix_test.dart` — NEW, 19 cases
+Closes the **dark-mode** and **430 px** gaps: `{light, dark} × {320, 390, 430} ×
+{1.0, 1.3}` on the real seeded DB.
+
+- No overflow, copy intact, and **ALIGNMENT** enforced per cell: the steps card
+  and both buttons share 20 px gutters at *every* width (`card.left == 20`,
+  `card.right == width - 20`), and the tile / pill / cheer row re-centre on the
+  new midpoint.
+- **BOTTOM EDGE** in both modes: bar rect is `left 0 … right width`,
+  `bottom == 844`, filled with that theme's `surface` token — plus a
+  *structural* proof that the bar is the body `Column`'s **last child**, so
+  nothing can paint below it or around the home pill. Note the dark design PNG
+  **does** show a meadow strip under the bar; the owner rule overrides the
+  designs and the app correctly does not reproduce it.
+- Dark is genuinely dark: `surface == 0xFF1F1C2E` vs light `0xFFFFFFFF`, on both
+  the bar and the card, so a light-mode colour leak or a swapped theme fails.
+- Dark interactions still work: `I did it!` → `/quest-complete`, a step toggles
+  to the **dark** `leaf` token, bottom `Back` → `/kid-home`.
+
+### `quest_detail_touch_targets_test.dart` — NEW, 10 cases
+Closes the tap-target gap as a *rule* rather than a side effect of the geometry
+test: `{320, 390, 430} × {1.0, 1.3}`, asserting every control's rendered box is
+≥ `NestDevice.tapKid` (56) tall and ≥ `tapParent` (44) wide — back and lock
+exactly 56×56, step rows ≥ 60, both bar buttons ≥ 56.
+
+Reachability is proven separately, which is the part a size assertion misses: a
+step toggles when tapped in the **empty 140 px right of its painted label**,
+on the ring itself, and 5 px inside its top edge; and the lock's
+`performAction(SemanticsAction.tap)` really pushes `/parental-gate`.
+
+### `quest_detail_view_test.dart` — EXTENDED, 19 → 28 cases
+- **`Seed.empty` on the real repository** (no fake): onboarded parent, no
+  children, no active child → `Who's playing?`, no quest, no coin pill, chrome
+  intact, `Choose` → `/who-is-playing`.
+- The four non-loaded states (loading, failure, missing quest, no child) each
+  re-pumped at the tightest cell **320 px @ 1.3×** in **both themes** — 8 cases.
+  The `PipAvatar(140)` failure card and the wide buttons were the overflow risks.
+
+## Results (real runs)
+
+```
+$ dart format test/features/kid_home/
+$ flutter analyze
+No issues found! (ran in 4.0s)
+
+$ flutter test --timeout 120s test/features/kid_home/quest_detail_*.dart
+00:02 +69: All tests passed!          # 9 bloc + 19 matrix + 10 targets + 28 view + 3 geometry
 
 $ flutter test --timeout 120s test/features/kid_home
-00:15 +484 ~3: All tests passed!
+00:12 +544 ~4: All tests passed!
 
 $ flutter test --timeout 120s
-03:23 +3415 ~4: All tests passed!
+01:32 +3675 ~5: All tests passed!
 ```
 
-No ignores were added to `analysis_options.yaml`; nothing outside
-`app/test/features/kid_home/**` and `docs/screens/K04/**` was touched. The 3
-skips (`~3` in the feature run, `~4` suite-wide) and the Drift "created the
-database class AppDatabase multiple times" warning are pre-existing harness
-noise, identical to the stage-2 run — not failures and not introduced here.
+K04 now has **69** cases across five files (was 22). The suite-wide count moved
+3415 → 3675: ~48 are mine and the rest came from other screens' tests landing
+in this worktree between iterations — not a K04 change.
+
+The 5 skips include the **K04-BUG-4 proof**, which is the skip this verdict
+turns on. The Drift "AppDatabase multiple times" warning is pre-existing harness
+noise. `analysis_options.yaml` was not touched and nothing outside
+`app/test/features/kid_home/**` + `docs/screens/K04/**` was written.
+
+## Iteration-1 gaps — status
+
+| gap | status |
+|---|---|
+| Dark mode uncovered | **closed** — 19-case matrix, colours from tokens + structural bottom-edge proof |
+| Width 430 uncovered | **closed** — all three widths in the matrix and the target rules |
+| Tap targets implicit | **closed** — size rule at 6 cells + edge-reachability probes |
+| `stepsFor` untested | **closed** — 4 cases incl. the real seeded DB |
+| `quest_detail_copy_parity_test.dart` absent | **not a gap** — copy parity is a group in the view test; no coverage lost, left as is to avoid churn |
+| Non-loaded states at 320 @ 1.3× / dark | **closed** — 8 new cases |
+
+## Not findings / process
+
+Per the orchestrator rules these are not reported as blockers: the uncommitted
+stage 4/5/6 artefacts in the worktree (`4_review.md`, `5_ui.md`, `6_bugs.md`,
+`k04_bugs_test.dart`, `ui/*.png`) and merge order — all handled by the loop.
+
+`ORCHESTRATOR_NOTES.md` 15:08 asks kid screens to switch to the shared
+`questIconFor/rewardIconFor(audience: kid)` once it lands on main. Verified in
+this worktree: `grep -rn questIconFor app/lib/` returns **0 hits** — only the
+unrelated single-argument `rewardIconFor(String key)` exists. The note's own
+wording is "not a finding meanwhile", so no K04 change was made and no test was
+written against a helper that does not exist. It should be picked up after the
+next main merge.
 
 ## Bugs found
 
-**None.** No test exposed a defect in `quest_detail_view.dart` or in the
-`bloc.stepsFor` seam, so nothing was patched and there is nothing to hand to
-stage 6. Specifically probed and found correct:
+1. **K04-BUG-4 — OPEN, Minor.** `quest_detail_view.dart:577` — over-cap title is
+   clipped instead of ellipsised (`TextOverflow.clip` is `NestBalancedText`'s
+   default and the call passes no `overflow:`). Repro + failing proof in
+   `6_bugs.md`; verified still failing above. Not patched, per the brief.
+2. **Not a new bug, but verdict-relevant:** `5_ui.md` `VERDICT: FAIL` with an
+   open Major on the hero tile glyph (`ic_quest_bed.svg` renders as a plain arch
+   at the 64/120 px hero size). Root cause is shared-asset, not screen code;
+   `core/**` is off-limits to a screen agent. Flagged so a green test stage is
+   not read as sign-off.
 
-- the bottom-edge owner rule — bar `bottom == 844`, no meadow/sky strip under it;
-- the accessibility rule — the step rows `excludeSemantics` yet still expose
-  `hasAction(tap)` and drive real state through it (this is the exact failure
-  mode the orchestrator rule warns about);
-- the PIP rule — `PipAvatar` fed from the child row, no `pip_stage_*.svg`;
-- anti-double-completion on the primary button and on the lock;
-- the copy blot — this screen is pure ASCII, so no curly quotes/dashes/ellipsis.
-
-Two deliberate, pre-documented deviations are **not** bugs and are not counted as
-findings: steps render unticked on arrival (v1 has no per-quest step storage;
-1_plan §d says do not pre-tick to match the mock) and a completed quest disables
-the primary button (1_plan §b product decision — the design has no such state).
-
-## Coverage gaps owed to iteration 2 (this stage under-delivered)
-
-Brief-mandated cells with **no** K04 test. These are gaps in the test suite, not
-defects in the screen.
-
-1. **Dark mode — completely uncovered.** `grep -rn "selectMode(ThemeMode.dark)"
-   test/features/kid_home/` returns nothing, so no kid_home screen is exercised
-   in dark at all. Needs `_pump(..., theme: ThemeMode.dark)` for the loaded screen,
-   the failure card and the missing-quest state, asserting the bar surface is the
-   dark `surface` token and that the ink border / `onLeaf` / dot pairs come from
-   tokens (no hard-coded light colours).
-2. **Width 430 — uncovered.** Only 320 and 390 are pumped. Needs the loaded screen
-   at 430 to prove the centred tile, the pill and the cheer row re-centre and the
-   card holds the 20 px gutters.
-3. **Tap targets are implicit, never asserted.** 56×56 / 60 / 64 are pinned only
-   *inside the 390 light geometry test*. The brief asks for ≥ 44 parent / ≥ 56 kid
-   as a rule; needs a dedicated case measuring `tester.getSize(...)` for
-   `NestIconButton`, `NestLockButton`, each step row and both `NestKidButton`s and
-   asserting `>= NestDevice.tapKid` at 320/390/430 and at 1.3× text.
-4. **The `stepsFor` bloc getter has no direct test.** It is covered only
-   indirectly (the three steps render). A one-line `bloc.stepsFor('q-tidy')`
-   delegation assertion would pin the seam stage 2a added.
-5. **`quest_detail_copy_parity_test.dart` does not exist** — 1_plan §f named it,
-   but stage 2 folded its assertions into the `copy parity` group of the view
-   test. Not a loss of coverage; noting it so the plan and the tree agree.
-6. **Failure / missing / no-child states are light-only** and never pumped at
-   320 @ 1.3×, where the `Try again` / `Choose` / `Back home` buttons and the
-   `PipAvatar(140)` are the overflow risks.
-
-## Verdict
-
-`flutter analyze` reports **No issues found!** with no ignores; all **3415** tests
-pass (22 of them K04); `disposeApp` drain discipline holds; **no screen bug was
-found**, so nothing is blocked on stage 6.
-
-The brief's stated bar is "PASS only if all tests pass and no bugs were found" —
-both conditions hold, so this stage returns PASS. That verdict covers the *screen*,
-not the completeness of this stage's matrix: items 1–3 above are real, unmasked
-gaps in the mandated coverage and should be closed before the screen is signed
-off.
-
-VERDICT: PASS
+VERDICT: FAIL
