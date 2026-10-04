@@ -16,6 +16,8 @@
 // and the fakes carry a fixed 7×6 challenge, so the suite behaves the same
 // whether the app clock is the real one or pinned to the demo story day.
 
+import 'dart:async';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
@@ -32,6 +34,41 @@ import 'package:nestling/features/parental_gate/domain/parental_gate_repository.
 
 import '../../test_scope.dart';
 
+/// Emits [challenge], then whatever [swap] is pushed — so a test can change the
+/// live question while the gate is open (any settings write re-emits).
+class _SequenceRepository extends ParentalGateRepository {
+  /// Always starts on the design's 7 × 6 challenge; [swap] moves it on.
+  static const ParentalGateChallenge challenge = designChallenge;
+
+  final StreamController<List<ParentalGateChallenge>> _swaps =
+      StreamController<List<ParentalGateChallenge>>.broadcast();
+
+  void swap(ParentalGateChallenge next) =>
+      _swaps.add(<ParentalGateChallenge>[next]);
+
+  Future<void> dispose() => _swaps.close();
+
+  @override
+  Future<List<ParentalGateChallenge>> getItems() async =>
+      <ParentalGateChallenge>[challenge];
+
+  @override
+  Stream<List<ParentalGateChallenge>> watchItems() =>
+      Stream<List<ParentalGateChallenge>>.multi((controller) {
+        controller.add(<ParentalGateChallenge>[challenge]);
+        _swaps.stream.listen(controller.add);
+      });
+
+  @override
+  Stream<bool> watchGateEnabled() => Stream<bool>.value(true);
+
+  @override
+  Future<void> setGateEnabled({required bool enabled}) async {}
+
+  @override
+  ParentalGateChallenge challengeFor(DateTime utc) => challenge;
+}
+
 /// The design's own challenge — used by the fakes so their copy and digits
 /// are fixed regardless of the day the suite runs on.
 const ParentalGateChallenge designChallenge = ParentalGateChallenge(
@@ -40,6 +77,15 @@ const ParentalGateChallenge designChallenge = ParentalGateChallenge(
   detail: 'This keeps settings and purchases safe.',
   a: 7,
   b: 6,
+);
+
+/// A second question (3 × 9 = 27) for challenge-swap scenarios.
+const ParentalGateChallenge otherChallenge = ParentalGateChallenge(
+  id: 'other',
+  title: 'Grown-ups only',
+  detail: 'This keeps settings and purchases safe.',
+  a: 3,
+  b: 9,
 );
 
 /// The live challenge the screen will show, read from the same repository the
@@ -359,6 +405,49 @@ void main() {
       expect(find.bySemanticsLabel('Answer, 0 of 2 entered'), findsOneWidget);
       // Curly apostrophe + em dash, exactly as the view sends it.
       expect(announcements, <String>['That wasn’t right — try again']);
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('a new challenge announces its first wrong answer again', (
+      tester,
+    ) async {
+      // 6_bugs observation 1: the bloc resets `attempts` when the live
+      // challenge changes, so the view's announcement high-water mark must be
+      // re-based on the new challenge id or the first wrong answer on the new
+      // question is silent.
+      final repo = _SequenceRepository();
+      addTearDown(repo.dispose);
+      await _useFake(repo);
+      final announcements = captureAnnouncements(tester);
+      GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+      await pumpAppRoute(tester, '/parental-gate');
+      final semantics = tester.ensureSemantics();
+
+      expect(find.text('seven times six'), findsOneWidget);
+      await typeAnswer(tester, wrongEntryOf('42'));
+      await tester.pump();
+      expect(announcements, hasLength(1));
+
+      // The settings row re-emits a different question (P16 write).
+      repo.swap(otherChallenge);
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('three times nine'), findsOneWidget);
+      expect(find.bySemanticsLabel('Answer, 0 of 2 entered'), findsOneWidget);
+
+      await typeAnswer(tester, wrongEntryOf('27'));
+      await tester.pump();
+      expect(announcements, <String>[
+        'That wasn’t right — try again',
+        'That wasn’t right — try again',
+      ], reason: 'the second challenge must announce its own first attempt');
+
+      // A same-challenge re-emit must NOT announce again (no phantom repeats).
+      repo.swap(otherChallenge);
+      await tester.pump();
+      await tester.pump();
+      expect(announcements, hasLength(2));
       semantics.dispose();
       await disposeApp(tester);
     });

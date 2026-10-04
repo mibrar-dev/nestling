@@ -9,6 +9,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
@@ -68,7 +69,26 @@ List<Rect> _paintedRects(WidgetTester tester, Finder finder) {
 Finder _keyInks() =>
     find.byWidgetPredicate((w) => w is Ink && w.width == 72 && w.height == 72);
 
+/// Real Inter/Nunito metrics: without them the fallback test font makes every
+/// glyph em-wide, text wraps early and the card measures ~120 px taller than a
+/// device run — which would make every geometry assertion here fiction.
+Future<void> _loadBundledFonts() async {
+  final inter = FontLoader('Inter')
+    ..addFont(rootBundle.load('assets/fonts/Inter-Regular.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-Medium.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-SemiBold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-Bold.ttf'));
+  final nunito = FontLoader('Nunito')
+    ..addFont(rootBundle.load('assets/fonts/Nunito-Bold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Nunito-ExtraBold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Nunito-Black.ttf'));
+  await inter.load();
+  await nunito.load();
+}
+
 void main() {
+  setUpAll(_loadBundledFonts);
+
   setUp(() async {
     await setUpTestScope();
   });
@@ -245,24 +265,85 @@ void main() {
     });
   });
 
-  group('text scale 1.3 needs the internal scroll on the tallest card', () {
-    testWidgets('390 × 1.3 scrolls the card instead of clipping it', (
+  group('shared keypad fit (CSS grid stretch vs shrink-wrapped)', () {
+    testWidgets('390 renders the block-level grid (fit: stretch)', (
+      tester,
+    ) async {
+      await _pump(tester);
+      // `.keypad` is a block-level grid: at the design width it fills the
+      // 302 px card content, so the call site renders it directly and the
+      // columns come out at the design's 88 px pitch.
+      final keypad = tester.widget<NestKeypad>(find.byType(NestKeypad));
+      expect(keypad.fit, NestKeypadFit.stretch);
+      final keys = _paintedRects(tester, _keyInks());
+      expect(keys, hasLength(11));
+      for (final key in keys) {
+        expect(key.width, moreOrLessEquals(72, epsilon: 0.5));
+        expect(key.height, moreOrLessEquals(72, epsilon: 0.5));
+      }
+      final lefts = (keys.map((r) => r.left).toSet().toList()..sort());
+      expect(
+        lefts[1] - lefts[0],
+        moreOrLessEquals(88, epsilon: 0.5),
+        reason: '(302 − 24×2 − 10×2) / 3 + 10 = 88 at the design width',
+      );
+      await disposeApp(tester);
+    });
+
+    for (final width in const <double>[320, 430]) {
+      testWidgets('${width.toInt()} picks the fit that keeps keys ≥56', (
+        tester,
+      ) async {
+        await _pump(tester, width: width, textScale: 1.3);
+        final keypad = tester.widget<NestKeypad>(find.byType(NestKeypad));
+        // 320 ⇒ 232 px of content (< NestKeypad.contentWidth 280) so the
+        // shrink-wrapped 280 box is scaled down; 430 ⇒ 342 px, stretch.
+        expect(
+          keypad.fit,
+          width < 368 ? NestKeypadFit.shrinkWrap : NestKeypadFit.stretch,
+          reason: 'the card content is ${width - 88} px wide',
+        );
+        final keys = _paintedRects(tester, _keyInks());
+        expect(keys, hasLength(11));
+        for (final key in keys) {
+          expect(
+            key.width,
+            greaterThanOrEqualTo(NestDevice.tapKid),
+            reason: 'the painted key must stay ≥56 at ${width.toInt()} px',
+          );
+        }
+        // The labels survive the scale-down (semantics are on the widgets).
+        expect(find.bySemanticsLabel('Delete'), findsOneWidget);
+        expect(find.bySemanticsLabel('Digit 5'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+        await disposeApp(tester);
+      });
+    }
+  });
+
+  group('text scale 1.3 keeps the whole card on screen', () {
+    testWidgets('390 × 1.3 fits the card, every control stays reachable', (
       tester,
     ) async {
       await _pump(tester, textScale: 1.3);
-      // The card is anchored at the design top, so at the maximum supported
-      // text scale it is taller than the slot below it: the plan's fallback is
-      // an internal SingleChildScrollView (no overflow error, no clipping).
-      expect(find.byType(SingleChildScrollView), findsOneWidget);
+      // The card is anchored at the design top and, with the CSS-grid keypad
+      // (326 rather than 352), it still fits the 844 px canvas at the maximum
+      // supported scale — the SingleChildScrollView stays as the fallback for
+      // shorter viewports.
       final modal = tester.getRect(find.byType(NestModal));
       expect(modal.top, moreOrLessEquals(66, epsilon: 0.5));
+      expect(
+        modal.bottom,
+        lessThanOrEqualTo(NestDevice.height),
+        reason: 'the anchored card must not need a scroll at 390 × 1.3',
+      );
       expect(tester.takeException(), isNull);
-      // The caption is the last element: it must still be reachable.
+      expect(find.text('Back to Pip'), findsOneWidget);
       expect(
         find.text('This keeps settings and purchases safe.'),
         findsOneWidget,
       );
-      expect(find.text('Back to Pip'), findsOneWidget);
+      expect(find.byType(SingleChildScrollView), findsOneWidget);
       await disposeApp(tester);
     });
   });

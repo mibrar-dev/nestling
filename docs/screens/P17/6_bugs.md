@@ -1,29 +1,33 @@
-# P17 Parental gate — bug hunt (Stage 6, iteration 2)
+# P17 Parental gate — bug hunt (Stage 6, iteration 3)
 
-Adversarial pass over the iteration-2 build: data edge cases (0 / 1 / 6
+Adversarial pass over the iteration-3 build: data edge cases (0 / 1 / 6
 children, long UK names, 0 / 9999 coins, empty lists), rapid double taps
 (real and semantics), back navigation and deep links, restart persistence,
-parent/kid mode guards, dark-mode contrast, text scale 1.3 + 320 px
-overflow, async gaps / emit-after-close, Europe/London time (both BST
-changes and GMT) and money rounding. No product code was changed in this
+parent/kid mode guards, dark-mode contrast, text scale 1.3 + 320 px and
+intermediate widths, async gaps / emit-after-close, Europe/London time (both
+BST changes and GMT) and money rounding. No product code was changed in this
 stage. No simulator was used (SIMULATORS rule; `flutter test` only).
 
 - Proof file: `app/test/features/parental_gate/p17_bugs_test.dart` —
-  **15 tests: 13 green + 2 skip-marked proofs** (P17-BUG-1 shared major,
-  P17-BUG-4 screen-local minor). `flutter analyze` on the file: No issues
-  found; `flutter test …p17_bugs_test.dart` → `+13 ~2`.
-- Every proof was run unskipped once to confirm it fails, then re-skipped.
-- No new major bug in the iteration-2 changes; the two iteration-1 minors
-  are fixed and their proofs now run green.
+  **18 tests: 17 green + 1 skip-marked proof** (P17-BUG-1, the shared router
+  loop). `flutter analyze` on the file: No issues found;
+  `flutter test …p17_bugs_test.dart` → `+17 ~1`.
+- Feature suite: `flutter test test/features/parental_gate` →
+  `+119 ~1: All tests passed!` — **0 red** (iteration 2 ended 2 red on the
+  shared keypad; `main`'s `shared/keypad_grid` merge closed them). The count
+  grew from the build stage's 106 as parallel stages added their own tests
+  while this stage ran; the skip is P17-BUG-1.
+- No new bug found in the iteration-3 changes; all three earlier bugs are
+  fixed and their proofs run green as regression tests.
 
 ## Result
 
 | ID | Severity | Status |
 |---|---|---|
 | P17-BUG-1 | Major (shared, router) | open — filed `SHARED_REQUEST.md` #2; proof skip-marked |
-| P17-BUG-2 | Minor | **fixed in iteration 2** — proof green (regression test) |
-| P17-BUG-3 | Minor | **fixed in iteration 2** — proof green (regression test) |
-| P17-BUG-4 | Minor (screen-local) | open — proof skip-marked; also pinned by 5_ui |
+| P17-BUG-2 | Minor | **fixed (iteration 2)** — proof green |
+| P17-BUG-3 | Minor | **fixed (iteration 2)** — proof green |
+| P17-BUG-4 | Minor (screen-local) | **fixed (iteration 3)** — proof green |
 
 No blocker and no major **screen-local** bug. P17-BUG-1 is a shared
 `app/lib/app/router.dart` defect the gate route participates in (P17 may not
@@ -37,7 +41,7 @@ screen.
 
 **Where:** `app/lib/app/router.dart:120-124` (trial-expired redirect),
 reached through `/parental-gate`; also breaks `/kid-home` and every kid
-route. Byte-identical to `main` after the iteration-2 merge.
+route. Still byte-identical to `main` after the iteration-3 merge.
 
 **Repro (proof: `P17-BUG-1: kid mode + expired trial renders the gate`,
 skip-marked):** demo DB + aged trial (`subscription_status = 'trial'`,
@@ -51,44 +55,27 @@ kid route is stuck the same way.
 **Suggested fix:** do not apply the paywall redirect in kid mode
 (`if (!appMode.isKid && onboarded && session.trialExpired && …)`), or exempt
 `ParentalGateRoutePaths.gate` from the trial-expired branch exactly as the
-onboarding branch already exempts it. Filed in `SHARED_REQUEST.md` #2
-(status updated this iteration: still unfixed).
+onboarding branch already exempts it. Filed in `SHARED_REQUEST.md` #2.
 
-## P17-BUG-4 — minor (screen-local): the backdrop header top-aligns its items
+## Iteration-3 changes verified
 
-**Where:** `parental_gate_view.dart:364-367` — the `_GateBackdropBody`
-header `Row` passes `crossAxisAlignment: CrossAxisAlignment.start`, where
-the CSS is `.kb-top { display:flex; align-items:center; gap:12px;
-padding-top:8px }`.
-
-**Repro (proof: `P17-BUG-4: the backdrop header centres its items`,
-skip-marked):** pump `/parental-gate` at 390×844, measure the avatar rect
-(55…99) and the greeting rect. Expected: greeting and coin pill centred in
-the 44 px row (greeting centre 77 ± 1). Actual: greeting centre 72, pill
-centre 73 — 5 px / 4 px high. Confirmed independently by the 5_ui geometry
-pin `the backdrop row centres its items like .kb-top`
-(`parental_gate_geometry_test.dart`, greeting 72 vs 77).
-
-**Suggested fix (one line):** drop the `crossAxisAlignment` argument (the
-default is centre). Dimmed scenery — cosmetic, but the header is the only
-backdrop strip the card does not cover.
-
-## Iteration-1 fixes verified this iteration
-
-- **P17-BUG-2 (challenge day) — FIXED.** `challengeFor` now reads the
-  calendar day via `toFamilyZone(utc, defaultFamilyZoneId)`
-  (`parental_gate_repository_impl.dart:43-58`) and `watchItems` uses
-  `appNowUtc()`. The old proof runs green; a new BST-boundary probe passes
-  both 2026 changes (BST start 29 Mar, end 25 Oct), the London-midnight flip
-  and GMT winter.
-- **P17-BUG-3 (stale entry) — FIXED.** `onData` resets
-  `entered`/`attempts`/`unlocked` when the challenge id changes and keeps
-  them on same-challenge re-emits (`parental_gate_bloc.dart:24-45`). Proof
-  green.
-- **3_test §3.1 (unlock never dismissed a pushed gate) — FIXED.** `_unlock`
-  now pops first and flips the mode after (`parental_gate_view.dart:36-58`);
-  the green probe asserts `pushedPath == '/kid-home'`, no `NestModal`, parent
-  mode, and that re-opening the gate from the lock still works.
+- **Shared keypad grid (`shared/keypad_grid` via `main`) — request #3
+  resolved.** `NestKeypad` now reproduces CSS `.keypad` (1fr columns, 10 px
+  gaps, `8 24 0` padding, 72 px keys); the P17 call site chooses stretch at
+  card content ≥ `NestKeypad.contentWidth` (284) and shrink-wrap + FittedBox
+  below it. The 11 ORCHESTRATOR_NOTES geometry pins are green at Δ0; my
+  independent probe at 360 px (shrink-wrap path) measures 11 painted keys of
+  69.0 px with no overlap — ≥56 as required.
+- **P17-BUG-4 fixed:** the backdrop header Row no longer passes
+  `crossAxisAlignment: start`, so `.kb-top { align-items: center }` holds;
+  the proof runs green (greeting centre now equals the avatar centre).
+- **6_bugs observation 1 fixed:** `_announcedChallengeId` re-bases the
+  wrong-answer announcement counter when the live challenge changes. New
+  regression proof: wrong answer on 7×6 (announce 1) → challenge switches to
+  3×9 → wrong answer on 3×9 announces again (2 total).
+- **Loading card height:** `_GateLoading` now reserves the CSS-grid keypad
+  height (326) and no longer double-counts the caption gap; the
+  "loading placeholders keep the loaded card height" pin is green.
 
 ## Verified clean (green probes)
 
@@ -101,64 +88,44 @@ backdrop strip the card does not cover.
 | disabled gate | pass-through pushed from kid home → parent mode, gate dismissed | pass |
 | failure state | `Try again` has a tap action and reloads; `Back to Pip` pops to kid home | pass |
 | data edges | no children (`Seed.empty`) → `Hi there!` fallback + usable gate | pass |
-| data edges | 1 child (Leo) → his own Pip from the DB (bolt · sky · stage 2 · none), `Hi Leo!` | pass |
-| data edges | unknown active-child id → falls back to the first child (Maya, CHILD ORDER) | pass |
+| data edges | 1 child (Leo) → his own Pip from the DB (bolt · sky · stage 2 · none) | pass |
 | data edges | 6 children, `Maximilian-Alexander`, 9999 coins at 320 px → no overflow | pass |
+| restart persistence | gate switch persists across repository instances | pass |
+| keypad widths | 360 px (shrink-wrap) → 11 painted keys 69 px, no overlap, no exception | pass |
 | timezone | BST start/end, London-midnight flip, GMT winter → one challenge per London day | pass |
+| a11y | announcement re-bases on a challenge change (obs 1 regression) | pass |
 | async gap | settings change after the gate closes → no emit-after-close error | pass |
-| 320 + 1.3 | failure state at 320 px × textScale 1.3 → no overflow, both buttons present | pass |
+| 320 + 1.3 | failure state at 320 px × textScale 1.3 → no overflow, both buttons | pass |
 | dark contrast | tokens: ink/ink2 on surface ≥ 9:1, lilac on lilacTint ≥ 3.4:1 (decorative icon) | pass |
 | money | N/A — no money on P17 (coins only; 0 and 9999 both render) | pass |
 
-## Known shared blocker (not a new finding)
+## Out of scope (not P17 findings)
 
-The remaining keypad reds in `parental_gate_geometry_test.dart` —
-`the bands below the keypad match the design` (card bottom/height +26,
-keypad rows 2–4, cancel, caption) and `the keypad follows the HTML grid gap
-(pitch 82)` (row pitch 88 vs 82, column pitch 96 vs 88) — are entirely
-inside the shared `NestKeypad` (`app/lib/core/design_system/components/`),
-already filed as `SHARED_REQUEST.md` #3 with measurements and a patch. No
-call-site change can fix the row pitch (row 2 is already +6 inside the
-component) and forking a local keypad is forbidden. ORCHESTRATOR_NOTES
-(07:13) confirms the fix is in flight on `shared/keypad_grid` and must match
-the CSS `.keypad`; do not re-space keys locally — re-check the key centres
-against the design once main has it. Not a P17-local bug.
-
-**Watch item on that request's proposed patch:** the suggestion drops the
-CSS `padding: 8px 24px 0` horizontal 24 px ("padding only top 8"). With
-Expanded columns, the column pitch then becomes `(W − 20)/3 + 10`, i.e.
-~102 at the current 296 slot / ~104 at the card's 302 content — not the
-design's 88. Matching the CSS grid (which is what the 07:13 note asks for)
-means keeping the 24 px horizontal padding: `(302 − 68)/3 + 10 = 88`. Worth
-checking against the geometry pins when the shared fix lands.
+The whole-app suite still has 8 reds, all in `app/test/features/kid_home/**`
+(P17 may not edit other features' tests): 7 assert the v1 scaffold title
+`P17 Parental gate` and 1 calls `tester.pageBack()` expecting an AppBar back
+button — both were supplied by the scaffold P17 replaced. One-line fixes per
+site are written up in `SHARED_REQUEST.md` #1 with line numbers.
 
 ## Observations (not defects)
 
-1. **`_announcedAttempts` is not reset when the state's `attempts` resets.**
-   The BUG-3 fix sets `attempts: 0` on a challenge change, but the view's
-   announcement counter keeps its high-water mark, so the first wrong
-   answers on the new challenge are silent. Reachable only if the settings
-   row changes while the gate is open (or the gate is open across a settings
-   write after midnight). A11y edge; suggest resetting the counter when
-   `state.challenge?.id` changes.
-2. **Loading has no cancel** (a 56 px slot is reserved but empty); only the
+1. Loading has no cancel (a 56 px slot is reserved but empty); only the
    system back gesture leaves the loading state. Drift's `watchSetting`
    emits promptly and errors land in the failure state, so it is transient.
-   Plan-level, already recorded by 3_test §3.3.1.
-3. **`Try again` is 44 px on a kid screen** (plan-mandated); DESIGN_SPEC kid
+   Plan-level, recorded by 3_test §3.3.1.
+2. `Try again` is 44 px on a kid screen (plan-mandated); DESIGN_SPEC kid
    rules ask for ≥56. Plan/DS question, recorded by 3_test §3.3.2.
-4. Dead code: `presentation/widgets/parental_gate_placeholder_card.dart`
-   and the unused `ParentalGateChallengeModel` (round-trip tested).
-5. Parent-mode deep link + `Back to Pip` lands on `/kid-home` (kid UI in
+3. Dead code: `presentation/widgets/parental_gate_placeholder_card.dart`
+   (the repo-wide v1 scaffold, unreferenced in 11 features).
+4. Parent-mode deep link + `Back to Pip` lands on `/kid-home` (kid UI in
    parent mode) — product-level question, same as K03's note.
 
 ## Verdict basis
 
-No blocker and no major screen-local bug: the two iteration-1 minors are
-fixed and proven, the new screen-local finding is minor and proven, and the
-one major (P17-BUG-1) is a shared router defect filed and carried per the
-P07/P08 precedent (RULES §1 forbids P17 from editing `app/lib/app/router.dart`).
-The remaining red geometry pins trace to the shared keypad (request #3).
-All other hunt areas are clean.
+No blocker and no major screen-local bug: all three earlier findings are
+fixed and proven, iteration-3's changes are verified by green probes, and the
+feature suite is fully green (106 pass / 1 honest skip). The one major
+(P17-BUG-1) is a shared router defect filed and carried per the P07/P08
+precedent (RULES §1 forbids P17 from editing `app/lib/app/router.dart`).
 
 VERDICT: PASS

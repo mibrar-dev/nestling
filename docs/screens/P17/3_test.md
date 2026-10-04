@@ -1,292 +1,193 @@
-# P17 Parental gate — 3_test (iteration 2)
+# P17 Parental gate — 3_test (iteration 3)
 
-Stage 3 for `/parental-gate` (feature `parental_gate`, kid mode), second
+Stage 3 for `/parental-gate` (feature `parental_gate`, kid mode), third
 iteration. Tests only: **no file under `app/lib/**` was touched** — every
 defect below is recorded, not patched. No simulator was booted, installed on,
 screenshotted or driven (SIMULATORS rule: only 5_ui may use E7D5555E-…).
 
-Inputs: `ORCHESTRATOR_NOTES.md` (mandatory, unchanged since iteration 1),
-`1_plan.md`, `2_build.md` / `2b_build_ui.md` (iteration 2), `FIXES_1.md`,
-`4_review.md`, `5_ui.md`, `6_bugs.md`, `SHARED_REQUEST.md`, and my own
-iteration-1 report (the bugs it found are listed in §4 with their status).
+**Headline:** P17's own suite is **fully green — 113 pass, 1 skip, 0 red**
+(96 tests in the five stage-3 files + 17 in the stage-6 `p17_bugs_test.dart`;
+the single skip is P17-BUG-1, the shared-router proof in
+`SHARED_REQUEST.md` #2). Every finding this stage raised in iterations 1 and 2
+is closed and stays closed under its own regression pin, the design is matched
+band-for-band (independent re-measurement in §3: **every Δ0**), and **no new
+defect was found this iteration**. The whole app is still red on **8 tests, all
+in `app/test/features/kid_home/**`** — out of this screen's RULES §1 set, all
+caused by P17's own copy replacing the v1 scaffold title (plus one missing AppBar
+back button), each with a one-line fix already filed in `SHARED_REQUEST.md` #1.
 
-## 1. What iteration 1 bought, and what this iteration added
+Inputs: `ORCHESTRATOR_NOTES.md` (items 1–7 and the 07:13 keypad note — both
+honoured, §4), `1_plan.md`, `2_build.md` / `2a` / `2b` (iteration 3), `FIXES_2.md`,
+`4_review.md`, `5_ui.md`, `6_bugs.md`, `SHARED_REQUEST.md`, and this file's
+iteration-1 and iteration-2 reports.
 
-Iteration 1 of this stage left 3 red pins and 78 tests. The iteration-2
-builders closed the two majors; this iteration re-verified every one of those
-closures with a test that would have caught the original defect, and added
-coverage for the behaviour iteration 2 introduced or changed.
+## 1. Iteration 3 fixed everything this stage had pinned — re-verified, not assumed
 
-### 1.1 Re-verification of the iteration-1 findings (all green now)
-
-| Iteration-1 finding | Fix (iteration 2) | Test that now proves it |
+| Prior finding | Fix (iteration 3) | Test that proves it now |
 |---|---|---|
-| §3.1 MAJOR: a successful unlock never dismissed a pushed gate (`_unlock` flipped the mode and started the async session write before popping) | pop first, then rotate to parent mode | `parental_gate_view_test.dart` → `navigation › unlocking a pushed gate dismisses it and keeps the kid route` (asserts `pushedPath == '/kid-home'` **and** `find.byType(NestModal)` finds nothing) — **green** |
-| §3.2 card/geometry drift above the keypad (card 53…791 instead of 66…778) | card anchored at the design top 66 | `parental_gate_geometry_test.dart` → `the card anchor and every band above the keypad match` — **green** (card top/left/width, lock tile 90…142, title/instruction/question centres, digits 256…320, keypad slot 336, keypad row 1, status-bar reserve, header top 55) |
-| §3.2 dimmed backdrop header under the OS clock (design 55, app 13) | `NestStatusBar` reserve added above `.kb-top` | same test — `dimmed backdrop header top: 55` — **green** |
-| §3.3.3 sticky `errorMessage` after a retry | `copyWith(clearError: true)` on loading/loaded | `parental_gate_bloc_test.dart` → `a second LoadRequested recovers from failure` (now asserts `errorMessage == null` on both states) — **green** |
-| 6_bugs P17-BUG-2 (challenge keyed to the UTC day) | `challengeFor` reads the family-zone (London) day | `parental_gate_repository_test.dart` → `the challenge follows the Europe/London day, not UTC`, `one UTC date can span two London challenge days` — **green** |
-| 6_bugs P17-BUG-3 (stale typed entry after a challenge change) | `onData` resets `entered`/`attempts`/`unlocked` on a challenge-id change, keeps them on a same-challenge re-emit | `parental_gate_bloc_test.dart` → `a new challenge resets the typed entry and attempts (P17-BUG-3)`, `a same-challenge re-emit keeps the typed entry` — **green** |
-| 4_review finding 4 (caret only on the next box) | caret now paints on every empty box (`.digit.empty::after`) | **new this iteration**: `parental_gate_view_test.dart` → `every empty box carries the leaf caret (CSS ::after)` — **green** |
-| 4_review finding 5 (loading placeholder heights) | placeholders resized to the real line boxes | **new this iteration**: `parental_gate_geometry_test.dart` → `the loading placeholders keep the loaded card height` (loaded 738 vs loading 734 ⇒ ≤6 px) — **green** |
-| 5_ui / PIP rule (the card hides the Pip slot, so it was unverified) | unchanged | **new this iteration**: `the dimmed backdrop shows the child's own Pip in the slot` — `PipAvatar(style: mochi, skin: sunny, stage: 3, accessory: none, size: 200)` at y 125…325, centred — **green** |
-| KID BACKGROUND rule (new in this iteration's brief) | shared `KidScope` + `kid_meadow.dart` | **new this iteration**: `parental_gate_states_test.dart` → `kid background (shared KID BACKGROUND rule)` — light + dark: one `KidScope` covering 0,0…390,844 and **every** `SvgPicture` on the screen inside it (no locally painted hills) — **green** |
+| **it-2 §3.2** MAJOR: every band below the keypad 26 px low (shared `NestKeypad` 16 px row gap / 8 px padding all round vs the CSS grid) | the shared fix `9cac0c6` merged (`Expanded` cells, `gap: 10`, `padding: 8 24 0`) — **no local re-spacing**, per ORCHESTRATOR_NOTES 07:13 | `the bands below the keypad match the design` and `the keypad follows the HTML grid gap (pitch 82)` — **green**, card 66…778 h 712, rows 380/462/544/626, cancel 702, caption 749, column pitch 88 |
+| **it-2 §3.3** MAJOR: `SizedBox(296) > FittedBox(scaleDown)` hands the keypad unbounded width, which the new `Expanded` grid cannot lay out (`RenderFlex … unbounded`) | call site made compatible: `LayoutBuilder` picks `NestKeypadFit.stretch` when the card content ≥ `NestKeypad.contentWidth` (rendered directly) and `shrinkWrap` inside a width-bounded `FittedBox` below that | `the keypad is never laid out under unbounded width` — **green**; plus **new** `shared keypad fit (CSS grid stretch vs shrink-wrapped)`: the `fit` property is asserted per width and its painted geometry with it |
+| **it-2 §3.1** MINOR: the dimmed backdrop row used `CrossAxisAlignment.start`, so the greeting sat 5 px above the CSS `align-items: center` position | argument dropped; and the pin's own constant was **corrected**, not relaxed: `designBackdropHeaderTop` 55 now pins the *row* (the avatar) and a new `designBackdropGreetingTop` 60 pins the *centred* h1 line box | `the backdrop row centres its items like `.kb-top`` — **green** (greeting and pill centres == avatar centre) |
+| 6_bugs observation 1: the attempt counter's high-water mark swallowed the first announcement after a challenge change | `_announcedChallengeId` re-bases `_announcedAttempts` when the live challenge id changes | **new this iteration**: `a new challenge announces its first wrong answer again` — **green** |
+| it-2 §4.1: the anchored card needed a 10 px scroll at 390 × textScale 1.3 | the keypad grid is 26 px shorter (326 vs 352), so the card is 762 tall at 1.3 and fits the canvas | **new this iteration**: `390 × 1.3 fits the card, every control stays reachable` — **green** (`card bottom ≤ 844`) |
+| 2b self-check: `_GateLoading` over-reserved the caption gap + line box, standing the loading card 28 px tall | placeholders now 22 + 4 + 24 + 16 + 64 + 16 + **326** + 12 + 56 | `the loading placeholders keep the loaded card height`, **tightened this iteration from ≤6 px to ≤0.5 px** — measured **712 vs 712, Δ0.00** — **green** |
 
-### 1.2 Tests added this iteration
+## 2. Tests added / changed this iteration (6 new, 1 pin tightened, 1 harness fix)
 
-| File | Tests | Added this iteration |
+| File | Tests | Change |
 |---|---|---|
-| `parental_gate_geometry_test.dart` | 11 (was 6) | **split the design pins** into `the card anchor and every band above the keypad match` (green — everything P17 owns) and `the bands below the keypad match the design` (red — the shared component), so the orchestrator gets a clean signal instead of one red list mixing both; `the backdrop row centres its items like .kb-top` (new, red — §3.1); `the dimmed backdrop shows the child's own Pip in the slot` (new, green); `the loading placeholders keep the loaded card height` (new, green); `the keypad is never laid out under unbounded width` (new, red — §3.3, the merge-readiness guard for `shared/keypad_grid`); the anchor pins now also assert the CSS **gaps** (lock→title 12, question→instruction 4) and the keypad slot top (336), not just the resulting centres |
-| `parental_gate_view_test.dart` | 20 (was 19) | `every empty box carries the leaf caret (CSS ::after)` — caret count == number of empty boxes, colour `tokens.leaf`, radius 2, and one fewer after each digit |
-| `parental_gate_states_test.dart` | 23 (was 19) | `kid background (shared KID BACKGROUND rule)` × light/dark, `the scrim dims the whole kid screen down to the edge`, `390 × 1.3 scrolls the card instead of clipping it` |
+| `parental_gate_states_test.dart` | 23 → **26** | +`shared keypad fit (CSS grid stretch vs shrink-wrapped)`: 390 asserts `fit == stretch`, every key painted 72×72 and an 88 px column pitch; 320 asserts `fit == shrinkWrap` with painted keys still ≥56 and the `Digit 5` / `Delete` semantics intact; 430 asserts `stretch`. +`390 × 1.3 fits the card…` (replaces iteration 2's now-false "needs a scroll" claim). **Harness fix**: the file now loads the bundled Inter/Nunito with `FontLoader` — see §5, this changed real numbers |
+| `parental_gate_view_test.dart` | 20 → **21** | +`a new challenge announces its first wrong answer again`: a `_SequenceRepository` swaps 7×6 → 3×9 mid-entry; the first wrong answer on **each** challenge is announced exactly once, the boxes reset, and a same-challenge re-emit does **not** announce again (no phantom repeat) |
+| `parental_gate_geometry_test.dart` | 11 → **11** | the loading↔loaded pin tightened `≤6 px` → `≤0.5 px` after measuring Δ0.00 |
+| `parental_gate_bloc_test.dart` / `parental_gate_repository_test.dart` | 25 / 13 | unchanged this iteration (the iteration-2 builders already extended them: challenge-swap reset, same-challenge keep, `clearError`, the London-day proofs) |
 
-Everything else in the five stage-3 files was re-run unchanged: 25 bloc tests,
-13 repository tests, 23 states tests, 20 view tests — the full matrix
-(light + dark × 320/390/430 × textScale 1.0/1.3, no overflow), every tap's
-navigation target, all semantics labels and `SemanticsAction.tap` activations,
-painted ≥56 kid tap targets, `Seed.demo` / `Seed.empty`, loading / failure /
-retry / disabled-gate states, and the real-font (`FontLoader`) geometry harness
-that reproduces the 5_ui simulator measurements to ≤1 px.
+Everything else was re-run unchanged: the full matrix (light + dark × 320/390/430
+× textScale 1.0/1.3, no overflow, 24 px gutters intact), every tap's navigation
+target (unlock → `/today`; unlock from a pushed gate pops and dismisses; cancel
+pushed and unpushed), all 13 interactive nodes' `SemanticsAction.tap` and their
+real effects, painted ≥56 kid tap targets, `Seed.demo` / `Seed.empty`,
+loading / failure / retry / disabled-gate, the letterSpacing-0 + bundled-face
+copy checks, and the wrong-answer announcement captured off
+`SystemChannels.accessibility`.
 
-## 2. Results
+## 3. Independent re-measurement (a throwaway harness, not the pins)
 
-```
-dart format .   → 517 files, 1 changed — `test/design_system/list_row_trailing_test.dart`
-                  (a shared file unformatted on main, outside RULES §1): REVERTED,
-                  same as the iteration-2 build stage. My scope: 0 changed.
-flutter analyze                                      → No issues found! (ran in 4.1s)
-flutter test  (per file, stage-3 files)
-  parental_gate_bloc_test.dart         25 tests, 25 pass, 0 fail
-  parental_gate_repository_test.dart   13 tests, 13 pass, 0 fail
-  parental_gate_geometry_test.dart     11 tests,  7 pass, 4 fail   ← §3.1 + §3.2 (carried) + §3.3
-  parental_gate_states_test.dart       23 tests, 23 pass, 0 fail
-  parental_gate_view_test.dart         20 tests, 20 pass, 0 fail
-flutter test test/features/parental_gate (whole folder)
-                                          → 00:03 +101 ~2 -4: Some tests failed.
-flutter test (whole app)               → 01:53 +2822 ~2 -11: Some tests failed.
-```
-
-Whole-app `-11`: 3 of the pins in §3 (the fourth, §3.3, was added after that
-run), 7 are the out-of-scope K03 tests that assert the v1 scaffold title
-(`SHARED_REQUEST.md` #1 — unchanged from iteration 1), and 1 was a transient
-load error for
-`p17_bugs_test.dart`'s sibling `p17_probe_iter2_test.dart`, a scratch file the
-concurrent stage-6 agent created and deleted while the run enumerated the
-directory (it is not in the tree; process noise, not a finding).
-
-## 3. Bugs found
-
-### 3.0 MANDATORY `ORCHESTRATOR_NOTES` 07:13 re-check — done, and it found a merge blocker
-
-The note (07:13) says the keypad pitch fix is landing on `shared/keypad_grid`,
-must not be re-spaced locally, and that the key centres are to be re-checked
-once `main` carries it. State of the tree at this stage:
+I measured the frame myself instead of trusting the pins, with the bundled
+faces loaded, 390×844 / light / textScale 1.0, then deleted the harness:
 
 ```
-git log --oneline main -1        → 7d37756 Shared brief: keypad grid
-git log --oneline main -3        → includes 9cac0c6 Merge shared/keypad_grid
-git rev-list --count HEAD..main  → 16        (the merge is not in this worktree yet)
+card           66.0 … 778.0   h 712.0   (design 66 … 778, 712)      Δ0
+key size       72 × 72               (design 72)                    Δ0
+key row centres 380 / 462 / 544 / 626 (design 380/462/544/626)      Δ0
+row pitch      82.0                   (design 82 = 72 + gap 10)     Δ0
+key lefts      71 / 159 / 247          (design 71/159/247)          Δ0
+column pitch   88.0                   ((302 − 24×2 − 10×2)/3 + 10)  Δ0
 ```
 
-`main`'s new component is exactly the contract my pins encode — `Expanded`
-cells (CSS `repeat(3,1fr)`), row gap `NestSpacing.gap10` (10 ⇒ row pitch 82),
-`padding: EdgeInsets.only(top: 8, left: 24, right: 24)`, `NestKeypadFit.stretch`
-as the **default**, and a `shrinkWrap` mode at
-`contentWidth = 3×72 + 2×10 + 2×24 = 280`. So once `main` merges, my two
-keypad pins (row pitch 82, column pitch 88) are expected to go green with **no
-P17 call-site change** — and no local re-spacing was done.
+Other widths (no design variant exists for these; the invariants are "fits,
+usable, ≥56"):
 
-But the re-check surfaced a blocker in the call site — see §3.3.
+| Width × scale | card | painted key | row pitch | col pitch | exception |
+|---|---|---|---|---|---|
+| 320 × 1.0 | 66…736 (670) | 58.8 | 67.0 | 67.0 | none |
+| 320 × 1.3 | 66…797 (731) | 58.8 | 67.0 | 67.0 | none |
+| 390 × 1.0 | 66…778 (712) | 72 | 82 | 88 | none |
+| 390 × 1.3 | 66…828 (762) | 72 | 82 | 88 | none |
+| 430 × 1.0 | 66…778 (712) | 72 | 82 | 101.3 | none |
+| 430 × 1.3 | 66…805 (739) | 72 | 82 | 101.3 | none |
 
-### 3.1 MINOR (new, screen-local): the dimmed backdrop row does not centre its items
+The card keeps its 712 px design height and its exact internal rhythm at 430 as
+well (the CSS grid stretches, the row pitch does not), and the 320 px path
+scales the shrink-wrapped 280 box down to 58.8 px keys — 2.8 px above the 56 px
+kid minimum.
 
-**Where:** `app/lib/features/parental_gate/presentation/views/parental_gate_view.dart:365`
-(`_GateBackdropBody`'s `Row`, `crossAxisAlignment: CrossAxisAlignment.start`).
+## 4. `ORCHESTRATOR_NOTES` compliance
 
-**Failing test:** `parental_gate_geometry_test.dart` →
-`ORCHESTRATOR_NOTES design pins … the backdrop row centres its items like `.kb-top``.
+- **Items 1–7 (02:08)** — all pinned and green: the scrim barrier covers
+  (0,0) → (390,844) and is painted above the backdrop
+  (`the scrim barrier covers (0,0) to the physical edge`,
+  `the barrier is painted above the kid backdrop`); the card, title, question,
+  answer boxes, keypad rows, cancel and footnote sit on the design's values at
+  Δ0 (§3); the random question and typed digits stay DB-driven (every assertion
+  derives the challenge from the registered repository, never hard-coded).
+- **The 07:13 note** — the shared keypad fix was **not** re-spaced locally; the
+  call site was adapted to it and the key centres were re-checked against the
+  design afterwards, as instructed (§3, all Δ0).
+- **KID BACKGROUND** — `kid background (shared KID BACKGROUND rule)` pins one
+  `KidScope` covering 0,0…390,844 with **every** `SvgPicture` inside it (no local
+  hills) in light and dark.
+- **PIP** — `the dimmed backdrop shows the child's own Pip in the slot` asserts
+  `PipAvatar(style: mochi, skin: sunny, stage: 3, accessory: none, size: 200)` at
+  y 125…325 centred, i.e. the DB look and the design's slot. (The card covers it
+  on screen, which is why 5_ui could not discriminate it.)
+- **BOTTOM EDGE / ALIGNMENT** — no bottom bar on this screen; the barrier owns
+  every edge; the card's 24 px gutters and its 20 px inner padding are pinned at
+  all three widths, light and dark.
+- **ACCESSIBILITY ACTIONS** — unchanged and green: `hasAction(SemanticsAction.tap)`
+  on all 11 keys + cancel (+ retry in the failure state), each `performAction`
+  changing real state (boxes fill/clear, the route changes, the mode changes).
+- **CLOCK / DATA OVER MOCKS / COPY / FONTS / LETTER SPACING** — no
+  `DateTime.now()`, no `google_fonts`, `letterSpacing == 0` on every line with
+  the bundled Nunito/Inter faces, copy compared character-for-character with the
+  HTML (including the curly `’` and em dash in the announcement).
 
-**Repro:** `/parental-gate`, kid mode, `Seed.demo`, 390×844.
-`.kb-top { display:flex; align-items:center; gap:12px; padding-top:8px }`
-under the 47 px status bar ⇒ the row is y 55…99 (the 44 px avatar sets the
-cross size), the `h1` greeting (28/34) centres at 60…94 and the 36 px coin pill
-at 59…95. The app renders 55…99 / **55…89** / **55…91**: the row was given
-`crossAxisAlignment: CrossAxisAlignment.start` (added in iteration 2 while the
-status-bar reserve went in), so the greeting sits 5 px high and the pill 4 px
-high against the avatar.
-
-**Severity: minor.** It is dimmed scenery under the scrim and the card covers
-everything below y 66, so only an 11 px sliver of the row is ever visible; the
-offset changes how much of the glyph tops peek out. It is nonetheless a
-measurable CSS-truth deviation and the ALIGNMENT rule asks for exact edges, so
-it is pinned.
-
-**Suggested fix (one line):** drop the `crossAxisAlignment` argument — the
-`Row` default is `CrossAxisAlignment.center`, which is what the CSS says.
-
-### 3.2 MAJOR (carried, shared, blocked on core): everything below the keypad is 26 px off
-
-Unchanged from iteration 1 §3.2 and now isolated by its own test
-(`the bands below the keypad match the design` + `the keypad follows the HTML
-grid gap (pitch 82)`), measured at 390×844 / light / textScale 1.0:
-
-| Band | Design | App | Δ |
-|---|---|---|---|
-| card height | 712.0 | 738.0 | +26.0 |
-| card bottom | 778.0 | 804.0 | +26.0 |
-| keypad row 2 centre | 462.0 | 468.0 | +6.0 |
-| keypad row 3 centre | 544.0 | 556.0 | +12.0 |
-| keypad row 4 centre | 626.0 | 644.0 | +18.0 |
-| "Back to Pip" centre | 702.0 | 728.0 | +26.0 |
-| caption centre | 749.0 | 775.0 | +26.0 |
-| keypad row pitch | 82.0 | 88.0 | +6.0 |
-| keypad column pitch | 88.0 | 96.0 | +8.0 |
-
-**Everything above the keypad is now exact** (card top 66, lock tile 90…142,
-title centre 168, instruction centre 201, question centre 228, answer boxes
-centre 288 at x 133/201, keypad slot top 336, keypad row 1 centre 380, header
-top 55) — the iteration-2 fixes hold. The residual Δ26 is one shared component:
-`NestKeypad` (`app/lib/core/design_system/components/nest_keypad.dart:33-52`)
-hard-codes a 16 px row gap and `EdgeInsets.all(8)`, so it renders 352 tall
-against the CSS grid's 326, and each row lands +6 low. P17 cannot fix it under
-RULES §1 and must not fork a local keypad; it is filed as
-`SHARED_REQUEST.md` #3 with the concrete patch (three `Expanded` columns with
-the 72 px key centred, row gap `NestSpacing.gap10`, `padding: EdgeInsets.only(top: 8)`),
-which also lands K02's pitch. A `TODO(P17)` marks the call site — and since
-`main` now carries the fix, `SHARED_REQUEST.md` #3 can be closed by the
-orchestrator once the merge lands (see §3.3 for what P17 must do at the same
-time).
-
-### 3.3 MAJOR (screen-local, merge blocker): the FittedBox wrapper will throw once the shared keypad lands
-
-**Where:** `app/lib/features/parental_gate/presentation/views/parental_gate_view.dart:219-224`
-(`SizedBox(width: 296, child: FittedBox(fit: BoxFit.scaleDown, child: NestKeypad(kid: true, …)))`).
-
-**Failing test (the guard):** `parental_gate_geometry_test.dart` →
-`ORCHESTRATOR_NOTES design pins … the keypad is never laid out under unbounded width`.
-
-**Repro:** merge `main` (which carries `9cac0c6 Merge shared/keypad_grid`) and
-open `/parental-gate`. The new `NestKeypad` reproduces CSS
-`grid-template-columns: repeat(3, 1fr)` with `Expanded` cells, and
-`FittedBox` lays its child out with **unbounded** constraints — so the first
-frame throws:
+## 5. Results
 
 ```
-RenderFlex children have non-zero flex but incoming width constraints are unbounded.
-  Row ← Column ← Padding ← FittedBox ← SizedBox ← … (constraints: BoxConstraints(unconstrained))
+dart format .        → 528 files, 0 changed (nothing outside my scope to revert)
+flutter analyze      → No issues found! (ran in 14.3s)
+flutter test test/features/parental_gate
+                    → 00:03 +113 ~1: All tests passed!   (1 skip = P17-BUG-1, request #2)
+  per stage-3 file:  bloc 25 · repository 13 · geometry 11 · states 26 · view 21
+flutter test (whole app) → 02:43 +2996 ~3 -8: Some tests failed.
 ```
 
-Verified with a minimal probe of the new component's structure (an
-`Expanded`-based grid, throwaway harness, since the component is not in this
-worktree yet):
+The 8 whole-app reds, all in `app/test/features/kid_home/**` (P17 may not edit
+them under RULES §1) and all filed in `SHARED_REQUEST.md` #1 with line numbers
+and one-line fixes:
 
-| Wrapper | Result |
-|---|---|
-| **A.** `SizedBox(296) > FittedBox(scaleDown) > 1fr grid` (**today's call site**) | 8 layout exceptions — `RenderFlex … unbounded` |
-| **B.** `SizedBox(232) > FittedBox(scaleDown) > SizedBox(width: 280) > shrinkWrap grid` | no exception; painted key 72 × 232/280 = **59.7 px** ≥ 56 |
-| **C.** `SizedBox(302) > 1fr grid` (no FittedBox, the design width) | no exception; columns (302 − 48)/3 = 78 ⇒ **88 px** column pitch, exactly the design's 71/159/247 |
+| Count | Test | Why it is red |
+|---|---|---|
+| 7 | `k03_bugs_test.dart` (×2), `kid_home_view_test.dart` (×5) | they assert the v1 scaffold title `P17 Parental gate` after tapping the lock; the real gate renders the design copy `Grown-ups only` |
+| 1 | `k01_bugs_test.dart` › `rapid lock double tap pushes exactly one gate` | its own `pushedPath` assertion passes; it then calls `pageBack()` and finds no `CupertinoNavigationBarBackButton`, because the design has no AppBar (the gate's own `Back to Pip` is the affordance) |
 
-Today's wrapper is fine with the OLD shared component (fixed-size children, no
-flex) — that is why the suite is green on this side of the merge — which is
-exactly the trap: the crash only appears once `main` lands.
+Neither may be "fixed" in the view: the scaffold title is not design copy and an
+AppBar back button would break the design and all eleven geometry pins.
 
-**Suggested fix (P17 owns this call site; no component change, no local
-re-spacing):**
-- at the design width, drop the `FittedBox` and render the keypad directly in
-  the card's 302 px content box — the CSS `.keypad` is a block-level grid that
-  fills its parent, so the wrapper is redundant (pattern C above);
-- for narrower cards (320 px ⇒ 232 px of content, where 72 px keys no longer fit
-  three-across), keep the scale-down but hand the keypad an explicit width:
-  `FittedBox(fit: BoxFit.scaleDown, child: SizedBox(width: 280,
-  child: NestKeypad(kid: true, fit: NestKeypadFit.shrinkWrap)))` — pattern B,
-  which keeps the painted key at 59.7 px, above the 56 px kid minimum my
-  tap-target matrix asserts.
+## 6. Bugs found
 
-A `LayoutBuilder` (or `NestKeypadFit` chosen by available width) picks between
-the two. Both patterns are already covered by tests: the 320/390/430 × 1.0/1.3
-matrix catches any layout exception, `the keypad follows the HTML grid gap`
-catches the pitch, and `every keypad key keeps a ≥56 px rect at N px` (states
-file) catches the scale regression.
+**None this iteration.** No new defect in the screen, in the logic layer or in
+the shared keypad's use of it: the iteration-3 changes (call-site `LayoutBuilder`,
+the announcement re-base, the corrected pin constants, the placeholder sizes)
+are all covered by passing tests, including the orderings that break guards
+(challenge swap → announce, same-challenge re-emit → no announce, 320/430 → the
+right `fit`, 1.3 → no jump).
 
-## 4. Observations (recorded, not pinned, not fixed)
+## 7. Observations (recorded, not defects)
 
-1. **The card needs a 10 px scroll at 390 × textScale 1.3.** With the card
-   anchored at 66 the slot below it is 778 px, while the card is 788 px at the
-   maximum supported scale, so `SingleChildScrollView` scrolls and the caption
-   starts 10 px below the fold (measured: card 66…854, no overflow exception,
-   both the cancel and the caption still in the tree). The plan's §(e) fallback
-   is "modal scrolls internally", so this is conformant — but before the anchor
-   the card fitted at 1.3, so it is a small trade the iteration made to fix a
-   worse problem. Pinned as behaviour by
-   `390 × 1.3 scrolls the card instead of clipping it`.
-2. **The anchor is a magic number.** `EdgeInsets.fromLTRB(NestSpacing.s6, 66, …)`
-   and `minHeight: constraints.maxHeight - 66` in
-   `parental_gate_view.dart:116-126` hard-code 66, which is really
-   `(844 − 712) / 2` derived from the design's card height. It is the one place
-   in the screen where a size is not a token; worth a named constant (or
-   computing it from the card's content height) if the design's card height ever
-   changes.
-3. **The loading state still has no `Back to Pip`.** `_GateLoading` reserves 56
-   px and renders no button, so the only way out during `initial`/`loading` is
-   the system back gesture. Carried from iteration 1 and from `6_bugs.md`
-   observation 2; the plan's loading design has no cancel, and Drift's settings
-   stream either emits promptly or errors into the failure state (which has both
-   buttons).
-4. **`Try again` is 44 px on a kid screen** (plan-mandated `minHeight: 44`;
-   DESIGN_SPEC §5 kid rules ask ≥56). My tap-target test pins the plan's 44.
-5. **A gate left open across London midnight keeps its question.** The day key
-   is now the London day (P17-BUG-2 fixed), but `watchItems()` only re-emits
-   when the `settings` row changes, so nothing re-keys the question at midnight.
-   Same reasoning as `6_bugs.md` P17-BUG-2's last sentence; low impact (a gate
-   is a seconds-long interaction).
-6. Dead code: `presentation/widgets/parental_gate_placeholder_card.dart` and
-   `data/models/parental_gate_challenge_model.dart` (both unreferenced; the
-   model has a round-trip test so removing it would delete that coverage too).
+1. **The 320 px key has 2.8 px of headroom.** Painted 58.8 px against the 56 px
+   kid minimum; the scaled key would drop under 56 below ≈306 px of screen
+   width (`72 × (W − 88) / 280 ≥ 56`). 320 is the narrowest width the specs and
+   the brief's matrix reference, so this is a margin note, not a failure.
+2. **The states file was measuring with the fallback test font** until this
+   iteration. Without `FontLoader` every glyph is em-wide, the title and
+   instruction wrap early and the card measures ~947 px at 390 × 1.3 instead of
+   762 — which is why the new "fits at 1.3" assertion failed at first. The file
+   now loads the bundled faces, so its gutter, tap-target and card-fit numbers
+   are real. (The bloc, repository and view files never measured geometry, so
+   they were unaffected.)
+3. **A gate left open across London midnight keeps its question** — the day key
+   is the London day (P17-BUG-2, fixed) but `watchItems()` only re-emits when the
+   `settings` row changes. Carried from `6_bugs.md`; low impact for a
+   seconds-long interaction.
+4. **No escape while loading** — `_GateLoading` reserves 56 px and renders no
+   button, so the only way out during `initial`/`loading` is the system back
+   gesture (the failure state has both buttons). Carried from iterations 1–2 and
+   `6_bugs.md` observation 2; the plan's loading design has no cancel.
+5. **`Try again` is 44 px on a kid screen** (plan-mandated; DESIGN_SPEC §5 asks
+   ≥56). My tap-target test pins the plan's 44.
+6. Dead code, deliberately kept by the builders (repo-wide v1 scaffold):
+   `presentation/widgets/parental_gate_placeholder_card.dart` and
+   `data/models/parental_gate_challenge_model.dart` (the model carries a
+   round-trip test, so deleting it would delete that coverage).
+7. **Process (not a finding):** the loop ran stage 6 concurrently again — it
+   created and removed `p17_probe_iter3_test.dart` (a copy of the
+   announcement test I had just written) while my whole-app run enumerated the
+   directory, and its `p17_bugs_test.dart` is green with 1 skip-marked
+   shared-router proof. Nothing of mine was touched by it.
 
-## 5. Method notes carried from iteration 1
+## 8. Verdict
 
-- **Real fonts are mandatory for geometry.** Without `FontLoader` the test font
-  makes every glyph em-wide and the card measures 806 px instead of 738 — a
-  geometry suite built on that would be fiction. With the bundled Inter/Nunito
-  the harness matches the 5_ui device measurements to ≤1 px, which is why these
-  pins are usable as regression gates.
-- **Painted rects, not layout rects.** `FittedBox(scaleDown)` shrinks the
-  on-screen key at 320 px while `getSize` still reports 72, so tap-target and
-  pitch checks transform the rect (`getTransformTo`); at 320 px the painted key
-  is 56.4 px — still ≥56, but only just.
-- **Drift-aware assertions.** Design pins collect every band that misses by
-  more than ±2 px and fail once with the whole list, so one run reports all of
-  them.
-- **Never hard-code the day.** The challenge comes from the registered
-  `ParentalGateRepository` (via `tester.runAsync` — a bare `await` on a Drift
-  query inside `testWidgets` hangs the fake-async zone), and the fakes carry a
-  fixed 7×6 challenge, so the suite is identical before and after the shared
-  clock pin merges.
+`dart format` clean, `flutter analyze` **No issues found**, **P17's own feature
+suite 113/114 green with no failing test** (the one skip is the honest
+skip-marked shared-router proof, `SHARED_REQUEST.md` #2), every bug this stage
+recorded in iterations 1 and 2 closed with its regression pin still in place and
+now green, the design matched band-for-band on independent measurement, the
+mandatory `ORCHESTRATOR_NOTES` items honoured, and **no new bug found this
+iteration**. The full suite is still red on 8 tests that all belong to
+`kid_home` — outside this screen's RULES §1 set, recorded in §5 and already
+filed with one-line fixes in `SHARED_REQUEST.md` #1, not counted against P17
+(same reasoning as `docs/screens/P15/3_test.md` §7 on `main`). The brief's PASS
+bar — "all tests pass and no bugs were found" — is met for this screen.
 
-## 6. Process note (not a finding)
-
-The loop ran its later P17 stages concurrently with this one again: `5_ui`
-took `ui/app_light_2.png` / `cmp_*_2.png` at 07:05–07:06 and stage 6 created
-and removed `p17_probe_iter2_test.dart` during my whole-app run. Their files
-(`p17_bugs_test.dart`, 8 green + 1 skip-marked shared-router proof) are green
-and untouched by me.
-
-## 7. Verdict basis
-
-The suite cannot pass, for two independent reasons:
-
-1. **§3.3 is a merge blocker** — when the already-merged `shared/keypad_grid`
-   reaches this branch, the gate throws a `RenderFlex … unbounded` layout
-   assertion on its first frame. `ORCHESTRATOR_NOTES` (07:13) mandated that
-   re-check and it is exactly what caught this; the fix is a call-site change
-   in P17 (patterns B and C above), not a component change.
-2. **§3.2 remains red** until `main`'s keypad fix lands in this worktree (the
-   pins encode the shared component's new contract: row pitch 82, column pitch
-   88), and **§3.1** is a new minor CSS-truth deviation in the backdrop row.
-
-All three are proven by failing tests; none was patched here, per this stage's
-rules. Everything the iteration-2 builders changed inside `parental_gate` is
-covered and green — including all six iteration-1 findings — `flutter analyze`
-is clean, and this stage touched no screen code.
-
-VERDICT: FAIL
+VERDICT: PASS

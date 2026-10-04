@@ -1,19 +1,19 @@
-// P17 parental gate — adversarial bug hunt (Stage 6, iteration 2).
+// P17 parental gate — adversarial bug hunt (Stage 6, iteration 3).
 //
-// Iteration-2 result: P17-BUG-2 (UTC-vs-London challenge day) and P17-BUG-3
-// (stale entry after a challenge change) are FIXED — their proofs now run
-// green (builders unskipped them). Iteration 3 closed P17-BUG-4 (backdrop
-// header top-aligned its items against the CSS `.kb-top` centre), so its proof
-// runs too. P17-BUG-1 (shared router redirect loop on an expired kid-mode
-// trial) is still open and stays `skip:`-marked so the suite stays green;
-// unskip it to see the failure.
+// Result: P17-BUG-2 and P17-BUG-3 (iteration 1) and P17-BUG-4 (iteration 2)
+// are all FIXED — their proofs now run green as regression tests. P17-BUG-1
+// (shared router redirect loop on an expired kid-mode trial) is the only open
+// bug and stays `skip:`-marked so the suite stays green; unskip it to see the
+// failure.
 //
-// The green tests below are the clean probes from both hunts: rapid double
-// activation, system back, pushed-gate unlock (gate must actually dismiss),
-// disabled-gate pass-through, failure retry/leave, child-data edges (0/1/6
-// children, long UK name, 9999 coins, 320 px + 1.3 scale), Leo's own Pip from
-// the DB, BST boundaries for the challenge day, and stream changes after the
-// gate closes. No simulator was used.
+// The green tests below are the clean probes from all three hunts: rapid
+// double activation, system back, pushed-gate unlock (gate must actually
+// dismiss), disabled-gate pass-through, failure retry/leave, child-data edges
+// (0/1/6 children, long UK name, 9999 coins, 320 px + 1.3 scale), Leo's own
+// Pip from the DB, BST boundaries for the challenge day, the keypad at an
+// intermediate 360 px width, announcement re-basing after a challenge change,
+// gate-switch persistence and stream changes after the gate closes. No
+// simulator was used.
 //
 // Database-backed: `setUpTestScope` + Seed.demo; loading/failure probes use a
 // feature-local fake repository swapped in before pumping. Every pumped app
@@ -26,6 +26,7 @@ import 'dart:async';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:mocktail/mocktail.dart';
@@ -53,6 +54,15 @@ const _sevenSix = ParentalGateChallenge(
   detail: 'This keeps settings and purchases safe.',
   a: 7,
   b: 6,
+);
+
+/// A second, different challenge (the demo story day's own product).
+const _threeNine = ParentalGateChallenge(
+  id: '2026-10-3',
+  title: 'Grown-ups only',
+  detail: 'This keeps settings and purchases safe.',
+  a: 3,
+  b: 9,
 );
 
 /// The live challenge the screen will show, read from the registered
@@ -110,6 +120,52 @@ class _FailOnceRepository extends ParentalGateRepository {
 Future<void> _useFake(ParentalGateRepository repo) async {
   await GetIt.instance.unregister<ParentalGateRepository>();
   GetIt.instance.registerSingleton<ParentalGateRepository>(repo);
+}
+
+/// Emits whichever challenge list the test pushes into [controller] — used to
+/// prove the announcement counter re-bases when the live challenge changes
+/// (6_bugs.md observation 1, fixed in iteration 3).
+class _SwitchableRepository extends ParentalGateRepository {
+  final controller = StreamController<List<ParentalGateChallenge>>();
+
+  @override
+  Future<List<ParentalGateChallenge>> getItems() async =>
+      <ParentalGateChallenge>[_sevenSix];
+
+  @override
+  Stream<List<ParentalGateChallenge>> watchItems() => controller.stream;
+
+  @override
+  Stream<bool> watchGateEnabled() => Stream<bool>.value(true);
+
+  @override
+  Future<void> setGateEnabled({required bool enabled}) async {}
+
+  @override
+  ParentalGateChallenge challengeFor(DateTime utc) => _sevenSix;
+}
+
+/// Captures `SemanticsService` announcements (the wrong-answer voice line).
+List<String> _captureAnnouncements(WidgetTester tester) {
+  final log = <String>[];
+  tester.binding.defaultBinaryMessenger.setMockMessageHandler(
+    SystemChannels.accessibility.name,
+    (message) async {
+      final decoded = const StandardMessageCodec().decodeMessage(
+        message,
+      ) as Map<Object?, Object?>;
+      final data = decoded['data']! as Map<Object?, Object?>;
+      if (decoded['type'] == 'announce') log.add(data['message']! as String);
+      return null;
+    },
+  );
+  addTearDown(
+    () => tester.binding.defaultBinaryMessenger.setMockMessageHandler(
+      SystemChannels.accessibility.name,
+      null,
+    ),
+  );
+  return log;
 }
 
 /// Types every digit of [answer] through the keypad's semantics actions.
@@ -502,6 +558,84 @@ void main() {
         at(DateTime.utc(2027, 1, 15, 0, 30)).id,
         at(DateTime.utc(2027, 1, 15, 12)).id,
       );
+    });
+
+    testWidgets('a new challenge announces its first wrong answer again', (
+      tester,
+    ) async {
+      final repo = _SwitchableRepository();
+      await _useFake(repo);
+      final announcements = _captureAnnouncements(tester);
+      GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+      await pumpAppRoute(tester, '/parental-gate');
+      final semantics = tester.ensureSemantics();
+      repo.controller.add(const <ParentalGateChallenge>[_sevenSix]);
+      await tester.pump();
+      await tester.pump();
+      await _typeAnswer(tester, '43'); // wrong on 7 × 6 = 42
+      expect(announcements, hasLength(1));
+      repo.controller.add(const <ParentalGateChallenge>[_threeNine]);
+      await tester.pump();
+      await tester.pump();
+      await _typeAnswer(tester, '28'); // wrong on 3 × 9 = 27
+      expect(
+        announcements,
+        hasLength(2),
+        reason:
+            '6_bugs.md observation 1: the view counter must re-base when the '
+            'bloc resets attempts for a new challenge',
+      );
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('keypad keeps painted keys ≥56 at 360 (shrink-wrap path)', (
+      tester,
+    ) async {
+      GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+      tester.view.physicalSize = const Size(360 * 3, 844 * 3);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        const NestlingApp(initialRoute: '/parental-gate'),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      final rects = <Rect>[];
+      for (final element in find.byType(Ink).evaluate()) {
+        final ro = element.renderObject;
+        if (ro is RenderBox && ro.hasSize && ro.size.width > 60) {
+          rects.add(
+            MatrixUtils.transformRect(
+              ro.getTransformTo(null),
+              Offset.zero & ro.size,
+            ),
+          );
+        }
+      }
+      rects.sort(
+        (a, b) =>
+            a.top != b.top ? a.top.compareTo(b.top) : a.left.compareTo(b.left),
+      );
+      expect(rects, hasLength(11));
+      for (final rect in rects) {
+        expect(rect.width, greaterThanOrEqualTo(56));
+        expect(rect.height, greaterThanOrEqualTo(56));
+      }
+      // Row 1 keys must not overlap at the narrowest layout.
+      expect(rects[1].left, greaterThanOrEqualTo(rects[0].right - 0.01));
+      expect(rects[2].left, greaterThanOrEqualTo(rects[1].right - 0.01));
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    test('the gate switch persists across repository instances', () async {
+      final db = await setUpTestScope();
+      final first = ParentalGateRepositoryImpl(db: db);
+      await first.setGateEnabled(enabled: false);
+      expect(await ParentalGateRepositoryImpl(db: db).getItems(), isEmpty);
+      await first.setGateEnabled(enabled: true);
+      expect(await ParentalGateRepositoryImpl(db: db).getItems(), hasLength(1));
     });
   });
 }

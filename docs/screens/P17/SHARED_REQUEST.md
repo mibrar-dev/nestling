@@ -96,11 +96,12 @@ Files: `app/lib/app/router.dart` (shared — P17 may not edit under RULES §1).
 Blocks: no — P17 lands with the proof skip-marked and the screen itself is
 unaffected while the trial is live (demo seed is `active`).
 
-**Status, iteration 2: STILL UNFIXED.** After the iteration-2 `main` merge,
-`app/lib/app/router.dart` is byte-identical to `main` (`git diff main --
+**Status, iteration 3: STILL UNFIXED.** After the iteration-3 `main` merge,
+`app/lib/app/router.dart` is still byte-identical to `main` (`git diff main --
 app/lib/app/router.dart` is empty) and the trial-expired branch
 (`router.dart:120-124`) still has no kid-mode guard, so the loop reproduces.
-Proof `P17-BUG-1` stays skip-marked.
+Proof `P17-BUG-1` stays skip-marked. The P17 feature suite is otherwise fully
+green (106 pass / 1 skip).
 
 ---
 

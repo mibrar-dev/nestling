@@ -648,10 +648,11 @@ void main() {
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
       expect(
         (loaded.height - loading.height).abs(),
-        lessThanOrEqualTo(6),
+        lessThanOrEqualTo(0.5),
         reason:
-            'the loading placeholders stand in for the instruction + question '
-            'lines, so the card may differ by at most the missing 4 px gap',
+            'the loading placeholders now stand in for the instruction, the '
+            'question, the 326 px keypad grid and the cancel button exactly, so '
+            'the card must not jump by a single pixel (measured: 712 vs 712)',
       );
       expect(loading.top, moreOrLessEquals(loaded.top, epsilon: 0.5));
       await disposeApp(tester);
