@@ -354,6 +354,27 @@ abstract final class NestlingIcons {
   /// (profile look-alike); K06 must switch its wardrobe tile to this.
   /// Screens: K06.
   static const String wardrobeWellies = 'assets/icons/ic_wardrobe_wellies.svg';
+
+  /// K06 design glyph: sun hat, exact `K06-pip.html` `.k6-ward` paths
+  /// (`M3 16h18l-1.6 2.4H4.6z` brim + `M7 16a5 5 0 0 1 10 0z` dome).
+  /// Distinct from [sunHat] (dome-band look-alike with an extra band
+  /// stroke); K06 must switch its wardrobe tile to this.
+  /// Screens: K06.
+  static const String wardrobeSunHat = 'assets/icons/ic_wardrobe_sun_hat.svg';
+
+  /// K06 design glyph: Feed care action, exact `K06-pip.html` `.k6-care`
+  /// paths (`M3 11h18a9 9 0 0 1-18 0Z` bowl + `M12 11V5` stem +
+  /// `M9 5a3 3 0 0 1 6 0` morsel). Distinct from [feedBowl] (bowl with paw
+  /// and kibble look-alike); K06 must switch its Feed button to this.
+  /// Screens: K06.
+  static const String kidFeed = 'assets/icons/ic_kid_feed.svg';
+
+  /// K06 design glyph: Play care action, exact `K06-pip.html` `.k6-care`
+  /// paths (`circle 12/12/9` ring + `M5 7.5c4 1 7 3.5 8 7.5` /
+  /// `M19 7.5c-4 1-7 3.5-8 7.5` seams). Distinct from [ball] (star-panel
+  /// look-alike); K06 must switch its Play button to this.
+  /// Screens: K06.
+  static const String kidPlay = 'assets/icons/ic_kid_play.svg';
 }
 
 /// Illustrations - `flutter/assets/illustrations/*.svg`. Keep their colours; they are
