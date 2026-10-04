@@ -65,3 +65,6 @@ Do exactly what docs/screens/_shared/shared_batch6_REPORT.md "Follow-ups for scr
 - read the email from `members.email`;
 - un-skip B09.
 The layout must stay where it is now (it already matches the design). Re-verify with the geometry tests.
+
+## UPDATE (12:52) — iteration 6
+P16-T04: replace both hand-rolled avatar initials with the shared `nestAvatarInitial` (now on main). Close the review findings in FIXES_5.md. Nothing else: the layout is done.

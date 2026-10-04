@@ -11,8 +11,14 @@ of it landing.
 > `NestCard(radius:, padding:)`. §4 → `members.email` (schema v7). §5 → IANA
 > links resolve to canonical. P16's local `_P16Sect`, the subcard fork and the
 > `SizedBox(width: 51, height: 44)` switch wrappers are deleted, and both
-> remaining proofs (B09, T03) run un-skipped. **§6 is the one open request** —
-> it is what still keeps `SettingsRow` alive on this screen.
+> remaining proofs (B09, T03) run un-skipped. **§6 is the one fork-blocking
+> request** — it is what still keeps `SettingsRow` alive on this screen.
+>
+> **Status after iteration 6:** §3's status line is **corrected** (the radius
+> parameter did *not* restore the ink surface — see the note under §3), and
+> **§8** (shared modal-close fence, replacing `P16TransientGuard`) and **§9**
+> (a regular-weight `NestType.hint` for `.lockhint` copy) are newly filed.
+> §§6 and 7 stay open, unchanged.
 
 ## 1. `NestToggle` / `NestListRow` cannot deliver a 44 px tap target (P16-T02, major) — LANDED (batch 6)
 
@@ -60,6 +66,25 @@ observation 2 in `FIXES_2.md`). A `radius` parameter removes the fork *and* that
 defect together.
 Files: `app/lib/core/design_system/components/nest_card.dart`.
 Blocks: no.
+
+> **Iteration 6 correction (review finding 3).** The paragraph above is wrong
+> about *why* the ripple is missing, and it was the reasoning that shipped the
+> bug through iteration 5. The `Material` only exists on `NestCard`'s
+> **tappable** branch (`nest_card.dart:88-98`, `onTap != null`); the plain
+> branch is a bare `Container`. P16's subscription card is **not** tappable as a
+> card (the design's `.linkrow` is a link *inside* the card, not the card), so
+> after the un-fork it took the plain branch and the ripple defect came back —
+> `SHARED_REQUEST.md` §3 and `2b_build_ui.md` both still claimed otherwise.
+>
+> **It does not block the screen** and P16 has fixed it screen-side: the link
+> row now supplies its own ink surface
+> (`Material(color: Colors.transparent, child: InkWell(…))`, the same shape
+> `NestListRow`/`SettingsRow` use), pinned by
+> `settings_view_test.dart` `[review 3]`. **Nothing here blocks.**
+> A shared improvement, if the orchestrator wants it: an
+> `InkSurface`-wrapping helper, or a documented "wrap your own InkWell in a
+> Material inside a non-tappable NestCard" note on `NestCard`, so the next
+> screen does not rediscover that `radius:` does not imply an ink surface.
 
 ## 4. `members` has no email column (review 6) — LANDED (batch 6)
 
@@ -167,6 +192,63 @@ P16 uses a documented screen-local `const double _linkRowMinHeight = 52` in
 (P02's progress-stage circle), so reusing it would be a lie. One line in
 `spacing.dart` (`static const double gap52 = 52;`, or a named
 `NestLinkRow.minHeight`) would let the value move to the token layer.
+Blocks: no.
+
+## 8. Modal / sheet helpers stay hit-testable through their exit animation — OPEN (filed iteration 6, review finding 2)
+
+Need: `showNestModal` and `showNestBottomSheet` remove their route from the
+hit-test tree before the exit animation ends, so an impatient second tap at the
+same spot lands on whatever is underneath. P16's `P16TransientGuard`
+(`presentation/widgets/p16_transient_guard.dart`) is a **screen-local
+workaround** for that shared behaviour: a 300 ms window after any modal/sheet
+close in which the screen ignores its own row taps. The window itself is fine
+(the double-tap fall-through it prevents is real — P16-B08), but it is a
+per-screen tax on every future screen, and it is process-wide static state, so
+a screen-local fix leaks across feature boundaries in a shared test process.
+
+Either fix it once at the source:
+
+* keep the barrier hit-testable until the reverse animation finishes, or
+* ship a shared `NestModalCloseFence` (a `NavigatorObserver` or a
+  `RouteAware` mixin) that holds taps for one animation on the route that just
+  dismissed, rather than on whatever page happens to be behind it.
+
+Then `P16TransientGuard` and its whole file delete.
+
+**Scope note (iteration 6).** The row-level fences stay until this lands — the
+review's second half asked for the guard's *blast radius* to be cut, and that
+is done: the three `NestToggle.onChanged` callbacks no longer route through
+`P16TransientGuard.run`. They were the nearest neighbour of the dismissed zone
+sheet (Notifications sits immediately below it), so a parent who picked a zone
+and then tapped a switch got a dead tap with no feedback; and a switch flip can
+never re-trigger itself, so the double-tap fall-through the guard exists for
+cannot apply to it. The move banner's buttons already bypassed the guard for
+the same reason. `SettingsRow`/`NestListRow` onTap handlers keep it.
+Pinned by `settings_view_test.dart` `[review 2]`, which asserts all three
+switches still write the DB row while the guard is armed.
+Files: `app/lib/core/design_system/components/nest_modal.dart`,
+`nest_bottom_sheet.dart` (or a new shared fence component).
+Blocks: no.
+
+## 9. The type scale has no regular 14 (`.lockhint` copy) — OPEN, filed iteration 6 (review finding 4)
+
+Need: `.lockhint { font-size:14px; line-height:20px }` (`P16-settings.html:10`)
+is regular-weight Inter. The scale's only 14 is `NestType.chipLabel`, which is
+**w600** — so both P16 call sites (the lock-hint row and the move banner) were
+taking the chip label and cancelling the weight with `.copyWith(fontWeight:
+w400)`. The numbers on screen are correct today, but a chip-label change
+(weight, tracking) silently moves hint text on two screens, which is exactly the
+drift the token layer exists to prevent.
+
+Add `NestType.hint` → Inter 14/20 **w400** (plus the `NestTextStyles` getter),
+and the two call sites become a single token.
+
+**Interim (iteration 6).** The literal now lives in exactly one documented
+screen-local function, `settingsHintStyle(context)` in
+`presentation/widgets/settings_rows.dart`, instead of two hand-cancelled chip
+labels. Metrics are unchanged (`chipLabel` and `hint` share the 14/20 line box),
+so no responsive or scale-1.3 test moved.
+Files: `app/lib/core/design_system/tokens/typography.dart`.
 Blocks: no.
 
 ## Also worth the orchestrator's attention (not requested here)

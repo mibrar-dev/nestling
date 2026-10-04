@@ -119,6 +119,20 @@ class SettingsRow extends StatelessWidget {
 Widget settingsChevron(BuildContext context) =>
     Text('›', style: NestType.h3(color: context.nest.ink3));
 
+/// `.lockhint { font-size:14px; line-height:20px }` regular copy
+/// (`P16-settings.html:10`) — used by the lock-hint row and the move banner.
+///
+/// Review finding 4: both sites used to reach this by taking the shared
+/// `NestType.chipLabel` (Inter 14/20 **w600**) and cancelling the weight, so a
+/// future chip-label change (weight, tracking) would silently move hint text.
+/// The literal now lives in exactly one documented function instead of two
+/// call sites; **SHARED_REQUEST.md §9** asks the orchestrator for a proper
+/// `NestType.hint` (14/20 w400) so even this one goes away. Metrics are
+/// unchanged: `chipLabel` and this style have the same 14/20 line box.
+TextStyle settingsHintStyle(BuildContext context) =>
+    NestType.body(color: context.nest.ink)
+        .copyWith(fontSize: 14, height: 20 / 14);
+
 /// Maps the stored avatar colour token to the avatar tint (mirrors the other
 /// parent features' local mapping — the token enum is shared, the mapping is
 /// per-feature display glue).

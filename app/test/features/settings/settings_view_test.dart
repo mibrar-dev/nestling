@@ -24,6 +24,7 @@ import 'package:nestling/features/settings/presentation/bloc/settings_bloc.dart'
 import 'package:nestling/features/settings/presentation/bloc/settings_event.dart';
 import 'package:nestling/features/settings/presentation/views/settings_view.dart';
 import 'package:nestling/features/settings/presentation/widgets/p16_transient_guard.dart';
+import 'package:nestling/features/settings/presentation/widgets/settings_rows.dart';
 
 import '../../test_scope.dart';
 import 'p16_test_support.dart' show p16PinnedNowUtc;
@@ -324,6 +325,123 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('p16_delete_cancel')));
       await tester.pumpAndSettle();
       expect(find.text('Delete family account?'), findsNothing);
+
+      unawaited(bloc.close());
+      await disposeApp(tester);
+    });
+
+    // Review finding 2 (iteration 6): every switch used to be routed through
+    // `P16TransientGuard.run`, so opening the Time zone sheet, picking a zone
+    // and then immediately flipping "Approvals waiting" (the section directly
+    // below the dismissed sheet) was swallowed by the 300 ms window — a dead
+    // tap with no feedback. The guard exists for the double-tap fall-through
+    // onto rows that OPEN a modal or route; a switch flip cannot re-fire
+    // itself, so it needs no fence. The guard itself still stands for the
+    // rows (proven in p16_transient_guard_test.dart).
+    testWidgets('[review 2] all three switches still flip while the guard is '
+        'armed', (tester) async {
+      await setUpTestScope();
+      final bloc = _blocWithDeviceZone(null)
+        ..add(const SettingsLoadRequested());
+      await _pumpView(tester, bloc);
+
+      // One guard window per switch: pumping between taps would expire the
+      // first one and the second tap would prove nothing.
+      for (final entry in <(String, bool Function(Setting))>[
+        ('Approvals waiting', (s) => s.notifApprovals),
+        ('Payout day reminder', (s) => s.notifPayout),
+        ('Weekly family summary', (s) => s.notifSummary),
+      ]) {
+        await _scrollTo(tester, find.text(entry.$1));
+        final before = entry.$2((await _settingRows()).single);
+
+        P16TransientGuard.reset();
+        P16TransientGuard.suppressShortly();
+        expect(
+          P16TransientGuard.suppressing,
+          isTrue,
+          reason: 'the guard must really be armed, or this proves nothing',
+        );
+
+        final track = tester.getRect(
+          find
+              .descendant(
+                of: find.ancestor(
+                  of: find.text(entry.$1),
+                  matching: find.byWidgetPredicate(
+                    (w) => w is SettingsRow || w is NestListRow,
+                  ),
+                ),
+                matching: find.byType(NestToggle),
+              )
+              .first,
+        );
+        await tester.tapAt(track.center);
+        await tester.pump(const Duration(milliseconds: 200));
+
+        expect(
+          entry.$2((await _settingRows()).single),
+          !before,
+          reason:
+              '"${entry.$1}" must flip inside the guard window — it cannot '
+              're-fire itself, so the fence is never the thing protecting it',
+        );
+        expect(
+          P16TransientGuard.suppressing,
+          isTrue,
+          reason: 'the flip must have happened BEFORE the window expired',
+        );
+      }
+
+      P16TransientGuard.reset();
+      unawaited(bloc.close());
+      await disposeApp(tester);
+    });
+
+    // Review finding 3 (iteration 6): the subscription card is not tappable as
+    // a card, so `NestCard` renders its plain `Container` branch — a bare
+    // Container carries no Material, which left the nested `InkWell` resolving
+    // its ink to the Scaffold's Material BEHIND the card's opaque surface, so
+    // "Manage subscription" painted no ripple at all.
+    testWidgets('[review 3] "Manage subscription" paints its ripple on the '
+        'card, not behind it', (tester) async {
+      await setUpTestScope();
+      final bloc = _blocWithDeviceZone(null)
+        ..add(const SettingsLoadRequested());
+      await _pumpView(tester, bloc);
+
+      final card = find
+          .ancestor(
+            of: find.text('Nestling Annual · £29.99/year'),
+            matching: find.byType(NestCard),
+          )
+          .first;
+      final linkRow = find
+          .descendant(of: card, matching: find.byType(InkWell))
+          .first;
+
+      // A Material strictly between the InkWell and the card is what gives the
+      // ripple a surface to paint on. Ancestors alone would be satisfied by the
+      // Scaffold's Material — which is exactly the defect being pinned.
+      final between = find
+          .descendant(of: card, matching: find.byType(Material))
+          .evaluate()
+          .map((e) => e.widget)
+          .where(
+            find
+                .ancestor(of: linkRow, matching: find.byType(Material))
+                .evaluate()
+                .map((e) => e.widget)
+                .toSet()
+                .contains,
+          );
+      expect(
+        between,
+        isNotEmpty,
+        reason:
+            'the link row needs its own ink surface inside the card; the '
+            'non-tappable `NestCard` branch ships none',
+      );
 
       unawaited(bloc.close());
       await disposeApp(tester);

@@ -201,31 +201,41 @@ class _SettingsLoaded extends StatelessWidget {
                 'Renews 18 Oct 2027 · Covers the whole family',
                 style: NestType.caption(color: tokens.ink2),
               ),
-              InkWell(
-                onTap: () => P16TransientGuard.run(
-                  () => context.push(PaywallRoutePaths.paywall),
-                ),
-                child: Semantics(
-                  button: true,
-                  label: 'Manage subscription',
-                  excludeSemantics: true,
+              // Review finding 3: this card is NOT tappable (`onTap == null`), so
+              // `NestCard` takes its plain `Container` branch — a bare
+              // `Container` carries no `Material`, so a nested `InkWell`
+              // resolved its ink to the Scaffold's `Material`, i.e. BEHIND the
+              // card's opaque `surface`, and the row painted no ripple at all.
+              // The link row therefore supplies its own ink surface, exactly
+              // as `NestListRow`/`SettingsRow` do for every other row.
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
                   onTap: () => P16TransientGuard.run(
                     () => context.push(PaywallRoutePaths.paywall),
                   ),
-                  child: SizedBox(
-                    // `.linkrow { min-height: 52px }`
-                    height: _linkRowMinHeight,
-                    child: Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: Text(
-                            'Manage subscription',
-                            style: NestType.bodySmall(color: tokens.leaf)
-                                .copyWith(fontWeight: FontWeight.w600),
+                  child: Semantics(
+                    button: true,
+                    label: 'Manage subscription',
+                    excludeSemantics: true,
+                    onTap: () => P16TransientGuard.run(
+                      () => context.push(PaywallRoutePaths.paywall),
+                    ),
+                    child: SizedBox(
+                      // `.linkrow { min-height: 52px }`
+                      height: _linkRowMinHeight,
+                      child: Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: Text(
+                              'Manage subscription',
+                              style: NestType.bodySmall(color: tokens.leaf)
+                                  .copyWith(fontWeight: FontWeight.w600),
+                            ),
                           ),
-                        ),
-                        settingsChevron(context),
-                      ],
+                          settingsChevron(context),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -257,10 +267,13 @@ class _SettingsLoaded extends StatelessWidget {
               trailing: NestToggle(
                 value: settings?.notifApprovals ?? true,
                 semanticLabel: 'Approvals waiting notifications',
-                onChanged: (v) => P16TransientGuard.run(
-                  () => context.read<SettingsBloc>().add(
-                    SettingsNotificationsChanged(approvals: v),
-                  ),
+                // NOT fenced by `P16TransientGuard` (review finding 2): the
+                // switches are the nearest neighbour of the dismissed zone
+                // sheet, and a switch flip cannot re-fire itself, so the
+                // double-tap fall-through the guard exists for can never apply
+                // here. Fencing them only produced a dead tap.
+                onChanged: (v) => context.read<SettingsBloc>().add(
+                  SettingsNotificationsChanged(approvals: v),
                 ),
               ),
             ),
@@ -270,10 +283,8 @@ class _SettingsLoaded extends StatelessWidget {
               trailing: NestToggle(
                 value: settings?.notifPayout ?? true,
                 semanticLabel: 'Payout day reminder',
-                onChanged: (v) => P16TransientGuard.run(
-                  () => context.read<SettingsBloc>().add(
-                    SettingsNotificationsChanged(payout: v),
-                  ),
+                onChanged: (v) => context.read<SettingsBloc>().add(
+                  SettingsNotificationsChanged(payout: v),
                 ),
               ),
             ),
@@ -282,10 +293,8 @@ class _SettingsLoaded extends StatelessWidget {
               trailing: NestToggle(
                 value: settings?.notifSummary ?? true,
                 semanticLabel: 'Weekly family summary',
-                onChanged: (v) => P16TransientGuard.run(
-                  () => context.read<SettingsBloc>().add(
-                    SettingsNotificationsChanged(summary: v),
-                  ),
+                onChanged: (v) => context.read<SettingsBloc>().add(
+                  SettingsNotificationsChanged(summary: v),
                 ),
               ),
             ),
@@ -415,14 +424,14 @@ class _MemberRow extends StatelessWidget {
               : isOwner
               ? 'Owner'
               : 'Active');
-    final initial = member.name.isEmpty
-        ? '?'
-        : member.name.characters.first.toUpperCase();
     return SettingsRow(
       title: title,
       subtitle: subtitle,
       leading: NestAvatar(
-        initial: initial,
+        // AVATAR INITIALS: the shared helper trims first and returns '?' for
+        // an empty / whitespace-only name, so " Maya" renders `M` and "   "
+        // renders `?` instead of a blank avatar (P16-T04).
+        initial: nestAvatarInitial(member.name),
         size: NestAvatarSize.s32,
         color: isOwner ? NestAvatarColor.leaf : NestAvatarColor.sky,
       ),
@@ -437,15 +446,13 @@ class _ChildRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final initial = child.nickname.isEmpty
-        ? '?'
-        : child.nickname.characters.first.toUpperCase();
     return SettingsRow(
       title: '${child.nickname} · ${child.ageBand.replaceAll('-', '–')}',
       subtitle:
           'Pip: ${child.pipStageName} · ${child.coins == 1 ? '1 coin' : '${child.coins} coins'}',
       leading: NestAvatar(
-        initial: initial,
+        // Shared helper — trims, grapheme-safe, '?' fallback (P16-T04).
+        initial: nestAvatarInitial(child.nickname),
         size: NestAvatarSize.s32,
         color: settingsAvatarColor(child.avatarColour),
       ),
@@ -486,10 +493,8 @@ class _MoveBanner extends StatelessWidget {
           Text(
             'Looks like you’re in $short now. Switch the family time zone? '
             'History keeps London times; future days follow $short.',
-            // `.lockhint` metrics: 14/20 (`NestType.chipLabel` carries that
-            // line box; only the weight differs — the hint is regular text).
-            style: NestType.chipLabel(color: tokens.ink)
-                .copyWith(fontWeight: FontWeight.w400),
+            // `.lockhint` metrics (review finding 4) — one shared call site.
+            style: settingsHintStyle(context),
           ),
           const SizedBox(height: NestSpacing.s3),
           Row(
@@ -552,8 +557,8 @@ class _LockHint extends StatelessWidget {
           Expanded(
             child: Text.rich(
               TextSpan(
-                style: NestType.chipLabel(color: tokens.ink)
-                    .copyWith(fontWeight: FontWeight.w400),
+                // `.lockhint { font-size:14px; line-height:20px }`
+                style: settingsHintStyle(context),
                 children: <InlineSpan>[
                   const TextSpan(text: 'Kid mode needs parent gate — '),
                   TextSpan(

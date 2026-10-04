@@ -1,144 +1,180 @@
-# P16 Settings — 2b build, UI chunk (iteration 5)
+# P16 Settings — 2b build, UI chunk (iteration 6)
 
-Scope: `presentation/views/**` + `presentation/widgets/**`, widget tests, and
-the FIXES_4 items that live in them. Shared batch 6 (`a05f346`, merged in
-`0a4ac23`) is on this branch, so the whole of §"Follow-ups for screens" in
-`docs/screens/_shared/shared_batch6_REPORT.md` applies.
+Scope: `app/lib/features/settings/presentation/views/**` +
+`presentation/widgets/**`, widget/view tests, and every **UI/layout/copy** item
+in `FIXES_5.md`. `main` is merged into this branch (`HEAD..main` = 0), so
+`nestAvatarInitial` is now in the worktree — the iteration-5 blocker on P16-T04
+is gone.
 
-## What landed
+## CONTRACT CHANGES (from 2a, re-read before finishing)
 
-### 1. The three forks are gone (ORCHESTRATOR_NOTES 08:12 item 3 / 09:22)
+`2a_build_logic.md` reports one additive change: `SettingsRepositoryImpl` takes
+an optional `FamilyZoneService? zoneService` (defaults to a local instance).
+No state/event/entity/interface shape changed, so nothing in the view layer had
+to move. Verified by compiling and running the whole settings suite against
+their tree, not by reading.
 
-| fork | now | evidence it is the shared one |
+## FIXES_5 triage — what I own and what landed
+
+| item | severity | outcome |
 |---|---|---|
-| `_P16Sect` (a per-build `TextPainter` probing Inter's natural line box) | `NestSectionLabel(label: …)` on all 7 section labels | the probe widget is deleted from the file; batch 6 item 2 makes the shared label 13/16 — the same number the probe produced, so the geometry the UI stage measured in iteration 4 is unchanged |
-| the subscription subcard (local `Container(key: p16_subcard, …)`) | `NestCard(radius: NestRadii.m, padding: EdgeInsets.symmetric(horizontal: s4, vertical: gap14))` | the inner `Material` is back, so the `Manage subscription` ripple paints **on** the card (closes `FIXES_2.md` obs 2); `.subcard`'s 16 px radius / 14×16 padding come from batch 6's new params, so the design metric is kept without forking |
-| `SettingsRow` on the three switch rows, each in `SizedBox(width: 51, height: 44, Center(…))` | plain `NestListRow(title: …, trailing: NestToggle(…))` | the wrappers are deleted. Batch 6 item 1 gives the shared row a `_TrailingSlop` + `_RowSlopForwarder`: the row lays out at the toggle's 51×31 and hit-forwards the full 59×44, so the row is back to the design's 56 **and** P16-T03's 4 px horizontal slop is back |
-| the zone-picker sheet rows | `NestListRow` (was `SettingsRow`) | shared |
+| **P16-T04** (from 3_test) | minor | **FIXED** — both call sites now call the shared `nestAvatarInitial`; proof **un-skipped** and green |
+| **Review 1** — avatar initials re-implemented | **major** | **FIXED** — same change as P16-T04 (they are the same defect seen from two stages) |
+| **Review 2** — the guard silently swallows switch flips | **major** | **FIXED** — `P16TransientGuard.run` removed from all three `NestToggle.onChanged`; row fences kept; **SHARED_REQUEST §8** filed |
+| **Review 3** — "Manage subscription" paints no ripple | minor | **FIXED** — the link row supplies its own ink surface; **§3's status line corrected** (it was the wrong claim that let this ship) |
+| **Review 4** — `.chip` label reused as hint body copy | minor | **FIXED as far as a screen can** — one documented `settingsHintStyle()` instead of two hand-cancelled chip labels; **SHARED_REQUEST §9** filed for a real `NestType.hint` |
+| Review 5 — `watchMembers` duplicates the shared query | minor | logic chunk — **done by 2a** |
+| Review 6 — repository builds its own `FamilyZoneService` | minor | logic chunk — **done by 2a** |
+| Review 7 — legacy `SettingsItem` / `watchItems()` | minor | **not mine** (domain/data); 2a re-verified the shared `repositories_test` still calls them |
+| Review 8 — `_linkRowMinHeight` / `SettingsRow` metrics | minor | filed as §6/§7 already; **no action**, deliberately not re-reported |
+| 3_test obs 2 (Family list announces as one node) | observation | shared `NestListRow`'s no-`onTap` branch; a local label broke the tappable-node contract, so still not a screen fix |
+| 3_test obs 4 (`.ptitle` has no `text-wrap: balance`) | observation | plain `Text` + `NestType.h1` is correct as the CSS is written — unchanged |
+| 3_test obs 5/6 | observation | 300 ms fence is defensible; dialog Cancel wrap is shared `NestButton` padding |
 
-### 2. DATA OVER MOCKS — the parent's e-mail (08:12 item 2 / batch 6 item 4)
+### 1. P16-T04 / review finding 1 — shared `nestAvatarInitial` (2 lines)
 
-`sarah@example.co.uk` is gone from the view. `_MemberRow` reads
-`SettingsMemberEntry.email`, which the repository maps from `members.email`
-(schema v7, nullable). NULL falls back to the role-derived `Owner` (owner) or
-the invite status (`Invited · awaiting reply`), so the invited co-parent is
-unchanged and no address is ever invented.
+`_MemberRow` and `_ChildRow` each hand-rolled `name.isEmpty ? '?' :
+name.characters.first.toUpperCase()`. Both now pass
+`nestAvatarInitial(member.name)` / `nestAvatarInitial(child.nickname)` straight
+into `NestAvatar`. The helper trims first and owns the `'?'` fallback, so
+`' Maya'` renders `M` and `'   '` renders `?` instead of a blank avatar. It also
+removes the last undeclared use of `package:characters` in this feature (it
+resolved only as a transitive Flutter dep; `main` declares it now).
 
-### 3. Both remaining proofs are live — nothing in this feature is skip-marked
+`settings_a11y_test.dart` `[P16-T04]` flips `skip: true → skip: false` and its
+comment is rewritten from "OPEN BUG … not fixable in this worktree" to what the
+code now does. The expectation stays computed **independently** of the helper
+(hand-written trim + first grapheme), so the proof still fails if the screen's
+behaviour drifts rather than agreeing with itself.
 
-- **P16-B09** (`p16_bugs_test.dart`): batch 6 item 5 resolves IANA backward
-  links, so the proof now uses `Asia/Calcutta` (a real tzdb link → `Asia/Kolkata`)
-  and asserts the picker lists `Asia/Kolkata · Current location`. `skip: false`.
-- **P16-T03** (`settings_a11y_test.dart`): with the wrappers gone the shared
-  trailing keeps the whole 59×44, so taps 4 px left and right of the track flip
-  it. `skip: false`. Its companion now measures the `NestListRow` (the row is
-  the ≥44 box) instead of a `SizedBox`.
-- `flutter test test/features/settings --run-skipped` selects **no test**.
+### 2. Review finding 2 — the switches are no longer fenced
 
-### 4. Review finding 1 — literals replaced with tokens (UI/layout items only)
+Three `NestToggle.onChanged` callbacks wrapped their write in
+`P16TransientGuard.run`, and the window is armed by any sheet/modal close.
+Notifications sits **immediately below** the zone picker sheet, so the natural
+sequence (open picker → pick a zone → tap a switch) put the user's very next tap
+inside the 300 ms window: the switch did not move and gave no feedback. A
+switch flip cannot re-trigger itself, so the double-tap fall-through the guard
+exists for (P16-B08/B10) can never apply to it — the same reasoning that
+already exempted the move banner's buttons (and the file's own comment at
+`p16_transient_guard_test.dart:181` said exactly this, applied to the banner but
+never to the toggles).
 
-- `SizedBox(height: 2)` → `NestSpacing.gap2` (`.subcard .b { margin-top:2px }`).
-- `fromLTRB(14, 12, 14, 12)` → `EdgeInsets.symmetric(horizontal: NestSpacing.gap14, vertical: NestSpacing.s3)` in both the move banner and `.lockhint` (`.lockhint { padding:12px 14px }`).
-- `copyWith(fontSize: 14, height: 20/14)` → `NestType.chipLabel(color: ink).copyWith(fontWeight: FontWeight.w400)`. `chipLabel` *is* Inter 14/20 (`.lockhint { font-size:14px; line-height:20px }`); only the weight differs, so the line box is now token-sourced. Same numbers on screen — the responsive suite's lock-hint and 1.3-scale tests are unchanged and green.
-- `height: 52` → `const double _linkRowMinHeight = 52`, documented with its CSS line (`P16-settings.html:9`) and filed as SHARED_REQUEST §7, because `NestPager.stage` is also 52 and is a different metric.
+Three `P16TransientGuard.run(` wrappers deleted; the guard itself stays for the
+rows that *do* open a modal or route, which is what `SHARED_REQUEST.md` **§8**
+(new) now asks the orchestrator to fix once at the source.
 
-### 5. Review findings 2/3 — stale comments on live proofs
+### 3. Review finding 3 — the subscription link row's ink surface
 
-`p16_bugs_test.dart`'s header (it still advertised B09 as open and told the
-reader to run `--run-skipped`), its section banner ("Open bugs — skipped") and
-the B11 block; `settings_responsive_test.dart`'s B11 block (still said "OPEN
-BUG … pinned skip-marked"); `settings_a11y_test.dart`'s T02 block (still
-described the deleted `SettingsRow` at 6 px padding + 44-high wrapper as the
-current mechanism). All now describe what the code does.
+`NestCard`'s `Material` only exists on its **tappable** branch
+(`nest_card.dart:88-98`). This card is not tappable as a card — the design's
+`.linkrow` is a link *inside* it — so it took the plain `Container` branch, which
+carries no `Material`, and the nested `InkWell` resolved its ink to the
+Scaffold's `Material`, i.e. **behind** the card's opaque `surface`: zero press
+feedback. `SHARED_REQUEST.md` §3 and iteration 5's `2b_build_ui.md` both
+claimed the opposite, and that wrong claim is why the defect survived the
+un-fork; both are corrected.
 
-### 6. `SettingsRow` — narrowed, and why it survives
+Fixed screen-side with `Material(color: Colors.transparent, child: InkWell(…))`
+— the same ink surface `NestListRow` and `SettingsRow` already give every other
+row. **Geometry-neutral**: a `Material` wrapper adds no padding and no height, so
+the subcard rects the UI stage measured (593.0 top / 712.7 bottom) are untouched.
 
-Its `padding` escape hatch existed only for the switch wrappers and is gone.
-What is left is the shared row's exact metrics for the five rows the shared row
-cannot yet express:
+### 4. Review finding 4 — `.lockhint` copy is one token-shaped call site
 
-- four **avatar-leading** rows (Sarah, James, Maya, Leo). The design puts
-  `<span class="avatar s32">` in the leading slot (`P16-settings.html:18-25`);
-  `NestListRow` only builds a 40 px icon tile from `leadingAsset`.
-- one **danger** row (`Delete family account`, `.dangerlink` = danger + w700).
+The lock hint and the move banner both rendered `.lockhint` copy
+(`.lockhint { font-size:14px; line-height:20px }`) as
+`NestType.chipLabel(…).copyWith(fontWeight: w400)` — the right line box from the
+wrong token. The numbers are unchanged, but a chip-label weight/tracking change
+would silently move hint text on two screens. The literal now lives once, in
+`settingsHintStyle(context)` in `settings_rows.dart`, documented with its CSS
+line; **SHARED_REQUEST.md §9** (new) asks for a proper `NestType.hint` so even
+that one goes away.
 
-Both are one-line shared additions — `NestQuestCard` already does `Widget?
-leading` the same way — filed as **SHARED_REQUEST §6** with the measured cost.
-When it lands, `SettingsRow` and its five call sites delete.
+## Tests (2 new, 1 un-skipped) — and proof they are not vacuous
 
-## CONTRACT CHANGE (outside my chunk — please review)
+Both new proofs were run against the **pre-fix** source to confirm they fail:
 
-The e-mail ruling is a **view/copy** mandate whose data shape lives in the logic
-chunk, and the logic chunk reported `CONTRACT CHANGES: None` (written before
-batch 6 landed). Rather than leave the suite red on the tripwire the test stage
-had armed for exactly this, I made the smallest possible additive change:
+```
+# with the switch re-fenced and the Material removed:
+[review 2] all three switches still flip while the guard is armed
+    Expected: <false>   Actual: <true>
+[review 3] "Manage subscription" paints its ripple on the card, not behind it
+    Expected: non-empty   Actual: WhereIterable<Widget>:[]
+```
 
-- `domain/entities/settings_member_entry.dart` — `final String? email;`
-  (optional named, default null, added to `props`), so **every** existing
-  construction site — including other features' test fakes — keeps compiling.
-- `data/settings_repository_impl.dart` — `email: row.email` in `_toMemberEntry`.
+- `[review 2]` arms the guard fresh per switch (pumping between taps would
+  expire the first window and prove nothing), asserts `suppressing` is **true**
+  before *and* after the tap, and reads the `settings` row — not the optimistic
+  widget — so a swallowed tap fails on the database.
+- `[review 3]` intersects the link row's `Material` ancestors with the
+  `Material`s **inside** the `NestCard`. Ancestors alone would be satisfied by
+  the Scaffold's `Material`, which is precisely the defect being pinned.
+- `[P16-T04]` is live again: `flutter test test/features/settings --run-skipped`
+  now selects no test in this feature.
 
-Nothing else in domain/data/bloc changed, no event/state/DI shape changed, and
-the diff is exactly what a logic pass would write, so a merge is a no-op if the
-logic builder lands it too. Flagging it because RULES.md assigns those paths to
-the logic builder.
-
-## FIXES_4 triage
-
-| item | outcome |
-|---|---|
-| **P16-T03** (minor) | **FIXED** — wrappers deleted, proof live and green |
-| **P16-B09** (minor, shared) | **FIXED** by batch 6 item 5, proof live and green |
-| **P16-T02** | still holds, now on the shared row (`contentBox ≥ 44`, track 51×31, ±5 px taps flip the DB row) — proof untouched and green |
-| **P16-B11** (major) | still holds (gap 0.0 at 320/390/430, both themes) — proof untouched and green |
-| **P16-B10** | untouched; delete + invite rows still go through `P16TransientGuard.run` — proof green |
-| review 1 (un-fork) | done for `_P16Sect`, the subcard and every switch/picker row; the two genuinely missing shared params are §6 |
-| review 2/3 (stale comments) | fixed (above) |
-| review 4 (B09 skip) | un-skipped, live |
-| review 5 (owner e-mail literal) | fixed — reads `members.email` now |
-| review 6 (guard lifetime) | unchanged: `P16TransientGuard` is still process-wide static state, now with a narrower blast radius (every row still routes through it). Tracked for a shared variant — not a UI/layout item, no action |
-| legacy `SettingsItem` / `watchItems()` | untouched (logic chunk owns it; shared `test/core/data/repositories_test.dart` still calls it — verified 22/22 green) |
-
-## Layout: unchanged where it was already right
-
-The three reverts are metric-preserving, and that is the point of the batch:
-`_P16Sect` measured 16, the shared label is 16; `.subcard` keeps 16 px / 14×16;
-the shared toggle row is 56 like the fork was *intended* to be (the fork's
-44-high wrapper was the bug — T03). No `SizedBox` on the rows changed the
-vertical rhythm, so the y positions the UI stage measured in iteration 4 stand.
-The only text that changed on screen is the owner subtitle, which now follows
-the seed — identical to the design in the demo seed.
-
-## Verified
+## Verification
 
 ```
 dart format lib/features/settings test/features/settings   → 0 changed
 flutter analyze lib/features/settings test/features/settings → No issues found!
-flutter test --timeout 120s test/features/settings          → +140: All tests passed!
+flutter test --timeout 120s test/features/settings          → +145: All tests passed!
 flutter test --timeout 120s test/features/settings --run-skipped → no test selected
-flutter test --timeout 120s test/core/data/repositories_test.dart → +22: All tests passed!
 ```
 
-Numbers: **+140 passed, 0 skipped** (iteration 4 closed at +137 with 2 skips).
-+1 new test, +2 previously-skipped proofs now live, 0 failures. No simulator
-booted, installed on, screenshotted or driven.
++145 passed, **0 skipped** (iteration 5: +141 with 1 skip) — 2 new proofs, 1
+un-skipped, +3 from the logic builder's `settings_repository_test.dart` work.
+No simulator booted, installed on, screenshotted or driven; no whole-app
+`flutter test`; no `flutter clean`.
+
+## Layout and copy: unchanged, deliberately
+
+No geometry moved. The three fixes are an expression swap (avatar initials), a
+wrapper removal (three `P16TransientGuard.run(`), a zero-cost `Material`
+wrapper, and a style call with identical metrics — so the y positions, 20 px
+gutters, row heights and the subcard's 16 px radius / 14×16 padding the iteration-5
+UI stage measured still stand. Copy is still character-exact against
+`P16-settings.html` (`Family & settings`, `Sarah — you`, `Invited · awaiting
+reply`, `Maya · 7–9`, `Pip: Fledgling · 120 coins`,
+`Nestling Annual · £29.99/year`, `Kid mode needs parent gate — On`, `›`), the
+live `Looks like you’re in …` banner keeps its curly apostrophe, and the
+DB-driven e-mail still comes from `members.email`.
+
+## Files changed (mine only)
+
+- `app/lib/features/settings/presentation/views/settings_view.dart`
+- `app/lib/features/settings/presentation/widgets/settings_rows.dart`
+- `app/test/features/settings/settings_view_test.dart` (+2 proofs)
+- `app/test/features/settings/settings_a11y_test.dart` — **un-skip `[P16-T04]`**
+- `docs/screens/P16/SHARED_REQUEST.md` (§3 corrected, §8 + §9 new, status block)
+- `docs/screens/P16/2b_build_ui.md` (this file)
+
+One note for the integrator: `dart format lib/features/settings` (the repo's own
+formatter, run per RULES §7) also normalised
+`data/settings_repository_impl.dart` while the logic builder was writing it. That
+is whitespace only, on their file, and `flutter analyze` is clean.
 
 ## LEFT FOR NEXT ITERATION
 
-1. **`SettingsRow` still exists for 5 rows** — needs SHARED_REQUEST §6
-   (`NestListRow.leading` widget + a danger `titleColor`/`titleStyle`). One
-   shared change, then delete the widget and its five call sites.
-2. **52 px `.linkrow`** — SHARED_REQUEST §7; moves to a token when the grid
-   grows one.
-3. **UI stage (5) must re-measure.** The switch rows are the shared 56 again
-   rather than the fork's 56-with-6px-padding, and the section labels are the
-   shared 16. Both should land on the same y as iteration 4's screenshots, but
-   the ±2 px verdict has to be re-earned on the new tree, and
-   `cmp_*_1.png` should be regenerated (the earlier one is 3.58 % drift).
-4. **Not my file, not done:** if the review wants the design-system gallery's
-   `hintText` copy or any other screen's literals audited, that is another
-   screen's chunk.
-5. `P16TransientGuard`'s process-wide static lifetime (review 6) — needs a
-   shared variant, not a screen fix.
+1. **`SettingsRow` still exists for five rows** (four avatar-leading + the
+   danger row) — needs **SHARED_REQUEST §6** (`NestListRow.leading` widget +
+   danger `titleColor`/`titleStyle`). One shared change, then delete the widget
+   and its five call sites. Not re-doable screen-side.
+2. **`_linkRowMinHeight = 52`** — **§7**; moves to a token when the grid grows
+   one.
+3. **`settingsHintStyle()`** — **§9**; becomes `NestType.hint` when it lands.
+   One documented literal, deliberately not two, and the review explicitly
+   warned against re-landing it silently elsewhere.
+4. **`P16TransientGuard` itself** — **§8**; needs the shared modal/sheet fence.
+   Its process-wide static lifetime (review 6) is unchanged and still the only
+   shared-behaviour workaround left in this feature.
+5. **The UI stage (5) must re-measure** and re-issue `cmp_*_6.png`. The three
+   fixes are geometry-neutral by construction and the layout is otherwise
+   untouched, but the ±2 px verdict has to be re-earned on the new tree. The
+   known open deviation is the subcard bottom edge at +2.0 px (at tolerance,
+   tracked, invisible side-by-side).
+6. **Not this chunk:** review finding 7 (dead `SettingsItem` / `watchItems()` /
+   `getItems()`) stays with the logic layer until the shared
+   `test/core/data/repositories_test.dart` settings group stops calling it.
 
 VERDICT: PASS

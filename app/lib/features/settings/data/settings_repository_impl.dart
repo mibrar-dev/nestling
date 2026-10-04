@@ -13,9 +13,15 @@ import 'package:nestling/features/settings/domain/settings_repository.dart';
 
 /// Drift-backed [SettingsRepository].
 class SettingsRepositoryImpl implements SettingsRepository {
-  new({required this._db});
+  new({required this._db, FamilyZoneService? zoneService})
+    : _zoneService = zoneService ?? FamilyZoneService(_db);
 
   final AppDatabase _db;
+
+  /// Family-zone writer. Injected so the DI singleton's configuration is
+  /// honoured; direct constructions fall back to a local instance (review
+  /// finding 6 — the repository must not build its own service inline).
+  final FamilyZoneService _zoneService;
 
   @override
   Future<List<SettingsItem>> getItems() => watchItems().first;
@@ -59,16 +65,10 @@ class SettingsRepositoryImpl implements SettingsRepository {
 
   @override
   Stream<List<SettingsMemberEntry>> watchMembers() {
-    // Insertion order (`rowid`) — Sarah before James. The `members` table has
-    // no creation column; `rowid` is insertion order on every write path.
-    return (_db.select(_db.members)
-          ..where((m) => m.familyId.equals(Seed.familyId))
-          ..orderBy([
-            (m) =>
-                OrderingTerm(expression: const CustomExpression<int>('rowid')),
-          ]))
-        .watch()
-        .map((rows) => rows.map(_toMemberEntry).toList());
+    // Insertion order (`rowid`) — Sarah before James — via the shared core
+    // query (review finding 5: no feature-local raw SQL for this). The
+    // default family id is `Seed.familyId`.
+    return _db.watchMembers().map((rows) => rows.map(_toMemberEntry).toList());
   }
 
   @override
@@ -104,7 +104,7 @@ class SettingsRepositoryImpl implements SettingsRepository {
 
   @override
   Future<void> setFamilyTimeZone(String zoneId) =>
-      FamilyZoneService(_db).setFamilyTimeZone(zoneId);
+      _zoneService.setFamilyTimeZone(zoneId);
 
   @override
   Stream<String> watchFamilyTimeZone() => _db.watchFamilyZoneId();

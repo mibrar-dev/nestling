@@ -8,6 +8,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/family_zone_service.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/features/settings/data/settings_repository_impl.dart';
 import 'package:nestling/features/settings/domain/entities/settings_child_entry.dart';
@@ -74,6 +75,10 @@ void main() {
       expect(members.last.name, 'James');
       expect(members.last.role, 'co-parent');
       expect(members.last.inviteStatus, 'invited');
+      // DATA OVER MOCKS: the owner e-mail comes from `members.email`
+      // (schema v7); the invited co-parent has none.
+      expect(members.first.email, 'sarah@example.co.uk');
+      expect(members.last.email, isNull);
     });
 
     test('empty seed has no roster rows but keeps Sarah', () async {
@@ -126,6 +131,20 @@ void main() {
       await repository.setFamilyTimeZone('Bogus/Zone');
 
       expect(await repository.watchFamilyTimeZone().first, 'Europe/London');
+    });
+
+    test('an explicitly injected zone service handles zone writes', () async {
+      final repository = SettingsRepositoryImpl(
+        db: db,
+        zoneService: FamilyZoneService(db),
+      );
+      await repository.setFamilyTimeZone('Asia/Dubai');
+
+      expect(await repository.watchFamilyTimeZone().first, 'Asia/Dubai');
+      final settingsRow = await (db.select(
+        db.settings,
+      )..where((s) => s.familyId.equals(Seed.familyId))).getSingle();
+      expect(settingsRow.timeZone, 'Asia/Dubai');
     });
 
     test('movedToDubai flips the zone without touching instants', () async {

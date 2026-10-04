@@ -446,23 +446,22 @@ void main() {
       '[P16-T04] the initial trims a leading space and falls back to "?" for a '
       'whitespace-only name',
       (tester) async {
-        // OPEN BUG (minor) — pinned skip-marked so `flutter test` stays green;
-        // run with `--run-skipped` to prove it. Do NOT patch the screen here.
-        //
-        // The rule says: use `nestAvatarInitial(name)`, one place for the
-        // initial. The helper (on `main`,
-        // `core/design_system/components/nest_avatar_initial.dart`) does three
-        // things the hand-rolled call sites do not: trims first, returns its
+        // FIXED in iteration 6 (review finding 1). The rule says: use
+        // `nestAvatarInitial(name)`, one place for the initial. The helper
+        // (`core/design_system/components/nest_avatar_initial.dart`) does three
+        // things the hand-rolled call sites did not: trims first, returns its
         // `fallback` ('?') for empty or whitespace-only names, and takes the
-        // first grapheme. `settings_view.dart`'s member and child rows do the
-        // last one only, so a nickname of " Maya" renders a SPACE as its
-        // avatar initial and "   " renders a space instead of "?" — a blank
-        // avatar rather than a name a parent can recognise.
+        // first grapheme. The screen was re-implementing it inline twice, so a
+        // nickname of " Maya" rendered a SPACE as its avatar initial and "   "
+        // rendered a space instead of "?" — a blank avatar rather than a name a
+        // parent can recognise.
         //
-        // Not fixable in this worktree: the branch is behind `main` and the
-        // helper does not exist here, so importing it would break
-        // `flutter analyze`. The fix is the two one-line swaps the integrator
-        // already identified (settings_view.dart, member + child rows).
+        // `settings_view.dart`'s member and child rows now call the helper, and
+        // `main` (merged into this branch) carries it, so the proof runs live
+        // rather than skip-marked. The expectation below is still computed
+        // INDEPENDENTLY of the helper — it re-implements the trim + first
+        // grapheme by hand, so it fails if the screen's own behaviour drifts
+        // rather than simply agreeing with itself.
         for (final nickname in <String>[' Maya', '   ']) {
           await pumpSettingsApp(
             tester,
@@ -502,12 +501,9 @@ void main() {
           await disposeApp(tester);
         }
       },
-      // P16-T04 open (minor) — the two hand-rolled initials predate
-      // `nestAvatarInitial`, which also trims and supplies the '?' fallback.
-      // The helper is absent from this worktree (branch behind main); the swap
-      // is two one-liners in settings_view.dart. See §Bugs of
-      // docs/screens/P16/3_test.md.
-      skip: true,
+      // FIXED (iteration 6): both call sites use the shared
+      // `nestAvatarInitial`, which trims and supplies the '?' fallback.
+      skip: false,
     );
   });
 

@@ -15,7 +15,10 @@ import 'package:nestling/features/settings/presentation/bloc/settings_session_st
 void registerSettings(GetIt sl) {
   if (!sl.isRegistered<SettingsRepository>()) {
     sl.registerLazySingleton<SettingsRepository>(
-      () => SettingsRepositoryImpl(db: sl<AppDatabase>()),
+      () => SettingsRepositoryImpl(
+        db: sl<AppDatabase>(),
+        zoneService: sl<FamilyZoneService>(),
+      ),
     );
   }
   if (!sl.isRegistered<SettingsSessionStore>()) {
