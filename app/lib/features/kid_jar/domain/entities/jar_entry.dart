@@ -9,6 +9,7 @@ class JarEntry extends Equatable {
     required this.type,
     required this.amountPence,
     required this.date,
+    this.iconKey = '',
   });
 
   final String id;
@@ -18,6 +19,12 @@ class JarEntry extends Equatable {
   final int amountPence;
   final DateTime date;
 
+  /// Quest icon key (`quests.icon`) for `quest_bonus` rows, resolved by title
+  /// in the repository (K09-BUG-3). `''` when unknown — other row types, an
+  /// unmatched note or an empty note — and the view then uses its fallback
+  /// glyph. Defaults to `''` so existing constructions keep compiling.
+  final String iconKey;
+
   @override
   List<Object?> get props => <Object?>[
     id,
@@ -26,5 +33,6 @@ class JarEntry extends Equatable {
     type,
     amountPence,
     date,
+    iconKey,
   ];
 }
