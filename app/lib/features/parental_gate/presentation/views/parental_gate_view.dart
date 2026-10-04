@@ -33,6 +33,12 @@ class _ParentalGateViewState extends State<ParentalGateView> {
   /// answer is announced exactly once.
   int _announcedAttempts = 0;
 
+  /// The challenge the counter above belongs to. `onData` resets `attempts`
+  /// to 0 when the live challenge changes (P17-BUG-3), so without this the
+  /// high-water mark would swallow the first announcement of the new
+  /// challenge (6_bugs.md observation 1).
+  String? _announcedChallengeId;
+
   void _unlock(BuildContext context) {
     context.read<ParentalGateBloc>().add(
       const ParentalGateUnlockAcknowledged(),
@@ -79,6 +85,13 @@ class _ParentalGateViewState extends State<ParentalGateView> {
           if (state.unlocked) {
             _unlock(context);
             return;
+          }
+          // A new challenge restarts the attempt counter (and therefore the
+          // announcement counter) with it.
+          final challengeId = state.challenge?.id;
+          if (challengeId != _announcedChallengeId) {
+            _announcedChallengeId = challengeId;
+            _announcedAttempts = state.attempts;
           }
           if (state.attempts > _announcedAttempts) {
             _announcedAttempts = state.attempts;
@@ -215,22 +228,29 @@ class _ParentalGateViewState extends State<ParentalGateView> {
                                               ),
                                               Semantics(
                                                 label: 'Number pad',
-                                                child: SizedBox(
-                                                  width: 296,
-                                                  child: FittedBox(
-                                                    fit: BoxFit.scaleDown,
-                                                    // TODO(P17): shared NestKeypad
-                                                    // hard-codes a 16px row gap +
-                                                    // 8px bottom padding where the CSS
-                                                    // grid is gap 10 / padding 8-24-0, so
-                                                    // this slot is 26px taller than the
-                                                    // design and every band below it
-                                                    // drifts (+6/row). Needs the shared
-                                                    // component (core) — see
-                                                    // docs/screens/P17/SHARED_REQUEST.md
-                                                    // #3. Do not fork a local keypad.
-                                                    child: NestKeypad(
+                                                child: LayoutBuilder(
+                                                  builder: (context, constraints) {
+                                                    // The new shared
+                                                    // NestKeypad_s Grid
+                                                    // expands to the parent
+                                                    // width via `fit: stretch`
+                                                    // at the design width
+                                                    // (≥ contentWidth). At
+                                                    // narrower cards the
+                                                    // shrinkWrap mode
+                                                    // renders a fixed 280
+                                                    // box that FittedBox
+                                                    // can scale down safely.
+                                                    final plenty =
+                                                        constraints.maxWidth >=
+                                                        NestKeypad.contentWidth;
+                                                    final keypad = NestKeypad(
                                                       kid: true,
+                                                      fit: plenty
+                                                          ? NestKeypadFit
+                                                                .stretch
+                                                          : NestKeypadFit
+                                                                .shrinkWrap,
                                                       onKey: (digit) => context
                                                           .read<
                                                             ParentalGateBloc
@@ -247,8 +267,19 @@ class _ParentalGateViewState extends State<ParentalGateView> {
                                                           .add(
                                                             const ParentalGateDeletePressed(),
                                                           ),
-                                                    ),
-                                                  ),
+                                                    );
+                                                    if (plenty) {
+                                                      return keypad;
+                                                    }
+                                                    return FittedBox(
+                                                      fit: BoxFit.scaleDown,
+                                                      child: SizedBox(
+                                                        width: NestKeypad
+                                                            .contentWidth,
+                                                        child: keypad,
+                                                      ),
+                                                    );
+                                                  },
                                                 ),
                                               ),
                                               const SizedBox(
@@ -362,7 +393,6 @@ class _GateBackdropBody extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(28, NestSpacing.s2, 28, 0),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             spacing: NestSpacing.s3,
             children: [
               NestAvatar(
@@ -514,12 +544,16 @@ class _GateLoading extends StatelessWidget {
         // Equal-height placeholders for the instruction/question lines,
         // so the modal frame does not jump when data arrives.
         const SizedBox(height: 22),
+        const SizedBox(height: NestSpacing.s1),
         const SizedBox(height: 24),
         const SizedBox(height: NestSpacing.s4),
         const SizedBox(height: 64),
         const SizedBox(height: NestSpacing.s4),
+        // The shared NestKeypad grid is 8 pad-top + 4x72 + 3x10 = 326 tall
+        // (`gap: 10; padding: 8 24 0`), so the placeholder reserves the
+        // design's 326 rather than the pre-merge 352.
         SizedBox(
-          height: 352,
+          height: 326,
           child: Center(
             child: Semantics(
               label: 'Loading the grown-ups check',
@@ -529,6 +563,9 @@ class _GateLoading extends StatelessWidget {
         ),
         const SizedBox(height: NestSpacing.s3),
         const SizedBox(height: 56),
+        // NB: the caption's own `s2 + gap2` gap and its 18 px line box are
+        // added by the enclosing column, so this placeholder must NOT reserve
+        // them again (it stood the card 28 px tall until iteration 3).
       ],
     );
   }

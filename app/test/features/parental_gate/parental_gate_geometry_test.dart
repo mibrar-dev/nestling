@@ -47,7 +47,14 @@ const double designDigitsCentre = 288; // 56×64 boxes 256…320
 const List<double> designKeyRowCentres = <double>[380, 462, 544, 626];
 const double designCancelCentre = 702; // ghost button 674…730
 const double designCaptionCentre = 749; // caption line box 740…758
-const double designBackdropHeaderTop = 55; // `.kb-top` under the 47 status bar
+const double designBackdropHeaderTop =
+    55; // `.kb-top` row top: 47 status bar + 8
+/// The greeting's TEXT top, not the row's: `.kb-top { align-items: center }`
+/// centres the h1 line box (28/34) and the 36 px coin pill inside the 44 px
+/// avatar row ⇒ 55 + (44 − 34)/2 = 60. (`3_test` §3.1 measured the app at 55
+/// there because the row used `CrossAxisAlignment.start`; the row top stays 55
+/// either way — only the items' alignment changes.)
+const double designBackdropGreetingTop = 60;
 const double designKeypadSlotTop = 336; // digits 320 + `.keypad` margin-top 16
 
 Future<void> _loadBundledFonts() async {
@@ -378,11 +385,19 @@ void main() {
       // ORCHESTRATOR_NOTES item 1 / 5_ui deviation 2: the dimmed kid header
       // starts below the 47 px status-bar reserve, not under the OS clock.
       expect(find.byType(NestStatusBar), findsOneWidget);
+      // `.kb-top` is a 44 px row at design y 55; `align-items: center` puts the
+      // 34 px greeting line box at 60 and the 36 px pill at 59.
       check(
         drifts,
-        'dimmed backdrop header top',
-        tester.getRect(find.text('Hi Maya!')).top,
+        'dimmed backdrop header row top',
+        tester.getRect(find.byType(NestAvatar)).top,
         designBackdropHeaderTop,
+      );
+      check(
+        drifts,
+        'dimmed backdrop greeting top',
+        tester.getRect(find.text('Hi Maya!')).top,
+        designBackdropGreetingTop,
       );
 
       expect(

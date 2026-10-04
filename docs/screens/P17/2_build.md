@@ -1,140 +1,141 @@
-# P17 Parental gate — 2 build (integrate, iteration 2)
+# P17 Parental gate — 2 build (integrate, iteration 3)
 
-Integration of the two iteration-2 builders. Scope: compile + green suite, no
+Integration of the two iteration-3 builders. Scope: compile + green suite, no
 redesign, no simulator, no `flutter clean`, no interactive run, no skipped or
 weakened tests.
 
 ## Summary of 2a (logic)
 
-- Contract unchanged from iteration 1 (same three events, same state fields and
-  helpers) — so again no shape conflict with 2b. Two additive internals:
-  `ParentalGateState.copyWith` gained optional `clearError: false` (PaywallState
-  precedent, no call-site change) and `challengeFor(utc)` now reads the
-  calendar day in the family zone (Europe/London) instead of UTC — P17-BUG-2.
-- `onData` (P17-BUG-3): resets `entered`/`attempts`/`unlocked` when the live
-  challenge id changes, keeps the half-typed entry on same-challenge re-emits,
-  and clears a stale `errorMessage` on loading/loaded (3_test §3.3.3 sticky-error
-  minor).
-- Tests: `parental_gate_bloc_test.dart` 25, `parental_gate_repository_test.dart`
-  13 (shared memory DB per 4_review finding 3, + BST London-day split proof),
-  and the `p17_bugs_test.dart` `skip:`s on the BUG-2/BUG-3 proofs removed (both
-  green now). P17-BUG-1 stays skip-marked — shared `router.dart`, request #2.
+- **CONTRACT CHANGES: none** — not even additive this iteration. Events, state
+  fields, helpers, `copyWith(clearError)` and the London-day `challengeFor` are
+  exactly what iteration 2 shipped, so 2b had nothing to re-cut.
+- No file changed in `app/lib/**` or `app/test/**`, deliberately: every
+  FIXES_2 item in the logic layer is either shared (§3.2 keypad → landed on
+  `main`), view-layer (§3.1 backdrop row, §3.3 FittedBox, 6_bugs obs 1), a
+  contract change it declines (4_review finding 2, contradicts `1_plan.md` §(b)),
+  or out of layer (P17-BUG-1 router, the 7 K03 reds).
+- Re-verified after the merge: bloc + repository files `+38` all pass (25 + 13);
+  the un-skipped P17-BUG-2 and P17-BUG-3 proofs pass individually.
 
 ## Summary of 2b (UI)
 
-- FIXES_1 §3.1 closed: `_unlock` now pops **before** flipping `AppModeController`,
-  because flipping the mode mid-pop made the router's refreshListenable re-parse
-  and resurrect `/parental-gate`. The root deep-link branch keeps the old order
-  (nothing to pop, redirect must not re-fire).
-- ORCHESTRATOR_NOTES addressed: card anchored at the design's top **66** instead
-  of centred (the uniform-shift failure), `NestStatusBar` reserve added as the
-  first child of the dimmed backdrop so the header sits below the OS status bar,
-  CSS vertical rhythm restored (lock→12→title→8→instr→4→question→16→digits→16
-  →keypad→12→cancel→10→caption→20), loading question placeholder resized to the
-  h3 line box (no jump), leaf caret on every empty box per `.digit.empty::after`.
-- Keypad pitch: **not** fixed — shared `NestKeypad` hard-codes 24/16 gaps where
-  the CSS grid is `gap:10` + `padding:8 24 0`. Filed as SHARED_REQUEST #3.
+- The shared keypad fix (`9cac0c6`) landed via `e70760c`, so per
+  ORCHESTRATOR_NOTES 07:13 nothing was re-spaced locally. 2b only made the call
+  site compatible: direct render when the card content is ≥
+  `NestKeypad.contentWidth` (the `SizedBox(296) > FittedBox` wrapper was
+  redundant and an unbounded-constraint crash risk with the new `Expanded`
+  cells), and `SizedBox(contentWidth) + FittedBox(scaleDown) +
+  NestKeypadFit.shrinkWrap` for narrower cards.
+- FIXES_2 §3.1 closed — backdrop header row no longer passes
+  `crossAxisAlignment: start`, so `.kb-top { align-items: center }` holds;
+  P17-BUG-4 proof un-skipped and green. Fixing it exposed a wrong expectation in
+  the pin itself (`designBackdropHeaderTop = 55` is the row top, but the
+  assertion measured the greeting text); the constant is now split 55 (row) / 60
+  (centred h1 line box) and both are pinned — a corrected expectation, not a
+  relaxed one.
+- FIXES_2 §3.3 closed (the merge blocker); §3.2 closed by the shared merge.
+- 6_bugs obs 1 closed — `_announcedChallengeId` re-bases the announcement
+  high-water mark when the challenge changes, so the first wrong answer on a new
+  challenge is announced again.
+- Found and fixed its own regression: `_GateLoading` over-reserved the caption
+  gap + line box (the enclosing column already adds both), which made the
+  loading card 28 px taller than the loaded one.
+- Dead code deliberately kept (`parental_gate_placeholder_card.dart` is the
+  repo-wide v1 scaffold, unreferenced in 11 features).
+- Copy re-verified character-by-character against the HTML; no letter-spacing
+  and no `text-wrap: balance` in the P17 CSS, so `NestType` defaults stand and
+  `NestBalancedText` is correctly absent.
 
 ## Merge check — no integration breakage
 
-No mismatched BLoC states/events, no import fixes, no renamed members, no test
-collisions. 2b consumed exactly the iteration-1 contract that 2a extended
-additively. The two halves needed no reconciliation.
+Nothing to reconcile: 2a changed no contract and no file, so the two halves
+could not conflict. Verified end-to-end rather than assumed — `dart format`,
+`analyze` and the whole suite all run clean on the combined tree.
 
 ## FIXES items
 
 | Item | Status |
 |---|---|
-| `dart format .` | DONE — `517 files (1 changed)`: the one change was an unrelated shared file (`test/design_system/list_row_trailing_test.dart`, unformatted on `main`), **reverted** — RULES §1. My scope: `Formatted 18 files (0 changed)` |
-| `flutter analyze` (whole app) | DONE — `No issues found! (ran in 4.0s)` |
-| `parental_gate` suite | 90 pass · 1 skip (shared-router proof, request #2) · **2 red** |
-| `flutter test` (whole app) | **NOT GREEN** — `+2811 ~2 -9: Some tests failed.` |
-| Integration fixes in scope | NONE FOUND — nothing to fix |
-| 2 reds in `parental_gate_geometry_test.dart` | BLOCKED on shared core — marked `TODO(P17)` in code, request #3 |
-| 7 reds in `kid_home` (K03) | OUT OF SCOPE — request #1, unfixed |
+| `dart format .` | DONE — `528 files (0 changed)`; nothing to revert this time (the unformatted shared test from iteration 2 is fixed on `main`) |
+| `flutter analyze` (whole app) | DONE — `No issues found! (ran in 13.9s)` |
+| `parental_gate` suite | **106 pass · 1 skip · 0 red** (was 90 · 1 · 2) |
+| `flutter test` (whole app) | **NOT GREEN** — `+2989 ~3 -8: Some tests failed.` |
+| Integration fixes in scope | NONE FOUND |
+| ORCHESTRATOR_NOTES 2–6 + item 11 (pins + scrim) | MET — 11/11 geometry pins green, every band Δ0 |
+| SHARED_REQUEST #3 (keypad) | RESOLVED by the `main` merge — request marked closable |
+| P17-BUG-1 (shared router loop) | OPEN, honestly skip-marked (request #2) |
+| 8 reds in `kid_home` | OUT OF SCOPE — request #1, updated |
 
-Iteration 1 had 41 reds; this merge of `main` cleared the 34 pre-existing ones
-(K03 layout matrix, P11 approvals copy/semantics, P08-B11). **9 remain: 7 + 2.**
+Iteration 2 had 9 reds; **8 remain, and none of them are in `parental_gate`.**
+The two in-feature reds (the ORCHESTRATOR_NOTES keypad/band pins) are green now
+that `main` carries the CSS-grid keypad.
 
-### The 2 reds in my own suite — why I could not fix them
+### The 8 remaining reds — all out of scope, all one root cause
 
-Both are the ORCHESTRATOR_NOTES item 11 pins that 2b added, and both fail on the
-keypad alone:
+All in `app/test/features/kid_home/**`, which P17 may not edit (RULES §1).
+Two symptoms of the same fact: P17 replaced the v1 scaffold, whose `AppBar`
+supplied a title and an automatic back button.
 
-```
-card height: app 738.0 vs design 712.0 (Δ26.0)
-keypad row 2 centre: app 468.0 vs design 462.0 (Δ6.0)   ← already +6 inside the keypad
-keypad row 3 centre: app 556.0 vs design 544.0 (Δ12.0)
-keypad row 4 centre: app 644.0 vs design 626.0 (Δ18.0)
-"Back to Pip" centre: app 728.0 vs design 702.0 (Δ26.0)
-caption centre: app 775.0 vs design 749.0 (Δ26.0)
-Expected: 82.0 (±0.5) / Actual: <88.0>
-```
+1. **7 × scaffold title** — `find.text('P17 Parental gate')` after tapping the
+   lock. The real gate renders design copy `Grown-ups only`.
+   `Found 0 widgets with text "P17 Parental gate"` at `k03_bugs_test.dart:1059,1531`
+   and `kid_home_view_test.dart:1247,1263,1279,1294,1993`.
+2. **1 × back button (new this iteration)** —
+   `k01_bugs_test.dart` › `rapid lock double tap pushes exactly one gate`
+   (line 697). Its own `expect(pushedPath(tester), '/parental-gate')` **passes**,
+   so the double-tap latch and the navigation are correct; it then fails on
+   `await tester.pageBack()`:
+   `Found 0 widgets with type "CupertinoNavigationBarBackButton": [] / One back
+   button expected on screen`. Proven both ways this iteration — with the v1
+   scaffold view checked out temporarily the test is **green**
+   (`00:01 +1: All tests passed!`), with the real view it fails; the view was
+   restored byte-identical afterwards (`diff -q` clean).
 
-The card top is now correct (66) and keypad row 1 matches, so the whole Δ26 is
-the shared component: `nest_keypad.dart` uses `SizedBox(s4)`=16 row gaps and
-`EdgeInsets.all(s2)` (8 all round) ⇒ 352 tall, where the CSS grid
-(`gap:10`, `padding:8 24 0`) gives 326. **No call-site change can fix it** —
-row 2's centre is already 6 px low inside `NestKeypad`, so nothing P17 does
-around it moves that row, and the alternative (a local keypad) is forbidden by
-plan §g and by "never re-implement components". The fix is in
-`app/lib/core/**`, which RULES §1 puts off-limits to me.
-
-I did **not** skip or relax those two pins — the red is the honest signal the
-orchestrator needs. Per RULES §2 I recorded the block in code as `TODO(P17)` at
-the `NestKeypad` call site and refreshed request #3 with the exact numbers,
-the reasoning, and the concrete patch (three `Expanded` columns with the 72 px
-key centred, row gap `NestSpacing.gap10`, `padding: EdgeInsets.only(top: 8)`),
-which also fixes K02's pitch.
-
-### The 7 reds outside my scope
-
-`kid_home` K03 tests navigate to `/parental-gate` and assert the v1 scaffold
-title `P17 Parental gate`; the real gate renders design copy `Grown-ups only`.
-Failure: `Found 0 widgets with text "P17 Parental gate": []`. Still present after
-the `main` merge (`k03_bugs_test.dart:1059,1531`;
-`kid_home_view_test.dart:1243,1259,1275,1290,1989`). Those files are outside
-RULES §1 for P17; the one-line fix each is `expect(find.text('Grown-ups only'),
-findsOneWidget);`. Re-adding the scaffold string to the view is not an option —
-it is not design copy and it would fail P17's own copy test. Request #1 updated
-with the live line numbers and status.
+Fixes are one line per site (assert `Grown-ups only`; tap `Back to Pip` instead
+of `pageBack()`) and are written up in `SHARED_REQUEST.md` #1. Neither may be
+"fixed" in the view: the placeholder title is not design copy and an AppBar back
+button would break the design and all 11 pins.
 
 ## Change I made this stage
 
-One, comment-only, in `parental_gate_view.dart`: the `TODO(P17)` block-quote at
-the `NestKeypad` call site recording the shared-component gap conflict and
-pointing at request #3 — the RULES §2 mechanism for building against the
-foundation while blocked. No behaviour, no layout, no copy change. I also
-reverted `dart format .`'s edit of the shared
-`test/design_system/list_row_trailing_test.dart` so this stage touches nothing
-outside `app/lib|test/features/parental_gate/**` and `docs/screens/P17/**`.
+None in `app/`. `dart format .` reported 0 changed, `analyze` is clean, the
+feature suite is fully green, and the only experiment I ran (the scaffold swap
+above) was reverted byte-identical. Docs only: `SHARED_REQUEST.md` #1 updated
+with the 8th failure, its proof and the one-line fixes; #3 annotated as resolved
+by `9cac0c6` with the re-measured numbers.
 
 ## Tails
 
-`dart format .` → `Formatted 517 files (1 changed) in 3.62 seconds.` (that 1 was
-the unrelated shared test; reverted). My scope:
-`Formatted 18 files (0 changed) in 0.13 seconds.`
+`dart format .`
+
+```
+Formatted 528 files (0 changed) in 2.33 seconds.
+```
 
 `flutter analyze`
 
 ```
 Analyzing app...
-No issues found! (ran in 4.0s)
+No issues found! (ran in 13.9s)
 ```
 
 `flutter test test/features/parental_gate`
 
 ```
-00:05 +90 ~1 -2: .../parental_gate_view_test.dart: states Seed.empty: no child, but the gate still works
-00:05 +90 ~1 -2: Some tests failed.
+00:06 +106 ~1: .../parental_gate_geometry_test.dart: ... loading placeholders keep the loaded card height
+00:06 +106 ~1: 1 skipped test.
+00:06 +106 ~1: All other tests passed!
 ```
+
+(The single skip is P17-BUG-1, the shared-router proof from request #2.)
 
 `flutter test` (whole app)
 
 ```
-01:33 +2811 ~2 -9: Some tests failed.
+02:19 +2989 ~3 -8: Some tests failed.
 
 Failing tests:
+  app/test/features/kid_home/k01_bugs_test.dart: edge-case probes rapid lock double tap pushes exactly one gate
   app/test/features/kid_home/k03_bugs_test.dart: K03-BUG-9: double-tapping the lock stacks two gate routes
   app/test/features/kid_home/k03_bugs_test.dart: performAction(tap) on the lock opens the gate
   app/test/features/kid_home/kid_home_view_test.dart: K03 grown-ups lock (every kid state) failure state: the lock still opens the parental gate
@@ -142,17 +143,15 @@ Failing tests:
   app/test/features/kid_home/kid_home_view_test.dart: K03 grown-ups lock (every kid state) loading state: the lock is reachable and opens the gate
   app/test/features/kid_home/kid_home_view_test.dart: K03 grown-ups lock (every kid state) no active child: the lock still opens the parental gate
   app/test/features/kid_home/kid_home_view_test.dart: K03 navigation lock opens the parental gate
-  app/test/features/parental_gate/parental_gate_geometry_test.dart: ORCHESTRATOR_NOTES design pins (390×844, light, textScale 1.0) every band sits within ±2 px of the design PNG
-  app/test/features/parental_gate/parental_gate_geometry_test.dart: ORCHESTRATOR_NOTES design pins (390×844, light, textScale 1.0) the keypad follows the HTML grid gap (pitch 82)
 ```
 
 ## For the orchestrator
 
-Two shared changes clear the whole suite — no P17 product code is needed for
-either:
-1. `nest_keypad.dart`: CSS-grid gaps (request #3) → the 2 P17 design pins go
-   green and the card returns to 712.
-2. K03 tests: assert `Grown-ups only` instead of the scaffold title
-   (request #1) → the 7 kid_home reds go green.
+The P17 screen is complete and pinned to the design — 11/11 geometry pins at
+Δ0, 106 green tests, 1 honest skip. The suite goes fully green with **one
+change in another feature's tests**: 7 × assert `Grown-ups only` instead of the
+scaffold title, and 1 × replace `pageBack()` with a `Back to Pip` tap
+(`SHARED_REQUEST.md` #1, with line numbers and the proof). Request #3 can be
+closed — `main` satisfied it.
 
 VERDICT: FAIL

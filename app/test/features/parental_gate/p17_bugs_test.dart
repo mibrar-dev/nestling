@@ -2,10 +2,11 @@
 //
 // Iteration-2 result: P17-BUG-2 (UTC-vs-London challenge day) and P17-BUG-3
 // (stale entry after a challenge change) are FIXED — their proofs now run
-// green (builders unskipped them). P17-BUG-1 (shared router redirect loop on
-// an expired kid-mode trial) and P17-BUG-4 (backdrop header top-aligns its
-// items) are still open and stay `skip:`-marked so the suite stays green;
-// unskip one to see the failure.
+// green (builders unskipped them). Iteration 3 closed P17-BUG-4 (backdrop
+// header top-aligned its items against the CSS `.kb-top` centre), so its proof
+// runs too. P17-BUG-1 (shared router redirect loop on an expired kid-mode
+// trial) is still open and stays `skip:`-marked so the suite stays green;
+// unskip it to see the failure.
 //
 // The green tests below are the clean probes from both hunts: rapid double
 // activation, system back, pushed-gate unlock (gate must actually dismiss),
@@ -181,7 +182,7 @@ void main() {
     await setUpTestScope();
   });
 
-  group('bug proofs (P17-BUG-1 shared + P17-BUG-4 open; BUG-2/3 fixed in iteration 2)', () {
+  group('bug proofs (P17-BUG-1 shared; BUG-2/3/4 fixed)', () {
     // P17-BUG-1 (major, shared): app/lib/app/router.dart redirects an expired
     // kid-mode trial to /paywall, which is parent-only in kid mode and
     // redirects back to /parental-gate — a redirect loop. Unskipping this
@@ -223,14 +224,14 @@ void main() {
       await controller.close();
     });
 
-    // P17-BUG-4 (minor, screen-local): `.kb-top { align-items: center }` but
-    // the app's header Row passes `CrossAxisAlignment.start`, so the greeting
-    // and coin pill sit 5 px / 4 px high in the 44 px row (greeting centre 72
-    // vs the avatar's 77). The dimmed header is the only backdrop strip the
-    // card does not cover; 5_ui pins the same deviation in
-    // `parental_gate_geometry_test.dart` ('the backdrop row centres its items
-    // like `.kb-top`'). One-line fix: drop the `crossAxisAlignment` argument
-    // (the default is centre).
+    // P17-BUG-4 (minor, screen-local) — FIXED in iteration 3, proof un-skipped:
+    // `.kb-top { align-items: center }` but the app's header Row passed
+    // `CrossAxisAlignment.start`, so the greeting and coin pill sat 5 px / 4 px
+    // high in the 44 px row (greeting centre 72 vs the avatar's 77). The dimmed
+    // header is the only backdrop strip the card does not cover;
+    // `parental_gate_geometry_test.dart` pins the same fact ('the backdrop row
+    // centres its items like `.kb-top`'). The fix: drop the
+    // `crossAxisAlignment` argument (the default is centre).
     testWidgets('P17-BUG-4: the backdrop header centres its items', (
       tester,
     ) async {
@@ -250,7 +251,7 @@ void main() {
         reason: 'CSS .kb-top align-items: center',
       );
       await disposeApp(tester);
-    }, skip: true);
+    });
   });
 
   group('clean probes (green)', () {

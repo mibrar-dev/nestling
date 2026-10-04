@@ -27,15 +27,45 @@ Files: `app/test/features/kid_home/k03_bugs_test.dart`,
 code change needed anywhere).
 
 Blocks: yes for `flutter test` on main once P17 lands; the P17 screen itself is
-complete — its own suite is 90 pass / 1 skip / 2 red (the 2 reds are request
-#3 below, not this one).
+complete — its own suite is **106 pass / 1 skip / 0 red** (the 1 skip is
+P17-BUG-1, request #2).
 
 **Status, iteration 2: STILL UNFIXED.** Re-measured after the iteration-2 main
 merge — the same 7 assertions fail with the same
 `Found 0 widgets with text "P17 Parental gate"` text; the K03 files still carry
 the scaffold title at `k03_bugs_test.dart:1059,1531` and
-`kid_home_view_test.dart:1243,1259,1275,1290,1989`. One-line fix each:
+`kid_home_view_test.dart:1247,1263,1279,1294,1993`. One-line fix each:
 `expect(find.text('Grown-ups only'), findsOneWidget);`.
+
+**Status, iteration 3: STILL UNFIXED, and now 8 reds — a new 8th failure with a
+second symptom of the same cause.** `k01_bugs_test.dart` › `edge-case probes
+rapid lock double tap pushes exactly one gate` (line 697) asserts the *back
+button*: after the double tap its `expect(pushedPath(tester),
+'/parental-gate')` PASSES — so the gate opens correctly — then it fails on
+`await tester.pageBack()` with
+
+```
+Expected: exactly one matching candidate
+  Actual: _TypeWidgetFinder:<Found 0 widgets with type "CupertinoNavigationBarBackButton": []>
+   Which: means none were found but one was expected
+One back button expected on screen
+```
+
+Cause: the v1 scaffold's `AppBar` supplied an automatic back button; the design
+has none — P17 is a full-bleed card whose only exit control is `Back to Pip`,
+and the HTML source has no back arrow. Proven both ways this iteration: with the
+v1 scaffold view checked out temporarily the test is **green**
+(`00:01 +1: All tests passed!`), and with the real view it fails. The view was
+restored byte-identical afterwards (`diff -q` clean).
+
+Fix: replace `tester.pageBack()` with a real exit — tap
+`find.text('Back to Pip')` (or its semantics label), then assert
+`pushedPath(tester) == '/who-is-playing'`, which also pins the design's own
+cancel path. Do **not** add an AppBar back button to the gate to satisfy the
+test: it would break the design and the 11 design pins.
+
+All 8 reds are in `app/test/features/kid_home/**`, which P17 may not edit under
+RULES §1. With these one-line-per-site fixes the whole suite is green.
 
 ---
 
@@ -134,6 +164,19 @@ too tall each (18) plus the 8 px bottom padding the CSS drops (8).
 shared component, so nothing P17 does around the keypad moves it, and forking a
 local keypad is forbidden (plan §g). Marked in code with `TODO(P17)` at the
 `NestKeypad` call site in `parental_gate_view.dart` per RULES §2.
+
+**RESOLVED on main — iteration 3, this request can be closed.**
+`9cac0c6 Merge shared/keypad_grid` ("NestKeypad matches CSS .keypad grid (10px
+gaps, 8-24-0 padding, 1fr columns) + shrinkWrap fit for K02") landed in this
+worktree via `e70760c`. Re-measured in the integrated build at 390×844 light,
+textScale 1.0, bundled fonts loaded: card 66…778 (Δ0), keypad row centres
+380/462/544/626 (Δ0), row pitch 82 (Δ0), column pitch 88 (Δ0), `Back to Pip` 702
+(Δ0), caption 749 (Δ0) — every ORCHESTRATOR_NOTES item 2–6 pin green, both
+geometry tests green. No P17-local re-spacing was made; the `TODO(P17)` comment
+this integrator added at the call site in iteration 2 was replaced by 2b's
+documented call-site compatibility work (direct render at the design width,
+`SizedBox(contentWidth) + FittedBox(scaleDown) + NestKeypadFit.shrinkWrap` for
+narrower cards), so nothing stale was left behind.
 
 ---
 
