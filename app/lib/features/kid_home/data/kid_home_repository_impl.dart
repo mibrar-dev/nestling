@@ -202,6 +202,7 @@ class KidHomeRepositoryImpl implements KidHomeRepository {
     return KidChild(
       id: row.id,
       nickname: row.nickname,
+      ageBand: row.ageBand,
       avatarColour: row.avatarColour,
       coins: row.coins,
       pipStyle: row.pipStyle,
@@ -210,6 +211,14 @@ class KidHomeRepositoryImpl implements KidHomeRepository {
       pipStage: row.pipStage,
       happiness: row.happiness,
       pinSet: row.pinHash != null,
+    );
+  }
+
+  /// K01 picker selection: persists the tapped profile as the active child.
+  @override
+  Future<void> setActiveChild(String childId) async {
+    await (_db.update(_db.appState)..where((a) => a.id.equals(1))).write(
+      AppStateCompanion(activeChildId: Value(childId)),
     );
   }
 

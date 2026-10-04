@@ -1595,6 +1595,12 @@ class _SlowFailRepository extends KidHomeRepository {
   @override
   Future<bool> verifyPin(String childId, String pin) async => true;
 
+  // K01 selection stub (logic builder): no-op so K03-era fakes still
+  // satisfy the repository contract; K01 selection is covered in
+  // `kid_home_bloc_test.dart` + `kid_home_repository_test.dart`.
+  @override
+  Future<void> setActiveChild(String childId) async {}
+
   @override
   Future<void> completeQuest(String childId, String questId) => _gate.future;
 }
@@ -1619,6 +1625,12 @@ class _FailSaveRepository extends KidHomeRepository {
   @override
   Future<bool> verifyPin(String childId, String pin) async => true;
 
+  // K01 selection stub (logic builder): no-op so K03-era fakes still
+  // satisfy the repository contract; K01 selection is covered in
+  // `kid_home_bloc_test.dart` + `kid_home_repository_test.dart`.
+  @override
+  Future<void> setActiveChild(String childId) async {}
+
   @override
   Future<void> completeQuest(String childId, String questId) async {
     throw Exception('save failed');
@@ -1628,6 +1640,7 @@ class _FailSaveRepository extends KidHomeRepository {
 const KidChild _maya = KidChild(
   id: 'maya',
   nickname: 'Maya',
+  ageBand: '7-9',
   avatarColour: 'lilac',
   coins: 120,
   pipStyle: 'mochi',
@@ -1705,6 +1718,12 @@ class _FailLoadRepository extends KidHomeRepository {
   @override
   Future<bool> verifyPin(String childId, String pin) async => true;
 
+  // K01 selection stub (logic builder): no-op so K03-era fakes still
+  // satisfy the repository contract; K01 selection is covered in
+  // `kid_home_bloc_test.dart` + `kid_home_repository_test.dart`.
+  @override
+  Future<void> setActiveChild(String childId) async {}
+
   @override
   Future<void> completeQuest(String childId, String questId) async {}
 }
@@ -1745,6 +1764,12 @@ class _PushableHomeRepository extends KidHomeRepository {
 
   @override
   Future<bool> verifyPin(String childId, String pin) async => true;
+
+  // K01 selection stub (logic builder): no-op so K03-era fakes still
+  // satisfy the repository contract; K01 selection is covered in
+  // `kid_home_bloc_test.dart` + `kid_home_repository_test.dart`.
+  @override
+  Future<void> setActiveChild(String childId) async {}
 
   @override
   Future<void> completeQuest(String childId, String questId) async {}
@@ -1799,6 +1824,12 @@ class _SubCountingRepository extends KidHomeRepository {
   @override
   Future<bool> verifyPin(String childId, String pin) async => true;
 
+  // K01 selection stub (logic builder): no-op so K03-era fakes still
+  // satisfy the repository contract; K01 selection is covered in
+  // `kid_home_bloc_test.dart` + `kid_home_repository_test.dart`.
+  @override
+  Future<void> setActiveChild(String childId) async {}
+
   @override
   Future<void> completeQuest(String childId, String questId) async {}
 }
@@ -1827,6 +1858,12 @@ class _SilentNoopRepository extends KidHomeRepository {
 
   @override
   Future<bool> verifyPin(String childId, String pin) async => true;
+
+  // K01 selection stub (logic builder): no-op so K03-era fakes still
+  // satisfy the repository contract; K01 selection is covered in
+  // `kid_home_bloc_test.dart` + `kid_home_repository_test.dart`.
+  @override
+  Future<void> setActiveChild(String childId) async {}
 
   @override
   Future<void> completeQuest(String childId, String questId) async {
@@ -1879,6 +1916,12 @@ class _ToggleFailRepository extends KidHomeRepository {
 
   @override
   Future<bool> verifyPin(String childId, String pin) async => true;
+
+  // K01 selection stub (logic builder): no-op so K03-era fakes still
+  // satisfy the repository contract; K01 selection is covered in
+  // `kid_home_bloc_test.dart` + `kid_home_repository_test.dart`.
+  @override
+  Future<void> setActiveChild(String childId) async {}
 
   @override
   Future<void> completeQuest(String childId, String questId) async {
@@ -1942,6 +1985,12 @@ class _GatedCompletionRepository extends KidHomeRepository {
 
   @override
   Future<bool> verifyPin(String childId, String pin) async => true;
+
+  // K01 selection stub (logic builder): no-op so K03-era fakes still
+  // satisfy the repository contract; K01 selection is covered in
+  // `kid_home_bloc_test.dart` + `kid_home_repository_test.dart`.
+  @override
+  Future<void> setActiveChild(String childId) async {}
 
   @override
   Future<void> completeQuest(String childId, String questId) {

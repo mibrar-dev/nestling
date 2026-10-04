@@ -36,6 +36,7 @@ import '../../test_scope.dart';
 const KidChild _maya = KidChild(
   id: 'maya',
   nickname: 'Maya',
+  ageBand: '7-9',
   avatarColour: 'lilac',
   coins: 120,
   pipStyle: 'mochi',
@@ -167,6 +168,9 @@ class _FakeKidHomeRepository extends KidHomeRepository {
 
   @override
   Future<bool> verifyPin(String childId, String pin) async => true;
+
+  @override
+  Future<void> setActiveChild(String childId) async {}
 
   @override
   Future<void> completeQuest(String childId, String questId) async {
@@ -1134,7 +1138,7 @@ void main() {
       expect(find.byType(NestLockButton), findsOneWidget);
       await tester.tap(find.text('Choose'));
       await _settleRoute(tester);
-      expect(find.text('K01 Who is playing'), findsOneWidget);
+      expect(find.text('Tap your face to start'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await disposeApp(tester);
     });
@@ -2166,7 +2170,7 @@ void main() {
       expect(hasTap(tester, choose), isTrue);
       performTap(tester, choose);
       await _settleRoute(tester);
-      expect(find.text('K01 Who is playing'), findsOneWidget);
+      expect(find.text('Tap your face to start'), findsOneWidget);
       semantics.dispose();
       await disposeApp(tester);
     });
