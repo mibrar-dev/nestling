@@ -656,6 +656,32 @@ void main() {
       await disposeApp(tester);
     });
 
+    testWidgets('loading still offers the Back to Pip escape', (tester) async {
+      // 3_test obs 3 / 6_bugs obs 1: the 56 px slot under the spinner used to
+      // be an empty placeholder, so only the system back gesture could leave
+      // the gate. The real ghost escape now stands in it (layout-neutral: the
+      // same 56 px, pinned by the loading-vs-loaded card-height geometry pin).
+      await _useFake(_FakeRepository(hang: true));
+      GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+      await pumpAppRoute(tester, '/parental-gate');
+
+      final semantics = tester.ensureSemantics();
+      expect(find.text('Back to Pip'), findsOneWidget);
+      final escape = tester.getSemantics(find.bySemanticsLabel('Back to Pip'));
+      expect(
+        escape.getSemanticsData().hasAction(SemanticsAction.tap),
+        isTrue,
+        reason: 'the loading escape must be operable by VoiceOver/TalkBack',
+      );
+      await semanticsTap(tester, 'Back to Pip');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(currentPath(tester), '/kid-home');
+      expect(GetIt.instance<AppModeController>().mode, AppMode.kid);
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+
     testWidgets('failure shows a message, Try again and Back to Pip', (
       tester,
     ) async {

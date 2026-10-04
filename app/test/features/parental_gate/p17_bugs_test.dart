@@ -1,10 +1,10 @@
-// P17 parental gate — adversarial bug hunt (Stage 6, iteration 3).
+// P17 parental gate — adversarial bug hunt (Stage 6, iteration 3; proofs
+// updated in iteration 4).
 //
-// Result: P17-BUG-2 and P17-BUG-3 (iteration 1) and P17-BUG-4 (iteration 2)
-// are all FIXED — their proofs now run green as regression tests. P17-BUG-1
-// (shared router redirect loop on an expired kid-mode trial) is the only open
-// bug and stays `skip:`-marked so the suite stays green; unskip it to see the
-// failure.
+// Result: P17-BUG-1 (shared router redirect loop on an expired kid-mode trial)
+// was FIXED on `main` by shared/kid_trial_gate, and P17-BUG-2 / BUG-3
+// (iteration 1) and P17-BUG-4 (iteration 2) were fixed in P17. All four proofs
+// now run green as regression tests; the suite has no skips.
 //
 // The green tests below are the clean probes from all three hunts: rapid
 // double activation, system back, pushed-gate unlock (gate must actually
@@ -238,15 +238,14 @@ void main() {
     await setUpTestScope();
   });
 
-  group('bug proofs (P17-BUG-1 shared; BUG-2/3/4 fixed)', () {
-    // P17-BUG-1 (major, shared): app/lib/app/router.dart redirects an expired
-    // kid-mode trial to /paywall, which is parent-only in kid mode and
-    // redirects back to /parental-gate — a redirect loop. Unskipping this
-    // proof shows go_router's error page: `Page Not Found / GoException:
-    // redirect loop detected /paywall => /parental-gate => /paywall / Go to
-    // home page`; every kid route (/kid-home included) is stuck the same way.
-    // Fix is router.dart (shared, filed in SHARED_REQUEST.md); not fixable
-    // under RULES §1.
+  group('bug proofs (P17-BUG-1/2/3/4 — all FIXED)', () {
+    // P17-BUG-1 (major, shared): app/lib/app/router.dart used to redirect an
+    // expired kid-mode trial to /paywall, which is parent-only in kid mode and
+    // redirects back to /parental-gate — a redirect loop that stuck every kid
+    // route. `main` merged the fix (shared/kid_trial_gate, ORCHESTRATOR_NOTES
+    // 09:48): kid mode + expired trial goes to the gate, and the gate is
+    // exempt from that redirect, so the proof now runs as a plain regression
+    // test.
     testWidgets('P17-BUG-1: kid mode + expired trial renders the gate', (
       tester,
     ) async {
@@ -255,8 +254,11 @@ void main() {
       await pumpAppRoute(tester, '/parental-gate');
       await tester.pump(const Duration(milliseconds: 400));
       expect(find.text('Grown-ups only'), findsOneWidget);
+      // … and no router error page in its place.
+      expect(find.textContaining('redirect loop'), findsNothing);
+      expect(currentPath(tester), '/parental-gate');
       await disposeApp(tester);
-    }, skip: true);
+    });
 
     test('P17-BUG-2: the challenge follows the Europe/London day (BST)', () {
       final repo = ParentalGateRepositoryImpl(db: AppDatabase.memory());

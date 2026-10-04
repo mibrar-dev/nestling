@@ -12,3 +12,6 @@ Pin 2–6 in a real-font geometry test, plus a scrim test that the barrier cover
 
 ## UPDATE (07:13) — the keypad layout is SHARED
 NestKeypad's pitch (rows 88 / cols 96 vs design 82 / 88) is being fixed on shared/keypad_grid to match CSS `.keypad`. Do not re-space keys locally. After main has it (merged before your build), re-check the key centres against the design.
+
+## UPDATE (09:48) — your two shared requests are being fixed on shared/kid_trial_gate
+The redirect loop and the 8 kid-test reds are being fixed there. Decision: in kid mode with an expired trial, everything goes to the gate, the gate is exempt, and the parent sees the paywall after the gate. Once main has it, un-skip P17-BUG-1. Do not edit kid_home tests yourself. Fix only P17-local items this pass.

@@ -179,7 +179,7 @@ void main() {
       });
     }
 
-    testWidgets('the retry escape in the failure state is ≥44 px', (
+    testWidgets('the retry escape in the failure state is ≥56 px', (
       tester,
     ) async {
       final repo = GetIt.instance<ParentalGateRepository>();
@@ -200,7 +200,9 @@ void main() {
           matching: find.byType(NestButton),
         ),
       );
-      expect(retry.height, greaterThanOrEqualTo(NestDevice.tapParent));
+      // Kid mode, so both escapes carry the ≥56 kid tap target
+      // (DESIGN_SPEC §5 kid rules) — not the 44 parent minimum.
+      expect(retry.height, greaterThanOrEqualTo(NestDevice.tapKid));
       // The failure body also keeps the 56 px kid escape.
       final cancel = tester.getRect(
         find.ancestor(
@@ -209,6 +211,26 @@ void main() {
         ),
       );
       expect(cancel.height, greaterThanOrEqualTo(NestDevice.tapKid));
+
+      // The `.gate-note` rhythm has a single owner: the caption renders
+      // exactly once, sits `s2 + gap2` (10 px) below the last button and is
+      // the card's last row — no orphan gap under it in this state (4_review
+      // finding 4).
+      final caption = find.text('This keeps settings and purchases safe.');
+      expect(caption, findsOneWidget);
+      final captionRect = tester.getRect(caption);
+      expect(
+        captionRect.top - cancel.bottom,
+        moreOrLessEquals(NestSpacing.s2 + NestSpacing.gap2, epsilon: 1),
+        reason: '`.gate-note { margin-top: 10 }` must be the only gap below it',
+      );
+      final card = tester.getRect(find.byType(NestModal));
+      expect(
+        card.bottom - captionRect.bottom,
+        NestSpacing.s5,
+        reason:
+            'the caption is the last row: card pad-bottom 20, no dead space',
+      );
       expect(tester.takeException(), isNull);
       await disposeApp(tester);
     });
@@ -321,21 +343,36 @@ void main() {
     }
   });
 
-  group('text scale 1.3 keeps the whole card on screen', () {
-    testWidgets('390 × 1.3 fits the card, every control stays reachable', (
+  group('the card stays centred at every supported scale', () {
+    testWidgets('390 × 1.3 centres the card, fits it and needs no scroll', (
       tester,
     ) async {
       await _pump(tester, textScale: 1.3);
-      // The card is anchored at the design top and, with the CSS-grid keypad
-      // (326 rather than 352), it still fits the 844 px canvas at the maximum
-      // supported scale — the SingleChildScrollView stays as the fallback for
-      // shorter viewports.
+      // CSS `.modal { top: 50%; transform: translateY(-50%) }` (DESIGN_SPEC §5
+      // P17: "as a centred `.modal`"), so at the maximum supported scale the
+      // card keeps equal air above and below instead of hanging off a literal
+      // top edge — and, with the CSS-grid keypad (326 rather than 352), it
+      // still fits the 844 px canvas, so the SingleChildScrollView never has to
+      // scroll (the scroll view stays as the fallback for shorter viewports).
       final modal = tester.getRect(find.byType(NestModal));
-      expect(modal.top, moreOrLessEquals(66, epsilon: 0.5));
+      expect(
+        modal.top,
+        moreOrLessEquals(NestDevice.height - modal.bottom, epsilon: 1),
+        reason: 'the card must be vertically centred, not top-anchored',
+      );
+      expect(modal.top, greaterThanOrEqualTo(0));
       expect(
         modal.bottom,
         lessThanOrEqualTo(NestDevice.height),
-        reason: 'the anchored card must not need a scroll at 390 × 1.3',
+        reason: 'the centred card must not need a scroll at 390 × 1.3',
+      );
+      expect(
+        tester
+            .state<ScrollableState>(find.byType(Scrollable).first)
+            .position
+            .maxScrollExtent,
+        0,
+        reason: 'the whole card fits, so nothing is scrolled out of reach',
       );
       expect(tester.takeException(), isNull);
       expect(find.text('Back to Pip'), findsOneWidget);

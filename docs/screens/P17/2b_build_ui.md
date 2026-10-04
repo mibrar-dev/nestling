@@ -1,199 +1,242 @@
-# P17 Parental gate — 2b build UI (iteration 3)
+# P17 Parental gate — 2b build UI (iteration 4)
 
-Scope: `app/lib/features/parental_gate/presentation/views/**`,
+Scope: `app/lib/features/parental_gate/presentation/views/**` +
 `presentation/widgets/**`, and the widget/view-side tests in
-`app/test/features/parental_gate/` (`…view_test.dart`, the geometry/states
-pinned layouts, `p17_bugs_test.dart`). No bloc/domain/data edits, no
-DI/route edits, no simulator, no `flutter clean`.
+`app/test/features/parental_gate/` (`parental_gate_view_test.dart`,
+`parental_gate_states_test.dart`, `parental_gate_geometry_test.dart`,
+`p17_bugs_test.dart`). No bloc/domain/data edits, no DI/route edits, no
+simulator, no `flutter clean`, no whole-app `flutter test`.
 
-Contract re-read: `2a_build_logic.md` says **CONTRACT CHANGES: none** — the
-three events, all state fields and the London-day `challengeFor` are unchanged,
-so nothing in this layer had to be re-cut.
+Contract re-read (mandatory before finishing): `2a_build_logic.md` (iteration 4)
+says **CONTRACT CHANGES: none** — same three events, same state fields
+(`status/items/entered/attempts/unlocked/errorMessage`), same
+`challengeFor(utcNow)` London-day rule. Nothing in this layer had to be re-cut.
 
-Inputs: `ORCHESTRATOR_NOTES.md` (items 1–7 + the 07:13 keypad note),
-`FIXES_2.md` (§3.1/§3.2/§3.3 + the 5_ui deviations), `6_bugs.md`, `4_review.md`,
-`1_plan.md`, the design PNG (re-read this iteration) and the HTML source.
+Inputs re-read: `ORCHESTRATOR_NOTES.md` (items 1–7, the 07:13 shared-keypad
+note and the **new 09:48 shared/kid_trial_gate note**), `FIXES_3.md`,
+`6_bugs.md`, `4_review.md`, `3_test.md`, `1_plan.md`, the light/dark design PNGs
+and `design/html-source/screens/P17-parental-gate.html`.
 
-## The headline: the whole screen is now pinned to the design
+## Summary
 
-`main` carries `9cac0c6 Merge shared/keypad_grid`, and this worktree is merged
-with it (`e70760c`). The shared `NestKeypad` now *is* the CSS `.keypad`
-(`repeat(3,1fr)` `Expanded` cells, row gap 10, `padding: 8 24 0`,
-`NestKeypadFit.stretch` default + a `shrinkWrap` mode). Per ORCHESTRATOR_NOTES
-07:13 I did **not** re-space anything locally — I only had to make the call site
-compatible and re-check the pins.
+Four UI-layer changes, all in the view, plus their pins. Every one of them
+closes an item that three consecutive stages had recorded as still open, and
+none of them moves a design band: the 11 `ORCHESTRATOR_NOTES` geometry pins are
+still **Δ0** against the design PNG.
 
-`parental_gate_geometry_test.dart` — **11/11 green** (was 7/11 in iteration 2),
-all against the design PNG with the bundled Inter/Nunito loaded through
-`FontLoader`, so the numbers are device-faithful:
+| Change | Closes | Layout impact |
+|---|---|---|
+| Card centred per CSS (no `66` literal) | `4_review` finding 3 | Δ0 at textScale 1.0; **better** at 1.3 (no internal scroll) |
+| `.gate-note` rhythm owned by one column | `4_review` finding 4 | removes a 10 px orphan gap in `failure` |
+| `Try again` 44 → `NestDevice.tapKid` (56) | `4_review` finding 6 / `6_bugs` obs 2 / `3_test` obs 2 | failure state only (not in any design PNG) |
+| Real `Back to Pip` escape while loading | `3_test` obs 3 / `6_bugs` obs 1 | **none** — same 56 px slot |
+| `P17-BUG-1` un-skipped (shared fix landed) | `ORCHESTRATOR_NOTES` 09:48 | none |
 
-| Band (390×844, light, textScale 1.0) | Design | App | Δ |
-|---|---|---|---|
-| card top / left / width | 66 / 24 / 342 | 66 / 24 / 342 | 0 |
-| card bottom / height | 778 / 712 | 778 / 712 | 0 |
-| lock tile | 90…142 | 90…142 | 0 |
-| title “Grown-ups only” centre | 168 | 168 | 0 |
-| instruction centre | 201 | 201 | 0 |
-| question centre | 228 | 228 | 0 |
-| answer boxes centre (56×64) | 288 | 288 | 0 |
-| keypad slot top | 336 | 336 | 0 |
-| keypad row centres | 380 / 462 / 544 / 626 | same | 0 |
-| keypad row pitch / column pitch | 82 / 88 | 82 / 88 | 0 |
-| “Back to Pip” centre | 702 | 702 | 0 |
-| caption centre | 749 | 749 | 0 |
-| scrim barrier | (0,0)→(390,844) | same | 0 |
+Feature suite: **115 pass · 0 skip · 0 red** (iteration 3: 106 pass · 1 skip).
 
-So ORCHESTRATOR_NOTES items 2–6 are all met, `5_ui`'s deviations 1 and 2 (keypad
-pitch, card bottom/cancel/caption +26) are gone, and **SHARED_REQUEST #3 can be
-closed** — no P17-local change was needed or made for the pitch.
+## 1. The card is now centred like the CSS (4_review finding 3)
 
-## FIXES_2 items closed this iteration
+The view pinned the card with a derived literal: `Padding.fromLTRB(s6, 66, s6, 0)`
++ `ConstrainedBox(minHeight: maxHeight − 66)` + `Align(topCenter)`. That `66` is
+`(844 − 712) / 2`, i.e. the CSS truth `.modal { top: 50%; transform:
+translateY(-50%) }` re-encoded as a magic number (DESIGN_SPEC §5 P17 describes
+the screen as "a centred `.modal`"). Now:
 
-### §3.1 MINOR — the dimmed backdrop row did not centre its items — CLOSED
+```dart
+SingleChildScrollView
+└ ConstrainedBox(minHeight: constraints.maxHeight)          // the canvas
+  └ Column(mainAxisAlignment: center, crossAxisAlignment: stretch)
+    └ Padding(horizontal: NestSpacing.s6) → Semantics('Parental gate') → NestModal
+```
 
-`_GateBackdropBody`'s header `Row` no longer passes
-`crossAxisAlignment: CrossAxisAlignment.start`; the `Row` default is `center`,
-which is what `.kb-top { align-items: center }` says. `p17_bugs_test.dart`'s
-**P17-BUG-4 proof is un-skipped and green** (`bug proofs (P17-BUG-1 shared;
-BUG-2/3/4 fixed) P17-BUG-4: the backdrop header centres its items`), as is the
-geometry twin `the backdrop row centres its items like .kb-top`.
+`Column`, not `Align(Alignment.center)`/`Center`: inside a scroll view those
+shrink-wrap, so a card taller than the canvas would hang off the top with its
+first pixels unreachable. The Column grows past the viewport instead, so the
+scroll view can still reach the top. Horizontal padding moved *inside* the
+scroll view so the gutters stay 24 px; the modal still gets tight 342 px
+constraints.
 
-That fix moved the greeting's *text* top from 55 to 60 — which exposed a latent
-error in the geometry pin: `designBackdropHeaderTop = 55` is the `.kb-top`
-**row** top (47 px status-bar reserve + 8 px `padding-top`), but the assertion
-measured the greeting `Text` rect. CSS truth is 55 for the row and
-`55 + (44 − 34)/2 = 60` for the centred h1 line box. The constant is now split
-(`designBackdropHeaderTop = 55` for the row, `designBackdropGreetingTop = 60`
-for the text) and both are pinned. This is a correction of a wrong expectation,
-not a relaxation: nothing moved by more than ±0.5 px of CSS truth.
+Measured effect (390×844, textScale 1.0 — `parental_gate_geometry_test.dart`,
+all 11 pins green, every band Δ0):
 
-### §3.3 MAJOR (merge blocker) — `FittedBox` would throw with the merged keypad — CLOSED
+| Band | Design | App |
+|---|---|---|
+| card top / left / width | 66 / 24 / 342 | 66 / 24 / 342 |
+| card bottom / height | 778 / 712 | 778 / 712 |
+| title / instruction / question centres | 168 / 201 / 228 | same |
+| answer boxes centre | 288 | 288 |
+| keypad row centres | 380/462/544/626 | same |
+| `Back to Pip` centre / caption centre | 702 / 749 | same |
 
-The call site now matches the two patterns the finding prescribed, chosen by
-available width inside a `LayoutBuilder`:
+The one pin that *was* an artefact of the old anchoring has been re-pointed at
+CSS instead of deleted — `the card stays centred at every supported scale · 390
+× 1.3 centres the card, fits it and needs no scroll` now asserts
+`top == height − bottom` (±1), `bottom ≤ 844`, and
+`Scrollable.position.maxScrollExtent == 0`. Previously it asserted
+`top == 66`, i.e. it pinned the 10 px internal scroll that `3_test` obs 1
+recorded. The card now sits at top 41 / bottom 803 at textScale 1.3: centred,
+whole, nothing scrolled out of reach. **The expectation moved to CSS truth, it
+was not weakened** — the old one is strictly stronger about top-anchoring and
+weaker about reachability, and top-anchoring was the finding.
 
-- at the design width (`constraints.maxWidth >= NestKeypad.contentWidth`, i.e.
-  302 px content ≥ 280) the keypad is rendered **directly** — the CSS
-  `.keypad` is a block-level grid that fills its parent, so the old
-  `SizedBox(296) > FittedBox` wrapper was both redundant and (with `Expanded`
-  cells) an unbounded-constraint crash;
-- for narrower cards the scale-down is kept but the child is given an **explicit
-  width**: `FittedBox(fit: scaleDown, child: SizedBox(width:
-  NestKeypad.contentWidth, child: NestKeypad(fit: NestKeypadFit.shrinkWrap)))`,
-  which paints the key at 232/280 = 59.7 px — still above the 56 px kid minimum
-  that `every key keeps a ≥56 px rect at N px` asserts at 320, 390 and 430.
+## 2. `.gate-note` has one owner (4_review finding 4)
 
-The merge-readiness guard `the keypad is never laid out under unbounded width`
-is green, and the full 320/390/430 × textScale 1.0/1.3 matrix shows no layout
-exception.
+`_GateFailure` rendered its own `SizedBox(s2 + gap2)` + `This keeps settings and
+purchases safe.`, while the enclosing column added a second `s2 + gap2` gap plus
+a `SizedBox.shrink()` standing in for the caption it skipped — a 10 px orphan
+gap under the caption in the failure state, and two owners for one piece of
+copy (flipping the `status == failure` condition would have printed it twice).
+The enclosing column now always renders the gap + caption and `_GateFailure`
+renders neither. Pinned in the retry/escape test:
 
-### §3.2 MAJOR (shared) — everything below the keypad +26 — CLOSED by the merge
+- `findsOneWidget` for the caption;
+- `captionTop − cancelBottom == s2 + gap2` (±1) — the `.gate-note` gap is the
+  only gap below it;
+- `cardBottom − captionBottom == s5` (20) — pad-bottom, **no dead space**.
 
-No P17 change; the pins encode the shared component's new contract and pass.
+## 3. `Try again` is a kid control: 56, not 44 (4_review finding 6)
 
-### Loading placeholders — a regression I introduced and fixed
+`1_plan.md` §(d) said `minHeight: 44` for the retry; DESIGN_SPEC §5 kid rules
+("tap targets ≥56") and the sibling `Back to Pip` in the same card say 56. The
+spec wins on a kid screen, no design PNG shows the failure state, and the
+reviewer's own instruction was to amend the plan line. The pin in
+`parental_gate_states_test.dart` moved from `≥ NestDevice.tapParent` (44) to
+`≥ NestDevice.tapKid` (56) — a **stricter** assertion, not a relaxed one. This
+is the only place I deviated from `1_plan.md`; it is called out here for the
+orchestrator, and the code comment at the call site records why.
 
-While re-checking §3.3 I updated the `_GateLoading` reserve for the new keypad
-(352 → 326, the CSS grid's 8 + 4×72 + 3×10) but also wrongly added the caption's
-`s2 + gap2` gap and its 18 px line box — the enclosing column already adds both,
-so the loading card stood 28 px taller than the loaded one and
-`the loading placeholders keep the loaded card height` went red (Δ28.0). The
-two extra `SizedBox`s are gone and a comment now records why the placeholder
-must not reserve them. That test is green again with Δ0.
+## 4. The loading state has a real escape (3_test obs 3 / 6_bugs obs 1)
 
-### 6_bugs observation 1 — `_announcedAttempts` never reset — CLOSED
+`_GateLoading` reserved a bare `const SizedBox(height: 56)` under the spinner, so
+during `initial`/`loading` the only way out was the system back gesture — bad
+for a kid and worse for VoiceOver. It now renders the same 56 px ghost
+`Back to Pip` the loaded card shows, wired to the existing `_leave`. The button
+is exactly the 56 px the placeholder stood in for, so the card does not move:
+the `loading placeholders keep the loaded card height` geometry pin is still
+**Δ0**. New proof `loading still offers the Back to Pip escape` asserts the
+semantics node exists, has `SemanticsAction.tap`, and that tapping it lands on
+`/kid-home` in kid mode.
 
-The BUG-3 fix resets `attempts` to 0 when the live challenge changes, but the
-view's announcement counter kept its high-water mark, so the first wrong answer
-on the new challenge was silent. The view now tracks `_announcedChallengeId`
-and, when the challenge id changes, re-bases `_announcedAttempts` on the
-incoming state's count before the announce check. View-only, no contract change.
+## 5. `P17-BUG-1` un-skipped — the shared fix has landed (ORCHESTRATOR_NOTES 09:48)
 
-### 6_bugs observation 4 / 3_test observation 6 — dead code — deliberately KEPT
+`main` merged `shared/kid_trial_gate` (`0d7aa52`): `router.dart:128-131` now
+routes kid mode + `trialExpired` to the gate and exempts the gate from that
+redirect, so the loop cannot form. Per the 09:48 note I un-skipped the proof and
+it passes. It is slightly **stronger** than before: it now also asserts there is
+no router error page (`find.textContaining('redirect loop')` is absent) and that
+`currentPath(tester) == '/parental-gate'`. The feature suite therefore has **no
+skips at all**. `SHARED_REQUEST.md` #1 and #2 are annotated RESOLVED.
 
-`presentation/widgets/parental_gate_placeholder_card.dart` is unreferenced, but
-so is the identical file in **ten** other features (kid_home, today, settings,
-quests, pip, family, auth, kid_jar, design_system_gallery). It is the repo-wide
-v1 scaffold, not P17 rot; deleting only P17's copy would make this feature the
-odd one out. Left on disk with this note. `ParentalGateChallengeModel` is 2a's
-call and has a round-trip test.
+## FIXES_3 triage
 
-## Copy / owner rules re-verified this iteration
+`FIXES_3.md` is the iteration-3 `2_build` summary; per the orchestrator's
+PROCESS-ITEMS rule its `dart format` / `flutter analyze` / suite rows are not
+findings. Every item I own is closed or explicitly out of layer:
 
-- Copy compared character-by-character with
-  `design/html-source/screens/P17-parental-gate.html`: `Grown-ups only`,
-  `Type the answer in numbers:`, `Back to Pip`,
-  `This keeps settings and purchases safe.` — this screen has no curly
-  punctuation, no dashes and no ellipsis, so ASCII-exact is the requirement;
-  the question and digits stay DB-driven (never `seven times six` / `4`).
-- `p17-parental-gate.html` sets **no** `letter-spacing` and no `text-wrap:
-  balance`, so `NestType` defaults are correct and `NestBalancedText` must NOT
-  be used (h2/h3/body/caption are excluded by the owner rule anyway). No
-  `letterSpacing` added anywhere.
-- No `google_fonts` / `GoogleFonts` in `lib` or tests (bundled Inter/Nunito).
-- BOTTOM EDGE: this screen has no bottom bar; the scrim and the shared
-  `KidScope` meadow run full-bleed to the physical edge — pinned by
-  `the scrim barrier covers (0,0) to the physical edge` and the dark/light
-  `kid background` group.
-- ALIGNMENT: 24 px card gutters, centred digit row, `12` CSS keypad gap inside
-  a `24`-padded grid → keys at 71…143 / 159…231 / 247…319, all pinned.
-- CHILD ORDER / PIP: the backdrop takes the **active** child and falls back to
-  the first in DB (insertion) order; Pip comes from the DB via `PipAvatar`
-  (Maya = Mochi·sunny·stage 3), pinned by
-  `the dimmed backdrop shows the child's own Pip in the slot` and the Leo
-  probe in `p17_bugs_test.dart`. No `pip_stage_*.svg`.
-- ACCESSIBILITY ACTIONS: every key, the delete key and both ghost buttons expose
-  `SemanticsAction.tap` and change real state; the backdrop stays out of the a11y
-  tree (`ExcludeSemantics`).
-- CLOCK: no `DateTime.now()` in the view; the challenge text is DB/clock driven.
+| Item | Status |
+|---|---|
+| ORCHESTRATOR_NOTES 2–6 + item 11 (11 geometry pins + scrim) | **MET, re-verified Δ0** this iteration |
+| SHARED_REQUEST #3 (keypad pitch) | resolved on `main` (`9cac0c6`), nothing P17-local — closable |
+| P17-BUG-1 (shared router) | **fixed on `main`, proof un-skipped and green** |
+| 8 reds in `kid_home` | out of layer (RULES §1); `main` fixed them (`0d7aa52`); not touched by me |
+| `flutter test` whole app | not run — integrator's job (stage brief) |
 
-## Test results (my layer + the feature folder; no whole-app run, no simulator)
+Beyond FIXES_3 I also closed the three `4_review` UI findings and the two
+`3_test`/`6_bugs` UI observations listed above, because they would otherwise be
+re-found every iteration.
+
+## Owner-rule sweep (re-checked, all clean)
+
+- **PIP** — the backdrop still renders the child's own Pip from the DB via
+  `PipAvatar` (`style/skin/accessory/stage`; Maya = Mochi·sunny·stage 3), with
+  the no-child fallback `PipAvatar(style: mochi, stage: 3)` (default skin
+  `sunny`). No `pip_stage_*.svg`. Untouched this iteration.
+- **STATUS BAR** — `NestStatusBar` still only reserves height.
+- **DATA OVER MOCKS** — question and digits stay repo/DB driven; nothing
+  hard-coded, and the design's `seven times six` example is not asserted
+  against the DB value anywhere.
+- **BOTTOM EDGE** — no bottom bar on this screen; scrim + shared `KidScope`
+  meadow run full-bleed (pinned).
+- **ALIGNMENT** — 24 px gutters unchanged; the horizontal padding moved inside
+  the centring Column and the modal still spans exactly 24…366.
+- **CHILD ORDER** — `db.watchChildren` order, `kids.first` fallback (insertion
+  order, never alphabetical).
+- **COPY** — re-verified character-by-character with the HTML source:
+  `Grown-ups only`, `Type the answer in numbers:`, `Back to Pip`,
+  `This keeps settings and purchases safe.`, `Parental gate`, `Number pad`,
+  `Delete`, `Loading the grown-ups check`, `That wasn’t right — try again`
+  (curly U+2019). No copy added or changed this iteration.
+- **FONTS / LETTER SPACING / BALANCED HEADINGS / CHIP ROWS** — no
+  `google_fonts`, no `letterSpacing` (the P17 CSS sets none), no
+  `NestBalancedText` (this screen uses `.h2/.h3/.body-s/.caption`, all excluded
+  by the owner rule), no chip rows.
+- **CLOCK** — no `DateTime.now()`; nothing time-dependent was added.
+- **TRIAL / IDS** — no `subscription_status` write; the new id rule does not
+  apply (no rows created).
+- **ACCESSIBILITY ACTIONS** — every control still exposes
+  `SemanticsAction.tap`: 11 keys, `Try again`, both `Back to Pip` buttons
+  (loaded + loading). No `Semantics(excludeSemantics: true)` wrapper was added
+  around anything interactive; the new button is a plain `NestButton` (outer
+  semantics `onTap`), and the new test proves `performAction(tap)` drives real
+  navigation.
+- **SIMULATORS** — none booted, installed on, screenshotted or driven.
+
+## Test results (my layer only)
 
 ```
 flutter analyze lib/features/parental_gate test/features/parental_gate
-  → No issues found! (ran in 4.3s)
+  → No issues found! (ran in 3.1s)
 
-flutter test test/features/parental_gate/parental_gate_geometry_test.dart
-  → +11: All tests passed!                     (iteration 2: +9 −2)
+dart format --output=none --set-exit-if-changed lib/features/parental_gate \
+    test/features/parental_gate
+  → Formatted 18 files (0 changed)
 
-flutter test test/features/parental_gate/parental_gate_view_test.dart
-                                       parental_gate_states_test.dart
-  → +43: All tests passed!
-
-flutter test test/features/parental_gate        (whole folder, incl. 2a's files)
-  → +106 ~1: All tests passed!                  (iteration 2: +90 ~2 −2 … )
+parental_gate_geometry_test.dart   → +11  All tests passed!   (11/11 pins Δ0)
+parental_gate_view_test.dart       → +22  All tests passed!   (was +21)
+parental_gate_states_test.dart     → +26  All tests passed!   (was +25)
+p17_bugs_test.dart                 → +18  All tests passed!   (was +17 ~1)
+flutter test test/features/parental_gate
+  → +115: All tests passed!         (was +106 ~1 — 0 skips now)
 ```
 
-The single `~1` skip is **P17-BUG-1** (shared `app/lib/app/router.dart`
-redirect loop on an expired kid-mode trial, SHARED_REQUEST #2) — out of my layer
-by RULES §1, still honestly skip-marked. Nothing else in `parental_gate` is red.
+Per-file counts include 2a's files; I ran the whole feature folder (not the
+whole-app suite) because the brief allows my own view tests.
 
-`dart format` on my scope: `18 files (1 changed)` — the geometry test only.
+## Files changed
 
-## For the orchestrator
+- `app/lib/features/parental_gate/presentation/views/parental_gate_view.dart`
+  — centred card (§1), caption ownership (§2), `Try again` 56 (§3), loading
+  escape (§4). The large line count in the diff is `dart format` re-indenting the
+  modal subtree under the new `Column` level; `git diff -w` shows only the four
+  intended hunks.
+- `app/test/features/parental_gate/parental_gate_states_test.dart` — retry pin
+  44 → 56, caption single-owner + `.gate-note` + pad-bottom pins, 1.3 pin
+  re-pointed at CSS centring.
+- `app/test/features/parental_gate/parental_gate_view_test.dart` — new loading
+  escape proof.
+- `app/test/features/parental_gate/p17_bugs_test.dart` — `P17-BUG-1` un-skipped
+  and strengthened.
+- `docs/screens/P17/SHARED_REQUEST.md` — #1/#2 annotated RESOLVED.
 
-1. **SHARED_REQUEST #3 (`NestKeypad` CSS grid) is satisfied.** Delete it — the
-   pitch now measures 82/88 and every P17 pin is green with no local hack.
-2. **SHARED_REQUEST #1 (K03 tests asserting `P17 Parental gate`) is still
-   needed** — those 7 `kid_home` reds are outside this worktree's rules; the
-   real gate renders `Grown-ups only`.
-3. SHARED_REQUEST #2 (P17-BUG-1 router loop) still open, still skipped.
+No change in `presentation/widgets/` (`parental_gate_placeholder_card.dart` is
+the repo-wide v1 scaffold, unreferenced in 14 features — deliberately kept, see
+`2b_build_ui.md` iteration 3 and `4_review` finding 7).
 
 ## LEFT FOR NEXT ITERATION
 
-Nothing in the 2b layer — every UI/layout/copy item from `FIXES_2.md` that
-belongs to this screen is implemented, pinned and green. Carried, all outside
-this layer:
+Nothing in the 2b layer — no outstanding UI/layout/copy item, and every pin that
+encodes this screen is green at Δ0. Carried, all outside this layer:
 
-- P17-BUG-1 shared router redirect loop (2a's/app layer, skip-marked);
-- the 7 K03 scaffold-title reds (request #1, `kid_home` tests);
-- 4_review finding 2 (backdrop reads `AppDatabase` via GetIt) — 2a declined it
-  because the fix is a new repository method (a contract change), and it
-  contradicts `1_plan.md` §(b);
-- 3_test obs 1 (a 10 px internal scroll at 390 × textScale 1.3 — the plan's
-  §(e) fallback, conformant), obs 3 (no `Back to Pip` during loading) and obs 4
-  (`Try again` at the plan-mandated 44 px on a kid screen) — all plan/DS calls;
-- midnight re-key of an open gate (`watchItems()` has no timer) — 2a, open by
-  design.
+- `4_review` finding 2 (backdrop reads `AppDatabase` via GetIt): a new
+  repository method, i.e. a contract change that contradicts `1_plan.md` §(b)
+  and needs a joint logic+UI iteration if the orchestrator ever mandates it
+  (2a declines it for the same reason).
+- `4_review` finding 5 (each `Try again` starts a second open `emit.forEach`):
+  bloc file — 2a's layer.
+- `6_bugs` obs 3 (dead `parental_gate_placeholder_card.dart`) / finding 7
+  (`ParentalGateChallengeModel` unreferenced from `lib`): deliberate, documented.
+- Midnight re-key of an open gate (`watchItems()` has no timer): 2a, open by
+  design, no pin.
+- Whole-app suite and simulator verification: the integrator's stage, not mine.
 
 VERDICT: PASS

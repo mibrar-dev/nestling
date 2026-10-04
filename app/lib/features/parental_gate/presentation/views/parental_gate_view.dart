@@ -118,196 +118,212 @@ class _ParentalGateViewState extends State<ParentalGateView> {
               Positioned.fill(child: ExcludeSemantics(child: _GateBackdrop())),
               // 2. Full-bleed scrim to every edge.
               Positioned.fill(child: ColoredBox(color: context.nest.scrim)),
-              // 3. Modal anchored at the design's y 66 (NOT centred — the
-              // centring path was producing a uniform shift). The
-              // LayoutBuilder/ConstrainedBox pair that measured the viewport
-              // stays — it is how the unpositioned slot on the gate Stack
-              // learns its width/height; the top offset now comes from the
-              // Padding above the scroll view instead of the center.
+              // 3. Modal. CSS truth is `.modal { top: 50%; transform:
+              // translateY(-50%) }` (DESIGN_SPEC §5 P17: "as a centred
+              // `.modal`"), so the card is CENTRED in the canvas rather than
+              // hanging off a derived literal — the design's 712 px card then
+              // lands on exactly y 66 with no 66 literal in the file.
+              // `Column(mainAxisAlignment: center)` inside a
+              // `ConstrainedBox(minHeight: viewport)` is deliberate: an
+              // `Align(Alignment.center)`/`Center` shrink-wraps, so a card
+              // taller than the canvas (large text scale) would hang off the
+              // top with its first pixels unreachable; the Column grows past
+              // the viewport instead, so the scroll view can still reach them.
               LayoutBuilder(
                 builder: (context, constraints) {
-                  return Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      NestSpacing.s6,
-                      66,
-                      NestSpacing.s6,
-                      0,
-                    ),
-                    child: SingleChildScrollView(
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minHeight: constraints.maxHeight - 66,
-                        ),
-                        child: Align(
-                          alignment: Alignment.topCenter,
-                          child: Semantics(
-                            label: 'Parental gate',
-                            explicitChildNodes: true,
-                            child: NestModal(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const _LockTile(),
-                                  const SizedBox(height: NestSpacing.s3),
-                                  Text(
-                                    'Grown-ups only',
-                                    style: NestType.h2(color: context.nest.ink),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                  const SizedBox(height: NestSpacing.s2),
-                                  BlocBuilder<
-                                    ParentalGateBloc,
-                                    ParentalGateState
-                                  >(
-                                    buildWhen: (p, c) =>
-                                        p.status != c.status ||
-                                        p.items != c.items ||
-                                        p.entered != c.entered ||
-                                        p.errorMessage != c.errorMessage,
-                                    builder: (context, state) {
-                                      Widget body;
-                                      switch (state.status) {
-                                        case ParentalGateStatus.initial:
-                                        case ParentalGateStatus.loading:
-                                          body = const _GateLoading();
-                                        case ParentalGateStatus.failure:
-                                          body = _GateFailure(
-                                            message:
-                                                state.errorMessage ??
-                                                'Something went wrong',
-                                            onRetry: () => context
-                                                .read<ParentalGateBloc>()
-                                                .add(
-                                                  const ParentalGateLoadRequested(),
+                  return SingleChildScrollView(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: NestSpacing.s6,
+                            ),
+                            child: Semantics(
+                              label: 'Parental gate',
+                              explicitChildNodes: true,
+                              child: NestModal(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const _LockTile(),
+                                    const SizedBox(height: NestSpacing.s3),
+                                    Text(
+                                      'Grown-ups only',
+                                      style: NestType.h2(
+                                        color: context.nest.ink,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: NestSpacing.s2),
+                                    BlocBuilder<
+                                      ParentalGateBloc,
+                                      ParentalGateState
+                                    >(
+                                      buildWhen: (p, c) =>
+                                          p.status != c.status ||
+                                          p.items != c.items ||
+                                          p.entered != c.entered ||
+                                          p.errorMessage != c.errorMessage,
+                                      builder: (context, state) {
+                                        Widget body;
+                                        switch (state.status) {
+                                          case ParentalGateStatus.initial:
+                                          case ParentalGateStatus.loading:
+                                            body = _GateLoading(
+                                              onLeave: () => _leave(context),
+                                            );
+                                          case ParentalGateStatus.failure:
+                                            body = _GateFailure(
+                                              message:
+                                                  state.errorMessage ??
+                                                  'Something went wrong',
+                                              onRetry: () => context
+                                                  .read<ParentalGateBloc>()
+                                                  .add(
+                                                    const ParentalGateLoadRequested(),
+                                                  ),
+                                              onLeave: () => _leave(context),
+                                            );
+                                          case ParentalGateStatus.loaded:
+                                            if (state.items.isEmpty) {
+                                              // Disabled gate passes straight
+                                              // through (BlocListener) — no
+                                              // visible empty state.
+                                              return const SizedBox.shrink();
+                                            }
+                                            body = Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  'Type the answer in numbers:',
+                                                  style: NestType.bodySmall(
+                                                    color: context.nest.ink2,
+                                                  ),
+                                                  textAlign: TextAlign.center,
                                                 ),
-                                            onLeave: () => _leave(context),
-                                          );
-                                        case ParentalGateStatus.loaded:
-                                          if (state.items.isEmpty) {
-                                            // Disabled gate passes straight
-                                            // through (BlocListener) — no
-                                            // visible empty state.
-                                            return const SizedBox.shrink();
-                                          }
-                                          body = Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(
-                                                'Type the answer in numbers:',
-                                                style: NestType.bodySmall(
-                                                  color: context.nest.ink2,
+                                                const SizedBox(
+                                                  height: NestSpacing.s1,
                                                 ),
-                                                textAlign: TextAlign.center,
-                                              ),
-                                              const SizedBox(
-                                                height: NestSpacing.s1,
-                                              ),
-                                              Text(
-                                                state.challenge?.question ?? '',
-                                                style: NestType.h3(
-                                                  color: context.nest.ink,
+                                                Text(
+                                                  state.challenge?.question ??
+                                                      '',
+                                                  style: NestType.h3(
+                                                    color: context.nest.ink,
+                                                  ),
+                                                  textAlign: TextAlign.center,
+                                                  maxLines: 2,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                 ),
-                                                textAlign: TextAlign.center,
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                              const SizedBox(
-                                                height: NestSpacing.s4,
-                                              ),
-                                              Semantics(
-                                                label:
-                                                    'Answer, ${state.entered.length} of ${state.expectedLength} entered',
-                                                excludeSemantics: true,
-                                                child: _DigitsRow(
-                                                  entered: state.entered,
-                                                  total: state.expectedLength,
+                                                const SizedBox(
+                                                  height: NestSpacing.s4,
                                                 ),
-                                              ),
-                                              const SizedBox(
-                                                height: NestSpacing.s4,
-                                              ),
-                                              Semantics(
-                                                label: 'Number pad',
-                                                child: LayoutBuilder(
-                                                  builder: (context, constraints) {
-                                                    // The new shared
-                                                    // NestKeypad_s Grid
-                                                    // expands to the parent
-                                                    // width via `fit: stretch`
-                                                    // at the design width
-                                                    // (≥ contentWidth). At
-                                                    // narrower cards the
-                                                    // shrinkWrap mode
-                                                    // renders a fixed 280
-                                                    // box that FittedBox
-                                                    // can scale down safely.
-                                                    final plenty =
-                                                        constraints.maxWidth >=
-                                                        NestKeypad.contentWidth;
-                                                    final keypad = NestKeypad(
-                                                      kid: true,
-                                                      fit: plenty
-                                                          ? NestKeypadFit
-                                                                .stretch
-                                                          : NestKeypadFit
-                                                                .shrinkWrap,
-                                                      onKey: (digit) => context
-                                                          .read<
-                                                            ParentalGateBloc
-                                                          >()
-                                                          .add(
-                                                            ParentalGateDigitEntered(
-                                                              digit,
+                                                Semantics(
+                                                  label:
+                                                      'Answer, ${state.entered.length} of ${state.expectedLength} entered',
+                                                  excludeSemantics: true,
+                                                  child: _DigitsRow(
+                                                    entered: state.entered,
+                                                    total: state.expectedLength,
+                                                  ),
+                                                ),
+                                                const SizedBox(
+                                                  height: NestSpacing.s4,
+                                                ),
+                                                Semantics(
+                                                  label: 'Number pad',
+                                                  child: LayoutBuilder(
+                                                    builder: (context, constraints) {
+                                                      // The new shared
+                                                      // NestKeypad_s Grid
+                                                      // expands to the parent
+                                                      // width via `fit: stretch`
+                                                      // at the design width
+                                                      // (≥ contentWidth). At
+                                                      // narrower cards the
+                                                      // shrinkWrap mode
+                                                      // renders a fixed 280
+                                                      // box that FittedBox
+                                                      // can scale down safely.
+                                                      final plenty =
+                                                          constraints
+                                                              .maxWidth >=
+                                                          NestKeypad
+                                                              .contentWidth;
+                                                      final keypad = NestKeypad(
+                                                        kid: true,
+                                                        fit: plenty
+                                                            ? NestKeypadFit
+                                                                  .stretch
+                                                            : NestKeypadFit
+                                                                  .shrinkWrap,
+                                                        onKey: (digit) => context
+                                                            .read<
+                                                              ParentalGateBloc
+                                                            >()
+                                                            .add(
+                                                              ParentalGateDigitEntered(
+                                                                digit,
+                                                              ),
                                                             ),
-                                                          ),
-                                                      onDelete: () => context
-                                                          .read<
-                                                            ParentalGateBloc
-                                                          >()
-                                                          .add(
-                                                            const ParentalGateDeletePressed(),
-                                                          ),
-                                                    );
-                                                    if (plenty) {
-                                                      return keypad;
-                                                    }
-                                                    return FittedBox(
-                                                      fit: BoxFit.scaleDown,
-                                                      child: SizedBox(
-                                                        width: NestKeypad
-                                                            .contentWidth,
-                                                        child: keypad,
-                                                      ),
-                                                    );
-                                                  },
+                                                        onDelete: () => context
+                                                            .read<
+                                                              ParentalGateBloc
+                                                            >()
+                                                            .add(
+                                                              const ParentalGateDeletePressed(),
+                                                            ),
+                                                      );
+                                                      if (plenty) {
+                                                        return keypad;
+                                                      }
+                                                      return FittedBox(
+                                                        fit: BoxFit.scaleDown,
+                                                        child: SizedBox(
+                                                          width: NestKeypad
+                                                              .contentWidth,
+                                                          child: keypad,
+                                                        ),
+                                                      );
+                                                    },
+                                                  ),
                                                 ),
-                                              ),
-                                              const SizedBox(
-                                                height: NestSpacing.s3,
-                                              ),
-                                              NestButton(
-                                                label: 'Back to Pip',
-                                                variant:
-                                                    NestButtonVariant.ghost,
-                                                minHeight: 56,
-                                                fontSize: 15,
-                                                onPressed: () =>
-                                                    _leave(context),
-                                              ),
-                                            ],
-                                          );
-                                      }
-                                      return Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          body,
-                                          const SizedBox(
-                                            height:
-                                                NestSpacing.s2 +
-                                                NestSpacing.gap2,
-                                          ),
-                                          if (state.status !=
-                                              ParentalGateStatus.failure)
+                                                const SizedBox(
+                                                  height: NestSpacing.s3,
+                                                ),
+                                                NestButton(
+                                                  label: 'Back to Pip',
+                                                  variant:
+                                                      NestButtonVariant.ghost,
+                                                  minHeight: 56,
+                                                  fontSize: 15,
+                                                  onPressed: () =>
+                                                      _leave(context),
+                                                ),
+                                              ],
+                                            );
+                                        }
+                                        return Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            body,
+                                            const SizedBox(
+                                              height:
+                                                  NestSpacing.s2 +
+                                                  NestSpacing.gap2,
+                                            ),
+                                            // The enclosing column is the single owner of the caption
+                                            // gap (`.gate-note { margin-top: 10 }`) and of the caption
+                                            // itself, in every state. `failure` used to render a second
+                                            // copy under a gap of its own and stand a `SizedBox.shrink()`
+                                            // in for the one it skipped, which left a 10 px orphan gap
+                                            // under the caption in that state alone.
                                             Text(
                                               'This keeps settings and purchases safe.',
                                               style: NestType.caption(
@@ -315,18 +331,16 @@ class _ParentalGateViewState extends State<ParentalGateView> {
                                               ),
                                               textAlign: TextAlign.center,
                                             ),
-                                          if (state.status ==
-                                              ParentalGateStatus.failure)
-                                            const SizedBox.shrink(),
-                                        ],
-                                      );
-                                    },
-                                  ),
-                                ],
+                                          ],
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
                   );
@@ -534,7 +548,9 @@ class _DigitsRow extends StatelessWidget {
 }
 
 class _GateLoading extends StatelessWidget {
-  const new();
+  const new({required this.onLeave});
+
+  final VoidCallback onLeave;
 
   @override
   Widget build(BuildContext context) {
@@ -562,7 +578,18 @@ class _GateLoading extends StatelessWidget {
           ),
         ),
         const SizedBox(height: NestSpacing.s3),
-        const SizedBox(height: 56),
+        // The escape is the same 56 px ghost `Back to Pip` the loaded card
+        // shows, in the slot that was already reserved for it, so a kid (or a
+        // VoiceOver user) can always leave the gate instead of waiting for the
+        // system back gesture (3_test obs 3 / 6_bugs obs 1). Layout-neutral:
+        // the button is exactly the 56 px the placeholder stood in for.
+        NestButton(
+          label: 'Back to Pip',
+          variant: NestButtonVariant.ghost,
+          minHeight: 56,
+          fontSize: 15,
+          onPressed: onLeave,
+        ),
         // NB: the caption's own `s2 + gap2` gap and its 18 px line box are
         // added by the enclosing column, so this placeholder must NOT reserve
         // them again (it stood the card 28 px tall until iteration 3).
@@ -597,7 +624,11 @@ class _GateFailure extends StatelessWidget {
         NestButton(
           label: 'Try again',
           variant: NestButtonVariant.ghost,
-          minHeight: 44,
+          // Kid mode: DESIGN_SPEC §5 kid rules ask for >= 56 tap targets,
+          // and the sibling `Back to Pip` in this same state is 56.
+          // `1_plan.md` §(d) said 44; the spec wins on a kid screen
+          // and no design PNG shows this state.
+          minHeight: NestDevice.tapKid,
           onPressed: onRetry,
         ),
         const SizedBox(height: NestSpacing.s2),
@@ -608,12 +639,9 @@ class _GateFailure extends StatelessWidget {
           fontSize: 15,
           onPressed: onLeave,
         ),
-        const SizedBox(height: NestSpacing.s2 + NestSpacing.gap2),
-        Text(
-          'This keeps settings and purchases safe.',
-          style: NestType.caption(color: tokens.ink2),
-          textAlign: TextAlign.center,
-        ),
+        // No gap and no caption here — the enclosing column owns
+        // the `.gate-note` rhythm in every state, so the copy has a
+        // single owner and the failure card has no orphan gap.
       ],
     );
   }

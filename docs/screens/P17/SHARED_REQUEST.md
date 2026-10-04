@@ -67,6 +67,11 @@ test: it would break the design and the 11 design pins.
 All 8 reds are in `app/test/features/kid_home/**`, which P17 may not edit under
 RULES §1. With these one-line-per-site fixes the whole suite is green.
 
+**Status, iteration 4: RESOLVED on `main` (shared/kid_trial_gate, `0d7aa52`)**
+— `main`'s commit message is "kid tests assert routes", i.e. the kid_home tests
+now assert the real gate's route/copy. P17 did not touch those tests (RULES §1)
+and did not run the whole-app suite this stage (the integrator does).
+
 ---
 
 # Shared request — P17 kid-mode + expired-trial redirect loop (/paywall ↔ /parental-gate)
@@ -102,6 +107,13 @@ app/lib/app/router.dart` is empty) and the trial-expired branch
 (`router.dart:120-124`) still has no kid-mode guard, so the loop reproduces.
 Proof `P17-BUG-1` stays skip-marked. The P17 feature suite is otherwise fully
 green (106 pass / 1 skip).
+
+**Status, iteration 4: RESOLVED on `main` (shared/kid_trial_gate, `0d7aa52`).**
+`router.dart` now sends kid mode + `trialExpired` to
+`ParentalGateRoutePaths.gate` and exempts the gate from that branch, exactly as
+suggested above. Proof `P17-BUG-1` is **un-skipped and green** (it now also
+asserts no router error page and `currentPath == '/parental-gate'`). The P17
+feature suite has **0 skips**. This request can be closed.
 
 ---
 
