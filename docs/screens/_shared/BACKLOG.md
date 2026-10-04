@@ -7,3 +7,4 @@
 - K01-BUG-7 (minor, latent): an orphaned child selection locks every tile on Who's playing (proof skipped in app/test/features/kid_home/k01_bugs_test.dart; docs/screens/K01/6_bugs.md). No shipped flow reaches it. Fix when K-screens that delete children land.
 - NestListRow: static (non-interactive) rows in a list merge into the next interactive row's semantics announcement (P16 Family list → Invite button). Each row should be its own semantics node.
 - Shared `Semantics(label:) > InkWell` pattern leaves an extra node (P16 settings_a11y_test pins it). Audit with the semantics_tap work.
+- P17 minor review items (parental_gate_view.dart: canPop checks, typed-digit style, .gate-note margin, items rebuild filter, dead challenge model, CSS magic numbers → tokens): tidy in the cleanup pass.
