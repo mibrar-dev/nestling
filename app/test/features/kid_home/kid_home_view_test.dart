@@ -356,6 +356,12 @@ Future<void> _addQuestlessChild(
   });
 }
 
+/// K04 replaced its placeholder title, so the "did we land on the quest
+/// detail?" anchor is now the K04-only hint line. Returns the finder for the
+/// detail screen's own copy (never the router, never a view title).
+Finder _k04DetailAnchor() =>
+    find.text('Tick each bit off, then press the big button.');
+
 void main() {
   setUp(() async {
     await setUpTestScope();
@@ -1849,9 +1855,8 @@ void main() {
       await tester.pump();
       await tester.tap(card);
       await _settleRoute(tester);
-      expect(find.text('K04 Quest detail'), findsOneWidget);
-      final state = GoRouter.of(tester.element(find.text('K04 Quest detail')))
-          .state;
+      expect(_k04DetailAnchor(), findsOneWidget);
+      final state = GoRouter.of(tester.element(_k04DetailAnchor())).state;
       expect(state.uri.path, '/quest-detail');
       final extra = state.extra! as Map<String, Object?>;
       expect(extra['questId'], 'q-reading');
@@ -1913,7 +1918,7 @@ void main() {
       await _settleRoute(tester);
       // No completion action on the check; the card beneath opens detail
       // and the pending-approval count is untouched.
-      expect(find.text('K04 Quest detail'), findsOneWidget);
+      expect(_k04DetailAnchor(), findsOneWidget);
       final pending = await tester.runAsync(
         () => GetIt.instance<AppDatabase>()
             .watchPendingApprovals(Seed.familyId)
@@ -2090,9 +2095,8 @@ void main() {
       expect(hasTap(tester, card), isTrue);
       performTap(tester, card);
       await _settleRoute(tester);
-      expect(find.text('K04 Quest detail'), findsOneWidget);
-      final state = GoRouter.of(tester.element(find.text('K04 Quest detail')))
-          .state;
+      expect(_k04DetailAnchor(), findsOneWidget);
+      final state = GoRouter.of(tester.element(_k04DetailAnchor())).state;
       expect(state.extra, isA<Map<String, Object?>>());
       expect((state.extra! as Map<String, Object?>)['childId'], 'maya');
       semantics.dispose();

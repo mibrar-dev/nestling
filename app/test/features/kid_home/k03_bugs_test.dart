@@ -562,13 +562,27 @@ void main() {
       await tester.tap(card);
       await tester.tap(card);
       await _settle(tester);
-      expect(find.text('K04 Quest detail'), findsOneWidget);
-      await tester.pageBack();
+      // K04 owns its own chrome (no AppBar, per the design), so the "did the
+      // second tap stack another route?" probe is the detail copy itself: a
+      // stacked second route would show it twice.
+      expect(
+        find.text('Tick each bit off, then press the big button.'),
+        findsOneWidget,
+        reason: 'a double tap must not stack two detail routes',
+      );
+      // K04 has no AppBar (the design puts Back in its own top row), so tap
+      // that button rather than `pageBack()`: it also proves the detail's own
+      // Back pops exactly one route.
+      await tester.tap(find.byType(NestIconButton));
       await _settle(tester);
       expect(
         find.text('Hi Maya!'),
         findsOneWidget,
         reason: 'one back press must leave the detail',
+      );
+      expect(
+        find.text('Tick each bit off, then press the big button.'),
+        findsNothing,
       );
       semantics.dispose();
       await disposeApp(tester);
@@ -1568,7 +1582,10 @@ void main() {
     final card = find.semantics.byLabel('Reading \u2013 20 minutes, To do');
     tester.semantics.performAction(card, SemanticsAction.tap);
     await _settle(tester);
-    expect(find.text('K04 Quest detail'), findsOneWidget);
+    expect(
+      find.text('Tick each bit off, then press the big button.'),
+      findsOneWidget,
+    );
     semantics.dispose();
     await disposeApp(tester);
   });
