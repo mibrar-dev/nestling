@@ -147,6 +147,78 @@ void main() {
     });
   });
 
+  group('P16 DATA OVER MOCKS — the parent e-mail', () {
+    // ORCHESTRATOR_NOTES (08:12, "LAST pass") item 2: the parent's e-mail must
+    // come from the database, and states "the seed holds that value". It does
+    // not: no table in the schema has an e-mail column, which the integrator
+    // measured and recorded in SHARED_REQUEST.md §4. The ruling's own fallback
+    // ("if the DB lacks a field, write SHARED_REQUEST.md") is what applies, so
+    // the two tests below record the situation instead of asserting a
+    // DB-driven value that cannot exist yet.
+    testWidgets('TRIPWIRE: `members` still has no e-mail column', (
+      tester,
+    ) async {
+      final database = GetIt.instance<AppDatabase>();
+      final columns = await database
+          .customSelect('PRAGMA table_info(members)')
+          .get();
+      final names = columns.map((row) => row.read<String>('name')).toList();
+
+      expect(
+        names,
+        isNot(contains('email')),
+        reason:
+            'the members table now HAS an email column, so '
+            'ORCHESTRATOR_NOTES (08:12) item 2 is satisfiable: replace the '
+            'hard-coded `sarah@example.co.uk` in settings_view.dart with a '
+            'repository read (members.email for the owner row) and update the '
+            'four tests that assert the literal. Until then this tripwire is '
+            'the only thing standing between the ruling and silence.',
+      );
+      // The rest of the owner row IS database-driven, and stays that way
+      // (`role` is what decides "— you" vs "— co-parent"). SQL column names
+      // are snake_case; the drift column names are camelCase.
+      expect(
+        names,
+        containsAll(<String>[
+          'id',
+          'family_id',
+          'name',
+          'role',
+          'invite_status',
+        ]),
+      );
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the owner row shows the seeded name with the literal e-mail', (
+      tester,
+    ) async {
+      // The other half of the ruling: the NAME must come from the database
+      // (DATA OVER MOCKS), so change the seed and the row follows. The
+      // subtitle beside it is the documented exception.
+      await pumpSettingsApp(
+        tester,
+        prepare: (db) =>
+            (db.update(db.members)..where((m) => m.id.equals('sarah'))).write(
+              const MembersCompanion(name: Value('Sam')),
+            ),
+      );
+
+      expect(find.text('Sam — you'), findsOneWidget);
+      expect(
+        find.text('sarah@example.co.uk'),
+        findsOneWidget,
+        reason:
+            'documented placeholder copy (SHARED_REQUEST.md §4): no column '
+            'holds an e-mail, so this cannot be DB-driven yet',
+      );
+
+      await disposeApp(tester);
+    });
+  });
+
   group('P16 coin pluralisation is data-driven', () {
     // Iteration 2 (P16-B05): `_ChildRow` pluralises. The bug proof pins the
     // singular; this pins the whole rule from the DATABASE, so 0 and 2 cannot

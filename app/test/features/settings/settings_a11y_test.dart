@@ -29,7 +29,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nestling/core/design_system/design_system.dart';
-import 'package:nestling/features/settings/presentation/widgets/settings_rows.dart';
 
 import '../../test_scope.dart';
 import 'p16_test_support.dart';
@@ -304,11 +303,10 @@ void main() {
         //
         // Fixed in iteration 3 by the screen: the three switch rows use P16's
         // `SettingsRow` at 6 px vertical padding (content box 56 - 12 = 44)
-        // AND wrap each `NestToggle` in `SizedBox(height: 44, Center(…))`.
-        // Both halves are needed — padding alone left `track.top - 5` dead
-        // (measured in iteration 2) — and dropping either re-opens the bug,
-        // which is what this proof is for. 5 px is stricter than the 4 px the
-        // orchestrator's note asks for.
+        // AND wrap each `NestToggle` in a 44-high box. Both halves are needed
+        // — padding alone left `track.top - 5` dead (measured in iteration 2)
+        // — and dropping either re-opens the bug, which is what this proof is
+        // for. 5 px is stricter than the 4 px the orchestrator's note asks for.
         await pumpSettingsApp(tester);
         await scrollSettingsTo(tester, find.text('Approvals waiting'));
         final track = tester.getRect(find.byType(NestToggle).first);
@@ -330,44 +328,130 @@ void main() {
           reason: '5 px below the track must flip it back',
         );
 
-        // The mechanism, pinned so the next reader can see why the taps work:
-        // the switch row is still a 56 px design row (same as every other row
-        // on the page), it uses the 6 px vertical padding that makes the
-        // content box 44, and each toggle keeps the design's 51x31 track.
+        // The mechanism, pinned as GEOMETRY rather than widget types.
+        // ORCHESTRATOR_NOTES (08:12) item 3 orders the `SettingsRow` fork
+        // reverted to the shared `NestListRow`, so a proof that named the fork
+        // would fail on the revert with "no SettingsRow in the tree" instead of
+        // reporting the truth. What the owner rule actually needs is ROOM: the
+        // switch's painted content box must be at least 44 tall, so the
+        // toggle's 6.5 px slop sits inside a box the hit pipeline honours.
         final toggle = find.byType(NestToggle).first;
-        final row = find
-            .ancestor(of: toggle, matching: find.byType(SettingsRow))
-            .first;
-        expect(
-          tester.getRect(row).height,
-          56,
-          reason: 'the switch row keeps the design 56 px row height',
+        // The nearest `Padding` ANCESTOR of the toggle is the row's own content
+        // box — `SettingsRow` and `NestListRow` both use it, so this reads the
+        // same before and after the mandated revert.
+        final contentBox = tester.getRect(
+          find.ancestor(of: toggle, matching: find.byType(Padding)).first,
         );
         expect(
-          tester.widget<SettingsRow>(row).padding,
-          const EdgeInsets.fromLTRB(12, 6, 16, 6),
-          reason: '6 px vertical padding is half of the 44 px fix',
-        );
-        expect(track.size, const Size(51, 31), reason: 'the design track');
-        // …and the 44-high box the slop needs is really there.
-        expect(
-          tester.getRect(toggle).height,
-          31,
-          reason: 'NestToggle lays out at the track, not at the hit box',
-        );
-        final hitBox = tester.getRect(
-          find.ancestor(of: toggle, matching: find.byType(SizedBox)).first,
+          contentBox.height,
+          greaterThanOrEqualTo(NestDevice.tapParent),
+          reason:
+              'the switch content box must be 44 tall or the slop is clipped '
+              '(measured $contentBox)',
         );
         expect(
-          hitBox.height,
-          44,
-          reason: 'the 44-high wrapper is the other half of the fix',
+          tester.getRect(toggle).size,
+          const Size(51, 31),
+          reason: 'the visible track is the design 51x31',
         );
 
         await disposeApp(tester);
       },
+      // P16-T02 fixed in iteration 3 and still fixed after iteration 4's B11
+      // wrapper change (`width: 51` added — both findings now pinned on one
+      // layout).
       skip: false,
     );
+  });
+
+  group('P16 accessibility — the switch hit box', () {
+    testWidgets(
+      '[P16-T03] a switch is live 4 px to the LEFT and RIGHT of its track',
+      (tester) async {
+        // OPEN BUG (minor) — pinned skip-marked so `flutter test` stays green;
+        // run with `--run-skipped` to prove it. Do NOT patch the screen here.
+        //
+        // `NestToggle` promises a 59x44 hit box: `_ToggleHitSlop(minWidth: 59,
+        // minHeight: 44)` mirrors the design's `.toggle::before { left/right:
+        // -4px; top/bottom: -7px }`. Iteration 4 fixed P16-B11 (the track was
+        // 34.5 px off the design x) by pinning the wrapper to
+        // `SizedBox(width: 51, height: 44, ...)` — 51 is exactly the TRACK
+        // width, so the wrapper now clips the horizontal half of the slop.
+        // Measured: track 303..354 inside a wrapper 303..354 (vertical
+        // 122..166 gives the full 6.5 px, horizontal 0 of 4).
+        //
+        // Severity is deliberately minor: the owner rule (>= 44 px parent
+        // target) is still met at 51 x 44, and P16-T02's vertical proof still
+        // passes. What is lost is the shared component's 4 px of horizontal
+        // forgiveness, and ORCHESTRATOR_NOTES (08:12) item 1 asks for exactly
+        // "taps 4 px outside the track" to toggle the switch.
+        //
+        // Fix (screen-local, keeps B11): give the wrapper the slop's width and
+        // right-align it, so the track stays flush at x 354 while the slop has
+        // room —
+        //   SizedBox(
+        //     width: 59,
+        //     height: 44,
+        //     child: Align(alignment: Alignment.centerRight, child: toggle),
+        //   )
+        // The row's 12 px left padding leaves the 4 px inside the content box.
+        await pumpSettingsApp(tester);
+        await scrollSettingsTo(tester, find.text('Approvals waiting'));
+        final track = tester.getRect(find.byType(NestToggle).first);
+
+        for (final offset in <double>[-4, 4]) {
+          final before = (await settingRows()).single.notifApprovals;
+          await tester.tapAt(
+            Offset(
+              offset < 0 ? track.left + offset : track.right - offset,
+              track.center.dy,
+            ),
+          );
+          await settleSettings(tester);
+          expect(
+            (await settingRows()).single.notifApprovals,
+            !before,
+            reason:
+                '${offset.abs()} px ${offset < 0 ? 'left' : 'right'} of the '
+                'track must still flip the switch',
+          );
+        }
+
+        await disposeApp(tester);
+      },
+      // P16-T03 open (minor) — the `width: 51` wrapper clips `NestToggle`'s
+      // 4 px horizontal hit slop. See the comment above and §Bugs of
+      // docs/screens/P16/3_test.md.
+      skip: true,
+    );
+
+    testWidgets('the switch still clears the 44 px owner rule', (tester) async {
+      // The part of the same contract that DOES hold today, kept live so a
+      // future wrapper change cannot quietly shrink the target below 44 in
+      // either axis.
+      await pumpSettingsApp(tester);
+      await scrollSettingsTo(tester, find.text('Approvals waiting'));
+      final wrapper = tester.getRect(
+        find
+            .ancestor(
+              of: find.byType(NestToggle).first,
+              matching: find.byType(SizedBox),
+            )
+            .first,
+      );
+      expect(
+        wrapper.width,
+        greaterThanOrEqualTo(NestDevice.tapParent),
+        reason: 'effective target is ${wrapper.size} — needs 44 wide',
+      );
+      expect(
+        wrapper.height,
+        greaterThanOrEqualTo(NestDevice.tapParent),
+        reason: 'effective target is ${wrapper.size} — needs 44 tall',
+      );
+
+      await disposeApp(tester);
+    });
   });
 
   group('P16 accessibility — activation drives the real state', () {

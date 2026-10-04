@@ -1,21 +1,17 @@
 // P16 · Family & settings — adversarial bug proofs (Stage 6).
 //
-// Iteration 1 found B01–B07; iteration 2 found B08/B09. The iteration-3
-// build fixed B08's picker repro (P16TransientGuard) and T02, and this
-// iteration adds two residuals found by re-attacking that fix:
+// Iteration 1 found B01–B07; iteration 2 found B08/B09; iteration 3 found
+// B10/B11. All but one are now fixed with live proofs: the iteration-3 build
+// closed B08 (P16TransientGuard) and T02, the iteration-4 build closed B11
+// (`width: 51` on the switch wrapper) and B10 (guard on the delete/invite
+// rows). The single open finding is:
 //   * [P16-B09] open (minor, shared) — IANA *link* ids (Europe/Amsterdam,
 //     Asia/Calcutta, …) are treated as unknown by the bundled tz dataset;
-//     fix belongs in core `family_time.dart` (SHARED_REQUEST §5).
-//   * [P16-B10] open (minor) — the guard does not fence the delete row (and
-//     the Invite row), so a double tap on Cancel still re-opens the delete
-//     dialog, and a picker double tap on a row over the delete row (New
-//     York) opens it too.
-//   * [P16-B11] open (major, alignment) — the T02 wrapper's `Center` expands
-//     into the 120 px trail cap, so the three switches render 34.5 px left of
-//     the design's right-edge position.
+//     fix belongs in core `family_time.dart` (SHARED_REQUEST §5), and no
+//     feature-side hook exists.
 // Open bugs carry `skip: true` so `flutter test` stays green;
 // `flutter test test/features/settings/p16_bugs_test.dart --run-skipped`
-// proves each fails (evidence in docs/screens/P16/6_bugs.md).
+// proves B09 fails (evidence in docs/screens/P16/6_bugs.md).
 //
 // The `verified clean` group holds the attacks that were run and held:
 // deep-link guards (kid mode / onboarding / trial-expiry), back navigation,
@@ -561,10 +557,10 @@ void main() {
             'delete row (repro: New York) open the dialog.',
       );
     },
-    // P16-B10 open (minor) — `_confirmDelete`'s row onTap (and the Invite
-    // co-parent toast row) never route through `P16TransientGuard.run`, so
-    // the B08 fall-through still reaches them. Fix: wrap both row handlers
-    // in `P16TransientGuard.run`, like every other row.
+    // P16-B10 fixed in iteration 4: the delete row's and the invite row's
+    // onTap route through `P16TransientGuard.run` like every other row, so
+    // the fall-through cannot reach them. Live proof (Cancel ×2 → no dialog;
+    // picker New York ×2 → no dialog).
     skip: false,
   );
 
@@ -597,13 +593,10 @@ void main() {
             'Measured gaps to the right content edge: $gaps',
       );
     },
-    // P16-B11 open (major, alignment/UI) — the T02 fix regressed the three
-    // switches to x 268.5–319.5 where the design (and iteration 2) has them
-    // at 303–354 (390 wide; same 34.5 px gap at 320). Fix: make the wrapper
-    // shrink-wrap horizontally, e.g.
-    // `SizedBox(width: 51, height: 44, child: Center(child: toggle))` or
-    // `Align(widthFactor: 1, child: SizedBox(height: 44, child: toggle))`,
-    // so the trailing stays 51 px wide and flush with the row's 16 px inset.
+    // P16-B11 fixed in iteration 4: the wrapper is
+    // `SizedBox(width: 51, height: 44, Center(...))`, so the track sits flush
+    // with the row's 16 px right inset (gap 0.0 at 390 and 320) and the T02
+    // slop is still live (±6). Live proof.
     skip: false,
   );
 

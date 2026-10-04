@@ -1,232 +1,238 @@
-# P16 Settings — Stage 3 TEST (iteration 3)
+# P16 Settings — Stage 3 TEST (iteration 4)
 
-Job: re-prove the screen after iteration 3's build, cover the code that build
-introduced (`P16TransientGuard`, the T02 row rework), and audit my own suite
-for blind spots.
+Job: re-prove the screen after iteration 4's build, serve the three new
+mandatory `ORCHESTRATOR_NOTES` items (08:12 "LAST pass") from the test side,
+and audit the fixes this build landed.
 
-**Outcome: FAIL — every gate is green and my two iteration-1 findings are both
-closed, but the iteration-3 build introduced a new major defect (P16-B11, the
-switch alignment regression) which I reproduced independently, and two
-bug-stage findings (B09, B10) are open. All four open proofs are skip-marked
-and all four fail under `--run-skipped`.**
+**Outcome: FAIL — all gates green, both of iteration 3's findings are closed
+and proved, and I found one new (minor) defect that iteration 4's own fix
+introduced. P16-B09 also remains open, and two of the three mandatory items
+are still unmet — one of them unsatisfiable as written.**
 
-Numbers: **+8 tests** (my files: 110 passing + 1 skip), **0 new failures**,
-**0 new bugs of my own**, **1 new major bug confirmed** (found by the bug
-stage, reproduced here), **both my earlier findings proved fixed**.
+Numbers: **+3 tests** (137 in `test/features/settings`, 2 of them skip-marked
+proofs), **0 new failures**, **1 new minor bug (P16-T03)**, **2 findings closed
+and proved**.
 
 ---
 
-## 1. What iteration 3 changed
+## 1. What iteration 4 changed
 
-| change | where | what a test has to say about it |
+| change | where | test consequence |
 |---|---|---|
-| **P16-T02 fixed** — switch rows use `SettingsRow` at 6 px padding + `SizedBox(height: 44, Center(…))` | `settings_view.dart:286-345` | the ±5 px taps now pass; the recipe needs pinning so it can't be half-applied |
-| **`P16TransientGuard`** — new widget-fencing helper (B08) | `p16_transient_guard.dart` | brand-new code that shipped with **no test of its own** |
-| every page row's `onTap` now routes through `P16TransientGuard.run` | `settings_view.dart` (7 rows + 3 toggles) | a static, process-wide 300 ms window is the easiest thing in the feature to break silently |
-| B09 linked-IANA ids | — | correctly not fixed (shared); still skip-marked |
+| **P16-B11 fixed** — switch wrapper `SizedBox(width: 51, height: 44, …)` | `settings_view.dart:296-303` and twice more | my widened B11 proof un-skipped; the T02 proof had to survive the change |
+| **P16-B10 fixed** — the delete row and the Invite row now route through `P16TransientGuard.run` | `settings_view.dart:185`, `:377` | covered by the bug stage's proofs |
+| `P16TransientGuard.reset()` added to the raw-pump helper in `settings_view_test.dart` | `settings_view_test.dart` | harness gap the integrator caught; nothing for me to add |
+| B09 still not fixed (shared) | — | unchanged, skip-marked |
+| **`ORCHESTRATOR_NOTES` (08:12) — three new mandatory items** | `ORCHESTRATOR_NOTES.md` | see §4; one is unsatisfiable as written, two are open |
 
-## 2. Tests added (8)
+Baseline at the start of this stage: `test/features/settings` `+134 ~1`, full
+suite `+2852 ~2`. Now: **+137 ~2** and **+3028 ~4**.
 
-### 2.1 `p16_transient_guard_test.dart` (new file, 7 tests)
+## 2. Tests added (3) and how the fixes were proved
 
-The guard is a `static DateTime?` plus a 300 ms window — two failure modes no
-existing test can see:
+### 2.1 `[P16-T03]` — the new minor defect iteration 4 introduced (skip-marked)
 
-- **the window never expires** → every row on /settings goes dead for the rest
-  of the session, and no other test notices because each one opens the screen
-  fresh;
-- **the guard leaks into the next test** → the next test's first row tap is
-  silently swallowed and looks like a broken screen.
+The B11 fix pinned the switch wrapper to **`width: 51`** — exactly the track
+width. `NestToggle` promises a **59 × 44** hit box
+(`_ToggleHitSlop(minWidth: 59, minHeight: 44)`, mirroring the design's
+`.toggle::before { left/right: -4px; top/bottom: -7px }`), so a 51-wide wrapper
+clips the horizontal half of the slop:
 
-Three unit tests drive it through an injected clock (`Clock(() => now)`), so
-the boundaries are exact rather than animation-dependent:
+| | wrapper | track | slop available |
+|---|---|---|---|
+| vertical | 122.0–166.0 (**44**) | 128.5–159.5 (31) | 6.5 px above/below ✓ |
+| horizontal | 303.0–354.0 (**51**) | 303.0–354.0 (51) | **0 px** of the 4 px ✗ |
 
-- the window is 300 ms and expires **inclusively**: true at +299, true at
-  exactly +300, false at +301;
-- `run()` swallows inside the window and passes outside it — and an unarmed
-  guard is a pure pass-through;
-- `reset()` clears it (the cross-test leak).
+Measured: a tap 4 px left of the track's left edge (x 299) and 4 px right of its
+right edge (x 358) **do not flip the switch**; the track centre and both
+vertical ±5 px probes do.
 
-This doubles as the CLOCK-rule proof: the guard reads `clock.now()`, which is
-why the test can move time at all.
+**Severity is deliberately minor, and the proof says why:** the owner rule
+(≥ 44 px parent target) is still met — the effective target is 51 × 44 — and
+P16-T02's vertical proof still passes. What is lost is the shared component's
+4 px of horizontal forgiveness, which `ORCHESTRATOR_NOTES` (08:12) item 1 asks
+for by name ("using the shared NestToggle as-is"; item 2: "prove taps 4 px
+outside the track toggle it"). Fix is one line and keeps B11: make the wrapper
+the slop's width and right-align it —
+`SizedBox(width: 59, height: 44, child: Align(alignment: Alignment.centerRight, child: toggle))`
+— so the track stays flush at x 354 while the 4 px has room (the row's 12 px
+left padding keeps it inside the content box).
 
-Four widget tests on the real screen:
+Beside it, a **live** companion test holds the part that does hold: the
+effective target clears 44 px in *both* axes, so no future wrapper change can
+quietly shrink it.
 
-- **closing the picker arms the guard** — asserted **one frame** after the tap,
-  before any settle. `_ZoneRow.onTap` arms synchronously before popping; a
-  `pumpAndSettle` lets the exit animation push the fake clock past 300 ms and
-  the window is legitimately over again, so asserting after a settle tests
-  nothing. (I got that wrong first and the failure was correct.)
-- **a fenced row tap does nothing, and the row works again once the window
-  passes** — the "stuck guard" regression, end to end on a real row.
-- **an unarmed screen navigates on the first tap** — the control case, so the
-  test above can't pass by accident.
-- **the move banner stays operable inside the window** — `Not now` works
-  immediately after a sheet closes. The guard fences page rows only; fencing
-  the banner's Switch / Not now would strand the prompt and break
-  ORCHESTRATOR_NOTES' "never switch without the confirm tap".
+### 2.2 DATA OVER MOCKS — the parent's e-mail (mandate item 2), 2 tests
 
-### 2.2 `settings_responsive_test.dart` — `[P16-B11]`, +1 test
+The ruling says the parent's e-mail must come from the database and asserts
+"the seed holds that value". **It does not** — the integrator measured that no
+table in the schema has an e-mail column (`auth_repository_impl.dart:38`
+documents the omission), and my own probe agreed. The ruling's own fallback
+("if the DB lacks a field, write SHARED_REQUEST.md") is what applies, and
+`SHARED_REQUEST.md` §4 already carries it.
 
-**The switch alignment regression.** The iteration-3 T02 fix wrapped each
-`NestToggle` in `SizedBox(height: 44, Center(…))`. A `SizedBox` with only a
-height takes the full width the parent allows — `NestListRow.trailMaxWidth`
-(120) — so the `Center` parks the 51 px track in the middle of that box.
+What the test stage can do without patching the screen is make the gap
+**impossible to ignore**:
 
-Measured here, independently, at 390 px light: track at **x 268.5–319.5**, the
-row's content edge at **354** (370 − 16) → a **34.5 px** gap; the same 34.5 px
-at 320 px. My proof widens the bug stage's 390-only check to **320 / 390 / 430
-× light / dark** (six measurements), so the eventual fix has to be right at
-every width, not just the design width. Skip-marked with the reason inline; it
-fails with `gaps={… 320 switch 0: 34.5, …}`.
+- **`TRIPWIRE: `members` still has no e-mail column`** — reads the live schema
+  (`PRAGMA table_info(members)`) and fails the moment a column appears, with a
+  message that says what to do then (read `members.email` for the owner row and
+  update the four tests that assert the literal). It also pins that the rest of
+  the owner row stays database-driven (`id`, `family_id`, `name`, `role`,
+  `invite_status`). Writing it made me check the real column names — they are
+  snake_case in SQL, which the first draft of my assertion got wrong.
+- **the owner row follows the seeded NAME** — rename Sarah to Sam in the
+  database and the row reads `Sam — you`, i.e. the part DATA OVER MOCKS covers
+  is genuinely live, while the subtitle beside it is the documented exception.
 
-**And the honest admission this forces.** My iteration-2 responsive sweep
-asserted each switch's **size** (51×31) at every width but never its
-**position** — so a 34 px horizontal regression passed green through two
-iterations of UI checks. Trailing-slot x is now measured, and the owner's
-ALIGNMENT rule is in the sweep rather than in someone else's file.
+I did **not** weaken the four tests that assert `sarah@example.co.uk`: they
+describe the screen as built, and they are the tests that have to change when
+§4 lands.
 
-## 3. Existing tests strengthened (3)
+## 3. Existing tests hardened (3)
 
-1. **The T02 proof now pins the mechanism, not just the taps** — the switch row
-   is still a **56 px** design row (same as every other row on the page), its
-   padding is the 6 px variant, the track is 51×31, and the 44-high wrapper is
-   really present. Padding alone was measured insufficient in iteration 2, so
-   dropping either half must fail loudly. I also rewrote the stale comment the
-   integrator flagged (it opened "P16-T02 open (major…)" and then said "FIXED
-   in iteration 3") — that file is mine and the wording was mine.
-2. **The subscription card is addressed by copy, not by key.** A new
-   `subscriptionCard()` helper finds it through
-   `Nestling Annual · £29.99/year`, so the ORCHESTRATOR_NOTES (06:58) item-1
-   revert — subcard back to the shared `NestCard` — fails with a *design*
-   message (24 px radius, 16 px padding) instead of "found 0 widgets with key
-   `p16_subcard`". The assertions still carry the design numbers, because that
-   is exactly the evidence `SHARED_REQUEST.md` §3 needs.
-3. **`pumpSettingsSurface` clears the guard too.** The builder added
-   `P16TransientGuard.reset()` to `pumpSettingsApp` when B08 landed; the
-   direct-pump helper (used by the loading/failure tests) had been left out.
-   Nothing failed today because those tests only read the screen — it is a
-   latent trap, now closed. Also added `scrollSettingsUpTo` (see §6).
+1. **The T02 proof is now shell-agnostic.** It used to assert
+   `find.byType(SettingsRow)`, its exact 6 px padding and a
+   `SizedBox(height: 44)` — i.e. the *fork*. `ORCHESTRATOR_NOTES` (08:12) item
+   3 orders that fork reverted to the shared `NestListRow`, and a proof that
+   names the fork would fail on the revert with "no SettingsRow in the tree"
+   instead of reporting the truth. It now asserts the **owner rule as
+   geometry**: the switch's painted content box (the nearest `Padding` ancestor
+   — the same element in both shells) is ≥ 44 tall, the track is 51 × 31, and
+   taps ±5 px outside it flip the database row. The ±5 px taps are the part
+   that cannot be faked.
+2. **The stale T02 comment is rewritten** (I carried that wording since
+   iteration 1).
+3. **The subcard tests stay copy-addressed** (`subscriptionCard()`), so
+   mandate item 3's subcard revert fails with a design message (24 px radius,
+   16 px padding) rather than a missing-key error.
 
-## 4. Results
+## 4. The three mandatory items — what the test side can say
+
+The integrator measured these; I add the test-side consequences, because two
+of them change what a suite is allowed to assert.
+
+**Item 1 (B11 ✓, B09 open, B10 ✓, un-skip all four).** Three of four proofs are
+live and green. B09 is unsatisfiable in the feature (shared
+`isKnownZoneId` against a links-less tz dataset; the raw id never reaches the
+bloc) — `SHARED_REQUEST.md` §5. B11's proof is now live in my responsive file
+too, widened to 320/390/430 × light/dark.
+
+**Item 2 (parent e-mail from the DB).** Unsatisfiable as written; §4 filed;
+tripwire + name-follows-seed tests above. **Four tests assert the literal** and
+must be updated together when §4 lands — my own included
+(`settings_states_test.dart`, `settings_view_test.dart`, and the a11y control
+list).
+
+**Item 3 (un-fork `_P16Sect`, the subcard, `SettingsRow`).** I measured what
+each revert costs, without patching the screen, by rendering the shared
+components in the same harness:
+
+| fork → shared | measured difference | effect on this suite |
+|---|---|---|
+| `_P16Sect` → `NestSectionLabel` | identical typography — 13 px, w700, `letter-spacing .78`, `ink-2`, `maxLines 1` — only the **line box** differs: **18 px vs 16 px** at scale 1.0 (23 vs 21 at 1.3) | **no assertion of mine breaks**: the typography test passes unchanged and the "box scales ×1.3" check is relative, so it holds for both |
+| subcard → `NestCard` | radius **24 vs design 16**; padding **all(16) vs design 14/16**; same `surface` colour and `sh-1` | exactly **two** assertions fail, by design, with a legible message |
+| `SettingsRow` → `NestListRow` (switch rows) | the ±5 px taps **still land** (the 44-high wrapper inside the shared row's 10 px padding is enough) — but the row **grows 56 → 64 px**, because 44 + 20 exceeds the 56 px min-height | the T02 proof still passes; **new vertical drift**: +8 px on each of three rows, ≈ +24 px down the page |
+
+That last row is the finding I would most want the orchestrator to see: **item
+3's un-fork of `SettingsRow` is not free** — it does not re-open the 44 px
+target (good), but it re-introduces the *same class of vertical drift* that
+`SHARED_REQUEST.md` §1/§2 exist to close, this time +8 px × 3 rows. So the
+sequencing still matters: §1 should also ask that the row not grow, and the
+reverts follow the shared batch, not precede it.
+
+## 5. Results
 
 ```
 $ dart format .
-Formatted 526 files (0 changed) in 1.54 seconds.
+Formatted 537 files (0 changed) in 1.55 seconds.
 
 $ flutter analyze
 Analyzing app...
-No issues found! (ran in 3.8s)
+No issues found! (ran in 2.9s)
 
 $ flutter test test/features/settings
-00:12 +131 ~4: All tests passed!
+00:13 +137 ~2: All tests passed!
 
 $ flutter test
-01:21 +2859 ~5: All tests passed!
+01:48 +3028 ~4: All tests passed!
 ```
 
-| tree | `test/features/settings` | full suite |
-|---|---|---|
-| iteration-3 build checkpoint (`7160fff`) | `+124 ~1` | `+2852 ~2` |
-| after this stage | `+131 ~4` | `+2859 ~5` |
-
-Zero failures. My files now hold **110 passing + 1 skip**:
-
-| file | passed | skipped |
-|---|---|---|
-| `p16_transient_guard_test.dart` (new) | 7 | 0 |
-| `settings_responsive_test.dart` | 14 | 1 |
-| `settings_a11y_test.dart` | 12 | 0 |
-| `settings_navigation_test.dart` | 19 | 0 |
-| `settings_states_test.dart` | 11 | 0 |
-| `settings_bloc_test.dart` | 29 | 0 |
-| `settings_view_test.dart` | 8 | 0 |
-| `settings_repository_test.dart` | 10 | 0 |
-
-The branch is 16 commits behind `main` at the time of writing (the loop's
-merge-order item); it produces no test noise here, so there is no baseline to
-subtract — the suite simply runs green.
+Zero failures. The full suite's `~4` is two P16 skips (B09 and T03), K01's
+`k01_bugs_test.dart` skip (arrived from `Merge screen/K01`) and P12's
+pre-existing one.
 
 **Skip honesty.** `flutter test test/features/settings --run-skipped` fails on
-exactly the four open proofs and nothing else:
+exactly the two open P16 proofs and nothing else:
 
 ```
-p16_bugs_test.dart         [P16-B09] the picker shows the device zone for a linked IANA id
-p16_bugs_test.dart         [P16-B10] a double tap on Cancel cannot re-open the delete dialog
-p16_bugs_test.dart         [P16-B11] the three switches sit on the row’s right edge
-settings_responsive_test   [P16-B11] the switches sit flush with the row trailing edge   (mine, widened)
+p16_bugs_test.dart        [P16-B09] the picker shows the device zone for a linked IANA id
+settings_a11y_test.dart   [P16-T03] a switch is live 4 px to the LEFT and RIGHT of its track
 ```
 
-## 5. Bugs
+## 6. Bugs
 
-### 5.1 Closed — P16-T02 (major, 44 px tap targets) — **mine, iterations 1-2**
+### Closed and proved — P16-B11 (major, ALIGNMENT) — iteration 3, mine + bug stage
 
-`settings_view.dart:286-345`: the three switch rows now use `SettingsRow` at
-6 px vertical padding (content box 56 − 12 = 44) with each `NestToggle` in a
-`SizedBox(height: 44, Center(…))`. My proof is live (`skip: false`) and taps
-**5 px** outside the track on both edges — stricter than the 4 px the
-orchestrator's note asks for — asserting the **database row** flips, and it now
-also pins the mechanism so the recipe cannot be half-applied. Confirmed.
+Track at **x 303–354** at 390 px, flush with the row's 16 px trailing inset
+(`370 − 16 = 354`), at 320/390/430 in both themes; my widened proof is live
+(`skip: false`) and green. P16-T02's vertical proof survived the wrapper
+change — both findings are now pinned on one layout.
 
-### 5.2 Open — P16-B11 (major, owner ALIGNMENT rule) — **new in iteration 3**
+### Closed and proved — P16-B10 (minor) — bug stage
 
-`app/lib/features/settings/presentation/views/settings_view.dart:289-296`
-(and the same shape at `:300-307` and `:311-318`).
+Delete and Invite rows fenced like every other row; proofs live.
 
-`SizedBox(height: 44, Center(child: NestToggle(...)))` takes the full width the
-Row's `Flexible` allows (`NestListRow.trailMaxWidth` = 120), so the 51 px track
-is centred in a 120 px box: measured **x 268.5–319.5** where the design puts
-it flush with the row's 16 px trailing inset (**x 303–354**), a 34.5 px gap at
-both 320 and 390.
+### Closed in earlier iterations, still green
+P16-T01 (blocker, wrong navigator), P16-B08 (modal-close double tap),
+P16-B01…B06 (iteration 1), P16-T02 (iteration 3).
 
-**Repro:** real app at `/settings` (any width), scroll to Notifications,
-compare the switch's right edge with the row's content edge 16 px in from the
-card's right edge — or run
-`flutter test test/features/settings/settings_responsive_test.dart --run-skipped`.
+### Open — P16-T03 (minor, new) — mine
 
-Fix (the bug stage's): make the wrapper shrink-wrap horizontally —
-`SizedBox(width: 51, height: 44, child: Center(child: toggle))`, or an
-`Align(widthFactor: 1, …)`. Note the fix must keep the 44-high box, or T02
-re-opens: the two findings are the same code.
+`app/lib/features/settings/presentation/views/settings_view.dart:298`, `:316`,
+`:334` — the three `SizedBox(width: 51, height: 44, Center(NestToggle(…)))`
+wrappers. The horizontal 4 px of `NestToggle`'s hit slop is clipped; taps 4 px
+either side of the track do nothing. Owner rule still met (51 × 44), so minor.
+Repro: real app at `/settings`, Notifications, tap 4 px left of the switch's
+left edge → nothing; the track itself flips.
+Proof: `flutter test test/features/settings --run-skipped`.
 
-### 5.3 Open, found by the bug stage (not this stage's tests)
+### Open — P16-B09 (minor, shared) — bug stage
+Linked IANA ids read as unknown; `SHARED_REQUEST.md` §5.
 
-- **P16-B10** (minor) — the B08 guard fences the nav rows but not the delete
-  row's `onTap` (nor the Invite co-parent toast row), so the fall-through
-  double-tap can still reach them.
-- **P16-B09** (minor, shared) — linked IANA ids read as unknown against the
-  links-less `latest_10y` dataset, so those phones get no prompt and no
-  "Current location" row. Unreachable from the feature; `SHARED_REQUEST.md` §5.
+### Mandatory items still unmet
+`ORCHESTRATOR_NOTES` (08:12) items 2 and 3 — §4 above. Item 2's premise is
+false; item 3 is a build decision with the drift numbers in §4.
 
-### 5.4 Observations carried forward (not bugs)
+## 7. Observations (not bugs)
 
-Unchanged from iteration 2 and still open elsewhere: the Family list's two
-static rows merge into the Invite button's announcement (shared
-`NestListRow`); the shared `Semantics(label:) > InkWell` wart, blast radius
-pinned by `settings_a11y_test.dart`; the hard-coded `sarah@example.co.uk`
-(`SHARED_REQUEST.md` §4); `_P16Sect` / the subcard / `SettingsRow` local forks
-and the ORCHESTRATOR_NOTES item-1 sequencing (`SHARED_REQUEST.md` §2, §3);
-`_P16Sect`'s per-build `TextPainter` (accepted, documented); `.ptitle` declares
-no `text-wrap: balance`, so the title is a plain `Text` by design.
+Unchanged from earlier iterations: the Family list's two static rows merge into
+the Invite button's announcement (shared `NestListRow`); the shared
+`Semantics(label:) > InkWell` wart, blast radius pinned; `.ptitle` declares no
+`text-wrap: balance`, so the plain `Text` is correct by the CSS; `_P16Sect`'s
+per-build `TextPainter` (accepted); the dialog Cancel wrapping at 320 × 1.3
+(shared `NestButton` padding).
 
-One new observation, cosmetic: a fenced tap gives the user **no feedback at
-all** — the `InkWell` ripples and the handler silently returns. Inside a
-300 ms window after closing a modal that is defensible, but if the guard is
-ever wired to a longer window it becomes a silent dead tap. Not filed.
+New this iteration: **a fenced tap still ripples but does nothing** — inside
+the 300 ms guard window the user gets no feedback either way. Defensible at
+300 ms; if the window is ever widened it becomes a silent dead tap.
 
-## 6. Harness notes (additions to iterations 1-2 §5)
+## 8. Harness notes
 
-- **`Clock.fixed` takes a value, not a callback** — use `Clock(() => now)` for
-  a mutable clock (`package:clock`).
-- **A `ListView` row can be un-built by scrolling away from it.** After
-  scrolling down and back up with a fixed drag, `ensureVisible` can throw
-  `Bad state: No element` for a widget that "should" be near the top — the
-  element was disposed. Added `scrollSettingsUpTo` (a negative delta flips
-  `scrollUntilVisible`'s direction) instead of hand-rolled drags.
-- **Never settle before asserting a time-windowed guard.** `pumpAndSettle`
-  advances the fake clock past a 300 ms window; the guard is then correctly
-  inactive and the assertion proves nothing.
-- **`testWidgets(skip: …)` takes a `bool`**, so the reason goes in a comment.
+- **A widget's nearest `Padding` ancestor is the row's content box** in both
+  `SettingsRow` and `NestListRow`, which makes it the one shell-agnostic place
+  to measure "is there room for the slop". My first attempt measured the
+  toggle's *descendant* padding (the knob's, 27 px) instead.
+- **`PRAGMA table_info(<table>)` through `customSelect` is the live schema**,
+  and SQL column names are snake_case while drift's are camelCase.
+- **`const MembersCompanion(name: Value('Sam'))`** — the plain constructor
+  takes `Value<String>`; `const` needs the `Value` inside.
+- Unchanged from iterations 1–3: Drift streams need `settleSettings`
+  (`runAsync`); `bloc.close()` must be `unawaited` in a widget test;
+  `scrollUntilVisible` walks down only (`scrollSettingsUpTo` walks up);
+  a semantics-tree walk misses un-passed nodes (`getSemantics` does not);
+  `testWidgets(skip: …)` takes a bool; never settle before asserting a
+  time-windowed guard.
 
 ---
 
