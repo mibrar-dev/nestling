@@ -43,12 +43,14 @@ const _ideaIds = <String>[
 ];
 
 /// Icon asset per template, in design order (`<span class="icon-tile …">`).
+/// Parent-audience exact (P09 `questBed/questDishes/questHoover/questBins`;
+/// the rest already matched).
 const _iconAssets = <String>[
-  NestIcons.bed,
+  NestIcons.questBed,
   NestIcons.table,
-  NestIcons.bin,
-  NestIcons.dishwasher,
-  NestIcons.hoover,
+  NestIcons.questBins,
+  NestIcons.questDishes,
+  NestIcons.questHoover,
   NestIcons.paw,
   NestIcons.schoolBag,
   NestIcons.sprout,
@@ -305,16 +307,16 @@ const List<String> _seedIconKeys = <String>[
 
 /// Icon asset the Active tab shows per seed icon key.
 ///
-/// Ground truth is `app/lib/features/today/presentation/widgets/today_loaded_body.dart`
-/// (P08's `todayIconAsset`), which must stay total over the same seed keys:
+/// Ground truth is the parent-audience single source
+/// `questIconFor(key, audience: NestAudience.parent)` (P09/P10/P08 HTML):
 /// `q-living` (`sofa`) has no icon of its own and deliberately falls back to
 /// the quest card, exactly as P08 does.
 const _activeIconBySeedKey = <String, String>{
-  'dishwasher': NestIcons.dishwasher,
+  'dishwasher': NestIcons.questDishes,
   'book': NestIcons.book,
-  'bins': NestIcons.bin,
-  'bed': NestIcons.bed,
-  'hoover': NestIcons.hoover,
+  'bins': NestIcons.questBins,
+  'bed': NestIcons.questBed,
+  'hoover': NestIcons.questHoover,
   'plate': NestIcons.table,
   'paw': NestIcons.paw,
   'bag': NestIcons.schoolBag,

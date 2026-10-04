@@ -136,6 +136,27 @@ abstract final class NestlingIcons {
   /// Screens: P09, P08/P10 `Put the bins out` rows.
   static const String questBins = 'assets/icons/ic_quest_bins.svg';
 
+  /// K03/K04 kid Bed: headboard post, pillow bump, long base and legs.
+  /// Exact `K03-kid-home.html` / `K04-quest-detail.html` tile glyph
+  /// (`M2 18v-7 / M2 14h20v4 / …h-9v3 / M6 11V8h4v3`). Distinct from
+  /// [questBed] (P09 flat frame, no headboard) and [bed] (P08 arch).
+  /// Screens: K03, K04.
+  static const String questBedKid = 'assets/icons/ic_quest_bed_kid.svg';
+
+  /// K03 kid Dishes: dishwasher with top rack line and bottom text lines.
+  /// Exact `K03-kid-home.html` `Empty the dishwasher` tile glyph
+  /// (`rect 3/4/18/16 + M3 10h18 + circle 8/14.5 + M12 14h5…`). Distinct
+  /// from [questDishes] (P09 handled basket) and [dishwasher] (appliance).
+  /// Screens: K03.
+  static const String questDishesKid = 'assets/icons/ic_quest_dishes_kid.svg';
+
+  /// K03 kid Reading: open book with centre spine.
+  /// Exact `K03-kid-home.html` `Reading – 20 minutes` tile glyph
+  /// (`M12 6v14 + M3 4.6… + M21 4.6…`). Distinct from [book] (P09 closed
+  /// book side view).
+  /// Screens: K03.
+  static const String questReadingKid = 'assets/icons/ic_quest_reading_kid.svg';
+
   /// Quest: read for 20 minutes.
   /// Screens: P08, P09, P10, K03, K03b.
   static const String book = 'assets/icons/ic_book.svg';
@@ -247,6 +268,58 @@ abstract final class NestlingIcons {
   /// Screens: K08.
   static const String pizza = 'assets/icons/ic_pizza.svg';
 
+  /// Shared reward glyphs — exact `K08-shop.html` `.k8-art` paths, one per
+  /// `rewards.icon` seed key (`tv`, `film`, `moon`, `cake`, `coffee`,
+  /// `plate`). The single source is `rewardIconFor(key, audience:)` in
+  /// `core/design_system/components/reward_icons.dart`; these `reward*`
+  /// constants are its KID targets (`NestAudience.kid`). The PARENT targets
+  /// are the P14-exact glyphs (`screenTime`, `film`, `clock`, `chefHat`,
+  /// `rewardCoffeeParent`); `plate` has no P14 row, so both audiences use
+  /// [rewardPlate]. Old look-alikes (`filmStrip`, `moon`, `cafe`, `pizza`)
+  /// are untouched.
+  /// Screens: K08 (kid); P14 uses the parent targets.
+  static const String rewardTv = 'assets/icons/ic_reward_tv.svg';
+
+  /// Shared reward glyph: pick Friday film — exact K08 film-strip
+  /// (`rect 2.5/4/19/16` + side sprockets). Distinct from [film] (P14 play
+  /// triangle, the parent target).
+  /// Screens: K08.
+  static const String rewardFilm = 'assets/icons/ic_reward_film.svg';
+
+  /// Shared reward glyph: stay up 15 min later — exact K08 crescent moon.
+  /// Distinct from [clock] (P14 clock, the parent target).
+  /// Screens: K08.
+  static const String rewardMoon = 'assets/icons/ic_reward_moon.svg';
+
+  /// Shared reward glyph: baking together — exact K08 basket/bucket
+  /// (arch handle + trapezoid body + top tick). Distinct from [chefHat]
+  /// (P14 three-lobe hat, the parent target) and [basket] (slatted laundry
+  /// basket).
+  /// Screens: K08.
+  static const String rewardCake = 'assets/icons/ic_reward_cake.svg';
+
+  /// Shared reward glyph: park café trip — exact K08 takeaway cup
+  /// (domed lid + tapered body, no handle/steam/saucer). Distinct from
+  /// [cafe] (sit-down mug) and the P14 dome+box+legs glyph
+  /// ([rewardCoffeeParent]).
+  /// Screens: K08.
+  static const String rewardCoffee = 'assets/icons/ic_reward_coffee.svg';
+
+  /// Parent reward glyph: park café trip — exact P14 dome + box + legs
+  /// (`M4 10a8 8 0 0 1 16 0` + `M7 10v8h10v-8` + `M9 18v2M15 18v2`).
+  /// Distinct from [rewardCoffee] (K08 takeaway cup) and [cafe]
+  /// (sit-down mug, matches neither design).
+  /// Screens: P14.
+  static const String rewardCoffeeParent =
+      'assets/icons/ic_reward_coffee_parent.svg';
+
+  /// Shared reward glyph: choose dinner — exact K08 plain triangle + three
+  /// stroked dots (no crust band, dots are outlines). Distinct from [pizza]
+  /// (crust band + filled dots). P14 has no dinner row in its HTML; the seed
+  /// `plate` key uses this K08 glyph on both screens.
+  /// Screens: P14, K08.
+  static const String rewardPlate = 'assets/icons/ic_reward_plate.svg';
+
   /// Shopping bag. P12 history row, K03 dock 'Shop'. Also the canonical bag for K08 baking.
   /// Screens: P12, K03.
   static const String bag = 'assets/icons/ic_bag.svg';
@@ -303,6 +376,39 @@ abstract final class NestlingIcons {
   /// K06 wardrobe: crown (locked).
   /// Screens: K06.
   static const String crown = 'assets/icons/ic_crown.svg';
+
+  /// K06 design glyph: scarf, exact `K06-pip.html` `.k6-ward` paths
+  /// (`M5 3h4v18H5z` + flag + tick). Distinct from [scarf] (fringed blanket
+  /// look-alike); K06 must switch its wardrobe tile to this.
+  /// Screens: K06.
+  static const String wardrobeScarf = 'assets/icons/ic_wardrobe_scarf.svg';
+
+  /// K06 design glyph: wellies, exact `K06-pip.html` `.k6-ward` paths
+  /// (boot body + `M6 3h4M14 3h4` top ticks). Distinct from [wellies]
+  /// (profile look-alike); K06 must switch its wardrobe tile to this.
+  /// Screens: K06.
+  static const String wardrobeWellies = 'assets/icons/ic_wardrobe_wellies.svg';
+
+  /// K06 design glyph: sun hat, exact `K06-pip.html` `.k6-ward` paths
+  /// (`M3 16h18l-1.6 2.4H4.6z` brim + `M7 16a5 5 0 0 1 10 0z` dome).
+  /// Distinct from [sunHat] (dome-band look-alike with an extra band
+  /// stroke); K06 must switch its wardrobe tile to this.
+  /// Screens: K06.
+  static const String wardrobeSunHat = 'assets/icons/ic_wardrobe_sun_hat.svg';
+
+  /// K06 design glyph: Feed care action, exact `K06-pip.html` `.k6-care`
+  /// paths (`M3 11h18a9 9 0 0 1-18 0Z` bowl + `M12 11V5` stem +
+  /// `M9 5a3 3 0 0 1 6 0` morsel). Distinct from [feedBowl] (bowl with paw
+  /// and kibble look-alike); K06 must switch its Feed button to this.
+  /// Screens: K06.
+  static const String kidFeed = 'assets/icons/ic_kid_feed.svg';
+
+  /// K06 design glyph: Play care action, exact `K06-pip.html` `.k6-care`
+  /// paths (`circle 12/12/9` ring + `M5 7.5c4 1 7 3.5 8 7.5` /
+  /// `M19 7.5c-4 1-7 3.5-8 7.5` seams). Distinct from [ball] (star-panel
+  /// look-alike); K06 must switch its Play button to this.
+  /// Screens: K06.
+  static const String kidPlay = 'assets/icons/ic_kid_play.svg';
 }
 
 /// Illustrations - `flutter/assets/illustrations/*.svg`. Keep their colours; they are

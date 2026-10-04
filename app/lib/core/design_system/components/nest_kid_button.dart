@@ -32,6 +32,7 @@ class NestKidButton extends StatefulWidget {
     this.fontSize = 20,
     this.contentPadding,
     this.wrapLabel = true,
+    this.trailing,
   });
 
   final String label;
@@ -64,6 +65,14 @@ class NestKidButton extends StatefulWidget {
   /// fonts): the label stays on one line and scales down instead of
   /// wrapping to two lines.
   final bool wrapLabel;
+
+  /// Optional third row under (vertical axis) or after (horizontal axis) the
+  /// label — K06 `.k6-care .btn-kid` stacks icon / 17-px label / coin price
+  /// (`.k6-coin`) or `.k6-free` pill in a column with the same 3 px gap.
+  /// Null (default) keeps the historical icon + label layout bit-for-bit.
+  /// The trailing is visual only (excluded from semantics): include its
+  /// meaning in [semanticLabel] (e.g. "Feed Pip, costs 5 coins").
+  final Widget? trailing;
 
   @override
   State<NestKidButton> createState() => _NestKidButtonState();
@@ -196,6 +205,19 @@ class _NestKidButtonState extends State<NestKidButton> {
                             ),
                           ),
                         ),
+                        if (widget.trailing case final trailing?) ...[
+                          SizedBox(
+                            width: widget.axis == Axis.horizontal
+                                ? widget.gap
+                                : 0,
+                            height: widget.axis == Axis.vertical
+                                ? widget.gap
+                                : 0,
+                          ),
+                          // Visual only: the outer Semantics owns the label
+                          // (include the trailing meaning in semanticLabel).
+                          ExcludeSemantics(child: trailing),
+                        ],
                       ],
                     ),
                   ),

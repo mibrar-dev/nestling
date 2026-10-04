@@ -604,12 +604,12 @@ abstract final class Seed {
 
     await item('maya', 'scarf', owned: true, price: 0);
     await item('maya', 'sunhat', owned: true, price: 0);
-    await item('maya', 'wellies', owned: false, price: 40);
-    await item('maya', 'crown', owned: false, price: 120);
+    await item('maya', 'wellies', owned: false, price: 30);
+    await item('maya', 'crown', owned: false, price: 60);
     await item('leo', 'sunhat', owned: true, price: 0);
     await item('leo', 'scarf', owned: false, price: 30);
-    await item('leo', 'wellies', owned: false, price: 40);
-    await item('leo', 'crown', owned: false, price: 120);
+    await item('leo', 'wellies', owned: false, price: 30);
+    await item('leo', 'crown', owned: false, price: 60);
   }
 
   static Future<void> _settingsDemo(AppDatabase db) async {
