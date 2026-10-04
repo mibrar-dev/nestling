@@ -48,3 +48,8 @@ P16 only needs to RENDER it — no schema or repository work.
 
 ## UPDATE (02:20, orchestrator QA of cmp_light_1, 3.58%)
 The early subtitle ellipsis, the mid-row chevron and the ≈ 2 px taller rows are a SHARED NestListRow bug: trailing is `Flexible`, which halves the text width. shared/list_row_trailing is fixing it. Do not work around it locally. Once main has it (merged before your build), re-check that every row matches the design (rows at y 221/281/341…) and that subtitles are full. Fix the other local findings now.
+
+## UPDATE (06:58) — iteration 3
+1. Do NOT fork shared components. Revert `_P16Sect` to the shared `NestSectionLabel`, and the subcard to `NestCard`. If the shared label or card does not match the design, write SHARED_REQUEST.md with the measured numbers and the orchestrator will fix the shared one.
+2. P16-T02: the switch must have a 44×44 tap target. NestToggle on main now has a 51×31 track plus hit slop, so give it room: no tight parent that clips the hit area. Prove taps 4 px outside the track toggle it.
+3. Close P16-B08/B09 (un-skip them; they must pass).

@@ -35,6 +35,7 @@ import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/settings/domain/settings_repository.dart';
 import 'package:nestling/features/settings/presentation/bloc/settings_bloc.dart';
 import 'package:nestling/features/settings/presentation/views/settings_view.dart';
+import 'package:nestling/features/settings/presentation/widgets/p16_transient_guard.dart';
 import 'package:nestling/features/settings/settings_routes.dart';
 
 import '../../test_scope.dart';
@@ -92,6 +93,7 @@ Future<void> pumpSettingsApp(
     );
   }
   await pumpAppRoute(tester, SettingsRoutePaths.settings, theme: theme);
+  P16TransientGuard.reset();
   _applySurface(tester, size: size, textScale: textScale);
   await tester.pump();
   await settleSettings(tester);

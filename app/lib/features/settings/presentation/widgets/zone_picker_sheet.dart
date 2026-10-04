@@ -5,6 +5,7 @@ import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/settings/presentation/bloc/settings_bloc.dart';
 import 'package:nestling/features/settings/presentation/bloc/settings_event.dart';
+import 'package:nestling/features/settings/presentation/widgets/p16_transient_guard.dart';
 import 'package:nestling/features/settings/presentation/widgets/settings_rows.dart';
 
 /// Curated zone list from ORCHESTRATOR_NOTES. Raw IANA ids appear only in
@@ -32,7 +33,7 @@ Future<void> openZonePickerSheet(BuildContext context) {
       value: bloc,
       child: const _ZonePickerList(),
     ),
-  );
+  ).whenComplete(P16TransientGuard.suppressShortly);
 }
 
 class _ZonePickerList extends StatelessWidget {
@@ -94,6 +95,9 @@ class _ZoneRow extends StatelessWidget {
           : null,
       onTap: () {
         context.read<SettingsBloc>().add(SettingsTimeZonePicked(zoneId));
+        // B08: start the guard the moment the sheet closes, not when
+        // its post-animation future completes.
+        P16TransientGuard.suppressShortly();
         Navigator.of(context).pop();
       },
     );

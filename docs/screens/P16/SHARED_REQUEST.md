@@ -42,6 +42,13 @@ the design's `.subcard` pins `border-radius: var(--r-m)` (16 px,
 `tokens.css:77`). P16's subscription card is therefore a local surface
 container rather than the shared component. A radius variant (or a `radius`
 parameter) on `NestCard` would let P16 use the shared card again.
+
+**The fork is not style-only — it costs a `Material`.** `NestCard` wraps its
+child in `Material(borderRadius: …)` (`nest_card.dart:71`); P16's local
+`Container` does not, so the `Manage subscription` `InkWell`'s ripple resolves
+to the Scaffold's `Material` **behind** the card instead of on it (bug-stage
+observation 2 in `FIXES_2.md`). A `radius` parameter removes the fork *and* that
+defect together.
 Files: `app/lib/core/design_system/components/nest_card.dart`.
 Blocks: no.
 

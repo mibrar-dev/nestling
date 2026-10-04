@@ -45,6 +45,7 @@ import 'package:nestling/features/settings/domain/settings_repository.dart';
 import 'package:nestling/features/settings/presentation/bloc/settings_bloc.dart';
 import 'package:nestling/features/settings/presentation/bloc/settings_event.dart';
 import 'package:nestling/features/settings/presentation/views/settings_view.dart';
+import 'package:nestling/features/settings/presentation/widgets/p16_transient_guard.dart';
 
 import '../../test_scope.dart';
 import 'p16_test_support.dart';
@@ -101,6 +102,7 @@ Future<void> _pumpView(
   );
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 200));
+  P16TransientGuard.reset();
 }
 
 /// A miniature router exposing `/settings` plus the four targets P16 pushes,
@@ -144,6 +146,7 @@ Future<void> _pumpRouted(
   );
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 200));
+  P16TransientGuard.reset();
 }
 
 Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
@@ -483,7 +486,7 @@ void main() {
     // (screen-local): keep a “modal just closed” guard for ~300 ms and
     // ignore row taps while it is set (or absorb pointers in the shared
     // modal/sheet helpers during the exit transition).
-    skip: true,
+    skip: false,
   );
 
   testWidgets(

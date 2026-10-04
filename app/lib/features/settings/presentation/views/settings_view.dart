@@ -12,6 +12,7 @@ import 'package:nestling/features/settings/domain/entities/settings_member_entry
 import 'package:nestling/features/settings/presentation/bloc/settings_bloc.dart';
 import 'package:nestling/features/settings/presentation/bloc/settings_event.dart';
 import 'package:nestling/features/settings/presentation/bloc/settings_state.dart';
+import 'package:nestling/features/settings/presentation/widgets/p16_transient_guard.dart';
 import 'package:nestling/features/settings/presentation/widgets/settings_rows.dart';
 import 'package:nestling/features/settings/presentation/widgets/zone_picker_sheet.dart';
 
@@ -198,7 +199,9 @@ class _SettingsLoaded extends StatelessWidget {
               subtitle: 'Nickname + age band only',
               leadingAsset: NestIcons.plus,
               trailing: settingsChevron(context),
-              onTap: () => context.push(FamilyRoutePaths.addChildren),
+              onTap: () => P16TransientGuard.run(
+                () => context.push(FamilyRoutePaths.addChildren),
+              ),
             ),
           ],
         ),
@@ -234,12 +237,16 @@ class _SettingsLoaded extends StatelessWidget {
                 style: NestType.caption(color: tokens.ink2),
               ),
               InkWell(
-                onTap: () => context.push(PaywallRoutePaths.paywall),
+                onTap: () => P16TransientGuard.run(
+                  () => context.push(PaywallRoutePaths.paywall),
+                ),
                 child: Semantics(
                   button: true,
                   label: 'Manage subscription',
                   excludeSemantics: true,
-                  onTap: () => context.push(PaywallRoutePaths.paywall),
+                  onTap: () => P16TransientGuard.run(
+                    () => context.push(PaywallRoutePaths.paywall),
+                  ),
                   child: SizedBox(
                     height: 52,
                     child: Row(
@@ -269,7 +276,8 @@ class _SettingsLoaded extends StatelessWidget {
               title: 'Time zone',
               subtitle: zoneSummary,
               trailing: settingsChevron(context),
-              onTap: () => openZonePickerSheet(context),
+              onTap: () =>
+                  P16TransientGuard.run(() => openZonePickerSheet(context)),
             ),
           ],
         ),
@@ -278,34 +286,62 @@ class _SettingsLoaded extends StatelessWidget {
         const SizedBox(height: NestSpacing.s2),
         NestList(
           children: <Widget>[
-            NestListRow(
+            SettingsRow(
               title: 'Approvals waiting',
-              trailing: NestToggle(
-                value: settings?.notifApprovals ?? true,
-                semanticLabel: 'Approvals waiting notifications',
-                onChanged: (v) => context.read<SettingsBloc>().add(
-                  SettingsNotificationsChanged(approvals: v),
+              // P16-T02: 6 px vertical padding so the content box is
+              // 56 − 12 = 44, plus the 44-high wrapper so the toggle's
+              // overhang is inside a box the hit pipeline honors (the
+              // padding alone does not restore the slop).
+              padding: const EdgeInsets.fromLTRB(12, 6, 16, 6),
+              trailing: SizedBox(
+                height: 44,
+                child: Center(
+                  child: NestToggle(
+                    value: settings?.notifApprovals ?? true,
+                    semanticLabel: 'Approvals waiting notifications',
+                    onChanged: (v) => P16TransientGuard.run(
+                      () => context.read<SettingsBloc>().add(
+                        SettingsNotificationsChanged(approvals: v),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
-            NestListRow(
+            SettingsRow(
               title: 'Payout day reminder',
               subtitle: 'Friday before Saturday payout',
-              trailing: NestToggle(
-                value: settings?.notifPayout ?? true,
-                semanticLabel: 'Payout day reminder',
-                onChanged: (v) => context.read<SettingsBloc>().add(
-                  SettingsNotificationsChanged(payout: v),
+              padding: const EdgeInsets.fromLTRB(12, 6, 16, 6),
+              trailing: SizedBox(
+                height: 44,
+                child: Center(
+                  child: NestToggle(
+                    value: settings?.notifPayout ?? true,
+                    semanticLabel: 'Payout day reminder',
+                    onChanged: (v) => P16TransientGuard.run(
+                      () => context.read<SettingsBloc>().add(
+                        SettingsNotificationsChanged(payout: v),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
-            NestListRow(
+            SettingsRow(
               title: 'Weekly family summary',
-              trailing: NestToggle(
-                value: settings?.notifSummary ?? true,
-                semanticLabel: 'Weekly family summary',
-                onChanged: (v) => context.read<SettingsBloc>().add(
-                  SettingsNotificationsChanged(summary: v),
+              padding: const EdgeInsets.fromLTRB(12, 6, 16, 6),
+              trailing: SizedBox(
+                height: 44,
+                child: Center(
+                  child: NestToggle(
+                    value: settings?.notifSummary ?? true,
+                    semanticLabel: 'Weekly family summary',
+                    onChanged: (v) => P16TransientGuard.run(
+                      () => context.read<SettingsBloc>().add(
+                        SettingsNotificationsChanged(summary: v),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -319,12 +355,16 @@ class _SettingsLoaded extends StatelessWidget {
             NestListRow(
               title: 'Download our data',
               trailing: settingsChevron(context),
-              onTap: () => context.push(PrivacyConsentRoutePaths.privacy),
+              onTap: () => P16TransientGuard.run(
+                () => context.push(PrivacyConsentRoutePaths.privacy),
+              ),
             ),
             NestListRow(
               title: 'Privacy Notice',
               trailing: settingsChevron(context),
-              onTap: () => context.push(PrivacyConsentRoutePaths.privacy),
+              onTap: () => P16TransientGuard.run(
+                () => context.push(PrivacyConsentRoutePaths.privacy),
+              ),
             ),
             SettingsRow(
               title: 'Delete family account',
@@ -345,8 +385,9 @@ class _SettingsLoaded extends StatelessWidget {
             NestListRow(
               title: 'Help & feedback',
               trailing: settingsChevron(context),
-              onTap: () =>
-                  showNestToast(context, 'Help & feedback is coming soon'),
+              onTap: () => P16TransientGuard.run(
+                () => showNestToast(context, 'Help & feedback is coming soon'),
+              ),
             ),
             const NestListRow(
               title: 'Version 1.0.0',
@@ -399,6 +440,7 @@ class _SettingsLoaded extends StatelessWidget {
         ],
       ),
     );
+    P16TransientGuard.suppressShortly();
     if (confirmed == true && context.mounted) {
       // TODO(P16): wire real deletion once the account-deletion flow exists;
       // intentionally a toast only today — never wipe the DB silently.
@@ -458,7 +500,9 @@ class _ChildRow extends StatelessWidget {
         color: settingsAvatarColor(child.avatarColour),
       ),
       trailing: settingsChevron(context),
-      onTap: () => context.push(FamilyRoutePaths.childProfile),
+      onTap: () => P16TransientGuard.run(
+        () => context.push(FamilyRoutePaths.childProfile),
+      ),
     );
   }
 }
