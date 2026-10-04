@@ -63,6 +63,37 @@ Files: `app/lib/core/data/` schema + migration, `Seed`, and P16's
 `SettingsMemberEntry`/`watchMembers` (feature-owned, will follow).
 Blocks: no.
 
+**Iteration 4 measured this, because `ORCHESTRATOR_NOTES` (08:12) ruled "the
+parent's email must come from the DB … the seed holds that value" — and the
+seed does not.** `grep -i email` over `app_database.g.dart` and
+`lib/core/data/*.dart` returns **0 hits**: no table in the schema has an email
+column. The omission is deliberate and already documented by the auth feature:
+`auth_repository_impl.dart:38` states *"the members table has no
+email/password columns"* and `:41` uses the submitted email **only** to derive
+the owner display name (that derivation is how `Sarah` exists at all).
+`auth_repository.dart:9-17` repeats it and asks the orchestrator to migrate
+the shared test to `email:`.
+
+So `sarah@example.co.uk` exists in the codebase in exactly two places: P16's
+hard-coded row subtitle (`settings_view.dart:468`) and the design-system
+gallery as a form `hintText` (`gallery_forms.dart:21`) — i.e. it is placeholder
+copy in both, seeded nowhere.
+
+Consequence: the 08:12 ruling is **unsatisfiable as written**, and its own
+fallback ("if the DB lacks a field, write SHARED_REQUEST.md") is what this
+section is. Two ways to close it, cheapest first:
+1. **Agree a role-derived subtitle** (`Owner`, or the stored `name`) and drop
+   the email copy — no schema change, no migration, and it removes a hard-coded
+   string that DATA-OVER-MOCKS can never satisfy.
+2. **Persist the email** — add `members.email`, migrate, seed it, and change
+   `AuthRepository.createAccount` to store it instead of discarding it (the
+   email is already in hand at signup, so the write is free; only the schema
+   and the auth contract change).
+
+Note the ruling also affects four P16 tests that assert the literal string
+(`settings_view_test.dart:113`, `settings_responsive_test.dart:365`), so
+whichever way it goes, those follow the shared decision.
+
 ## 5. IANA link ids are rejected by `isKnownZoneId` (P16-B09, minor)
 
 Need: the bundled `package:timezone` `latest_10y` dataset has 341 locations

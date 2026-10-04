@@ -565,7 +565,7 @@ void main() {
     // co-parent toast row) never route through `P16TransientGuard.run`, so
     // the B08 fall-through still reaches them. Fix: wrap both row handlers
     // in `P16TransientGuard.run`, like every other row.
-    skip: true,
+    skip: false,
   );
 
   testWidgets(
@@ -604,7 +604,7 @@ void main() {
     // `SizedBox(width: 51, height: 44, child: Center(child: toggle))` or
     // `Align(widthFactor: 1, child: SizedBox(height: 44, child: toggle))`,
     // so the trailing stays 51 px wide and flush with the row's 16 px inset.
-    skip: true,
+    skip: false,
   );
 
   // -------------------------------------------------------------------------

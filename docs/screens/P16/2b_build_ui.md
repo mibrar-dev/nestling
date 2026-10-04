@@ -1,71 +1,58 @@
-# P16 Settings — 2b build, UI chunk (iteration 3)
+# P16 Settings — 2b build, UI chunk (iteration 4)
 
-Scope: views + widgets only; `FIXES_2.md` triage of the bug-fix items,
-limited to assets I own. This document supersedes the iteration-2 copy.
+Scope: views + widgets only; `FIXES_3.md` triage, limited to assets I own.
 
-## FIXES_2 triage (views/widgets owned items)
+## FIXES_3 triage (views/widgets owned items)
 
-- **P16-T02 (major, switch tap target 51×31, not 44): FIXED.** Screen-local
-  recipe from the bug stage, applied verbatim: the three switch rows render
-  with P16's own `SettingsRow` at 6 px vertical padding (content box
-  56 − 12 = 44) and each `NestToggle` is wrapped in
-  `SizedBox(height: 44, Center(...))`. Padding alone did not restore the
-  slop; the 44-high wrapper around the toggle is what makes the overhang
-  hittable (verified by the failing proof, now un-skipped and green).
-  `settings_a11y_test.dart` `[P16-T02]` is `skip: false`.
-- **P16-B08 (minor, double tap during a modal close falls through): FIXED.**
-  New `P16TransientGuard` (`presentation/widgets/p16_transient_guard.dart`):
-  every modal/sheet close (`openZonePickerSheet`'s completion, the delete
-  dialog's completion, and each picker row's close tap) records the instant;
-  every page-level row tap (`onTap`/`onChanged` handlers on the settings
-  list) runs through `P16TransientGuard.run`, which ignores taps for the
-  next 300 ms. `p16_bugs_test.dart` `[P16-B08]` un-skipped, green.
-- **P16-B09 (minor, IANA link ids rejected): NOT FIXED — out of scope.**
-  `isKnownZoneId` lives in `app/lib/core/data/family_time.dart` (core
-  data). Fixing it is a shared change tracked as SHARED_REQUEST §5; the
-  screen-side proof stays skip-marked, and no feature-side workaround was
-  attempted.
-- **3_test §2.1/§4.4: `_P16Sect` runs a `TextPainter.layout()` per build.**
-  Left as-is; no measurable cost. It is now intentional and documented.
-- **3_test §4.4 #2 (Family list announces as ONE button):** not edited —
-  the merge happens in shared `NestListRow`'s no-`onTap` branch; a local
-  Semantics label on static rows was tried and rejected because it broke
-  the tappable-node test contract over the whole Family section. Kept
-  for the orchestrator's shared-batch pass.
-- **Observation #5 (hard-coded `sarah@example.co.uk`):** unchanged, per
-  plan §(g) static copy; members table still has no email column.
-- **Review "three local re-implementations" (SettingsRow, p16_subcard,
-  _P16Sect):** all three remain with the workarounds above and stay
-  covered by dedicated tests; removing them needs the shared changes in
-  SHARED_REQUEST §1/§2/§3.
+- **P16-B11 (major, switches 34.5 px off the right edge): FIXED.**
+  The T02 wrapper is now `SizedBox(width: 51, height: 44, child:
+  Center(child: NestToggle(...)))` for all three switch rows, so the
+  wrapper no longer stretches to the row's 120 px trailing cap and the
+  track sits flush with the row's 16 px right inset (x 303–354 at 390,
+  233–284 at 320). `settings_responsive_test.dart` `[P16-B11]` is
+  un-skipped and green; the T02 proof still passes with the new
+  wrapper, so both findings are pinned together on the same layout.
+- **P16-B10 (minor, guard did not fence delete row / invite row):
+  FIXED.** `Delete family account` and the `Invite co-parent` toast row
+  `onTap`s now route through `P16TransientGuard.run`, exactly like the
+  other navigational rows. Un-skipped `[P16-B10]`: double-tap on Cancel
+  no longer re-opens the dialog, and a picker double-tap landing on the
+  delete row no longer opens it either.
+- **P16-B09 (minor, IANA link ids): NOT FIXED — shared.** The root
+  cause is in core `family_time.dart`/`isKnownZoneId` (treated as an
+  unknown zone, which blocks the device-zone prompt). Carried via
+  SHARED_REQUEST §5; the feature-side proof stays skip-marked.
+- **3_test observations carried forward (iteration 2/3, not regressions):**
+  Family list merges into one announcement (shared `NestListRow`
+  no-`onTap` branch, blast radius pinned); `sarah@example.co.uk`
+  hard-coded (SHARED_REQUEST §4); `_P16Sect` per-build `TextPainter`
+  accepted; three local forks documented against SHARED_REQUEST §1/§2/§3.
 
-## Contract notes
+## Test-harness coupling found while fixing B10
 
-- `SettingsState.deviceZoneId` batched by 2a (unchanged by this pass);
-  `SettingsSessionStore` un-skipped B02's proof earlier.
-- No new imports of `google_fonts`; no `DateTime.now()` in feature code
-  (B04 proof green); statics: quick work.
-- `p16_test_support.dart` / `p16_bugs_test.dart` reset the static
-  `P16TransientGuard` between tests (`P16TransientGuard.reset()`),
-  because the guard is process-level state; the failing-in-full-run /
-  passing-alone `[P16-clean]` picker test was exactly that leak.
+- `settings_view_test.dart` pumps a raw `SettingsView` without the
+  route harness, so it never went through `P16TransientGuard.reset()`.
+  Adding the guarded delete-row onTap broke its modal-open test by the
+  stale guard window. Reset is now inserted into that test file's pump
+  helper as well (`P16TransientGuard.reset()` after `addTearDown`).
 
 ## Verified
 
-- `flutter analyze`: No issues found (full app).
+- `flutter analyze`: No issues found (feature lib + tests).
 - `dart format`: clean.
-- `flutter test test/features/settings`: **+124 ~1** green (the single
-  skip is P16-B09 — shared data-layer request, documented). B08 and T02
-  are now live regression guards, un-skipped and passing.
-- No simulator used.
+- `flutter test test/features/settings`: **+134 ~1** green (only skip is
+  P16-B09 — the shared data-layer request). T02, B08, B10 and B11 now
+  have live un-skipped proofs; the delete-dialog toast and re-open path
+  is covered by the full-app harness too.
+- No simulator used; no new feature edits outside
+  `presentation/{views,widgets}` + `app/test/features/settings`.
 
 ## LEFT FOR NEXT ITERATION
 
-- P16-B09 waits for SHARED_REQUEST §5 (`isKnownZoneId` link-id support)
-  before its proof can be un-skipped.
-- T02's screen-local recipe mirrors the exact bounds; if the shared fix
-  in SHARED_REQUEST §1 lands, the local `SettingsRow` padding +
-  `SizedBox(height: 44, Center(...))` wrapper for the three toggle rows
-  should be retired in favour of the shared component.
+- P16-B09 waits for SHARED_REQUEST §5 (`isKnownZoneId` link-id
+  support) before its proof can be un-skipped.
+- If SHARED_REQUEST §1 ships the shared 44 px row-native fix for
+  P16-T02, retire the local `SettingsRow` + `SizedBox(width: 51,
+  height: 44, Center(...))` recipe.
 
 VERDICT: PASS

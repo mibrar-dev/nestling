@@ -347,7 +347,7 @@ void main() {
     // Center(...))` wrapper takes the row's full trailing width and centres
     // the track ~34.5 px off the design position. See §Bugs of
     // docs/screens/P16/3_test.md.
-    skip: true,
+    skip: false,
   );
 
   testWidgets('row copy stays on one line and ellipsizes instead of wrapping', (

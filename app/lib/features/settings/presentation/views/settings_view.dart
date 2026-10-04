@@ -182,8 +182,9 @@ class _SettingsLoaded extends StatelessWidget {
               leadingAsset: NestIcons.plus,
               tint: NestTileTint.leaf,
               trailing: settingsChevron(context),
-              onTap: () =>
-                  showNestToast(context, 'Co-parent invite is coming soon'),
+              onTap: () => P16TransientGuard.run(
+                () => showNestToast(context, 'Co-parent invite is coming soon'),
+              ),
               semanticLabel: 'Invite co-parent',
             ),
           ],
@@ -294,6 +295,7 @@ class _SettingsLoaded extends StatelessWidget {
               // padding alone does not restore the slop).
               padding: const EdgeInsets.fromLTRB(12, 6, 16, 6),
               trailing: SizedBox(
+                width: 51,
                 height: 44,
                 child: Center(
                   child: NestToggle(
@@ -313,6 +315,7 @@ class _SettingsLoaded extends StatelessWidget {
               subtitle: 'Friday before Saturday payout',
               padding: const EdgeInsets.fromLTRB(12, 6, 16, 6),
               trailing: SizedBox(
+                width: 51,
                 height: 44,
                 child: Center(
                   child: NestToggle(
@@ -331,6 +334,7 @@ class _SettingsLoaded extends StatelessWidget {
               title: 'Weekly family summary',
               padding: const EdgeInsets.fromLTRB(12, 6, 16, 6),
               trailing: SizedBox(
+                width: 51,
                 height: 44,
                 child: Center(
                   child: NestToggle(
@@ -370,7 +374,7 @@ class _SettingsLoaded extends StatelessWidget {
               title: 'Delete family account',
               titleColor: tokens.danger,
               titleWeight: FontWeight.w700,
-              onTap: () => _confirmDelete(context),
+              onTap: () => P16TransientGuard.run(() => _confirmDelete(context)),
               semanticLabel: 'Delete family account',
             ),
           ],

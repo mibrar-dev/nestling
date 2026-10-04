@@ -53,3 +53,8 @@ The early subtitle ellipsis, the mid-row chevron and the ≈ 2 px taller rows ar
 1. Do NOT fork shared components. Revert `_P16Sect` to the shared `NestSectionLabel`, and the subcard to `NestCard`. If the shared label or card does not match the design, write SHARED_REQUEST.md with the measured numbers and the orchestrator will fix the shared one.
 2. P16-T02: the switch must have a 44×44 tap target. NestToggle on main now has a 51×31 track plus hit slop, so give it room: no tight parent that clips the hit area. Prove taps 4 px outside the track toggle it.
 3. Close P16-B08/B09 (un-skip them; they must pass).
+
+## UPDATE (08:12) — iteration 4 (LAST pass)
+1. Fix P16-B11 (switch alignment regression from iteration 3): the NestToggle track must sit at the design rect, using the shared NestToggle as-is with no offsets. Then fix B09 and B10, and un-skip all four proofs.
+2. DATA OVER MOCKS: the parent's email must come from the DB (the signed-in parent / members table), not the hard-coded "sarah@example.co.uk". The seed holds that value. If the DB lacks a field, write SHARED_REQUEST.md.
+3. The forks `_P16Sect`, the subcard and `SettingsRow` must use the shared NestSectionLabel / NestCard / NestListRow. If they really differ from the design, record the numbers in SHARED_REQUEST.md and keep the shared ones. Do not fork.

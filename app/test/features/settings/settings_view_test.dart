@@ -23,6 +23,7 @@ import 'package:nestling/features/settings/domain/settings_repository.dart';
 import 'package:nestling/features/settings/presentation/bloc/settings_bloc.dart';
 import 'package:nestling/features/settings/presentation/bloc/settings_event.dart';
 import 'package:nestling/features/settings/presentation/views/settings_view.dart';
+import 'package:nestling/features/settings/presentation/widgets/p16_transient_guard.dart';
 
 import '../../test_scope.dart';
 import 'p16_test_support.dart' show p16PinnedNowUtc;
@@ -57,6 +58,7 @@ Future<void> _pumpView(WidgetTester tester, SettingsBloc bloc) async {
   tester.view.physicalSize = const Size(390 * 3, 844 * 3);
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
+  P16TransientGuard.reset();
   await tester.pumpWidget(
     MaterialApp(
       theme: NestTheme.light(),
