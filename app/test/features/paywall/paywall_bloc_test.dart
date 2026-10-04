@@ -17,6 +17,7 @@ import 'dart:async';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/features/paywall/data/paywall_repository_impl.dart';
@@ -646,7 +647,7 @@ void main() {
       'startTrial records the status, a UTC start and the family zone',
       () async {
         await Seed.fresh(db);
-        final before = DateTime.now().toUtc();
+        final before = appNowUtc();
 
         await repository.startTrial();
 

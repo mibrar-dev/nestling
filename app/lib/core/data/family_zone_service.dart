@@ -12,6 +12,7 @@
 
 import 'package:drift/drift.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/seed.dart';
@@ -91,7 +92,7 @@ class FamilyZoneService {
     String familyId = Seed.familyId,
   ]) async {
     if (!isKnownZoneId(zoneId)) return;
-    final now = DateTime.now().toUtc();
+    final now = appNowUtc();
     await (_db.update(_db.families)..where((f) => f.id.equals(familyId))).write(
       FamiliesCompanion(
         timeZone: Value(zoneId),

@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/family_zone_service.dart';
@@ -111,7 +112,7 @@ class SettingsRepositoryImpl implements SettingsRepository {
   Future<void> _write(SettingsCompanion companion) async {
     final zone = await _db.familyZoneId();
     final stamped = companion.copyWith(
-      updatedAt: Value(DateTime.now().toUtc()),
+      updatedAt: Value(appNowUtc()),
       updatedAtTz: Value(normalizeZoneId(zone)),
     );
     await (_db.update(
@@ -122,7 +123,7 @@ class SettingsRepositoryImpl implements SettingsRepository {
       _db.families,
     )..where((f) => f.id.equals(Seed.familyId))).write(
       FamiliesCompanion(
-        updatedAt: Value(DateTime.now().toUtc()),
+        updatedAt: Value(appNowUtc()),
         updatedAtTz: Value(normalizeZoneId(zone)),
       ),
     );

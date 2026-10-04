@@ -26,6 +26,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:nestling/app/app.dart';
 import 'package:nestling/app/controllers.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/family_time.dart';
@@ -799,7 +800,7 @@ void main() {
       // the same pure function the view uses (never a frozen date).
       final expected = payoutLabel(
         payoutWeekday: 6,
-        nowUtc: DateTime.now().toUtc(),
+        nowUtc: appNowUtc(),
         zoneId: 'Asia/Dubai',
       );
       final breakdown = tester
