@@ -81,3 +81,25 @@ final class PocketMoneySpendingSubmitted extends PocketMoneyEvent {
   @override
   List<Object?> get props => <Object?>[childId, amountPence, note];
 }
+
+/// P13: "Mark as paid" for one child. The view dispatches one event per
+/// ticked child with that child's owed total; `savingsMovePence`/`goalId`
+/// carry the £1.00 (100 p) Lego-fund move and are zero/null otherwise —
+/// including for the goal-bearing child when its toggle is off, and always
+/// for children without a goal.
+final class PocketMoneyPayoutSubmitted extends PocketMoneyEvent {
+  const new(this.childId, this.amountPence, this.savingsMovePence, this.goalId);
+
+  final String childId;
+  final int amountPence;
+  final int savingsMovePence;
+  final String? goalId;
+
+  @override
+  List<Object?> get props => <Object?>[
+    childId,
+    amountPence,
+    savingsMovePence,
+    goalId,
+  ];
+}

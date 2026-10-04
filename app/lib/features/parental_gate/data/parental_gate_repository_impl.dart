@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/features/parental_gate/domain/entities/parental_gate_challenge.dart';
@@ -19,7 +20,7 @@ class ParentalGateRepositoryImpl implements ParentalGateRepository {
       if (setting != null && !setting.kidGateEnabled) {
         return const <ParentalGateChallenge>[];
       }
-      return <ParentalGateChallenge>[challengeFor(DateTime.now().toUtc())];
+      return <ParentalGateChallenge>[challengeFor(appNowUtc())];
     });
   }
 

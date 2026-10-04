@@ -23,6 +23,7 @@
 // method: design ink 228.33 vs Inter w700 @16 = 229.99.
 
 import 'package:flutter/material.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/approvals/domain/entities/approval.dart';
 import 'package:nestling/features/approvals/presentation/widgets/approval_time.dart';
@@ -107,7 +108,7 @@ class _ApprovalCardState extends State<ApprovalCard> {
   Widget build(BuildContext context) {
     final tokens = context.nest;
     final item = widget.approval;
-    final now = widget.nowUtc ?? DateTime.now().toUtc();
+    final now = widget.nowUtc ?? appNowUtc();
     final busy = widget.busy;
     final dayLabel = approvalDayLabel(
       createdAtUtc: item.createdAt,

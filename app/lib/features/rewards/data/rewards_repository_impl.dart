@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/seed.dart';
@@ -60,7 +61,7 @@ class RewardsRepositoryImpl implements RewardsRepository {
   @override
   Future<void> createReward(domain.Reward reward) {
     final id = reward.id.isEmpty
-        ? 'reward-${DateTime.now().toUtc().millisecondsSinceEpoch}'
+        ? 'reward-${clock.now().toUtc().millisecondsSinceEpoch}'
         : reward.id;
     return _db
         .into(_db.rewards)

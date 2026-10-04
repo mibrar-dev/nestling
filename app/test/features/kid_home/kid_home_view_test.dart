@@ -19,6 +19,7 @@ import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nestling/app/app.dart';
 import 'package:nestling/app/controllers.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/london_time.dart';
@@ -35,6 +36,7 @@ import '../../test_scope.dart';
 const KidChild _maya = KidChild(
   id: 'maya',
   nickname: 'Maya',
+  ageBand: '7-9',
   avatarColour: 'lilac',
   coins: 120,
   pipStyle: 'mochi',
@@ -166,6 +168,9 @@ class _FakeKidHomeRepository extends KidHomeRepository {
 
   @override
   Future<bool> verifyPin(String childId, String pin) async => true;
+
+  @override
+  Future<void> setActiveChild(String childId) async {}
 
   @override
   Future<void> completeQuest(String childId, String questId) async {
@@ -1133,7 +1138,7 @@ void main() {
       expect(find.byType(NestLockButton), findsOneWidget);
       await tester.tap(find.text('Choose'));
       await _settleRoute(tester);
-      expect(find.text('K01 Who is playing'), findsOneWidget);
+      expect(find.text('Tap your face to start'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await disposeApp(tester);
     });
@@ -1522,7 +1527,7 @@ void main() {
     testWidgets('daily: before the London day start reads to do again', (
       tester,
     ) async {
-      final now = DateTime.now().toUtc();
+      final now = appNowUtc();
       final dayStart = londonDayStartUtc(now);
       await seedCompletion(
         tester,
@@ -1559,7 +1564,7 @@ void main() {
     testWidgets("weekly: last week's completion reads to do again", (
       tester,
     ) async {
-      final now = DateTime.now().toUtc();
+      final now = appNowUtc();
       final weekStart = londonWeekStartUtc(now);
       await seedCompletion(
         tester,
@@ -1619,7 +1624,7 @@ void main() {
                 status: const Value('approved'),
                 coins: const Value(5),
                 createdAt: Value(
-                  DateTime.now().toUtc().subtract(const Duration(days: 400)),
+                  appNowUtc().subtract(const Duration(days: 400)),
                 ),
               ),
             );
@@ -1641,7 +1646,7 @@ void main() {
     testWidgets('a period-expired daily quest starts a fresh completion', (
       tester,
     ) async {
-      final now = DateTime.now().toUtc();
+      final now = appNowUtc();
       final dayStart = londonDayStartUtc(now);
       await seedCompletion(
         tester,
@@ -2165,7 +2170,7 @@ void main() {
       expect(hasTap(tester, choose), isTrue);
       performTap(tester, choose);
       await _settleRoute(tester);
-      expect(find.text('K01 Who is playing'), findsOneWidget);
+      expect(find.text('Tap your face to start'), findsOneWidget);
       semantics.dispose();
       await disposeApp(tester);
     });

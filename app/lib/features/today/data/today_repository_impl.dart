@@ -1,3 +1,4 @@
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/seed.dart';
@@ -17,13 +18,12 @@ class TodayRepositoryImpl implements TodayRepository {
 
   final AppDatabase _db;
 
-  /// "Now" for period checks. Defaults to the seed anchor when tests pin it
-  /// (so demo assertions stay date-independent) and to the wall clock
-  /// otherwise — pass an explicit clock in tests that need one.
+  /// "Now" for period checks. Defaults to the pinned test instant when tests
+  /// pin the seed anchor (so demo assertions stay date-independent) and to
+  /// the zone clock otherwise — pass an explicit clock in tests that need one.
   final DateTime Function() _clock;
 
-  static DateTime _defaultClock() =>
-      Seed.anchorOverride ?? DateTime.now().toUtc();
+  static DateTime _defaultClock() => appNowUtc();
 
   @override
   Future<List<TodayItem>> getItems() => watchItems().first;

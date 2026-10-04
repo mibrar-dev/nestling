@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/seed.dart';
@@ -74,7 +75,7 @@ class KidJarRepositoryImpl implements KidJarRepository {
     required String goalId,
     required int amountPence,
   }) async {
-    final now = DateTime.now().toUtc();
+    final now = appNowUtc();
     final zone = await _db.familyZoneId();
     await _db.transaction(() async {
       await _db

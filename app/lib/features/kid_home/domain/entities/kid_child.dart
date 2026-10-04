@@ -1,11 +1,12 @@
 import 'package:equatable/equatable.dart';
 
 // The child currently playing in kid mode (K01 picker, K03 header): nickname,
-// coin balance and Pip look, read live from the DB.
+// age band, coin balance and Pip look, read live from the DB.
 class KidChild extends Equatable {
   const new({
     required this.id,
     required this.nickname,
+    required this.ageBand,
     required this.avatarColour,
     required this.coins,
     required this.pipStyle,
@@ -18,6 +19,9 @@ class KidChild extends Equatable {
 
   final String id;
   final String nickname;
+
+  /// DB stores `7-9` (hyphen); the K01 view renders `7–9` (U+2013 en dash).
+  final String ageBand;
   final String avatarColour;
   final int coins;
   final String pipStyle;
@@ -31,6 +35,7 @@ class KidChild extends Equatable {
   List<Object?> get props => <Object?>[
     id,
     nickname,
+    ageBand,
     avatarColour,
     coins,
     pipStyle,

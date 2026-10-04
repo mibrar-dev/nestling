@@ -11,6 +11,7 @@ import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
+import 'package:nestling/features/family/domain/entities/child_profile.dart';
 import 'package:nestling/features/family/domain/entities/family_child.dart';
 import 'package:nestling/features/family/domain/entities/family_member.dart';
 import 'package:nestling/features/family/domain/family_repository.dart';
@@ -155,6 +156,10 @@ void main() {
         final repo = _MockFamilyRepository();
         when(repo.watchItems).thenAnswer((_) => Stream.value(_members));
         when(repo.watchChildren).thenAnswer((_) => Stream.value(_kids));
+        // P15: the load also subscribes to the selected-child profile, which
+        // P05 screens never read — a null profile keeps these proofs neutral.
+        when(repo.watchProfile)
+            .thenAnswer((_) => Stream<ChildProfile?>.value(null));
         return FamilyBloc(repository: repo);
       },
       act: (bloc) => bloc.add(const FamilyLoadRequested()),
@@ -176,6 +181,8 @@ void main() {
         when(repo.watchChildren).thenAnswer(
           (_) => Stream<List<FamilyChild>>.error(Exception('offline')),
         );
+        when(repo.watchProfile)
+            .thenAnswer((_) => Stream<ChildProfile?>.value(null));
         return FamilyBloc(repository: repo);
       },
       act: (bloc) => bloc.add(const FamilyLoadRequested()),
@@ -465,6 +472,10 @@ void main() {
       final repo = _MockFamilyRepository();
       when(repo.watchItems).thenAnswer((_) => Stream.value(_members));
       when(repo.watchChildren).thenAnswer((_) => controller.stream);
+      // P15: the load also subscribes to the selected-child profile, which
+      // P05 screens never read — a null profile keeps these proofs neutral.
+      when(repo.watchProfile)
+          .thenAnswer((_) => Stream<ChildProfile?>.value(null));
       final bloc = FamilyBloc(repository: repo)
         ..add(const FamilyLoadRequested());
 
@@ -638,10 +649,10 @@ void main() {
       await tester.tap(find.byKey(const Key('editChild-maya')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
-      expect(find.text('P15 Child profile'), findsOneWidget);
+      expect(find.byKey(const Key('p15-hero')), findsOneWidget);
       expect(currentPath(tester), '/child-profile');
       expect(
-        GoRouter.of(tester.element(find.text('P15 Child profile')))
+        GoRouter.of(tester.element(find.byKey(const Key('p15-hero'))))
             .state
             .uri
             .queryParameters['childId'],
@@ -841,6 +852,8 @@ void main() {
           .thenAnswer((_) => const Stream<List<FamilyMember>>.empty());
       when(repo.watchChildren)
           .thenAnswer((_) => const Stream<List<FamilyChild>>.empty());
+      when(repo.watchProfile)
+          .thenAnswer((_) => Stream<ChildProfile?>.value(null));
       final bloc = FamilyBloc(repository: repo)
         ..add(const FamilyLoadRequested());
 
@@ -863,6 +876,10 @@ void main() {
             : Stream.value(_members);
       });
       when(repo.watchChildren).thenAnswer((_) => Stream.value(_kids));
+      // P15: the load also subscribes to the selected-child profile, which
+      // P05 screens never read — a null profile keeps these proofs neutral.
+      when(repo.watchProfile)
+          .thenAnswer((_) => Stream<ChildProfile?>.value(null));
       final bloc = FamilyBloc(repository: repo)
         ..add(const FamilyLoadRequested());
 
@@ -887,6 +904,10 @@ void main() {
         (_) => Stream<List<FamilyMember>>.error(Exception('offline')),
       );
       when(repo.watchChildren).thenAnswer((_) => Stream.value(_kids));
+      // P15: the load also subscribes to the selected-child profile, which
+      // P05 screens never read — a null profile keeps these proofs neutral.
+      when(repo.watchProfile)
+          .thenAnswer((_) => Stream<ChildProfile?>.value(null));
       final bloc = FamilyBloc(repository: repo)
         ..add(const FamilyLoadRequested());
 
@@ -1170,6 +1191,10 @@ void main() {
         (_) => Stream<List<FamilyMember>>.error(Exception('offline')),
       );
       when(repo.watchChildren).thenAnswer((_) => Stream.value(_kids));
+      // P15: the load also subscribes to the selected-child profile, which
+      // P05 screens never read — a null profile keeps these proofs neutral.
+      when(repo.watchProfile)
+          .thenAnswer((_) => Stream<ChildProfile?>.value(null));
       final bloc = FamilyBloc(repository: repo)
         ..add(const FamilyLoadRequested());
 
@@ -1271,7 +1296,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
       expect(currentPath(tester), '/child-profile');
       expect(
-        GoRouter.of(tester.element(find.text('P15 Child profile')))
+        GoRouter.of(tester.element(find.byKey(const Key('p15-hero'))))
             .state
             .uri
             .queryParameters['childId'],
@@ -1313,6 +1338,10 @@ void main() {
       final repo = _MockFamilyRepository();
       when(repo.watchItems).thenAnswer((_) => Stream.value(_members));
       when(repo.watchChildren).thenAnswer((_) => Stream.value(_kids));
+      // P15: the load also subscribes to the selected-child profile, which
+      // P05 screens never read — a null profile keeps these proofs neutral.
+      when(repo.watchProfile)
+          .thenAnswer((_) => Stream<ChildProfile?>.value(null));
       when(
         () => repo.addChild(
           nickname: any(named: 'nickname'),
@@ -1377,6 +1406,10 @@ void main() {
       final repo = _MockFamilyRepository();
       when(repo.watchItems).thenAnswer((_) => Stream.value(_members));
       when(repo.watchChildren).thenAnswer((_) => Stream.value(_kids));
+      // P15: the load also subscribes to the selected-child profile, which
+      // P05 screens never read — a null profile keeps these proofs neutral.
+      when(repo.watchProfile)
+          .thenAnswer((_) => Stream<ChildProfile?>.value(null));
       when(
         () => repo.addChild(
           nickname: any(named: 'nickname'),
@@ -1602,7 +1635,7 @@ void main() {
         await tester.pump(const Duration(milliseconds: 200));
         expect(currentPath(tester), '/child-profile');
         expect(
-          GoRouter.of(tester.element(find.text('P15 Child profile')))
+          GoRouter.of(tester.element(find.byKey(const Key('p15-hero'))))
               .state
               .uri
               .queryParameters['childId'],
@@ -2127,6 +2160,10 @@ void main() {
         final repo = _MockFamilyRepository();
         when(repo.watchItems).thenAnswer((_) => Stream.value(_members));
         when(repo.watchChildren).thenAnswer((_) => Stream.value(kids));
+        // P15: the load also subscribes to the selected-child profile,
+        // which P05 screens never read — a null profile keeps this neutral.
+        when(repo.watchProfile)
+            .thenAnswer((_) => Stream<ChildProfile?>.value(null));
         final bloc = FamilyBloc(repository: repo)
           ..add(const FamilyLoadRequested());
         await bloc.stream.firstWhere((s) => s.status == FamilyStatus.loaded);
@@ -2871,6 +2908,10 @@ void main() {
       final repo = _MockFamilyRepository();
       when(repo.watchItems).thenAnswer((_) => Stream.value(_members));
       when(repo.watchChildren).thenAnswer((_) => Stream.value(_kids));
+      // P15: the load also subscribes to the selected-child profile, which
+      // P05 screens never read — a null profile keeps these proofs neutral.
+      when(repo.watchProfile)
+          .thenAnswer((_) => Stream<ChildProfile?>.value(null));
       when(
         () => repo.addChild(
           nickname: any(named: 'nickname'),
@@ -2927,6 +2968,10 @@ void main() {
       final repo = _MockFamilyRepository();
       when(repo.watchItems).thenAnswer((_) => Stream.value(_members));
       when(repo.watchChildren).thenAnswer((_) => Stream.value(_kids));
+      // P15: the load also subscribes to the selected-child profile, which
+      // P05 screens never read — a null profile keeps these proofs neutral.
+      when(repo.watchProfile)
+          .thenAnswer((_) => Stream<ChildProfile?>.value(null));
       when(
         () => repo.addChild(
           nickname: any(named: 'nickname'),
@@ -2983,6 +3028,10 @@ void main() {
       final repo = _MockFamilyRepository();
       when(repo.watchItems).thenAnswer((_) => Stream.value(_members));
       when(repo.watchChildren).thenAnswer((_) => Stream.value(_kids));
+      // P15: the load also subscribes to the selected-child profile, which
+      // P05 screens never read — a null profile keeps these proofs neutral.
+      when(repo.watchProfile)
+          .thenAnswer((_) => Stream<ChildProfile?>.value(null));
       var calls = 0;
       when(
         () => repo.addChild(
@@ -3085,6 +3134,10 @@ void main() {
             : Stream.value(_members);
       });
       when(repo.watchChildren).thenAnswer((_) => Stream.value(_kids));
+      // P15: the load also subscribes to the selected-child profile, which
+      // P05 screens never read — a null profile keeps these proofs neutral.
+      when(repo.watchProfile)
+          .thenAnswer((_) => Stream<ChildProfile?>.value(null));
       final bloc = FamilyBloc(repository: repo)
         ..add(const FamilyLoadRequested());
 
@@ -3111,6 +3164,10 @@ void main() {
       final repo = _MockFamilyRepository();
       when(repo.watchItems).thenAnswer((_) => Stream.value(_members));
       when(repo.watchChildren).thenAnswer((_) => controller.stream);
+      // P15: the load also subscribes to the selected-child profile, which
+      // P05 screens never read — a null profile keeps these proofs neutral.
+      when(repo.watchProfile)
+          .thenAnswer((_) => Stream<ChildProfile?>.value(null));
       final bloc = FamilyBloc(repository: repo)
         ..add(const FamilyLoadRequested());
 

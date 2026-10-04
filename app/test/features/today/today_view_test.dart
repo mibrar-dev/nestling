@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/family_time.dart';
@@ -56,13 +57,13 @@ const _mockSummaries = <ChildDaySummary>[
 ];
 
 String _expectedGreeting() {
-  final london = toFamilyZone(DateTime.now().toUtc(), 'Europe/London');
+  final london = toFamilyZone(appNowUtc(), 'Europe/London');
   return '${dayPartForHour(london.hour)}, Sarah';
 }
 
 String _expectedDateLine(int happyDays) {
   final day = happyDays == 1 ? 'day' : 'days';
-  return '${formatDay(DateTime.now().toUtc(), 'Europe/London')} · Happy week: $happyDays $day';
+  return '${formatDay(appNowUtc(), 'Europe/London')} · Happy week: $happyDays $day';
 }
 
 /// Pumps [TodayView] directly (no router, no shell) over [bloc].
@@ -278,11 +279,11 @@ void main() {
       await tester.tap(find.text('Hand to Maya or Leo'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
-      expect(find.text('K01 Who is playing'), findsOneWidget);
-      expect(
-        _currentUri(tester, find.text('K01 Who is playing')).path,
-        '/who-is-playing',
-      );
+      // K01 is a real screen now, so the old `K01 Who is playing` placeholder
+      // anchor is gone. Assert the route only — same treatment shared_batch4
+      // §4 gave the `/quests` hand-off: K01 owns the picker's copy, P08 only
+      // owns the route it pushes.
+      expect(pushedPath(tester), '/who-is-playing');
 
       await disposeApp(tester);
     });
@@ -545,8 +546,10 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
-      expect(find.text('P15 Child profile'), findsOneWidget);
-      final uri = _currentUri(tester, find.text('P15 Child profile'));
+      // P15 is a real screen now, so anchor on its hero card instead of the
+      // old placeholder title (same anchor add_children_test.dart uses).
+      expect(find.byKey(const Key('p15-hero')), findsOneWidget);
+      final uri = _currentUri(tester, find.byKey(const Key('p15-hero')));
       expect(uri.path, '/child-profile');
       expect(uri.queryParameters['childId'], 'maya');
 

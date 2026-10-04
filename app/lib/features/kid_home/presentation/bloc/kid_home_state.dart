@@ -14,6 +14,9 @@ final class KidHomeState extends Equatable {
     this.actionNonce = 0,
     this.justCompletedQuestId,
     this.justCompletedCoins,
+    this.profiles = const <KidChild>[],
+    this.selectedProfileId,
+    this.profilesFailed = false,
   });
 
   final KidHomeStatus status;
@@ -37,6 +40,29 @@ final class KidHomeState extends Equatable {
   final String? justCompletedQuestId;
   final int? justCompletedCoins;
 
+  /// K01 picker roster in creation order (Maya, then Leo — never re-sorted).
+  /// Shared with the K03 instance on its own route bloc, so every
+  /// `copyWith`/`withCompletion*` constructor must carry it through: a
+  /// dropped list blanks the picker after any quest completion emit.
+  final List<KidChild> profiles;
+
+  /// K01 tile tap, set by `KidHomeProfileSelected` after the
+  /// `setActiveChild` write saves. One-shot: the view pushes
+  /// `/kid-pin` (`pinSet`) or `/kid-home` for this id, then dispatches
+  /// `KidHomeSelectionHandled`. Consumed by the handled event or by the
+  /// next home-stream emission, whichever comes first (same pattern as
+  /// `justCompletedQuestId`). Never drives navigation inside the bloc.
+  final String? selectedProfileId;
+
+  /// K01 roster outage flag (review finding 2, iteration 2): true while the
+  /// last profiles-stream outcome was an error that released the
+  /// subscription. Lets the view tell a profiles-caused failure (heal once
+  /// the roster is back) from a home-stream failure with a stale roster
+  /// (keep the failure card) instead of re-deriving it from
+  /// `profiles.isNotEmpty`. Set on the profiles error path, cleared by any
+  /// healthy roster; every other constructor carries it through.
+  final bool profilesFailed;
+
   /// Done = `approved` + `done_pending` (live counts from the DB).
   int get doneCount => items
       .where((q) => q.status == 'approved' || q.status == 'done_pending')
@@ -50,6 +76,8 @@ final class KidHomeState extends Equatable {
     KidHomeStatus? status,
     List<KidQuest>? items,
     String? errorMessage,
+    List<KidChild>? profiles,
+    bool? profilesFailed,
   }) {
     return KidHomeState(
       status: status ?? this.status,
@@ -60,6 +88,45 @@ final class KidHomeState extends Equatable {
       actionNonce: actionNonce,
       justCompletedQuestId: justCompletedQuestId,
       justCompletedCoins: justCompletedCoins,
+      profiles: profiles ?? this.profiles,
+      selectedProfileId: selectedProfileId,
+      profilesFailed: profilesFailed ?? this.profilesFailed,
+    );
+  }
+
+  /// K01 selection: records the tapped profile, keeping everything else.
+  KidHomeState copyWithSelection(String childId) {
+    return KidHomeState(
+      status: status,
+      child: child,
+      items: items,
+      errorMessage: errorMessage,
+      actionError: actionError,
+      actionNonce: actionNonce,
+      justCompletedQuestId: justCompletedQuestId,
+      justCompletedCoins: justCompletedCoins,
+      profiles: profiles,
+      selectedProfileId: childId,
+      profilesFailed: profilesFailed,
+    );
+  }
+
+  /// K01 selection consumed (K01-BUG-3): the view pushed the PIN/home route
+  /// for the pending profile, so forget it. Everything else is carried
+  /// through untouched; the next home emission would clear it anyway, this
+  /// just stops depending on a stream round-trip that may never come.
+  KidHomeState copyWithSelectionHandled() {
+    return KidHomeState(
+      status: status,
+      child: child,
+      items: items,
+      errorMessage: errorMessage,
+      actionError: actionError,
+      actionNonce: actionNonce,
+      justCompletedQuestId: justCompletedQuestId,
+      justCompletedCoins: justCompletedCoins,
+      profiles: profiles,
+      profilesFailed: profilesFailed,
     );
   }
 
@@ -71,6 +138,9 @@ final class KidHomeState extends Equatable {
       child: child,
       items: items,
       errorMessage: errorMessage,
+      profiles: profiles,
+      selectedProfileId: selectedProfileId,
+      profilesFailed: profilesFailed,
     );
   }
 
@@ -83,6 +153,9 @@ final class KidHomeState extends Equatable {
       errorMessage: errorMessage,
       actionError: error.toString(),
       actionNonce: actionNonce + 1,
+      profiles: profiles,
+      selectedProfileId: selectedProfileId,
+      profilesFailed: profilesFailed,
     );
   }
 
@@ -98,13 +171,18 @@ final class KidHomeState extends Equatable {
       errorMessage: errorMessage,
       justCompletedQuestId: questId,
       justCompletedCoins: coins,
+      profiles: profiles,
+      selectedProfileId: selectedProfileId,
+      profilesFailed: profilesFailed,
     );
   }
 
   /// Loaded emission from the combined child + items streams. Built
   /// explicitly (not via [copyWith]) so a null child clears the previous
   /// one; a healthy stream also clears transient completion outcomes and
-  /// any stale load error (review finding 5).
+  /// any stale load error (review finding 5). Carries the K01 [profiles]
+  /// through untouched, and consumes a pending [selectedProfileId]
+  /// one-shot signal (same pattern as [justCompletedQuestId]).
   KidHomeState copyWithLoaded({
     required KidChild? child,
     required List<KidQuest> items,
@@ -113,6 +191,52 @@ final class KidHomeState extends Equatable {
       status: KidHomeStatus.loaded,
       child: child,
       items: items,
+      profiles: profiles,
+      profilesFailed: profilesFailed,
+    );
+  }
+
+  /// Loaded emission from the profiles stream: same child + items, new
+  /// roster. Never touches the load status, the load error or the pending
+  /// selection — the home stream owns the status, and the selection is
+  /// consumed by `KidHomeSelectionHandled` or [copyWithLoaded]. A healthy
+  /// roster always clears the outage flag (the constructor default
+  /// `profilesFailed: false` is the point, not an omission). (A roster
+  /// that arrives after a profiles-caused outage goes through
+  /// [copyWithProfilesRecovered] instead.)
+  KidHomeState copyWithProfiles(List<KidChild> next) {
+    return KidHomeState(
+      status: status,
+      child: child,
+      items: items,
+      errorMessage: errorMessage,
+      actionError: actionError,
+      actionNonce: actionNonce,
+      justCompletedQuestId: justCompletedQuestId,
+      justCompletedCoins: justCompletedCoins,
+      profiles: next,
+      selectedProfileId: selectedProfileId,
+    );
+  }
+
+  /// Healthy roster after a profiles-caused outage (K01-BUG-5, review
+  /// finding 1): restore `loaded` and clear the stale load error (review
+  /// finding 2) instead of leaving the failure card up forever. The
+  /// completion channel (`actionError`/`justCompleted…`) is carried
+  /// through — only the load failure is forgiven. Used only when the home
+  /// subscription is still live; when the home stream itself is down the
+  /// failure stands until it recovers. The outage flag clears via the
+  /// constructor default (`profilesFailed: false`).
+  KidHomeState copyWithProfilesRecovered(List<KidChild> next) {
+    return KidHomeState(
+      status: KidHomeStatus.loaded,
+      child: child,
+      items: items,
+      actionError: actionError,
+      actionNonce: actionNonce,
+      justCompletedQuestId: justCompletedQuestId,
+      justCompletedCoins: justCompletedCoins,
+      profiles: next,
     );
   }
 
@@ -126,5 +250,8 @@ final class KidHomeState extends Equatable {
     actionNonce,
     justCompletedQuestId,
     justCompletedCoins,
+    profiles,
+    selectedProfileId,
+    profilesFailed,
   ];
 }

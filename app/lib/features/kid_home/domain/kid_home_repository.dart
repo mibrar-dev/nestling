@@ -37,6 +37,11 @@ abstract class KidHomeRepository {
 
   Future<bool> verifyPin(String childId, String pin);
   Future<void> completeQuest(String childId, String questId);
+
+  /// K01 picker: remembers the tapped profile in `app_state.activeChildId`
+  /// so the PIN / home routes that follow resolve the right child.
+  /// Owns its write (like `completeQuest`); no `AppSession` dependency.
+  Future<void> setActiveChild(String childId);
 }
 
 /// `switchMap` for never-closing Drift watch streams: every outer emission

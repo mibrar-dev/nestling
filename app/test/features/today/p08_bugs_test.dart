@@ -22,6 +22,7 @@ import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:nestling/app/controllers.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/family_time.dart';
@@ -388,7 +389,7 @@ void main() {
       '[P08-B11] a daily completion from the previous London day is to do',
       () async {
         final db = await setUpTestScope();
-        final now = DateTime.now().toUtc();
+        final now = appNowUtc();
         final stale = dayStartUtc(
           'Europe/London',
           now,
@@ -426,7 +427,7 @@ void main() {
       '[P08-B11] a weekly completion from last week is to do again',
       () async {
         final db = await setUpTestScope();
-        final now = DateTime.now().toUtc();
+        final now = appNowUtc();
         final stale = weekStartUtc(
           'Europe/London',
           now,
@@ -462,7 +463,7 @@ void main() {
       tester,
     ) async {
       final db = await setUpTestScope();
-      final now = DateTime.now().toUtc();
+      final now = appNowUtc();
       final stale = dayStartUtc(
         'Europe/London',
         now,
@@ -612,7 +613,7 @@ void main() {
         final db = await setUpTestScope();
         // Derive the stale instant from the pinned story clock (repo default
         // clock is `Seed.anchorOverride`) instead of duplicating a literal.
-        final pin = Seed.anchorOverride ?? DateTime.now().toUtc();
+        final pin = Seed.anchorOverride ?? appNowUtc();
         final stale = dayStartUtc(
           'Europe/London',
           pin,
@@ -658,7 +659,7 @@ void main() {
       tester,
     ) async {
       final db = await setUpTestScope();
-      final pin = Seed.anchorOverride ?? DateTime.now().toUtc();
+      final pin = Seed.anchorOverride ?? appNowUtc();
       final stale = dayStartUtc(
         'Europe/London',
         pin,
