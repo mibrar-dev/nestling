@@ -1,14 +1,14 @@
-# P16 Settings — 5_ui (iteration 4)
+# P16 Settings — 5_ui (iteration 5)
 
 Route `/settings` · parent mode · child maya · seed demo · simulator 604697A9-11DA-462F-9837-396E9CA2493A (390×844).
-Shots: `docs/screens/P16/ui/app_light_4.png`, `app_dark_4.png` (absolute OUT path — relative fails because `shot.sh` cds into `app/` before copying).
-Compares: `cmp_light_4.png`, `cmp_dark_4.png`.
+Shots: `docs/screens/P16/ui/app_light_5.png`, `app_dark_5.png` (absolute OUT path — relative fails because `shot.sh` cds into `app/` before copying).
+Compares: `cmp_light_5.png`, `cmp_dark_5.png`.
 
-Mean diff: light **1.06%**, dark **0.98%** (iteration 3: 1.06% / 0.98% — stable).
+Mean diff: light **0.95%**, dark **0.94%** (iteration 4: 1.06% / 0.98% — stable, slight improvement in band 7).
 
-Band table (light): 0–105: 1.74 · 105–211: 0.27 · 211–316: 0.24 · 316–422: 0.33 · 422–527: 0.18 · 527–633: 0.48 · 633–738: 1.90 · 738–844: 3.33.
-Band table (dark): 0–105: 1.72 · 105–211: 0.27 · 211–316: 0.24 · 316–422: 0.33 · 422–527: 0.18 · 527–633: 0.49 · 633–738: 1.73 · 738–844: 2.89.
-(Band 0 = real OS status bar 08:22/08:23 vs design 9:41 — ignored per STATUS BAR rule. Band 7 = shared tab-bar chrome + OS home area — see §3.)
+Band table (light): 0–105: 1.69 · 105–211: 0.27 · 211–316: 0.24 · 316–422: 0.33 · 422–527: 0.18 · 527–633: 0.48 · 633–738: 1.90 · 738–844: 2.50.
+Band table (dark): 0–105: 1.67 · 105–211: 0.27 · 211–316: 0.24 · 316–422: 0.33 · 422–527: 0.18 · 527–633: 0.49 · 633–738: 1.73 · 738–844: 2.61.
+(Band 0 = real OS status bar 12:29/12:30 vs design 9:41 — ignored per STATUS BAR rule. Band 7 = shared tab-bar chrome + OS home area — see §3.)
 
 ## Measured Y (logical px, design light vs app light, same script on both)
 
@@ -32,7 +32,7 @@ Band table (dark): 0–105: 1.72 · 105–211: 0.27 · 211–316: 0.24 · 316–
 
 ## Shared observations (not P16-editable, for orchestrator)
 
-3. Money tab icon glyph differs from the design (banknote vs wallet) — shared shell chrome, carried from iterations 1–3; P16 cannot edit per RULES §1.
+3. Money tab icon glyph differs from the design (banknote vs wallet) — shared shell chrome, carried from iterations 1–4; P16 cannot edit per RULES §1.
 4. Bottom edge complies with the OWNER RULE in both themes (bar surface runs to the physical edge, no strip), overriding the design's paper strip.
 
 VERDICT: PASS

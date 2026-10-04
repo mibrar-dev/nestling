@@ -25,10 +25,14 @@
 
 import 'dart:ui' show Tristate;
 
+import 'package:drift/drift.dart' show Value;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/design_system/design_system.dart';
+import 'package:nestling/features/settings/presentation/widgets/settings_rows.dart';
 
 import '../../test_scope.dart';
 import 'p16_test_support.dart';
@@ -358,6 +362,29 @@ void main() {
           const Size(51, 31),
           reason: 'the visible track is the design 51x31',
         );
+        // The switch row keeps the design's 56 px height like every other row
+        // on the page. Iteration 4 measured what an un-forked `NestListRow`
+        // would do WITHOUT shared batch 6: its 10 px padding plus the 44-high
+        // wrapper exceeds the 56 px minimum and the row grows to 64 (+8 px on
+        // each of three rows, ~+24 px down the page). The shared
+        // `_TrailingSlop` / `_RowSlopForwarder` is what keeps it at 56, so the
+        // number is worth pinning rather than trusting.
+        expect(
+          tester
+              .getRect(
+                find
+                    .ancestor(
+                      of: toggle,
+                      matching: find.byWidgetPredicate(
+                        (w) => w is SettingsRow || w is NestListRow,
+                      ),
+                    )
+                    .first,
+              )
+              .height,
+          56,
+          reason: 'the switch row is a 56 px design row, like its neighbours',
+        );
 
         await disposeApp(tester);
       },
@@ -365,6 +392,122 @@ void main() {
       // wrapper change (`width: 51` added — both findings now pinned on one
       // layout).
       skip: false,
+    );
+  });
+
+  group('P16 avatar initials — owner AVATAR INITIALS rule', () {
+    testWidgets('an emoji nickname yields ONE grapheme, never a broken '
+        'surrogate', (tester) async {
+      // The rule forbids `name[0]`, which indexes UTF-16 code units: a leading
+      // non-BMP character yields an unpaired surrogate and `toUpperCase()`
+      // then throws, taking the frame with it. P16's two call sites use
+      // `.characters.first`, so today this holds — the test is here to keep it
+      // true through the pending `nestAvatarInitial` swap and to stop anyone
+      // "simplifying" it back to `name[0]`.
+      await pumpSettingsApp(
+        tester,
+        prepare: (db) =>
+            (db.update(db.children)..where((c) => c.id.equals('leo'))).write(
+              const ChildrenCompanion(nickname: Value('🌟Zoe')),
+            ),
+      );
+      await scrollSettingsTo(tester, find.text('🌟Zoe · 4–6'));
+
+      // The emoji row's own avatar, addressed through the row so another
+      // child's initial cannot satisfy the expectation.
+      final row = find
+          .ancestor(
+            of: find.text('🌟Zoe · 4–6'),
+            matching: find.byWidgetPredicate(
+              (w) => w is SettingsRow || w is NestListRow,
+            ),
+          )
+          .first;
+      final initial = tester
+          .widget<NestAvatar>(
+            find.descendant(of: row, matching: find.byType(NestAvatar)).first,
+          )
+          .initial;
+      expect(
+        initial,
+        '🌟',
+        reason: 'the star is one grapheme and is rendered whole',
+      );
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'no unpaired-surrogate crash while building the row',
+      );
+
+      await disposeApp(tester);
+    });
+
+    testWidgets(
+      '[P16-T04] the initial trims a leading space and falls back to "?" for a '
+      'whitespace-only name',
+      (tester) async {
+        // OPEN BUG (minor) — pinned skip-marked so `flutter test` stays green;
+        // run with `--run-skipped` to prove it. Do NOT patch the screen here.
+        //
+        // The rule says: use `nestAvatarInitial(name)`, one place for the
+        // initial. The helper (on `main`,
+        // `core/design_system/components/nest_avatar_initial.dart`) does three
+        // things the hand-rolled call sites do not: trims first, returns its
+        // `fallback` ('?') for empty or whitespace-only names, and takes the
+        // first grapheme. `settings_view.dart`'s member and child rows do the
+        // last one only, so a nickname of " Maya" renders a SPACE as its
+        // avatar initial and "   " renders a space instead of "?" — a blank
+        // avatar rather than a name a parent can recognise.
+        //
+        // Not fixable in this worktree: the branch is behind `main` and the
+        // helper does not exist here, so importing it would break
+        // `flutter analyze`. The fix is the two one-line swaps the integrator
+        // already identified (settings_view.dart, member + child rows).
+        for (final nickname in <String>[' Maya', '   ']) {
+          await pumpSettingsApp(
+            tester,
+            prepare: (db) =>
+                (db.update(db.children)..where((c) => c.id.equals('leo')))
+                    .write(ChildrenCompanion(nickname: Value(nickname))),
+          );
+          await scrollSettingsTo(tester, find.text('$nickname · 4–6'));
+
+          // The LEO row's own avatar — not "some avatar", or Maya's "M" would
+          // satisfy the expectation on its own.
+          final row = find
+              .ancestor(
+                of: find.text('$nickname · 4–6'),
+                matching: find.byWidgetPredicate(
+                  (w) => w is SettingsRow || w is NestListRow,
+                ),
+              )
+              .first;
+          final initial = tester
+              .widget<NestAvatar>(
+                find
+                    .descendant(of: row, matching: find.byType(NestAvatar))
+                    .first,
+              )
+              .initial;
+          expect(
+            initial,
+            nickname.trim().isEmpty
+                ? '?'
+                : nickname.trim().characters.first.toUpperCase(),
+            reason:
+                'nickname ${nickname.replaceAll(' ', '<space>')} must render '
+                'the trimmed initial, not a space',
+          );
+
+          await disposeApp(tester);
+        }
+      },
+      // P16-T04 open (minor) — the two hand-rolled initials predate
+      // `nestAvatarInitial`, which also trims and supplies the '?' fallback.
+      // The helper is absent from this worktree (branch behind main); the swap
+      // is two one-liners in settings_view.dart. See §Bugs of
+      // docs/screens/P16/3_test.md.
+      skip: true,
     );
   });
 

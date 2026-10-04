@@ -1,238 +1,195 @@
-# P16 Settings — Stage 3 TEST (iteration 4)
+# P16 Settings — Stage 3 TEST (iteration 5)
 
-Job: re-prove the screen after iteration 4's build, serve the three new
-mandatory `ORCHESTRATOR_NOTES` items (08:12 "LAST pass") from the test side,
-and audit the fixes this build landed.
+Job: re-prove the screen after the iteration-5 un-fork, and serve the two new
+mandatory rules in this brief (AVATAR INITIALS, TEST TIMEOUTS).
 
-**Outcome: FAIL — all gates green, both of iteration 3's findings are closed
-and proved, and I found one new (minor) defect that iteration 4's own fix
-introduced. P16-B09 also remains open, and two of the three mandatory items
-are still unmet — one of them unsatisfiable as written.**
+**Outcome: FAIL — every gate is green, the screen now has **zero** skip-marked
+tests in its own file except the one I added this stage, and iteration 5's
+un-fork is verified metric-preserving by my existing tests. One minor defect
+remains open (P16-T04: the two hand-rolled avatar initials), and it is a
+**mandatory rule the tree cannot apply yet** — not a choice.**
 
-Numbers: **+3 tests** (137 in `test/features/settings`, 2 of them skip-marked
-proofs), **0 new failures**, **1 new minor bug (P16-T03)**, **2 findings closed
-and proved**.
+Numbers: **+2 tests** (141 in `test/features/settings`, 1 of them a skip-marked
+proof), **0 new failures**, **1 new minor bug**, **the iteration-4 finding and
+mandate items 1–3 all closed by the build**.
 
 ---
 
-## 1. What iteration 4 changed
+## 1. What iteration 5 changed (the shared-request arc closed)
 
-| change | where | test consequence |
+Shared batch 6 landed on this branch and made every previously-blocked item
+buildable, so this build is mostly consumption:
+
+| shared batch 6 item | what it unblocked |
+|---|---|
+| `NestListRow._TrailingSlop` + `_RowSlopForwarder` | T02 / T03 **without** local wrappers |
+| section label line box 13/16 | `_P16Sect` revert |
+| `members.email` (schema v7, nullable) + seeded | DATA OVER MOCKS owner row |
+| `NestCard(radius:)` parameter | subcard revert |
+| IANA backward links resolved | P16-B09 |
+
+1. **All three forks are gone** — `NestSectionLabel` ×7, `NestCard` ×2, plain
+   `NestListRow` for the switch and picker rows, every `SizedBox` wrapper
+   deleted. `SettingsRow` survives narrowed to the five rows the shared row
+   still cannot express (owner, co-parent, two children, the danger row).
+2. **DATA OVER MOCKS is real** — the owner subtitle reads
+   `SettingsMemberEntry.email` ← `members.email`; `sarah@example.co.uk` is gone
+   from the view; a NULL e-mail falls back to the role-derived `Owner`.
+3. **T03 and B09 un-skipped and green** — so, with my T02 proof from iteration 3
+   and the B11 proof from iteration 3, **every tap-target and zone finding of
+   the last three iterations is closed with a live guard**.
+4. Token literals replaced (`gap2`, `gap14`, `NestType.chipLabel`).
+5. The build corrected its own iteration-4 finding: "the seed holds that parent
+   email" is true *now* — the ruling described the destination and the integrator
+   measured the tree it was written against.
+
+## 2. What I verified this iteration (no new test needed — the old ones did it)
+
+The build claims the reverts are "metric-preserving". My geometry and design
+tests, written against the forks in iterations 2–4, now pass against the shared
+components — which is the verification:
+
+| contract | assertion (which file) | measured now |
 |---|---|---|
-| **P16-B11 fixed** — switch wrapper `SizedBox(width: 51, height: 44, …)` | `settings_view.dart:296-303` and twice more | my widened B11 proof un-skipped; the T02 proof had to survive the change |
-| **P16-B10 fixed** — the delete row and the Invite row now route through `P16TransientGuard.run` | `settings_view.dart:185`, `:377` | covered by the bug stage's proofs |
-| `P16TransientGuard.reset()` added to the raw-pump helper in `settings_view_test.dart` | `settings_view_test.dart` | harness gap the integrator caught; nothing for me to add |
-| B09 still not fixed (shared) | — | unchanged, skip-marked |
-| **`ORCHESTRATOR_NOTES` (08:12) — three new mandatory items** | `ORCHESTRATOR_NOTES.md` | see §4; one is unsatisfiable as written, two are open |
+| section label line box | typography + scaling, both themes/scales (`settings_responsive_test.dart`) | **16 px** at scale 1.0, 21 px at 1.3 — identical to the fork |
+| subcard radius / padding | `subscriptionCard()` decoration (`settings_responsive_test.dart`) | **16 px** radius, **16 × 14** padding, `surface` + `sh-1` |
+| switch track flush right | B11 proof, 320/390/430 × light/dark | track **303–354** at 390 (= 370 − 16) |
+| 44 px target | T02 proof: content box ≥ 44 + taps ±5 px flip the DB | content box **44** (row padding box 56 − 12) |
+| 4 px horizontal slop | T03 proof: taps 4 px left AND right of the track | both flip |
+| gutter / ALIGNMENT | full sweep at three widths × two scales × two themes | one 20 px gutter everywhere |
 
-Baseline at the start of this stage: `test/features/settings` `+134 ~1`, full
-suite `+2852 ~2`. Now: **+137 ~2** and **+3028 ~4**.
+**One number I re-pinned because it was only ever a prediction:** iteration 4
+measured that un-forking `SettingsRow` → `NestListRow` *without* batch 6 would
+grow the switch rows 56 → **64 px** (+8 × 3 rows). Batch 6's `_TrailingSlop` is
+what prevents it, so "the reverts are metric-preserving" was a claim until now.
+The T02 proof now asserts the row is **56 px** — like every other row on the
+page — so the claim is testable rather than trusted.
 
-## 2. Tests added (3) and how the fixes were proved
+## 3. Tests added (2) — the new AVATAR INITIALS rule
 
-### 2.1 `[P16-T03]` — the new minor defect iteration 4 introduced (skip-marked)
+`nestAvatarInitial(name)` lives on `main` but is **absent from this worktree**
+(the branch is 25 commits behind `main`), so importing it here would break
+`flutter analyze`. Both P16 call sites
+(`settings_view.dart`, member row and child row) still hand-roll
+`characters.first` — which is grapheme-safe and so does **not** violate the
+rule's actual prohibition (`name[0]`), but also does not do two of the things
+the shared helper does.
 
-The B11 fix pinned the switch wrapper to **`width: 51`** — exactly the track
-width. `NestToggle` promises a **59 × 44** hit box
-(`_ToggleHitSlop(minWidth: 59, minHeight: 44)`, mirroring the design's
-`.toggle::before { left/right: -4px; top/bottom: -7px }`), so a 51-wide wrapper
-clips the horizontal half of the slop:
+- **Live: an emoji nickname yields ONE grapheme.** `'🌟Zoe'` renders initial
+  `'🌟'`, whole, with no exception — the guard against anyone "simplifying" the
+  call site back to `name[0]`, which would throw on an unpaired surrogate and
+  take the frame with it. Addressed through *the row's own* avatar: my first
+  draft asserted "some avatar contains '🌟'", which a different child could
+  satisfy — the same false-pass shape the loop's rules warn about, caught by
+  tightening it.
+- **Skip-marked `[P16-T04]`: the initial trims and falls back.** The helper
+  trims first and returns its `fallback` (`'?'`) for empty or whitespace-only
+  names; the hand-rolled version does neither. Measured: a nickname of
+  `' Maya'` renders a **space** as its avatar initial, and `'   '` also renders
+  a space instead of `'?'` — a blank avatar where a parent expects a letter.
+  Unfixable in this tree (the helper does not exist here); the fix is the two
+  one-line swaps the integrator already identified.
 
-| | wrapper | track | slop available |
-|---|---|---|---|
-| vertical | 122.0–166.0 (**44**) | 128.5–159.5 (31) | 6.5 px above/below ✓ |
-| horizontal | 303.0–354.0 (**51**) | 303.0–354.0 (51) | **0 px** of the 4 px ✗ |
+Also satisfied this stage: **TEST TIMEOUTS** — every run above used
+`--timeout 120s`, foreground, none over 10 minutes. **IDS** — the screen mints
+no ids, nothing to check.
 
-Measured: a tap 4 px left of the track's left edge (x 299) and 4 px right of its
-right edge (x 358) **do not flip the switch**; the track centre and both
-vertical ±5 px probes do.
-
-**Severity is deliberately minor, and the proof says why:** the owner rule
-(≥ 44 px parent target) is still met — the effective target is 51 × 44 — and
-P16-T02's vertical proof still passes. What is lost is the shared component's
-4 px of horizontal forgiveness, which `ORCHESTRATOR_NOTES` (08:12) item 1 asks
-for by name ("using the shared NestToggle as-is"; item 2: "prove taps 4 px
-outside the track toggle it"). Fix is one line and keeps B11: make the wrapper
-the slop's width and right-align it —
-`SizedBox(width: 59, height: 44, child: Align(alignment: Alignment.centerRight, child: toggle))`
-— so the track stays flush at x 354 while the 4 px has room (the row's 12 px
-left padding keeps it inside the content box).
-
-Beside it, a **live** companion test holds the part that does hold: the
-effective target clears 44 px in *both* axes, so no future wrapper change can
-quietly shrink it.
-
-### 2.2 DATA OVER MOCKS — the parent's e-mail (mandate item 2), 2 tests
-
-The ruling says the parent's e-mail must come from the database and asserts
-"the seed holds that value". **It does not** — the integrator measured that no
-table in the schema has an e-mail column (`auth_repository_impl.dart:38`
-documents the omission), and my own probe agreed. The ruling's own fallback
-("if the DB lacks a field, write SHARED_REQUEST.md") is what applies, and
-`SHARED_REQUEST.md` §4 already carries it.
-
-What the test stage can do without patching the screen is make the gap
-**impossible to ignore**:
-
-- **`TRIPWIRE: `members` still has no e-mail column`** — reads the live schema
-  (`PRAGMA table_info(members)`) and fails the moment a column appears, with a
-  message that says what to do then (read `members.email` for the owner row and
-  update the four tests that assert the literal). It also pins that the rest of
-  the owner row stays database-driven (`id`, `family_id`, `name`, `role`,
-  `invite_status`). Writing it made me check the real column names — they are
-  snake_case in SQL, which the first draft of my assertion got wrong.
-- **the owner row follows the seeded NAME** — rename Sarah to Sam in the
-  database and the row reads `Sam — you`, i.e. the part DATA OVER MOCKS covers
-  is genuinely live, while the subtitle beside it is the documented exception.
-
-I did **not** weaken the four tests that assert `sarah@example.co.uk`: they
-describe the screen as built, and they are the tests that have to change when
-§4 lands.
-
-## 3. Existing tests hardened (3)
-
-1. **The T02 proof is now shell-agnostic.** It used to assert
-   `find.byType(SettingsRow)`, its exact 6 px padding and a
-   `SizedBox(height: 44)` — i.e. the *fork*. `ORCHESTRATOR_NOTES` (08:12) item
-   3 orders that fork reverted to the shared `NestListRow`, and a proof that
-   names the fork would fail on the revert with "no SettingsRow in the tree"
-   instead of reporting the truth. It now asserts the **owner rule as
-   geometry**: the switch's painted content box (the nearest `Padding` ancestor
-   — the same element in both shells) is ≥ 44 tall, the track is 51 × 31, and
-   taps ±5 px outside it flip the database row. The ±5 px taps are the part
-   that cannot be faked.
-2. **The stale T02 comment is rewritten** (I carried that wording since
-   iteration 1).
-3. **The subcard tests stay copy-addressed** (`subscriptionCard()`), so
-   mandate item 3's subcard revert fails with a design message (24 px radius,
-   16 px padding) rather than a missing-key error.
-
-## 4. The three mandatory items — what the test side can say
-
-The integrator measured these; I add the test-side consequences, because two
-of them change what a suite is allowed to assert.
-
-**Item 1 (B11 ✓, B09 open, B10 ✓, un-skip all four).** Three of four proofs are
-live and green. B09 is unsatisfiable in the feature (shared
-`isKnownZoneId` against a links-less tz dataset; the raw id never reaches the
-bloc) — `SHARED_REQUEST.md` §5. B11's proof is now live in my responsive file
-too, widened to 320/390/430 × light/dark.
-
-**Item 2 (parent e-mail from the DB).** Unsatisfiable as written; §4 filed;
-tripwire + name-follows-seed tests above. **Four tests assert the literal** and
-must be updated together when §4 lands — my own included
-(`settings_states_test.dart`, `settings_view_test.dart`, and the a11y control
-list).
-
-**Item 3 (un-fork `_P16Sect`, the subcard, `SettingsRow`).** I measured what
-each revert costs, without patching the screen, by rendering the shared
-components in the same harness:
-
-| fork → shared | measured difference | effect on this suite |
-|---|---|---|
-| `_P16Sect` → `NestSectionLabel` | identical typography — 13 px, w700, `letter-spacing .78`, `ink-2`, `maxLines 1` — only the **line box** differs: **18 px vs 16 px** at scale 1.0 (23 vs 21 at 1.3) | **no assertion of mine breaks**: the typography test passes unchanged and the "box scales ×1.3" check is relative, so it holds for both |
-| subcard → `NestCard` | radius **24 vs design 16**; padding **all(16) vs design 14/16**; same `surface` colour and `sh-1` | exactly **two** assertions fail, by design, with a legible message |
-| `SettingsRow` → `NestListRow` (switch rows) | the ±5 px taps **still land** (the 44-high wrapper inside the shared row's 10 px padding is enough) — but the row **grows 56 → 64 px**, because 44 + 20 exceeds the 56 px min-height | the T02 proof still passes; **new vertical drift**: +8 px on each of three rows, ≈ +24 px down the page |
-
-That last row is the finding I would most want the orchestrator to see: **item
-3's un-fork of `SettingsRow` is not free** — it does not re-open the 44 px
-target (good), but it re-introduces the *same class of vertical drift* that
-`SHARED_REQUEST.md` §1/§2 exist to close, this time +8 px × 3 rows. So the
-sequencing still matters: §1 should also ask that the row not grow, and the
-reverts follow the shared batch, not precede it.
-
-## 5. Results
+## 4. Results
 
 ```
 $ dart format .
-Formatted 537 files (0 changed) in 1.55 seconds.
+Formatted 553 files (0 changed) in 3.21 seconds.
 
 $ flutter analyze
 Analyzing app...
-No issues found! (ran in 2.9s)
+No issues found! (ran in 14.2s)
 
-$ flutter test test/features/settings
-00:13 +137 ~2: All tests passed!
+$ flutter test test/features/settings --timeout 120s
+00:31 +141 ~1: All tests passed!
 
-$ flutter test
-01:48 +3028 ~4: All tests passed!
+$ flutter test --timeout 120s
+02:29 +3278 ~3: All tests passed!
 ```
 
-Zero failures. The full suite's `~4` is two P16 skips (B09 and T03), K01's
-`k01_bugs_test.dart` skip (arrived from `Merge screen/K01`) and P12's
-pre-existing one.
+Zero failures. The full suite's `~3` is **one** P16 skip (my T04), K01's
+`k01_bugs_test.dart` skip (from `Merge screen/K09`/main) and P12's pre-existing
+one. P16's own skip count went 2 (iteration 4) → 1 (this stage).
 
-**Skip honesty.** `flutter test test/features/settings --run-skipped` fails on
-exactly the two open P16 proofs and nothing else:
+**Skip honesty.** `flutter test test/features/settings --run-skipped --timeout
+120s` fails on exactly the one open proof:
 
 ```
-p16_bugs_test.dart        [P16-B09] the picker shows the device zone for a linked IANA id
-settings_a11y_test.dart   [P16-T03] a switch is live 4 px to the LEFT and RIGHT of its track
+settings_a11y_test.dart  [P16-T04] the initial trims a leading space and falls
+                                   back to "?" for a whitespace-only name
+        Expected: 'M'   Actual: ' '     (nickname <space>Maya)
 ```
 
-## 6. Bugs
+## 5. Bugs
 
-### Closed and proved — P16-B11 (major, ALIGNMENT) — iteration 3, mine + bug stage
+### Closed this iteration (build, verified by my tests)
+P16-T03 (4 px horizontal slop), P16-B09 (linked IANA ids), P16-B11 (switch
+alignment), P16-B10 (guard coverage), and — via the un-fork and batch 6 — the
+three mandatory `ORCHESTRATOR_NOTES` items 1 and 3, plus item 2 (DATA OVER
+MOCKS). Nothing regressed: T02 and B11 still pass on the new layout.
 
-Track at **x 303–354** at 390 px, flush with the row's 16 px trailing inset
-(`370 − 16 = 354`), at 320/390/430 in both themes; my widened proof is live
-(`skip: false`) and green. P16-T02's vertical proof survived the wrapper
-change — both findings are now pinned on one layout.
+### Open — P16-T04 (minor) — mine
 
-### Closed and proved — P16-B10 (minor) — bug stage
+`app/lib/features/settings/presentation/views/settings_view.dart` — the member
+row and the child row build their `NestAvatar` initial from
+`name.characters.first.toUpperCase()` (with an `isEmpty ? '?'` guard) instead of
+`nestAvatarInitial(name)`. Effect: a leading space or a whitespace-only
+nickname renders a space (or nothing) in the avatar; the shared helper would
+render `M` and `?`.
 
-Delete and Invite rows fenced like every other row; proofs live.
+**Repro:** real app at `/settings`, rename a child to `' Maya'` → the Children
+row's avatar shows a blank where `M` belongs. Proof:
+`flutter test test/features/settings --run-skipped --timeout 120s`.
 
-### Closed in earlier iterations, still green
-P16-T01 (blocker, wrong navigator), P16-B08 (modal-close double tap),
-P16-B01…B06 (iteration 1), P16-T02 (iteration 3).
+**Blocked here:** the helper is on `main`, absent from this branch (25 commits
+behind); importing it fails `flutter analyze`. Fix after the merge: two
+one-line swaps. `SHARED_REQUEST.md` already carries the rest of the arc; this
+one needs no schema or shared work, only the merge.
 
-### Open — P16-T03 (minor, new) — mine
+## 6. Observations (not bugs)
 
-`app/lib/features/settings/presentation/views/settings_view.dart:298`, `:316`,
-`:334` — the three `SizedBox(width: 51, height: 44, Center(NestToggle(…)))`
-wrappers. The horizontal 4 px of `NestToggle`'s hit slop is clipped; taps 4 px
-either side of the track do nothing. Owner rule still met (51 × 44), so minor.
-Repro: real app at `/settings`, Notifications, tap 4 px left of the switch's
-left edge → nothing; the track itself flips.
-Proof: `flutter test test/features/settings --run-skipped`.
+1. **The email tripwire did its job and was correctly flipped.** My iteration-4
+   tripwire asserted "no `email` column exists"; when batch 6 landed it failed,
+   which is exactly what it was for. The builders replaced it with the positive
+   form (column present, row reads it) plus a NULL-fallback case — the right
+   resolution, and a good demonstration of why a tripwire is worth writing when
+   a ruling cannot yet be honoured.
+2. **The Family list still announces as one node.** Its two static rows (Sarah,
+   James) have no semantics node of their own, so a screen reader announces
+   `"Sarah — you / … / James — co-parent / … / Invite co-parent"` as a single
+   button. Unchanged across five iterations; the shared `NestListRow`'s
+   no-`onTap` branch is where it lives, and the integrator records that a local
+   label broke the tappable-node contract for the whole section.
+3. **The shared `Semantics(label:) > InkWheel` wart** — blast radius still
+   pinned by `settings_a11y_test.dart`: the only unlabelled tappable nodes are
+   the three switch tracks.
+4. `.ptitle` declares no `text-wrap: balance`, so the plain `Text` with
+   `NestType.h1` is correct by the CSS as written.
+5. **A fenced tap ripples but does nothing** (the 300 ms guard) — defensible,
+   but a silent dead tap if the window is ever widened.
+6. The dialog Cancel still wraps at 320 × 1.3 (shared `NestButton` padding).
 
-### Open — P16-B09 (minor, shared) — bug stage
-Linked IANA ids read as unknown; `SHARED_REQUEST.md` §5.
+## 7. Harness notes
 
-### Mandatory items still unmet
-`ORCHESTRATOR_NOTES` (08:12) items 2 and 3 — §4 above. Item 2's premise is
-false; item 3 is a build decision with the drift numbers in §4.
-
-## 7. Observations (not bugs)
-
-Unchanged from earlier iterations: the Family list's two static rows merge into
-the Invite button's announcement (shared `NestListRow`); the shared
-`Semantics(label:) > InkWell` wart, blast radius pinned; `.ptitle` declares no
-`text-wrap: balance`, so the plain `Text` is correct by the CSS; `_P16Sect`'s
-per-build `TextPainter` (accepted); the dialog Cancel wrapping at 320 × 1.3
-(shared `NestButton` padding).
-
-New this iteration: **a fenced tap still ripples but does nothing** — inside
-the 300 ms guard window the user gets no feedback either way. Defensible at
-300 ms; if the window is ever widened it becomes a silent dead tap.
-
-## 8. Harness notes
-
-- **A widget's nearest `Padding` ancestor is the row's content box** in both
-  `SettingsRow` and `NestListRow`, which makes it the one shell-agnostic place
-  to measure "is there room for the slop". My first attempt measured the
-  toggle's *descendant* padding (the knob's, 27 px) instead.
-- **`PRAGMA table_info(<table>)` through `customSelect` is the live schema**,
-  and SQL column names are snake_case while drift's are camelCase.
-- **`const MembersCompanion(name: Value('Sam'))`** — the plain constructor
-  takes `Value<String>`; `const` needs the `Value` inside.
-- Unchanged from iterations 1–3: Drift streams need `settleSettings`
+- **A row's type is not stable across a fork/revert.** `NestAvatar` lives under
+  `NestListRow` for some rows and under P16's `SettingsRow` for the member and
+  child rows; after the un-fork the child rows are `SettingsRow`. Address rows
+  with `find.byWidgetPredicate((w) => w is SettingsRow || w is NestListRow)` so
+  a proof survives either shape — the same reasoning that made the T02 proof
+  shell-agnostic.
+- **"Some element contains X" is a weak assertion** when the tree holds several
+  similar nodes: my first avatar draft passed for the wrong reason (another
+  child's `M`). Address the node's own row and read that row's value.
+- Unchanged from iterations 1–4: Drift streams need `settleSettings`
   (`runAsync`); `bloc.close()` must be `unawaited` in a widget test;
-  `scrollUntilVisible` walks down only (`scrollSettingsUpTo` walks up);
-  a semantics-tree walk misses un-passed nodes (`getSemantics` does not);
+  `scrollUntilVisible` walks down only (`scrollSettingsUpTo` walks up); a
+  semantics-tree walk misses un-passed nodes (`getSemantics` does not);
   `testWidgets(skip: …)` takes a bool; never settle before asserting a
-  time-windowed guard.
+  time-windowed guard; `PRAGMA table_info(t)` reads the live schema.
 
 ---
 
