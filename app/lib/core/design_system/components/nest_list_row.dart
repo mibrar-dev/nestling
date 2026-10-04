@@ -28,6 +28,16 @@ class NestListRow extends StatelessWidget {
   final VoidCallback? onTap;
   final String? semanticLabel;
 
+  /// `.list-trail` overflow guard (logical px).
+  ///
+  /// The design's trail (`components.css:119`) is `flex-shrink: 0` with no
+  /// width cap — trail content is always short (chevron, `Change ›`,
+  /// coin pill). The cap only bounds a pathological trailing so it cannot
+  /// push the text column to zero: the widest known trailing is `Change ›`
+  /// at 70.7 px, so 120 leaves every real trailing untouched while keeping
+  /// ≥ 68 px for the text column even on a 320-wide screen.
+  static const double trailMaxWidth = 120;
+
   /// P02 pager-row small variant (screen wins): 36px tile, radius 12.
   final bool compact;
 
@@ -94,7 +104,20 @@ class NestListRow extends StatelessWidget {
                   ],
                 ),
               ),
-              if (tail != null) Flexible(child: tail),
+              // `.list-trail { flex-shrink: 0 }` (components.css:119): the
+              // trailing takes its intrinsic width at the right edge and
+              // never joins the flex distribution. (`Flexible` gives the
+              // trail an equal flex share, starving the text column to half
+              // the free width and parking the chevron mid-row.) The
+              // `Row(spacing: s3)` gap above is the design's 12px gap.
+              // The cap is an overflow guard only: while the trailing fits,
+              // the `Expanded` text column keeps the remainder; only a wider
+              // trailing is clamped.
+              if (tail != null)
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: trailMaxWidth),
+                  child: tail,
+                ),
             ],
           ),
         ),
