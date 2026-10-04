@@ -331,8 +331,9 @@ void main() {
     test('needsOk writes requested and leaves coins untouched', () async {
       final repo = KidShopRepositoryImpl(db: db);
 
-      await repo.requestReward('maya', 'r-screen');
+      final written = await repo.requestReward('maya', 'r-screen');
 
+      expect(written, 'requested');
       final rows = await redemptionsFor('r-screen');
       expect(rows, hasLength(1));
       expect(rows.single.status, 'requested');
@@ -343,8 +344,9 @@ void main() {
     test('instant writes approved and deducts the price', () async {
       final repo = KidShopRepositoryImpl(db: db);
 
-      await repo.requestReward('maya', 'r-baking');
+      final written = await repo.requestReward('maya', 'r-baking');
 
+      expect(written, 'approved');
       final rows = await redemptionsFor('r-baking');
       expect(rows, hasLength(1));
       expect(rows.single.status, 'approved');
@@ -360,7 +362,12 @@ void main() {
         await repo.requestReward('maya', 'r-baking'); // 100 of 120 → approved
         expect((await child('maya')).coins, 20);
 
-        await repo.requestReward('maya', 'r-screen'); // 50 — NOT covered
+        final written = await repo.requestReward(
+          'maya',
+          'r-screen',
+        ); // 50 — NOT covered
+
+        expect(written, 'requested');
 
         final baking = await redemptionsFor('r-baking');
         expect(baking.single.status, 'approved');
@@ -385,8 +392,9 @@ void main() {
         // `watchActiveShop` falls back to the literal 'maya', so a family whose
         // child row has gone still reaches this branch. Nothing may be granted
         // or deducted for a child that does not exist.
-        await repo.requestReward('nobody', 'r-baking');
+        final written = await repo.requestReward('nobody', 'r-baking');
 
+        expect(written, 'requested');
         final rows = await redemptionsFor('r-baking');
         expect(rows, hasLength(1));
         expect(
@@ -401,8 +409,9 @@ void main() {
     test('unknown reward is a no-op', () async {
       final repo = KidShopRepositoryImpl(db: db);
 
-      await repo.requestReward('maya', 'r-nope');
+      final written = await repo.requestReward('maya', 'r-nope');
 
+      expect(written, isNull);
       expect(await db.select(db.rewardRedemptions).get(), isEmpty);
       expect((await child('maya')).coins, 120);
     });

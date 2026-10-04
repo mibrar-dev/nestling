@@ -1,68 +1,78 @@
-# K08 · Reward shop — stage 2a build logic (iteration 2)
+# K08 · Reward shop — stage 2a build logic (iteration 3)
 
 ## CONTRACT CHANGES
 
-None. `requestReward(childId, rewardId)` keeps its `Future<void>` signature
-and the five BLoC events / state shape from iteration 1 are untouched, so
-the UI builder codes against the plan unchanged.
+One, required by FIXES_2 (K08-BUG-4): `KidShopRepository.requestReward`
+now returns the status it actually wrote — `Future<String?>`:
+`'approved'` when the reward was granted and paid for, `'requested'` when
+it waits for a grown-up, `null` for unknown ids (no-op, unchanged).
+BLoC events and state shapes are UNCHANGED; the view still toasts
+`state.notice` on `noticeSeq` — only the copy selection moved (from the
+tap-time `needsOk` flag to the written status).
 
-One behaviour note for the UI builder (not a signature change): an instant
-reward requested when the balance no longer covers it now lands as
-`requested` (a grown-up decides) instead of `approved`-unpaid. The bloc
-toasts from the item's `needsOk` flag captured at tap time, so in that
-raced edge the toast may read “enjoy” for a row that is actually
-`requested` — accepted as negligible; the money invariant is what the
-proofs pin.
+**For the UI builder:** `app/test/features/kid_shop/
+reward_shop_view_test.dart` was the only out-of-layer file touched, and
+only its `_FakeKidShopRepository` (lines 93–154): the signature follows
+the new contract and the fake reports the same status the real repository
+would for the served items (`needsOk` → `'requested'`, instant →
+`'approved'`, unknown → `null` via a shared `_servedItems` getter). No
+test body, no view, no widget was changed — your 67 view tests pass
+unmodified against it (verified below). Revert/adjust freely if your half
+needs a different fake behaviour; the bloc contract above is what matters.
 
-## Files changed (logic layer only — no views/widgets touched)
+## Files changed
 
-- `app/lib/features/kid_shop/data/kid_shop_repository_impl.dart`:
-  **K08-BUG-1 fixed** (FIXES_1 item 1, my layer). `requestReward` now makes
-  payment a precondition of the `approved` row, inside the single
-  transaction, mirroring P14's `approveRedemption` check-before-write:
-  needsOk → `requested` (unchanged); instant → child row read **inside**
-  the transaction, and only when the balance covers the price is the row
-  written `approved` **and** the coins deducted together. When the balance
-  is short (two individually-affordable cards tapped in one frame, second
-  lands after the first spent the coins) — or the child row is gone — the
-  row is written `requested` instead, so no unpaid `approved` row survives.
-  The old write-first + silently-no-op `_spendCoins` is deleted (replaced
-  by one `_insertRedemption` helper; no triplicated insert body).
-- `app/test/features/kid_shop/kid_shop_repository_test.dart`: new
-  regression test `an instant reward beyond the balance is left requested
-  (K08-BUG-1)` — baking (100, approved, 120→20) then screen-as-instant
-  (50, uncovered) → `requested`, coins stay 20 — plus a `makeInstant`
-  helper. File is now 17 tests.
-- No other logic file touched: domain contract, `watchActiveShop`,
-  `watchShop` legacy entry, BLoC events/state all already match the plan.
+- `app/lib/features/kid_shop/domain/kid_shop_repository.dart`: `requestReward`
+  returns `Future<String?>` with the written-status contract documented.
+  Source-compatible for callers that ignore the result (the shared
+  `test/core/data/repositories_test.dart` needed no edit — verified green).
+- `app/lib/features/kid_shop/data/kid_shop_repository_impl.dart`: the three
+  write paths return their status (`'requested'` needsOk / uncovered /
+  missing child, `'approved'` + deduction otherwise); unknown id returns
+  `null`. Transaction body unchanged otherwise.
+- `app/lib/features/kid_shop/presentation/bloc/kid_shop_bloc.dart`
+  (K08-BUG-4 fixed): `_onRewardRequested` chooses the toast from the
+  written status — `'approved'` → `It’s yours — enjoy!`, anything written
+  as `'requested'` → `Mum will give it a thumbs-up soon.` A throw or a
+  `null` (reward vanished mid-flight; unreachable behind the guard) keeps
+  the existing `Hmm, that did not work. Try again.` Guards (unknown /
+  unaffordable / duplicate / pre-load) and `requestingIds` semantics
+  unchanged.
+- `app/test/features/kid_shop/kid_shop_bloc_test.dart` (34→35): the fake
+  implements the new signature with a per-id `writtenStatus` override
+  (default `'requested'`); new test `a raced instant request left requested
+  toasts thumbs-up (K08-BUG-4)`; the enjoy-copy test now pins
+  `writtenStatus['r-baking'] = 'approved'`.
+- `app/test/features/kid_shop/kid_shop_repository_test.dart` (18 tests):
+  return-value assertions added to the four write tests (`requested` /
+  `approved` / `requested`-when-uncovered / `requested`-no-row / `null`
+  unknown).
+- `app/test/features/kid_shop/reward_shop_view_test.dart`: fake-only
+  update described under CONTRACT CHANGES (UI builder's file; flagged,
+  minimal, verified).
 
-FIXES_1 items **not** mine (left for the UI builder — views/widgets are
-out of my scope): K08-BUG-2 (`reward_shop_view.dart:354` `Spacer` →
-`SizedBox.shrink`) and K08-BUG-3 (`shop_reward_card.dart` price
-`Semantics(label: '$price coins')`). Their 4 proofs still fail, as
-expected, and I did not touch those files or their tests.
+Not mine, not touched: K08-BUG-5 (`shop_reward_card.dart` name semantics —
+UI builder is actively editing that file in this worktree) and the
+`kid_home_view_test.dart` SHARED_REQUEST blocker (another feature).
 
 ## Verification (no simulator — 5_ui only; no whole-app run — integrator)
 
 - `flutter analyze lib/features/kid_shop test/features/kid_shop` → No
   issues found.
-- `flutter test --timeout 120s test/features/kid_shop/
-  kid_shop_bloc_test.dart test/features/kid_shop/kid_shop_repository_test.dart`
-  → All 51 tests passed (34 bloc + 17 repository).
-- `flutter test --timeout 120s test/features/kid_shop/k08_bugs_test.dart
-  --plain-name K08-BUG-1` → All 3 passed (repository proof, one-frame
-  two-card widget proof, needs-OK sibling regression). Full bugs file:
-  +3 −4, the 4 failures being exactly the BUG-2/BUG-3 proofs owned by the
-  UI builder.
-- `flutter test --timeout 120s test/core/data/repositories_test.dart` →
-  All 22 passed (legacy `watchShop` entry unaffected).
-- No `DateTime.now` (clock via `appNowUtc`), no `google_fonts`, no new ids
-  minted, no `flutter clean`, no simulator, no `analysis_options` change.
+- `flutter test --timeout 120s` (own files): bloc 35 + repository 18 → All
+  53 passed.
+- `... k08_bugs_test.dart` → All 7 passed, including the previously failing
+  K08-BUG-4 proof (`a reward left awaiting approval is not announced as
+  "yours"`); no `skip:` marker anywhere in the feature's tests.
+- Regression sweep for the contract change: `reward_shop_view_test.dart`
+  → 67 passed; icons + a11y + geometry + shared `repositories_test.dart`
+  → 60 passed.
+- No `DateTime.now` (clock via `appNowUtc`), no `google_fonts`, no new ids,
+  no `flutter clean`, no simulator, no `analysis_options` change.
 
 ## LEFT FOR NEXT ITERATION
 
-- UI builder: K08-BUG-2 and K08-BUG-3 fixes (their files, their proofs).
-- Integrator: whole-app suite (the `kid_home_view_test.dart` placeholder-copy
-  blocker in SHARED_REQUEST.md is still open) and the `5_ui` screenshots.
+- UI builder: K08-BUG-5 fix (your file, your proofs).
+- Integrator: whole-app suite + `5_ui` re-shoot (glyph + toast changes).
 
 VERDICT: PASS

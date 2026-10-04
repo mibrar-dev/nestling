@@ -70,24 +70,34 @@ class KidShopBloc extends Bloc<KidShopEvent, KidShopState> {
     Emitter<KidShopState> emit,
   ) async {
     if (!state.isLoaded) return;
-    bool? needsOk;
+    // The affordability flag is only the tap-time guard — the toast below is
+    // chosen from the status the write actually produced (K08-BUG-4), never
+    // from a captured flag.
+    var known = false;
     var affordable = false;
     for (final item in state.items) {
       if (item.id == event.rewardId) {
-        needsOk = item.needsOk;
+        known = true;
         affordable = item.affordable;
         break;
       }
     }
-    if (needsOk == null) return;
+    // Unknown ids never reach the repository (and the repository itself is
+    // a no-op for them).
+    if (!known) return;
     if (!affordable) return;
     if (state.requestingIds.contains(event.rewardId)) return;
-    final itemNeedsOk = needsOk;
     final childId = state.childId;
     emit(state.copyWithRequestStarted(event.rewardId));
+    String? written;
     try {
-      await _repository.requestReward(childId, event.rewardId);
+      written = await _repository.requestReward(childId, event.rewardId);
     } on Object catch (_) {
+      written = null;
+    }
+    if (written == null) {
+      // The write failed — or the reward vanished mid-flight, which the
+      // guard above can no longer see. Either way nothing was granted.
       emit(
         state.copyWithRequestFinished(
           event.rewardId,
@@ -99,9 +109,9 @@ class KidShopBloc extends Bloc<KidShopEvent, KidShopState> {
     emit(
       state.copyWithRequestFinished(
         event.rewardId,
-        itemNeedsOk
-            ? 'Mum will give it a thumbs-up soon.'
-            : 'It’s yours — enjoy!',
+        written == 'approved'
+            ? 'It’s yours — enjoy!'
+            : 'Mum will give it a thumbs-up soon.',
       ),
     );
   }

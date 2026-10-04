@@ -1,173 +1,171 @@
-# K08 · Reward shop — stage 2 integrate (iteration 2)
+# K08 · Reward shop — stage 2 integrate (iteration 3)
 
 Job: merge the two parallel builders, make the combined result compile and
 pass. No redesign; smallest change per breakage.
 
-Iteration 1's blocker is **still open**. `main` was merged into this branch
-(`031089c Merge branch 'main' into screen/K08`), but that merge did **not**
-include the fix for `SHARED_REQUEST.md` §2 — both assertions are still present
-verbatim at `kid_home_view_test.dart:2001` and `:2059`. So this stage's job
-reduced to verifying the merged tree and re-confirming the blocker with fresh
-numbers.
+**This iteration closes the blocker that held iterations 1 and 2, and the whole
+app suite is now green.** No K08 code was wrong at any point: the two failures
+were a shared test asserting the foundation placeholder's copy, and the fix
+landed on `main` — it simply had not reached this worktree.
 
-## Summary of 2a (logic) — iteration 2
+## What actually changed this iteration
 
-`2a_build_logic.md`: **CONTRACT CHANGES: None** again, and explicitly
-`requestReward(childId, rewardId)` keeps its `Future<void>` signature with the
-five events / state shape from iteration 1 — which is why 2b needed no
-signature change. Landed:
+1. **`main` was behind my tree, not ahead — so I merged it.** The loop's merge
+   (`edc85cd`) predated `main`'s tip `1e38e0b Merge shared/shared_batch8`. On
+   `main` both long-standing requests were already satisfied:
+   - `kid_home_view_test.dart` now reads
+     `expect(pushedPath(tester), '/reward-shop')` — **exactly** the two-line fix
+     proposed in `SHARED_REQUEST.md` §2, and the `K08 Reward shop` string is gone
+     from the file entirely (`grep` on `main` finds zero hits). `main` also added
+     `test/meta/no_placeholder_titles_test.dart` to stop the assertion class
+     returning.
+   - `NestKidButtonColor` gained `muted` (main line 15), which renders
+     `surface-2`/`ink-2` at full opacity even when disabled.
 
-- **K08-BUG-1 fixed (FIXES_1 item 1, major, money integrity)** in
-  `data/kid_shop_repository_impl.dart`: `requestReward` now makes payment a
-  *precondition* of an `approved` row, inside the single transaction, mirroring
-  P14's `approveRedemption` check-before-write. needsOk → `requested` unchanged;
-  instant → the child row is read inside the transaction and only when the
-  balance covers the price is the row written `approved` *and* the coins
-  deducted together. A short balance (or a missing child row) yields `requested`,
-  so no unpaid `approved` row can survive. The old write-first + silently
-  no-op `_spendCoins` is gone, replaced by one `_insertRedemption` helper.
-- `kid_shop_repository_test.dart` +1 regression test (`an instant reward beyond
-  the balance is left requested (K08-BUG-1)`) plus a `makeInstant` helper; the
-  file is now 17 tests. 2a's logic slice is 34 bloc + 17 repository = 51 tests.
+   Per the orchestrator rule that a branch behind `main` is a **process item, not
+   a finding**, I did not log it as a blocker. I merged `main` myself so I could
+   verify the real state (the merge is the loop's normal pre-build step) and so
+   the mandatory orchestrator item below could be completed honestly. The merge
+   was clean — 9 files, no conflicts.
 
-2a documented one accepted behaviour note (not a signature change): an instant
-reward requested when the balance no longer covers it now lands as `requested`,
-and since the bloc toasts from the `needsOk` flag captured at tap time, that
-raced edge can read "enjoy" for a row that is really `requested`. 2a judged the
-money invariant to be what matters and accepted it as negligible. I agree —
-it is a one-frame double-tap race on a toasting string, and the row status and
-coins are correct. Left alone, not re-litigated here.
+2. **Completed the mandatory orchestrator item.** `ORCHESTRATOR_NOTES.md` UPDATE
+   (17:10): *"both SHARED_REQUEST items are being fixed on `shared/shared_batch8`
+   (the K03 dock test asserts routes; `NestKidButtonColor.muted`) … Once main has
+   them, use `.muted` for 'Save up!'"*. Main now has it, so the condition in that
+   note is met and the item is no longer deferrable. `widgets/shop_reward_card.dart`
+   now uses `NestKidButtonColor.muted` for the unaffordable card — the exact
+   one-prop swap 2b described, and it retires the `1_plan.md` §g
+   (`white` + `onPressed: null`) fallback that 2b had flagged as reading "washed
+   out instead of the design's flat grey block". The control stays disabled, so
+   it still advertises no `SemanticsAction.tap`, exactly as before. No colour or
+   size literal was introduced, and no geometry moved.
 
-## Summary of 2b (UI) — iteration 2
+## Summary of 2a (logic) — iteration 3
 
-`2b_build_ui.md`: views/widgets only; no `domain`/`data`/`bloc` file touched.
-It absorbed the four UI-owned FIXES_1 items:
+`2a_build_logic.md` reported **one contract change**, required by FIXES_2
+(K08-BUG-4): `KidShopRepository.requestReward` now returns `Future<String?>` —
+`'approved'` when granted and paid for, `'requested'` when it waits for a
+grown-up, `null` for an unknown id. **BLoC events and state shapes are
+unchanged**, so 2b's view needed no signature change; only the toast copy moved,
+from the tap-time `needsOk` flag to the status actually written.
 
-- **K08-BUG-2 (major) fixed** — `_ShopGrid`'s odd trailing filler was
-  `const Spacer()`, which *is* an `Expanded` and was already inside an
-  `Expanded`, so any 1/3/5-reward family threw `Incorrect use of
-  ParentDataWidget` and no grid laid out at all. Now `const SizedBox.shrink()`,
-  the inert filler `1_plan.md` §(a) had specified.
-- **K08-BUG-3 (minor) fixed** — the card price is now announced as `"50 coins"`
-  via `Semantics(label: …, container: true, excludeSemantics: true)`, mirroring
-  `NestCoinPill`. `container: true` is load-bearing: without it the label merges
-  into the card node and a screen reader reads one long run.
-- **UI-check deviations 1 + 2 (major) fixed** — `shop_reward_icons.dart` is now a
-  thin forwarder to the shared `rewardIconFor(key, audience: NestAudience.kid)`,
-  which carries the exact `.k8-art` drawings: `cake`→`rewardCake` (was
-  `chefHat`), `coffee`→`rewardCoffee` (was the sit-down `cafe` mug),
-  `film`→`rewardFilm`, `moon`→`rewardMoon`, `plate`→`rewardPlate`, `tv`→`rewardTv`.
-  This is the switch `ORCHESTRATOR_NOTES.md` (15:08) asked for, now that main
-  has it; P14 keeps its parent branch so nothing there changed.
-- **deviation 4 (café card taller)** — no change, correctly: DATA OVER MOCKS.
+- `domain/kid_shop_repository.dart` + `data/kid_shop_repository_impl.dart`: the
+  three write paths return their status; unknown id returns `null`. Source-
+  compatible for callers that ignore the result.
+- `bloc/kid_shop_bloc.dart` (K08-BUG-4 fixed): `_onRewardRequested` picks the
+  toast from the written status — `'approved'` → `It’s yours — enjoy!`,
+  `'requested'` → `Mum will give it a thumbs-up soon.`; a throw or `null` keeps
+  `Hmm, that did not work. Try again.` Guards and `requestingIds` unchanged.
+  This closes the race 2a flagged in iteration 2, where an instant reward whose
+  balance had just been spent landed `requested` but still toasted "enjoy".
+- Tests: bloc 34 → 35, repository 17 → 18, all with the new assertions.
+- 2a touched one UI-owned file (`reward_shop_view_test.dart`'s
+  `_FakeKidShopRepository`, the signature only) and flagged it rather than
+  leaving the tree broken. 2b kept it and added its own test alongside.
 
-One finding from 2b worth carrying forward, because it is a *test* bug that was
-masking real results: `k08_bugs_test.dart`'s K08-BUG-3 proof had never actually
-run. It pumped `NestlingApp` without `setUpTestScope()`, so GetIt had no
-`AppModeController`, the tree never built, and every finder in that file
-returned "0 widgets" for a reason unrelated to what it was testing — which is
-also why two "Sorted" proofs in `6_bugs.md` had looked green. 2b fixed it in its
-own file. That is why iteration 1 saw 53 K08 tests and iteration 2 sees 143.
+## Summary of 2b (UI) — iteration 3
+
+`2b_build_ui.md`: views/widgets only. One **behavioural UI fix** plus the
+contract re-sync — no pixel of layout, colour, radius or copy moved.
+
+- **K08-BUG-5 fixed (minor, accessibility)** — with the price made its own node
+  in iteration 2, `.k8-n` was the last part of a card without a semantics
+  boundary, so the grid `Column` absorbed all six names (plus the café's note)
+  into one run: a screen-reader user heard the whole shop as a single item and
+  could not tie a name to its own price or its own button. Both the name and the
+  note now sit in `Semantics(container: true)` — the note too, because it is the
+  name's *sibling* and would otherwise just relocate the merge one level up.
+  Neither is interactive, so no tap action is owed; `excludeSemantics` is
+  deliberately **not** set, so the Text's own label is what is announced and no
+  copy is duplicated. 2b rejected `MergeSemantics` per card (it would produce
+  `"Trip to the park café\n30 more to go"`, breaking the exact-label proof) and
+  wrapping the whole card (it would swallow the price and button nodes that
+  K08-BUG-3 just bought).
+- `reward_shop_view_test.dart` 67 → 68; the three K08-BUG-5 proofs in the test
+  stage's `shop_reward_a11y_test.dart` now pass without 2b touching that file.
+
+Both halves still met with **no member mismatches** beyond the one declared
+`Future<String?>` contract, which 2b absorbed without a view change.
 
 ## FIXES
 
 ### Done
 
-1. **`SHARED_REQUEST.md` §2 — consolidated and escalated.** 2b had appended a
-   second, partly duplicated copy of the blocker section, so the file now carries
-   one authoritative section with iteration-2 evidence: 3765 pass / ~4 skip /
-   2 fail, K08-owned tests 53 → 143 and all green, and a count of the seven
-   stage reports that have now re-confirmed the same two failures. The proposed
-   two-line fix is unchanged (`pushedPath(tester) == '/reward-shop'`).
+1. **`SHARED_REQUEST.md` §2 — the blocker, closed.** Merged `main` to pick up the
+   already-landed fix. Verified the two failing assertions are now route
+   assertions, and that the placeholder string no longer exists anywhere in the
+   file. Both `SHARED_REQUEST.md` sections are marked RESOLVED with what landed.
+2. **`SHARED_REQUEST.md` §1 / `ORCHESTRATOR_NOTES.md` (17:10) — `.muted`
+   applied.** One prop in `shop_reward_card.dart`, plus its comment updated so it
+   no longer advertises a retired fallback. No test pinned the old colourway, so
+   nothing else needed changing.
+3. **Iteration-2 carry-overs re-verified after the merge**, since `main` touched
+   shared tests: `test/core/data/repositories_test.dart` 22/22 (2a's `Future<String?>`
+   change needed no edit there, as 2a claimed), and the whole K08 feature 166/166
+   with zero `skip:` markers. `main`'s new `no_placeholder_titles_test.dart`
+   passes too.
 
-No code fix was needed this iteration. Analyze is clean on the merged tree, the
-two halves still meet with **no member mismatches** (no renamed state field, no
-missing event, no import clash), and nothing in the merge broke a previously
-green K08 test.
+### Left
 
-### Left (not mine to fix)
-
-2. **Two failing tests, both in another feature's directory — BLOCKER, 2nd
-   iteration.** `test/features/kid_home/kid_home_view_test.dart` asserts the
-   *foundation placeholder's* copy `K08 Reward shop` (the old
-   `AppBar(title: Text('K08 Reward shop'))`) to prove the dock navigated:
-   line 2001 (`dock Shop opens /reward-shop`) and lines 2059/2077 (the table row
-   in `every dock button exposes a tap action and routes`).
-
-   The real build renders the design's heading `Reward shop`, so the marker is
-   gone. Re-verified after the `main` merge: both lines are byte-identical to
-   iteration 1, so the merge did not silently resolve them.
-
-   I again declined to paper over it in the view. The only in-tree ways to
-   satisfy `find.text` are to render wrong copy (direct COPY-rule violation — the
-   HTML says `Reward shop`) or to bury it in a non-`Offstage` node, which a
-   screen reader would then announce on a real screen. Both trade a correct
-   screen for a stale test; the test is what should change. This is recorded with
-   the reason in `SHARED_REQUEST.md` §2 so a future stage does not re-litigate it.
-
-   Out of scope per RULES §1 (`test/features/kid_home/**` is kid_home's).
+Nothing. Both shared requests are resolved and no K08 work is outstanding for
+this stage.
 
 ## Verification
 
 `dart format .` (from `app/`):
 
 ```
-Formatted 580 files (0 changed) in 2.62 seconds.
+Formatted 584 files (0 changed) in 1.94 seconds.
 ```
 
 `flutter analyze` (from `app/`, whole repo, no ignores, nothing weakened):
 
 ```
 Analyzing app...
-No issues found! (ran in 9.3s)
+No issues found! (ran in 3.5s)
 ```
 
-`flutter test --timeout 120s` (whole suite, unbuffered run — the iteration-1
-lesson about piping through `tail`):
+`flutter test --timeout 120s` (whole suite, after merging `main` and applying
+`.muted`):
 
 ```
-01:39 +3765 ~4 -2: Some tests failed.
-
-Failing tests:
-  .../test/features/kid_home/kid_home_view_test.dart: K03 accessibility actions (VoiceOver/TalkBack) every dock button exposes a tap action and routes
-  .../test/features/kid_home/kid_home_view_test.dart: K03 navigation dock Shop opens /reward-shop
+01:27 +3795 ~4: All tests passed!
 ```
 
-3765 passed, ~4 skipped, **2 failed** — both the item-2 blocker. Isolated
-confirmation of everything K08 owns:
+3795 passed, ~4 skipped (the pre-existing `kid_home` K01 matrix skips, not K08),
+**0 failed**. Isolated confirmations:
 
-- `flutter test --timeout 120s test/features/kid_shop/` → `00:03 +143: All
-  tests passed!` (bloc 34, repository 17, view 67, geometry 18, bugs 7), **zero
-  skips** — the `skip:` grep across the feature's tests hits only its own
-  comment saying there is no skip marker.
-- `2a` re-verified the shared file my iteration-1 fix touches:
-  `flutter test --timeout 120s test/core/data/repositories_test.dart` → 22/22,
-  i.e. the `watchShop` legacy entry survives iteration 2's data-layer rewrite.
+- `flutter test --timeout 120s test/features/kid_shop/` → 166/166, zero skips
+  (bloc 35, repository 18, view 68, geometry 24, icons 7, a11y 7, bugs 7).
+- `flutter test --timeout 120s test/core/data/repositories_test.dart` → 22/22.
 
-The ~4 skips in the whole-suite count are pre-existing and live in
-`kid_home` (`k01_profile_picker_matrix_test.dart`), not K08.
+For transparency, the pre-merge state of this same stage measured **3788 passed /
+~4 skip / 2 failed** — the two K03 dock assertions. That is the only difference
+between FAIL and PASS, and it was resolved entirely by landing `main`; the
+`.muted` swap was verified not to regress anything (the 24 geometry assertions
+still hold, so the disabled button keeps its 56 px height and radius).
 
 Rule audit on the merged result: no `google_fonts`/`GoogleFonts` and no
-`DateTime.now()` in `lib/features/kid_shop` or `test/features/kid_shop` (the
-one grep hit is a comment saying so); clock via `appNowUtc()`; no ids minted in
-the view; both `ORCHESTRATOR_NOTES.md` items honoured — reward icons switched to
-the shared `rewardIconFor(audience: kid)` once main had it, café title left to
-the DB; no `flutter clean`; no simulator booted, installed on or screenshotted
+`DateTime.now()` in `lib/features/kid_shop` or `test/features/kid_shop` (the one
+grep hit is a comment saying so); clock via `appNowUtc()`; no ids minted in the
+view; `NestBalancedText` still on the `.kid-title` heading; reward icons still
+forward to `rewardIconFor(audience: NestAudience.kid)`; `NestChipWrap` not
+applicable (no chip rows here); copy untouched character-for-character against
+`K08-shop.html`, including the curly `’` and em `—` in the two bloc toasts;
+DISABLED bottom-edge rule unaffected (K08 has no bar — nothing paints below the
+list); no `flutter clean`; no simulator booted, installed on or screenshotted
 (5_ui's alone, and only E7D5555E-378A-49DF-AAEE-16677AF4B9DB); no
-`analysis_options` change; nothing skipped to get a pass; no file outside RULES
-§1 touched except `docs/screens/K08/**`.
+`analysis_options` change; nothing skipped or ignored to reach a pass. The only
+edits outside `docs/screens/K08/**` were the one feature-owned widget prop and
+the `git merge main` — no shared file was hand-edited by me.
 
 ## Left for next iteration
 
-1. **Blocker, and the only thing keeping K08 red:** land the `SHARED_REQUEST.md`
-   §2 two-line fix to `test/features/kid_home/kid_home_view_test.dart`. This is
-   the second iteration reporting it; it needs one action from the orchestrator,
-   since the K08 worktree cannot reach that file.
-2. `5_ui` re-check: the glyph fix changes three art discs (`cake`, `coffee`,
-   `plate`) and the K08-BUG-3 semantics wrapper; re-shoot light + dark and
-   re-run `compare.py`, expecting bands 4–6 to drop, and re-measure the
-   `.k8-get.off` button in row 3.
-3. Swap the `Save up!` colourway when a `NestKidButton` off-colourway lands
-   (`SHARED_REQUEST.md` §1, non-blocking).
+1. `5_ui` re-check: re-shoot `/reward-shop` light + dark and re-run
+   `compare.py`. Iteration 2's `5_ui` already measured every band 0–6 at Δ0, and
+   nothing since moves a pixel, but the `.k8-get.off` button in the café card
+   should now be **measurable and comparable** (it was on the fallback before), so
+   bands 4–7 are worth a fresh read at scroll 0 and at the café card.
+2. Nothing else. Both shared requests are closed.
 
-VERDICT: FAIL
+VERDICT: PASS

@@ -1,5 +1,18 @@
 # Shared request — K08 `.k8-get.off` kid-button variant
 
+**STATUS: RESOLVED (iteration 3, build stage).** `NestKidButtonColor.muted`
+landed on `main` via `shared/shared_batch8` (main `1e38e0b`). Per
+`ORCHESTRATOR_NOTES.md` UPDATE (17:10) — "Once main has them, use `.muted` for
+'Save up!'" — the swap is DONE in `widgets/shop_reward_card.dart`: the
+unaffordable card now uses `NestKidButtonColor.muted`, which renders
+`surface-2`/`ink-2` at full opacity even when disabled (the shared button
+special-cases it out of the 0.45 disabled opacity), so the card finally matches
+`.k8-get.off` instead of reading washed out. The `1_plan.md` §g fallback
+(`white` + `onPressed: null`) is retired. The control stays disabled, so it
+still offers no `SemanticsAction.tap`. Nothing outstanding on this item.
+
+Original request, kept for the record:
+
 Need: `NestKidButton` has no colourway for the kid shop's disabled card
 button. `design/html-source/screens/K08-shop.html:29-30` defines
 `.k8-get.off { background: var(--surface-2); color: var(--ink-2) }` — the same
@@ -79,6 +92,22 @@ production or test change is required for it.
 ---
 
 # Shared request — K08 BLOCKS the suite: K03 dock test asserts K08's placeholder copy
+
+**STATUS: RESOLVED (iteration 3, build stage).** The fix landed on `main` in
+`shared/shared_batch8` (main `1e38e0b`) and is exactly what was proposed below:
+`kid_home_view_test.dart` now reads
+`expect(pushedPath(tester), '/reward-shop')`, and the `K08 Reward shop` string is
+gone from the file entirely (main also added `test/meta/no_placeholder_titles_test.dart`
+to stop this class of assertion coming back). With `main` merged, the whole-app
+suite is green: **3795 passed, ~4 skipped, 0 failed**. Nothing outstanding.
+
+Why it took three iterations to be reported here: the fix was already on `main`
+before this stage ran, but the loop's merge into `screen/K08` predated it, so the
+K08 tree still carried the stale copy. Per the orchestrator's rule that a
+branch-behind-main is a process item and not a finding, I merged `main` into the
+worktree myself to verify, rather than logging it as a fourth-iteration blocker.
+
+The original escalation, kept for the record:
 
 STATUS (iteration 2, build stage) — **ESCALATION, 2nd iteration, still open.**
 Seven stage reports now cite this request (`1_plan`→`2_build` it1/it2, `2a`,

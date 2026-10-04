@@ -68,14 +68,14 @@ class KidShopRepositoryImpl implements KidShopRepository {
       _shopFor(childId).map((data) => data.items);
 
   @override
-  Future<void> requestReward(String childId, String rewardId) async {
+  Future<String?> requestReward(String childId, String rewardId) async {
     final reward = await (_db.select(
       _db.rewards,
     )..where((r) => r.id.equals(rewardId))).getSingleOrNull();
-    if (reward == null) return;
+    if (reward == null) return null;
     final now = appNowUtc();
     final zone = await _db.familyZoneId();
-    await _db.transaction(() async {
+    final written = await _db.transaction(() async {
       if (reward.needsOk) {
         await _insertRedemption(
           childId: childId,
@@ -84,7 +84,7 @@ class KidShopRepositoryImpl implements KidShopRepository {
           now: now,
           zone: zone,
         );
-        return;
+        return 'requested';
       }
       // Instant rewards are paid in coins at request time, so payment is a
       // precondition of the `approved` row (K08-BUG-1): two cards that are
@@ -104,7 +104,7 @@ class KidShopRepositoryImpl implements KidShopRepository {
           now: now,
           zone: zone,
         );
-        return;
+        return 'requested';
       }
       await _insertRedemption(
         childId: childId,
@@ -115,7 +115,9 @@ class KidShopRepositoryImpl implements KidShopRepository {
       );
       await (_db.update(_db.children)..where((c) => c.id.equals(childId)))
           .write(ChildrenCompanion(coins: Value(kid.coins - reward.coinPrice)));
+      return 'approved';
     });
+    return written;
   }
 
   Future<void> _insertRedemption({

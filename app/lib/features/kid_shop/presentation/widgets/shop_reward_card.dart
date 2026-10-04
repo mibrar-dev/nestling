@@ -106,18 +106,28 @@ class ShopRewardCard extends StatelessWidget {
         spacing: NestSpacing.gap6,
         children: [
           _ShopArt(icon: shopRewardIcon(item.icon)),
+          // `.k8-n` gets its OWN semantics node (K08-BUG-5). Without a
+          // boundary the grid's Column absorbs every card's name into one
+          // run — "30 min extra screen time, Pick Friday film, …" — so a
+          // screen-reader user hears the whole shop as a single item and can
+          // no longer tie a name to its own price or its own action. The price
+          // and the button already have nodes; the name was the last part of a
+          // card left without one.
           ConstrainedBox(
             constraints: const BoxConstraints(minHeight: _nameMinHeight),
             child: Center(
-              child: Text(
-                item.title,
-                style: NestType.h3(color: tokens.ink).copyWith(
-                  fontSize: _nameFontSize,
-                  height: _nameLineHeight / _nameFontSize,
+              child: Semantics(
+                container: true,
+                child: Text(
+                  item.title,
+                  style: NestType.h3(color: tokens.ink).copyWith(
+                    fontSize: _nameFontSize,
+                    height: _nameLineHeight / _nameFontSize,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
               ),
             ),
           ),
@@ -125,26 +135,37 @@ class ShopRewardCard extends StatelessWidget {
           // `.k8-note` only exists when the price is out of reach — the shop
           // never nags a child who is saving (DESIGN_SPEC §5 K08: "disabled
           // style + Save up! — not shaming").
+          //
+          // Its own node for the same reason as the name (K08-BUG-5): it is a
+          // sibling of the name, so without a boundary it climbs to the same
+          // stray grid-level node the six names used to share.
           if (!affordable)
-            Text(
-              '$shortBy $_moreToGoLabel',
-              style: NestType.kidCaption(color: tokens.ink2).copyWith(
-                fontSize: _noteFontSize,
-                height: _noteLineHeight / _noteFontSize,
+            Semantics(
+              container: true,
+              child: Text(
+                '$shortBy $_moreToGoLabel',
+                style: NestType.kidCaption(color: tokens.ink2).copyWith(
+                  fontSize: _noteFontSize,
+                  height: _noteLineHeight / _noteFontSize,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
           NestKidButton(
             label: affordable ? _getItLabel : _saveUpLabel,
-            // `.k8-get.off` (bg `--surface-2`, fg `--ink-2`, full opacity) has
-            // no `NestKidButton` colourway yet (SHARED_REQUEST, non-blocking):
-            // until it lands the unaffordable card uses the white colourway
-            // disabled (`onPressed: null`), per `1_plan.md` §g.
+            // `.k8-get.off` (bg `--surface-2`, fg `--ink-2`, full opacity) is
+            // the shared `muted` colourway, which renders at full opacity even
+            // when disabled — the one prop `SHARED_REQUEST.md` §1 asked for,
+            // landed on `main` in `shared_batch8` and required by
+            // `ORCHESTRATOR_NOTES.md` UPDATE (17:10). Replaces the
+            // `1_plan.md` §g fallback (`white` + `onPressed: null`), which read
+            // as washed out rather than the design's flat grey block. Still
+            // disabled, so no tap action is offered.
             color: affordable
                 ? NestKidButtonColor.leaf
-                : NestKidButtonColor.white,
+                : NestKidButtonColor.muted,
             minHeight: _getMinHeight,
             borderRadius: NestRadii.m,
             fontSize: _getFontSize,

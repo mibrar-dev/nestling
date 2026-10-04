@@ -112,6 +112,15 @@ class _FakeKidShopRepository implements KidShopRepository {
 
   int _watches = 0;
 
+  /// The items the fake serves (mirrors the `serveDemoShop` switch in
+  /// `watchActiveShop`), so `requestReward` can report the same written
+  /// status the real repository would for them. The balance race an instant
+  /// reward can lose is NOT modelled here — the real database covers it in
+  /// `k08_bugs_test.dart`.
+  List<ShopReward> get _servedItems => serveDemoShop
+      ? const <ShopReward>[_screen, _film, _bedtime, _baking, _cafe, _dinner]
+      : const <ShopReward>[];
+
   @override
   Stream<KidShopData> watchActiveShop() {
     _watches++;
@@ -120,26 +129,17 @@ class _FakeKidShopRepository implements KidShopRepository {
       return Stream<KidShopData>.error(Exception('shop down'));
     }
     return Stream<KidShopData>.value(
-      KidShopData(
-        childId: 'maya',
-        coins: 120,
-        items: serveDemoShop
-            ? const <ShopReward>[
-                _screen,
-                _film,
-                _bedtime,
-                _baking,
-                _cafe,
-                _dinner,
-              ]
-            : const <ShopReward>[],
-      ),
+      KidShopData(childId: 'maya', coins: 120, items: _servedItems),
     );
   }
 
   @override
-  Future<void> requestReward(String childId, String rewardId) async {
+  Future<String?> requestReward(String childId, String rewardId) async {
     requests.add((childId: childId, rewardId: rewardId));
+    for (final item in _servedItems) {
+      if (item.id == rewardId) return item.needsOk ? 'requested' : 'approved';
+    }
+    return null;
   }
 }
 
@@ -618,6 +618,56 @@ void main() {
           reason: 'a price is a reading, not a control',
         );
       }
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('every reward name is its own announcement (K08-BUG-5)', (
+      tester,
+    ) async {
+      // K08-BUG-5 regression, kept here as well as in
+      // `shop_reward_a11y_test.dart` so the rule has a proof in the file the
+      // UI layer owns: `.k8-n` carries a semantics container, so no single
+      // announcement ever runs two rewards together (which is what happened
+      // once the price became its own node and the name had not).
+      final semantics = tester.ensureSemantics();
+      await _pumpRoute(tester);
+
+      const titles = <String>[
+        '30 min extra screen time',
+        'Pick Friday film',
+        'Stay up 15 min later',
+        'Baking together',
+        'Trip to the park café',
+        'Choose dinner',
+      ];
+      for (final title in titles) {
+        expect(
+          find.bySemanticsLabel(title),
+          findsOneWidget,
+          reason: '"$title" must be announced on its own',
+        );
+      }
+      // The note is a sibling of the name, so it needs its own node too —
+      // otherwise it climbs to the same grid-level node the six names shared.
+      expect(find.bySemanticsLabel('30 more to go'), findsOneWidget);
+
+      final runs = <String>[];
+      for (final element in find.bySemanticsLabel(RegExp('.')).evaluate()) {
+        runs.add(
+          tester
+              .getSemantics(
+                find.byElementPredicate((c) => identical(c, element)),
+              )
+              .getSemanticsData()
+              .label,
+        );
+      }
+      expect(
+        runs.where((label) => titles.where(label.contains).length > 1),
+        isEmpty,
+        reason: 'one announcement must not read two different rewards',
+      );
       semantics.dispose();
       await disposeApp(tester);
     });

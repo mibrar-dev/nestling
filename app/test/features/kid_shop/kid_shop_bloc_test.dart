@@ -152,13 +152,21 @@ class _FakeKidShopRepository implements KidShopRepository {
   }
 
   @override
-  Future<void> requestReward(String childId, String rewardId) async {
+  Future<String?> requestReward(String childId, String rewardId) async {
     if (requestError != null) throw requestError!;
     if (writeDelay > Duration.zero) {
       await Future<void>.delayed(writeDelay);
     }
     requests.add((childId, rewardId));
+    // Mirrors the real repository: the written status, not the requested
+    // one. Tests override [writtenStatus] per id for the raced cases the
+    // seed cannot produce (an instant reward the balance stops covering).
+    return writtenStatus[rewardId] ?? 'requested';
   }
+
+  /// Per-id override for the status the write produces. Defaults to
+  /// `'requested'`; a test sets `'approved'` for the grants it needs.
+  final Map<String, String> writtenStatus = <String, String>{};
 }
 
 /// A bloc already showing the demo shop through a live stream, with every
@@ -401,8 +409,11 @@ void main() {
 
     blocTest<KidShopBloc, KidShopState>(
       'instant request toasts the enjoy copy',
-      build: () =>
-          KidShopBloc(repository: _FakeKidShopRepository(data: _demoData())),
+      build: () {
+        final repo = _FakeKidShopRepository(data: _demoData())
+          ..writtenStatus['r-baking'] = 'approved';
+        return KidShopBloc(repository: repo);
+      },
       seed: _loaded,
       act: (bloc) => bloc.add(const KidShopRewardRequested('r-baking')),
       expect: () {
@@ -411,6 +422,34 @@ void main() {
           loaded.copyWithRequestStarted('r-baking'),
           loaded.copyWithRequestFinished('r-baking', 'It’s yours — enjoy!'),
         ];
+      },
+    );
+
+    blocTest<KidShopBloc, KidShopState>(
+      'a raced instant request left requested toasts thumbs-up (K08-BUG-4)',
+      build: () {
+        // The K08-BUG-1 guard in the real repository: an instant reward the
+        // balance stops covering lands `requested`, and the toast must say
+        // so instead of announcing the reward as already owned.
+        final repo = _FakeKidShopRepository(data: _demoData())
+          ..writtenStatus['r-baking'] = 'requested';
+        return KidShopBloc(repository: repo);
+      },
+      seed: _loaded,
+      act: (bloc) => bloc.add(const KidShopRewardRequested('r-baking')),
+      expect: () {
+        final loaded = _loaded();
+        return <KidShopState>[
+          loaded.copyWithRequestStarted('r-baking'),
+          loaded.copyWithRequestFinished(
+            'r-baking',
+            'Mum will give it a thumbs-up soon.',
+          ),
+        ];
+      },
+      verify: (bloc) {
+        expect(bloc.state.notice, 'Mum will give it a thumbs-up soon.');
+        expect(bloc.state.noticeSeq, 1);
       },
     );
 

@@ -1,146 +1,131 @@
-# K08 · Reward shop — stage 2b build UI (iteration 2)
+# K08 · Reward shop — stage 2b build UI (iteration 3)
 
-Iteration 2 of the UI chunk. Scope unchanged: only
-`app/lib/features/kid_shop/presentation/views/**`,
-`presentation/widgets/**`, and the `view`/`widget`-named tests in
-`app/test/features/kid_shop/`. No `domain/`, `data/` or `bloc/` file touched —
-`2a_build_logic.md` was re-read before finishing (still "CONTRACT CHANGES:
-None"; the logic builder's own K08-BUG-1 fix landed in the data layer between
-iterations and my view needed no change for it: it consumes the same
-`watchActiveShop()` / request events).
+Scope as briefed: `app/lib/features/kid_shop/presentation/views/**` and
+`presentation/widgets/**`, plus the view/widget tests in
+`app/test/features/kid_shop/` (`reward_shop_view_test.dart`).
+No `domain/`, `data/`, `bloc/` or shared file was touched. No simulator was
+booted, installed on or driven; no whole-app `flutter test`; no
+`flutter clean`; `analysis_options.yaml` untouched.
 
-## FIXES_1 items owned by this stage
+## Summary
 
-`FIXES_1.md` carries five stage reports. The items that sit in the UI layer,
-and what happened to each:
+The iteration-2 build was already at the design's geometry (iteration-2 `5_ui`
+measured every band 0–6 at Δ0 and PASSed the ±2 px rule), so this iteration is
+one **behavioural UI fix** plus a **contract re-sync**, not a redesign. No
+pixel of layout, colour, radius or copy moved: the only change to the card is
+two `Semantics(container: true)` wrappers, which do not lay out.
 
-### K08-BUG-2 (major) — odd reward counts crashed the grid — FIXED
+## Fixed — K08-BUG-5 (FIXES_2 "From 3_test.md" item 2, minor, accessibility)
 
-`views/reward_shop_view.dart`, `_ShopGrid`: the odd trailing slot was filled
-with `const Spacer()`. `Spacer` **is** an `Expanded`, and it was already inside
-`Expanded`, so any 1/3/5-reward family threw
-`Incorrect use of ParentDataWidget … Competing ParentDataWidgets` and no grid
-laid out. Now `const SizedBox.shrink()` — the inert filler `1_plan.md` §(a)
-specified ("second `Expanded` with `SizedBox.shrink`"). The three proofs in
-`k08_bugs_test.dart` (five cards render with a legal empty cell; one card at
-full column width; the lone card still buys) now pass.
+**"Every reward name merges into one announcement."** With the price made its
+own node in iteration 2 (K08-BUG-3's fix), `.k8-n` was the last part of a card
+without a semantics boundary, so the grid `Column` absorbed all six names (plus
+the café's note) into a single run: a screen-reader user heard the whole shop
+as one item and could not tie a name to its own "50 coins" or its own
+"Get …" button.
 
-### K08-BUG-3 (minor) — the card price was announced as a bare number — FIXED
+Fix (`shop_reward_card.dart`), mirroring the fix the price already documents:
 
-`widgets/shop_reward_card.dart`, `_ShopPrice`: the price `Text` now renders
-inside `Semantics(label: '$price coins', container: true,
-excludeSemantics: true)`, mirroring `NestCoinPill` (`nest_coin_pill.dart:64`).
-`container: true` is the load-bearing part: without it the label merely merges
-into the surrounding card node, and the screen reader reads one long run
-("30 min extra screen time|50 coins|Pick Friday film|80 coins|…"). With it each
-card exposes its own `"50 coins"` node, no tap action — verified by walking the
-live semantics tree during the fix. The proof in `k08_bugs_test.dart` passes.
+- the `.k8-n` name is wrapped in `Semantics(container: true)`, so it announces
+  as its own node with the same copy and the same rect;
+- the `.k8-note` gets the same wrapper. The note is the name's **sibling**, so
+  without its own boundary it would simply have moved into the stray grid-level
+  node the six names used to share — the merge would still exist, one level up.
+  It now reads as its own short node ("30 more to go") between the price and
+  the (absent) action, which is exactly the order the card reads in.
 
-### UI-check deviations 1 + 2 (major) — wrong reward glyphs — FIXED
+Neither wrapper is interactive, so no `SemanticsAction.tap` is owed on them
+(the ACCESSIBILITY-ACTIONS rule only binds controls); `container: true` without
+`excludeSemantics: true`, so the Text's own label is what gets announced — no
+label is duplicated and no visual copy changed.
 
-`widgets/shop_reward_icons.dart` was a screen-local map (documented as a
-deliberate delta in iteration 1) that predated the shared map. It is now a thin
-forwarder to the shared
-`rewardIconFor(key, audience: NestAudience.kid)`
-(`core/design_system/components/reward_icons.dart`, landed on `main` with
-`shared/audience_glyphs`), which per its own doc-comment carries the exact
-`K08-shop.html` `.k8-art` drawings:
+Rejected alternatives, for the record:
 
-- `cake` → `rewardCake` (covered basket/bowl) — was `chefHat`, the
-  UI check's "wrong object" finding.
-- `coffee` → `rewardCoffee` (domed takeaway cup) — was the old `cafe` sit-down
-  mug with handle, steam and saucer, the UI check's other "wrong drawing".
-- `film` → `rewardFilm`, `moon` → `rewardMoon`, `plate` → `rewardPlate`, and
-  `tv` → `rewardTv` — the design's own drawings rather than the old look-alikes
-  (`filmStrip`, `moon`, `pizza`), clearing UI-check deviation 3 (the pizza
-  drawing variance) as a bonus.
+- `MergeSemantics` per card — it would make the card's node
+  `"Trip to the park café\n30 more to go"`, which breaks the exact-label proof
+  and merges reading with content;
+- wrapping the whole card — same problem, and it would swallow the price and
+  button nodes K08-BUG-3 just bought;
+- `excludeSemantics` on the name — silently drops the one string that carries
+  the card's meaning, which is the opposite of the fix.
 
-The parent P14 screen keeps its own audience branch inside the shared map, so
-nothing in P14 changed. This is a build-stage swap, per
-`ORCHESTRATOR_NOTES.md` (15:08) — "switch once main has it" — now done.
+## Contract re-sync (2a, iteration 3)
 
-### UI-check deviation 4 (café card taller) — no change, database wins
+`2a_build_logic.md` CONTRACT CHANGES: `KidShopRepository.requestReward` now
+returns `Future<String?>` — `'approved'` / `'requested'` / `null` — so the toast
+can be honest (K08-BUG-4). **BLoC events and state shapes are unchanged**, so
+no view code needed to move: the view still dispatches
+`KidShopRewardRequested(item.id)` and toasts `state.notice` on `noticeSeq`.
 
-The app's 2-line `Trip to the park café` (DB) + the `30 more to go` note vs the
-design's 1-line `Park café trip` is DATA OVER MOCKS, not a defect; the UI check
-recorded it as accepted and it is still the intended behaviour.
+2a touched one file of mine to keep the tree compiling:
+`reward_shop_view_test.dart`'s `_FakeKidShopRepository` (the `Future<String?>`
+signature + a `_servedItems` getter so the fake reports the same status the real
+repository would). I kept it — it is correct, minimal and documented by 2a — and
+added my test alongside it; the 2b view suite passes unmodified against it.
 
-### UI-check deviation 7 (`.k8-get.off` not comparable) — still the filed request
+## Tests
 
-`SHARED_REQUEST.md` §1 stands (non-blocking). The unaffordable card keeps the
-`NestKidButtonColor.white` + `onPressed: null` fallback until a colourway
-lands. Note for the next UI check: with the glyphs now correct, the row-3 cards
-shift back to the design's heights, so that card's off-state button is worth
-re-measuring there.
+`reward_shop_view_test.dart` 67 → **68**: new
+`every reward name is its own announcement (K08-BUG-5)`, kept in the file the UI
+layer owns so the rule has a proof here as well as in the test stage's
+`shop_reward_a11y_test.dart` (two files, one rule, no duplication of intent).
+It asserts each of the six DB titles is its own label, that the note is its own
+node, and that no reachable label contains two titles.
 
-### K08-BUG-1 (major, money integrity) — not UI-owned
+The three K08-BUG-5 proofs in `shop_reward_a11y_test.dart` (owned by the test
+stage) now **pass** — I only changed the widget, not that file.
 
-The data-layer fix was already in the merged tree when I arrived (payment is
-now a precondition of an `approved` row, inside the transaction — the P14
-pattern). Both proofs in `k08_bugs_test.dart` pass, including the sibling
-regression ("two needs-OK cards both write, once each"). No view change needed:
-the second instant tap merely leaves a `requested` row now, which the card's
-existing disabled semantics already handle.
+## Verification (no simulator, no whole-app run)
 
-### The two `kid_home_view_test.dart` failures — not UI-ownable
+```
+dart format lib/features/kid_shop test/features/kid_shop
+  Formatted 15 files (0 changed)
 
-Still filed in `SHARED_REQUEST.md` §2 (they assert the foundation placeholder's
-`K08 Reward shop`). They are the only two failures left in the whole suite and
-cannot be fixed from this worktree (RULES §1: `test/features/kid_home/**` is
-another feature's). I extended §2 with an iteration-2 status note.
+flutter analyze lib/features/kid_shop test/features/kid_shop
+  No issues found! (ran in 3.0s)
 
-### Un-skipped bug tests — all pass, none skipped
+flutter test --timeout 120s test/features/kid_shop/reward_shop_view_test.dart
+                                                  test/features/kid_shop/reward_shop_widget_geometry_test.dart
+  00:04 +91: All tests passed!
 
-`test/features/kid_shop/k08_bugs_test.dart` has **no `skip:` marker** anywhere
-(the only grep hit is its own comment saying so) and is now **7/7 green**.
+flutter test --timeout 120s test/features/kid_shop/shop_reward_a11y_test.dart
+  00:01 +7: All tests passed!          (3 of them the K08-BUG-5 proofs)
 
-One honest finding while un-skipping: the K08-BUG-3 proof had never actually
-run. It pumped `NestlingApp` without `setUpTestScope()`, so GetIt had no
-`AppModeController`, the widget tree never built, and every finder in the file
-returned "0 widgets" for a reason unrelated to the label — which is also why
-two "Sorted" proofs in `6_bugs.md` had looked green. This is a test-file bug,
-not a screen bug, so I fixed it in its own file (one `setUpTestScope()` call,
-with a comment): the file now builds the real tree and all seven proofs are
-meaningful. I could not leave it broken and still claim the proofs pass.
+flutter test --timeout 120s test/features/kid_shop/     (feature sweep, read-only)
+  00:03 +166: All tests passed!        (bloc 35, repository 18, view 68,
+                                         geometry 24, icons 7, a11y 7, bugs 7)
+```
 
-### UI-check deviation 6 (home-indicator mock pill) and 5 (status bar)
+The whole K08 feature is green, including 2a's K08-BUG-4 proof, which was the
+feature's last failing test. The 24 geometry assertions are the regression
+proof that the semantics wrappers moved nothing: every card top, column width,
+56 disc, 20 price row, 56 button and the 20 px gutters measure exactly as
+before.
 
-Accepted/skip per the orchestrator (the OS draws both); no action.
-
-## Also in this iteration
-
-- `reward_shop_view_test.dart` +1 test (48 testWidgets blocks in the file,
-  shared with the test stage's matrix): every card price is announced as
-  `"N coins"`, has no tap action, and the six per-card nodes survive the glyph
-  swap — the K08-BUG-3 regression net, at the screen level.
-- Deleted my two throwaway probe test files (`probe_*_view_test.dart`) after
-  they served their purpose; nothing references them.
-- Re-checked the ALIGNMENT owner rule against the new semantics wrapper: the
-  price row's `Semantics` wraps the same `Row`, so the coin+label group is
-  still centred on the card (geometry tests unchanged and green: art centres,
-  price 20-tall row at +121, button 56 at +147).
-
-## Verification
-
-- `flutter analyze lib/features/kid_shop test/features/kid_shop` → **No issues
-  found** (no ignores, nothing weakened).
-- `dart format lib/features/kid_shop test/features/kid_shop` → clean.
-- `flutter test --timeout 120s test/features/kid_shop/` → **143 tests, all
-  passed**, zero skips: `kid_shop_bloc_test.dart` 34, `kid_shop_repository_test.dart`
-  17, `reward_shop_view_test.dart` 67, `reward_shop_widget_geometry_test.dart`
-  18, `k08_bugs_test.dart` 7.
-- Whole-app `flutter test` and the simulator stay with the integrator and
-  `5_ui` respectively — not run here (and only E7D5555E-378A-49DF-AAEE-16677AF4B9DB
-  may be booted, by `5_ui`).
+Rule audit: no `google_fonts` / `GoogleFonts` (the only grep hit in the feature
+is the test header saying so), no `DateTime.now()` (clock stays on
+`appNowUtc()`), no id minted in the view, no `Wrap`/`Row` chip rows on this
+screen, `NestBalancedText` still on the `.kid-title` heading, reward icons still
+forward to `rewardIconFor(audience: NestAudience.kid)`, copy untouched
+(character-for-character against `K08-shop.html`), no bare colour or size
+literal introduced — the wrappers add no values at all.
 
 ## LEFT FOR NEXT ITERATION
 
-1. `5_ui` re-check: the glyph fixes change three art discs (`cake`, `coffee`,
-   `plate`) — re-shoot light + dark and re-run `compare.py`; expect band 4–6 to
-   drop. The `.k8-get.off` button should now be measurable in row 3.
-2. Land the `SHARED_REQUEST.md` §2 two-line fix on `main` (restores a fully
-   green whole-app suite).
-3. Swap the `Save up!` colourway when a `NestKidButton` off-colourway lands
-   (`SHARED_REQUEST.md` §1, non-blocking).
+1. **`NestKidButtonColor.muted` for the "Save up!" button** — the one item of
+   `ORCHESTRATOR_NOTES.md` UPDATE (17:10) that is still code-blocked. I checked
+   the tree: neither `main` nor `shared/shared_batch8` has it yet
+   (`enum NestKidButtonColor { leaf, coin, sky, peach, lilac, white }` on both),
+   so the documented fallback (`NestKidButtonColor.white` + `onPressed: null`,
+   `1_plan.md` §g / `SHARED_REQUEST.md` §1) stands. When the batch merges this
+   is one prop on `shop_reward_card.dart`; it is invisible in the UI shots today
+   because the card is below the fold at scroll 0.
+2. **Not mine, still open** — `SHARED_REQUEST.md` §2: the two
+   `test/features/kid_home/kid_home_view_test.dart` lines that assert the
+   foundation placeholder copy `K08 Reward shop`. Out of RULES §1 for this
+   worktree; needs one orchestrator edit.
+3. **Next `5_ui`**: re-shoot light + dark. Nothing in this iteration moves a
+   pixel, but 2a's toast copy and the shared glyphs are new since the last
+   compare, so bands 4–7 should be re-measured as planned.
 
 VERDICT: PASS
