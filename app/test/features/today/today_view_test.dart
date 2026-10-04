@@ -13,6 +13,7 @@ import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
+import 'package:nestling/features/quests/presentation/views/quest_editor_view.dart';
 import 'package:nestling/features/today/domain/entities/child_day_summary.dart';
 import 'package:nestling/features/today/domain/entities/today_item.dart';
 import 'package:nestling/features/today/domain/today_repository.dart';
@@ -88,6 +89,15 @@ Future<void> _pumpTodayView(
 /// Current go_router location for a widget already on screen after a tap.
 Uri _currentUri(WidgetTester tester, Finder anchor) =>
     GoRouter.of(tester.element(anchor)).state.uri;
+
+/// The pushed page's own URI, read from the router (not from a widget).
+///
+/// The pushed screen may replace its placeholder view at any time, so tests
+/// that need to be *on* it assert the location — the durable contract — never
+/// a view title (`docs/screens/_shared/router_push_test_fix_REPORT.md` §4).
+/// `pushedPath` is the path-only form; this keeps the query string.
+Uri _pushedUri(WidgetTester tester) =>
+    GoRouter.of(tester.element(find.byType(Navigator).first)).state.uri;
 
 /// Resizes the test surface and applies a text scale, then settles a frame.
 Future<void> _resize(WidgetTester tester, double width, double scale) async {
@@ -232,8 +242,8 @@ void main() {
       await tester.tap(find.bySemanticsLabel('New quest'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
-      expect(find.text('P09 Quest editor'), findsOneWidget);
-      final uri = _currentUri(tester, find.text('P09 Quest editor'));
+      expect(pushedPath(tester), '/quest-editor');
+      final uri = _pushedUri(tester);
       expect(uri.path, '/quest-editor');
       expect(uri.queryParameters.containsKey('questId'), isFalse);
 
@@ -247,8 +257,8 @@ void main() {
       await tester.tap(find.text('Empty the dishwasher'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
-      expect(find.text('P09 Quest editor'), findsOneWidget);
-      final uri = _currentUri(tester, find.text('P09 Quest editor'));
+      expect(pushedPath(tester), '/quest-editor');
+      final uri = _pushedUri(tester);
       expect(uri.path, '/quest-editor');
       expect(uri.queryParameters['questId'], 'q-dishwasher');
 
@@ -358,11 +368,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
-      expect(find.text('P09 Quest editor'), findsOneWidget);
-      expect(
-        _currentUri(tester, find.text('P09 Quest editor')).path,
-        '/quest-editor',
-      );
+      expect(pushedPath(tester), '/quest-editor');
+      expect(_pushedUri(tester).queryParameters.isEmpty, isTrue);
 
       await disposeApp(tester);
     });
@@ -954,14 +961,8 @@ void main() {
       await tester.tap(find.text('Empty the dishwasher'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
-      expect(find.text('P09 Quest editor'), findsOneWidget);
-      expect(
-        _currentUri(
-          tester,
-          find.text('P09 Quest editor'),
-        ).queryParameters['questId'],
-        'q-dishwasher',
-      );
+      expect(pushedPath(tester), '/quest-editor');
+      expect(_pushedUri(tester).queryParameters['questId'], 'q-dishwasher');
 
       final popped = await tester.binding.handlePopRoute();
       await tester.pump();
@@ -1257,10 +1258,9 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
 
-      expect(
-        find.text('P09 Quest editor', skipOffstage: false),
-        findsOneWidget,
-      );
+      // Exactly one editor page: a second tap must not stack a second
+      // `/quest-editor` route. Counted by type, not by a title string.
+      expect(find.byType(QuestEditorView, skipOffstage: false), findsOneWidget);
 
       expect(await tester.binding.handlePopRoute(), isTrue);
       await tester.pump();
@@ -1277,7 +1277,7 @@ void main() {
       await tester.tap(find.text('Empty the dishwasher'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
-      expect(find.text('P09 Quest editor'), findsOneWidget);
+      expect(pushedPath(tester), '/quest-editor');
 
       expect(await tester.binding.handlePopRoute(), isTrue);
       await tester.pump();
@@ -1288,7 +1288,7 @@ void main() {
       await tester.tap(find.text('Empty the dishwasher'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
-      expect(find.text('P09 Quest editor'), findsOneWidget);
+      expect(pushedPath(tester), '/quest-editor');
 
       await disposeApp(tester);
     });

@@ -573,7 +573,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(pushedPath(tester), QuestsRoutePaths.editor);
-      await tester.pageBack();
+      await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       expect(currentPath(tester), QuestsRoutePaths.library);
 

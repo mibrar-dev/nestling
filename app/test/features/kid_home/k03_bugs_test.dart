@@ -1056,8 +1056,19 @@ void main() {
     await tester.tap(lock);
     await tester.tap(lock);
     await _settle(tester);
-    expect(find.text('P17 Parental gate'), findsOneWidget);
-    await tester.pageBack();
+    // Route assertion, not placeholder copy: P17 replaces the scaffold
+    // title with the real gate, but the path is stable (RULES §7/shared
+    // test_scope.dart).
+    expect(pushedPath(tester), '/parental-gate');
+    // The real P17 gate has no AppBar back button — its only exit is
+    // "Back to Pip". Tap it when present; the scaffold fallback (main
+    // today) still pops via the AppBar back button.
+    final backToPip = find.text('Back to Pip');
+    if (backToPip.evaluate().isNotEmpty) {
+      await tester.tap(backToPip);
+    } else {
+      await tester.pageBack();
+    }
     await _settle(tester);
     expect(
       find.text('Hi Maya!'),
@@ -1528,7 +1539,9 @@ void main() {
     final lock = find.semantics.byLabel('Grown-ups');
     tester.semantics.performAction(lock, SemanticsAction.tap);
     await _settle(tester);
-    expect(find.text('P17 Parental gate'), findsOneWidget);
+    // Route assertion, not placeholder copy: P17 replaces the scaffold
+    // title with the real gate, but the path is stable.
+    expect(pushedPath(tester), '/parental-gate');
     semantics.dispose();
     await disposeApp(tester);
   });

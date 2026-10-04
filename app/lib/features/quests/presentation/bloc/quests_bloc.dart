@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' show log;
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:nestling/features/quests/domain/entities/quest.dart';
@@ -9,7 +10,16 @@ import 'package:nestling/features/quests/presentation/bloc/quests_state.dart';
 class QuestsBloc extends Bloc<QuestsEvent, QuestsState> {
   new({required this._repository}) : super(const QuestsState()) {
     on<QuestsLoadRequested>(_onLoadRequested);
+    on<QuestsCreateRequested>(_onCreateRequested);
+    on<QuestsUpdateRequested>(_onUpdateRequested);
+    on<QuestsDeleteRequested>(_onDeleteRequested);
   }
+
+  /// Parent-safe save-failure copy (review finding 4): programmer errors
+  /// must never reach the screen verbatim. The technical error is logged
+  /// under `quests` instead.
+  static const String saveFailedMessage =
+      'Could not save the quest. Try again.';
 
   final QuestsRepository _repository;
 
@@ -34,6 +44,88 @@ class QuestsBloc extends Bloc<QuestsEvent, QuestsState> {
         errorMessage: error.toString(),
       ),
     );
+  }
+
+  Future<void> _onCreateRequested(
+    QuestsCreateRequested event,
+    Emitter<QuestsState> emit,
+  ) async {
+    emit(
+      state.copyWith(
+        editorStatus: QuestEditorStatus.saving,
+        clearEditorError: true,
+      ),
+    );
+    try {
+      await _repository.createQuest(event.quest);
+      emit(state.copyWith(editorStatus: QuestEditorStatus.saved));
+    } on Object catch (error) {
+      emit(
+        state.copyWith(
+          editorStatus: QuestEditorStatus.failure,
+          editorError: _editorError(error),
+        ),
+      );
+    }
+  }
+
+  Future<void> _onUpdateRequested(
+    QuestsUpdateRequested event,
+    Emitter<QuestsState> emit,
+  ) async {
+    emit(
+      state.copyWith(
+        editorStatus: QuestEditorStatus.saving,
+        clearEditorError: true,
+      ),
+    );
+    try {
+      await _repository.updateQuest(event.quest);
+      emit(state.copyWith(editorStatus: QuestEditorStatus.saved));
+    } on Object catch (error) {
+      emit(
+        state.copyWith(
+          editorStatus: QuestEditorStatus.failure,
+          editorError: _editorError(error),
+        ),
+      );
+    }
+  }
+
+  Future<void> _onDeleteRequested(
+    QuestsDeleteRequested event,
+    Emitter<QuestsState> emit,
+  ) async {
+    emit(
+      state.copyWith(
+        editorStatus: QuestEditorStatus.saving,
+        clearEditorError: true,
+      ),
+    );
+    try {
+      await _repository.deleteQuest(event.id);
+      emit(state.copyWith(editorStatus: QuestEditorStatus.saved));
+    } on Object catch (error) {
+      emit(
+        state.copyWith(
+          editorStatus: QuestEditorStatus.failure,
+          editorError: _editorError(error),
+        ),
+      );
+    }
+  }
+
+  /// Maps a save failure to the toast copy. Operational failures (offline,
+  /// disk full) surface the repository message — the states suite pins
+  /// that — but an [ArgumentError] is a programmer error (today only the
+  /// coins range guard, unreachable from the clamped editor) and the
+  /// parent gets [saveFailedMessage] while the detail goes to the log.
+  String _editorError(Object error) {
+    if (error is ArgumentError) {
+      log('quest save rejected: $error', name: 'quests');
+      return QuestsBloc.saveFailedMessage;
+    }
+    return error.toString();
   }
 }
 

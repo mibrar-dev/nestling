@@ -439,11 +439,16 @@ void main() {
         ideas: _ideas,
         errorMessage: 'boom',
       );
+      // P09 merge: props additionally carries the editor save-attempt fields.
+      // P10's four entries stay first and verbatim; the two P09 entries are
+      // appended so equality still distinguishes save attempts.
       expect(state.props, <Object?>[
         QuestsStatus.failure,
         _items,
         _ideas,
         'boom',
+        QuestEditorStatus.initial,
+        null,
       ]);
     });
   });

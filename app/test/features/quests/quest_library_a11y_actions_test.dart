@@ -236,7 +236,7 @@ void main() {
       expect(uri.queryParameters['idea'], 'idea-bed');
 
       // …and back returns to a filtered-free library.
-      await tester.pageBack();
+      await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       expect(currentPath(tester), QuestsRoutePaths.library);
 
@@ -265,7 +265,7 @@ void main() {
           reason: title,
         );
 
-        await tester.pageBack();
+        await tester.binding.handlePopRoute();
         await tester.pumpAndSettle();
       }
 
@@ -282,7 +282,7 @@ void main() {
       // (P09 owns the save). The Active count stays at the seeded 12.
       _performTap(tester, 'Add Make your bed');
       await tester.pumpAndSettle();
-      await tester.pageBack();
+      await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
 
       expect(find.text('Active (12)'), findsOneWidget);

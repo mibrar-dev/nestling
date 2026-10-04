@@ -79,6 +79,7 @@ extra care (bloc/entity edits will conflict).
 - Pip look (`pip_style/skin/accessory/stage`) comes from the child's row
   via `PipRepository.watchProfile`; feed it into
   `PipAvatar(style/stage/mood/skin/accessory/inNest)`.
+- Ids are newId(prefix) (uuid); never derive ids from the clock.
 
 ## 5. Launch flags (every screen loop uses these)
 

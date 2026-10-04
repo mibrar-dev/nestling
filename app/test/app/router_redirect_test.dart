@@ -117,4 +117,100 @@ void main() {
       });
     }
   });
+
+  // Kid trial gate (shared/kid_trial_gate): with an expired trial in kid
+  // mode the router used to send everything to /paywall, which is
+  // parent-only in kid mode and bounced to /parental-gate, which hit the
+  // trial branch again — GoException "redirect loop" and go_router's error
+  // page. Kids now funnel to the gate (exempt from the trial branch);
+  // passing it flips to parent mode, where the trial branch fires.
+  group('kid trial gate (shared/kid_trial_gate)', () {
+    Future<void> expireTrialAndEnterKidMode() async {
+      final session = GetIt.instance<AppSession>();
+      await session.setSubscription('expired');
+      await session.refresh();
+      expect(session.trialExpired, isTrue);
+      GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+      await session.setAppMode('kid');
+      await session.refresh();
+    }
+
+    for (final route in const <String>[
+      '/kid-home',
+      '/who-is-playing',
+      '/pip',
+      '/paywall',
+      '/today',
+    ]) {
+      testWidgets('kid mode + expired trial sends $route to the gate', (
+        tester,
+      ) async {
+        await setUpTestScope();
+        await expireTrialAndEnterKidMode();
+
+        await pumpAppRoute(tester, route);
+
+        // Route assertions only (never gate copy): P17 replaces the
+        // scaffold title, but the path is stable. Before the fix this
+        // landed on go_router's error page ('Page Not Found' +
+        // 'GoException: redirect loop detected
+        // /paywall => /parental-gate => /paywall').
+        expect(currentPath(tester), '/parental-gate');
+        expect(find.text('Page Not Found'), findsNothing);
+        expect(tester.takeException(), isNull);
+        await disposeApp(tester);
+      });
+    }
+
+    testWidgets(
+      'passing the gate with an expired trial lands the parent on the '
+      'paywall',
+      (tester) async {
+        await setUpTestScope();
+        await expireTrialAndEnterKidMode();
+
+        await pumpAppRoute(tester, '/kid-home');
+        expect(currentPath(tester), '/parental-gate');
+
+        // What the real P17 gate does on a correct answer: flip to parent
+        // mode. The trial branch then fires for the parent.
+        GetIt.instance<AppModeController>().selectMode(AppMode.parent);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+
+        expect(currentPath(tester), '/paywall');
+        expect(tester.takeException(), isNull);
+        await disposeApp(tester);
+      },
+    );
+
+    testWidgets('kid mode + active trial keeps kid screens open', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      final session = GetIt.instance<AppSession>();
+      expect(session.trialExpired, isFalse);
+      GetIt.instance<AppModeController>().selectMode(AppMode.kid);
+      await session.setAppMode('kid');
+      await session.refresh();
+
+      await pumpAppRoute(tester, '/kid-home');
+      expect(currentPath(tester), '/kid-home');
+      await disposeApp(tester);
+    });
+
+    testWidgets('parent mode + expired trial still goes to the paywall', (
+      tester,
+    ) async {
+      await setUpTestScope();
+      final session = GetIt.instance<AppSession>();
+      await session.setSubscription('expired');
+      await session.refresh();
+      expect(session.trialExpired, isTrue);
+
+      await pumpAppRoute(tester, '/kid-home');
+      expect(currentPath(tester), '/paywall');
+      await disposeApp(tester);
+    });
+  });
 }

@@ -580,6 +580,15 @@ class $MembersTable extends Members with TableInfo<$MembersTable, Member> {
     requiredDuringInsert: false,
     defaultValue: const Constant('active'),
   );
+  static const VerificationMeta _emailMeta = const VerificationMeta('email');
+  @override
+  late final GeneratedColumn<String> email = GeneratedColumn<String>(
+    'email',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -587,6 +596,7 @@ class $MembersTable extends Members with TableInfo<$MembersTable, Member> {
     name,
     role,
     inviteStatus,
+    email,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -636,6 +646,12 @@ class $MembersTable extends Members with TableInfo<$MembersTable, Member> {
         ),
       );
     }
+    if (data.containsKey('email')) {
+      context.handle(
+        _emailMeta,
+        email.isAcceptableOrUnknown(data['email']!, _emailMeta),
+      );
+    }
     return context;
   }
 
@@ -665,6 +681,10 @@ class $MembersTable extends Members with TableInfo<$MembersTable, Member> {
         DriftSqlType.string,
         data['${effectivePrefix}invite_status'],
       )!,
+      email: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}email'],
+      ),
     );
   }
 
@@ -680,12 +700,14 @@ class Member extends DataClass implements Insertable<Member> {
   final String name;
   final String role;
   final String inviteStatus;
+  final String? email;
   const Member({
     required this.id,
     required this.familyId,
     required this.name,
     required this.role,
     required this.inviteStatus,
+    this.email,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -695,6 +717,9 @@ class Member extends DataClass implements Insertable<Member> {
     map['name'] = Variable<String>(name);
     map['role'] = Variable<String>(role);
     map['invite_status'] = Variable<String>(inviteStatus);
+    if (!nullToAbsent || email != null) {
+      map['email'] = Variable<String>(email);
+    }
     return map;
   }
 
@@ -705,6 +730,9 @@ class Member extends DataClass implements Insertable<Member> {
       name: Value(name),
       role: Value(role),
       inviteStatus: Value(inviteStatus),
+      email: email == null && nullToAbsent
+          ? const Value.absent()
+          : Value(email),
     );
   }
 
@@ -719,6 +747,7 @@ class Member extends DataClass implements Insertable<Member> {
       name: serializer.fromJson<String>(json['name']),
       role: serializer.fromJson<String>(json['role']),
       inviteStatus: serializer.fromJson<String>(json['inviteStatus']),
+      email: serializer.fromJson<String?>(json['email']),
     );
   }
   @override
@@ -730,6 +759,7 @@ class Member extends DataClass implements Insertable<Member> {
       'name': serializer.toJson<String>(name),
       'role': serializer.toJson<String>(role),
       'inviteStatus': serializer.toJson<String>(inviteStatus),
+      'email': serializer.toJson<String?>(email),
     };
   }
 
@@ -739,12 +769,14 @@ class Member extends DataClass implements Insertable<Member> {
     String? name,
     String? role,
     String? inviteStatus,
+    Value<String?> email = const Value.absent(),
   }) => Member(
     id: id ?? this.id,
     familyId: familyId ?? this.familyId,
     name: name ?? this.name,
     role: role ?? this.role,
     inviteStatus: inviteStatus ?? this.inviteStatus,
+    email: email.present ? email.value : this.email,
   );
   Member copyWithCompanion(MembersCompanion data) {
     return Member(
@@ -755,6 +787,7 @@ class Member extends DataClass implements Insertable<Member> {
       inviteStatus: data.inviteStatus.present
           ? data.inviteStatus.value
           : this.inviteStatus,
+      email: data.email.present ? data.email.value : this.email,
     );
   }
 
@@ -765,13 +798,15 @@ class Member extends DataClass implements Insertable<Member> {
           ..write('familyId: $familyId, ')
           ..write('name: $name, ')
           ..write('role: $role, ')
-          ..write('inviteStatus: $inviteStatus')
+          ..write('inviteStatus: $inviteStatus, ')
+          ..write('email: $email')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, familyId, name, role, inviteStatus);
+  int get hashCode =>
+      Object.hash(id, familyId, name, role, inviteStatus, email);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -780,7 +815,8 @@ class Member extends DataClass implements Insertable<Member> {
           other.familyId == this.familyId &&
           other.name == this.name &&
           other.role == this.role &&
-          other.inviteStatus == this.inviteStatus);
+          other.inviteStatus == this.inviteStatus &&
+          other.email == this.email);
 }
 
 class MembersCompanion extends UpdateCompanion<Member> {
@@ -789,6 +825,7 @@ class MembersCompanion extends UpdateCompanion<Member> {
   final Value<String> name;
   final Value<String> role;
   final Value<String> inviteStatus;
+  final Value<String?> email;
   final Value<int> rowid;
   const MembersCompanion({
     this.id = const Value.absent(),
@@ -796,6 +833,7 @@ class MembersCompanion extends UpdateCompanion<Member> {
     this.name = const Value.absent(),
     this.role = const Value.absent(),
     this.inviteStatus = const Value.absent(),
+    this.email = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   MembersCompanion.insert({
@@ -804,6 +842,7 @@ class MembersCompanion extends UpdateCompanion<Member> {
     required String name,
     this.role = const Value.absent(),
     this.inviteStatus = const Value.absent(),
+    this.email = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        familyId = Value(familyId),
@@ -814,6 +853,7 @@ class MembersCompanion extends UpdateCompanion<Member> {
     Expression<String>? name,
     Expression<String>? role,
     Expression<String>? inviteStatus,
+    Expression<String>? email,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -822,6 +862,7 @@ class MembersCompanion extends UpdateCompanion<Member> {
       if (name != null) 'name': name,
       if (role != null) 'role': role,
       if (inviteStatus != null) 'invite_status': inviteStatus,
+      if (email != null) 'email': email,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -832,6 +873,7 @@ class MembersCompanion extends UpdateCompanion<Member> {
     Value<String>? name,
     Value<String>? role,
     Value<String>? inviteStatus,
+    Value<String?>? email,
     Value<int>? rowid,
   }) {
     return MembersCompanion(
@@ -840,6 +882,7 @@ class MembersCompanion extends UpdateCompanion<Member> {
       name: name ?? this.name,
       role: role ?? this.role,
       inviteStatus: inviteStatus ?? this.inviteStatus,
+      email: email ?? this.email,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -862,6 +905,9 @@ class MembersCompanion extends UpdateCompanion<Member> {
     if (inviteStatus.present) {
       map['invite_status'] = Variable<String>(inviteStatus.value);
     }
+    if (email.present) {
+      map['email'] = Variable<String>(email.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -876,6 +922,7 @@ class MembersCompanion extends UpdateCompanion<Member> {
           ..write('name: $name, ')
           ..write('role: $role, ')
           ..write('inviteStatus: $inviteStatus, ')
+          ..write('email: $email, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -8771,6 +8818,7 @@ typedef $$MembersTableCreateCompanionBuilder = MembersCompanion Function({
   required String name,
   Value<String> role,
   Value<String> inviteStatus,
+  Value<String?> email,
   Value<int> rowid,
 });
 typedef $$MembersTableUpdateCompanionBuilder = MembersCompanion Function({
@@ -8779,6 +8827,7 @@ typedef $$MembersTableUpdateCompanionBuilder = MembersCompanion Function({
   Value<String> name,
   Value<String> role,
   Value<String> inviteStatus,
+  Value<String?> email,
   Value<int> rowid,
 });
 
@@ -8830,6 +8879,11 @@ class $$MembersTableFilterComposer
 
   ColumnFilters<String> get inviteStatus => $composableBuilder(
     column: $table.inviteStatus,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get email => $composableBuilder(
+    column: $table.email,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8886,6 +8940,11 @@ class $$MembersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get email => $composableBuilder(
+    column: $table.email,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$FamiliesTableOrderingComposer get familyId {
     final $$FamiliesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -8932,6 +8991,9 @@ class $$MembersTableAnnotationComposer
     column: $table.inviteStatus,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get email =>
+      $composableBuilder(column: $table.email, builder: (column) => column);
 
   $$FamiliesTableAnnotationComposer get familyId {
     final $$FamiliesTableAnnotationComposer composer = $composerBuilder(
@@ -8990,6 +9052,7 @@ class $$MembersTableTableManager
                 Value<String> name = const Value.absent(),
                 Value<String> role = const Value.absent(),
                 Value<String> inviteStatus = const Value.absent(),
+                Value<String?> email = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => MembersCompanion(
                 id: id,
@@ -8997,6 +9060,7 @@ class $$MembersTableTableManager
                 name: name,
                 role: role,
                 inviteStatus: inviteStatus,
+                email: email,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -9006,6 +9070,7 @@ class $$MembersTableTableManager
                 required String name,
                 Value<String> role = const Value.absent(),
                 Value<String> inviteStatus = const Value.absent(),
+                Value<String?> email = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => MembersCompanion.insert(
                 id: id,
@@ -9013,6 +9078,7 @@ class $$MembersTableTableManager
                 name: name,
                 role: role,
                 inviteStatus: inviteStatus,
+                email: email,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

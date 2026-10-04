@@ -1244,7 +1244,9 @@ void main() {
       expect(find.bySemanticsLabel('Grown-ups'), findsOneWidget);
       await tester.tap(find.bySemanticsLabel('Grown-ups'));
       await _settleRoute(tester);
-      expect(find.text('P17 Parental gate'), findsOneWidget);
+      // Route assertion, not placeholder copy: P17 replaces the scaffold
+      // title with the real gate, but the path is stable.
+      expect(pushedPath(tester), '/parental-gate');
       semantics.dispose();
       await disposeApp(tester);
     });
@@ -1260,7 +1262,7 @@ void main() {
       expect(find.bySemanticsLabel('Grown-ups'), findsOneWidget);
       await tester.tap(find.bySemanticsLabel('Grown-ups'));
       await _settleRoute(tester);
-      expect(find.text('P17 Parental gate'), findsOneWidget);
+      expect(pushedPath(tester), '/parental-gate');
       semantics.dispose();
       await disposeApp(tester);
     });
@@ -1276,7 +1278,7 @@ void main() {
       expect(find.bySemanticsLabel('Grown-ups'), findsOneWidget);
       await tester.tap(find.bySemanticsLabel('Grown-ups'));
       await _settleRoute(tester);
-      expect(find.text('P17 Parental gate'), findsOneWidget);
+      expect(pushedPath(tester), '/parental-gate');
       semantics.dispose();
       await disposeApp(tester);
     });
@@ -1291,7 +1293,7 @@ void main() {
       expect(find.bySemanticsLabel('Grown-ups'), findsOneWidget);
       await tester.tap(find.bySemanticsLabel('Grown-ups'));
       await _settleRoute(tester);
-      expect(find.text('P17 Parental gate'), findsOneWidget);
+      expect(pushedPath(tester), '/parental-gate');
       semantics.dispose();
       await disposeApp(tester);
     });
@@ -1990,7 +1992,9 @@ void main() {
       await tester.tap(find.bySemanticsLabel('Grown-ups'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
-      expect(find.text('P17 Parental gate'), findsOneWidget);
+      // Route assertion, not placeholder copy: P17 replaces the scaffold
+      // title with the real gate, but the path is stable.
+      expect(pushedPath(tester), '/parental-gate');
       semantics.dispose();
       await disposeApp(tester);
     });
