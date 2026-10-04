@@ -19,3 +19,6 @@ Integrator: switch the icon picker to `NestIcons.questBed / questDishes / questH
 
 ## UPDATE (23:55) — known red test on main, NOT your finding
 `test/core/family_time_test.dart` › 'kid_home completions are stamped with the family zone' fails since the date rolled to 4 Oct. It is a date-dependent test bug on main, being fixed by shared/family_time_test_fix. If it is the ONLY failing test in the full suite, treat the gate as green for this screen.
+
+## UPDATE (00:25, orchestrator QA of cmp_light_4, 1.37%) — iteration 5: one item
+The layout and icons match the design. Fix ONLY P09-TEST-6 (3_test.md): in debug builds the coin guard's assert text leaks into the toast. The toast must show the product copy only, in debug and release, with a test. The family_time_test failure is fixed on main (it is merged before the build). Change nothing else.
