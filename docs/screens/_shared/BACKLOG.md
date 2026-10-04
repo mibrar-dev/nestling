@@ -10,3 +10,9 @@
 - P17 minor review items (parental_gate_view.dart: canPop checks, typed-digit style, .gate-note margin, items rebuild filter, dead challenge model, CSS magic numbers → tokens): tidy in the cleanup pass.
 - K02 keeps a feature-local `kidAvatarInitial` (kid_style_helpers.dart:65, used by kid_pin_view.dart:168 + its own test). Replace with shared `nestAvatarInitial` and delete the duplicate.
 - K03 pet stage: nest rim 274 vs design 278 (K03-BUG-16) and bowl-height disagreement (K03-BUG-17; proofs skip-marked in k03_bugs_test.dart, see docs/screens/K03/SHARED_REQUEST.md #18). Re-measure the design PNG and settle it in the shared NestPetStage; un-skip both.
+
+## K09 My jar (merged 4 Oct with 4 minor bugs open; proofs skipped in app/test/features/kid_jar/k09_bugs_test.dart)
+- K09-BUG-10 `_relativeDay` (kid_jar_repository_impl.dart): rows older than last week or in the future get a wrong "This/Last <day>" label. Also label a same-day row "Today" (the demo seed is anchored to today, so on a Sunday the payout row reads "This Sunday").
+- K09-BUG-9 a large history amount overflows its card at 320 px × 1.3 text.
+- K09-BUG-8 `moveToSavings` writes a savings_move row when the goal does not exist (money leaves the jar to nowhere).
+- K09-BUG-7/7b a load dispatched and the bloc closed in the same tick leaks a subscription.

@@ -8,6 +8,7 @@ class JarEntryModel extends JarEntry {
     required super.type,
     required super.amountPence,
     required super.date,
+    super.iconKey = '',
   });
 
   factory JarEntryModel.fromJson(Map<String, dynamic> json) {
@@ -18,6 +19,7 @@ class JarEntryModel extends JarEntry {
       type: json['type'] as String,
       amountPence: json['amountPence'] as int,
       date: DateTime.parse(json['date'] as String),
+      iconKey: json['iconKey'] as String? ?? '',
     );
   }
 
@@ -29,6 +31,7 @@ class JarEntryModel extends JarEntry {
       'type': type,
       'amountPence': amountPence,
       'date': date.toIso8601String(),
+      'iconKey': iconKey,
     };
   }
 }
