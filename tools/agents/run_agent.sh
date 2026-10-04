@@ -66,7 +66,7 @@ for i in 1 2 3 4 5; do
     [ "$SID" = "-" ] && SID=$(opencode session list 2>/dev/null | grep "$TITLE" | head -1 | awk '{print $1}')
     [ -z "$SID" ] && SID="-"
     # Free models rate-limit hard: after two rate limits, fall back to Space Bunny (same session title, fresh session).
-    if tail -40 "$LOG" | grep -qiE "rate limit|usage limit"; then
+    if tail -40 "$LOG" | grep -qiE "rate limit|usage limit|Upstream|502 Bad Gateway|503 Service|504 Gateway"; then
       RL=$(( ${RL:-0} + 1 )); date +%s > "$CD/$(echo "$MODEL" | tr '/#' '__')"
       if [ "$RL" -ge 2 ] && [ "$MODEL" != "opencode-go/space-bunny-free#max" ]; then
         ev RETRY "fallback_model=space-bunny from=$MODEL"; MODEL="opencode-go/space-bunny-free#max"; SID="-"
