@@ -45,6 +45,11 @@ import '../../test_scope.dart';
 
 const String _route = '/reward-shop';
 
+/// `.kcap` intro line, pinned once so the alignment check below can measure
+/// its box (a `Text` box spans the available width, so its edges ARE the
+/// scroll's gutters).
+const String _intro = 'Spend your coins on things you actually want.';
+
 /// Grid geometry at 390 wide (`.k8-grid`: two columns, `--s4` gap, 20 px
 /// gutters).
 const double _colWidth = 167;
@@ -73,8 +78,8 @@ void main() {
     await setUpTestScope();
   });
 
-  Future<void> pumpShop(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(390 * 3, 844 * 3);
+  Future<void> pumpShop(WidgetTester tester, {double width = 390}) async {
+    tester.view.physicalSize = Size(width * 3, 844 * 3);
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
     GetIt.instance<ThemeModeController>().selectMode(ThemeMode.light);
@@ -84,6 +89,32 @@ void main() {
   }
 
   Finder card(int index) => find.byType(ShopRewardCard).at(index);
+
+  /// The ALIGNMENT owner rule: every edge on the screen resolves to the same
+  /// 20 px gutter, whatever the device width.
+  Future<void> expectAlignedEdges(WidgetTester tester, double width) async {
+    final edges = <(String, double)>[
+      ('back left', tester.getRect(find.byType(NestIconButton)).left),
+      ('lock right', tester.getRect(find.byType(NestLockButton)).right),
+      ('card left', tester.getRect(card(0)).left),
+      ('card right', tester.getRect(card(1)).right),
+      ('pill right', tester.getRect(find.byType(NestCoinPill)).right),
+      ('intro left', tester.getRect(find.text(_intro)).left),
+      ('intro right', tester.getRect(find.text(_intro)).right),
+    ];
+    for (final (what, value) in edges) {
+      final expected = what.contains('right') ? width - _gutter : _gutter;
+      expect(value, closeTo(expected, 0.5), reason: '$what at $width px');
+    }
+    // Rows 2 and 3 repeat the same gutters.
+    for (final index in <int>[2, 4]) {
+      expect(tester.getRect(card(index)).left, closeTo(_gutter, 0.5));
+      expect(
+        tester.getRect(card(index + 1)).right,
+        closeTo(width - _gutter, 0.5),
+      );
+    }
+  }
 
   group('K08 chrome geometry', () {
     testWidgets('back and lock boxes sit in the 47…103 top row', (
@@ -320,6 +351,83 @@ void main() {
       );
       expect(right.left, closeTo(216, 1));
       expect(right.top, closeTo(348, 2));
+      await disposeApp(tester);
+    });
+  });
+
+  group('K08 alignment across widths (OWNER rule)', () {
+    for (final width in <double>[320, 390, 430]) {
+      testWidgets('every edge lands on the 20 px gutter at ${width.toInt()}', (
+        tester,
+      ) async {
+        await pumpShop(tester, width: width);
+        expect(tester.takeException(), isNull);
+        await expectAlignedEdges(tester, width);
+        await disposeApp(tester);
+      });
+
+      testWidgets('the columns follow the width at ${width.toInt()}', (
+        tester,
+      ) async {
+        await pumpShop(tester, width: width);
+        expect(tester.takeException(), isNull);
+        final column = (width - 2 * _gutter - _colGap) / 2;
+        for (final index in <int>[0, 2, 4]) {
+          expect(
+            tester.getRect(card(index)).width,
+            closeTo(column, 1),
+            reason: 'card $index at ${width.toInt()}',
+          );
+          expect(
+            tester.getRect(card(index + 1)).left -
+                tester.getRect(card(index)).right,
+            closeTo(_colGap, 0.5),
+          );
+        }
+        // The `.k8-n` 40 px name row and the 56 px art disc keep their offset from
+        // the card's own top at every width (201 + 95 = 296 at 390). A
+        // narrower device moves the whole rhythm down (the balanced heading
+        // wraps to two lines), but the card's internal spacing is unchanged.
+        final one = tester.getRect(find.text('Pick Friday film'));
+        expect(one.center.dy - tester.getRect(card(1)).top, closeTo(95, 2));
+        // One 19 px line at 390/430, two (38) in the 132 px column at 320 —
+        // either way the `.k8-n` box is its 40 px slot, never taller.
+        expect(one.height, anyOf(closeTo(19, 2), closeTo(38, 2)));
+        final art = tester.getRect(
+          find.descendant(of: card(1), matching: find.byType(NestIcon)),
+        );
+        expect(
+          art.center.dy - tester.getRect(card(1)).top,
+          closeTo(41, 2),
+          reason: 'the 56 px disc sits 13 px below the card top',
+        );
+        expect(art.size, const Size.square(32));
+        await disposeApp(tester);
+      });
+    }
+
+    testWidgets('the kid targets stay 56 at 320 px / 1.3 scale', (
+      tester,
+    ) async {
+      await pumpShop(tester, width: 320);
+      expect(tester.takeException(), isNull);
+      expect(
+        tester.getRect(find.byType(NestIconButton)).size,
+        const Size(56, 56),
+      );
+      expect(
+        tester.getRect(find.byType(NestLockButton)).size,
+        const Size(56, 56),
+      );
+      final button = tester.getRect(
+        find.descendant(of: card(0), matching: find.byType(NestKidButton)),
+      );
+      expect(button.width, greaterThanOrEqualTo(56));
+      expect(
+        button.height,
+        closeTo(62, 2),
+        reason: '56 painted + 6 shadow room',
+      );
       await disposeApp(tester);
     });
   });
