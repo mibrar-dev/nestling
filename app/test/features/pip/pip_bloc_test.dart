@@ -72,6 +72,11 @@ class _FailingNestRepository extends _EvolutionSilentRepository {
 /// emits), so the exact load/care/wardrobe sequences below read exactly as
 /// before. Evolution behaviour itself is covered in
 /// `pip_evolution_bloc_test.dart` with controlled fakes.
+///
+/// A silent sibling means the feature-level `PipStatus` never reaches `loaded`
+/// (`loaded` is the AND of both streams — 6_bugs.md K07-BUG-1), so every K06
+/// assertion below reads `PipState.nestStatus`, the NEST stream's own status,
+/// which is what `/pip` switches on.
 class _EvolutionSilentRepository extends PipRepositoryImpl {
   _EvolutionSilentRepository({required super.db});
 
@@ -84,7 +89,8 @@ class _EvolutionSilentRepository extends PipRepositoryImpl {
 
 Matcher _loadedWithCoins(int coins) => predicate<PipState>(
   (state) =>
-      state.status == PipStatus.loaded && state.nest?.profile.coins == coins,
+      state.nestStatus == PipStatus.loaded &&
+      state.nest?.profile.coins == coins,
 );
 
 void main() {
@@ -130,6 +136,8 @@ void main() {
         status: PipStatus.loaded,
         actionError: 'Exception: x',
         actionNonce: 2,
+        nestSettled: true,
+        evolutionSettled: true,
       );
       final reloaded = failed.copyWithLoaded(nest);
       expect(reloaded.status, PipStatus.loaded);
@@ -163,7 +171,9 @@ void main() {
         predicate<PipState>((s) => s.status == PipStatus.loading),
         predicate<PipState>((state) {
           final nest = state.nest;
-          if (state.status != PipStatus.loaded || nest == null) return false;
+          if (state.nestStatus != PipStatus.loaded || nest == null) {
+            return false;
+          }
           if (nest.profile.nickname != 'Maya') return false;
           if (nest.profile.coins != 120) return false;
           return nest.items.map((i) => i.id).join(',') ==
@@ -184,7 +194,7 @@ void main() {
       wait: const Duration(milliseconds: 100),
       expect: () => <Matcher>[
         predicate<PipState>((s) => s.status == PipStatus.loading),
-        predicate<PipState>((s) => s.status == PipStatus.loaded),
+        predicate<PipState>((s) => s.nestStatus == PipStatus.loaded),
       ],
     );
 
@@ -215,7 +225,11 @@ void main() {
       repo.failNest = false;
       bloc.add(const PipLoadRequested());
       await Future<void>.delayed(const Duration(milliseconds: 60));
-      expect(bloc.state.status, PipStatus.loaded);
+      expect(
+        bloc.state.nestStatus,
+        PipStatus.loaded,
+        reason: 'the nest stream answered again',
+      );
       expect(bloc.state.nest?.profile.nickname, 'Maya');
       // The failed subscription was released: only one live handler, and
       // the healthy stream clears the stale load error.
@@ -327,13 +341,13 @@ void main() {
         // stream emits once per write, so both land as loaded states.
         predicate<PipState>(
           (s) =>
-              s.status == PipStatus.loaded &&
+              s.nestStatus == PipStatus.loaded &&
               s.nest?.profile.coins == 90 &&
               !s.nest!.items.firstWhere((i) => i.id == 'wellies').owned,
         ),
         predicate<PipState>(
           (s) =>
-              s.status == PipStatus.loaded &&
+              s.nestStatus == PipStatus.loaded &&
               s.nest?.profile.coins == 90 &&
               s.nest!.items.firstWhere((i) => i.id == 'wellies').owned,
         ),

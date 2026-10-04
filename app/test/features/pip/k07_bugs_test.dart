@@ -73,11 +73,15 @@ import '../../test_scope.dart';
 /// (profile + wardrobe + ordered stages), so the two streams are genuinely
 /// unordered.
 class _PendingEvolutionRepository extends PipRepositoryImpl {
-  _PendingEvolutionRepository({required super.db});
+  _PendingEvolutionRepository({required super.db, required this.delivered});
 
   /// Silent until the test closes it: no value, no error.
   final StreamController<PipEvolution?> evolutionGate =
       StreamController<PipEvolution?>.broadcast();
+
+  /// What the stream delivers when the gate opens, so the test can prove the
+  /// screen recovers to the celebration instead of hanging on the spinner.
+  final PipEvolution? delivered;
 
   /// Every `watchEvolution()` call — proves a retry either reloads or is not
   /// offered at all, never a dead button over a live subscription.
@@ -89,7 +93,10 @@ class _PendingEvolutionRepository extends PipRepositoryImpl {
     return evolutionGate.stream;
   }
 
-  Future<void> closeGate() => evolutionGate.close();
+  Future<void> closeGate() async {
+    evolutionGate.add(delivered);
+    await evolutionGate.close();
+  }
 }
 
 /// Cleared-investigation harness for the "is the retry really dead?" question
@@ -300,7 +307,10 @@ void main() {
   });
 
   // ---------------------------------------------------------------------------
-  // K07-BUG-1 — still open on iteration 2 (the fix never landed).
+  // K07-BUG-1 — FIXED in iteration 2's build (per-stream arrival + error slots).
+  // The widget proof above is parked until the view switches on
+  // `state.evolutionStatus`; the state-level proof below is this layer's and
+  // is green again.
   // ---------------------------------------------------------------------------
 
   testWidgets(
@@ -308,7 +318,13 @@ void main() {
     '("Oh no! Pip got lost.") instead of the spinner, and its "Try again" is a '
     'dead control',
     (tester) async {
-      final repo = _PendingEvolutionRepository(db: db);
+      // Read what the real stream would deliver BEFORE the fake stands in for
+      // it, so the release below lands the genuine evolution on screen.
+      // `runAsync`: a real Drift read inside the fake-async zone deadlocks.
+      final delivered = await tester.runAsync(
+        () => PipRepositoryImpl(db: db).watchEvolution().first,
+      );
+      final repo = _PendingEvolutionRepository(db: db, delivered: delivered);
       await _useRepository(repo);
       await _pumpEvolution(tester);
 
@@ -328,24 +344,27 @@ void main() {
       );
       expect(find.byKey(const Key('k07-title')), findsNothing);
 
-      // The false card's only way out must not be dead: either the retry
-      // reloads, or a still-pending screen offers no retry at all.
+      // A pending stream must not be offered a retry at all: the bloc ignores
+      // a reload while both subscriptions are live, so the control the old
+      // false card painted was dead. (A REAL failure does re-subscribe — see
+      // the `cleared:` proof in this file.)
       expect(repo.evolutionCalls, 1);
-      await tester.tap(find.byKey(const Key('k07-retry')));
-      await _settle(tester);
       expect(
-        repo.evolutionCalls,
-        2,
+        find.byKey(const Key('k07-retry')),
+        findsNothing,
         reason:
-            'either retry really reloads, or a pending stream must never be '
-            'offered a retry (the bloc guard silently ignores the event while '
-            'both subscriptions are live)',
+            'a stream that has not failed must not offer a retry whose tap the '
+            'bloc silently drops',
       );
 
+      // …and when the stream really does answer, the celebration replaces the
+      // spinner.
       await repo.closeGate();
+      await _settle(tester);
+      expect(find.byKey(const Key('k07-title')), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
       await disposeApp(tester);
     },
-    skip: true,
   );
 
   test(
@@ -386,7 +405,6 @@ void main() {
             'the load-failure card (pip_evolution_view.dart:94-95)',
       );
     },
-    skip: true,
   );
 
   // ---------------------------------------------------------------------------
@@ -438,11 +456,12 @@ void main() {
 
       await disposeApp(tester);
     },
-    skip: true,
   );
 
   // ---------------------------------------------------------------------------
-  // K07-BUG-3 — new on iteration 2.
+  // K07-BUG-3 — FIXED in iteration 2's build: `watchEvolution` now reports the
+  // distinct-quest count for the milestone card (2a) and the stats card is fed
+  // `evolution.questsFinishedCount` (2b). Both proofs are un-skipped.
   // ---------------------------------------------------------------------------
 
   testWidgets(
@@ -479,7 +498,6 @@ void main() {
 
       await disposeApp(tester);
     },
-    skip: true,
   );
 
   test('K07-BUG-3 (repository, no widget tree): watchEvolution reports 5 for 4 '
@@ -510,17 +528,25 @@ void main() {
         .toList();
     final distinct = counted.map((c) => c.questId).toSet();
 
+    // The card's number is the distinct one (`questsFinishedCount`), while the
+    // sub-line honestly keeps the per-completion row count (`questsDone`) —
+    // which is why both are asserted here.
     expect(
-      seen.last!.questsDone,
+      seen.last!.questsFinishedCount,
       distinct.length,
       reason:
           '${counted.length} completion rows cover only ${distinct.length} '
-          'distinct quests (${distinct.join(', ')}), so "quests done" '
-          'counted rows, not quests',
+          'distinct quests (${distinct.join(', ')}), so "quests done" must '
+          'count quests, not rows',
+    );
+    expect(
+      seen.last!.questsDone,
+      counted.length,
+      reason: 'the sub-line still counts completions ("helped 5 times")',
     );
 
     await sub.cancel();
-  }, skip: true);
+  });
 
   // ---------------------------------------------------------------------------
   // K07-BUG-4 — new on iteration 2: the exact cause behind `5_ui.md` D2.
@@ -570,7 +596,6 @@ void main() {
       expect(box.left, inInclusiveRange(19, 21));
       expect(box.right, inInclusiveRange(42, 44));
     },
-    skip: true,
   );
 
   // ---------------------------------------------------------------------------

@@ -94,10 +94,19 @@ class PipRepositoryImpl implements PipRepository {
         // never count, and no clock is read (the PERIODS ruling does not
         // apply here).
         final completions = (parts[1] as List<dynamic>).cast<QuestCompletion>();
-        final questsDone = completions
+        final counted = completions
             .where((c) => c.status == 'done_pending' || c.status == 'approved')
-            .length;
-        return PipEvolution(profile: profile, questsDone: questsDone);
+            .toList(growable: false);
+        // Two numbers, deliberately (6_bugs.md K07-BUG-3): the sub-line
+        // "Because you helped N times" counts completions, while the "quests
+        // done" milestone card counts DISTINCT quests — a re-completable
+        // daily/weekly quest must not inflate a milestone that is about
+        // quests, and the two sentences must never contradict each other.
+        return PipEvolution(
+          profile: profile,
+          questsDone: counted.length,
+          questsFinished: counted.map((c) => c.questId).toSet().length,
+        );
       });
     });
   }

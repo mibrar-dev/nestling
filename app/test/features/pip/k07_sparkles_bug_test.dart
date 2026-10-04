@@ -30,11 +30,16 @@
 // `skip: true` and carries its id in the test DESCRIPTION, so
 //
 //   flutter test --timeout 120s \
-//     test/features/pip/pip_evolution_sparks_bug_test.dart --run-skipped
+//     test/features/pip/k07_sparkles_bug_test.dart --run-skipped
 //
 // runs it and FAILS until the bug is fixed. Drop `skip: true` in that commit.
+//
+// FIXED in iteration 2 (stage 2b, UI): `_SparksPainter._sparkPath` now hands
+// EVERY vertex, the `M` pair included, to a single `Path.addPolygon`, and the
+// four paths are parsed once and cached on `_Spark.path`
+// (`4_review.md` finding 1 = `6_bugs.md` K07-BUG-4 = `5_ui.md` D2; finding 11
+// is the caching). All three proofs below are un-skipped and green.
 // Evidence and repro live in `docs/screens/K07/3_test.md`.
-// This stage does not change product code.
 
 import 'dart:io';
 import 'dart:typed_data';
@@ -112,6 +117,21 @@ List<String> get _paths =>
         .map((m) => m.group(1)!)
         .toList();
 
+/// `<circle cx="…" cy="…" r="…">` in document order — the design's four dots.
+/// The screen paints them too, so a reference raster of the design's `<g>` must
+/// include them or the silhouette comparison would flag them as a difference.
+List<({int cx, int cy, int r})> get _circles =>
+    RegExp(r'<circle cx="(-?\d+)" cy="(-?\d+)" r="(\d+)"')
+        .allMatches(_block)
+        .map(
+          (m) => (
+            cx: int.parse(m.group(1)!),
+            cy: int.parse(m.group(2)!),
+            r: int.parse(m.group(3)!),
+          ),
+        )
+        .toList();
+
 void main() {
   setUpAll(() {
     _block = _sparksBlock();
@@ -155,7 +175,7 @@ void main() {
         const Rect.fromLTRB(13, 30, 51, 68),
         reason: 'the design path spans 13..51 x 30..68',
       );
-    }, skip: true);
+    });
 
     testWidgets(
       'K07-BUG-SPARK-1: the painted sparkle is the design’s polygon, tip included',
@@ -216,12 +236,20 @@ void main() {
           (canvas) => painter.paint(canvas, EvolutionSparksGeometry.artSize),
         );
 
-        // The design's own tip region: y 28..33 around x 32. The 3 px stroke
-        // rounds it, so the whole 6-row band must be inked.
+        // The design's own tip region: y 28..33 around x 32. The 3 px stroke is
+        // CENTRED on the path, so the round-joined cap at the tip (32, 30)
+        // reaches up to y = 28.5: rows 29..33 are solid and row 28 is the
+        // stroke's outer halo. All six must carry ink — the bug left 28..43
+        // completely empty, because the tip vertex was never in the polygon.
         expect(
-          inkedRows(app, from: 28, to: 33),
-          6,
+          inkedRows(app, from: 29, to: 33),
+          5,
           reason: "the design's top tip is (32, 30) and must be painted",
+        );
+        expect(
+          app[((28 * 350) + 32) * 4 + 3],
+          greaterThan(0),
+          reason: 'the 3 px stroke cap halo above the tip must be painted too',
         );
         expect(
           app[((30 * 350) + 32) * 4 + 3],
@@ -248,6 +276,19 @@ void main() {
               ..drawPath(path, fill)
               ..drawPath(path, stroke);
           }
+          for (final c in _circles) {
+            canvas
+              ..drawCircle(
+                Offset(c.cx.toDouble(), c.cy.toDouble()),
+                c.r.toDouble(),
+                fill,
+              )
+              ..drawCircle(
+                Offset(c.cx.toDouble(), c.cy.toDouble()),
+                c.r.toDouble(),
+                stroke,
+              );
+          }
           canvas.restore();
         }
 
@@ -266,7 +307,6 @@ void main() {
               '($inked inked px)',
         );
       },
-      skip: true,
     );
 
     testWidgets('K07-BUG-SPARK-1: the silhouette is symmetric about the design’s x = 32 axis '
@@ -375,6 +415,6 @@ void main() {
           reason: 'row $y is off the design’s axis',
         );
       }
-    }, skip: true);
+    });
   });
 }

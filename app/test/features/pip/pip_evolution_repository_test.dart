@@ -152,6 +152,31 @@ void main() {
       expect((await repo.watchEvolution().first)!.questsDone, 4);
     });
 
+    test('the milestone card counts DISTINCT quests, the sub-line counts rows '
+        '(6_bugs.md K07-BUG-3)', () async {
+      // Demo truth: 4 completion rows over 4 distinct quests.
+      final first = (await repo.watchEvolution().first)!;
+      expect(first.questsDone, 4);
+      expect(first.questsFinished, 4);
+      expect(first.questsFinishedCount, 4);
+
+      // A second `approved` row for q-bins — legal in the schema and routine in
+      // the product, because a daily/weekly quest is re-completable.
+      await _addCompletion(
+        db,
+        questId: 'q-bins',
+        childId: 'maya',
+        status: 'approved',
+      );
+      final second = (await repo.watchEvolution().first)!;
+      expect(second.questsDone, 5, reason: '"Because you helped 5 times"');
+      expect(
+        second.questsFinishedCount,
+        4,
+        reason: '"4 quests done" — the milestone is about quests, not rows',
+      );
+    });
+
     test('null active child emits null', () async {
       await _setActiveChild(db, null);
       expect(await repo.watchEvolution().first, isNull);

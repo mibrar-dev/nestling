@@ -43,18 +43,32 @@ enum _SparkFill { lilac, success, coin, peach, sky }
 /// One entry of the design's `<g>`: a 4-point sparkle `d`, or a dot.
 @immutable
 class _Spark {
-  const _Spark.sparkle(this.path, this.fill) : center = null, radius = null;
+  const _Spark.sparkle(this.d, this.fill) : center = null, radius = null;
 
-  const _Spark.dot(this.center, this.radius, this.fill) : path = null;
+  const _Spark.dot(this.center, this.radius, this.fill) : d = null;
 
   /// The SVG `d` attribute, verbatim (implicit lineto commands).
-  final String? path;
+  final String? d;
 
   /// `(cx, cy)` and `r` of a `<circle>`.
   final Offset? center;
   final double? radius;
 
   final _SparkFill fill;
+
+  /// The closed polygon for [d], parsed once per `d` and kept.
+  ///
+  /// The layer is static art that repaints only on a theme change, so
+  /// re-parsing the path data on every paint would be pure allocation on the
+  /// render path (`4_review.md` finding 11).
+  Path? get path {
+    final d = this.d;
+    if (d == null) return null;
+    return _sparkPaths.putIfAbsent(d, () => _sparkPath(d));
+  }
+
+  /// The parsed paths, keyed by their `d`.
+  static final Map<String, Path> _sparkPaths = <String, Path>{};
 
   /// The CSS fill this entry uses, resolved from the theme's tokens.
   Color colorOf(NestTokens tokens) => switch (fill) {
@@ -147,9 +161,8 @@ class _SparksPainter extends CustomPainter {
       final fill = Paint()
         ..color = spark.colorOf(tokens)
         ..style = PaintingStyle.fill;
-      final d = spark.path;
-      if (d != null) {
-        final path = _sparkPath(d);
+      final path = spark.path;
+      if (path != null) {
         canvas
           ..drawPath(path, fill)
           ..drawPath(path, stroke);
@@ -162,23 +175,28 @@ class _SparksPainter extends CustomPainter {
     canvas.restore();
   }
 
-  /// The design's `d` subset: one absolute `M` followed by implicit absolute
-  /// lineto pairs (`M32 30 37 44 …`), closed with `Z`. These are the only
-  /// commands the HTML uses, so a full SVG parser would be dead code.
-  static Path _sparkPath(String d) {
-    final numbers = RegExp(r'-?\d+(\.\d+)?')
-        .allMatches(d.replaceAll(RegExp('[MZ]'), ' '))
-        .map((m) => double.parse(m.group(0)!))
-        .toList(growable: false);
-    return Path()
-      ..moveTo(numbers[0], numbers[1])
-      ..addPolygon(<Offset>[
-        for (var i = 2; i + 1 < numbers.length; i += 2)
-          Offset(numbers[i], numbers[i + 1]),
-      ], true);
-  }
-
   @override
   bool shouldRepaint(covariant _SparksPainter oldDelegate) =>
       oldDelegate.tokens != tokens;
+}
+
+/// The design's `d` subset: one absolute `M` followed by implicit absolute
+/// lineto pairs (`M32 30 37 44 …`), closed with `Z`. These are the only
+/// commands the HTML uses, so a full SVG parser would be dead code.
+///
+/// EVERY vertex goes to [Path.addPolygon], starting at the `M` pair itself:
+/// `addPolygon` opens its own contour (`_addLeadingPoint`), so a separate
+/// `moveTo` before it is discarded and `close` returns to the polygon's *own*
+/// first vertex, never to the `moveTo` point. Building it the old way silently
+/// dropped each sparkle's `M` tip — the design's symmetric 4-point star painted
+/// as a flat-topped blob (`6_bugs.md` K07-BUG-4 = `5_ui.md` D2).
+Path _sparkPath(String d) {
+  final numbers = RegExp(r'-?\d+(\.\d+)?')
+      .allMatches(d.replaceAll(RegExp('[MZ]'), ' '))
+      .map((m) => double.parse(m.group(0)!))
+      .toList(growable: false);
+  return Path()..addPolygon(<Offset>[
+    for (var i = 0; i + 1 < numbers.length; i += 2)
+      Offset(numbers[i], numbers[i + 1]),
+  ], true);
 }

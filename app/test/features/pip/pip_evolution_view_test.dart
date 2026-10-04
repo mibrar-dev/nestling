@@ -193,7 +193,7 @@ void main() {
 
         expect(find.byType(CircularProgressIndicator), findsOneWidget);
         expect(
-          find.bySemanticsLabel('Loading Pip’s big moment'),
+          find.bySemanticsLabel("Loading Pip's big moment"),
           findsOneWidget,
         );
         // Nothing from the loaded body leaks into the loading state.

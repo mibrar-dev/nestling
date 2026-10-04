@@ -53,7 +53,10 @@ class PipEvolutionStats extends StatelessWidget {
     super.key,
   });
 
-  /// Lifetime quests done (all time — a milestone, not a period).
+  /// The DISTINCT lifetime quests done — the milestone this card is about, so
+  /// a daily or weekly quest counts once however many times it was completed
+  /// (`6_bugs.md` K07-BUG-3; `PipEvolution.questsFinishedCount`). The row count
+  /// behind it backs the sub-line's "helped N times" instead.
   final int questsDone;
 
   /// Lifetime coins Pip grew.
@@ -79,7 +82,7 @@ class PipEvolutionStats extends StatelessWidget {
             child: _StatCell(
               cellKey: const Key('k07-card-quests'),
               value: questsDone,
-              label: 'quests done',
+              label: evolutionStatQuestsLabel(),
               valueKey: const Key('k07-stat-quests'),
             ),
           ),
@@ -87,7 +90,7 @@ class PipEvolutionStats extends StatelessWidget {
             child: _StatCell(
               cellKey: const Key('k07-card-coins'),
               value: coinsGrown,
-              label: 'coins grown',
+              label: evolutionStatCoinsLabel(),
               valueKey: const Key('k07-stat-coins'),
             ),
           ),
@@ -95,7 +98,7 @@ class PipEvolutionStats extends StatelessWidget {
             child: _StatCell(
               cellKey: const Key('k07-card-stage'),
               value: stage,
-              label: 'of 4 stages',
+              label: evolutionStatStagesLabel(),
               valueKey: const Key('k07-stat-stage'),
             ),
           ),

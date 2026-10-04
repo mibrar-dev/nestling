@@ -256,7 +256,7 @@ void main() {
     });
 
     test('the speech line for every stage, ASCII apostrophes throughout', () {
-      expect(evolutionSpeech(1), 'Shh... Pip is still growing!');
+      expect(evolutionSpeech(1), 'Psst… Pip is still an Egg!');
       expect(evolutionSpeech(2), 'Hello! Pip is out of the egg!');
       expect(evolutionSpeech(3), "Flap, flap! Look at Pip's wings!");
       expect(evolutionSpeech(4), "Hear that? That is Pip's new song!");
@@ -267,7 +267,22 @@ void main() {
           isEmpty,
           reason: 'no curly apostrophe at stage $stage: $line',
         );
+        // …and no ASCII `...` either: the ellipsis is U+2026.
+        expect(line, isNot(contains('...')), reason: 'stage $stage: $line');
       }
+      // `4_review.md` finding 7: the stage-1 hero announces `Pip grew into an
+      // Egg!`, so its bubble may not then say Pip is still growing.
+      expect(
+        evolutionSpeech(1).toLowerCase(),
+        contains(evolutionStageName(1).toLowerCase()),
+        reason: 'the stage-1 bubble must agree with its own title',
+      );
+    });
+
+    test('the three stat labels are the design bytes, from the copy table', () {
+      expect(evolutionStatQuestsLabel(), 'quests done');
+      expect(evolutionStatCoinsLabel(), 'coins grown');
+      expect(evolutionStatStagesLabel(), 'of 4 stages');
     });
 
     test('the caption is stage-independent', () {

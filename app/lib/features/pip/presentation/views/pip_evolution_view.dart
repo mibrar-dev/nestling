@@ -73,26 +73,33 @@ class PipEvolutionView extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<PipBloc, PipState>(
       builder: (context, state) {
-        switch (state.status) {
+        // This screen switches on ITS OWN stream's status, never the feature's
+        // shared one: the nest stream (K06) shares this bloc, and `PipLoad`
+        // subscribes nest-first, so on a cold open the nest answered while the
+        // evolution was still in flight (`6_bugs.md` K07-BUG-1 — the old
+        // sibling-stream branch painted "Oh no! Pip got lost." on 5 of 5 cold
+        // opens). `evolutionStatus` is `loading` until the evolution stream
+        // itself answers, `failure` only when IT failed, and a stream that
+        // answered and then failed keeps its data on screen.
+        switch (state.evolutionStatus) {
           case PipStatus.initial:
           case PipStatus.loading:
             return const _EvolutionLoading();
           case PipStatus.failure:
             // Keep the last-known child on the failure card when there is one
-            // (mid-session error must not blank the screen).
+            // (mid-session error must not blank the screen). The nest profile is
+            // a last-known-CHILD fallback only: this branch needs the evolution
+            // stream's OWN failure to be reached, so a sibling emission can
+            // never turn into a false error card (`2a_build_logic.md`
+            // CONTRACT CHANGES §1).
             return _EvolutionFailure(
               profile: state.evolution?.profile ?? state.nest?.profile,
             );
           case PipStatus.loaded:
             final evolution = state.evolution;
+            // Settled with no evolution is the healthy no-child emission, so
+            // the picker hand-off is the right card — not a failure.
             if (evolution != null) return _EvolutionBody(evolution: evolution);
-            // The nest stream (K06) shares this bloc, so `loaded` can arrive
-            // from it while THIS screen's stream failed. A child is known then,
-            // and "Who's playing?" would send a real child to the picker — the
-            // failure card (with the nest's last-known Pip + its retry) stands
-            // in instead, exactly as on the `failure` path above.
-            final nest = state.nest;
-            if (nest != null) return _EvolutionFailure(profile: nest.profile);
             return const _EvolutionNoChild();
         }
       },
@@ -162,7 +169,9 @@ class _EvolutionLoading extends StatelessWidget {
       bar: const _EvolutionBar(),
       body: Center(
         child: Semantics(
-          label: 'Loading Pip’s big moment',
+          // ASCII apostrophe, like the rest of this screen's copy (see
+          // `pip_evolution_copy.dart`'s header) and the app-wide kid cards.
+          label: "Loading Pip's big moment",
           child: CircularProgressIndicator(color: context.nest.leaf),
         ),
       ),
@@ -353,7 +362,11 @@ class _EvolutionBody extends StatelessWidget {
               ),
             ),
             PipEvolutionStats(
-              questsDone: evolution.questsDone,
+              // The card counts DISTINCT quests — a re-completable daily or
+              // weekly quest is one quest, however many times it was finished
+              // (`6_bugs.md` K07-BUG-3) — while the sub-line above keeps the
+              // honest per-completion row count it says "times" about.
+              questsDone: evolution.questsFinishedCount,
               coinsGrown: profile.totalCoins,
               stage: stage,
             ),
@@ -392,12 +405,20 @@ class _EvolutionBar extends StatelessWidget {
       key: const Key('k07-bar'),
       decoration: BoxDecoration(
         color: tokens.surface,
-        border: Border(
-          top: BorderSide(
-            color: tokens.ink,
-            width: context.nestKid.borderWidth,
-          ),
-        ),
+        // `.kid-bar { border-top: 3px solid var(--ink) }` belongs to the
+        // celebration bar. On the loading / failure / no-child cards there is no
+        // button under it, and a full-width 3 px rule with nothing on it reads
+        // as a broken button row, so those states get the plain surface band —
+        // the box stays (the bottom-edge rule needs the surface to the physical
+        // edge). `4_review.md` finding 5.
+        border: stage == null
+            ? null
+            : Border(
+                top: BorderSide(
+                  color: tokens.ink,
+                  width: context.nestKid.borderWidth,
+                ),
+              ),
       ),
       child: SafeArea(
         top: false,

@@ -90,12 +90,15 @@ void main() {
       const loaded = PipState(
         status: PipStatus.loaded,
         nest: _mayaNest,
+        nestSettled: true,
+        evolutionSettled: true,
         errorMessage: 'stale',
       );
       final next = loaded.copyWithEvolution(_mayaEvolution);
       expect(next.status, PipStatus.loaded);
       expect(next.nest, _mayaNest);
       expect(next.evolution?.questsDone, 4);
+      expect(next.evolutionSettled, isTrue);
       expect(next.errorMessage, isNull);
     });
 
@@ -103,35 +106,170 @@ void main() {
       const withEvolution = PipState(
         status: PipStatus.loaded,
         evolution: _mayaEvolution,
+        nestSettled: true,
+        evolutionSettled: true,
       );
       final next = withEvolution.copyWithLoaded(_mayaNest);
       expect(next.nest, _mayaNest);
       expect(next.evolution?.questsDone, 4);
     });
 
-    test('withStreamError keeps the shown data and records the error', () {
+    test('a stream error lands in its OWN slot, and only that stream can fail '
+        'its own screen', () {
+      // 6_bugs.md K07-BUG-1 / `4_review.md` finding 2: one error slot per
+      // stream, so a nest failure can neither fake readiness nor fake a
+      // failure on the evolution screen (and the mirror holds).
       const loaded = PipState(
         status: PipStatus.loaded,
         nest: _mayaNest,
         evolution: _mayaEvolution,
+        nestSettled: true,
+        evolutionSettled: true,
       );
-      final next = loaded.withStreamError(Exception('boom'));
-      expect(next.status, PipStatus.loaded);
-      expect(next.nest, _mayaNest);
-      expect(next.evolution, _mayaEvolution);
-      expect(next.errorMessage, contains('boom'));
+
+      final nestFailed = loaded.withNestError(Exception('nest boom'));
+      expect(nestFailed.nestError, contains('nest boom'));
+      expect(nestFailed.evolutionError, isNull, reason: 'the sibling slot');
+      expect(
+        nestFailed.evolutionStatus,
+        PipStatus.loaded,
+        reason: 'a nest failure must not turn /pip-evolution into a failure',
+      );
+      expect(nestFailed.nest, _mayaNest, reason: 'the shown data is kept');
+
+      final evolutionFailed = loaded.withEvolutionError(Exception('evo boom'));
+      expect(evolutionFailed.evolutionError, contains('evo boom'));
+      expect(evolutionFailed.nestError, isNull);
+      expect(
+        evolutionFailed.nestStatus,
+        PipStatus.loaded,
+        reason: 'the sibling is untouched',
+      );
+
+      // The failure verdict belongs to a stream that failed BEFORE it ever
+      // answered; one that already showed its data keeps it (the keep-loaded
+      // rule above), so a kid never loses a screen to a late hiccup.
+      const pending = PipState(status: PipStatus.loading);
+      final early = pending.withEvolutionError(Exception('evo boom'));
+      expect(early.evolutionStatus, PipStatus.failure);
+      expect(early.status, PipStatus.failure);
+      expect(
+        pending.withNestError(Exception('nest boom')).nestStatus,
+        PipStatus.failure,
+        reason: 'the mirror: a nest failure is never a K07 failure',
+      );
     });
 
-    test('toFailure drops the data', () {
+    test('a stream that already answered keeps its status loaded through an '
+        'error (K03 review-finding-6)', () {
+      // Data is on screen, so a mid-session error must not blank it.
+      final next = const PipState(status: PipStatus.loading)
+          .copyWithLoaded(_mayaNest)
+          .copyWithEvolution(_mayaEvolution)
+          .withEvolutionError(Exception('boom'));
+      expect(next.evolutionStatus, PipStatus.loaded);
+      expect(next.evolution?.questsDone, 4);
+      expect(
+        next.errorMessage,
+        contains('boom'),
+        reason: 'recorded, not shown',
+      );
+    });
+
+    test('a stream that failed BEFORE answering fails, dropping nothing', () {
+      final next = const PipState(status: PipStatus.loading)
+          .withEvolutionError(Exception('boom'));
+      expect(next.status, PipStatus.failure);
+      expect(next.evolutionStatus, PipStatus.failure);
+      expect(next.nestStatus, PipStatus.loading, reason: 'still in flight');
+      expect(next.evolution, isNull);
+      expect(next.nest, isNull);
+    });
+
+    test('the per-stream statuses ignore the sibling entirely', () {
+      const initial = PipState();
+      expect(initial.nestStatus, PipStatus.loading);
+      expect(initial.evolutionStatus, PipStatus.loading);
+      expect(initial.status, PipStatus.initial);
+
+      // K06 answers first: the evolution screen is still loading, and nothing
+      // about the nest's arrival can call it a failure.
+      final nestOnly = initial.copyWithLoaded(_mayaNest);
+      expect(nestOnly.nestStatus, PipStatus.loaded);
+      expect(nestOnly.evolutionStatus, PipStatus.loading);
+      expect(nestOnly.status, PipStatus.loading);
+
+      // K07 answers: now — and only now — the feature is loaded.
+      final both = nestOnly.copyWithEvolution(_mayaEvolution);
+      expect(both.status, PipStatus.loaded);
+      expect(both.nestStatus, PipStatus.loaded);
+      expect(both.evolutionStatus, PipStatus.loaded);
+    });
+
+    test(
+      'a healthy emission CARRIES the sibling error slot status came from',
+      () {
+        // The nest answers AFTER the evolution stream failed. `copyWithLoaded`
+        // derives `status` from `evolutionError`, so that slot must travel into
+        // the state it produced: dropped, `evolutionStatus` reads `loading`
+        // from a settled-false / error-null pair and `/pip-evolution` would
+        // spin forever instead of showing its failure card (2b_build_ui.md
+        // §0 — the real stream's `Stream.error` lands first, the nest needs
+        // Drift I/O).
+        final afterNest = const PipState(status: PipStatus.loading)
+            .withEvolutionError(Exception('boom'))
+            .copyWithLoaded(_mayaNest);
+        expect(afterNest.status, PipStatus.failure, reason: 'computed from it');
+        expect(
+          afterNest.evolutionError,
+          contains('boom'),
+          reason: 'carried into the state that computed from it',
+        );
+        expect(
+          afterNest.evolutionStatus,
+          PipStatus.failure,
+          reason: 'the slot and the per-stream status must agree',
+        );
+
+        // The mirror: the nest error must survive K07's healthy emission.
+        final afterEvolution = const PipState(status: PipStatus.loading)
+            .withNestError(Exception('bang'))
+            .copyWithEvolution(_mayaEvolution);
+        expect(afterEvolution.nestError, contains('bang'));
+        expect(afterEvolution.nestStatus, PipStatus.failure);
+      },
+    );
+
+    test(
+      'a null evolution emission settles the stream as loaded (no-child)',
+      () {
+        final next = const PipState(status: PipStatus.loading)
+            .copyWithEvolution(null);
+        expect(next.evolutionSettled, isTrue);
+        expect(next.evolutionStatus, PipStatus.loaded);
+        expect(next.evolutionError, isNull);
+        expect(next.evolution, isNull);
+      },
+    );
+
+    test('toLoading re-arms both arrival flags but keeps the data', () {
       const loaded = PipState(
         status: PipStatus.loaded,
         nest: _mayaNest,
         evolution: _mayaEvolution,
+        nestSettled: true,
+        evolutionSettled: true,
       );
-      final next = loaded.toFailure(Exception('boom'));
-      expect(next.status, PipStatus.failure);
-      expect(next.nest, isNull);
-      expect(next.evolution, isNull);
+      final loading = loaded.toLoading();
+      expect(loading.status, PipStatus.loading);
+      expect(loading.nestSettled, isFalse);
+      expect(loading.evolutionSettled, isFalse);
+      expect(
+        loading.nestStatus,
+        PipStatus.loading,
+        reason: 'the fresh subscriptions have not answered yet',
+      );
+      expect(loading.evolution?.questsDone, 4, reason: 'no blanking');
     });
 
     test('evolution events carry every field', () {
@@ -142,19 +280,22 @@ void main() {
       expect(failed, isNot(const PipEvolutionFailed('y')));
     });
 
-    test('a null evolution emission loads the no-child path, not a failure', () {
+    test('a null evolution emission settles the no-child path, not a failure', () {
       // `watchEvolution()` emits null when there is no active child. That is a
-      // HEALTHY emission: it must report `loaded` with a null evolution, which
-      // the view renders as "Who's playing?" — never the failure card.
+      // HEALTHY emission: it must report its own stream as `loaded` with a null
+      // evolution, which the view renders as "Who's playing?" — never the
+      // failure card.
       final next = const PipState(status: PipStatus.loading)
+          .copyWithLoaded(_mayaNest)
           .copyWithEvolution(null);
       expect(next.status, PipStatus.loaded);
+      expect(next.evolutionStatus, PipStatus.loaded);
       expect(next.evolution, isNull);
-      expect(next.nest, isNull);
+      expect(next.nest, _mayaNest);
       expect(next.errorMessage, isNull);
     });
 
-    test('toLoading carries the evolution, so a reload keeps the screen', () {
+    test('toLoading keeps the data a reload must not blank', () {
       const loaded = PipState(
         status: PipStatus.loaded,
         evolution: _mayaEvolution,
@@ -199,7 +340,35 @@ void main() {
       expect(a, b);
       expect(a, isNot(c));
       expect(a.props, contains(_mayaEvolution));
-      expect(const PipState().props, hasLength(6));
+      // Every field is in `props`, the two arrival flags included: two states
+      // that differ only in whether a stream has answered must not collapse.
+      expect(const PipState().props, hasLength(10));
+      expect(
+        const PipState(nestSettled: true),
+        isNot(const PipState()),
+        reason: 'the arrival flags are part of state identity',
+      );
+    });
+
+    test('the distinct-quest count (K07-BUG-3) defaults to the row count', () {
+      // `PipEvolution(profile:, questsDone:)` — what the older fixtures build —
+      // must keep working, and the card then shows the row count.
+      const rowsOnly = PipEvolution(profile: _mayaProfile, questsDone: 5);
+      expect(rowsOnly.questsFinished, isNull);
+      expect(rowsOnly.questsFinishedCount, 5);
+
+      const split = PipEvolution(
+        profile: _mayaProfile,
+        questsDone: 5,
+        questsFinished: 4,
+      );
+      expect(split.questsFinishedCount, 4, reason: 'the card counts quests');
+      expect(split.questsDone, 5, reason: 'the sub-line counts times');
+      expect(
+        split.props,
+        contains(4),
+        reason: 'the card number is part of entity equality',
+      );
     });
   });
 
@@ -216,7 +385,12 @@ void main() {
 
       repo.nest.add(_mayaNest);
       await Future<void>.delayed(_settle);
-      expect(bloc.state.status, PipStatus.loaded);
+      expect(bloc.state.nestStatus, PipStatus.loaded, reason: 'K06 answered');
+      expect(
+        bloc.state.evolutionStatus,
+        PipStatus.loading,
+        reason: 'K07 is still in flight — K06 says nothing about it',
+      );
       expect(bloc.state.nest?.profile.nickname, 'Maya');
       expect(bloc.state.evolution, isNull);
 
@@ -225,6 +399,7 @@ void main() {
       expect(bloc.state.status, PipStatus.loaded);
       expect(bloc.state.nest?.profile.nickname, 'Maya');
       expect(bloc.state.evolution?.questsDone, 4);
+      expect(bloc.state.evolution?.questsFinishedCount, 4);
 
       await sub.cancel();
       await bloc.close();
@@ -287,13 +462,21 @@ void main() {
       await Future<void>.delayed(_settle);
       repo.evolution.add(_mayaEvolution);
       await Future<void>.delayed(_settle);
-      expect(bloc.state.status, PipStatus.loaded);
-      expect(bloc.state.nest, isNull);
+      expect(
+        bloc.state.evolutionStatus,
+        PipStatus.loaded,
+        reason: 'K07 answered; K06 is still in flight',
+      );
 
       repo.nest.addError(Exception('nest down'));
       await Future<void>.delayed(_settle);
 
-      expect(bloc.state.status, PipStatus.loaded);
+      expect(
+        bloc.state.evolutionStatus,
+        PipStatus.loaded,
+        reason: 'a NEST failure must not blank the celebration screen',
+      );
+      expect(bloc.state.nestStatus, PipStatus.failure);
       expect(bloc.state.evolution?.questsDone, 4);
 
       await sub.cancel();
@@ -389,7 +572,6 @@ void main() {
       final bloc = PipBloc(repository: repo);
       final seen = <PipStatus>[];
       final sub = bloc.stream.listen((state) => seen.add(state.status));
-
       bloc.add(const PipLoadRequested());
 
       await Future<void>.delayed(_settle);
@@ -402,6 +584,12 @@ void main() {
         reason: 'this screen’s own stream has not answered yet',
       );
       expect(bloc.state.nest, isNotNull, reason: 'K06’s data did arrive');
+      expect(bloc.state.evolutionStatus, PipStatus.loading);
+      expect(
+        bloc.state.evolutionError,
+        isNull,
+        reason: 'pending is not failure — nothing has errored',
+      );
 
       // Only its OWN stream may say the screen is ready.
       repo.evolution.add(_mayaEvolution);
@@ -416,7 +604,7 @@ void main() {
       await bloc.close();
       await repo.nest.close();
       await repo.evolution.close();
-    }, skip: true);
+    });
 
     test('retry after an evolution failure really reloads', () async {
       final repo = _ControlledPipRepository(db: db);
@@ -437,7 +625,11 @@ void main() {
       expect(bloc.state.status, PipStatus.loading);
       repo.evolution.add(_mayaEvolution);
       await Future<void>.delayed(_settle);
-      expect(bloc.state.status, PipStatus.loaded);
+      // The nest stream is deliberately silent in this test (only the failed
+      // one is retried), so the K07 half of the state is what may say "ready":
+      // the aggregate `status` needs BOTH streams answered.
+      expect(bloc.state.evolutionStatus, PipStatus.loaded);
+      expect(bloc.state.status, PipStatus.loading);
       expect(bloc.state.evolution?.questsDone, 4);
       expect(bloc.state.errorMessage, isNull);
 

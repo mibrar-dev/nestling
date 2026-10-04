@@ -440,6 +440,8 @@ void main() {
         errorMessage: 'stale load error',
         actionError: kPipNotEnoughCoins,
         actionNonce: 3,
+        nestSettled: true,
+        evolutionSettled: true,
       );
 
       final carried = failed.copyWithLoaded(null);

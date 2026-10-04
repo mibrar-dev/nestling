@@ -73,15 +73,14 @@ class PipBloc extends Bloc<PipEvent, PipState> {
   }
 
   void _onNestFailed(PipNestFailed event, Emitter<PipState> emit) {
-    // A mid-session error keeps the loaded screen (K03 review-finding-6
-    // pattern): only a load with nothing to show becomes the failure card.
-    // A healthy emission restores `loaded` via `copyWithLoaded` /
-    // `copyWithEvolution`.
-    if (state.nest != null || state.evolution != null) {
-      emit(state.withStreamError(event.error));
-    } else {
-      emit(state.toFailure(event.error));
-    }
+    // The NEST stream's failure lands in the NEST stream's slot, never the
+    // evolution one: a mid-session error keeps the loaded screen (K03
+    // review-finding-6 pattern — `nestSettled` is already true when data is on
+    // screen, so `/pip` stays loaded), and only a nest that failed before it
+    // ever answered turns into the failure card. `/pip-evolution` is untouched
+    // by a nest failure. A healthy emission clears the slot via
+    // `copyWithLoaded` / `copyWithEvolution`.
+    emit(state.withNestError(event.error));
   }
 
   void _onEvolutionReceived(
@@ -92,13 +91,10 @@ class PipBloc extends Bloc<PipEvent, PipState> {
   }
 
   void _onEvolutionFailed(PipEvolutionFailed event, Emitter<PipState> emit) {
-    // Same keep-loaded rule as [_onNestFailed]: only nothing-to-show
-    // becomes the failure card.
-    if (state.nest != null || state.evolution != null) {
-      emit(state.withStreamError(event.error));
-    } else {
-      emit(state.toFailure(event.error));
-    }
+    // [_onNestFailed]'s mirror: only this stream's slot takes the error, so a
+    // nest failure can never blank the celebration screen and a still-pending
+    // evolution stream is not a failure (6_bugs.md K07-BUG-1).
+    emit(state.withEvolutionError(event.error));
   }
 
   Future<void> _onCareRequested(

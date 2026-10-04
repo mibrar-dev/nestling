@@ -13,7 +13,16 @@
 // The design writes a LITERAL ASCII apostrophe (0x27) in `Pip's` — verified
 // with a byte dump of line 57 (`50 69 70 27 73`), never `&rsquo;`. The
 // orchestrator COPY rule makes the source byte the oracle, so this file uses
-// ASCII `'` throughout (the K06-BUG-3 / K01 BUG-A precedent).
+// ASCII `'` throughout (the K06-BUG-3 / K01 BUG-A precedent). That is also the
+// screen's convention for its NON-design copy — the view's spinner label and
+// the "Let's try again." / "Who's playing?" cards are all ASCII, because those
+// three are the app-wide kid-card strings (K01-BUG-5) and must stay identical
+// to the same cards on K01/K02/K03/K06 (`4_review.md` finding 6). Nothing on
+// this screen mixes `'` and `’`.
+//
+// This file is K07's SINGLE copy table: every user-visible string the screen
+// paints lives here, including the three stat-card labels (`4_review.md`
+// finding 8).
 //
 // The stage NAMES are not duplicated here: [pipStageName] in `pip_look.dart`
 // is the feature's single Pip stage table (1 Egg, 2 Hatchling, 3 Fledgling,
@@ -43,12 +52,26 @@ String evolutionSub(int questsDone) => questsDone == 1
 /// `.k7-cheer .speech` — HTML line 57 verbatim for the design's stage 4; the
 /// other stages are parallel kid-tone lines (no HTML source, so they follow
 /// the design's ASCII-apostrophe byte).
+///
+/// The stage-1 line agrees with the hero it sits under: the title reads
+/// `Pip grew into an Egg!`, so the bubble must not then deny the growth
+/// (`4_review.md` finding 7). `…` is the ellipsis character of the COPY
+/// ruling, never three ASCII dots.
 String evolutionSpeech(int stage) => switch (stage) {
-  1 => 'Shh... Pip is still growing!',
+  1 => 'Psst… Pip is still an Egg!',
   2 => 'Hello! Pip is out of the egg!',
   4 => "Hear that? That is Pip's new song!",
   _ => "Flap, flap! Look at Pip's wings!",
 };
+
+/// `.k7-stats > div > span` — HTML line 59, the first card's label.
+String evolutionStatQuestsLabel() => 'quests done';
+
+/// HTML line 60, the second card's label.
+String evolutionStatCoinsLabel() => 'coins grown';
+
+/// HTML line 61, the third card's label.
+String evolutionStatStagesLabel() => 'of 4 stages';
 
 /// `.btn-kid.lilac` — HTML line 66 (`Meet Songbird Pip`); demo Maya ->
 /// `Meet Fledgling Pip`.
