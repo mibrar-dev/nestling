@@ -1,13 +1,13 @@
-# K02 Kid PIN (`/kid-pin`) — 5_ui (iteration 3)
+# K02 Kid PIN (`/kid-pin`) — 5_ui (iteration 4)
 
 Shots (simulator BC440E48-B3A3-43BC-971B-0EF5DB621874, `demo kid maya`):
-- `docs/screens/K02/ui/app_light_3.png` (1170×2532, = 390×844 @3x)
-- `docs/screens/K02/ui/app_dark_3.png` (1170×2532)
+- `docs/screens/K02/ui/app_light_4.png` (1170×2532, = 390×844 @3x)
+- `docs/screens/K02/ui/app_dark_4.png` (1170×2532)
 
 Compare output:
-- Light: `mean diff: 0.95%`; bands 0: 1.54 (0–105), 1: 0.19 (105–211), 2: 2.07 (211–316), 3: 0.64 (316–422), 4: 0.83 (422–527), 5: 0.64 (527–633), 6: 0.55 (633–738), 7: 1.15 (738–844).
-- Dark: `mean diff: 1.02%`; bands 0: 1.53, 1: 0.21, 2: 1.97, 3: 0.62, 4: 1.04, 5: 1.00, 6: 0.69, 7: 1.14.
-- Unchanged from iteration 2 (0.96% / 1.04%): the shared keypad fix (`shared/keypad_grid`: 72 px keys, 10 px gaps, padding 8/24/0) holds; keypad bands stay ~0.5–1.0%.
+- Light: `mean diff: 0.95%`; bands 0: 1.50 (0–105), 1: 0.19 (105–211), 2: 2.07 (211–316), 3: 0.64 (316–422), 4: 0.83 (422–527), 5: 0.64 (527–633), 6: 0.55 (633–738), 7: 1.15 (738–844).
+- Dark: `mean diff: 1.03%`; bands 0: 1.55, 1: 0.21, 2: 1.97, 3: 0.62, 4: 1.04, 5: 1.00, 6: 0.69, 7: 1.14.
+- Steady across iterations 2–4 (0.95–0.96% / 1.02–1.04%): the shared keypad fix (`shared/keypad_grid`: 72 px keys, 10 px gaps, padding 8/24/0) holds; keypad bands stay ~0.5–1.0%.
 
 Method: logical px = PNG px ÷ 3. Dark-ink row/column projections on design vs app (light pair; dark pair geometrically identical per the compare sheets).
 

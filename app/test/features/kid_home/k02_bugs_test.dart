@@ -41,6 +41,7 @@ import 'package:nestling/features/kid_home/domain/entities/kid_child.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_home_data.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_quest.dart';
 import 'package:nestling/features/kid_home/domain/kid_home_repository.dart';
+import 'package:nestling/features/kid_home/presentation/widgets/kid_style_helpers.dart';
 
 import '../../test_scope.dart';
 
@@ -667,6 +668,40 @@ void main() {
       expect(find.textContaining('999.99'), findsNothing);
       expect(tester.takeException(), isNull);
       await disposeApp(tester);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Avatar initial helper (probes — pass): grapheme-safe, never `name[0]`
+  // -------------------------------------------------------------------------
+
+  group('K02 avatar initial helper (probes)', () {
+    test('kidAvatarInitial keeps non-BMP initials whole', () {
+      expect(kidAvatarInitial(''), '?');
+      expect(kidAvatarInitial('', fallback: 'S'), 'S');
+      expect(kidAvatarInitial('maya'), 'M');
+      expect(kidAvatarInitial('Maximilian-Alexander'), 'M');
+      expect(kidAvatarInitial('🐝 Bee'), '🐝');
+      expect(kidAvatarInitial('🇬🇧 Ben'), '🇬');
+      expect(kidAvatarInitial('𝒜da'), '𝒜');
+      expect(kidAvatarInitial('𠀀字'), '𠀀');
+      expect(kidAvatarInitial('Åsa'), 'Å');
+      // Every returned initial is well-formed UTF-16: a lone surrogate
+      // (D800–DFFF as a rune) is exactly the crash class `name[0]` produced.
+      for (final name in const <String>[
+        '🐝 Bee',
+        '🇬🇧 Ben',
+        '𝒜da',
+        '𠀀字',
+        '👨‍👩‍👧 Family',
+      ]) {
+        final initial = kidAvatarInitial(name);
+        expect(
+          initial.runes.any((r) => r >= 0xD800 && r <= 0xDFFF),
+          isFalse,
+          reason: 'lone surrogate in the initial for "$name"',
+        );
+      }
     });
   });
 
