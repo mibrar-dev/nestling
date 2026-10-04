@@ -12,6 +12,7 @@ class NestCard extends StatelessWidget {
     super.key,
     this.variant = NestCardVariant.standard,
     this.padding,
+    this.radius,
     this.onTap,
     this.semanticLabel,
   });
@@ -19,6 +20,13 @@ class NestCard extends StatelessWidget {
   final Widget child;
   final NestCardVariant variant;
   final EdgeInsetsGeometry? padding;
+
+  /// Corner radius override (logical px). Null keeps the default 24
+  /// (`NestRadii.allL`) for every variant. P16's `.subcard` needs 16
+  /// (`--r-m`, `P16-settings.html:7`, `padding:14px 16px`): pass
+  /// `radius: NestRadii.m` with
+  /// `padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16)`.
+  final double? radius;
   final VoidCallback? onTap;
   final String? semanticLabel;
 
@@ -30,19 +38,22 @@ class NestCard extends StatelessWidget {
         (variant == NestCardVariant.hero
             ? const EdgeInsets.all(NestSpacing.padSide)
             : const EdgeInsets.all(NestSpacing.s4));
+    final effectiveRadius = radius == null
+        ? NestRadii.allL
+        : BorderRadius.circular(radius!);
     final decoration = switch (variant) {
       NestCardVariant.standard => BoxDecoration(
         color: tokens.surface,
-        borderRadius: NestRadii.allL,
+        borderRadius: effectiveRadius,
         boxShadow: tokens.cardShadow,
       ),
       NestCardVariant.inset => BoxDecoration(
         color: tokens.surface2,
-        borderRadius: NestRadii.allL,
+        borderRadius: effectiveRadius,
       ),
       NestCardVariant.hero => BoxDecoration(
         color: tokens.heroBg,
-        borderRadius: NestRadii.allL,
+        borderRadius: effectiveRadius,
         boxShadow: tokens.raisedShadow,
       ),
     };
@@ -70,9 +81,9 @@ class NestCard extends StatelessWidget {
         onTap: tap,
         child: Material(
           color: Colors.transparent,
-          borderRadius: NestRadii.allL,
+          borderRadius: effectiveRadius,
           child: InkWell(
-            borderRadius: NestRadii.allL,
+            borderRadius: effectiveRadius,
             onTap: tap,
             child: Ink(
               padding: effectivePadding,
