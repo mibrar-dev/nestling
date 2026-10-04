@@ -223,6 +223,12 @@ void main() {
     testWidgets('the price reads as "N coins", not a bare number', (
       tester,
     ) async {
+      // The proof needs the app scope like every other widget test here: the
+      // original draft pumped `NestlingApp` without `setUpTestScope()`, so
+      // GetIt had no `AppModeController`, the tree never built, and the finder
+      // reported "0 widgets" for a reason that had nothing to do with the
+      // label (fixed with the K08-BUG-3 fix, iteration 2).
+      await setUpTestScope();
       final semantics = tester.ensureSemantics();
       await _pump(tester);
 

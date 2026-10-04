@@ -75,3 +75,33 @@ Files: `app/test/features/kid_home/kid_home_view_test.dart` (lines 2001, 2059,
 
 Blocks: yes — `flutter test` does not go green until this lands. No K08
 production or test change is required for it.
+
+---
+
+# Shared request — K08 BLOCKS the suite: K03 dock test asserts K08's placeholder copy
+
+STATUS (iteration 2, build stage) — **ESCALATION, 2nd iteration, still open.**
+Seven stage reports now cite this request (`1_plan`→`2_build` it1/it2, `2a`,
+`2b`, `3_test`, `4_review`, `5_ui`, `6_bugs`) and every one of them re-confirms
+the same two failures. Whole-suite numbers moved from 3444 pass (it 1) to
+**3765 pass, ~4 skip, 2 fail (it 2)** — the K08-owned tests grew from 53 to 143
+and are all green; the 2 failures are unchanged and are both in this file's
+scope. The orchestrator owns `main`, and nothing in the K08 worktree can land
+the two-line edit, so this needs one action from the orchestrator to unblock the
+screen. It is now the single thing standing between K08 and a green suite.
+
+Since iteration 1 the two assertions moved line numbers but the shape is
+unchanged — both still expect the foundation placeholder's `K08 Reward shop`,
+which the real screen (correctly, per the COPY rule) renders as `Reward shop`.
+
+Iteration 2 also removed the one thing that had made the tree *look* green for a
+while: `k08_bugs_test.dart`'s price proof was pumping `NestlingApp` without
+`setUpTestScope()`, so GetIt had no `AppModeController` and *every* finder in
+that file found nothing (it read as a pass for the two "Sorted" bug proofs, and
+as a false failure for K08-BUG-3). Fixed in iteration 2 — see `2b_build_ui.md`
+"Verification" — so the feature's own suite now reflects reality:
+`k08_bugs_test.dart` is 7/7 green and `test/features/kid_shop/` is 143/143.
+
+Two healthy K03 assertions still fail (they are the only two failures in the
+whole suite), exactly as filed above. Suggested fix unchanged:
+`pushedPath(tester) == '/reward-shop'` (or drop the third tuple element).

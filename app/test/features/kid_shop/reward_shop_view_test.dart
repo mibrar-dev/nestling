@@ -598,6 +598,30 @@ void main() {
       await disposeApp(tester);
     });
 
+    testWidgets('every card price is announced with its coin unit', (
+      tester,
+    ) async {
+      // K08-BUG-3 regression: with the shared audience glyphs landing in the
+      // same iteration, this also proves the swap did not disturb the price
+      // nodes — one "N coins" node per card, still no tap action.
+      final semantics = tester.ensureSemantics();
+      await _pumpRoute(tester);
+      for (final price in <int>[50, 80, 60, 100, 150, 90]) {
+        final node = find.bySemanticsLabel('$price coins');
+        expect(node, findsOneWidget, reason: '$price coins');
+        expect(
+          tester
+              .getSemantics(node)
+              .getSemanticsData()
+              .hasAction(SemanticsAction.tap),
+          isFalse,
+          reason: 'a price is a reading, not a control',
+        );
+      }
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+
     testWidgets('the coin pill is a reading, not a control', (tester) async {
       final semantics = tester.ensureSemantics();
       await _pumpRoute(tester);

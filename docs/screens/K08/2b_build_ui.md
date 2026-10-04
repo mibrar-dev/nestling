@@ -1,158 +1,146 @@
-# K08 · Reward shop — stage 2b build UI (iteration 1)
+# K08 · Reward shop — stage 2b build UI (iteration 2)
 
-Scope: `app/lib/features/kid_shop/presentation/views/**` +
-`presentation/widgets/**`, and the view/widget tests in
-`app/test/features/kid_shop/` (`reward_shop_view_test.dart`,
-`reward_shop_widget_geometry_test.dart`). No domain/data/bloc file was
-touched — the logic builder's `2a_build_logic.md` reports **CONTRACT CHANGES:
-None**, and re-reading it before finishing confirmed the plan names
-(`KidShopRewardRequested(rewardId)` positional, state `{status, childId,
-coins, items, requestingIds, notice, noticeSeq, errorMessage}`) are exactly
-what this layer codes against.
+Iteration 2 of the UI chunk. Scope unchanged: only
+`app/lib/features/kid_shop/presentation/views/**`,
+`presentation/widgets/**`, and the `view`/`widget`-named tests in
+`app/test/features/kid_shop/`. No `domain/`, `data/` or `bloc/` file touched —
+`2a_build_logic.md` was re-read before finishing (still "CONTRACT CHANGES:
+None"; the logic builder's own K08-BUG-1 fix landed in the data layer between
+iterations and my view needed no change for it: it consumes the same
+`watchActiveShop()` / request events).
 
-## Files
+## FIXES_1 items owned by this stage
 
-- `views/reward_shop_view.dart` — rewritten from the placeholder. One
-  `KidScope` + transparent `Scaffold` chrome for every state (status reserve,
-  `.k8-top` back/lock, `NestHomeIndicator`), `BlocListener` on `noticeSeq` →
-  `showNestToast` + `KidShopNoticeShown`, `BlocBuilder` switching
-  loading / failure / empty / loaded, and the `.scroll.k8-scroll` column.
-- `widgets/shop_reward_card.dart` (new) — `.k8-card`: surface, 3 px ink border,
-  `--r-l` 24, `--sh-kid`, art disc, 40 px name row, coin price, "N more to go"
-  note, and the `.k8-get` kid button.
-- `widgets/shop_reward_icons.dart` (new) — the screen-private glyph map
-  (`tv→screenTime`, `film→filmStrip`, `moon→moon`, `cake→chefHat`,
-  `coffee→cafe`, `plate→pizza`, fallback `gift`), kept separate from P14's
-  `rewardIconSpecs` on purpose (plan §a).
-- `widgets/kid_shop_placeholder_card.dart` — **deleted**. Unreferenced
-  (`grep` over `lib/` and `test/` found no import, `kid_shop.dart` never
-  exported it) and now dead weight next to the real card.
-- Tests: 31 tests across the two files (see Verification).
+`FIXES_1.md` carries five stage reports. The items that sit in the UI layer,
+and what happened to each:
 
-## Geometry — measured from the design PNG, not eyeballed
+### K08-BUG-2 (major) — odd reward counts crashed the grid — FIXED
 
-I measured `design/screens/light/K08-shop.png` (1170×2532) programmatically
-(component scan per exact colour: `leaf #17804F`, `coin-tint #FFF4D1`,
-`surface #FFFFFF`, `ink #1E1B3A`) and divided by 3. Every number in the plan
-and in the new tests comes from that:
+`views/reward_shop_view.dart`, `_ShopGrid`: the odd trailing slot was filled
+with `const Spacer()`. `Spacer` **is** an `Expanded`, and it was already inside
+`Expanded`, so any 1/3/5-reward family threw
+`Incorrect use of ParentDataWidget … Competing ParentDataWidgets` and no grid
+laid out. Now `const SizedBox.shrink()` — the inert filler `1_plan.md` §(a)
+specified ("second `Expanded` with `SizedBox.shrink`"). The three proofs in
+`k08_bugs_test.dart` (five cards render with a legal empty cell; one card at
+full column width; the lone card still buys) now pass.
 
-| element | design (÷3) | app (pinned in the geometry test) |
-|---|---|---|
-| back / lock boxes | y 47…103, x 20…76 / 314…370 | same (±0.5) |
-| `.coin-pill.big` | x 276…370, y 109…149 (94×40) | same (±0.5) |
-| heading line box | y 112…146 (34, centred in the 40 row) | ±2 |
-| `.kcap` intro | y 165…185 (one line) | ±2 |
-| grid row 1 | y 201…417 (216 tall), cols x 20…187 / 203…370 (167) | ±1 |
-| grid row 2 | y 433…649 (216) | ±2 |
-| grid row 3 | y 665…905 (240 — café note, dinner stretched) | ±2 |
-| art disc | y 214…270 (56, centre 242), x centred 104 / 287 | ±2 |
-| name row | y 276…316 (min 40; 2 lines = 38 → 277) | ±2 |
-| price row | y 322…342 (20; label 16 → 324) | ±2 |
-| `.k8-get` | x 33…174 (141), y 348…404 (56) | ±1 / ±2 |
+### K08-BUG-3 (minor) — the card price was announced as a bare number — FIXED
 
-Two details worth recording for the next iteration:
+`widgets/shop_reward_card.dart`, `_ShopPrice`: the price `Text` now renders
+inside `Semantics(label: '$price coins', container: true,
+excludeSemantics: true)`, mirroring `NestCoinPill` (`nest_coin_pill.dart:64`).
+`container: true` is the load-bearing part: without it the label merely merges
+into the surrounding card node, and the screen reader reads one long run
+("30 min extra screen time|50 coins|Pick Friday film|80 coins|…"). With it each
+card exposes its own `"50 coins"` node, no tap action — verified by walking the
+live semantics tree during the fix. The proof in `k08_bugs_test.dart` passes.
 
-1. **The card's bottom padding is `--s1` (4), not the CSS `10`.**
-   `NestKidButton` carries its own 6 px shadow room *inside* its widget box, and
-   the CSS puts the button's `--sh-kid` shadow inside the card's 10 px bottom
-   padding. `10 + 6` would make every card 222 tall instead of 216; `10 − 6 = 4`
-   lands the card on 417 AND puts the shadow band at 404…410 with 4 px of white
-   to the border at 414…417 — byte-for-byte what the PNG shows. Same reason the
-   `NestKidButton` widget box measures 62 tall in the tests: the painted button
-   is its first 56 px.
-2. **The grid stretches the last row.** `IntrinsicHeight` + `CrossAxisAlignment.stretch`
-   gives the dinner card the café card's 240 height with its content still at
-   the top, which is the CSS grid's default `align-items: stretch`. `mainAxisAlignment`
-   is left at `start` on purpose (`.k8-card` sets no `justify-content`).
+### UI-check deviations 1 + 2 (major) — wrong reward glyphs — FIXED
 
-Column width is computed from the slot (`Expanded` inside a pair row), so it is
-132 px at 320 wide — pinned in the matrix test, never a hard-coded 167
-(SPACING_SPEC §10.2).
+`widgets/shop_reward_icons.dart` was a screen-local map (documented as a
+deliberate delta in iteration 1) that predated the shared map. It is now a thin
+forwarder to the shared
+`rewardIconFor(key, audience: NestAudience.kid)`
+(`core/design_system/components/reward_icons.dart`, landed on `main` with
+`shared/audience_glyphs`), which per its own doc-comment carries the exact
+`K08-shop.html` `.k8-art` drawings:
 
-## Owner rules applied
+- `cake` → `rewardCake` (covered basket/bowl) — was `chefHat`, the
+  UI check's "wrong object" finding.
+- `coffee` → `rewardCoffee` (domed takeaway cup) — was the old `cafe` sit-down
+  mug with handle, steam and saucer, the UI check's other "wrong drawing".
+- `film` → `rewardFilm`, `moon` → `rewardMoon`, `plate` → `rewardPlate`, and
+  `tv` → `rewardTv` — the design's own drawings rather than the old look-alikes
+  (`filmStrip`, `moon`, `pizza`), clearing UI-check deviation 3 (the pizza
+  drawing variance) as a bonus.
 
-- **Kid background**: shared `KidScope` only (sky gradient + the shared 390×136
-  meadow, bottom 0). No local hills, no stars outside the shared painter.
-- **Bottom edge**: K08 has no bar — the list runs to the edge over the meadow,
-  and `NestHomeIndicator()` renders nothing, so no coloured strip appears below
-  the list or around the home indicator.
-- **Alignment**: 20 px gutters on the top row, the scroll and the grid; cards,
-  pill, lock and back all resolve to the same 20/370 edges (pinned in tests).
-- **Copy**: transcribed character-by-character from the HTML — including
-  `Trip to the park café` from the database (the HTML's "Park café trip" loses
-  to the seeded title, per DATA OVER MOCKS) and the é in "café". No curly
-  quotes or dashes are needed on this screen; the copy has none.
-- **BALANCED HEADINGS**: the title renders through `NestBalancedText` (the
-  `.kid-title` rule sets `text-wrap: balance`), never a bare `Text`.
-- **Bottom bar / CTA**: none — nothing to paint to the edge.
-- **PIP**: the design has no Pip slot on K08 (only the word "Pip" in the
-  footer), so no `PipAvatar`. The failure and empty surfaces use the neutral
-  96 px gift glyph, never a borrowed Pip, so they cannot contradict the PIP
-  rule.
-- **CHILD ORDER**: the grid renders `state.items` in repository order
-  (creation order, `r-screen` → `r-dinner`), asserted in the view test.
-- **FONTS / tracking / clock / ids**: no `google_fonts`, no tracking added
-  (`NestType` defaults stay 0; the design's K08 CSS sets none), no
-  `DateTime.now`, no ids minted in the view.
-- **ACCESSIBILITY**: every control exposes `SemanticsAction.tap`; the view's own
-  tests perform the real VoiceOver activation (`Back` → `/kid-home`, `Grown-ups`
-  → `/parental-gate`, `Get Baking together` → a real `reward_redemptions` row +
-  coins 120 → 20 + pill/footer/affordability all updating from the stream).
-  `Save up!` reports `enabled: false` and offers no tap. No
-  `Semantics(excludeSemantics: true)` in my files except the decorative art and
-  the price coin, which are not interactive.
-- **TOKENS ONLY**: colours and all shared metrics come from
-  `context.nest` / `context.nestKid` / `NestSpacing` / `NestRadii`. Four
-  screen-specific numbers have no token and are named local constants with the
-  CSS they come from (`_backIconSize` 26, `_artSize` 56, `_artIconSize` 32,
-  `_nameMinHeight` 40, `_coinSize` 20, `_getMinHeight` 56, `_getFontSize` 17) —
-  the same pattern K03 uses for its design slots.
+The parent P14 screen keeps its own audience branch inside the shared map, so
+nothing in P14 changed. This is a build-stage swap, per
+`ORCHESTRATOR_NOTES.md` (15:08) — "switch once main has it" — now done.
 
-## Icons verified against the PNG
+### UI-check deviation 4 (café card taller) — no change, database wins
 
-`screenTime` (monitor), `filmStrip` (side sprockets), `moon` (crescent),
-`chefHat` (the K08 baking glyph), `cafe` (the cup/lamp-looking café mark),
-`pizza` (slice with dots) — each matches the light design's art circle.
+The app's 2-line `Trip to the park café` (DB) + the `30 more to go` note vs the
+design's 1-line `Park café trip` is DATA OVER MOCKS, not a defect; the UI check
+recorded it as accepted and it is still the intended behaviour.
 
-## SHARED_REQUEST (filed, non-blocking)
+### UI-check deviation 7 (`.k8-get.off` not comparable) — still the filed request
 
-`docs/screens/K08/SHARED_REQUEST.md`: a `NestKidButton` colourway for
-`.k8-get.off` (`surface-2`/`ink-2` at full opacity). Until it lands, the
-unaffordable card uses `NestKidButtonColor.white` + `onPressed: null`
-(plan §g), which is a deliberate, documented deviation — that one card reads
-washed out instead of flat grey.
+`SHARED_REQUEST.md` §1 stands (non-blocking). The unaffordable card keeps the
+`NestKidButtonColor.white` + `onPressed: null` fallback until a colourway
+lands. Note for the next UI check: with the glyphs now correct, the row-3 cards
+shift back to the design's heights, so that card's off-state button is worth
+re-measuring there.
+
+### K08-BUG-1 (major, money integrity) — not UI-owned
+
+The data-layer fix was already in the merged tree when I arrived (payment is
+now a precondition of an `approved` row, inside the transaction — the P14
+pattern). Both proofs in `k08_bugs_test.dart` pass, including the sibling
+regression ("two needs-OK cards both write, once each"). No view change needed:
+the second instant tap merely leaves a `requested` row now, which the card's
+existing disabled semantics already handle.
+
+### The two `kid_home_view_test.dart` failures — not UI-ownable
+
+Still filed in `SHARED_REQUEST.md` §2 (they assert the foundation placeholder's
+`K08 Reward shop`). They are the only two failures left in the whole suite and
+cannot be fixed from this worktree (RULES §1: `test/features/kid_home/**` is
+another feature's). I extended §2 with an iteration-2 status note.
+
+### Un-skipped bug tests — all pass, none skipped
+
+`test/features/kid_shop/k08_bugs_test.dart` has **no `skip:` marker** anywhere
+(the only grep hit is its own comment saying so) and is now **7/7 green**.
+
+One honest finding while un-skipping: the K08-BUG-3 proof had never actually
+run. It pumped `NestlingApp` without `setUpTestScope()`, so GetIt had no
+`AppModeController`, the widget tree never built, and every finder in the file
+returned "0 widgets" for a reason unrelated to the label — which is also why
+two "Sorted" proofs in `6_bugs.md` had looked green. This is a test-file bug,
+not a screen bug, so I fixed it in its own file (one `setUpTestScope()` call,
+with a comment): the file now builds the real tree and all seven proofs are
+meaningful. I could not leave it broken and still claim the proofs pass.
+
+### UI-check deviation 6 (home-indicator mock pill) and 5 (status bar)
+
+Accepted/skip per the orchestrator (the OS draws both); no action.
+
+## Also in this iteration
+
+- `reward_shop_view_test.dart` +1 test (48 testWidgets blocks in the file,
+  shared with the test stage's matrix): every card price is announced as
+  `"N coins"`, has no tap action, and the six per-card nodes survive the glyph
+  swap — the K08-BUG-3 regression net, at the screen level.
+- Deleted my two throwaway probe test files (`probe_*_view_test.dart`) after
+  they served their purpose; nothing references them.
+- Re-checked the ALIGNMENT owner rule against the new semantics wrapper: the
+  price row's `Semantics` wraps the same `Row`, so the coin+label group is
+  still centred on the card (geometry tests unchanged and green: art centres,
+  price 20-tall row at +121, button 56 at +147).
 
 ## Verification
 
-- `flutter analyze lib/features/kid_shop test/features/kid_shop` → No issues
-  found (no ignores, nothing weakened).
+- `flutter analyze lib/features/kid_shop test/features/kid_shop` → **No issues
+  found** (no ignores, nothing weakened).
 - `dart format lib/features/kid_shop test/features/kid_shop` → clean.
-- `flutter test --timeout 120s test/features/kid_shop/` → **53 tests, all
-  passed** (22 from the logic builder, 31 mine):
-  - `reward_shop_view_test.dart` (20) — copy parity for title/pill/intro/footer,
-    all six seeded titles in creation order, prices from the database, the
-    "30 more to go" + "Save up!" pairing with no shaming copy, two-column grid
-    gutters, row-stretch, back → `/kid-home`, lock → `/parental-gate`, tap
-    actions on every control, the two real DB writes (`requested` keeps coins,
-    instant `approved` spends them), the disabled button's semantics, empty /
-    loading / failure surfaces, and the light + dark + 320 px @ 1.3 matrix.
-  - `reward_shop_widget_geometry_test.dart` (11) — the design geometry table
-    above, run with the bundled Nunito/Inter faces loaded (own file, so the
-    real metrics cannot move the other 20 tests), every value within ±2 px.
-- Whole-app `flutter test`, `dart format .` across the repo, and the
-  light/dark `shot.sh` + `compare.py` band table were **not** run here — the
-  brief assigns the simulator to stage `5_ui` and the whole-app run to the
-  integrator. No simulator was booted, installed on or screenshotted in this
-  stage.
+- `flutter test --timeout 120s test/features/kid_shop/` → **143 tests, all
+  passed**, zero skips: `kid_shop_bloc_test.dart` 34, `kid_shop_repository_test.dart`
+  17, `reward_shop_view_test.dart` 67, `reward_shop_widget_geometry_test.dart`
+  18, `k08_bugs_test.dart` 7.
+- Whole-app `flutter test` and the simulator stay with the integrator and
+  `5_ui` respectively — not run here (and only E7D5555E-378A-49DF-AAEE-16677AF4B9DB
+  may be booted, by `5_ui`).
 
 ## LEFT FOR NEXT ITERATION
 
-1. `5_ui`: `tools/screens/shot.sh` for `/reward-shop` in light + dark
-   (kid mode, `CHILD=maya`, `SEED=demo`, `DISABLE_ANIMATIONS=1`) and
-   `compare.py` against both design PNGs — my geometry table is the prediction
-   to check the band drift against, especially rows 2 and 3 (below the fold in
-   the PNG, so only the design's own CSS backs them).
-2. Swap the `Save up!` colourway once the SHARED_REQUEST lands.
-3. Whole-app `flutter test` + repo-wide `dart format` (integrator).
+1. `5_ui` re-check: the glyph fixes change three art discs (`cake`, `coffee`,
+   `plate`) — re-shoot light + dark and re-run `compare.py`; expect band 4–6 to
+   drop. The `.k8-get.off` button should now be measurable in row 3.
+2. Land the `SHARED_REQUEST.md` §2 two-line fix on `main` (restores a fully
+   green whole-app suite).
+3. Swap the `Save up!` colourway when a `NestKidButton` off-colourway lands
+   (`SHARED_REQUEST.md` §1, non-blocking).
 
 VERDICT: PASS

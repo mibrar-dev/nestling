@@ -186,6 +186,10 @@ class _ShopArt extends StatelessWidget {
 
 /// `.k8-p` — the coin image plus the price in `--coin-ink`, 16/1 w900, never
 /// wrapping (`white-space: nowrap`, SPACING_SPEC §10.11).
+///
+/// The row announces `'$price coins'`, mirroring `NestCoinPill`, and excludes
+/// its children: without the label a screen reader reads a bare "50" with no
+/// unit (K08-BUG-3).
 class _ShopPrice extends StatelessWidget {
   const _ShopPrice({required this.price});
 
@@ -194,26 +198,34 @@ class _ShopPrice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = context.nest;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      spacing: NestSpacing.s1,
-      children: [
-        ExcludeSemantics(
-          child: SvgPicture.asset(
-            nest_assets.NestlingIllustrations.coin,
-            width: _coinSize,
-            height: _coinSize,
-            placeholderBuilder: (_) => const SizedBox.shrink(),
+    return Semantics(
+      label: '$price coins',
+      // `container` gives the price its OWN semantics node: without it the
+      // label merges into the card/column node and a screen reader reads one
+      // long run of every card's name and price (K08-BUG-3).
+      container: true,
+      excludeSemantics: true,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        spacing: NestSpacing.s1,
+        children: [
+          ExcludeSemantics(
+            child: SvgPicture.asset(
+              nest_assets.NestlingIllustrations.coin,
+              width: _coinSize,
+              height: _coinSize,
+              placeholderBuilder: (_) => const SizedBox.shrink(),
+            ),
           ),
-        ),
-        Text(
-          '$price',
-          style: NestType.coinPill(color: tokens.coinInk)
-              .copyWith(fontWeight: FontWeight.w900, height: 1),
-          maxLines: 1,
-          softWrap: false,
-        ),
-      ],
+          Text(
+            '$price',
+            style: NestType.coinPill(color: tokens.coinInk)
+                .copyWith(fontWeight: FontWeight.w900, height: 1),
+            maxLines: 1,
+            softWrap: false,
+          ),
+        ],
+      ),
     );
   }
 }

@@ -83,6 +83,12 @@ void main() {
     );
   }
 
+  Future<void> makeInstant(AppDatabase db, String rewardId) {
+    return (db.update(db.rewards)..where((r) => r.id.equals(rewardId))).write(
+      const RewardsCompanion(needsOk: Value(false)),
+    );
+  }
+
   Future<void> addReward({
     required String id,
     required String title,
@@ -344,6 +350,33 @@ void main() {
       expect(rows.single.status, 'approved');
       expect((await child('maya')).coins, 20);
     });
+
+    test(
+      'an instant reward beyond the balance is left requested (K08-BUG-1)',
+      () async {
+        final repo = KidShopRepositoryImpl(db: db);
+        await makeInstant(db, 'r-screen'); // 50, now instant like r-baking
+
+        await repo.requestReward('maya', 'r-baking'); // 100 of 120 → approved
+        expect((await child('maya')).coins, 20);
+
+        await repo.requestReward('maya', 'r-screen'); // 50 — NOT covered
+
+        final baking = await redemptionsFor('r-baking');
+        expect(baking.single.status, 'approved');
+        final screen = await redemptionsFor('r-screen');
+        expect(screen, hasLength(1));
+        expect(
+          screen.single.status,
+          'requested',
+          reason:
+              'payment is a precondition of the approved row: an uncovered '
+              'instant reward waits for a grown-up instead of landing approved '
+              'unpaid',
+        );
+        expect((await child('maya')).coins, 20);
+      },
+    );
 
     test('unknown reward is a no-op', () async {
       final repo = KidShopRepositoryImpl(db: db);

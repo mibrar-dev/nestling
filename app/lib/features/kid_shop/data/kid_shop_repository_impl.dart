@@ -73,36 +73,70 @@ class KidShopRepositoryImpl implements KidShopRepository {
       _db.rewards,
     )..where((r) => r.id.equals(rewardId))).getSingleOrNull();
     if (reward == null) return;
-    final status = reward.needsOk ? 'requested' : 'approved';
     final now = appNowUtc();
     final zone = await _db.familyZoneId();
     await _db.transaction(() async {
-      await _db
-          .into(_db.rewardRedemptions)
-          .insert(
-            RewardRedemptionsCompanion.insert(
-              rewardId: rewardId,
-              childId: childId,
-              familyId: Seed.familyId,
-              status: Value(status),
-              createdAt: Value(now),
-              createdAtTz: Value(zone),
-            ),
-          );
-      if (!reward.needsOk) {
-        await _spendCoins(childId, reward.coinPrice, now);
+      if (reward.needsOk) {
+        await _insertRedemption(
+          childId: childId,
+          rewardId: rewardId,
+          status: 'requested',
+          now: now,
+          zone: zone,
+        );
+        return;
       }
+      // Instant rewards are paid in coins at request time, so payment is a
+      // precondition of the `approved` row (K08-BUG-1): two cards that are
+      // each affordable, tapped in one frame, must not both land `approved`
+      // when the balance only covers the first. The balance is read inside
+      // the same transaction so concurrent requests serialize on it; when it
+      // no longer covers the price the row is left `requested` for a
+      // grown-up instead of an unpaid `approved` row.
+      final kid = await (_db.select(
+        _db.children,
+      )..where((c) => c.id.equals(childId))).getSingleOrNull();
+      if (kid == null || kid.coins < reward.coinPrice) {
+        await _insertRedemption(
+          childId: childId,
+          rewardId: rewardId,
+          status: 'requested',
+          now: now,
+          zone: zone,
+        );
+        return;
+      }
+      await _insertRedemption(
+        childId: childId,
+        rewardId: rewardId,
+        status: 'approved',
+        now: now,
+        zone: zone,
+      );
+      await (_db.update(_db.children)..where((c) => c.id.equals(childId)))
+          .write(ChildrenCompanion(coins: Value(kid.coins - reward.coinPrice)));
     });
   }
 
-  Future<void> _spendCoins(String childId, int coins, DateTime now) async {
-    final kid = await (_db.select(
-      _db.children,
-    )..where((c) => c.id.equals(childId))).getSingleOrNull();
-    if (kid == null || kid.coins < coins) return;
-    await (_db.update(_db.children)..where((c) => c.id.equals(childId))).write(
-      ChildrenCompanion(coins: Value(kid.coins - coins)),
-    );
+  Future<void> _insertRedemption({
+    required String childId,
+    required String rewardId,
+    required String status,
+    required DateTime now,
+    required String zone,
+  }) {
+    return _db
+        .into(_db.rewardRedemptions)
+        .insert(
+          RewardRedemptionsCompanion.insert(
+            rewardId: rewardId,
+            childId: childId,
+            familyId: Seed.familyId,
+            status: Value(status),
+            createdAt: Value(now),
+            createdAtTz: Value(zone),
+          ),
+        );
   }
 }
 

@@ -1,25 +1,27 @@
-import 'package:nestling/core/design_system/components/nest_icon.dart';
+import 'package:nestling/core/design_system/components/audience.dart';
+import 'package:nestling/core/design_system/components/reward_icons.dart';
 
 /// K08 card glyph per `Reward.icon` (the seed writes `tv`, `film`, `moon`,
 /// `cake`, `coffee`, `plate`).
 ///
-/// This map is deliberately SCREEN-PRIVATE and differs from the parent P14
-/// `rewardIconSpecs` (`features/rewards/presentation/widgets/p14_reward_meta.dart`):
-/// the K08 HTML draws the film-strip (side sprockets) and the crescent moon
-/// for those two rewards, and `nestling_assets.dart` annotates
-/// `NestlingIcons.filmStrip` / `NestlingIcons.moon` as the K08 glyphs. P14's
-/// parent cards use `film` / `clock` instead. Both maps stay; unifying them
-/// would break one screen's fidelity (documented in `1_plan.md` §a).
+/// Thin forwarder to the SHARED `rewardIconFor(key, audience: kid)`
+/// (`core/design_system/components/reward_icons.dart`, landed with
+/// `shared/audience_glyphs` after iteration 1). The kid branch is the exact
+/// `K08-shop.html` `.k8-art` set — `ic_reward_tv` / `ic_reward_film` /
+/// `ic_reward_moon` / `ic_reward_cake` / `ic_reward_coffee` /
+/// `ic_reward_plate` — which superseded this screen's earlier local map:
 ///
-/// Fallback is `gift` (the generic reward glyph), matching the P14 fallback.
-String shopRewardIcon(String raw) {
-  return switch (raw) {
-    'tv' => NestIcons.screenTime,
-    'film' => NestIcons.filmStrip,
-    'moon' => NestIcons.moon,
-    'cake' => NestIcons.chefHat,
-    'coffee' => NestIcons.cafe,
-    'plate' => NestIcons.pizza,
-    _ => NestIcons.gift,
-  };
-}
+/// * `cake` used to map to `chefHat` (a chef's hat) where the design draws a
+///   covered basket/bowl — the stage-4 UI check caught it (`icon_r2c2_bake`).
+/// * `coffee` used to map to the old `cafe` sit-down mug (handle, steam,
+///   saucer) where the design draws a domed takeaway cup — also caught by the
+///   UI check (`icon_r3c1_cafe`).
+/// * `film`, `moon` and `plate` now use the exact design drawings rather than
+///   the old look-alikes (`filmStrip`, `moon`, `pizza`).
+///
+/// The parent P14 screen keeps its own audience branch via
+/// `rewardIconFor(key, audience: NestAudience.parent)`; this forwarder exists
+/// so the card has one call site and the audience is stated where it belongs
+/// (kid).
+String shopRewardIcon(String raw) =>
+    rewardIconFor(raw, audience: NestAudience.kid);

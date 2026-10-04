@@ -349,9 +349,14 @@ class _ShopGrid extends StatelessWidget {
     final cards = <Widget>[];
     for (var i = 0; i < items.length; i += 2) {
       final left = _cardFor(items[i], bloc);
+      // The trailing odd slot is already inside an `Expanded`, so the filler
+      // must be inert: a `Spacer` is itself an `Expanded`, and
+      // `Expanded(child: Spacer())` throws "competing ParentDataWidgets"
+      // (K08-BUG-2), which broke the whole grid for any odd reward count.
+      // `1_plan.md` §(a): "second `Expanded` with `SizedBox.shrink`".
       final right = i + 1 < items.length
           ? _cardFor(items[i + 1], bloc)
-          : const Spacer();
+          : const SizedBox.shrink();
       cards.add(
         IntrinsicHeight(
           child: Row(

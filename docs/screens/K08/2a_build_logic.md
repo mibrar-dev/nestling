@@ -1,83 +1,68 @@
-# K08 · Reward shop — stage 2a build logic (iteration 1)
+# K08 · Reward shop — stage 2a build logic (iteration 2)
 
 ## CONTRACT CHANGES
 
-None. Event/state/repository names match `1_plan.md` §(b) exactly
-(`KidShopLoadRequested`, `KidShopDataReceived(KidShopData)`,
-`KidShopStreamFailed`, `KidShopRewardRequested(rewardId)`,
-`KidShopNoticeShown`; state `{status, childId, coins, items,
-requestingIds, notice, noticeSeq, errorMessage}`; repository
-`watchActiveShop()` + `requestReward`). The UI builder can code against the
-plan unchanged.
+None. `requestReward(childId, rewardId)` keeps its `Future<void>` signature
+and the five BLoC events / state shape from iteration 1 are untouched, so
+the UI builder codes against the plan unchanged.
+
+One behaviour note for the UI builder (not a signature change): an instant
+reward requested when the balance no longer covers it now lands as
+`requested` (a grown-up decides) instead of `approved`-unpaid. The bloc
+toasts from the item's `needsOk` flag captured at tap time, so in that
+raced edge the toast may read “enjoy” for a row that is actually
+`requested` — accepted as negligible; the money invariant is what the
+proofs pin.
 
 ## Files changed (logic layer only — no views/widgets touched)
 
-- `app/lib/features/kid_shop/domain/entities/kid_shop_data.dart` (new):
-  `KidShopData {childId, coins, items}` value object per plan §(b).
-- `app/lib/features/kid_shop/domain/kid_shop_repository.dart`: contract is
-  now `watchActiveShop()` + `requestReward`. Deleted the superseded
-  `getItems`/`watchItems`/`watchShop` (price-order `watchRewards` — wrong
-  order for K08); verified zero other callers before deleting. Existing
-  `RewardShopView` uses only `state.status`/`items`/`errorMessage`, which are
-  preserved, so the parallel UI build is unaffected.
 - `app/lib/features/kid_shop/data/kid_shop_repository_impl.dart`:
-  `watchActiveShop()` = `watchAppState()` → `activeChildId ?? 'maya'` →
-  `combineLatest2(watchRewardsInCreationOrder, watchChild)` → items in
-  CREATION order with `affordable = coins >= coinPrice`. Outer/inner fan-out
-  uses a feature-local `_switchMap` (same semantics as the `kid_home`
-  helper — `asyncExpand` would stall on child switches since watch streams
-  never close; kept local to avoid a cross-feature import and any shared
-  edit). `requestReward`/`_spendCoins` unchanged (needsOk → `requested`,
-  coins untouched; else `approved` + deduct; unknown id no-op).
-- `app/lib/features/kid_shop/presentation/bloc/kid_shop_event.dart`: the
-  five plan events with guard/ownership docs.
-- `app/lib/features/kid_shop/presentation/bloc/kid_shop_state.dart`: plan
-  state plus `copyWithLoaded` (clears stale load error, preserves
-  `requestingIds`/`notice*`), `copyWithRequestStarted/Finished`
-  (spinner + one-shot notice with `noticeSeq+1`), `copyWithNoticeCleared`.
-- `app/lib/features/kid_shop/presentation/bloc/kid_shop_bloc.dart`:
-  guarded manual subscription (K03-BUG-15 precedent — `await emit.forEach`
-  would hang and deadlock tap events; the old handler had this latent bug
-  and was rewritten, not extended). `RewardRequested` ignores
-  not-loaded / unknown / unaffordable / duplicate; success notice is
-  `needsOk ? 'Mum will give it a thumbs-up soon.' : 'It’s yours — enjoy!'`
-  (curly ’ U+2019, em dash U+2014), failure notice is
-  `'Hmm, that did not work. Try again.'` with `noticeSeq+1`.
-- `app/test/features/kid_shop/kid_shop_bloc_test.dart` (new, 15 tests):
-  loaded emits Maya 120 + 6 items in creation order with only `r-cafe`
-  unaffordable; needsOk → thumbs-up, instant → enjoy, repo write asserted as
-  `(maya, rewardId)`; unaffordable/unknown/duplicate/pre-load ignored;
-  stream error → failure → retry reloads; second load while live ignored
-  (`watches == 1`); notice clear keeps `noticeSeq`; state value semantics.
-- `app/test/features/kid_shop/kid_shop_repository_test.dart` (new, 7
-  tests): in-memory Drift + `Seed.demo` — creation order, affordable flags,
-  `{price} coins` detail, active-child switch (Leo 45, nothing affordable),
-  needsOk → `requested` + coins unchanged, instant → `approved` + 120→20,
-  unknown id no-op.
+  **K08-BUG-1 fixed** (FIXES_1 item 1, my layer). `requestReward` now makes
+  payment a precondition of the `approved` row, inside the single
+  transaction, mirroring P14's `approveRedemption` check-before-write:
+  needsOk → `requested` (unchanged); instant → child row read **inside**
+  the transaction, and only when the balance covers the price is the row
+  written `approved` **and** the coins deducted together. When the balance
+  is short (two individually-affordable cards tapped in one frame, second
+  lands after the first spent the coins) — or the child row is gone — the
+  row is written `requested` instead, so no unpaid `approved` row survives.
+  The old write-first + silently-no-op `_spendCoins` is deleted (replaced
+  by one `_insertRedemption` helper; no triplicated insert body).
+- `app/test/features/kid_shop/kid_shop_repository_test.dart`: new
+  regression test `an instant reward beyond the balance is left requested
+  (K08-BUG-1)` — baking (100, approved, 120→20) then screen-as-instant
+  (50, uncovered) → `requested`, coins stay 20 — plus a `makeInstant`
+  helper. File is now 17 tests.
+- No other logic file touched: domain contract, `watchActiveShop`,
+  `watchShop` legacy entry, BLoC events/state all already match the plan.
 
-DI/routes untouched (constructor signatures unchanged; route still adds
-`KidShopLoadRequested`). No shared files touched. No `DateTime.now`, no
-`google_fonts`, no simulator use.
+FIXES_1 items **not** mine (left for the UI builder — views/widgets are
+out of my scope): K08-BUG-2 (`reward_shop_view.dart:354` `Spacer` →
+`SizedBox.shrink`) and K08-BUG-3 (`shop_reward_card.dart` price
+`Semantics(label: '$price coins')`). Their 4 proofs still fail, as
+expected, and I did not touch those files or their tests.
 
-## Verification
+## Verification (no simulator — 5_ui only; no whole-app run — integrator)
 
 - `flutter analyze lib/features/kid_shop test/features/kid_shop` → No
   issues found.
-- `flutter test --timeout 120s test/features/kid_shop/` (2 files) → All
-  22 tests passed.
-- Whole-app `flutter test` and simulator runs left to the integrator per
-  stage scope.
-
-## Plan items done (§b + §f logic parts)
-
-State/events/repository/bloc per §(b); bloc + repository tests per §(f).
-View tests, geometry, semantics-tap and screenshots belong to the UI
-builder / integrator.
+- `flutter test --timeout 120s test/features/kid_shop/
+  kid_shop_bloc_test.dart test/features/kid_shop/kid_shop_repository_test.dart`
+  → All 51 tests passed (34 bloc + 17 repository).
+- `flutter test --timeout 120s test/features/kid_shop/k08_bugs_test.dart
+  --plain-name K08-BUG-1` → All 3 passed (repository proof, one-frame
+  two-card widget proof, needs-OK sibling regression). Full bugs file:
+  +3 −4, the 4 failures being exactly the BUG-2/BUG-3 proofs owned by the
+  UI builder.
+- `flutter test --timeout 120s test/core/data/repositories_test.dart` →
+  All 22 passed (legacy `watchShop` entry unaffected).
+- No `DateTime.now` (clock via `appNowUtc`), no `google_fonts`, no new ids
+  minted, no `flutter clean`, no simulator, no `analysis_options` change.
 
 ## LEFT FOR NEXT ITERATION
 
-Nothing in the logic layer. If the UI builder needs anything beyond the
-plan contract (e.g. a derived `footerCoins` string), it goes through the
-integrator as a contract amendment.
+- UI builder: K08-BUG-2 and K08-BUG-3 fixes (their files, their proofs).
+- Integrator: whole-app suite (the `kid_home_view_test.dart` placeholder-copy
+  blocker in SHARED_REQUEST.md is still open) and the `5_ui` screenshots.
 
 VERDICT: PASS
