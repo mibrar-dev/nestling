@@ -1,4 +1,5 @@
 export 'package:nestling/core/design_system/assets/nestling_assets.dart';
+export 'package:nestling/core/design_system/components/audience.dart';
 export 'package:nestling/core/design_system/components/nest_avatar.dart';
 export 'package:nestling/core/design_system/components/nest_avatar_initial.dart';
 export 'package:nestling/core/design_system/components/nest_badge_count.dart';
@@ -38,6 +39,8 @@ export 'package:nestling/core/design_system/components/nest_tab_bar.dart';
 export 'package:nestling/core/design_system/components/nest_text_field.dart';
 export 'package:nestling/core/design_system/components/nest_toast.dart';
 export 'package:nestling/core/design_system/components/nest_toggle.dart';
+export 'package:nestling/core/design_system/components/quest_icons.dart';
+export 'package:nestling/core/design_system/components/reward_icons.dart';
 export 'package:nestling/core/design_system/motion/pip_rive.dart';
 export 'package:nestling/core/design_system/theme/kid_meadow.dart';
 export 'package:nestling/core/design_system/theme/kid_scope.dart';
