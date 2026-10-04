@@ -516,6 +516,11 @@ class PipNestFallback extends StatelessWidget {
     this.pip,
     this.nestH,
     this.explicitLayout = false,
+    this.slotHeight,
+    this.pipBottom,
+    this.nestFit = BoxFit.fill,
+    this.showGlow = true,
+    this.showGroundShadow = true,
   });
 
   /// Growth stage. Selects the default pip art when [pipAsset] is null.
@@ -543,6 +548,35 @@ class PipNestFallback extends StatelessWidget {
   /// Selects the explicit rim-seated layout (see the class docs). False keeps
   /// the legacy nominal-width layout bit-for-bit.
   final bool explicitLayout;
+
+  /// Explicit-slot block height override (logical px). Null (default) keeps
+  /// the K03 236 block (`_explicitSlotH`). K06 passes 206 for its
+  /// `.k6-pet { height: 206px }` slot; the nest then sits flush at
+  /// `slotHeight - nestH` (bottom: 0) with no extra bleed.
+  final double? slotHeight;
+
+  /// Custom-pip bottom offset (logical px) from the slot bottom
+  /// (`.k6-pet .pip { bottom: 81px }`). Null (default) keeps the K03
+  /// rim-seated placement (`rimOverlap` below the rim). When set, both the
+  /// custom `pip:` box and the v1 SVG box seat bottom-anchored:
+  /// `pipTop = slotH - pipBottom - pipH` (K06: 206 − 81 − 134 = −9, the
+  /// 9 px overhang the design shows, painted with `Clip.none`).
+  final double? pipBottom;
+
+  /// How the square `nest.svg` art fits its (possibly non-square) box.
+  /// Default `fill` (the design's `<img>` stretch, K03). K06 passes
+  /// `contain`: the browser fits the square art uniformly into its
+  /// 230 × 206 box (a 206 × 206 nest, 12 px letterbox each side).
+  final BoxFit nestFit;
+
+  /// Whether to paint the dark-mode `PetStageGlow`. Default true (K03).
+  /// K06 passes false: its markup has no `.pet-stage`, so the design shows
+  /// no glow even in dark.
+  final bool showGlow;
+
+  /// Whether to paint the extra blurred ground ellipse. Default true (K03).
+  /// K06 passes false: it relies on the baked shadow inside `nest.svg`.
+  final bool showGroundShadow;
 
   /// Nest back/front split, measured from the nest top in nest heights.
   static const double split = 0.55;
@@ -613,9 +647,29 @@ class PipNestFallback extends StatelessWidget {
     required double nestH,
     required double pipH,
     required double contactFrac,
+    double? slotHeight,
+    double? pipBottom,
   }) {
+    final effectiveSlotH = slotHeight ?? _explicitSlotH;
+    final double nestTop;
+    final double stageH;
+    if (slotHeight != null) {
+      nestTop = effectiveSlotH - nestH;
+      stageH = effectiveSlotH;
+    } else {
+      nestTop = _explicitSlotH - nestH - _explicitBleed;
+      stageH = nestTop + nestH + _explicitBleed;
+    }
+    if (pipBottom != null) {
+      final pipTop = effectiveSlotH - pipBottom - pipH;
+      return (
+        nestTop: nestTop,
+        pipTop: pipTop,
+        pipTopSvg: pipTop,
+        stageH: stageH,
+      );
+    }
     final seat = nestRimTopFraction * nestH + rimOverlap;
-    final nestTop = _explicitSlotH - nestH - _explicitBleed;
     return (
       nestTop: nestTop,
       pipTop: nestTop + seat - pipH,
@@ -646,11 +700,14 @@ class PipNestFallback extends StatelessWidget {
         nestH: resolvedNestH,
         pipH: pipH,
         contactFrac: contactInSvg(stage),
+        slotHeight: slotHeight,
+        pipBottom: pipBottom,
       );
       nestTop = g.nestTop;
       // Custom `pip:` widgets (e.g. the child's v2 `PipAvatar`) seat by box;
       // v1 SVGs seat by visible contact so the baked shadow stays buried.
       // Both bottoms land within ±3 px of the rim + 20 px line.
+      // When `pipBottom` is set (K06) both seat bottom-anchored instead.
       pipTopUsed = pip == null ? g.pipTopSvg : g.pipTop;
       stageH = g.stageH;
       shadowTop = nestTop + nestBowlBottomFraction * resolvedNestH - 10.0;
@@ -666,10 +723,12 @@ class PipNestFallback extends StatelessWidget {
       return SvgPicture.asset(
         nest_assets.NestlingIllustrations.nest,
         width: nestW,
-        // The design's `<img>` stretches the art into its box; fill keeps
+        // K03: the design's `<img>` stretches the art into its box; fill keeps
         // the visible outline at `visibleNestRatio × nestW` whatever the box
-        // height. Square boxes render exactly as before.
-        fit: BoxFit.fill,
+        // height. Square boxes render exactly as before. K06 passes
+        // `contain`: the browser fits the square art uniformly into its
+        // 230 × 206 box (206 × 206, 12 px letterbox each side).
+        fit: nestFit,
         height: resolvedNestH,
         placeholderBuilder: (_) => const SizedBox.shrink(),
       );
@@ -683,15 +742,16 @@ class PipNestFallback extends StatelessWidget {
         // stage instead of clipping or forcing the layout wider.
         clipBehavior: Clip.none,
         children: [
-          PetStageGlow(stageW: stageW, stageH: stageH),
-          Positioned(
-            left: nestLeft + nestW * 0.05,
-            top: shadowTop,
-            child: _GroundShadow(
-              width: nestW * 0.9,
-              color: tokens.groundShadow,
+          if (showGlow) PetStageGlow(stageW: stageW, stageH: stageH),
+          if (showGroundShadow)
+            Positioned(
+              left: nestLeft + nestW * 0.05,
+              top: shadowTop,
+              child: _GroundShadow(
+                width: nestW * 0.9,
+                color: tokens.groundShadow,
+              ),
             ),
-          ),
           Positioned(
             left: nestLeft,
             top: nestTop,
@@ -798,6 +858,11 @@ class PipInNest extends StatefulWidget {
     this.stageW,
     this.nestH,
     this.explicitLayout = false,
+    this.slotHeight,
+    this.pipBottom,
+    this.nestFit = BoxFit.fill,
+    this.showGlow = true,
+    this.showGroundShadow = true,
   });
 
   /// Growth stage. Selects the visible rig and the default fallback art.
@@ -823,6 +888,13 @@ class PipInNest extends StatefulWidget {
   /// the Rive-missing frame matches the fallback scene exactly.
   final double? nestH;
   final bool explicitLayout;
+
+  /// K06 slot overrides, forwarded to the fallback (see [PipNestFallback]).
+  final double? slotHeight;
+  final double? pipBottom;
+  final BoxFit nestFit;
+  final bool showGlow;
+  final bool showGroundShadow;
 
   @override
   State<PipInNest> createState() => _PipInNestState();
@@ -904,6 +976,11 @@ class _PipInNestState extends State<PipInNest> {
         stageW: stageW,
         nestH: widget.nestH,
         explicitLayout: widget.explicitLayout,
+        slotHeight: widget.slotHeight,
+        pipBottom: widget.pipBottom,
+        nestFit: widget.nestFit,
+        showGlow: widget.showGlow,
+        showGroundShadow: widget.showGroundShadow,
       );
     }
     return _PipSvgFallback(stage: widget.stage);

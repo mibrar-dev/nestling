@@ -303,6 +303,18 @@ abstract final class NestlingIcons {
   /// K06 wardrobe: crown (locked).
   /// Screens: K06.
   static const String crown = 'assets/icons/ic_crown.svg';
+
+  /// K06 design glyph: scarf, exact `K06-pip.html` `.k6-ward` paths
+  /// (`M5 3h4v18H5z` + flag + tick). Distinct from [scarf] (fringed blanket
+  /// look-alike); K06 must switch its wardrobe tile to this.
+  /// Screens: K06.
+  static const String wardrobeScarf = 'assets/icons/ic_wardrobe_scarf.svg';
+
+  /// K06 design glyph: wellies, exact `K06-pip.html` `.k6-ward` paths
+  /// (boot body + `M6 3h4M14 3h4` top ticks). Distinct from [wellies]
+  /// (profile look-alike); K06 must switch its wardrobe tile to this.
+  /// Screens: K06.
+  static const String wardrobeWellies = 'assets/icons/ic_wardrobe_wellies.svg';
 }
 
 /// Illustrations - `flutter/assets/illustrations/*.svg`. Keep their colours; they are

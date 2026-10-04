@@ -46,6 +46,11 @@ class NestPetStage extends StatelessWidget {
     this.semanticLabel,
     this.pip,
     this.bubbleGap = NestSpacing.s2,
+    this.slotHeight,
+    this.pipBottom,
+    this.nestFit = BoxFit.fill,
+    this.showGlow = true,
+    this.showGroundShadow = true,
   });
 
   /// The child's own Pip (v2 `PipAvatar`, inNest: false) to seat in the
@@ -106,6 +111,29 @@ class NestPetStage extends StatelessWidget {
   /// default, so callers that do not pass it render exactly as before).
   /// K03 passes `bubbleGap: NestSpacing.gap14`.
   final double bubbleGap;
+
+  /// Explicit-slot block height override (logical px). Null (default) keeps
+  /// the K03 236 block. K06 passes 206 for its `.k6-pet { height: 206px }`
+  /// slot (with `nestWidth: 230, nestHeight: 206, fixedPipHeight: 134,
+  /// pipBottom: 81, nestFit: BoxFit.contain, showGlow: false,
+  /// showGroundShadow: false`).
+  final double? slotHeight;
+
+  /// Custom-pip bottom offset (logical px) from the slot bottom
+  /// (K06 `.k6-pet .pip { bottom: 81px }`). Null (default) keeps the K03
+  /// rim-seated placement.
+  final double? pipBottom;
+
+  /// How the square `nest.svg` art fits its box. Default `fill` (K03
+  /// stretch). K06 passes `contain` (uniform 206/240 scale, 12 px letterbox
+  /// each side, as the browser's `<img>` does).
+  final BoxFit nestFit;
+
+  /// Whether to paint the dark-mode glow / extra ground shadow. Defaults
+  /// true (K03). K06 passes false for both: its markup has no `.pet-stage`
+  /// glow and relies on the baked shadow inside `nest.svg`.
+  final bool showGlow;
+  final bool showGroundShadow;
 
   @override
   Widget build(BuildContext context) {
@@ -179,6 +207,11 @@ class NestPetStage extends StatelessWidget {
                   nestH: nestH,
                   stageW: stageW,
                   explicitLayout: explicit,
+                  slotHeight: slotHeight,
+                  pipBottom: pipBottom,
+                  nestFit: nestFit,
+                  showGlow: showGlow,
+                  showGroundShadow: showGroundShadow,
                 );
               }
               return _PetScene(
@@ -191,6 +224,11 @@ class NestPetStage extends StatelessWidget {
                 nestH: nestH,
                 stageW: stageW,
                 explicitLayout: explicit,
+                slotHeight: slotHeight,
+                pipBottom: pipBottom,
+                nestFit: nestFit,
+                showGlow: showGlow,
+                showGroundShadow: showGroundShadow,
               );
             },
           ),
@@ -211,6 +249,11 @@ class _PetScene extends StatelessWidget {
     required this.nestH,
     required this.stageW,
     this.explicitLayout = false,
+    this.slotHeight,
+    this.pipBottom,
+    this.nestFit = BoxFit.fill,
+    this.showGlow = true,
+    this.showGroundShadow = true,
   });
 
   final String pipAsset;
@@ -222,6 +265,11 @@ class _PetScene extends StatelessWidget {
   final double nestH;
   final double stageW;
   final bool explicitLayout;
+  final double? slotHeight;
+  final double? pipBottom;
+  final BoxFit nestFit;
+  final bool showGlow;
+  final bool showGroundShadow;
 
   @override
   Widget build(BuildContext context) {
@@ -237,6 +285,8 @@ class _PetScene extends StatelessWidget {
         nestH: nestH,
         pipH: pipH,
         contactFrac: PipNestFallback.contactInSvg(stage),
+        slotHeight: slotHeight,
+        pipBottom: pipBottom,
       );
       return SizedBox(
         width: stageW,
@@ -244,7 +294,7 @@ class _PetScene extends StatelessWidget {
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            PetStageGlow(stageW: stageW, stageH: g.stageH),
+            if (showGlow) PetStageGlow(stageW: stageW, stageH: g.stageH),
             Positioned.fill(
               child: PipInNest(
                 stage: stage,
@@ -255,6 +305,11 @@ class _PetScene extends StatelessWidget {
                 nestH: nestH,
                 stageW: stageW,
                 explicitLayout: true,
+                slotHeight: slotHeight,
+                pipBottom: pipBottom,
+                nestFit: nestFit,
+                showGlow: showGlow,
+                showGroundShadow: showGroundShadow,
               ),
             ),
           ],
@@ -302,6 +357,11 @@ class _PetScene extends StatelessWidget {
       nestH: nestH,
       stageW: stageW,
       explicitLayout: explicitLayout,
+      slotHeight: slotHeight,
+      pipBottom: pipBottom,
+      nestFit: nestFit,
+      showGlow: showGlow,
+      showGroundShadow: showGroundShadow,
     );
   }
 }
