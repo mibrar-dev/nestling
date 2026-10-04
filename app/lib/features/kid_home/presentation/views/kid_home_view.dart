@@ -43,20 +43,15 @@ const double _kNestBoxWidth = 236;
 const double _kNestBoxHeight = 188;
 const double _kPipSlotSize = 152;
 
-/// Scroll gap between the pet stage and the hearts row.
+/// Scroll gap between the pet stage and the hearts row: the HTML's
+/// `.scroll > * + *`, i.e. `--s4`.
 ///
-/// `.scroll > * + *` is `--s4` (16) in the HTML, but the shared pet stage
-/// paints the bubble's 9 px tail and the design's `.k3-pet` 14 px top margin
-/// inside its own block, so 16 here would push every row below the design down
-/// by the same amount. Measured at real fonts
-/// (`kid_home_geometry_test.dart`), 10.75 lands the hearts row centre on
-/// 447.75 — the design's y 448 — and every row below it keeps the design's
-/// `s4` rhythm. The orchestrator's last-pass note sanctions this lever ("fix
-/// by sizing the NestPetStage box — pipSize / nest width / bottom gap — not by
-/// negative margins"); the shared component owns the box now (exactly the
-/// design's 236 px slot for `nestHeight: 188`), the gap is the only lever
-/// left.
-const double _kStageToHearts = 10.75;
+/// The design's arithmetic adds up exactly, and every term of it now lives in
+/// the component that owns it (`shared/pet_bubble_gap` gives `NestPetStage`
+/// the `bubbleGap` K03 passes as the design's 14): speech bubble 125…169 (44),
+/// + 14 (`.k3-pet { margin: 14px auto 0 }`) → the 236-tall pet box 183…419,
+/// + `s4` 16 → the hearts row top 435, centre 448.
+const double _kStageToHearts = NestSpacing.s4;
 
 /// Shadow room that `NestKidQuestCard` puts UNDER its own painted card
 /// (`core/design_system/components/nest_quest_card.dart:168`,
@@ -77,16 +72,6 @@ const double _kStageToHearts = 10.75;
 /// The value is `NestSpacing.gap6`, the token for that 6 px, so the view and
 /// `kid_home_view_test.dart` name the same reserve the same way.
 const double _kQuestCardShadowRoom = NestSpacing.gap6;
-
-/// Meadow crest silhouette (review finding 2: single place to change).
-/// Numbers cite the `.meadow` hill in
-/// `design/html-source/screens/K03-kid-home.html`, flattened so the band
-/// starts uniformly just above the progress bar like the design (green at
-/// panel top, bar 4 px below it): the crest rises only a few px.
-const double _kCrestLeftY = 6;
-const double _kCrestBend = 0.5;
-const double _kCrestControlY = 0;
-const double _kCrestRightY = 5;
 
 /// Icon tile glyph per `KidQuest.icon` (K03 glyph per `nestling_assets.dart`).
 String _iconFor(String raw) {
@@ -490,63 +475,48 @@ class _KidHomeBody extends StatelessWidget {
                             ],
                           ),
                         ),
-                        // 12 + the band's own 4 px top inset below, so the
-                        // band's top edge lands on the design's 62 % horizon
-                        // stop (`0.62 × NestDevice.height` ≈ y 523) and the
-                        // progress bar still starts exactly `s4` (16) below
-                        // the section title, as `.scroll > * + *` does. The
-                        // band is the design's *screen background* there, so in
-                        // the HTML it never pushes content; the inset
-                        // reproduces that without moving anything.
-                        const SizedBox(height: NestSpacing.s3),
-                        // Meadow band behind progress + cards (FIXES_1 #1,
-                        // review finding 4): in-flow full-bleed hill, so it
-                        // scrolls with the content and needs no magic offsets.
-                        // The tone is `kidHorizon`: pixel measurement of both
-                        // design PNGs lands exactly on it (light #EAF7E2, dark
-                        // within a few levels), and it grades to `kidMeadow`
-                        // over the design's own 321 px gradient span
-                        // (`components.css` l.25: kid-horizon at 62 %, kid-meadow at
-                        // 100 % of the design height). The shared KidScope hill
-                        // (untouched) stays `kidMeadow`.
-                        CustomPaint(
-                          painter: _MeadowPainter(
-                            top: tokens.kidHorizon,
-                            bottom: tokens.kidMeadow,
+                        // `.scroll > * + *` is `--s4` (16): the progress bar
+                        // starts exactly 16 below the section row. Nothing
+                        // paints here — the design's meadow is the SCREEN
+                        // background, so the shared `KidScope` gradient
+                        // (`components.css` l.25: `kid-horizon` at 62 %,
+                        // `kid-meadow` at 100 %) and the shared bottom hills
+                        // (`shared/kid_meadow`) show through behind the bar
+                        // and the cards, exactly where the HTML puts them
+                        // (`shared/kid_meadow_REPORT.md`, `ORCHESTRATOR_NOTES`
+                        // 02:45).
+                        const SizedBox(height: NestSpacing.s4),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(
+                            NestSpacing.padSide,
+                            0,
+                            NestSpacing.padSide,
+                            NestSpacing.s8,
                           ),
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(
-                              NestSpacing.padSide,
-                              NestSpacing.s1,
-                              NestSpacing.padSide,
-                              NestSpacing.s8,
-                            ),
-                            child: Column(
-                              spacing: NestSpacing.s4,
-                              children: [
-                                NestProgress(
-                                  fraction: state.fraction,
-                                  kid: true,
-                                  semanticLabel:
-                                      "$done of $total of today's quests done",
-                                ),
-                                Column(
-                                  // `.k3-quests` gap 12, less the card's own
-                                  // 6 px shadow room: see
-                                  // `_kQuestCardShadowRoom`.
-                                  spacing:
-                                      NestSpacing.s3 - _kQuestCardShadowRoom,
-                                  children: [
-                                    for (final item in state.items)
-                                      _QuestCard(
-                                        child: child,
-                                        item: item,
-                                        completionToken: state.actionNonce,
-                                      ),
-                                  ],
-                                ),
-                              ],
-                            ),
+                          child: Column(
+                            spacing: NestSpacing.s4,
+                            children: [
+                              NestProgress(
+                                fraction: state.fraction,
+                                kid: true,
+                                semanticLabel:
+                                    "$done of $total of today's quests done",
+                              ),
+                              Column(
+                                // `.k3-quests` gap 12, less the card's own
+                                // 6 px shadow room: see
+                                // `_kQuestCardShadowRoom`.
+                                spacing: NestSpacing.s3 - _kQuestCardShadowRoom,
+                                children: [
+                                  for (final item in state.items)
+                                    _QuestCard(
+                                      child: child,
+                                      item: item,
+                                      completionToken: state.actionNonce,
+                                    ),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -719,65 +689,10 @@ class _KidPetStage extends StatelessWidget {
       nestWidth: _kNestBoxWidth,
       nestHeight: _kNestBoxHeight,
       fixedPipHeight: _kPipSlotSize,
+      bubbleGap: NestSpacing.gap14,
       semanticLabel: 'Pip the ${pipStageName(stage)}, stage $stage of 4',
     );
   }
-}
-
-/// Tall meadow band behind progress + cards (FIXES_1 #1, review finding 4).
-// TODO(K03): this is still a feature-local band. The design paints it as the
-// SCREEN background — `components.css` l.25
-// `linear-gradient(180deg, kid-sky-top 0%, kid-sky-bottom 62%, kid-horizon 62%, kid-meadow 100%)`
-// — and `KidScope` grew `meadowHeight`/`meadowBottom`/`meadowColor` for it
-// (SHARED_REQUEST #6). What is still missing in `core/` is the third and
-// fourth gradient stop: `KidScope`'s own background has only two
-// (kidSkyTop → kidSkyBottom) and its hill SVG has a curved crest, while the
-// design's horizon stop is a flat horizontal line 62 % down the screen. Until
-// that lands the band is painted in flow behind the progress bar and the
-// cards, with the design's tones over the design's gradient span.
-class _MeadowPainter extends CustomPainter {
-  const _MeadowPainter({required this.top, required this.bottom});
-
-  final Color top;
-  final Color bottom;
-
-  /// The design's gradient run in logical px: the band starts at the 62 %
-  /// horizon stop (`0.62 × NestDevice.height = 523.3`) and reaches
-  /// `kid-meadow` at the design screen bottom (`NestDevice.height`) —
-  /// ≈321 px. The in-flow band is far taller than that (progress bar plus every card), so the grade is
-  /// compressed into the design's span and stays `kidMeadow` below it: that
-  /// is what makes the visible part match both PNGs. Grading over the band's
-  /// whole height (the old behaviour) left dark mode a flat navy block,
-  /// three iterations running.
-  ///
-  /// The two stops are the design's own percentages of the design device
-  /// height, so the whole run comes from `NestDevice.height` (FIXES_8 finding
-  /// 5) rather than a repeated literal.
-  static const double gradeSpan = NestDevice.height * (1 - 0.62);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-    final path = Path()
-      ..moveTo(0, _kCrestLeftY)
-      ..quadraticBezierTo(w * _kCrestBend, _kCrestControlY, w, _kCrestRightY)
-      ..lineTo(w, h)
-      ..lineTo(0, h)
-      ..close();
-    final paint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: <Color>[top, bottom],
-        stops: <double>[0, (gradeSpan / h).clamp(0.0, 1.0)],
-      ).createShader(Offset.zero & size);
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _MeadowPainter oldDelegate) =>
-      oldDelegate.top != top || oldDelegate.bottom != bottom;
 }
 
 class _QuestCard extends StatefulWidget {
