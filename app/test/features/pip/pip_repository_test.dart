@@ -12,6 +12,7 @@ import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/features/pip/data/pip_repository_impl.dart';
 import 'package:nestling/features/pip/domain/entities/pip_nest.dart';
+import 'package:nestling/features/pip/domain/pip_repository.dart';
 
 Future<void> _setMayaCoins(AppDatabase db, int coins) async {
   await (db.update(db.children)..where((c) => c.id.equals('maya'))).write(
@@ -75,13 +76,13 @@ void main() {
           false,
           false,
         ]);
-        // Prices come from the DB (wellies 40 / crown 120), never the HTML.
-        expect(items.map((i) => i.priceCoins).toList(), <int>[0, 0, 40, 120]);
+        // Prices come from the DB (wellies 30 / crown 60), never the HTML.
+        expect(items.map((i) => i.priceCoins).toList(), <int>[0, 0, 30, 60]);
         expect(items.map((i) => i.detail).toList(), <String>[
           'Owned',
           'Owned',
-          '40 coins',
-          '120 coins',
+          '30 coins',
+          '60 coins',
         ]);
       },
     );
@@ -171,24 +172,24 @@ void main() {
 
   group('wardrobe + look', () {
     test('buyItem marks owned and deducts the DB price', () async {
-      await repo.buyItem('maya', 'wellies');
+      expect(await repo.buyItem('maya', 'wellies'), PipBuyResult.bought);
       final nest = await repo.watchNest().first;
       final wellies = nest!.items.firstWhere((i) => i.id == 'wellies');
       expect(wellies.owned, isTrue);
       expect(wellies.detail, 'Owned');
-      expect(nest.profile.coins, 80);
+      expect(nest.profile.coins, 90);
     });
 
     test('buyItem unaffordable is a no-op', () async {
       await _setMayaCoins(db, 10);
-      await repo.buyItem('maya', 'crown');
+      expect(await repo.buyItem('maya', 'crown'), PipBuyResult.cannotAfford);
       final nest = await repo.watchNest().first;
       expect(nest!.items.firstWhere((i) => i.id == 'crown').owned, isFalse);
       expect(nest.profile.coins, 10);
     });
 
     test('buyItem already-owned is a no-op', () async {
-      await repo.buyItem('maya', 'scarf');
+      expect(await repo.buyItem('maya', 'scarf'), PipBuyResult.alreadyOwned);
       final profile = await repo.watchProfile('maya').first;
       expect(profile?.coins, 120);
     });
@@ -216,10 +217,14 @@ void main() {
     });
 
     test('concurrent different-item buys cannot overspend', () async {
-      await Future.wait(<Future<void>>[
+      // 70 coins fit only one of Wellies (30) + Crown (60).
+      await _setMayaCoins(db, 70);
+      final results = await Future.wait(<Future<PipBuyResult>>[
         repo.buyItem('maya', 'wellies'),
         repo.buyItem('maya', 'crown'),
       ]);
+      expect(results, contains(PipBuyResult.bought));
+      expect(results, contains(PipBuyResult.cannotAfford));
       final nest = await repo.watchNest().first;
       final owned = nest!.items.where((i) => i.owned).length;
       expect(owned, 3); // scarf + sunhat + exactly one purchase.
@@ -227,13 +232,14 @@ void main() {
     });
 
     test('concurrent same-item buys charge exactly once', () async {
-      await Future.wait(<Future<void>>[
+      final results = await Future.wait(<Future<PipBuyResult>>[
         repo.buyItem('maya', 'wellies'),
         repo.buyItem('maya', 'wellies'),
       ]);
+      expect(results, contains(PipBuyResult.bought));
       final nest = await repo.watchNest().first;
       expect(nest!.items.firstWhere((i) => i.id == 'wellies').owned, isTrue);
-      expect(nest.profile.coins, 80);
+      expect(nest.profile.coins, 90);
     });
   });
 

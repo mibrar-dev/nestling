@@ -22,14 +22,19 @@
 //   `SHARED_REQUEST.md` §6; the test side pins that the *rendered* price is
 //   the seeded one (DATA OVER MOCKS) and never a literal.
 //
-// ITERATION 2 / ORCHESTRATOR_NOTES 13:52: §1/§2/§3/§5/§6 are being fixed on
-// `shared/shared_batch7` — "the prices (the seed moves to 30/60) … they are not
-// K06 findings meanwhile". So the sanctioned end-state is the DESIGN's 30/60,
-// and the parked proof at the end of the item-3 group goes green by itself
-// when that batch merges — no edit to this file. The green assertions in that
-// group keep today's seeded 40/120, because that is still what this branch's
-// seed holds; they move together with the batch (the numbers are listed in
-// `docs/screens/K06/3_test.md` §6).
+// ITERATION 3 / ORCHESTRATOR_NOTES 13:52: `shared/shared_batch7` HAS LANDED
+// (§1/§2/§3/§5/§6 fixed: the scarf/wellies glyphs, the prices — the seed moved
+// to the design's 30/60 — the pet-slot params, the kid-button third row and the
+// shared dashed border). Consequences in this file:
+//   * the item-2 proofs for the two glyphs the note NAMES (scarf, wellies) are
+//     live and green — K06 now paints `NestIcons.wardrobeScarf` /
+//     `.wardrobeWellies`;
+//   * the sun hat stays parked as §7: batch 7 left it on `NestIcons.sunHat`
+//     and reported it as already matching, which this proof shows is not the
+//     case;
+//   * the item-3 `K06-BATCH7` proof is LIVE again (it was parked precisely
+//     until the batch landed) and the seeded-price proof above now reads its
+//     expectation out of the row, so it tracks the seed instead of a number.
 //
 // Item 4 · "Pip and the nest are correct" — no action, and nothing here
 //   constrains the nest art box (note this: it contradicts stage 6's
@@ -269,14 +274,13 @@ void main() {
     // current point back at (4,8)). Same geometry, different notation — so a
     // byte comparison there would be a brittle false positive, and the note
     // does not name it.
-    for (final item in const <String>['scarf', 'wellies', 'sunhat']) {
+    // The two glyphs ORCHESTRATOR_NOTES 11:30 item 2 names by hand ("Scarf …
+    // and Wellies … the app uses look-alikes. Do not substitute"). Live since
+    // `shared/shared_batch7` landed the exact K06 paths and K06 switched its
+    // tile icons to `NestIcons.wardrobeScarf` / `.wardrobeWellies`
+    // (`pip_look.dart`).
+    for (final item in const <String>['scarf', 'wellies']) {
       test('ORCHESTRATOR NOTES item 2: the $item glyph is the design path', () {
-        // Parked: these shared assets still carry look-alikes. The note names
-        // Scarf and Wellies explicitly; the Sun hat is the same shape on
-        // different coordinates plus an extra brim stroke, and is listed here
-        // so the build can rule on it rather than have it missed. The fix is
-        // `SHARED_REQUEST.md` §5 — these are `core/design_system` assets a
-        // screen agent may not edit (RULES §1).
         final design = _designGlyphPaths(item).join();
         final app = _paths(_asset(item).readAsStringSync()).join();
         expect(
@@ -286,35 +290,73 @@ void main() {
               'assets/icons/${pipWardrobeIcon(item)} must draw the design '
               "glyph from K06-pip.html's .k6-item block verbatim",
         );
-      }, skip: true); // ORCHESTRATOR_NOTES 11:30 item 2 — parked, see §5.
+      });
     }
+
+    // Sun hat: NOT named by the note, and `shared/shared_batch7` left it on
+    // `NestIcons.sunHat` reporting that it "already matches the design
+    // geometry". It does not match — same silhouette, different coordinates
+    // plus an extra brim stroke (`m2.413.8h19.2…` vs the design's
+    // `m316h18…`). The fix is a shared asset a screen agent may not edit
+    // (RULES §1), so this stays parked as `SHARED_REQUEST.md` §7 rather than
+    // reddening the suite or being quietly dropped.
+    test(
+      'ORCHESTRATOR NOTES item 2 (extra): the sunhat glyph is the design path',
+      () {
+        final design = _designGlyphPaths('sunhat').join();
+        final app = _paths(_asset('sunhat').readAsStringSync()).join();
+        expect(
+          app,
+          design,
+          reason:
+              'assets/icons/${pipWardrobeIcon('sunhat')} must draw the design '
+              "glyph from K06-pip.html's .k6-item block verbatim",
+        );
+      },
+      skip: true,
+    ); // shared asset, see SHARED_REQUEST.md §7.
   });
 
   group('item 3 — prices come from the database', () {
     testWidgets('the rendered price is the seeded one, never a literal', (
       tester,
     ) async {
+      // The point of this proof is DATA OVER MOCKS ("never hard-code prices"):
+      // the tile must show whatever the ROW says. So the expectation is read
+      // out of the seeded wardrobe rather than typed in — shared batch 7 moved
+      // these rows from 40/120 to the design's 30/60, and a literal here would
+      // have reddened a proof that has nothing to do with prices being data.
+      final db = GetIt.instance<AppDatabase>();
+      final seeded = <String, int>{
+        for (final row in await (db.select(
+          db.pipWardrobe,
+        )..where((w) => w.childId.equals('maya'))).get())
+          row.item: row.priceCoins,
+      };
       await pumpAppRoute(tester, '/pip');
 
-      // Seed.demo: wellies 40, crown 120 for Maya (the HTML mocks say 30/60
-      // and are overridden by DATA OVER MOCKS).
-      expect(find.text('40'), findsOneWidget);
-      expect(find.text('120'), findsOneWidget);
-      expect(find.text('30'), findsNothing);
-      expect(find.text('60'), findsNothing);
+      expect(find.text('${seeded['wellies']}'), findsOneWidget);
+      expect(find.text('${seeded['crown']}'), findsOneWidget);
       // The number is announced with its item, never alone.
-      expect(find.bySemanticsLabel('Wellies, 40 coins'), findsOneWidget);
-      expect(find.bySemanticsLabel('Crown, 120 coins'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('Wellies, ${seeded['wellies']} coins'),
+        findsOneWidget,
+      );
+      expect(
+        find.bySemanticsLabel('Crown, ${seeded['crown']} coins'),
+        findsOneWidget,
+      );
       await disposeApp(tester);
     });
 
     testWidgets('K06-BATCH7: the rendered price is the DESIGN number', (
       tester,
     ) async {
-      // Parked: shared_batch7 moves the seed to the design's numbers
-      // (ORCHESTRATOR_NOTES 13:52), and this proof goes green with no edit
-      // here. Until then DATA OVER MOCKS makes the seeded 40/120 the correct
-      // render, which the two green tests above pin.
+      // `shared/shared_batch7` HAS LANDED (ORCHESTRATOR_NOTES 13:52): the seed
+      // now mirrors the design, so the database and the design agree and DATA
+      // OVER MOCKS is satisfied by the design's own numbers. This proof was
+      // parked until exactly that, and is live again with no expectation
+      // changed.
       //
       // `.k6-item-p` in the design's `.k6-ward`, read from the source: the two
       // locked tiles carry 30 and 60.
@@ -328,7 +370,7 @@ void main() {
       expect(find.bySemanticsLabel('Wellies, 30 coins'), findsOneWidget);
       expect(find.bySemanticsLabel('Crown, 60 coins'), findsOneWidget);
       await disposeApp(tester);
-    }, skip: true); // ORCHESTRATOR_NOTES 13:52 · shared_batch7 — parked.
+    });
 
     testWidgets('a re-seeded price renders without a code change', (
       tester,

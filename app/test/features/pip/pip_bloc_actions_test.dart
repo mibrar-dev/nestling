@@ -21,6 +21,7 @@ import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/features/pip/data/pip_repository_impl.dart';
 import 'package:nestling/features/pip/domain/entities/pip_nest.dart';
 import 'package:nestling/features/pip/domain/entities/pip_profile.dart';
+import 'package:nestling/features/pip/domain/pip_repository.dart';
 import 'package:nestling/features/pip/presentation/bloc/pip_bloc.dart';
 import 'package:nestling/features/pip/presentation/bloc/pip_event.dart';
 import 'package:nestling/features/pip/presentation/bloc/pip_state.dart';
@@ -51,7 +52,7 @@ class _SpyRepository extends PipRepositoryImpl {
   }
 
   @override
-  Future<void> buyItem(String childId, String item) {
+  Future<PipBuyResult> buyItem(String childId, String item) {
     calls.add('buy:$item');
     return super.buyItem(childId, item);
   }
@@ -99,7 +100,7 @@ class _ThrowingRepository extends PipRepositoryImpl {
       _throws('bathe') ? _blow('bathe') : super.bathe(childId);
 
   @override
-  Future<void> buyItem(String childId, String item) =>
+  Future<PipBuyResult> buyItem(String childId, String item) =>
       _throws('buyItem') ? _blow('buyItem') : super.buyItem(childId, item);
 
   @override

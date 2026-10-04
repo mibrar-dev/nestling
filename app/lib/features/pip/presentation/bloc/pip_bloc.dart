@@ -97,7 +97,17 @@ class PipBloc extends Bloc<PipEvent, PipState> {
       return;
     }
     try {
-      await _repository.buyItem(nest.profile.childId, event.item);
+      // The result tells apart what a silent void could not (K06-BUG-7):
+      // a buy the fresh balance refuses still gets the kind toast, while
+      // bought / already-owned / unavailable stay event-free (the stream
+      // re-emits the new wardrobe on success).
+      final result = await _repository.buyItem(
+        nest.profile.childId,
+        event.item,
+      );
+      if (result == PipBuyResult.cannotAfford) {
+        emit(state.withActionFailed(kPipNotEnoughCoins));
+      }
     } on Object catch (error) {
       emit(state.withActionFailed(error));
     }

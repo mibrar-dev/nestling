@@ -173,12 +173,12 @@ void main() {
     expect(find.text('Wellies'), findsOneWidget);
     expect(find.text('Crown'), findsOneWidget);
     expect(find.text('Owned'), findsNWidgets(2));
-    // Database beats the HTML: wellies 40 and crown 120 for Maya.
+    // The seed now mirrors the design (Wellies 30, Crown 60).
     final prices = tester
         .widgetList<PipCoinAmount>(find.byType(PipCoinAmount))
         .map((w) => w.amount)
         .toList();
-    expect(prices, containsAll(<String>['40', '120']));
+    expect(prices, containsAll(<String>['30', '60']));
     await disposeApp(tester);
   });
 
@@ -194,8 +194,8 @@ void main() {
       'Bathe Pip, costs 3 coins',
       'Scarf, Owned',
       'Sun hat, Owned',
-      'Wellies, 40 coins',
-      'Crown, 120 coins',
+      'Wellies, 30 coins',
+      'Crown, 60 coins',
     ];
     for (final label in labels) {
       final node = find.bySemanticsLabel(label);
@@ -228,10 +228,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(await _coins(db), 112);
 
-    // Buying an affordable locked tile spends the DB price (Wellies 40).
-    performTap(tester, find.bySemanticsLabel('Wellies, 40 coins'));
+    // Buying an affordable locked tile spends the DB price (Wellies 30).
+    performTap(tester, find.bySemanticsLabel('Wellies, 30 coins'));
     await tester.pumpAndSettle();
-    expect(await _coins(db), 72);
+    expect(await _coins(db), 82);
     final row =
         await (db.select(db.pipWardrobe)..where(
               (w) => w.childId.equals('maya') & w.item.equals('wellies'),
@@ -264,7 +264,7 @@ void main() {
   ) async {
     await _pumpNest(tester);
 
-    // Wellies: locked, 120 coins vs the DB's 40 → the buy writes.
+    // Wellies: locked, 120 coins vs the DB's 30 → the buy writes.
     await tester.tap(find.byKey(const Key('k06-ward-wellies')));
     await tester.pumpAndSettle();
     final row =
@@ -273,7 +273,7 @@ void main() {
             ))
             .getSingle();
     expect(row.owned, isTrue);
-    expect(await _coins(db), 80);
+    expect(await _coins(db), 90);
     // The strip now shows three owned tiles.
     expect(find.text('Owned'), findsNWidgets(3));
     await disposeApp(tester);
@@ -284,16 +284,16 @@ void main() {
   ) async {
     await _pumpNest(tester);
 
-    // Buy the wellies first (120 - 40 = 80), then tap the OWNED tile: it has
+    // Buy the wellies first (120 - 30 = 90), then tap the OWNED tile: it has
     // no Pip accessory node, so no DB write — just the kind explanation.
     await tester.tap(find.byKey(const Key('k06-ward-wellies')));
     await tester.pumpAndSettle();
-    expect(await _coins(db), 80);
+    expect(await _coins(db), 90);
 
     await tester.tap(find.byKey(const Key('k06-ward-wellies')));
     await tester.pumpAndSettle();
     expect(find.text(kPipNotWearable), findsOneWidget);
-    expect(await _coins(db), 80);
+    expect(await _coins(db), 90);
     await disposeApp(tester);
   });
 

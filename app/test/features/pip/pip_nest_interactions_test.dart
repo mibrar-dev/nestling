@@ -44,7 +44,7 @@ class _ThrowingBuyRepository extends PipRepositoryImpl {
   _ThrowingBuyRepository({required super.db});
 
   @override
-  Future<void> buyItem(String childId, String item) =>
+  Future<PipBuyResult> buyItem(String childId, String item) =>
       throw Exception('buy down');
 }
 
@@ -109,6 +109,17 @@ Future<bool> _owned(AppDatabase db, String item) async {
     db.pipWardrobe,
   )..where((w) => w.childId.equals('maya') & w.item.equals(item))).getSingle();
   return row.owned;
+}
+
+/// The seeded price of one wardrobe row. Read, never typed: DATA OVER MOCKS
+/// makes the database the source of truth, and `shared_batch7` moved these
+/// rows to the design's numbers, so a literal would pin the seed rather than
+/// the "the screen follows the row" contract these proofs exist for.
+Future<int> _price(AppDatabase db, String item, {String id = 'maya'}) async {
+  final row = await (db.select(
+    db.pipWardrobe,
+  )..where((w) => w.childId.equals(id) & w.item.equals(item))).getSingle();
+  return row.priceCoins;
 }
 
 Future<void> _setCoins(AppDatabase db, int coins, [String id = 'maya']) async {
@@ -403,10 +414,21 @@ void main() {
     ) async {
       await _pumpNest(tester);
 
-      performTap(tester, find.bySemanticsLabel('Wellies, 40 coins'));
+      // The price is read from the wardrobe ROW, not typed in: DATA OVER MOCKS
+      // makes the database the source of truth and `shared_batch7` moved this
+      // row (40 -> 30, the design's number). A literal here would test the
+      // seed, not the "no hard-coded price" contract this group exists for.
+      final price = await _price(db, 'wellies');
+      final before = await _coins(db);
+
+      performTap(tester, find.bySemanticsLabel('Wellies, $price coins'));
       await _settle(tester);
 
-      expect(await _coins(db), 80, reason: 'the DB price, not the HTML 30');
+      expect(
+        await _coins(db),
+        before - price,
+        reason: 'the DB price, whatever it is today',
+      );
       expect(await _owned(db, 'wellies'), isTrue);
       // The tile announces itself as owned afterwards.
       expect(find.bySemanticsLabel('Wellies, Owned'), findsOneWidget);
@@ -596,9 +618,23 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Owned'), findsOneWidget);
-      expect(find.text('30'), findsOneWidget);
-      expect(find.text('40'), findsOneWidget);
-      expect(find.text('120'), findsOneWidget);
+      // HIS prices, read from HIS rows — not Maya's and not literals. Batch 7
+      // moved these to the design's 30/60, and two of his locked tiles share a
+      // price (Scarf and Wellies are both 30), so each tile is identified by
+      // its own announcement rather than by counting bare `30`s on screen.
+      for (final tile in const <(String, String)>[
+        ('scarf', 'Scarf'),
+        ('wellies', 'Wellies'),
+        ('crown', 'Crown'),
+      ]) {
+        final (id, title) = tile;
+        final price = await _price(db, id, id: 'leo');
+        expect(
+          find.bySemanticsLabel(RegExp('^$title, $price coins\$')),
+          findsOneWidget,
+          reason: "Leo's $title tile shows his own seeded price ($price)",
+        );
+      }
       // Design order for every child: Scarf, Sun hat, Wellies, Crown.
       final tiles = find.byType(PipWardrobeTile);
       expect(tiles, findsNWidgets(4));

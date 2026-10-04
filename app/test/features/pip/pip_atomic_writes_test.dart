@@ -19,11 +19,13 @@
 // `testWidgets`: awaiting a Drift stream inside the fake-async zone never
 // completes.
 //
-// ORCHESTRATOR_NOTES 13:52: `shared/shared_batch7` moves the seed's wardrobe
-// prices to the design's 30/60. The 40/120 numbers in the buy-boundary tests
-// below are THIS branch's seeded values and they all move together with that
-// merge; `pip_orchestrator_notes_test.dart`'s parked `K06-BATCH7` proof is the
-// signal, and it goes green on its own when the batch lands.
+// ORCHESTRATOR_NOTES 13:52: `shared/shared_batch7` moved the demo wardrobe to
+// the design's 30/60 (it used to be 40/120) and HAS LANDED on `main`. The buy
+// boundaries below therefore read the seeded price out of the database instead
+// of pinning it, so a future price change moves the premise with the guard
+// rather than reddening an unrelated boundary probe.
+import 'dart:math' as math;
+
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nestling/core/data/app_database.dart';
@@ -180,21 +182,34 @@ void main() {
   });
 
   group('wardrobe: the deduction and the claim are one transaction', () {
-    test('the price is inclusive: 40 coins buys the 40-coin wellies', () async {
-      await setCoins('maya', 40);
-      await repo.buyItem('maya', 'wellies');
+    // Every buy boundary below is expressed against the SEEDED price, read out
+    // of the database, never a literal. Shared batch 7 moved the demo wardrobe
+    // to the design's 30/60 (it used to be 40/120), which proved literals are
+    // the wrong oracle here: the guard under test is the affordability
+    // boundary, not a particular number.
+    Future<int> priceOf(String item) async =>
+        (await nest())!.items.firstWhere((i) => i.id == item).priceCoins;
 
-      final after = await nest();
-      expect(await owned('wellies'), isTrue);
-      expect(after!.profile.coins, 0, reason: 'never negative');
-    });
+    test(
+      'the price is inclusive: exactly the price buys the wellies',
+      () async {
+        final price = await priceOf('wellies');
+        await setCoins('maya', price);
+        await repo.buyItem('maya', 'wellies');
+
+        final after = await nest();
+        expect(await owned('wellies'), isTrue);
+        expect(after!.profile.coins, 0, reason: 'never negative');
+      },
+    );
 
     test('one coin short buys nothing', () async {
-      await setCoins('maya', 39);
+      final price = await priceOf('wellies');
+      await setCoins('maya', price - 1);
       await repo.buyItem('maya', 'wellies');
 
       expect(await owned('wellies'), isFalse);
-      expect((await nest())!.profile.coins, 39);
+      expect((await nest())!.profile.coins, price - 1);
     });
 
     test('an unknown child or an unknown item buys nothing', () async {
@@ -206,6 +221,8 @@ void main() {
     });
 
     test('a same-item burst pays once and the tile ends owned', () async {
+      final price = await priceOf('wellies');
+      final start = (await nest())!.profile.coins;
       await Future.wait(<Future<void>>[
         repo.buyItem('maya', 'wellies'),
         repo.buyItem('maya', 'wellies'),
@@ -213,10 +230,23 @@ void main() {
       ]);
 
       expect(await owned('wellies'), isTrue);
-      expect((await nest())!.profile.coins, 80, reason: '40 paid, once');
+      expect(
+        (await nest())!.profile.coins,
+        start - price,
+        reason: 'the $price price paid exactly once',
+      );
     });
 
-    test('a two-item burst on a 120 balance can afford exactly one', () async {
+    test('a two-item burst can afford exactly one', () async {
+      // The balance sits strictly BETWEEN the two seeded prices, so whichever
+      // is cheaper is affordable and the other is not — whatever the seed says
+      // (30/60 after shared batch 7, where a 120 balance could now afford
+      // both and this probe would have proved nothing).
+      final wellies = await priceOf('wellies');
+      final crown = await priceOf('crown');
+      final lo = math.min(wellies, crown);
+      final hi = math.max(wellies, crown);
+      await setCoins('maya', lo + (hi - lo) ~/ 2);
       await Future.wait(<Future<void>>[
         repo.buyItem('maya', 'wellies'),
         repo.buyItem('maya', 'crown'),
@@ -227,7 +257,7 @@ void main() {
       expect(
         bought,
         hasLength(1),
-        reason: 'only one of 40 + 120 is affordable',
+        reason: 'only one of $wellies + $crown is affordable',
       );
       expect(after.profile.coins, greaterThanOrEqualTo(0));
     });
@@ -245,12 +275,13 @@ void main() {
     });
 
     test('buying leaves the equip path untouched', () async {
+      final price = await priceOf('wellies');
       await repo.buyItem('maya', 'wellies');
       await repo.updateLook(childId: 'maya', accessory: 'scarf');
 
       final profile = await repo.watchProfile('maya').first;
       expect(profile!.accessory, 'scarf');
-      expect(profile.coins, 80);
+      expect(profile.coins, 120 - price);
     });
   });
 

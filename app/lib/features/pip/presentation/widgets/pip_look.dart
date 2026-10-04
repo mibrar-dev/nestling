@@ -45,9 +45,18 @@ PipAccessory pipAccessoryOf(String raw) {
 /// renders a glyph instead of an empty circle.
 String pipWardrobeIcon(String item) {
   return switch (item) {
-    'scarf' => NestIcons.scarf,
+    // ORCHESTRATOR_NOTES 11:30 item 2 ("wardrobe icons must be the design's
+    // glyphs … do not substitute") + 13:52. `shared/shared_batch7` added the
+    // exact `K06-pip.html` paths as `NestIcons.wardrobeScarf` /
+    // `NestIcons.wardrobeWellies`; `NestIcons.scarf` / `.wellies` are
+    // look-alikes (a fringed blanket and a side-profile boot) and are no longer
+    // what this screen may draw. See
+    // docs/screens/_shared/shared_batch7_REPORT.md §1 + "What K06 must switch
+    // to". Sun hat and crown keep their existing icons — batch 7 verified
+    // their geometry already matches the design.
+    'scarf' => NestIcons.wardrobeScarf,
     'sunhat' => NestIcons.sunHat,
-    'wellies' => NestIcons.wellies,
+    'wellies' => NestIcons.wardrobeWellies,
     'crown' => NestIcons.crown,
     _ => NestIcons.paw,
   };

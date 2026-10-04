@@ -43,9 +43,17 @@ final class PipState extends Equatable {
   }
 
   /// Healthy nest emission: loaded (even with a null nest — the no-child
-  /// card), clearing transient action outcomes and any stale load error.
+  /// card). A pending action outcome is carried through, not cleared: in a
+  /// tap burst the refused tap's toast must survive the sibling write's
+  /// refresh (K06-BUG-7). The outcome clears on the next attempt via
+  /// [withActionStarted], so a repeated outcome is still announced again.
   PipState copyWithLoaded(PipNest? next) {
-    return PipState(status: PipStatus.loaded, nest: next);
+    return PipState(
+      status: PipStatus.loaded,
+      nest: next,
+      actionError: actionError,
+      actionNonce: actionNonce,
+    );
   }
 
   PipState toFailure(Object error) {

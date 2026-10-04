@@ -2,6 +2,21 @@ import 'package:nestling/features/pip/domain/entities/pip_nest.dart';
 import 'package:nestling/features/pip/domain/entities/pip_profile.dart';
 import 'package:nestling/features/pip/domain/entities/pip_stage.dart';
 
+/// Outcome of a wardrobe purchase attempt.
+enum PipBuyResult {
+  /// The tile is now owned and the DB price was deducted.
+  bought,
+
+  /// The fresh balance cannot afford the tile: nothing was written.
+  cannotAfford,
+
+  /// The tile was already owned: nothing was written, nothing charged.
+  alreadyOwned,
+
+  /// Unknown item or child: nothing was written.
+  unavailable,
+}
+
 /// Pip's nest + evolution (K06, K07), backed by Drift.
 ///
 /// Care actions are kind choices with no timers: feeding costs 5 coins,
@@ -33,5 +48,12 @@ abstract class PipRepository {
   Future<void> feed(String childId);
   Future<void> play(String childId);
   Future<void> bathe(String childId);
-  Future<void> buyItem(String childId, String item);
+
+  /// Buys a wardrobe tile at its DB price. Atomic (K06-BUG-2): the
+  /// affordability check is part of the write, so overlapping taps cannot
+  /// overspend, and a lost same-item race refunds instead of charging
+  /// twice. The result tells the caller apart what a silent `void` could
+  /// not (K06-BUG-7): only [PipBuyResult.cannotAfford] needs the kind
+  /// "not enough coins" toast.
+  Future<PipBuyResult> buyItem(String childId, String item);
 }

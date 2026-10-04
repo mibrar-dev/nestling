@@ -19,6 +19,7 @@
 
 import 'dart:async';
 
+import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -124,6 +125,16 @@ bool hasTap(WidgetTester tester, Finder finder) {
       .getSemantics(finder)
       .getSemanticsData()
       .hasAction(SemanticsAction.tap);
+}
+
+/// The seeded price of one wardrobe row, read rather than typed: DATA OVER
+/// MOCKS makes the database the source of truth and `shared_batch7` moved
+/// these rows, so a literal would pin the seed instead of the contract.
+Future<int> _price(AppDatabase db, String item, {String id = 'maya'}) async {
+  final row = await (db.select(
+    db.pipWardrobe,
+  )..where((w) => w.childId.equals(id) & w.item.equals(item))).getSingle();
+  return row.priceCoins;
 }
 
 /// The chrome every state shares: the 56 px back tile and the 56 px
@@ -369,8 +380,14 @@ void main() {
       final semantics = tester.ensureSemantics();
       await _pumpNest(tester);
 
-      // Every control on K06, and nothing else.
-      for (final label in const <String>[
+      // Every control on K06, and nothing else. The two wardrobe labels carry
+      // the SEEDED price, read from the row: `shared_batch7` moved them to the
+      // design's 30/60, and this proof is about which nodes advertise a tap,
+      // not about a particular number.
+      final db = GetIt.instance<AppDatabase>();
+      final welliesPrice = await _price(db, 'wellies');
+      final crownPrice = await _price(db, 'crown');
+      for (final label in <String>[
         'Back',
         'Grown-ups',
         'Feed Pip, costs 5 coins',
@@ -378,8 +395,8 @@ void main() {
         'Bathe Pip, costs 3 coins',
         'Scarf, Owned',
         'Sun hat, Owned',
-        'Wellies, 40 coins',
-        'Crown, 120 coins',
+        'Wellies, $welliesPrice coins',
+        'Crown, $crownPrice coins',
       ]) {
         expect(
           hasTap(tester, find.bySemanticsLabel(label)),

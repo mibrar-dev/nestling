@@ -12,14 +12,18 @@
 //   * #11 — the progress bar now announces the design's own aria wording, so
 //     the copy oracle can compare it with the HTML instead of documenting the
 //     difference.
-//   * OPEN — a purchase refused by the DATABASE (not the bloc's cached
-//     pre-check) answers a tap with silence. Parked, repro in the group.
+//   * K06-BUG-7 — a purchase refused by the DATABASE (not the bloc's cached
+//     pre-check) answers a tap with silence. FIXED in iteration 3: `buyItem`
+//     returns a `PipBuyResult` and the bloc announces `cannotAfford` with the
+//     existing kind toast. The proof below is live again; the group's "OPEN"
+//     name is kept so the history stays greppable.
 //
 // Real fonts are loaded first: the placeholder glyphs are one em wide and would
 // wrap the care labels, which is what made the heights differ in the first
 // place.
 
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:flutter/material.dart';
@@ -65,6 +69,16 @@ Future<void> loadBundledFonts() async {
 Future<void> _settle(WidgetTester tester) async {
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 400));
+}
+
+/// The seeded price of one wardrobe row, read rather than typed: DATA OVER
+/// MOCKS makes the database the source of truth, and `shared_batch7` moved
+/// these rows to the design's 30/60.
+Future<int> _price(AppDatabase db, String item, {String id = 'maya'}) async {
+  final row = await (db.select(
+    db.pipWardrobe,
+  )..where((w) => w.childId.equals(id) & w.item.equals(item))).getSingle();
+  return row.priceCoins;
 }
 
 Future<void> _pumpNest(
@@ -376,21 +390,35 @@ void main() {
     });
   });
 
-  group('OPEN — a purchase the DATABASE refuses answers nothing', () {
-    testWidgets(
-      'K06-BUG-7: the tile that lost the race must still say why',
-      (tester) async {
+  group(
+    'K06-BUG-7 (was OPEN) — a purchase the DATABASE refused answers nothing',
+    () {
+      testWidgets('K06-BUG-7: the tile that lost the race must still say why', (
+        tester,
+      ) async {
         // Two locked tiles tapped in one burst, both inside the balance the
-        // bloc has cached: Wellies (40) and Crown (120) against 120 coins.
-        // The database can only honour one (K06-BUG-2's fix is exactly that).
-        // The refused tile is the same "not enough coins yet" condition the
-        // screen already has copy for (`kPipNotEnoughCoins`), but the refusal
-        // happens BELOW the bloc's cached pre-check, so no error is ever
-        // raised and the tap is answered with silence.
+        // bloc has cached. The prices are read from the ROWS (shared batch 7
+        // moved them to the design's 30/60; they used to be 40/120), and the
+        // balance is set so it covers BOTH prices but not their sum — that is
+        // the only shape where the bloc's cached pre-check passes for both
+        // taps and the DATABASE is what has to refuse the second, which is
+        // precisely the condition this bug is about.
         await _pumpNest(tester);
+        final welliesPrice = await _price(db, 'wellies');
+        final crownPrice = await _price(db, 'crown');
+        final balance = math.max(welliesPrice, crownPrice) + 5;
+        await (db.update(db.children)..where((c) => c.id.equals('maya'))).write(
+          ChildrenCompanion(coins: Value(balance)),
+        );
+        await _settle(tester);
+        expect(
+          welliesPrice + crownPrice,
+          greaterThan(balance),
+          reason: 'the probe is only meaningful while the sum exceeds it',
+        );
 
         // Both taps land in the same frame, so both handlers run against the
-        // same cached balance of 120.
+        // same cached balance.
         await tester.tap(find.byKey(const Key('k06-ward-wellies')));
         await tester.tap(find.byKey(const Key('k06-ward-crown')));
         await _settle(tester);
@@ -419,10 +447,9 @@ void main() {
               'unaffordable buy',
         );
         await disposeApp(tester);
-      },
-      skip: true, // K06-BUG-7 — parked; see docs/screens/K06/3_test.md §4.
-    );
-  });
+      });
+    },
+  );
 
   group('the fixes did not disturb the rest of the screen', () {
     testWidgets('the wardrobe strip is still four tiles in design order', (

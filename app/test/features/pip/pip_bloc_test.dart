@@ -13,6 +13,7 @@ import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/features/pip/data/pip_repository_impl.dart';
 import 'package:nestling/features/pip/domain/entities/pip_nest.dart';
 import 'package:nestling/features/pip/domain/entities/pip_profile.dart';
+import 'package:nestling/features/pip/domain/pip_repository.dart';
 import 'package:nestling/features/pip/presentation/bloc/pip_bloc.dart';
 import 'package:nestling/features/pip/presentation/bloc/pip_event.dart';
 import 'package:nestling/features/pip/presentation/bloc/pip_state.dart';
@@ -36,6 +37,18 @@ class _FailingFeedRepository extends PipRepositoryImpl {
 
   @override
   Future<void> feed(String childId) => throw Exception('feed down');
+}
+
+/// Repository whose `buyItem` reports a fresh-balance refusal even though
+/// the cached nest looks affordable (K06-BUG-7: the sibling tap spent the
+/// coins first). Pins the bloc's result mapping deterministically; the
+/// burst proof lives in `k06_bugs_test.dart`.
+class _RefusingBuyRepository extends PipRepositoryImpl {
+  _RefusingBuyRepository({required super.db});
+
+  @override
+  Future<PipBuyResult> buyItem(String childId, String item) =>
+      Future.value(PipBuyResult.cannotAfford);
 }
 
 /// Repository whose nest stream errors on listen (load-failure path) until
@@ -94,7 +107,7 @@ void main() {
       expect(started.actionNonce, 0);
     });
 
-    test('copyWithLoaded clears transient action outcomes', () {
+    test('copyWithLoaded carries a pending action outcome through', () {
       const nest = PipNest(profile: _mayaProfile);
       const failed = PipState(
         status: PipStatus.loaded,
@@ -104,8 +117,10 @@ void main() {
       final reloaded = failed.copyWithLoaded(nest);
       expect(reloaded.status, PipStatus.loaded);
       expect(reloaded.nest?.profile.childId, 'maya');
-      expect(reloaded.actionError, isNull);
-      expect(reloaded.actionNonce, 0);
+      // K06-BUG-7: a refusal announced during a burst must survive the
+      // sibling write's refresh; it clears on the next attempt instead.
+      expect(reloaded.actionError, 'Exception: x');
+      expect(reloaded.actionNonce, 2);
     });
 
     test('care and wardrobe events carry every field', () {
@@ -296,13 +311,13 @@ void main() {
         predicate<PipState>(
           (s) =>
               s.status == PipStatus.loaded &&
-              s.nest?.profile.coins == 80 &&
+              s.nest?.profile.coins == 90 &&
               !s.nest!.items.firstWhere((i) => i.id == 'wellies').owned,
         ),
         predicate<PipState>(
           (s) =>
               s.status == PipStatus.loaded &&
-              s.nest?.profile.coins == 80 &&
+              s.nest?.profile.coins == 90 &&
               s.nest!.items.firstWhere((i) => i.id == 'wellies').owned,
         ),
       ],
@@ -327,6 +342,27 @@ void main() {
         final nest = await PipRepositoryImpl(db: db).watchNest().first;
         expect(nest?.profile.coins, 10);
         expect(nest!.items.firstWhere((i) => i.id == 'wellies').owned, isFalse);
+      },
+    );
+
+    blocTest<PipBloc, PipState>(
+      'a fresh-balance refusal toasts the kind copy (K06-BUG-7)',
+      build: () => PipBloc(repository: _RefusingBuyRepository(db: db)),
+      act: (bloc) async {
+        bloc.add(const PipLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        // The cached nest shows 120 coins, so the pre-check passes; the
+        // repository reports the sibling tap spent them first.
+        bloc.add(const PipWardrobeBuyRequested('crown'));
+      },
+      wait: const Duration(milliseconds: 150),
+      verify: (bloc) async {
+        expect(bloc.state.status, PipStatus.loaded);
+        expect(bloc.state.actionError, kPipNotEnoughCoins);
+        expect(bloc.state.actionNonce, 1);
+        final nest = await PipRepositoryImpl(db: db).watchNest().first;
+        expect(nest?.profile.coins, 120);
+        expect(nest!.items.firstWhere((i) => i.id == 'crown').owned, isFalse);
       },
     );
 

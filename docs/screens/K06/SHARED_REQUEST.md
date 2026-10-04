@@ -147,6 +147,23 @@ Files: `app/assets/icons/ic_scarf.svg`, `app/assets/icons/ic_wellies.svg`,
 declarations in `app/lib/core/design_system/assets/nestling_assets.dart` if
 the file names change.
 
+**PARTLY LANDED (13:52 update + verified at Stage 2, iteration 3).**
+`shared/shared_batch7` (`2517101`) added `ic_wardrobe_scarf.svg` and
+`ic_wardrobe_wellies.svg` (`NestIcons.wardrobeScarf` / `.wardrobeWellies`) with
+the exact K06 paths, and K06 now paints them (`pip_look.dart`), so **§5 is
+closed for the two glyphs ORCHESTRATOR_NOTES item 2 names** — both proofs in
+`pip_orchestrator_notes_test.dart` are live and green.
+
+**Still open — the sun hat.** Batch 7 left `NestIcons.sunHat` alone, reporting
+that it "already match[es] the design geometry". It does not: the asset is
+`m2.413.8h19.2l-1.62.8H4z` + `m6.813.8a5.2700110.40z` + an extra
+`m7.411.6h9.2`, against the design's `m316h18l-1.62.4h4.6z` +
+`m716a55001100z` — same silhouette, different coordinates plus an extra brim
+stroke (the same table row in §5 above already recorded this). The note does
+not name the sun hat, so this is a bonus finding rather than a mandate, but it
+is the same defect class and K06 may not edit the asset (RULES §1). Filed as
+§7 below with its parked proof.
+
 Blocks: **no** for K06 — the screen renders today and the fix is cosmetic. But
 it blocks the note's item 2, which is a mandatory iteration-2 target.
 
@@ -160,7 +177,7 @@ path". Each compares the asset's path data against the path data read out of
 flutter test test/features/pip/pip_orchestrator_notes_test.dart --run-skipped
 ```
 
-## 6 — Wardrobe prices: the seed says 40/120, the design says 30/60
+## 6 — DONE (shared_batch7 `2517101`, verified at Stage 2 iteration 3) — wardrobe prices: the seed says 40/120, the design says 30/60
 (ORCHESTRATOR_NOTES 11:30, item 3)
 
 Need: decide the single source of truth for `pip_wardrobe.priceCoins`. The
@@ -193,3 +210,51 @@ also proves the price follows the row: it re-seeds Crown to 7 and expects 7).
 Files: `app/lib/core/data/seed.dart` (or `design/html-source/screens/K06-pip.html`
 + `design/screens/{light,dark}/K06-pip.png`).
 Blocks: no.
+
+**Resolution.** The orchestrator took option 1: `shared_batch7` moved
+`Seed._wardrobeDemo` to the design's numbers for Maya and Leo (wellies 30,
+crown 60), so DATA OVER MOCKS and the designs now agree and there is nothing
+left to choose. K06 needed **no production change** — the view already rendered
+`item.priceCoins`. What the merge did redden was every K06 test that had typed
+the old 40/120 as its premise; Stage 2 iteration 3 re-based them all to read
+the seeded row instead (see `2_build.md` FIX 2). The `K06-BATCH7` proof that was
+parked precisely for this is live again and green.
+
+## 7 — OPEN: the sun-hat glyph is still a look-alike (the third tile batch 7 left behind)
+
+Need: `app/assets/icons/ic_sun_hat.svg` should draw the design's sun-hat paths
+from `K06-pip.html` line 74 —
+
+```html
+<path d="M3 16h18l-1.6 2.4H4.6z"/><path d="M7 16a5 5 0 0 1 10 0z"/>
+```
+
+— as a new shared asset beside batch 7's `ic_wardrobe_scarf.svg` /
+`ic_wardrobe_wellies.svg` (e.g. `ic_wardrobe_sunhat.svg` +
+`NestIcons.wardrobeSunHat`). What the screen paints today is the same
+silhouette on different coordinates plus an extra brim stroke:
+`m2.413.8h19.2l-1.62.8h4z` + `m6.813.8a5.2700110.40z` + `m7.411.6h9.2`.
+
+Why this is filed even though ORCHESTRATOR_NOTES 11:30 item 2 names only Scarf
+and Wellies: those two are closed, so this is the same defect class left with
+one tile, and it is the tile a user sees third. Batch 7's report states sun hat
+and crown "already match the design geometry"; the proof below shows the sun hat
+does not, while the crown does (it is excluded from the byte comparison for a
+documented reason: identical geometry written with an implicit lineto and a
+relative `m2 12h12`).
+
+K06 may not edit shared assets (RULES §1) and the note forbids substituting a
+glyph in-screen, so this needs a shared batch.
+
+Files: `app/assets/icons/ic_sun_hat.svg` (or a new
+`assets/icons/ic_wardrobe_sunhat.svg`) + `nestling_assets.dart` /
+`nest_icon.dart`.
+Blocks: no (K06 renders and the note's mandate is met). Proof (parked,
+deterministic — the oracle is the HTML, read at test time):
+`app/test/features/pip/pip_orchestrator_notes_test.dart` →
+"ORCHESTRATOR NOTES item 2 (extra): the sunhat glyph is the design path".
+
+```
+flutter test test/features/pip/pip_orchestrator_notes_test.dart --run-skipped \
+  --plain-name sunhat
+```

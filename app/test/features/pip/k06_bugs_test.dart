@@ -175,8 +175,7 @@ Future<int> _topBandPixels(
 // ---------------------------------------------------------------------------
 // Bug proofs. The six iteration-1 proofs run live as the regression guard
 // (K06-BUG-1 / K06-BUG-2 the logic layer's races, K06-BUG-3 … K06-BUG-6 the
-// UI layer's). K06-BUG-7 is parked with `skip: true` until the buy-feedback
-// gap is fixed.
+// UI layer's), and K06-BUG-7 runs live since the buy-result fix below.
 // ---------------------------------------------------------------------------
 
 void main() {
@@ -209,14 +208,19 @@ void main() {
       await db.close();
     });
 
-    test('K06-BUG-2: two quick wardrobe buys must not overspend a 120-coin balance', () async {
+    test('K06-BUG-2: two quick wardrobe buys must not overspend a 70-coin balance', () async {
       // Regression for the fixed overspend: the bloc pre-check still uses
       // the cached `state.nest.profile.coins`, and `buyItem` used to
       // re-check affordability outside its transaction, so both taps
-      // (Wellies 40 + Crown 120) succeeded from a 120-coin balance. The
-      // atomic transaction now lets exactly one through.
+      // succeeded from a balance that fits only one. The balance is 70 so
+      // only one of Wellies (30) + Crown (60) fits after the shared seed
+      // adopted the design prices. The atomic transaction now lets exactly
+      // one through.
       final db = AppDatabase.memory();
       await Seed.demo(db);
+      await (db.update(db.children)..where((c) => c.id.equals('maya'))).write(
+        const ChildrenCompanion(coins: Value(70)),
+      );
       final bloc = PipBloc(repository: PipRepositoryImpl(db: db));
       final sub = bloc.stream.listen((_) {});
       bloc.add(const PipLoadRequested());
@@ -233,7 +237,7 @@ void main() {
         <bool>[wellies, crown].where((b) => b).length,
         1,
         reason:
-            'only one of 40 + 120 can be afforded from 120 coins; '
+            'only one of 30 + 60 can be afforded from 70 coins; '
             'measured wellies=$wellies crown=$crown coins=${await _coins(db)}',
       );
       await sub.cancel();
@@ -365,13 +369,18 @@ void main() {
       'K06-BUG-7: a buy refused by the fresh balance must still be announced',
       () async {
         // Since the iteration-2 atomics, `buyItem` refuses a purchase the
-        // blocs stale pre-check cannot see (the sibling tap spent the coins
+        // bloc's stale pre-check cannot see (the sibling tap spent the coins
         // first). The refusal is silent: `buyItem` returns void, so the bloc
         // never emits `kPipNotEnoughCoins` and the child gets no feedback
         // for the second tile (1_plan.md section 1f: locked-tile failure ->
         // kind toast). The money is safe; the feedback is missing.
+        // The balance is 70 so only one of Wellies (30) + Crown (60) fits
+        // after the shared seed adopted the design prices.
         final db = AppDatabase.memory();
         await Seed.demo(db);
+        await (db.update(db.children)..where((c) => c.id.equals('maya'))).write(
+          const ChildrenCompanion(coins: Value(70)),
+        );
         final bloc = PipBloc(repository: PipRepositoryImpl(db: db));
         final sub = bloc.stream.listen((_) {});
         bloc.add(const PipLoadRequested());
@@ -387,7 +396,7 @@ void main() {
         expect(
           <bool>[wellies, crown].where((b) => b).length,
           1,
-          reason: 'one of 40 + 120 fits in 120 coins',
+          reason: 'one of 30 + 60 fits in 70 coins',
         );
         expect(
           bloc.state.actionError,
@@ -400,7 +409,6 @@ void main() {
         await bloc.close();
         await db.close();
       },
-      skip: true,
     );
   });
 
@@ -592,7 +600,12 @@ void main() {
     ) async {
       // Iteration-2 regression: both tiles pass the stale in-bloc
       // affordability pre-check; the transaction may only let one through.
+      // The balance is 70 so only one of Wellies (30) + Crown (60) fits
+      // after the shared seed adopted the design prices.
       final db = await setUpTestScope();
+      await (db.update(db.children)..where((c) => c.id.equals('maya'))).write(
+        const ChildrenCompanion(coins: Value(70)),
+      );
       await _pumpPip(tester);
       final wellies = await tester.startGesture(
         tester.getCenter(find.byKey(const Key('k06-ward-wellies'))),
@@ -608,9 +621,9 @@ void main() {
       expect(
         <bool>[ownedWellies, ownedCrown].where((b) => b).length,
         1,
-        reason: '40 + 120 cannot both fit in 120 coins',
+        reason: '30 + 60 cannot both fit in 70 coins',
       );
-      expect(await _coins(db), ownedWellies ? 80 : 0);
+      expect(await _coins(db), ownedWellies ? 40 : 10);
       await disposeApp(tester);
     });
 
@@ -664,7 +677,7 @@ void main() {
 
       db = AppDatabase(NativeDatabase(file));
       repo = PipRepositoryImpl(db: db);
-      expect(await _coins(db), 75);
+      expect(await _coins(db), 85, reason: '120 - 5 feed - 30 wellies');
       expect(await _owned(db, 'wellies'), isTrue);
       await db.close();
     });

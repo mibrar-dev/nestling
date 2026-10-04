@@ -129,16 +129,17 @@ class PipRepositoryImpl implements PipRepository {
   }
 
   @override
-  Future<void> buyItem(String childId, String item) async {
-    await _db.transaction(() async {
+  Future<PipBuyResult> buyItem(String childId, String item) {
+    return _db.transaction(() async {
       final row =
           await (_db.select(_db.pipWardrobe)
                 ..where((w) => w.childId.equals(childId) & w.item.equals(item)))
               .getSingleOrNull();
-      if (row == null || row.owned) return;
+      if (row == null) return PipBuyResult.unavailable;
+      if (row.owned) return PipBuyResult.alreadyOwned;
       // Atomic conditional deduction (K06-BUG-2): the affordability check
       // is part of the write, so two overlapping buys cannot both spend the
-      // same coins. Zero changed rows means insufficient coins: no-op.
+      // same coins. Zero changed rows means insufficient coins.
       final paid = await _db.customUpdate(
         'UPDATE children SET coins = coins - ? WHERE id = ? AND coins >= ?',
         variables: <Variable>[
@@ -148,7 +149,7 @@ class PipRepositoryImpl implements PipRepository {
         ],
         updates: {_db.children},
       );
-      if (paid == 0) return;
+      if (paid == 0) return PipBuyResult.cannotAfford;
       // Claim the tile only while still unowned: a same-item double tap
       // that lost the race refunds instead of charging twice.
       final claimed =
@@ -168,7 +169,9 @@ class PipRepositoryImpl implements PipRepository {
           ],
           updates: {_db.children},
         );
+        return PipBuyResult.alreadyOwned;
       }
+      return PipBuyResult.bought;
     });
   }
 
