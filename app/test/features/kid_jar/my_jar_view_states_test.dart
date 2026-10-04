@@ -188,6 +188,17 @@ void main() {
         tester.getSemantics(find.byType(CircularProgressIndicator)).label,
         'Loading your jar',
       );
+      // A live region so a screen reader announces a slow stream instead of
+      // the frame swapping in silently (review finding 6).
+      expect(
+        tester
+            .getSemantics(find.byType(CircularProgressIndicator))
+            .getSemanticsData()
+            .flagsCollection
+            .isLiveRegion,
+        isTrue,
+        reason: 'the loading label must be a live region',
+      );
       // Nothing from the loaded body may leak into the first frame.
       expect(find.text('My jar'), findsNothing);
       expect(find.byType(JarGoalCard), findsNothing);

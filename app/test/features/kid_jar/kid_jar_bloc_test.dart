@@ -497,4 +497,54 @@ void main() {
       expect(_mayaLoaded(), isNot(_mayaLoaded().copyWith(owedPence: 421)));
     });
   });
+
+  group('KidJarBloc guarded subscription (K09-BUG-1)', () {
+    test('close() releases the live subscription', () async {
+      final repo = _CountingKidJarRepository();
+      addTearDown(repo.dispose);
+      final bloc = KidJarBloc(repository: repo);
+      addTearDown(bloc.close);
+      bloc.add(const KidJarLoadRequested());
+      await Future<void>.delayed(Duration.zero);
+      expect(repo.liveListeners, 1);
+
+      // Closing releases the guarded subscription (K09-BUG-1).
+      await bloc.close();
+      expect(repo.liveListeners, 0);
+    });
+
+    test('a snapshot emission carries the quest icon key through', () async {
+      final snapshot = JarSnapshot(
+        childId: 'maya',
+        items: <JarEntry>[
+          JarEntry(
+            id: '3',
+            title: 'Hoover the stairs',
+            detail: 'Quest bonus',
+            type: 'quest_bonus',
+            amountPence: 40,
+            date: DateTime.utc(2026, 10, 1, 18),
+            iconKey: 'hoover',
+          ),
+        ],
+        summary: const JarSummary(
+          childId: 'maya',
+          owedPence: 420,
+          nextPayoutDay: 'Saturday',
+          goalTitle: 'Lego Friends set',
+          goalSavedPence: 1550,
+          goalTargetPence: 2499,
+        ),
+      );
+      final bloc = KidJarBloc(
+        repository: _FakeKidJarRepository(snapshot: snapshot),
+      );
+      addTearDown(bloc.close);
+      bloc.add(const KidJarLoadRequested());
+      await Future<void>.delayed(Duration.zero);
+
+      expect(bloc.state.status, KidJarStatus.loaded);
+      expect(bloc.state.items.single.iconKey, 'hoover');
+    });
+  });
 }

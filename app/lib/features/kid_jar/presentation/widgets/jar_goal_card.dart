@@ -33,8 +33,11 @@ class JarGoalCard extends StatelessWidget {
   double get fraction =>
       targetPence <= 0 ? 0 : (savedPence / targetPence).clamp(0.0, 1.0);
 
-  /// `£9.49 to go` — what is still missing (`K09-jar.html:77`).
-  int get remainingPence => targetPence - savedPence;
+  /// `£9.49 to go` — what is still missing (`K09-jar.html:77`). Clamped at
+  /// zero: once the goal is reached the card must never claim a positive
+  /// amount is still missing (K09-BUG-4).
+  int get remainingPence =>
+      targetPence > savedPence ? targetPence - savedPence : 0;
 
   /// `.k9-goal-top img` — 34 px, the shared gold coin illustration with its
   /// own colours (`K09-jar.html:27,72`).

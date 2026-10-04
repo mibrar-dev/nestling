@@ -3,12 +3,11 @@
 // Adversarial pass over `kid_jar` K09: data edges, rapid double taps, back
 // navigation and deep links, restart persistence, mode guards, dark contrast,
 // 320 px + 1.3 scale, async gaps, Europe/London + BST, integer money, owner
-// rules. The pass found THREE defects; each proof below is SKIPPED with its
-// bug id so this file's run stays green, and each FAILS when run with
-// `--run-skipped`:
+// rules. The pass found THREE defects (K09-BUG-4..6); the iteration-2 build
+// fixed all three, so their proofs below run LIVE — no `skip:` remains — and
+// `--run-skipped` is no longer needed:
 //
-//   cd app && flutter test --timeout 120s --run-skipped \
-//     test/features/kid_jar/k09_bugs_test.dart
+//   cd app && flutter test --timeout 120s test/features/kid_jar/k09_bugs_test.dart
 //
 // Numbering continues the registry: stages 3–5 already own K09-BUG-1 (retry
 // stacks subscriptions; red proofs in `kid_jar_bloc_test.dart`), K09-BUG-2
@@ -161,7 +160,7 @@ void main() {
           '`jarPounds` prints its absolute value',
     );
     await disposeApp(tester);
-  }, skip: true);
+  });
 
   // -------------------------------------------------------------------------
   // K09-BUG-5 — minor (latent) — a negative owed is announced as positive
@@ -209,7 +208,7 @@ void main() {
           'Clamp owed at 0 in `_summarize` (→ "£0.00") or render the minus',
     );
     await disposeApp(tester);
-  }, skip: true);
+  });
 
   // -------------------------------------------------------------------------
   // K09-BUG-6 — minor — the scroll tail reserves the home inset twice
@@ -246,7 +245,7 @@ void main() {
           "instead of the design's 778 (34 + 32 = 66)",
     );
     await disposeApp(tester);
-  }, skip: true);
+  });
 
   // -------------------------------------------------------------------------
   // CLEAN probes — kept green so the 6_bugs.md "verified clean" list is

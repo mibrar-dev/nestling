@@ -288,6 +288,38 @@ void main() {
       semantics.dispose();
       await tester.pumpWidget(const SizedBox.shrink());
     });
+
+    // K09-BUG-4 (review finding 2): a payer can credit past the target (P13's
+    // payout), so the card itself must clamp `remainingPence` — the seed's
+    // 1550/2499 never reaches this, the direct widget pump does.
+    testWidgets('an over-saved goal reads £0.00 to go, never a positive gap', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: NestTheme.light(),
+          home: const Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 350,
+                child: JarGoalCard(
+                  title: 'Lego Friends set',
+                  savedPence: 3150,
+                  targetPence: 2499,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('£31.50'), findsOneWidget);
+      expect(find.text('100% there!'), findsOneWidget);
+      expect(find.text('£0.00 to go'), findsOneWidget);
+      expect(find.text('£6.51 to go'), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
   });
 
   group('ORCHESTRATOR_NOTES 18:47 — mandatory history glyphs', () {
@@ -345,15 +377,44 @@ void main() {
     // "The pocket-money and gift glyphs are being added on shared/jar_glyphs
     // (NestIcons.jarPocketMoney / jarGift). Use them once on main."
     //
-    // BLOCKED: neither constant exists on this branch yet
-    // (`grep -rn "jarPocketMoney\|jarGift" app/` → no hits), so a test naming
-    // them would not compile. Recorded in 3_test.md instead. Once main lands
-    // them, this is the proof:
-    //
-    //   expect(tester.widget<NestIcon>(icon).assetName,
-    //       NestIcons.jarPocketMoney);  // row 1, "Pocket money"
-    //   expect(tester.widget<NestIcon>(icon).assetName,
-    //       NestIcons.jarGift);         // "Birthday money" (row 6)
+    // Main landed both (`app/test/design_system/shared_jar_glyphs_test.dart`):
+    // pocket money is `NestIcons.jarPocketMoney`, the design's exact coin-slot
+    // mark (`K09-jar.html:85`), and the gift needs no new file because
+    // `NestIcons.gift` already draws `:95` exactly. This reads the rendered
+    // disc of both seeded rows.
+    testWidgets('K09-BUG-3b: pocket-money and gift rows use the shared jar '
+        'glyphs', (tester) async {
+      await _pumpRoute(tester);
+
+      String rowGlyph(String title) {
+        final row = find
+            .ancestor(
+              of: find.text(title).first,
+              matching: find.byType(Container),
+            )
+            .first;
+        return tester
+            .widget<NestIcon>(
+              find.descendant(of: row, matching: find.byType(NestIcon)),
+            )
+            .assetName;
+      }
+
+      expect(
+        rowGlyph('Pocket money'),
+        NestIcons.jarPocketMoney,
+        reason:
+            "row 1 is the design's geometric coin-slot mark, not `poundCoin`",
+      );
+      // `Birthday money` (row 6) sits below the design's fold.
+      await _reveal(tester, 'Birthday money');
+      expect(
+        rowGlyph('Birthday money'),
+        NestIcons.gift,
+        reason: 'the design gift (`K09-jar.html:95`) is the shared gift asset',
+      );
+      await disposeApp(tester);
+    });
   });
 
   group('ORCHESTRATOR_NOTES 18:47 — "coming on Saturday" colour', () {

@@ -4,13 +4,15 @@ import 'package:nestling/features/kid_jar/domain/entities/jar_entry.dart';
 import 'package:nestling/features/kid_jar/domain/entities/jar_snapshot.dart';
 
 /// Entry types the K09 list carries (`1_plan.md` §b — money IN only), mapped
-/// to the design's glyphs: pocket money is the pound coin, a quest bonus the
-/// kid bins glyph (the design's second row, `K09-jar.html:90`), a gift the
-/// present (`:95`).
-String jarEntryGlyph(String type) => switch (type) {
-  'quest_bonus' => NestIcons.questBins,
+/// to the design's glyphs: pocket money is the design's geometric coin-slot
+/// mark (`NestIcons.jarPocketMoney`, `K09-jar.html:85`); a quest bonus shows
+/// the quest's own KID glyph via `questIconFor` (ORCHESTRATOR_NOTES 18:47 —
+/// [iconKey] is the repository's note → quest lookup, `''` when unknown and
+/// the resolver's own fallback applies); a gift the present (`:95`).
+String jarEntryGlyph(String type, String iconKey) => switch (type) {
+  'quest_bonus' => questIconFor(iconKey, audience: NestAudience.kid),
   'gift' => NestIcons.gift,
-  _ => NestIcons.poundCoin,
+  _ => NestIcons.jarPocketMoney,
 };
 
 /// `.k9-list` (`K09-jar.html:83-99`): the "What went in" card — every
@@ -97,7 +99,10 @@ class _JarEmptyRow extends StatelessWidget {
                 shape: BoxShape.circle,
               ),
               child: Center(
-                child: NestIcon(NestIcons.poundCoin, color: tokens.leafInk),
+                child: NestIcon(
+                  NestIcons.jarPocketMoney,
+                  color: tokens.leafInk,
+                ),
               ),
             ),
             const SizedBox(width: NestSpacing.s3),
@@ -173,7 +178,7 @@ class _JarEntryRow extends StatelessWidget {
   }
 
   /// Entry type to glyph — see [jarEntryGlyph].
-  String get _glyph => jarEntryGlyph(entry.type);
+  String get _glyph => jarEntryGlyph(entry.type, entry.iconKey);
 
   @override
   Widget build(BuildContext context) {

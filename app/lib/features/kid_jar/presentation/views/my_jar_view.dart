@@ -166,9 +166,9 @@ class _GateLockButtonState extends State<_GateLockButton> {
 }
 
 /// The loaded screen: `.scroll` (`K09-jar.html:46-101`) with its
-/// `--s4` separators. The tail padding is the design's `--s8` plus the
-/// `--home-h` reserve the design keeps in a sibling element, so the last line
-/// clears the OS home indicator exactly as it does in the design.
+/// `--s4` separators. `SafeArea` already reserves the 34 px home-indicator
+/// inset the design keeps in its sibling `.home-indicator`, so the tail is
+/// only the design's `--s8` (K09-BUG-6).
 class _JarBody extends StatelessWidget {
   const _JarBody({required this.state});
 
@@ -226,9 +226,12 @@ class _JarBody extends StatelessWidget {
               ),
             ),
             const SizedBox(height: NestSpacing.gap2),
+            // `.k9-when` sets no colour of its own and inherits
+            // `.screen { color: var(--ink) }` — full ink, NOT `--ink-2`
+            // (K09-BUG-2; the design PNG measures #1E1B3A / #F3F0FA here).
             Text(
               MyJarCopy.comingOn(state.nextPayoutDay),
-              style: NestType.kidBody(color: tokens.ink2),
+              style: NestType.kidBody(color: tokens.ink),
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -267,7 +270,7 @@ class _JarBody extends StatelessWidget {
         NestSpacing.padSide,
         0,
         NestSpacing.padSide,
-        NestDevice.homeH + NestSpacing.s8,
+        NestSpacing.s8,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -289,6 +292,7 @@ class _JarLoading extends StatelessWidget {
     return Center(
       child: Semantics(
         label: MyJarCopy.loading,
+        liveRegion: true,
         child: CircularProgressIndicator(color: tokens.leaf),
       ),
     );

@@ -26,8 +26,10 @@ class KidJarRepositoryImpl implements KidJarRepository {
       watchJar().map((snapshot) => snapshot.items);
 
   /// The K09 screen stream: `app_state.activeChildId` (`'maya'` fallback)
-  /// fans out to exactly one entries query plus one summary query, so the
-  /// history list and the hero/goal figures always arrive atomically.
+  /// fans out to one atomic snapshot per child. Each snapshot derives from
+  /// a single `watchLedger` emission (plus goals, setting and the
+  /// quest-icon lookup), so the history list and the hero/goal figures can
+  /// never pair rows with a stale owed figure.
   @override
   Stream<JarSnapshot> watchJar() {
     return _switchMap<AppStateData?, JarSnapshot>(
@@ -37,35 +39,59 @@ class KidJarRepositoryImpl implements KidJarRepository {
   }
 
   Stream<JarSnapshot> _jarFor(String childId) {
-    // One ledger subscription feeds BOTH the list and the summary, so an
-    // emission can never pair new rows with a stale owed figure (two
-    // independent `watchLedger` subscriptions would race each other).
-    return combineLatest3(
+    return combineLatest4(
       _db.watchLedger(childId),
       _db.watchGoals(Seed.familyId),
       _db.watchSetting(Seed.familyId),
+      _watchFamilyQuests(),
     ).map((parts) {
       final rows = parts[0] as List<LedgerEntry>;
       final goals = (parts[1] as List<SavingsGoal>)
           .where((g) => g.childId == childId)
           .toList();
       final setting = parts[2] as Setting?;
+      final quests = parts[3] as List<Quest>;
+      // Quest title → icon key, first match in creation order wins. The
+      // ledger carries no quest reference, so the row's note (the quest
+      // title) is the join key (K09-BUG-3).
+      final iconForTitle = <String, String>{};
+      for (final quest in quests) {
+        iconForTitle.putIfAbsent(quest.title, () => quest.icon);
+      }
       return JarSnapshot(
         childId: childId,
-        items: _mapItems(rows, londonWeekStartUtc(appNowUtc())),
+        items: _mapItems(rows, londonWeekStartUtc(appNowUtc()), iconForTitle),
         summary: _summarize(childId, rows, goals, setting),
       );
     });
+  }
+
+  /// Every quest in the family in creation order (the title → icon join
+  /// source). All quests, not just active ones: a bonus row outlives the
+  /// quest being switched off.
+  Stream<List<Quest>> _watchFamilyQuests() {
+    return (_db.select(_db.quests)
+          ..where((q) => q.familyId.equals(Seed.familyId))
+          ..orderBy([
+            (q) => OrderingTerm(expression: q.createdAt),
+            (q) => OrderingTerm(expression: q.id),
+          ]))
+        .watch();
   }
 
   /// K09 money-in list (NOT the P12 ledger): `weekly_base`, `quest_bonus`
   /// and `gift` rows only — `payout`/`spend`/`savings_move` never reach the
   /// jar. `watchLedger` is date-desc already, so the filter preserves
   /// newest-first order.
-  static List<JarEntry> _mapItems(List<LedgerEntry> rows, DateTime weekStart) {
+  static List<JarEntry> _mapItems(
+    List<LedgerEntry> rows,
+    DateTime weekStart,
+    Map<String, String> iconForTitle,
+  ) {
     return <JarEntry>[
       for (final row in rows)
-        if (_moneyInTypes.contains(row.type)) _toEntry(row, weekStart),
+        if (_moneyInTypes.contains(row.type))
+          _toEntry(row, weekStart, iconForTitle),
     ];
   }
 
@@ -89,10 +115,14 @@ class KidJarRepositoryImpl implements KidJarRepository {
       if (row.type == 'weekly_base') base += row.amountPence;
       if (row.type == 'quest_bonus') quests += row.amountPence;
     }
+    // The ledger is signed, so a correction row can push the period total
+    // below zero — but a child can never be "owed" a negative amount, and
+    // the hero must not render one as positive money coming (K09-BUG-5).
+    final owed = base + quests;
     final goal = goals.isEmpty ? null : goals.first;
     return JarSummary(
       childId: childId,
-      owedPence: base + quests,
+      owedPence: owed < 0 ? 0 : owed,
       nextPayoutDay: _weekday(setting?.payoutDay ?? 6),
       goalTitle: goal?.title ?? 'Savings goal',
       goalSavedPence: goal?.savedPence ?? 0,
@@ -109,6 +139,18 @@ class KidJarRepositoryImpl implements KidJarRepository {
     final now = appNowUtc();
     final zone = await _db.familyZoneId();
     await _db.transaction(() async {
+      final goal = await (_db.select(
+        _db.savingsGoals,
+      )..where((g) => g.id.equals(goalId))).getSingleOrNull();
+      // A savings move can never credit past the goal's remainder — without
+      // the cap the data drifts over target and the card contradicts its own
+      // "100% there!" (K09-BUG-4). A full goal makes the move a no-op.
+      final requested = amountPence.abs();
+      final remainder = goal == null
+          ? requested
+          : goal.targetPence - goal.savedPence;
+      if (remainder <= 0) return;
+      final move = requested < remainder ? requested : remainder;
       await _db
           .into(_db.ledgerEntries)
           .insert(
@@ -116,28 +158,27 @@ class KidJarRepositoryImpl implements KidJarRepository {
               familyId: Seed.familyId,
               childId: childId,
               type: 'savings_move',
-              amountPence: amountPence.abs(),
+              amountPence: move,
               note: const Value('Jar → savings goal'),
               date: Value(now),
               dateTz: Value(zone),
             ),
           );
-      final goal = await (_db.select(
-        _db.savingsGoals,
-      )..where((g) => g.id.equals(goalId))).getSingleOrNull();
       if (goal != null) {
         await (_db.update(
           _db.savingsGoals,
         )..where((g) => g.id.equals(goalId))).write(
-          SavingsGoalsCompanion(
-            savedPence: Value(goal.savedPence + amountPence.abs()),
-          ),
+          SavingsGoalsCompanion(savedPence: Value(goal.savedPence + move)),
         );
       }
     });
   }
 
-  static JarEntry _toEntry(LedgerEntry row, DateTime weekStart) {
+  static JarEntry _toEntry(
+    LedgerEntry row,
+    DateTime weekStart,
+    Map<String, String> iconForTitle,
+  ) {
     return switch (row.type) {
       'weekly_base' => JarEntry(
         id: '${row.id}',
@@ -162,6 +203,9 @@ class KidJarRepositoryImpl implements KidJarRepository {
         type: row.type,
         amountPence: row.amountPence,
         date: row.date,
+        // `''` when the note names no known quest — the view then uses its
+        // fallback glyph (K09-BUG-3).
+        iconKey: iconForTitle[row.note] ?? '',
       ),
     };
   }
