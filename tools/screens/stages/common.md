@@ -30,3 +30,4 @@ ORCHESTRATOR RULES (override the design PNGs where they conflict):
 - TEST TIMEOUTS: always run flutter test with a per-test timeout (`flutter test --timeout 120s …`). A test that can hang is a bug, so fix it. Never wait on a background test run for more than 10 minutes.
 - AVATAR INITIALS: use `nestAvatarInitial(name)` (grapheme-safe). Never `name[0]`.
 - ICONS: kid screens use questIconFor/rewardIconFor(audience: NestAudience.kid) and kid glyphs; parent screens use audience: parent. Each screen matches its own design's glyphs exactly.
+- NO GLOBAL KILLS: never run `pkill`/`killall` on flutter_tester, flutter, dart or opencode. Other screens' stages are running their tests at the same time and a global kill destroys their runs. Stop only a process you started yourself, by its PID.
