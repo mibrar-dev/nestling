@@ -546,19 +546,24 @@ void ownerQaRegressions() {
       expect(distance, lessThan(0.5));
     });
 
-    testWidgets('keypad pitch and dark treatment', (tester) async {
+    testWidgets('keypad grid geometry and dark treatment', (tester) async {
       for (final mode in const [ThemeMode.light, ThemeMode.dark]) {
         await pumpNest(
           tester,
-          NestKeypad(onKey: (_) {}, onDelete: () {}),
+          SizedBox(
+            width: 302,
+            child: NestKeypad(onKey: (_) {}, onDelete: () {}),
+          ),
           mode: mode,
         );
-        // Explicit rows: 72 keys, 24px columns, 16px rows.
+        // CSS `.keypad` grid in the 302px P17 card content box: 3 equal
+        // columns over 302-48 padding with 10px gaps -> 88px column pitch;
+        // 72px rows with 10px gaps -> 82px row pitch.
         final oneLeft = tester.getTopLeft(find.text('1'));
         final twoLeft = tester.getTopLeft(find.text('2'));
         final fourTop = tester.getTopLeft(find.text('4'));
-        expect(twoLeft.dx - oneLeft.dx, moreOrLessEquals(72 + 24));
-        expect(fourTop.dy - oneLeft.dy, moreOrLessEquals(72 + 16));
+        expect(twoLeft.dx - oneLeft.dx, moreOrLessEquals(88));
+        expect(fourTop.dy - oneLeft.dy, moreOrLessEquals(82));
         final key = find
             .descendant(of: find.byType(NestKeypad), matching: find.byType(Ink))
             .first;
