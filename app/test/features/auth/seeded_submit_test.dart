@@ -198,14 +198,22 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(currentPath(tester), '/privacy');
-      // The members table has no email/password column at all, so the
-      // password can never be persisted — asserted on the schema itself.
+      // Schema v7 adds `members.email` (shared batch 6, P16 §4); there is
+      // still no password column, so the password can never be persisted —
+      // asserted on the schema itself. The auth stub does not yet write the
+      // email (it only derives the owner name); storing it is a follow-up
+      // in `AuthRepository.createAccount`.
       final columnNames = db.members.$columns.map((c) => c.name).toSet();
-      expect(columnNames.contains('email'), isFalse);
+      expect(columnNames.contains('email'), isTrue);
       expect(columnNames.contains('password'), isFalse);
 
       final members = await _members(tester);
       expect(members.single.name, 'sarah');
+      // The auth stub derives the name but does not yet persist the email
+      // (follow-up in `AuthRepository.createAccount`); the row exists with
+      // a NULL email.
+      final rows = await tester.runAsync(() => db.select(db.members).get());
+      expect(rows!.single.email, isNull);
 
       await disposeApp(tester);
     });
@@ -224,7 +232,9 @@ void main() {
       );
 
       expect(await _members(tester), isEmpty);
-      expect(db.members.$columns.map((c) => c.name), isNot(contains('email')));
+      // Schema v7 carries `members.email` (shared batch 6); the invalid
+      // form still writes nothing.
+      expect(db.members.$columns.map((c) => c.name), contains('email'));
 
       await disposeApp(tester);
     });
