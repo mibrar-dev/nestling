@@ -361,7 +361,7 @@ class _KidHomeBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.nest;
     final nickname = child.nickname;
-    final initial = nickname.isEmpty ? '?' : nickname[0].toUpperCase();
+    final initial = kidAvatarInitial(nickname);
     final done = state.doneCount;
     final total = state.totalCount;
     final filledHearts = child.happiness.clamp(0, 5);

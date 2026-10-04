@@ -65,6 +65,25 @@ Future<void> _enterPin(WidgetTester tester, String pin) async {
   }
 }
 
+/// Leaves the P17 parental gate and settles back on the calling screen.
+///
+/// Since the P17 merge the gate has no AppBar back button — its only exit is
+/// the 56 px ghost `Back to Pip` (`parental_gate_view.dart`), which is what a
+/// kid actually taps. `tester.pageBack()` finds no back button and throws, so
+/// every "did the gate detour return me?" assertion drives that button. The
+/// `pageBack()` branch keeps the harness honest if the gate ever grows an
+/// AppBar again without this button.
+Future<void> _leaveGate(WidgetTester tester) async {
+  final backToPip = find.text('Back to Pip');
+  if (backToPip.evaluate().isNotEmpty) {
+    await tester.tap(backToPip);
+  } else {
+    await tester.pageBack();
+  }
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
+}
+
 /// Test seam around `verifyPin`: lets a test script right/wrong answers
 /// without forking the real repository.
 class _PinStub {
@@ -631,9 +650,11 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       expect(pushedPath(tester), ParentalGateRoutePaths.gate);
-      await tester.pageBack();
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
+      // P17's gate has no AppBar back button since the P17 merge: its only
+      // exit is the 56 px ghost `Back to Pip`, so drive THAT (the same
+      // pattern `k01_bugs_test.dart` / `k03_bugs_test.dart` use after the
+      // merge). `pageBack()` finds no back button and throws.
+      await _leaveGate(tester);
       expect(pushedPath(tester), KidHomeRoutePaths.pin);
       expect(
         find.bySemanticsLabel(RegExp('1 of 4 entered')),
@@ -652,11 +673,9 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       expect(pushedPath(tester), ParentalGateRoutePaths.gate);
-      // One pop lands back on the PIN screen; a second gate would leave the
+      // One exit lands back on the PIN screen; a second gate would leave the
       // gate on top and the finder below would find nothing.
-      await tester.pageBack();
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
+      await _leaveGate(tester);
       expect(pushedPath(tester), KidHomeRoutePaths.pin);
       expect(find.text('Hi Maya! Enter your secret code'), findsOneWidget);
       await disposeApp(tester);
@@ -935,7 +954,7 @@ void main() {
               w is Container &&
               w.decoration is BoxDecoration &&
               (w.decoration! as BoxDecoration).borderRadius ==
-                  BorderRadius.circular(999),
+                  NestRadii.allPill,
         ),
       );
       for (final finder in <Finder>[
@@ -986,7 +1005,7 @@ void main() {
                     w is Container &&
                     w.decoration is BoxDecoration &&
                     (w.decoration! as BoxDecoration).borderRadius ==
-                        BorderRadius.circular(999),
+                        NestRadii.allPill,
               ),
             )
             .first,
@@ -995,7 +1014,7 @@ void main() {
       expect(decoration.color, tokens.lilacTint, reason: '.mark background');
       expect(
         decoration.borderRadius,
-        BorderRadius.circular(999),
+        NestRadii.allPill,
         reason: '.mark border-radius',
       );
       expect(
@@ -1009,7 +1028,7 @@ void main() {
                           w is Container &&
                           w.decoration is BoxDecoration &&
                           (w.decoration! as BoxDecoration).borderRadius ==
-                              BorderRadius.circular(999),
+                              NestRadii.allPill,
                     ),
                   )
                   .first,
@@ -1054,7 +1073,7 @@ void main() {
                 w is Container &&
                 w.decoration is BoxDecoration &&
                 (w.decoration! as BoxDecoration).borderRadius ==
-                    BorderRadius.circular(999),
+                    NestRadii.allPill,
           ),
         );
         return <String, Rect>{
@@ -1496,6 +1515,36 @@ void main() {
       fake.emit(roster.leo);
       await _settleK02(tester);
       expect(currentPath(tester), KidHomeRoutePaths.home);
+      await disposeApp(tester);
+    });
+
+    testWidgets('a nickname opening with an emoji still builds the frame', (
+      tester,
+    ) async {
+      // K02-TEST-BUG-A / SHARED_REQUEST #3: `nickname[0]` indexes UTF-16 code
+      // units, so a non-BMP first character handed `toUpperCase()` an
+      // unpaired surrogate and `ArgumentError` took the WHOLE screen down
+      // while laying out the avatar. P05 accepts such a name, so K02 must
+      // build it — and `kidAvatarInitial` keeps the initial grapheme-safe
+      // until the shared helper lands.
+      await tester.runAsync(() async {
+        final db = GetIt.instance<AppDatabase>();
+        await (db.update(db.children)..where((c) => c.id.equals('maya'))).write(
+          const ChildrenCompanion(nickname: Value('🐝 Bee')),
+        );
+        await GetIt.instance<AppSession>().refresh();
+      });
+      await _pumpRoute(tester);
+      expect(tester.takeException(), isNull);
+      expect(
+        tester.widget<NestAvatar>(find.byType(NestAvatar).first).initial,
+        '🐝',
+        reason: 'the emoji itself is the initial, not a replacement',
+      );
+      // The sentence still reads with the real nickname, and the screen is
+      // still a working PIN entry (copy + the keypad survive the odd name).
+      expect(find.text('Hi 🐝 Bee! Enter your secret code'), findsOneWidget);
+      expect(find.byType(NestKeypad), findsOneWidget);
       await disposeApp(tester);
     });
   });

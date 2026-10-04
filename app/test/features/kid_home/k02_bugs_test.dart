@@ -765,12 +765,20 @@ void main() {
       await tester.tap(find.bySemanticsLabel('Grown-ups'));
       await _settle(tester);
       expect(pushedPath(tester), '/parental-gate');
-      await tester.pageBack();
+      // P17's gate has no AppBar back button since the P17 merge — its only
+      // exit is the 56 px ghost `Back to Pip`, which is what a kid taps.
+      // `pageBack()` finds no back button and throws.
+      final backToPip = find.text('Back to Pip');
+      if (backToPip.evaluate().isNotEmpty) {
+        await tester.tap(backToPip);
+      } else {
+        await tester.pageBack();
+      }
       await _settle(tester);
       expect(
         pushedPath(tester),
         '/kid-pin',
-        reason: 'one pop must land back on the PIN screen, not a second gate',
+        reason: 'one exit must land back on the PIN screen, not a second gate',
       );
       await disposeApp(tester);
     });

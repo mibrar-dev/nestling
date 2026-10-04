@@ -11,6 +11,7 @@ import 'package:nestling/features/kid_home/kid_home_routes.dart';
 import 'package:nestling/features/kid_home/presentation/bloc/kid_home_bloc.dart';
 import 'package:nestling/features/kid_home/presentation/bloc/kid_home_event.dart';
 import 'package:nestling/features/kid_home/presentation/bloc/kid_home_state.dart';
+import 'package:nestling/features/kid_home/presentation/widgets/kid_style_helpers.dart';
 import 'package:nestling/features/parental_gate/parental_gate_routes.dart';
 
 /// K02 Kid PIN (`/kid-pin`): kid avatar, "Hi {name}!" greeting, 4-dot code
@@ -155,13 +156,16 @@ class _KidPinBody extends StatelessWidget {
   final ValueChanged<String> onKey;
   final VoidCallback onDelete;
 
+  /// `.k2-ava` (`K02-pin.html:22`): the tinted disc that wraps `.avatar.s96`.
+  /// Named because it is a screen-local design value, not a spacing token —
+  /// another screen wanting it asks for a shared token (SHARED_REQUEST #1).
+  static const double avatarDisc = 128;
+
   @override
   Widget build(BuildContext context) {
     final tokens = context.nest;
     final nickname = child.nickname;
-    final initial = nickname.isEmpty
-        ? '?'
-        : String.fromCharCode(nickname.runes.first).toUpperCase();
+    final initial = kidAvatarInitial(nickname);
     return KidScope(
       child: Scaffold(
         backgroundColor: Colors.transparent,
@@ -210,8 +214,8 @@ class _KidPinBody extends StatelessWidget {
                     children: [
                       // `.k2-ava`: 128 tinted disc, inner `.avatar.s96`.
                       Container(
-                        width: 128,
-                        height: 128,
+                        width: avatarDisc,
+                        height: avatarDisc,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: tokens.lilacTint,
@@ -232,7 +236,7 @@ class _KidPinBody extends StatelessWidget {
                         ),
                         decoration: BoxDecoration(
                           color: tokens.lilacTint,
-                          borderRadius: BorderRadius.circular(999),
+                          borderRadius: NestRadii.allPill,
                         ),
                         child: Text(
                           'NESTLING',
@@ -286,6 +290,20 @@ class _KidPinBody extends StatelessWidget {
                       // keypad-grid fix now governs pitch; K02 applies the
                       // documented shrink-wrap fit (the K02 body is the
                       // centred `.k2-body` flex column). No local spacing.
+                      // While a check is in flight the keys are inert: both
+                      // callbacks early-return on `_awaiting`, so a pointer tap
+                      // AND a VoiceOver/TalkBack `SemanticsAction.tap` both
+                      // change nothing and the code cannot pass four digits.
+                      // Tried `AbsorbPointer(absorbing: awaiting)` for the
+                      // RULES §8 disabled look (no ripple) — it also removes
+                      // the keys' semantics nodes, which contradicts the same
+                      // rule (every key must keep advertising `tap`) and
+                      // `k02_bugs_test.dart`'s "dots stay non-interactive"
+                      // probe, which taps `Digit 9` mid-check by label. Reverted.
+                      // TODO(K02): SHARED_REQUEST #1 — a shared
+                      // `NestKeypad(enabled: …)` (as `NestIconButton` has)
+                      // would report `enabled: false` and drop the ripple while
+                      // keeping each key's node addressable.
                       NestKeypad(
                         onKey: onKey,
                         onDelete: onDelete,

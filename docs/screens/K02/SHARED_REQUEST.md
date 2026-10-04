@@ -6,9 +6,17 @@ Filed by the K02 screen loop, iteration 1. RULES §2 shape. Created because
 it did not exist), and because stage 3 found one more genuinely shared defect
 that must not be patched locally (K02-BUG-1).
 
-Current status: **#1 and #3 open**, **#2 landed on `main`, K02 follow-up
-pending**. Nothing here blocks K02 from landing — the build carries
-metric-matched local stand-ins behind TODOs.
+Current status: **#1 and #3 open**, **#2 done** (the merged `NestKeypad`
+matches CSS `.keypad`; K02 calls it with `fit: NestKeypadFit.shrinkWrap` and
+`5_ui` iteration 3 measured the keypad inside the ±2 px band). Nothing here
+blocks K02 from landing — the build carries metric-matched local stand-ins
+behind TODOs.
+
+**Iteration-4 note.** #3 is still open as a *shared* ask, but the crash class is
+no longer reachable anywhere in `kid_home`: `kidAvatarInitial()` in
+`presentation/widgets/kid_style_helpers.dart` (UI-builder-owned) now backs all
+three `kid_home` sites, pinned by two render tests. When the shared helper
+lands, delete the local one and re-point the three call sites.
 
 ---
 
@@ -59,20 +67,19 @@ that merge, so the 5_ui drift is an artefact of the branch, **not a K02
 defect**. Per `ORCHESTRATOR_NOTES.md` (07:13) K02 must **not** re-space keys
 locally, and it correctly does not: the call site carries a `NOTE(K02)`.
 
-**Remaining K02 follow-up (after the loop merges `main`).**
+**Remaining K02 follow-up — DONE (iteration 3).**
 
-1. Re-run `shot.sh` for `/kid-pin` in light **and** dark and re-run
-   `compare.py`; bands 4–6 must fall under ±2.
-2. If the merged `NestKeypad` grew a `fit: NestKeypadFit.shrinkWrap` style of
-   opt-in, decide whether K02 wants it — the loaded body
-   (`kid_pin_view.dart:261`) currently wraps the keypad in no extra padding,
-   so a `shrinkWrap` fit is expected to be a no-op here but must be confirmed
-   against the design's grid x 77–313.
-3. Report the measured y of the first control, each key row and the caption,
-   design versus app (UI VERDICT RULE).
+1. `5_ui` iteration 3 re-shot `/kid-pin` in light and dark on the merged
+   keypad; bands 4–6 (keypad rows, caption) came back inside ±2.
+2. The merged `NestKeypad` did grow `fit: NestKeypadFit.shrinkWrap`, and K02
+   opts in — the loaded body calls it with that fit
+   (`kid_pin_view.dart`, `_KidPinBody`), which reproduces the design's grid
+   x 77–313.
+3. Measured y reported in `5_ui.md` per the UI VERDICT RULE.
 
-**Files.** none on `main`; K02-side only
-`app/lib/features/kid_home/presentation/views/kid_pin_view.dart:261`.
+**Files.** none on `main`; the K02-side call site is
+`app/lib/features/kid_home/presentation/views/kid_pin_view.dart`
+(`NestKeypad(fit: NestKeypadFit.shrinkWrap)`).
 
 **Blocks K02?** No — but it is the sole reason `5_ui` returned FAIL.
 
@@ -91,16 +98,19 @@ There is **no** guard upstream: `app/lib/` contains no `inputFormatters`, no
 `maxLength` and no nickname validation, so P05 accepts such a name.
 
 **Seven call sites across four features** — a local patch anywhere leaves the
-others broken, which is why this must be one shared helper:
+others broken, which is why this must be one shared helper. **Update (iteration
+4): the three `kid_home` sites now route through `kidAvatarInitial()`**
+(`presentation/widgets/kid_style_helpers.dart`) and are pinned by render tests,
+so the shared ask is now only the other four sites plus the helper's new home:
 
-| file | line |
+| file | status |
 |---|---|
-| `features/kid_home/presentation/views/kid_pin_view.dart` | 140 |
-| `features/kid_home/presentation/views/kid_home_view.dart` | 364 |
-| `features/kid_home/presentation/widgets/profile_tile.dart` | 96 |
-| `features/family/presentation/widgets/child_profile_body.dart` | 108 |
-| `features/family/presentation/widgets/kid_card_grid.dart` | 68 |
-| `features/today/presentation/widgets/today_loaded_body.dart` | 363, 571 |
+| `features/kid_home/presentation/views/kid_pin_view.dart` | ✅ `kidAvatarInitial()` |
+| `features/kid_home/presentation/views/kid_home_view.dart` | ✅ `kidAvatarInitial()` |
+| `features/kid_home/presentation/widgets/profile_tile.dart` | ✅ `kidAvatarInitial()` |
+| `features/family/presentation/widgets/child_profile_body.dart` | ⬜ open |
+| `features/family/presentation/widgets/kid_card_grid.dart` | ⬜ open |
+| `features/today/presentation/widgets/today_loaded_body.dart` (2 sites) | ⬜ open |
 
 **Ask.** Add one grapheme-safe initial helper to the design system — e.g.
 `String nestAvatarInitial(String name)` in
