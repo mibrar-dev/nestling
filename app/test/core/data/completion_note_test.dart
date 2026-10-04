@@ -19,6 +19,7 @@ const List<String> _v5Ddl = <String>[
   'CREATE TABLE families (id TEXT NOT NULL PRIMARY KEY)',
   'CREATE TABLE settings (family_id TEXT NOT NULL PRIMARY KEY)',
   'CREATE TABLE app_state (id INTEGER NOT NULL PRIMARY KEY)',
+  "CREATE TABLE members (id TEXT NOT NULL PRIMARY KEY, family_id TEXT NOT NULL, name TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'owner', invite_status TEXT NOT NULL DEFAULT 'active')",
   "CREATE TABLE quest_completions (id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, quest_id TEXT NOT NULL, child_id TEXT NOT NULL, family_id TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'to_do', coins INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, created_at_tz TEXT NOT NULL DEFAULT 'Europe/London', decided_at INTEGER NULL, decided_at_tz TEXT NOT NULL DEFAULT 'Europe/London')",
 ];
 

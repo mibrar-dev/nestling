@@ -5,3 +5,5 @@
 - P15 family_repository_impl.dart:41 uses `Seed.anchorOverride?.toUtc() ?? DateTime.now()` in app code: replace with `clock.now()`/appNowUtc() (the test clock already pins the day); never read the seed test hook in product code.
 - K03 still paints its own in-flow meadow band (kid_home_view.dart ~l.134-137, 550-599). Switch it to the shared kid_meadow when its next polish pass runs (see docs/screens/_shared/kid_meadow_REPORT.md).
 - K01-BUG-7 (minor, latent): an orphaned child selection locks every tile on Who's playing (proof skipped in app/test/features/kid_home/k01_bugs_test.dart; docs/screens/K01/6_bugs.md). No shipped flow reaches it. Fix when K-screens that delete children land.
+- NestListRow: static (non-interactive) rows in a list merge into the next interactive row's semantics announcement (P16 Family list → Invite button). Each row should be its own semantics node.
+- Shared `Semantics(label:) > InkWell` pattern leaves an extra node (P16 settings_a11y_test pins it). Audit with the semantics_tap work.

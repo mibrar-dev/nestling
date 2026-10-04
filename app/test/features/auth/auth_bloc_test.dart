@@ -771,12 +771,17 @@ void main() {
     test('no password column is written anywhere (local-only stub)', () async {
       await repository.createAccount(email: 'sarah@example.co.uk');
       final rows = await db.select(db.members).get();
-      // The members table has no email/password columns at all — the form's
-      // password can never be persisted (schema change is out of scope).
+      // Schema v7 adds `members.email` (shared batch 6, P16 §4), but there
+      // is still no password column — the form's password can never be
+      // persisted. The auth stub does not yet write the email either (it
+      // only derives the owner name); storing it is a follow-up in
+      // `AuthRepository.createAccount`.
       expect(rows.single.name, 'sarah');
+      expect(rows.single.email, isNull);
+      expect(db.members.$columns.map((c) => c.name), contains('email'));
       expect(
         db.members.$columns.map((c) => c.name),
-        isNot(contains(anyOf('email', 'password'))),
+        isNot(contains('password')),
       );
     });
   });
