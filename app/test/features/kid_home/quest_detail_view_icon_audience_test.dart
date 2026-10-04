@@ -51,6 +51,8 @@ const Set<String> _divergentKeys = <String>{
   'dishwasher',
   'book',
   'reading',
+  'bins',
+  'bin',
 };
 
 /// Keys the demo seed must cover so the "not the parent asset" assertion
@@ -301,7 +303,7 @@ void main() {
   ) async {
     // The premise both cases above rest on, asserted against the shared table
     // rather than against a comment: the divergent set is exactly
-    // bed / dishwasher / book / reading, and the rest are shared.
+    // bed / dishwasher / book / reading / bins / bin, and the rest are shared.
     for (final key in _divergentKeys) {
       expect(
         questIconFor(key, audience: NestAudience.kid),
@@ -309,7 +311,7 @@ void main() {
         reason: '"$key" must have distinct kid and parent glyphs',
       );
     }
-    for (final key in <String>['bins', 'hoover', 'plate', 'paw', 'bag']) {
+    for (final key in <String>['hoover', 'plate', 'paw', 'bag']) {
       expect(
         questIconFor(key, audience: NestAudience.kid),
         questIconFor(key, audience: NestAudience.parent),
