@@ -1,3 +1,4 @@
+import 'package:nestling/core/design_system/components/audience.dart';
 import 'package:nestling/core/design_system/components/nest_icon.dart';
 import 'package:nestling/core/design_system/components/nest_list_row.dart';
 import 'package:nestling/core/design_system/components/reward_icons.dart';
@@ -5,9 +6,11 @@ import 'package:nestling/features/rewards/domain/entities/reward.dart';
 
 /// Tile art + tint for one reward (P14 `.icon-tile`).
 ///
-/// The ART is the shared single source `rewardIconFor` in
-/// `core/design_system/components/reward_icons.dart` — exact `K08-shop.html`
-/// `.k8-art` glyphs, kid wins where K08 and P14 disagree (see that file).
+/// The ART is the shared single source `rewardIconFor(key, audience:
+/// NestAudience.parent)` in `core/design_system/components/reward_icons.dart`
+/// — exact `P14-rewards.html` glyphs (TV `screenTime`, play `film`, clock
+/// `clock`, hat `chefHat`, dome+box+legs `rewardCoffeeParent`; `plate` has
+/// no P14 row so both audiences share K08's `rewardPlate`).
 /// The TINT stays screen-private (P14 `.icon-tile tint-*`); K08 paints every
 /// disc `coinTint`/`coinInk` instead.
 ///
@@ -30,11 +33,15 @@ const Map<String, NestTileTint> _rewardIconTints = <String, NestTileTint>{
 };
 
 /// Legacy per-key art map, kept for backward compatibility (screen agents may
-/// still import it). Values equal `rewardIconFor(key)` — the single source is
-/// `rewardIconFor`; do not extend this map, add keys there instead.
+/// still import it). Values equal `rewardIconFor(key, audience: parent)` —
+/// the single source is `rewardIconFor`; do not extend this map, add keys
+/// there instead.
 final Map<String, RewardIconSpec> rewardIconSpecs = <String, RewardIconSpec>{
   for (final entry in _rewardIconTints.entries)
-    entry.key: RewardIconSpec(rewardIconFor(entry.key), entry.value),
+    entry.key: RewardIconSpec(
+      rewardIconFor(entry.key, audience: NestAudience.parent),
+      entry.value,
+    ),
 };
 
 /// Neutral fallback tile (P14 §1): `NestIcons.gift` on `surface-2`/`ink`.
@@ -46,7 +53,10 @@ const RewardIconSpec rewardIconFallback = RewardIconSpec(
 RewardIconSpec rewardIconSpec(String icon) {
   final tint = _rewardIconTints[icon];
   if (tint == null) return rewardIconFallback;
-  return RewardIconSpec(rewardIconFor(icon), tint);
+  return RewardIconSpec(
+    rewardIconFor(icon, audience: NestAudience.parent),
+    tint,
+  );
 }
 
 /// `aria-label` subject for each seeded row, copied verbatim from
