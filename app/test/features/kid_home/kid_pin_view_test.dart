@@ -1403,6 +1403,102 @@ void main() {
       await disposeApp(tester);
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Iteration 3 — K02-BUG-5's fix: the no-PIN auto-advance latch is released
+  // on the DECLINE path. Two promises, tested here from a fresh harness:
+  //   * while a PIN-protected child is active nothing may navigate (the
+  //     release must not become a bypass — K02-BUG-3's protection), and the
+  //     PIN screen stays fully interactive;
+  //   * a no-PIN child that comes back afterwards really does advance.
+  //
+  // The pair fake is needed because the decline only happens when the two
+  // children swap inside one frame, which real awaited writes cannot do.
+  // -------------------------------------------------------------------------
+  group('K02 iteration 3 fixes', () {
+    testWidgets('a declined auto-advance leaves a live PIN screen', (
+      tester,
+    ) async {
+      final roster = await _seededRoster(tester);
+      final fake = _PairRepo();
+      await _useRepo(fake);
+      await _pumpRoute(tester);
+      // Leo (no PIN) then Maya (PIN) in one turn: the post-frame re-check
+      // declines, so K02 must stay on the PIN screen.
+      fake
+        ..emit(roster.leo)
+        ..emit(roster.maya);
+      await _settleK02(tester);
+      expect(currentPath(tester), KidHomeRoutePaths.pin);
+      expect(find.text('Hi Maya! Enter your secret code'), findsOneWidget);
+      expect(find.byType(NestKeypad), findsOneWidget);
+      // Several frames later nothing may have navigated by itself: releasing
+      // the latch must never let a PIN child through.
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(
+        currentPath(tester),
+        KidHomeRoutePaths.pin,
+        reason: 'a released latch must not become a PIN bypass',
+      );
+      // And the screen the fix left behind is fully interactive.
+      await _enterPin(tester, '9999');
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text("That didn't work. Try again."), findsOneWidget);
+      await _enterPin(tester, '1234');
+      await _settleK02(tester);
+      expect(currentPath(tester), KidHomeRoutePaths.home);
+      await disposeApp(tester);
+    });
+
+    testWidgets('the released latch advances the returning no-PIN child', (
+      tester,
+    ) async {
+      final roster = await _seededRoster(tester);
+      final fake = _PairRepo();
+      await _useRepo(fake);
+      await _pumpRoute(tester);
+      fake
+        ..emit(roster.leo)
+        ..emit(roster.maya); // declined
+      await _settleK02(tester);
+      expect(currentPath(tester), KidHomeRoutePaths.pin);
+      fake.emit(roster.leo); // the no-PIN child comes back
+      await _settleK02(tester);
+      expect(
+        currentPath(tester),
+        KidHomeRoutePaths.home,
+        reason: 'the decline must not latch the auto-advance off forever',
+      );
+      // K02's own loader must be gone — not K03's transient one, which is
+      // why this checks the K02-specific label rather than a spinner.
+      expect(find.bySemanticsLabel('Loading your secret code'), findsNothing);
+      await disposeApp(tester);
+    });
+
+    testWidgets('repeated alternation never advances a PIN child', (
+      tester,
+    ) async {
+      final roster = await _seededRoster(tester);
+      final fake = _PairRepo();
+      await _useRepo(fake);
+      await _pumpRoute(tester);
+      for (var i = 0; i < 3; i++) {
+        fake
+          ..emit(roster.leo)
+          ..emit(roster.maya);
+        await _settleK02(tester);
+        expect(
+          currentPath(tester),
+          KidHomeRoutePaths.pin,
+          reason: 'pass $i must keep the PIN screen',
+        );
+      }
+      fake.emit(roster.leo);
+      await _settleK02(tester);
+      expect(currentPath(tester), KidHomeRoutePaths.home);
+      await disposeApp(tester);
+    });
+  });
 }
 
 /// The eleven announced keypad controls, in tree order
@@ -1411,6 +1507,80 @@ Finder _keyFinder() => find.descendant(
   of: find.byType(NestKeypad),
   matching: find.bySemanticsLabel(RegExp(r'^(Digit [0-9]|Delete)$')),
 );
+
+/// Settles without `pumpAndSettle`: the destination screens can carry an
+/// infinite `CircularProgressIndicator`, which would never settle. Two
+/// round-trips are enough for a post-frame navigation *and* for the outgoing
+/// route to finish its transition and leave the tree — which matters when the
+/// assertion is "the previous screen's fallback is gone".
+Future<void> _settleK02(WidgetTester tester) async {
+  for (var i = 0; i < 2; i++) {
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+  }
+}
+
+/// The seeded roster as real rows (Maya: PIN `1234`, Leo: no PIN), read once
+/// through the real repository before a fake takes its place.
+Future<({KidChild maya, KidChild leo})> _seededRoster(
+  WidgetTester tester,
+) async {
+  late List<KidChild> profiles;
+  await tester.runAsync(() async {
+    profiles = await GetIt.instance<KidHomeRepository>().watchProfiles().first;
+  });
+  return (
+    maya: profiles.firstWhere((c) => c.id == 'maya'),
+    leo: profiles.firstWhere((c) => c.id == 'leo'),
+  );
+}
+
+/// Hands a hand-written repository to the app for this test.
+Future<void> _useRepo(KidHomeRepository repo) async {
+  await GetIt.instance.unregister<KidHomeRepository>();
+  GetIt.instance.registerSingleton<KidHomeRepository>(repo);
+}
+
+/// Scripted home stream: the test pushes whole `KidHomeData` snapshots in one
+/// turn, which is the only way to reproduce the no-PIN → PIN swap that the
+/// post-frame re-check has to decline (real awaited writes cannot land two
+/// children inside one frame). `verifyPin` mirrors the seed: Maya's code is
+/// `1234`, Leo has no code at all.
+class _PairRepo implements KidHomeRepository {
+  final StreamController<KidHomeData> home =
+      StreamController<KidHomeData>.broadcast();
+
+  /// Pushes one home snapshot for [child] (no quests, no ledger).
+  void emit(KidChild child) => home.add(KidHomeData(child: child));
+
+  @override
+  Stream<KidHomeData> watchHome() => home.stream;
+
+  @override
+  Stream<KidChild?> watchActiveChild() => home.stream.map((h) => h.child);
+
+  @override
+  Stream<List<KidChild>> watchProfiles() =>
+      const Stream<List<KidChild>>.empty();
+
+  @override
+  Future<List<KidQuest>> getItems() async => const <KidQuest>[];
+
+  @override
+  Stream<List<KidQuest>> watchItems() => const Stream<List<KidQuest>>.empty();
+
+  @override
+  Future<bool> verifyPin(String childId, String pin) async => pin == '1234';
+
+  @override
+  List<String> stepsFor(String questId) => const <String>[];
+
+  @override
+  Future<void> setActiveChild(String childId) async {}
+
+  @override
+  Future<void> completeQuest(String childId, String questId) async {}
+}
 
 /// Registers [stub] as the app's `KidHomeRepository` for this test.
 Future<void> _registerRepo(_PinStub stub) async {

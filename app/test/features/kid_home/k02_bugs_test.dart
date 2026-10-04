@@ -31,6 +31,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:nestling/app/app.dart';
 import 'package:nestling/app/controllers.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/pin_hash.dart';
@@ -486,6 +487,34 @@ void main() {
   );
 
   // -------------------------------------------------------------------------
+  // K02-BUG-5 extension — the release must also work for a null-child decline
+  // -------------------------------------------------------------------------
+
+  testWidgets(
+    'K02-BUG-5 extension: a null-child decline still releases the latch',
+    (tester) async {
+      final fake = _StreamPairRepo();
+      await _useFake(fake);
+      await _pump(tester);
+      // No-PIN Leo schedules the advance; a null child declines it.
+      fake.home.add(const KidHomeData(child: _leo));
+      fake.home.add(const KidHomeData(child: null));
+      await _settle(tester);
+      expect(currentPath(tester), '/kid-pin');
+      expect(find.text("Who's playing?"), findsOneWidget);
+      // Leo returns: the released latch must let the auto-advance run again.
+      fake.home.add(const KidHomeData(child: _leo));
+      await _settle(tester);
+      expect(
+        currentPath(tester),
+        '/kid-home',
+        reason: 'a null-child decline must release the no-PIN latch too',
+      );
+      await disposeApp(tester);
+    },
+  );
+
+  // -------------------------------------------------------------------------
   // Data edges (probes — pass)
   // -------------------------------------------------------------------------
 
@@ -842,6 +871,32 @@ void main() {
       await tester.tap(find.bySemanticsLabel('Back'));
       await _settle(tester);
       expect(currentPath(tester), '/who-is-playing');
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    testWidgets('kid mode + expired trial: /kid-pin lands on the gate', (
+      tester,
+    ) async {
+      // Shared kid_trial_gate ruling: in kid mode an expired trial sends
+      // every location to the gate (no paywall, no redirect loop). The
+      // status is driven through AppSession, never written directly.
+      await tester.runAsync(() async {
+        final session = GetIt.instance<AppSession>();
+        await session.startTrialNow();
+        final db = GetIt.instance<AppDatabase>();
+        // Use the app clock (pinned via Seed.anchorOverride in tests); the
+        // raw zone clock reads real wall time inside test bodies.
+        await (db.update(db.appState)..where((a) => a.id.equals(1))).write(
+          AppStateCompanion(
+            trialStart: Value(appNowUtc().subtract(const Duration(days: 15))),
+          ),
+        );
+        await session.refresh();
+      });
+      await _pump(tester);
+      await _settle(tester);
+      expect(currentPath(tester), '/parental-gate');
       expect(tester.takeException(), isNull);
       await disposeApp(tester);
     });
