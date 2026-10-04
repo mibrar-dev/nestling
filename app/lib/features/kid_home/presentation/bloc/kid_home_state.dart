@@ -14,6 +14,8 @@ final class KidHomeState extends Equatable {
     this.actionNonce = 0,
     this.justCompletedQuestId,
     this.justCompletedCoins,
+    this.profiles = const <KidChild>[],
+    this.selectedProfileId,
   });
 
   final KidHomeStatus status;
@@ -37,6 +39,19 @@ final class KidHomeState extends Equatable {
   final String? justCompletedQuestId;
   final int? justCompletedCoins;
 
+  /// K01 picker roster in creation order (Maya, then Leo — never re-sorted).
+  /// Shared with the K03 instance on its own route bloc, so every
+  /// `copyWith`/`withCompletion*` constructor must carry it through: a
+  /// dropped list blanks the picker after any quest completion emit.
+  final List<KidChild> profiles;
+
+  /// K01 tile tap, set by `KidHomeProfileSelected` after the
+  /// `setActiveChild` write saves. One-shot: the view pushes
+  /// `/kid-pin` (`pinSet`) or `/kid-home` for this id, and the next home
+  /// stream emission clears it (same pattern as `justCompletedQuestId`).
+  /// Never drives navigation inside the bloc.
+  final String? selectedProfileId;
+
   /// Done = `approved` + `done_pending` (live counts from the DB).
   int get doneCount => items
       .where((q) => q.status == 'approved' || q.status == 'done_pending')
@@ -50,6 +65,7 @@ final class KidHomeState extends Equatable {
     KidHomeStatus? status,
     List<KidQuest>? items,
     String? errorMessage,
+    List<KidChild>? profiles,
   }) {
     return KidHomeState(
       status: status ?? this.status,
@@ -60,6 +76,24 @@ final class KidHomeState extends Equatable {
       actionNonce: actionNonce,
       justCompletedQuestId: justCompletedQuestId,
       justCompletedCoins: justCompletedCoins,
+      profiles: profiles ?? this.profiles,
+      selectedProfileId: selectedProfileId,
+    );
+  }
+
+  /// K01 selection: records the tapped profile, keeping everything else.
+  KidHomeState copyWithSelection(String childId) {
+    return KidHomeState(
+      status: status,
+      child: child,
+      items: items,
+      errorMessage: errorMessage,
+      actionError: actionError,
+      actionNonce: actionNonce,
+      justCompletedQuestId: justCompletedQuestId,
+      justCompletedCoins: justCompletedCoins,
+      profiles: profiles,
+      selectedProfileId: childId,
     );
   }
 
@@ -71,6 +105,8 @@ final class KidHomeState extends Equatable {
       child: child,
       items: items,
       errorMessage: errorMessage,
+      profiles: profiles,
+      selectedProfileId: selectedProfileId,
     );
   }
 
@@ -83,6 +119,8 @@ final class KidHomeState extends Equatable {
       errorMessage: errorMessage,
       actionError: error.toString(),
       actionNonce: actionNonce + 1,
+      profiles: profiles,
+      selectedProfileId: selectedProfileId,
     );
   }
 
@@ -98,13 +136,17 @@ final class KidHomeState extends Equatable {
       errorMessage: errorMessage,
       justCompletedQuestId: questId,
       justCompletedCoins: coins,
+      profiles: profiles,
+      selectedProfileId: selectedProfileId,
     );
   }
 
   /// Loaded emission from the combined child + items streams. Built
   /// explicitly (not via [copyWith]) so a null child clears the previous
   /// one; a healthy stream also clears transient completion outcomes and
-  /// any stale load error (review finding 5).
+  /// any stale load error (review finding 5). Carries the K01 [profiles]
+  /// through untouched, and consumes a pending [selectedProfileId]
+  /// one-shot signal (same pattern as [justCompletedQuestId]).
   KidHomeState copyWithLoaded({
     required KidChild? child,
     required List<KidQuest> items,
@@ -113,6 +155,26 @@ final class KidHomeState extends Equatable {
       status: KidHomeStatus.loaded,
       child: child,
       items: items,
+      profiles: profiles,
+    );
+  }
+
+  /// Loaded emission from the profiles stream: same child + items, new
+  /// roster. Never touches the load status or the pending selection — the
+  /// home stream owns the status, and the selection is consumed only by
+  /// [copyWithLoaded].
+  KidHomeState copyWithProfiles(List<KidChild> next) {
+    return KidHomeState(
+      status: status,
+      child: child,
+      items: items,
+      errorMessage: errorMessage,
+      actionError: actionError,
+      actionNonce: actionNonce,
+      justCompletedQuestId: justCompletedQuestId,
+      justCompletedCoins: justCompletedCoins,
+      profiles: next,
+      selectedProfileId: selectedProfileId,
     );
   }
 
@@ -126,5 +188,7 @@ final class KidHomeState extends Equatable {
     actionNonce,
     justCompletedQuestId,
     justCompletedCoins,
+    profiles,
+    selectedProfileId,
   ];
 }

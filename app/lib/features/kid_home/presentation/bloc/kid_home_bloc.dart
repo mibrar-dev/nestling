@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:nestling/features/kid_home/domain/entities/kid_child.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_home_data.dart';
 import 'package:nestling/features/kid_home/domain/kid_home_repository.dart';
 import 'package:nestling/features/kid_home/presentation/bloc/kid_home_event.dart';
@@ -12,6 +13,10 @@ class KidHomeBloc extends Bloc<KidHomeEvent, KidHomeState> {
     on<KidHomeQuestCompleted>(_onQuestCompleted);
     on<KidHomeDataReceived>(_onDataReceived);
     on<KidHomeStreamFailed>(_onStreamFailed);
+    on<KidHomeProfilesRequested>(_onProfilesRequested);
+    on<KidHomeProfileSelected>(_onProfileSelected);
+    on<KidHomeProfilesReceived>(_onProfilesReceived);
+    on<KidHomeProfilesFailed>(_onProfilesFailed);
   }
 
   final KidHomeRepository _repository;
@@ -24,6 +29,12 @@ class KidHomeBloc extends Bloc<KidHomeEvent, KidHomeState> {
   /// loads are ignored; the subscription is released on error and on close,
   /// so a retry after a failure still works.
   StreamSubscription<KidHomeData>? _homeSub;
+
+  /// The live K01 profiles subscription, or null when not streaming. Same
+  /// guard pattern as [_homeSub]: `watchProfiles()` never closes, so a
+  /// retry while live is ignored, and the subscription is released on
+  /// error and on close so "Try again" really reloads.
+  StreamSubscription<List<KidChild>>? _profilesSub;
 
   /// Completions waiting for their stream flip, questId → coins. Set on the
   /// tap event; the first emission that newly marks a waiting quest done
@@ -38,19 +49,86 @@ class KidHomeBloc extends Bloc<KidHomeEvent, KidHomeState> {
   ) async {
     // A load is already live: ignore the reload instead of stacking another
     // never-ending handler. Never re-add load events to refresh.
-    if (_homeSub != null) return;
-    emit(state.copyWith(status: KidHomeStatus.loading));
-    // One combined subscription (review finding 4, iteration 5): the child
-    // row is watched exactly once per load.
-    _homeSub = _repository.watchHome().listen(
-      (home) => add(KidHomeDataReceived(home)),
+    if (_homeSub == null) {
+      emit(state.copyWith(status: KidHomeStatus.loading));
+      // One combined subscription (review finding 4, iteration 5): the child
+      // row is watched exactly once per load.
+      _homeSub = _repository.watchHome().listen(
+        (home) => add(KidHomeDataReceived(home)),
+        onError: (Object error) {
+          final sub = _homeSub;
+          _homeSub = null;
+          unawaited(sub?.cancel());
+          add(KidHomeStreamFailed(error));
+        },
+      );
+    }
+    _ensureProfilesSub();
+  }
+
+  /// Starts the profiles subscription when none is live. Split out so both
+  /// `KidHomeLoadRequested` and `KidHomeProfilesRequested` share the guard;
+  /// never emits the loading status itself (the load event owns that).
+  void _ensureProfilesSub() {
+    if (_profilesSub != null) return;
+    _profilesSub = _repository.watchProfiles().listen(
+      (profiles) => add(KidHomeProfilesReceived(profiles)),
       onError: (Object error) {
-        final sub = _homeSub;
-        _homeSub = null;
+        final sub = _profilesSub;
+        _profilesSub = null;
         unawaited(sub?.cancel());
-        add(KidHomeStreamFailed(error));
+        add(KidHomeProfilesFailed(error));
       },
     );
+  }
+
+  void _onProfilesRequested(
+    KidHomeProfilesRequested event,
+    Emitter<KidHomeState> emit,
+  ) {
+    _ensureProfilesSub();
+  }
+
+  void _onProfilesReceived(
+    KidHomeProfilesReceived event,
+    Emitter<KidHomeState> emit,
+  ) {
+    emit(state.copyWithProfiles(event.profiles));
+  }
+
+  void _onProfilesFailed(
+    KidHomeProfilesFailed event,
+    Emitter<KidHomeState> emit,
+  ) {
+    // A mid-session error keeps the loaded picker (review finding 6,
+    // iteration 7, applied to the roster): only a load with nothing to show
+    // becomes the failure card. A healthy emission restores `loaded` via
+    // `copyWithLoaded`, which also clears this stale error.
+    emit(
+      state.copyWith(
+        status: state.profiles.isEmpty && state.child == null
+            ? KidHomeStatus.failure
+            : state.status,
+        errorMessage: event.error.toString(),
+      ),
+    );
+  }
+
+  /// K01 tile tap: persist the choice, then publish the one-shot
+  /// `selectedProfileId` the view's `BlocListener` pushes on. On failure the
+  /// roster stays visible and the action error explains it
+  /// (`Hmm, that did not work. Try again.` in the view) — same
+  /// `actionError`/`actionNonce` channel as a failed quest write.
+  Future<void> _onProfileSelected(
+    KidHomeProfileSelected event,
+    Emitter<KidHomeState> emit,
+  ) async {
+    try {
+      await _repository.setActiveChild(event.childId);
+      emit(state.copyWithSelection(event.childId));
+    } on Object catch (error) {
+      emit(state.withCompletionFailed(error));
+    }
   }
 
   void _onDataReceived(KidHomeDataReceived event, Emitter<KidHomeState> emit) {
@@ -120,6 +198,8 @@ class KidHomeBloc extends Bloc<KidHomeEvent, KidHomeState> {
   Future<void> close() async {
     await _homeSub?.cancel();
     _homeSub = null;
+    await _profilesSub?.cancel();
+    _profilesSub = null;
     await super.close();
   }
 }

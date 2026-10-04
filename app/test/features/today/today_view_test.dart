@@ -268,11 +268,11 @@ void main() {
       await tester.tap(find.text('Hand to Maya or Leo'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
-      expect(find.text('K01 Who is playing'), findsOneWidget);
-      expect(
-        _currentUri(tester, find.text('K01 Who is playing')).path,
-        '/who-is-playing',
-      );
+      // K01 is a real screen now, so the old `K01 Who is playing` placeholder
+      // anchor is gone. Assert the route only — same treatment shared_batch4
+      // §4 gave the `/quests` hand-off: K01 owns the picker's copy, P08 only
+      // owns the route it pushes.
+      expect(pushedPath(tester), '/who-is-playing');
 
       await disposeApp(tester);
     });
