@@ -29,6 +29,7 @@ import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
+import 'package:nestling/features/quests/presentation/views/quest_editor_view.dart';
 import 'package:nestling/features/today/data/today_repository_impl.dart';
 import 'package:nestling/features/today/domain/entities/child_day_summary.dart';
 import 'package:nestling/features/today/domain/entities/today_item.dart';
@@ -541,8 +542,12 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
 
+      // Assert the route (durable contract) via the shared `pushedPath`
+      // helper — same as the /approvals assertion — plus the view type.
+      // Never assert a pushed screen's placeholder title text.
+      expect(pushedPath(tester), '/quest-editor');
       expect(
-        find.text('P09 Quest editor', skipOffstage: false),
+        find.byType(QuestEditorView, skipOffstage: false),
         findsOneWidget,
         reason: 'a double-tap must not stack two editor pages',
       );
@@ -694,18 +699,12 @@ void main() {
       await tester.tap(find.bySemanticsLabel('New quest'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
-      expect(
-        find.text('P09 Quest editor', skipOffstage: false),
-        findsOneWidget,
-      );
+      expect(pushedPath(tester), '/quest-editor');
 
       // The pushed page navigates home with `go` (P09/P11 may; §4 asks them
       // to pop, but the guard must not depend on another screen's contract).
-      GoRouter.of(
-        tester.element(
-          find.text('P09 Quest editor', skipOffstage: false).first,
-        ),
-      ).go('/today');
+      // Use the same Navigator lookup as the shared `pushedPath` helper.
+      GoRouter.of(tester.element(find.byType(Navigator).first)).go('/today');
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 700));
 
@@ -714,8 +713,9 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
+      expect(pushedPath(tester), '/quest-editor');
       expect(
-        find.text('P09 Quest editor', skipOffstage: false),
+        find.byType(QuestEditorView, skipOffstage: false),
         findsOneWidget,
         reason: 'the pushed page is gone, so the button must not stay latched',
       );
