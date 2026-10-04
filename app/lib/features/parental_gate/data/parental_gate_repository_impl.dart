@@ -1,5 +1,7 @@
 import 'package:drift/drift.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/features/parental_gate/domain/entities/parental_gate_challenge.dart';
 import 'package:nestling/features/parental_gate/domain/parental_gate_repository.dart';
@@ -19,7 +21,7 @@ class ParentalGateRepositoryImpl implements ParentalGateRepository {
       if (setting != null && !setting.kidGateEnabled) {
         return const <ParentalGateChallenge>[];
       }
-      return <ParentalGateChallenge>[challengeFor(DateTime.now().toUtc())];
+      return <ParentalGateChallenge>[challengeFor(appNowUtc())];
     });
   }
 
@@ -39,11 +41,15 @@ class ParentalGateRepositoryImpl implements ParentalGateRepository {
 
   @override
   ParentalGateChallenge challengeFor(DateTime utc) {
-    final day = utc.day + utc.month * 31;
+    // P17-BUG-2: the gate's day is the Europe/London calendar day, like
+    // every other period in the app (PERIODS ruling) — never the UTC date,
+    // which would flip the question at 01:00 London during BST.
+    final london = toFamilyZone(utc, defaultFamilyZoneId);
+    final day = london.day + london.month * 31;
     final a = 2 + (day % 8);
     final b = 2 + ((day ~/ 8) % 8);
     return ParentalGateChallenge(
-      id: '${utc.year}-${utc.month}-${utc.day}',
+      id: '${london.year}-${london.month}-${london.day}',
       title: 'Grown-ups only',
       detail: 'This keeps settings and purchases safe.',
       a: a,

@@ -300,8 +300,13 @@ class _NestTextFieldState extends State<NestTextField> {
           helperStyle: NestType.caption(color: tokens.ink2),
           filled: true,
           fillColor: tokens.surface,
+          // Design `.field input`: `border 1px` + `padding 0 16px`, so text
+          // starts 17 px from the field's left edge. Material's editable
+          // origin sits ~4 px inside the decoration content box (same fix as
+          // the search variant's `left: -4`), so the decoration carries 12
+          // px — 12 + 4 + 1 border = 17 — not 16 (which rendered 20).
           contentPadding: const EdgeInsets.symmetric(
-            horizontal: NestSpacing.s4,
+            horizontal: NestSpacing.s3,
             vertical: 14,
           ),
           border: errorText == null ? enabledBorder : errorBorder,

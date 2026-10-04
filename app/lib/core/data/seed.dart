@@ -13,6 +13,7 @@
 // the seed uses Sat 3 Oct 2026 (and Sat 26 Sep 2026 for "last Saturday") and
 // every weekday label renders correctly via `family_time.dart`.
 
+import 'package:clock/clock.dart';
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/family_time.dart';
@@ -32,7 +33,7 @@ abstract final class Seed {
   static DateTime get anchorDay {
     final override = anchorOverride;
     if (override != null) return override;
-    final london = toFamilyZone(DateTime.now().toUtc(), defaultFamilyZoneId);
+    final london = toFamilyZone(clock.now().toUtc(), defaultFamilyZoneId);
     return DateTime.utc(london.year, london.month, london.day);
   }
 
@@ -79,6 +80,7 @@ abstract final class Seed {
             id: 'sarah',
             familyId: familyId,
             name: 'Sarah',
+            email: const Value('sarah@example.co.uk'),
           ),
         );
     await _settingsDemo(db);
@@ -89,7 +91,7 @@ abstract final class Seed {
             id: const Value(1),
             onboardingComplete: const Value(true),
             subscriptionStatus: const Value('trial'),
-            trialStart: Value(DateTime.now().toUtc()),
+            trialStart: Value(clock.now().toUtc()),
             appMode: const Value('parent'),
           ),
         );
@@ -122,6 +124,7 @@ abstract final class Seed {
             id: 'sarah',
             familyId: familyId,
             name: 'Sarah',
+            email: const Value('sarah@example.co.uk'),
           ),
         );
     await _childrenDemo(db);
@@ -174,6 +177,7 @@ abstract final class Seed {
             id: 'sarah',
             familyId: familyId,
             name: 'Sarah',
+            email: const Value('sarah@example.co.uk'),
           ),
         );
     await db
@@ -185,6 +189,8 @@ abstract final class Seed {
             name: 'James',
             role: const Value('co-parent'),
             inviteStatus: const Value('invited'),
+            // No email: the P16 design shows "Invited · awaiting reply",
+            // not an address, for the co-parent row (absent == NULL).
           ),
         );
   }
@@ -313,6 +319,7 @@ abstract final class Seed {
       int coins,
       DateTime created, [
       DateTime? decided,
+      String? kidNote,
     ]) {
       return db
           .into(db.questCompletions)
@@ -329,20 +336,33 @@ abstract final class Seed {
                   ? const Value.absent()
                   : Value(decided),
               decidedAtTz: const Value(defaultFamilyZoneId),
+              kidNote: kidNote == null ? const Value.absent() : Value(kidNote),
             ),
           );
     }
 
-    // 3 awaiting approval (P11 "Waiting for you (3)").
+    // 3 awaiting approval (P11 "Waiting for you (3)"). The child's note
+    // (`kid_note`) is stored WITHOUT the surrounding “ ” — P11 adds them
+    // at render time. q-table has no note (NULL → no quote line).
     await completion(
       'q-dishwasher',
       'maya',
       'done_pending',
       15,
       utc(10, 3, 7, 12),
+      null,
+      'I stacked everything neatly!',
     );
     await completion('q-table', 'maya', 'done_pending', 10, utc(10, 3, 7, 5));
-    await completion('q-bed', 'leo', 'done_pending', 5, utc(10, 3, 6, 58));
+    await completion(
+      'q-bed',
+      'leo',
+      'done_pending',
+      5,
+      utc(10, 3, 6, 58),
+      null,
+      'I did the pillows too.',
+    );
     // Approved this week (drive P08 progress + ledger).
     await completion(
       'q-bins',

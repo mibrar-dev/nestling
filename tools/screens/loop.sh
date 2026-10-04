@@ -55,6 +55,11 @@ stage() { # name model template iter fixes
       for lg in "$ST/${ID}_${name}_i${it}_nudge.log" "$ST/${ID}_${name}_i${it}.log"; do
         [ -f "$lg" ] || continue
         sed 's/\x1b\[[0-9;]*m//g' "$lg" | awk '/^> build/{buf=""; next} {buf=buf $0 "\n"} END{printf "%s", buf}' > "$out.tmp"
+        # Never replace a complete report (has a VERDICT and is longer) with a
+        # shorter chat answer: the agent may rightly have left it as it was.
+        if [ "$name" = plan ] && [ -f "$out" ] && grep -qE "^VERDICT: (PASS|FAIL)" "$out" && [ "$(wc -l < "$out")" -gt "$(wc -l < "$out.tmp")" ]; then
+          touch "$out"; rm -f "$out.tmp"; ev REPORT_KEPT "${name}_i${it}"; break
+        fi
         if grep -qE "^VERDICT: (PASS|FAIL)" "$out.tmp"; then
           { echo "<!-- saved from the agent's final answer by loop.sh -->"; cat "$out.tmp"; } > "$out"; rm -f "$out.tmp"; ev REPORT_FROM_LOG "${name}_i${it}"; break
         fi

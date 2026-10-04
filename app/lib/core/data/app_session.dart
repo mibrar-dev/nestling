@@ -16,15 +16,16 @@ import 'dart:async';
 
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 
-/// Clock returning "now" (defaults to [DateTime.now]). Tests pin this to a
+/// Clock returning "now" (defaults to [appNowUtc], i.e. `clock.now()` pinned
+/// to the seed anchor in tests). Tests pin this to a
 /// fixed instant to prove the trial boundary deterministically.
 typedef AppSessionClock = DateTime Function();
 
 class AppSession extends ChangeNotifier {
-  AppSession(this._db, {AppSessionClock? clock})
-    : _clock = clock ?? DateTime.now {
+  AppSession(this._db, {AppSessionClock? clock}) : _clock = clock ?? appNowUtc {
     _subscription = _db.watchAppState().listen((row) {
       _row = row;
       notifyListeners();

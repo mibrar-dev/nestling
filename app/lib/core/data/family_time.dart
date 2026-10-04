@@ -33,34 +33,97 @@ void initFamilyTime() {
 
 void _ensureInit() => initFamilyTime();
 
-/// True when [id] names a zone in the tz database.
+/// IANA backward-link aliases the bundled `latest_10y` dataset omits.
+///
+/// The `timezone` package's `LocationDatabase` only knows canonical
+/// locations — link ids such as `Europe/Belfast` (→ `Europe/London`) or
+/// `Asia/Calcutta` (→ `Asia/Kolkata`) throw `LocationNotFoundException`,
+/// so a phone reporting one reads as an unknown zone (P16-B09). The map
+/// resolves each link to its canonical zone before every `getLocation`
+/// call; unknown ids still fall back via [normalizeZoneId] as before.
+///
+/// Sources: IANA `backward` file (canonical targets verified against the
+/// bundled db where present). Kept small and explicit — a full link table
+/// would dwarf the helper — covering the GB/UK links P16 needs plus the
+/// common `US/*`, `Asia/*` and `Europe/Kiev` aliases phones still report.
+const Map<String, String> _zoneAliases = <String, String>{
+  // UK (P16-B09): Belfast and the bare `GB`/`GB-Eire` country zones are
+  // links to London.
+  'Europe/Belfast': 'Europe/London',
+  'GB': 'Europe/London',
+  'GB-Eire': 'Europe/London',
+  'Eire': 'Europe/Dublin',
+  // India (task proof): `Asia/Calcutta` is the old name of Kolkata.
+  'Asia/Calcutta': 'Asia/Kolkata',
+  // Vietnam / Myanmar / Nepal / Mongolia spellings phones still report.
+  'Asia/Saigon': 'Asia/Ho_Chi_Minh',
+  'Asia/Rangoon': 'Asia/Yangon',
+  'Asia/Katmandu': 'Asia/Kathmandu',
+  'Asia/Ulan_Bator': 'Asia/Ulaanbaatar',
+  // Ukraine.
+  'Europe/Kiev': 'Europe/Kyiv',
+  // US backward links → canonical `America/*`.
+  'US/Alaska': 'America/Anchorage',
+  'US/Aleutian': 'America/Adak',
+  'US/Arizona': 'America/Phoenix',
+  'US/Central': 'America/Chicago',
+  'US/East-Indiana': 'America/Indiana/Indianapolis',
+  'US/Eastern': 'America/New_York',
+  'US/Hawaii': 'Pacific/Honolulu',
+  'US/Indiana-Starke': 'America/Indiana/Knox',
+  'US/Michigan': 'America/Detroit',
+  'US/Mountain': 'America/Denver',
+  'US/Pacific': 'America/Los_Angeles',
+  'US/Samoa': 'Pacific/Pago_Pago',
+  // Canada backward links.
+  'Canada/Atlantic': 'America/Halifax',
+  'Canada/Central': 'America/Winnipeg',
+  'Canada/Eastern': 'America/Toronto',
+  'Canada/Mountain': 'America/Edmonton',
+  'Canada/Newfoundland': 'America/St_Johns',
+  'Canada/Pacific': 'America/Vancouver',
+  'Canada/Saskatchewan': 'America/Regina',
+  'Canada/Yukon': 'America/Whitehorse',
+};
+
+/// Canonical zone for [id]: the alias target when [id] is a known IANA
+/// backward link, else [id] unchanged. Never throws.
+String canonicalZoneId(String id) => _zoneAliases[id] ?? id;
+
+/// True when [id] names a zone in the tz database, or an IANA backward link
+/// in [_zoneAliases] whose canonical target is known.
 bool isKnownZoneId(String id) {
   _ensureInit();
+  final canonical = canonicalZoneId(id);
   try {
-    tz.getLocation(id);
+    tz.getLocation(canonical);
     return true;
   } on Object catch (_) {
     return false;
   }
 }
 
-/// Validates [id], returning it unchanged when known. Otherwise returns
-/// [fallback] when that is known, else `'Europe/London'`, else `'UTC'`.
-/// Never throws — unknown zone ids must fall back safely.
+/// Validates [id], returning its canonical zone when known (links resolve:
+/// `Europe/Belfast` → `Europe/London`, `Asia/Calcutta` → `Asia/Kolkata`).
+/// Otherwise returns [fallback]'s canonical zone when that is known, else
+/// `'Europe/London'`, else `'UTC'`. Never throws — unknown zone ids must
+/// fall back safely.
 String normalizeZoneId(String? id, {String fallback = defaultFamilyZoneId}) {
   _ensureInit();
   if (id != null && id.isNotEmpty) {
+    final canonical = canonicalZoneId(id);
     try {
-      tz.getLocation(id);
-      return id;
+      tz.getLocation(canonical);
+      return canonical;
     } on Object catch (_) {
       // Fall through to the fallback chain.
     }
   }
   if (fallback.isNotEmpty) {
+    final canonicalFallback = canonicalZoneId(fallback);
     try {
-      tz.getLocation(fallback);
-      return fallback;
+      tz.getLocation(canonicalFallback);
+      return canonicalFallback;
     } on Object catch (_) {
       // Fall through.
     }
@@ -79,13 +142,15 @@ String normalizeZoneId(String? id, {String fallback = defaultFamilyZoneId}) {
 
 /// Picks the zone id to stamp on a new row: the writer's device zone when
 /// valid, else the family zone, else `'Europe/London'`, else `'UTC'`.
+/// Link ids resolve to their canonical zone (never stamps an alias).
 String resolveWriteZone({String? deviceZone, String? familyZone}) {
   _ensureInit();
   for (final candidate in <String?>[deviceZone, familyZone]) {
     if (candidate != null && candidate.isNotEmpty) {
+      final canonical = canonicalZoneId(candidate);
       try {
-        tz.getLocation(candidate);
-        return candidate;
+        tz.getLocation(canonical);
+        return canonical;
       } on Object catch (_) {
         // Try the next fallback.
       }

@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/ids.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/data/stream_combine.dart';
 import 'package:nestling/features/rewards/domain/entities/reward.dart'
@@ -19,8 +20,11 @@ class RewardsRepositoryImpl implements RewardsRepository {
 
   @override
   Stream<List<domain.Reward>> watchItems() {
+    // Owner rule (ORCHESTRATOR_NOTES 12:27): the P14 list is creation order
+    // — the order rewards were added — never price order. The legacy
+    // `watchRewards` (coinPrice ASC) is kept for backward compatibility only.
     return _db
-        .watchRewards(Seed.familyId)
+        .watchRewardsInCreationOrder(Seed.familyId)
         .map((rows) => rows.map(_toEntity).toList());
   }
 
@@ -56,9 +60,7 @@ class RewardsRepositoryImpl implements RewardsRepository {
 
   @override
   Future<void> createReward(domain.Reward reward) {
-    final id = reward.id.isEmpty
-        ? 'reward-${DateTime.now().toUtc().millisecondsSinceEpoch}'
-        : reward.id;
+    final id = reward.id.isEmpty ? newId('reward') : reward.id;
     return _db
         .into(_db.rewards)
         .insert(
@@ -89,7 +91,15 @@ class RewardsRepositoryImpl implements RewardsRepository {
 
   @override
   Future<void> deleteReward(String id) {
-    return (_db.delete(_db.rewards)..where((r) => r.id.equals(id))).go();
+    // P14-B04: foreign keys are off app-wide, so deleting only the reward row
+    // would orphan its `reward_redemptions` rows (a later approve is then a
+    // silent no-op). Remove both in one transaction.
+    return _db.transaction(() async {
+      await (_db.delete(
+        _db.rewardRedemptions,
+      )..where((r) => r.rewardId.equals(id))).go();
+      await (_db.delete(_db.rewards)..where((r) => r.id.equals(id))).go();
+    });
   }
 
   @override

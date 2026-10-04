@@ -155,5 +155,14 @@ class _MoodButton extends StatelessWidget {
   }
 }
 
-String _pretty(String value) =>
-    '${value.substring(0, 1).toUpperCase()}${value.substring(1)}';
+String _pretty(String value) {
+  // Grapheme-safe capitalize (same UTF-16 class as K02-BUG-1): `value[0]`
+  // would split a leading surrogate pair. Mood names are ASCII today, but
+  // the accessor costs nothing.
+  if (value.isEmpty) {
+    return value;
+  }
+  final first = value.characters.first.toUpperCase();
+  final rest = value.characters.skip(1).string;
+  return '$first$rest';
+}

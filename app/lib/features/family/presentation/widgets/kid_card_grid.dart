@@ -65,7 +65,7 @@ class _KidCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.nest;
     final nickname = child.nickname;
-    final initial = nickname.isNotEmpty ? nickname[0].toUpperCase() : '?';
+    final initial = nestAvatarInitial(nickname);
     return NestCard(
       padding: EdgeInsets.zero,
       child: Stack(

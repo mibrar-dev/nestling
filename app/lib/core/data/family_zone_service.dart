@@ -12,6 +12,7 @@
 
 import 'package:drift/drift.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/seed.dart';
@@ -29,18 +30,21 @@ class FamilyZoneService {
   final AppDatabase _db;
   final DeviceZoneReader _deviceZoneReader;
 
-  /// The device's current IANA zone id, or null when unreadable/invalid.
+  /// The device's current IANA zone id (canonical — IANA backward links
+  /// resolve, e.g. `Europe/Belfast` → `Europe/London`), or null when
+  /// unreadable/invalid.
   Future<String?> deviceZoneId() async {
     try {
       final raw = await _deviceZoneReader();
       if (raw.isEmpty || !isKnownZoneId(raw)) return null;
-      return raw;
+      return normalizeZoneId(raw);
     } on Object catch (_) {
       return null;
     }
   }
 
-  /// The stored family zone (`families.time_zone`, London default).
+  /// The stored family zone (`families.time_zone`, London default; links
+  /// resolve to canonical via [normalizeZoneId]).
   Future<String> familyZoneId([String familyId = Seed.familyId]) async {
     final row = await (_db.select(
       _db.families,
@@ -49,10 +53,10 @@ class FamilyZoneService {
     if (stored == null || stored.isEmpty || !isKnownZoneId(stored)) {
       return defaultFamilyZoneId;
     }
-    return stored;
+    return normalizeZoneId(stored);
   }
 
-  /// Live stream of the stored family zone.
+  /// Live stream of the stored family zone (canonical, London fallback).
   Stream<String> watchFamilyZone([String familyId = Seed.familyId]) {
     return (_db.select(
       _db.families,
@@ -61,7 +65,7 @@ class FamilyZoneService {
       if (stored == null || stored.isEmpty || !isKnownZoneId(stored)) {
         return defaultFamilyZoneId;
       }
-      return stored;
+      return normalizeZoneId(stored);
     });
   }
 
@@ -84,28 +88,31 @@ class FamilyZoneService {
     await setFamilyTimeZone(device, familyId);
   }
 
-  /// Stores [zoneId] as the family zone (validated; unknown ids are ignored).
-  /// Also mirrors the zone into `settings` so both rule tables agree.
+  /// Stores [zoneId] as the family zone (validated; unknown ids are ignored;
+  /// IANA links resolve to canonical before the write, so the DB never
+  /// stores an alias). Also mirrors the zone into `settings` so both rule
+  /// tables agree.
   Future<void> setFamilyTimeZone(
     String zoneId, [
     String familyId = Seed.familyId,
   ]) async {
     if (!isKnownZoneId(zoneId)) return;
-    final now = DateTime.now().toUtc();
+    final canonical = normalizeZoneId(zoneId);
+    final now = appNowUtc();
     await (_db.update(_db.families)..where((f) => f.id.equals(familyId))).write(
       FamiliesCompanion(
-        timeZone: Value(zoneId),
+        timeZone: Value(canonical),
         updatedAt: Value(now),
-        updatedAtTz: Value(zoneId),
+        updatedAtTz: Value(canonical),
       ),
     );
     await (_db.update(
       _db.settings,
     )..where((s) => s.familyId.equals(familyId))).write(
       SettingsCompanion(
-        timeZone: Value(zoneId),
+        timeZone: Value(canonical),
         updatedAt: Value(now),
-        updatedAtTz: Value(zoneId),
+        updatedAtTz: Value(canonical),
       ),
     );
   }

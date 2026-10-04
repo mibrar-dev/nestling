@@ -12,49 +12,11 @@ import 'package:nestling/features/kid_home/presentation/bloc/kid_home_bloc.dart'
 import 'package:nestling/features/kid_home/presentation/bloc/kid_home_event.dart';
 import 'package:nestling/features/kid_home/presentation/bloc/kid_home_state.dart';
 import 'package:nestling/features/kid_home/presentation/widgets/kid_status_chip.dart';
+import 'package:nestling/features/kid_home/presentation/widgets/kid_style_helpers.dart';
 import 'package:nestling/features/kid_jar/kid_jar_routes.dart';
 import 'package:nestling/features/kid_shop/kid_shop_routes.dart';
 import 'package:nestling/features/parental_gate/parental_gate_routes.dart';
 import 'package:nestling/features/pip/pip_routes.dart';
-
-NestAvatarColor _avatarColor(String raw) {
-  return switch (raw) {
-    'lilac' => NestAvatarColor.lilac,
-    'peach' => NestAvatarColor.peach,
-    'sky' => NestAvatarColor.sky,
-    'leaf' => NestAvatarColor.leaf,
-    'coin' => NestAvatarColor.coin,
-    _ => NestAvatarColor.neutral,
-  };
-}
-
-/// The child's own Pip look from the database (ORCHESTRATOR_NOTES #1).
-PipStyle _pipStyle(String raw) {
-  return switch (raw) {
-    'bolt' => PipStyle.bolt,
-    'storybook' => PipStyle.storybook,
-    _ => PipStyle.mochi,
-  };
-}
-
-PipSkin _pipSkin(String raw) {
-  return switch (raw) {
-    'sky' => PipSkin.sky,
-    'berry' => PipSkin.berry,
-    'mint' => PipSkin.mint,
-    _ => PipSkin.sunny,
-  };
-}
-
-PipAccessory _pipAccessory(String raw) {
-  return switch (raw) {
-    'bow' => PipAccessory.bow,
-    'cap' => PipAccessory.cap,
-    'scarf' => PipAccessory.scarf,
-    'glasses' => PipAccessory.glasses,
-    _ => PipAccessory.none,
-  };
-}
 
 /// Design-slot numbers (single place to change, cited to `.k3-pet` in
 /// `design/html-source/screens/K03-kid-home.html` and to
@@ -131,16 +93,6 @@ const double _kStageToHearts = 21;
 /// The value is `NestSpacing.gap6`, the token for that 6 px, so the view and
 /// `kid_home_view_test.dart` name the same reserve the same way.
 const double _kQuestCardShadowRoom = NestSpacing.gap6;
-
-/// Display name for the pet-stage semantics label (design alt text).
-String _pipStageName(int stage) {
-  return switch (stage) {
-    1 => 'Egg',
-    2 => 'Hatchling',
-    4 => 'Songbird',
-    _ => 'Fledgling',
-  };
-}
 
 /// Meadow crest silhouette (review finding 2: single place to change).
 /// Numbers cite the `.meadow` hill in
@@ -319,10 +271,10 @@ class _KidFailure extends StatelessWidget {
                       // (orchestrator rule for childless screens).
                       if (known != null)
                         PipAvatar(
-                          style: _pipStyle(known.pipStyle),
+                          style: pipStyleOf(known.pipStyle),
                           stage: known.pipStage.clamp(1, 4),
-                          skin: _pipSkin(known.pipSkin),
-                          accessory: _pipAccessory(known.pipAccessory),
+                          skin: pipSkinOf(known.pipSkin),
+                          accessory: pipAccessoryOf(known.pipAccessory),
                           size: 140,
                         )
                       else
@@ -425,7 +377,7 @@ class _KidHomeBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.nest;
     final nickname = child.nickname;
-    final initial = nickname.isEmpty ? '?' : nickname[0].toUpperCase();
+    final initial = nestAvatarInitial(nickname);
     final done = state.doneCount;
     final total = state.totalCount;
     final filledHearts = child.happiness.clamp(0, 5);
@@ -448,7 +400,7 @@ class _KidHomeBody extends StatelessWidget {
                   NestAvatar(
                     initial: initial,
                     size: NestAvatarSize.s64,
-                    color: _avatarColor(child.avatarColour),
+                    color: avatarColorOf(child.avatarColour),
                   ),
                   Expanded(
                     child: Semantics(
@@ -774,16 +726,16 @@ class _KidPetStage extends StatelessWidget {
     final stage = child.pipStage.clamp(1, 4);
     return NestPetStage(
       pip: PipAvatar(
-        style: _pipStyle(child.pipStyle),
+        style: pipStyleOf(child.pipStyle),
         stage: stage,
-        skin: _pipSkin(child.pipSkin),
-        accessory: _pipAccessory(child.pipAccessory),
+        skin: pipSkinOf(child.pipSkin),
+        accessory: pipAccessoryOf(child.pipAccessory),
       ),
       speech: "Let's do some quests!",
       nestWidth: _kNestBoxWidth,
       nestHeight: _kNestBoxHeight,
       fixedPipHeight: _kPipSlotSize,
-      semanticLabel: 'Pip the ${_pipStageName(stage)}, stage $stage of 4',
+      semanticLabel: 'Pip the ${pipStageName(stage)}, stage $stage of 4',
     );
   }
 }
@@ -963,10 +915,10 @@ class _KidEmptyQuests extends StatelessWidget {
       children: [
         NestEmptyState(
           art: PipAvatar(
-            style: _pipStyle(child.pipStyle),
+            style: pipStyleOf(child.pipStyle),
             stage: child.pipStage.clamp(1, 4),
-            skin: _pipSkin(child.pipSkin),
-            accessory: _pipAccessory(child.pipAccessory),
+            skin: pipSkinOf(child.pipSkin),
+            accessory: pipAccessoryOf(child.pipAccessory),
             size: 120,
           ),
           title: 'No quests today',

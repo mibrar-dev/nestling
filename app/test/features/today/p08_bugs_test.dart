@@ -22,12 +22,14 @@ import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:nestling/app/controllers.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
+import 'package:nestling/features/quests/presentation/views/quest_editor_view.dart';
 import 'package:nestling/features/today/data/today_repository_impl.dart';
 import 'package:nestling/features/today/domain/entities/child_day_summary.dart';
 import 'package:nestling/features/today/domain/entities/today_item.dart';
@@ -37,11 +39,6 @@ import 'package:nestling/features/today/presentation/bloc/today_event.dart';
 import 'package:nestling/features/today/presentation/views/today_view.dart';
 
 import '../../test_scope.dart';
-
-/// The pushed page's own location (the shell branch still reports `/today`
-/// via `currentConfiguration` after a `push`, so read the page URI).
-Uri currentUri(WidgetTester tester, Finder anchor) =>
-    GoRouter.of(tester.element(anchor)).state.uri;
 
 class _MockTodayRepository extends Mock implements TodayRepository;
 
@@ -265,10 +262,14 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
       // The pushed page observes the new location (the shell branch still
-      // reports `/today` via `currentConfiguration`, so read the URI from
-      // the pushed page itself — same method as the navigation tests).
-      expect(find.text('P11 Approvals'), findsOneWidget);
-      expect(currentUri(tester, find.text('P11 Approvals')).path, '/approvals');
+      // reports `/today` via `currentConfiguration`), so read the URI from
+      // the top-most rendered route via the shared `pushedPath` helper —
+      // `GoRouter.state` is built from the full match list, so this asserts
+      // both where we are AND what the Navigator renders. Never assert a
+      // pushed screen's title text: screen agents replace placeholder views
+      // (P11's `AppBar('P11 Approvals')` → `Waiting for you (N)`), paths are
+      // the stable contract. See `_shared/router_push_test_fix_REPORT.md`.
+      expect(pushedPath(tester), '/approvals');
 
       final popped = await tester.binding.handlePopRoute();
       await tester.pump();
@@ -388,7 +389,7 @@ void main() {
       '[P08-B11] a daily completion from the previous London day is to do',
       () async {
         final db = await setUpTestScope();
-        final now = DateTime.now().toUtc();
+        final now = appNowUtc();
         final stale = dayStartUtc(
           'Europe/London',
           now,
@@ -426,7 +427,7 @@ void main() {
       '[P08-B11] a weekly completion from last week is to do again',
       () async {
         final db = await setUpTestScope();
-        final now = DateTime.now().toUtc();
+        final now = appNowUtc();
         final stale = weekStartUtc(
           'Europe/London',
           now,
@@ -462,7 +463,7 @@ void main() {
       tester,
     ) async {
       final db = await setUpTestScope();
-      final now = DateTime.now().toUtc();
+      final now = appNowUtc();
       final stale = dayStartUtc(
         'Europe/London',
         now,
@@ -541,8 +542,12 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
 
+      // Assert the route (durable contract) via the shared `pushedPath`
+      // helper — same as the /approvals assertion — plus the view type.
+      // Never assert a pushed screen's placeholder title text.
+      expect(pushedPath(tester), '/quest-editor');
       expect(
-        find.text('P09 Quest editor', skipOffstage: false),
+        find.byType(QuestEditorView, skipOffstage: false),
         findsOneWidget,
         reason: 'a double-tap must not stack two editor pages',
       );
@@ -608,7 +613,7 @@ void main() {
         final db = await setUpTestScope();
         // Derive the stale instant from the pinned story clock (repo default
         // clock is `Seed.anchorOverride`) instead of duplicating a literal.
-        final pin = Seed.anchorOverride ?? DateTime.now().toUtc();
+        final pin = Seed.anchorOverride ?? appNowUtc();
         final stale = dayStartUtc(
           'Europe/London',
           pin,
@@ -654,7 +659,7 @@ void main() {
       tester,
     ) async {
       final db = await setUpTestScope();
-      final pin = Seed.anchorOverride ?? DateTime.now().toUtc();
+      final pin = Seed.anchorOverride ?? appNowUtc();
       final stale = dayStartUtc(
         'Europe/London',
         pin,
@@ -694,18 +699,12 @@ void main() {
       await tester.tap(find.bySemanticsLabel('New quest'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
-      expect(
-        find.text('P09 Quest editor', skipOffstage: false),
-        findsOneWidget,
-      );
+      expect(pushedPath(tester), '/quest-editor');
 
       // The pushed page navigates home with `go` (P09/P11 may; §4 asks them
       // to pop, but the guard must not depend on another screen's contract).
-      GoRouter.of(
-        tester.element(
-          find.text('P09 Quest editor', skipOffstage: false).first,
-        ),
-      ).go('/today');
+      // Use the same Navigator lookup as the shared `pushedPath` helper.
+      GoRouter.of(tester.element(find.byType(Navigator).first)).go('/today');
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 700));
 
@@ -714,8 +713,9 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
+      expect(pushedPath(tester), '/quest-editor');
       expect(
-        find.text('P09 Quest editor', skipOffstage: false),
+        find.byType(QuestEditorView, skipOffstage: false),
         findsOneWidget,
         reason: 'the pushed page is gone, so the button must not stay latched',
       );

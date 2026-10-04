@@ -79,6 +79,7 @@ extra care (bloc/entity edits will conflict).
 - Pip look (`pip_style/skin/accessory/stage`) comes from the child's row
   via `PipRepository.watchProfile`; feed it into
   `PipAvatar(style/stage/mood/skin/accessory/inNest)`.
+- Ids are newId(prefix) (uuid); never derive ids from the clock.
 
 ## 5. Launch flags (every screen loop uses these)
 
@@ -124,3 +125,7 @@ If a control is wrapped in `Semantics(excludeSemantics: true)`, the wrapper
 must still pass `onTap:` (and `onLongPress`/`onIncrease`/`onDecrease` where
 used) so VoiceOver/TalkBack can activate the labelled node; a disabled
 control passes no tap and reports `enabled: false`.
+
+## 9. Pinned test clock (shared test_clock)
+
+App code never calls DateTime.now(); use clock.now() (package:clock). Tests are pinned to Sat 3 Oct 2026 09:41 London.

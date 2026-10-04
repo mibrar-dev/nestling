@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/features/paywall/domain/entities/paywall_plan.dart';
@@ -44,7 +45,7 @@ class PaywallRepositoryImpl implements PaywallRepository {
     await _upsert(
       AppStateCompanion(
         subscriptionStatus: const Value('trial'),
-        trialStart: Value(DateTime.now().toUtc()),
+        trialStart: Value(appNowUtc()),
         trialStartTz: Value(zone),
       ),
     );
