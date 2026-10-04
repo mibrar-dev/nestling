@@ -48,11 +48,13 @@ NestAvatarColor approvalAvatarColor(String colour) {
   }
 }
 
-/// First letter of the child's nickname, upper-cased (`.avatar` shows `M`/`L`).
+/// First grapheme of the child's nickname, upper-cased (`.avatar` shows `M`/`L`).
+///
+/// Delegates to the shared [nestAvatarInitial] helper so emoji-leading names
+/// never throw (K02-BUG-1). Empty names stay `''` (the card's existing
+/// contract — no avatar letter).
 String approvalInitial(String childName) {
-  final trimmed = childName.trim();
-  if (trimmed.isEmpty) return '';
-  return trimmed.substring(0, 1).toUpperCase();
+  return nestAvatarInitial(childName, fallback: '');
 }
 
 /// Which of the two card buttons the parent pressed. Only the pressed one

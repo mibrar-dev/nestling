@@ -336,10 +336,7 @@ class PayoutChildRow extends StatelessWidget {
       child: Row(
         children: <Widget>[
           // `.avatar.s44` — `NestAvatar`'s default size.
-          NestAvatar(
-            initial: name.isEmpty ? '?' : name.characters.first.toUpperCase(),
-            color: avatarColour,
-          ),
+          NestAvatar(initial: nestAvatarInitial(name), color: avatarColour),
           const SizedBox(width: NestSpacing.s3),
           Expanded(
             child: Column(

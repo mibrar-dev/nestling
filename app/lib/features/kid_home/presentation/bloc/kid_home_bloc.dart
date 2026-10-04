@@ -18,6 +18,7 @@ class KidHomeBloc extends Bloc<KidHomeEvent, KidHomeState> {
     on<KidHomeProfilesReceived>(_onProfilesReceived);
     on<KidHomeProfilesFailed>(_onProfilesFailed);
     on<KidHomeSelectionHandled>(_onSelectionHandled);
+    on<KidHomePinSubmitted>(_onPinSubmitted);
   }
 
   final KidHomeRepository _repository;
@@ -242,6 +243,46 @@ class KidHomeBloc extends Bloc<KidHomeEvent, KidHomeState> {
     } on Object catch (error) {
       _awaitingCelebration.remove(event.questId);
       emit(state.withCompletionFailed(error));
+    }
+  }
+
+  /// K02 PIN submit: checks the 4-digit code via `verifyPin` (`pinHash ==
+  /// null` already reads as pass in the repository, so no-PIN children never
+  /// reach a wrong path). Re-entry while a check is in flight is ignored
+  /// (same guard style as [_homeSub]): the view already gates dispatches
+  /// with its local `_awaiting` flag, this is the backstop so a double-tap
+  /// of the 4th digit submits once. The outcome is built from the state at
+  /// completion time, so an interleaved home-stream emission cannot swallow
+  /// it; a repository throw reads as the wrong path (the stream is healthy,
+  /// the code just did not match).
+  Future<void> _onPinSubmitted(
+    KidHomePinSubmitted event,
+    Emitter<KidHomeState> emit,
+  ) async {
+    if (state.pinChecking) return;
+    emit(state.copyWith(pinChecking: true));
+    final bool ok;
+    try {
+      ok = await _repository.verifyPin(event.childId, event.pin);
+    } on Object catch (_) {
+      // Repository errors read as a wrong PIN; the list stays usable.
+      emit(
+        state.copyWith(
+          pinChecking: false,
+          pinWrongNonce: state.pinWrongNonce + 1,
+        ),
+      );
+      return;
+    }
+    if (ok) {
+      emit(state.copyWith(pinChecking: false, pinPassed: true));
+    } else {
+      emit(
+        state.copyWith(
+          pinChecking: false,
+          pinWrongNonce: state.pinWrongNonce + 1,
+        ),
+      );
     }
   }
 

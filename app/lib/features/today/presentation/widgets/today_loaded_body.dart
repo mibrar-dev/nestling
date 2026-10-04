@@ -360,7 +360,7 @@ class _Greeting extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = context.nest;
-    final initial = parentName.isEmpty ? 'S' : parentName[0].toUpperCase();
+    final initial = nestAvatarInitial(parentName, fallback: 'S');
     return Padding(
       padding: const EdgeInsets.only(top: NestSpacing.s2),
       child: Row(
@@ -566,9 +566,7 @@ class _KidCard extends StatelessWidget {
             spacing: NestSpacing.s2,
             children: [
               NestAvatar(
-                initial: summary.nickname.isEmpty
-                    ? '?'
-                    : summary.nickname[0].toUpperCase(),
+                initial: nestAvatarInitial(summary.nickname),
                 size: NestAvatarSize.s32,
                 color: avatarColorFor(summary.avatarColour),
               ),

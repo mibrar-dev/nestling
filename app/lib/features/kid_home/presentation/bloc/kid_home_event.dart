@@ -105,3 +105,19 @@ final class KidHomeProfilesFailed extends KidHomeEvent {
   @override
   List<Object?> get props => <Object?>[error];
 }
+
+/// K02 PIN submit. The view keeps the entered digits locally (max 4) and
+/// dispatches this with the full 4-digit code; the bloc checks it via
+/// `KidHomeRepository.verifyPin` and emits `pinPassed` or bumps
+/// `pinWrongNonce`. NO navigation in the bloc — the view's `BlocListener`
+/// pushes `/kid-home` on `pinPassed` false→true and clears + toasts on a
+/// `pinWrongNonce` bump. Unlimited retries, no lockout (kind motivation).
+final class KidHomePinSubmitted extends KidHomeEvent {
+  const new({required this.childId, required this.pin});
+
+  final String childId;
+  final String pin;
+
+  @override
+  List<Object?> get props => <Object?>[childId, pin];
+}
