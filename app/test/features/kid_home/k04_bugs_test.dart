@@ -2,7 +2,7 @@
 //
 // Findings in this file:
 //
-// * K04-BUG-1 (MAJOR, open) — a quest title that fills all 3 allowed lines
+// * K04-BUG-1 (MAJOR, fixed) — a quest title that fills all 3 allowed lines
 //   renders INVISIBLE. `NestBalancedText` computes its balanced width with
 //   `maxLines: 3` applied to the probe painter, so a text whose natural
 //   layout needs 3+ lines never reports more than 3 lines at any width and
@@ -17,7 +17,7 @@
 //   skip balancing and return `_text()` at full width (the design has no
 //   max-lines, so a full-width, ellipsised heading is the honest render).
 //
-// * K04-BUG-2 (MINOR, open) — a route `extra` that names another child
+// * K04-BUG-2 (MINOR, fixed) — a route `extra` that names another child
 //   (`{'questId': 'q-bed', 'childId': 'leo'}` while Maya is playing) silently
 //   swaps in a DIFFERENT quest (the q-tidy fallback) instead of the
 //   "Pick a quest" state, contradicting the view's own doc comment ("an id
@@ -29,7 +29,7 @@
 //   not resolve for the active child, return null (missing state); use the
 //   q-tidy/first-item fallbacks only when no `questId` was supplied.
 //
-// * K04-BUG-3 (MAJOR, open, mandated) — `ORCHESTRATOR_NOTES.md` (14:28 QA):
+// * K04-BUG-3 (MAJOR, fixed, mandated) — `ORCHESTRATOR_NOTES.md` (14:28 QA):
 //   "The quest hero icon must be the design's glyph. For the 'bed' quest it
 //   is the flat bed (shared `NestIcons.questBed`, added in batch 5 from the
 //   P09 HTML), not the current bed-with-figure icon." K04's `_iconFor` still
@@ -170,43 +170,38 @@ void main() {
   // K04-BUG-1 — a three-line quest title renders invisible
   // -------------------------------------------------------------------------
 
-  test(
-    'K04-BUG-1: balancedWidthFor collapses to zero when the text exceeds '
-    'maxLines',
-    () {
-      final style = NestType.kidTitle(color: NestColors.light.ink);
-      final lines = NestBalancedText.lineCountFor(
-        text: _longTitle,
-        style: style,
-        maxWidth: 350,
-        textDirection: TextDirection.ltr,
-        textScaler: TextScaler.noScaling,
-        maxLines: 3,
-      );
-      // Sanity: the probe itself is clamped at maxLines, which is the root
-      // cause — a longer text can never report more than 3 lines.
-      expect(lines, 3);
+  test('K04-BUG-1: balancedWidthFor collapses to zero when the text exceeds '
+      'maxLines', () {
+    final style = NestType.kidTitle(color: NestColors.light.ink);
+    final lines = NestBalancedText.lineCountFor(
+      text: _longTitle,
+      style: style,
+      maxWidth: 350,
+      textDirection: TextDirection.ltr,
+      textScaler: TextScaler.noScaling,
+      maxLines: 3,
+    );
+    // Sanity: the probe itself is clamped at maxLines, which is the root
+    // cause — a longer text can never report more than 3 lines.
+    expect(lines, 3);
 
-      final width = NestBalancedText.balancedWidthFor(
-        text: _longTitle,
-        style: style,
-        maxWidth: 350,
-        lineCount: lines,
-        textDirection: TextDirection.ltr,
-        textScaler: TextScaler.noScaling,
-        maxLines: 3,
-      );
-      expect(
-        width,
-        greaterThan(50),
-        reason:
-            'the balanced heading must stay readable; it collapses to '
-            '$width px because the line probe is capped at maxLines',
-      );
-    },
-    // skip: K04-BUG-1 (open)
-    skip: true,
-  );
+    final width = NestBalancedText.balancedWidthFor(
+      text: _longTitle,
+      style: style,
+      maxWidth: 350,
+      lineCount: lines,
+      textDirection: TextDirection.ltr,
+      textScaler: TextScaler.noScaling,
+      maxLines: 3,
+    );
+    expect(
+      width,
+      greaterThan(50),
+      reason:
+          'the balanced heading must stay readable; it collapses to '
+          '$width px because the line probe is capped at maxLines',
+    );
+  });
 
   testWidgets(
     'K04-BUG-1: a long quest title measures ~0 px on the detail screen',
@@ -226,9 +221,8 @@ void main() {
             'the quest title must be visible; measured $size — the balanced '
             'width binary search collapsed to ~0 px',
       );
+      await disposeApp(tester);
     },
-    // skip: K04-BUG-1 (open)
-    skip: true,
   );
 
   // -------------------------------------------------------------------------
@@ -255,9 +249,8 @@ void main() {
         findsOneWidget,
         reason: 'an unresolvable extra is the missing-quest state',
       );
+      await disposeApp(tester);
     },
-    // skip: K04-BUG-2 (open)
-    skip: true,
   );
 
   // -------------------------------------------------------------------------
@@ -291,7 +284,8 @@ void main() {
       await tester.tap(find.byType(NestIconButton));
       await _settle(tester);
     }
-  }, skip: true); // skip: K04-BUG-3 (open, mandated)
+    await disposeApp(tester);
+  });
 
   // -------------------------------------------------------------------------
   // Checked clean — navigation, persistence, period, overflow, dark edge

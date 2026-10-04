@@ -1,35 +1,41 @@
-# K04 — Stage 2a build, logic chunk (iteration 1)
+# K04 — Stage 2a build, logic chunk (iteration 2)
 
 Scope: non-UI layer of feature `kid_home` for K04 (`/quest-detail`) —
 `domain/**`, `data/**`, `presentation/bloc/**`, DI/route registration.
-Views/widgets untouched (UI builder owns them).
+Views/widgets untouched (UI builder owns them, working in parallel).
 
 ## Files changed
 
-- `app/lib/features/kid_home/presentation/bloc/kid_home_bloc.dart`
-  - Added presentation-supporting getter (plan §b, the only logic change):
-    `List<String> stepsFor(String questId) => _repository.stepsFor(questId);`
-    so the view can read the K04 checklist without touching GetIt directly.
-    No event, no state change.
+None in iteration 2. The iteration-1 change (bloc `stepsFor` getter,
+`kid_home_bloc.dart:30`) is committed and still in place; no logic-layer
+edit is required by the plan or by FIXES_1 (see triage below).
 
-No changes to `domain/` (entities + `KidHomeRepository` interface already
-expose everything K04 needs), `data/` (`stepsFor` map already contains the
-`q-tidy` design steps; `completeQuest` already idempotent + period-aware),
-`kid_home_di.dart`, `kid_home_routes.dart` (route `/quest-detail` already
-registered with `KidHomeLoadRequested` dispatch), or the barrel.
+## FIXES_1 triage — no item is in the logic layer
 
-## Items done (plan §b)
+- **K04-BUG-1 (Major):** root cause is the shared component
+  `app/lib/core/design_system/components/nest_balanced_text.dart`.
+  RULES §1 forbids editing `app/lib/core/**`; the bug report itself marks
+  this as SHARED_REQUEST territory. No domain/data/bloc change can fix a
+  width-search collapse inside that component. NOT ACTIONABLE in this layer —
+  needs an orchestrator-level shared fix (component + regression test next
+  to the component, per the report's suggested fix).
+- **K04-BUG-2 (Minor):** `_resolveQuest` in
+  `presentation/views/quest_detail_view.dart` — UI-builder owned file.
+  NOT MINE.
+- **K04-BUG-3 (Major, mandated):** `_iconFor` in
+  `presentation/views/quest_detail_view.dart` — UI-builder owned file.
+  NOT MINE.
+- Skipped proofs in `app/test/features/kid_home/k04_bugs_test.dart`: that
+  filename contains none of `bloc`/`cubit`/`repository`/`data`, so it is
+  outside my test ownership; I did not edit, un-skip, or run it with
+  `--run-skipped` (un-skipping belongs to the stage that fixes each bug).
 
-- [x] Bloc `stepsFor` getter added — pure delegate, no state/event shape change.
-- [x] Verified no new events needed: `KidHomeLoadRequested` (route builder)
-      + `KidHomeQuestCompleted(childId, questId, coins)` (existing) cover the
-      K04 completion channel; celebration/error routing unchanged.
-- [x] Verified no repo changes needed: `stepsFor` / `completeQuest` /
-      `watchHome` already exist and are period-aware (K03-BUG-4 ruling).
-- [x] Verified no DI/route changes needed: detail route + bloc factory already
-      registered.
-- [x] Checked `google_fonts`/`GoogleFonts`: no imports in feature code or
-      tests (only comment/assertion strings) — nothing to delete.
+## Items done
+
+- [x] Re-verified plan §b: no new events, no repo/DI/route changes needed —
+      `KidHomeLoadRequested` + `KidHomeQuestCompleted` + `watchHome` +
+      `stepsFor` + `completeQuest` already cover K04.
+- [x] Re-verified no `google_fonts`/`GoogleFonts` imports in feature code.
 - [x] `flutter analyze lib/features/kid_home` → No issues found.
 - [x] Ran logic-layer tests with `--timeout 120s`:
       `kid_home_bloc_test.dart` + `kid_home_repository_test.dart` +
@@ -37,16 +43,14 @@ registered with `KidHomeLoadRequested` dispatch), or the barrel.
 
 ## CONTRACT CHANGES
 
-None. Public event/state shapes unchanged; the added `stepsFor` getter is
-exactly the call path the plan §b specifies for the UI builder
-(`bloc.stepsFor(questId)` for the checklist; tick `Set<int>` state lives in
-the view's `State`, initialised empty).
+None. Event/state shapes unchanged; `stepsFor` getter stands as the UI
+builder's checklist call path.
 
 ## LEFT FOR NEXT ITERATION
 
-Nothing in the logic layer. All remaining K04 work is UI-builder owned:
-`quest_detail_view.dart` rewrite (quest resolution, steps card, cheer row,
-bottom bar, loading/failure/missing states) + `quest_detail_*_test.dart`
-view/geometry/copy tests.
+Nothing in the logic layer. Open work belongs elsewhere: K04-BUG-2 +
+K04-BUG-3 fixes + their test un-skips are UI-builder owned;
+K04-BUG-1 needs a shared-component fix via the orchestrator (this screen
+cannot land it under RULES §1).
 
 VERDICT: PASS

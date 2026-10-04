@@ -175,4 +175,38 @@ were repointed at real K04 content — no K03 behaviour assertion was weakened:
   border, 186 px card and 163 px bar are all expressed with existing tokens
   plus named screen constants).
 
+## Iteration 2 — FIXES_1 remediation (2026-10-04)
+
+All three bugs from `6_bugs.md` / `FIXES_1.md` are fixed and the skipped bug
+tests are now un-skipped and passing:
+
+- **K04-BUG-1 (Major)** — `NestBalancedText` collapsed to a ~0 px-wide
+  invisible heading when a DB-driven title needed more lines than its
+  `maxLines` cap. Fixed in
+  `app/lib/core/design_system/components/nest_balanced_text.dart`:
+  - `balancedWidthFor` now probes with the natural line count
+    (`maxLines: null`) instead of the capped probe, which had reported
+    "3 lines" at every width and collapsed the binary search to ~0 px.
+  - `build` first computes the natural line count with `maxLines: null`;
+    when it exceeds the requested `maxLines`, it renders the full-width
+    `Text` (clipped/ellipsised by the Text itself) instead of a narrowed
+    invisible box.
+  - Verified: the unit probe (`balancedWidthFor` > 50) and the widget probe
+    (measured title width > 100 px for the 59-char playroom title) both pass.
+  - NOTE: this is a shared-component fix — flagged in
+    `docs/screens/K04/SHARED_REQUEST.md` for the orchestrator to upstream,
+    since stage rules assign `app/lib/core/**` to shared ownership.
+- **K04-BUG-2 (Minor)** — `_resolveQuest` no longer falls through to the
+  `q-tidy` fallback when the route `extra` names another child or an
+  unknown quest. An explicit `questId` that does not resolve for the active
+  child now returns `null` → the "Pick a quest" empty state. The design-
+  quest fallback now only fires for true direct launches (no `questId`).
+- **K04-BUG-3 (Major, mandated)** — `_iconFor` replaced with the P09 batch-5
+  mapping: `bed|sofa → questBed`, `dishwasher|plate → questDishes`,
+  `hoover → questHoover`, `book → book`, `bin|bins|shirt|bag → questBins`,
+  `paw|leaf → paw`, fallback `questCard` (ORCHESTRATOR_NOTES 14:28).
+
+All four previously skipped proofs in `app/test/features/kid_home/k04_bugs_test.dart`
+are now un-skipped and passing; full `test/features/kid_home` run is green.
+
 VERDICT: PASS

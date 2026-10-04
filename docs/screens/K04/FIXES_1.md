@@ -18,9 +18,9 @@ carries the id) so the plain suite stays green.
 
 | # | Severity | Status | Area |
 |---|---|---|---|
-| K04-BUG-1 | **Major** | OPEN | `.kid-title` / `NestBalancedText` + `maxLines: 3` |
-| K04-BUG-2 | Minor | OPEN | `_resolveQuest` extra handling |
-| K04-BUG-3 | **Major** | OPEN, mandated | hero tile icon glyphs (`_iconFor`) |
+| K04-BUG-1 | **Major** | FIXED (iter 2) | `.kid-title` / `NestBalancedText` + `maxLines: 3` |
+| K04-BUG-2 | Minor | FIXED (iter 2) | `_resolveQuest` extra handling |
+| K04-BUG-3 | **Major** | FIXED (iter 2) | hero tile icon glyphs (`_iconFor`) |
 
 Commands:
 

@@ -73,18 +73,21 @@ const double _kBarGap = NestSpacing.s1;
 /// outside the app.
 const String _kDesignQuestId = 'q-tidy';
 
-/// Glyph per `KidQuest.icon` — the same mapping K03 uses
-/// (`kid_home_view.dart` `_iconFor`, cited to `nestling_assets.dart`). Kept
-/// local so this screen never edits another screen's view.
+/// Glyph per `KidQuest.icon`. Mirrors P09's editor mapping exactly
+/// (`quest_editor_view.dart` `_questIcons`), per the orchestrator ruling
+/// (ORCHESTRATOR_NOTES 14:28 / K04-BUG-3): `bed` is the flat
+/// `questBed` design glyph, NOT the pre-batch-5 `bedSit`. Aliases resolve
+/// the same way P09's tiles do (`sofa`→questBed, `plate`→questDishes,
+/// `bins/shirt/bag`→questBins, `leaf`→paw). Unknown keys fall back to
+/// `questCard`. Kept local so this screen never edits another screen's view.
 String _iconFor(String raw) {
   return switch (raw) {
-    'dishwasher' => NestIcons.dishwasher,
+    'bed' || 'sofa' => NestIcons.questBed,
+    'dishwasher' || 'plate' => NestIcons.questDishes,
+    'hoover' => NestIcons.questHoover,
     'book' => NestIcons.book,
-    'bed' => NestIcons.bedSit,
-    'bins' => NestIcons.bin,
-    'hoover' => NestIcons.hoover,
-    'plate' => NestIcons.table,
-    'table' => NestIcons.table,
+    'bin' || 'bins' || 'shirt' || 'bag' => NestIcons.questBins,
+    'paw' || 'leaf' => NestIcons.paw,
     _ => NestIcons.questCard,
   };
 }
@@ -117,7 +120,14 @@ KidQuest? _resolveQuest(KidHomeState state, Object? extra) {
       : const <Object?, Object?>{};
   final questId = map['questId'];
   final childId = map['childId'];
-  if (questId is String && (childId == null || childId == state.child?.id)) {
+  // An explicit request must resolve to the playing child's own list — or to
+  // the missing state. It must never silently swap in a different quest
+  // (K04-BUG-2): an extra naming another child, or naming a quest the
+  // playing child does not have, means the screen cannot honestly show one.
+  // The q-tidy / first-to-do / first-item fallbacks below belong to the
+  // direct-launch path (no questId in extra).
+  if (questId is String) {
+    if (childId is String && childId != state.child?.id) return null;
     return _firstWithQuestId(items, questId);
   }
   final designQuest = _firstWithQuestId(items, _kDesignQuestId);
