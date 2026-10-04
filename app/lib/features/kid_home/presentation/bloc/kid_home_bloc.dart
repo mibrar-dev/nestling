@@ -17,6 +17,7 @@ class KidHomeBloc extends Bloc<KidHomeEvent, KidHomeState> {
     on<KidHomeProfileSelected>(_onProfileSelected);
     on<KidHomeProfilesReceived>(_onProfilesReceived);
     on<KidHomeProfilesFailed>(_onProfilesFailed);
+    on<KidHomeSelectionHandled>(_onSelectionHandled);
   }
 
   final KidHomeRepository _repository;
@@ -35,6 +36,12 @@ class KidHomeBloc extends Bloc<KidHomeEvent, KidHomeState> {
   /// retry while live is ignored, and the subscription is released on
   /// error and on close so "Try again" really reloads.
   StreamSubscription<List<KidChild>>? _profilesSub;
+
+  /// Whether the last profiles-stream outcome was an error that released
+  /// the subscription (K01-BUG-5). Cleared by the next healthy roster: a
+  /// recovery then restores `loaded` when the failure was profiles-caused
+  /// and the home stream is still live.
+  bool _profilesFailed = false;
 
   /// Completions waiting for their stream flip, questId → coins. Set on the
   /// tap event; the first emission that newly marks a waiting quest done
@@ -63,7 +70,15 @@ class KidHomeBloc extends Bloc<KidHomeEvent, KidHomeState> {
         },
       );
     }
-    _ensureProfilesSub();
+    if (_profilesSub == null) {
+      // Try again on a profiles-caused failure card (K01-BUG-5, review
+      // finding 3): the home stream is still live, so without this the
+      // tapped card shows no spinner until the roster lands.
+      if (_homeSub != null && state.status == KidHomeStatus.failure) {
+        emit(state.copyWith(status: KidHomeStatus.loading));
+      }
+      _ensureProfilesSub();
+    }
   }
 
   /// Starts the profiles subscription when none is live. Split out so both
@@ -76,6 +91,7 @@ class KidHomeBloc extends Bloc<KidHomeEvent, KidHomeState> {
       onError: (Object error) {
         final sub = _profilesSub;
         _profilesSub = null;
+        _profilesFailed = true;
         unawaited(sub?.cancel());
         add(KidHomeProfilesFailed(error));
       },
@@ -93,7 +109,22 @@ class KidHomeBloc extends Bloc<KidHomeEvent, KidHomeState> {
     KidHomeProfilesReceived event,
     Emitter<KidHomeState> emit,
   ) {
-    emit(state.copyWithProfiles(event.profiles));
+    // Recovery from a profiles-caused outage (K01-BUG-5, review finding
+    // 1): a healthy roster after the error restores `loaded` and clears
+    // the stale load error (review finding 2) — but only while the home
+    // stream is still live. When the home stream itself is down
+    // (`_homeSub == null`) the failure stands until it recovers, so a
+    // roster arriving over a dead home never masks the failure card.
+    final failed = _profilesFailed;
+    _profilesFailed = false;
+    if (failed &&
+        _homeSub != null &&
+        (state.status == KidHomeStatus.failure ||
+            state.status == KidHomeStatus.loading)) {
+      emit(state.copyWithProfilesRecovered(event.profiles));
+    } else {
+      emit(state.copyWithProfiles(event.profiles));
+    }
   }
 
   void _onProfilesFailed(
@@ -102,8 +133,9 @@ class KidHomeBloc extends Bloc<KidHomeEvent, KidHomeState> {
   ) {
     // A mid-session error keeps the loaded picker (review finding 6,
     // iteration 7, applied to the roster): only a load with nothing to show
-    // becomes the failure card. A healthy emission restores `loaded` via
-    // `copyWithLoaded`, which also clears this stale error.
+    // becomes the failure card. The release is recorded in `_profilesFailed`
+    // so the recovery roster restores `loaded` (a healthy home emission
+    // also clears this stale error via `copyWithLoaded`).
     emit(
       state.copyWith(
         status: state.profiles.isEmpty && state.child == null
@@ -112,6 +144,19 @@ class KidHomeBloc extends Bloc<KidHomeEvent, KidHomeState> {
         errorMessage: event.error.toString(),
       ),
     );
+  }
+
+  /// K01 selection consumed by the view (K01-BUG-3): forget the pending
+  /// profile so tapping the same tile after coming back emits a distinct
+  /// state and navigates again. No-op when nothing is pending, so stray
+  /// dispatches never rebuild the picker.
+  void _onSelectionHandled(
+    KidHomeSelectionHandled event,
+    Emitter<KidHomeState> emit,
+  ) {
+    if (state.selectedProfileId != null) {
+      emit(state.copyWithSelectionHandled());
+    }
   }
 
   /// K01 tile tap: persist the choice, then publish the one-shot

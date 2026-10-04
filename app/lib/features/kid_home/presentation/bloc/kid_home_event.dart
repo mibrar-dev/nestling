@@ -73,6 +73,17 @@ final class KidHomeProfileSelected extends KidHomeEvent {
   List<Object?> get props => <Object?>[childId, pinSet];
 }
 
+/// K01 selection consumed by the view (K01-BUG-3). The picker's
+/// `BlocListener` dispatches this right after it starts the pushed route;
+/// the bloc clears the pending `selectedProfileId` so tapping the SAME
+/// tile after coming back emits a distinct state and navigates again.
+/// Without it the re-selection is `==`-equal, the bloc drops it and the
+/// tile looks dead. No-op when nothing is pending. The next home-stream
+/// emission still clears as a backstop.
+final class KidHomeSelectionHandled extends KidHomeEvent {
+  const new();
+}
+
 /// Bloc-internal: a fresh emission from the profiles stream. Views never
 /// send this; the bloc raises it from its own subscription so a reload can
 /// guard on the live subscription instead of stacking handlers.

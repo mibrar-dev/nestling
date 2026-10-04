@@ -35,7 +35,7 @@ import '../../test_scope.dart';
 const ValueKey<String> _mayaTile = ValueKey<String>('k01-tile-maya');
 const ValueKey<String> _leoTile = ValueKey<String>('k01-tile-leo');
 
-const String _title = 'Who’s playing?'; // K01-BUG-5: must be the straight '
+const String _title = "Who's playing?"; // K01-BUG-5: must be the straight '
 const String _sub = 'Tap your face to start';
 const String _caption =
     'Grown-ups: tap the lock to get back to your dashboard.';
@@ -359,7 +359,7 @@ void main() {
     });
   }
 
-  testWidgets('the failure card’s Try again meets the 56px kid target', (
+  testWidgets("the failure card's Try again meets the 56px kid target", (
     tester,
   ) async {
     await _useFakeRepository(_FakeKidHomeRepository(failTimes: 1));
@@ -421,7 +421,7 @@ void main() {
     await disposeApp(tester);
   });
 
-  testWidgets('Leo’s tile tap action routes by its own pinSet', (tester) async {
+  testWidgets("Leo's tile tap action routes by its own pinSet", (tester) async {
     final semantics = tester.ensureSemantics();
     await _pump(tester);
     final db = GetIt.instance<AppDatabase>();
@@ -497,7 +497,7 @@ void main() {
   // Every tap navigates to the right route
   // -------------------------------------------------------------------------
 
-  testWidgets('Maya’s tile pushes the PIN route', (tester) async {
+  testWidgets("Maya's tile pushes the PIN route", (tester) async {
     await _pump(tester);
     await tester.tap(find.byKey(_mayaTile));
     await _settle(tester);
@@ -507,7 +507,7 @@ void main() {
     await disposeApp(tester);
   });
 
-  testWidgets('Leo’s tile pushes the home route (no PIN set)', (tester) async {
+  testWidgets("Leo's tile pushes the home route (no PIN set)", (tester) async {
     await _pump(tester);
     await tester.tap(find.byKey(_leoTile));
     await _settle(tester);
@@ -707,7 +707,7 @@ void main() {
     // Sample BELOW the caption so the probe reads paint, never a glyph.
     _expectPixelNear(
       await _pixelAt(tester, 195, 838),
-      dark.kidMeadow,
+      kidHillFront(dark.kidMeadow, dark.surface),
       'the hill must reach the bottom edge in dark mode too',
     );
     _expectPixelNear(
@@ -739,8 +739,8 @@ void main() {
           reason: 'the home indicator must not reserve height here',
         );
         final expected = theme == ThemeMode.light
-            ? NestColors.light.kidMeadow
-            : NestColors.dark.kidMeadow;
+            ? kidHillFront(NestColors.light.kidMeadow, NestColors.light.surface)
+            : kidHillFront(NestColors.dark.kidMeadow, NestColors.dark.surface);
         // y=838 sits under the caption (which ends well above 830) and
         // y=843 is the last physical row.
         for (final y in const <double>[838, 843]) {

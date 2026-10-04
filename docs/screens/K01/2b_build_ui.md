@@ -1,104 +1,85 @@
-# K01 · Who's playing? — Stage 2b (BUILD, UI CHUNK, iteration 1)
+# K01 · Who's playing? — Stage 2b (BUILD, UI CHUNK, iteration 2)
 
-## Files changed (UI layer only)
+Fixes applied for `FIXES_1.md` — UI/layout/copy items only; bloc-owned
+FIXES_1 items (BUG-3) and the BUG-2 assertion semantic remain with the
+other stages (see "LEFT FOR NEXT ITERATION").
 
-- `app/lib/features/kid_home/presentation/views/profile_picker_view.dart`
-  — replaced the placeholder with the real K01 screen.
-- `app/lib/features/kid_home/presentation/widgets/profile_tile.dart`
-  — new `ProfileTile` (the `.k1-tile` card).
-- `app/lib/features/kid_home/presentation/widgets/kid_style_helpers.dart`
-  — shared `avatarColorOf` / `pipStyleOf` / `pipSkinOf` /
-  `pipAccessoryOf` / `pipStageName` switches, extracted from
-  `kid_home_view.dart` (which now imports them; no duplicated switch).
-- `app/lib/features/kid_home/presentation/views/kid_home_view.dart`
-  — only the import swap + switch removal above; layout untouched.
-- `app/test/features/kid_home/k01_profile_picker_view_test.dart` — new
-  (seeded-demo widget tests).
-- `app/test/features/kid_home/k01_profile_picker_geometry_test.dart` —
-  new (real-font geometry pins).
-- `app/test/features/kid_home/kid_home_view_test.dart` — two stale
-  assertions on the old K01 placeholder (`'K01 Who is playing'`) updated
-  to the real screen's `'Tap your face to start'`.
+## FIXES_1 items resolved in code
 
-## What the view does
+- **BUG-A (apostrophe bytes)**: the title in
+  `profile_picker_view.dart` now uses ASCII `'`, byte-identical to
+  `design/html-source/screens/K01-profile-picker.html` (U+2019 was the
+  plan's error). `k01_copy_parity_test.dart`'s two deliberately-red
+  copies now pass; every drawn-string assertion across
+  `k01_bugs_test.dart`, `k01_profile_picker_matrix_test.dart`,
+  `k01_copy_fit_test.dart`, `k01_profile_picker_view_test.dart`
+  repointed at the ASCII form (per the FIXES_1 follow-on list).
+- **BUG-1 (3+ children collapse the tile row)**: `_PickerLoaded` now
+  branches — ≤2 profiles keep the single full-width `Row` of `Expanded`
+  tiles at 167 px (390) / 132 (320); **3+** tiles get `_OverflowTileRow`,
+  a horizontal `SingleChildScrollView` where each tile is fixed at the
+  two-up width (`(bandW − 16) / 2`, ≥ 132 compact minimum), never
+  squashed. The three parked tests are un-skipped and pass.
+- **BUG-2 (two-finger burst stacks two routes)**: screen-level
+  `_navPending` latch in `ProfilePickerView` (now a StatefulWidget) gates
+  the `BlocListener` navigation — at most ONE push per gesture burst;
+  released when the route pops or when selection fails (toast channel).
+  DECISION NEEDED (see below): the parked test's assertion is stricter
+  than the FIXES_1 suggestion; left with `skip: true`.
+- **BUG-4 (empty nickname ⇒ unlabelled tile)**: `ProfileTile` falls back
+  to the spoken label `Kid` (`Kid, Age 7–9` when a band exists); the
+  parked test is un-skipped and passes.
+- **BUG-5 (Try again cannot recover from a profiles failure)**:
+  healed at the view layer — when the failure status arrives for a
+  profiles-only failure, a later successful roster emission renders the
+  loaded UI even though the shared `copyWithProfiles` does not restore
+  `loaded` (TODO(K01): drop the branch after the bloc restores status
+  or clears `errorMessage` together, stage 4 finding 2). The parked test
+  is un-skipped and passes.
+- **D1 + D2 (tiles +16.5 px / caption +34 px low)**: the caption's
+  bottom reserve is now `NestSpacing.s8` **plus**
+  `NestDevice.homeH` (34), because the running app
+  `NestHomeIndicator` reserves no space (P01 BUG-2) and
+  `NestStatusBar`'s top reserve is already there; the flex-centred
+  tiles band re-centres on the design values.
 
-- `KidScope` + transparent `Scaffold`. Column: `NestStatusBar` (height
-  only), lock row (`Padding(20,0,20,4)` → `NestLockButton` 56, r18,
-  `semanticLabel: 'Grown-ups'`, busy-guarded push to `/parental-gate`),
-  then the body, then `NestHomeIndicator` (no-op in-app).
-- Loaded body: `NestBalancedText("Who’s playing?", kidTitle, maxLines 2)`
-  → `Tap your face to start` (`kidBody`, ink2) → **tiles band**
-  (`Expanded` + `Center`, `.k1-mid` flex-centre) → caption
-  `Grown-ups: tap the lock to get back to your dashboard.`
-  (`kidCaption`). Title→sub→band→caption gaps are 16 each, bottom pad 32.
-- Tiles: `Row(spacing: 16)` of two `Expanded(ProfileTile)`; Maya, then
-  Leo, in `state.profiles` order (repo guarantee, never re-sorted).
-- `ProfileTile`: container with surface fill, 3 ink border, r32,
-  `kidShadow`, `min-height: 336`, centred Column (gap 8): `NestAvatar`
-  s96 → name (h1 28/34 w900, overridden to 28/32 via `copyWith`) → age
-  (`kidCaption`, DB `7-9` → `Age 7–9` U+2013; empty band gets a 20-tall
-  slot so both tiles keep identical heights) → pet circle (132, padded
-  10 above the gap) → `PipAvatar(size: 112)` driven by the child's
-  `pipStyle/pipSkin/pipAccessory/pipStage` (Maya mochi/sunny/none/3,
-  Leo bolt/sky/none/2). Pet circle tint: lilac for Maya, peach for Leo,
-  matching `.k1-pet` / `.k1-pet.p2`, mirrored for other avatar colours.
-- Compact rule: tile width < 150 → avatar s64, pet 96, Pip 80, name
-  stays 28 (ellipsis). Verified at 320 px + textScaler 1.3, no overflow.
-- Selection: tile tap → `KidHomeProfileSelected(childId, pinSet)` →
-  `BlocListener(selectedProfileId)` pushes `pinSet ? /kid-pin :
-  /kid-home` with `extra: {'childId': id}`. No navigation in the bloc.
-- Selection failure: same-style toast `Hmm, that did not work. Try
-  again.` via the shared `actionError`/`actionNonce` channel.
-- States: loading → `CircularProgressIndicator(tokens.leaf)` with
-  `Semantics('Loading profiles')`; failure → Pip (mochi, stage 1,
-  140) + `Oh no! Pip got lost.` / `Let's try again.` /
-  `NestKidButton.white('Try again')` → `KidHomeLoadRequested`;
-  loaded-empty roster → `Ask a grown-up to add your profile.` in the
-  tiles band (lock row and title kept).
-- Accessibility: tile root `Semantics(button, label: '<name>, Age
-  7–9', onTap)` with `excludeSemantics: true` (mirrors
-  `NestKidQuestCard`), the pet circle carries its own
-  `Semantics(image: true, label: 'Pip the Fledgling' |
-  'Pip the Hatchling', excludeSemantics: true)`, lock advertises
-  `Grown-ups` — all tap-action tested via `performAction`.
-- Dark mode: zero branches — all colours come from `context.nest`.
+## Tests moved to green
 
-## Layout notes / deviations
+- Parked k01_bugs tests un-skipped: `BUG-1 ×3`, `BUG-4`,
+  `BUG-5` → green (with the missing `disposeApp(tester)` drains added to
+  the three BUG-1 proofs, same P01 BUG-2 style as every pending Drift
+  stream-close). The `BUG-2` and `BUG-3` parked tests stay parked.
+- `k01_bugs_test` (18 pass, 2 skip), `k01_copy_parity_test` (13),
+  `k01_copy_fit_test` (7), `k01_profile_picker_matrix_test` (46),
+  `k01_profile_picker_view_test` (13), `k01_profile_picker_geometry_test`
+  (4), `k01_bloc_paths_test` (19), `kid_home_view_test` (87) —
+  all green as of this iteration.
 
-- The plan's tree puts `Expanded` inside the `SingleChildScrollView`
-  column, which is not a valid flex context; implemented as K03-style
-  fixed header/footer with a bounded, scrollable tiles band in the
-  middle (`ConstrainedBox(minHeight: viewport)` + `Center`), so the
-  tiles still centre in the leftover space at 390×844 and the band
-  scrolls under 320 px + 1.3 scaling. At design size the result is the
-  same box positions.
-- `.k1-pet` is `gap 8 + margin-top 10` = 18 above the pet circle;
-  done with a 10-padded pet circle inside the gap-8 column (the plan's
-  literal `SizedBox(h:10)` between two gap-8 edges would have read 26).
-- Tile content stacks taller than the design's 336 floor (≈346–354
-  with the 28/32 name line); the design's `.k1-tile` min-height is
-  satisfied and nothing reflows.
+## K01 remains consistent
 
-## Tests
-
-- `k01_profile_picker_view_test.dart` (13): exact copy incl. U+2019 /
-  U+2013, Maya-then-Leo keys, per-child `PipAvatar` params (+no v1
-  art), tap Maya → DB `maya` + `/kid-pin`, tap Leo → DB `leo` +
-  `/kid-home`, lock → `/parental-gate`, semantics tap actions incl.
-  `performAction` writes the DB, loading, failure + Try-again recovery,
-  empty roster, 320 px @1.3 light + dark.
-- `k01_profile_picker_geometry_test.dart` (4): lock 56 at x 314, y 47;
-  tile width 167, gap 16, border 3 ink, radius 32, min-height 336,
-  20 px gutters; pet circle 132 centred with Pip 112 centred inside;
-  pet tints lilac/peach.
-
-Verification: `flutter analyze lib/features/kid_home` — no issues; new
-view + geometry tests all green (13 + 4).
+- Analyser: `flutter analyze lib/features/kid_home` — no issues.
+- Format: `dart format` clean on touched files.
+- Matrix bottom-edge/meadow probes updated for the landed shared
+  twotone meadow (`shared/kid_meadow`): samples at y 838 now expect the
+  hill-front bake `kidHillFront(kidMeadow, surface)` (204/30, 65, 56),
+  matching the design PNGs. This was the D3/D4 shared fix, not a K01
+  layout change.
 
 ## LEFT FOR NEXT ITERATION
 
-- Nothing blocking. Optional polish: a frame-by-frame UI capture stage
-  (5_ui) comparison against both PNGs; compact-metric tile at 320 px is
-  covered by overflow asserts only.
+- **K01-BUG-3 — a tile is dead after returning from a kid route**: the
+  `==`-equal `selectedProfileId` re-emit is dropped by the bloc. Fixable
+  only in the bloc/state layer (e.g. a `selectionNonce` bump on every
+  selection, or clearing the one-shot on the push's pop event from the
+  view via a new bloc event). Left with the logic chunk; the parked
+  proof sits next to it.
+- **K01-BUG-2 assertion semantics**: the stage-3/6 parked assertion
+  expects top-route absence of `K02 Kid PIN`, i.e. it demands routes go
+  to `/kid-home` for a simultaneous-tap burst; the FIXES_1-suggested
+  screen-level latch (implemented) pins one push to the *first*
+  selection instead. Both collapse stacking, but the test only accepts
+  one reading. Needs an orchestrator ruling to un-skip.
+- **D3/D4 (meadow two-tone)** are shared (`shared/kid_meadow`, landed in
+  `cb66ae2`-era main), already covered by the matrix's pixel probes.
 
 VERDICT: PASS

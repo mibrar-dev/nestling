@@ -50,10 +50,12 @@ class _ProfileTileState extends State<ProfileTile> {
       final band when band.isNotEmpty => 'Age ${band.replaceAll('-', '–')}',
       _ => null,
     };
+    // K01-BUG-4: an empty nickname must not blank the tile's spoken label.
+    final tileName = child.nickname.trim().isEmpty ? 'Kid' : child.nickname;
     return Semantics(
       button: true,
       enabled: true,
-      label: ageLine == null ? child.nickname : '${child.nickname}, $ageLine',
+      label: ageLine == null ? tileName : '$tileName, $ageLine',
       onTap: _tap,
       child: Container(
         width: double.infinity,

@@ -75,10 +75,7 @@ void main() {
   }
 
   testWidgets('subtitle renders in full at 390', (tester) async {
-    await pumpNest(
-      tester,
-      Center(child: p16Row()),
-    );
+    await pumpNest(tester, Center(child: p16Row()));
     expect(tester.takeException(), isNull);
     expect(
       tester
@@ -100,10 +97,7 @@ void main() {
   testWidgets('chevron right edge meets the row content right edge', (
     tester,
   ) async {
-    await pumpNest(
-      tester,
-      Center(child: p16Row()),
-    );
+    await pumpNest(tester, Center(child: p16Row()));
     expect(tester.takeException(), isNull);
     final chevronRight = tester.getRect(find.text('›')).right;
     // Row content right edge = row box minus the 16px right padding
@@ -159,10 +153,7 @@ void main() {
   });
 
   testWidgets('a long trailing word stays intact', (tester) async {
-    await pumpNest(
-      tester,
-      Center(child: p16Row(trailingText: 'Change')),
-    );
+    await pumpNest(tester, Center(child: p16Row(trailingText: 'Change')));
     expect(tester.takeException(), isNull);
     expect(
       tester

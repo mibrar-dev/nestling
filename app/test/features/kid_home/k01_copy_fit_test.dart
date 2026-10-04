@@ -5,7 +5,7 @@
 // assertion run under `flutter_test`'s default (metric-less) font measures a
 // font no device will ever show and reports false clipping. `flutter test`
 // uses the Ahem-style placeholder where every glyph is one em wide, so
-// "Who’s playing?" looks ~2× wider than it is.
+// "Who's playing?" looks ~2× wider than it is.
 //
 // This file loads the bundled faces (the same isolation
 // `k01_profile_picker_geometry_test.dart` documents) and proves the copy fits
@@ -26,7 +26,7 @@ import '../../test_scope.dart';
 
 /// Every string the picker draws, with the maxLines the screen sets on it.
 const List<(String, int)> _copy = <(String, int)>[
-  ('Who’s playing?', 2), // NestBalancedText, .kid-title
+  ("Who's playing?", 2), // NestBalancedText, .kid-title
   ('Tap your face to start', 2), // .kid-body
   ('Grown-ups: tap the lock to get back to your dashboard.', 3), // .kcap
   ('Maya', 1), // .k1-name
@@ -97,7 +97,7 @@ void main() {
     }
   }
 
-  testWidgets('the grown-ups caption wraps to the design’s two lines', (
+  testWidgets("the grown-ups caption wraps to the design's two lines", (
     tester,
   ) async {
     // The design PNG breaks the caption after "your"; the app must break it

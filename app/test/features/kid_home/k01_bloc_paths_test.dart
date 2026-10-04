@@ -15,6 +15,13 @@
 //   • roster emissions never clobber status / child / items / selection
 //   • the selection one-shot is consumed by the next HOME emission
 //   • every field the picker reads takes part in equality
+//   • K01-BUG-5: a profiles-caused failure recovers to `loaded` (with the
+//     stale load error cleared) on the next healthy roster, without a new
+//     home emission; Try again shows `loading` while only the roster
+//     restarts (review findings 1–3)
+//   • K01-BUG-3: `KidHomeSelectionHandled` consumes a pending selection so
+//     tapping the same tile after coming back emits distinctly again; a
+//     no-op when nothing is pending
 
 import 'dart:async';
 
@@ -72,12 +79,20 @@ List<KidQuest> _items() => const <KidQuest>[
 /// Fresh streams per call, pushable roster, injectable errors, and a
 /// subscription counter for the roster so stacking is observable.
 class _RosterFake extends KidHomeRepository {
+  /// Fail the next [watchHome] listen (a home stream that cannot be read).
+  bool failHome = false;
+
   /// Fail the next [watchProfiles] listen (a roster that cannot be read).
   bool failProfiles = false;
 
   int profileSubscriptions = 0;
   int homeSubscriptions = 0;
   final List<String> selected = <String>[];
+
+  /// Yield a childless home that then stays quiet — the K01-BUG-5 shape:
+  /// the failure card is shown while the home stream is healthy (live)
+  /// but silent, so only a roster recovery can dismiss it.
+  bool homeChildNull = false;
 
   final StreamController<List<KidChild>> _pushed =
       StreamController<List<KidChild>>.broadcast();
@@ -108,7 +123,10 @@ class _RosterFake extends KidHomeRepository {
   @override
   Stream<KidHomeData> watchHome() async* {
     homeSubscriptions++;
-    yield KidHomeData(child: maya, items: _items());
+    if (failHome) {
+      throw Exception('home down');
+    }
+    yield KidHomeData(child: homeChildNull ? null : maya, items: _items());
   }
 
   @override
@@ -350,6 +368,223 @@ void main() {
         expect(bloc.state.profiles, hasLength(2), reason: 'roster survives');
       },
     );
+  });
+
+  group('K01 — profiles recovery after a failure (K01-BUG-5)', () {
+    // The review's regression test, verbatim: profiles-failure → Try again
+    // → profiles-recovery asserts `loaded` without a new home emission.
+    // The home stream yields its childless value once and then stays
+    // quiet, so the recovery MUST come from the roster.
+    blocTest<KidHomeBloc, KidHomeState>(
+      'Try again recovers a profiles-caused failure without a home re-emit',
+      build: () {
+        repo = _RosterFake()
+          ..homeChildNull = true
+          ..failProfiles = true;
+        return KidHomeBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        repo.failProfiles = false;
+        bloc.add(const KidHomeLoadRequested());
+      },
+      wait: const Duration(milliseconds: 150),
+      verify: (bloc) {
+        expect(bloc.state.status, KidHomeStatus.loaded);
+        expect(bloc.state.profiles.map((c) => c.id).toList(), <String>[
+          'maya',
+          'leo',
+        ]);
+        // Review finding 2: the recovery clears the stale load error.
+        expect(bloc.state.errorMessage, isNull);
+        expect(
+          repo.homeSubscriptions,
+          1,
+          reason: 'the quiet home stream was never restarted',
+        );
+        expect(repo.profileSubscriptions, 2);
+      },
+    );
+
+    blocTest<KidHomeBloc, KidHomeState>(
+      'Try again shows loading while only the roster restarts',
+      build: () {
+        repo = _RosterFake()
+          ..homeChildNull = true
+          ..failProfiles = true;
+        return KidHomeBloc(repository: repo);
+      },
+      // Interleaving of the first home value and the profiles error is not
+      // a contract, so capture statuses instead of asserting a sequence.
+      act: (bloc) async {
+        final seen = <KidHomeStatus>[];
+        final subscription = bloc.stream.listen((state) {
+          seen.add(state.status);
+        });
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        repo.failProfiles = false;
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        await subscription.cancel();
+        expect(
+          seen.where((status) => status == KidHomeStatus.loading).length,
+          2,
+          reason:
+              'the first load plus the Try again spinner (review finding 3: '
+              'no spinner while the home stream is live left the dead card '
+              'sitting with no feedback)',
+        );
+        expect(
+          seen,
+          contains(KidHomeStatus.failure),
+          reason: 'the profiles outage did show the failure card first',
+        );
+        expect(seen.last, KidHomeStatus.loaded);
+      },
+      wait: const Duration(milliseconds: 150),
+      verify: (bloc) {
+        expect(bloc.state.status, KidHomeStatus.loaded);
+      },
+    );
+
+    blocTest<KidHomeBloc, KidHomeState>(
+      'a home-caused failure is NOT masked by a healthy roster',
+      build: () {
+        repo = _RosterFake()
+          ..failHome = true
+          ..failProfiles = true;
+        return KidHomeBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        // The home stream stays down; only the roster recovers.
+        repo.failProfiles = false;
+        bloc.add(const KidHomeLoadRequested());
+      },
+      wait: const Duration(milliseconds: 200),
+      verify: (bloc) {
+        expect(
+          bloc.state.status,
+          KidHomeStatus.failure,
+          reason:
+              'the home stream is still down — a recovered roster must not '
+              'mask the failure card with an empty home',
+        );
+        expect(bloc.state.profiles, hasLength(2));
+        expect(repo.homeSubscriptions, 2);
+        expect(repo.profileSubscriptions, 2);
+      },
+    );
+  });
+
+  group('K01 — selection handled (K01-BUG-3)', () {
+    blocTest<KidHomeBloc, KidHomeState>(
+      'handled consumes a pending selection without touching the roster',
+      build: () {
+        repo = _RosterFake();
+        return KidHomeBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+        bloc.add(const KidHomeProfileSelected(childId: 'leo', pinSet: false));
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        bloc.add(const KidHomeSelectionHandled());
+      },
+      wait: const Duration(milliseconds: 150),
+      verify: (bloc) {
+        expect(bloc.state.selectedProfileId, isNull);
+        expect(bloc.state.profiles.map((c) => c.id).toList(), <String>[
+          'maya',
+          'leo',
+        ]);
+        expect(repo.selected, <String>['leo']);
+      },
+    );
+
+    blocTest<KidHomeBloc, KidHomeState>(
+      'a re-selection after handled emits distinctly and writes again',
+      build: () {
+        repo = _RosterFake();
+        return KidHomeBloc(repository: repo);
+      },
+      // Exact interleaving of the two live streams is not a contract, so
+      // count the selection emissions instead of asserting a sequence:
+      // without the handled event the second selection is `==`-equal and
+      // the bloc drops it (the dead tile).
+      act: (bloc) async {
+        var selections = 0;
+        final subscription = bloc.stream.listen((state) {
+          if (state.selectedProfileId == 'leo') selections++;
+        });
+        bloc.add(const KidHomeLoadRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+        bloc.add(const KidHomeProfileSelected(childId: 'leo', pinSet: false));
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        bloc.add(const KidHomeSelectionHandled());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        bloc.add(const KidHomeProfileSelected(childId: 'leo', pinSet: false));
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        await subscription.cancel();
+        expect(
+          selections,
+          2,
+          reason:
+              'K01-BUG-3: the same tile tapped after coming back must '
+              'navigate again — the second selection must reach the view',
+        );
+        expect(repo.selected, <String>['leo', 'leo']);
+      },
+      wait: const Duration(milliseconds: 150),
+      verify: (bloc) {
+        expect(bloc.state.selectedProfileId, 'leo');
+      },
+    );
+
+    blocTest<KidHomeBloc, KidHomeState>(
+      'handled with no pending selection emits nothing',
+      build: () {
+        repo = _RosterFake();
+        return KidHomeBloc(repository: repo);
+      },
+      act: (bloc) async {
+        bloc.add(const KidHomeProfilesRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        bloc.add(const KidHomeSelectionHandled());
+      },
+      wait: const Duration(milliseconds: 100),
+      expect: () => <Matcher>[
+        _roster(<String>['maya', 'leo']),
+      ],
+    );
+
+    test('the handled event and constructors are well-behaved', () {
+      expect(const KidHomeSelectionHandled(), const KidHomeSelectionHandled());
+      final selected = KidHomeState(
+        status: KidHomeStatus.loaded,
+        child: maya,
+        items: _items(),
+        profiles: const <KidChild>[maya, leo],
+      ).copyWithSelection('leo');
+      final handled = selected.copyWithSelectionHandled();
+      expect(handled.selectedProfileId, isNull);
+      expect(handled.profiles, hasLength(2));
+      expect(handled.child?.nickname, 'Maya');
+      expect(handled.items, hasLength(1));
+      final recovered = const KidHomeState(
+        status: KidHomeStatus.failure,
+        errorMessage: 'Exception: profiles down',
+      ).copyWithProfilesRecovered(const <KidChild>[maya, leo]);
+      expect(recovered.status, KidHomeStatus.loaded);
+      expect(recovered.errorMessage, isNull);
+      expect(recovered.profiles.map((c) => c.id).toList(), <String>[
+        'maya',
+        'leo',
+      ]);
+    });
   });
 
   group('K01 — state value semantics', () {

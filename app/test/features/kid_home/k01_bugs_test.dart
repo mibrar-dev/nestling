@@ -250,7 +250,8 @@ void main() {
             'K01-BUG-1: 3 children shrink the tiles to $widths; the design '
             'tile is 167 wide and compact mode needs at least 132',
       );
-    }, skip: true);
+      await disposeApp(tester);
+    });
 
     testWidgets('at 4+ children the pet disc/avatar stop being circles', (
       tester,
@@ -271,7 +272,8 @@ void main() {
               '${rect.width}×${rect.height}',
         );
       }
-    }, skip: true);
+      await disposeApp(tester);
+    });
 
     testWidgets('six children leave 45 px slivers (design tile: 167)', (
       tester,
@@ -292,7 +294,8 @@ void main() {
         isTrue,
         reason: 'K01-BUG-1: six children shrink the tiles to $widths',
       );
-    }, skip: true);
+      await disposeApp(tester);
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -365,7 +368,7 @@ void main() {
       isNull,
       reason:
           'K01-BUG-3 mechanism: the one-shot is still set when the picker '
-          'comes back (the home stream’s clear emission races ahead of the '
+          "comes back (the home stream's clear emission races ahead of the "
           'selection emit), so the equal re-selection is dropped by the bloc',
     );
     await tester.tap(_tile('maya'));
@@ -406,9 +409,9 @@ void main() {
           'K01-BUG-5: the profiles stream recovered but the failure card '
           'stayed; `copyWithProfiles` must restore the loaded state',
     );
-    expect(find.text('Who’s playing?'), findsOneWidget);
+    expect(find.text("Who's playing?"), findsOneWidget);
     await disposeApp(tester);
-  }, skip: true);
+  });
 
   // -------------------------------------------------------------------------
   // Edge-case probes (expected green — kept as evidence)
@@ -419,7 +422,7 @@ void main() {
       await tester.runAsync(() => Seed.empty(GetIt.instance<AppDatabase>()));
       await tester.runAsync(() => GetIt.instance<AppSession>().refresh());
       await _pumpPicker(tester);
-      expect(find.text('Who’s playing?'), findsOneWidget);
+      expect(find.text("Who's playing?"), findsOneWidget);
       expect(find.text('Ask a grown-up to add your profile.'), findsOneWidget);
       expect(find.byType(ProfileTile), findsNothing);
       expect(find.byType(NestLockButton), findsOneWidget);
@@ -528,20 +531,20 @@ void main() {
       tester,
     ) async {
       await _pumpPicker(tester);
-      expect(find.text('Who’s playing?'), findsOneWidget);
+      expect(find.text("Who's playing?"), findsOneWidget);
       await disposeApp(tester);
       await _pumpPicker(tester, kidMode: false);
-      expect(find.text('Who’s playing?'), findsOneWidget);
+      expect(find.text("Who's playing?"), findsOneWidget);
       await disposeApp(tester);
     });
 
-    testWidgets('copy matches the plan’s typographic characters exactly', (
+    testWidgets("copy matches the plan\u0027s typographic characters exactly", (
       tester,
     ) async {
       await _pumpPicker(tester);
-      final title = tester.widget<Text>(find.text('Who’s playing?')).data!;
-      expect(title.contains('’'), isTrue);
-      expect(title.contains("'"), isFalse);
+      final title = tester.widget<Text>(find.text("Who's playing?")).data!;
+      expect(title.contains("'"), isTrue);
+      expect(title.contains('’'), isFalse);
       expect(find.text('Tap your face to start'), findsOneWidget);
       expect(find.text('Age 7–9'), findsOneWidget);
       expect(find.text('Age 4–6'), findsOneWidget);
@@ -630,7 +633,7 @@ void main() {
       );
       semantics.dispose();
       await disposeApp(tester);
-    }, skip: true);
+    });
 
     testWidgets('title, sub and caption render in full at 320 px + 1.3', (
       tester,
@@ -639,7 +642,7 @@ void main() {
       // The balanced title must keep a real box; a collapsed width would
       // clip the words away (the shared search regresses silently).
       final title = tester.renderObject<RenderParagraph>(
-        find.text('Who’s playing?'),
+        find.text("Who's playing?"),
       );
       expect(title.didExceedMaxLines, isFalse);
       expect(

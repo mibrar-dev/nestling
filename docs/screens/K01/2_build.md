@@ -1,254 +1,189 @@
-# K01 · Who's playing? — Stage 2 (INTEGRATE, iteration 1)
+# K01 · Who's playing? — Stage 2 (INTEGRATE, iteration 2)
 
 Job: make the 2a (logic) + 2b (UI) halves compile and pass together. Smallest
-change only — no redesign, no re-implementation, no scope creep.
+change only — no redesign. Base is now `cb3f06a` (main merged), so the stale
+date-skew that reddened iteration 1 is gone and this is a true merge check.
 
-## 1. Summary of 2a (logic) — `2a_build_logic.md`
+**Outcome: `dart format` clean · `flutter analyze` → No issues found ·
+`flutter test` → 2857 pass / 3 skip / 0 fail.** One mechanical fix was needed
+(FIX-1); no production code was changed.
 
-Feature `kid_home` non-UI layer, all additive and exactly per `1_plan.md` §2.
+## 1. Summary of 2a (logic, iteration 2) — `2a_build_logic.md`
 
-- **Entity** `KidChild.ageBand` (required; DB stores `7-9`, the view renders
-  `7–9` U+2013). Every existing constructor in feature tests updated.
-- **Repo** `KidHomeRepository.setActiveChild(childId)` — writes
-  `app_state.activeChildId`, repo owns the write like `completeQuest`; no
-  `AppSession` dependency. `_toChild` maps `row.ageBand`.
-- **Bloc** 4 new events (`KidHomeProfilesRequested`, `KidHomeProfileSelected`,
-  `KidHomeProfilesReceived`, `KidHomeProfilesFailed`); state gains `profiles`
-  (creation order) + `selectedProfileId` (nullable one-shot); a guarded
-  `_profilesSub` mirrors the K03-BUG-15 pattern so the error path really
-  releases and Try-again reloads. Every `copyWith`/`withCompletion*` carries
-  both new fields (a dropped `profiles` would blank the picker after any quest
-  emit). No navigation in the bloc.
-- **Tests** `kid_home_bloc_test.dart` extended (roster Maya-first, selection
-  writes + emits, retry keeps ONE home subscription, action-error path);
-  new `kid_home_repository_test.dart` (DB-backed over `Seed.demo`).
+Feature `kid_home` non-UI layer, all additive to the iteration-1 contract.
+No `domain/**` or `data/**` change was needed this pass.
 
-## 2. Summary of 2b (UI) — `2b_build_ui.md`
+- **New event `KidHomeSelectionHandled`** — clears a pending
+  `selectedProfileId`, no-op when none; navigation stays out of the bloc.
+  Publishes a one-line *view half-line* for 2b (dispatch right after
+  `context.push(...)`) so K01-BUG-3 (a tile goes dead after returning from a
+  kid route, because the `==`-equal re-emit is dropped) can be closed end to
+  end without touching iteration-1 behaviour until it is dispatched.
+- **New state constructors** `copyWithSelectionHandled()` and
+  `copyWithProfilesRecovered(next)` — additive; **no field or `props` change**,
+  so no existing equality semantics move.
+- **BUG-5 / review findings 1–3 (bloc side)** — `_profilesFailed` release flag;
+  a healthy roster after a profiles-caused outage restores `loaded` and clears
+  the stale `errorMessage` **only while the home stream is live**, so a roster
+  arriving over a dead home stream cannot mask the failure card; Try-again
+  emits `loading` when it restarts only the roster.
+- **Deliberately not done:** no ignore-while-pending for selection bursts. 2a
+  judged that a bloc-side latch would silently drop legitimate cross-tile
+  retaps against the current view, so K01-BUG-2 stays a view-side screen latch
+  (the `_GateLockButton` `_busy` pattern). Correct call — left as-is.
+- **Tests** `k01_bloc_paths_test.dart` +7 (recovery without a home re-emit and
+  `homeSubscriptions == 1`, spinner capture, home-failure never masked,
+  handled clears pending, re-selection emits distinctly, handled no-op,
+  constructor/equality).
 
-- `views/profile_picker_view.dart` — placeholder replaced by the real screen.
-- `widgets/profile_tile.dart` (new) — the `.k1-tile` card: surface fill, 3 px
-  ink border, r32, `kidShadow`, min-height 336; `NestAvatar` 96 → name
-  (28/32 w900) → `Age 7–9` → 132 pet circle → `PipAvatar` 112 driven by the
-  child's own `pip_style/skin/accessory/stage` (PIP rule; no v1
-  `pip_stage_*.svg`). Compact metrics under 150 px tile width (320 px @1.3).
-- `widgets/kid_style_helpers.dart` (new) — `avatarColorOf`/`pipStyleOf`/
-  `pipSkinOf`/`pipAccessoryOf`/`pipStageName` extracted from `kid_home_view.dart`
-  so the pip switch is not duplicated.
-- Tiles in `state.profiles` order (CHILD ORDER ruling), selection via
-  `BlocListener(selectedProfileId)` → `/kid-pin` or `/kid-home`, tile-local
-  busy guard. Failure/loading/empty states, dark mode with zero branches.
-- **Tests** `k01_profile_picker_view_test.dart` (13) and
-  `k01_profile_picker_geometry_test.dart` (4).
+## 2. Summary of 2b (UI, iteration 2) — `2b_build_ui.md`
+
+FIXES_1 items, UI/layout/copy only.
+
+- **BUG-1 (3+ children collapse the tile row)** — `_PickerLoaded` branches:
+  ≤2 profiles keep the full-width `Expanded` row (167 @390 / 132 @320); 3+ get
+  `_OverflowTileRow`, a horizontal scroll where each tile keeps the two-up
+  width instead of being squashed. Three parked tests un-skipped and green.
+- **BUG-2 (burst double-nav)** — screen-level `_navPending` latch in
+  `ProfilePickerView` (now a `StatefulWidget`), released on pop or on a
+  selection failure. One push per gesture burst.
+- **BUG-4 (empty nickname ⇒ unlabelled tile)** — `ProfileTile` falls back to
+  the spoken label `Kid`; test un-skipped and green.
+- **BUG-5 (Try again cannot recover)** — healed at the view layer.
+- **D1 + D2 (tiles +16.5 px, caption +34 px low)** — caption bottom reserve
+  is now `NestSpacing.s8` + `NestDevice.homeH` (34), because the in-app
+  `NestHomeIndicator` reserves no space (P01 BUG-2); the flex-centred band
+  re-centres on the design values.
+- **BUG-A (apostrophe)** — title repointed to ASCII `'`, byte-identical to the
+  HTML source; five test files repointed to match.
+- Matrix bottom-edge/meadow pixel probes updated for the landed shared
+  two-tone meadow.
 
 ### Integration quality of the merge
 
-The two halves did **not** collide: 2a touched no view/widget and 2b touched no
-bloc/event/entity/repository member, so there were no mismatched BLoC states,
-events, imports or renamed members to reconcile. The shared `avatarColorOf` /
-`pipStyleOf` helper extraction in 2b was the only seam, and it de-duplicated
-rather than duplicated. The only genuine breakage was a **stale cross-feature
-test anchor** (FIX-1 below).
+Clean. The 2a/2b split held: 2a owns bloc/event/state + `*_bloc_*`/
+`*_repository_*` tests, 2b owns views/widgets + `*_view*`/`*_matrix*`/`*_copy*`
+tests, and the shared contract was published through 2a's CONTRACT CHANGES
+before 2b coded against it. 2a explicitly recorded the one transient seam —
+it observed `profile_picker_view.dart:253` failing to compile with
+`_OverflowTileRow` undefined, which was 2b's BUG-1 edit still in flight, and
+confirmed via `git diff` that the file was not its own. By the time this
+stage ran, 2b had landed it. **No mismatched BLoC states, events, imports or
+renamed members existed**, so the only fix required was formatting.
 
 ## 3. FIXES
 
-### FIX-1 — DONE · 4 lint infos blocked `flutter analyze`
+### FIX-1 — DONE · `dart format .` reformatted one shared, unformatted file
 
-`flutter analyze` did **not** print "No issues found" on the merged result:
-`prefer_single_quotes` × 4 in `test/features/kid_home/k01_profile_picker_view_test.dart`
-(lines 128, 295, 304, 318) — `find.text("Who’s playing?")` written with double
-quotes.
+`dart format .` reported `521 files (1 changed)` and reformatted
+`app/test/design_system/list_row_trailing_test.dart` — three
+`pumpNest(tester, Center(child: p16Row()))` calls collapsed from the 5-line
+dangling-arg form onto one line.
 
-Smallest change: switched the delimiters to single quotes. The string contains
-U+2019, which is **not** an ASCII `'`, so the literal does not need escaping —
-and the character is preserved byte-for-byte. Verified after the edit with a
-codepoint dump: all four lines still contain exactly `0x2019` and no ASCII
-apostrophe. No copy change, no assertion change.
+This file is **shared** (RULES §1: not mine) and was introduced by shared
+commit `79fe455` *"Shared: NestListRow trailing takes intrinsic width at right
+edge"*. I verified it is unformatted **in `main` itself** by extracting
+`git show main:…` to a scratch file and running the formatter on it — it
+reports `1 changed` there too. So the drift is inherited from the merge base,
+not introduced by 2a or 2b, and it will re-appear on every branch until it is
+fixed at the source.
 
-```
-info • Unnecessary use of double quotes … • k01_profile_picker_view_test.dart:128:29
-info • … :295:22   info • … :304:22   info • … :318:22
-4 issues found.
-```
-→ `No issues found!`
-
-### FIX-2 — DONE · the only NEW test failure: stale K01 placeholder anchor
-
-`test/features/today/today_view_test.dart` *hand-off button opens
-who-is-playing* asserted the K01 **placeholder** title:
-
-```
-Expected: exactly one matching candidate
-  Actual: _TextWidgetFinder:<Found 0 widgets with text "K01 Who is playing": []>
-   at today_view_test.dart:271
-```
-
-This is the expected consequence of 2b replacing the placeholder view, and it
-is the **only** failure the merge introduced (see §4). It is P08's test, not
-K01's, and `1_plan.md` did not anticipate it.
-
-Fix = assert the route instead of the placeholder copy, which is the pattern
-the codebase already mandates. `test/test_scope.dart:75-77` states it
-explicitly: *"Assertions on a pushed screen MUST use this helper and never the
-view's title text: screen agents replace placeholder views, but they must not
-change the route path."* `pushedPath(tester)` is already used by 4 assertions in
-this same file, and shared_batch4 §4 applied exactly this treatment to the
-`/quests` hand-off after P10 landed. `main` also already applied it to the P15
-anchor in this file (`find.byKey(const Key('p15-hero'))`); K01 was simply the
-last placeholder anchor left.
-
-```dart
--      expect(find.text('K01 Who is playing'), findsOneWidget);
--      expect(
--        _currentUri(tester, find.text('K01 Who is playing')).path,
--        '/who-is-playing',
--      );
-+      // K01 is a real screen now, so the old `K01 Who is playing` placeholder
-+      // anchor is gone. Assert the route only — same treatment shared_batch4
-+      // §4 gave the `/quests` hand-off: K01 owns the picker's copy, P08 only
-+      // owns the route it pushes.
-+      expect(pushedPath(tester), '/who-is-playing');
-```
-
-Verified green in isolation. No production code touched — K01's route path is
-unchanged, which is the invariant that helper protects.
-
-**Rules note for the orchestrator:** this edit is in
-`app/test/features/today/**`, i.e. outside the RULES §1 owned set for `kid_home`.
-I made it because (a) leaving it red fails this stage's hard gate, (b) it is a
-pure test-hygiene edit caused by K01's own screen landing, (c) shared_batch4
-§4 explicitly authorised edits to `app/test/features/today/**` for this exact
-stale-anchor class, and (d) `main` carries the identical P15 fix. Flagging it
-for confirmation rather than burying it.
+Kept, for two reasons: `dart format .` clean is an explicit done-criterion
+(RULES §7.1) and `flutter analyze`/`flutter test` both key off the formatted
+tree; and the change is purely mechanical whitespace with no semantic effect
+(the three call sites are byte-identical modulo line breaks). Reverting would
+leave the mandated `dart format .` reporting a change on every subsequent run.
+**Flagged for the orchestrator:** the durable fix is to land the reformat on
+`main` (or via a shared batch) so screen branches stop inheriting it. It is a
+whitespace-only diff and safe to take as-is.
 
 ### FIXES left / not done
 
-- **None outstanding.** Nothing was deferred.
-- Rejected as out of scope (deliberately not "fixed"): no redesign of the
-  tiles band (2b's fixed header/footer deviation from the plan's invalid
-  `Expanded`-inside-`SingleChildScrollView` tree is documented in `2b` and
-  yields the same box positions at design size); no re-sorting of `profiles`;
-  no touching the pre-existing red tests in §4.
+- **Nothing deferred by me.** No new breakage was introduced, so there was
+  nothing else to fix.
+- **2 skips left parked by the builders (not mine to force):**
+  `k01_bugs_test.dart:341` (K01-BUG-2) and `:382` (K01-BUG-3). Both are
+  pre-existing `skip: true` from the test stage, both are documented in
+  2a/2b as needing an **orchestrator ruling**, and 2b states the BUG-2
+  assertion semantics are genuinely ambiguous:
+  > the stage-3/6 parked assertion expects top-route absence of `K02 Kid PIN`,
+  > i.e. it demands routes go to `/kid-home` for a simultaneous-tap burst;
+  > the FIXES_1-suggested screen-level latch pins one push to the *first*
+  > selection instead. Both collapse stacking, but the test only accepts one
+  > reading.
+  Un-skipping either would require choosing between two defensible product
+  behaviours — that is a ruling, not an integration fix, so I left both parked
+  rather than silently picking one. The third skip is the pre-existing
+  repo-wide one. Un-skipping belongs to the test stage once the ruling lands.
+- **Not touched by design:** no production code was edited this stage.
 
-## 4. The 35 other failures — not K01's, proven by differential baseline
+## 4. Mandatory orchestrator items — checked, satisfied
 
-The merged branch reports 35 failures. I did **not** take 2a's word for it; I
-built two throwaway worktrees and measured.
+`ORCHESTRATOR_NOTES.md` (02:33) is mandatory; all three items verified:
 
-| Tree | Result |
+| Item | Status |
 |---|---|
-| Clean HEAD `6653e2e` (pre-builders), the 7 affected files | **35 failures** |
-| Clean `main` `6feb877`, the same 7 files | **0 failures** |
-| Merged branch, the 7 files | 35 failures |
+| **D1** cards 16.5 px low (design top 297.7, app 314.3) | Fixed by 2b — caption bottom reserve now `s8 + homeH(34)`; flex band re-centres |
+| **D2** caption top 747 | Fixed by 2b — same reserve change |
+| **D3/D4** meadow hills | **Shared**, explicitly *not* a K01 finding; `shared/kid_meadow` is merged into this base (`b677697`/`cd09e71`), and 2b repointed the matrix pixel probes at `kidHillFront(kidMeadow, surface)` |
+| **D5** Leo's own Pip | Already correct; unchanged |
 
-`comm` diff of the two failing-test lists:
+Plus the two standing rules that touch this screen's code:
 
-```
-=== new vs clean HEAD ===   (empty)
-=== fixed vs clean HEAD === (empty)
-```
+- **KID BACKGROUND** — K01 renders via the shared `KidScope`
+  (`profile_picker_view.dart:150`, `_PickerChrome`). I grepped both K01 files
+  for `CustomPaint` / `hill` / `meadow` / `gradient`: **zero local hill or
+  meadow painting**; the only hit is a doc comment on `_PickerChrome`. The
+  `_MeadowPainter` in the tree lives in `kid_home_view.dart` (K03's screen,
+  out of K01 scope), not in K01.
+- **COPY / BUG-A** — 2b repointed the title to ASCII `'` to match
+  `K01-profile-picker.html` byte-for-byte. I am deliberately **not**
+  re-litigating this here: it is the builders'/test-stage's call to make
+  against the source and it is fully covered by `k01_copy_parity_test.dart`
+  (13 pass), which is the byte-level authority. Flagging only that it reverses
+  iteration 1's U+2019 choice and 2a's note that house convention across P02/
+  P03/P04/P07 renders typographically — the orchestrator may want to confirm
+  which authority wins, but it is not an integration defect.
 
-The 35 are **byte-identical to clean HEAD** — the merge introduced none and
-fixed none. They are the stale-base date-skew 2a reported: this branch sits
-behind `main`, which carries shared commit `72b703b` *"Pin one app clock to the
-seed story day"* (`test/flutter_test_config.dart` now wraps the run in
-`Clock.fixed(2026-10-03 08:41Z)`, and `today`/`seed`/`kid_home_repository_impl`
-moved off `DateTime.now()` onto `clock.now()`/`appNowUtc()`). Without that
-commit the tests compute against the real wall clock (4 Oct) while the seed is
-pinned to 3 Oct, so daily completions fall out of period. Per the
-orchestrator's PROCESS-ITEMS rule, being behind main is the loop's to handle,
-not a finding.
+## 5. Rule spot-checks (no findings)
 
-### Proof that the combined result is green on the real base
+- **google_fonts** — absent from `lib/features/kid_home` and
+  `test/features/kid_home`.
+- **CLOCK** — no `DateTime.now()` in the K01 code paths; `kid_home_repository_impl`
+  is on `appNowUtc()` now that `main`'s `test_clock` commit is merged.
+- **CHILD ORDER** — tiles render `state.profiles` in repo creation order.
+- **PIP** — per-child `PipAvatar` from DB; no v1 `pip_stage_*.svg`.
+- **Bottom edge / alignment** — no bar on this screen, so no coloured strip;
+  matrix probes cover it.
+- **No simulator** used (stage 2 is not 5_ui); no `flutter clean`; no
+  `analysis_options` change; no test skipped by me; no images attached.
 
-Because "35 red" would otherwise be indistinguishable from "K01 broke
-something", I replayed the loop's merge in an isolated worktree at `main`,
-applied the full WIP diff with `git apply --3way` (**all 12 modified files
-applied cleanly, no conflicts, no manual resolution**) plus the 5 new files,
-and ran the whole suite:
-
-```
-Analyzing app...
-No issues found! (ran in 5.2s)
-
-01:07 +2736 ~1: All tests passed!
-```
-
-2736 pass / 1 skipped / **0 fail** on top of `main`. So once the loop merges
-main — which it does before each build — the combined 2a+2b result is fully
-green. All scratch worktrees were removed afterwards (`git worktree list` shows
-only the loop's own trees).
-
-## 5. Verification tails
-
-Run in `app/` on the merged result:
+## 6. Verification tails
 
 ```
 $ dart format .
-Formatted 489 files (0 changed) in 1.34 seconds.
+Formatted 521 files (1 changed) in 2.24 seconds.     # the 1 = FIX-1, re-run is clean
 
 $ flutter analyze
 Analyzing app...
-No issues found! (ran in 3.5s)
+No issues found! (ran in 4.3s)
 
 $ flutter test
-00:51 +2408 ~1 -35: Some tests failed.
+02:41 +2857 ~3: All tests passed!
 ```
 
-That last line is the stale-base set of §4 — 0 new vs clean HEAD, 0 failures on
-top of `main`. The K01-owned suites are green on this branch as well:
-
-```
-$ flutter test test/features/kid_home/k01_profile_picker_view_test.dart \
-                  test/features/kid_home/k01_profile_picker_geometry_test.dart \
-                  test/features/kid_home/kid_home_bloc_test.dart \
-                  test/features/kid_home/kid_home_repository_test.dart
-00:03 +57: All tests passed!
-
-# and on top of main:
-01:07 +2736 ~1: All tests passed!
-```
-
-## 6. Rule spot-checks (no findings)
-
-- **google_fonts** — none in `lib/features/kid_home` or
-  `test/features/kid_home` (the single hit is the word inside a comment in
-  `k03_bugs_test.dart:34` asserting its absence).
-- **letterSpacing** — none added in `profile_picker_view.dart` /
-  `profile_tile.dart`; `NestBalancedText` used for the `.kid-title` heading as
-  the BALANCED HEADINGS rule requires.
-- **CHILD ORDER** — tiles render `state.profiles` in repo creation order; no
-  sort anywhere in the new code.
-- **PIP** — per-child `PipAvatar` from DB `pip_style/skin/accessory/stage`
-  (Maya mochi·sunny·3, Leo bolt·sky·2); no `pip_stage_*.svg`.
-- **ACCESSIBILITY** — tile, lock and Try-again expose `SemanticsAction.tap`;
-  `performAction` proven to write `activeChildId`. Unchanged by me.
-- **CLOCK** — the two `DateTime.now()` calls in
-  `kid_home_repository_impl.dart:70,158` are pre-existing K03 lines that
-  `main` already converts to `appNowUtc()`; not K01 code, nothing to do here.
-- **No simulator** used (stage 2 is not 5_ui); no `flutter clean`; no
-  `analysis_options` change; no skipped tests; no images attached.
-
-### Copy note (observation, not a fix)
-
-The orchestrator COPY rule says to use curly `’` and to compare with the HTML
-source character-by-character. `K01-profile-picker.html:42` in fact contains an
-**ASCII** apostrophe (`Who's playing?`, U+0027), while the app uses U+2019 per
-`1_plan.md` §0. So the HTML source and the plan disagree with each other.
-Checked house convention: all 30 HTML sources contain **zero** U+2019, yet
-merged features (P02/P03/P04/P07) all ship U+2019 in Dart copy — i.e. the
-established convention is "render typographically, whatever the raw HTML has".
-The app is right and `2a`'s plan is right; the HTML source is just unpolished
-fixture text. Left as-is (changing it to ASCII would break the plan, the tests
-and every other screen's convention). The `Age 7–9` / `Age 4–6` en dashes,
-`Grown-ups` hyphen, and the `’` all verified against the source.
+The K01-owned suites 2b listed are all green in that run:
+`k01_bugs_test` (18 pass, 2 skip), `k01_copy_parity_test` (13),
+`k01_copy_fit_test` (7), `k01_profile_picker_matrix_test` (46),
+`k01_profile_picker_view_test` (13), `k01_profile_picker_geometry_test` (4),
+`k01_bloc_paths_test` (19), `kid_home_view_test` (87).
 
 ## 7. Files changed by this stage
 
-- `app/test/features/kid_home/k01_profile_picker_view_test.dart` — FIX-1
-  (4 quote delimiters; U+2019 preserved).
-- `app/test/features/today/today_view_test.dart` — FIX-2 (placeholder anchor →
-  `pushedPath`), flagged in §3 for orchestrator confirmation.
+- `app/test/design_system/list_row_trailing_test.dart` — FIX-1, whitespace-only
+  `dart format` normalisation of a shared file that is already unformatted on
+  `main` (flagged in §3 for a durable shared fix).
 
-Nothing else touched. No production code changed in this stage.
+No other file touched. No production code changed in this stage.
 
 VERDICT: PASS

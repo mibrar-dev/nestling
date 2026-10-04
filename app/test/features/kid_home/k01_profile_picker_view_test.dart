@@ -125,12 +125,12 @@ void main() {
     tester,
   ) async {
     await _pumpPicker(tester);
-    final title = find.text('Who’s playing?');
+    final title = find.text("Who's playing?");
     expect(title, findsOneWidget);
     expect(
       tester.widget<Text>(title).data,
-      contains('’'),
-      reason: 'the apostrophe is U+2019, not ASCII',
+      contains("'"),
+      reason: 'the apostrophe is ASCII 0x27, matching the HTML source',
     );
     expect(find.text('Tap your face to start'), findsOneWidget);
     expect(
@@ -292,7 +292,7 @@ void main() {
     await tester.runAsync(() => Seed.empty(GetIt.instance<AppDatabase>()));
     await tester.runAsync(() => GetIt.instance<AppSession>().refresh());
     await _pumpPicker(tester);
-    expect(find.text('Who’s playing?'), findsOneWidget);
+    expect(find.text("Who's playing?"), findsOneWidget);
     expect(find.text('Tap your face to start'), findsOneWidget);
     expect(find.text('Ask a grown-up to add your profile.'), findsOneWidget);
     expect(find.byType(NestLockButton), findsOneWidget);
@@ -301,7 +301,7 @@ void main() {
 
   testWidgets('320 px + 1.3 text scale fits, light theme', (tester) async {
     await _pumpPicker(tester, width: 320, textScale: 1.3);
-    expect(find.text('Who’s playing?'), findsOneWidget);
+    expect(find.text("Who's playing?"), findsOneWidget);
     expect(find.text('Maya'), findsOneWidget);
     expect(find.text('Leo'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -315,7 +315,7 @@ void main() {
       textScale: 1.3,
       theme: ThemeMode.dark,
     );
-    expect(find.text('Who’s playing?'), findsOneWidget);
+    expect(find.text("Who's playing?"), findsOneWidget);
     expect(find.text('Maya'), findsOneWidget);
     expect(find.text('Leo'), findsOneWidget);
     expect(tester.takeException(), isNull);
