@@ -4,8 +4,9 @@
 // - Parent rewards are the P14-exact glyphs; kid rewards the K08-exact glyphs
 //   (plate shares K08 for both).
 // - Parent quests are the P09/P10/P08-exact glyphs (questBed etc. kept);
-//   kid bed/dishes/reading are the new K03/K04-exact glyphs, the rest share
-//   the parent (single source).
+//   kid bed/dishes/reading are the K03/K04-exact glyphs, kid bins is the
+//   K09-exact lidded bin (K03/K04 draw no bins row; K09 is where bins
+//   appears most prominently), the rest share the parent (single source).
 // - P14/K03/P08/P10 delegate to the shared single source.
 
 import 'dart:io';
@@ -202,11 +203,11 @@ void main() {
         'shirt': NestIcons.washingMachine,
         'sofa': NestIcons.questCard,
       };
-      // Kid: K03/K04-exact where drawn, else the parent (single source).
+      // Kid: K03/K04-exact where drawn, K09-exact bins, else the parent.
       const kidByKey = <String, String>{
         'dishwasher': NestIcons.questDishesKid,
         'book': NestIcons.questReadingKid,
-        'bins': NestIcons.questBins,
+        'bins': NestIcons.questBinsKid,
         'bed': NestIcons.questBedKid,
         'hoover': NestIcons.questHoover,
         'plate': NestIcons.table,
@@ -243,7 +244,7 @@ void main() {
       );
       expect(
         questIconFor('bin', audience: NestAudience.kid),
-        NestIcons.questBins,
+        NestIcons.questBinsKid,
       );
       expect(
         questIconFor('table', audience: NestAudience.parent),

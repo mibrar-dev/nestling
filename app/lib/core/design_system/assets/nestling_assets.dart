@@ -136,6 +136,16 @@ abstract final class NestlingIcons {
   /// Screens: P09, P08/P10 `Put the bins out` rows.
   static const String questBins = 'assets/icons/ic_quest_bins.svg';
 
+  /// K09 kid Bins: lidded bin with a trapezoid lid. Exact
+  /// `K09-jar.html:90` glyph (`M6 3h12l-2 5H8Z` lid +
+  /// `M8 8v10a2 2 0 0 0 8 0V8` body). Distinct from [questBins] (P09
+  /// handled case with clasp) and [bin] (rimmed wheelie bin). The kid
+  /// designs disagree (K03/K04 draw no bins row, so the kid set fell back
+  /// to the parent [questBins]); K09 is where bins appears most
+  /// prominently, so the kid set now uses this K09-exact glyph.
+  /// Screens: K09 (kid `bins`/`bin` via `questIconFor`).
+  static const String questBinsKid = 'assets/icons/ic_quest_bins_kid.svg';
+
   /// K03/K04 kid Bed: headboard post, pillow bump, long base and legs.
   /// Exact `K03-kid-home.html` / `K04-quest-detail.html` tile glyph
   /// (`M2 18v-7 / M2 14h20v4 / …h-9v3 / M6 11V8h4v3`). Distinct from
@@ -220,11 +230,20 @@ abstract final class NestlingIcons {
   /// Screens: K09.
   static const String poundCoin = 'assets/icons/ic_pound_coin.svg';
 
+  /// K09 'Pocket money' history row — the design's geometric coin-slot
+  /// mark. Exact `K09-jar.html:85` glyph (`circle r8` + `M12 8v8` +
+  /// `M9.5 9.5h5` + `M9.5 14.5h5`). Distinct from [poundCoin] (a curved
+  /// pound letterform in a circle); K09 must use this, not [poundCoin].
+  /// Screens: K09.
+  static const String jarPocketMoney = 'assets/icons/ic_jar_pocket_money.svg';
+
   /// K09 'Put the bins out' history row. Award rosette: outer + inner disc, two tails.
   /// Screens: K09.
   static const String ribbon = 'assets/icons/ic_ribbon.svg';
 
-  /// Birthday money.
+  /// Birthday money. Exact `K09-jar.html:95` gift glyph (`rect 3/9/18/12`
+  /// + `M3 13h18` + `M12 9v12` + the two bow loops) — the shared file
+  /// draws exactly those paths, so K09 reuses this (no `jarGift` file).
   /// Screens: P09, P12, K09.
   static const String gift = 'assets/icons/ic_gift.svg';
 

@@ -11,12 +11,12 @@
 //
 //  1. TABLE INVARIANT (pure) — over every key `questIconKeys` says the demo seed
 //     can write, the kid and parent glyphs must differ for exactly
-//     {bed, dishwasher, book}. Accidental convergence (a shared key quietly
+//     {bed, dishwasher, book, bins}. Accidental convergence (a shared key quietly
 //     switched to a kid asset) and accidental divergence (a parent-only key
 //     given a kid asset) both fail here.
 //  2. RENDERED, REAL DB — for each of Maya's seeded quests the icon key is read
 //     FROM THE DATABASE (DATA OVER MOCKS) and the painted 64 px tile glyph must
-//     equal `questIconFor(icon, audience: kid)`, and for the three divergent
+//     equal `questIconFor(icon, audience: kid)`, and for the four divergent
 //     keys must NOT equal the parent glyph.
 //  3. COLUMN-DRIVEN — two quests sharing a title/coins but differing only in
 //     `icon` render different glyphs, proving the tile follows the column and
@@ -42,15 +42,24 @@ import '../../test_scope.dart';
 
 /// The keys whose KID and PARENT designs genuinely differ. K03/K04 draw a
 /// headboard-post bed, a handled-dish basket and an open book; P09/P10 draw the
-/// flat bed frame, the handled-basket appliance and a closed book. Every other
-/// seeded key has a single design source and is shared by both audiences.
-const Set<String> _divergentKeys = <String>{'bed', 'dishwasher', 'book'};
+/// flat bed frame, the handled-basket appliance and a closed book. `bins`
+/// diverges too: K03/K04 draw no bins row (the kid set fell back to the
+/// parent `questBins`), but K09 draws the lidded bin where bins appears most
+/// prominently, so the kid set now uses the K09-exact `questBinsKid`.
+/// Every other seeded key has a single design source and is shared.
+const Set<String> _divergentKeys = <String>{
+  'bed',
+  'dishwasher',
+  'book',
+  'bins',
+};
 
-/// The exact kid assets those three keys must resolve to.
+/// The exact kid assets those four keys must resolve to.
 const Map<String, String> _divergentKidAssets = <String, String>{
   'bed': NestIcons.questBedKid,
   'dishwasher': NestIcons.questDishesKid,
   'book': NestIcons.questReadingKid,
+  'bins': NestIcons.questBinsKid,
 };
 
 const KidChild _maya = KidChild(
@@ -153,7 +162,7 @@ void main() {
   });
 
   group('K04 ICONS — the audience table itself', () {
-    test('kid and parent diverge for exactly the three designed keys', () {
+    test('kid and parent diverge for exactly the four designed keys', () {
       // Walks `questIconKeys`, the shared list of every icon the demo seed can
       // write, so a new seeded key is covered automatically.
       for (final key in questIconKeys) {
@@ -203,6 +212,7 @@ void main() {
       expect(NestIcons.questBedKid, isNot(NestIcons.questBed));
       expect(NestIcons.questDishesKid, isNot(NestIcons.questDishes));
       expect(NestIcons.questReadingKid, isNot(NestIcons.book));
+      expect(NestIcons.questBinsKid, isNot(NestIcons.questBins));
     });
   });
 

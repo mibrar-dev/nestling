@@ -111,14 +111,21 @@ void main() {
     });
 
     test('questIconFor splits kid from parent on the divergent keys only', () {
-      for (final key in <String>['bed', 'dishwasher', 'book', 'reading']) {
+      for (final key in <String>[
+        'bed',
+        'dishwasher',
+        'book',
+        'reading',
+        'bins',
+        'bin',
+      ]) {
         expect(
           questIconFor(key, audience: NestAudience.kid),
           isNot(questIconFor(key, audience: NestAudience.parent)),
           reason: '$key must render the kid glyph on K04, never the parent',
         );
       }
-      for (final key in <String>['bins', 'hoover', 'plate']) {
+      for (final key in <String>['hoover', 'plate']) {
         expect(
           questIconFor(key, audience: NestAudience.kid),
           questIconFor(key, audience: NestAudience.parent),

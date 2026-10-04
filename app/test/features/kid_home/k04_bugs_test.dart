@@ -22,9 +22,10 @@
 //   now resolves through the shared `questIconFor(key, audience:
 //   NestAudience.kid)` single source (ORCHESTRATOR_NOTES 15:08), so the bed
 //   hero is the K04-faithful `questBedKid` (headboard post/pillow/legs),
-//   dishwasher the K03/K04 `questDishesKid`, and `hoover`/`bins` keep the
-//   shared parent glyphs. The proof below asserts the kid assets and runs
-//   un-skipped.
+//   dishwasher the K03/K04 `questDishesKid`, bins the K09-exact
+//   `questBinsKid` (kid designs disagree; K09 is where bins appears most
+//   prominently), and `hoover` keeps the shared parent glyph. The proof
+//   below asserts the kid assets and runs un-skipped.
 //
 // * K04-BUG-4 (was MINOR, FIXED iter 3, verified) — an over-cap title used
 //   to be cut with `TextOverflow.clip` (mid-word, no ellipsis). The K04 call
@@ -287,7 +288,7 @@ void main() {
       'q-tidy': NestIcons.questBedKid,
       'q-dishwasher': NestIcons.questDishesKid,
       'q-hoover': NestIcons.questHoover,
-      'q-bins': NestIcons.questBins,
+      'q-bins': NestIcons.questBinsKid,
     };
     await _pump(tester, route: KidHomeRoutePaths.home);
     for (final MapEntry(key: questId, value: glyph) in expected.entries) {

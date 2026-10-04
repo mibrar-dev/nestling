@@ -37,6 +37,7 @@ abstract final class NestIcons {
   static const String questDishes = assets.NestlingIcons.questDishes;
   static const String questHoover = assets.NestlingIcons.questHoover;
   static const String questBins = assets.NestlingIcons.questBins;
+  static const String questBinsKid = assets.NestlingIcons.questBinsKid;
   static const String questBedKid = assets.NestlingIcons.questBedKid;
   static const String questDishesKid = assets.NestlingIcons.questDishesKid;
   static const String questReadingKid = assets.NestlingIcons.questReadingKid;
@@ -55,6 +56,7 @@ abstract final class NestIcons {
   static const String target = assets.NestlingIcons.target;
   static const String trash = assets.NestlingIcons.trash;
   static const String poundCoin = assets.NestlingIcons.poundCoin;
+  static const String jarPocketMoney = assets.NestlingIcons.jarPocketMoney;
   static const String ribbon = assets.NestlingIcons.ribbon;
   static const String gift = assets.NestlingIcons.gift;
   static const String saved = assets.NestlingIcons.saved;
