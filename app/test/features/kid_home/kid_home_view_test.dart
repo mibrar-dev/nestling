@@ -19,6 +19,7 @@ import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nestling/app/app.dart';
 import 'package:nestling/app/controllers.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/london_time.dart';
@@ -1526,7 +1527,7 @@ void main() {
     testWidgets('daily: before the London day start reads to do again', (
       tester,
     ) async {
-      final now = DateTime.now().toUtc();
+      final now = appNowUtc();
       final dayStart = londonDayStartUtc(now);
       await seedCompletion(
         tester,
@@ -1563,7 +1564,7 @@ void main() {
     testWidgets("weekly: last week's completion reads to do again", (
       tester,
     ) async {
-      final now = DateTime.now().toUtc();
+      final now = appNowUtc();
       final weekStart = londonWeekStartUtc(now);
       await seedCompletion(
         tester,
@@ -1623,7 +1624,7 @@ void main() {
                 status: const Value('approved'),
                 coins: const Value(5),
                 createdAt: Value(
-                  DateTime.now().toUtc().subtract(const Duration(days: 400)),
+                  appNowUtc().subtract(const Duration(days: 400)),
                 ),
               ),
             );
@@ -1645,7 +1646,7 @@ void main() {
     testWidgets('a period-expired daily quest starts a fresh completion', (
       tester,
     ) async {
-      final now = DateTime.now().toUtc();
+      final now = appNowUtc();
       final dayStart = londonDayStartUtc(now);
       await seedCompletion(
         tester,

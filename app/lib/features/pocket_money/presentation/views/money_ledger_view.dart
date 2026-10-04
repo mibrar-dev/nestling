@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/family/family_routes.dart';
 import 'package:nestling/features/pocket_money/domain/entities/money_child.dart';
@@ -292,7 +293,7 @@ class _LoadedBody extends StatelessWidget {
     final name = child.nickname;
     final nextPayout = payoutLabel(
       payoutWeekday: data.payoutDay,
-      nowUtc: DateTime.now().toUtc(),
+      nowUtc: appNowUtc(),
       zoneId: data.zoneId,
     );
 
