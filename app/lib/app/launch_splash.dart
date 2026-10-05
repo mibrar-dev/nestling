@@ -3,10 +3,12 @@
 // Cold start shows the native splash first (leaf green + centred egg), then
 // this widget continues on the same green with the egg at the same apparent
 // size (256 dp, centred) so the hand-off does not jump. The hatch plays with
-// the existing v2 Rive Pip (mochi/sunny): stage 1 egg, then the existing
-// `evolve` trigger advances to the stage 2 hatchling, a brief hold, and a
-// ≤ 200 ms cross-fade into the router. A hard timeout guarantees the splash
-// can never hang, even if Rive never binds.
+// the existing v2 Rive Pip (mochi/sunny): both stages preload from the first
+// frame in a stack (egg opaque below, hatchling fading in on top at `evolve`),
+// so the egg stays visible until the hatchling's first frame is painted and
+// no blank green beat shows; then a brief hold and a ≤ 200 ms cross-fade
+// into the router. A hard timeout guarantees the splash can never hang, even
+// if Rive never binds.
 //
 // Owner rules: total animated part ≤ 1.6 s, tap anywhere skips, Reduce Motion
 // (`MediaQuery.disableAnimations` or `DISABLE_ANIMATIONS`) shows the
@@ -50,6 +52,10 @@ const double kLaunchSplashHatchlingLift = 4;
 abstract final class LaunchSplashTimings {
   /// Delay after the first frame before firing `evolve` (lets Rive bind).
   static const Duration evolveDelay = Duration(milliseconds: 450);
+
+  /// Egg-to-hatchling cross-fade: the hatchling is preloaded underneath the
+  /// egg from the first frame, so revealing it never shows the green.
+  static const Duration hatchFade = Duration(milliseconds: 200);
 
   /// Cross-fade into the router at the end of the animated path.
   static const Duration fade = Duration(milliseconds: 200);
@@ -160,22 +166,61 @@ class _LaunchSplashState extends State<LaunchSplash> {
     // The hatchling box is scaled so its visible art height matches the
     // egg's (±5 %); the box stays centred and the lift aligns the art
     // centres (see [kLaunchSplashHatchlingScale]).
-    final isEgg = _stage == 1;
-    final pip = PipAvatar(
+    //
+    // Blank-beat fix (shared/polish_ui): both stages are built from the
+    // first frame and stacked — the egg opaque below, the hatchling fading
+    // in on top at `evolve`. The old code swapped a single `PipAvatar` from
+    // Stage1 to Stage2, so the Stage2 artboard (or its SVG fallback) had to
+    // load/decode after the swap and one blank green frame showed through.
+    // Here the hatchling preloads during the 450 ms evolve delay, and the
+    // egg stays opaque underneath until the hatchling is opaque, so green
+    // can never show through. The Reduce Motion path keeps its single
+    // hatchling still (no motion, no stack).
+    if (_reduce) {
+      final pip = PipAvatar(
+        style: PipStyle.mochi,
+        stage: 2,
+        size: kLaunchSplashEggSize * kLaunchSplashHatchlingScale,
+        controller: _pip,
+        riveEnabled: widget.riveEnabled,
+      );
+      final art = Transform.translate(
+        offset: const Offset(0, -kLaunchSplashHatchlingLift),
+        child: pip,
+      );
+      return _splashFrame(art);
+    }
+    final egg = PipAvatar(
       style: PipStyle.mochi,
-      stage: _stage,
-      size: isEgg
-          ? kLaunchSplashEggSize
-          : kLaunchSplashEggSize * kLaunchSplashHatchlingScale,
+      stage: 1,
+      size: kLaunchSplashEggSize,
       controller: _pip,
       riveEnabled: widget.riveEnabled,
     );
-    final art = isEgg
-        ? pip
-        : Transform.translate(
+    final hatchling = PipAvatar(
+      style: PipStyle.mochi,
+      stage: 2,
+      size: kLaunchSplashEggSize * kLaunchSplashHatchlingScale,
+      riveEnabled: widget.riveEnabled,
+    );
+    final art = Stack(
+      alignment: Alignment.center,
+      children: <Widget>[
+        egg,
+        AnimatedOpacity(
+          opacity: _stage == 2 ? 1 : 0,
+          duration: LaunchSplashTimings.hatchFade,
+          child: Transform.translate(
             offset: const Offset(0, -kLaunchSplashHatchlingLift),
-            child: pip,
-          );
+            child: hatchling,
+          ),
+        ),
+      ],
+    );
+    return _splashFrame(art);
+  }
+
+  Widget _splashFrame(Widget art) {
     // One labelled node for the whole splash: `excludeSemantics` collapses
     // the visual tree (the egg is decorative here) and `onTap` exposes the
     // skip as SemanticsAction.tap. No FocusNode anywhere, so focus can never

@@ -318,4 +318,74 @@ void main() {
       );
     });
   });
+
+  group('LaunchSplash hatch preload (shared/polish_ui blank-beat fix)', () {
+    testWidgets('preloads the hatchling under the egg from the first frame', (
+      tester,
+    ) async {
+      var doneCount = 0;
+      await _pumpSplash(tester, onDone: () => doneCount++, riveEnabled: false);
+      // Both stages are in the tree immediately: the hatchling preloads
+      // during the evolve delay, so the swap can never show green.
+      expect(
+        _svgAssets(tester),
+        contains(PipAvatar.fallbackAsset(PipStyle.mochi, 1)),
+      );
+      expect(
+        _svgAssets(tester),
+        contains(PipAvatar.fallbackAsset(PipStyle.mochi, 2)),
+      );
+      expect(doneCount, 0);
+    });
+
+    testWidgets('animated path stacks, reduce path stays a single still', (
+      tester,
+    ) async {
+      await _pumpSplash(tester, onDone: () {}, riveEnabled: false);
+      // Animated path preloads both stages (egg + hatchling); the reduce
+      // path keeps its single hatchling still with no second avatar.
+      expect(
+        find.descendant(
+          of: find.byType(LaunchSplash),
+          matching: find.byType(PipAvatar),
+        ),
+        findsNWidgets(2),
+      );
+    });
+
+    testWidgets('reduce path stays a single hatchling still', (tester) async {
+      await _pumpSplash(
+        tester,
+        onDone: () {},
+        disableAnimations: true,
+        riveEnabled: false,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(LaunchSplash),
+          matching: find.byType(PipAvatar),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        _svgAssets(tester),
+        contains(PipAvatar.fallbackAsset(PipStyle.mochi, 2)),
+      );
+      expect(
+        _svgAssets(tester),
+        isNot(contains(PipAvatar.fallbackAsset(PipStyle.mochi, 1))),
+      );
+    });
+
+    test('the hatch completes well before the router fade', () {
+      // evolve (450) + hatch cross-fade (200) = 650 ms, router fade starts
+      // at 1400 ms; total hard ceiling unchanged at 1600 ms.
+      final hatchDone =
+          LaunchSplashTimings.evolveDelay + LaunchSplashTimings.hatchFade;
+      final fadeStart = LaunchSplashTimings.total - LaunchSplashTimings.fade;
+      expect(hatchDone, lessThan(fadeStart));
+      expect(LaunchSplashTimings.total, const Duration(milliseconds: 1600));
+      expect(LaunchSplashTimings.stillHold, const Duration(milliseconds: 300));
+    });
+  });
 }
