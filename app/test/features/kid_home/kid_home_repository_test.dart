@@ -5,6 +5,7 @@
 // `pinSet`), and `setActiveChild` persists the tapped profile to
 // `app_state.activeChildId` so the PIN / home routes resolve it.
 
+import 'package:drift/drift.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/seed.dart';
@@ -180,6 +181,58 @@ void main() {
           reason: '$key is shared between audiences',
         );
       }
+    });
+  });
+
+  // K03b ROW ORDER + ROW META — logic-layer premises (FIXES_1, 04:52).
+  //
+  // The view renders `state.items` in order (no re-sort), so the repository
+  // order IS the card order: creation order (dishwasher, reading, bins,
+  // tidy, hoover, table — the seed stamps one second per quest), never
+  // alphabetical. Card 1 stays 'Empty the dishwasher' either way, so K03's
+  // pinned first card does not move. `needsApproval` rides straight from
+  // the quest row for the view's done-row meta branch.
+  group('K03b row order + approval flag', () {
+    test('watchItems lists Maya quests in creation order', () async {
+      final repo = KidHomeRepositoryImpl(db: db);
+      // Seed.demo plays Maya, so watchItems yields her quests directly.
+      final items = await repo.watchItems().first;
+      expect(items.map((item) => item.questId).toList(), <String>[
+        'q-dishwasher',
+        'q-reading',
+        'q-bins',
+        'q-tidy',
+        'q-hoover',
+        'q-table',
+      ], reason: 'creation order, exactly the K03/K03b HTML row order');
+    });
+
+    test('seed quests carry needsApproval true from the DB default', () async {
+      final repo = KidHomeRepositoryImpl(db: db);
+      final items = await repo.watchItems().first;
+      expect(items, hasLength(6));
+      expect(
+        items.every((item) => item.needsApproval),
+        isTrue,
+        reason:
+            'the seed never clears needs_approval; the column defaults true',
+      );
+    });
+
+    test('clearing needs_approval surfaces on the entity', () async {
+      final repo = KidHomeRepositoryImpl(db: db);
+      await (db.update(db.quests)..where((q) => q.id.equals('q-tidy'))).write(
+        const QuestsCompanion(needsApproval: Value(false)),
+      );
+      final items = await repo.watchItems().first;
+      final tidy = items.singleWhere((item) => item.questId == 'q-tidy');
+      expect(tidy.needsApproval, isFalse);
+      expect(
+        items
+            .where((item) => item.questId != 'q-tidy')
+            .every((item) => item.needsApproval),
+        isTrue,
+      );
     });
   });
 }

@@ -60,6 +60,12 @@ class KidHomeRepositoryImpl implements KidHomeRepository {
 
   /// Quest list for one child: active quests + their completions scoped to
   /// each quest's current family-zone period (period ruling K03-BUG-4).
+  ///
+  /// ROW ORDER (owner rule, orchestrator 04:52): creation order —
+  /// `watchActiveQuests` already sorts by `created_at` then `id` — never
+  /// re-sorted here. The previous title sort is gone on purpose: the seed
+  /// stamps one second per quest so creation order is dishwasher, reading,
+  /// bins, tidy, hoover, table, exactly the K03/K03b HTML row order.
   Stream<List<KidQuest>> _watchItemsFor(String childId) {
     return combineLatest3(
       _db.watchActiveQuests(Seed.familyId),
@@ -70,8 +76,7 @@ class KidHomeRepositoryImpl implements KidHomeRepository {
       final completions = parts[1] as List<QuestCompletion>;
       final now = appNowUtc();
       final zone = normalizeZoneId(parts[2] as String);
-      final mine = quests.where((q) => q.assigneeChildId == childId).toList()
-        ..sort((a, b) => a.title.compareTo(b.title));
+      final mine = quests.where((q) => q.assigneeChildId == childId).toList();
       return mine.map((q) {
         final rows = completions.where((c) => c.questId == q.id).toList()
           ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -90,6 +95,9 @@ class KidHomeRepositoryImpl implements KidHomeRepository {
           icon: q.icon,
           coins: q.coins,
           status: status,
+          // ROW META (orchestrator ruling 04:52): the view branches the
+          // done-row meta on this flag straight from the quest row.
+          needsApproval: q.needsApproval,
         );
       }).toList();
     });

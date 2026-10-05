@@ -1,128 +1,133 @@
-# 2 BUILD (INTEGRATE) — K03b Kid home all done (iteration 1)
+# 2 BUILD (INTEGRATE) — K03b Kid home all done (iteration 2)
 
 ## Result
 
-`dart format` clean, `flutter analyze` → **No issues found!**, full suite
-`flutter test --timeout 120s` → **All tests passed!** (4395 passed, 12 skipped).
-No integration edits were required — the two halves merged without conflict.
+`dart format .` clean, `flutter analyze` → **No issues found!**, full suite
+`flutter test --timeout 120s` → **All tests passed!** (+4999 ~21).
+One integration fix was required (a new `prefer_const` lint in a
+logic-builder test edit). Nothing was renamed across halves, no import
+broke, no BLoC state/event mismatch survived the merge.
 
 ## Summary of the two halves
 
-### 2a (logic) — `2a_build_logic.md`, VERDICT: FAIL (investigation only, 0 files changed)
+### 2a (logic) — `2a_build_logic.md`, VERDICT: PASS
 
-Investigation-only pass. It read the state/bloc/event/repository/route/DI chain and
-concluded, correctly, that the logic surface is exactly one pure getter plus the
-`/kid-home-done` route alias — no new events, no new states, no repository change
-(period-scoped statuses already live in `KidHomeRepositoryImpl._watchItemsFor` via
-`countsForCurrentPeriod`, per the PERIODS ruling). It deliberately left the three
-items on its "LEFT FOR NEXT ITERATION" list to the UI builder/integrator to avoid a
-parallel-edit conflict on the same files. All three landed as intended (below).
+Contract changes (all in the feature's domain/data layers):
+
+- `KidQuest` gains `needsApproval` (default `true`, in `props`) —
+  mirrors the `quests.needs_approval` DB default and the P09 ON default.
+- `KidQuestModel` round-trips the flag (`fromJson` absent → `true`).
+- `_watchItemsFor` no longer re-sorts; `state.items` is
+  `watchActiveQuests` creation order (dishwasher, reading, bins, tidy,
+  hoover, table) — ROW ORDER owner rule, K03B-BUG-5 data half.
+- Repository surfaces `needsApproval: q.needsApproval` — K03B-BUG-4
+  data half; new `K03b row order + approval flag` group (3 tests).
+- `kid_home_bloc_test.dart`: `_withStatus` carries the flag; new
+  `needsApproval defaults true and shapes equality` test.
 
 ### 2b (UI) — `2b_build_ui.md`, VERDICT: PASS
 
-Implemented the whole all-done state inside the shared `KidHomeView` (per
-`ORCHESTRATOR_NOTES` §4 "ONE kid home"):
+View half, coded against 2a's contract (`needsApproval`, creation-order
+`state.items`); owns only `presentation/views/**` + view tests:
 
-- `presentation/bloc/kid_home_state.dart` — `bool get allDone => totalCount > 0 && doneCount == totalCount;`
-  (the single logic addition 2a proposed; pure getter, no `copyWith` change).
-- `presentation/views/kid_home_view.dart`
-  - header sub-line: `All done!` in `tokens.leafInk` (was `$done done today` / `ink2`);
-    semantics label `Hi $nickname, all done!`.
-  - `_AllDoneBody`: centred `NestSpeechBubble` "You did everything today! Pip is so
-    proud.", `gap14`, `NestPetStage` (nest 236×188, fixedPip 152, `slotHeight: 226`)
-    with the child's own `PipAvatar` (`pipStyleOf/pipSkinOf/pipAccessoryOf` from the
-    child row, stage clamped 1..4, `PipMood.happy`) rotated −7°, confetti plate
-    (`SvgPicture.asset(NestlingIllustrations.confetti)`, 320×250, `FittedBox.scaleDown`,
-    `top: 4`, `IgnorePointer` + `ExcludeSemantics`), section row (`NestBalancedText`
-    "Today's quests" + `KidStatusChip` "$done of $total done"), `NestProgress(kid: true)`
-    at `state.fraction`, then the unchanged `_QuestCard` list.
-  - `_AllDoneBar` replaces the 3-button dock when all done: surface Container,
-    3 px `ink` top border, `SafeArea(top: false)`, one lilac `NestKidButton`
-    "Visit Pip" with the `check` glyph → `context.go(PipRoutePaths.nest)`, and
-    `NestHomeIndicator` INSIDE the surface (BOTTOM EDGE owner rule).
-  - not-done branch: byte-identical to K03 (dock, hearts row, `_KidPetStage`,
-    section row, progress, cards) — re-indented under the `if (state.allDone)` ternary,
-    no behaviour or geometry change.
-- `kid_home_routes.dart` — `kidHomeDoneRoute` now builds `const KidHomeView()` with the
-  same `BlocProvider(... KidHomeLoadRequested ...)` as `kidHomeRoute`; path/name constants
-  untouched.
-- deleted `presentation/views/kid_home_done_view.dart` (placeholder AppBar
-  "K03b Kid home done"); its barrel export in `kid_home.dart` and its import in
-  `kid_home_routes.dart` removed.
-- new `test/features/kid_home/k03b_all_done_view_test.dart` — 3 `allDone` truth-table
-  tests + 5 widget tests (all-done branch, K03 branch untouched, `SemanticsAction.tap`
-  on Visit Pip, 320-wide + textScale 1.3 no overflow, `/kid-home-done` renders
-  `KidHomeView`).
+- `_AllDoneBody` geometry (FIXES_1 finding 1 / K03B-BUG-1 / 04:52 D1):
+  bubble → `SizedBox(s4=16)`, `Stack(clipBehavior: Clip.none)` so the
+  absolute confetti never sizes the layout, `NestPetStage` in
+  `Padding(top: gap14)` — bubble→pet = 16 + 14 = 30, confetti `top: 4`
+  from the design stage origin.
+- Nest art (K03B-BUG-3): all-done-local 226/226 constants; K03's
+  236/188 untouched.
+- Shared slot bug (K03B-BUG-2) worked around feature-side per D1:
+  `pipBottom: 92` takes the `explicitGeometry` early return that honours
+  `slotHeight` (226 − 92 − 152 = −18 → Pip −18…134 vs design −16…134).
+- ROW META view branch on `status` + `needsApproval`: not-done → `+N`;
+  done + no approval → `+N` (no status chip); `done_pending` + approval
+  → `Waiting for Mum`; `approved` + approval → `Mum said yes!`.
+  `_statusText` mirrors it. Approved demo rows move `Done` →
+  `Mum said yes!` by mandate; waiting/to-do demo rows unchanged.
+- View-test pins updated to creation order + new meta
+  (`k03b_all_done_view_test.dart` 54 green, `kid_home_view_test.dart`
+  88 green, K03 geometry/bugs suites green).
 
-The only cross-half hazard was the `PipMood` name living in both the design-system barrel
-and `motion/pip_avatar.dart`; 2b resolved it with
-`import '.../design_system.dart' hide PipMood` — the same resolution the K05 view already
-uses, so no shared file needed touching.
+The halves dovetailed: 2b consumed 2a's `needsApproval` exactly as
+specified; neither builder touched `k03b_bugs_test.dart` (bugs-stage
+owned) or any shared file.
 
-## FIXES items
+## Integration fixes applied by this stage
 
-2a "LEFT FOR NEXT ITERATION" list — all three DONE (by 2b, verified here):
+1. `app/test/features/kid_home/kid_home_bloc_test.dart:410` —
+   `flutter analyze` flagged 2a's new test
+   (`prefer_const_constructors`, then `prefer_const_declarations`):
+   `final noApproval = KidQuest(...)` with all-constant args →
+   `const noApproval = KidQuest(...)`. Lint-only; zero behaviour change.
+   Re-ran analyze → No issues found.
+
+No other merge repair was needed: the entity default keeps every
+existing `KidQuest(...)` construction compiling, and the view's
+`item.needsApproval` references resolve against 2a's field.
+
+## FIXES_1 disposition (every item done/left)
 
 | # | Item | Status |
 |---|---|---|
-| 1 | `allDone` getter on `KidHomeState` | DONE — `kid_home_state.dart:94`, pure getter next to `fraction` |
-| 2 | `kidHomeDoneRoute` builder → `KidHomeView`, unused placeholder import dropped | DONE — `kid_home_routes.dart:73` |
-| 3 | State-level unit tests (empty → false, partial 4/6 → false, all done → true, `to_do` present → false) | DONE — `k03b_all_done_view_test.dart:105-138` (`to_do` present is the partial case) |
+| Review 1 (major) | bubble→pet gap 16 px short (14 vs 30) | DONE — 2b (`s4` + 14 px pet padding); BUG-1 proofs pass on demand (below) |
+| Review 2 (minor) | `docs/ARCHITECTURE.md` route table still maps `/kid-home-done` to `KidHomeDoneView` | LEFT — shared doc, orchestrator owns (no branch edit per RULES §1) |
+| 5_ui dev 1 (major) | section + cards shifted down ~15.3 px | DONE — title/progress/card1 geometry proofs pass on demand (BUG-1 second proof); card shapes/gutters already exact |
+| 5_ui dev 2 (minor) | bubble `textAlign: center` vs design start | DONE on main via `shared/speech_align` (04:52 D2) — not this branch |
+| K03B-BUG-1 | bubble→pet gap + rows below | DONE — both parked proofs green on demand |
+| K03B-BUG-2 | `explicitGeometry` ignores `slotHeight` (shared) | SUPERSEDED by D1 feature-side correction (`pipBottom: 92`); the shared unit (no-`pipBottom` form) still returns 257.4 — LEFT, needs an orchestrator SHARED_REQUEST if the unit contract must change; this branch must not touch `core/**` |
+| K03B-BUG-3 | nest art 236×188 vs design 226×226 | DONE — parked proof green on demand |
+| K03B-BUG-4 | row meta (`Mum said yes!` / `+N` chip) | DONE in behaviour — no-approval `+15` proof green on demand; approved-proof renders the right copy but its `findsOneWidget` expectation is stale (see below) — LEFT for the bugs stage to update + un-skip |
+| K03B-BUG-5 | creation order vs title sort | DONE — parked proof green on demand; LEFT skipped for the bugs stage to un-skip |
 
-2b "LEFT FOR NEXT ITERATION" — still open, correctly not a stage-2 item:
+## Parked-proof on-demand runs (this stage, evidence for stage 6)
 
-- `SEED=kid_all_done` is still absent from `app/lib/core/data/seed.dart` on this branch
-  (`grep kid_all_done seed.dart` → no match). It is orchestrator-owned
-  (`shared/kid_all_done_seed`, to be merged to `main`; the loop merges main before each
-  build) and RULES §1 forbids this branch editing `core/**`. Widget tests build the
-  all-done state from a fake repository, so nothing in stage 2 depends on it; the UI-check
-  stage (5_ui) owns the wait and must pass `kid_all_done` as `shot.sh` 6th arg.
+`skip: true` markers left untouched — the file is bugs-stage owned and
+the full suite is green either way. Ran with `--run-skipped`:
 
-Integration fixes applied by this stage: **none were needed.** Nothing was renamed, no
-import broke, no BLoC state/event mismatch survived the merge (2a changed no contracts),
-and no test regressed.
+- `K03B-BUG-1` (×2: 30 px gap; rows on design row) → **pass**.
+- `K03B-BUG-3` (226×226 art) → **pass**.
+- `K03B-BUG-5` (creation order) → **pass**.
+- `K03B-BUG-4` no-approval (`+15` chip) → **pass**.
+- `K03B-BUG-4` approved (`Mum said yes!`) → fails ONLY on the count:
+  `Expected: exactly one matching candidate / Actual: Found 3 widgets`.
+  The 3 are correct per ROW META — demo seeds q-bins + q-hoover
+  `approved` (same London week, count for the period) and the test flips
+  q-reading to `approved`; all three need approval. The expectation dates
+  from iteration 1, when approved rendered `Done` (0 before the flip, 1
+  after). Bugs stage: assert the reading card specifically or expect
+  `findsNWidgets(3)`, then un-skip.
+- `K03B-BUG-2` unit form → still 257.4 (shared code, superseded per D1;
+  not re-run by this stage beyond 2b's evidence).
 
 ## Verification (run in `app/`)
 
 ```
-$ dart format --output=none --set-exit-if-changed .
-Formatted 631 files (0 changed) in 2.57 seconds.
+$ dart format .
+Formatted 665 files (0 changed) in 2.29 seconds.
 
 $ flutter analyze
 Analyzing app...
-No issues found! (ran in 6.1s)
+No issues found! (ran in 3.9s)
 
-$ flutter test --timeout 120s -j 4
-03:45 +4395 ~12: All tests passed!
+$ flutter test --timeout 120s test/features/kid_home
+00:17 +755 ~12: All tests passed!
 
-$ flutter test --timeout 120s -j 4 test/features/kid_home
-00:29 +659 ~5: All tests passed!
+$ flutter test --timeout 120s
+02:46 +4999 ~21: All tests passed!
 ```
 
-(`~12` / `~5` are pre-existing `skip:`-marked tests, not failures. The Drift
-"database was opened a second time" debug warning in the log is the known
-`setUpTestScope` notice, not an error.)
+(`~12` / `~21` are pre-existing `skip:`-marked tests, not failures.)
 
 ## Compliance spot-checks
 
-- Files touched are all inside RULES §1 (`app/lib/features/kid_home/**`,
-  `app/test/features/kid_home/**`, `docs/screens/K03b/**`) — `git status --porcelain`
-  filtered outside those paths returns nothing.
-- Copy character-checked against `design/html-source/screens/K03b-kid-home-done.html`:
-  "All done!" (l.43), "You did everything today! Pip is so proud." (l.49),
-  "Today's quests" (l.76, ASCII apostrophe — identical to the K03 string it reuses),
-  "Visit Pip" (l.108), check glyph `m5 12.5 4.5 4.5L19 7` → `NestIcon(NestIcons.check)`.
-- Bar geometry vs `.kid-bar { padding: 12px 20px 10px }` (l.14) and `.btn-kid
-  min-height: 64px` (components.css l.88): the code uses
-  `EdgeInsets.fromLTRB(padSide, s3, padSide, s1)` = 20/12/20/4 per 1_plan §a
-  (10 − 6 button-shadow room, the K05-measured precedent) and the
-  `NestKidButton` default `minHeight: 64`. Vertical fit inside the bar is a stage-5
-  measurement, not decided here.
-- Confetti art follows the K05 precedent exactly (`SvgPicture.asset` +
-  `NestlingIllustrations.*` + `placeholderBuilder: SizedBox.shrink`); the asset
-  `assets/illustrations/confetti.svg` exists and `assets/illustrations/` is declared in
-  `pubspec.yaml:81`.
-- No `google_fonts`, no `DateTime.now()`, no hard-coded colours/sizes outside
-  `NestSpacing`/`NestType`/tokens, no `pkill`, no `flutter clean`, no simulator booted.
+- Scope: `git status --porcelain` paths all sit under RULES §1
+  (`app/lib/features/kid_home/**`, `app/test/features/kid_home/**`,
+  `docs/screens/K03b/**`) — nothing outside.
+- No `google_fonts` import, no live `DateTime.now()` call in the
+  feature (one comment mentions the ban; enforced by tests).
+- No `flutter clean`, no simulator booted, no `pkill`, `clock.now()` /
+  `appNowUtc()` untouched, `disposeApp` pattern kept, `newId` untouched.
+- k03b diffs in `k03b_all_done_bloc_test.dart` are formatter reflow only.
 
 VERDICT: PASS

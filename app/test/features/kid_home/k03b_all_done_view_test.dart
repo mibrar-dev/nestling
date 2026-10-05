@@ -64,10 +64,28 @@ const KidChild _maya = KidChild(
   pipTotalCoins: 175,
 );
 
-/// Maya's 6 quests in repository order with every status already done — the
+/// Maya's 6 quests in creation order with every status already done — the
 /// shape `kid_all_done` produces. Used only where the state itself (not the
 /// database) is what is under test.
 List<KidQuest> _allDoneItems() => const <KidQuest>[
+  KidQuest(
+    id: 'q-dishwasher:maya',
+    title: 'Empty the dishwasher',
+    detail: "Waiting for Mum's thumbs-up · +15",
+    questId: 'q-dishwasher',
+    icon: 'dishwasher',
+    coins: 15,
+    status: 'done_pending',
+  ),
+  KidQuest(
+    id: 'q-reading:maya',
+    title: 'Reading – 20 minutes',
+    detail: "Waiting for Mum's thumbs-up · +10",
+    questId: 'q-reading',
+    icon: 'book',
+    coins: 10,
+    status: 'done_pending',
+  ),
   KidQuest(
     id: 'q-bins:maya',
     title: 'Put the bins out',
@@ -78,11 +96,11 @@ List<KidQuest> _allDoneItems() => const <KidQuest>[
     status: 'approved',
   ),
   KidQuest(
-    id: 'q-dishwasher:maya',
-    title: 'Empty the dishwasher',
+    id: 'q-tidy:maya',
+    title: 'Tidy your bedroom',
     detail: "Waiting for Mum's thumbs-up · +15",
-    questId: 'q-dishwasher',
-    icon: 'dishwasher',
+    questId: 'q-tidy',
+    icon: 'bed',
     coins: 15,
     status: 'done_pending',
   ),
@@ -96,30 +114,12 @@ List<KidQuest> _allDoneItems() => const <KidQuest>[
     status: 'approved',
   ),
   KidQuest(
-    id: 'q-reading:maya',
-    title: 'Reading – 20 minutes',
-    detail: "Waiting for Mum's thumbs-up · +10",
-    questId: 'q-reading',
-    icon: 'book',
-    coins: 10,
-    status: 'done_pending',
-  ),
-  KidQuest(
     id: 'q-table:maya',
     title: 'Lay the table',
     detail: "Waiting for Mum's thumbs-up · +10",
     questId: 'q-table',
     icon: 'plate',
     coins: 10,
-    status: 'done_pending',
-  ),
-  KidQuest(
-    id: 'q-tidy:maya',
-    title: 'Tidy your bedroom',
-    detail: "Waiting for Mum's thumbs-up · +15",
-    questId: 'q-tidy',
-    icon: 'bed',
-    coins: 15,
     status: 'done_pending',
   ),
 ];
@@ -196,8 +196,7 @@ class _PushableRepo extends KidHomeRepository {
   }
 
   @override
-  Stream<KidChild?> watchActiveChild() =>
-      Stream<KidChild?>.value(_maya);
+  Stream<KidChild?> watchActiveChild() => Stream<KidChild?>.value(_maya);
 
   @override
   Stream<List<KidChild>> watchProfiles() =>
@@ -256,10 +255,9 @@ Future<void> _finishEveryQuest(WidgetTester tester) async {
     // `q-reading` and `q-tidy` are the two seeded to-do quests; the four
     // others already count for the current London period.
     for (final questId in <String>['q-reading', 'q-tidy']) {
-      await (db.update(db.questCompletions)
-            ..where(
-              (c) => c.questId.equals(questId) & c.childId.equals('maya'),
-            ))
+      await (db.update(
+            db.questCompletions,
+          )..where((c) => c.questId.equals(questId) & c.childId.equals('maya')))
           .write(
             QuestCompletionsCompanion(
               status: const Value('done_pending'),
@@ -431,7 +429,7 @@ void main() {
       tester,
     ) async {
       await _finishEveryQuest(tester);
-      await _pump(tester, route: '/kid-home');
+      await _pump(tester);
       expect(find.text('All done!'), findsOneWidget);
       expect(find.text('Visit Pip'), findsOneWidget);
       expect(find.text('My jar'), findsNothing);
@@ -499,15 +497,15 @@ void main() {
         // celebration must not appear.
         await tester.runAsync(() async {
           final db = GetIt.instance<AppDatabase>();
-          await (db.update(db.questCompletions)
-                ..where((c) => c.questId.equals('q-hoover')))
-              .write(
-                QuestCompletionsCompanion(
-                  createdAt: Value(
-                    Seed.anchorDay.subtract(const Duration(days: 9)),
-                  ),
-                ),
-              );
+          await (db.update(
+            db.questCompletions,
+          )..where((c) => c.questId.equals('q-hoover'))).write(
+            QuestCompletionsCompanion(
+              createdAt: Value(
+                Seed.anchorDay.subtract(const Duration(days: 9)),
+              ),
+            ),
+          );
           await GetIt.instance<AppSession>().refresh();
         });
         await _pump(tester);
@@ -572,12 +570,7 @@ void main() {
     ) async {
       final semantics = tester.ensureSemantics();
       await _finishEveryQuest(tester);
-      await _pump(
-        tester,
-        route: '/kid-home-done',
-        width: 320,
-        textScale: 1.3,
-      );
+      await _pump(tester, route: '/kid-home-done', width: 320, textScale: 1.3);
       expect(find.bySemanticsLabel('Grown-ups'), findsOneWidget);
       expect(
         find.bySemanticsLabel("6 of 6 of today's quests done"),
@@ -618,9 +611,10 @@ void main() {
       // The retry exposes a tap action (ACCESSIBILITY ACTIONS).
       final retry = find.text('Try again');
       expect(
-        tester.getSemantics(retry).getSemanticsData().hasAction(
-              SemanticsAction.tap,
-            ),
+        tester
+            .getSemantics(retry)
+            .getSemanticsData()
+            .hasAction(SemanticsAction.tap),
         isTrue,
       );
       await disposeApp(tester);
@@ -631,9 +625,9 @@ void main() {
     ) async {
       await tester.runAsync(() async {
         final db = GetIt.instance<AppDatabase>();
-        await (db.delete(db.quests)
-              ..where((q) => q.assigneeChildId.equals('maya')))
-            .go();
+        await (db.delete(
+          db.quests,
+        )..where((q) => q.assigneeChildId.equals('maya'))).go();
         await GetIt.instance<AppSession>().refresh();
       });
       await _pump(tester, route: '/kid-home-done');
@@ -688,9 +682,8 @@ void main() {
         find.descendant(of: chip, matching: find.byType(Container)).first,
       );
       final decoration = container.decoration! as BoxDecoration;
-      final tokens = Theme.of(
-        tester.element(find.byType(NestProgress)),
-      ).extension<NestTokens>()!;
+      final tokens = Theme.of(tester.element(find.byType(NestProgress)))
+          .extension<NestTokens>()!;
       expect(decoration.color, tokens.leafTint, reason: '.kchip background');
       expect(decoration.borderRadius, NestRadii.allPill);
       // The 12 px horizontal padding keeps the label off the pill edge, and
@@ -709,9 +702,8 @@ void main() {
     ) async {
       await _finishEveryQuest(tester);
       await _pump(tester, route: '/kid-home-done');
-      final tokens = Theme.of(
-        tester.element(find.byType(NestProgress)),
-      ).extension<NestTokens>()!;
+      final tokens = Theme.of(tester.element(find.byType(NestProgress)))
+          .extension<NestTokens>()!;
       final body = find.descendant(
         of: find.byType(NestSpeechBubble),
         matching: find.byWidgetPredicate((widget) {
@@ -793,12 +785,13 @@ void main() {
         matching: find.byWidgetPredicate((widget) {
           if (widget is! AnimatedContainer) return false;
           final box = widget.decoration;
-          return box is BoxDecoration && box.color == tokens_lilac(tester);
+          return box is BoxDecoration && box.color == _lilacCta(tester);
         }),
       );
       expect(painted, findsOneWidget);
       final decoration =
-          tester.widget<AnimatedContainer>(painted).decoration! as BoxDecoration;
+          tester.widget<AnimatedContainer>(painted).decoration!
+              as BoxDecoration;
       expect(
         decoration.borderRadius,
         BorderRadius.circular(NestRadii.l),
@@ -934,7 +927,10 @@ void main() {
         );
         expect(tester.getSize(find.byType(NestHomeIndicator)), Size.zero);
         final safeArea = find
-            .ancestor(of: find.text('Visit Pip'), matching: find.byType(SafeArea))
+            .ancestor(
+              of: find.text('Visit Pip'),
+              matching: find.byType(SafeArea),
+            )
             .first;
         expect(tester.widget<SafeArea>(safeArea).top, isFalse);
         expect(tester.takeException(), isNull);
@@ -1111,7 +1107,7 @@ void main() {
       await tester.runAsync(() async {
         final db = GetIt.instance<AppDatabase>();
         await (db.update(db.appState)..where((a) => a.id.equals(1))).write(
-          AppStateCompanion(activeChildId: const Value('leo')),
+          const AppStateCompanion(activeChildId: Value('leo')),
         );
         await GetIt.instance<AppSession>().refresh();
       });
@@ -1256,12 +1252,12 @@ void main() {
       );
       // The seed title's en dash is preserved (HTML `&ndash;`).
       expect(find.text('Reading – 20 minutes'), findsOneWidget);
-      // Every done quest shows the K03 status chip (DB-driven meta, not the
-      // design's sample "+10" pills — DATA OVER MOCKS).
+      // DB-driven meta (ROW META, orchestrator 04:52): approved + needs
+      // approval → `Mum said yes!`, waiting → `Waiting for Mum`.
       // `Seed.demo` approves two of Maya's quests (bins, hoover) and leaves
       // the dishwasher + table pending; `_finishEveryQuest` adds reading +
-      // tidy as pending. So: 2 "Done", 4 "Waiting for Mum" — DB-driven.
-      expect(find.text('Done'), findsNWidgets(2));
+      // tidy as pending. So: 2 "Mum said yes!", 4 "Waiting for Mum".
+      expect(find.text('Mum said yes!'), findsNWidgets(2));
       expect(find.text('Waiting for Mum'), findsNWidgets(4));
       await disposeApp(tester);
     });
@@ -1305,9 +1301,8 @@ void main() {
       await tester.tap(find.text('Reading – 20 minutes'));
       await _settleRoute(tester);
       expect(pushedPath(tester), '/quest-detail');
-      final state = GoRouter.of(
-        tester.element(find.byType(Navigator).first),
-      ).state;
+      final state = GoRouter.of(tester.element(find.byType(Navigator).first))
+          .state;
       final extra = state.extra! as Map<String, Object?>;
       expect(extra['questId'], 'q-reading');
       expect(extra['childId'], 'maya');
@@ -1323,27 +1318,28 @@ void main() {
         await tester.drag(find.byType(Scrollable).first, const Offset(0, -200));
         await tester.pump();
       }
-      // Pinned to what `KidHomeRepositoryImpl` documents today: the child's
-      // active quests sorted by title. NOT re-sorted by status, and NOT
-      // hard-coded to the design PNG's sample rows (DATA OVER MOCKS).
-      //
-      // NOTE for the next iteration: ORCHESTRATOR_NOTES (04:52) ROW ORDER
-      // requires CREATION order (dishwasher, reading, tidy …) on every
-      // screen, so this pin is expected to change when that fix lands — it is
-      // written here so the change is deliberate, not silent.
-      expect(<String>[
-        for (final card in tester.widgetList<NestKidQuestCard>(
-          find.byType(NestKidQuestCard),
-        ))
-          card.title,
-      ], <String>[
-        'Empty the dishwasher',
-        'Hoover the stairs',
-        'Lay the table',
-        'Put the bins out',
-        'Reading – 20 minutes',
-        'Tidy your bedroom',
-      ]);
+      // ROW ORDER (owner rule, orchestrator 04:52): creation order —
+      // `watchActiveQuests` sorts by `created_at` then `id`, and the view
+      // renders `state.items` in order (no re-sort). The seed stamps one
+      // second per quest: dishwasher, reading, bins, tidy, hoover, table —
+      // exactly the K03/K03b HTML row order. NOT re-sorted by status, and
+      // NOT hard-coded to the design PNG's sample rows (DATA OVER MOCKS).
+      expect(
+        <String>[
+          for (final card in tester.widgetList<NestKidQuestCard>(
+            find.byType(NestKidQuestCard),
+          ))
+            card.title,
+        ],
+        <String>[
+          'Empty the dishwasher',
+          'Reading – 20 minutes',
+          'Put the bins out',
+          'Tidy your bedroom',
+          'Hoover the stairs',
+          'Lay the table',
+        ],
+      );
       await disposeApp(tester);
     });
   });
@@ -1364,13 +1360,17 @@ void main() {
       node.owner!.performAction(node.id, SemanticsAction.tap);
     }
 
-    testWidgets('every control exposes a tap action and reaches its route', (
-      tester,
-    ) async {
-      for (final (label, path) in <(String, String)>[
-        ('Visit Pip', '/pip'),
-        ('Grown-ups', '/parental-gate'),
-      ]) {
+    // One test per control, not a loop: a second iteration would have to
+    // re-seed the database AFTER frames were pumped, and the first
+    // `runAsync` of a test cannot complete then (see the `_PushableRepo`
+    // comment).
+    for (final (label, path) in <(String, String)>[
+      ('Visit Pip', '/pip'),
+      ('Grown-ups', '/parental-gate'),
+    ]) {
+      testWidgets('$label exposes a tap action that reaches $path', (
+        tester,
+      ) async {
         final semantics = tester.ensureSemantics();
         await _finishEveryQuest(tester);
         await _pump(tester, route: '/kid-home-done');
@@ -1381,8 +1381,8 @@ void main() {
         expect(pushedPath(tester), path, reason: label);
         semantics.dispose();
         await disposeApp(tester);
-      }
-    });
+      });
+    }
 
     testWidgets('a quest card exposes a tap action that opens the detail', (
       tester,
@@ -1393,9 +1393,10 @@ void main() {
       await _revealCards(tester);
       final card = find.byType(NestKidQuestCard).first;
       expect(
-        tester.getSemantics(card).getSemanticsData().hasAction(
-              SemanticsAction.tap,
-            ),
+        tester
+            .getSemantics(card)
+            .getSemanticsData()
+            .hasAction(SemanticsAction.tap),
         isTrue,
       );
       performTap(tester, card);
@@ -1415,10 +1416,7 @@ void main() {
       expect(find.bySemanticsLabel('120 coins'), findsOneWidget);
       // The header merges the two texts behind `excludeSemantics` and reads
       // as one announcement — display-only, never a button.
-      expect(
-        find.bySemanticsLabel('Hi Maya, all done!'),
-        findsOneWidget,
-      );
+      expect(find.bySemanticsLabel('Hi Maya, all done!'), findsOneWidget);
       expect(
         find.bySemanticsLabel("6 of 6 of today's quests done"),
         findsOneWidget,
@@ -1437,7 +1435,7 @@ void main() {
       );
       expect(
         tester.getSemantics(find.text('Put the bins out')).label,
-        startsWith('Put the bins out, Done'),
+        startsWith('Put the bins out, Mum said yes!'),
       );
       semantics.dispose();
       await disposeApp(tester);
@@ -1500,12 +1498,11 @@ void main() {
   });
 }
 
-/// The ambient token set at [context]'s nearest `Theme`.
+/// The ambient token set at the nearest `Theme`.
 NestTokens _tokens(WidgetTester tester) {
-  return Theme.of(
-    tester.element(find.byType(NestProgress).first),
-  ).extension<NestTokens>()!;
+  return Theme.of(tester.element(find.byType(NestProgress).first))
+      .extension<NestTokens>()!;
 }
 
 /// The lilac CTA fill, read from the tokens so the finder cannot drift.
-Color tokens_lilac(WidgetTester tester) => _tokens(tester).lilacStrong;
+Color _lilacCta(WidgetTester tester) => _tokens(tester).lilacStrong;

@@ -46,6 +46,24 @@ const double _kNestBoxWidth = 236;
 const double _kNestBoxHeight = 188;
 const double _kPipSlotSize = 152;
 
+/// K03b all-done pet box (`.k3-pet { width: 260px; height: 226px }` in
+/// `design/html-source/screens/K03b-kid-home-done.html:25`): the celebration
+/// nest is a 226×226 square (the browser's SVG `meet` draws 226×226,
+/// letterboxed 17 px each side of the 260-wide box), NOT K03's 236×188.
+/// K03B-BUG-3: these stay local — `_kNestBoxWidth/_kNestBoxHeight` are shared
+/// with `_KidPetStage` and K03 must not move.
+const double _kAllDoneNestBoxWidth = 226;
+const double _kAllDoneNestBoxHeight = 226;
+
+/// K03b Pip bottom offset (`.k3-pet .pip { bottom: 92px }`, HTML l.27).
+/// Passing it also takes the shared `explicitGeometry` `pipBottom` early
+/// return, which honours `slotHeight` (K03B-BUG-2: the final return ignores
+/// it and adds `_explicitBleed`, rendering 257.4 instead of 226 — shared
+/// code this branch must not touch per ORCHESTRATOR_NOTES 04:52 D1).
+/// `226 − 92 − 152 = −18` lands the Pip box at −18…134 vs the design
+/// −16…134 (within 2 px; BUG-3 decomposition).
+const double _kAllDonePipBottom = 92;
+
 /// Scroll gap between the pet stage and the hearts row: the HTML's
 /// `.scroll > * + *`, i.e. `--s4`.
 ///
@@ -90,12 +108,19 @@ bool _isDone(KidQuest item) =>
     item.status == 'approved' || item.status == 'done_pending';
 
 /// Card-level status text for the `{title}, {status text}` semantics label.
+/// ROW META (orchestrator 04:52): mirrors the visible meta — waiting +
+/// needs approval announces the wait, approved + needed approval announces
+/// the approval, done + no approval announces Done (the `+N` chip is the
+/// visual), anything else is to do.
 String _statusText(KidQuest item) {
-  return switch (item.status) {
-    'done_pending' => "Waiting for Mum's thumbs-up",
-    'approved' => 'Done',
-    _ => 'To do',
-  };
+  if (item.status == 'done_pending' && item.needsApproval) {
+    return "Waiting for Mum's thumbs-up";
+  }
+  if (item.status == 'approved' && item.needsApproval) {
+    return 'Mum said yes!';
+  }
+  if (_isDone(item)) return 'Done';
+  return 'To do';
 }
 
 /// K03 Kid home (`/kid-home`): greeting header, Pip stage, happiness hearts,
@@ -779,6 +804,19 @@ class _QuestCardState extends State<_QuestCard> {
   Widget build(BuildContext context) {
     final tokens = context.nest;
     final done = _isDone(widget.item);
+    // ROW META (orchestrator 04:52, K03b HTML l.85/93/101): waiting +
+    // needs approval → `Waiting for Mum`; approved + needed approval →
+    // `Mum said yes!`; done + no approval → the `+N` coin chip (no status
+    // chip). To-do rows keep the `+N` chip. Demo rows are unchanged
+    // (waiting stays waiting, to-do stays +N); approved demo rows move
+    // from `Done` to `Mum said yes!` (all seeded quests need approval).
+    final needsApproval = widget.item.needsApproval;
+    final showCoin = !done || !needsApproval;
+    final metaLabel = !done || !needsApproval
+        ? null
+        : widget.item.status == 'done_pending'
+        ? 'Waiting for Mum'
+        : 'Mum said yes!';
     return NestKidQuestCard(
       title: widget.item.title,
       icon: NestIcon(_iconFor(widget.item.icon), size: 28, color: tokens.ink),
@@ -791,14 +829,8 @@ class _QuestCardState extends State<_QuestCard> {
         'bed' => tokens.peachTint,
         _ => null,
       },
-      coinAmount: done ? null : '+${widget.item.coins}',
-      metaChip: done
-          ? KidStatusChip(
-              label: widget.item.status == 'done_pending'
-                  ? 'Waiting for Mum'
-                  : 'Done',
-            )
-          : null,
+      coinAmount: showCoin ? '+${widget.item.coins}' : null,
+      metaChip: metaLabel == null ? null : KidStatusChip(label: metaLabel),
       done: done,
       // Pending/approved checks are display-only; only `to_do` taps complete.
       onToggled: done ? null : (_) => _complete(),
@@ -867,11 +899,20 @@ class _AllDoneBody extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: NestSpacing.gap14),
+        // `.scroll > * + * { margin-top: var(--s4) }` (16) on `.k3-stage`:
+        // the stage starts 16 below the bubble; the pet's own 14 (below)
+        // makes the design's 16 + 14 = 30 total (K03B-BUG-1).
+        const SizedBox(height: NestSpacing.s4),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: NestSpacing.padSide),
           child: Stack(
             alignment: Alignment.topCenter,
+            // D1 (ORCHESTRATOR_NOTES 04:52): the confetti layer is
+            // `position: absolute` in the HTML, so it must NOT take part in
+            // layout — `Positioned` children never size the Stack, and
+            // `Clip.none` reproduces the CSS overflow (14 px past the stage)
+            // instead of clipping or scaling the plate down.
+            clipBehavior: Clip.none,
             children: [
               // Confetti plate: decorative, behind Pip (`.confetti` CSS:
               // absolute, top 4, centred, 320×250). `scaleDown` keeps
@@ -896,24 +937,33 @@ class _AllDoneBody extends StatelessWidget {
                   ),
                 ),
               ),
-              NestPetStage(
-                pip: Transform.rotate(
-                  angle: -7 * 3.141592653589793 / 180,
-                  child: PipAvatar(
-                    style: pipStyleOf(child.pipStyle),
-                    stage: stage,
-                    skin: pipSkinOf(child.pipSkin),
-                    accessory: pipAccessoryOf(child.pipAccessory),
-                    mood: PipMood.happy,
+              // `.k3-pet { margin: 14px auto 0 }` (HTML l.25): the pet box
+              // sits 14 below the stage origin, so the confetti's `top: 4`
+              // measures from the design's stage origin. Together with the
+              // 16 above (`scroll > * + *`, `--s4`) the bubble→pet gap is the
+              // design's 16 + 14 = 30 (FIXES_1 finding 1 / K03B-BUG-1).
+              Padding(
+                padding: const EdgeInsets.only(top: NestSpacing.gap14),
+                child: NestPetStage(
+                  pip: Transform.rotate(
+                    angle: -7 * 3.141592653589793 / 180,
+                    child: PipAvatar(
+                      style: pipStyleOf(child.pipStyle),
+                      stage: stage,
+                      skin: pipSkinOf(child.pipSkin),
+                      accessory: pipAccessoryOf(child.pipAccessory),
+                      mood: PipMood.happy,
+                    ),
                   ),
+                  nestWidth: _kAllDoneNestBoxWidth,
+                  nestHeight: _kAllDoneNestBoxHeight,
+                  fixedPipHeight: _kPipSlotSize,
+                  slotHeight: 226,
+                  pipBottom: _kAllDonePipBottom,
+                  semanticLabel:
+                      'Pip the ${pipStageName(stage)}, stage $stage of 4, '
+                      'celebrating',
                 ),
-                nestWidth: _kNestBoxWidth,
-                nestHeight: _kNestBoxHeight,
-                fixedPipHeight: _kPipSlotSize,
-                slotHeight: 226,
-                semanticLabel:
-                    'Pip the ${pipStageName(stage)}, stage $stage of 4, '
-                    'celebrating',
               ),
             ],
           ),

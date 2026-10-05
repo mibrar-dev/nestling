@@ -175,16 +175,16 @@ class _FakeRepo extends KidHomeRepository {
     if (completeIsNoop) return;
     pushItems(<KidQuest>[
       for (final quest in _items)
-        if (quest.questId == questId) _withStatus(quest, 'done_pending')
+        if (quest.questId == questId)
+          _withStatus(quest, 'done_pending')
         else
           quest,
     ]);
   }
 }
 
-Matcher _loading() => predicate<KidHomeState>(
-  (state) => state.status == KidHomeStatus.loading,
-);
+Matcher _loading() =>
+    predicate<KidHomeState>((state) => state.status == KidHomeStatus.loading);
 
 /// Loading once the K01 roster has landed. Every load passes through it: the
 /// profiles stream answers before the combined home stream does, so the
@@ -207,9 +207,8 @@ Matcher _loaded({int? done, int? total, bool? allDone}) {
   });
 }
 
-Matcher _failure() => predicate<KidHomeState>(
-  (state) => state.status == KidHomeStatus.failure,
-);
+Matcher _failure() =>
+    predicate<KidHomeState>((state) => state.status == KidHomeStatus.failure);
 
 void main() {
   group('KidHomeState.allDone truth table', () {
@@ -243,9 +242,7 @@ void main() {
     });
 
     test('every done_pending quest is all done', () {
-      final state = KidHomeState(
-        items: _allDone(6, status: 'done_pending'),
-      );
+      final state = KidHomeState(items: _allDone(6, status: 'done_pending'));
       expect(state.allDone, isTrue, reason: 'waiting for Mum still counts');
     });
 
@@ -262,10 +259,7 @@ void main() {
 
     test('not_yet never counts as done', () {
       final state = KidHomeState(
-        items: <KidQuest>[
-          _quest('a', 'approved'),
-          _quest('b', 'not_yet'),
-        ],
+        items: <KidQuest>[_quest('a', 'approved'), _quest('b', 'not_yet')],
       );
       expect(state.doneCount, 1);
       expect(state.allDone, isFalse);
@@ -278,10 +272,7 @@ void main() {
         items: _quests(6, 5),
       );
       expect(partial.allDone, isFalse);
-      final finished = partial.copyWithLoaded(
-        child: _maya,
-        items: _allDone(6),
-      );
+      final finished = partial.copyWithLoaded(child: _maya, items: _allDone(6));
       expect(finished.allDone, isTrue);
       // The equality contract keeps the derived flag consistent: two states
       // with the same items are equal, so `BlocBuilder` can never skip a
@@ -520,61 +511,62 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 50));
       expect(bloc.state.doneCount, 6);
       expect(bloc.state.totalCount, 6);
-      expect(bloc.state.allDone, isTrue, reason: 'K03b is a STATE, not a route');
+      expect(
+        bloc.state.allDone,
+        isTrue,
+        reason: 'K03b is a STATE, not a route',
+      );
       expect(bloc.state.fraction, 1);
       await bloc.close();
     });
 
+    test('PERIODS: a weekly completion from last week drops the screen back to K03', () async {
+      final db = GetIt.instance<AppDatabase>();
+      final repo = GetIt.instance<KidHomeRepository>();
+      // Finish everything for the current period…
+      await _completeInDb(db, <String>['q-reading', 'q-tidy']);
+      var bloc = KidHomeBloc(repository: repo)
+        ..add(const KidHomeLoadRequested());
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(bloc.state.allDone, isTrue);
+      await bloc.close();
+
+      // …then move ONE weekly completion out of the current London week:
+      // `q-hoover` is weekly, so it reads "to do" again and the all-done
+      // branch must disappear (the period ruling governs the celebration).
+      final weekStart = londonWeekStartUtc(appNowUtc());
+      await (db.update(
+        db.questCompletions,
+      )..where((c) => c.questId.equals('q-hoover'))).write(
+        QuestCompletionsCompanion(
+          createdAt: Value(weekStart.subtract(const Duration(seconds: 1))),
+        ),
+      );
+      bloc = KidHomeBloc(repository: repo)..add(const KidHomeLoadRequested());
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(bloc.state.doneCount, 5);
+      expect(bloc.state.allDone, isFalse);
+      await bloc.close();
+    });
+
     test(
-      'PERIODS: a weekly completion from last week drops the screen back to K03',
+      'a child with no quests reports an empty list, not all done',
       () async {
         final db = GetIt.instance<AppDatabase>();
-        final repo = GetIt.instance<KidHomeRepository>();
-        // Finish everything for the current period…
-        await _completeInDb(db, <String>['q-reading', 'q-tidy']);
-        var bloc = KidHomeBloc(repository: repo)
-          ..add(const KidHomeLoadRequested());
-        await Future<void>.delayed(const Duration(milliseconds: 50));
-        expect(bloc.state.allDone, isTrue);
-        await bloc.close();
-
-        // …then move ONE weekly completion out of the current London week:
-        // `q-hoover` is weekly, so it reads "to do" again and the all-done
-        // branch must disappear (the period ruling governs the celebration).
-        final weekStart = londonWeekStartUtc(appNowUtc());
-        await (db.update(db.questCompletions)
-              ..where((c) => c.questId.equals('q-hoover')))
-            .write(
-              QuestCompletionsCompanion(
-                createdAt: Value(
-                  weekStart.subtract(const Duration(seconds: 1)),
-                ),
-              ),
-            );
-        bloc = KidHomeBloc(repository: repo)
-          ..add(const KidHomeLoadRequested());
-        await Future<void>.delayed(const Duration(milliseconds: 50));
-        expect(bloc.state.doneCount, 5);
-        expect(bloc.state.allDone, isFalse);
-        await bloc.close();
+        final repo = KidHomeRepositoryImpl(db: db);
+        await (db.delete(
+          db.quests,
+        )..where((q) => q.assigneeChildId.equals('maya'))).go();
+        final items = await repo.getItems();
+        expect(items, isEmpty);
+        final state = KidHomeState(
+          status: KidHomeStatus.loaded,
+          child: _maya,
+          items: items,
+        );
+        expect(state.totalCount, 0);
+        expect(state.allDone, isFalse);
       },
     );
-
-    test('a child with no quests reports an empty list, not all done', () async {
-      final db = GetIt.instance<AppDatabase>();
-      final repo = KidHomeRepositoryImpl(db: db);
-      await (db.delete(db.quests)
-            ..where((q) => q.assigneeChildId.equals('maya')))
-          .go();
-      final items = await repo.getItems();
-      expect(items, isEmpty);
-      final state = KidHomeState(
-        status: KidHomeStatus.loaded,
-        child: _maya,
-        items: items,
-      );
-      expect(state.totalCount, 0);
-      expect(state.allDone, isFalse);
-    });
   });
 }
