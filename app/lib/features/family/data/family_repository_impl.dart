@@ -31,14 +31,13 @@ class FamilyRepositoryImpl implements FamilyRepository {
 
   final AppDatabase _db;
 
-  /// "Now" for period checks. Defaults to the seed anchor when tests pin it
-  /// (so demo assertions stay date-independent — P15-BUG-8) and to the wall
-  /// clock otherwise — pass an explicit clock in tests that need one.
-  /// (Same shape as `TodayRepositoryImpl`.)
+  /// "Now" for period checks. Defaults to [appNowUtc] — `clock.now()` pinned
+  /// to the seed anchor in tests (so demo assertions stay date-independent
+  /// — P15-BUG-8) and the wall clock in production. Pass an explicit clock
+  /// in tests that need one. (Same shape as `TodayRepositoryImpl`.)
   final DateTime Function() _clock;
 
-  static DateTime _defaultClock() =>
-      Seed.anchorOverride?.toUtc() ?? DateTime.now().toUtc();
+  static DateTime _defaultClock() => appNowUtc();
 
   /// In-memory selection request from `selectChild`, effective for the
   /// mapper below the moment it is set (synchronously — no DB roundtrip).

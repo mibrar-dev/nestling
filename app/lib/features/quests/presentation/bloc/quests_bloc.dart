@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:developer' show log;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:nestling/features/quests/domain/entities/quest.dart';
 import 'package:nestling/features/quests/domain/quests_repository.dart';
@@ -122,7 +123,8 @@ class QuestsBloc extends Bloc<QuestsEvent, QuestsState> {
   /// parent gets [saveFailedMessage] while the detail goes to the log.
   String _editorError(Object error) {
     if (error is ArgumentError) {
-      log('quest save rejected: $error', name: 'quests');
+      // Debug-only: release logs must never carry names, emails or PINs.
+      if (kDebugMode) log('quest save rejected: $error', name: 'quests');
       return QuestsBloc.saveFailedMessage;
     }
     return error.toString();

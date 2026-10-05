@@ -86,6 +86,12 @@ class PrivacyConsentRepositoryImpl implements PrivacyConsentRepository {
               SettingsCompanion.insert(
                 familyId: Seed.familyId,
                 crashReportConsent: Value(consent),
+                // New-family defaults, written explicitly: the DDL default
+                // only applies to databases created after the change, so an
+                // explicit value is exact on migrated databases too.
+                notifApprovals: const Value(false),
+                notifPayout: const Value(false),
+                notifSummary: const Value(false),
               ),
               mode: InsertMode.insertOrIgnore,
             );

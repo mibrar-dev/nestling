@@ -13,11 +13,14 @@ import 'package:nestling/core/data/seed.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 /// Minimal v5 DDL: `quest_completions` in its exact v5 shape (every column
-/// except `kid_note`) plus PK-only stubs for the tables `beforeOpen`
-/// touches (the v5 → v6 open only runs the v6 step).
+/// except `kid_note`) plus stubs for the tables `beforeOpen`
+/// touches (the v5 → v6 open only runs the v6 step). The `settings` stub
+/// carries the notification columns in their real v5 shape (`DEFAULT 1`):
+/// `beforeOpen` writes them explicitly (new-family OFF), so a PK-only stub
+/// no longer satisfies the insert.
 const List<String> _v5Ddl = <String>[
   'CREATE TABLE families (id TEXT NOT NULL PRIMARY KEY)',
-  'CREATE TABLE settings (family_id TEXT NOT NULL PRIMARY KEY)',
+  'CREATE TABLE settings (family_id TEXT NOT NULL PRIMARY KEY, notif_approvals INTEGER NOT NULL DEFAULT 1, notif_payout INTEGER NOT NULL DEFAULT 1, notif_summary INTEGER NOT NULL DEFAULT 1)',
   'CREATE TABLE app_state (id INTEGER NOT NULL PRIMARY KEY)',
   "CREATE TABLE members (id TEXT NOT NULL PRIMARY KEY, family_id TEXT NOT NULL, name TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'owner', invite_status TEXT NOT NULL DEFAULT 'active')",
   "CREATE TABLE quest_completions (id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, quest_id TEXT NOT NULL, child_id TEXT NOT NULL, family_id TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'to_do', coins INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, created_at_tz TEXT NOT NULL DEFAULT 'Europe/London', decided_at INTEGER NULL, decided_at_tz TEXT NOT NULL DEFAULT 'Europe/London')",

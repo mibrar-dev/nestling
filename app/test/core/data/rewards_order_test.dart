@@ -21,10 +21,13 @@ import 'package:sqlite3/sqlite3.dart' as sqlite;
 /// `created_at` / `created_at_tz`) plus PK-only stubs for the tables
 /// `beforeOpen` touches (the v4 → v5 open only runs the v5 step).
 /// `quest_completions` is a PK-only stub: real v4 databases always have it,
-/// and the v6 step needs the table to exist.
+/// and the v6 step needs the table to exist. The `settings` stub carries the
+/// notification columns in their real v4 shape (`DEFAULT 1`): `beforeOpen`
+/// writes them explicitly (new-family OFF), so a PK-only stub no longer
+/// satisfies the insert.
 const List<String> _v4Ddl = <String>[
   'CREATE TABLE families (id TEXT NOT NULL PRIMARY KEY)',
-  'CREATE TABLE settings (family_id TEXT NOT NULL PRIMARY KEY)',
+  'CREATE TABLE settings (family_id TEXT NOT NULL PRIMARY KEY, notif_approvals INTEGER NOT NULL DEFAULT 1, notif_payout INTEGER NOT NULL DEFAULT 1, notif_summary INTEGER NOT NULL DEFAULT 1)',
   'CREATE TABLE app_state (id INTEGER NOT NULL PRIMARY KEY)',
   "CREATE TABLE members (id TEXT NOT NULL PRIMARY KEY, family_id TEXT NOT NULL, name TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'owner', invite_status TEXT NOT NULL DEFAULT 'active')",
   "CREATE TABLE rewards (id TEXT NOT NULL PRIMARY KEY, family_id TEXT NOT NULL, title TEXT NOT NULL, icon TEXT NOT NULL DEFAULT 'gift', coin_price INTEGER NOT NULL, needs_ok INTEGER NOT NULL DEFAULT 1)",

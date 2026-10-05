@@ -15,7 +15,7 @@ NestAvatarColor avatarColourFor(String raw) {
     _ => null,
   };
   if (colour == null) {
-    debugPrint('P05 unknown avatar colour: $raw');
+    if (kDebugMode) debugPrint('P05 unknown avatar colour: $raw');
     return NestAvatarColor.neutral;
   }
   return colour;

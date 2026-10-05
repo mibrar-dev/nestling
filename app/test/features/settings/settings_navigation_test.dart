@@ -15,16 +15,23 @@ import 'dart:async';
 import 'dart:ui' show Tristate;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nestling/app/controllers.dart';
+import 'package:nestling/core/config/legal_links.dart';
+import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/design_system/design_system.dart';
+import 'package:nestling/features/onboarding/onboarding_routes.dart';
 import 'package:nestling/features/settings/presentation/bloc/settings_bloc.dart';
 import 'package:nestling/features/settings/presentation/bloc/settings_event.dart';
 import 'package:nestling/features/settings/presentation/bloc/settings_session_store.dart';
 import 'package:nestling/features/settings/presentation/bloc/settings_state.dart';
 import 'package:nestling/features/settings/presentation/views/settings_view.dart';
 import 'package:nestling/features/settings/settings_routes.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../test_scope.dart';
 import 'p16_test_support.dart';
@@ -39,7 +46,6 @@ import 'p16_test_support.dart';
 /// 404).
 const String kInviteToast = 'Co-parent invite is coming soon';
 const String kHelpToast = 'Help & feedback is coming soon';
-const String kDeleteToast = 'Family account deletion is not available yet';
 
 void main() {
   setUpAll(loadP16Fonts);
@@ -160,22 +166,58 @@ void main() {
       await disposeApp(tester);
     });
 
-    for (final row in const <String>['Download our data', 'Privacy Notice']) {
-      testWidgets('the privacy row opens the privacy screen ($row)', (
-        tester,
-      ) async {
-        await pumpSettingsApp(tester);
+    testWidgets('Download our data keeps its tap action and never leaves '
+        'the screen', (tester) async {
+      // Local export (shared/release_prep): the row builds the family's JSON
+      // document and opens the OS share sheet — never a route. The sheet is
+      // platform code, so this proves the row is operable by a screen reader
+      // and does not navigate; the JSON content is pinned at the repository
+      // level and the share call with a mocked share function.
+      final handle = tester.ensureSemantics();
+      await pumpSettingsApp(tester);
 
-        await scrollSettingsTo(tester, find.text(row));
-        await tester.tap(find.text(row));
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 300));
+      await scrollSettingsTo(tester, find.text('Download our data'));
+      final nodes = p16Announcing(tester, 'Download our data');
+      expect(nodes, isNotEmpty, reason: 'the row must stay operable');
+      expect(
+        nodes.first.getSemanticsData().hasAction(SemanticsAction.tap),
+        isTrue,
+      );
 
-        expect(pushedPath(tester), '/privacy');
+      await p16ActivateSemantics(tester, nodes.first);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
-        await disposeApp(tester);
+      expect(pushedPath(tester), SettingsRoutePaths.settings);
+
+      handle.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('Privacy Notice opens the hosted notice, never a route', (
+      tester,
+    ) async {
+      final opened = <Uri>[];
+      LegalLinks.launcherOverride = (url, {required mode}) async {
+        expect(mode, LaunchMode.inAppBrowserView);
+        opened.add(url);
+        return true;
+      };
+      addTearDown(() {
+        LegalLinks.launcherOverride = null;
       });
-    }
+      await pumpSettingsApp(tester);
+
+      await scrollSettingsTo(tester, find.text('Privacy Notice'));
+      await tester.tap(find.text('Privacy Notice'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(opened, <Uri>[Uri.parse(LegalLinks.privacyUrl)]);
+      expect(pushedPath(tester), SettingsRoutePaths.settings);
+
+      await disposeApp(tester);
+    });
   });
 
   group('P16 navigation — rows that stay on the screen', () {
@@ -296,8 +338,8 @@ void main() {
     });
   });
 
-  group('P16 navigation — deleting the family account is a confirm, not a '
-      'wipe', () {
+  group('P16 navigation — deleting the family account wipes and lands on '
+      'welcome', () {
     testWidgets('Cancel closes the modal and keeps everything', (tester) async {
       await pumpSettingsApp(tester);
       final childrenBefore = await childRows();
@@ -325,33 +367,60 @@ void main() {
       // still there afterwards, and the path is still /settings.
     });
 
-    testWidgets(
-      '[P16-T01] Delete confirms, toasts and never touches the database',
-      (tester) async {
-        await pumpSettingsApp(tester);
-        final childrenBefore = await childRows();
-        final zoneBefore = await familyZoneId();
+    testWidgets('Delete confirms, wipes the database and lands on welcome', (
+      tester,
+    ) async {
+      await pumpSettingsApp(tester);
+      expect(await childRows(), isNotEmpty);
 
-        await scrollSettingsTo(tester, find.text('Delete family account'));
-        await tester.tap(find.text('Delete family account'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const ValueKey('p16_delete_confirm')));
-        await tester.pumpAndSettle();
+      await scrollSettingsTo(tester, find.text('Delete family account'));
+      await tester.tap(find.text('Delete family account'));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete family account?'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('p16_delete_confirm')));
+      await tester.pumpAndSettle();
+      await settleSettings(tester);
 
-        expect(find.text(kDeleteToast), findsOneWidget);
-        expect(pushedPath(tester), SettingsRoutePaths.settings);
-        expect(
-          await childRows(),
-          childrenBefore,
-          reason: 'the account-deletion flow does not exist yet (TODO(P16))',
-        );
-        expect(await familyZoneId(), zoneBefore);
-        expect(await settingRows(), isNotEmpty);
+      // The router lands on /welcome (assert the location, never
+      // placeholder copy — screen agents own the views).
+      expect(currentPath(tester), OnboardingRoutePaths.welcome);
 
-        await disposeApp(tester);
-      },
-      skip: false,
-    );
+      // Every table is empty except the fresh `app_state` row: a fresh
+      // install (onboarding incomplete, parent mode, no subscription).
+      final db = GetIt.instance<AppDatabase>();
+      expect(await db.select(db.families).get(), isEmpty);
+      expect(await db.select(db.members).get(), isEmpty);
+      expect(await db.select(db.children).get(), isEmpty);
+      expect(await db.select(db.quests).get(), isEmpty);
+      expect(await db.select(db.questCompletions).get(), isEmpty);
+      expect(await db.select(db.ledgerEntries).get(), isEmpty);
+      expect(await db.select(db.savingsGoals).get(), isEmpty);
+      expect(await db.select(db.rewards).get(), isEmpty);
+      expect(await db.select(db.rewardRedemptions).get(), isEmpty);
+      expect(await db.select(db.badges).get(), isEmpty);
+      expect(await db.select(db.earnedBadges).get(), isEmpty);
+      expect(await db.select(db.pipWardrobe).get(), isEmpty);
+      expect(await db.select(db.settings).get(), isEmpty);
+      final state = await db.select(db.appState).getSingle();
+      expect(state.onboardingComplete, isFalse);
+      expect(state.appMode, 'parent');
+      expect(state.trialStart, isNull);
+      expect(state.activeChildId, isNull);
+
+      // In-memory session state follows the wipe (parent mode, fresh).
+      expect(GetIt.instance<AppSession>().onboardingComplete, isFalse);
+      expect(GetIt.instance<AppModeController>().mode, AppMode.parent);
+
+      // A second launch starts at welcome: the router's onboarding guard
+      // redirects any non-onboarding location there.
+      final routerContext = tester.element(find.byType(Navigator).first);
+      GoRouter.of(routerContext).go(SettingsRoutePaths.settings);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(currentPath(tester), OnboardingRoutePaths.welcome);
+
+      await disposeApp(tester);
+    });
   });
 
   group('P16 the zone row is driven by the database', () {

@@ -174,12 +174,13 @@ void main() {
 
       // Only the consent column is written by P04; everything else keeps the
       // schema defaults (`Settings` in core/data/app_database.dart), never
-      // demo-seed values.
+      // demo-seed values. Notifications are OFF for new families (nudge
+      // rule — shared/release_prep); the demo seed writes ON explicitly.
       expect(row.crashReportConsent, isTrue);
       expect(row.kidGateEnabled, isTrue, reason: 'table default');
-      expect(row.notifApprovals, isTrue, reason: 'table default');
-      expect(row.notifPayout, isTrue, reason: 'table default');
-      expect(row.notifSummary, isTrue, reason: 'table default');
+      expect(row.notifApprovals, isFalse, reason: 'table default');
+      expect(row.notifPayout, isFalse, reason: 'table default');
+      expect(row.notifSummary, isFalse, reason: 'table default');
       expect(row.pocketMoneyMode, 'both', reason: 'table default');
       expect(row.payoutDay, 6, reason: 'table default');
       expect(row.coinValuePencePerCoin, 1, reason: 'table default');

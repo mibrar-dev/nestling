@@ -22,10 +22,13 @@ import 'package:sqlite3/sqlite3.dart' as sqlite;
 /// `rewards` is included in its exact pre-v5 shape: real v3 databases always
 /// have it, and the v5 step needs the table to exist.
 /// `quest_completions` is a PK-only stub: real v3 databases always have it,
-/// and the v6 step needs the table to exist.
+/// and the v6 step needs the table to exist. The `settings` stub carries the
+/// notification columns in their real v3 shape (`DEFAULT 1`): `beforeOpen`
+/// writes them explicitly (new-family OFF), so a PK-only stub no longer
+/// satisfies the insert.
 const List<String> _v3Ddl = <String>[
   'CREATE TABLE families (id TEXT NOT NULL PRIMARY KEY)',
-  'CREATE TABLE settings (family_id TEXT NOT NULL PRIMARY KEY)',
+  'CREATE TABLE settings (family_id TEXT NOT NULL PRIMARY KEY, notif_approvals INTEGER NOT NULL DEFAULT 1, notif_payout INTEGER NOT NULL DEFAULT 1, notif_summary INTEGER NOT NULL DEFAULT 1)',
   'CREATE TABLE app_state (id INTEGER NOT NULL PRIMARY KEY)',
   "CREATE TABLE members (id TEXT NOT NULL PRIMARY KEY, family_id TEXT NOT NULL, name TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'owner', invite_status TEXT NOT NULL DEFAULT 'active')",
   "CREATE TABLE quests (id TEXT NOT NULL PRIMARY KEY, family_id TEXT NOT NULL, title TEXT NOT NULL, icon TEXT NOT NULL DEFAULT 'star', coins INTEGER NOT NULL DEFAULT 10, repeat_rule TEXT NOT NULL DEFAULT 'once', days TEXT NOT NULL DEFAULT '', due_label TEXT NULL, needs_approval INTEGER NOT NULL DEFAULT 1, assignee_child_id TEXT NULL, active INTEGER NOT NULL DEFAULT 1, due_time_local TEXT NULL)",

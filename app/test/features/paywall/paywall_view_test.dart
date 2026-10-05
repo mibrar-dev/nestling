@@ -33,6 +33,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:nestling/app/app.dart';
 import 'package:nestling/app/controllers.dart';
+import 'package:nestling/core/config/legal_links.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/seed.dart';
@@ -45,6 +46,7 @@ import 'package:nestling/features/paywall/presentation/bloc/paywall_bloc.dart';
 import 'package:nestling/features/paywall/presentation/bloc/paywall_event.dart';
 import 'package:nestling/features/paywall/presentation/bloc/paywall_state.dart';
 import 'package:nestling/features/paywall/presentation/views/paywall_view.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../test_scope.dart';
 
@@ -1207,9 +1209,17 @@ void main() {
       },
     );
 
-    testWidgets('Terms and Privacy are placeholders, not dead links', (
+    testWidgets('Terms and Privacy open the hosted pages, never a route', (
       tester,
     ) async {
+      final opened = <Uri, LaunchMode>{};
+      LegalLinks.launcherOverride = (url, {required mode}) async {
+        opened[url] = mode;
+        return true;
+      };
+      addTearDown(() {
+        LegalLinks.launcherOverride = null;
+      });
       await setUpTestScope();
       await _pumpPaywall(
         tester,
@@ -1217,20 +1227,25 @@ void main() {
         surface: const Size(390, 844),
       );
 
-      for (final link in const <String>['Terms', 'Privacy']) {
-        await tester.tap(find.bySemanticsLabel(link));
+      const targets = <String, String>{
+        'Terms': LegalLinks.termsUrl,
+        'Privacy': LegalLinks.privacyUrl,
+      };
+      for (final entry in targets.entries) {
+        await tester.tap(find.bySemanticsLabel(entry.key));
         await _settle(tester);
 
-        // No onboarding route exists for the legal pages, so the screen must
-        // answer in place (a toast) and stay on /paywall.
-        expect(currentPath(tester), '/paywall', reason: link);
-        expect(
-          find.byType(SnackBar).evaluate().isNotEmpty ||
-              find.byType(NestToast).evaluate().isNotEmpty,
-          isTrue,
-          reason: '$link must tell the parent something happened',
-        );
+        // The in-app browser opens over the screen: no route change.
+        expect(currentPath(tester), '/paywall', reason: entry.key);
       }
+      expect(
+        opened[Uri.parse(LegalLinks.termsUrl)],
+        LaunchMode.inAppBrowserView,
+      );
+      expect(
+        opened[Uri.parse(LegalLinks.privacyUrl)],
+        LaunchMode.inAppBrowserView,
+      );
 
       await disposeApp(tester);
     });

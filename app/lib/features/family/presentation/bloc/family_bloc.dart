@@ -105,7 +105,8 @@ class FamilyBloc extends Bloc<FamilyEvent, FamilyState> {
       );
       event.onSaved();
     } on Exception catch (error) {
-      debugPrint('P05 addChild failed: $error');
+      // Debug-only: release logs must never carry names, emails or PINs.
+      if (kDebugMode) debugPrint('P05 addChild failed: $error');
       emit(
         state.copyWith(
           saveInProgress: false,
