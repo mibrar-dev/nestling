@@ -1,321 +1,238 @@
-# K10 · Payout day — 3 TEST (iteration 1)
+# K10 · Payout day — 3 TEST (iteration 2)
 
 Feature `kid_jar`, route `/payout-day` (`KidJarRoutePaths.payoutDay`), kid
 mode. Per-test timeout `120s` throughout; no simulator was booted, installed on
 or driven (only `5_ui` may use one, and only
-`604697A9-11DA-462F-9837-396E9CA2493A`). No screen file was patched: the one
-real defect this stage found is recorded below, not fixed (stage rule), and no
-file outside `app/test/features/kid_jar/**` and `docs/screens/K10/**` was
-touched.
+`604697A9-11DA-462F-9837-396E9CA2493A`). **No screen code was patched by this
+stage** — every screen change reverted (`git diff HEAD -- app/lib` is empty at
+the end). Iteration 1's version of this file is preserved in
+`FIXES_1.md`; this file is iteration 2 only.
 
 ## Headline
 
 | gate | command | result |
 |---|---|---|
-| format | `dart format test/features/kid_jar/payout_day_matrix_test.dart` | `Formatted 1 file (0 changed)` |
-| analyze (this stage's file) | `flutter analyze test/features/kid_jar/payout_day_matrix_test.dart` | **No issues found!** |
-| analyze (whole package) | `flutter analyze` | 1 issue, **not mine**: `k10_bugs_test.dart:264` `avoid_escaping_inner_quotes` — the concurrent bugs stage's live file (§5) |
-| tests (this stage's file) | `flutter test --timeout 120s test/features/kid_jar/payout_day_matrix_test.dart` | **`+76 ~1`** — 76 pass, 1 skipped (the parked bug proof) |
-| tests (whole feature) | `flutter test --timeout 120s test/features/kid_jar` | **`+255 ~10`, All tests passed!** |
-| tests (whole app) | `flutter test --timeout 120s` | **`+4509 ~16`, All tests passed!** — the first parallel run showed `+4505 ~16 -4`, all four in `paywall/paywall_coparent_test.dart` on a missing `libsqlite3.dylib`; a clean re-run is green and that file also passes standalone (`+7`). Not K10, not reproducible (§5) |
-| bug proofs | `flutter test --timeout 120s --run-skipped --plain-name 'K10-BUG-3' …` | passes = the defect is present (§3) |
+| format | `dart format test/features/kid_jar/{payout_day_iter2_test,kid_jar_bloc_test}.dart` | `Formatted 2 files (0 changed)` |
+| analyze (this stage's files) | `flutter analyze test/features/kid_jar/payout_day_iter2_test.dart test/features/kid_jar/kid_jar_bloc_test.dart` | **No issues found!** |
+| tests (new file) | `flutter test --timeout 120s test/features/kid_jar/payout_day_iter2_test.dart` | **`+40`** — all pass |
+| tests (bloc file, extended) | `flutter test --timeout 120s test/features/kid_jar/kid_jar_bloc_test.dart` | **`+38`** (36 inherited + my 2) |
+| tests (iteration-1 matrix, untouched by me) | `flutter test --timeout 120s test/features/kid_jar/payout_day_matrix_test.dart` | **`+78`** green — the build's un-parked `(320, 1.3)` copy-fit cells hold |
+| tests (whole feature) | `flutter test --timeout 120s test/features/kid_jar` | **`+316 ~6`, All tests passed!** |
+| tests (whole app) | `flutter test --timeout 120s` | **`+4806 ~13`, All tests passed!** (a first parallel run showed only the known `paywall_coparent_test.dart` `libsqlite3.dylib` native-asset race — §6.1) |
 
-**One real bug found (K10-BUG-3, major):** at **320 px / 1.3×** two strings
-render with an ellipsis — the savings note loses the goal's last word
-(`£5.50 went into your Lego Friends…`) and the **`£9.49 to go` money string is
-ellipsized mid-word**. The design truncates nothing. Proof parked with
-`skip: true` (repo convention) so the suite stays green; repro in §3.
+**No bug found.** All three iteration-1 defects are fixed and now pinned by
+tests that would fail if the fixes regressed (§2, §3). The one genuine
+coverage hole this stage could still find — **screen HEIGHT** — is closed
+(§4). Verdict PASS.
 
 ## 1. Baseline on arrival
 
-The build stages left a real, passing suite, so this stage extended rather than
-rewrote:
+Iteration 2's build (`905a54a`) fixed all three registered defects and
+un-parked their proofs, so this stage extended rather than repaired:
 
 ```
-flutter test --timeout 120s test/features/kid_jar → +170 ~6, All tests passed!
+flutter test --timeout 120s test/features/kid_jar → +265 ~6, All tests passed!
 ```
 
 Per file, as inherited:
 
-| file | tests | what it already owned |
+| file | tests | state on arrival |
 |---|---|---|
-| `payout_celebration_test.dart` | 12 | `watchLatestPayout` contract (demo Maya 380/550/Lego 1550·2499/62 %, `recordPayout` re-render, no-move → null, no-payout → null, `Seed.empty`, live active-child switch, entity equality + clamps) |
-| `kid_jar_bloc_test.dart` | 34 | every event/state path for both screens: load, payout, failure, retry, reload guard, `close()`, internal events, `copyWithPayout`/sentinel `copyWith`/`copyWithLoaded`, `props` |
-| `payout_day_view_test.dart` | 9 | seeded copy, a recorded payout re-render, the Pip look, the four navigation destinations, tap-action semantics, empty + failure frames |
-| `payout_day_view_geometry_test.dart` | 3 | design bands at 390/1.0/light (title 107/34, rain 180×270@141, notes 427/509, fund 613/143, progress 695, bar to 844), gutters at 320/390/430 |
-| `k09_bugs_test.dart` | 17 ~6 | K09 regressions (untouched by this stage) |
+| `payout_day_matrix_test.dart` | 78 | iteration-1's matrix; the build added the `(320, 1.3)` copy-fit cell (both themes) and deleted my parked K10-BUG-3 proof |
+| `kid_jar_bloc_test.dart` | 36 | iteration-1's coverage + the build's two `_closing`-guard regressions |
+| `payout_celebration_test.dart` | 14 | + the build's overshoot-percent proof |
+| `k10_bugs_test.dart` | 14 ~3 | the bugs stage's file; K10-BUG-1/1b/2 un-skipped by the build |
+| `payout_day_view_test.dart`, `payout_day_view_geometry_test.dart`, K09 files | 9 / 3 / rest | unchanged since iteration 1 |
 
-## 2. Tests added
+## 2. The iteration-1 defects, re-proved at the level they are rendered
 
-One new file, `app/test/features/kid_jar/payout_day_matrix_test.dart`
-(**77 tests: 76 live + 1 parked**). It exists because the stage prompt's matrix
-was only partly covered, and every real hole was invisible to the inherited
-suite.
+### 2.1 K10-BUG-3 (major) — whole money at 320/1.3×, untouched everywhere else
 
-### 2.1 The device matrix — 320/390/430 × light/dark × 1.0/1.3 (48 tests)
+Iteration 1 proved *not truncated*. That is necessary but not sufficient: a
+"fix" that shrank every amount on every screen would pass it and would be
+rejected by a designer. `payout_day_iter2_test.dart` adds the other half.
 
-12 cells × 4 assertions:
-
-- **the whole celebration renders and nothing overflows** — every design string
-  (`It's payout day!`, both receipt lines and subs, the goal title, `£15.50`,
-  `£9.49 to go`, `of £24.99`, `62% there!`, `Thanks Mum!`), the jar-rain box,
-  both `PayoutNote`s, the `PayoutFundCard`; the scroll is then dragged so the
-  **below-the-fold Pip row** is measured too (`tester.takeException()` is null —
-  catches RenderFlex overflow, unbounded constraints and painter assertions).
-- **20 px gutters, cards aligned to one edge set** (owner ALIGNMENT rule) — both
-  notes and the fund card share `20 … width−20`; the back button, the lock and
-  the CTA share the same two edges; the title and the illustration are centred
-  on the same axis; and after scrolling, **no drawn string escapes either
-  gutter** (the K01 matrix idiom).
-- **the bar surface runs to the physical edge** (owner BOTTOM EDGE rule) — the
-  rect (`left 0`, `right width`, `bottom 844`) *and* a **painted-raster probe**:
-  every row from 4 px under the bar's ink border to the last physical row, at
-  x = 2 and x = width−2, plus the full width under the CTA box. A rect
-  assertion cannot see a strip painted *inside* the bar's surface box, so the
-  raster is the only honest check (§4 proves it).
-- **every control meets the 56 px kid floor** — the back `NestIconButton`, the
-  `NestLockButton` and the `NestKidButton` are all ≥ `NestDevice.tapKid` wide
-  and tall (the parent floor of 44 is implied). The floor itself had never been
-  asserted on this screen — only the incidental 390/light numbers.
-
-Plus `a 34px home inset is absorbed by the bar surface, both themes` — with a
-real OS home inset the bar grows to 89 + 34 and every probed row at
-`y = 843, bar.bottom−33, bar.bottom−1` is the bar's own surface, so nothing
-meadow- or sky-coloured shows around the home indicator in either theme.
-
-### 2.2 Dark mode actually had no content coverage (2 tests)
-
-`dark is the light layout: same rects, only the tokens differ` measures **11
-surfaces** (back, lock, title, rain, note 1, note 2, fund, progress, caption,
-bar, CTA) in both themes and demands exact rect equality — dark may flip
-tokens, never padding, border width or spacing. A token guard
-(`surface`/`ink`/`coinTint` must differ between the themes) keeps that test from
-passing vacuously. Before this, nothing pinned the dark LAYOUT at all.
-
-`every surface on the screen paints from the live theme tokens` (both themes)
-reads the real `BoxDecoration`s: both notes = `surface` + a 3 px `ink` border on
-all four sides + `NestRadii.allM`; the fund card = `coinTint` + 3 px `ink` +
-`NestRadii.allL`; the two `.k10-ico` discs = `leafTint` then `lilacTint` (in
-that order); the bar = `surface` + a 3 px `ink` **top-only** border. This is
-the "never hard-code colours" rule measured, not assumed.
-
-### 2.3 States — loading had no test at all (6 tests)
-
-- **loading** at 320/1.3: `Loading payout day` semantics node with
-  `isLiveRegion`, the spinner, the chrome (back/lock/status bar) still present,
-  and no title/notes — then a late emission swaps the celebration in.
-- **empty (no payout yet)** at 320/1.3 in **both themes**: copy, no notes, no
-  fund card, no CTA, the button ≥ 56 px, no overflow, and `Back home` → really
-  navigates to `/kid-home` (semantics tap, not just `tester.tap`).
-- **empty under `Seed.empty()`** (no children at all) at 1.3 → the same frame,
-  no crash.
-- **failure**: copy + ≥ 56 px `Try again` + no overflow at 320/1.3, and the
-  lock is still the escape hatch (a kid can never be stranded on the failure
-  card: the tap really reaches `/parental-gate`). `Try again` really
-  re-subscribes (a **second** `watchLatestPayout()` stream controller exists
-  after the retry) and recovers onto the celebration, both by tap and by
-  `performAction(SemanticsAction.tap)`.
-
-### 2.4 Accessibility actions and labels (6 tests)
-
-- The two icon buttons carry the design's `aria-label`s verbatim — `Back` and
-  `Grown-ups` — with `isButton` **and** `SemanticsAction.tap`, and the lock's
-  `performAction` really navigates.
-- `the lock tap action opens the gate (only one route)`: after the semantic tap
-  a **single** pop must land back on `/payout-day` (no stacked gate).
-- `a double tap on the lock pushes exactly one gate`: two down/up **pairs**
-  (not two simultaneous pointers — the gesture arena gives a tap to one pointer,
-  so a burst would prove nothing), then one pop back to `/payout-day`. This is
-  the only coverage of `_GateLockButton._busy`.
-- `back pops the route payout day was pushed onto`: the `canPop()` branch the
-  inherited suite could not reach (start at `/kid-home`, `context.push`
-  `/payout-day`, tap back → `/kid-home`). The `canPop() == false` fallback is
-  already covered in `payout_day_view_test.dart`.
-- `the title is a header and the illustration is an image`: `It's payout day!`
-  is a header; the jar-rain node carries the SVG `aria-label` **verbatim** as an
-  image; the progress node carries `62% of the Lego Friends set saved`; each
-  receipt is ONE spoken sentence (`<title>. <sub>`); Pip is an image labelled
-  `Pip cheering`; and none of them advertises a tap (no phantom buttons).
-- `the child's own Pip is rendered, never a v1 stage SVG`: `PipAvatar`
-  `mochi · sunny · stage 3 · happy · 72` (the seeded row), and **no `Image` with
-  a `pip-stage` asset is mounted anywhere** (PIP rule).
-
-### 2.5 Copy audit, copy fit and the kid background (12 tests + 1 parked)
-
-- `every visible string is ASCII-punctuated like the design` — the twelve
-  visible strings are all present; `_title.codeUnitAt(2) == 0x27` (the HTML
-  byte at `K10-payout-day.html:39` is U+0027, confirmed by hexdump, not
-  U+2019); and no string on the screen contains `’ “ ”`.
-- **copy fit, 10 green cells** — `didExceedMaxLines` is false for all twelve
-  strings at 320@1.0, 390@1.0, 390@1.3, 430@1.0, 430@1.3 in light **and** dark.
-  320@1.3 is deliberately absent: that cell is the bug (§3).
-- `the shared KidScope sky and meadow are mounted exactly once` — one `KidScope`,
-  one `NestMeadow` **inside** it (a local hill would move the count), and the
-  painted sky at y = 8 is the live theme's `kidSkyTop` (±1 per channel, because
-  y = 8 is inside the gradient).
-
-### 2.6 Bloc / repository layer — no gaps found, nothing added
-
-The brief asks for "bloc_test for every event/state path". I audited the
-inherited coverage event by event (`KidJarPayoutRequested`,
-`KidJarPayoutReceived`, `KidJarStreamFailed`, `KidJarLoadRequested`,
-`KidJarSnapshotReceived` × the states `initial / loading / loaded / failure`, the
-reload guard, `close()`, `copyWithPayout`, the sentinel `copyWith`,
-`copyWithLoaded`, `props`) and against `payout_celebration_test.dart`'s
-repository contract: **every path is already covered, and duplicating it would
-only add noise.** So this stage added **zero** bloc tests — a deliberate,
-audited decision, not an omission.
-
-## 3. Bug found — K10-BUG-3 (major): copy is truncated at 320 px / 1.3×
-
-**Not patched** (stage rule: "If a test exposes a real bug in the screen, do
-NOT patch the screen — record it").
-
-### 3.1 What is wrong
-
-At the narrowest supported width (320 px) with the app's own maximum text scale
-(1.3, `SPACING_SPEC` §10.1 "clamp app `textScaler` to **1.0–1.3**"), two strings
-render with an ellipsis:
-
-| string | where | measured | result |
-|---|---|---|---|
-| `£5.50 went into your Lego Friends set` | `payout_note.dart:64` — `maxLines: 2` on `.k10-t` | natural single-line width **404.5 px** in a **200 px** text column → needs **3** lines | renders `£5.50 went into your Lego Friends…` — the goal's last word is lost |
-| `£9.49 to go` | `payout_fund_card.dart:104` — `maxLines: 1` on `.k10-amts b` | natural **121.4 px**, the `spaceBetween` row offers **117.0 px** | renders `£9.49 to g…` — a **money** string cut mid-word |
-
-File:line anchors:
-`app/lib/features/kid_jar/presentation/widgets/payout_note.dart:62-68`
-(the `.k10-t` `maxLines: 2, overflow: ellipsis`) and
-`app/lib/features/kid_jar/presentation/widgets/payout_fund_card.dart:96-119`
-(the two `maxLines: 1` amount rows).
-
-### 3.2 Why it is a bug and not a mock artefact
-
-- **The design truncates nothing.** `K10-payout-day.html` sets no `max-lines`,
-  no `line-clamp` and no `text-overflow` anywhere on this screen; in the browser
-  the note title would wrap to a third line and grow the card, and the amounts
-  row would wrap rather than eat a character.
-- **Money must never be truncated.** `SPACING_SPEC` §10.11 puts `.money`
-  strings on the `softWrap:false` + parent-ellipsis path — cutting
-  `£9.49 to go` into `£9.49 to g…` in a money app is the worst case on the
-  screen.
-- **The configuration is supported.** 320 px and 1.3× are both first-class (the
-  app clamps to 1.3 precisely so content still fits; this screen's own matrix
-  must cover them).
-- **It is not caused by the mock→DB string swap alone.** The seeded goal title
-  `Lego Friends set` is the database's truth (DATA OVER MOCKS) and a longer real
-  goal name is worse; the fix must be layout, not shorter copy.
-
-Severity split for the fix: the money row is **major**; the note title is the
-same defect class (**major** if the fix is one pass over both `maxLines`).
-
-### 3.3 Repro (one command, bug present ⇒ the proof passes)
-
-```
-cd app && flutter test --timeout 120s --run-skipped \
-  --plain-name 'K10-BUG-3' test/features/kid_jar/payout_day_matrix_test.dart
-# → +1: All tests passed!  (the two didExceedMaxLines == true expectations hold)
-```
-
-Behaviour matrix measured with a temporary probe (deleted again):
-
-| cell | truncated |
+| test | what it pins |
 |---|---|
-| 320 @ 1.0 | no |
-| 320 @ 1.3 | **yes — `£5.50 went into your Lego Friends set`, `£9.49 to go`** |
-| 390 @ 1.0 / 1.3 | no |
-| 430 @ 1.0 / 1.3 | no |
+| `320px @1.3x: both amounts render whole and stay legible` | `didExceedMaxLines == false` for `£15.50` and `£9.49 to go`; **no `…` character anywhere on the screen**; and the `FittedBox` scale for each amount is in `(0.8, 1.0]` — measured **0.963** for `£9.49 to go`, i.e. the glyphs shrank 4 % instead of losing a character. A scale below 0.8 (unreadable money) fails the test. The note title, now unclamped, is asserted whole too. |
+| `the amounts keep their design size when they already fit` (5 cells: 320@1.0, 390@1.0, 390@1.3, 430@1.0, 430@1.3) | scale is **1.0 ± 0.001** for both amounts. The fix is invisible where the design already fits — the design's 17 px Nunito w900 is never shrunk for a comfortable cell. |
+| `the 320 @1.3x shrink is the same in light and dark` | the shrink is geometry, not a token: both themes measure the same scale, dark truncates nothing, and it really is the shrink cell (`< 1`). |
+| `the amounts row keeps the design rects at the design cell` | `.k10-amts` still sits 16 px inside the fund card's 3 px border (left amount at x = 39, right amount ending at x = 351 at 390) and both amounts share one baseline row — the fix must not shift the ALIGNMENT (owner rule). |
 
-### 3.4 Suggested fix (for the next build stage — not applied here)
+### 2.2 The clamp removal must not have moved the design bands
 
-Let the note title wrap as the design does (drop the 2-line cap or raise it to
-3 at 320 px, keeping `Flexible` so it can never overflow), and give the amounts
-row room instead of capping it at one line — e.g. keep `maxLines: 1` but wrap
-the row in a `FittedBox(fit: BoxFit.scaleDown)`, or let the right-hand amount
-wrap to two lines under the 1.3× clamp. Then flip this proof from `skip: true`
-to live. The green cells in §2.5 will then cover 320 @ 1.3 too.
+`390/1.0: removing the title clamp kept every design band` re-measures the
+screen after the layout change: title 107/34, rain 105/141/180×270, note 1
+427/66, note 2 top 509, fund top 613 width 350, bar to 844 (89 tall). Deleting
+the `.k10-t` line clamp is the kind of edit that silently re-flows a card; this
+proves it did not move anything at the design cell.
 
-## 4. The tests are not vacuous — three mutation probes, all reverted
+### 2.3 K10-BUG-2 (minor) — through the widget, not just the entity
 
-Each probe patched `payout_day_view.dart` temporarily, ran the new file, and was
-reverted with `git checkout --` (final `git status`: **no tracked file
-modified**):
+`an overshot goal reads 100% there, with a full bar and a 100% spoken value, in
+both themes` drives the **real product API**
+(`PocketMoneyRepositoryImpl.recordPayout(2000, move 2000)` → saved £35.50 of a
+£24.99 target) and then asserts all four layers agree: the caption reads
+`100% there!` (and never `142% there!`), `NestProgress.fraction == 1`, the
+progress node is announced as `100% of the Lego Friends set saved`, and nothing
+throws. The bugs file pins the caption; this adds the **bar** and the **spoken
+value**, which a caption-only assertion cannot see (a 100 % caption over a
+part-full bar would be the same bug one layer down). `Seed.demo` re-seeds
+between the two themes, because `recordPayout` accumulates.
+
+`the fund card still fits its gutter at 320/1.3 with an overshot goal` — the
+same data on the narrowest cell: every amount stays inside the 20 px gutters.
+
+### 2.4 K10-BUG-1 (minor) — the new `_closing` guard must not break the pair
+
+The fix added one shared `_closing` flag to **both** `*Requested` handlers. Two
+new bloc tests pin that the two screens' events can still interleave safely on
+one bloc instance:
+
+- `interleaved K09/K10 events keep one live subscription per stream` — jar load
+  → payout load → jar load again leaves exactly **one** live jar subscription
+  (replaced, never stacked) and **one** live payout subscription (untouched), and
+  `close()` releases both. This is the regression the new flag could have
+  introduced: a payout load that cancelled the jar stream, or a guard that
+  disabled the other handler.
+- `close() is idempotent and never throws with a load queued` — the K09 and K10
+  teardown paths can both reach an instance; a second `close()` is a no-op, not
+  a double-cancel `Bad state`.
+
+Mutation proof for the first one (§5, probe 3): making `_onPayoutRequested`
+cancel `_jarSub` fails it (`Expected: <1>, Actual: <0>`).
+
+## 3. Bloc / repository audit — still complete
+
+Re-audited against the brief's "bloc_test for every event/state path":
+`KidJarLoadRequested`, `KidJarSnapshotReceived`, `KidJarPayoutRequested`,
+`KidJarPayoutReceived`, `KidJarStreamFailed` × `initial / loading / loaded /
+failure` (including failure-after-load keeping the celebration), the reload
+guard, `close()`, `copyWithPayout`, the sentinel `copyWith`, `copyWithLoaded`,
+`props`, plus the repository contract (demo figures, `recordPayout` re-render,
+no-move → null, no-payout → null, `Seed.empty`, active-child switch, live
+re-emission, clamped helpers). **Every path is covered**; the only additions
+worth making were the two interleaving tests above, which cover a path the fix
+created. Nothing else added — a deliberate decision, not an omission.
+
+## 4. The hole this stage found: no K10 test had ever pumped a short screen
+
+Every K10 test — the geometry test, the view test, iteration 1's 12-cell matrix,
+the bugs stage's probes — pumps **390×844**. Height was never a variable. On a
+667-tall phone (iPhone 13 mini / SE class) the celebration's own chrome
+(status bar 47 + top row 60) plus the fixed 89 px bar leaves ~325 px of scroll
+viewport, and at 568 px about 226 px — while the jar-rain box alone is 270 px
+tall, so the notes and the Pip row are far below the fold and the layout is
+under real pressure.
+
+New group `K10 short viewports — 844 / 667 / 568 tall` (24 tests):
+**12 cells** (3 heights × light/dark × 1.0/1.3) × 2 assertions:
+
+- *the celebration renders and nothing overflows* — every string, the rain box,
+  both notes, the fund card and the CTA exist; `takeException()` is null. (A
+  shorter viewport is where an unbounded-height row or a fixed-height
+  illustration would throw.)
+- *the bar keeps its rect and the physical edge* — the bar is still 89 tall,
+  still 390 wide, still bleeds to `left 0 / right 390 / bottom = height`, and the
+  CTA keeps the 20 px gutters and the 56 px kid floor. A shorter screen makes a
+  bottom-edge strip *more* likely, not less (owner BOTTOM EDGE rule).
+
+Plus:
+
+- `the Pip row is reachable by scrolling at every height` — at 667 and 568 the
+  Pip row starts below the fold; after a drag it is on screen, inside the
+  gutters, and nothing threw. (At 844 it is already visible, so the same test
+  covers both.)
+- `320px on a 568-tall screen: the notes and bar still line up` — the narrowest
+  width on the shortest height at 1.3×: both notes share the fund card's edges
+  and the bar still owns 568.
+
+And the three state frames on the short viewport (`loading`, `empty`,
+`failure`): their 96 px glyph + copy + 64 px button must fit the ~226 px the
+`Expanded` leaves, and the failure frame's lock must still reach
+`/parental-gate`.
+
+## 5. The new tests are not vacuous — three mutation probes, all reverted
+
+Each probe patched the screen, ran the new tests, and was reverted with
+`git checkout --` (final `git status --short app/lib`: empty).
 
 | # | temporary mutation | result |
 |---|---|---|
-| 1 | `_GateLockButtonState._open`: `if (_busy) return;` → `if (false) return;` (`payout_day_view.dart:153`) | the double-tap test **fails**: `Expected '/payout-day'`, `Actual '/parental-gate'` — two gates stacked. The `_busy` guard is genuinely covered. |
-| 2 | a `Container(height: 34, color: tokens.kidMeadow)` injected **inside** the bar's surface box (`payout_day_view.dart:236-261`) | the raster probe **fails** in light (`[191,232,176]` vs the white surface) **and** dark (`[30,74,58]` vs `#1F1C2E`) — the BOTTOM EDGE check sees what a rect assertion cannot. |
-| 3 | removed `FittedBox(fit: BoxFit.scaleDown)` around the title | **nothing failed.** Recorded as an observation in §6, not as a bug: the title's natural width is 207.5 px at 1.0× and 269.8 px at 1.3×, inside the 280 px content box even at 320 px, so the scale-down path is simply never exercised at a supported cell. |
+| 1 | revert the K10-BUG-3 fix: drop the right amount's `FittedBox` back to a bare `Flexible`+`maxLines: 1`+ellipsis (`payout_fund_card.dart`) | `320px @1.3x: both amounts render whole and stay legible` **fails** — `Expected: false / Actual: <true>` on `£9.49 to go`. The fix is genuinely pinned. |
+| 2 | `alignment: Alignment.centerRight` → `centerLeft` on the right amount | **not caught** — at a scale of 1.0 the alignment has no visible effect, so that mutation is a no-op rather than a hole. Recorded rather than overclaimed (§6.3). |
+| 3 | make `_onPayoutRequested` also `await _jarSub?.cancel()` (`kid_jar_bloc.dart`) | `interleaved K09/K10 events keep one live subscription per stream` **fails** — `Expected: <1> / Actual: <0>`. The new flag has not broken the two screens' independence. |
 
-## 5. Suite hygiene, and what is *not* a K10 finding
+## 6. Suite hygiene and what is *not* a K10 finding
 
-- `dart format` clean; `flutter analyze` on the added file → **No issues found!**
-- The one whole-package analyze issue, `k10_bugs_test.dart:264`
-  `avoid_escaping_inner_quotes`, is in the **concurrent bugs stage's live
-  file** (it appeared while this stage ran; that file is being rewritten right
-  now). I did not touch it — editing another stage's live file is exactly the
-  collision RULES §1 exists to prevent.
-- The 4 whole-suite reds seen in the first parallel run
-  (`paywall/paywall_coparent_test.dart`, all `readCoParentName`) are an
-  **environment race**, not a product failure: the error is
-  `Couldn't resolve native function 'sqlite3_initialize' … libsqlite3.dylib
-  (no such file)` — a native-asset file that concurrent `flutter test` /
-  `flutter analyze` processes in this same worktree delete/regenerate while a
-  suite is running. Proof: the clean re-run is `+4509 ~16: All tests passed!`
-  and that file on its own is `+7: All tests passed!`. Not K10, not
-  reproducible, and not something a screen agent can act on.
-- No simulator was booted, installed on, screenshot or driven. No
-  `google_fonts`, no `DateTime.now()`, no wall-clock assertion (the clock is
-  pinned to Sat 3 Oct 2026 09:41 Europe/London by
-  `test/flutter_test_config.dart`); every pumped app ends with `disposeApp`
-  (test_scope.dart).
+1. **Whole-app suite:** the first parallel run showed the same
+   `paywall_coparent_test.dart` reds as iteration 1 — `Couldn't resolve native
+   function 'sqlite3_initialize' … libsqlite3.dylib (no such file)`, the
+   native-asset race that concurrent `flutter test` processes in one worktree
+   cause. That file passes standalone (`+7`) and the clean re-run is
+   **`+4806 ~13`, All tests passed! (§ Headline). Not K10, not reproducible, not
+   actionable by a screen agent.**
+2. **A concurrent stage's live file** is present in the feature directory:
+   `app/test/features/kid_jar/_k10_i2_probe_test.dart` (the iteration-2 bugs
+   stage's scratch probes, "deleted after this stage"). It is untracked, it is
+   not mine, and it was not edited — the `+316` directory figure above includes
+   it. Per-file figures in §1/§Headline are the ones this stage owns.
+3. `dart format` clean; `flutter analyze` clean for both files this stage
+   touched. `flutter analyze test/features/kid_jar` reports 20 infos, **none of
+   them in this stage's files**: 18 in the concurrent bugs stage's scratch
+   `_k10_i2_probe_test.dart` (ignore-comment documentation, cascades) and one
+   in its committed `k10_bugs_test.dart:786`; the two that briefly appeared in
+   `kid_jar_bloc_test.dart` (`cascade_invocations`) were mine and are fixed, so
+   that file analyzes clean on its own.
+   `analysis_options.yaml` untouched; no `google_fonts`, no
+   `DateTime.now()`, no wall-clock assertion (the clock is pinned to
+   Sat 3 Oct 2026 09:41 Europe/London by `test/flutter_test_config.dart`); every
+   pumped app ends with `disposeApp` (test_scope.dart) so Drift's deferred
+   stream-close timer is drained.
 
-## 6. Observations recorded, not bugs
+## 7. Observations recorded, not bugs
 
-1. **The title's `FittedBox(scaleDown)` is unexercised** (§4 probe 3): the
-   longest design title fits even at 320/1.3×, so removing it changes nothing at
-   any supported cell. Harmless belt-and-braces; if a future data-driven title
-   is longer it becomes load-bearing.
-2. **Note 2 is 88 px tall with the database's goal name**, so the fund card top
-   reads 613 instead of the mock's 591 (already flagged by 2b/2_build). This is
-   DATA OVER MOCKS (`£5.50 went into your Lego Friends set` is longer than the
-   mock's `£1.00 went into your Lego fund`) and the UI VERDICT RULE excludes
-   DB-driven content; `5_ui.md` PASSed on that basis. K10-BUG-3 is the same
-   content pressure showing up as *truncation* at 320/1.3×.
+1. **Note 2 is still 88 px tall with the database's goal name** (fund top 613
+   instead of the mock's 591). Unchanged by iteration 2 and deliberately so:
+   DATA OVER MOCKS, and the card grows with content exactly as the CSS does.
+   `5_ui.md` PASSed on that basis (UI VERDICT RULE excludes DB-driven content).
+2. **The title's `FittedBox(scaleDown)` is still never exercised** at any
+   supported cell (carried over from iteration 1 §6.1: the design's longest
+   title fits even at 320/1.3×). Harmless; it becomes load-bearing only for a
+   longer data-driven title.
+3. The K10-BUG-3 amounts `FittedBox` is a **painted** transform, so rect
+   assertions cannot see the shrink — `_amountScale` in the new file reads it
+   off the enclosing `RenderFittedBox`. Worth remembering for any future
+   money-string work on this screen.
+4. Review findings 3 and 4 (`stale errorMessage` during a payout reload,
+   newest-vs-oldest companion move) remain **deliberately unfixed** per
+   `2_build.md`, with their reasoning; nothing in this stage's tests depends on
+   either being changed.
 
-## 7. Coverage against the stage brief
+## 8. Coverage against the stage brief (iteration 2)
 
 | Required | Where | Status |
 |---|---|---|
-| bloc_test for every event/state path | audited in `kid_jar_bloc_test.dart` (34) + `payout_celebration_test.dart` (12) — already complete, nothing added (§2.6) | ✅ |
-| light + dark | all 12 matrix cells; dark rect equality + token paint in §2.1–2.2 | ✅ |
-| widths 320 / 390 / 430 | matrix cells + the inset test at 390 | ✅ |
-| text scale 1.0 and 1.3 | matrix cells + the copy-fit group (10 green cells) | ✅ |
-| empty / loading / error | §2.3 — 6 tests, loading had **zero** coverage before | ✅ |
-| every tap → right route | `Thanks Mum!` → `/kid-home`, back → pop when stacked / home otherwise, lock → `/parental-gate`, `Try again` → real re-subscribe, `Back home` → `/kid-home`, and the lock from the failure frame | ✅ |
-| semantics labels on icon buttons | `Back` / `Grown-ups` labels, `isButton`, `hasAction(tap)`, `performAction` drives real navigation; plus header/image/value labels on the title, rain, progress, notes, Pip | ✅ |
-| tap targets ≥ 44 parent / ≥ 56 kid | the 56 px kid floor on back, lock, CTA, `Try again` and `Back home`, in all 12 cells | ✅ |
-| in-memory Drift, `Seed.demo` / `Seed.empty` | `setUpTestScope()` (demo) + `Seed.empty(db)` for the no-children path + a feature-local fake repository for the loading/error paths | ✅ |
-| every pumped test drains Drift | `disposeApp(tester)` in all 77 | ✅ |
-
-## 8. Hand-off
-
-- **Next build stage:** fix K10-BUG-3 (§3.4) and flip its proof from
-  `skip: true` to live.
-- **Registry:** this stage owns **K10-BUG-3**. The concurrent bugs stage already
-  allocated K10-BUG-1 and K10-BUG-2 in `k10_bugs_test.dart`; if it later claims
-  `-3` as well, the orchestrator must renumber one of them.
-- No `SHARED_REQUEST`: every fix above lives inside
-  `app/lib/features/kid_jar/**`.
+| bloc_test for every event/state path | inherited 36 + the 2 interleaving tests (§2.4, §3) — audited, complete | ✅ |
+| light + dark | every short-viewport cell runs both themes; the shrink parity test is cross-theme | ✅ |
+| widths 320 / 390 / 430 | iteration-1 matrix + the new 320×568 cell and the amount-scale cells | ✅ |
+| text scale 1.0 and 1.3 | both, in every new group | ✅ |
+| empty / loading / error | §4 — the three state frames re-checked at 568 tall / 1.3× | ✅ |
+| every tap navigates to the right route | inherited; this stage adds the lock escape from the failure frame on a short viewport | ✅ |
+| semantics labels on icon buttons | inherited; this stage adds the progress node's spoken value under the K10-BUG-2 fix | ✅ |
+| tap targets ≥ 44 parent / ≥ 56 kid | the CTA's 56 px floor re-asserted at all three heights, both themes, both scales | ✅ |
+| in-memory Drift, `Seed.demo` / `Seed.empty` | `setUpTestScope()` (demo) + a `Seed.demo` re-seed for the overshoot pair + a feature-local fake for the state frames | ✅ |
+| verify the iteration-1 fixes | §2 — each fix pinned at the layer it renders, plus two mutation proofs | ✅ |
 
 ## 9. Verdict
 
-All 76 live tests of this stage pass, `flutter analyze` is clean for every file
-this stage owns, and the whole `kid_jar` suite is green (`+255 ~10`). **But a
-real screen defect was found and, per the stage rule, not patched:** at
-320 px / 1.3× the savings note loses the goal's last word and the `£9.49 to go`
-money string is ellipsized mid-word (K10-BUG-3, major, §3). The brief allows
-`VERDICT: PASS` only when all tests pass **and** no bugs were found — one of the
-two conditions is not met, so the verdict is FAIL and the loop's next iteration
-fixes the two `maxLines`.
+All 40 tests in the new file pass, the extended bloc file is green (38), the
+inherited iteration-1 matrix is green with the build's un-parked `(320, 1.3)`
+cells (78), the whole feature is green (`+316 ~6`) and the whole app is green
+on a clean run. All three iteration-1 defects are fixed and pinned by tests
+that demonstrably fail when the fix is removed. The one real hole left — no
+K10 test had ever pumped a screen shorter than 844 — is now covered at 667 and
+568 in both themes at both scales, together with the state frames. **No new bug
+found; no screen patched.**
 
-VERDICT: FAIL
+VERDICT: PASS

@@ -1,18 +1,21 @@
-// K10 · Payout day — bug proofs (Stage 6, iteration 1).
+// K10 · Payout day — bug proofs (Stage 6, iteration 2).
 //
 // The adversarial pass over the built K10 screen (`/payout-day`) and its
-// logic. Open findings were parked with `skip:` so the suite stays green;
-// run them red with:
+// logic. Open findings are parked with `skip:` so the suite stays green; run
+// them red with:
 //
 //   cd app && flutter test --timeout 120s --run-skipped \
 //     --plain-name 'K10-BUG' test/features/kid_jar/k10_bugs_test.dart
 //
-// Iteration 2 fixed K10-BUG-1/1b (same-tick close guard) and K10-BUG-2
-// (clamped percent), so those three proofs are live again; only genuinely
-// open findings stay parked.
+// Iteration 2 re-verified the iteration-1 findings against the fixed code:
+// K10-BUG-1/1b (same-tick close guard), K10-BUG-2 (clamped percent) and
+// K10-BUG-3 (320/1.3 copy fit) are FIXED — their proofs here are live and
+// green, and the new probes at the bottom pin the fix behaviour. One new
+// latent defect this pass found: K10-BUG-4 (the fund-card h2 still clamps a
+// long goal name at 320/1.3), parked below.
 //
-// Numbering is K10's own registry (K09 keeps its 1..10). The clean probes in
-// the last groups stay green and back the "verified clean" table in
+// Numbering is K10's own registry (K09 keeps its 1..10). The clean probes
+// stay green and back the "verified clean" table in
 // `docs/screens/K10/6_bugs.md`.
 //
 // No screen code was changed in this stage. No simulator was booted,
@@ -27,6 +30,8 @@ import 'dart:math' as math;
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
+import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:nestling/app/app.dart';
@@ -160,10 +165,28 @@ class _CountingPayoutRepository implements KidJarRepository {
   }
 }
 
+/// The real bundled faces, so the layout probes below measure the design's
+/// Nunito metrics (the geometry test's loader).
+Future<void> _loadBundledFonts() async {
+  final inter = FontLoader('Inter')
+    ..addFont(rootBundle.load('assets/fonts/Inter-Regular.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-Medium.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-SemiBold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-Bold.ttf'));
+  final nunito = FontLoader('Nunito')
+    ..addFont(rootBundle.load('assets/fonts/Nunito-Bold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Nunito-ExtraBold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Nunito-Black.ttf'));
+  await inter.load();
+  await nunito.load();
+}
+
 void main() {
+  setUpAll(_loadBundledFonts);
+
   // -------------------------------------------------------------------------
-  // K10-BUG-1 — minor (latent) — a payout request + close in the same tick
-  // leaks a live subscription and throws on its first emission
+  // K10-BUG-1 — minor (latent) — FIXED in iteration 2 (same-tick close guard).
+  // This proof is LIVE and green: it fails on the iteration-1 build.
   // -------------------------------------------------------------------------
   //
   // `_onPayoutRequested` (kid_jar_bloc.dart:88-105) opens with
@@ -221,8 +244,10 @@ void main() {
   );
 
   // -------------------------------------------------------------------------
-  // K10-BUG-2 — minor — a goal saved past its target reads "142% there!"
-  // beside a full bar and "£0.00 to go"
+  // K10-BUG-2 — minor — FIXED in iteration 2 (percent follows the clamped
+  // fraction). This proof is LIVE and green: it fails on the iteration-1
+  // build, where a goal saved past its target reads "142% there!" beside a
+  // full bar and "£0.00 to go".
   // -------------------------------------------------------------------------
   //
   // `PayoutCelebration.goalFraction` is clamped to 0…1 (the bar is honest),
@@ -275,6 +300,56 @@ void main() {
       await disposeApp(tester);
     },
   );
+
+  // -------------------------------------------------------------------------
+  // K10-BUG-4 — minor (latent) — the fund-card h2 still clamps a long goal
+  // name at 320 px / 1.3×
+  // -------------------------------------------------------------------------
+  //
+  // The iteration-2 K10-BUG-3 fix freed the NOTE title (`payout_note.dart`
+  // dropped `maxLines: 2`) but the fund card's h2 kept its cap
+  // (`payout_fund_card.dart:49-54` — `maxLines: 2, overflow: ellipsis`).
+  // `K10-payout-day.html` sets no max-lines/line-clamp anywhere on the
+  // screen (the K10-BUG-3 rationale), and the design's `.k10-fund h2` grows
+  // with content like every other card. A plausible UK wishlist name —
+  // `Maximilian-Alexander's Nintendo Switch 2 game`, the same fixture K09's
+  // clean probe uses — needs THREE lines in the 242 px card at 320/1.3, so
+  // the goal name loses its tail.
+  //
+  // Latent: savings goals have no writer in `lib/` today (only `Seed.demo`
+  // inserts them; `recordPayout` and `moveToSavings` update `savedPence`
+  // only; P15 deletes them with a child), so this needs a future goal
+  // editor or imported data. It is the one string on the screen still
+  // clamped against the design's own "no clamp" rule, and the fix is the
+  // same one the note title already got.
+  testWidgets('K10-BUG-4: a long goal name is never clamped in the fund card', (
+    tester,
+  ) async {
+    final db = await _pumpRoute(tester, width: 320, textScale: 1.3);
+    await (db.update(
+      db.savingsGoals,
+    )..where((g) => g.id.equals('goal-lego'))).write(
+      const SavingsGoalsCompanion(
+        title: Value('Maximilian-Alexander’s Nintendo Switch 2 game'),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    final h2 = tester.renderObject<RenderParagraph>(
+      find.text('Maximilian-Alexander’s Nintendo Switch 2 game'),
+    );
+    expect(
+      h2.didExceedMaxLines,
+      isFalse,
+      reason:
+          'K10-BUG-4: the fund-card h2 keeps maxLines: 2, so a long goal '
+          'name is ellipsized at 320 px / 1.3× while the sibling note title '
+          'wraps freely (K10-BUG-3 fix) and the design clamps nothing. Drop '
+          'the cap (or raise it) so the card grows with content',
+    );
+    await disposeApp(tester);
+  }, skip: true);
 
   // -------------------------------------------------------------------------
   // CLEAN probes — kept green so the 6_bugs.md "verified clean" list is
@@ -569,5 +644,154 @@ void main() {
       expect(find.text('Mum marked £3.80 as paid'), findsOneWidget);
       await disposeApp(tester);
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // ITERATION-2 probes — the fix behaviour, pinned (all stay green).
+  // -------------------------------------------------------------------------
+  group('K10 iteration-2 close races (stay green)', () {
+    test('an emission racing close leaves no leak and no error', () async {
+      final repo = _CountingPayoutRepository();
+      final bloc = KidJarBloc(repository: repo)
+        ..add(const KidJarPayoutRequested());
+      await Future<void>.delayed(Duration.zero);
+      expect(repo.liveSubscriptions, 1);
+
+      // The event is in flight when close() starts; the guard and the
+      // cancel must leave nothing live and throw nothing.
+      repo.controllers.last.add(_mayaCelebration);
+      await bloc.close();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(repo.liveSubscriptions, 0);
+      await repo.shutDown();
+    });
+
+    test('a stream error racing close leaves no leak and no error', () async {
+      final repo = _CountingPayoutRepository();
+      final bloc = KidJarBloc(repository: repo)
+        ..add(const KidJarPayoutRequested());
+      await Future<void>.delayed(Duration.zero);
+      repo.controllers.last.addError(StateError('racing error'));
+      await bloc.close();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(repo.liveSubscriptions, 0);
+      await repo.shutDown();
+    });
+
+    test('a reload racing close leaves no leak and no second watch', () async {
+      final repo = _CountingPayoutRepository();
+      final bloc = KidJarBloc(repository: repo)
+        ..add(const KidJarPayoutRequested());
+      await Future<void>.delayed(Duration.zero);
+
+      // The second load is paused in `await previous.cancel()` when close
+      // lands; the old sub is cancelled by the handler, the new one is
+      // never created (the `_closing` re-check).
+      bloc.add(const KidJarPayoutRequested());
+      repo.controllers.first.add(_mayaCelebration);
+      await bloc.close();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(repo.liveSubscriptions, 0);
+      await repo.shutDown();
+    });
+
+    test('six same-tick requests then close never subscribe', () async {
+      final repo = _CountingPayoutRepository();
+      final bloc = KidJarBloc(repository: repo);
+      for (var i = 0; i < 6; i++) {
+        bloc.add(const KidJarPayoutRequested());
+      }
+      await bloc.close();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      // Every queued handler saw `_closing` before it emitted or subscribed.
+      expect(repo.watches, 0);
+      expect(repo.liveSubscriptions, 0);
+      await repo.shutDown();
+    });
+
+    test('close is idempotent after an emission', () async {
+      final repo = _CountingPayoutRepository();
+      final bloc = KidJarBloc(repository: repo)
+        ..add(const KidJarPayoutRequested());
+      await Future<void>.delayed(Duration.zero);
+      repo.controllers.last.add(_mayaCelebration);
+      await bloc.close();
+      await bloc.close();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(repo.liveSubscriptions, 0);
+      await repo.shutDown();
+    });
+  });
+
+  group('K10 iteration-2 layout fixes (stay green)', () {
+    testWidgets('the seeded note title and money render whole at 320 x 1.3', (
+      tester,
+    ) async {
+      // K10-BUG-3 regression: the note title wraps unclamped and the amount
+      // is shrunk to fit by its FittedBox, instead of being ellipsized.
+      await _pumpRoute(tester, width: 320, textScale: 1.3);
+      bool exceeded(String line) => tester
+          .renderObject<RenderParagraph>(find.text(line, skipOffstage: false))
+          .didExceedMaxLines;
+      expect(exceeded('£5.50 went into your Lego Friends set'), isFalse);
+      expect(exceeded('£9.49 to go'), isFalse);
+      await disposeApp(tester);
+    });
+
+    testWidgets('the amount slot is identity at 390 and scales at 320 x 1.3', (
+      tester,
+    ) async {
+      // 390/1.0 (the design cell): the amount fits its slot, so the
+      // FittedBox renders at scale 1 — pixel-identical to the pre-fix build.
+      await _pumpRoute(tester);
+      final fitted390 = find.ancestor(
+        of: find.text('£9.49 to go'),
+        matching: find.byType(FittedBox),
+      );
+      final child390 = tester.getSize(find.text('£9.49 to go')).width;
+      final box390 = tester.getSize(fitted390).width;
+      expect(box390, closeTo(child390, 0.1), reason: 'scale 1.0 at 390');
+      await disposeApp(tester);
+
+      // 320/1.3: the slot is narrower than the text, so the money string is
+      // scaled to fit (never cut) — and only barely.
+      await _pumpRoute(tester, width: 320, textScale: 1.3);
+      final fitted320 = find.ancestor(
+        of: find.text('£9.49 to go'),
+        matching: find.byType(FittedBox),
+      );
+      final child320 = tester.getSize(find.text('£9.49 to go')).width;
+      final box320 = tester.getSize(fitted320).width;
+      expect(box320, lessThan(child320), reason: 'scaled at 320/1.3');
+      expect(box320 / child320, greaterThan(0.9), reason: 'barely shrunk');
+      await disposeApp(tester);
+    });
+
+    testWidgets(
+      'an unbroken goal word wraps by character, never past the card',
+      (tester) async {
+        // The K10-BUG-3 fix removed the note-title ellipsis; this proves that
+        // did not trade truncation for a paint overflow on unbreakable words.
+        final db = await _pumpRoute(tester, width: 320, textScale: 1.3);
+        const word = 'Supercalifragilisticexpialidocious';
+        await (db.update(db.savingsGoals)
+              ..where((g) => g.id.equals('goal-lego')))
+            .write(const SavingsGoalsCompanion(title: Value(word)));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+
+        final h2 = tester.renderObject<RenderParagraph>(find.text(word));
+        final boxes = h2.getBoxesForSelection(
+          const TextSelection(baseOffset: 0, extentOffset: word.length),
+        );
+        final maxRight = boxes.fold<double>(
+          0,
+          (m, b) => b.right > m ? b.right : m,
+        );
+        expect(maxRight, lessThanOrEqualTo(h2.size.width + 0.5));
+        await disposeApp(tester);
+      },
+    );
   });
 }

@@ -901,6 +901,63 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 20));
       },
     );
+
+    // Iteration 2 (K10-BUG-1's fix added one shared `_closing` flag to BOTH
+    // handlers). The guard must be inert until `close()` is called, and each
+    // handler must keep managing only its own stream when the two screens'
+    // events interleave on one bloc instance — the two guards cannot cancel
+    // or disable each other.
+    test(
+      'interleaved K09/K10 events keep one live subscription per stream',
+      () async {
+        final repo = _CountingKidJarRepository();
+        addTearDown(repo.dispose);
+        final bloc = KidJarBloc(repository: repo)
+          ..add(const KidJarLoadRequested());
+        await Future<void>.delayed(Duration.zero);
+        expect(repo.liveListeners, 1, reason: 'the K09 stream is live');
+
+        bloc.add(const KidJarPayoutRequested());
+        await Future<void>.delayed(Duration.zero);
+        expect(repo.payoutLiveListeners, 1, reason: 'the K10 stream is live');
+        expect(
+          repo.liveListeners,
+          1,
+          reason: 'a payout load must not disturb the jar subscription',
+        );
+
+        // K09 again: the jar subscription is replaced (never stacked) and the
+        // payout subscription is untouched.
+        bloc.add(const KidJarLoadRequested());
+        await Future<void>.delayed(Duration.zero);
+        expect(repo.handed, hasLength(2));
+        expect(
+          repo.liveListeners,
+          1,
+          reason: 'the second jar load replaced the first subscription',
+        );
+        expect(repo.payoutLiveListeners, 1);
+
+        await bloc.close();
+        expect(repo.liveListeners, 0, reason: 'close() releases both');
+        expect(repo.payoutLiveListeners, 0);
+      },
+    );
+
+    test('close() is idempotent and never throws with a load queued', () async {
+      final repo = _CountingKidJarRepository();
+      addTearDown(repo.dispose);
+      final bloc = KidJarBloc(repository: repo)
+        ..add(const KidJarPayoutRequested());
+      await bloc.close();
+      // The K09 route's teardown and the K10 route's teardown can both reach a
+      // shared instance (e.g. a double dispose in a test harness); a second
+      // close must be a no-op, not a `Bad state` from a double cancel.
+      await bloc.close();
+
+      expect(repo.payoutLiveListeners, 0);
+      expect(repo.liveListeners, 0);
+    });
   });
 
   group('KidJarBloc payout internal events', () {
