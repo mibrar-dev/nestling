@@ -367,7 +367,192 @@ void main() {
             'the kid row already shows its +N chip',
       );
     },
-    skip: false,
+  );
+
+  // =========================================================================
+  // Iteration-3 probes (terminal completion + ledger credit, K03B-BUG-6 fix)
+  // =========================================================================
+
+  group('terminal completion money path', () {
+    Future<Set<int>> ledgerIds(AppDatabase db) async {
+      final rows =
+          await (db.select(db.ledgerEntries)..where(
+                (l) => l.childId.equals('maya') & l.type.equals('quest_bonus'),
+              ))
+              .get();
+      return rows.map((l) => l.id).toSet();
+    }
+
+    Future<void> makeNoApproval(AppDatabase db, String questId) async {
+      await (db.delete(
+        db.questCompletions,
+      )..where((c) => c.questId.equals(questId))).go();
+      await (db.update(db.quests)..where((q) => q.id.equals(questId))).write(
+        const QuestsCompanion(needsApproval: Value(false)),
+      );
+    }
+
+    test(
+      'terminal completion: approved + one quest_bonus credit in pence',
+      () async {
+        final db = GetIt.instance<AppDatabase>();
+        final repo = GetIt.instance<KidHomeRepository>();
+        await makeNoApproval(db, 'q-tidy');
+        final before = await ledgerIds(db);
+        await repo.completeQuest('maya', 'q-tidy');
+        final rows =
+            await (db.select(db.questCompletions)..where(
+                  (c) => c.questId.equals('q-tidy') & c.childId.equals('maya'),
+                ))
+                .get();
+        expect(rows, hasLength(1));
+        expect(rows.single.status, 'approved');
+        expect(rows.single.decidedAt, isNotNull);
+        final added = (await ledgerIds(db)).difference(before);
+        expect(added, hasLength(1));
+        final credit = await (db.select(
+          db.ledgerEntries,
+        )..where((l) => l.id.equals(added.single))).getSingle();
+        expect(credit.type, 'quest_bonus');
+        expect(credit.childId, 'maya');
+        expect(credit.amountPence, 15, reason: 'q-tidy coins, integer pence');
+        expect(credit.note, 'Tidy your bedroom');
+      },
+    );
+
+    test('racing double completion of a terminal quest credits once', () async {
+      final db = GetIt.instance<AppDatabase>();
+      final repo = GetIt.instance<KidHomeRepository>();
+      await makeNoApproval(db, 'q-tidy');
+      final before = await ledgerIds(db);
+      await Future.wait(<Future<void>>[
+        repo.completeQuest('maya', 'q-tidy'),
+        repo.completeQuest('maya', 'q-tidy'),
+      ]);
+      final rows =
+          await (db.select(db.questCompletions)..where(
+                (c) => c.questId.equals('q-tidy') & c.childId.equals('maya'),
+              ))
+              .get();
+      expect(rows, hasLength(1));
+      expect(rows.single.status, 'approved');
+      expect(
+        (await ledgerIds(db)).difference(before),
+        hasLength(1),
+        reason: 'one completion = one coin credit, never two',
+      );
+    });
+
+    test(
+      'a second completion in the same period does not credit again',
+      () async {
+        final db = GetIt.instance<AppDatabase>();
+        final repo = GetIt.instance<KidHomeRepository>();
+        await makeNoApproval(db, 'q-bins'); // weekly
+        await repo.completeQuest('maya', 'q-bins');
+        final before = await ledgerIds(db);
+        await repo.completeQuest('maya', 'q-bins');
+        expect((await ledgerIds(db)).difference(before), isEmpty);
+        final rows =
+            await (db.select(db.questCompletions)..where(
+                  (c) => c.questId.equals('q-bins') & c.childId.equals('maya'),
+                ))
+                .get();
+        expect(rows, hasLength(1));
+        expect(rows.single.status, 'approved');
+      },
+    );
+
+    test(
+      'an approval quest still writes done_pending with no credit',
+      () async {
+        final db = GetIt.instance<AppDatabase>();
+        final repo = GetIt.instance<KidHomeRepository>();
+        await (db.delete(
+          db.questCompletions,
+        )..where((c) => c.questId.equals('q-reading'))).go();
+        await (db.update(db.quests)..where((q) => q.id.equals('q-reading')))
+            .write(const QuestsCompanion(needsApproval: Value(true)));
+        final before = await ledgerIds(db);
+        await repo.completeQuest('maya', 'q-reading');
+        final rows =
+            await (db.select(db.questCompletions)..where(
+                  (c) =>
+                      c.questId.equals('q-reading') & c.childId.equals('maya'),
+                ))
+                .get();
+        expect(rows.single.status, 'done_pending');
+        expect(rows.single.decidedAt, isNull);
+        expect((await ledgerIds(db)).difference(before), isEmpty);
+        final approvals = await GetIt.instance<ApprovalsRepository>()
+            .getItems();
+        expect(approvals.where((a) => a.questId == 'q-reading'), hasLength(1));
+      },
+    );
+
+    test('the terminal credit survives a database reopen', () async {
+      final dir = Directory.systemTemp.createTempSync('k03b_terminal_');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final file = File('${dir.path}/nestling.db');
+      final db1 = AppDatabase(NativeDatabase(file));
+      await Seed.kidAllDone(db1);
+      await makeNoApproval(db1, 'q-tidy');
+      final before = await ledgerIds(db1);
+      await KidHomeRepositoryImpl(db: db1).completeQuest('maya', 'q-tidy');
+      await db1.close();
+      final db2 = AppDatabase(NativeDatabase(file));
+      final completion =
+          await (db2.select(db2.questCompletions)..where(
+                (c) => c.questId.equals('q-tidy') & c.childId.equals('maya'),
+              ))
+              .getSingle();
+      expect(completion.status, 'approved');
+      final after =
+          await (db2.select(db2.ledgerEntries)..where(
+                (l) => l.childId.equals('maya') & l.type.equals('quest_bonus'),
+              ))
+              .get();
+      final added = after.where((l) => !before.contains(l.id)).toList();
+      expect(added, hasLength(1));
+      expect(added.single.amountPence, 15);
+      await db2.close();
+    });
+  });
+
+  testWidgets(
+    'K03B-BUG-7: approval OFF after a pending completion leaves it in the queue',
+    (tester) async {
+      await _seedAllDone(tester);
+      // q-reading is done_pending from the seed; the parent turns its
+      // "Needs my approval" off afterwards.
+      await tester.runAsync(() async {
+        final db = GetIt.instance<AppDatabase>();
+        await (db.update(db.quests)..where((q) => q.id.equals('q-reading')))
+            .write(const QuestsCompanion(needsApproval: Value(false)));
+      });
+      await _pump(tester);
+      // The kid row now shows the +N chip (no approval needed)...
+      final readingCard = find.ancestor(
+        of: find.text('Reading \u2013 20 minutes'),
+        matching: find.byType(NestKidQuestCard),
+      );
+      expect(
+        find.descendant(of: readingCard, matching: find.text('+10')),
+        findsOneWidget,
+      );
+      // ...but the parent's approvals queue still holds the completion.
+      final approvals = await tester.runAsync(
+        () => GetIt.instance<ApprovalsRepository>().getItems(),
+      );
+      expect(
+        approvals!.where((a) => a.questId == 'q-reading'),
+        isEmpty,
+        reason:
+            'the kid is told no approval is needed while the parent is still '
+            'asked for one',
+      );
+    },
+    skip: true,
   );
 
   testWidgets('the confetti plate is the design 320×250 at stage top + 4', (
