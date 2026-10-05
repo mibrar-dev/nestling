@@ -11,6 +11,7 @@ import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/components/audience.dart';
 import 'package:nestling/core/design_system/components/quest_icons.dart';
 import 'package:nestling/features/kid_home/data/kid_home_repository_impl.dart';
+import 'package:nestling/features/kid_home/domain/entities/kid_growth.dart';
 
 void main() {
   late AppDatabase db;
@@ -86,6 +87,53 @@ void main() {
       final repo = KidHomeRepositoryImpl(db: db);
       expect(await repo.verifyPin('leo', '1234'), isTrue);
       expect(await repo.verifyPin('leo', '0000'), isTrue);
+    });
+  });
+
+  // K05 growth inputs (logic layer): `pipTotalCoins` is mapped from the
+  // child's row (DB truth, never the design's hard-coded 175), and the pure
+  // growth helpers derive the card's remaining / fraction / copy from it.
+  group('K05 pipTotalCoins mapping + growth helpers', () {
+    test('watchProfiles carries lifetime coins in creation order', () async {
+      final repo = KidHomeRepositoryImpl(db: db);
+      final profiles = await repo.watchProfiles().first;
+      expect(profiles.map((child) => child.pipTotalCoins).toList(), <int>[
+        175,
+        60,
+      ], reason: 'Maya 175 then Leo 60, straight from Seed.demo rows');
+    });
+
+    test('watchHome carries the active child lifetime coins', () async {
+      final repo = KidHomeRepositoryImpl(db: db);
+      // Seed.demo plays Maya.
+      final home = await repo.watchHome().first;
+      expect(home.child?.pipTotalCoins, 175);
+      expect(kidPipCoinsRemaining(home.child!.pipTotalCoins), 75);
+      expect(
+        kidPipGrowthFraction(home.child!.pipTotalCoins),
+        closeTo(0.7, 1e-9),
+      );
+    });
+
+    test('Leo maps 60 → 190 more at 0.24', () async {
+      final repo = KidHomeRepositoryImpl(db: db);
+      await repo.setActiveChild('leo');
+      final home = await repo.watchHome().first;
+      expect(home.child?.pipTotalCoins, 60);
+      expect(kidPipCoinsRemaining(60), 190);
+      expect(kidPipGrowthFraction(60), closeTo(0.24, 1e-9));
+    });
+
+    test('growth copy and count match the K05 card', () {
+      expect(kidPipGrowthCopy(175), 'Pip needs 75 more coins to grow');
+      expect(kidPipGrowthCount(175), '175 of 250 coins');
+      expect(kidPipGrowthCopy(60), 'Pip needs 190 more coins to grow');
+      expect(kidPipGrowthCopy(249), 'Pip needs 1 more coin to grow');
+      expect(kidPipGrowthCopy(250), 'Pip is ready to grow!');
+      expect(kidPipGrowthCopy(999), 'Pip is ready to grow!');
+      expect(kidPipGrowthFraction(250), 1.0);
+      expect(kidPipGrowthFraction(999), 1.0);
+      expect(kidPipCoinsRemaining(250), 0);
     });
   });
 

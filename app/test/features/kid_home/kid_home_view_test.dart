@@ -1665,7 +1665,9 @@ void main() {
       await _settleRoute(tester);
       // The new completion celebrates, so the home is offstage until back.
       expect(pushedPath(tester), '/quest-complete');
-      await tester.pageBack();
+      // K05 has no AppBar back button (the design leaves via its CTA), so
+      // leave the way a child does: tap "Yay! Back home".
+      await tester.tap(find.text('Yay! Back home'));
       await _settleRoute(tester);
       expect(
         find.descendant(of: card, matching: find.text('Waiting for Mum')),
