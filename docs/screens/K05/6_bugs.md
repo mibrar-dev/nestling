@@ -1,180 +1,159 @@
-# K05 · Quest complete — Stage 6 bug hunt (iteration 1)
+# K05 · Quest complete — Stage 6 bug hunt (iteration 2)
 
-Adversarial pass over the iteration-1 build (`8343ed2` + build notes
-`2a_build_logic.md` / `2b_build_ui.md`). Hunted: data edges (0/1/6 children,
-long UK names, £0/£999.99 equivalents — K05 shows integer coins only —
-0 and 9999 coins, empty quest lists, deleted active child), rapid double taps,
-back navigation and deep links, restart persistence, parent/kid mode guards,
-dark mode contrast, 320 px + 1.3× text scale, async gaps, Europe/London/BST
-and money rounding. **No screen code was changed in this stage.** No simulator
-was booted, installed on, or driven (only `5_ui` may use
-BC440E48-B3A3-43BC-971B-0EF5DB621874).
+Adversarial pass over the iteration-2 build (`a7bda00`, plus the concurrent
+test/review/UI stages' uncommitted artefacts). Iteration 1's four findings
+are **fixed and verified**; this pass re-audited those fixes and found
+**two new minor issues (K05-BUG-5, K05-BUG-6)** — no major bug. **No screen
+code was changed in this stage.** No simulator was booted, installed on or
+driven (only `5_ui` may use 604697A9-11DA-462F-9837-396E9CA2493A).
 
-**Result: no major bug found — four minor findings (all copy/data-scale, none
-structural). The screen's navigation, persistence, a11y actions, layout,
-dark-mode contrast and rapid-tap guards all pass the probes below.**
+Hunted this pass: the four fixes' edge windows, data edges (0/1/6 children,
+long UK names, 0/1/2/100/9999 coins, empty lists, deleted active child),
+rapid double taps and double pushes, back navigation and deep links, restart
+persistence, parent/kid mode, dark mode, 320/390/430 × 1.0/1.3, async gaps,
+Europe/London/BST, and rounding. Timezone/BST and £ rounding have nothing to
+fail on this screen (integer coins only, no clock).
 
 ```
 flutter analyze test/features/kid_home/k05_bugs_test.dart   → No issues found!
 flutter test --timeout 120s test/features/kid_home/k05_bugs_test.dart
-  → +13 pass, ~5 skip (the five bug proofs; green suite)
+  → +18 pass, ~2 skip (the two new proofs; suite green)
 flutter test --timeout 120s --run-skipped test/features/kid_home/k05_bugs_test.dart
-  → the 5 skipped proofs FAIL exactly as documented below
-flutter test --timeout 120s test/features/kid_home/
-  → +606 pass, ~8 skip (3 pre-existing K03 skips + the 5 here), 0 fail
+  → the 2 skipped proofs FAIL exactly as documented below
+flutter test --timeout 120s test/features/kid_home/quest_complete_view_test.dart
+  test/features/kid_home/quest_complete_geometry_test.dart
+  → +31 pass, 0 skip, 0 fail (K05 core suite, iteration-1 fixes verified)
 ```
 
 ## Findings
 
 | # | Severity | Area | Status |
 |---|---|---|---|
-| K05-BUG-1 | minor | copy/plural (`+1 coins`) | OPEN — proofs skipped, fail when run |
-| K05-BUG-2 | minor | rounding (249/250 → 100 %) | OPEN — proof skipped, fails when run |
-| K05-BUG-3 | minor | 320 px @ 1.3× count-row truncation | OPEN — proof skipped, fails when run |
-| K05-BUG-4 | minor | long UK name hero truncation | OPEN — proof skipped, fails when run |
+| K05-BUG-1 | minor | copy/plural (`+1 coins`) | **FIXED (iter 2), verified** — proofs green |
+| K05-BUG-2 | minor | rounding label (249/250 → 100 %) | **FIXED (iter 2), verified** — label proof green (value is K05-BUG-6) |
+| K05-BUG-3 | minor | 320 px @ 1.3× count-row truncation | **FIXED (iter 2), verified** — proof green (heuristic hole is K05-BUG-5) |
+| K05-BUG-4 | minor | long UK name hero truncation | **FIXED (iter 2), verified** — proof green |
+| K05-BUG-5 | minor | count row still ellipsises 4-digit counts | OPEN — proof skipped, fails when run |
+| K05-BUG-6 | minor | progress value contradicts its label | OPEN — proof skipped, fails when run |
 
 ---
 
-### K05-BUG-1 (minor) — a 1-coin quest celebrates as `+1 coins`
+### K05-BUG-5 (minor) — a 4-digit lifetime count still ellipsises on one line
 
-**Repro.** P09's quest editor floor is 1 coin
-(`app/lib/features/quests/presentation/views/quest_editor_view.dart:333
-_minCoins = 1`). A parent creates a 1-coin quest; the child completes it.
-The K05 pill renders `+1 coins` and its semantics node announces
-`1 coins earned` — the wrong plural in both places. The growth card on the
-same screen already singularises (`Pip needs 1 more coin to grow`), so the
-pill is the only place the grammar slips. Measured on the real widget:
-`+1 coins` = 1 node, `+1 coin` = 0 nodes; `1 coins earned` = 1 node.
+**Repro.** Set Maya's `pip_total_coins = 9999` (the brief's 9999-coins edge)
+and open `/quest-complete`:
 
-**Failing test.** `K05-BUG-1a: a 1-coin quest must read "+1 coin", not
-"+1 coins"` and `K05-BUG-1b: the 1-coin pill announces "1 coin earned", not
-"1 coins earned"` (skipped; run with `--run-skipped`).
+- 390 px @ 1.3×: `"9999 of 250 coins"` needs 162.1 px and `"Next: Songbird"`
+  136.0 px. The K05-BUG-3 decision checks `162.1 + 8 + 136.0 = 306.1 <= 312`
+  and keeps **one line**, but the one-line `Row` gives each `Flexible`
+  `(312 − 8) / 2 = 152 px`. Measured: the count box is x 39…191 (152 px,
+  `didExceedMaxLines == true`), `Next:` x 215…351 (fits), both on the same
+  line.
+- 320 px @ 1.0×: `124.7 + 8 + 104.6 = 237.3 <= 242` keeps one line; the cap
+  is 117 px. Measured: count x 39…156 (117 px, ellipsised), `Next:`
+  x 176.4…281 (fits).
 
-**Suggested fix.** In `quest_complete_view.dart`, singularise both strings:
+The flaw: the heuristic only checks that the pair *sum* fits, not that each
+label fits the half-width the equal-flex `Row` actually gives it. An
+asymmetric pair (a 4-digit count with the short fixed `Next:` label) is cut
+even though the decision says one line.
 
-```dart
-final coinWord = coins == 1 ? 'coin' : 'coins';
-amount: '+$coins $coinWord',
-semanticLabel: '$coins $coinWord earned',
-```
+**Failing test.** `K05-BUG-5: a 4-digit lifetime count must not ellipsise on
+one line` (skipped; run with `--run-skipped`).
 
-Note: K08's bug report already logged `N coins` as an app-wide convention
-(K08 observation 3). K05's own card singularises, so this is an internal
-inconsistency; the orchestrator may prefer one shared plural helper instead.
-
----
-
-### K05-BUG-2 (minor) — 249/250 announces `100% of the way to Songbird`
-
-**Repro.** Set Maya's `pip_total_coins = 249`. The card shows
-`Pip needs 1 more coin to grow` and `249 of 250 coins`, while the progress
-node announces `Pip is 100% of the way to Songbird`:
-`(0.996 * 100).round()` rounds the last coin away (99.6 → 100). The bar itself
-is 99.6 % filled. Measured: the `100%` label exists, the `99%` label does not,
-while `1 more coin` and `249 of 250 coins` are both on screen.
-
-**Failing test.** `K05-BUG-2: one coin short of growing must not announce
-100 %` (skipped).
-
-**Suggested fix.** Floor the percentage while the fraction is below 1:
-
-```dart
-final percent = fraction >= 1 ? 100 : (fraction * 100).floor();
-```
-
-(70 and 24 stay exact for the seed values.) K06's `PipGrowthCard` uses the
-same `.round()`; if the orchestrator wants one behaviour, fix both — K05's
-copy makes the contradiction visible, so it is filed here.
+**Suggested fix.** Keep the one-line branch only when
+`max(countW, nextW) <= (maxWidth - NestSpacing.s2) / 2`, or allocate the flex
+proportional to the measured widths (`Expanded(flex: countW.round())` etc.) so
+the count gets the room it needs; the stacked branch already exists for the
+overflow case. Seed values (175 → 150.4 px) stay one line.
 
 ---
 
-### K05-BUG-3 (minor) — the count row truncates at 320 px / 1.3×
+### K05-BUG-6 (minor) — the progress node's value contradicts its own label
 
-**Repro.** Pump the loaded screen at 320 px wide with the app shell's maximum
-supported text scale 1.3, scroll to the growth card. The count row gives each
-`Flexible` `(242 − 8) / 2 = 117 px`; with real Nunito the labels need
-`175 of 250 coins` ≈ 150.4 px and `Next: Songbird` ≈ 136.0 px, so **both
-ellipsise** (`175 of 250 coi…` / `Next: Songbi…`) and
-`RenderParagraph.didExceedMaxLines == true` for both. At 390 px / 1.3 the same
-labels fit (150.4 / 136.0 vs 152 each), so the defect is specific to the
-320 px + 1.3× combination the shell explicitly supports.
+**Repro.** The K05-BUG-2 fix floored the view's progress **label** but the
+shared `NestProgress` still computes its semantics **value** as
+`(fraction * 100).round()` (`nest_progress.dart:65-66`). Measured on the real
+widget:
 
-**Failing test.** `K05-BUG-3: the count row must stay readable at 320 px /
-1.3×` (skipped).
+| `pip_total_coins` | node label | node value |
+|---|---|---|
+| 249 | `Pip is 99% of the way to Songbird` | `100 percent` |
+| 174 | `Pip is 69% of the way to Songbird` | `70 percent` |
+| 124 | `Pip is 49% of the way to Songbird` | `50 percent` |
 
-**Suggested fix.** At large scalers, let the row stack (count on one line,
-`Next:` under it) or scale the labels down with `FittedBox`; keep the exact
-390/1.0 design rect (`quest_complete_geometry_test.dart` pins count left 39,
-`Next:` right 351, progress top 662).
+VoiceOver reads the label and value as one announcement
+("… 99% of the way to Songbird, 100 percent"), so whenever the hundredths
+round up the node contradicts itself — the same defect K05-BUG-2 closed for
+the label. The seed values (175 → 70, 60 → 24) are consistent.
 
----
+**Failing test.** `K05-BUG-6: the progress node must not announce a
+contradictory value` (skipped).
 
-### K05-BUG-4 (minor) — a long UK name is ellipsised in the hero
-
-**Repro.** Add a child named `Maximilian-Alexander` (or
-`Christopher-James`) as the active child and open `/quest-complete` at the
-design size (390 px, text scale 1.0). The hero `Brilliant,
-Maximilian-Alexander!` needs 3 natural 44 px lines at the design's 40/44
-(measured with real Nunito at 350 px), but the view caps it at
-`maxLines: 2`, so the name renders ellipsised (`didExceedMaxLines == true`,
-box 350×88). `Alexandrina` (2 lines) and every seed name fit. The design's h1
-has **no line cap** (`text-wrap: balance` only), so the browser shows the
-whole name; VoiceOver already announces the full string — only the visual is
-cut.
-
-**Failing test.** `K05-BUG-4: "Brilliant, Maximilian-Alexander!" must not be
-truncated` (skipped).
-
-**Suggested fix.** Raise the hero to `maxLines: 3` (or drop the cap):
-`Brilliant, Maya!` stays a single line, so the design rect at 343…387 is
-unchanged; only over-cap names gain a third line and scroll with the rest of
-the content.
+**Suggested fix.** Give `NestProgress` an optional `semanticValue` (or floor
+`(f * 100)` the same way the view floors its label) so label and value always
+agree; `core/**` is outside this screen's edit set, so this is a
+SHARED_REQUEST-style shared fix. A screen-only alternative is wrapping the
+progress in K05's own labelled node, but that would drop the component's
+`role=img` contract.
 
 ---
+
+### Iteration-1 findings — fixed and verified
+
+- **K05-BUG-1** — a 1-coin quest now renders `+1 coin` and announces
+  `1 coin earned` (`K05-BUG-1a/1b` run green; the view singularises both).
+- **K05-BUG-2** — the label floors to 99 % at 249/250 (`K05-BUG-2` green);
+  the remaining value mismatch is K05-BUG-6.
+- **K05-BUG-3** — the count row stacks at 320/1.3 instead of ellipsising
+  (`K05-BUG-3` green); the one-line heuristic's asymmetric window is
+  K05-BUG-5.
+- **K05-BUG-4** — the hero allows 3 lines: `Maximilian-Alexander` is whole at
+  390/1.0 (3 lines), at 390/1.3 (3 lines, measured) and at 320/1.0 (3 lines);
+  `K05-BUG-4` green.
 
 ## Checked clean (evidence in `k05_bugs_test.dart`, un-skipped and green)
 
 | Area | Probe / test | Result |
 |---|---|---|
-| rapid double tap, same frame | `a same-frame double tap of the CTA lands on /kid-home once` | pass — one `/kid-home`, no exception |
-| rapid double tap, staggered | `a staggered double tap of the CTA still lands once` | pass |
-| lock double tap | `the lock opens the gate exactly once for a double tap` | pass — one `/parental-gate` |
-| lock a11y action | `the lock semantics action drives the real gate push` | pass — `hasAction(tap)` + `performAction` pushes the gate |
-| system back | `system back from a pushed celebration returns to the pusher` | pass |
-| restart persistence | `a completed quest survives an app restart` | pass — the same Drift DB still answers the direct launch (`+10` for a 10-coin q-reading) |
-| 0 children | `Seed.empty offers the picker, never a blank celebration` | pass |
-| 1 / 6 children | `six children do not change the active celebration` | pass — active child's data only |
-| empty quest list | `an empty quest list still celebrates with +0 coins` | pass — never blank |
-| deleted active child | `deleting the active child mid-view falls back to the picker` | pass — no exception |
-| 9999 coins @ 320/1.3 | `9999 coins at 320 px / 1.3x fits the pill` | pass — no truncation with real Nunito |
-| dark bottom edge | `the dark bar surface reaches the edge under a 34 px inset` | pass — surface box reaches y 844 (owner rule) |
-| dark/light contrast | `every K05 token pair meets WCAG contrast in light and dark` | pass — 18/18 pairs ≥ 4.5:1 |
-| real K03 flow | probe: tap a card check → `/quest-complete` with the quest's own coins (`+10` for q-reading) | pass |
-| kid/parent mode | `/quest-complete` renders in both; only parent-only routes are guarded from kid mode (K06 precedent) | pass by design |
+| rapid double tap, same frame / staggered | `a same-frame double tap of the CTA lands on /kid-home once`, `a staggered double tap of the CTA still lands once` | pass |
+| double push of the celebration | iteration-2 probe: two pushes → CTA lands on `/kid-home` | pass |
+| CTA + system back, same frame | iteration-2 probe: settles on `/kid-home`, no exception | pass |
+| lock → back → CTA | iteration-2 probe: gate → K05 → home | pass |
+| lock double tap / a11y action | `the lock opens the gate exactly once…`, `the lock semantics action drives the real gate push` | pass |
+| system back from a pushed celebration | `system back from a pushed celebration returns to the pusher` | pass |
+| restart persistence | `a completed quest survives an app restart` | pass — same DB answers `+10` |
+| 0 children / empty lists | `Seed.empty offers the picker…`, `an empty quest list still celebrates with +0 coins` | pass |
+| 6 children / deleted active child | `six children do not change the active celebration`, `deleting the active child mid-view falls back to the picker` | pass |
+| pill matrix 0/1/2/100 | iteration-2 probe: `+0 coins` / `+1 coin` / `+2 coins` / `+100 coins` + labels | pass |
+| count row at 390/1.0, 390/1.3, 320/1.0, 320/1.3 | iteration-2 probes: one line / one line / one line / stacked, no ellipsis with seed values | pass |
+| percent labels 0/1/125/249/250/260 | iteration-2 probe: 0 / 0 / 50 / 99 / 100 / 100 | pass |
+| card label no longer duplicates the percent | iteration-2 probe: card node = `… Next Songbird.`, progress node separate | pass |
+| 9999 coins @ 320/1.3 | `9999 coins at 320 px / 1.3x fits the pill` | pass — pill fits; count row is K05-BUG-5 |
+| stress: 6 children + long name + dark + 320/1.3 | iteration-2 probe: renders, no exception | pass |
+| dark bottom edge under a 34 px inset | `the dark bar surface reaches the edge under a 34 px inset` | pass |
+| contrast | `every K05 token pair meets WCAG contrast…` | pass — 18/18 ≥ 4.5:1 |
+| rebuild scope (`buildWhen`) | `quest_complete_view_test.dart` roster-only emission | pass |
+| device matrix | `quest_complete_matrix_test.dart` overflow/gutters/tap-target cells | pass (bottom-band cells: see note) |
 
 ## Notes (not product findings)
 
-- **Direct-launch fallback order.** With no route `extra`, `_coinsFor` quotes
-  the first `done_pending`/`approved` item in title order, not the most recent
-  completion. No in-app path pushes K05 without `extra` (K03/K04 always pass
-  `{questId, childId, coins}`); only `shot.sh` / `INITIAL_ROUTE` launches use
-  the fallback, where it is the intended DB-driven replacement for the
-  design's hard-coded `+15`. Not filed.
-- **`extra` naming another child.** `{questId: 'q-bed', childId: 'leo',
-  coins: 5}` while Maya plays shows Maya + `+5 coins`. The plan §b says the
-  extra's coins are the authority and the stream's active child owns the
-  screen; K03/K04 always pass matching ids, so the path is unreachable in
-  product. Not filed (would be a shared-caller question if ever reachable).
-- **Cross-feature: `children.pip_total_coins` never increments.** Only
-  `Seed.demo` writes it; P11 approval credits the ledger but not the child
-  row, so the growth bar does not advance in real use. This is outside K05's
-  editable set (approvals/pip features) — carried for the orchestrator, not a
-  K05 defect.
-- **Timezone/BST and money rounding.** K05 has no clock and shows integer
-  coins, never £, so there is nothing for the London period rule or pence
-  rounding to change on this screen; the period rule is already pinned in the
-  K03/K04/K11 suites.
-- **Status bar.** `NestStatusBar` reserves height only; OS glyph differences
-  are excluded from checks per the orchestrator rule.
+- **4-line nicknames still ellipsise.** `Maximilian-Alexander-Wellington`
+  needs 4 natural hero lines; the K05-BUG-4 fix caps at 3, so it ellipsises
+  (no exception, full name in the semantics). The design h1 has no cap, but
+  the cap keeps the realistic double-barrelled names whole; noted, not filed.
+- **The test-stage matrix file's bottom-band cells are a false positive.**
+  `quest_complete_matrix_test.dart` (owned by the concurrent test stage)
+  iterates every `DecoratedBox` overlapping the band below the CTA and
+  requires the bar surface colour — but `KidScope`'s full-screen background
+  box (`color: kidSkyBottom` + gradient, `Positioned.fill`) overlaps it and
+  is painted *behind* the bar, so all band cells fail regardless of the
+  product. The product's bottom edge is correct: the iteration-2 `5_ui`
+  capture measures the bar surface to the physical edge (and would fail a
+  strip), and the pixel probes in iteration 1 agree. Left to the test stage.
+- **Deep-link fallback order** (review finding 1) and **`kid_growth.dart`
+  location** (review finding 2) remain carried minors outside this stage.
+- **`NestProgress`'s `TextPainter` disposal** (review finding 5) and the
+  **`pi` literal** (finding 6) are hygiene, not product bugs.
 
 VERDICT: PASS

@@ -1,40 +1,36 @@
-// K05 (quest complete) adversarial bug hunt — Stage 6, iteration 1.
+// K05 (quest complete) adversarial bug hunt — Stage 6, iteration 2.
 //
-// Findings this iteration (all MINOR — no major bug found; the screen's
-// navigation, persistence, a11y actions, layout, dark-mode contrast and
-// rapid-tap guards all pass the probes in this file):
+// Iteration 1's four findings (K05-BUG-1..4) are FIXED and verified: their
+// proofs run un-skipped and green. This pass re-audited the fixes and found
+// two new MINOR issues (no major bug: navigation, persistence, a11y actions,
+// layout, dark-mode contrast, tap guards and the device matrix all pass):
 //
-// * K05-BUG-1 (MINOR, fixed in iteration 2) — a 1-coin quest celebrated as
-//   "+1 coins" and
-//   announces "1 coins earned". The quest editor's minimum reward is 1
-//   (`quest_editor_view.dart:333 _minCoins = 1`), so the path is reachable.
-//   The growth card next door already handles the singular ("Pip needs
-//   1 more coin to grow"), so the pill is the only place the grammar slips.
-//   Proofs below: `K05-BUG-1a` (visible copy) and `K05-BUG-1b` (semantics).
+// * K05-BUG-5 (MINOR, open) — the K05-BUG-3 one-line/stacked decision only
+//   checks `countW + gap + nextW <= maxWidth`, but the one-line `Row` gives
+//   each `Flexible` only `(maxWidth - gap) / 2`. An asymmetric pair — a
+//   4-digit lifetime count (1000–9999, the brief's 9999 edge) with the fixed
+//   `Next:` label — therefore keeps the one-line layout and ellipsises the
+//   COUNT: "9999 of 250 coins" needs 162.1 px at 1.3× (cap 152) and 124.7 px
+//   at 1.0× (cap 117). Proof below.
 //
-// * K05-BUG-2 (MINOR, fixed in iteration 2) — at 249 of 250 lifetime coins the
-//   card showed
-//   "Pip needs 1 more coin to grow" and "249 of 250 coins", yet the progress
-//   node announces "Pip is 100% of the way to Songbird": `(0.996 * 100)
-//   .round()` rounds the last coin away. The bar itself is 99.6 % filled, so
-//   the announced 100 % contradicts the two visible lines. Proof below.
-//
-// * K05-BUG-3 (MINOR, fixed in iteration 2) — at 320 px wide with the 1.3×
-//   accessibility
-//   text scale (the app shell's supported maximum), the growth card's count
-//   row gives each of "175 of 250 coins" and "Next: Songbird" 117 px and
-//   BOTH ellipsise ("175 of 250 coi…" / "Next: Songbi…"). The data is still
-//   reachable by VoiceOver, but the visible line loses the numbers. Proof
+// * K05-BUG-6 (MINOR, open) — the K05-BUG-2 fix floored the progress LABEL
+//   but the shared `NestProgress` still computes its semantics VALUE as
+//   `(fraction * 100).round()`, so the node contradicts itself whenever the
+//   hundredths round up: 249/250 reads label "Pip is 99% of the way to
+//   Songbird" value "100 percent"; 124/250 → 49 % / "50 percent"; 174/250 →
+//   69 % / "70 percent". VoiceOver reads the contradiction aloud. Proof
 //   below.
 //
-// * K05-BUG-4 (MINOR, fixed in iteration 2) — a double-barrelled UK nickname
-//   such as
-//   "Maximilian-Alexander" makes the hero need 3 natural lines at the
-//   design's 40/44; the view's `maxLines: 2` ellipsises the name even at
-//   390 px / 1.0× ("Brilliant," / "Maximilian-Alexan…"). The design's h1 has
-//   no line cap (`text-wrap: balance` only), so the browser would show the
-//   whole name; the fix is to allow the third line (or drop the cap) for
-//   over-cap names — the "Brilliant, Maya!" case is unaffected. Proof below.
+// Iteration-1 findings (FIXED in iteration 2, proofs now green):
+//
+// * K05-BUG-1 — a 1-coin quest rendered "+1 coins" / announced "1 coins
+//   earned"; the pill now singularises. Proofs `K05-BUG-1a/1b` run.
+// * K05-BUG-2 — 249/250 announced "100%"; the LABEL now floors to 99 %
+//   (the VALUE is K05-BUG-6).
+// * K05-BUG-3 — the count row ellipsised both labels at 320 px / 1.3×; it
+//   now stacks when the pair does not fit. Proof runs.
+// * K05-BUG-4 — "Brilliant, Maximilian-Alexander!" was cut at the 2-line
+//   cap; the hero now allows 3 lines. Proof runs.
 //
 // Checked clean (kept as evidence; these run in the plain suite):
 //   * rapid same-frame and staggered double taps of "Yay! Back home" land on
@@ -46,20 +42,23 @@
 //   * `Seed.empty` deep link offers the picker (no crash, no celebration);
 //   * 6 children in the family do not change the active child's celebration;
 //   * an empty quest list still celebrates with "+0 coins", never blank;
-//   * 9999 coins at 320 px / 1.3× fits the pill with real Nunito (no
-//     truncation, no overflow);
+//   * 9999 coins at 320 px / 1.3× fits the PILL with real Nunito (the count
+//     ROW is K05-BUG-5);
 //   * the dark bottom bar surface reaches the physical edge under a 34 px
 //     home-indicator inset (owner bottom-edge rule);
 //   * every K05 token pair meets WCAG 4.5:1 in both themes;
 //   * the lock's semantics action drives the real gate push;
 //   * kid mode may reach /quest-complete (kid route) and parent mode may too
-//     (K06 precedent: kid screens are reachable in parent mode by design).
+//     (K06 precedent: kid screens are reachable in parent mode by design);
+//   * a double push of the celebration and a CTA-then-system-back burst both
+//     settle on a valid route with no exception (iteration-2 probes).
 //
 // Timezone/BST: K05 has no time logic (static celebration + DB values), so
 // there is nothing for the Europe/London periods to change on this screen —
 // the period rule is K03/K04/K11 business and is already covered there.
-// Money rounding: K05 shows integer coins only, never £ — the only rounding
-// artefact is K05-BUG-2's percentage.
+// Money rounding: K05 shows integer coins only, never £ — the rounding
+// artefacts are the percentage pair K05-BUG-2 (fixed label) / K05-BUG-6
+// (value).
 //
 // Every pumped app ends with `disposeApp` (test_scope.dart) so Drift's
 // deferred stream-close timer is drained.
@@ -328,6 +327,98 @@ void main() {
       );
       await disposeApp(tester);
     },
+  );
+
+  // -------------------------------------------------------------------------
+  // K05-BUG-5 — the one-line heuristic ignores the equal-flex cap
+  // -------------------------------------------------------------------------
+
+  testWidgets(
+    'K05-BUG-5: a 4-digit lifetime count must not ellipsise on one line',
+    (tester) async {
+      final db = GetIt.instance<AppDatabase>();
+      await tester.runAsync(() async {
+        await (db.update(db.children)..where((c) => c.id.equals('maya'))).write(
+          const ChildrenCompanion(pipTotalCoins: Value(9999)),
+        );
+      });
+      // Two supported cells where the pair total still fits the card (so the
+      // K05-BUG-3 decision keeps one line) while the count ALONE exceeds the
+      // half-width cap the equal-flex Row imposes on each label.
+      for (final (width, scale) in <(double, double)>[(390, 1.3), (320, 1.0)]) {
+        await _pump(tester, width: width, textScale: scale);
+        await _revealCard(tester);
+        final count = tester.renderObject<RenderParagraph>(
+          find.text('9999 of 250 coins'),
+        );
+        final next = tester.renderObject<RenderParagraph>(
+          find.text('Next: Songbird'),
+        );
+        final countRect = tester.getRect(find.text('9999 of 250 coins'));
+        final nextRect = tester.getRect(find.text('Next: Songbird'));
+        expect(
+          (countRect.top - nextRect.top).abs() < 1,
+          isTrue,
+          reason: '${width}px/${scale}x: sanity — one-line layout was chosen',
+        );
+        expect(
+          count.didExceedMaxLines,
+          isFalse,
+          reason:
+              '${width}px/${scale}x: "9999 of 250 coins" ellipsises. The '
+              'one-line decision only checks count + gap + next <= maxWidth, '
+              'but the Row gives each Flexible only (maxWidth - 8) / 2 '
+              '(152 px at 390/1.3, 117 px at 320/1.0) while the count needs '
+              '162.1 / 124.7 px — an asymmetric pair is cut even though the '
+              'decision says it fits. Fix: keep one line only when '
+              'max(countW, nextW) <= (maxWidth - 8) / 2, or allocate flex '
+              'proportional to the measured widths.',
+        );
+        expect(next.didExceedMaxLines, isFalse);
+        expect(tester.takeException(), isNull);
+        await disposeApp(tester);
+      }
+    },
+    skip: true,
+  );
+
+  // -------------------------------------------------------------------------
+  // K05-BUG-6 — the progress node's value contradicts its own label
+  // -------------------------------------------------------------------------
+
+  testWidgets(
+    'K05-BUG-6: the progress node must not announce a contradictory value',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      final db = GetIt.instance<AppDatabase>();
+      for (final total in <int>[249, 174, 124]) {
+        await tester.runAsync(() async {
+          await (db.update(db.children)..where((c) => c.id.equals('maya')))
+              .write(ChildrenCompanion(pipTotalCoins: Value(total)));
+        });
+        await _pump(tester);
+        await _revealCard(tester);
+        // The view's floored label: 99 / 69 / 49.
+        final label = find.bySemanticsLabel(RegExp('Pip is .*% of the way'));
+        expect(label, findsOneWidget);
+        final data = tester.getSemantics(label).getSemanticsData();
+        final labelPct = RegExp(r'(\d+)%').firstMatch(data.label)!.group(1)!;
+        expect(
+          data.value,
+          '$labelPct percent',
+          reason:
+              'total $total: the node label says $labelPct % but the value '
+              'comes from NestProgress\u2019s own (fraction * 100).round() '
+              '(K05-BUG-2 floored the label only), so VoiceOver reads '
+              '"${data.label}, ${data.value}". Fix: give NestProgress a '
+              'semanticValue / floor it like the label (shared component), '
+              'or have K05 pass the floored figure to both.',
+        );
+        await disposeApp(tester);
+      }
+      semantics.dispose();
+    },
+    skip: true,
   );
 
   // -------------------------------------------------------------------------
