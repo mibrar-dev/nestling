@@ -1,17 +1,22 @@
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/current_family.dart';
 import 'package:nestling/core/data/family_time.dart';
-import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/data/stream_combine.dart';
 import 'package:nestling/features/approvals/domain/approvals_repository.dart';
 import 'package:nestling/features/approvals/domain/entities/approval.dart';
 
 /// Drift-backed [ApprovalsRepository].
 class ApprovalsRepositoryImpl implements ApprovalsRepository {
-  new({required this._db});
+  new({required AppDatabase db, CurrentFamily? currentFamily})
+    : _db = db,
+      _currentFamily = currentFamily ?? CurrentFamily.fallback(db);
 
   final AppDatabase _db;
+  final CurrentFamily _currentFamily;
+
+  String get _familyId => _currentFamily.familyId;
 
   @override
   Future<List<Approval>> getItems() => watchItems().first;
@@ -19,9 +24,9 @@ class ApprovalsRepositoryImpl implements ApprovalsRepository {
   @override
   Stream<List<Approval>> watchItems() {
     return combineLatest4(
-      _db.watchPendingApprovals(Seed.familyId),
+      _db.watchPendingApprovals(_familyId),
       _db.select(_db.quests).watch(),
-      _db.watchChildren(Seed.familyId),
+      _db.watchChildren(_familyId),
       _db.watchFamilyZoneId(),
     ).map((parts) {
       final pending = parts[0] as List<QuestCompletion>;
@@ -94,7 +99,7 @@ class ApprovalsRepositoryImpl implements ApprovalsRepository {
           .into(_db.ledgerEntries)
           .insert(
             LedgerEntriesCompanion.insert(
-              familyId: Seed.familyId,
+              familyId: _familyId,
               childId: completion.childId,
               type: 'quest_bonus',
               amountPence: completion.coins,
@@ -134,7 +139,7 @@ class ApprovalsRepositoryImpl implements ApprovalsRepository {
     final pending =
         await (_db.select(_db.questCompletions)..where(
               (c) =>
-                  c.familyId.equals(Seed.familyId) &
+                  c.familyId.equals(_familyId) &
                   c.status.equals('done_pending'),
             ))
             .get();

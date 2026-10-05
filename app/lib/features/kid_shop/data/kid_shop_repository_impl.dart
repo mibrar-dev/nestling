@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
-import 'package:nestling/core/data/seed.dart';
+import 'package:nestling/core/data/current_family.dart';
 import 'package:nestling/core/data/stream_combine.dart';
 import 'package:nestling/features/kid_shop/domain/entities/kid_shop_data.dart';
 import 'package:nestling/features/kid_shop/domain/entities/shop_reward.dart';
@@ -11,9 +11,14 @@ import 'package:nestling/features/kid_shop/domain/kid_shop_repository.dart';
 
 /// Drift-backed [KidShopRepository].
 class KidShopRepositoryImpl implements KidShopRepository {
-  new({required this._db});
+  new({required AppDatabase db, CurrentFamily? currentFamily})
+    : _db = db,
+      _currentFamily = currentFamily ?? CurrentFamily.fallback(db);
 
   final AppDatabase _db;
+  final CurrentFamily _currentFamily;
+
+  String get _familyId => _currentFamily.familyId;
 
   /// The active child's shop: `app_state.activeChildId` (demo seed: `maya`)
   /// fans out to exactly one rewards query (creation order — the K08 list
@@ -31,7 +36,7 @@ class KidShopRepositoryImpl implements KidShopRepository {
   /// with `affordable` resolved against that child's coins.
   Stream<KidShopData> _shopFor(String childId) {
     return combineLatest2(
-      _db.watchRewardsInCreationOrder(Seed.familyId),
+      _db.watchRewardsInCreationOrder(_familyId),
       _db.watchChild(childId),
     ).map((parts) {
       final rewards = parts[0] as List<Reward>;
@@ -133,7 +138,7 @@ class KidShopRepositoryImpl implements KidShopRepository {
           RewardRedemptionsCompanion.insert(
             rewardId: rewardId,
             childId: childId,
-            familyId: Seed.familyId,
+            familyId: _familyId,
             status: Value(status),
             createdAt: Value(now),
             createdAtTz: Value(zone),

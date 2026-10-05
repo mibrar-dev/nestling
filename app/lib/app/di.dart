@@ -2,6 +2,7 @@ import 'package:get_it/get_it.dart';
 import 'package:nestling/app/controllers.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
+import 'package:nestling/core/data/current_family.dart';
 import 'package:nestling/core/data/family_zone_service.dart';
 import 'package:nestling/features/approvals/approvals_di.dart';
 import 'package:nestling/features/auth/auth_di.dart';
@@ -32,6 +33,11 @@ Future<void> configureDependencies({AppDatabase? database}) async {
   if (!sl.isRegistered<AppDatabase>()) {
     sl.registerSingleton<AppDatabase>(database ?? await AppDatabase.open());
   }
+  if (!sl.isRegistered<CurrentFamily>()) {
+    sl.registerSingleton<CurrentFamily>(
+      await CurrentFamily.resolve(sl<AppDatabase>()),
+    );
+  }
   if (!sl.isRegistered<AppModeController>()) {
     sl.registerLazySingleton<AppModeController>(AppModeController.new);
   }
@@ -39,7 +45,9 @@ Future<void> configureDependencies({AppDatabase? database}) async {
     sl.registerLazySingleton<ThemeModeController>(ThemeModeController.new);
   }
   if (!sl.isRegistered<AppSession>()) {
-    sl.registerSingleton<AppSession>(AppSession(sl<AppDatabase>()));
+    sl.registerSingleton<AppSession>(
+      AppSession(sl<AppDatabase>(), currentFamily: sl<CurrentFamily>()),
+    );
   }
   if (!sl.isRegistered<FamilyZoneService>()) {
     sl.registerLazySingleton<FamilyZoneService>(

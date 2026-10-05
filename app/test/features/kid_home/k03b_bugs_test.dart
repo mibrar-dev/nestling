@@ -520,40 +520,60 @@ void main() {
     });
   });
 
-  testWidgets(
-    'K03B-BUG-7: approval OFF after a pending completion leaves it in the queue',
-    (tester) async {
-      await _seedAllDone(tester);
-      // q-reading is done_pending from the seed; the parent turns its
-      // "Needs my approval" off afterwards.
-      await tester.runAsync(() async {
-        final db = GetIt.instance<AppDatabase>();
-        await (db.update(db.quests)..where((q) => q.id.equals('q-reading')))
-            .write(const QuestsCompanion(needsApproval: Value(false)));
-      });
-      await _pump(tester);
-      // The kid row now shows the +N chip (no approval needed)...
-      final readingCard = find.ancestor(
-        of: find.text('Reading \u2013 20 minutes'),
-        matching: find.byType(NestKidQuestCard),
+  test(
+    'K03B-BUG-7: approval OFF keeps already-pending completions in the queue',
+    () async {
+      // Orchestrator decision: turning "Needs my approval" OFF never silently credits pending completions — they stay for the parent to decide; only new completions are terminal.
+      final db = GetIt.instance<AppDatabase>();
+      final approvalsRepo = GetIt.instance<ApprovalsRepository>();
+      final kidRepo = GetIt.instance<KidHomeRepository>();
+
+      Future<int> questBonusCount() async {
+        return (await (db.select(db.ledgerEntries)..where(
+                  (l) =>
+                      l.childId.equals('maya') & l.type.equals('quest_bonus'),
+                ))
+                .get())
+            .length;
+      }
+
+      // q-dishwasher is pending in demo; flipping approval OFF keeps it queued.
+      final beforePending = await questBonusCount();
+      await (db.update(db.quests)..where((q) => q.id.equals('q-dishwasher')))
+          .write(const QuestsCompanion(needsApproval: Value(false)));
+      final stillQueued = await approvalsRepo.getItems();
+      expect(
+        stillQueued.where((a) => a.questId == 'q-dishwasher'),
+        hasLength(1),
+        reason: 'submitted under the old rule: the parent still decides',
       );
       expect(
-        find.descendant(of: readingCard, matching: find.text('+10')),
-        findsOneWidget,
+        await questBonusCount(),
+        beforePending,
+        reason: 'no silent coin credit for the waiting completion',
       );
-      // ...but the parent's approvals queue still holds the completion.
-      final approvals = await tester.runAsync(
-        () => GetIt.instance<ApprovalsRepository>().getItems(),
-      );
+
+      // A new completion after the flip is terminal: approved + credited,
+      // never queued. q-reading is still to_do in demo.
+      await (db.update(db.quests)..where((q) => q.id.equals('q-reading')))
+          .write(const QuestsCompanion(needsApproval: Value(false)));
+      final beforeNew = await questBonusCount();
+      await kidRepo.completeQuest('maya', 'q-reading');
+      final readingRows =
+          await (db.select(db.questCompletions)..where(
+                (c) => c.questId.equals('q-reading') & c.childId.equals('maya'),
+              ))
+              .get();
+      expect(readingRows, hasLength(1));
+      expect(readingRows.single.status, 'approved');
+      expect(await questBonusCount(), beforeNew + 1);
+      final afterNew = await approvalsRepo.getItems();
       expect(
-        approvals!.where((a) => a.questId == 'q-reading'),
+        afterNew.where((a) => a.questId == 'q-reading'),
         isEmpty,
-        reason:
-            'the kid is told no approval is needed while the parent is still '
-            'asked for one',
+        reason: 'terminal completions never land in the approvals queue',
       );
     },
-    skip: true,
   );
 
   testWidgets('the confetti plate is the design 320×250 at stage top + 4', (

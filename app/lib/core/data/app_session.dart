@@ -18,6 +18,7 @@ import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/current_family.dart';
 
 /// Clock returning "now" (defaults to [appNowUtc], i.e. `clock.now()` pinned
 /// to the seed anchor in tests). Tests pin this to a
@@ -25,7 +26,8 @@ import 'package:nestling/core/data/app_database.dart';
 typedef AppSessionClock = DateTime Function();
 
 class AppSession extends ChangeNotifier {
-  AppSession(this._db, {AppSessionClock? clock}) : _clock = clock ?? appNowUtc {
+  AppSession(this._db, {AppSessionClock? clock, this._currentFamily})
+    : _clock = clock ?? appNowUtc {
     _subscription = _db.watchAppState().listen((row) {
       _row = row;
       notifyListeners();
@@ -34,6 +36,7 @@ class AppSession extends ChangeNotifier {
 
   final AppDatabase _db;
   final AppSessionClock _clock;
+  final CurrentFamily? _currentFamily;
   late final StreamSubscription<AppStateData?> _subscription;
   AppStateData? _row;
 
@@ -65,6 +68,11 @@ class AppSession extends ChangeNotifier {
   String? get activeChildId => _row?.activeChildId;
   String get appMode => _row?.appMode ?? 'parent';
   bool get isKid => appMode == 'kid';
+
+  /// The current family id (one family per device). Reads the shared
+  /// [CurrentFamily] holder when wired (production DI), otherwise the
+  /// `'fam1'` fallback so direct test constructions keep working.
+  String get familyId => _currentFamily?.familyId ?? CurrentFamily.fallbackId;
 
   Future<void> completeOnboarding() =>
       _write(const AppStateCompanion(onboardingComplete: Value(true)));

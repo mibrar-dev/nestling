@@ -24,7 +24,6 @@ import 'package:nestling/features/settings/presentation/bloc/settings_bloc.dart'
 import 'package:nestling/features/settings/presentation/bloc/settings_event.dart';
 import 'package:nestling/features/settings/presentation/views/settings_view.dart';
 import 'package:nestling/features/settings/presentation/widgets/p16_transient_guard.dart';
-import 'package:nestling/features/settings/presentation/widgets/settings_rows.dart';
 
 import '../../test_scope.dart';
 import 'p16_test_support.dart' show p16PinnedNowUtc;
@@ -368,9 +367,7 @@ void main() {
               .descendant(
                 of: find.ancestor(
                   of: find.text(entry.$1),
-                  matching: find.byWidgetPredicate(
-                    (w) => w is SettingsRow || w is NestListRow,
-                  ),
+                  matching: find.byWidgetPredicate((w) => w is NestListRow),
                 ),
                 matching: find.byType(NestToggle),
               )

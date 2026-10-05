@@ -1,5 +1,6 @@
 import 'package:get_it/get_it.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/current_family.dart';
 import 'package:nestling/core/data/family_zone_service.dart';
 import 'package:nestling/features/settings/data/settings_repository_impl.dart';
 import 'package:nestling/features/settings/domain/settings_repository.dart';
@@ -17,6 +18,7 @@ void registerSettings(GetIt sl) {
     sl.registerLazySingleton<SettingsRepository>(
       () => SettingsRepositoryImpl(
         db: sl<AppDatabase>(),
+        currentFamily: sl<CurrentFamily>(),
         zoneService: sl<FamilyZoneService>(),
       ),
     );

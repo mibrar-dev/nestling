@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/current_family.dart';
 import 'package:nestling/core/data/london_time.dart';
-import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/data/stream_combine.dart';
 import 'package:nestling/features/kid_jar/domain/entities/jar_entry.dart';
 import 'package:nestling/features/kid_jar/domain/entities/jar_snapshot.dart';
@@ -14,9 +14,14 @@ import 'package:nestling/features/kid_jar/domain/kid_jar_repository.dart';
 
 /// Drift-backed [KidJarRepository].
 class KidJarRepositoryImpl implements KidJarRepository {
-  new({required this._db});
+  new({required AppDatabase db, CurrentFamily? currentFamily})
+    : _db = db,
+      _currentFamily = currentFamily ?? CurrentFamily.fallback(db);
 
   final AppDatabase _db;
+  final CurrentFamily _currentFamily;
+
+  String get _familyId => _currentFamily.familyId;
 
   @override
   Future<List<JarEntry>> getItems() => watchItems().first;
@@ -42,8 +47,8 @@ class KidJarRepositoryImpl implements KidJarRepository {
   Stream<JarSnapshot> _jarFor(String childId) {
     return combineLatest4(
       _db.watchLedger(childId),
-      _db.watchGoals(Seed.familyId),
-      _db.watchSetting(Seed.familyId),
+      _db.watchGoals(_familyId),
+      _db.watchSetting(_familyId),
       _watchFamilyQuests(),
     ).map((parts) {
       final rows = parts[0] as List<LedgerEntry>;
@@ -72,7 +77,7 @@ class KidJarRepositoryImpl implements KidJarRepository {
   /// quest being switched off.
   Stream<List<Quest>> _watchFamilyQuests() {
     return (_db.select(_db.quests)
-          ..where((q) => q.familyId.equals(Seed.familyId))
+          ..where((q) => q.familyId.equals(_familyId))
           ..orderBy([
             (q) => OrderingTerm(expression: q.createdAt),
             (q) => OrderingTerm(expression: q.id),
@@ -113,7 +118,7 @@ class KidJarRepositoryImpl implements KidJarRepository {
   Stream<PayoutCelebration?> _payoutFor(String childId) {
     return combineLatest3(
       _db.watchLedger(childId),
-      _db.watchGoals(Seed.familyId),
+      _db.watchGoals(_familyId),
       _db.watchChild(childId),
     ).map((parts) {
       final rows = parts[0] as List<LedgerEntry>;
@@ -235,7 +240,7 @@ class KidJarRepositoryImpl implements KidJarRepository {
           .into(_db.ledgerEntries)
           .insert(
             LedgerEntriesCompanion.insert(
-              familyId: Seed.familyId,
+              familyId: _familyId,
               childId: childId,
               type: 'savings_move',
               amountPence: move,

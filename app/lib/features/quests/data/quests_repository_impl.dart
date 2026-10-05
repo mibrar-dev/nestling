@@ -1,14 +1,19 @@
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_database.dart';
-import 'package:nestling/core/data/seed.dart';
+import 'package:nestling/core/data/current_family.dart';
 import 'package:nestling/features/quests/domain/entities/quest.dart' as domain;
 import 'package:nestling/features/quests/domain/quests_repository.dart';
 
 /// Drift-backed [QuestsRepository].
 class QuestsRepositoryImpl implements QuestsRepository {
-  new({required this._db});
+  new({required AppDatabase db, CurrentFamily? currentFamily})
+    : _db = db,
+      _currentFamily = currentFamily ?? CurrentFamily.fallback(db);
 
   final AppDatabase _db;
+  final CurrentFamily _currentFamily;
+
+  String get _familyId => _currentFamily.familyId;
 
   /// Editor coins range (plan §1-5; BUG-P09-4).
   static const int minCoins = 1;
@@ -19,14 +24,14 @@ class QuestsRepositoryImpl implements QuestsRepository {
 
   @override
   Stream<List<domain.Quest>> watchItems() {
-    return _db.watchActiveQuests(Seed.familyId).map(_toEntities);
+    return _db.watchActiveQuests(_familyId).map(_toEntities);
   }
 
   @override
   Stream<int> watchCoinValuePencePerCoin() {
     // `families` is the source of truth (same read as pocket_money's
     // setup); the `settings` mirror is deliberately NOT subscribed.
-    return (_db.select(_db.families)..where((f) => f.id.equals(Seed.familyId)))
+    return (_db.select(_db.families)..where((f) => f.id.equals(_familyId)))
         .watchSingleOrNull()
         .map((family) => family?.coinValuePencePerCoin ?? 1);
   }
@@ -50,7 +55,7 @@ class QuestsRepositoryImpl implements QuestsRepository {
         .insert(
           QuestsCompanion.insert(
             id: quest.id,
-            familyId: Seed.familyId,
+            familyId: _familyId,
             title: quest.title,
             icon: Value(quest.icon),
             coins: Value(quest.coins),

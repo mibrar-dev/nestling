@@ -315,7 +315,7 @@ class _SettingsLoaded extends StatelessWidget {
               trailing: settingsChevron(context),
               onTap: () => P16TransientGuard.run(LegalLinks.openPrivacy),
             ),
-            SettingsRow(
+            NestListRow(
               title: 'Delete family account',
               titleColor: tokens.danger,
               titleWeight: FontWeight.w700,
@@ -444,7 +444,7 @@ class _MemberRow extends StatelessWidget {
               : isOwner
               ? 'Owner'
               : 'Active');
-    return SettingsRow(
+    return NestListRow(
       title: title,
       subtitle: subtitle,
       leading: NestAvatar(
@@ -466,7 +466,7 @@ class _ChildRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SettingsRow(
+    return NestListRow(
       title: '${child.nickname} · ${child.ageBand.replaceAll('-', '–')}',
       subtitle:
           'Pip: ${child.pipStageName} · ${child.coins == 1 ? '1 coin' : '${child.coins} coins'}',

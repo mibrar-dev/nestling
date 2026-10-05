@@ -10,7 +10,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart';
-import 'package:nestling/features/settings/presentation/widgets/settings_rows.dart';
 
 import '../../test_scope.dart';
 import 'p16_test_support.dart';
@@ -104,9 +103,7 @@ void main() {
         final row = find
             .ancestor(
               of: find.text('Invite co-parent'),
-              matching: find.byWidgetPredicate(
-                (w) => w is NestListRow || w is SettingsRow,
-              ),
+              matching: find.byWidgetPredicate((w) => w is NestListRow),
             )
             .first;
         final chevron = find

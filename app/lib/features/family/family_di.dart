@@ -1,5 +1,6 @@
 import 'package:get_it/get_it.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/current_family.dart';
 import 'package:nestling/features/family/data/family_repository_impl.dart';
 import 'package:nestling/features/family/domain/family_repository.dart';
 import 'package:nestling/features/family/presentation/bloc/family_bloc.dart';
@@ -10,7 +11,10 @@ import 'package:nestling/features/family/presentation/bloc/family_bloc.dart';
 void registerFamily(GetIt sl) {
   if (!sl.isRegistered<FamilyRepository>()) {
     sl.registerLazySingleton<FamilyRepository>(
-      () => FamilyRepositoryImpl(db: sl<AppDatabase>()),
+      () => FamilyRepositoryImpl(
+        db: sl<AppDatabase>(),
+        currentFamily: sl<CurrentFamily>(),
+      ),
     );
   }
   if (!sl.isRegistered<FamilyBloc>()) {

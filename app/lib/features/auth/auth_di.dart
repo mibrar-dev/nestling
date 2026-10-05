@@ -1,5 +1,6 @@
 import 'package:get_it/get_it.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/current_family.dart';
 import 'package:nestling/features/auth/data/auth_repository_impl.dart';
 import 'package:nestling/features/auth/domain/auth_repository.dart';
 import 'package:nestling/features/auth/presentation/bloc/auth_bloc.dart';
@@ -10,7 +11,10 @@ import 'package:nestling/features/auth/presentation/bloc/auth_bloc.dart';
 void registerAuth(GetIt sl) {
   if (!sl.isRegistered<AuthRepository>()) {
     sl.registerLazySingleton<AuthRepository>(
-      () => AuthRepositoryImpl(db: sl<AppDatabase>()),
+      () => AuthRepositoryImpl(
+        db: sl<AppDatabase>(),
+        currentFamily: sl<CurrentFamily>(),
+      ),
     );
   }
   if (!sl.isRegistered<AuthBloc>()) {

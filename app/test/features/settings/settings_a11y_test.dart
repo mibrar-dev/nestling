@@ -29,7 +29,6 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/design_system/design_system.dart';
-import 'package:nestling/features/settings/presentation/widgets/settings_rows.dart';
 
 import '../../test_scope.dart';
 import 'p16_test_support.dart';
@@ -471,9 +470,7 @@ void main() {
                 find
                     .ancestor(
                       of: toggle,
-                      matching: find.byWidgetPredicate(
-                        (w) => w is SettingsRow || w is NestListRow,
-                      ),
+                      matching: find.byWidgetPredicate((w) => w is NestListRow),
                     )
                     .first,
               )
@@ -514,9 +511,7 @@ void main() {
       final row = find
           .ancestor(
             of: find.text('🌟Zoe · 4–6'),
-            matching: find.byWidgetPredicate(
-              (w) => w is SettingsRow || w is NestListRow,
-            ),
+            matching: find.byWidgetPredicate((w) => w is NestListRow),
           )
           .first;
       final initial = tester
@@ -572,9 +567,7 @@ void main() {
           final row = find
               .ancestor(
                 of: find.text('$nickname · 4–6'),
-                matching: find.byWidgetPredicate(
-                  (w) => w is SettingsRow || w is NestListRow,
-                ),
+                matching: find.byWidgetPredicate((w) => w is NestListRow),
               )
               .first;
           final initial = tester

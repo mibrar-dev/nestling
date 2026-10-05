@@ -9,7 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:nestling/app/controllers.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
-import 'package:nestling/core/data/seed.dart';
+import 'package:nestling/core/data/current_family.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 import 'package:nestling/features/kid_home/kid_home_routes.dart';
@@ -395,11 +395,12 @@ class _GateBackdrop extends StatelessWidget {
   Widget build(BuildContext context) {
     final session = GetIt.instance<AppSession>();
     final db = GetIt.instance<AppDatabase>();
+    final familyId = GetIt.instance<CurrentFamily>().familyId;
     return ListenableBuilder(
       listenable: session,
       builder: (context, _) {
         return StreamBuilder<List<ChildrenData>>(
-          stream: db.watchChildren(Seed.familyId),
+          stream: db.watchChildren(familyId),
           builder: (context, snapshot) {
             final kids = snapshot.data ?? const <ChildrenData>[];
             ChildrenData? child;

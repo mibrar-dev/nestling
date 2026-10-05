@@ -1,5 +1,6 @@
 import 'package:get_it/get_it.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/current_family.dart';
 import 'package:nestling/features/quests/data/quests_repository_impl.dart';
 import 'package:nestling/features/quests/domain/quests_repository.dart';
 import 'package:nestling/features/quests/presentation/bloc/quests_bloc.dart';
@@ -10,7 +11,10 @@ import 'package:nestling/features/quests/presentation/bloc/quests_bloc.dart';
 void registerQuests(GetIt sl) {
   if (!sl.isRegistered<QuestsRepository>()) {
     sl.registerLazySingleton<QuestsRepository>(
-      () => QuestsRepositoryImpl(db: sl<AppDatabase>()),
+      () => QuestsRepositoryImpl(
+        db: sl<AppDatabase>(),
+        currentFamily: sl<CurrentFamily>(),
+      ),
     );
   }
   if (!sl.isRegistered<QuestsBloc>()) {
