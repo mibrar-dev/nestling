@@ -1,12 +1,16 @@
-// K11 · My badges — locked-medal art regression (stage 3, iteration 3).
+// K11 · My badges — locked-medal art regression (stage 3, iteration 4).
 //
 // Iteration 3 rebuilt the five still-to-do medals as a local
 // `lockedMedalSvg(id)` (`badge_grid_cell.dart`, ORCHESTRATOR_NOTES.md 06:55,
 // mandatory): the dashed ring is INK (`#1E1B3A` — the HTML keeps the FIRST of
-// the locked `<circle>`'s two `stroke` attributes) and the ribbon
-// `opacity=".4"` sits on the WHOLE `<path>` (fill AND 3 px ink stroke
-// together). The shared `badge_*` asset files paint the ring `#6E6A8A` and
-// are no longer used for these ids.
+// the locked `<circle>`'s two `stroke` attributes). Iteration 4 applied the
+// mandatory 07:33 nit: the ribbon `opacity=".4"` sits on a wrapping `<g>`
+// (fill AND 3 px ink stroke composite as ONE group layer, as the browser
+// draws the HTML element) with NO opacity on the `<path>` itself — a
+// per-paint path opacity composites the two separately and darkens the
+// stroke's inner band ((130,128,148) vs the design's (165,164,176)). The
+// shared `badge_*` asset files paint the ring `#6E6A8A` and are no longer
+// used for these ids.
 //
 // `badges_view_test.dart` pins `bins-out` only (string + widget, light +
 // dark) and `badges_art_test.dart` pins "an SVG, never the rosette" —
@@ -15,7 +19,8 @@
 //
 //   * the pumped cell draws `SvgPicture.string` (not the shared asset);
 //   * its SVG carries its OWN glyph marker and none of the other four;
-//   * the ink ring, the whole-element ribbon opacity and the cream disc;
+//   * the ink ring, the group-wrapped ribbon opacity (no per-paint opacity
+//     on the path) and the cream disc;
 //   * the light and dark strings are IDENTICAL (medals keep own colours).
 //
 // Plus: the four earned ids still take the shared-asset path in BOTH states
@@ -110,6 +115,16 @@ void main() {
         expect(svg, contains('opacity=".4"'), reason: '$id ribbon at 40 %');
         expect(
           svg,
+          contains('<g opacity=".4"><path'),
+          reason: '$id ribbon opacity is a group around the path (07:33)',
+        );
+        expect(
+          svg,
+          isNot(contains('H27Z" opacity')),
+          reason: '$id ribbon path carries no per-paint opacity',
+        );
+        expect(
+          svg,
           contains('fill="#F3EEE5"'),
           reason: '$id disc keeps its cream fill',
         );
@@ -123,6 +138,8 @@ void main() {
       final svg = lockedMedalSvg('mystery-badge');
       expect(svg, contains('stroke="#1E1B3A" stroke-dasharray="5 4"'));
       expect(svg, contains('opacity=".4"'));
+      expect(svg, contains('<g opacity=".4"><path'));
+      expect(svg, isNot(contains('H27Z" opacity')));
       expect(svg, contains('fill="#F3EEE5"'));
       expect(svg, isNot(contains('stroke="#6E6A8A" stroke-dasharray')));
       for (final marker in _lockedMarkers.values) {

@@ -1,14 +1,15 @@
-# K11 · Badges — stage 6 bug hunt (iteration 3)
+# K11 · Badges — stage 6 bug hunt (iteration 4)
 
 Adversarial pass over `/badges` (feature `badges`, kid mode) on the
-iteration-3 tree. The only product change this iteration is the locked-medal
-art in `badge_grid_cell.dart` (`ORCHESTRATOR_NOTES.md` 06:55). Result:
-**no new bugs** — the art renders exactly the design's colours in both
-themes, and the iteration-1 fixes remain verified. No major bug exists, so
-the stage verdict is PASS.
+iteration-4 tree. The only product change this iteration is the mandatory
+07:33 nit: the locked ribbon's 40 % opacity must composite as a **group**
+(`<g opacity=".4">`), not per paint on the `<path>`. Result: **fix verified,
+no new bugs**. No major bug exists, so the stage verdict is PASS.
 
-No file under `app/lib/` was touched by this stage. Only
-`app/test/features/badges/k11_bugs_test.dart` and this file changed.
+No file under `app/lib/` was touched by this stage. The iteration-4 build
+already corrected the raster guard's stroke expectation together with the fix
+(committed in the build checkpoint); this stage verified it and changed only
+this file.
 
 ## Bugs — status
 
@@ -16,8 +17,7 @@ No file under `app/lib/` was touched by this stage. Only
 
 - **Severity (when open):** minor. **Repro (when open):** store `happyDays 8`
   for Maya → “8 happy days” under seven dots.
-- **Fix:** `HappyWeekCard` clamps to 0..7 for the dots and the why-line;
-  the repository still reports the stored value verbatim.
+- **Fix:** `HappyWeekCard` clamps to 0..7 for the dots and the why-line.
 - **Regression guard:** `K11-BUG-1 happyDays 8 clamps to the seven drawn
   days` — passing.
 
@@ -30,53 +30,43 @@ No file under `app/lib/` was touched by this stage. Only
 - **Regression guard:** `K11-BUG-2 a non-Maya family with no active child
   shows Zoe` — passing.
 
-## Iteration 3 — locked-medal art, verified (no bug)
+### K11-BUG-3 — locked ribbon composited its 40 % opacity per paint — FIXED (iteration 4)
 
-The mandatory item: the locked medal's dashed ring is INK, the ribbon's
-`opacity=".4"` applies to fill **and** 3 px stroke together, and dark mode
-matches the dark design PNG.
+- **Severity (when open):** minor (colour band mismatch on the five locked
+  medals; the stroke's inner band was too dark, e.g. `(130,128,148)` where
+  the design shows `(165,164,176)`).
+- **Where:** `badge_grid_cell.dart` `lockedMedalSvg` — the iteration-3 build
+  put `opacity=".4"` on the ribbon `<path>`; flutter_svg applies that per
+  paint, so the stroke composited over the already-40 % fill instead of the
+  browser's group layer (`ORCHESTRATOR_NOTES.md` 07:33).
+- **Fix (iteration 4):** wrap the ribbon in `<g opacity=".4"><path …/></g>`
+  with no opacity on the path, so fill and stroke are rendered together and
+  the group is composited once at 40 %.
+- **Verified (independent raster probe, 3×):** after the fix the stroke band
+  samples `(164,163,175)` in light and `(30,27,50)` in dark versus the design
+  PNG's `(165,164,176)` / `(31,28,51)` (within 1 due to raster rounding); the
+  fill samples `(196,195,207)` / `(62,59,83)` versus `(197,195,208)` /
+  `(63,59,83)`.
+- **Regression guard:** `K11-ART locked medals in light|dark` (all five
+  still-to-do ids) now asserts the group composite
+  (`Color.alphaBlend(ink, 0.4, tile surface)`). Note: the iteration-3 version
+  of this guard had encoded the per-paint composite as its expectation, i.e.
+  it pinned the bug instead of the design — the expectation is corrected and
+  now fails if the markup ever regresses to a path-level opacity.
 
-**Design measurement (independent, PIL over the design PNGs; Bins out medal,
-light + dark):**
+## Iteration 4 — checked, no new bug
 
-| Element | Light PNG | Dark PNG | App (`lockedMedalSvg`) |
-|---|---|---|---|
-| Dashed ring core | `(30,27,58)` = `#1E1B3A` | `(30,27,58)` = `#1E1B3A` | `stroke="#1E1B3A"`, 3 px, dasharray `5 4` |
-| Disc fill | `(243,238,229)` = `#F3EEE5` | `(243,238,229)` = `#F3EEE5` | `fill="#F3EEE5"` (the medal stays light in dark — this is what “light ring” in the note describes) |
-| Ribbon fill | 40 % `#6E6A8A` over the tile | 40 % over the dark tile | `fill="#6E6A8A"` + element `opacity=".4"` |
-| Ribbon stroke | 40 % ink over the fill | 40 % ink over the fill | `stroke="#1E1B3A"` + element `opacity=".4"` |
-| Glyph | `(110,106,138)` = `#6E6A8A` | same | per-id glyph stroke `#6E6A8A` |
-
-**Raster proof (kept as a regression guard):** `K11-ART locked medals in
-light|dark` pumps each of the five still-to-do ids, rasterizes the tile and
-asserts the exact composites at the medal's known coordinates —
-`Color.alphaBlend` expectations from the tokens, so a dropped element opacity
-or a wrong ring colour fails. It also counts glyph-coloured pixels inside the
-disc for every id (>50 at 3×), which catches a malformed path that parses and
-paints nothing. The stage-3 `badges_locked_art_test.dart` pins the same
-contract at the SVG-string level.
-
-**Known limitation (documented in `1_plan.md`, not a new bug):** if one of
-the five still-to-do ids is ever *earned*, the tile gets the solid ink border
-and “Got it!” but keeps its locked medal drawing (no colourful variant exists
-for those ids in the design). Each id still renders its own medal, never the
-rosette.
-
-**Observation (not a bug, for the review stage):** the corrected locked
-markup lives as inline SVG strings with fixed illustration colours inside
-`badge_grid_cell.dart`, and the five shared `badge_*` asset files still paint
-the ring `#6E6A8A`, so K11 no longer uses those five assets. If the design
-system should own the corrected art (assets under `app/assets/**` are shared),
-that is a SHARED_REQUEST for the orchestrator, not a screen bug.
-
-## Other hunt areas
-
-Unchanged since iteration 2 and still covered by the green suite (168 tests):
-child-resolution matrix (0/1/6 children, deleted active child, creation
-order), empty-family live recovery, switch-burst stale-emission race,
-double-tap Back/lock, 320 px × 1.3 overflow at 3 widths × 2 scales × 2
-themes, restart persistence, nine-id art, a11y actions. Timezone/BST and
-money rounding remain N/A on K11 (no clock reads, no £/coins).
+- The `<g opacity=".4">` wrapper renders with true group semantics in
+  flutter_svg 2.3 (proven by the raster guard and the independent probe).
+- The glyph and the dashed ring stay outside the group: ring `#1E1B3A`,
+  disc `#F3EEE5`, glyph `#6E6A8A`, unchanged in both themes.
+- The stage-3 string checks (`badges_locked_art_test.dart`) still match the
+  markup (the group still contains `opacity=".4"` and the ink-ring path).
+- Everything else is unchanged since iterations 1–3 and still covered by the
+  green suite: child resolution (0/1/6 children, deleted active child,
+  creation order), empty-family live recovery, switch-burst race, double-tap
+  Back/lock, 320 px × 1.3 overflow matrix, restart persistence, a11y.
+  Timezone/BST and money rounding remain N/A on K11 (no clock, no £).
 
 ## Verification
 
@@ -86,12 +76,11 @@ flutter analyze test/features/badges/k11_bugs_test.dart      → No issues found
 flutter test --timeout 120s test/features/badges/k11_bugs_test.dart
   → +4: All tests passed!    (2 fix guards + 2 raster art guards)
 flutter test --timeout 120s --concurrency=1 test/features/badges
-  → +168: All tests passed!  (feature suite, 0 failed)
+  → +170: All tests passed!  (feature suite, 0 failed)
 ```
 
 No simulator was booted, no `flutter clean`, no global kills (only my own
-orphaned test PIDs), no files outside
-`app/test/features/badges/k11_bugs_test.dart` and `docs/screens/K11/6_bugs.md`
-were touched by this stage.
+orphaned test PIDs); this stage changed only `docs/screens/K11/6_bugs.md` and
+left every `app/` file as the build committed it.
 
 VERDICT: PASS
