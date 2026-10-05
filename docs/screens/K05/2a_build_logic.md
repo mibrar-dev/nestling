@@ -76,4 +76,43 @@
 - `git status`: this layer's files unchanged since iteration 1; no
   views/widgets/core edits. No simulator use.
 
+## Iteration 2 re-run (this stage — FIXES_1.md still empty)
+
+- `FIXES_1.md` still has no items (`From 2_build.md` / `From 3_test.md`
+  sections empty), so no logic-layer change was made.
+- `ORCHESTRATOR_NOTES.md` 19:45 item (K03 `k03_bugs_test` back-from-
+  celebration) is owned by the UI builder: the fix drives K05's real CTA
+  in `quest_complete_view.dart` + edits `k03_bugs_test.dart`. Neither
+  file is in this stage's editable set (views/** + a non-bloc/non-
+  repository/non-data test), and `2b_build_ui.md:55-68` records it done.
+  Untouched by this stage.
+- Stage 4 findings 1 (deep-link fallback order) and 2 (`kid_growth.dart`
+  location/cross-feature import) are deliberately LEFT OPEN: fixing 1
+  needs view cooperation (UI-builder owned, parallel work in this
+  worktree) and fixing 2 moves the file the view already imports
+  (`quest_complete_view.dart:45` + `kid_home_repository_test.dart:14`
+  both import `domain/entities/kid_growth.dart`), i.e. a CONTRACT CHANGE
+  mid-parallel. Both are minors; the bugs stage confirms the fallback is
+  the intended DB-driven path. Carried for the orchestrator batch.
+- No BLoC event/state shape change; contract from iteration 1 stands.
+
+## Verification (this run)
+
+- `flutter analyze lib/features/kid_home` → No issues found.
+- `flutter test --timeout 120s kid_home_repository_test kid_home_bloc_test`
+  → All tests passed (62).
+- `flutter test --timeout 120s quest_detail_bloc_test k01_bloc_paths_test`
+  → All tests passed (32, compile guard for older fixtures).
+- `dart format` clean (9 files, 0 changed).
+- Hygiene: no `GoogleFonts`/`google_fonts` import; no `DateTime.now()`
+  call (single match is a code comment); no new ids.
+- `git status`: no lib/test edits by this stage; no views/widgets/core
+  edits. No simulator use.
+
+## LEFT FOR NEXT ITERATION
+
+- Nothing in this layer beyond the two carried review minors above
+  (findings 1–2, orchestrator batch). Integrator owns the full suite +
+  goldens.
+
 VERDICT: PASS

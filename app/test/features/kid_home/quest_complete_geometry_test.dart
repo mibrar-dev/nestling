@@ -50,35 +50,51 @@ Future<void> _loadBundledFonts() async {
   await nunito.load();
 }
 
+/// The live theme's [NestTokens], read through a widget that is always on
+/// this screen. Both surfaces are matched from the token the view actually
+/// paints with — a hard-coded `0xFFFFFFFF` / `0xFFEEEBFF` would silently
+/// match NOTHING the day a token changes (review finding 6) and could never
+/// be reused for the dark geometry.
+NestTokens _tokens(WidgetTester tester) =>
+    Theme.of(tester.element(find.byType(NestProgress)))
+        .extension<NestTokens>()!;
+
 /// The `.kid-bar` surface: a `Container` painted `surface` with a TOP-ONLY
-/// 3 px ink border.
-Finder _barSurface() => find.byWidgetPredicate((widget) {
-  if (widget is! Container) return false;
-  final box = widget.decoration;
-  if (box is! BoxDecoration) return false;
-  if (box.color != const Color(0xFFFFFFFF)) return false;
-  final border = box.border;
-  return border is Border &&
-      border.top.width == 3 &&
-      border.left.width == 0 &&
-      border.right.width == 0 &&
-      border.bottom.width == 0;
-});
+/// 3 px ink border (the speech bubble shares the fill but borders all four
+/// sides, so the shape identifies the bar).
+Finder _barSurface(WidgetTester tester) {
+  final surface = _tokens(tester).surface;
+  return find.byWidgetPredicate((widget) {
+    if (widget is! Container) return false;
+    final box = widget.decoration;
+    if (box is! BoxDecoration) return false;
+    if (box.color != surface) return false;
+    final border = box.border;
+    return border is Border &&
+        border.top.width == 3 &&
+        border.left.width == 0 &&
+        border.right.width == 0 &&
+        border.bottom.width == 0;
+  });
+}
 
 /// The `.k5-card` surface: `lilacTint` + a 3 px ink border on all four sides
 /// + the kid shadow.
-Finder _growthCardSurface() => find.byWidgetPredicate((widget) {
-  if (widget is! Container) return false;
-  final box = widget.decoration;
-  if (box is! BoxDecoration) return false;
-  if (box.color != const Color(0xFFEEEBFF)) return false;
-  final border = box.border;
-  return border is Border &&
-      border.top.width == 3 &&
-      border.left.width == 3 &&
-      box.boxShadow != null &&
-      box.boxShadow!.isNotEmpty;
-});
+Finder _growthCardSurface(WidgetTester tester) {
+  final lilac = _tokens(tester).lilacTint;
+  return find.byWidgetPredicate((widget) {
+    if (widget is! Container) return false;
+    final box = widget.decoration;
+    if (box is! BoxDecoration) return false;
+    if (box.color != lilac) return false;
+    final border = box.border;
+    return border is Border &&
+        border.top.width == 3 &&
+        border.left.width == 3 &&
+        box.boxShadow != null &&
+        box.boxShadow!.isNotEmpty;
+  });
+}
 
 /// The painted CTA: the button's box MINUS the 6 px shadow room
 /// `NestKidButton` reserves below it (same convention as
@@ -164,7 +180,7 @@ void main() {
       expect(bubble.right, closeTo(314.67, 1));
 
       // `.k5-card`: 3 + 14 + 48 + 10 + 20 + 6 + 16 + 14 + 3 = 134 tall.
-      final card = _rectOf(tester, _growthCardSurface());
+      final card = _rectOf(tester, _growthCardSurface(tester));
       expect(card.left, 20);
       expect(card.right, 370);
       expect(card.width, 350);
@@ -208,11 +224,21 @@ void main() {
       // `.kid-bar`: the surface runs to the physical bottom edge (owner rule —
       // no meadow/sky strip under it) and the painted CTA sits 15 px below
       // the bar's top border (3 border + 12 padding), 350×64.
-      final barSurface = _rectOf(tester, _barSurface());
+      final barSurface = _rectOf(tester, _barSurface(tester));
       expect(barSurface.left, 0);
       expect(barSurface.right, 390);
       expect(barSurface.bottom, 844);
-      expect(barSurface.height, 3 + 12 + 64 + 10 + NestDevice.homeH - 34);
+      expect(
+        barSurface.height,
+        89,
+        reason:
+            'border 3 + pad 12 + button 64 + its 6 px shadow room + pad 4. '
+            '`NestHomeIndicator` collapses to zero in this test surface '
+            '(`NestStatusBar.showMockGlyphs` is false), and the real '
+            '${NestDevice.homeH} px device inset is added by `SafeArea` '
+            'INSIDE this surface box (owner bottom-edge rule) — neither '
+            'belongs in the height asserted here.',
+      );
       final cta = _paintedCta(tester);
       expect(cta.left, 20);
       expect(cta.right, 370);
@@ -226,7 +252,7 @@ void main() {
     testWidgets('nothing overlaps and every edge is shared', (tester) async {
       await _pumpComplete(tester);
 
-      final card = _rectOf(tester, _growthCardSurface());
+      final card = _rectOf(tester, _growthCardSurface(tester));
       final bar = _rectOf(tester, find.byType(NestProgress));
       expect(bar.bottom, lessThanOrEqualTo(card.bottom - 3));
 
@@ -256,7 +282,7 @@ void main() {
       await _pumpComplete(tester, width: 320, textScale: 1.3);
       expect(tester.takeException(), isNull);
 
-      final card = _rectOf(tester, _growthCardSurface());
+      final card = _rectOf(tester, _growthCardSurface(tester));
       expect(card.left, 20, reason: 'the gutters stay 20 at every width');
       expect(card.right, 300);
       // The burst plate scales down instead of overflowing (FittedBox).

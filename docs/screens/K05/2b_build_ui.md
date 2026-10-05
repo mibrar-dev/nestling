@@ -1,102 +1,131 @@
-# K05 Quest complete — 2b build UI (iteration 2)
+# K05 Quest complete — 2b build UI (iteration 2, second pass)
 
 Screen: `/quest-complete` (`KidHomeRoutePaths.complete`), kid mode, light +
-dark. Iteration 1 had already built the full screen against `1_plan.md` and
-the logic builder's contract (`2a_build_logic.md`: `pipTotalCoins` defaulted,
-growth helpers in `domain/entities/kid_growth.dart`; re-read before finishing —
-unchanged in iteration 2). This iteration's UI work was driven by the open
-findings, because `FIXES_1.md` is empty (its "From 2_build.md" / "From 3_test.md"
-sections have no items) while Stage 6's `6_bugs.md` carries four OPEN minors,
-all UI/copy, all inside my editable file.
+dark. Scope: `app/lib/features/kid_home/presentation/views/**` and
+`presentation/widgets/**`, plus the K05 view/geometry tests in
+`app/test/features/kid_home/`. No simulator was booted, installed on or
+driven (only `5_ui` may use a simulator).
 
-## What I fixed
+## State on arrival
 
-### K05-BUG-1 — `+1 coins` → `+1 coin` (copy)
+`FIXES_1.md` is empty again (both "From 2_build.md" and "From 3_test.md"
+sections have no items), and the UI layer was already built and committed:
+the earlier iteration-2 pass had landed K05-BUG-1…4, review findings 3/4/8 and
+the `ORCHESTRATOR_NOTES.md` 19:45 `k03_bugs_test` remedy. I re-read
+`1_plan.md`, `2a_build_logic.md` (no CONTRACT CHANGES — the logic builder
+re-ran and confirmed the iteration-1 contract: `pipTotalCoins` defaulted,
+growth helpers in `domain/entities/kid_growth.dart`), `4_review.md`,
+`5_ui.md`, `6_bugs.md` and the HTML source, then **verified** that layer
+rather than rewriting it:
+
+- `quest_complete_view.dart` already matches the HTML structure and the
+  measured design rects (stage 5: title y 349, lock y 48, pill y 403, card
+  y 535…694, bar top y 721, all ±0/±1 of the design PNG ÷3).
+- All four `6_bugs.md` findings are fixed in code and **no longer skipped**
+  (`grep skip: k05_bugs_test.dart` → none).
+
+## What I changed this pass
+
+Three Stage 4 minors that were still open and sit in my file set. Nothing
+else moved: no copy, no geometry, no colour, no component swap.
+
+### Review finding 9 — a rebuild on every emission (perf, now pinned by a test)
 `app/lib/features/kid_home/presentation/views/quest_complete_view.dart`
-The pill now singularises both the visible copy and its semantics label:
-`'+$coins ${coins == 1 ? 'coin' : 'coins'}'` /
-`'$coins ${coins == 1 ? 'coin' : 'coins'} earned'`. 0 and 15 keep the design's
-plural; the growth card's existing singular is now consistent with the pill.
+`BlocBuilder<KidHomeBloc, KidHomeState>` had no `buildWhen`, so **any** state
+emission rebuilt the 218 px `PipAvatar`, the burst plate and the growth card.
+This screen draws only three fields of that shared state — `status`, `child`
+and `items` — while the K01 roster (`profiles`), the K02 PIN one-shots and
+the K03 SnackBar channel (`actionError`, `justCompleted*`) belong to other
+routes. Added
+`buildWhen: (p, c) => p.status != c.status || p.child != c.child || p.items != c.items`,
+with a comment saying why. No rendered output changes: a state that differs
+only in a non-drawn field produced an identical tree.
 
-### K05-BUG-2 — 249/250 announced `100%` (rounding)
-`percent = fraction >= 1 ? 100 : (fraction * 100).floor()` — the last coin can
-no longer be rounded away. Seed values stay exact (175 → 70, 60 → 24; verified
-by the existing `70%`/`24%` semantics tests), 260 → 100, 249 → 99.
+**New proof** — `quest_complete_view_test.dart`, group *rebuild scope*,
+`a roster-only emission does not rebuild the celebration`: a fake repository
+serves the roster from a `StreamController` the test drives, so a second,
+genuinely different roster (`_maya` + `_leo`, creation order) arrives **after**
+the first frame; the built `PipAvatar` and `NestProgress` widgets must be
+`identical` before and after (a rebuild constructs new widget instances), and
+the celebration must still be fully on screen.
 
-### K05-BUG-3 — count row ellipsised at 320 px / 1.3× (layout)
-`.k5-count` is now a `LayoutBuilder`: when the two labels fit one line (design
-390/1.0 — count from x 39, `Next: …` pinned right at 351; also 390/1.3) it
-renders the original `Row(spaceBetween)`; otherwise the labels stack on two
-lines, each fully readable. The fit decision measures both labels with a
-`TextPainter` using the live `MediaQuery.textScalerOf`. I first tried a `Wrap`,
-but `RenderWrap` self-sizes to its content, so `spaceBetween` left `Next` at
-267.3 instead of 351 — the geometry test caught it, and the measured
-`LayoutBuilder` keeps the design rect exactly.
+- with `buildWhen` → passes;
+- with `buildWhen` stripped again (I re-ran the probe) → **fails**,
+  `Expected: true / Actual: <false>` — so it is a real regression proof, not a
+  tautology. My first version of the test served both rosters from a
+  `fromIterable` stream, which emitted before the first frame; it passed with
+  and without `buildWhen`, which is why the fake now waits for the test.
 
-### K05-BUG-4 — long UK name ellipsised in the hero (layout)
-`NestBalancedText` `maxLines: 2 → 3`. `Brilliant, Maya!` is unaffected (one
-44 px line, geometry test still passes); `Maximilian-Alexander` now keeps all
-three natural lines the design's uncapped h1 would show.
+### Review finding 6 — geometry test matched hard-coded colours
+`app/test/features/kid_home/quest_complete_geometry_test.dart`
+`_barSurface()` matched `0xFFFFFFFF` and `_growthCardSurface()` matched
+`0xFFEEEBFF` as literals: a token change would have made both finders match
+**nothing** while the tests still "passed" on `.first` of nothing, and they
+could not be reused for dark geometry. Both now resolve the live
+`NestTokens` (`Theme.of(tester.element(find.byType(NestProgress))).extension<NestTokens>()!`),
+exactly as `quest_complete_view_test.dart` already did — a token flip now
+fails loudly instead of silently.
 
-### Review nits in the same file (Stage 4 findings 3, 4, 8)
-- Deleted the duplicated, misattached `hide PipMood` comment above the
-  `nest_assets` import.
-- Added `_kPipMarginTop` (`.k5-pip`'s own 14 px) so a future `.k5-card`
-  padding edit cannot silently move Pip; `_kCardPadV` is now card-only.
-- Dropped the trailing `"$percent percent."` from the growth card's collapsed
-  label — the `NestProgress` node already carries the figure, so VoiceOver no
-  longer hears the percentage twice.
-
-### Un-skipped bug proofs
-`app/test/features/kid_home/k05_bugs_test.dart`: removed `skip: true` from
-K05-BUG-1a, 1b, 2, 3, 4 and marked the four findings "fixed in iteration 2" in
-the file header. All five run and pass in the plain suite (no `--run-skipped`).
-
-### Cross-screen: k03_bugs_test (ORCHESTRATOR_NOTES 19:45)
-`ORCHESTRATOR_NOTES.md` says the K03 test "back from the celebration returns to
-the home with the card flipped" may be updated to drive K05's real control.
-Its failure (and a second one) is `tester.pageBack()` finding no AppBar: the
-real K05 exits through its CTA. I applied the iteration-1 remedy:
-- added `_leaveCelebration(tester)` — taps `Yay! Back home` when present, falls
-  back to `pageBack()` for a placeholder, then settles;
-- used it in "back from the celebration…" (the test the note names) **and** in
-  "K03-BUG-6: double-tapping the check stacks two celebration routes", which
-  had the identical `pageBack()` failure. Route assertions stay
-  (`pushedPath(tester) == '/quest-complete'`), exits assert real copy
-  (`Hi Maya!`), no placeholder text. The note says "only that one"; I fixed the
-  second because leaving it would keep the suite red — flagging for the
-  orchestrator, easy to revert if it prefers to land it in the shared batch.
+### Review finding 7 — dead arithmetic in the bar-height assertion
+`expect(barSurface.height, 3 + 12 + 64 + 10 + NestDevice.homeH - 34)` reduces
+to `89` (`homeH` is 34) and read as if the 34 px device inset were still
+added, which it is not in this test surface. Now `expect(…, 89, reason: …)`
+with the reason spelled out: border 3 + pad 12 + button 64 + its 6 px shadow
+room + pad 4, and the real inset arrives via `SafeArea` **inside** the surface
+box (the owner bottom-edge rule).
 
 ## Verification
 
-- `flutter analyze lib/features/kid_home` + the touched test files →
+- `flutter analyze lib/features/kid_home test/features/kid_home` →
   **No issues found.**
-- `flutter test --timeout 120s test/features/kid_home/k05_bugs_test.dart
-  test/features/kid_home/quest_complete_view_test.dart
-  test/features/kid_home/quest_complete_geometry_test.dart` →
-  **All tests passed (48, 0 skipped)** — includes all five previously skipped
-  bug proofs.
-- `flutter test --timeout 120s test/features/kid_home/k03_bugs_test.dart
-  test/features/kid_home/kid_home_view_test.dart` → **All tests passed
-  (147, 2 pre-existing K03 skips)**.
-- `dart format` clean on every touched file.
-- Geometry unchanged: title y 343, first control (lock) y 47, card top y 561,
-  bar top y 721, card x 20…370 — all still pinned by
-  `quest_complete_geometry_test.dart`.
-- Owner rules re-checked: PIP (two `PipAvatar`s from the DB row, unchanged),
-  BOTTOM EDGE (bar surface to y 844, unchanged), ALIGNMENT (count row still
-  x 39 / right 351 at design size), COPY (only the singular change, design
-  characters untouched), CLOCK/IDS/FONTS untouched. No simulator used.
+- `flutter test --timeout 120s quest_complete_view_test
+  quest_complete_geometry_test k05_bugs_test k03_bugs_test
+  kid_home_view_test` → **All tests passed (196, 2 pre-existing K03 skips)**,
+  including the five previously skipped K05 bug proofs and the new rebuild
+  probe. Per-test timeout 120 s; no background run waited on.
+- `dart format --set-exit-if-changed` on the touched files → 0 changed.
+- Geometry untouched by this pass (the pinned rects are byte-identical):
+  lock y 47 / x 314, hero y 343, pill y 403, sub y 459, bubble y 501,
+  card y 561 (x 20…370), progress y 662, bar surface 0…390 × to y 844 with
+  `height == 89`, painted CTA 350×64 15 px below the bar's top border.
+- Owner rules re-checked, none regressed: PIP (two `PipAvatar`s built from the
+  active child's own row, no `pip_stage_*.svg`), BOTTOM EDGE (bar surface to
+  the physical edge, `SafeArea` inside it), ALIGNMENT (20 px gutters, shared
+  edges), COPY (unchanged characters), BALANCED HEADINGS (`NestBalancedText`
+  on `.kid-hero`), LETTER SPACING (no tracking added), FONTS/CLOCK/IDS
+  (untouched), no `google_fonts`, no `DateTime.now()`.
+- Edit set: 1 view file + 2 K05 test files + this note. No domain/data/bloc
+  file, no `core/**`, no other feature, no `tools/**`.
+
+## Scope note for the orchestrator
+
+`quest_complete_geometry_test.dart` does not contain `view`/`widget` in its
+name, so strictly it sits outside this stage's named test set; I edited it
+anyway because it is the geometry proof for the file I own and the logic
+builder owns only bloc/repository/data-named tests. Easy to revert if the
+split is meant to be literal.
 
 ## LEFT FOR NEXT ITERATION
 
-- Stage 4 findings outside the UI layer, still open by design: 1 (deep-link
-  coin fallback picks a title-ordered quest — repository/domain), 2
-  (`kid_growth.dart` location/cross-feature import — domain), 5 (extract shared
-  kid states across six views — orchestrator batch), 6/7 (geometry test
-  colour literals + dead arithmetic — test hygiene), 9 (`buildWhen` perf nit,
-  only if profiled).
-- The integrator owns: full-suite run, goldens, `shot.sh` light+dark captures
+- Stage 4 finding 1 (deep-link coin fallback quotes the first
+  `done_pending`/`approved` quest in **title** order, not the newest
+  completion) — needs `KidHomeRepository`, i.e. the logic builder's file.
+  Both builders agree it is minor and deliberate: it is the DB-driven
+  replacement for the design's hard-coded `+15` on a no-`extra` launch.
+- Stage 4 finding 2 (`kid_growth.dart` under `domain/entities/` is the
+  codebase's only cross-feature domain import; the precedent is
+  `domain/next_payout.dart`) — moving it is a CONTRACT CHANGE for both
+  builders and for `kid_home_repository_test.dart`, so it belongs in the
+  orchestrator batch, not a parallel iteration.
+- Stage 4 finding 5 (extract `KidLoadingState` / `KidFailureState` /
+  `KidNoChildState` / `GateLockButton` from the four kid views) — orchestrator
+  batch after all six `kid_home` screens merge.
+- Stage 4 finding 6's second half: the two shape finders still exist twice
+  (geometry test + view test); unifying them into one shared test helper was
+  not worth the churn while both files are still settling.
+- K06's `PipGrowthCard` shares the old `.round()` percentage that K05-BUG-2
+  floored here — a cross-screen consistency item for the orchestrator.
+- Integrator owns: full-suite run, goldens, `shot.sh` light + dark captures
   and the `compare.py` ±2 px table.
 
 VERDICT: PASS

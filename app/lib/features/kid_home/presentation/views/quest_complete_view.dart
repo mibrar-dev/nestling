@@ -133,6 +133,16 @@ class QuestCompleteView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<KidHomeBloc, KidHomeState>(
+      // This screen draws only the load channel, the active child and the
+      // item list. Every other field of the shared `KidHomeState` (the K01
+      // roster, the K02 PIN one-shots, the completion SnackBar channel) is
+      // consumed by other routes, so an emission that only moves those must
+      // not rebuild the 218 px Pip, the burst plate and the progress card
+      // (review finding 9).
+      buildWhen: (previous, current) =>
+          previous.status != current.status ||
+          previous.child != current.child ||
+          previous.items != current.items,
       builder: (context, state) {
         switch (state.status) {
           case KidHomeStatus.initial:

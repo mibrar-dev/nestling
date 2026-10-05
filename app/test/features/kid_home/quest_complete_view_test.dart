@@ -56,6 +56,24 @@ const KidChild _maya = KidChild(
   pipTotalCoins: 175,
 );
 
+/// The second demo child (Leo: bolt/sky Pip at stage 2), mirrored from
+/// `Seed.demo`. Only the roster-rebuild probe needs him; CHILD order stays
+/// Maya-then-Leo everywhere.
+const KidChild _leo = KidChild(
+  id: 'leo',
+  nickname: 'Leo',
+  ageBand: '5-6',
+  avatarColour: 'sky',
+  coins: 45,
+  pipStyle: 'bolt',
+  pipSkin: 'sky',
+  pipAccessory: 'none',
+  pipStage: 2,
+  happiness: 3,
+  pinSet: true,
+  pipTotalCoins: 60,
+);
+
 KidQuest _quest({
   String id = 'q-tidy',
   String title = 'Tidy your bedroom',
@@ -80,12 +98,25 @@ class _FakeKidHomeRepository extends KidHomeRepository {
     this.child = _maya,
     this.failLoad = false,
     this.hang = false,
+    // `secondRoster` → `liveProfiles` + `pushRoster`.
+    this.liveProfiles = false,
   });
 
   List<KidQuest> items;
   KidChild? child;
   bool failLoad;
   bool hang;
+
+  /// Serve the roster from a controller the test drives, so a roster change
+  /// can arrive AFTER the first frame (see `pushRoster`).
+  bool liveProfiles = false;
+  final StreamController<List<KidChild>> _profiles =
+      StreamController<List<KidChild>>.broadcast();
+
+  /// Pushes a new roster to the bloc. Only valid with [liveProfiles].
+  void pushRoster(List<KidChild> roster) => _profiles.add(roster);
+
+  Future<void> closeProfiles() => _profiles.close();
 
   @override
   Future<List<KidQuest>> getItems() async => items;
@@ -98,9 +129,11 @@ class _FakeKidHomeRepository extends KidHomeRepository {
   }
 
   @override
-  Stream<List<KidChild>> watchProfiles() => Stream<List<KidChild>>.value(
-    child == null ? const <KidChild>[] : <KidChild>[child!],
-  );
+  Stream<List<KidChild>> watchProfiles() {
+    if (liveProfiles) return _profiles.stream;
+    final roster = child == null ? const <KidChild>[] : <KidChild>[child!];
+    return Stream<List<KidChild>>.value(roster);
+  }
 
   @override
   Stream<KidChild?> watchActiveChild() {
@@ -631,6 +664,53 @@ void main() {
         findsOneWidget,
       );
       semantics.dispose();
+      await disposeApp(tester);
+    });
+  });
+
+  group('K05 quest complete — rebuild scope', () {
+    // Review finding 9: an emission that only moves a channel this screen does
+    // not draw (the K01 roster lives here) must not rebuild the 218 px Pip,
+    // the burst plate and the growth card. `identical` on the built
+    // `PipAvatar` is the proof: a rebuild constructs a new widget instance.
+    testWidgets('a roster-only emission does not rebuild the celebration', (
+      tester,
+    ) async {
+      final repo = _FakeKidHomeRepository(liveProfiles: true);
+      addTearDown(repo.closeProfiles);
+      await _useFakeRepository(repo);
+      await _pump(tester);
+      expect(find.text('Brilliant, Maya!'), findsOneWidget);
+
+      // First roster: Maya, in creation order. Captured AFTER it settles, so
+      // the next push is the only thing that can move the tree.
+      repo.pushRoster(<KidChild>[_maya]);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      final before = tester.widget<PipAvatar>(find.byType(PipAvatar).first);
+      final cardBefore = tester.widget<NestProgress>(find.byType(NestProgress));
+
+      // A second, genuinely different roster (Leo joins) → the bloc emits a
+      // state that differs ONLY in `profiles`, a K01 channel this screen does
+      // not draw.
+      repo.pushRoster(<KidChild>[_maya, _leo]);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      final after = tester.widget<PipAvatar>(find.byType(PipAvatar).first);
+      final cardAfter = tester.widget<NestProgress>(find.byType(NestProgress));
+
+      expect(
+        identical(before, after),
+        isTrue,
+        reason: 'the K01 roster channel must not rebuild this screen',
+      );
+      expect(identical(cardBefore, cardAfter), isTrue);
+      // …and the celebration is still fully on screen afterwards.
+      expect(find.text('Brilliant, Maya!'), findsOneWidget);
+      expect(find.text('175 of 250 coins'), findsOneWidget);
+      expect(find.text('Maya'), findsNothing);
+
       await disposeApp(tester);
     });
   });
