@@ -1253,6 +1253,218 @@ void main() {
     });
   });
 
+  group('P08b live data updates (the empty state is stream-driven)', () {
+    testWidgets('adding a quest flips body and date line; archiving flips '
+        'both back', (tester) async {
+      final db = await _seedNewFamily();
+      await pumpAppRoute(tester, '/today-empty');
+      expect(find.text(_cardTitle), findsOneWidget);
+      expect(find.textContaining(_emptyDateLine), findsOneWidget);
+
+      await db
+          .into(db.quests)
+          .insert(
+            QuestsCompanion.insert(
+              id: 'q-bed',
+              familyId: Seed.familyId,
+              title: 'Make your bed',
+              coins: const Value(5),
+              assigneeChildId: const Value('maya'),
+            ),
+          );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // The view branch and the bloc's date line must move together.
+      expect(find.text("Today's quests"), findsOneWidget);
+      expect(find.text(_cardTitle), findsNothing);
+      expect(
+        tester.widget<Text>(find.textContaining('Sat 3 Oct · ')).data,
+        'Sat 3 Oct · Happy week: 4 days',
+      );
+
+      await (db.update(db.quests)..where((q) => q.id.equals('q-bed'))).write(
+        const QuestsCompanion(active: Value(false)),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text(_cardTitle), findsOneWidget);
+      expect(find.textContaining(_emptyDateLine), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('a child added while the screen is open joins the message '
+        'in creation order', (tester) async {
+      final db = await _seedNewFamily();
+      await pumpAppRoute(tester, '/today-empty');
+      expect(find.text(_twoChildMessage), findsOneWidget);
+
+      await _insertChild(db, 'ava', 'Ava', 4);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(
+        tester.widget<Text>(find.textContaining('Add your first')).data,
+        'Add your first quest and Pip will start to hatch. '
+        'Maya, Leo and Ava will see it straight away.',
+      );
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('removing every child drops the names sentence', (
+      tester,
+    ) async {
+      final db = await _seedNewFamily();
+      await pumpAppRoute(tester, '/today-empty');
+
+      await _removeChild(db, 'maya');
+      await _removeChild(db, 'leo');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(
+        tester.widget<Text>(find.textContaining('Add your first')).data,
+        _noChildMessage,
+      );
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('a long name grows the heading without clipping it', (
+      tester,
+    ) async {
+      const name = 'Sarah-Jane Featherstone';
+      final db = await _seedNewFamily();
+      await (db.delete(db.members)..where((m) => m.id.equals('sarah'))).go();
+      await db
+          .into(db.members)
+          .insert(
+            MembersCompanion.insert(
+              id: 'parent',
+              familyId: Seed.familyId,
+              name: name,
+              email: const Value('sarah@example.co.uk'),
+            ),
+          );
+      await GetIt.instance<AppSession>().refresh();
+      await pumpAppRoute(tester, '/today-empty');
+      await _resize(tester, 320, 1.3);
+
+      final paragraph = tester.renderObject<RenderParagraph>(
+        find.text('Good morning, $name'),
+      );
+      expect(paragraph.didExceedMaxLines, isFalse);
+      // Three lines at 320 px: with no cap the name survives.
+      expect(
+        tester.getSize(find.text('Good morning, $name')).height,
+        closeTo(3 * 34 * 1.3, 1),
+      );
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('a long roster grows the card and the tip stays reachable', (
+      tester,
+    ) async {
+      final db = await _seedNewFamily();
+      for (final kid in const <(String, String)>[
+        ('k1', 'Wolfeschlegelsteinhausenberger'),
+        ('k2', 'Maximilian-Alexander'),
+        ('k3', 'Anastasia Konstantinopolou'),
+        ('k4', 'Boadicea Featherstonehaugh'),
+        ('k5', 'Maria-Rosa Fernandez-Whiteley'),
+        ('k6', 'Constantina Papadopoulou'),
+      ]) {
+        await _insertChild(db, kid.$1, kid.$2, 6);
+      }
+      await pumpAppRoute(tester, '/today-empty');
+      await _resize(tester, 320, 1.3);
+
+      // The message has no cap, so the card is tall — but the page scrolls and
+      // nothing overflows.
+      expect(
+        tester.getSize(find.textContaining('Add your first')).height,
+        greaterThan(5 * 22 * 1.3),
+      );
+      expect(tester.takeException(), isNull);
+
+      await tester.scrollUntilVisible(
+        find.text(_tipTitle),
+        400,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump();
+      expect(find.text(_tipTitle), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+  });
+
+  group('P08b uncapped copy keeps the design layout (P08b-T07/T08 fixes)', () {
+    testWidgets('the design state geometry is unchanged by removing the caps', (
+      tester,
+    ) async {
+      await _seedNewFamily();
+      await pumpAppRoute(tester, '/today-empty');
+
+      // Dropping `maxLines` from the greeting and the message must not move
+      // anything in the design's own state — those caps were never reached
+      // there, so every box keeps its measured position.
+      expect(tester.getTopLeft(find.text(_greetingTitle)).dy, _dH1Top);
+      expect(
+        tester.getTopLeft(find.textContaining(_emptyDateLine)).dy,
+        _dDateTop,
+      );
+      expect(tester.getTopLeft(_emptyCard()).dy, _dCardTop);
+      expect(tester.getBottomLeft(_emptyCard()).dy, _dCardBottom);
+      expect(tester.getTopLeft(_tipCard()).dy, _dTipTop);
+      expect(tester.getSize(_tipCard()).height, _dTipBottom - _dTipTop);
+      expect(
+        tester.getSize(find.text(_twoChildMessage)).height,
+        closeTo(66, 1),
+        reason: 'the design message is three 15/22 lines',
+      );
+      expect(tester.getSize(_emptyCard()).height, closeTo(434, 1));
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('a 50-character nickname never truncates', (tester) async {
+      final db = await _seedNewFamily();
+      await _removeChild(db, 'leo');
+      await _insertChild(
+        db,
+        'long',
+        'Maximilian-Alexander-Featherstonehaugen',
+        6,
+      );
+      await pumpAppRoute(tester, '/today-empty');
+      await _resize(tester, 320, 1.3);
+
+      expect(
+        tester.widget<Text>(find.textContaining('Add your first')).data,
+        'Add your first quest and Pip will start to hatch. Maya and '
+        'Maximilian-Alexander-Featherstonehaugen will see it straight away.',
+      );
+      expect(
+        tester
+            .renderObject<RenderParagraph>(
+              find.textContaining('Add your first'),
+            )
+            .didExceedMaxLines,
+        isFalse,
+      );
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+  });
   group('P08b bottom edge (owner rule)', () {
     for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
       testWidgets('${theme.name}: the tab bar surface runs to the edge', (

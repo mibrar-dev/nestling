@@ -1,21 +1,22 @@
-// P08b · Today empty — adversarial bug proofs (Stage 6, iteration 2).
+// P08b · Today empty — adversarial bug proofs (Stage 6, iterations 1–3).
 //
-// Iteration 1 found B01–B05 (full report: `docs/screens/P08b/6_bugs.md`);
-// the iteration-2 build fixed all five and their proofs now run LIVE and
-// green in the group below.
+// B01–B07 were found by this stage in iterations 1–2 and fixed by the
+// builds; every proof below now runs LIVE and green:
+//   B01  date line "Happy week: 4 days" on the fresh-nest state
+//   B02  message named children in age order (CHILD ORDER ruling)
+//   B03  whole body shifted +8 px by an inherited padding
+//   B04  greeting clipped instead of wrapping at 1.3×
+//   B05  "Browse ideas" underline painted ink instead of sky
+//   B06  greeting clipped a long parent name (maxLines: 2)
+//   B07  six long-named children lost the message tail at 1.3×
+//        (maxLines: 5) — B06/B07 fixed by dropping the caps the design's
+//        CSS never sets.
 //
-// Iteration 2 re-hunted the fixed tree (0/1/3/6 children, long UK names,
-// 320/390 at 1.0–1.3×, rapid taps, back/deep links, restart, semantics,
-// dark, bottom edge, BST) and found two new MINORS (fixed in iteration 3 by
-// dropping the invented `maxLines` caps the design does not have):
-//   P08b-B06  the greeting still clips a long parent name (320 px at 1.0×,
-//             any width at 1.3×) because `maxLines: 2`
-//   P08b-B07  the empty message clips the last children's names for six
-//             children with long names at 1.3× (`maxLines: 5`)
-//
-// The "probed clean" group pins the areas that were hunted and found sound
-// (double taps, back/deep links, restart, semantics taps, 320 px + 1.3×
-// layout, six normal long-name children, bottom edge, BST date line).
+// Iteration 3 re-hunted the fixed tree at the extremes of the newly
+// uncapped copy (30-char unbreakable parent name, six long-named children,
+// 320 px × 1.3×, scroll + CTA) and found no new bug; that probe is pinned
+// in the clean group below. Full report:
+// `docs/screens/P08b/6_bugs.md`.
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
@@ -87,7 +88,7 @@ void main() {
   setUpAll(_loadBundledFonts);
 
   // -------------------------------------------------------------------
-  // Bug proofs — B01–B05 fixed and live; B06–B07 skipped until fixed.
+  // Bug proofs — B01–B07 all live and green (fixed by the builds).
   // -------------------------------------------------------------------
   group('P08b bug proofs', () {
     testWidgets(
@@ -455,6 +456,76 @@ void main() {
         isFalse,
         reason: 'the sixth child must not be cut off',
       );
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('extreme names at 320 px + 1.3x: nothing clips, CTA works', (
+      tester,
+    ) async {
+      // Iteration-3 verification of the uncapped copy at its limits: a
+      // 30-char unbreakable parent name (broken by the engine), six
+      // long-named children and the largest text scale on the smallest
+      // width. The greeting and the whole message must render untruncated
+      // and the CTAs must stay reachable.
+      final db = await _newFamilyScope();
+      await db
+          .update(db.members)
+          .write(
+            const MembersCompanion(
+              name: Value('Wolfeschlegelsteinhausenberger'),
+            ),
+          );
+      final names = <String>[
+        'Maximilian-Alexander',
+        'Wilhelmina-Rose',
+        'Bartholomew',
+        'Persephone',
+      ];
+      for (var i = 0; i < names.length; i++) {
+        await _insertChild(
+          db,
+          'kid$i',
+          names[i],
+          3 + i,
+          createdAt: Seed.utc(9, 19, 8).add(Duration(minutes: 2 + i)),
+        );
+      }
+      await GetIt.instance<AppSession>().refresh();
+      await pumpAppRoute(tester, '/today-empty');
+
+      tester.view.physicalSize = const Size(320 * 3, 844 * 3);
+      tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      final greeting = tester.renderObject<RenderParagraph>(
+        find.textContaining('Good morning'),
+      );
+      final message = tester.renderObject<RenderParagraph>(
+        find.textContaining('will see it straight away'),
+      );
+      expect(greeting.didExceedMaxLines, isFalse);
+      expect(message.didExceedMaxLines, isFalse);
+
+      await tester.scrollUntilVisible(
+        find.text('Tip for new nests'),
+        400,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump();
+      await tester.scrollUntilVisible(
+        find.text('Add a quest'),
+        -400,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump();
+      await tester.tap(find.text('Add a quest'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(pushedPath(tester), '/quest-editor');
       expect(tester.takeException(), isNull);
 
       await disposeApp(tester);

@@ -1,168 +1,119 @@
-# Stage 3 — TEST (iteration 2) · P08b · Today empty
+# Stage 3 — TEST (iteration 3) · P08b · Today empty
 
 Route `/today-empty` · parent · feature `today` · branch `screen/P08b`
-(HEAD `7d106cb` "checkpoint after build (iteration 2)", main merged at
-`d340024`). All six iteration-1 bugs were fixed by the iteration-2 builders.
+(HEAD `3ea8e0c` "checkpoint after build (iteration 3)", main merged at
+`c4355ef`). Iteration 2's build fixed the last two defects by removing the
+invented line caps from the empty greeting and the empty message.
 
-## Result
-
-`flutter test --timeout 120s test/features/today/` → **190 passed, 2 skipped
-(the review stage's pending proofs), 2 failed**.
-
-Both failures are my new proofs for the two defects below — **no iteration-1
-proof regressed**: the seven red tests from iteration 1 (T01–T06) turned green
-on their own when the builders fixed them, which is exactly what a good red
-test should do. The whole-app suite is also clean apart from those two:
+## Results
 
 ```
-flutter test --timeout 120s            → 4695 passed, 15 skipped, 2 failed
-flutter analyze lib/features/today + the 7 today test files → No issues found
-dart format --set-exit-if-changed        → clean
+flutter test --timeout 120s test/features/today/   → 202 passed, 0 skipped, 0 failed
+flutter test --timeout 120s (whole app)            → 4709 passed, 13 skipped, 0 failed
+flutter analyze lib/features/today + 7 today test files → No issues found
+dart format --set-exit-if-changed                            → clean
 ```
 
-No screen code was edited (Stage 3 rule): the only file I touched is
-`app/test/features/today/today_empty_view_test.dart`.
+**No skips left in `test/features/today/`** (the iteration-2 proofs B01–B07 were
+all unskipped by the builders and are green), and **no failures anywhere in the
+app**. My two iteration-2 red proofs (T07 the 2-line greeting cap, T08 the
+5-line message cap) went green on their own when the caps were removed — again
+no test edits needed.
 
-## Verification of the iteration-1 fixes (measured, not assumed)
+No screen code was edited (Stage 3 rule). Files I touched this stage:
+`app/test/features/today/today_empty_view_test.dart` and this report, plus a
+ruling request appended to `SHARED_REQUEST.md`.
 
-Design numbers are `PNG ÷ 3 − 47` (status bar reserved only; widget tests have
-no top inset). Measured with the bundled Inter/Nunito faces loaded:
+## T07 / T08 verified fixed
 
-| element | design | app (was) | app now |
-|---|---|---|---|
-| greeting h1 box | 0–34 | 8–42 | **0–34** ✓ |
-| date line | 36–58 | 44–66 | **36–58** ✓ |
-| empty card | 74–508 (434) | 82–518 (436) | **74–508 (434)** ✓ |
-| `Add a quest` pill | y 376–428, x 40–350 | y 384–436 | **y 376–428, x 40–350** ✓ |
-| `Browse ideas` row | y 436–480, h 44 | y 444–490, h 46 | **y 436–480, h 44** ✓ |
-| tip card | 524–614 (90) | 534–628 (94) | **524–614 (90)** ✓ |
-| tip caption box | y 562 | y 576 | **562** ✓ |
-| date line copy | `A fresh nest` | `Happy week: 4 days` | **`A fresh nest`** ✓ |
+Both caps are gone from `_EmptyGreeting` and `_EmptyCard`, and the design state
+is byte-for-byte where it was before the change — the caps were never reached
+there, so nothing moved:
 
-Every element is now inside ±1 px, and dark mode lays out identically (card
-`74–508`, tip `524–614` in both themes). The whole-screen +8 px shift is gone.
+| element | design | measured |
+|---|---|---|
+| greeting h1 box | 0–34 | 0–34 |
+| date line | 36–58 | 36–58 |
+| empty card | 74–508 (434) | 74–508 (434) |
+| message | y 286–352 (66 = 3 × 22) | y 286–352 (66) |
+| tip card | 524–614 (90) | 524–614 (90) |
 
-## Tests added this iteration
+This is now pinned by a dedicated group so a future re-introduced cap, or a
+"helpful" clamp that the design does not have, fails immediately.
 
-`app/test/features/today/today_empty_view_test.dart` grows from 51 to 63
-executed tests (12 groups; 48 written `testWidgets`/`test`/`blocTest`
-bodies, several of them parameterised over themes/widths/scales).
+## Tests added (7 new, `today_empty_view_test.dart`: 63 → 70 executed)
 
-**1. `P08b iteration-2 regression pins` (11 new tests)** — each pins the
-*mechanism* of a fix, not just its outcome, so the same drift reintroduced
-elsewhere still fails:
+**`P08b live data updates` (5)** — the empty state is driven by live Drift
+streams, and nothing tested a transition while the screen was open:
 
-- the empty greeting's box starts at the `ListView`'s own origin (no padding
-  of its own anywhere between them);
-- the link row is exactly `NestDevice.tapParent`, its glyph centred, and the row
-  spans the card's inner width x 40–350;
-- `decorationColor == color == sky` on the link style in **both** themes;
-- the tip's `.body-s` and `.caption` boxes are flush (`body.top == title.bottom`)
-  and the card is exactly 90 tall;
-- the greeting wraps at 1.3× **and really did take two lines** (so the wrap path
-  is exercised, not a lucky one-line fit);
-- summaries stay in creation order for a roster whose ages disagree;
-- **the "A fresh nest" fix does not over-trigger**: one assigned quest puts the
-  P08 body back *and* restores `Happy week: 4 days`;
-- an unassigned "Anyone" quest still reads as an empty nest (repository contract:
-  only assigned quests appear on Today) — proves the empty branch is driven by
-  the same predicate the bloc uses;
-- an archived (`active = false`) quest does not resurrect the P08 body;
-- light and dark produce the identical card rect.
+- adding a quest flips **both** the body (P08b card → P08 body) and the date
+  line (`A fresh nest` → `Happy week: 4 days`) together, and archiving it flips
+  both back — the bloc and the view can no longer disagree mid-session;
+- a child added while the screen is open joins the sentence **in creation
+  order** (`… Maya, Leo and Ava …`), live;
+- removing every child drops the names sentence, live;
+- a double-barrelled parent name now takes three lines at 320 px @1.3× and is
+  **not** clipped (`didExceedMaxLines == false`);
+- an 8-child roster at 320 px @1.3× grows the message past the old 5-line cap
+  (377 px), overflows nothing, and the tip card is still reachable by scrolling.
 
-**2. Two new bug proofs** (below), plus the 51 iteration-1 tests unchanged.
+**`P08b uncapped copy keeps the design layout` (2)**:
+
+- the design-state geometry above, asserted box by box — the guards against a
+  cap being "helpfully" re-added;
+- a 50-character nickname renders the full sentence with no truncation.
+
+## Hunted and clean (so nobody re-checks)
+
+- **Uncapped content at the extremes**: a 50-character single-token nickname and
+  a 60-character parent name at 320 px @1.3× produce no overflow, no exception
+  and no ellipsis; the card simply grows (the page scrolls). Flutter breaks the
+  long word at character level inside the 260 px measure, so the design's
+  `max-width: 260px` still holds.
+- **Rapid double tap** on `Add a quest` opens exactly one `/quest-editor`.
+- **Restart/re-entry** and the whole navigation set (`Add a quest` →
+  `/quest-editor` with no `questId`, back returns to the empty screen,
+  `Browse ideas` → `/quests`, tab bar branch switching).
+- **Semantics**: greeting is a `header` node carrying the full string; both
+  controls expose and honour `performAction(tap)`; the Pip art is a labelled
+  non-interactive `image`.
+- **Sizes / themes**: 320/390/430 × 1.0/1.3 in light and dark, no overflow.
+- **Bottom edge** (owner rule) and **alignment**: tab-bar surface to the
+  physical edge with `currentIndex == 0`; 20 px gutters at every width.
+- **Copy** byte-exact vs the HTML, including the em dash, the curly quotes, the
+  en dash and the UK comma-free `Maya, Leo and Ava`.
+- **No `google_fonts`, no `DateTime.now()`, no simulator** booted, installed on
+  or driven (Stage 3 rule); nothing outside RULES §1 edited.
 
 ## Bugs found
 
-### P08b-T07 · MINOR · the greeting is still capped at two lines, so a double-barrelled surname is clipped
+**None.** No test exposed a defect in the screen this iteration.
 
-- **Where**: `app/lib/features/today/presentation/widgets/today_loaded_body.dart:773-778`
-  (`maxLines: 2, overflow: TextOverflow.ellipsis` on the empty greeting).
-- **What changed**: iteration 2 raised the cap from 1 to 2. That fixed the
-  iteration-1 case (the design's own `Sarah` at 320 px / 1.3×), but 2 lines is
-  still not always enough, and the design's cap is not 2 — it is **none**.
-- **Evidence**: P08b's `.greet h1` (`P08b-today-empty.html:4`) sets only font
-  family/weight/size/line-height. `components.css:43` gives `h1` exactly one
-  related rule — `overflow-wrap: anywhere; min-width: 0` — i.e. the design lets
-  the heading run to as many lines as the name needs. `.linkrow a`'s 44 px and
-  `.btn`'s 52 px are caps; the h1 has none.
-- **Measured** (`didExceedMaxLines`, bundled Nunito Black, 320 px @1.0):
+## One ruling still requested (not a bug, not counted against the verdict)
 
-  | parent name | chars | clipped? |
-  |---|---|---|
-  | `Sarah` (the design's) | 5 | no |
-  | `Sarah-Jane` | 10 | no |
-  | `Sarah-Jane Watson` | 17 | no |
-  | `Boadicea Featherstone` | 21 | **yes** |
-  | `Maria-Jose Featherstone` | 23 | **yes** |
-  | `Maria-Jose Konstantinopolou` | 27 | **yes** |
+Appended to `SHARED_REQUEST.md`: the loop's PIP rule says "wherever a screen
+shows Pip, render the child's OWN Pip … from the database (Maya = stage 3,
+Leo = stage 2)", and carves out only "onboarding/marketing screens with no child
+yet (P01–P07)". P08b is neither — `SEED=new_family` has two children in the
+database — yet the empty card renders `PipAvatar(mochi, stage: 1)`, an egg.
 
-  21 characters is an ordinary UK double-barrelled surname at the *smallest*
-  supported width, at *normal* text scale — no accessibility setting involved.
-- **Repro**: `flutter test --timeout 120s --plain-name "double-barrelled surname" app/test/features/today/today_empty_view_test.dart`
-  → `Expected: false  Actual: <true>`.
-- **Fix**: drop `maxLines` on the empty greeting (or raise it enough that the
-  realistic ceiling is unreachable). The screen scrolls, so a third line costs
-  nothing; `overflow: ellipsis` on a heading is what loses the parent's name.
-- **Cross-reference**: the concurrent Stage 4 (iteration 2) reached the same
-  conclusion independently and filed it as `P08b-B06` in
-  `app/test/features/today/p08b_bugs_test.dart` (still `skip: true`). Same fix.
+I believe the app is right and the rule's carve-out is too narrow, because: the
+design is unambiguous (both PNGs and the HTML `alt` show
+`Pip the bird as a speckled egg`); the card has no "own" child (it is the
+family's shared nest Pip, and the sentence under it says *"Pip will start to
+hatch"*); and `Seed.newFamily` reuses `_childrenDemo`, so the children's DB
+stages (3 and 2) are a seed artefact of a family with **zero** quests and zero
+completions. Stages 5 and 4 reached the same conclusion independently, but three
+stages re-deriving the same call is a sign the rule wants an explicit sentence.
+I have asked for one line in `ORCHESTRATOR_NOTES.md` stating that the
+"child's own Pip" clause governs per-child slots, and that a screen-level Pip
+with no owning child renders at the stage the design shows.
 
-### P08b-T08 · MINOR · the message is capped at five lines, so at 1.3× the children's names are the part that gets cut
+## Note for the UI stage
 
-- **Where**: `today_loaded_body.dart:848-851` (`maxLines: 5` on the `.empty-card p`).
-- **Evidence**: `.empty-card p` sets only `max-width: 260px` — no cap.
-- **Measured**: at 1.0× a 6-child roster with long names fits the cap *exactly*
-  (5 lines, `didExceedMaxLines == false`). At **1.3×** the same sentence needs
-  ~9 lines, so the ellipsis eats the tail — which is precisely the part that
-  names the children: `… Maya, Leo, Maximilian-Alexander and …` is cut before
-  "will see it straight away".
-- **Repro**: `flutter test --timeout 120s --plain-name "every child name survives in the message" app/test/features/today/today_empty_view_test.dart`
-  → `Expected: false  Actual: <true>`.
-- **Fix**: remove the cap (or raise it). The card is in a `ListView`; a longer
-  message just grows the card.
-- **Cross-reference**: Stage 4 filed the same as `P08b-B07` (still `skip: true`).
+The design PNGs still paint the area under the tab bar (y 810–844) in the page
+tint `#FBF7F0`. That is pre-owner-rule artwork: the bottom-edge owner rule
+requires the bar's surface to run to the physical edge, the app does that, and
+`3_test.md` proves it in both themes. Do not "fix" the app to match the strip.
 
-Both are the same root cause: an invented line cap on copy the design does not
-cap. Neither moves any element in the design's own state (the design PNG is
-unaffected), so this is an a11y/robustness defect, not a geometry one.
-
-## Hunted and clean this iteration (so nobody re-checks)
-
-- **Link row hit area**: the whole 310×44 strip is live, not just the glyph —
-  taps at dy ±6/±12/±20 and dx ±20/±100/±152 from the centre all reach
-  `/quests`, including the row's far corners. The row is now wider than the
-  design's content-width `<a>`, which only enlarges the target; the underline
-  still paints on the glyph alone, so nothing is visible at the edges.
-- **Child order** now holds for equal ages too (`Zed` at 9 alongside Maya at 9
-  reads `Maya, Leo and Zed` — no alphabetical tiebreak).
-- **The sort removal did not move P08**: with Maya 9 / Leo 6 / Zara 12 the kids
-  grid and group labels render Maya, Leo, Zara (creation order), which is what
-  both the design and the CHILD ORDER ruling require. The whole-app suite
-  (4 695 tests) shows no regression from the `watchSummaries` change.
-- **Empty-state predicates agree**: unassigned "Anyone" quest and archived quest
-  both show the P08b card *and* `A fresh nest`; the first assigned quest flips
-  both the body and the label together, so the bloc can no longer disagree with
-  the view.
-- **Navigation**: `Add a quest` → `/quest-editor` with no `questId`, system back
-  returns to the empty screen; `Browse ideas` → `/quests`; the tab bar still
-  switches branches and the Today tab restores `/today-empty`.
-- **Semantics**: both controls expose and honour `performAction(tap)`; the art
-  node is a labelled non-interactive `image`; the greeting is a `header`.
-- **Sizes**: 320/390/430 × 1.0/1.3 in both themes — no overflow, no exception,
-  the tip caption is not ellipsised at the worst case.
-- **Bottom edge** (owner rule): tab-bar surface runs to the physical edge in
-  both themes with `currentIndex == 0`.
-- **Byte-exact copy**: the two-name message, the tip's `— “Make your bed” …`
-  and `Reading – 20 minutes`, the UK comma-free `Maya, Leo and Ava`.
-- No `google_fonts`, no `DateTime.now()`, no simulator booted/installed/driven
-  (Stage 3 rule), no file outside `app/test/features/today/` edited.
-
-## Note for the next iteration
-
-T07 and T08 are both "remove a `maxLines` cap the design does not have" and are
-one-line changes in `today_loaded_body.dart`. My two red proofs and Stage 4's
-skipped B06/B07 all turn green on their own when they land; no test edits
-needed.
-
-VERDICT: FAIL
+VERDICT: PASS
