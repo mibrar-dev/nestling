@@ -18,3 +18,7 @@
 - K09-BUG-7/7b a load dispatched and the bloc closed in the same tick leaks a subscription.
 
 - K05/K06 growth percentage: K05 floors the Pip growth percentage (K05-BUG-2) but K06 `PipGrowthCard` still uses `.round()`; make both floor so the two screens never disagree.
+
+## K05 Quest complete (merged 5 Oct with 2 minor bugs open; proofs skipped in its bugs test)
+- K05-BUG-5 a 4-digit lifetime count ellipsises on one line.
+- K05-BUG-6 the progress node's semantics value contradicts its own label.

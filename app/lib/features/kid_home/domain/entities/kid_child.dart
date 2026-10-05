@@ -15,6 +15,7 @@ class KidChild extends Equatable {
     required this.pipStage,
     required this.happiness,
     required this.pinSet,
+    this.pipTotalCoins = 0,
   });
 
   final String id;
@@ -31,6 +32,12 @@ class KidChild extends Equatable {
   final int happiness;
   final bool pinSet;
 
+  /// Lifetime coins earned — drives Pip evolution (Songbird at 250).
+  /// Defaults to 0 so fixtures that predate K05 keep compiling; the
+  /// repository always maps the real DB value (see CONTRACT CHANGES in
+  /// `docs/screens/K05/2a_build_logic.md`).
+  final int pipTotalCoins;
+
   @override
   List<Object?> get props => <Object?>[
     id,
@@ -44,5 +51,6 @@ class KidChild extends Equatable {
     pipStage,
     happiness,
     pinSet,
+    pipTotalCoins,
   ];
 }
