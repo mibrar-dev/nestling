@@ -1,0 +1,7 @@
+TASK — P08b support: Today-empty inside the Today tab shell + a "new family" seed (shared/p08b_shell)
+
+1. Router (`app/lib/app/router.dart`): `/today-empty` must render INSIDE the Today `StatefulShellBranch`, so the tab bar shows with Today active, exactly like `/today`. Move `todayEmptyRoute` out of the top-level route list into that branch's `routes:` (next to `todayRoute`). Keep its path/name and the parent-only redirect. Add/adjust a router test: navigating to `/today-empty` shows `NestTabBar` with Today selected; `/today` unchanged.
+2. Seed (`app/lib/core/data/seed.dart`): add `Seed.newFamily(db)`: a family that has just finished onboarding — family + parent Sarah (same as `empty`) + both children exactly as `_childrenDemo` (Maya then Leo, creation order) + `_settingsDemo`, NO quests/completions/ledger/goals/rewards/badges/wardrobe, `onboarding_complete = true`, subscription 'trial' with trialStart = clock.now() (same as `empty`), appMode parent. Wire it into the launch seed switch (`app/lib/app/launch.dart` + the comment in `launch_flags.dart`) as `SEED=new_family`. Add a seed test (children present in order, zero quests, onboarding complete).
+3. `docs/screens/SCREENS.tsv`: P08b seed column `empty` → `new_family`.
+Do NOT change any feature view code or any other seed. Run `cd app && flutter analyze` (No issues found) and `flutter test --timeout 120s` (all green). Commit on this branch.
+Write docs/screens/_shared/p08b_shell_REPORT.md (diff summary, tests, full-suite result). End with `VERDICT: PASS` or `VERDICT: FAIL`.
