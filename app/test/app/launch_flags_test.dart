@@ -4,11 +4,12 @@ import 'package:nestling/core/data/env_flags.dart';
 
 void main() {
   group('LaunchFlags.isSupportedSeed', () {
-    test('supports demo, empty, fresh, new_family and onboarding_kids', () {
+    test('supports demo, empty, fresh, new_family, kid_all_done and onboarding_kids', () {
       expect(LaunchFlags.isSupportedSeed('demo'), isTrue);
       expect(LaunchFlags.isSupportedSeed('empty'), isTrue);
       expect(LaunchFlags.isSupportedSeed('fresh'), isTrue);
       expect(LaunchFlags.isSupportedSeed('new_family'), isTrue);
+      expect(LaunchFlags.isSupportedSeed('kid_all_done'), isTrue);
       expect(LaunchFlags.isSupportedSeed('onboarding_kids'), isTrue);
     });
 
