@@ -1,10 +1,13 @@
 // K07 (Pip evolves, `/pip-evolution`) — Stage 6 adversarial bug proofs.
 //
-// ITERATION 2 (second pass, after the iteration-2 build 34abefa). No product
-// code is changed by this stage (RULES §1: a bug hunt may add only
-// `app/test/features/pip/**` and `docs/screens/K07/**`). Iteration 1's four
-// bugs were FIXED by that build, so their proofs are un-skipped and green here;
-// the hunt re-measured every one of them rather than assuming the fix.
+// ITERATION 3 (third pass, after the iteration-3 build f4174f9, which landed the
+// orchestrator-mandatory D4 / K07-BUG-5 fix). No product code is changed by this
+// stage (RULES §1: a bug hunt may add only `app/test/features/pip/**` and
+// `docs/screens/K07/**`) — K07-BUG-6 and K07-BUG-7 are NEW on this pass; every
+// earlier id was re-measured rather than assumed fixed.
+//
+// ITERATION 2 (second pass, after the iteration-2 build 34abefa) re-measured
+// iteration 1's four bugs, which that build had FIXED.
 //
 // Every `testWidgets`/`test` carrying a `K07-BUG-n` id FAILS by design, so the
 // suite stays green: each is parked with `skip: true` (Flutter's `test` takes a
@@ -17,6 +20,10 @@
 // and drop `skip: true` in the fix commit. The `cleared:` / `control:` tests
 // are NOT skipped: they pin what the hunt cleared, so the fixes cannot be
 // "remove the guard" / "hard-code the demo numbers".
+//
+// REAL-FONT ORDERING IS LOAD-BEARING: the iteration-3 block is LAST in this file
+// because `_loadNunito` swaps the engine font collection for the rest of the
+// process (see its doc comment). Do not add tests after it.
 //
 // Hunt matrix (the brief's list) and where each item is pinned:
 //   0 children / no active child ....... `control: no active child…`
@@ -67,6 +74,8 @@ import 'dart:ui' as ui;
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart' show NativeDatabase;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:nestling/app/controllers.dart';
@@ -164,6 +173,32 @@ class _FailingRepository extends PipRepositoryImpl {
     await nestGate.close();
     await evolutionGate.close();
   }
+}
+
+/// K07-BUG-6 / K07-BUG-7's harness is layout-only, but this one belongs to
+/// iteration 3's control set: an evolution stream that fails, then fails AGAIN
+/// after a real retry, then heals. It answers the adversarial question the
+/// single-retry control left open — is the failure card's "Try again" a live
+/// control on the *second* visit, or does one re-subscription poison it?
+class _TwiceFailingRepository extends PipRepositoryImpl {
+  _TwiceFailingRepository({required super.db});
+
+  final StreamController<PipEvolution?> healGate =
+      StreamController<PipEvolution?>.broadcast();
+
+  int evolutionCalls = 0;
+
+  /// Fails until the test heals it; then the silent gate answers instead.
+  bool heal = false;
+
+  @override
+  Stream<PipEvolution?> watchEvolution() {
+    evolutionCalls++;
+    if (heal) return healGate.stream;
+    return Stream<PipEvolution?>.error(Exception('evolution down'));
+  }
+
+  Future<void> closeGates() => healGate.close();
 }
 
 Future<void> _useRepository(PipRepository repo) async {
@@ -1348,4 +1383,368 @@ void main() {
       await disposeApp(tester);
     },
   );
+
+  // ===========================================================================
+  // ITERATION 3's hunt (after the iteration-3 build `f4174f9`, which landed the
+  // orchestrator-mandatory D4 / K07-BUG-5 fix).
+  //
+  // Nothing here changes the screen (RULES §1: a bug hunt adds only
+  // `app/test/features/pip/**` and `docs/screens/K07/**`).
+  //
+  // REAL-FONT NOTE — the one thing this pass changed about the method. The
+  // file header's "text-driven geometry measured in a widget test is not the
+  // device's geometry" caveat is true and it HID a real defect: Flutter's test
+  // font renders all three stat labels at the SAME width, so the cards' scale
+  // factors came out equal and the misalignment vanished; with the bundled
+  // Nunito loaded (`_loadNunito`, the pattern
+  // `test/core/design_system/nest_pet_stage_test.dart:154` established) the
+  // three labels' widths differ and the drift is 2.40 px on a 320 px phone.
+  // `FontLoader` mutates the engine font collection for the rest of the
+  // process, so these tests are deliberately LAST in the file: nothing after
+  // them can be perturbed by the swap.
+  // ===========================================================================
+
+  testWidgets(
+    'K07-BUG-6: the three stat cards are different heights and their top and '
+    'bottom edges drift apart, because the row CENTRES its children instead of '
+    'stretching them like the design flex row does',
+    (tester) async {
+      await _loadNunito(tester);
+      // No DB write at all: this is the shipped demo seed (Maya, 4 quests,
+      // 120 coins, stage 3). The brief's own width.
+      await _pumpEvolution(tester);
+      await _resize(tester, 320);
+
+      final quests = _cardRect(tester, 'k07-card-quests');
+      final coins = _cardRect(tester, 'k07-card-coins');
+      final stages = _cardRect(tester, 'k07-card-stage');
+
+      // `.k7-stats { display: flex; gap: 10px }` with no `align-items`, so CSS
+      // stretches all three `.k7-stats > div` to the tallest — one height,
+      // three identical top and bottom edges. The design PNG measures all
+      // three at y 545..629 (84 px) at x 20 / 140 / 260.
+      expect(
+        _drift(<double>[quests.height, coins.height, stages.height]),
+        lessThanOrEqualTo(0.5),
+        reason:
+            'the three `.k7-stats > div` boxes are ${quests.height} / '
+            '${coins.height} / ${stages.height} px tall. `_StatCell` wraps its '
+            'number+label in `FittedBox(fit: scaleDown)`, so a card whose '
+            'content is narrower than the cell is scaled LESS and therefore '
+            'painted SHORTER; the design stretches all three to one height.',
+      );
+      expect(
+        _drift(<double>[quests.top, coins.top, stages.top]),
+        lessThanOrEqualTo(0.5),
+        reason:
+            'card tops are ${quests.top} / ${coins.top} / ${stages.top} — the '
+            'chunky 3 px ink borders and 6 px `--sh-kid` shadows make a ragged '
+            'top edge plainly visible, and the owner ALIGNMENT rule calls any '
+            'visible misalignment a UI failure.',
+      );
+      expect(
+        _drift(<double>[quests.bottom, coins.bottom, stages.bottom]),
+        lessThanOrEqualTo(0.5),
+        reason:
+            'card bottoms are ${quests.bottom} / ${coins.bottom} / '
+            '${stages.bottom} — the row uses the default '
+            'CrossAxisAlignment.center, so unequal cards are centred against '
+            'each other and their bottom edges splay.',
+      );
+
+      await disposeApp(tester);
+    },
+    skip: true, // K07-BUG-6 — fix `PipEvolutionStats`'s Row, then drop this
+  );
+
+  testWidgets(
+    'K07-BUG-7: the app-only `maxLines` caps truncate the celebration copy — '
+    'the hero headline is cut mid-glyph with NO ellipsis, and the quest count '
+    'is ellipsized away, at accessibility text scales the design never clamps',
+    (tester) async {
+      await _loadNunito(tester);
+      await _pumpEvolution(tester);
+
+      // Read the caps the screen ACTUALLY applies, so this proof measures the
+      // shipped widget rather than a hard-coded number (and so raising or
+      // dropping a cap is what turns it green).
+      final heroCap = tester
+          .widget<NestBalancedText>(find.byKey(const Key('k07-title')))
+          .maxLines;
+      final subCap = tester
+          .widget<Text>(find.byKey(const Key('k07-sub')))
+          .maxLines;
+
+      // `.k7-hero` / `.k7-sub` carry NO line clamp in the design (only
+      // `text-wrap: balance` on `.kid-title` and `text-align: center`), so in
+      // the browser these lines simply grow and `.scroll` scrolls. The app adds
+      // `maxLines: 4` on a `NestBalancedText` whose default overflow is
+      // `TextOverflow.clip` (a HARD cut, not even an ellipsis) and
+      // `maxLines: 2` + ellipsis on the sub-line, which carries the count.
+      final overlongTitle = <String>[];
+      final overlongSub = <String>[];
+      for (final scale in const <double>[1, 1.3, 1.5, 2, 2.5, 3, 3.16]) {
+        for (final width in const <double>[350, 320, 280]) {
+          final scaler = TextScaler.linear(scale);
+          for (final stage in const [1, 2, 3, 4]) {
+            final lines = _lineCount(
+              evolutionTitle(stage),
+              NestType.kidTitle(),
+              width,
+              scaler,
+            );
+            if (heroCap != null && lines > heroCap) {
+              overlongTitle.add(
+                'stage $stage needs $lines lines at ${scale}x '
+                '${width.toInt()}px',
+              );
+            }
+          }
+          for (final q in const [1, 44, 9999, 999999, 999999999]) {
+            final lines = _lineCount(
+              evolutionSub(q),
+              NestType.kidBody(),
+              width,
+              scaler,
+            );
+            if (subCap != null && lines > subCap) {
+              overlongSub.add(
+                '"$q times" needs $lines lines at ${scale}x '
+                '${width.toInt()}px',
+              );
+            }
+          }
+        }
+      }
+      expect(
+        overlongTitle,
+        isEmpty,
+        reason:
+            'the hero is capped at $heroCap lines with the default '
+            'TextOverflow.clip, so a further line is cut mid-glyph with '
+            'nothing to show for it — iOS reaches 3.16x (.accessibility5) on a '
+            '390 px phone, and 2.5x already needs 5 lines at 320 px. '
+            'Offenders: ${overlongTitle.take(3).join('; ')}',
+      );
+      expect(
+        overlongSub,
+        isEmpty,
+        reason:
+            'the sub-line is capped at $subCap lines and carries the quest '
+            'count, so the one sentence that explains WHY Pip grew reads '
+            '"Because you helped 9999..." at 2x (Android maximum font scale) '
+            'on a 320 px phone, and even "Because you helped 1 time" needs 3 '
+            'lines at 3.16x. Offenders: ${overlongSub.take(3).join('; ')}',
+      );
+      await disposeApp(tester);
+    },
+    skip: true, // K07-BUG-7 — raise/drop the two caps, then drop this skip
+  );
+
+  // ---------------------------------------------------------------------------
+  // ITERATION 3's controls: what this pass MEASURED as clean, pinned so a
+  // future fix cannot "fix" K07-BUG-6/7 by breaking fidelity.
+  // ---------------------------------------------------------------------------
+
+  testWidgets(
+    "control: with the real Nunito the stat cards are exactly the design's "
+    '110x84 at x 20 / 140 / 260 on the design width, and at 375 / 360 they stay '
+    'on the 20 px gutter with equal heights and aligned edges',
+    (tester) async {
+      await _loadNunito(tester);
+      for (final width in const <double>[390, 375, 360]) {
+        await _pumpEvolution(tester);
+        await _resize(tester, width);
+        final quests = _cardRect(tester, 'k07-card-quests');
+        final coins = _cardRect(tester, 'k07-card-coins');
+        final stages = _cardRect(tester, 'k07-card-stage');
+        final first = width == 390;
+        // `.k7-stats { display: flex; gap: 10px }` inside a 20 px-gutted
+        // `.scroll`: three equal cells, so cell = (width - 40 - 20) / 3 —
+        // exactly the design's 110 at 390.
+        final cell = (width - 40 - 20) / 3;
+        expect(quests.left, closeTo(20, 0.01));
+        expect(quests.width, closeTo(cell, 0.01));
+        // At the design's own 390 the absolute card is pinned: x 20..130,
+        // y 545..629 (84 px tall).
+        if (first) {
+          expect(quests.width, closeTo(110, 0.5));
+          expect(quests.height, closeTo(84, 0.5));
+        }
+        // The 20 px side gutter and the 10 px `.k7-stats` gap hold at every
+        // width: three equal cells with two 10 px gutters between them.
+        expect(coins.width, closeTo(quests.width, 0.01));
+        expect(stages.width, closeTo(quests.width, 0.01));
+        expect(coins.left - quests.right, closeTo(10, 0.01));
+        expect(stages.left - coins.right, closeTo(10, 0.01));
+        expect(stages.right, closeTo(width - 20, 0.01));
+        // …and they share one height, so their top and bottom edges align.
+        expect(
+          _drift(<double>[quests.height, coins.height, stages.height]),
+          lessThanOrEqualTo(0.5),
+        );
+        expect(
+          _drift(<double>[quests.top, coins.top, stages.top]),
+          lessThanOrEqualTo(0.5),
+        );
+        expect(
+          _drift(<double>[quests.bottom, coins.bottom, stages.bottom]),
+          lessThanOrEqualTo(0.5),
+        );
+        await disposeApp(tester);
+      }
+    },
+  );
+
+  testWidgets(
+    'control: no copy is truncated at text scale 1.0–2.0 on a 320 px phone '
+    'with the real Nunito, so the widget test font (not the screen) is what '
+    'makes text look clipped',
+    (tester) async {
+      await _loadNunito(tester);
+      await _pumpEvolution(tester);
+      await _resize(tester, 320);
+      // The brief's own combination, asserted on the real rendered paragraphs.
+      tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await _settle(tester);
+      expect(_exceededMaxLines(tester, 'k07-title'), isFalse);
+      expect(_exceededMaxLines(tester, 'k07-sub'), isFalse);
+      expect(_exceededMaxLines(tester, 'k07-caption'), isFalse);
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    },
+  );
+
+  testWidgets(
+    'control: a second REAL stream failure still leaves "Try again" alive, and '
+    'the celebration comes back when the stream finally answers',
+    (tester) async {
+      final repo = _TwiceFailingRepository(db: db);
+      await _useRepository(repo);
+      addTearDown(repo.closeGates);
+      await _pumpEvolution(tester);
+      expect(find.byKey(const Key('k07-retry')), findsOneWidget);
+      expect(repo.evolutionCalls, 1);
+
+      await tester.tap(find.byKey(const Key('k07-retry')));
+      await _settle(tester);
+      expect(repo.evolutionCalls, 2, reason: 'retry #1 re-subscribed');
+      expect(
+        find.byKey(const Key('k07-retry')),
+        findsOneWidget,
+        reason: 'the second failure offers a second, live retry',
+      );
+
+      repo.heal = true;
+      await tester.tap(find.byKey(const Key('k07-retry')));
+      await _settle(tester);
+      expect(repo.evolutionCalls, 3, reason: 'retry #2 re-subscribed');
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byKey(const Key('k07-retry')), findsNothing);
+
+      final delivered = await tester.runAsync(
+        () => PipRepositoryImpl(db: db).watchEvolution().first,
+      );
+      await tester.runAsync(() async => repo.healGate.add(delivered));
+      await _settle(tester);
+      expect(find.byKey(const Key('k07-title')), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    },
+  );
+
+  testWidgets(
+    'control: only done_pending / approved rows for the ACTIVE child count '
+    'toward the milestone (to_do, not_yet and rows belonging to another child '
+    'do not)',
+    (tester) async {
+      // Written BEFORE the first pump: a write to a table a live watch sits on
+      // deadlocks this harness inside the fake-async zone (file header).
+      await tester.runAsync(() async {
+        for (final entry in const <(String, String)>[
+          ('q-todo', 'maya'),
+          ('q-notyet', 'maya'),
+          ('q-denied', 'maya'),
+          ('q-leo', 'leo'),
+        ]) {
+          await db
+              .into(db.questCompletions)
+              .insert(
+                QuestCompletionsCompanion.insert(
+                  questId: entry.$1,
+                  childId: entry.$2,
+                  familyId: Seed.familyId,
+                  status: Value(
+                    entry.$1 == 'q-denied'
+                        ? 'denied'
+                        : entry.$1 == 'q-todo'
+                        ? 'to_do'
+                        : entry.$1 == 'q-notyet'
+                        ? 'not_yet'
+                        : 'approved',
+                  ),
+                  coins: const Value(15),
+                ),
+              );
+        }
+      });
+      await _pumpEvolution(tester);
+      // Demo truth for Maya: 4 counted completions, 4 distinct quests.
+      expect(
+        tester.widget<Text>(find.byKey(const Key('k07-stat-quests'))).data,
+        '4',
+      );
+      expect(find.text('Because you helped 4 times'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    },
+  );
 }
+
+/// Loads the bundled Nunito so text-driven geometry matches the device.
+///
+/// `flutter test` otherwise lays out with a fallback font that is markedly
+/// WIDER than Nunito; for K07-BUG-6 that difference is the whole point (the
+/// fallback renders all three stat labels at the same width, hiding the bug).
+/// Same pattern as `test/core/design_system/nest_pet_stage_test.dart:154`.
+Future<void> _loadNunito(WidgetTester tester) async {
+  await tester.runAsync(() async {
+    final loader = FontLoader('Nunito')
+      ..addFont(rootBundle.load('assets/fonts/Nunito-Bold.ttf'))
+      ..addFont(rootBundle.load('assets/fonts/Nunito-Black.ttf'));
+    await loader.load();
+  });
+}
+
+/// The painted card box, not the text inside it.
+Rect _cardRect(WidgetTester tester, String key) =>
+    tester.getRect(find.byKey(Key(key)));
+
+/// Largest pairwise distance in [values] — the alignment drift.
+double _drift(List<double> values) {
+  final sorted = <double>[...values]..sort();
+  return sorted.last - sorted.first;
+}
+
+/// Real-font line count for `text` at `width` and `scale` — the same
+/// `TextPainter` probe `NestBalancedText` itself uses to lay out and balance.
+int _lineCount(String text, TextStyle style, double width, TextScaler scaler) =>
+    NestBalancedText.lineCountFor(
+      text: text,
+      style: style,
+      maxWidth: width,
+      textDirection: TextDirection.ltr,
+      textScaler: scaler,
+    );
+
+/// Whether the rendered paragraph under [key] is running past its `maxLines`.
+bool _exceededMaxLines(WidgetTester tester, String key) => tester
+    .renderObject<RenderParagraph>(
+      find.descendant(
+        of: find.byKey(Key(key)),
+        matching: find.byType(RichText),
+      ),
+    )
+    .didExceedMaxLines;

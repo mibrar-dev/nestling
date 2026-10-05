@@ -27,7 +27,7 @@
 // fake time can pass before the query has answered on a loaded machine).
 // Nothing here reads the wall clock — `appNowUtc()` is the pinned instant.
 
-import 'package:drift/drift.dart' show Value;
+import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
@@ -287,6 +287,56 @@ void main() {
 
       await disposeApp(tester);
     });
+  });
+
+  group('the zero case, measured for the orchestrator', () {
+    testWidgets(
+      'a child with no counted completions still reaches the celebration, with '
+      "today's zero wording pinned",
+      (tester) async {
+        // `4_review.md` finding 2: `evolutionSub(0)` has no zero branch, so a
+        // reachable kid-facing string reads "Because you helped 0 times" on a
+        // celebration screen. No design source has a zero case, so the WORDING
+        // is the orchestrator's to rule on (`SHARED_REQUEST.md` item 5) - this
+        // test only pins that (a) the case is reachable from the database and
+        // (b) what it says today, so the ruling has a measurement to argue
+        // about. No copy is invented here.
+        var countedRows = -1;
+        await write(tester, () async {
+          await (db.update(db.questCompletions)..where(
+                (c) =>
+                    c.childId.equals('maya') &
+                    c.status.isIn(<String>['done_pending', 'approved']),
+              ))
+              .write(const QuestCompletionsCompanion(status: Value('to_do')));
+          final rows =
+              await (db.select(db.questCompletions)..where(
+                    (c) =>
+                        c.childId.equals('maya') &
+                        c.status.isIn(<String>['done_pending', 'approved']),
+                  ))
+                  .get();
+          countedRows = rows.length;
+        });
+        expect(
+          countedRows,
+          0,
+          reason: 'the database really has no counting row',
+        );
+
+        await pumpEvolution(tester);
+
+        // The celebration is reachable with nothing to celebrate yet.
+        expect(find.text('Pip grew into a Fledgling!'), findsOneWidget);
+        expect(find.text('Meet Fledgling Pip'), findsOneWidget);
+        expect(statValue('k07-card-quests', '0'), findsOneWidget);
+        // Today’s wording, from the DB’s zero \u2014 not a literal in the view.
+        expect(find.text('Because you helped 0 times'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+
+        await disposeApp(tester);
+      },
+    );
   });
 
   group('the active child’s own Pip (ORCHESTRATOR PIP + DATA OVER MOCKS)', () {

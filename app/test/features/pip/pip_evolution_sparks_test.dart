@@ -84,6 +84,22 @@ List<int> get _fills => <int>[
     int.parse(m.group(1)!, radix: 16),
 ];
 
+/// Every fully opaque ARGB the layer puts on the render path.
+Set<int> _opaqueArgbs(Uint8List bytes) => <int>{
+  for (var i = 0; i < bytes.length; i += 4)
+    if (bytes[i + 3] == 255)
+      (bytes[i + 3] << 24) |
+          (bytes[i] << 16) |
+          (bytes[i + 1] << 8) |
+          bytes[i + 2],
+};
+
+/// The `<g>`'s stroke hex, as the design writes it.
+int get _designStroke => int.parse(
+  RegExp('stroke="#([0-9A-Fa-f]{6})"').firstMatch(_block)!.group(1)!,
+  radix: 16,
+);
+
 void main() {
   setUpAll(() {
     _block = _sparksBlock();
@@ -255,6 +271,43 @@ void main() {
         }
       }
     });
+    testWidgets(
+      'every hex in the design block reaches the canvas, in both themes',
+      (tester) async {
+        // ORCHESTRATOR_NOTES 23:55 asked for exactly this check — "Verify each
+        // fill hex equals the HTML's literal" — and the tests above compare the
+        // canvas with the PALETTE. This one closes the loop on the DESIGN
+        // SOURCE, so a token that drifts off its hex, or a new literal added to
+        // the SVG and quietly never painted, cannot pass unnoticed.
+        //
+        // The one documented exception is the SVG's `#3D7FF0` sky dot, which is
+        // not a token in either scheme (`--sky` is `#2563D6`); the test above
+        // asserts it absent, so here it is excluded rather than expected.
+        const notAToken = 0x3D7FF0;
+        final designHexes = <int>{..._fills, _designStroke}..remove(notAToken);
+        expect(designHexes, <int>{
+          0x7C6CF2,
+          0x1F9D63,
+          0xF4B400,
+          0xFF8A5B,
+          0x1E1B3A,
+        }, reason: 'the design block’s own hexes, read from the HTML');
+
+        for (final theme in <ThemeData>[NestTheme.light(), NestTheme.dark()]) {
+          await pumpSparks(tester, theme: theme);
+          final painted = _opaqueArgbs(await rasterise(tester));
+          for (final hex in designHexes) {
+            expect(
+              painted,
+              contains(0xFF000000 | hex),
+              reason:
+                  '#${hex.toRadixString(16).padLeft(6, '0')} is in the design '
+                  'but never reached the canvas in ${theme.brightness.name}',
+            );
+          }
+        }
+      },
+    );
   });
 
   group('the layer is decorative and static (RULES §6, HTML aria-hidden)', () {

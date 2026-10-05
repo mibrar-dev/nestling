@@ -40,6 +40,7 @@ import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart' hide PipStage;
+import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 import 'package:nestling/features/pip/data/pip_repository_impl.dart';
 import 'package:nestling/features/pip/domain/entities/pip_evolution.dart';
 import 'package:nestling/features/pip/domain/entities/pip_nest.dart';
@@ -117,6 +118,65 @@ class _BothStreamsFailRepository extends PipRepositoryImpl {
   Stream<PipEvolution?> watchEvolution() =>
       Stream<PipEvolution?>.error(Exception('evolution down'));
 }
+
+/// K06's stream is healthy; K07's is driven by hand, so a MID-SESSION failure
+/// (an emission followed by an error) can be delivered deterministically.
+class _GatedEvolutionOnlyRepository extends PipRepositoryImpl {
+  _GatedEvolutionOnlyRepository({required super.db})
+    : evolutionGate = StreamController<PipEvolution?>.broadcast();
+
+  final StreamController<PipEvolution?> evolutionGate;
+
+  @override
+  Stream<PipEvolution?> watchEvolution() => evolutionGate.stream;
+
+  Future<void> closeGate() async {
+    await evolutionGate.close();
+  }
+}
+
+/// Counts every subscription, so "the retry touched only the dead stream" is an
+/// observation rather than an inference. [evolutionFails] flips K07's stream from
+/// erroring to healthy, which is exactly what the failure card's "Try again"
+/// needs to recover.
+class _RecoveringEvolutionRepository extends PipRepositoryImpl {
+  _RecoveringEvolutionRepository({required super.db});
+
+  int nestCalls = 0;
+  int evolutionCalls = 0;
+  bool evolutionFails = true;
+
+  @override
+  Stream<PipNest?> watchNest() {
+    nestCalls++;
+    return super.watchNest();
+  }
+
+  @override
+  Stream<PipEvolution?> watchEvolution() {
+    evolutionCalls++;
+    if (evolutionFails) {
+      return Stream<PipEvolution?>.error(Exception('evolution down'));
+    }
+    return super.watchEvolution();
+  }
+}
+
+/// Maya's seeded evolution, as the real repository would deliver it.
+const PipEvolution _mayaEvolution = PipEvolution(
+  profile: PipProfile(
+    childId: 'maya',
+    nickname: 'Maya',
+    style: 'mochi',
+    skin: 'sunny',
+    accessory: 'none',
+    stage: 3,
+    totalCoins: 175,
+    coins: 120,
+    happiness: 4,
+  ),
+  questsDone: 4,
+);
 
 Future<void> _useRepository(PipRepository repo) async {
   await GetIt.instance.unregister<PipRepository>();
@@ -253,22 +313,7 @@ void main() {
       expect(find.byKey(const Key('k07-bar')), findsOneWidget);
 
       // Release the gate with what the real repository would have delivered.
-      repo.evolutionGate.add(
-        const PipEvolution(
-          profile: PipProfile(
-            childId: 'maya',
-            nickname: 'Maya',
-            style: 'mochi',
-            skin: 'sunny',
-            accessory: 'none',
-            stage: 3,
-            totalCoins: 175,
-            coins: 120,
-            happiness: 4,
-          ),
-          questsDone: 4,
-        ),
-      );
+      repo.evolutionGate.add(_mayaEvolution);
       await _pumpUntil(tester, find.byKey(const Key('k07-cta')));
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
@@ -290,6 +335,82 @@ void main() {
       expect(find.text('Oh no! Pip got lost.'), findsOneWidget);
       expect(find.byKey(const Key('k07-retry')), findsOneWidget);
       expect(find.text("Who's playing?"), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+  });
+
+  group('a hiccup is not a failure card', () {
+    testWidgets('a mid-session evolution failure keeps the celebration on '
+        'screen', (tester) async {
+      final repo = _GatedEvolutionOnlyRepository(db: db);
+      await _useRepository(repo);
+      addTearDown(repo.closeGate);
+      await pumpEvolution(tester, ready: 'k07-lock');
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      repo.evolutionGate.add(_mayaEvolution);
+      await _pumpUntil(tester, find.byKey(const Key('k07-cta')));
+      expect(find.text('Pip grew into a Fledgling!'), findsOneWidget);
+
+      // Now the stream fails, having ALREADY answered: `evolutionSettled` stays
+      // true, so K07 keeps its own status `loaded`. A child must not be thrown
+      // out of the celebration by a hiccup (the K03 review-finding-6
+      // keep-loaded rule), and the raw stream text must never appear.
+      repo.evolutionGate.addError(Exception('evolution down'));
+      await _settle(tester);
+
+      expect(find.text('Oh no! Pip got lost.'), findsNothing);
+      expect(find.text('Pip grew into a Fledgling!'), findsOneWidget);
+      expect(find.byKey(const Key('k07-cta')), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(
+        screenText(tester).where((t) => t.contains('evolution down')),
+        isEmpty,
+      );
+      // The screen is still live: the CTA really navigates.
+      await tester.tap(find.byKey(const Key('k07-cta')));
+      await _settle(tester);
+      expect(currentPath(tester), '/pip');
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('Try again re-subscribes ONLY the stream that died', (
+      tester,
+    ) async {
+      final repo = _RecoveringEvolutionRepository(db: db);
+      await _useRepository(repo);
+      await pumpEvolution(tester, ready: 'k07-retry');
+
+      expect(find.text('Oh no! Pip got lost.'), findsOneWidget);
+      expect(repo.nestCalls, 1, reason: 'K06 answered on the first load');
+      expect(repo.evolutionCalls, 1);
+      // The card's last-known Pip is the NEST's row, which is healthy.
+      final avatar = tester.widget<PipAvatar>(find.byType(PipAvatar));
+      expect(avatar.style, PipStyle.mochi);
+      expect(avatar.skin, PipSkin.sunny);
+      expect(avatar.stage, 3);
+
+      repo.evolutionFails = false;
+      await tester.tap(find.byKey(const Key('k07-retry')));
+      await _pumpUntil(tester, find.byKey(const Key('k07-cta')));
+
+      expect(find.text('Oh no! Pip got lost.'), findsNothing);
+      expect(find.text('Pip grew into a Fledgling!'), findsOneWidget);
+      expect(repo.evolutionCalls, 2, reason: 'the dead stream was re-listened');
+      expect(
+        repo.nestCalls,
+        1,
+        reason:
+            'the healthy subscription was never released, so the retry must '
+            'not re-listen it — `toLoading(restartingNest: false)` keeps '
+            'K06 loaded instead of dropping it on a spinner '
+            '(4_review.md finding 1)',
+      );
+      expect(currentPath(tester), '/pip-evolution');
       expect(tester.takeException(), isNull);
 
       await disposeApp(tester);
