@@ -12,6 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/features/pip/data/pip_repository_impl.dart';
+import 'package:nestling/features/pip/domain/entities/pip_evolution.dart';
 
 Future<void> _setActiveChild(AppDatabase db, String? childId) async {
   await (db.update(db.appState)..where((a) => a.id.equals(1))).write(
@@ -38,6 +39,33 @@ Future<void> _addCompletion(
           createdAtTz: const Value('Europe/London'),
         ),
       );
+}
+
+/// The production writes are status UPDATES, not inserts: P11 approves by
+/// `status = 'approved' WHERE status = 'done_pending'` and denies with
+/// `not_yet` (`approvals_repository_impl.dart:76-121`), and K05 re-does a
+/// quest in its current period by flipping the newest `to_do`/`not_yet` row
+/// to `done_pending` (`kid_home_repository_impl.dart:171-182`). [createdAt]
+/// picks one row when a quest has several. Returns the rows changed, so a
+/// test can prove exactly which row moved.
+Future<int> _setStatus(
+  AppDatabase db, {
+  required String questId,
+  required String childId,
+  required String status,
+  DateTime? createdAt,
+}) {
+  Expression<bool> row(QuestCompletions c) {
+    return c.questId.equals(questId) &
+        c.childId.equals(childId) &
+        (createdAt == null
+            ? const Constant(true)
+            : c.createdAt.equals(createdAt));
+  }
+
+  return (db.update(
+    db.questCompletions,
+  )..where(row)).write(QuestCompletionsCompanion(status: Value(status)));
 }
 
 /// Waits (real async) until [ready] holds, up to ~3 s. The per-test
@@ -195,6 +223,127 @@ void main() {
         status: 'approved',
       );
       expect((await repo.watchEvolution().first)!.questsDone, 4);
+    });
+  });
+
+  // The two production writers on these numbers never INSERT a counted row:
+  // K05 flips the newest `to_do`/`not_yet` row of the current period to
+  // `done_pending`, and P11 then flips that row to `approved` (approve) or to
+  // `not_yet` (decline). The existing suite above covers INSERTs, so these
+  // pin the UPDATE paths — including the one that takes credit BACK.
+  group('the production status updates', () {
+    test('a re-done quest (to_do -> done_pending) counts +1', () async {
+      expect((await repo.watchEvolution().first)!.questsDone, 4);
+      final changed = await _setStatus(
+        db,
+        questId: 'q-reading',
+        childId: 'maya',
+        status: 'done_pending',
+      );
+      expect(changed, 1, reason: 'exactly the one `to_do` row moved');
+      final after = (await repo.watchEvolution().first)!;
+      expect(after.questsDone, 5);
+      expect(after.questsFinishedCount, 5);
+    });
+
+    test(
+      'approving it (done_pending -> approved) never double-counts',
+      () async {
+        // The exact write P11 makes (`status = 'approved' WHERE status =
+        // 'done_pending'`). A `done_pending` row is already counted, so the
+        // approval must move nothing — a screen that counted on transition
+        // would jump from 4 to 5 and tell the child they helped twice.
+        final changed = await _setStatus(
+          db,
+          questId: 'q-dishwasher',
+          childId: 'maya',
+          status: 'approved',
+        );
+        expect(changed, 1);
+        final after = (await repo.watchEvolution().first)!;
+        expect(after.questsDone, 4, reason: 'no double credit');
+        expect(after.questsFinishedCount, 4);
+      },
+    );
+
+    test(
+      'declining it (done_pending -> not_yet) takes the credit back',
+      () async {
+        // The mirror, and the only path that makes the milestone go DOWN: the
+        // count is derived live from the rows, never accumulated, so a
+        // grown-up declining a completion cannot leave "Because you helped 4
+        // times" standing on screen.
+        final changed = await _setStatus(
+          db,
+          questId: 'q-table',
+          childId: 'maya',
+          status: 'not_yet',
+        );
+        expect(changed, 1);
+        final after = (await repo.watchEvolution().first)!;
+        expect(after.questsDone, 3);
+        expect(after.questsFinishedCount, 3);
+      },
+    );
+
+    test(
+      'declining ONE of two rows for the same quest keeps it a quest done',
+      () async {
+        // q-bins re-completed (legal: a daily/weekly quest is repeatable) →
+        // 5 helped times over 4 quests.
+        await _addCompletion(
+          db,
+          questId: 'q-bins',
+          childId: 'maya',
+          status: 'approved',
+        );
+        expect((await repo.watchEvolution().first)!.questsDone, 5);
+
+        final changed = await _setStatus(
+          db,
+          questId: 'q-bins',
+          childId: 'maya',
+          status: 'not_yet',
+          createdAt: Seed.utc(10, 3, 8, 30),
+        );
+        expect(changed, 1, reason: 'only the newest row was declined');
+        final after = (await repo.watchEvolution().first)!;
+        // The other q-bins row is still `approved`, so the quest still counts
+        // as done while the helped-times count drops: the two numbers move
+        // independently and neither contradicts the other on screen.
+        expect(after.questsDone, 4, reason: '"Because you helped 4 times"');
+        expect(after.questsFinishedCount, 4, reason: '"4 quests done"');
+      },
+    );
+
+    test('control: a status change between two uncounted values changes '
+        'nothing', () async {
+      // q-reading `to_do` -> `not_yet` (K05 cancelling a completion, and the
+      // value P11's decline writes on a never-submitted row). The write is
+      // live — the stream answers again — but both numbers hold, so the
+      // celebration screen does not flicker.
+      final emissions = <PipEvolution>[];
+      final sub = repo.watchEvolution().listen((e) {
+        if (e != null) emissions.add(e);
+      });
+      await _waitFor(() => emissions.isNotEmpty);
+      expect(emissions.last.questsDone, 4);
+
+      await _setStatus(
+        db,
+        questId: 'q-reading',
+        childId: 'maya',
+        status: 'not_yet',
+      );
+      await _waitFor(() => emissions.length >= 2);
+      expect(emissions.last.questsDone, 4);
+      expect(emissions.last.questsFinishedCount, 4);
+      // `PipEvolution` is an Equatable value object, and every field is
+      // unchanged, so the re-emission is `==` the first one — which is what
+      // lets the bloc's state dedupe keep the celebration screen still
+      // instead of rebuilding it on an unrelated table write.
+      expect(emissions.last, emissions.first);
+      await sub.cancel();
     });
   });
 }

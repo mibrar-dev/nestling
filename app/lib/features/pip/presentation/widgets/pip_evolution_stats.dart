@@ -75,34 +75,47 @@ class PipEvolutionStats extends StatelessWidget {
         coinsGrown: coinsGrown,
         stage: stage,
       ),
-      child: Row(
-        spacing: EvolutionStatsGeometry.gap,
-        children: <Widget>[
-          Expanded(
-            child: _StatCell(
-              cellKey: const Key('k07-card-quests'),
-              value: questsDone,
-              label: evolutionStatQuestsLabel(),
-              valueKey: const Key('k07-stat-quests'),
+      // `.k7-stats` is a CSS flex row with NO `align-items`, i.e. the default
+      // `stretch`: all three `.k7-stats > div` boxes are the height of the
+      // tallest, so their top and bottom edges line up (`5_ui.md` measures all
+      // three at y 545..629 on the light PNG). `CrossAxisAlignment.stretch`
+      // is the same instruction; `IntrinsicHeight` is required alongside it
+      // because the row lives inside a `SingleChildScrollView`, whose cross
+      // axis is unbounded (a bare `stretch` throws "forces an infinite
+      // height"). Deliberately NOT a fixed card height: the cards must still
+      // GROW at large text scales and on a 320 px phone, where the labels
+      // wrap (6_bugs.md K07-BUG-6).
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: EvolutionStatsGeometry.gap,
+          children: <Widget>[
+            Expanded(
+              child: _StatCell(
+                cellKey: const Key('k07-card-quests'),
+                value: questsDone,
+                label: evolutionStatQuestsLabel(),
+                valueKey: const Key('k07-stat-quests'),
+              ),
             ),
-          ),
-          Expanded(
-            child: _StatCell(
-              cellKey: const Key('k07-card-coins'),
-              value: coinsGrown,
-              label: evolutionStatCoinsLabel(),
-              valueKey: const Key('k07-stat-coins'),
+            Expanded(
+              child: _StatCell(
+                cellKey: const Key('k07-card-coins'),
+                value: coinsGrown,
+                label: evolutionStatCoinsLabel(),
+                valueKey: const Key('k07-stat-coins'),
+              ),
             ),
-          ),
-          Expanded(
-            child: _StatCell(
-              cellKey: const Key('k07-card-stage'),
-              value: stage,
-              label: evolutionStatStagesLabel(),
-              valueKey: const Key('k07-stat-stage'),
+            Expanded(
+              child: _StatCell(
+                cellKey: const Key('k07-card-stage'),
+                value: stage,
+                label: evolutionStatStagesLabel(),
+                valueKey: const Key('k07-stat-stage'),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

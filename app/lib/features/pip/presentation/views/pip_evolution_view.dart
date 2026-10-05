@@ -336,21 +336,28 @@ class _EvolutionBody extends StatelessWidget {
               profile: profile,
             ),
             // `.kid-title` sets `text-wrap: balance`, so the hero heading uses
-            // NestBalancedText: same copy, style and maxLines, with the
-            // design's break instead of a one-word orphan line.
+            // NestBalancedText: same copy, style and line breaking as the
+            // design, instead of a one-word orphan line. Deliberately NO
+            // `maxLines`: `.k7-hero` adds only `overflow-wrap: anywhere` and
+            // `text-align: center`, so in the browser the heading simply grows,
+            // and `NestBalancedText`'s default overflow is `TextOverflow.clip`
+            // — a cap would cut a 5th line MID-GLYPH at accessibility text
+            // scales (iOS reaches 3.16x) with nothing to show for it
+            // (6_bugs.md K07-BUG-7; `1_plan.md` §(a).3's maxLines 4 was a
+            // planned value that the design does not actually specify).
             NestBalancedText(
               evolutionTitle(stage),
               key: const Key('k07-title'),
               style: NestType.kidTitle(color: tokens.ink),
-              maxLines: 4,
             ),
+            // `.k7-sub` is `.kid-body` with `text-align: center` and no clamp
+            // either; this line carries the quest count, so an ellipsis here
+            // would swallow the number that explains why Pip grew.
             Text(
               evolutionSub(evolution.questsDone),
               key: const Key('k07-sub'),
               style: NestType.kidBody(color: tokens.ink),
               textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
             ),
             // `.k7-cheer { display:flex; justify-content:center }`; the shared
             // bubble already caps itself at 260 wide and owns padding, border,

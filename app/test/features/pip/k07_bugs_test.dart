@@ -1454,7 +1454,6 @@ void main() {
 
       await disposeApp(tester);
     },
-    skip: true, // K07-BUG-6 — fix `PipEvolutionStats`'s Row, then drop this
   );
 
   testWidgets(
@@ -1538,7 +1537,6 @@ void main() {
       );
       await disposeApp(tester);
     },
-    skip: true, // K07-BUG-7 — raise/drop the two caps, then drop this skip
   );
 
   // ---------------------------------------------------------------------------

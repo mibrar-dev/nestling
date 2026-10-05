@@ -326,12 +326,18 @@ void main() {
       );
       expect(balanced, hasLength(1), reason: 'only the hero is balanced');
       expect(balanced.single.text, 'Pip grew into a Fledgling!');
-      // The heading keeps the shared `kidTitle` style (the plan's maxLines 4).
+      // The heading keeps the shared `kidTitle` style and carries NO line cap:
+      // `.k7-hero` adds only `overflow-wrap: anywhere` + `text-align: center`,
+      // and the plan's `maxLines: 4` turned out to clip a 5th line mid-glyph
+      // at accessibility text scales, because NestBalancedText's default
+      // overflow is `TextOverflow.clip` (`6_bugs.md` K07-BUG-7). `k07-bugs`'s
+      // K07-BUG-7 proof reads the cap off the shipped widget, so dropping it
+      // here and there together is what keeps the screen unclamped.
       expect(
         balanced.single.style.fontSize,
         NestType.kidTitle(color: const Color(0xFF000000)).fontSize,
       );
-      expect(balanced.single.maxLines, 4);
+      expect(balanced.single.maxLines, isNull);
       expect(balanced.single.textAlign, TextAlign.center);
       await disposeApp(tester);
     });

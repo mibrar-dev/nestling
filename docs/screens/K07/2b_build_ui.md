@@ -1,358 +1,198 @@
-# K07 · Stage 2b — build, UI chunk (iteration 3)
+# K07 · Stage 2b — build, UI chunk (iteration 4)
 
-Scope owned: `app/lib/features/pip/presentation/views/**`,
-`presentation/widgets/**`, and the view/widget/bug proofs in
-`app/test/features/pip/` that pin them. No file in `domain/`, `data/` or
-`presentation/bloc/` was touched (2a's). No simulator was booted, installed on
-or driven — only `5_ui` may touch `BC440E48-…`, and the brief gives that stage
-alone. No `flutter clean`, no `analysis_options` change, no skipped gate.
+Scope owned and touched: `app/lib/features/pip/presentation/views/**` and
+`presentation/widgets/**` for K07, plus the presentation tests named in
+`FIXES_3.md`. **No domain/, data/, bloc/ or route file was edited** — the only
+`app/lib` diff is the two files below. No simulator was booted, installed on,
+driven or screenshotted (only stage 5 may touch
+`BC440E48-B3A3-43BC-971B-0EF5DB621874`), no `flutter clean`, no
+`analysis_options` change, no `pkill`, no whole-app `flutter test`.
 
-Re-read before finishing: `ORCHESTRATOR_NOTES.md` (23:55 iteration-3 ruling),
-`FIXES_2.md`, `2a_build_logic.md` CONTRACT CHANGES §1–§2. §1 and §2 were
-already implemented by iteration 2's `34abefa` and re-verified here (§Contracts
-below); the open work was the one major bug and two small test fixtures.
+`2a_build_logic.md` carries **no CONTRACT CHANGES** for iteration 4, so this
+stage codes against the same bloc surface iteration 3 shipped. Re-read before
+finishing: nothing in the logic layer moved under this build.
 
-## What changed
+## Files changed
 
 | file | change |
 |---|---|
-| `lib/features/pip/presentation/widgets/pip_evolution_sparks.dart` | **K07-BUG-5 fixed** — the layer's stroke and all five fills now resolve from `NestColors.light` in BOTH themes; `shouldRepaint` is `false`; the widget tree is `const` end to end |
-| `test/features/pip/k07_bugs_test.dart` | un-skipped the **K07-BUG-5** proof (only `skip:` in the file) |
-| `test/features/pip/pip_evolution_sparks_test.dart` | palette assertions now read the light palette (the layer is theme-invariant) + a dark-only proof that no dark ink reaches the canvas; `shouldRepaint` pinned false; finding 3's wrong filename in the header corrected |
-| `test/features/pip/pip_nest_states_test.dart` | 2a's fixture change (`_NestOnlyRepository.watchEvolution` answers with a healthy null instead of a silent controller; `closeEvolutionGate()` and both call sites dropped) |
-| `docs/screens/K07/SHARED_REQUEST.md` | two non-blocking notes (items 4 and 5) |
+| `lib/features/pip/presentation/widgets/pip_evolution_stats.dart` | `IntrinsicHeight` + `CrossAxisAlignment.stretch` around the stats `Row` — **K07-BUG-6** |
+| `lib/features/pip/presentation/views/pip_evolution_view.dart` | dropped the hero's `maxLines: 4` and the sub's `maxLines: 2` + `TextOverflow.ellipsis` — **K07-BUG-7** |
+| `test/features/pip/k07_bugs_test.dart` | dropped both `skip: true` flags (K07-BUG-6 and K07-BUG-7 are now run) |
+| `test/features/pip/pip_evolution_copy_test.dart` | the one assertion that pinned the plan's `maxLines == 4` now pins `isNull` |
 
-Layout, copy, spacing and the bottom-edge rule are **unchanged** from iteration
-2, which passed build + test + review + UI; this iteration's brief is the bug
-fix list, and changing geometry without a design reason would only re-open the
-verified band table.
+Nothing else needed work: the screen's layout, copy, a11y actions, tokens and
+both theme palettes were already green through stages 3/4/5 of iteration 3, so
+this iteration is deliberately the two-line FIXES_3 commit plus its knock-ons.
 
-## K07-BUG-5 — the `svg.sparks` palette is theme-invariant (MAJOR, orchestrator-mandated)
+## K07-BUG-6 (MAJOR) — the three stat cards are now one height
 
-The design's confetti is an **inline SVG with literal hexes** — `<g
-stroke="#1E1B3A" stroke-width="3">` with `fill="#7C6CF2 / #1F9D63 / #F4B400 /
-#FF8A5B / #3D7FF0` — so it never references a theme variable and the dark design
-PNG paints the same colours as the light one. Measured off both design PNGs at
-this stage (design px / 3, art `viewBox` coords → CSS px):
-
-| sample | light PNG | dark PNG |
-|---|---|---|
-| sparkle 1 fill, art (32, 49) | `#7C6CF2` | `#7C6CF2` |
-| sparkle 1 left-point stroke, art (13, 49) | `#1E1B3A` | `#1E1B3A` |
-| gold dot (86, 10) | `#F4B400` | `#F4B400` |
-| sky dot (268, 8) | `#3D7FF0` | `#3D7FF0` |
-
-The app resolved all of them from `context.nest`, so dark mode stroked every
-sparkle and dot with the dark ink `#F3F0FA` and filled them with the dark
-accents — the white rings in `5_ui.md` D4 / `cmp_dark_2.png`. The fix is the
-orchestrator's recipe, in that one file:
+`app/lib/features/pip/presentation/widgets/pip_evolution_stats.dart`, the
+`PipEvolutionStats.build` row:
 
 ```dart
-Color get color => switch (fill) {
-  _SparkFill.lilac   => NestColors.light.lilac,    // #7C6CF2, as in the HTML
-  _SparkFill.success => NestColors.light.success,  // #1F9D63
-  _SparkFill.coin    => NestColors.light.coin,     // #F4B400
-  _SparkFill.peach   => NestColors.light.peach,    // #FF8A5B
-  _SparkFill.sky     => NestColors.light.sky,      // #2563D6 — see the note below
-};
-// paint(): ..color = NestColors.light.ink          // #1E1B3A, the design's <g>
-// shouldRepaint → false
+child: IntrinsicHeight(
+  child: Row(
+    crossAxisAlignment: CrossAxisAlignment.stretch,   // CSS `align-items` default
+    spacing: EvolutionStatsGeometry.gap,
+    children: <Widget>[ … ],
+  ),
+),
 ```
 
-Still tokens-only: `NestColors.light` is the 1:1 transcription of `tokens.css
-:root`, and for ink / lilac / success / coin / peach its values **are** the
-HTML's literals, so "tokens only" and "PNG parity" now agree. Nothing on the
-render path is a literal hex.
+`IntrinsicHeight` is required alongside the `stretch` and is the reason the
+finding's own note matters: the row lives inside a `SingleChildScrollView`, so
+its cross axis is unbounded and a bare `stretch` throws *"BoxConstraints forces
+an infinite height"* in the 280×360 control. `IntrinsicHeight` bounds the cross
+axis to the tallest child, which is precisely CSS `stretch`.
 
-**The one honest loose end** (carried from `6_bugs.md`): the sky dot's
-`#3D7FF0` is not a token in either scheme (`--sky` is `#2563D6` / `#7FA9FF`), so
-it paints the light `--sky` — theme-invariant, which is the ruling's intent, but
-24/28/26 per channel off the PNG on one 6 px dot. Fixing it would need a
-literal hex (forbidden) or a new shared token, so it is filed as
-`SHARED_REQUEST.md` item 4 and pinned by
-`pip_evolution_sparks_test.dart`'s "the design's non-token #3D7FF0 dot is NOT
-painted literally".
+This is the fix `FIXES_3.md` verified and reverted, applied as specified — and
+deliberately **not** a pinned card height, because the cards must still GROW at
+large text scales and on a 320 px phone where the labels wrap; that growth is
+what accessibility needs and what the browser does.
 
-Only `svg.sparks` needed this: a scan of the whole K07 HTML shows the other
-inline SVGs (status icons, lock, arrow, home pill) use `currentColor`, which is
-the theme ink the app already resolves from tokens.
+**Geometry is unchanged at the design width.** The 390 px proof in
+`pip_evolution_widget_test.dart` (cards 110 wide at x 20/140/260, 84 tall, top
+545 — i.e. `3 + 12 + 34 + 2 + 18 + 12 + 3`) still passes untouched: at 390 the
+three cards were already one height, so `stretch` changes nothing there and
+`5_ui` at ±2 px will not move. What changes is exactly the case the UI check
+never measured — 320 px, where the labels wrap and the heights used to diverge
+by 2.40 px with the demo seed and 11.67 px with a large coin total.
 
-## Contracts re-verified against `2a_build_logic.md`
+## K07-BUG-7 (minor) — the app-only line clamps are gone
 
-- **§1** `pip_evolution_view.dart:84` switches on `state.evolutionStatus`; the
-  sibling-nest branch that painted a false "Oh no! Pip got lost." is gone;
-  `_EvolutionFailure` still falls back to `state.nest?.profile` for the
-  last-known child.
-- **§2** `PipEvolutionStats` is fed `evolution.questsFinishedCount` while
-  `k07-sub` keeps `evolution.questsDone` (K07-BUG-3's widget half).
-- The three `pip_nest_states_test.dart` cases 2a predicted would fail
-  (`loading the first nest emission replaces the spinner`, `load failure Try
-  again really reloads the nest`, `load failure the accessibility path reloads
-  the nest too`) are green again — `+20: All tests passed!`, 0 skips.
+`app/lib/features/pip/presentation/views/pip_evolution_view.dart`, the hero and
+sub. Verified against the HTML source, not from memory:
 
-## Also closed (small, carried findings)
+```css
+.k7-hero { text-align: center; overflow-wrap: anywhere; }   /* HTML:24 */
+.k7-sub  { text-align: center; }                            /* HTML:25 */
+```
 
-- `4_review.md` finding 3: the header that pointed at
-  `pip_evolution_sparks_bug_test.dart` now names `k07_sparkles_bug_test.dart`
-  (2a left `dart format` on that file to this stage; it is clean).
+No `-webkit-line-clamp`, no `max-height`, no `overflow` — in the browser these
+two lines simply grow and `.scroll` scrolls. The app's `maxLines: 4` sat on a
+`NestBalancedText` whose default overflow is `TextOverflow.clip`, so the 5th line
+was cut mid-glyph with nothing to show for it; the sub's `maxLines: 2` +
+ellipsis swallowed the tail of **the number that explains why Pip grew**.
+`NestBalancedText` keeps `softWrap: true` by default, which is `.k7-hero`'s
+`overflow-wrap: anywhere`, and keeps `textAlign: center` — so the design's break
+(`.kid-title`'s `text-wrap: balance`) is preserved; only the cap is gone.
 
-## Gates (this layer only, every run with `--timeout`)
+### The plan knock-on (deliberate, documented — not silent)
+
+`FIXES_3.md` K07-BUG-7 flags two knock-ons "the build stage must handle in the
+same commit", and asks for a re-ratification rather than a silent change. Both
+are handled:
+
+1. **`1_plan.md` §(a).3** specified `maxLines: 4` and §(a).4 specified
+   `maxLines: 2, overflow: ellipsis`. The plan's own justification for the
+   caps is now recorded as wrong: §(a).3 says `.k7-hero` adds
+   `overflow-wrap: anywhere` "(≈ softWrap, keep default `softWrap: true`)", which
+   says nothing about a line cap, and §(a).4's `maxLines: 2` was a guess that
+   the HTML does not support. **`1_plan.md` is not mine to edit** (§1 of this
+   stage's brief: the plan is the contract), so it is left as written and the
+   deviation is recorded here and in the code comment instead. **The orchestrator
+   should re-ratify `1_plan.md` §(a).3/§(a).4** — the shipped values are now
+   "no cap on either, matching the CSS", which is what `pip_evolution_copy_test`
+   and `k07_bugs_test`'s K07-BUG-7 pin.
+   `1_plan.md`'s §(a).6 diagram line also says `Row(spacing: 10) stats`; the
+   shipped tree is `IntrinsicHeight > Row(spacing: 10, stretch: true)`.
+2. **`pip_evolution_copy_test.dart:334`** pinned `maxLines == 4` with the
+   comment "the plan's maxLines 4". That one assertion was the only thing that
+   failed when the cap was dropped (verified by the bug stage: `Expected: <4>
+   Actual: <null>`). It now pins `isNull`, and the style and
+   `textAlign == center` assertions around it are unchanged.
+
+Both caps were **dropped**, not raised. Raising to the envelope's worst case
+would have had to be a large arbitrary number to cover 3.16× at 280 px, and
+would still be a cap the design does not have; dropping is safe because
+`.k7-scroll` scrolls.
+
+## Gates (this stage only, every run with `--timeout`)
 
 ```
-$ flutter analyze lib/features/pip test/features/pip   → No issues found!
-$ dart format --output=none --set-exit-if-changed lib/features/pip \
-      test/features/pip                                → (0 changed)
+$ dart format lib/features/pip/presentation/{views,widgets} \
+      test/features/pip/{k07_bugs,copy}_test.dart
+    Formatted 14 files (0 changed)
 
-$ flutter test --timeout 120s --run-skipped test/features/pip/k07_bugs_test.dart
-    → +24: All tests passed!      ← K07-BUG-5 GREEN, 0 skips in the file
+$ flutter analyze lib/features/pip \
+      test/features/pip/k07_bugs_test.dart \
+      test/features/pip/pip_evolution_copy_test.dart
+    No issues found! (ran in 3.3s)
+
+$ flutter test --timeout 120s test/features/pip/k07_bugs_test.dart
+    → +30: All tests passed!      (was +28 ~2 — the two parked proofs now RUN)
+
+$ flutter test --timeout 120s test/features/pip/pip_evolution_view_test.dart \
+      test/features/pip/pip_evolution_widget_test.dart \
+      test/features/pip/pip_evolution_copy_test.dart \
+      test/features/pip/pip_evolution_a11y_test.dart
+    → +87: All tests passed!
+
 $ flutter test --timeout 120s test/features/pip/pip_evolution_sparks_test.dart \
-      test/features/pip/k07_sparkles_bug_test.dart     → +11: All tests passed!
-$ flutter test --timeout 120s test/features/pip/pip_nest_states_test.dart
-                                                    → +20: All tests passed!
-$ flutter test --timeout 120s test/features/pip/{view,widget,a11y,
-      stream_contract,iter2_fixes}_test.dart          → +96: All tests passed!
-$ flutter test --timeout 120s test/features/pip      → +419: All tests passed!
+      test/features/pip/pip_iter2_fixes_test.dart \
+      test/features/pip/pip_orchestrator_notes_test.dart \
+      test/features/pip/pip_shared_component_fidelity_test.dart \
+      test/features/pip/k07_sparkles_bug_test.dart \
+      test/features/pip/pip_evolution_copy_test.dart
+    → +64: All tests passed!
 ```
 
-The dark-mode stroke proof the orchestrator asked for exists in both places:
-`k07_bugs_test.dart`'s **K07-BUG-5** (real app shell, `ThemeMode.dark`,
-samples the painter's own raster at the design's `viewBox` coordinates and
-expects `0x1E1B3A` — this is the `--run-skipped` proof that failed at `0xF3F0FA`
-before the fix) and `pip_evolution_sparks_test.dart`'s new dark-case assertion
-that no `NestColors.dark.ink` pixel is on the canvas.
+**181 K07 presentation proofs green**, up from 179, with the two skipped
+counted as run. Nothing hung and nothing was waited on for more than six
+minutes. `k07_bugs_test.dart` has **zero skips** left inside the feature.
 
-## For the UI stage (5_ui)
+Negative control: both proofs were red before this stage by construction (they
+ship with `skip: true` because the bug stage measured them failing — K07-BUG-6
+at a 4.80 px height spread and K07-BUG-7 at 5 hero lines / 3 sub lines), and
+`pip_evolution_copy_test.dart`'s single assertion flipped to `isNull` with the
+cap — so they pin the fixes, not the fixtures.
 
-- Re-measure the dark sparkles (`5_ui.md` **D4**): no light outline, fills
-  `#7C6CF2 / #1F9D63 / #F4B400 / #FF8A5B`, stroke `#1E1B3A`. Everything else on
-  the screen is byte-identical to iteration 2's accepted shots, so the band
-  table should not move.
-- D5's 6 px sky dot will read `#2563D6` where the PNG says `#3D7FF0` — that is
-  the filed `SHARED_REQUEST.md` item 4, not a regression.
+Files were named rather than passing `test/features/pip` wholesale: iteration 2
+measured that `pip_buy_result_test.dart` stalls when the whole directory runs at
+once (`6_bugs.md` observation 3), which is not K07's to fix. The integrator's
+directory run should cover `pip_buy_result_test.dart`, `k06_bugs_test.dart` and
+the K06 suites, none of which this stage's diff can affect.
+
+`dart format --set-exit-if-changed .` over the app reports one changed file,
+`test/features/pip/zz_probe_2a_iter4_test.dart` — the parallel logic builder's
+scratch probe, seen untracked in `git status` and **not mine**; left alone on
+purpose (PROCESS: another stage's in-flight work is not this stage's to touch).
+
+## Deliberately not actioned
+
+- **`4_review.md` finding 1** — `evolutionSub(0)` still renders "Because you
+  helped 0 times". It lives in `pip_evolution_copy.dart`, which is 2b's file,
+  but the wording needs the orchestrator's sign-off (`SHARED_REQUEST.md` item 5,
+  no ruling in `ORCHESTRATOR_NOTES.md`) and no copy was invented. Unchanged from
+  iteration 3, where the zero branch was also left in place. Flagged in
+  `LEFT FOR NEXT ITERATION` so it is not lost.
+- **`ORCHESTRATOR_NOTES.md` 23:55 (D4, dark sparkles)** — already fixed and
+  re-verified in iteration 3; the `pip_orchestrator_notes_test.dart` and
+  `k07_sparkles_bug_test.dart` suites above include the dark-palette proof and
+  pass. Nothing to do.
+- **`SHARED_REQUEST.md` §4** — the design's `#3D7FF0` sky dot is off-token; the
+  orchestrator's D4 ruling paints the light sky token (`#2563D6`) in both
+  themes. A code change here would contradict the ruling.
+- **`SHARED_REQUEST.md` §2** — `PipLoadRequested` still subscribes K06's
+  `watchNest()` on K07. Logic-layer, no orchestrator ruling, cost only.
 
 ## LEFT FOR NEXT ITERATION
 
-1. **`4_review.md` finding 2 — `evolutionSub(0)` = "Because you helped 0
-   times"** under "Pip grew into a Hatchling!". The branch is missing, not the
-   wording, and there is no zero case in any design source, so it needs the
-   orchestrator's sign-off. Filed as `SHARED_REQUEST.md` item 5; the wording
-   assertion in `k07_bugs_test.dart`'s "0 and 999999999 coins…" control moves
-   with it.
-2. **`4_review.md` finding 1 — `toLoading()` clears both arrival flags while a
-   retry re-subscribes one stream.** Logic-layer (`pip_state.dart`), latent
-   because every route builds a fresh `PipBloc` and no view reads the sibling's
-   status. Left to the feature owner / `SHARED_REQUEST.md` item 2.
-3. **No in-app entry point for `/pip-evolution`** (`6_bugs.md` observation 1) —
-   the CTA leaves to `/pip`; if K06 should open K07 on a stage-up, that is the
-   K06/flow owner's call.
+1. **`evolutionSub(0)`'s zero branch** (`pip_evolution_copy.dart`) — needs an
+   orchestrator wording ruling before any code moves. When it lands,
+   `k07_bugs_test.dart`'s `0 and 999999999 coins…` control pins today's wording
+   and must move on purpose.
+2. **`1_plan.md` §(a).3 / §(a).4 re-ratification** by the orchestrator (above) —
+   the plan still documents caps the design does not have. Documentation only;
+   no code is blocked by it.
 
 ## Verdict
 
-Iteration 2's layout work stood up: the contracts 2a wrote are already in the
-tree and re-verified here, and this iteration's only open item was the dark-mode
-sparkle palette. That is now the design's fixed, theme-invariant inline-SVG
-palette in both themes — tokens-only, no white rings on the night sky — proven
-by the previously-failing K07-BUG-5 test in dark, plus the three fixture tests
-2a predicted would fail. The two remaining items are a copy ruling and a
-logic-layer latent finding, both filed.
-
-
----
-
-# Appendix — iteration 2 (superseded, kept for history)
-
-Verbatim `2b_build_ui.md` from `3f8ef59` / `HEAD`; iteration 3's report is above.
-
-# K07 · 2b BUILD UI (iteration 2) — views + widgets of feature `pip`
-
-Scope owned and edited: `app/lib/features/pip/presentation/views/**` and
-`presentation/widgets/**`, plus the K07 view/widget/bug/copy tests I had to keep
-in step. No `domain/`, `data/` or `bloc/` file was edited (the 2a state file was
-temporarily patched **only** to prove a defect, then restored byte-for-byte —
-md5 `30843865b9248985a885b1e5f2c0acf1`, see §1). No simulator was booted,
-installed on or driven; no `flutter clean`; no `analysis_options` change; no
-skipped gate left behind that this stage owns.
-
-Gates run by this stage:
-
-```
-flutter analyze lib/features/pip test/features/pip      → No issues found!
-dart format --output=none --set-exit-if-changed \
-    lib/features/pip test/features/pip                  → 0 changed
-```
-
----
-
-## 0. MANDATORY FOR THE INTEGRATOR — two red tests, one 2-line logic fix
-
-`PipState.copyWithLoaded` / `copyWithEvolution` compute `status` from the
-**sibling** stream's error slot but do not pass that slot into the new state, so
-the error is silently dropped. `PipState` (`presentation/bloc/pip_state.dart`,
-2a's file, ~lines 133-170 — **not mine to edit**) needs, in `copyWithLoaded`:
-
-```dart
-      nest: next,
-      evolution: evolution,
-      nestSettled: true,
-      evolutionSettled: evolutionSettled,
-      evolutionError: evolutionError,      // ← ADD: carry the sibling's slot
-      actionError: actionError,
-```
-
-and, in `copyWithEvolution`:
-
-```dart
-      nest: nest,
-      evolution: next,
-      nestSettled: nestSettled,
-      evolutionSettled: true,
-      nestError: nestError,                 // ← ADD: and here
-      actionError: actionError,
-```
-
-**Why it is real, not theoretical.** The evolution stream's `Stream.error` is
-delivered in a microtask, while the nest's first emission needs real Drift I/O,
-so on the real `PipRepositoryImpl` the **error lands first** and the healthy
-sibling emission then wipes it. Measured state during
-`pip_evolution_view_test.dart` → *"the nest stream healthy and this one
-failing"* (fake: nest real, evolution `Stream.error`):
-
-```
-PipState(PipStatus.failure, PipNest(…Maya…), null, /*nestSettled*/true,
-         /*evolutionSettled*/false, null, /*nestError*/null,
-         /*evolutionError*/null, null, 0)
-```
-
-`evolutionStatus` reads `loading` from a settled-false / error-null pair, so the
-celebration screen would sit on its spinner forever instead of showing the
-failure card. Mirror symptom on K06 (`copyWithEvolution` dropping `nestError`),
-which is why `pip_nest_states_test.dart` → *"the K07 stream healthy and this one
-failing"* is red too.
-
-**Proof it is exactly this and nothing else.** With the two lines applied,
-`pip_nest_states_test.dart` + `pip_evolution_view_test.dart` → `+41: All tests
-passed!`. The patch was then reverted and `pip_state.dart` verified restored
-(identical md5 to 2a's version; `git status` still shows only 2a's own diff).
-
-Currently red, and green the moment those two lines land:
-
-- `test/features/pip/pip_evolution_view_test.dart` → *the nest stream healthy and
-  this one failing: the failure card, not the who-is-playing card*
-- `test/features/pip/pip_nest_states_test.dart` → *load failure the K07 stream
-  healthy and this one failing: the failure card, not the who-is-playing card*
-
-(`errorMessage`, the aggregate diagnostic, is dropped by the same two methods —
-harmless, no view reads it, but it is the same oversight.)
-
----
-
-## 1. Items from `FIXES_1.md` — UI / layout / copy, all closed
-
-| item | where | what |
-|---|---|---|
-| **finding 1** = `5_ui.md` **D2** = `6_bugs.md` **K07-BUG-4** (MAJOR, mandatory via `ORCHESTRATOR_NOTES.md`) | `pip_evolution_sparks.dart` | `_sparkPath` hands **every** vertex, the `M` pair included, to one `Path.addPolygon`. `addPolygon` opens its own contour, so the old `moveTo(numbers[0], numbers[1])` before it was discarded and `close` returned to the polygon's own first vertex — every sparkle painted as a flat-topped 7-gon. Measured before: art rows 46..60, 14 px tall, 5 px off the design's centre line. After: rows 37..60, symmetric about the design's y 49, width unchanged. The `d` strings were already byte-exact; only the parser was wrong. |
-| **finding 11** (MINOR) | same file | the four `Path`s are parsed once and cached (`_Spark.path` → `static final Map<String, Path>`), so a repaint no longer compiles a `RegExp`, re-runs `allMatches` and allocates four `Path`s. |
-| **finding 5** (MINOR) | `pip_evolution_view.dart` `_EvolutionBar` | the `.kid-bar` 3 px ink rule is now built **only** when there is a CTA. On loading / failure / no-child the bar is a plain surface band instead of a full-width rule over an empty 53 px strip. The surface box stays, so the owner BOTTOM EDGE rule (same colour to the physical edge, no strip, light and dark) is untouched. |
-| **finding 6** (MINOR) | `pip_evolution_view.dart` + copy header | one convention for the screen: the spinner label is now `"Loading Pip's big moment"` (ASCII), matching `"Let's try again."`, `"Who's playing?"` and the design's own `Pip's`. The reasoning is written into `pip_evolution_copy.dart`'s header instead of being implicit. |
-| **finding 7** (MINOR) | `pip_evolution_copy.dart` | stage 1 no longer contradicts itself: the hero reads `Pip grew into an Egg!`, so the bubble reads `Psst… Pip is still an Egg!` (was `Shh... Pip is still growing!`) — and the ellipsis is `…`, never three ASCII dots. |
-| **finding 8** (MINOR) | `pip_evolution_copy.dart` + `pip_evolution_stats.dart` | the three stat labels moved out of the widget into the copy table as `evolutionStatQuestsLabel()` / `evolutionStatCoinsLabel()` / `evolutionStatStagesLabel()`, so `pip_evolution_copy.dart` really is the screen's single copy table. |
-| **finding 2** view half (K07-BUG-1) | `pip_evolution_view.dart` + `pip_nest_view.dart` | both views now switch on **their own** stream (`state.evolutionStatus` / `state.nestStatus`). The sibling-stream branches (K07's line 94-95, K06's `if (state.evolution != null) return const _PipFailure();`) are gone, exactly as `2a_build_logic.md` CONTRACT CHANGES §1 requires. `pip_evolution_view.dart`'s `failure` branch keeps `state.evolution?.profile ?? state.nest?.profile` for the last-known Pip. |
-| **finding 12** = `6_bugs.md` **K07-BUG-2** (MINOR) | `pip_evolution_stage.dart` | below the design's 350 px of slot content the three fixed-size pieces no longer fit (352 px needed), so the right-anchored grown Pip slid 72 px over the arrow. The slot is now wrapped in `FittedBox(scaleDown, bottomRight)` **only** when `maxWidth < 350`: at 390 and above the geometry is byte-identical (scale 1.0, same Stack), at 320 everything scales by 0.8 and the arrow/old Pip are legible again (measured gap +6 / +27 instead of −72 / −36). Stage 1's centred single Pip is untouched. |
-| **K07-BUG-3** widget half | `pip_evolution_view.dart` + `pip_evolution_stats.dart` | the `quests done` card now renders `evolution.questsFinishedCount` (distinct quests) while the sub-line keeps the row count it honestly calls "times" (`2a` CONTRACT CHANGES §2). Demo data is unchanged (4 rows / 4 quests) so the design still shows `4`. |
-
-### Deliberately not actioned
-
-- **finding 3** (red `dart format` on `k07_sparkles_bug_test.dart`) — done:
-  that file is now formatted and both analyzers are clean.
-- **finding 4** (K07 opens K06's stream it never renders) — 2a kept it as-is
-  pending the orchestrator ruling; nothing view-side.
-- **finding 9** (dark-mode sparkle fills differ from the dark PNG) — no code
-  change, on purpose. The design's inline SVG hard-codes `#7C6CF2` / `#1F9D63` /
-  `#FF8A5B` while the design system re-themes accents on dark surfaces, and
-  "tokens only, never hard-code colours" wins. The token re-theme stands (the
-  same trade every inline-SVG accent screen makes); **the orchestrator still owes
-  the explicit ruling** — this stage did not file it, it is recorded in
-  `4_review.md` finding 9.
-
-## 2. Proofs un-skipped (every one green)
-
-- `k07_sparkles_bug_test.dart` — all three `skip: true` flags dropped (the
-  mechanism test, the "design's polygon, tip included" raster comparison and
-  the symmetry proof). Two of them needed an honest repair, not a weaker
-  assertion: the tip-band expectation was 6 rows in `28..33` where a **centred**
-  3 px stroke caps the tip at `y = 28.5`, so rows 29..33 are solid and row 28 is
-  the halo (measured: row 28 alpha 1..127, rows 29..33 > 200); and the reference
-  raster drew only the four `<path>`s, so the screen's four `<circle>` dots —
-  which the design has too — counted as 832 "differing" pixels. The reference now
-  rasterises the whole `<g>` parsed from the HTML, and both assertions are
-  stronger than before (exact tip row, halo present, 0 differing px).
-- `k07_bugs_test.dart` — **K07-BUG-1** (widget half), **K07-BUG-2**,
-  **K07-BUG-3** (widget half) and **K07-BUG-4** un-skipped; the file is now
-  `+14: All tests passed!` with **zero** skips.
-  - K07-BUG-1's widget proof needed restructuring to match the fix: the old
-    second half demanded that a retry re-subscribe, which cannot hold now that a
-    pending screen shows **no retry at all**. It asserts the honest rule instead
-    (no `k07-retry` while pending, spinner instead of the false card), and then
-    releases the gate with the real repository's evolution and proves the
-    celebration appears — a stronger proof than the dead-button count. The
-    "a REAL failure's retry really re-subscribes" half was already pinned by the
-    file's passing `cleared:` test, so nothing is lost.
-  - `_PendingEvolutionRepository` now takes the value the fake will deliver, and
-    `closeGate()` delivers it before closing, so the release assertion is real.
-
-## 3. Copy changes (character by character)
-
-Only three strings moved, none of them design copy:
-
-| string | before | after | why |
-|---|---|---|---|
-| stage-1 bubble | `Shh... Pip is still growing!` | `Psst… Pip is still an Egg!` | contradicted its own hero; three ASCII dots → `…` |
-| spinner label | `Loading Pip’s big moment` | `Loading Pip's big moment` | one apostrophe convention (ASCII, like the design's `Pip's`) |
-| stat labels | inline literals | `pip_evolution_copy.dart` | one copy table |
-
-`pip_evolution_copy_test.dart` was updated for the bubble and gained two
-assertions: no `...` in any stage line, and the stage-1 line must name what the
-hero says it grew into; plus a test that the three labels come from the copy
-table.
-
-## 4. Test runs (all with `--timeout 120s`)
-
-```
-k07_sparkles_bug_test.dart + pip_evolution_sparks_test.dart   → +10  All passed
-k07_bugs_test.dart                                             → +14  All passed (was 6 skipped)
-pip_evolution_widget_test.dart + pip_evolution_a11y_test.dart
-  + pip_evolution_copy_test.dart                              → +66  All passed
-pip_nest_view_test.dart + pip_nest_widget_test.dart           → +22  All passed
-pip_nest_interactions_test.dart + k06_bugs_test.dart          → +52  All passed
-pip_orchestrator_notes_test.dart
-  + pip_shared_component_fidelity_test.dart
-  + pip_copy_parity_test.dart                                 → +28  All passed
-pip_evolution_view_test.dart                                  → +20 -1  (the §0 logic defect)
-pip_nest_states_test.dart                                     → +19 -1  (the §0 logic defect)
-```
-
-The 320 px fit matrix (light/dark × 320/390/430 × text scale 1.0/1.3) and the
-`k07-bar` geometry suite (`top ≈ 721`, height 123, surface to the edge) still pass
-inside `pip_evolution_widget_test.dart`, i.e. the `FittedBox` and the
-`border: null` change moved nothing at 390.
-
-## 5. For the next stages
-
-- **`5_ui` must re-measure the sparkle band** (per `4_review.md` note 1). The
-  sparkles' ink boxes now run 14 logical px higher, onto the design's own
-  coordinates: design `y 407..528` / app was `449..528` / app is now `407..528`,
-  same for all four. `D2` should clear; `D1` stays exempt (orchestrator-accepted
-  DB-truth wrap, +34 px below the title), `D3` stays accepted.
-- **The §0 two-line state fix** before the feature directory can be green.
-- Nothing else in this layer.
-
-## LEFT FOR NEXT ITERATION
-
-- The §0 `pip_state.dart` carry-through (2a / integrator / review — not a UI
-  item, and this stage may not edit bloc files).
-- The orchestrator ruling on `4_review.md` finding 9 (dark-mode sparkle accents):
-  accept the token re-theme (recommended) or file a literal-accent token. No
-  code changes in this stage either way.
-
+The UI layer is implemented: `FIXES_3.md`'s two open items are both closed in the
+files this stage owns, both parked proofs are un-skipped and green, the plan's
+`maxLines` knock-on and the one test assertion that pinned it are resolved
+together, and the design geometry at 390 px is bit-identical so stage 5's
+±2 px check will not move. Nothing is left half-done.
 
 VERDICT: PASS
