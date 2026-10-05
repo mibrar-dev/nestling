@@ -1,3 +1,86 @@
+# K11 · Badges — stage 2b build, UI chunk (iteration 4)
+
+> Iteration 4 addendum (this section only; iterations 1–3 follow unchanged).
+>
+> Scope: `app/lib/features/badges/presentation/views/**` +
+> `presentation/widgets/**` and view/widget tests only. No domain / data /
+> bloc file touched (the logic builder owns those in parallel in this worktree;
+> re-read `2a_build_logic.md` iteration 3 — no contract changes, no view
+> change needed). No `docs/screens/K11/FIXES_3.md` exists in this worktree, so
+> iteration-4 UI work is driven by the mandatory `ORCHESTRATOR_NOTES.md` —
+> the only new item since iteration 3 is the **(07:33) ribbon group opacity**
+> nit. Iteration-3 artifacts (`3_test`, `4_review`, `5_ui`, `6_bugs`) are all
+> PASS with no new UI items.
+>
+> ## Changes
+>
+> - **Ribbon group opacity fixed (`badge_grid_cell.dart`, orchestrator-mandatory
+>   07:33):** `lockedMedalSvg` now wraps the ribbon in a group —
+>   `<g opacity=".4"><path fill="#6E6A8A" stroke="#1E1B3A" …/></g>` — with NO
+>   opacity on the `<path>` itself. The browser composites the HTML element as
+>   one group layer; the old per-paint path opacity composited fill and stroke
+>   separately and darkened the stroke's inner band (app (130,128,148) vs
+>   design (165,164,176)). The numbers confirm the theory exactly: group math
+>   at the stroke centre is ink-at-40 % over the tile surface =
+>   0.4·(30,27,58)+0.6·(255,255,255) = (165,164,176) in light; per-paint math
+>   is ink-at-40 % over the composited fill = (130,128,148). Nothing else
+>   changes (ring, disc, glyphs, borders, layout untouched).
+> - **Tests (my files only):** `badges_view_test.dart` 42 → 44.
+>   The 06:55 string pin now also asserts the group form
+>   (`<g opacity=".4"><path`, and the path carries no per-paint opacity), so
+>   a revert to `<path … opacity>` fails. Two new raster tests (light + dark)
+>   pump a todo cell in a `RepaintBoundary` and sample real pixels: ribbon
+>   fill centre ≈ grey-at-40 % over the tile surface (proves the renderer
+>   honours the group opacity — ignored opacity would read solid grey), and
+>   ribbon stroke centre ≈ ink-at-40 % over the tile surface (proves GROUP
+>   compositing — per-paint would read ink over the composited fill, ~35
+>   levels darker in light). Both pass: the app now draws the design value.
+> - **NOT touched:** `badges_view.dart`, `happy_week_card.dart` (clamp +
+>   copy landed, UI check at 0–1 px); `badges_locked_art_test.dart`,
+>   `k11_bugs_test.dart` (outside this chunk's filenames); domain/data/bloc.
+>
+> ## Verification (iteration 4)
+>
+> ```
+> flutter analyze lib/features/badges test/features/badges/badges_view_test.dart
+>   test/features/badges/badges_widget_geometry_test.dart → No issues found!
+> flutter test --timeout 120s badges_view_test + badges_widget_geometry_test
+>   → 62/62 passed (44 view incl. 2 new raster guards + 18 geometry)
+> dart format (own files) → clean
+> grep GoogleFonts|DateTime.now (own scope) → comment mention only
+> ```
+>
+> No simulator booted (stage 5 owns 604697A9-11DA-462F-9837-396E9CA2493A).
+> No whole-app suite run. No domain/data/bloc/core/app/tools file touched
+> (`git status --short -- app/` shows only the widget + the view test).
+>
+> ## Handoff — `k11_bugs_test.dart` K11-ART stroke guard is now stale (bugs stage)
+>
+> Read-only run (no edits): `badges_locked_art_test.dart` still passes (all
+> its `contains()` pins survive the group wrap), but both `K11-ART locked
+> medals` raster tests fail at the stroke assertion (`k11_bugs_test.dart:246`).
+> That guard encodes the OLD per-paint formula —
+> `_over(_ink, 0.4, fillComposite)` with the comment "the stroke paints over
+> the fill at full alpha, then the whole ribbon at 40 %" — which is
+> self-contradictory: true group compositing hides the fill under the opaque
+> stroke inside the layer, so the stroke centre is ink-at-40 % over the tile
+> SURFACE, i.e. `_over(_ink, 0.4, tokens.surface)` (= (165,164,176) in light,
+> exactly the design sample and the note's ±3 target). The fill/ring/disc/
+> glyph asserts in that guard are unaffected. Recommended bugs-stage update:
+> change the line-246 expectation base from `fillComposite` to
+> `tokens.surface` (both themes resolve via tokens); my new view-level raster
+> tests already pin the corrected composites in the meantime. My chunk owns no
+> file that can carry that fix.
+>
+> ## LEFT FOR NEXT ITERATION
+>
+> - Bugs stage: update the K11-ART stroke expectation to group math (above).
+> - Stage 5: the ordered zoomed-crop check (Bins out, design vs app, both
+>   themes; inner band (165,164,176) ±3 in light, dark equivalent).
+> - Nothing unfinished in the UI layer.
+>
+> ---
+
 # K11 · Badges — stage 2b build, UI chunk (iteration 3)
 
 > Iteration 3 addendum (this section only; iterations 1–2 follow unchanged).

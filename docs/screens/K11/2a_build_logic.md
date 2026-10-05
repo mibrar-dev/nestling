@@ -216,4 +216,19 @@ live child-switch tests fail under it). Implemented the feature-local
   (working tree shows only the loop's own `.brief_*` modifications);
   no simulator, no global kills.
 
+## Iteration 4 (this stage — no FIXES_3.md exists)
+
+- Fix list assembled from the loop artifacts instead: `6_bugs.md`
+  (iteration 3: no new bugs — only product change was the locked-medal
+  art in `badge_grid_cell.dart`, UI layer; both iteration-2 fixes remain
+  verified). No logic-layer items anywhere.
+- No lib edits this iteration (nothing to fix; review's `_switchMap`
+  note remains explicit hardening-only).
+- Re-verification: `flutter analyze lib/features/badges
+  test/features/badges/badges_bloc_test.dart
+  test/features/badges/badges_repository_test.dart` → No issues found;
+  `flutter test --timeout 120s` (repository + bloc files) → 38/38 pass.
+- No contract changes; no files outside the logic chunk touched;
+  no simulator, no global kills.
+
 VERDICT: PASS

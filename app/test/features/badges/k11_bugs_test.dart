@@ -241,12 +241,13 @@ void main() {
           isTrue,
           reason: '$id ribbon fill: ink3 at 40 % over the tile surface',
         );
-        // Element opacity groups fill+stroke: the stroke paints over the
-        // fill at full alpha, then the whole ribbon at 40 %.
+        // Group opacity (`<g opacity>`, ORCHESTRATOR_NOTES 07:33): fill AND
+        // stroke composite at 40 % together over the tile surface — the
+        // stroke centre is ink at 40 % over the surface, not over the fill.
         expect(
-          _close(at(32, 5), _over(_ink, 0.4, fillComposite)),
+          _close(at(32, 5), _over(_ink, 0.4, tokens.surface)),
           isTrue,
-          reason: '$id ribbon stroke: ink at 40 % over the ribbon fill',
+          reason: '$id ribbon stroke: ink at 40 % over the tile surface',
         );
         expect(_close(at(32, 55), _disc), isTrue, reason: '$id disc #F3EEE5');
 

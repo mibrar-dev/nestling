@@ -16,12 +16,13 @@
 // database, never hard-coded from the design.
 
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:drift/drift.dart' show Value;
 // Material's `Badge` widget collides with the Drift row class for the
 // `badges` table, which these tests read straight from the database.
 import 'package:flutter/material.dart' hide Badge;
-import 'package:flutter/semantics.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
@@ -763,14 +764,27 @@ void main() {
     });
 
     test('the ribbon opacity sits on the whole element, not the fill only', () {
-      // `opacity=".4"` on the <path> draws its fill AND its 3 px ink stroke
-      // at 40 % together (sampled ink-at-40 % over the tile in both themes).
+      // The opacity wraps the ribbon in a `<g>` (group layer: fill AND the
+      // 3 px ink stroke composite at 40 % together, as the browser draws
+      // the HTML element). A per-paint opacity on the `<path>` itself
+      // composites the two separately and darkens the stroke's inner band
+      // (`ORCHESTRATOR_NOTES.md` 07:33) — so the path must carry no opacity.
       for (final id in lockedIds) {
         final svg = lockedMedalSvg(id);
         expect(
           svg,
           contains('<path fill="#6E6A8A" stroke="#1E1B3A"'),
           reason: '$id ribbon keeps the design fill + ink stroke',
+        );
+        expect(
+          svg,
+          contains('<g opacity=".4"><path'),
+          reason: '$id ribbon opacity is a group around the path',
+        );
+        expect(
+          svg,
+          isNot(contains('H27Z" opacity')),
+          reason: '$id ribbon path carries no per-paint opacity',
         );
         expect(svg, contains('opacity=".4"'), reason: '$id ribbon at 40 %');
         expect(
@@ -869,6 +883,77 @@ void main() {
       );
       expect(picture.bytesLoader, isNot(isA<SvgStringLoader>()));
     });
+
+    for (final mode in <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      testWidgets('the grouped ribbon rasterizes at 40 % in ${mode.name}', (
+        tester,
+      ) async {
+        // `ORCHESTRATOR_NOTES.md` 07:33: the `<g opacity=".4">` composites
+        // the ribbon as one group layer, so the stroke paints over the tile
+        // SURFACE at 40 % — not over the already-composited fill (the old
+        // per-paint `<path opacity>` read (130,128,148) at the stroke; the
+        // design reads (165,164,176) in light). Sampling the real pixels is
+        // the only way to catch the renderer dropping or splitting the
+        // group, so this pins the composites, not just the markup.
+        await pumpNest(
+          tester,
+          RepaintBoundary(
+            key: const ValueKey('k11-ribbon-probe'),
+            child: SizedBox(
+              width: 350,
+              child: BadgeGridCell(badge: cellBadge('bins-out', earned: false)),
+            ),
+          ),
+          mode: mode,
+        );
+        expect(tester.takeException(), isNull);
+
+        final tokens = tester.element(find.byType(BadgeGridCell)).nest;
+        final medal = tester.getRect(find.byType(SvgPicture));
+        final origin = tester.getTopLeft(
+          find.byKey(const ValueKey('k11-ribbon-probe')),
+        );
+        final boundary = tester.renderObject<RenderRepaintBoundary>(
+          find.byKey(const ValueKey('k11-ribbon-probe')),
+        );
+        late ui.Image image;
+        await tester.runAsync(() async {
+          image = await boundary.toImage(pixelRatio: 3);
+        });
+        final data = (await tester.runAsync(() => image.toByteData()))!;
+
+        Color at(double vx, double vy) {
+          final lx = medal.left - origin.dx + vx / 64 * 60;
+          final ly = medal.top - origin.dy + vy / 64 * 60;
+          final x = (lx * 3).round().clamp(0, image.width - 1);
+          final y = (ly * 3).round().clamp(0, image.height - 1);
+          final i = (y * image.width + x) * 4;
+          return Color.fromARGB(
+            data.getUint8(i + 3),
+            data.getUint8(i),
+            data.getUint8(i + 1),
+            data.getUint8(i + 2),
+          );
+        }
+
+        expect(
+          _ribbonClose(
+            at(32, 15),
+            _ribbonOver(_ribbonInk3, 0.4, tokens.surface),
+          ),
+          isTrue,
+          reason: 'ribbon fill is grey at 40 % over the tile in ${mode.name}',
+        );
+        expect(
+          _ribbonClose(at(32, 5), _ribbonOver(_ribbonInk, 0.4, tokens.surface)),
+          isTrue,
+          reason:
+              'ribbon stroke uses group compositing in ${mode.name} '
+              '(per-paint would ink over the composited fill instead)',
+        );
+        await tester.pumpWidget(Container());
+      });
+    }
   });
 
   group('K11 theme and layout matrix', () {
@@ -928,3 +1013,22 @@ void main() {
     });
   });
 }
+
+/// Illustration-art constants for the locked-medal ribbon raster guard
+/// (`ORCHESTRATOR_NOTES.md` 07:33): ink `#1E1B3A`, grey `#6E6A8A`.
+const Color _ribbonInk = Color(0xFF1E1B3A);
+const Color _ribbonInk3 = Color(0xFF6E6A8A);
+
+Color _ribbonOver(Color fg, double a, Color bg) =>
+    Color.alphaBlend(fg.withValues(alpha: a), bg);
+
+int _ribbonChannel(Color c, int i) => i == 0
+    ? (c.r * 255).round()
+    : i == 1
+    ? (c.g * 255).round()
+    : (c.b * 255).round();
+
+bool _ribbonClose(Color a, Color b, {int tol = 8}) =>
+    (_ribbonChannel(a, 0) - _ribbonChannel(b, 0)).abs() <= tol &&
+    (_ribbonChannel(a, 1) - _ribbonChannel(b, 1)).abs() <= tol &&
+    (_ribbonChannel(a, 2) - _ribbonChannel(b, 2)).abs() <= tol;

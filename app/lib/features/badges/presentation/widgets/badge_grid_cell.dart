@@ -71,11 +71,15 @@ const Map<String, String> _lockedGlyphFor = <String, String>{
 ///    its fill AND its 3 px ink stroke draw at 40 % together (sampled
 ///    `(165, 164, 176)` over white in light, `(31, 28, 51)` over the dark
 ///    surface in dark — both exactly ink at 40 % over the tile). The
-///    opacity stays on the element here, never split onto the fill alone.
+///    opacity sits on a wrapping `<g>`, never on the `<path>` itself:
+///    the browser composites the element as one group layer, while a
+///    per-paint opacity would composite fill and stroke separately and
+///    darken the stroke's inner band (`ORCHESTRATOR_NOTES.md` 07:33).
+///    No opacity stays on the path — fill-only or otherwise.
 String lockedMedalSvg(String id) {
   final glyph = _lockedGlyphFor[id] ?? '';
   const header =
-      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path fill="#6E6A8A" stroke="#1E1B3A" stroke-linejoin="round" stroke-width="3" d="M22 5h20l-5 21H27Z" opacity=".4"/><circle cx="32" cy="39" r="20" fill="#F3EEE5" stroke="#1E1B3A" stroke-dasharray="5 4" stroke-width="3"/>';
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><g opacity=".4"><path fill="#6E6A8A" stroke="#1E1B3A" stroke-linejoin="round" stroke-width="3" d="M22 5h20l-5 21H27Z"/></g><circle cx="32" cy="39" r="20" fill="#F3EEE5" stroke="#1E1B3A" stroke-dasharray="5 4" stroke-width="3"/>';
   const footer = '</svg>';
   return '$header$glyph$footer';
 }
