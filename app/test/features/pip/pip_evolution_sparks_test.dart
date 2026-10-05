@@ -4,12 +4,14 @@
 // `pip_evolution_widget_test.dart` already pins the sparks' BOX (350x250 at
 // `top: 92`, the letterboxed 350x220 art) with `tester.getRect`. This file
 // covers what a rect cannot: that the layer paints exactly the design's five
-// fills plus its ink stroke, in BOTH themes, and that it never puts a
-// hard-coded colour on the render path.
+// fills plus its ink stroke, in BOTH themes — the SAME five fills, because the
+// design's `svg.sparks` is an inline SVG with literal hexes and therefore
+// theme-invariant (`ORCHESTRATOR_NOTES` 23:55, `6_bugs.md` K07-BUG-5) — and that
+// it never puts a hard-coded colour on the render path.
 //
 // The SILHOUETTE is deliberately not asserted here: the painted sparkle shape
-// is K07-BUG-1's subject and lives with its proof in
-// `pip_evolution_sparks_bug_test.dart`. (An earlier version of this file
+// is K07-BUG-4's subject and lives with its proof in
+// `k07_sparkles_bug_test.dart`. (An earlier version of this file
 // compared the app's painter with a reference built by the same path recipe
 // the screen uses; that recipe loses the design's `M` vertex, so the
 // comparison agreed with itself and proved nothing. A reference has to be
@@ -135,12 +137,18 @@ void main() {
   }
 
   group('the colours are tokens, never literals', () {
+    // The design's `<g>` writes inline hexes, so the layer is
+    // theme-INVARIANT (ORCHESTRATOR_NOTES 23:55): both themes paint the LIGHT
+    // palette. These two tests therefore expect the SAME palette in both, which
+    // is what makes `k07_bugs_test.dart`'s K07-BUG-5 (dark stroke == 0xFF1E1B3A)
+    // green instead of a light ring on the night sky.
+    const palette = NestColors.light;
+
     for (final theme in <ThemeData>[NestTheme.light(), NestTheme.dark()]) {
       testWidgets(
         '${theme.brightness.name}: the layer paints the five design fills '
         'and the ink stroke, and nothing else',
         (tester) async {
-          final tokens = theme.extension<NestTokens>()!;
           await pumpSparks(tester, theme: theme);
           final bytes = await rasterise(tester);
 
@@ -157,13 +165,13 @@ void main() {
           }
           expect(opaque, isNotEmpty, reason: 'the layer must paint something');
 
-          final palette = <Color>[
-            tokens.lilac,
-            tokens.success,
-            tokens.coin,
-            tokens.peach,
-            tokens.sky,
-            tokens.ink,
+          final tokens = <Color>[
+            palette.lilac,
+            palette.success,
+            palette.coin,
+            palette.peach,
+            palette.sky,
+            palette.ink,
           ];
           // Antialiasing blends the fill into the 3 px stroke, so opaque
           // pixels include fill/stroke mixtures; every one must still be ON the
@@ -173,7 +181,7 @@ void main() {
           const channelTolerance = 12;
           for (final argb in opaque) {
             final colour = Color(argb);
-            final nearest = palette
+            final nearest = tokens
                 .map(
                   (token) =>
                       (token.r - colour.r).abs() +
@@ -192,11 +200,11 @@ void main() {
 
           // All five fills are actually used (four sparkles + four dots).
           for (final token in <Color>[
-            tokens.lilac,
-            tokens.success,
-            tokens.coin,
-            tokens.peach,
-            tokens.sky,
+            palette.lilac,
+            palette.success,
+            palette.coin,
+            palette.peach,
+            palette.sky,
           ]) {
             expect(
               opaque,
@@ -204,8 +212,16 @@ void main() {
               reason: '$token never appears',
             );
           }
-          // The `<g>` stroke is `tokens.ink`.
-          expect(opaque, contains(tokens.ink.toARGB32()));
+          // The `<g>` stroke is the design's `#1E1B3A` — the LIGHT ink in both
+          // themes, which is the whole point of K07-BUG-5's fix.
+          expect(opaque, contains(palette.ink.toARGB32()));
+          if (theme.brightness == Brightness.dark) {
+            expect(
+              opaque,
+              isNot(contains(NestColors.dark.ink.toARGB32())),
+              reason: 'a dark-theme ink reached the render path (K07-BUG-5)',
+            );
+          }
         },
       );
     }
@@ -274,9 +290,10 @@ void main() {
         ),
         findsNothing,
       );
-      // The layer is `const` at the call site, so a theme change is the only
-      // thing that can repaint it.
+      // The layer is `const` at the call site and every colour in it is a fixed
+      // design literal, so a theme change cannot repaint a single pixel.
       expect(tester.widget<PipEvolutionSparks>(sparks).key, isNull);
+      expect(appPainter(tester).shouldRepaint(appPainter(tester)), isFalse);
     });
   });
 

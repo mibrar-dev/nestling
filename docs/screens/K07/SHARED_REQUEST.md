@@ -92,3 +92,36 @@ be absolute, because `shot.sh` `cd`s into the app dir before copying.
 
 Files: `tools/screens/shot.sh`.
 Blocks: **no** (K07's iteration-2 UI check was completed with the workaround).
+
+## 4. `#3D7FF0` is an off-token literal in the K07 design source (added by iteration 3, `2b`)
+
+Need: `K07-evolution.html:41` draws one sparkle dot at `fill="#3D7FF0"` — the
+`svg.sparks` layer's only colour with no token behind it. `--sky` is `#2563D6`
+(light) / `#7FA9FF` (dark), so 24/28/26 per channel away. Both design PNGs paint
+that dot `#3D7FF0` (sampled at CSS 288 × 115 by this stage), so the layer is
+genuinely theme-invariant — and the "tokens only" rule means K07 paints the
+light `--sky` there in both themes. Either the HTML should use `var(--sky)` /
+the token, or the design system should gain a `sparkBlue` token at `#3D7FF0`.
+Until one of those lands the deviation is one 6 px dot, and it is pinned by
+`pip_evolution_sparks_test.dart`'s "the design’s non-token #3D7FF0 dot is NOT
+painted literally" so it cannot drift silently.
+
+Files: `design/html-source/screens/K07-evolution.html` (or
+`app/lib/core/design_system/tokens/colors.dart`).
+Blocks: **no**.
+
+## 5. Copy sign-off for `evolutionSub(0)` (`4_review.md` finding 2)
+
+Need: `evolutionSub(0)` renders "Because you helped 0 times" above
+"Pip grew into a Hatchling!" — a self-contradicting sentence on a celebration
+screen. There is no zero case in any design source, so the wording needs the
+ruling before it lands. Suggested zero line in
+`pip_evolution_copy.dart`: "Pip is ready for its first adventure" (the ASCII
+convention and the `switch` shape are already right; only the branch is
+missing). Today's behaviour is pinned by `k07_bugs_test.dart`'s
+"0 and 999999999 coins…" control, so this stage left it and will move the
+assertion with the wording.
+
+Files: `app/lib/features/pip/presentation/widgets/pip_evolution_copy.dart`
+(in-feature), `app/test/features/pip/k07_bugs_test.dart`.
+Blocks: **no**.

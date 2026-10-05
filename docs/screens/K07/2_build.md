@@ -1,162 +1,180 @@
-# K07 · 2 BUILD (integrate, iteration 2) — 2a logic + 2b UI combined
+# K07 · 2 BUILD (integrate, iteration 3) — 2a logic + 2b UI combined
 
 Job: make the two parallel halves compile and pass together. No simulator was
-booted (only `5_ui` may), no design was redesigned, no shared file was touched
-(RULES §1: `features/pip/**` + `test/features/pip/**` + this folder only).
+booted (only `5_ui` may touch `BC440E48-B3A3-43BC-971B-0EF5DB621874`), no
+design was redesigned, no shared file was touched (RULES §1: `features/pip/**` +
+`test/features/pip/**` + this folder only), no `pkill`.
+
+**This iteration needed no integration repair.** The two halves already agreed
+on the contract, so the work below is verification (the gates, plus reading
+every seam the merge could have broken) and one stale cross-half comment.
 
 ## What landed
 
-### 2a — non-UI layer (`2a_build_logic.md`, iteration 2)
+### 2a — non-UI layer (`2a_build_logic.md`, iteration 3)
 
-A real contract change this time, published at the top of its note as
-CONTRACT CHANGES:
+CONTRACT CHANGES: **none** — the public surface is byte-identical to iteration
+2. The single edit to an existing member is additive and defaulted:
+`PipState.toLoading({bool restartingNest = true, bool restartingEvolution =
+true})`, so every existing fixture and `pip_buy_result_test.dart:480`'s no-arg
+call still compiles and behaves exactly as before.
 
-- `PipState` now tracks **each stream on its own**: `nestSettled` /
-  `evolutionSettled` (a null emission counts as answered — "no child" is a
-  healthy answer), the diagnostic-only slots `nestError` / `evolutionError`,
-  and the getters `nestStatus` / `evolutionStatus` that each screen must
-  switch on. The aggregate `status` is now the AND of both streams
-  (`_combine`), so a sibling stream can neither fake readiness nor fake a
-  failure. `withStreamError` / `toFailure` are replaced by `withNestError` /
-  `withEvolutionError`; `status`, `nest`, `evolution`, `errorMessage`,
-  `actionError`, `actionNonce` and every event keep their shapes.
-- `PipEvolution` gained `questsFinished` (DISTINCT quests) beside `questsDone`
-  (completion ROWS), with `questsFinishedCount` falling back to the row count —
-  K07-BUG-3's data half. `watchEvolution` reports both.
-- Fixed `4_review.md` finding 2 / `6_bugs.md` **K07-BUG-1** (MAJOR): "Oh no!
-  Pip got lost." on 5/5 cold opens, because `PipLoadRequested` subscribes nest
-  first and the nest's arrival used to publish `loaded`. Proofs un-skipped and
-  green (`pip_evolution_bloc_test.dart`, `k07_bugs_test.dart` state level).
-- Also folded in `4_review.md` finding 10 (error slots written per stream) and
-  finding 3 (the `cascade_invocations` analyze info, which gated).
+- Fixed `4_review.md` finding 1 (carried from `FIXES_2`): `toLoading()` dropped
+  **both** streams' arrival flags while a retry re-subscribed only the one that
+  died, so the surviving stream reported `loading` and its screen sat on a
+  spinner with **no retry affordance** (the retry button only exists on the
+  `failure` branch). The reset is now explicit about what is restarting:
+  `_onLoadRequested` passes `restartingNest: _nestSub == null,
+  restartingEvolution: _evolutionSub == null` — the one null subscription is
+  exactly the stream `??=` is about to re-listen. A restarting stream drops its
+  flag and error slot; a surviving stream keeps flag, slot, status and data.
+- `status` inside `toLoading` is now derived through the existing `_combine`
+  instead of being hard-coded `loading`, so the aggregate can never disagree
+  with the two per-stream statuses it is defined from (the same lesson as
+  iteration 2's `copyWithLoaded` sibling-slot defect).
+- +3 proofs in `pip_evolution_bloc_test.dart`: the state-level reset in both
+  directions (including that a restart clears only its own error slot), and two
+  bloc-level proofs that the surviving stream never dips back to `loading`.
+  2a verified they bite: reverting only the call site to `emit(state.toLoading())`
+  fails exactly those two and nothing else.
 
-### 2b — presentation layer (`2b_build_ui.md`, iteration 2)
+### 2b — presentation layer (`2b_build_ui.md`, iteration 3)
 
-- Both views now switch on **their own** stream (`state.evolutionStatus` /
-  `state.nestStatus`) and the sibling-consult branches are gone, exactly as
-  CONTRACT CHANGES §1 requires.
-- **K07-BUG-4 / `5_ui` D2** (MAJOR, mandatory via `ORCHESTRATOR_NOTES.md`):
-  every sparkle lost its `M` tip vertex — `Path.moveTo` draws nothing and
-  `addPolygon(close: true)` closes to the polygon's *own* first point, so the
-  design's 4-point sparkle painted as a flat-topped 7-gon. `_sparkPath` now
-  hands every vertex to one `addPolygon`; measured art band moved from
-  `y 449..528` onto the design's own `y 407..528`. The four `Path`s are also
-  parsed once and cached (finding 11).
-- **K07-BUG-3** widget half: the `quests done` card renders
-  `evolution.questsFinishedCount` (distinct quests) while the sub-line keeps
-  the row count it honestly calls "times".
-- **K07-BUG-2**: the stage slot is wrapped in `FittedBox(scaleDown,
-  bottomRight)` only below 350 px of width — at 390 the geometry is
-  byte-identical (scale 1.0), at 320 the arrow and the "before" Pip are legible
-  again.
-- Finding 5 (the `.kid-bar` 3 px rule is drawn only when there is a CTA; the
-  surface box, and so the owner BOTTOM EDGE rule, is untouched), finding 6
-  (one ASCII-apostrophe convention, spinner label now `"Loading Pip's big
-  moment"`), findings 7 + 8 (stage-1 copy no longer contradicts its own hero
-  — `Psst… Pip is still an Egg!` with a real `…`; the three stat labels moved
-  into the copy table).
-- Every proof un-skipped: `k07_sparkles_bug_test.dart` and `k07_bugs_test.dart`
-  run with **zero** skips, and K07-BUG-1's widget proof was honestly rewritten
-  (a pending screen shows no retry at all) rather than weakened.
+Layout, copy, spacing and the bottom-edge rule are **unchanged** from iteration
+2 (which passed build + test + review + UI) — correctly, this iteration's brief
+was a bug list.
+
+- **K07-BUG-5 fixed (MAJOR, orchestrator-mandatory)** —
+  `pip_evolution_sparks.dart` only: the design's `svg.sparks` is an inline SVG
+  with **literal** hexes, so the layer is theme-invariant by construction;
+  resolving from `context.nest` gave every sparkle and dot a `#F3F0FA` white
+  ring on the night sky (`5_ui.md` D4 / `cmp_dark_2.png`). Stroke and all five
+  fills now resolve from `NestColors.light` in both themes, `shouldRepaint` is
+  `false`, the widget tree is `const` end to end.
+- `k07_bugs_test.dart`: the K07-BUG-5 proof un-skipped (the file's only
+  `skip:`, now removed).
+- `pip_evolution_sparks_test.dart`: palette assertions read the light palette,
+  plus a dark-only proof that no dark ink reaches the canvas, `shouldRepaint`
+  pinned false, and `4_review.md` finding 3's wrong filename in the header
+  corrected.
+- `pip_nest_states_test.dart`: applied 2a's cross-half fixture change (below).
 
 ## FIXES
 
-### Done — 1. `2b_build_ui.md` §0: the state dropped the sibling error slot it
-### computed `status` from (2 lines, the whole integration breakage)
+### Done — 1. The mandatory orchestrator item (D4 / K07-BUG-5) verified as ruled
 
-`copyWithLoaded` / `copyWithEvolution` call `_combine(... evolutionError:
-evolutionError)` — they READ the sibling's slot to decide `status` — but the
-`PipState` they build did not carry that slot, so it defaulted to null. The
-result was a state that contradicted itself: `status == failure` while
-`evolutionSettled == false` / `evolutionError == null`, i.e.
-`evolutionStatus == loading` — so `/pip-evolution` would sit on its spinner
-forever instead of showing its failure card, and `/pip` would spin instead of
-retrying. It is not theoretical: the evolution stream's `Stream.error` is
-delivered in a microtask while the nest's first emission needs real Drift I/O,
-so on the real `PipRepositoryImpl` the error lands FIRST and the healthy
-sibling emission then wiped it.
+`ORCHESTRATOR_NOTES.md` 23:55 is mandatory, so I checked the landed code against
+it rather than trusting the note:
 
-Fixed in `app/lib/features/pip/presentation/bloc/pip_state.dart` (2a's file,
-which 2b may not edit — the integrator's job): `evolutionError: evolutionError`
-in `copyWithLoaded` and `nestError: nestError` in `copyWithEvolution`, each with
-a comment saying why the slot must travel with the state that derived from it.
-Recovery still works unchanged: the sibling's own healthy emission clears its
-slot, and `toLoading()` re-arms both flags with both slots null, so "Try again"
-re-subscribes cleanly.
+- `_SparksPainter.paint` strokes with `NestColors.light.ink` and every fill goes
+  through `_Spark.color`, which reads `NestColors.light` — no `context.nest`
+  left in the file, `shouldRepaint` returns `false`, and the change is confined
+  to `pip_evolution_sparks.dart` as ruled.
+- "Verify each fill hex equals the HTML's literal": `tokens/colors.dart` holds
+  `ink 0xFF1E1B3A`, `lilac 0xFF7C6CF2`, `success 0xFF1F9D63`, `coin
+  0xFFF4B400`, `peach 0xFFFF8A5B` — the HTML's `<g stroke="#1E1B3A">` and its
+  four sparkle fills, exactly. Tokens-only and PNG parity agree, as 2b claimed.
+  The sixth sample, the sky dot's `#3D7FF0`, is not a token in either scheme
+  (`--sky` is `#2563D6`), so it paints the light sky token — 2b's disclosed
+  loose end, filed as `SHARED_REQUEST.md` item 4 and pinned by an assertion that
+  the literal is NOT painted. Leaving it is right: the alternative is a literal
+  hex (forbidden) or a new shared token (not this screen's call).
+- "Add a widget/painter test under dark theme asserting the stroke colour is
+  0xFF1E1B3A": `k07_bugs_test.dart`'s K07-BUG-5 does exactly that, and it is a
+  real probe — it pumps the **app shell** at `ThemeMode.dark`, pulls the
+  painter off the live `CustomPaint`, rasterises it with a `PictureRecorder`
+  and samples pixels at the design's own `viewBox` coordinates (stroke at
+  sparkle 1's left point `(13, 49)`, each fill at its sparkle's waist), then
+  compares the whole dark map against the light one so a future accent cannot
+  slip past the per-entry list. No skip, no `--run-skipped` needed now.
 
-The two tests 2b predicted red were red (`00:10 +389 -2`) and went green with
-the patch. Added one state-level pin in
-`pip_evolution_bloc_test.dart` so the invariant cannot rot silently next
-iteration: *"a healthy emission CARRIES the sibling error slot status came
-from"* — both directions, asserting the slot AND the per-stream status.
+### Done — 2. 2a's cross-half fixture change, applied by 2b, verified
 
-### Done — 2. Verified, no change needed
+2a flagged (mid-flight) that `pip_nest_states_test.dart` referenced a
+`closeEvolutionGate` that no longer existed, and prescribed one line:
+`_NestOnlyRepository.watchEvolution` answers a healthy `Stream.value(null)`
+instead of hanging on a silent controller. 2b landed it: no orphan reference
+remains, the fake is one 5-line class, and the file is `+20: All tests passed!`.
+This is the iteration-1 fixture I originally added for K06 — it now matches the
+production shape (a stream that settles with no child) instead of diverging
+from it.
 
-- `2a` CONTRACT CHANGES §1's view wiring (§1's `evolutionStatus` /
-  `nestStatus` switch, the two deleted sibling branches) — both views are
-  correct in the tree (`pip_evolution_view.dart:84`,
-  `pip_nest_view.dart:80`); no leftover `switch (state.status)`.
-- §2's `questsFinishedCount` on the `quests done` card — landed.
-- `2a`'s warning that 3 cases in `pip_nest_states_test.dart` would stay red
-  while K07's stream is silent: **stale**, and deliberately NOT actioned. Those
-  are view tests and the views now read `nestStatus`, which the silent sibling
-  does not touch — the file is `+19 -1` with the only failure being §0. The
-  one-line `_NestOnlyRepository` change 2a proposed would have made the fixture
-  diverge from the production shape for no gain, so it stays out.
-- `errorMessage` is dropped by the same two methods. Left alone: it is the
-  aggregate diagnostic, no view reads it (raw DB text must never reach a kid
-  screen), and its docstring says it is cleared by the next healthy emission.
+### Done — 3. Stale cross-half comment in that same file
+
+2b corrected the fixture's own docstring but left the **file header** still
+describing iteration 1's behaviour ("keeps K07's second stream silent"), which is
+now false — the very file a future iteration would edit from. Fixed the header
+(4 lines) and moved the trailing comment off the over-long `watchEvolution`
+line. Comments only; no behaviour, no assertion touched.
+
+### Verified, no change needed
+
+- **Contract**: 2a says "none in iteration 3", and the tree matches — every
+  `PipState` member, `props` and `PipEvent` keeps its iteration-2 shape, the
+  two views still switch on `state.evolutionStatus` / `state.nestStatus`, and
+  `questsFinishedCount` still feeds the `quests done` card.
+- **The iteration-2 defect class cannot recur in `toLoading`**: every one of the
+  five `status:` sites in `pip_state.dart` now passes `_combine` exactly the
+  flags and slots the state it builds carries, so `status`, `nestStatus` and
+  `evolutionStatus` cannot disagree. The only two remaining `status: status`
+  passes are `withActionStarted` / `withActionFailed`, which touch no load
+  field.
+- **Retry semantics on a real failure**: both subs dead ⇒ both restart ⇒ both
+  flags and slots drop ⇒ spinner; one dead ⇒ only that one restarts; both live
+  ⇒ the early guard returns and nothing is emitted, so no reload flicker.
+- **No skipped gate**: zero `skip: true` in `test/features/pip/`; the whole
+  directory runs `+419` with no `~` marker.
+- Nothing outside RULES §1 was edited by me; no `analysis_options` change, no
+  `google_fonts`, no `DateTime.now()`, no `flutter clean`.
 
 ### Left
 
-- **`5_ui` must re-measure the sparkle band** (per `4_review.md` note 1 and
-  `2b_build_ui.md` §5): the ink boxes now run 14 logical px higher, onto the
-  design's coordinates (`407..528` for all four sparkles). `D2` should clear;
-  `D1` stays exempt (orchestrator-accepted DB-truth wrap, +34 px below the
-  title) and `D3` stays accepted. That is the only stage allowed to boot
-  simulator `BC440E48-B3A3-43BC-971B-0EF5DB621874`.
-- **`4_review.md` finding 9** — the orchestrator still owes the explicit ruling
-  on the dark-mode sparkle accents (the design's inline SVG hard-codes
-  `#7C6CF2` / `#1F9D63` / `#FF8A5B`; "tokens only" wins, so the token re-theme
-  stands). No code change either way until it rules.
-- **`SHARED_REQUEST.md`** — item 1 (record the K07 background deviation: no
-  `KidScope`, no `.meadow` element, lilac glow + the shared dark stars) is
-  still a note the orchestrator owes; item 2 (a screen-scoped load event, so
-  K07 stops opening K06's stream) is deferred, non-blocking.
-- **`4_review.md` finding 4** — accepted as-is by both stages, same request.
-
-### Not my call
-
-Nothing in `FIXES_1.md` is left open on the integration path: every bug 2a/2b
-owned is fixed and proven, and the remaining items above are UI-verification,
-orchestrator rulings or deferred requests.
+- **`5_ui`: re-measure the dark sparkles** (`5_ui.md` **D4** / the 23:55 note's
+  second bullet): no light outline, stroke `#1E1B3A`, fills `#7C6CF2` /
+  `#1F9D63` / `#F4B400` / `#FF8A5B`. Everything else on screen is byte-identical
+  to iteration 2's accepted shots, so the band table should not move. The 6 px
+  sky dot will read `#2563D6` where the PNG says `#3D7FF0` — filed item 4, not a
+  regression.
+- **`4_review.md` finding 2 — `evolutionSub(0)`** = "Because you helped 0 times"
+  under "Pip grew into a Hatchling!". The branch is missing, not the wording,
+  and no design source has a zero case, so it needs the orchestrator's sign-off
+  (filed as `SHARED_REQUEST.md` item 5). No copy invented here; 2b's
+  `k07_bugs_test.dart` control pins today's wording.
+- **`SHARED_REQUEST.md`** items 1-4, all non-blocking notes/rulings for the
+  orchestrator: the K07 background deviation (no `KidScope`, no `.meadow`), the
+  screen-scoped load event (item 2, the reason `PipLoadRequested` still opens
+  K06's stream on K07), and the non-token `#3D7FF0` sky dot (item 4).
+- **No in-app entry point for `/pip-evolution`** (`6_bugs.md` observation 1) —
+  the CTA leaves to `/pip`; whether K06 should open K07 on a stage-up is the
+  K06/flow owner's call.
+- **Stale note, closed here so it is not re-reported**: 2b's LEFT item 2
+  (`toLoading()` clearing both arrival flags, `4_review.md` finding 1) was
+  written before 2a's fix landed in the same iteration — 2a fixed exactly that
+  finding and it is proven by the two new bloc-level tests. Nothing is owed.
 
 ## Gates
 
 ```
 $ dart format .
-Formatted 641 files (0 changed) in 1.94 seconds.
+Formatted 642 files (0 changed) in 2.05 seconds.
 
 $ flutter analyze
 Analyzing app...
-No issues found! (ran in 3.0s)
+No issues found! (ran in 3.8s)
 
 $ flutter test --timeout 120s test/features/pip
-00:10 +392: All tests passed!
+00:10 +419: All tests passed!      (no `~`: zero skips in the feature)
 
 $ flutter test --timeout 120s
-01:48 +4447 ~10: All tests passed!
+01:35 +4474 ~10: All tests passed!
 ```
 
-`~10` are the suite's own skips and **none of them is K07's**: they are
-`k01_bugs` (1), `k03_bugs` (2), `k09_bugs` (6) and `p12_bugs` (1). The whole
-`test/features/pip` directory runs with **zero** skips.
+`~10` are the suite's own skips and **none is K07's**: `k01_bugs` (1),
+`k03_bugs` (2), `k09_bugs` (6), `p12_bugs` (1).
 
 Files changed by this stage only:
-`app/lib/features/pip/presentation/bloc/pip_state.dart` (the 2 carry lines +
-their comments), `app/test/features/pip/pip_evolution_bloc_test.dart` (one
-state-level test), `docs/screens/K07/2_build.md`. Nothing outside RULES §1; no
-`analysis_options` change, no `google_fonts`, no `DateTime.now()`, no
-`flutter clean`, no simulator, no `Wrap`/`Row` chip rows.
+`app/test/features/pip/pip_nest_states_test.dart` (the stale file header + the
+over-long line's comment) and `docs/screens/K07/2_build.md`. No production file
+needed a change this iteration.
 
 VERDICT: PASS

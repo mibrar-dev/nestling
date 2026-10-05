@@ -47,7 +47,19 @@ class PipBloc extends Bloc<PipEvent, PipState> {
     // Both loads are already live: ignore the reload instead of stacking
     // more never-ending handlers. Never re-add load events to refresh.
     if (_nestSub != null && _evolutionSub != null) return;
-    emit(state.toLoading());
+    // The reset names what is ACTUALLY restarting: a null subscription is the
+    // one that died and is being re-listened (`??=` below keeps the healthy
+    // one), and only that stream's arrival flag and error slot may drop. The
+    // surviving stream is still streaming and will not re-announce itself, so
+    // clearing its flag would strand its screen on a spinner that has no retry
+    // button (`4_review.md` finding 1). On a cold open both are null, so both
+    // restart — the common case is unchanged.
+    emit(
+      state.toLoading(
+        restartingNest: _nestSub == null,
+        restartingEvolution: _evolutionSub == null,
+      ),
+    );
     _nestSub ??= _repository.watchNest().listen(
       (nest) => add(PipNestReceived(nest)),
       onError: (Object error) {

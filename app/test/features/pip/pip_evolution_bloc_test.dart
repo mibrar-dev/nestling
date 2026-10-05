@@ -272,6 +272,63 @@ void main() {
       expect(loading.evolution?.questsDone, 4, reason: 'no blanking');
     });
 
+    test('a retry resets only the stream it actually restarts '
+        '(4_review.md finding 1)', () {
+      // `PipLoadRequested` re-subscribes with `??=`, so a retry after ONE
+      // stream's failure keeps the healthy subscription. Clearing both
+      // arrival flags would report that live stream as `loading` until some
+      // unrelated table write re-emitted it — a screen on a spinner with no
+      // retry button. The reset is therefore explicit per stream.
+      const loaded = PipState(
+        status: PipStatus.loaded,
+        nest: _mayaNest,
+        evolution: _mayaEvolution,
+        nestSettled: true,
+        evolutionSettled: true,
+      );
+
+      final nestRetry = loaded.toLoading(restartingEvolution: false);
+      expect(nestRetry.status, PipStatus.loading);
+      expect(nestRetry.nestSettled, isFalse);
+      expect(nestRetry.nestStatus, PipStatus.loading);
+      expect(
+        nestRetry.evolutionSettled,
+        isTrue,
+        reason: 'the evolution subscription was never released',
+      );
+      expect(
+        nestRetry.evolutionStatus,
+        PipStatus.loaded,
+        reason: 'K07 must not drop to a spinner while K06 retries',
+      );
+      expect(nestRetry.evolution?.questsDone, 4);
+
+      final evolutionRetry = loaded.toLoading(restartingNest: false);
+      expect(evolutionRetry.nestSettled, isTrue);
+      expect(evolutionRetry.nestStatus, PipStatus.loaded);
+      expect(evolutionRetry.evolutionSettled, isFalse);
+      expect(evolutionRetry.evolutionStatus, PipStatus.loading);
+
+      // A restart also clears THAT stream's error slot only: the sibling's
+      // recorded error must survive so its own status stays honest.
+      final withErrors = loaded
+          .withNestError(Exception('nest down'))
+          .withEvolutionError(Exception('evolution down'));
+      expect(withErrors.status, PipStatus.loaded);
+      final evolutionRetry2 = withErrors.toLoading(restartingNest: false);
+      expect(evolutionRetry2.nestError, contains('nest down'));
+      expect(evolutionRetry2.evolutionError, isNull);
+      expect(evolutionRetry2.nestStatus, PipStatus.loaded);
+
+      // The defaults still describe a full reload, so any caller that has no
+      // reason to think (and every existing fixture) keeps today's behaviour.
+      final full = loaded.toLoading();
+      expect(full.nestSettled, isFalse);
+      expect(full.evolutionSettled, isFalse);
+      expect(full.status, PipStatus.loading);
+      expect(full.evolution?.questsDone, 4, reason: 'no blanking');
+    });
+
     test('evolution events carry every field', () {
       const received = PipEvolutionReceived(_mayaEvolution);
       expect(received.evolution?.questsDone, 4);
@@ -638,6 +695,102 @@ void main() {
       await repo.nest.close();
       await repo.evolution.close();
     });
+
+    test('a retry keeps the SURVIVING stream loaded '
+        '(4_review.md finding 1)', () async {
+      // The review's requested proof: one stream fails before answering, the
+      // other is healthy and has already loaded, and the sibling NEVER
+      // re-emits. Before the fix `toLoading()` cleared both arrival flags, so
+      // the healthy stream reported `loading` and its screen sat on a spinner
+      // forever (the retry button only exists on the `failure` branch). The
+      // mirror case is asserted too, so neither direction can regress.
+      final repo = _ControlledPipRepository(db: db);
+      final bloc = PipBloc(repository: repo);
+      final evolutionStatuses = <PipStatus>[];
+      final sub = bloc.stream.listen((state) {
+        evolutionStatuses.add(state.evolutionStatus);
+      });
+
+      bloc.add(const PipLoadRequested());
+      await Future<void>.delayed(_settle);
+      repo.evolution.add(_mayaEvolution);
+      repo.nest.addError(Exception('nest down'));
+      await Future<void>.delayed(_settle);
+
+      expect(bloc.state.nestStatus, PipStatus.failure, reason: 'K06 retries');
+      expect(bloc.state.evolutionStatus, PipStatus.loaded);
+      evolutionStatuses.clear(); // only what is published from here on
+
+      // K06's "Try again": the dead stream is re-subscribed, the live
+      // evolution subscription is untouched (it never emits again).
+      bloc.add(const PipLoadRequested());
+      await Future<void>.delayed(_settle);
+
+      expect(bloc.state.nestStatus, PipStatus.loading, reason: 're-subscribed');
+      expect(
+        bloc.state.evolutionStatus,
+        PipStatus.loaded,
+        reason: 'the surviving subscription keeps its own loaded status',
+      );
+      expect(
+        bloc.state.evolution?.questsDone,
+        4,
+        reason: 'the celebration is never blanked by the sibling’s retry',
+      );
+      expect(
+        evolutionStatuses,
+        everyElement(PipStatus.loaded),
+        reason: 'evolutionStatus must never dip back to loading once loaded',
+      );
+
+      repo.nest.add(_mayaNest);
+      await Future<void>.delayed(_settle);
+      expect(bloc.state.status, PipStatus.loaded);
+      expect(bloc.state.nestStatus, PipStatus.loaded);
+
+      await sub.cancel();
+      await bloc.close();
+      await repo.nest.close();
+      await repo.evolution.close();
+    });
+
+    test(
+      'the mirror: a retried evolution leaves the NEST stream loaded',
+      () async {
+        final repo = _ControlledPipRepository(db: db);
+        final bloc = PipBloc(repository: repo);
+        final nestStatuses = <PipStatus>[];
+        final sub = bloc.stream.listen(
+          (state) => nestStatuses.add(state.nestStatus),
+        );
+
+        bloc.add(const PipLoadRequested());
+        await Future<void>.delayed(_settle);
+        repo.nest.add(_mayaNest);
+        repo.evolution.addError(Exception('evolution down'));
+        await Future<void>.delayed(_settle);
+        expect(bloc.state.evolutionStatus, PipStatus.failure);
+        expect(bloc.state.nestStatus, PipStatus.loaded);
+        nestStatuses.clear(); // only what is published from here on
+
+        bloc.add(const PipLoadRequested());
+        await Future<void>.delayed(_settle);
+
+        expect(bloc.state.evolutionStatus, PipStatus.loading);
+        expect(bloc.state.nestStatus, PipStatus.loaded);
+        expect(bloc.state.nest?.profile.nickname, 'Maya');
+        expect(nestStatuses, everyElement(PipStatus.loaded));
+
+        repo.evolution.add(_mayaEvolution);
+        await Future<void>.delayed(_settle);
+        expect(bloc.state.status, PipStatus.loaded);
+
+        await sub.cancel();
+        await bloc.close();
+        await repo.nest.close();
+        await repo.evolution.close();
+      },
+    );
 
     test('a second load while both streams are live is ignored', () async {
       final repo = _ControlledPipRepository(db: db);

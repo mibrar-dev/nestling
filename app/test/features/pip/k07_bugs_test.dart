@@ -1010,7 +1010,6 @@ void main() {
             'bug, and not this screen to fix)',
       );
     },
-    skip: true,
   );
 
   testWidgets(

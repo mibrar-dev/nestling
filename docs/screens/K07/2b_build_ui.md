@@ -1,3 +1,168 @@
+# K07 · Stage 2b — build, UI chunk (iteration 3)
+
+Scope owned: `app/lib/features/pip/presentation/views/**`,
+`presentation/widgets/**`, and the view/widget/bug proofs in
+`app/test/features/pip/` that pin them. No file in `domain/`, `data/` or
+`presentation/bloc/` was touched (2a's). No simulator was booted, installed on
+or driven — only `5_ui` may touch `BC440E48-…`, and the brief gives that stage
+alone. No `flutter clean`, no `analysis_options` change, no skipped gate.
+
+Re-read before finishing: `ORCHESTRATOR_NOTES.md` (23:55 iteration-3 ruling),
+`FIXES_2.md`, `2a_build_logic.md` CONTRACT CHANGES §1–§2. §1 and §2 were
+already implemented by iteration 2's `34abefa` and re-verified here (§Contracts
+below); the open work was the one major bug and two small test fixtures.
+
+## What changed
+
+| file | change |
+|---|---|
+| `lib/features/pip/presentation/widgets/pip_evolution_sparks.dart` | **K07-BUG-5 fixed** — the layer's stroke and all five fills now resolve from `NestColors.light` in BOTH themes; `shouldRepaint` is `false`; the widget tree is `const` end to end |
+| `test/features/pip/k07_bugs_test.dart` | un-skipped the **K07-BUG-5** proof (only `skip:` in the file) |
+| `test/features/pip/pip_evolution_sparks_test.dart` | palette assertions now read the light palette (the layer is theme-invariant) + a dark-only proof that no dark ink reaches the canvas; `shouldRepaint` pinned false; finding 3's wrong filename in the header corrected |
+| `test/features/pip/pip_nest_states_test.dart` | 2a's fixture change (`_NestOnlyRepository.watchEvolution` answers with a healthy null instead of a silent controller; `closeEvolutionGate()` and both call sites dropped) |
+| `docs/screens/K07/SHARED_REQUEST.md` | two non-blocking notes (items 4 and 5) |
+
+Layout, copy, spacing and the bottom-edge rule are **unchanged** from iteration
+2, which passed build + test + review + UI; this iteration's brief is the bug
+fix list, and changing geometry without a design reason would only re-open the
+verified band table.
+
+## K07-BUG-5 — the `svg.sparks` palette is theme-invariant (MAJOR, orchestrator-mandated)
+
+The design's confetti is an **inline SVG with literal hexes** — `<g
+stroke="#1E1B3A" stroke-width="3">` with `fill="#7C6CF2 / #1F9D63 / #F4B400 /
+#FF8A5B / #3D7FF0` — so it never references a theme variable and the dark design
+PNG paints the same colours as the light one. Measured off both design PNGs at
+this stage (design px / 3, art `viewBox` coords → CSS px):
+
+| sample | light PNG | dark PNG |
+|---|---|---|
+| sparkle 1 fill, art (32, 49) | `#7C6CF2` | `#7C6CF2` |
+| sparkle 1 left-point stroke, art (13, 49) | `#1E1B3A` | `#1E1B3A` |
+| gold dot (86, 10) | `#F4B400` | `#F4B400` |
+| sky dot (268, 8) | `#3D7FF0` | `#3D7FF0` |
+
+The app resolved all of them from `context.nest`, so dark mode stroked every
+sparkle and dot with the dark ink `#F3F0FA` and filled them with the dark
+accents — the white rings in `5_ui.md` D4 / `cmp_dark_2.png`. The fix is the
+orchestrator's recipe, in that one file:
+
+```dart
+Color get color => switch (fill) {
+  _SparkFill.lilac   => NestColors.light.lilac,    // #7C6CF2, as in the HTML
+  _SparkFill.success => NestColors.light.success,  // #1F9D63
+  _SparkFill.coin    => NestColors.light.coin,     // #F4B400
+  _SparkFill.peach   => NestColors.light.peach,    // #FF8A5B
+  _SparkFill.sky     => NestColors.light.sky,      // #2563D6 — see the note below
+};
+// paint(): ..color = NestColors.light.ink          // #1E1B3A, the design's <g>
+// shouldRepaint → false
+```
+
+Still tokens-only: `NestColors.light` is the 1:1 transcription of `tokens.css
+:root`, and for ink / lilac / success / coin / peach its values **are** the
+HTML's literals, so "tokens only" and "PNG parity" now agree. Nothing on the
+render path is a literal hex.
+
+**The one honest loose end** (carried from `6_bugs.md`): the sky dot's
+`#3D7FF0` is not a token in either scheme (`--sky` is `#2563D6` / `#7FA9FF`), so
+it paints the light `--sky` — theme-invariant, which is the ruling's intent, but
+24/28/26 per channel off the PNG on one 6 px dot. Fixing it would need a
+literal hex (forbidden) or a new shared token, so it is filed as
+`SHARED_REQUEST.md` item 4 and pinned by
+`pip_evolution_sparks_test.dart`'s "the design's non-token #3D7FF0 dot is NOT
+painted literally".
+
+Only `svg.sparks` needed this: a scan of the whole K07 HTML shows the other
+inline SVGs (status icons, lock, arrow, home pill) use `currentColor`, which is
+the theme ink the app already resolves from tokens.
+
+## Contracts re-verified against `2a_build_logic.md`
+
+- **§1** `pip_evolution_view.dart:84` switches on `state.evolutionStatus`; the
+  sibling-nest branch that painted a false "Oh no! Pip got lost." is gone;
+  `_EvolutionFailure` still falls back to `state.nest?.profile` for the
+  last-known child.
+- **§2** `PipEvolutionStats` is fed `evolution.questsFinishedCount` while
+  `k07-sub` keeps `evolution.questsDone` (K07-BUG-3's widget half).
+- The three `pip_nest_states_test.dart` cases 2a predicted would fail
+  (`loading the first nest emission replaces the spinner`, `load failure Try
+  again really reloads the nest`, `load failure the accessibility path reloads
+  the nest too`) are green again — `+20: All tests passed!`, 0 skips.
+
+## Also closed (small, carried findings)
+
+- `4_review.md` finding 3: the header that pointed at
+  `pip_evolution_sparks_bug_test.dart` now names `k07_sparkles_bug_test.dart`
+  (2a left `dart format` on that file to this stage; it is clean).
+
+## Gates (this layer only, every run with `--timeout`)
+
+```
+$ flutter analyze lib/features/pip test/features/pip   → No issues found!
+$ dart format --output=none --set-exit-if-changed lib/features/pip \
+      test/features/pip                                → (0 changed)
+
+$ flutter test --timeout 120s --run-skipped test/features/pip/k07_bugs_test.dart
+    → +24: All tests passed!      ← K07-BUG-5 GREEN, 0 skips in the file
+$ flutter test --timeout 120s test/features/pip/pip_evolution_sparks_test.dart \
+      test/features/pip/k07_sparkles_bug_test.dart     → +11: All tests passed!
+$ flutter test --timeout 120s test/features/pip/pip_nest_states_test.dart
+                                                    → +20: All tests passed!
+$ flutter test --timeout 120s test/features/pip/{view,widget,a11y,
+      stream_contract,iter2_fixes}_test.dart          → +96: All tests passed!
+$ flutter test --timeout 120s test/features/pip      → +419: All tests passed!
+```
+
+The dark-mode stroke proof the orchestrator asked for exists in both places:
+`k07_bugs_test.dart`'s **K07-BUG-5** (real app shell, `ThemeMode.dark`,
+samples the painter's own raster at the design's `viewBox` coordinates and
+expects `0x1E1B3A` — this is the `--run-skipped` proof that failed at `0xF3F0FA`
+before the fix) and `pip_evolution_sparks_test.dart`'s new dark-case assertion
+that no `NestColors.dark.ink` pixel is on the canvas.
+
+## For the UI stage (5_ui)
+
+- Re-measure the dark sparkles (`5_ui.md` **D4**): no light outline, fills
+  `#7C6CF2 / #1F9D63 / #F4B400 / #FF8A5B`, stroke `#1E1B3A`. Everything else on
+  the screen is byte-identical to iteration 2's accepted shots, so the band
+  table should not move.
+- D5's 6 px sky dot will read `#2563D6` where the PNG says `#3D7FF0` — that is
+  the filed `SHARED_REQUEST.md` item 4, not a regression.
+
+## LEFT FOR NEXT ITERATION
+
+1. **`4_review.md` finding 2 — `evolutionSub(0)` = "Because you helped 0
+   times"** under "Pip grew into a Hatchling!". The branch is missing, not the
+   wording, and there is no zero case in any design source, so it needs the
+   orchestrator's sign-off. Filed as `SHARED_REQUEST.md` item 5; the wording
+   assertion in `k07_bugs_test.dart`'s "0 and 999999999 coins…" control moves
+   with it.
+2. **`4_review.md` finding 1 — `toLoading()` clears both arrival flags while a
+   retry re-subscribes one stream.** Logic-layer (`pip_state.dart`), latent
+   because every route builds a fresh `PipBloc` and no view reads the sibling's
+   status. Left to the feature owner / `SHARED_REQUEST.md` item 2.
+3. **No in-app entry point for `/pip-evolution`** (`6_bugs.md` observation 1) —
+   the CTA leaves to `/pip`; if K06 should open K07 on a stage-up, that is the
+   K06/flow owner's call.
+
+## Verdict
+
+Iteration 2's layout work stood up: the contracts 2a wrote are already in the
+tree and re-verified here, and this iteration's only open item was the dark-mode
+sparkle palette. That is now the design's fixed, theme-invariant inline-SVG
+palette in both themes — tokens-only, no white rings on the night sky — proven
+by the previously-failing K07-BUG-5 test in dark, plus the three fixture tests
+2a predicted would fail. The two remaining items are a copy ruling and a
+logic-layer latent finding, both filed.
+
+
+---
+
+# Appendix — iteration 2 (superseded, kept for history)
+
+Verbatim `2b_build_ui.md` from `3f8ef59` / `HEAD`; iteration 3's report is above.
+
 # K07 · 2b BUILD UI (iteration 2) — views + widgets of feature `pip`
 
 Scope owned and edited: `app/lib/features/pip/presentation/views/**` and
@@ -188,5 +353,6 @@ inside `pip_evolution_widget_test.dart`, i.e. the `FittedBox` and the
 - The orchestrator ruling on `4_review.md` finding 9 (dark-mode sparkle accents):
   accept the token re-theme (recommended) or file a literal-accent token. No
   code changes in this stage either way.
+
 
 VERDICT: PASS

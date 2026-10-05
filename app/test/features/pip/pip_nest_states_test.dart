@@ -12,10 +12,11 @@
 //   * `_FlakyNestRepository` — the stream errors until the test flips it, so
 //     the failure card's "Try again" can be exercised for real.
 //
-// Both extend `_NestOnlyRepository`, which keeps K07's second stream
-// (`watchEvolution`, opened by the same `PipLoadRequested`) silent: these
-// tests are about the NEST stream's loading / failure / no-child states, and a
-// healthy evolution emission would carry the screen out of them.
+// Both extend `_NestOnlyRepository`, which answers K07's second stream
+// (`watchEvolution`, opened by the same `PipLoadRequested`) with a healthy
+// no-child emission: these tests are about the NEST stream's loading /
+// failure / no-child states, and a real evolution emission would carry the
+// screen out of them.
 //
 // `Seed.empty()` gives the third state: an onboarded family with no children,
 // so `app_state.active_child_id` is null and the bloc loads a null nest.
@@ -47,25 +48,24 @@ import 'package:nestling/features/pip/presentation/widgets/pip_wardrobe_tile.dar
 import '../../test_scope.dart';
 
 /// Base for the fakes below: K07's second subscription (`watchEvolution`)
-/// is SILENT here, exactly as in `pip_bloc_test.dart`'s
-/// `_EvolutionSilentRepository`.
+/// answers here as a HEALTHY no-child emission.
 ///
-/// `PipLoadRequested` opens both streams, and either healthy emission flips
-/// `PipState.status` to `loaded`. These tests drive the NEST stream only, so a
-/// real evolution emission would carry the screen out of the loading spinner
-/// and out of the failure card — the K06 states under test would never appear.
-/// A silent stream keeps every assertion below about the nest stream alone.
+/// `PipLoadRequested` opens both streams, and each load event now tracks its own
+/// arrival (`2a_build_logic.md` CONTRACT CHANGES §1: `nestSettled` /
+/// `evolutionSettled`, with `nestStatus` / `evolutionStatus` as the per-screen
+/// statuses). `/pip` (`K06`) switches on `nestStatus`, so these tests — which
+/// drive the NEST stream only — need the sibling to have answered *once* for
+/// the aggregate `PipState.status` to leave `loading`; a never-answering stream
+/// pinned it at `loading` forever. A null evolution is the healthy no-child
+/// emission, and K06 never reads it.
 abstract class _NestOnlyRepository extends PipRepositoryImpl {
   _NestOnlyRepository({required super.db});
 
-  final StreamController<PipEvolution?> _silentEvolution =
-      StreamController<PipEvolution?>.broadcast();
-
   @override
-  Stream<PipEvolution?> watchEvolution() => _silentEvolution.stream;
-
-  /// Closes the silent controller so teardown leaves nothing behind.
-  Future<void> closeEvolutionGate() => _silentEvolution.close();
+  Stream<PipEvolution?> watchEvolution() =>
+      // A healthy no-child emission: it settles K07's stream without ever
+      // claiming a child, so `nestStatus` alone decides this screen.
+      Stream<PipEvolution?>.value(null);
 }
 
 /// Nest stream the test drives by hand: [gate] emits nothing until the test
@@ -209,7 +209,6 @@ void main() {
       await _useRepository(repo);
       addTearDown(() async {
         if (!repo.gate.isClosed) await repo.gate.close();
-        await repo.closeEvolutionGate();
       });
 
       await _pumpNest(tester);
@@ -235,7 +234,6 @@ void main() {
       await _useRepository(repo);
       addTearDown(() async {
         if (!repo.gate.isClosed) await repo.gate.close();
-        await repo.closeEvolutionGate();
       });
       await _pumpNest(tester);
       expect(find.byType(CircularProgressIndicator), findsOneWidget);

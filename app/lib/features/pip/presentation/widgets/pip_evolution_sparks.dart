@@ -13,6 +13,20 @@
 //
 // Static art: screenshots run with `DISABLE_ANIMATIONS=1` and RULES §6 forbids
 // a Timer/AnimationController here, so nothing loops.
+//
+// PALETTE (ORCHESTRATOR_NOTES 23:55, `6_bugs.md` K07-BUG-5): the design's
+// `svg.sparks` is an inline SVG whose colours are LITERAL hexes —
+// `<g stroke="#1E1B3A">` and `fill="#7C6CF2" / #1F9D63 / #F4B400 / #FF8A5B /
+// #3D7FF0`. It never references `var(--lilac)` or any other theme variable, so
+// the whole layer is theme-INVARIANT by construction and the dark design PNG
+// paints exactly the colours the light one does. Resolving from the ambient
+// theme made every sparkle and dot carry a `#F3F0FA` white ring on the night sky
+// (`5_ui.md` D4, `cmp_dark_2.png`). The colours therefore come from
+// [NestColors.light] in BOTH themes, which keeps the tokens-only rule (the light
+// palette is the 1:1 transcription of `tokens.css :root`) AND the PNG parity
+// the design has. The one literal with no token behind it is the sky dot's
+// `#3D7FF0` (`--sky` is `#2563D6`) — a design-source bug (`5_ui.md` D5), which
+// resolves to the light sky token here and is reported, not faked.
 import 'package:flutter/material.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 
@@ -35,9 +49,10 @@ abstract final class EvolutionSparksGeometry {
   static const double strokeWidth = 3;
 }
 
-/// Which token paints a spark — the design's literal fills, mapped:
-/// `#7C6CF2` lilac, `#1F9D63` success, `#F4B400` coin, `#FF8A5B` peach,
-/// `#3D7FF0` sky.
+/// Which token paints a spark — the design's literal fills, mapped against
+/// `tokens.css :root`: `#7C6CF2` lilac, `#1F9D63` success, `#F4B400` coin,
+/// `#FF8A5B` peach, and the one-off `#3D7FF0` blue, which is not a token in
+/// either scheme and so paints as the light `--sky` (see the header).
 enum _SparkFill { lilac, success, coin, peach, sky }
 
 /// One entry of the design's `<g>`: a 4-point sparkle `d`, or a dot.
@@ -58,9 +73,9 @@ class _Spark {
 
   /// The closed polygon for [d], parsed once per `d` and kept.
   ///
-  /// The layer is static art that repaints only on a theme change, so
-  /// re-parsing the path data on every paint would be pure allocation on the
-  /// render path (`4_review.md` finding 11).
+  /// The layer is static art that never repaints, so re-parsing the path data
+  /// on every paint would be pure allocation on the render path
+  /// (`4_review.md` finding 11).
   Path? get path {
     final d = this.d;
     if (d == null) return null;
@@ -70,13 +85,15 @@ class _Spark {
   /// The parsed paths, keyed by their `d`.
   static final Map<String, Path> _sparkPaths = <String, Path>{};
 
-  /// The CSS fill this entry uses, resolved from the theme's tokens.
-  Color colorOf(NestTokens tokens) => switch (fill) {
-    _SparkFill.lilac => tokens.lilac,
-    _SparkFill.success => tokens.success,
-    _SparkFill.coin => tokens.coin,
-    _SparkFill.peach => tokens.peach,
-    _SparkFill.sky => tokens.sky,
+  /// The CSS fill this entry uses: the design's inline hex read off the LIGHT
+  /// palette, in every theme (see the header). No parameter — the layer has no
+  /// theme-dependent colour left to resolve.
+  Color get color => switch (fill) {
+    _SparkFill.lilac => NestColors.light.lilac,
+    _SparkFill.success => NestColors.light.success,
+    _SparkFill.coin => NestColors.light.coin,
+    _SparkFill.peach => NestColors.light.peach,
+    _SparkFill.sky => NestColors.light.sky,
   };
 }
 
@@ -122,7 +139,7 @@ class PipEvolutionSparks extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ExcludeSemantics(
+    return const ExcludeSemantics(
       child: IgnorePointer(
         child: SizedBox(
           width: EvolutionSparksGeometry.boxWidth,
@@ -130,7 +147,7 @@ class PipEvolutionSparks extends StatelessWidget {
           child: Center(
             child: CustomPaint(
               size: EvolutionSparksGeometry.artSize,
-              painter: _SparksPainter(tokens: context.nest),
+              painter: _SparksPainter(),
             ),
           ),
         ),
@@ -140,15 +157,14 @@ class PipEvolutionSparks extends StatelessWidget {
 }
 
 class _SparksPainter extends CustomPainter {
-  const _SparksPainter({required this.tokens});
-
-  final NestTokens tokens;
+  const _SparksPainter();
 
   @override
   void paint(Canvas canvas, Size size) {
-    // The `<g stroke="#1E1B3A" stroke-width="3" stroke-linejoin="round">`.
+    // The `<g stroke="#1E1B3A" stroke-width="3" stroke-linejoin="round">` —
+    // the design's own ink literal, so it is the LIGHT ink in both themes.
     final stroke = Paint()
-      ..color = tokens.ink
+      ..color = NestColors.light.ink
       ..style = PaintingStyle.stroke
       ..strokeWidth = EvolutionSparksGeometry.strokeWidth
       ..strokeJoin = StrokeJoin.round;
@@ -159,7 +175,7 @@ class _SparksPainter extends CustomPainter {
       ..clipRect(Offset.zero & size);
     for (final spark in _sparks) {
       final fill = Paint()
-        ..color = spark.colorOf(tokens)
+        ..color = spark.color
         ..style = PaintingStyle.fill;
       final path = spark.path;
       if (path != null) {
@@ -177,7 +193,9 @@ class _SparksPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _SparksPainter oldDelegate) =>
-      oldDelegate.tokens != tokens;
+      // Every colour in the layer is a fixed design literal, so a theme change
+      // cannot change a single pixel (ORCHESTRATOR_NOTES 23:55).
+      false;
 }
 
 /// The design's `d` subset: one absolute `M` followed by implicit absolute

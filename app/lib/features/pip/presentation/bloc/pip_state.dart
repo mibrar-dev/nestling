@@ -108,16 +108,40 @@ final class PipState extends Equatable {
   /// the same list): the nest's items, empty before load.
   List<PipStage> get items => nest?.items ?? const <PipStage>[];
 
-  /// A fresh load re-answers both streams, so both arrival flags drop: the
-  /// screen goes back to its spinner while the new subscriptions stream in.
-  /// The data and any pending action outcome are carried through (a reload
-  /// must not blank what is on screen mid-session).
-  PipState toLoading() {
+  /// A load re-answers the streams it actually restarted, so the reset is
+  /// explicit about which ones those are ([restartingNest] /
+  /// [restartingEvolution], both default to a full reload):
+  ///
+  /// - a **restarting** stream drops its arrival flag and its error slot and
+  ///   goes back to `loading` until the new subscription answers;
+  /// - a **surviving** stream keeps its flag, its error slot and therefore its
+  ///   own status — it is still streaming and will never re-announce itself,
+  ///   so clearing its flag would leave that screen on its spinner forever
+  ///   with no retry affordance (`4_review.md` finding 1: the failure card's
+  ///   "Try again" re-subscribes only the stream that died).
+  ///
+  /// The data and any pending action outcome are carried through either way (a
+  /// reload must not blank what is on screen mid-session).
+  PipState toLoading({
+    bool restartingNest = true,
+    bool restartingEvolution = true,
+  }) {
+    final nextNestSettled = !restartingNest && nestSettled;
+    final nextEvolutionSettled = !restartingEvolution && evolutionSettled;
     return PipState(
-      status: PipStatus.loading,
+      status: _combine(
+        nestSettled: nextNestSettled,
+        evolutionSettled: nextEvolutionSettled,
+        nestError: restartingNest ? null : nestError,
+        evolutionError: restartingEvolution ? null : evolutionError,
+      ),
       nest: nest,
       evolution: evolution,
+      nestSettled: nextNestSettled,
+      evolutionSettled: nextEvolutionSettled,
       errorMessage: errorMessage,
+      nestError: restartingNest ? null : nestError,
+      evolutionError: restartingEvolution ? null : evolutionError,
       actionError: actionError,
       actionNonce: actionNonce,
     );
