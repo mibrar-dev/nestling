@@ -256,10 +256,14 @@ class Settings extends Table {
   IntColumn get payoutDay => integer().withDefault(const Constant(6))();
   IntColumn get coinValuePencePerCoin =>
       integer().withDefault(const Constant(1))();
+  // Local-only notification preferences. OFF by default for new families
+  // (Age Appropriate Design / nudge rule — shared/release_prep): they flip
+  // ON only via the P16 toggles after a runtime permission + explainer.
+  // `Seed.demo` writes ON explicitly to match the P16 design (checked).
   BoolColumn get notifApprovals =>
-      boolean().withDefault(const Constant(true))();
-  BoolColumn get notifPayout => boolean().withDefault(const Constant(true))();
-  BoolColumn get notifSummary => boolean().withDefault(const Constant(true))();
+      boolean().withDefault(const Constant(false))();
+  BoolColumn get notifPayout => boolean().withDefault(const Constant(false))();
+  BoolColumn get notifSummary => boolean().withDefault(const Constant(false))();
   // OFF by default (P04 / ICO nudge rule).
   BoolColumn get crashReportConsent =>
       boolean().withDefault(const Constant(false))();
@@ -462,9 +466,13 @@ class AppDatabase extends _$AppDatabase {
       // both repositories issue `UPDATE settings WHERE family_id = 'fam1'`,
       // which matches zero rows on a real first launch and silently drops
       // the parent's choice. `crashReportConsent` keeps its table default
-      // (OFF, ICO rule). `'fam1'` mirrors `Seed.familyId` (kept a literal:
-      // `seed.dart` imports this file, so importing it back would be a
-      // cycle). New rows pick up the London `time_zone` table defaults.
+      // (OFF, ICO rule). Notification preferences are OFF for new families
+      // (nudge rule) — written explicitly, because the DDL default only
+      // applies to databases created after the change; an explicit value is
+      // exact on migrated databases too. `'fam1'` mirrors `Seed.familyId`
+      // (kept a literal: `seed.dart` imports this file, so importing it back
+      // would be a cycle). New rows pick up the London `time_zone` table
+      // defaults.
       await into(appState).insert(
         const AppStateCompanion(id: Value(1)),
         mode: InsertMode.insertOrIgnore,
@@ -474,7 +482,12 @@ class AppDatabase extends _$AppDatabase {
         mode: InsertMode.insertOrIgnore,
       );
       await into(settings).insert(
-        SettingsCompanion.insert(familyId: 'fam1'),
+        SettingsCompanion.insert(
+          familyId: 'fam1',
+          notifApprovals: const Value(false),
+          notifPayout: const Value(false),
+          notifSummary: const Value(false),
+        ),
         mode: InsertMode.insertOrIgnore,
       );
     },

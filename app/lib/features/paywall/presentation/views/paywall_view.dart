@@ -6,6 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nestling/core/config/legal_links.dart';
 import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
@@ -770,13 +771,6 @@ class _LegalRow extends StatelessWidget {
     context.read<PaywallBloc>().add(const PaywallRestoreRequested());
   }
 
-  void _placeholder(BuildContext context, String message) {
-    // TODO(P07): link to the real legal route when the orchestrator adds one.
-    // No onboarding route exists for the legal pages, so the screen answers
-    // in place and stays on `/paywall`.
-    showNestToast(context, message);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Wrap(
@@ -797,10 +791,12 @@ class _LegalRow extends StatelessWidget {
             style: NestType.caption(color: context.nest.ink3),
           ),
         ),
+        // Hosted pages in the in-app browser (shared/release_prep); the
+        // screen stays on `/paywall`. Disabled while an action is working so
+        // a tap cannot fire mid-flight.
         _LegalLink(
           label: 'Terms',
-          onTap: () =>
-              _placeholder(context, 'Terms are available in the full app.'),
+          onTap: disabled ? null : LegalLinks.openTerms,
         ),
         ExcludeSemantics(
           child: Text(
@@ -812,10 +808,7 @@ class _LegalRow extends StatelessWidget {
         ),
         _LegalLink(
           label: 'Privacy',
-          onTap: () => _placeholder(
-            context,
-            'The Privacy Notice is available in the full app.',
-          ),
+          onTap: disabled ? null : LegalLinks.openPrivacy,
         ),
       ],
     );

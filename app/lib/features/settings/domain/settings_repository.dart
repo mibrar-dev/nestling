@@ -25,6 +25,17 @@ abstract class SettingsRepository {
   Future<void> setCrashConsent({required bool consent});
   Future<void> setKidGateEnabled({required bool enabled});
 
+  /// Local export for the P16 "Download our data" row: the family's data as
+  /// a JSON-ready document (family zone + ISO timestamps, no PIN hashes).
+  Future<Map<String, dynamic>> exportFamilyData();
+
+  /// Deletes the family account: every table is emptied and `app_state` is
+  /// reset to a fresh install (onboarding incomplete, parent mode, no
+  /// subscription) in one transaction. The caller then resets in-memory
+  /// session state (`AppSession`, `AppModeController`) and routes to
+  /// `/welcome`.
+  Future<void> deleteFamilyAccount();
+
   /// Stores [zoneId] as the family time zone (validated IANA id; unknown
   /// ids are ignored). No UI here — P16 Settings renders the picker plus
   /// the one-time "looks like you moved" prompt (see

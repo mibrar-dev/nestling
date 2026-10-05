@@ -14,11 +14,14 @@ import 'package:nestling/core/data/seed.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 /// Minimal v6 DDL: `members` in its exact v6 shape (every column except
-/// `email`) plus PK-only stubs for the tables `beforeOpen` touches (the
-/// v6 → v7 open only runs the v7 step).
+/// `email`) plus stubs for the tables `beforeOpen` touches (the
+/// v6 → v7 open only runs the v7 step). The `settings` stub carries the
+/// notification columns in their real v6 shape (`DEFAULT 1`): `beforeOpen`
+/// writes them explicitly (new-family OFF), so a PK-only stub no longer
+/// satisfies the insert.
 const List<String> _v6Ddl = <String>[
   'CREATE TABLE families (id TEXT NOT NULL PRIMARY KEY)',
-  'CREATE TABLE settings (family_id TEXT NOT NULL PRIMARY KEY)',
+  'CREATE TABLE settings (family_id TEXT NOT NULL PRIMARY KEY, notif_approvals INTEGER NOT NULL DEFAULT 1, notif_payout INTEGER NOT NULL DEFAULT 1, notif_summary INTEGER NOT NULL DEFAULT 1)',
   'CREATE TABLE app_state (id INTEGER NOT NULL PRIMARY KEY)',
   "CREATE TABLE members (id TEXT NOT NULL PRIMARY KEY, family_id TEXT NOT NULL, name TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'owner', invite_status TEXT NOT NULL DEFAULT 'active')",
 ];

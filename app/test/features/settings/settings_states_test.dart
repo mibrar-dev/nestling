@@ -432,4 +432,10 @@ class _FailsOnceRepository implements SettingsRepository {
 
   @override
   Stream<String> watchFamilyTimeZone() => _inner.watchFamilyTimeZone();
+
+  @override
+  Future<Map<String, dynamic>> exportFamilyData() => _inner.exportFamilyData();
+
+  @override
+  Future<void> deleteFamilyAccount() => _inner.deleteFamilyAccount();
 }

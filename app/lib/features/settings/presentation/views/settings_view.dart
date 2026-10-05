@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nestling/app/controllers.dart';
+import 'package:nestling/core/config/legal_links.dart';
 import 'package:nestling/core/data/app_clock.dart';
+import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/family/family_routes.dart';
+import 'package:nestling/features/onboarding/onboarding_routes.dart';
 import 'package:nestling/features/paywall/paywall_routes.dart';
-import 'package:nestling/features/privacy_consent/privacy_consent_routes.dart';
+import 'package:nestling/features/settings/data/family_data_export.dart';
 import 'package:nestling/features/settings/domain/entities/settings_child_entry.dart';
 import 'package:nestling/features/settings/domain/entities/settings_member_entry.dart';
+import 'package:nestling/features/settings/domain/settings_repository.dart';
 import 'package:nestling/features/settings/presentation/bloc/settings_bloc.dart';
 import 'package:nestling/features/settings/presentation/bloc/settings_event.dart';
 import 'package:nestling/features/settings/presentation/bloc/settings_state.dart';
@@ -265,7 +271,7 @@ class _SettingsLoaded extends StatelessWidget {
             NestListRow(
               title: 'Approvals waiting',
               trailing: NestToggle(
-                value: settings?.notifApprovals ?? true,
+                value: settings?.notifApprovals ?? false,
                 semanticLabel: 'Approvals waiting notifications',
                 // NOT fenced by `P16TransientGuard` (review finding 2): the
                 // switches are the nearest neighbour of the dismissed zone
@@ -281,7 +287,7 @@ class _SettingsLoaded extends StatelessWidget {
               title: 'Payout day reminder',
               subtitle: 'Friday before Saturday payout',
               trailing: NestToggle(
-                value: settings?.notifPayout ?? true,
+                value: settings?.notifPayout ?? false,
                 semanticLabel: 'Payout day reminder',
                 onChanged: (v) => context.read<SettingsBloc>().add(
                   SettingsNotificationsChanged(payout: v),
@@ -291,7 +297,7 @@ class _SettingsLoaded extends StatelessWidget {
             NestListRow(
               title: 'Weekly family summary',
               trailing: NestToggle(
-                value: settings?.notifSummary ?? true,
+                value: settings?.notifSummary ?? false,
                 semanticLabel: 'Weekly family summary',
                 onChanged: (v) => context.read<SettingsBloc>().add(
                   SettingsNotificationsChanged(summary: v),
@@ -308,16 +314,12 @@ class _SettingsLoaded extends StatelessWidget {
             NestListRow(
               title: 'Download our data',
               trailing: settingsChevron(context),
-              onTap: () => P16TransientGuard.run(
-                () => context.push(PrivacyConsentRoutePaths.privacy),
-              ),
+              onTap: () => P16TransientGuard.run(() => _downloadData(context)),
             ),
             NestListRow(
               title: 'Privacy Notice',
               trailing: settingsChevron(context),
-              onTap: () => P16TransientGuard.run(
-                () => context.push(PrivacyConsentRoutePaths.privacy),
-              ),
+              onTap: () => P16TransientGuard.run(LegalLinks.openPrivacy),
             ),
             SettingsRow(
               title: 'Delete family account',
@@ -350,6 +352,23 @@ class _SettingsLoaded extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  /// Local export for the "Download our data" row: builds the family's JSON
+  /// document on-device, writes `nestling-export-<date>.json` to a temp
+  /// file and opens the OS share sheet. Failures toast in place — the row
+  /// never navigates.
+  Future<void> _downloadData(BuildContext context) async {
+    try {
+      final document = await GetIt.instance<SettingsRepository>()
+          .exportFamilyData();
+      final file = await writeExportToTempFile(document);
+      await shareExportFile(file);
+    } on Exception {
+      if (context.mounted) {
+        showNestToast(context, 'Couldn’t prepare the export — try again');
+      }
+    }
   }
 
   Future<void> _confirmDelete(BuildContext context) async {
@@ -395,9 +414,16 @@ class _SettingsLoaded extends StatelessWidget {
     );
     P16TransientGuard.suppressShortly();
     if (confirmed == true && context.mounted) {
-      // TODO(P16): wire real deletion once the account-deletion flow exists;
-      // intentionally a toast only today — never wipe the DB silently.
-      showNestToast(context, 'Family account deletion is not available yet');
+      // Real deletion (shared/release_prep): the repository empties every
+      // table and resets `app_state` to a fresh install in one transaction;
+      // in-memory session state is cleared here and the router's onboarding
+      // redirect would send any location to `/welcome` anyway.
+      await GetIt.instance<SettingsRepository>().deleteFamilyAccount();
+      if (!context.mounted) return;
+      context.read<AppModeController>().selectMode(AppMode.parent);
+      await GetIt.instance<AppSession>().refresh();
+      if (!context.mounted) return;
+      context.go(OnboardingRoutePaths.welcome);
     }
   }
 }

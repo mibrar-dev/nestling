@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nestling/core/config/legal_links.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/auth/auth_routes.dart';
 import 'package:nestling/features/family/family_routes.dart';
@@ -312,6 +313,49 @@ class _PromiseRow extends StatelessWidget {
   }
 }
 
+/// Hosted-notice link inside the P04 summary modal: same sky underlined
+/// treatment as [_NoticeLink], opening the full notice in the in-app
+/// browser. A single semantics node carries the label, the button flag and
+/// the tap action on a 44×44 minimum target.
+class _FullNoticeLink extends StatelessWidget {
+  const _FullNoticeLink();
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.nest;
+    return Semantics(
+      button: true,
+      label: 'Full privacy notice',
+      onTap: LegalLinks.openPrivacy,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          minHeight: NestDevice.tapParent,
+          minWidth: NestDevice.tapParent,
+        ),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: LegalLinks.openPrivacy,
+          child: Center(
+            child: ExcludeSemantics(
+              child: Text(
+                'Full privacy notice',
+                key: const ValueKey('p04_full_privacy_notice'),
+                style: NestType.caption(color: tokens.sky).copyWith(
+                  fontWeight: FontWeight.w600,
+                  decoration: TextDecoration.underline,
+                  decorationThickness: 1,
+                ),
+                textAlign: TextAlign.center,
+                softWrap: true,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Underlined tappable footnote. [NestBottomCta] only takes plain-text
 /// `caption`, but the design needs a link, so this is a second child of the
 /// bottom-CTA column instead (CTA geometry unchanged).
@@ -365,6 +409,9 @@ class _NoticeLink extends StatelessWidget {
                         textAlign: TextAlign.center,
                         softWrap: true,
                       ),
+                    // The modal is the summary; the hosted page is one tap
+                    // away (shared/release_prep).
+                    const _FullNoticeLink(),
                     NestButton(
                       label: 'Close',
                       variant: NestButtonVariant.secondary,

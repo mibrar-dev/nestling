@@ -26,6 +26,12 @@ import 'package:nestling/features/settings/presentation/widgets/p16_transient_gu
 import '../../test_scope.dart';
 import 'p16_test_support.dart';
 
+/// The toast the "Download our data" row shows when the export pipeline
+/// throws (in widget tests `getTemporaryDirectory` has no platform channel,
+/// so the row always lands here — the success path is platform code and the
+/// JSON content is pinned at the repository level instead).
+const String kExportFailureToast = 'Couldn’t prepare the export — try again';
+
 void main() {
   setUpAll(loadP16Fonts);
 
@@ -134,7 +140,10 @@ void main() {
     testWidgets('a fenced row tap does nothing, and the row works again once '
         'the window passes', (tester) async {
       // Armed the same way the sheet arms it, so the assertion is about the
-      // window and not about how long an exit animation happens to take.
+      // window and not about how long an exit animation happens to take. The
+      // Download row runs the export pipeline instead of navigating (local
+      // export, shared/release_prep), so "works" is its failure toast — the
+      // success path is platform code a widget test cannot open.
       await pumpSettingsApp(tester);
       await scrollSettingsTo(tester, find.text('Download our data'));
 
@@ -143,35 +152,37 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
       expect(
-        pushedPath(tester),
-        '/settings',
-        reason: 'a fenced tap must not navigate',
+        find.text(kExportFailureToast),
+        findsNothing,
+        reason: 'a fenced tap must not run the row at all',
       );
 
       await tester.pump(P16TransientGuard.window);
       await tester.tap(find.text('Download our data'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+      // The export pipeline awaits a platform channel, which only resolves
+      // in real time under a widget test — `settleSettings` gives it that.
+      await settleSettings(tester);
       expect(
-        pushedPath(tester),
-        '/privacy',
+        find.text(kExportFailureToast),
+        findsOneWidget,
         reason: 'the guard must expire — a stuck guard kills every row',
       );
 
       await disposeApp(tester);
     });
 
-    testWidgets('an unarmed screen navigates on the first tap', (tester) async {
+    testWidgets('an unarmed screen runs the row on the first tap', (
+      tester,
+    ) async {
       // The control case for the test above: no modal has closed, so nothing
       // is fenced and the row works immediately.
       await pumpSettingsApp(tester);
       await scrollSettingsTo(tester, find.text('Download our data'));
 
       await tester.tap(find.text('Download our data'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+      await settleSettings(tester);
 
-      expect(pushedPath(tester), '/privacy');
+      expect(find.text(kExportFailureToast), findsOneWidget);
       await disposeApp(tester);
     });
 
@@ -290,9 +301,9 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
       expect(
-        pushedPath(tester),
-        '/settings',
-        reason: 'the guard still fences a row that would navigate (B08)',
+        find.text(kExportFailureToast),
+        findsNothing,
+        reason: 'the guard still fences a row (B08)',
       );
 
       await tester.tap(toggle);

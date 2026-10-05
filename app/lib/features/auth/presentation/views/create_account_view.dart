@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nestling/core/config/legal_links.dart';
 import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/auth/domain/auth_repository.dart';
 import 'package:nestling/features/auth/presentation/bloc/auth_bloc.dart';
@@ -325,9 +326,9 @@ class _OrRow extends StatelessWidget {
 /// Each link's 44dp target is an overlay box measured off the laid-out text
 /// (post-frame) and centred over its word — the HTML
 /// `.link { min-height:44px; margin:-12px 0 }` trick, where the hit box
-/// overlaps its line instead of adding layout height. The links are inert in
-/// v1 (`TODO(P03)`). Never use `NestBottomCta.caption` here — it cannot
-/// render links.
+/// overlaps its line instead of adding layout height. The links open the
+/// hosted pages in the in-app browser ([LegalLinks]). Never use
+/// `NestBottomCta.caption` here — it cannot render links.
 class _LegalLine extends StatefulWidget {
   const new();
 
@@ -590,6 +591,7 @@ class _LegalLineState extends State<_LegalLine> {
                   child: const _LegalTarget(
                     key: ValueKey('p03_terms'),
                     label: 'Terms',
+                    url: LegalLinks.termsUrl,
                   ),
                 ),
               if (privacy != null)
@@ -598,6 +600,7 @@ class _LegalLineState extends State<_LegalLine> {
                   child: const _LegalTarget(
                     key: ValueKey('p03_privacy'),
                     label: _LegalLine.privacyLabel,
+                    url: LegalLinks.privacyUrl,
                   ),
                 ),
             ],
@@ -700,29 +703,31 @@ class _RenderHitTestExpand extends RenderProxyBox {
   }
 }
 
-/// One inert legal-link target (P03-BUG-1/4/10/13).
+/// One hosted legal-link target (P03-BUG-1/4/10/13, shared/release_prep).
 ///
 /// Carries the `p03_*` key and the exact single-node button semantics. The
 /// `Positioned.fromRect` parent gives it tight ≥44×44 constraints, so it
-/// fills its measured box over its word.
+/// fills its measured box over its word. The tap opens the hosted page in
+/// the in-app browser (same overlap note as before: the Terms box reaches
+/// ~4dp into the submit button's row, so a tap there still lets the submit
+/// win functionally — see `_HitTestExpand`).
 class _LegalTarget extends StatelessWidget {
-  const new({required this.label, super.key});
+  const new({required this.label, required this.url, super.key});
 
   final String label;
+
+  /// Hosted page to open ([LegalLinks.termsUrl]/[LegalLinks.privacyUrl]).
+  final String url;
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
       label: label,
+      onTap: () => LegalLinks.open(Uri.parse(url)),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        // TODO(P03): inert — no Terms/Notice routes exist in v1. When they
-        // land, note the targets overlap: the Terms box reaches ~4dp into
-        // the submit button's row (and the boxes overlap each other where
-        // lines stack), so a tap there activates both — keep the submit
-        // winning functionally or disambiguate then.
-        onTap: () {},
+        onTap: () => LegalLinks.open(Uri.parse(url)),
         child: const SizedBox.expand(),
       ),
     );

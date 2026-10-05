@@ -5,6 +5,7 @@ import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/family_zone_service.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/data/stream_combine.dart';
+import 'package:nestling/features/settings/data/family_data_export.dart';
 import 'package:nestling/features/settings/domain/entities/app_settings.dart';
 import 'package:nestling/features/settings/domain/entities/settings_child_entry.dart';
 import 'package:nestling/features/settings/domain/entities/settings_item.dart';
@@ -42,9 +43,10 @@ class SettingsRepositoryImpl implements SettingsRepository {
         pocketMoneyMode: setting?.pocketMoneyMode ?? 'both',
         payoutDay: setting?.payoutDay ?? 6,
         coinValuePencePerCoin: setting?.coinValuePencePerCoin ?? 1,
-        notifApprovals: setting?.notifApprovals ?? true,
-        notifPayout: setting?.notifPayout ?? true,
-        notifSummary: setting?.notifSummary ?? true,
+        // OFF when no row exists yet (new-family nudge rule).
+        notifApprovals: setting?.notifApprovals ?? false,
+        notifPayout: setting?.notifPayout ?? false,
+        notifSummary: setting?.notifSummary ?? false,
         crashReportConsent: setting?.crashReportConsent ?? false,
         kidGateEnabled: setting?.kidGateEnabled ?? true,
         subscriptionStatus:
@@ -69,6 +71,32 @@ class SettingsRepositoryImpl implements SettingsRepository {
     // query (review finding 5: no feature-local raw SQL for this). The
     // default family id is `Seed.familyId`.
     return _db.watchMembers().map((rows) => rows.map(_toMemberEntry).toList());
+  }
+
+  @override
+  Future<Map<String, dynamic>> exportFamilyData() => buildFamilyExport(_db);
+
+  @override
+  Future<void> deleteFamilyAccount() {
+    // One transaction (P16 deletion rule): empty every table, then reset
+    // `app_state` to a fresh install — onboarding incomplete, parent mode,
+    // no subscription (trial status with no start, like `Seed.fresh`). Only
+    // the fresh `app_state` row survives, so a second launch starts at
+    // `/welcome` via the router's onboarding redirect.
+    return _db.transaction(() async {
+      for (final table in _db.allTables) {
+        await _db.delete(table).go();
+      }
+      await _db
+          .into(_db.appState)
+          .insert(
+            const AppStateCompanion(
+              id: Value(1),
+              onboardingComplete: Value(false),
+              appMode: Value('parent'),
+            ),
+          );
+    });
   }
 
   @override

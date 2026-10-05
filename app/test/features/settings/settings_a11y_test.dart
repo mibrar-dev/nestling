@@ -834,8 +834,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Delete family account?'), findsOneWidget);
-      // Both buttons are operable — `settings_navigation_test.dart` proves what
-      // Cancel and Delete actually do (and currently pin the [P16-T01] bug).
+      // Both buttons are operable — `settings_navigation_test.dart` proves
+      // what Cancel and Delete actually do (Cancel keeps everything; Delete
+      // wipes the database and lands on /welcome).
       for (final label in const <String>['Cancel', 'Delete']) {
         final nodes = p16Announcing(tester, label);
         expect(nodes, isNotEmpty, reason: '"$label" must be operable');

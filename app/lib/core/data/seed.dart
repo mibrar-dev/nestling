@@ -92,7 +92,7 @@ abstract final class Seed {
             email: const Value('sarah@example.co.uk'),
           ),
         );
-    await _settingsDemo(db);
+    await _settingsForNewFamily(db);
     await db
         .into(db.appState)
         .insert(
@@ -126,7 +126,7 @@ abstract final class Seed {
           ),
         );
     await _childrenDemo(db);
-    await _settingsDemo(db);
+    await _settingsForNewFamily(db);
     await db
         .into(db.appState)
         .insert(
@@ -171,7 +171,7 @@ abstract final class Seed {
           ),
         );
     await _childrenDemo(db);
-    await _settingsDemo(db);
+    await _settingsForNewFamily(db);
     await db
         .into(db.appState)
         .insert(
@@ -712,8 +712,35 @@ abstract final class Seed {
   }
 
   static Future<void> _settingsDemo(AppDatabase db) async {
+    // Demo-exact (P16 design shows all three toggles checked): written
+    // explicitly so the OFF table default for new families can never drift
+    // the spec screenshots.
     await db
         .into(db.settings)
-        .insert(SettingsCompanion.insert(familyId: familyId));
+        .insert(
+          SettingsCompanion.insert(
+            familyId: familyId,
+            notifApprovals: const Value(true),
+            notifPayout: const Value(true),
+            notifSummary: const Value(true),
+          ),
+        );
+  }
+
+  /// Default settings for a new family (OFF notifications — nudge rule).
+  /// Used by every seed except [demo], which keeps the design's checked
+  /// toggles via [_settingsDemo]. Written explicitly, because the DDL
+  /// default only applies to databases created after the change.
+  static Future<void> _settingsForNewFamily(AppDatabase db) async {
+    await db
+        .into(db.settings)
+        .insert(
+          SettingsCompanion.insert(
+            familyId: familyId,
+            notifApprovals: const Value(false),
+            notifPayout: const Value(false),
+            notifSummary: const Value(false),
+          ),
+        );
   }
 }

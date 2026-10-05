@@ -6392,7 +6392,7 @@ class $SettingsTable extends Settings with TableInfo<$SettingsTable, Setting> {
     defaultConstraints: GeneratedColumn.constraintIsAlways(
       'CHECK ("notif_approvals" IN (0, 1))',
     ),
-    defaultValue: const Constant(true),
+    defaultValue: const Constant(false),
   );
   static const VerificationMeta _notifPayoutMeta = const VerificationMeta(
     'notifPayout',
@@ -6407,7 +6407,7 @@ class $SettingsTable extends Settings with TableInfo<$SettingsTable, Setting> {
     defaultConstraints: GeneratedColumn.constraintIsAlways(
       'CHECK ("notif_payout" IN (0, 1))',
     ),
-    defaultValue: const Constant(true),
+    defaultValue: const Constant(false),
   );
   static const VerificationMeta _notifSummaryMeta = const VerificationMeta(
     'notifSummary',
@@ -6422,7 +6422,7 @@ class $SettingsTable extends Settings with TableInfo<$SettingsTable, Setting> {
     defaultConstraints: GeneratedColumn.constraintIsAlways(
       'CHECK ("notif_summary" IN (0, 1))',
     ),
-    defaultValue: const Constant(true),
+    defaultValue: const Constant(false),
   );
   static const VerificationMeta _crashReportConsentMeta =
       const VerificationMeta('crashReportConsent');
