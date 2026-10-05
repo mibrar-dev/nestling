@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:nestling/core/data/app_database.dart';
-import 'package:nestling/core/data/seed.dart';
+import 'package:nestling/core/data/current_family.dart';
 import 'package:nestling/core/data/stream_combine.dart';
 import 'package:nestling/features/badges/domain/badges_repository.dart';
 import 'package:nestling/features/badges/domain/entities/badge.dart' as domain;
@@ -9,9 +9,14 @@ import 'package:nestling/features/badges/domain/entities/badges_data.dart';
 
 /// Drift-backed [BadgesRepository].
 class BadgesRepositoryImpl implements BadgesRepository {
-  BadgesRepositoryImpl({required this._db});
+  BadgesRepositoryImpl({required AppDatabase db, CurrentFamily? currentFamily})
+    : _db = db,
+      _currentFamily = currentFamily ?? CurrentFamily.fallback(db);
 
   final AppDatabase _db;
+  final CurrentFamily _currentFamily;
+
+  String get _familyId => _currentFamily.familyId;
 
   @override
   Future<List<domain.Badge>> getItems() => watchItems().first;
@@ -32,7 +37,7 @@ class BadgesRepositoryImpl implements BadgesRepository {
   @override
   Stream<BadgesData> watchActiveBadges() {
     return _switchMap<List<dynamic>, BadgesData>(
-      combineLatest2(_db.watchAppState(), _db.watchChildren(Seed.familyId)),
+      combineLatest2(_db.watchAppState(), _db.watchChildren(_familyId)),
       (parts) {
         final state = parts[0] as AppStateData?;
         final kids = parts[1] as List<ChildrenData>;

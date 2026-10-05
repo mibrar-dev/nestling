@@ -1,5 +1,6 @@
 import 'package:get_it/get_it.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/current_family.dart';
 import 'package:nestling/features/badges/data/badges_repository_impl.dart';
 import 'package:nestling/features/badges/domain/badges_repository.dart';
 import 'package:nestling/features/badges/presentation/bloc/badges_bloc.dart';
@@ -10,7 +11,10 @@ import 'package:nestling/features/badges/presentation/bloc/badges_bloc.dart';
 void registerBadges(GetIt sl) {
   if (!sl.isRegistered<BadgesRepository>()) {
     sl.registerLazySingleton<BadgesRepository>(
-      () => BadgesRepositoryImpl(db: sl<AppDatabase>()),
+      () => BadgesRepositoryImpl(
+        db: sl<AppDatabase>(),
+        currentFamily: sl<CurrentFamily>(),
+      ),
     );
   }
   if (!sl.isRegistered<BadgesBloc>()) {

@@ -3,11 +3,11 @@ import 'dart:async';
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/current_family.dart';
 import 'package:nestling/core/data/family_time.dart'
     hide countsForCurrentPeriod;
 import 'package:nestling/core/data/ids.dart';
 import 'package:nestling/core/data/london_time.dart';
-import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/data/stream_combine.dart';
 import 'package:nestling/features/family/domain/entities/child_profile.dart';
 import 'package:nestling/features/family/domain/entities/family_child.dart';
@@ -26,10 +26,18 @@ int _ageYearsForBand(String ageBand) => switch (ageBand) {
 
 /// Drift-backed [FamilyRepository].
 class FamilyRepositoryImpl implements FamilyRepository {
-  new({required this._db, DateTime Function()? clock})
-    : _clock = clock ?? _defaultClock;
+  new({
+    required AppDatabase db,
+    DateTime Function()? clock,
+    CurrentFamily? currentFamily,
+  }) : _db = db,
+       _clock = clock ?? _defaultClock,
+       _currentFamily = currentFamily ?? CurrentFamily.fallback(db);
 
   final AppDatabase _db;
+  final CurrentFamily _currentFamily;
+
+  String get _familyId => _currentFamily.familyId;
 
   /// "Now" for period checks. Defaults to [appNowUtc] — `clock.now()` pinned
   /// to the seed anchor in tests (so demo assertions stay date-independent
@@ -51,8 +59,7 @@ class FamilyRepositoryImpl implements FamilyRepository {
 
   @override
   Stream<List<FamilyMember>> watchItems() {
-    return (_db.select(_db.members)
-          ..where((m) => m.familyId.equals(Seed.familyId)))
+    return (_db.select(_db.members)..where((m) => m.familyId.equals(_familyId)))
         .watch()
         .map((rows) => rows.map(_toMember).toList());
   }
@@ -65,9 +72,9 @@ class FamilyRepositoryImpl implements FamilyRepository {
       // alphabetical. (Pre-schema-v3 this feature carried its own
       // `rowid`-only query; the durable column has landed, so the interim
       // query is retired.)
-      _db.watchChildren(Seed.familyId),
-      _db.watchActiveQuests(Seed.familyId),
-      _db.watchAllCompletions(Seed.familyId),
+      _db.watchChildren(_familyId),
+      _db.watchActiveQuests(_familyId),
+      _db.watchAllCompletions(_familyId),
     ).map((parts) {
       final kids = parts[0] as List<ChildrenData>;
       final quests = parts[1] as List<Quest>;
@@ -130,9 +137,9 @@ class FamilyRepositoryImpl implements FamilyRepository {
             combineLatest4(
               _db.watchAppState(),
               // Creation order (CHILD ORDER ruling) via the shared helper.
-              _db.watchChildren(Seed.familyId),
-              _db.watchActiveQuests(Seed.familyId),
-              _db.watchAllCompletions(Seed.familyId),
+              _db.watchChildren(_familyId),
+              _db.watchActiveQuests(_familyId),
+              _db.watchAllCompletions(_familyId),
             ).listen((parts) async {
               latestParts = parts;
               final selected = _selectedOf(parts);
@@ -300,7 +307,7 @@ class FamilyRepositoryImpl implements FamilyRepository {
     if (row == null) return null;
     final quests = await (_db.select(
       _db.quests,
-    )..where((q) => q.familyId.equals(Seed.familyId))).get();
+    )..where((q) => q.familyId.equals(_familyId))).get();
     final completions = await (_db.select(
       _db.questCompletions,
     )..where((c) => c.childId.equals(childId))).get();
@@ -320,7 +327,7 @@ class FamilyRepositoryImpl implements FamilyRepository {
         .insert(
           ChildrenCompanion.insert(
             id: id,
-            familyId: Seed.familyId,
+            familyId: _familyId,
             nickname: nickname,
             ageBand: Value(ageBand),
             // P05-BUG-6: the schema default (7) used to stand whatever band
@@ -424,7 +431,7 @@ class FamilyRepositoryImpl implements FamilyRepository {
         // `SHARED_REQUEST.md` so both call sites share one query.
         final next =
             await (_db.select(_db.children)
-                  ..where((c) => c.familyId.equals(Seed.familyId))
+                  ..where((c) => c.familyId.equals(_familyId))
                   ..orderBy([
                     (c) => OrderingTerm(expression: c.createdAt),
                     (c) => OrderingTerm(
@@ -448,7 +455,7 @@ class FamilyRepositoryImpl implements FamilyRepository {
         .insert(
           MembersCompanion.insert(
             id: id,
-            familyId: Seed.familyId,
+            familyId: _familyId,
             name: name,
             role: const Value('co-parent'),
             inviteStatus: const Value('invited'),

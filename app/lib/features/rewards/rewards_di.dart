@@ -1,5 +1,6 @@
 import 'package:get_it/get_it.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/current_family.dart';
 import 'package:nestling/features/rewards/data/rewards_repository_impl.dart';
 import 'package:nestling/features/rewards/domain/rewards_repository.dart';
 import 'package:nestling/features/rewards/presentation/bloc/rewards_bloc.dart';
@@ -10,7 +11,10 @@ import 'package:nestling/features/rewards/presentation/bloc/rewards_bloc.dart';
 void registerRewards(GetIt sl) {
   if (!sl.isRegistered<RewardsRepository>()) {
     sl.registerLazySingleton<RewardsRepository>(
-      () => RewardsRepositoryImpl(db: sl<AppDatabase>()),
+      () => RewardsRepositoryImpl(
+        db: sl<AppDatabase>(),
+        currentFamily: sl<CurrentFamily>(),
+      ),
     );
   }
   if (!sl.isRegistered<RewardsBloc>()) {

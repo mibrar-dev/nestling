@@ -1,9 +1,9 @@
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/current_family.dart';
 import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/family_zone_service.dart';
-import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/data/stream_combine.dart';
 import 'package:nestling/features/settings/data/family_data_export.dart';
 import 'package:nestling/features/settings/domain/entities/app_settings.dart';
@@ -14,10 +14,18 @@ import 'package:nestling/features/settings/domain/settings_repository.dart';
 
 /// Drift-backed [SettingsRepository].
 class SettingsRepositoryImpl implements SettingsRepository {
-  new({required this._db, FamilyZoneService? zoneService})
-    : _zoneService = zoneService ?? FamilyZoneService(_db);
+  new({
+    required AppDatabase db,
+    FamilyZoneService? zoneService,
+    CurrentFamily? currentFamily,
+  }) : _db = db,
+       _zoneService = zoneService ?? FamilyZoneService(db),
+       _currentFamily = currentFamily ?? CurrentFamily.fallback(db);
 
   final AppDatabase _db;
+  final CurrentFamily _currentFamily;
+
+  String get _familyId => _currentFamily.familyId;
 
   /// Family-zone writer. Injected so the DI singleton's configuration is
   /// honoured; direct constructions fall back to a local instance (review
@@ -34,25 +42,24 @@ class SettingsRepositoryImpl implements SettingsRepository {
 
   @override
   Stream<AppSettings> watchSettings() {
-    return combineLatest2(
-      _db.watchSetting(Seed.familyId),
-      _db.watchAppState(),
-    ).map((parts) {
-      final setting = parts[0] as Setting?;
-      return AppSettings(
-        pocketMoneyMode: setting?.pocketMoneyMode ?? 'both',
-        payoutDay: setting?.payoutDay ?? 6,
-        coinValuePencePerCoin: setting?.coinValuePencePerCoin ?? 1,
-        // OFF when no row exists yet (new-family nudge rule).
-        notifApprovals: setting?.notifApprovals ?? false,
-        notifPayout: setting?.notifPayout ?? false,
-        notifSummary: setting?.notifSummary ?? false,
-        crashReportConsent: setting?.crashReportConsent ?? false,
-        kidGateEnabled: setting?.kidGateEnabled ?? true,
-        subscriptionStatus:
-            (parts[1] as AppStateData?)?.subscriptionStatus ?? 'trial',
-      );
-    });
+    return combineLatest2(_db.watchSetting(_familyId), _db.watchAppState()).map(
+      (parts) {
+        final setting = parts[0] as Setting?;
+        return AppSettings(
+          pocketMoneyMode: setting?.pocketMoneyMode ?? 'both',
+          payoutDay: setting?.payoutDay ?? 6,
+          coinValuePencePerCoin: setting?.coinValuePencePerCoin ?? 1,
+          // OFF when no row exists yet (new-family nudge rule).
+          notifApprovals: setting?.notifApprovals ?? false,
+          notifPayout: setting?.notifPayout ?? false,
+          notifSummary: setting?.notifSummary ?? false,
+          crashReportConsent: setting?.crashReportConsent ?? false,
+          kidGateEnabled: setting?.kidGateEnabled ?? true,
+          subscriptionStatus:
+              (parts[1] as AppStateData?)?.subscriptionStatus ?? 'trial',
+        );
+      },
+    );
   }
 
   @override
@@ -61,7 +68,7 @@ class SettingsRepositoryImpl implements SettingsRepository {
     // then `rowid` for same-second ties) — Maya before Leo — never
     // alphabetical.
     return _db
-        .watchChildren(Seed.familyId)
+        .watchChildren(_familyId)
         .map((rows) => rows.map(_toChildEntry).toList());
   }
 
@@ -69,12 +76,15 @@ class SettingsRepositoryImpl implements SettingsRepository {
   Stream<List<SettingsMemberEntry>> watchMembers() {
     // Insertion order (`rowid`) — Sarah before James — via the shared core
     // query (review finding 5: no feature-local raw SQL for this). The
-    // default family id is `Seed.familyId`.
-    return _db.watchMembers().map((rows) => rows.map(_toMemberEntry).toList());
+    // current family id comes from the shared holder.
+    return _db
+        .watchMembers(_familyId)
+        .map((rows) => rows.map(_toMemberEntry).toList());
   }
 
   @override
-  Future<Map<String, dynamic>> exportFamilyData() => buildFamilyExport(_db);
+  Future<Map<String, dynamic>> exportFamilyData() =>
+      buildFamilyExport(_db, _familyId);
 
   @override
   Future<void> deleteFamilyAccount() {
@@ -145,11 +155,11 @@ class SettingsRepositoryImpl implements SettingsRepository {
     );
     await (_db.update(
       _db.settings,
-    )..where((s) => s.familyId.equals(Seed.familyId))).write(stamped);
+    )..where((s) => s.familyId.equals(_familyId))).write(stamped);
     // Keep the `families` rule row in step (payout day / zone live there).
     await (_db.update(
       _db.families,
-    )..where((f) => f.id.equals(Seed.familyId))).write(
+    )..where((f) => f.id.equals(_familyId))).write(
       FamiliesCompanion(
         updatedAt: Value(appNowUtc()),
         updatedAtTz: Value(normalizeZoneId(zone)),

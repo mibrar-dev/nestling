@@ -1,14 +1,19 @@
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_database.dart';
-import 'package:nestling/core/data/seed.dart';
+import 'package:nestling/core/data/current_family.dart';
 import 'package:nestling/features/auth/domain/auth_repository.dart';
 import 'package:nestling/features/auth/domain/entities/auth_account.dart';
 
 /// Drift-backed [AuthRepository].
 class AuthRepositoryImpl implements AuthRepository {
-  new({required this._db});
+  AuthRepositoryImpl({required AppDatabase db, CurrentFamily? currentFamily})
+    : _db = db,
+      _currentFamily = currentFamily ?? CurrentFamily.fallback(db);
 
   final AppDatabase _db;
+  final CurrentFamily _currentFamily;
+
+  String get _familyId => _currentFamily.familyId;
 
   @override
   Future<List<AuthAccount>> getItems() => watchItems().first;
@@ -17,7 +22,7 @@ class AuthRepositoryImpl implements AuthRepository {
   Stream<List<AuthAccount>> watchItems() {
     return (_db.select(
       _db.members,
-    )..where((m) => m.familyId.equals(Seed.familyId))).watch().map(
+    )..where((m) => m.familyId.equals(_familyId))).watch().map(
       (rows) => rows
           .map(
             (m) => AuthAccount(
@@ -58,9 +63,12 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   Future<void> _ensureOwner(String displayName) async {
+    // Fresh install after account deletion has no `families` row until
+    // onboarding writes again: recreate it so the member has a parent row.
+    await _currentFamily.ensureFamily();
     final existing =
         await (_db.select(_db.members)..where(
-              (m) => m.familyId.equals(Seed.familyId) & m.role.equals('owner'),
+              (m) => m.familyId.equals(_familyId) & m.role.equals('owner'),
             ))
             .get();
     if (existing.isNotEmpty) return;
@@ -69,7 +77,7 @@ class AuthRepositoryImpl implements AuthRepository {
         .insert(
           MembersCompanion.insert(
             id: 'owner',
-            familyId: Seed.familyId,
+            familyId: _familyId,
             name: displayName,
           ),
         );

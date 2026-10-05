@@ -1,9 +1,9 @@
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/current_family.dart';
 import 'package:nestling/core/data/family_time.dart';
 import 'package:nestling/core/data/pin_hash.dart' as pin_hash;
-import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/data/stream_combine.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_child.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_home_data.dart';
@@ -12,9 +12,14 @@ import 'package:nestling/features/kid_home/domain/kid_home_repository.dart';
 
 /// Drift-backed [KidHomeRepository].
 class KidHomeRepositoryImpl implements KidHomeRepository {
-  new({required this._db});
+  new({required AppDatabase db, CurrentFamily? currentFamily})
+    : _db = db,
+      _currentFamily = currentFamily ?? CurrentFamily.fallback(db);
 
   final AppDatabase _db;
+  final CurrentFamily _currentFamily;
+
+  String get _familyId => _currentFamily.familyId;
 
   @override
   Future<List<KidQuest>> getItems() => watchItems().first;
@@ -68,7 +73,7 @@ class KidHomeRepositoryImpl implements KidHomeRepository {
   /// bins, tidy, hoover, table, exactly the K03/K03b HTML row order.
   Stream<List<KidQuest>> _watchItemsFor(String childId) {
     return combineLatest3(
-      _db.watchActiveQuests(Seed.familyId),
+      _db.watchActiveQuests(_familyId),
       _db.watchCompletionsForChild(childId),
       _db.watchFamilyZoneId(),
     ).map((parts) {
@@ -106,7 +111,7 @@ class KidHomeRepositoryImpl implements KidHomeRepository {
   @override
   Stream<List<KidChild>> watchProfiles() {
     return _db
-        .watchChildren(Seed.familyId)
+        .watchChildren(_familyId)
         .map((rows) => rows.map(_toChild).toList());
   }
 
@@ -224,7 +229,7 @@ class KidHomeRepositoryImpl implements KidHomeRepository {
             QuestCompletionsCompanion.insert(
               questId: questId,
               childId: childId,
-              familyId: Seed.familyId,
+              familyId: _familyId,
               status: Value(terminal ? 'approved' : 'done_pending'),
               coins: Value(quest.coins),
               createdAt: Value(now),
@@ -260,7 +265,7 @@ class KidHomeRepositoryImpl implements KidHomeRepository {
         .into(_db.ledgerEntries)
         .insert(
           LedgerEntriesCompanion.insert(
-            familyId: Seed.familyId,
+            familyId: _familyId,
             childId: childId,
             type: 'quest_bonus',
             amountPence: coins,

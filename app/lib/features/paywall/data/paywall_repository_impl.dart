@@ -1,16 +1,21 @@
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
-import 'package:nestling/core/data/seed.dart';
+import 'package:nestling/core/data/current_family.dart';
 import 'package:nestling/features/paywall/domain/entities/paywall_plan.dart';
 import 'package:nestling/features/paywall/domain/entities/subscription_status.dart';
 import 'package:nestling/features/paywall/domain/paywall_repository.dart';
 
 /// Drift-backed [PaywallRepository].
 class PaywallRepositoryImpl implements PaywallRepository {
-  new({required this._db});
+  new({required AppDatabase db, CurrentFamily? currentFamily})
+    : _db = db,
+      _currentFamily = currentFamily ?? CurrentFamily.fallback(db);
 
   final AppDatabase _db;
+  final CurrentFamily _currentFamily;
+
+  String get _familyId => _currentFamily.familyId;
 
   @override
   Future<List<PaywallPlan>> getItems() => Future.value(_plans);
@@ -64,9 +69,7 @@ class PaywallRepositoryImpl implements PaywallRepository {
   @override
   Future<String?> readCoParentName() async {
     final query = _db.select(_db.members)
-      ..where(
-        (m) => m.familyId.equals(Seed.familyId) & m.role.equals('co-parent'),
-      )
+      ..where((m) => m.familyId.equals(_familyId) & m.role.equals('co-parent'))
       ..orderBy([
         (m) => OrderingTerm(expression: const CustomExpression<int>('rowid')),
       ]);

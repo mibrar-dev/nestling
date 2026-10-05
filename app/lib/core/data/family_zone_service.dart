@@ -14,8 +14,8 @@ import 'package:drift/drift.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/current_family.dart';
 import 'package:nestling/core/data/family_time.dart';
-import 'package:nestling/core/data/seed.dart';
 
 /// Reads the device zone; injectable so tests avoid the platform channel.
 typedef DeviceZoneReader = Future<String> Function();
@@ -45,7 +45,9 @@ class FamilyZoneService {
 
   /// The stored family zone (`families.time_zone`, London default; links
   /// resolve to canonical via [normalizeZoneId]).
-  Future<String> familyZoneId([String familyId = Seed.familyId]) async {
+  Future<String> familyZoneId([
+    String familyId = CurrentFamily.fallbackId,
+  ]) async {
     final row = await (_db.select(
       _db.families,
     )..where((f) => f.id.equals(familyId))).getSingleOrNull();
@@ -57,7 +59,7 @@ class FamilyZoneService {
   }
 
   /// Live stream of the stored family zone (canonical, London fallback).
-  Stream<String> watchFamilyZone([String familyId = Seed.familyId]) {
+  Stream<String> watchFamilyZone([String familyId = CurrentFamily.fallbackId]) {
     return (_db.select(
       _db.families,
     )..where((f) => f.id.equals(familyId))).watchSingleOrNull().map((row) {
@@ -72,7 +74,9 @@ class FamilyZoneService {
   /// The device zone when it is known AND differs from the family zone —
   /// the one-time "looks like you moved, switch?" prompt input. Null means
   /// no prompt (same zone, or device zone unreadable).
-  Future<String?> pendingMove([String familyId = Seed.familyId]) async {
+  Future<String?> pendingMove([
+    String familyId = CurrentFamily.fallbackId,
+  ]) async {
     final device = await deviceZoneId();
     if (device == null) return null;
     final family = await familyZoneId(familyId);
@@ -82,7 +86,9 @@ class FamilyZoneService {
 
   /// Confirms the pending move: stores the device zone as the family zone.
   /// History keeps its stored zones; future periods follow the new zone.
-  Future<void> confirmPendingMove([String familyId = Seed.familyId]) async {
+  Future<void> confirmPendingMove([
+    String familyId = CurrentFamily.fallbackId,
+  ]) async {
     final device = await deviceZoneId();
     if (device == null) return;
     await setFamilyTimeZone(device, familyId);
@@ -94,7 +100,7 @@ class FamilyZoneService {
   /// tables agree.
   Future<void> setFamilyTimeZone(
     String zoneId, [
-    String familyId = Seed.familyId,
+    String familyId = CurrentFamily.fallbackId,
   ]) async {
     if (!isKnownZoneId(zoneId)) return;
     final canonical = normalizeZoneId(zoneId);

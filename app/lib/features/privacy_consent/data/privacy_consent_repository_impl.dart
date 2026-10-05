@@ -1,21 +1,26 @@
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_database.dart';
-import 'package:nestling/core/data/seed.dart';
+import 'package:nestling/core/data/current_family.dart';
 import 'package:nestling/features/privacy_consent/domain/entities/consent_option.dart';
 import 'package:nestling/features/privacy_consent/domain/privacy_consent_repository.dart';
 
 /// Drift-backed [PrivacyConsentRepository].
 class PrivacyConsentRepositoryImpl implements PrivacyConsentRepository {
-  new({required this._db});
+  new({required AppDatabase db, CurrentFamily? currentFamily})
+    : _db = db,
+      _currentFamily = currentFamily ?? CurrentFamily.fallback(db);
 
   final AppDatabase _db;
+  final CurrentFamily _currentFamily;
+
+  String get _familyId => _currentFamily.familyId;
 
   @override
   Future<List<ConsentOption>> getItems() => watchItems().first;
 
   @override
   Stream<List<ConsentOption>> watchItems() {
-    return _db.watchSetting(Seed.familyId).map((setting) {
+    return _db.watchSetting(_familyId).map((setting) {
       final crash = setting?.crashReportConsent ?? false;
       return <ConsentOption>[
         const ConsentOption(
@@ -55,7 +60,7 @@ class PrivacyConsentRepositoryImpl implements PrivacyConsentRepository {
   @override
   Stream<bool> watchCrashConsent() {
     return _db
-        .watchSetting(Seed.familyId)
+        .watchSetting(_familyId)
         .map((setting) => setting?.crashReportConsent ?? false);
   }
 
@@ -77,14 +82,14 @@ class PrivacyConsentRepositoryImpl implements PrivacyConsentRepository {
     await _db.transaction(() async {
       final changed =
           await (_db.update(_db.settings)
-                ..where((s) => s.familyId.equals(Seed.familyId)))
+                ..where((s) => s.familyId.equals(_familyId)))
               .write(SettingsCompanion(crashReportConsent: Value(consent)));
       if (changed == 0) {
         await _db
             .into(_db.settings)
             .insert(
               SettingsCompanion.insert(
-                familyId: Seed.familyId,
+                familyId: _familyId,
                 crashReportConsent: Value(consent),
                 // New-family defaults, written explicitly: the DDL default
                 // only applies to databases created after the change, so an

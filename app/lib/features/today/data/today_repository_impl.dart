@@ -1,7 +1,7 @@
 import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/current_family.dart';
 import 'package:nestling/core/data/family_time.dart';
-import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/data/stream_combine.dart';
 import 'package:nestling/features/today/domain/entities/child_day_summary.dart';
 import 'package:nestling/features/today/domain/entities/today_item.dart';
@@ -13,10 +13,18 @@ import 'package:nestling/features/today/domain/today_repository.dart';
 /// directly assigned quests appear here ("4 of 6" on P08); "Anyone" quests
 /// live in the quest library (P10).
 class TodayRepositoryImpl implements TodayRepository {
-  new({required this._db, DateTime Function()? clock})
-    : _clock = clock ?? _defaultClock;
+  new({
+    required AppDatabase db,
+    DateTime Function()? clock,
+    CurrentFamily? currentFamily,
+  }) : _db = db,
+       _clock = clock ?? _defaultClock,
+       _currentFamily = currentFamily ?? CurrentFamily.fallback(db);
 
   final AppDatabase _db;
+  final CurrentFamily _currentFamily;
+
+  String get _familyId => _currentFamily.familyId;
 
   /// "Now" for period checks. Defaults to the pinned test instant when tests
   /// pin the seed anchor (so demo assertions stay date-independent) and to
@@ -31,9 +39,9 @@ class TodayRepositoryImpl implements TodayRepository {
   @override
   Stream<List<TodayItem>> watchItems() {
     return combineLatest4(
-      _db.watchActiveQuests(Seed.familyId),
-      _db.watchAllCompletions(Seed.familyId),
-      _db.watchChildren(Seed.familyId),
+      _db.watchActiveQuests(_familyId),
+      _db.watchAllCompletions(_familyId),
+      _db.watchChildren(_familyId),
       _db.watchFamilyZoneId(),
     ).map((parts) {
       return rows(
@@ -47,7 +55,7 @@ class TodayRepositoryImpl implements TodayRepository {
 
   @override
   Stream<List<ChildDaySummary>> watchSummaries() {
-    return combineLatest2(watchItems(), _db.watchChildren(Seed.familyId)).map((
+    return combineLatest2(watchItems(), _db.watchChildren(_familyId)).map((
       parts,
     ) {
       final items = parts[0] as List<TodayItem>;
@@ -90,7 +98,7 @@ class TodayRepositoryImpl implements TodayRepository {
   Stream<String> watchParentName() {
     return (_db.select(
       _db.members,
-    )..where((m) => m.familyId.equals(Seed.familyId))).watch().map((rows) {
+    )..where((m) => m.familyId.equals(_familyId))).watch().map((rows) {
       if (rows.isEmpty) return 'Sarah';
       for (final row in rows) {
         if (row.role == 'owner') return row.name;
@@ -102,7 +110,7 @@ class TodayRepositoryImpl implements TodayRepository {
 
   @override
   Stream<int> watchPayoutDay() {
-    return (_db.select(_db.families)..where((f) => f.id.equals(Seed.familyId)))
+    return (_db.select(_db.families)..where((f) => f.id.equals(_familyId)))
         .watchSingleOrNull()
         .map((family) => family?.payoutDay ?? 6);
   }
@@ -116,8 +124,8 @@ class TodayRepositoryImpl implements TodayRepository {
     // not silently dropped. NOTE: P11 must apply the same scoping or the
     // Review list will disagree with this count (SHARED_REQUEST §9).
     return combineLatest3(
-      _db.watchAllCompletions(Seed.familyId),
-      _db.watchActiveQuests(Seed.familyId),
+      _db.watchAllCompletions(_familyId),
+      _db.watchActiveQuests(_familyId),
       _db.watchFamilyZoneId(),
     ).map((parts) {
       final rule = <String, String>{

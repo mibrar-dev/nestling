@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_clock.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/current_family.dart';
 import 'package:nestling/core/data/family_time.dart';
-import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/data/stream_combine.dart';
 import 'package:nestling/features/pocket_money/domain/entities/money_child.dart';
 import 'package:nestling/features/pocket_money/domain/entities/money_ledger_data.dart';
@@ -16,9 +16,14 @@ import 'package:nestling/features/pocket_money/domain/pocket_money_repository.da
 
 /// Drift-backed [PocketMoneyRepository].
 class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
-  new({required this._db});
+  new({required AppDatabase db, CurrentFamily? currentFamily})
+    : _db = db,
+      _currentFamily = currentFamily ?? CurrentFamily.fallback(db);
 
   final AppDatabase _db;
+  final CurrentFamily _currentFamily;
+
+  String get _familyId => _currentFamily.familyId;
 
   @override
   Future<List<PocketMoneyEntry>> getItems() => watchItems().first;
@@ -66,7 +71,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
   /// bloc serves P06 from this one stream.
   @override
   Stream<MoneyLedgerData> watchLedgerData() {
-    return _db.watchChildren(Seed.familyId).asyncExpand((kids) {
+    return _db.watchChildren(_familyId).asyncExpand((kids) {
       final allLedger = kids.isEmpty
           ? Stream<List<LedgerEntry>>.value(const <LedgerEntry>[])
           : _combineLedgers(<Stream<List<LedgerEntry>>>[
@@ -74,7 +79,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
             ]);
       return combineLatest3(
         allLedger,
-        _db.watchGoals(Seed.familyId),
+        _db.watchGoals(_familyId),
         _watchFamily(),
       ).map((parts) {
         final rows = parts[0] as List<LedgerEntry>;
@@ -141,27 +146,27 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
     // Roster order is the canonical CHILD ORDER query (creation order,
     // Maya before Leo — never alphabetical), not a local raw query
     // (review #4).
-    return combineLatest2(_watchFamily(), _db.watchChildren(Seed.familyId)).map(
-      (parts) {
-        final family = parts[0] as Family?;
-        final children = parts[1] as List<ChildrenData>;
-        return PocketMoneySetup(
-          mode: family?.pocketMoneyMode ?? 'both',
-          payoutDay: family?.payoutDay ?? 6,
-          coinValuePencePerCoin: family?.coinValuePencePerCoin ?? 1,
-          children: children
-              .map(
-                (row) => PocketMoneySetupChild(
-                  id: row.id,
-                  nickname: row.nickname,
-                  avatarColour: row.avatarColour,
-                  weeklyBasePence: row.weeklyBasePence,
-                ),
-              )
-              .toList(),
-        );
-      },
-    );
+    return combineLatest2(_watchFamily(), _db.watchChildren(_familyId)).map((
+      parts,
+    ) {
+      final family = parts[0] as Family?;
+      final children = parts[1] as List<ChildrenData>;
+      return PocketMoneySetup(
+        mode: family?.pocketMoneyMode ?? 'both',
+        payoutDay: family?.payoutDay ?? 6,
+        coinValuePencePerCoin: family?.coinValuePencePerCoin ?? 1,
+        children: children
+            .map(
+              (row) => PocketMoneySetupChild(
+                id: row.id,
+                nickname: row.nickname,
+                avatarColour: row.avatarColour,
+                weeklyBasePence: row.weeklyBasePence,
+              ),
+            )
+            .toList(),
+      );
+    });
   }
 
   /// The `families` row for the demo family (null until the first launch
@@ -169,7 +174,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
   Stream<Family?> _watchFamily() {
     return (_db.select(
       _db.families,
-    )..where((f) => f.id.equals(Seed.familyId))).watchSingleOrNull();
+    )..where((f) => f.id.equals(_familyId))).watchSingleOrNull();
   }
 
   @override
@@ -193,7 +198,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
     await _db.transaction(() async {
       await (_db.update(
         _db.families,
-      )..where((f) => f.id.equals(Seed.familyId))).write(
+      )..where((f) => f.id.equals(_familyId))).write(
         FamiliesCompanion(
           pocketMoneyMode: Value(mode),
           updatedAt: Value(now),
@@ -202,7 +207,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
       );
       await (_db.update(
         _db.settings,
-      )..where((s) => s.familyId.equals(Seed.familyId))).write(
+      )..where((s) => s.familyId.equals(_familyId))).write(
         SettingsCompanion(
           pocketMoneyMode: Value(mode),
           updatedAt: Value(now),
@@ -224,7 +229,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
     await _db.transaction(() async {
       await (_db.update(
         _db.families,
-      )..where((f) => f.id.equals(Seed.familyId))).write(
+      )..where((f) => f.id.equals(_familyId))).write(
         FamiliesCompanion(
           payoutDay: Value(day),
           updatedAt: Value(now),
@@ -233,7 +238,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
       );
       await (_db.update(
         _db.settings,
-      )..where((s) => s.familyId.equals(Seed.familyId))).write(
+      )..where((s) => s.familyId.equals(_familyId))).write(
         SettingsCompanion(
           payoutDay: Value(day),
           updatedAt: Value(now),
@@ -295,7 +300,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
         .into(_db.ledgerEntries)
         .insert(
           LedgerEntriesCompanion.insert(
-            familyId: Seed.familyId,
+            familyId: _familyId,
             childId: childId,
             type: 'gift',
             amountPence: amountPence,
@@ -317,7 +322,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
         .into(_db.ledgerEntries)
         .insert(
           LedgerEntriesCompanion.insert(
-            familyId: Seed.familyId,
+            familyId: _familyId,
             childId: childId,
             type: 'spend',
             amountPence: -amountPence.abs(),
@@ -352,7 +357,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
           .into(_db.ledgerEntries)
           .insert(
             LedgerEntriesCompanion.insert(
-              familyId: Seed.familyId,
+              familyId: _familyId,
               childId: childId,
               type: 'payout',
               amountPence: -amountPence.abs(),
@@ -366,7 +371,7 @@ class PocketMoneyRepositoryImpl implements PocketMoneyRepository {
             .into(_db.ledgerEntries)
             .insert(
               LedgerEntriesCompanion.insert(
-                familyId: Seed.familyId,
+                familyId: _familyId,
                 childId: childId,
                 type: 'savings_move',
                 amountPence: movePence,

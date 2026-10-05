@@ -17,6 +17,7 @@ import 'package:nestling/app/controllers.dart';
 import 'package:nestling/app/di.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
+import 'package:nestling/core/data/current_family.dart';
 import 'package:nestling/core/data/seed.dart';
 
 Future<AppDatabase> setUpTestScope({bool seedDemo = true}) async {
@@ -26,6 +27,10 @@ Future<AppDatabase> setUpTestScope({bool seedDemo = true}) async {
   if (seedDemo) {
     await Seed.demo(db);
     await GetIt.instance<AppSession>().refresh();
+    // The DI singleton resolved before the seed (empty table → fallback);
+    // re-point it at the seeded row so repositories read the same id the
+    // product code uses at startup.
+    await GetIt.instance<CurrentFamily>().refresh();
   }
   return db;
 }

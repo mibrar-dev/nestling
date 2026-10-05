@@ -1,5 +1,6 @@
 import 'package:get_it/get_it.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/current_family.dart';
 import 'package:nestling/features/privacy_consent/data/privacy_consent_repository_impl.dart';
 import 'package:nestling/features/privacy_consent/domain/privacy_consent_repository.dart';
 import 'package:nestling/features/privacy_consent/presentation/bloc/privacy_consent_bloc.dart';
@@ -10,7 +11,10 @@ import 'package:nestling/features/privacy_consent/presentation/bloc/privacy_cons
 void registerPrivacyConsent(GetIt sl) {
   if (!sl.isRegistered<PrivacyConsentRepository>()) {
     sl.registerLazySingleton<PrivacyConsentRepository>(
-      () => PrivacyConsentRepositoryImpl(db: sl<AppDatabase>()),
+      () => PrivacyConsentRepositoryImpl(
+        db: sl<AppDatabase>(),
+        currentFamily: sl<CurrentFamily>(),
+      ),
     );
   }
   if (!sl.isRegistered<PrivacyConsentBloc>()) {

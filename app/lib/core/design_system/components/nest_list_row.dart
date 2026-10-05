@@ -16,6 +16,9 @@ class NestListRow extends StatelessWidget {
     super.key,
     this.subtitle,
     this.leadingAsset,
+    this.leading,
+    this.titleColor,
+    this.titleWeight,
     this.tint = NestTileTint.neutral,
     this.trailing,
     this.onTap,
@@ -26,6 +29,20 @@ class NestListRow extends StatelessWidget {
   final String title;
   final String? subtitle;
   final String? leadingAsset;
+
+  /// Custom leading slot (SHARED_REQUEST.md §6a): P16's Family/Children rows
+  /// carry a 32 px avatar where the shared row otherwise builds a 40 px icon
+  /// tile from [leadingAsset]. A 32 px leading leaves the 56 px min-height
+  /// untouched (32 + 20 padding < 56), so nothing shifts.
+  final Widget? leading;
+
+  /// Title colour override (SHARED_REQUEST.md §6b): `.dangerlink` for the
+  /// delete row. Defaults to ink.
+  final Color? titleColor;
+
+  /// Title weight override: the delete row is w700, everything else w600.
+  final FontWeight? titleWeight;
+
   final NestTileTint tint;
   final Widget? trailing;
   final VoidCallback? onTap;
@@ -56,6 +73,7 @@ class NestListRow extends StatelessWidget {
       NestTileTint.peach => (tokens.peachTint, tokens.aPeach),
     };
     final asset = leadingAsset;
+    final customLeading = leading;
     final caption = subtitle;
     final tail = trailing;
     final content = Material(
@@ -68,7 +86,9 @@ class NestListRow extends StatelessWidget {
             child: Row(
               spacing: NestSpacing.s3,
               children: [
-                if (asset != null)
+                if (customLeading != null)
+                  customLeading
+                else if (asset != null)
                   Container(
                     width: compact ? 36 : 40,
                     height: compact ? 36 : 40,
@@ -92,10 +112,12 @@ class NestListRow extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        style: NestType.bodyStrong(color: tokens.ink).copyWith(
-                          fontWeight: FontWeight.w600,
-                          height: 22 / 16,
-                        ),
+                        style:
+                            NestType.bodyStrong(color: titleColor ?? tokens.ink)
+                                .copyWith(
+                                  fontWeight: titleWeight ?? FontWeight.w600,
+                                  height: 22 / 16,
+                                ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),

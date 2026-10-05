@@ -1,7 +1,7 @@
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/current_family.dart';
 import 'package:nestling/core/data/ids.dart';
-import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/data/stream_combine.dart';
 import 'package:nestling/features/rewards/domain/entities/reward.dart'
     as domain;
@@ -11,9 +11,14 @@ import 'package:nestling/features/rewards/domain/rewards_repository.dart';
 
 /// Drift-backed [RewardsRepository].
 class RewardsRepositoryImpl implements RewardsRepository {
-  new({required this._db});
+  new({required AppDatabase db, CurrentFamily? currentFamily})
+    : _db = db,
+      _currentFamily = currentFamily ?? CurrentFamily.fallback(db);
 
   final AppDatabase _db;
+  final CurrentFamily _currentFamily;
+
+  String get _familyId => _currentFamily.familyId;
 
   @override
   Future<List<domain.Reward>> getItems() => watchItems().first;
@@ -24,16 +29,16 @@ class RewardsRepositoryImpl implements RewardsRepository {
     // — the order rewards were added — never price order. The legacy
     // `watchRewards` (coinPrice ASC) is kept for backward compatibility only.
     return _db
-        .watchRewardsInCreationOrder(Seed.familyId)
+        .watchRewardsInCreationOrder(_familyId)
         .map((rows) => rows.map(_toEntity).toList());
   }
 
   @override
   Stream<List<redemption.RewardRedemption>> watchRequests() {
     return combineLatest3(
-      _db.watchRedemptions(Seed.familyId),
+      _db.watchRedemptions(_familyId),
       _db.select(_db.rewards).watch(),
-      _db.watchChildren(Seed.familyId),
+      _db.watchChildren(_familyId),
     ).map((parts) {
       final redemptions = parts[0] as List<RewardRedemption>;
       final rewards = <String, Reward>{
@@ -66,7 +71,7 @@ class RewardsRepositoryImpl implements RewardsRepository {
         .insert(
           RewardsCompanion.insert(
             id: id,
-            familyId: Seed.familyId,
+            familyId: _familyId,
             title: reward.title,
             icon: Value(reward.icon),
             coinPrice: reward.coinPrice,

@@ -1,5 +1,6 @@
 import 'package:get_it/get_it.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/current_family.dart';
 import 'package:nestling/features/kid_jar/data/kid_jar_repository_impl.dart';
 import 'package:nestling/features/kid_jar/domain/kid_jar_repository.dart';
 import 'package:nestling/features/kid_jar/presentation/bloc/kid_jar_bloc.dart';
@@ -10,7 +11,10 @@ import 'package:nestling/features/kid_jar/presentation/bloc/kid_jar_bloc.dart';
 void registerKidJar(GetIt sl) {
   if (!sl.isRegistered<KidJarRepository>()) {
     sl.registerLazySingleton<KidJarRepository>(
-      () => KidJarRepositoryImpl(db: sl<AppDatabase>()),
+      () => KidJarRepositoryImpl(
+        db: sl<AppDatabase>(),
+        currentFamily: sl<CurrentFamily>(),
+      ),
     );
   }
   if (!sl.isRegistered<KidJarBloc>()) {

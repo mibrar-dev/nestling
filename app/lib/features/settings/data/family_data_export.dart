@@ -12,8 +12,8 @@ import 'dart:io';
 
 import 'package:clock/clock.dart';
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/current_family.dart';
 import 'package:nestling/core/data/family_time.dart';
-import 'package:nestling/core/data/seed.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -22,7 +22,7 @@ import 'package:share_plus/share_plus.dart';
 /// earned and settings — plus the family zone and ISO timestamps.
 Future<Map<String, dynamic>> buildFamilyExport(
   AppDatabase db, [
-  String familyId = Seed.familyId,
+  String familyId = CurrentFamily.fallbackId,
 ]) async {
   String iso(DateTime instant) => instant.toUtc().toIso8601String();
   String? isoOrNull(DateTime? instant) => instant?.toUtc().toIso8601String();
