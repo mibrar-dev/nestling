@@ -16,3 +16,5 @@
 - K09-BUG-9 a large history amount overflows its card at 320 px × 1.3 text.
 - K09-BUG-8 `moveToSavings` writes a savings_move row when the goal does not exist (money leaves the jar to nowhere).
 - K09-BUG-7/7b a load dispatched and the bloc closed in the same tick leaks a subscription.
+
+- K05/K06 growth percentage: K05 floors the Pip growth percentage (K05-BUG-2) but K06 `PipGrowthCard` still uses `.round()`; make both floor so the two screens never disagree.
