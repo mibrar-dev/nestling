@@ -1831,6 +1831,82 @@ void main() {
   );
 
   testWidgets(
+    'K07-BUG-10: a stat number wider than its card is CLIPPED mid-digit, with '
+    'no ellipsis and no shrink — `.k7-stats b` sets no `overflow` in the '
+    'design, so CSS paints the digits over the card edge instead of cutting '
+    'them',
+    (tester) async {
+      await _loadNunito(tester);
+      // 9999 is the value ORCHESTRATOR_NOTES 03:03 names for this row. The
+      // shipped demo seed (Maya 175 / Leo 60) is only 0.77 px over per side at
+      // 320 px / 1.3 — invisible — so the proof uses the value the ruling
+      // itself names, where the cut is 12.47 px per side.
+      await tester.runAsync(() async {
+        await (db.update(db.children)..where((c) => c.id.equals('maya'))).write(
+          const ChildrenCompanion(pipTotalCoins: Value(9999)),
+        );
+        await GetIt.instance<AppSession>().refresh();
+      });
+      await _pumpEvolution(tester);
+      await _resize(tester, 320);
+      tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await _settle(tester);
+
+      final cut = <String>[];
+      for (final cell in _kStatCells) {
+        final rp = tester
+            .renderObjectList<RenderParagraph>(
+              find.descendant(
+                of: find.byKey(Key(cell)),
+                matching: find.byType(RichText),
+              ),
+            )
+            .first;
+        // `softWrap: false` lays the paragraph out on ONE line at infinite
+        // width and then constrains the box, so the intrinsic width is the
+        // honest measure of the glyphs the widget asked to paint.
+        final intrinsic = TextPainter(
+          text: TextSpan(text: rp.text.toPlainText(), style: rp.text.style),
+          textDirection: TextDirection.ltr,
+          textScaler: rp.textScaler,
+          maxLines: 1,
+        )..layout();
+        if (intrinsic.width > rp.size.width + 0.5 &&
+            rp.overflow == TextOverflow.clip) {
+          cut.add(
+            '"${rp.text.toPlainText()}" paints '
+            '${intrinsic.width.toStringAsFixed(2)} px into a '
+            '${rp.size.width.toStringAsFixed(2)} px box — '
+            '${(intrinsic.width - rp.size.width).toStringAsFixed(2)} px of '
+            'digits cut off the right edge',
+          );
+        }
+      }
+      expect(
+        cut,
+        isEmpty,
+        reason:
+            'at 320 px / text scale 1.3 the card is a third of the row '
+            '(86.67 px), so 9999 needs 93.60 px and loses 24.93 px of its '
+            'right-hand digits (and is no longer centred: a `softWrap: false` '
+            'paragraph lays out at infinite width, so the line starts at the '
+            'content box\'s left edge). `K07-evolution.html:29` sets no '
+            '`overflow` on `.k7-stats b`; a browser paints the line over the '
+            'card edge (CSS `visible`), so the design never silently removes '
+            'digits. Reachability: `pip_total_coins` is written ONLY by the '
+            'seed (175/60), so the worst shipped case is 1.53 px off the right '
+            '— this is latent, not a shipping defect. Cheapest fix that '
+            'removes the silent cut: `overflow: TextOverflow.visible` on the '
+            'number, which keeps the mandated single 30 px size. Offenders: '
+            '${cut.join('; ')}',
+      );
+      await disposeApp(tester);
+    },
+    skip: true,
+  );
+
+  testWidgets(
     'control: at the design 390 px and text scale 1.0 the three stat cards '
     'are exactly the design 110x84 at x 20 / 140 / 260, their numbers share '
     'one top edge and one painted size (34.00 px = Nunito 900 30/34), so a '
