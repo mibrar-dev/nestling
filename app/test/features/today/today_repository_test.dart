@@ -303,7 +303,7 @@ void main() {
       final summaries = await impl.watchSummaries().first;
 
       expect(summaries, hasLength(2));
-      // Eldest first: Maya (9) before Leo (6).
+      // Creation order: Maya added before Leo (CHILD ORDER ruling).
       expect(summaries[0].childId, 'maya');
       expect(summaries[1].childId, 'leo');
 
@@ -353,6 +353,34 @@ void main() {
       expect(sam.total, 0);
       expect(sam.coins, 0);
       expect(sam.ageYears, 5);
+    });
+
+    test('summaries keep creation order when a later child is older', () async {
+      final db = await setUpTestScope();
+      // Zara (12) is added after Maya (9) and Leo (6): creation order is
+      // Maya, Leo, Zara (CHILD ORDER ruling) — never age, never alphabetical.
+      await db
+          .into(db.children)
+          .insert(
+            ChildrenCompanion.insert(
+              id: 'zara',
+              familyId: Seed.familyId,
+              nickname: 'Zara',
+              ageYears: const Value(12),
+              createdAt: Value(
+                Seed.utc(9, 19, 8).add(const Duration(minutes: 2)),
+              ),
+            ),
+          );
+      final impl = TodayRepositoryImpl(db: db);
+      final summaries = await impl.watchSummaries().first;
+
+      expect(summaries, hasLength(3));
+      expect(summaries.map((s) => s.childId).toList(), <String>[
+        'maya',
+        'leo',
+        'zara',
+      ]);
     });
 
     test('pending count covers unassigned quests too', () async {

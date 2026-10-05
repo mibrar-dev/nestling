@@ -355,8 +355,17 @@ void main() {
       await pumpAppRoute(tester, '/today-empty');
 
       expect(find.text('Your nest is quiet'), findsOneWidget);
+      // Seed.empty() has no children, so the names sentence is omitted.
       expect(
         find.text('Add your first quest and Pip will start to hatch.'),
+        findsOneWidget,
+      );
+      expect(find.text('Tip for new nests'), findsOneWidget);
+      expect(
+        find.text(
+          'Start with two daily quests each — “Make your bed” and '
+          '“Reading – 20 minutes” work beautifully.',
+        ),
         findsOneWidget,
       );
       expect(find.text('Add a quest'), findsOneWidget);
@@ -842,6 +851,69 @@ void main() {
       await disposeApp(tester);
     });
 
+    testWidgets('dark theme renders the same empty copy', (tester) async {
+      final db = await setUpTestScope(seedDemo: false);
+      await Seed.empty(db);
+      await GetIt.instance<AppSession>().refresh();
+      await pumpAppRoute(tester, '/today-empty', theme: ThemeMode.dark);
+
+      expect(find.text('Your nest is quiet'), findsOneWidget);
+      expect(
+        find.text('Add your first quest and Pip will start to hatch.'),
+        findsOneWidget,
+      );
+      expect(find.text('Tip for new nests'), findsOneWidget);
+      expect(find.text('Add a quest'), findsOneWidget);
+      expect(find.text('Browse ideas'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('320px + 1.3x scrolls the tip without overflow', (
+      tester,
+    ) async {
+      final db = await setUpTestScope(seedDemo: false);
+      await Seed.empty(db);
+      await GetIt.instance<AppSession>().refresh();
+      await pumpAppRoute(tester, '/today-empty');
+
+      tester.view.physicalSize = const Size(320 * 3, 844 * 3);
+      tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await tester.scrollUntilVisible(
+        find.text('Tip for new nests'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump();
+
+      expect(find.text('Tip for new nests'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      final link = tester.getSize(find.text('Browse ideas'));
+      expect(link.height, greaterThanOrEqualTo(22));
+      // The link ROW (InkWell hit area) is exactly the design's 44: a
+      // ConstrainedBox(minHeight: tapParent) around the 22 px glyph.
+      final linkRow = tester.getSize(
+        find
+            .ancestor(
+              of: find.text('Browse ideas'),
+              matching: find.byType(InkWell),
+            )
+            .first,
+      );
+      expect(linkRow.height, closeTo(NestDevice.tapParent, 1));
+      // The underline paints sky, not the ambient ink (P08b-B05).
+      final linkStyle = tester.widget<Text>(find.text('Browse ideas')).style!;
+      expect(linkStyle.decoration, TextDecoration.underline);
+      expect(linkStyle.decorationColor, linkStyle.color);
+
+      await disposeApp(tester);
+    });
+
     testWidgets('non-default Pip fields travel from the DB to the card', (
       tester,
     ) async {
@@ -862,7 +934,7 @@ void main() {
           .widgetList<PipAvatar>(find.byType(PipAvatar))
           .toList();
       expect(pips, hasLength(3));
-      // Eldest first: Maya, Leo, then Ava.
+      // Creation order: Maya, Leo, then Ava.
       final ava = pips.last;
       expect(ava.style, PipStyle.storybook);
       expect(ava.skin, PipSkin.mint);

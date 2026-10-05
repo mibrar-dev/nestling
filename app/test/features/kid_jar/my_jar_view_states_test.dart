@@ -34,6 +34,7 @@ import 'package:nestling/core/design_system/design_system.dart';
 import 'package:nestling/features/kid_jar/domain/entities/jar_entry.dart';
 import 'package:nestling/features/kid_jar/domain/entities/jar_snapshot.dart';
 import 'package:nestling/features/kid_jar/domain/entities/jar_summary.dart';
+import 'package:nestling/features/kid_jar/domain/entities/payout_celebration.dart';
 import 'package:nestling/features/kid_jar/domain/kid_jar_repository.dart';
 import 'package:nestling/features/kid_jar/presentation/widgets/jar_goal_card.dart';
 import 'package:nestling/features/kid_jar/presentation/widgets/jar_history_card.dart';
@@ -115,6 +116,12 @@ class _FakeKidJarRepository implements KidJarRepository {
     required String goalId,
     required int amountPence,
   }) async {}
+
+  /// K10 hook: the empty celebration stream — the K09 jar views this test
+  /// drives never request a payout load.
+  @override
+  Stream<PayoutCelebration?> watchLatestPayout() =>
+      const Stream<PayoutCelebration?>.empty();
 }
 
 /// Swaps the Drift repository for [repo]. `KidJarRepository` is a lazy

@@ -25,3 +25,10 @@
 
 ## K07 Pip evolves (merged 5 Oct, 1 latent minor open)
 - K07-BUG-10 a stat number wider than its card (5+ digits at 320 px × 1.3) is clipped mid-digit; real counts are far below that. If needed, scale the three numbers together with one shared factor.
+
+## Shell
+- Money tab icon: the parent tab bar draws a banknote glyph; every parent design (P08b, P16 …) draws a wallet/card glyph (rounded rect with a stripe). Swap the NestTabBar Money icon to the design glyph (flagged by P16 and P08b UI checks).
+
+## K10 Payout day (merged 5 Oct, 1 latent minor)
+- K10-BUG-4 the fund-card heading clamps a very long goal name at 320 px × 1.3.
+- K10 copy: the saving line uses the goal title ("£5.50 went into your Lego Friends set") where the design says "your Lego fund" — owner may want a shorter phrase.
