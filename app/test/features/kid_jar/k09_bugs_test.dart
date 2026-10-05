@@ -67,6 +67,7 @@ import 'package:nestling/features/kid_jar/data/kid_jar_repository_impl.dart';
 import 'package:nestling/features/kid_jar/domain/entities/jar_entry.dart';
 import 'package:nestling/features/kid_jar/domain/entities/jar_snapshot.dart';
 import 'package:nestling/features/kid_jar/domain/entities/jar_summary.dart';
+import 'package:nestling/features/kid_jar/domain/entities/payout_celebration.dart';
 import 'package:nestling/features/kid_jar/domain/kid_jar_repository.dart';
 import 'package:nestling/features/kid_jar/presentation/bloc/kid_jar_bloc.dart';
 import 'package:nestling/features/kid_jar/presentation/bloc/kid_jar_event.dart';
@@ -157,6 +158,10 @@ class _CountingJarRepository implements KidJarRepository {
     controllers.add(controller);
     return controller.stream;
   }
+
+  @override
+  Stream<PayoutCelebration?> watchLatestPayout() =>
+      const Stream<PayoutCelebration?>.empty();
 
   @override
   Future<List<JarEntry>> getItems() async => const <JarEntry>[];
