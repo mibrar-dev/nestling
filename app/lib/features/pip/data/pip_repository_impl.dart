@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/stream_combine.dart';
+import 'package:nestling/features/pip/domain/entities/pip_evolution.dart';
 import 'package:nestling/features/pip/domain/entities/pip_nest.dart';
 import 'package:nestling/features/pip/domain/entities/pip_profile.dart';
 import 'package:nestling/features/pip/domain/entities/pip_stage.dart';
@@ -70,6 +71,41 @@ class PipRepositoryImpl implements PipRepository {
         return PipNest(
           profile: profile,
           items: (parts[1] as List<dynamic>).cast<PipStage>(),
+        );
+      });
+    });
+  }
+
+  @override
+  Stream<PipEvolution?> watchEvolution() {
+    return _switchMap<AppStateData?, PipEvolution?>(_db.watchAppState(), (
+      state,
+    ) {
+      final id = state?.activeChildId;
+      if (id == null) return Stream<PipEvolution?>.value(null);
+      return combineLatest2(
+        watchProfile(id),
+        _db.watchCompletionsForChild(id),
+      ).map((parts) {
+        final profile = parts[0] as PipProfile?;
+        if (profile == null) return null;
+        // Lifetime milestone (1_plan.md §(b)): every `done_pending` or
+        // `approved` completion counts, all time. `to_do` and `not_yet`
+        // never count, and no clock is read (the PERIODS ruling does not
+        // apply here).
+        final completions = (parts[1] as List<dynamic>).cast<QuestCompletion>();
+        final counted = completions
+            .where((c) => c.status == 'done_pending' || c.status == 'approved')
+            .toList(growable: false);
+        // Two numbers, deliberately (6_bugs.md K07-BUG-3): the sub-line
+        // "Because you helped N times" counts completions, while the "quests
+        // done" milestone card counts DISTINCT quests — a re-completable
+        // daily/weekly quest must not inflate a milestone that is about
+        // quests, and the two sentences must never contradict each other.
+        return PipEvolution(
+          profile: profile,
+          questsDone: counted.length,
+          questsFinished: counted.map((c) => c.questId).toSet().length,
         );
       });
     });

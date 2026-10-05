@@ -210,6 +210,62 @@ void main() {
     });
   });
 
+  group('Seed.newFamily', () {
+    test('Maya then Leo exactly as demo, onboarding complete', () async {
+      await Seed.newFamily(db);
+
+      final mayaQuery = db.select(db.children)
+        ..where((c) => c.id.equals('maya'));
+      final maya = await mayaQuery.getSingle();
+      expect(maya.nickname, 'Maya');
+      expect(maya.ageBand, '7-9');
+      expect(maya.ageYears, 9);
+      expect(maya.avatarColour, 'lilac');
+      expect(maya.pipStyle, 'mochi');
+      expect(maya.pipSkin, 'sunny');
+      expect(maya.pipStage, 3);
+      expect(maya.coins, 120);
+      expect(maya.weeklyBasePence, 300);
+      expect(maya.pinHash, isNotNull);
+
+      final leoQuery = db.select(db.children)..where((c) => c.id.equals('leo'));
+      final leo = await leoQuery.getSingle();
+      expect(leo.nickname, 'Leo');
+      expect(leo.ageBand, '4-6');
+      expect(leo.ageYears, 6);
+      expect(leo.avatarColour, 'peach');
+      expect(leo.pipStyle, 'bolt');
+      expect(leo.pipSkin, 'sky');
+      expect(leo.pipStage, 2);
+      expect(leo.coins, 45);
+      expect(leo.weeklyBasePence, 150);
+
+      // Creation order is the roster order (CHILD ORDER ruling).
+      final roster = await db.watchChildren('fam1').first;
+      expect(roster.map((k) => k.id), ['maya', 'leo']);
+
+      final members = await db.select(db.members).get();
+      expect(members.map((m) => m.id), contains('sarah'));
+
+      final state = await db.select(db.appState).getSingle();
+      expect(state.onboardingComplete, isTrue);
+      expect(state.subscriptionStatus, 'trial');
+      expect(state.appMode, 'parent');
+    });
+
+    test('no quests, ledger, goals, rewards, badges or wardrobe', () async {
+      await Seed.newFamily(db);
+      expect(await db.select(db.quests).get(), isEmpty);
+      expect(await db.select(db.questCompletions).get(), isEmpty);
+      expect(await db.select(db.ledgerEntries).get(), isEmpty);
+      expect(await db.select(db.savingsGoals).get(), isEmpty);
+      expect(await db.select(db.rewards).get(), isEmpty);
+      expect(await db.select(db.badges).get(), isEmpty);
+      expect(await db.select(db.earnedBadges).get(), isEmpty);
+      expect(await db.select(db.pipWardrobe).get(), isEmpty);
+    });
+  });
+
   group('Seed.fresh', () {
     test('nothing: onboarding incomplete', () async {
       await Seed.fresh(db);

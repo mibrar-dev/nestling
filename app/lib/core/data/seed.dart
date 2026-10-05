@@ -1,13 +1,21 @@
 // Nestling — seed data for local-only development and screenshots.
 //
-// Four variants, selected with `--dart-define=SEED=…`:
+// Six variants, selected with `--dart-define=SEED=…`:
 // * `demo` — the exact spec family (DESIGN_SPEC §5). Every number visible in
 //   the designs (P08, P10–P12, P14, K03, K08, K09, K11) is asserted in tests.
-// * `empty` — onboarded parent, no children or quests (P08b).
+// * `empty` — onboarded parent, no children or quests (P08b legacy).
+// * `new_family` — a family that has just finished onboarding (P08b): family
+//   + parent Sarah + both children exactly as in `demo`, default settings,
+//   NO quests/completions/ledger/goals/rewards/badges/wardrobe,
+//   `onboarding_complete = true`, trial subscription starting now.
 // * `fresh` — nothing at all: app_state only, onboarding incomplete.
 // * `onboarding_kids` — P05 UI-check state: family + Sarah + Maya (7-9
 //   lilac) + Leo (4-6 peach) exactly as in `demo`, no quests/ledger/etc.,
 //   onboarding incomplete.
+// * `kid_all_done` — K03b UI-check state: exactly `demo`, plus a
+//   `done_pending` completion for each of Maya's quests that is not yet done
+//   in the current period, so Maya reads "6 of 6 done" / "All done!". Leo
+//   and every table except `quest_completions` are byte-identical to `demo`.
 //
 // Date anchor: the designs say "Sat 4 Oct", but 4 Oct 2026 is a Sunday, so
 // the seed uses Sat 3 Oct 2026 (and Sat 26 Sep 2026 for "last Saturday") and
@@ -17,6 +25,7 @@ import 'package:clock/clock.dart';
 import 'package:drift/drift.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/family_time.dart';
+import 'package:nestling/core/data/london_time.dart' as london;
 import 'package:nestling/core/data/pin_hash.dart';
 
 abstract final class Seed {
@@ -97,6 +106,40 @@ abstract final class Seed {
         );
   }
 
+  /// P08b state: a family that has just finished onboarding — family +
+  /// parent Sarah (same as [empty]) + both children exactly as in [demo]
+  /// (Maya then Leo, creation order) + default settings, and NOTHING else:
+  /// no quests, completions, ledger, goals, rewards, badges or wardrobe.
+  /// `onboarding_complete = true`, trial subscription starting now, parent
+  /// app mode.
+  static Future<void> newFamily(AppDatabase db) async {
+    await db.clearAll();
+    await _family(db);
+    await db
+        .into(db.members)
+        .insert(
+          MembersCompanion.insert(
+            id: 'sarah',
+            familyId: familyId,
+            name: 'Sarah',
+            email: const Value('sarah@example.co.uk'),
+          ),
+        );
+    await _childrenDemo(db);
+    await _settingsDemo(db);
+    await db
+        .into(db.appState)
+        .insert(
+          AppStateCompanion.insert(
+            id: const Value(1),
+            onboardingComplete: const Value(true),
+            subscriptionStatus: const Value('trial'),
+            trialStart: Value(clock.now().toUtc()),
+            appMode: const Value('parent'),
+          ),
+        );
+  }
+
   static Future<void> fresh(AppDatabase db) async {
     await db.clearAll();
     await db
@@ -138,6 +181,61 @@ abstract final class Seed {
             appMode: const Value('parent'),
           ),
         );
+  }
+
+  /// K03b state: Maya's kid home when EVERY one of her quests for the
+  /// current period is done ("6 of 6 done", "All done!").
+  ///
+  /// Runs exactly [demo], then inserts a `done_pending` completion for each
+  /// of Maya's quests with no done/approved completion in its current
+  /// period ([london.countsForCurrentPeriod] — daily → current London day,
+  /// weekly → current London week, the K03-BUG-4 ruling). The row is exactly
+  /// what `KidHomeRepositoryImpl.completeQuest` writes for a kid tapping
+  /// "done": status + coin snapshot + timestamps, NO ledger row and NO coin
+  /// change (credits land only via the approvals `approve` path).
+  ///
+  /// Status follows the K03b HTML per-row labels ("Approved by Mum" →
+  /// approved, "Done"/waiting → pending): the two quests still open in
+  /// `demo` — `q-reading` and `q-tidy`, both labelled "Done" with a coin
+  /// pill — become pending. Nothing is approved here, so no other table
+  /// changes: Maya keeps her 120 coins / £4.20 owed, Leo and every other
+  /// table stay byte-identical to `demo`.
+  static Future<void> kidAllDone(AppDatabase db) async {
+    await demo(db);
+    // Story-anchored morning time (08:30 UTC = 09:30 London on the anchor
+    // day): inside the current London day like the pinned test clock, and
+    // after every `demo` completion, so the new rows are the latest in
+    // their period. Deterministic under test; "today" in production.
+    final now = utc(10, 3, 8, 30);
+    final quests = await (db.select(
+      db.quests,
+    )..where((q) => q.assigneeChildId.equals('maya'))).get();
+    for (final quest in quests) {
+      final rows =
+          await (db.select(db.questCompletions)..where(
+                (c) => c.questId.equals(quest.id) & c.childId.equals('maya'),
+              ))
+              .get();
+      final done = rows.any(
+        (c) =>
+            (c.status == 'done_pending' || c.status == 'approved') &&
+            london.countsForCurrentPeriod(quest.repeatRule, c.createdAt, now),
+      );
+      if (done) continue;
+      await db
+          .into(db.questCompletions)
+          .insert(
+            QuestCompletionsCompanion.insert(
+              questId: quest.id,
+              childId: 'maya',
+              familyId: familyId,
+              status: const Value('done_pending'),
+              coins: Value(quest.coins),
+              createdAt: Value(now),
+              createdAtTz: const Value(defaultFamilyZoneId),
+            ),
+          );
+    }
   }
 
   // -- shared -------------------------------------------------------------
@@ -557,10 +655,11 @@ abstract final class Seed {
     await badge('bed-maker-7', title: 'Bed maker ×7');
     await badge('kind-helper', title: 'Kind helper');
     await badge('bookworm', title: 'Bookworm');
-    await badge('tidy-champion', title: 'Tidy champion');
+    await badge('bins-out', title: 'Bins out');
+    await badge('biscuit-sitter', title: 'Biscuit sitter');
+    await badge('tidy-hero', title: 'Tidy hero');
     await badge('early-bird', title: 'Early bird');
-    await badge('super-saver', title: 'Super saver');
-    await badge('pet-friend', title: 'Pet friend');
+    await badge('plant-waterer', title: 'Plant waterer');
 
     Future<void> earned(String badge, String child, DateTime at) {
       return db

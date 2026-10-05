@@ -561,6 +561,94 @@ void main() {
       expect(tailRect.top, closeTo(bubbleRect.bottom, 0.5));
       expect(tailRect.bottom, closeTo(bubbleRect.bottom + 9, 0.5));
     });
+
+    testWidgets('two-line bubble lines start-align with the text box', (
+      tester,
+    ) async {
+      // `.speech` sets no `text-align`, so the browser start-aligns a
+      // wrapped bubble's lines (K03b, K07). The widget must do the same.
+      const text = 'You did everything today! Pip is so proud.';
+      await pumpNest(tester, const Center(child: NestSpeechBubble(text: text)));
+      expect(tester.takeException(), isNull);
+      expect(tester.widget<Text>(find.text(text)).textAlign, TextAlign.start);
+      final paragraph = tester.renderObject<RenderParagraph>(find.text(text));
+      final boxes = paragraph.getBoxesForSelection(
+        const TextSelection(baseOffset: 0, extentOffset: text.length),
+      );
+      expect(boxes.length, greaterThanOrEqualTo(2), reason: 'must wrap');
+      // The final line is shorter than the full width, so this assertion
+      // would fail under centering (its left would sit right of the edge).
+      expect(boxes.last.right, lessThan(paragraph.size.width - 1));
+      for (final box in boxes) {
+        expect(box.left, closeTo(0, 0.5));
+      }
+    });
+
+    testWidgets('one-line bubble rect is unchanged by start alignment', (
+      tester,
+    ) async {
+      // A one-line bubble hugs its text: the text fills its own box exactly,
+      // so start vs center lays out to the same pixels. The twin below
+      // rebuilds the pre-change (centred) geometry with identical padding,
+      // border, style and strut; its laid-out size must match the bubble.
+      const text = "Let's do some quests!";
+      await pumpNest(tester, const Center(child: NestSpeechBubble(text: text)));
+      expect(tester.takeException(), isNull);
+      final bodySize = tester.getSize(bubbleBody());
+      // Hugs its text: narrower than the 260 max width.
+      expect(bodySize.width, lessThan(260));
+      await pumpNest(
+        tester,
+        Center(
+          child: Builder(
+            builder: (context) {
+              final tokens = context.nest;
+              return Container(
+                key: const ValueKey<String>('speechAlignCenterTwin'),
+                constraints: const BoxConstraints(maxWidth: 260),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: NestSpacing.gap14,
+                  vertical: NestSpacing.s2,
+                ),
+                decoration: BoxDecoration(
+                  color: tokens.surface,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: tokens.ink,
+                    width: context.nestKid.borderWidth,
+                  ),
+                ),
+                child: Text(
+                  text,
+                  style: TextStyle(
+                    fontFamily: 'Nunito',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0,
+                    color: tokens.ink,
+                  ),
+                  strutStyle: const StrutStyle(
+                    fontFamily: 'Nunito',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    height: 22 / 16,
+                    forceStrutHeight: true,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              );
+            },
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      expect(
+        tester.getSize(
+          find.byKey(const ValueKey<String>('speechAlignCenterTwin')),
+        ),
+        bodySize,
+      );
+    });
   });
 
   group('pet glow matches --pet-glow (soft fade, not a solid disc)', () {

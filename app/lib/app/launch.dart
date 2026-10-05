@@ -3,7 +3,7 @@
 // Applies the compile-time `--dart-define` values from [LaunchFlags] to the
 // service locator after [configureDependencies]:
 //
-//   SEED=demo|empty|fresh|onboarding_kids   reseed the database on launch when given
+//   SEED=demo|empty|fresh|onboarding_kids|new_family|kid_all_done   reseed the database on launch when given
 //   INITIAL_ROUTE=/today    returned so the router boots straight there
 //   APP_MODE=parent|kid     controller + persisted app_state
 //   THEME=light|dark|system  theme controller
@@ -30,10 +30,14 @@ Future<String?> applyLaunchFlags() async {
         await Seed.demo(db);
       case 'empty':
         await Seed.empty(db);
+      case 'new_family':
+        await Seed.newFamily(db);
       case 'fresh':
         await Seed.fresh(db);
       case 'onboarding_kids':
         await Seed.onboardingKids(db);
+      case 'kid_all_done':
+        await Seed.kidAllDone(db);
     }
     await session.refresh();
   }

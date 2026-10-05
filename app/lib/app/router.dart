@@ -145,7 +145,7 @@ GoRouter buildAppRouter(
           return ParentShell(navigationShell: shell);
         },
         branches: <StatefulShellBranch>[
-          StatefulShellBranch(routes: <RouteBase>[todayRoute]),
+          StatefulShellBranch(routes: <RouteBase>[todayRoute, todayEmptyRoute]),
           StatefulShellBranch(routes: <RouteBase>[questLibraryRoute]),
           StatefulShellBranch(routes: <RouteBase>[moneyLedgerRoute]),
           StatefulShellBranch(
@@ -161,7 +161,6 @@ GoRouter buildAppRouter(
       payoutRoute,
       ...paywallRoutes,
       ...parentalGateRoutes,
-      todayEmptyRoute,
       questEditorRoute,
       ...approvalsRoutes,
       ...rewardsRoutes,

@@ -438,7 +438,11 @@ class NestSpeechBubble extends StatelessWidget {
               height: 22 / 16,
               forceStrutHeight: true,
             ),
-            textAlign: TextAlign.center,
+            // `.speech` sets no `text-align`, so the browser start-aligns a
+            // wrapped bubble's lines; `TextAlign.start` is Flutter's
+            // equivalent (shared/speech_align). A one-line bubble hugs its
+            // text, so its pixels are identical either way.
+            textAlign: TextAlign.start,
           ),
         ),
         // `.speech::after`: `bottom:-9px` — the tail hangs 9 px below the

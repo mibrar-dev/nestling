@@ -4,7 +4,7 @@
 // harness (`tools/screens/shot.sh`) and the 30 screen agents to open any
 // screen in a deterministic state:
 //
-//   SEED=demo|empty|fresh|onboarding_kids   reseed the database on launch when given
+//   SEED=demo|empty|fresh|onboarding_kids|new_family|kid_all_done   reseed the database on launch when given
 //   INITIAL_ROUTE=/today    jump straight to a route (see route constants)
 //   APP_MODE=parent|kid     app mode at launch
 //   THEME=light|dark|system theme at launch
@@ -31,5 +31,7 @@ abstract final class LaunchFlags {
       value == 'demo' ||
       value == 'empty' ||
       value == 'fresh' ||
+      value == 'new_family' ||
+      value == 'kid_all_done' ||
       value == 'onboarding_kids';
 }

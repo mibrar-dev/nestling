@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:nestling/features/pip/domain/entities/pip_evolution.dart';
 import 'package:nestling/features/pip/domain/entities/pip_nest.dart';
 import 'package:nestling/features/pip/domain/pip_repository.dart';
 import 'package:nestling/features/pip/presentation/bloc/pip_event.dart';
@@ -18,6 +19,8 @@ class PipBloc extends Bloc<PipEvent, PipState> {
     on<PipWardrobeEquipRequested>(_onEquipRequested);
     on<PipNestReceived>(_onNestReceived);
     on<PipNestFailed>(_onNestFailed);
+    on<PipEvolutionReceived>(_onEvolutionReceived);
+    on<PipEvolutionFailed>(_onEvolutionFailed);
   }
 
   final PipRepository _repository;
@@ -31,21 +34,48 @@ class PipBloc extends Bloc<PipEvent, PipState> {
   /// and on close, so a retry after a failure still works.
   StreamSubscription<PipNest?>? _nestSub;
 
+  /// The live evolution subscription (K07), or null when not streaming.
+  /// Same guard pattern as [_nestSub]: `watchEvolution()` never closes, so
+  /// a retry while live is ignored, and the subscription is released on
+  /// error and on close so "Try again" really reloads just this stream.
+  StreamSubscription<PipEvolution?>? _evolutionSub;
+
   Future<void> _onLoadRequested(
     PipLoadRequested event,
     Emitter<PipState> emit,
   ) async {
-    // A load is already live: ignore the reload instead of stacking
-    // another never-ending handler. Never re-add load events to refresh.
-    if (_nestSub != null) return;
-    emit(state.toLoading());
-    _nestSub = _repository.watchNest().listen(
+    // Both loads are already live: ignore the reload instead of stacking
+    // more never-ending handlers. Never re-add load events to refresh.
+    if (_nestSub != null && _evolutionSub != null) return;
+    // The reset names what is ACTUALLY restarting: a null subscription is the
+    // one that died and is being re-listened (`??=` below keeps the healthy
+    // one), and only that stream's arrival flag and error slot may drop. The
+    // surviving stream is still streaming and will not re-announce itself, so
+    // clearing its flag would strand its screen on a spinner that has no retry
+    // button (`4_review.md` finding 1). On a cold open both are null, so both
+    // restart — the common case is unchanged.
+    emit(
+      state.toLoading(
+        restartingNest: _nestSub == null,
+        restartingEvolution: _evolutionSub == null,
+      ),
+    );
+    _nestSub ??= _repository.watchNest().listen(
       (nest) => add(PipNestReceived(nest)),
       onError: (Object error) {
         final sub = _nestSub;
         _nestSub = null;
         unawaited(sub?.cancel());
         add(PipNestFailed(error));
+      },
+    );
+    _evolutionSub ??= _repository.watchEvolution().listen(
+      (evolution) => add(PipEvolutionReceived(evolution)),
+      onError: (Object error) {
+        final sub = _evolutionSub;
+        _evolutionSub = null;
+        unawaited(sub?.cancel());
+        add(PipEvolutionFailed(error));
       },
     );
   }
@@ -55,7 +85,28 @@ class PipBloc extends Bloc<PipEvent, PipState> {
   }
 
   void _onNestFailed(PipNestFailed event, Emitter<PipState> emit) {
-    emit(state.toFailure(event.error));
+    // The NEST stream's failure lands in the NEST stream's slot, never the
+    // evolution one: a mid-session error keeps the loaded screen (K03
+    // review-finding-6 pattern — `nestSettled` is already true when data is on
+    // screen, so `/pip` stays loaded), and only a nest that failed before it
+    // ever answered turns into the failure card. `/pip-evolution` is untouched
+    // by a nest failure. A healthy emission clears the slot via
+    // `copyWithLoaded` / `copyWithEvolution`.
+    emit(state.withNestError(event.error));
+  }
+
+  void _onEvolutionReceived(
+    PipEvolutionReceived event,
+    Emitter<PipState> emit,
+  ) {
+    emit(state.copyWithEvolution(event.evolution));
+  }
+
+  void _onEvolutionFailed(PipEvolutionFailed event, Emitter<PipState> emit) {
+    // [_onNestFailed]'s mirror: only this stream's slot takes the error, so a
+    // nest failure can never blank the celebration screen and a still-pending
+    // evolution stream is not a failure (6_bugs.md K07-BUG-1).
+    emit(state.withEvolutionError(event.error));
   }
 
   Future<void> _onCareRequested(
@@ -152,6 +203,8 @@ class PipBloc extends Bloc<PipEvent, PipState> {
   Future<void> close() async {
     await _nestSub?.cancel();
     _nestSub = null;
+    await _evolutionSub?.cancel();
+    _evolutionSub = null;
     await super.close();
   }
 }
