@@ -72,7 +72,12 @@ class PipNestView extends StatelessWidget {
       },
       child: BlocBuilder<PipBloc, PipState>(
         builder: (context, state) {
-          switch (state.status) {
+          // This screen switches on the NEST stream's own status, never the
+          // feature's shared one: K07 shares this bloc and `PipLoad` subscribes
+          // nest-first, so the sibling stream's arrival (or failure) says
+          // nothing about whether Pip's nest has arrived (`6_bugs.md`
+          // K07-BUG-1, `2a_build_logic.md` CONTRACT CHANGES §1).
+          switch (state.nestStatus) {
             case PipStatus.initial:
             case PipStatus.loading:
               return const _PipLoading();
@@ -80,8 +85,10 @@ class PipNestView extends StatelessWidget {
               return const _PipFailure();
             case PipStatus.loaded:
               final nest = state.nest;
-              if (nest == null) return const _NoActiveChild();
-              return _PipNestBody(nest: nest);
+              // Settled with no nest is the healthy no-child emission, so the
+              // picker hand-off is right — not a failure.
+              if (nest != null) return _PipNestBody(nest: nest);
+              return const _NoActiveChild();
           }
         },
       ),

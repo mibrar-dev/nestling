@@ -11,5 +11,8 @@ while true; do
       if [ $age -gt 900 ] && [ ! -e "$ST/.$name.warned" ]; then echo "$(date +%H:%M:%S) STALL $name idle=${age}s"; touch "$ST/.$name.warned"; fi
       [ $age -le 900 ] && rm -f "$ST/.$name.warned"
     fi; done
+  # Disk guard: flutter test fails with "No space left" when the disk fills (5 Oct 04:10).
+  free=$(df -g / | awk 'NR==2{print $4}')
+  if [ "${free:-99}" -lt 8 ]; then [ -e "$ST/.disk.warned" ] || { echo "$(date +%H:%M:%S) DISK_LOW free=${free}G (rm -rf merged worktrees' app/build)"; touch "$ST/.disk.warned"; }; else rm -f "$ST/.disk.warned"; fi
   sleep 30
 done

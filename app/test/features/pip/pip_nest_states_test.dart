@@ -12,6 +12,12 @@
 //   * `_FlakyNestRepository` — the stream errors until the test flips it, so
 //     the failure card's "Try again" can be exercised for real.
 //
+// Both extend `_NestOnlyRepository`, which answers K07's second stream
+// (`watchEvolution`, opened by the same `PipLoadRequested`) with a healthy
+// no-child emission: these tests are about the NEST stream's loading /
+// failure / no-child states, and a real evolution emission would carry the
+// screen out of them.
+//
 // `Seed.empty()` gives the third state: an onboarded family with no children,
 // so `app_state.active_child_id` is null and the bloc loads a null nest.
 //
@@ -31,6 +37,7 @@ import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart' hide PipStage;
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 import 'package:nestling/features/pip/data/pip_repository_impl.dart';
+import 'package:nestling/features/pip/domain/entities/pip_evolution.dart';
 import 'package:nestling/features/pip/domain/entities/pip_nest.dart';
 import 'package:nestling/features/pip/domain/entities/pip_profile.dart';
 import 'package:nestling/features/pip/domain/entities/pip_stage.dart'
@@ -40,9 +47,30 @@ import 'package:nestling/features/pip/presentation/widgets/pip_wardrobe_tile.dar
 
 import '../../test_scope.dart';
 
+/// Base for the fakes below: K07's second subscription (`watchEvolution`)
+/// answers here as a HEALTHY no-child emission.
+///
+/// `PipLoadRequested` opens both streams, and each load event now tracks its own
+/// arrival (`2a_build_logic.md` CONTRACT CHANGES §1: `nestSettled` /
+/// `evolutionSettled`, with `nestStatus` / `evolutionStatus` as the per-screen
+/// statuses). `/pip` (`K06`) switches on `nestStatus`, so these tests — which
+/// drive the NEST stream only — need the sibling to have answered *once* for
+/// the aggregate `PipState.status` to leave `loading`; a never-answering stream
+/// pinned it at `loading` forever. A null evolution is the healthy no-child
+/// emission, and K06 never reads it.
+abstract class _NestOnlyRepository extends PipRepositoryImpl {
+  _NestOnlyRepository({required super.db});
+
+  @override
+  Stream<PipEvolution?> watchEvolution() =>
+      // A healthy no-child emission: it settles K07's stream without ever
+      // claiming a child, so `nestStatus` alone decides this screen.
+      Stream<PipEvolution?>.value(null);
+}
+
 /// Nest stream the test drives by hand: [gate] emits nothing until the test
 /// adds a nest or flips [fail] to make it error.
-class _ControlledNestRepository extends PipRepositoryImpl {
+class _ControlledNestRepository extends _NestOnlyRepository {
   _ControlledNestRepository({required super.db});
 
   final StreamController<PipNest?> gate = StreamController<PipNest?>();
@@ -57,7 +85,7 @@ class _ControlledNestRepository extends PipRepositoryImpl {
 
 /// The stream errors while [failNest] is true; the failure card's
 /// "Try again" then really reloads.
-class _FlakyNestRepository extends PipRepositoryImpl {
+class _FlakyNestRepository extends _NestOnlyRepository {
   _FlakyNestRepository({required super.db});
 
   bool failNest = true;
@@ -67,6 +95,18 @@ class _FlakyNestRepository extends PipRepositoryImpl {
     if (failNest) return Stream<PipNest?>.error(Exception('nest down'));
     return super.watchNest();
   }
+}
+
+/// The NEST stream errors while K07's stays healthy. K07 shares this bloc, so
+/// the healthy evolution emission reports `loaded` with a nest of null — a
+/// child IS known, and this screen must then show the failure card (with its
+/// retry) instead of sending that child to the picker.
+class _FailingNestOnlyRepository extends PipRepositoryImpl {
+  _FailingNestOnlyRepository({required super.db});
+
+  @override
+  Stream<PipNest?> watchNest() =>
+      Stream<PipNest?>.error(Exception('nest down'));
 }
 
 Future<void> _useRepository(PipRepository repo) async {
@@ -273,6 +313,22 @@ void main() {
       semantics.dispose();
       await disposeApp(tester);
     });
+
+    testWidgets(
+      'the K07 stream healthy and this one failing: the failure card, '
+      'not the who-is-playing card',
+      (tester) async {
+        await _useRepository(_FailingNestOnlyRepository(db: db));
+        await _pumpNest(tester);
+
+        expect(find.text("Who's playing?"), findsNothing);
+        expect(find.text('Oh no! Pip got lost.'), findsOneWidget);
+        expect(hasTap(tester, find.byType(NestKidButton)), isTrue);
+        expect(find.byKey(const Key('k06-title')), findsNothing);
+        expect(tester.takeException(), isNull);
+        await disposeApp(tester);
+      },
+    );
 
     testWidgets(
       'the back tile still leaves to kid home from the failure card',
