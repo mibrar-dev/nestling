@@ -1,110 +1,77 @@
-# 5 UI CHECK — K03b Kid home all done (iteration 1)
+# 5 UI CHECK — K03b Kid home all done (iteration 2)
 
 Seed `kid_all_done` (per ORCHESTRATOR_NOTES, which overrides the brief's
 `demo` arg), route `/kid-home-done`, mode kid, child maya,
 simulator BC440E48-B3A3-43BC-971B-0EF5DB621874, `DISABLE_ANIMATIONS=1`.
-Tool note: `shot.sh` must be given an ABSOLUTE out path — a relative
-`docs/...` out fails at the final `cp` because the script `cd`s into
-`$APP_DIR` before copying (first light run hit this; re-ran absolute).
+Absolute out paths (relative `docs/...` fails at `shot.sh`'s final `cp`).
 
-Process note (not a finding): this branch was behind `main` and lacked
-`SEED=kid_all_done`, so this stage merged `main` into `screen/K03b`
-(`e2472fa`, brings `075aed5` seed + K07 loop artefacts only). No source
-file was hand-edited by this stage; new/changed paths are
-`docs/screens/K03b/ui/*` + this file.
-
-Shots: `docs/screens/K03b/ui/app_light_1.png`, `app_dark_1.png`
-(1170×2532, ÷3 = logical). Compares: `cmp_light_1.png`, `cmp_dark_1.png`.
+Shots: `docs/screens/K03b/ui/app_light_2.png`, `app_dark_2.png`
+(1170×2532, ÷3 = logical). Compares: `cmp_light_2.png`, `cmp_dark_2.png`.
 
 ## Mean diff + bands
 
-Light: mean diff **10.70%**
-band 0 (0–105) 3.69 · 1 (105–211) 3.91 · 2 (211–316) 6.62 ·
-3 (316–422) 9.90 · 4 (422–527) 15.60 · 5 (527–633) 25.73 ·
-6 (633–738) 14.35 · 7 (738–844) 5.80
+Light: mean diff **3.22%** (was 10.70%)
+band 0 (0–105) 3.71 · 1 (105–211) 0.30 · 2 (211–316) 4.57 ·
+3 (316–422) 1.32 · 4 (422–527) 1.55 · 5 (527–633) 3.61 ·
+6 (633–738) 4.91 · 7 (738–844) 5.80
 
-Dark: mean diff **9.10%**
-band 0 3.74 · 1 3.78 · 2 4.36 · 3 6.28 · 4 13.70 · 5 24.27 ·
-6 12.06 · 7 4.58
+Dark: mean diff **2.86%** (was 9.10%)
+band 0 3.71 · 1 0.32 · 2 3.49 · 3 1.30 · 4 1.07 · 5 3.50 ·
+6 4.91 · 7 4.58
 
-Bands 0–1 ≈ status-bar clock (OS-drawn, ignored) + header AA.
-Bands 2–4 ≈ Pip art swap (mandated PipAvatar vs v1 SVG) + confetti
-positions (shared asset, decorative). Band 5 is the real drift (below).
+Residual bands: 0 = status-bar clock (OS-drawn, ignored); 2 = Pip art
+swap (mandated PipAvatar vs v1 SVG) + confetti positions (shared
+decorative asset); 5–6 = card meta text widths (DB-driven, see below);
+7 = bottom bar + home-indicator zone (design's meadow strip vs the
+owner-rule surface-to-edge, app correct).
 
-## Measured y (logical px = full-res ÷ 3), design vs app
+## Measured y (logical px), design vs app — identical in all four profiles
 
-Light (dark identical unless noted):
+Full-width border-edge profiler, light + dark, design + app, every row
+identical: progress top 513.0, progress bottom 527.0–528.7, card1 top
+**545.0**, card1 bottom 630.0–632.7, card1 height **85.0** both, card2
+top **645.0**, card2 bottom 721.0–723.7, bar top border 736.0–738.7.
 
 | Element | Design | App | Δ |
 |---|---|---|---|
+| Screen title "Today's quests" (xcorr strip) | — | dy 0 px | 0 |
 | Header "Hi Maya!" glyph top | 64.3 | 64.3 | 0 |
 | Speech bubble top / bottom | 125.0 / 190.7 | 125.0 / 190.7 | 0 / 0 |
-| Section title "Today's quests" top | 469.3 | 484.7 | **+15.4** |
-| Kid progress bar outer top | 513.0 | 528.7 | **+15.7** |
-| Quest card 1 top border | 545.0 | 560.7 | **+15.7** |
-| Quest card 1 bottom border | 630.0 | 645.3 | **+15.3** |
-| Quest card 1 height | 85.0 | 85.0 | 0 (shapes identical) |
-| Quest card 2 top border | 645.0 | 660.3 | **+15.3** |
-| Card left / right edges | 20.3 / 369.3 | 20.3 / 369.3 | 0 / 0 |
-| "Visit Pip" lilac fill top / bottom | 739.0 / 796.7 | 739.0 / 796.7 | 0 / 0 |
-| Button fill left / right | 23.0 / 366.7 | 23.0 / 366.7 | 0 / 0 |
+| Kid progress outer top | 513.0 | 513.0 | 0 |
+| Quest card 1 top / bottom / height | 545.0 / 630.0 / 85.0 | same | 0 |
+| Quest card 2 top | 645.0 | 645.0 | 0 |
+| Card left / right edges | 20.3 / 369.3 | 20.3 / 369.3 | 0 |
+| "Visit Pip" lilac fill top / bottom / left / right | 739.0 / 796.7 / 23.0 / 366.7 | same | 0 |
+| App card-2 status chip tint height | h32 (spec) | 32.0 | well-formed, not collapsed |
 
-Cross-correlation of identical-shape strips confirms a clean uniform
-shift: title strip best dy = +46 full-res px (+15.3 logical, residual
-2.1), card-1 strip +46 px; bubble strip dy = 0, button strip dy = 0.
-Dark mode measures the same (title 484.7, card1 560.3, button exact).
+Bubble crop: line 2 "is so proud." starts at the left in the app,
+matching `.speech` (shared `speech_align` fix on main). Dark crop:
+title, "6 of 6 done" chip (tint bg, light-green text), glossed
+progress, sky-tint icon tile, waiting chip, green check — all match
+the dark design. Card 2 sits whole above the bar with a gap in both.
 
-## Deviations (design value → app value + fix)
+## Deviations
 
-1. Section + cards shifted down ~15.3 px (MAJOR — breaks ±2 px rule).
-   Title 469.3→484.7, progress 513.0→528.7, card1 545.0→560.7,
-   card2 645.0→660.3; card shapes/heights identical (85.0 both),
-   gutters exact. Because card2's bottom lands ~9 px lower, the app
-   clips card 2 behind the bottom bar while the design shows it whole
-   with a gap. Everything above the pet stage (header, bubble) and the
-   bottom bar itself are pixel-exact, so the pet-stage block lays out
-   ~15 px too tall: bubble bottom 190.7 + 14 gap + stage + 16 gap =
-   title ⇒ app stage ≈ 264, design PNG block ≈ 248.6 (note: the PNG
-   block is NOT the CSS 226 — do not blindly force 226, which would
-   overshoot to ≈446.7). Suspect: `slotHeight: 226` is not honoured
-   as the total — shared `explicitGeometry` (`motion/pip_rive.dart`)
-   returns `nestTop + nestH + _explicitBleed` (= 257.4) and the
-   `stageH = effectiveSlotH` local is dead code, plus a possible 6 px
-   `_padTop`. Shared code may not be touched from this branch: file a
-   SHARED_REQUEST or apply an approved feature-side height correction,
-   then re-shoot until title = 469.3, progress top = 513.0,
-   card1 top = 545.0 (both themes).
-2. Speech-bubble text alignment (MINOR, visible). Design `.speech`
-   sets no `text-align` (browser left): line 2 "is so proud." starts
-   at the left. App `NestSpeechBubble` hard-codes
-   `textAlign: center`. Single-line K03/K05 bubbles hide this; the
-   2-line K03b bubble shows it. Needs `textAlign: start` for this
-   bubble — shared-param SHARED_REQUEST or approved approach; do not
-   fork the bubble component.
+None. Iteration-1 findings are fixed: D1 stage height (title 469.3→
+pixel-match at every border row; orchestrator targets 469.3/513.0/
+545.0 met — card1 top measures exactly 545.0), D2 bubble alignment
+(left-aligned, verified in crop). ROW ORDER now matches the design
+(dishwasher, reading). ROW META follows the DB per the ruling:
+`kid_all_done` leaves dishwasher/reading `done_pending` → "Waiting
+for Mum" chips where the design PNG shows "Mum said yes!"/"+10" —
+DB-driven content, excluded from the verdict (shapes: card/chip
+geometry identical, chip h32 verified).
 
 ## Explicitly NOT deviations (rules override the PNGs)
 
-- Status-bar clock 9:41 vs 04:37 — OS-drawn; `NestStatusBar` only
-  reserves height. Ignored.
-- Pip art (round Mochi avatar vs tall v1 fledgling SVG) — PIP rule:
-  the child's OWN `PipAvatar` is mandatory; v1 SVGs never in product.
-- Confetti piece positions — shared `confetti.svg` asset, decorative.
-- Card meta/order ("Waiting for Mum" chips, 2nd card "Hoover the
-  stairs" vs design "Reading – 20 minutes" with +10/+15 pills) —
-  DB-driven per DATA OVER MOCKS and the known 1_plan §d discrepancy;
-  `kid_all_done` marks everything `done_pending`. Excluded.
-- Bottom edge: design shows a meadow-green strip under the bar; app
-  runs bar surface to the edge (light `#FFFFFF`, dark `#1F1C2E`
-  sampled at y 836/841) — BOTTOM EDGE owner rule; app is correct.
-- Copy is ASCII-exact vs the HTML: "Hi Maya!", "All done!",
-  "You did everything today! Pip is so proud.", "Today's quests"
-  (straight apostrophe), "6 of 6 done", "Visit Pip", "Empty the
-  dishwasher". Coin pill 120, lilac bar, leaf-ink sub-line, full
-  progress fill all match.
+- Status-bar clock — OS-drawn, ignored.
+- Pip art (Mochi PipAvatar vs v1 SVG) — PIP rule, mandatory.
+- Confetti piece positions — shared decorative asset.
+- Card meta text ("Waiting for Mum" vs "Mum said yes!"/"+10") —
+  DB status + approval flag per ROW META ruling; excluded.
+- Bottom edge surface-to-edge (no meadow strip) — owner rule; app
+  correct in both themes.
+- Copy ASCII-exact vs HTML ("Hi Maya!", "All done!", bubble,
+  "Today's quests", "6 of 6 done", "Visit Pip"); coin pill 120.
 
-## Verdict
-
-Two real deviations (a +15.3 px block shift and a text-alignment
-flip) exceed the ±2 px design-match rule.
-
-VERDICT: FAIL
+VERDICT: PASS

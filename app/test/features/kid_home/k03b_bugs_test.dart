@@ -42,7 +42,9 @@ import 'package:nestling/core/data/london_time.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/design_system/design_system.dart' hide PipMood;
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
+import 'package:nestling/features/approvals/domain/approvals_repository.dart';
 import 'package:nestling/features/kid_home/data/kid_home_repository_impl.dart';
+import 'package:nestling/features/kid_home/data/models/kid_quest_model.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_home_data.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_quest.dart';
 import 'package:nestling/features/kid_home/domain/kid_home_repository.dart';
@@ -151,7 +153,7 @@ void main() {
   });
 
   // =========================================================================
-  // PARKED GEOMETRY PROOFS (open bugs, see docs/screens/K03b/6_bugs.md)
+  // Geometry proofs (design rows, real fonts; iteration-2 fixes verified)
   // =========================================================================
 
   testWidgets('K03B-BUG-1: the bubble→pet gap is the design 30 px, not 14', (
@@ -170,7 +172,7 @@ void main() {
           'single 14 px SizedBox, so the hero sits 16 px high',
     );
     await disposeApp(tester);
-  }, skip: true);
+  });
 
   testWidgets('K03B-BUG-1: every row below the hero is on the design row', (
     tester,
@@ -186,12 +188,28 @@ void main() {
     expect(progress.top, closeTo(_dProgressTop, 2), reason: 'progress top');
     expect(card1.top, closeTo(_dCard1Top, 2), reason: 'card 1 top');
     await disposeApp(tester);
-  }, skip: true);
+  });
 
-  testWidgets('K03B-BUG-2: the slotHeight pet block is the design 226 px', (
-    tester,
-  ) async {
-    // Unit form first: `slotHeight` is documented as the block height.
+  testWidgets(
+    'the all-done pet block is the design 226 px (feature-side fix)',
+    (tester) async {
+      // K03B-BUG-2's screen half is fixed feature-side (ORCHESTRATOR_NOTES
+      // 04:52 D1): `pipBottom: 92` takes the `explicitGeometry` early return
+      // that honours `slotHeight`.
+      await _seedAllDone(tester);
+      await _pump(tester);
+      expect(
+        tester.getSize(find.byType(PipNestFallback)).height,
+        closeTo(_dPetBlockHeight, 0.5),
+      );
+      await disposeApp(tester);
+    },
+  );
+
+  test('K03B-BUG-2 (latent, shared): explicitGeometry adds _explicitBleed to slotHeight', () {
+    // Shared-unit contract only: no screen uses this form now (K03b and
+    // K06 pass `pipBottom`, K03 passes no `slotHeight`). Parked until the
+    // orchestrator decides whether the unit contract changes.
     final g = PipNestFallback.explicitGeometry(
       nestH: 188,
       pipH: 152,
@@ -199,14 +217,6 @@ void main() {
       slotHeight: _dPetBlockHeight,
     );
     expect(g.stageH, _dPetBlockHeight);
-    // Widget form: the composed stage must be the same block.
-    await _seedAllDone(tester);
-    await _pump(tester);
-    expect(
-      tester.getSize(find.byType(PipNestFallback)).height,
-      closeTo(_dPetBlockHeight, 0.5),
-    );
-    await disposeApp(tester);
   }, skip: true);
 
   testWidgets(
@@ -244,7 +254,6 @@ void main() {
       expect(pip.center.dy, closeTo(_dPipCenterY, 2), reason: 'Pip centre');
       await disposeApp(tester);
     },
-    skip: true,
   );
 
   // =========================================================================
@@ -265,11 +274,19 @@ void main() {
             .write(const QuestCompletionsCompanion(status: Value('approved')));
       });
       await _pump(tester);
-      // ORCHESTRATOR_NOTES 04:52 ROW META / K03b HTML l.85.
-      expect(find.text('Mum said yes!'), findsOneWidget);
+      // ORCHESTRATOR_NOTES 04:52 ROW META / K03b HTML l.85. Demo's q-bins
+      // and q-hoover are already approved, so the flipped q-reading card is
+      // asserted specifically (three 'Mum said yes!' rows exist in total).
+      final readingCard = find.ancestor(
+        of: find.text('Reading \u2013 20 minutes'),
+        matching: find.byType(NestKidQuestCard),
+      );
+      expect(
+        find.descendant(of: readingCard, matching: find.text('Mum said yes!')),
+        findsOneWidget,
+      );
       await disposeApp(tester);
     },
-    skip: true,
   );
 
   testWidgets(
@@ -292,7 +309,6 @@ void main() {
       expect(find.text('+15'), findsOneWidget);
       await disposeApp(tester);
     },
-    skip: true,
   );
 
   testWidgets(
@@ -316,8 +332,133 @@ void main() {
       ]);
       await disposeApp(tester);
     },
+  );
+
+  // =========================================================================
+  // Iteration-2 probes (the ROW META / geometry fixes)
+  // =========================================================================
+
+  testWidgets(
+    'K03B-BUG-6: a no-approval quest must not land in the approvals queue',
+    (tester) async {
+      await _seedAllDone(tester);
+      await tester.runAsync(() async {
+        final db = GetIt.instance<AppDatabase>();
+        await (db.delete(db.questCompletions)..where(
+              (c) => c.questId.equals('q-tidy') & c.childId.equals('maya'),
+            ))
+            .go();
+        await (db.update(db.quests)..where((q) => q.id.equals('q-tidy'))).write(
+          const QuestsCompanion(needsApproval: Value(false)),
+        );
+        await GetIt.instance<KidHomeRepository>().completeQuest(
+          'maya',
+          'q-tidy',
+        );
+      });
+      final approvals = await tester.runAsync(
+        () => GetIt.instance<ApprovalsRepository>().getItems(),
+      );
+      expect(
+        approvals!.where((a) => a.questId == 'q-tidy'),
+        isEmpty,
+        reason:
+            'ROW META: a quest that needs no approval must not ask for one; '
+            'the kid row already shows its +N chip',
+      );
+    },
     skip: true,
   );
+
+  testWidgets('the confetti plate is the design 320×250 at stage top + 4', (
+    tester,
+  ) async {
+    await _seedAllDone(tester);
+    await _pump(tester);
+    final bubble = tester.getRect(find.byType(NestSpeechBubble));
+    final fitted = find
+        .ancestor(of: find.byType(SvgPicture), matching: find.byType(FittedBox))
+        .first;
+    final plate = tester.getRect(fitted);
+    final art = tester.getRect(
+      find.descendant(of: fitted, matching: find.byType(SvgPicture)).first,
+    );
+    expect(
+      plate.top,
+      closeTo(bubble.bottom + 20, 2),
+      reason: 'bubble + 16 (stage) + 4 (confetti top)',
+    );
+    expect(art.width, closeTo(320, 0.5));
+    expect(art.height, closeTo(250, 0.5));
+    await disposeApp(tester);
+  });
+
+  testWidgets('the done-row meta matrix matches ROW META', (tester) async {
+    await _seedAllDone(tester);
+    await tester.runAsync(() async {
+      final db = GetIt.instance<AppDatabase>();
+      await (db.update(db.questCompletions)..where(
+            (c) =>
+                c.questId.equals('q-reading') & c.status.equals('done_pending'),
+          ))
+          .write(const QuestCompletionsCompanion(status: Value('approved')));
+      await (db.update(db.quests)..where((q) => q.id.equals('q-tidy'))).write(
+        const QuestsCompanion(needsApproval: Value(false)),
+      );
+    });
+    await _pump(tester);
+    // approved + needs approval: q-reading (flipped), q-bins, q-hoover.
+    expect(find.text('Mum said yes!'), findsNWidgets(3));
+    // waiting + needs approval: q-dishwasher, q-table.
+    expect(find.text('Waiting for Mum'), findsNWidgets(2));
+    // done + no approval: the +15 coin chip, no status chip.
+    final tidyCard = find.ancestor(
+      of: find.text('Tidy your bedroom'),
+      matching: find.byType(NestKidQuestCard),
+    );
+    expect(
+      find.descendant(of: tidyCard, matching: find.text('+15')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: tidyCard, matching: find.text('Waiting for Mum')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: tidyCard, matching: find.text('Mum said yes!')),
+      findsNothing,
+    );
+    await disposeApp(tester);
+  });
+
+  test('KidQuestModel round-trips needsApproval with a true default', () {
+    const base = KidQuestModel(
+      id: 'q:maya',
+      title: 'T',
+      detail: '',
+      questId: 'q',
+      icon: 'book',
+      coins: 10,
+      status: 'to_do',
+    );
+    expect(base.needsApproval, isTrue);
+    expect(KidQuestModel.fromJson(base.toJson()).needsApproval, isTrue);
+    const no = KidQuestModel(
+      id: 'q:maya',
+      title: 'T',
+      detail: '',
+      questId: 'q',
+      icon: 'book',
+      coins: 10,
+      status: 'to_do',
+      needsApproval: false,
+    );
+    expect(KidQuestModel.fromJson(no.toJson()).needsApproval, isFalse);
+    // A legacy payload without the key reads as true.
+    final legacy = Map<String, dynamic>.from(base.toJson())
+      ..remove('needsApproval');
+    expect(KidQuestModel.fromJson(legacy).needsApproval, isTrue);
+  });
 
   // =========================================================================
   // CLEAN PROBES

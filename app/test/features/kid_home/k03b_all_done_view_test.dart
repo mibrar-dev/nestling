@@ -124,9 +124,41 @@ List<KidQuest> _allDoneItems() => const <KidQuest>[
   ),
 ];
 
+/// A done quest that needs no approval (ROW META third arm, orchestrator
+/// 04:52): `q-tidy` is approved but shows its `+N` coin chip instead of a
+/// status chip. All six still count as done, so the branch still celebrates.
+List<KidQuest> _mixedApprovalItems() {
+  final items = _allDoneItems()
+      .map(
+        (q) => KidQuest(
+          id: q.id,
+          title: q.title,
+          detail: q.detail,
+          questId: q.questId,
+          icon: q.icon,
+          coins: q.coins,
+          status: q.status,
+        ),
+      )
+      .toList();
+  // Index 3 is `q-tidy` (done_pending in `_allDoneItems`).
+  items[3] = const KidQuest(
+    id: 'q-tidy:maya',
+    title: 'Tidy your bedroom',
+    detail: 'Done · +15',
+    questId: 'q-tidy',
+    icon: 'bed',
+    coins: 15,
+    status: 'approved',
+    needsApproval: false,
+  );
+  return items;
+}
+
 /// Fake repository for the two channels a healthy database cannot produce.
 class _FakeRepo extends KidHomeRepository {
-  _FakeRepo({this.hang = false, this.failLoad = false});
+  _FakeRepo({this.hang = false, this.failLoad = false, List<KidQuest>? items})
+    : _items = items ?? _allDoneItems();
 
   /// Watch streams never emit (the loading channel).
   final bool hang;
@@ -134,20 +166,67 @@ class _FakeRepo extends KidHomeRepository {
   /// Watch streams error on listen (the load-failure channel).
   final bool failLoad;
 
+  /// The quests the streams yield (defaults to the all-done shape).
+  final List<KidQuest> _items;
+
   @override
-  Future<List<KidQuest>> getItems() async => _allDoneItems();
+  Future<List<KidQuest>> getItems() async => _items;
 
   @override
   Stream<List<KidQuest>> watchItems() async* {
     if (failLoad) throw Exception('items down');
     if (hang) return;
-    yield _allDoneItems();
+    yield _items;
   }
 
   @override
   Stream<KidChild?> watchActiveChild() async* {
     if (failLoad) throw Exception('child down');
     if (hang) return;
+    yield _maya;
+  }
+
+  @override
+  Stream<List<KidChild>> watchProfiles() =>
+      Stream<List<KidChild>>.value(const <KidChild>[_maya]);
+
+  @override
+  List<String> stepsFor(String questId) => const <String>['Step one'];
+
+  @override
+  Future<bool> verifyPin(String childId, String pin) async => true;
+
+  @override
+  Future<void> setActiveChild(String childId) async {}
+
+  @override
+  Future<void> completeQuest(String childId, String questId) async {}
+}
+
+/// Fails the FIRST load on both streams, then serves the all-done shape, so
+/// the failure card's "Try again" can prove it really reloads (the bloc
+/// releases a failed subscription, so the retry re-listens and recovers).
+class _FlappingRepo extends KidHomeRepository {
+  var _failedOnce = false;
+
+  bool _failFirst() {
+    if (_failedOnce) return false;
+    _failedOnce = true;
+    return true;
+  }
+
+  @override
+  Future<List<KidQuest>> getItems() async => _allDoneItems();
+
+  @override
+  Stream<List<KidQuest>> watchItems() async* {
+    if (_failFirst()) throw Exception('items down');
+    yield _allDoneItems();
+  }
+
+  @override
+  Stream<KidChild?> watchActiveChild() async* {
+    if (_failFirst()) throw Exception('child down');
     yield _maya;
   }
 
@@ -1493,6 +1572,134 @@ void main() {
       final painted = tester.getRect(_paintedCard(0));
       expect(painted.height, greaterThanOrEqualTo(NestSpacing.s8));
       semantics.dispose();
+      await disposeApp(tester);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Iteration 2 pins — ROW META third arm, D1 hero structure, retry, Choose
+  // -------------------------------------------------------------------------
+
+  group('K03b iteration 2 pins', () {
+    testWidgets('a done quest needing no approval shows its +N coin chip', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await _useRepo(_FakeRepo(items: _mixedApprovalItems()));
+      await _pump(tester, route: '/kid-home-done');
+      // All six still count (the flag never changes the done count), so the
+      // branch still celebrates — only the row meta changes.
+      expect(find.text('All done!'), findsOneWidget);
+      expect(find.text('6 of 6 done'), findsOneWidget);
+      // ROW META (orchestrator 04:52): approved + no approval → the `+N`
+      // coin chip and no status chip on that card.
+      expect(find.text('+15'), findsOneWidget);
+      expect(find.text('Mum said yes!'), findsNWidgets(2));
+      expect(find.text('Waiting for Mum'), findsNWidgets(3));
+      expect(
+        tester.getSemantics(find.text('Tidy your bedroom')).label,
+        startsWith('Tidy your bedroom, Done'),
+      );
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('the hero keeps the design 16 + 14 gaps (D1 structure)', (
+      tester,
+    ) async {
+      await _useRepo(_FakeRepo());
+      await _pump(tester, route: '/kid-home-done');
+      final bubble = tester.getRect(find.byType(NestSpeechBubble));
+      // The stage stack starts exactly `.scroll > * + *` (16) below the
+      // bubble, and the pet box exactly `.k3-pet` margin (14) below that —
+      // the design's 16 + 14 = 30 (K03B-BUG-1).
+      final heroStack = find
+          .ancestor(of: find.byType(NestPetStage), matching: find.byType(Stack))
+          .first;
+      expect(
+        tester.widget<Stack>(heroStack).clipBehavior,
+        Clip.none,
+        reason: 'the confetti layer is position:absolute, never in layout',
+      );
+      final stackRect = tester.getRect(heroStack);
+      expect(stackRect.top - bubble.bottom, closeTo(16, 0.5));
+      final pet = tester.getRect(find.byType(NestPetStage));
+      expect(pet.top - bubble.bottom, closeTo(30, 0.5));
+      // The pet's own 14 px sits INSIDE the stack as padding, so the
+      // confetti's `top: 4` measures from the design's stage origin.
+      final petPad = find.ancestor(
+        of: find.byType(NestPetStage),
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Padding &&
+              widget.padding == const EdgeInsets.only(top: NestSpacing.gap14),
+        ),
+      );
+      expect(petPad, findsOneWidget);
+      final confetti = find.byWidgetPredicate(
+        (widget) =>
+            widget is SvgPicture &&
+            widget.bytesLoader is SvgAssetLoader &&
+            (widget.bytesLoader as SvgAssetLoader).assetName ==
+                nest_assets.NestlingIllustrations.confetti,
+      );
+      expect(confetti, findsOneWidget);
+      expect(
+        tester.getRect(confetti).top - stackRect.top,
+        closeTo(4, 0.5),
+        reason: 'the plate sits 4 px below the stage origin, as in the CSS',
+      );
+      await disposeApp(tester);
+    });
+
+    testWidgets('the celebration nest is the design 226x226 slot (BUG-3)', (
+      tester,
+    ) async {
+      await _useRepo(_FakeRepo());
+      await _pump(tester, route: '/kid-home-done');
+      final stage = tester.widget<NestPetStage>(find.byType(NestPetStage));
+      expect(stage.nestWidth, 226);
+      expect(stage.nestHeight, 226);
+      expect(stage.fixedPipHeight, 152);
+      expect(stage.slotHeight, 226);
+      // The feature-side D1 correction: `pipBottom` takes the shared
+      // `explicitGeometry` early return that honours `slotHeight`, so the
+      // block stays 226 without touching shared code.
+      expect(stage.pipBottom, 92);
+      final avatar = tester.widget<PipAvatar>(find.byType(PipAvatar));
+      expect(avatar.mood, PipMood.happy, reason: 'the celebration mood');
+      await disposeApp(tester);
+    });
+
+    testWidgets('Try again reloads into the celebration after a failure', (
+      tester,
+    ) async {
+      await _useRepo(_FlappingRepo());
+      await _pump(tester, route: '/kid-home-done');
+      expect(find.text('Oh no! Pip got lost.'), findsOneWidget);
+      expect(find.text('All done!'), findsNothing);
+      await tester.tap(find.text('Try again'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.text('All done!'), findsOneWidget);
+      expect(find.text('6 of 6 done'), findsOneWidget);
+      expect(find.text('Visit Pip'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    });
+
+    testWidgets('Choose opens the K01 picker from the no-child channel', (
+      tester,
+    ) async {
+      await tester.runAsync(() async {
+        await Seed.empty(GetIt.instance<AppDatabase>());
+        await GetIt.instance<AppSession>().refresh();
+      });
+      await _pump(tester, route: '/kid-home-done');
+      expect(find.text("Who's playing?"), findsOneWidget);
+      await tester.tap(find.text('Choose'));
+      await _settleRoute(tester);
+      expect(pushedPath(tester), '/who-is-playing');
       await disposeApp(tester);
     });
   });

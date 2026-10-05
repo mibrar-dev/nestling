@@ -69,6 +69,7 @@ KidQuest _withStatus(KidQuest quest, String status) => KidQuest(
   icon: quest.icon,
   coins: quest.coins,
   status: status,
+  needsApproval: quest.needsApproval,
 );
 
 /// [count] quests, the first [doneCount] of them already finished.
@@ -260,6 +261,60 @@ void main() {
     test('not_yet never counts as done', () {
       final state = KidHomeState(
         items: <KidQuest>[_quest('a', 'approved'), _quest('b', 'not_yet')],
+      );
+      expect(state.doneCount, 1);
+      expect(state.allDone, isFalse);
+    });
+
+    test('needsApproval never changes the done count or the branch', () {
+      // ROW META (orchestrator 04:52): the flag shapes the row copy only.
+      // Done-ness is the status alone, so a no-approval quest still counts.
+      final state = KidHomeState(
+        items: <KidQuest>[
+          _quest('a', 'approved'),
+          const KidQuest(
+            id: 'b:maya',
+            title: 'Quest b',
+            detail: '',
+            questId: 'b',
+            icon: 'book',
+            coins: 15,
+            status: 'approved',
+            needsApproval: false,
+          ),
+          const KidQuest(
+            id: 'c:maya',
+            title: 'Quest c',
+            detail: '',
+            questId: 'c',
+            icon: 'book',
+            coins: 10,
+            status: 'done_pending',
+            needsApproval: false,
+          ),
+        ],
+      );
+      expect(state.doneCount, 3);
+      expect(state.totalCount, 3);
+      expect(state.allDone, isTrue);
+      expect(state.fraction, 1);
+    });
+
+    test('a to-do quest breaks all-done even when it needs no approval', () {
+      final state = KidHomeState(
+        items: <KidQuest>[
+          _quest('a', 'approved'),
+          const KidQuest(
+            id: 'b:maya',
+            title: 'Quest b',
+            detail: '',
+            questId: 'b',
+            icon: 'book',
+            coins: 10,
+            status: 'to_do',
+            needsApproval: false,
+          ),
+        ],
       );
       expect(state.doneCount, 1);
       expect(state.allDone, isFalse);
