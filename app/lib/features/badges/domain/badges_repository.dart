@@ -11,9 +11,11 @@ abstract class BadgesRepository {
   Future<List<domain.Badge>> getItems();
   Stream<List<domain.Badge>> watchItems();
 
-  /// The active child's badges: `app_state.activeChildId` (demo seed:
-  /// `maya`) fans out to that child's shelf plus their happy-week count,
-  /// so the grid and the week card always arrive atomically.
+  /// The resolved child's badges: the persisted `activeChildId` when it
+  /// names a real child, else the first child in creation order (CHILD
+  /// ORDER ruling), else the empty shelf (no children — the view shows
+  /// the childless empty state). Never a hard-coded child id (K11-BUG-2).
+  /// Shelf plus happy-week count arrive atomically.
   Stream<BadgesData> watchActiveBadges();
 
   /// Badge shelf for one child: every badge with its earned state.

@@ -1,3 +1,73 @@
+# K11 · Badges — stage 2b build, UI chunk (iteration 2)
+
+> Iteration 2 addendum (this section only; iteration 1 notes follow unchanged).
+>
+> Scope: `app/lib/features/badges/presentation/views/**` +
+> `presentation/widgets/**` and the view/widget tests only. No domain / data /
+> bloc file touched (the logic builder owns those in parallel in this worktree;
+> re-read `2a_build_logic.md` — no contract changes, so the view still codes
+> against `1_plan.md` as written). No `docs/screens/K11/FIXES_1.md` exists for
+> this screen, so there are no FIXES items; iteration-2 UI work is driven by the
+> mandatory `ORCHESTRATOR_NOTES.md` items plus the seed landing on main.
+>
+> ## Changes
+>
+> - **K11-BUG-1 fixed (UI chunk, orchestrator-mandatory):**
+>   `happy_week_card.dart` now clamps once —
+>   `final days = happyDays.clamp(0, 7)` at the top of `build` (dots use
+>   `i < days`, why-line uses `HappyWeekCopy.why(days)`) — and `HappyWeekCopy.why`
+>   clamps its own input too (review finding 4 pattern: clamp at both `build`
+>   and `why`). A stored 8 fills seven dots and reads “7 happy days…”, never an
+>   impossible “8 happy days”; a negative reads the zero line with no dots.
+> - **`TODO(K11)` removed (`badges_view.dart`):** the orchestrator's
+>   `shared/k11_badges_seed` has landed — the seed now carries the design's nine
+>   badges in order with Maya's earned set unchanged — so the note requires its
+>   removal. The grid still renders whatever the DB returns in DB order.
+> - **Badge art (orchestrator-mandatory):** unchanged code — `_artFor` already
+>   maps all nine design ids to their own `badge*` medal in both earned and
+>   locked states, light and dark, with the rosette fallback only for unknown
+>   ids. No edit needed.
+> - **K11-BUG-2 (`?? 'maya'` fallback): NOT touched** — it lives in
+>   `data/badges_repository_impl.dart`, owned by the parallel logic builder.
+> - **Tests (my files only):** `badges_widget_geometry_test.dart` 8→9 cells at
+>   320/1.3 plus stale-comment refresh (full third row; the short-row branch now
+>   pins the contract for a future odd shelf); `badges_view_test.dart` header
+>   comment refreshed + new `K11 happy-day clamp (K11-BUG-1 regression)` group
+>   with 3 tests (stored-8 widget probe mirroring the skipped `k11_bugs_test`,
+>   negative-count probe, `HappyWeekCopy.why` clamp unit). `k11_bugs_test.dart`
+>   itself is outside this chunk's files (name contains neither `view` nor
+>   `widget`) and was left skipped for the bugs stage to un-skip; the new
+>   regression group proves the fix now.
+>
+> ## Verification (iteration 2)
+>
+> ```
+> flutter analyze lib/features/badges test/features/badges → 1 pre-existing
+>   warning in the logic builder's in-progress badges_repository_test.dart
+>   (unused `clearActiveChild`); zero issues in this chunk's files.
+> flutter test --timeout 120s test/features/badges/badges_view_test.dart
+>   test/features/badges/badges_widget_geometry_test.dart → 50/50 passed
+>   (32 view incl. 3 new clamp tests + 18 geometry)
+> dart format (presentation + own tests) → 0 changed
+> grep google_fonts|GoogleFonts|DateTime.now (own scope) → comment mention only
+> ```
+>
+> No simulator booted (stage 5 owns it). No whole-app suite run. With nine rows
+> the geometry still lands exactly (R1 193 / R2 355 / R3 517, week 683 — pinned
+> by the passing geometry tests), so the UI check should now match the design
+> tile-for-tile outside DB chrome.
+>
+> ## LEFT FOR NEXT ITERATION
+>
+> - Logic-layer tests (`badges_repository_test.dart`, `badges_bloc_test.dart`)
+>   still hard-code the 8 legacy rows (`tidy-champion`/`super-saver`/`pet-friend`)
+>   and belong to the parallel logic builder — verify they go green with the
+>   nine-badge seed before the merge.
+> - Un-skip K11-BUG-1 in `k11_bugs_test.dart` (bugs stage) now that the widget
+>   clamp lands; K11-BUG-2 un-skip waits on the logic fix.
+>
+> ---
+
 # K11 · Badges — stage 2b build, UI chunk (iteration 1)
 
 Scope: `app/lib/features/badges/presentation/views/**` +

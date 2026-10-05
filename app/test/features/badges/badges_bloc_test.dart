@@ -269,10 +269,12 @@ void main() {
       await expectLater(
         bloc.stream,
         emitsInOrder([
-          // The retry spinner carries the load error through (K08 precedent:
-          // only a healthy emission clears it), so match on status only.
+          // The retry spinner starts clean (review finding 4: a stale load
+          // error never rides into loading), so match on status only.
           predicate<BadgesState>(
-            (state) => state.status == BadgesStatus.loading,
+            (state) =>
+                state.status == BadgesStatus.loading &&
+                state.errorMessage == null,
           ),
           predicate<BadgesState>(
             (state) =>
@@ -436,6 +438,23 @@ void main() {
       expect(recovered.errorMessage, isNull);
       expect(recovered.childId, 'maya');
       expect(recovered.happyDays, 4);
+    });
+
+    test('loading emission clears a stale load error', () {
+      // Review finding 4: a retry starts clean — the spinner never carries
+      // the previous failure's message, while the last known shelf rides
+      // through underneath.
+      const failed = BadgesState(
+        status: BadgesStatus.failure,
+        childId: 'maya',
+        happyDays: 4,
+        errorMessage: 'stream is down',
+      );
+      final loading = failed.copyWithLoading();
+      expect(loading.status, BadgesStatus.loading);
+      expect(loading.errorMessage, isNull);
+      expect(loading.childId, 'maya');
+      expect(loading.happyDays, 4);
     });
 
     test('a fresh state is initial, childless and count-free', () {

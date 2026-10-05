@@ -214,9 +214,10 @@ void main() {
           reason: 'cell $index right gutter',
         );
       }
-      // The trailing row of the demo shelf (8 rows, not the design's nine)
-      // keeps the same column width and 12 px gap: the inert filler slot holds
-      // the third column open so the card below stays on the 20 px gutter.
+      // The demo shelf holds the design's nine badges in full rows of three,
+      // so there is no short row; the branch below pins the contract for a
+      // future odd shelf (the inert filler slot holds the open columns so the
+      // card below stays on the 20 px gutter).
       if (count % 3 != 0) {
         final last = count - 1;
         expect(
@@ -261,7 +262,7 @@ void main() {
               'cell $index height (border 6 + padding 20 + 60 + 4 + 38 + 4 + 18)',
         );
       }
-      // Row 3's last cell is a two-cell row stretched to the same 150 by
+      // Row 3 is a full three-cell row stretched to the same 150 by
       // `IntrinsicHeight`; the week card follows 16 below the grid.
       expect(tester.getRect(cell(7)).top, closeTo(517, 2));
       final week = tester.getRect(find.byType(HappyWeekCard));
@@ -397,7 +398,7 @@ void main() {
       await pumpBadges(tester, width: 320, textScale: 1.3);
       expect(tester.takeException(), isNull);
       expect(find.text('My badges'), findsOneWidget);
-      expect(find.byType(BadgeGridCell), findsNWidgets(8));
+      expect(find.byType(BadgeGridCell), findsNWidgets(9));
       // The last column still ends on the 20 px gutter; the names are
       // clamped to two lines so the cell can never push past its slot.
       expect(tester.getRect(cell(2)).right, closeTo(320 - _gutter, 0.5));

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:nestling/core/data/app_database.dart';
+import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/core/data/stream_combine.dart';
 import 'package:nestling/features/badges/domain/badges_repository.dart';
 import 'package:nestling/features/badges/domain/entities/badge.dart' as domain;
@@ -8,7 +9,7 @@ import 'package:nestling/features/badges/domain/entities/badges_data.dart';
 
 /// Drift-backed [BadgesRepository].
 class BadgesRepositoryImpl implements BadgesRepository {
-  new({required this._db});
+  BadgesRepositoryImpl({required this._db});
 
   final AppDatabase _db;
 
@@ -16,23 +17,52 @@ class BadgesRepositoryImpl implements BadgesRepository {
   Future<List<domain.Badge>> getItems() => watchItems().first;
 
   @override
-  Stream<List<domain.Badge>> watchItems() async* {
-    final state = await (_db.select(
-      _db.appState,
-    )..where((a) => a.id.equals(1))).getSingleOrNull();
-    yield* watchShelf(state?.activeChildId ?? 'maya');
+  Stream<List<domain.Badge>> watchItems() {
+    // The active shelf, resolved the same way as [watchActiveBadges]
+    // (K11-BUG-2): no hard-coded child id anywhere on this path either.
+    return watchActiveBadges().map((data) => data.items);
   }
 
-  /// The active child's badges: `app_state.activeChildId` (demo seed: `maya`)
-  /// fans out to exactly one shelf query (DB insertion order — the K11 grid
-  /// order, never sorted) plus that child's row, so the grid and the week
-  /// card always arrive atomically.
+  /// The resolved child's badges: the roster (creation order — the CHILD
+  /// ORDER ruling) plus `app_state.activeChildId` fan out to exactly one
+  /// shelf query (DB insertion order — the K11 grid order, never sorted)
+  /// plus that child's row, so the grid and the week card always arrive
+  /// atomically. With no children at all the stream emits the empty shelf,
+  /// so the view shows the childless empty state.
   @override
   Stream<BadgesData> watchActiveBadges() {
-    return _switchMap<AppStateData?, BadgesData>(
-      _db.watchAppState(),
-      (state) => _badgesFor(state?.activeChildId ?? 'maya'),
+    return _switchMap<List<dynamic>, BadgesData>(
+      combineLatest2(_db.watchAppState(), _db.watchChildren(Seed.familyId)),
+      (parts) {
+        final state = parts[0] as AppStateData?;
+        final kids = parts[1] as List<ChildrenData>;
+        final childId = _resolveChildId(state?.activeChildId, kids);
+        if (childId == null) {
+          return Stream<BadgesData>.value(
+            const BadgesData(
+              childId: '',
+              items: <domain.Badge>[],
+              happyDays: 0,
+            ),
+          );
+        }
+        return _badgesFor(childId);
+      },
     );
+  }
+
+  /// K11-BUG-2: the persisted `activeChildId` when it names a real child,
+  /// else the first child in creation order (CHILD ORDER ruling —
+  /// `watchChildren` already sorts that way), else null (no children).
+  /// Never a hard-coded id (P15 `_selectProfileChild` precedent).
+  String? _resolveChildId(String? activeChildId, List<ChildrenData> kids) {
+    if (activeChildId != null) {
+      for (final kid in kids) {
+        if (kid.id == activeChildId) return kid.id;
+      }
+    }
+    if (kids.isEmpty) return null;
+    return kids.first.id;
   }
 
   /// Per-child badges stream: the shelf in DB insertion order with

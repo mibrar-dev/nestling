@@ -11,9 +11,9 @@
 // Every pumped app ends with `disposeApp` (test_scope.dart). No
 // `DateTime.now`, no `google_fonts`, no simulator.
 //
-// The demo seed currently carries 8 shelf rows (the design's nine minus one
-// legacy set); every count below is read from the database, never hard-coded
-// from the design, so the §g seed correction does not break these tests.
+// The demo seed carries the design's nine shelf rows in DB insertion order
+// (`shared/k11_badges_seed` on main); every count below is read from the
+// database, never hard-coded from the design.
 
 import 'dart:async';
 
@@ -456,6 +456,76 @@ void main() {
       expect(find.byType(NestIconButton), findsOneWidget);
       expect(find.byType(NestLockButton), findsOneWidget);
       await disposeApp(tester);
+    });
+  });
+
+  group('K11 happy-day clamp (K11-BUG-1 regression)', () {
+    testWidgets('a stored count above 7 fills seven dots, never eight days', (
+      tester,
+    ) async {
+      // The schema documents 0..7 but enforces no upper bound; the card must
+      // clamp to the seven days it draws. Mirrors the skipped `k11_bugs_test`
+      // probe — un-skipped here because the widget now owns the clamp.
+      await (db.update(db.children)..where((c) => c.id.equals('maya'))).write(
+        const ChildrenCompanion(happyDays: Value(8)),
+      );
+      await _pumpRoute(tester);
+      expect(tester.takeException(), isNull);
+
+      final checks = find.descendant(
+        of: find.byType(HappyWeekCard),
+        matching: find.byWidgetPredicate(
+          (widget) => widget is NestIcon && widget.assetName == NestIcons.check,
+        ),
+      );
+      expect(checks, findsNWidgets(7), reason: 'only seven days exist');
+      expect(
+        find.text('8 happy days this week — Pip hasn’t stopped singing.'),
+        findsNothing,
+        reason: 'the card must not claim a day it cannot draw',
+      );
+      expect(
+        find.text('7 happy days this week — Pip hasn’t stopped singing.'),
+        findsOneWidget,
+        reason: 'the line clamps to the seven drawn days',
+      );
+      await disposeApp(tester);
+    });
+
+    testWidgets('a negative stored count renders the zero line, no dots', (
+      tester,
+    ) async {
+      await (db.update(db.children)..where((c) => c.id.equals('maya'))).write(
+        const ChildrenCompanion(happyDays: Value(-3)),
+      );
+      await _pumpRoute(tester);
+      expect(tester.takeException(), isNull);
+
+      final checks = find.descendant(
+        of: find.byType(HappyWeekCard),
+        matching: find.byWidgetPredicate(
+          (widget) => widget is NestIcon && widget.assetName == NestIcons.check,
+        ),
+      );
+      expect(checks, findsNothing);
+      expect(find.text('Let’s make today a happy day!'), findsOneWidget);
+      await disposeApp(tester);
+    });
+
+    test('HappyWeekCopy.why clamps outside 0..7', () {
+      expect(
+        HappyWeekCopy.why(8),
+        '7 happy days this week — Pip hasn’t stopped singing.',
+      );
+      expect(
+        HappyWeekCopy.why(99),
+        '7 happy days this week — Pip hasn’t stopped singing.',
+      );
+      expect(HappyWeekCopy.why(-3), 'Let’s make today a happy day!');
+      expect(
+        HappyWeekCopy.why(1),
+        '1 happy day this week — Pip hasn’t stopped singing.',
+      );
     });
   });
 

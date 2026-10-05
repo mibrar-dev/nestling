@@ -44,6 +44,19 @@ final class BadgesState extends Equatable {
     );
   }
 
+  /// Loading emission for a (re)load. Built explicitly so a retry starts
+  /// clean: a stale load error never rides into the spinner (review
+  /// finding 4). The last known child/shelf/count ride through untouched;
+  /// only failure-path behaviour is unchanged.
+  BadgesState copyWithLoading() {
+    return BadgesState(
+      status: BadgesStatus.loading,
+      childId: childId,
+      items: items,
+      happyDays: happyDays,
+    );
+  }
+
   /// Loaded emission from the badges stream. Built explicitly so a healthy
   /// emission also clears a stale load error. (No request actions exist on
   /// this screen, so there is nothing else to ride through.)

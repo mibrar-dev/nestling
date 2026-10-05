@@ -30,7 +30,7 @@ class BadgesBloc extends Bloc<BadgesEvent, BadgesState> {
     // A load is already live: ignore the reload instead of stacking another
     // never-ending handler. Never re-add load events to refresh.
     if (_sub == null) {
-      emit(state.copyWith(status: BadgesStatus.loading));
+      emit(state.copyWithLoading());
       _sub = _repository.watchActiveBadges().listen(
         (data) => add(BadgesDataReceived(data)),
         onError: (Object error) {

@@ -1,9 +1,12 @@
 // K11 repository tests (DB-backed, Seed.demo): the badges-stream contract.
 //
-// `watchActiveBadges` emits the active child (demo seed: Maya, 8 badges in
-// DB insertion order, 4 earned) plus the stored happy-week count, and follows
-// `app_state.activeChildId` switches. Detail copy is design copy: earned →
-// `Got it!`, todo → `Keep going!`.
+// `watchActiveBadges` emits the resolved child (demo seed: Maya, 9 badges
+// in DB insertion order, 4 earned) plus the stored happy-week count, and
+// follows `app_state.activeChildId` switches. Detail copy is design copy:
+// earned → `Got it!`, todo → `Keep going!`. Child resolution never falls
+// back to a hard-coded id (K11-BUG-2): the persisted `activeChildId` when
+// it names a real child, else the first child in creation order, else the
+// empty shelf (no children).
 
 import 'dart:async';
 
@@ -21,10 +24,11 @@ const List<String> _insertionOrder = <String>[
   'bed-maker-7',
   'kind-helper',
   'bookworm',
-  'tidy-champion',
+  'bins-out',
+  'biscuit-sitter',
+  'tidy-hero',
   'early-bird',
-  'super-saver',
-  'pet-friend',
+  'plant-waterer',
 ];
 
 /// Maya's earned set in the demo seed.
@@ -84,6 +88,12 @@ void main() {
     );
   }
 
+  Future<void> clearActiveChild() {
+    return (db.update(db.appState)..where((a) => a.id.equals(1))).write(
+      const AppStateCompanion(activeChildId: Value<String?>(null)),
+    );
+  }
+
   Future<void> setHappyDays(String childId, int days) {
     return (db.update(db.children)..where((c) => c.id.equals(childId))).write(
       ChildrenCompanion(happyDays: Value(days)),
@@ -103,7 +113,7 @@ void main() {
   }
 
   group('BadgesRepository watchShelf (K11)', () {
-    test('Maya shelf is 8 rows in insertion order, 4 earned', () async {
+    test('Maya shelf is 9 rows in insertion order, 4 earned', () async {
       final repo = BadgesRepositoryImpl(db: db);
       final shelf = await repo.watchShelf('maya').first;
 
@@ -116,7 +126,7 @@ void main() {
         shelf.where((b) => b.earned).map((b) => b.id).toSet(),
         _mayaEarned,
       );
-      expect(shelf.where((b) => !b.earned), hasLength(4));
+      expect(shelf.where((b) => !b.earned), hasLength(5));
     });
 
     test('earned detail is Got it!, todo is Keep going!', () async {
@@ -130,15 +140,16 @@ void main() {
           'bed-maker-7': 'Got it!',
           'kind-helper': 'Got it!',
           'bookworm': 'Got it!',
-          'tidy-champion': 'Keep going!',
+          'bins-out': 'Keep going!',
+          'biscuit-sitter': 'Keep going!',
+          'tidy-hero': 'Keep going!',
           'early-bird': 'Keep going!',
-          'super-saver': 'Keep going!',
-          'pet-friend': 'Keep going!',
+          'plant-waterer': 'Keep going!',
         },
       );
     });
 
-    test('Leo shelf is the same 8 rows with 1 earned', () async {
+    test('Leo shelf is the same 9 rows with 1 earned', () async {
       final repo = BadgesRepositoryImpl(db: db);
       final shelf = await repo.watchShelf('leo').first;
 
@@ -157,10 +168,11 @@ void main() {
         'Bed maker ×7',
         'Kind helper',
         'Bookworm',
-        'Tidy champion',
+        'Bins out',
+        'Biscuit sitter',
+        'Tidy hero',
         'Early bird',
-        'Super saver',
-        'Pet friend',
+        'Plant waterer',
       ]);
     });
   });
@@ -227,10 +239,102 @@ void main() {
       expect(items.map((b) => b.id).toList(), _insertionOrder);
       expect(items.where((b) => b.earned), hasLength(4));
       expect(items.firstWhere((b) => b.id == 'first-quest').detail, 'Got it!');
+      expect(items.firstWhere((b) => b.id == 'bins-out').detail, 'Keep going!');
+    });
+
+    test('legacy watchItems follows the same resolution', () async {
+      final repo = BadgesRepositoryImpl(db: db);
+      await clearActiveChild();
+
+      // The demo family's first child in creation order is Maya — served
+      // through the legacy path with no hard-coded id behind it.
+      final items = await repo.watchItems().first;
+
+      expect(items.map((b) => b.id).toList(), _insertionOrder);
+      expect(items.where((b) => b.earned), hasLength(4));
+    });
+  });
+
+  // K11-BUG-2: the persisted `activeChildId` when it names a real child,
+  // else the first child in creation order, else the empty shelf — never a
+  // hard-coded id.
+  group('BadgesRepository child resolution (K11-BUG-2)', () {
+    test('null activeChildId resolves the first child (Maya)', () async {
+      final repo = BadgesRepositoryImpl(db: db);
+      await clearActiveChild();
+
+      final data = await repo.watchActiveBadges().first;
+
+      expect(data.childId, 'maya');
+      expect(data.happyDays, 4);
+      expect(data.items.map((b) => b.id).toList(), _insertionOrder);
       expect(
-        items.firstWhere((b) => b.id == 'tidy-champion').detail,
-        'Keep going!',
+        data.items.where((b) => b.earned).map((b) => b.id).toSet(),
+        _mayaEarned,
       );
+    });
+
+    test('an activeChildId naming no child falls back to Maya', () async {
+      final repo = BadgesRepositoryImpl(db: db);
+      await setActiveChild('nobody');
+
+      final data = await repo.watchActiveBadges().first;
+
+      expect(data.childId, 'maya');
+      expect(data.happyDays, 4);
+      expect(data.items.where((b) => b.earned), hasLength(4));
+    });
+
+    test('a Zoe-only family with null active resolves Zoe', () async {
+      // Mirrors the stage-6 repro at repository level: a family whose only
+      // child is Zoe (one earned badge, happyDays 2), deep-linked with no
+      // active child, must show Zoe's shelf — not a hard-coded fallback.
+      await db.delete(db.earnedBadges).go();
+      await db.delete(db.children).go();
+      await db
+          .into(db.children)
+          .insert(
+            ChildrenCompanion.insert(
+              id: 'zoe',
+              familyId: Seed.familyId,
+              nickname: 'Zoe',
+              happyDays: const Value(2),
+            ),
+          );
+      await db
+          .into(db.earnedBadges)
+          .insert(
+            EarnedBadgesCompanion.insert(
+              badgeId: 'bookworm',
+              childId: 'zoe',
+              familyId: Seed.familyId,
+            ),
+          );
+      await clearActiveChild();
+      final repo = BadgesRepositoryImpl(db: db);
+
+      final data = await repo.watchActiveBadges().first;
+
+      expect(data.childId, 'zoe');
+      expect(data.happyDays, 2);
+      expect(data.items.map((b) => b.id).toList(), _insertionOrder);
+      expect(
+        data.items.where((b) => b.earned).map((b) => b.id).toList(),
+        <String>['bookworm'],
+      );
+    });
+
+    test('no children at all emits the empty shelf', () async {
+      await db.delete(db.earnedBadges).go();
+      await db.delete(db.children).go();
+      await clearActiveChild();
+      final repo = BadgesRepositoryImpl(db: db);
+
+      final data = await repo.watchActiveBadges().first;
+
+      expect(data.childId, isEmpty, reason: 'no child to resolve');
+      expect(data.items, isEmpty, reason: 'the view shows its empty state');
+      expect(data.happyDays, 0);
     });
   });
 
@@ -266,22 +370,16 @@ void main() {
 
     test('a newly earned badge flips its cell in place', () async {
       final first = await badges.next();
-      expect(
-        first.items.firstWhere((b) => b.id == 'tidy-champion').earned,
-        isFalse,
-      );
+      expect(first.items.firstWhere((b) => b.id == 'bins-out').earned, isFalse);
 
-      await earn('tidy-champion', 'maya');
+      await earn('bins-out', 'maya');
 
       final next = await badges.next();
       expect(next.childId, 'maya');
       expect(next.happyDays, 4);
+      expect(next.items.firstWhere((b) => b.id == 'bins-out').earned, isTrue);
       expect(
-        next.items.firstWhere((b) => b.id == 'tidy-champion').earned,
-        isTrue,
-      );
-      expect(
-        next.items.firstWhere((b) => b.id == 'tidy-champion').detail,
+        next.items.firstWhere((b) => b.id == 'bins-out').detail,
         'Got it!',
       );
       expect(next.items.map((b) => b.id).toList(), _insertionOrder);
@@ -330,6 +428,7 @@ void main() {
 
       final data = await repo.watchActiveBadges().first;
 
+      expect(data.childId, isEmpty, reason: 'no child to resolve');
       expect(data.items, isEmpty, reason: 'nothing earned yet');
       expect(data.happyDays, 0, reason: 'no child row, so no count');
     });

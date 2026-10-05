@@ -323,12 +323,9 @@ class _BadgesList extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
         const SizedBox(height: NestSpacing.s4),
-        // TODO(K11): the demo seed still carries 8 shelf rows
-        // (`tidy-champion` / `super-saver` / `pet-friend` in place of the
-        // design's `bins-out` / `biscuit-sitter` / `tidy-hero` /
-        // `plant-waterer`); the grid renders whatever the database returns
-        // in DB order. Seed correction filed as
-        // `docs/screens/K11/SHARED_REQUEST.md` (blocks: no).
+        // The grid renders whatever the database returns in DB order; the
+        // demo seed carries the design's nine badges (`SHARED_REQUEST.md`,
+        // landed on main as `shared/k11_badges_seed`).
         _BadgeGrid(items: state.items),
         const SizedBox(height: NestSpacing.s4),
         HappyWeekCard(happyDays: state.happyDays),

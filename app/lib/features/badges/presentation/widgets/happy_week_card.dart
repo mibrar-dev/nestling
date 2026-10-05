@@ -31,11 +31,14 @@ abstract final class HappyWeekCopy {
 
   /// `.k11-why` why-line. The Design draws `4 happy days this week — Pip
   /// hasn’t stopped singing.` (em dash U+2014, curly ’ U+2019); `n` comes
-  /// from the child row, never from the design.
+  /// from the child row, never from the design. Clamped to the seven days
+  /// the card can draw (K11-BUG-1): the schema documents 0..7 but enforces
+  /// no upper bound, so a stored 8 must read as 7, never “8 happy days”.
   static String why(int happyDays) {
-    if (happyDays <= 0) return 'Let’s make today a happy day!';
-    final days = happyDays == 1 ? 'day' : 'days';
-    return '$happyDays happy $days this week — Pip hasn’t stopped singing.';
+    final n = happyDays.clamp(0, 7);
+    if (n <= 0) return 'Let’s make today a happy day!';
+    final days = n == 1 ? 'day' : 'days';
+    return '$n happy $days this week — Pip hasn’t stopped singing.';
   }
 }
 
@@ -57,6 +60,11 @@ class HappyWeekCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.nest;
     final kid = context.nestKid;
+    // K11-BUG-1: the stored count is documented 0..7 but the schema enforces
+    // no upper bound — clamp to the seven days the card draws before using
+    // it for the dots or the why-line, so a stored 8 fills seven dots and
+    // reads “7 happy days”, never an impossible “8 happy days”.
+    final days = happyDays.clamp(0, 7);
     return Container(
       padding: _cardPadding,
       decoration: BoxDecoration(
@@ -83,7 +91,7 @@ class HappyWeekCard extends StatelessWidget {
                     Expanded(
                       child: _DayColumn(
                         letter: _dayLetters[i],
-                        on: i < happyDays,
+                        on: i < days,
                         dot: dot,
                       ),
                     ),
@@ -94,7 +102,7 @@ class HappyWeekCard extends StatelessWidget {
           // `.k11-why { margin-top: 12px }` (`K11-badges.html:36`).
           const SizedBox(height: NestSpacing.s3),
           Text(
-            HappyWeekCopy.why(happyDays),
+            HappyWeekCopy.why(days),
             style: NestType.kidCaption(color: tokens.ink2),
             textAlign: TextAlign.center,
             maxLines: 3,
