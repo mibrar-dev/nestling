@@ -1,4 +1,7 @@
-# Shared backlog (do after all screens are merged)
+# Shared backlog
+
+**Status 5 Oct 11:45: every item below is closed** (merges `282cbcd`, `c2ffb80`, `8e97d48`, `6ad463a`, `c9ffa78`; 0 skipped bug proofs). Open owner decisions: K10 "Lego fund" wording; app icon Pip style.
+
 - ~~NestSegmented with 6 options at 320 dp shrinks each option below the 44 px tap target (P12-BUG-04, proof skipped in app/test/features/pocket_money/p12_bugs_test.dart; see docs/screens/P12/SHARED_REQUEST.md).~~ DONE 5 Oct
 - Parent-tab page title (`.ptitle`) is re-implemented privately in 4+ screens. Extract a shared NestPageTitle and migrate the screens (P12 review finding 6).
 - Repositories read the family id from the seed constant `Seed.familyId` (10+ feature repos). OK for local-only (one family per device), but before Supabase, expose the current family from AppSession and replace every `Seed.familyId` in app/lib/features with it.

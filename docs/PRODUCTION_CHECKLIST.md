@@ -1,6 +1,6 @@
 # Nestling — Production Checklist (app readiness)
 
-**Date:** 5 Oct 2026 · **Scope:** what stands between the current app
+**Date:** 5 Oct 2026 (updated 11:45 after the release-prep, polish and backlog merges) · **Scope:** what stands between the current app
 (all 30 screens built, local-only Drift backend, launch icons + animated
 splash done) and a public App Store + Google Play release in the UK.
 **Companion doc:** [`SETUP_CHECKLIST.md`](./SETUP_CHECKLIST.md) covers owner
@@ -39,13 +39,13 @@ step. UK English throughout.
 
 | Item | Status | Evidence | Next step |
 |---|---|---|---|
-| Design-system gallery / motion lab / pip lab excluded from release | ❌ | Routes always registered (`app/lib/app/router.dart:172`); default initial location is the **gallery** when no `INITIAL_ROUTE` is passed (`router.dart:73-79`) | Gate gallery + motion-lab + pip-lab behind `kReleaseMode` (release: unreachable + removed from route list) or strip from release routes |
+| Design-system gallery / motion lab / pip lab excluded from release | ✅ | Fixed 5 Oct (`ce9198c`): dev routes registered only in debug/profile or with `DEV_ROUTES=1`; cold start lands on welcome / Today / kid home | None |
 | `SEED` reseed path | ✅ | Only runs when `LaunchFlags.hasSeed` (`app/lib/app/launch.dart:27`); empty by default | None (inert without `--dart-define`) |
 | `INITIAL_ROUTE` / `APP_MODE` / `THEME` / `CHILD` | ✅ | `String.fromEnvironment`, empty by default (`launch_flags.dart:16-20`) | None; release builds pass no dart-defines |
 | `DISABLE_ANIMATIONS` / `SKIP_SPLASH` | ✅ | Empty by default; `skipSplash` getter only true with explicit flag or forced route (`launch_flags.dart:27-35`) | None |
 | `MOTION_AUTOPLAY` / `PIP_LAB_AUTOPLAY` | ✅ | Empty by default; only redirect to labs when non-empty (`router.dart:70-79`) | None (dies with the §1 lab-route gate) |
 | Debug banners | ✅ | `debugShowCheckedModeBanner: false` (`app/lib/app/app.dart:90`) | None |
-| `debugPrint` / logging of personal data | ⚠️ | `pip_rive.dart:293,302` inside `assert` (debug-only, fine); `family_bloc.dart:132,155` guarded by `kDebugMode` ✅; but `child_display.dart:18` and `family_bloc.dart:108` call unguarded `debugPrint`, `quests_bloc.dart:125` calls unguarded `log()` | Wrap the three unguarded calls in `kDebugMode`; keep messages error-only (never nicknames, emails, PINs) |
+| `debugPrint` / logging of personal data | ✅ | Fixed 5 Oct (`c2ffb80`): every log in `app/lib` is `kDebugMode`-guarded and carries no names/emails/PINs. Previously: | `pip_rive.dart:293,302` inside `assert` (debug-only, fine); `family_bloc.dart:132,155` guarded by `kDebugMode` ✅; but `child_display.dart:18` and `family_bloc.dart:108` call unguarded `debugPrint`, `quests_bloc.dart:125` calls unguarded `log()` | Wrap the three unguarded calls in `kDebugMode`; keep messages error-only (never nicknames, emails, PINs) |
 
 ---
 
@@ -66,8 +66,8 @@ trial-expiry enforcement at launch/resume. No network calls exist in `lib/`.
 | Push | ❌ | `notifApprovals/Payout/Summary` are local booleans (`app_database.dart:257-259`); no `firebase_messaging` / `flutter_local_notifications` dep | FCM messaging-only + local notifications per TECH_STACK §5; payloads carry IDs only, parent devices only |
 | Schema migrations path (current v7) | ✅ | `schemaVersion => 7` + documented v1→v7 path (`app_database.dart:340-373`); `beforeOpen` guarantees `app_state`/`fam1` rows | Keep the per-version `onUpgrade` discipline; never squash before a release without a tested path |
 | Migration test | ✅ | `test/core/data/time_migration_test.dart` (v1→v2), `members_email_test.dart:82` (v6→v7), `children_order_test.dart:88`, `quest_order_test.dart:117`, `rewards_order_test.dart:134`, `completion_note_test.dart:82`, `migration_first_run_test.dart` | Add a v7→v8 test with every future migration |
-| Backup / restore | ❌ | Single file DB, no export/import, no cloud backup wiring | Decide v1 story (OS auto-backup of `nestling.db` only?) + Edge-Function CSV/JSON export for the "Download our data" row; see §5 |
-| "Delete everything" (P04 promise) | ❌ | Mechanism exists (`clearAll()` deletes every table, `app_database.dart:331`) but Settings → Delete shows toast `Family account deletion is not available yet` (`settings_view.dart:399`) | Wire confirm dialog → `clearAll()` + reset `app_state` + (post-backend) cancel store subscription + confirm by email ≤ 30 days per TECH_STACK §11 |
+| Backup / restore | ⚠️ | 5 Oct: local JSON export via the share sheet (Settings → Download our data, no PIN hashes); restore + cloud backup still open. Before: | Single file DB, no export/import, no cloud backup wiring | Decide v1 story (OS auto-backup of `nestling.db` only?) + Edge-Function CSV/JSON export for the "Download our data" row; see §5 |
+| "Delete everything" (P04 promise) | ✅ | Fixed 5 Oct (`c2ffb80`): Settings → Delete family account empties every table in one transaction and returns to welcome. Before: | Mechanism exists (`clearAll()` deletes every table, `app_database.dart:331`) but Settings → Delete shows toast `Family account deletion is not available yet` (`settings_view.dart:399`) | Wire confirm dialog → `clearAll()` + reset `app_state` + (post-backend) cancel store subscription + confirm by email ≤ 30 days per TECH_STACK §11 |
 
 ---
 
@@ -94,14 +94,14 @@ The schema holds no child email/photo/location columns by design.
 | Item | Status | Evidence | Next step |
 |---|---|---|---|
 | High privacy defaults | ✅ | `crashReportConsent` defaults OFF (`app_database.dart:263-264`); `kidGateEnabled` defaults ON; `onboardingComplete` false; `appMode` parent | None; keep OFF/ON as the tested defaults |
-| No nudges (incl. to share) | ⚠️ | Crash toggle OFF by default ✅; no streak-shame/loot copy (grep empty); but `notifApprovals/Payout/Summary` default **true** (`app_database.dart:257-259`) | Set notification defaults to OFF until runtime permission + in-app explainer; notifications are local-only today so risk is low, but defaults must be defensible |
+| No nudges (incl. to share) | ✅ | Fixed 5 Oct (`c2ffb80`): notification toggles default OFF for new families. Before: | Crash toggle OFF by default ✅; no streak-shame/loot copy (grep empty); but `notifApprovals/Payout/Summary` default **true** (`app_database.dart:257-259`) | Set notification defaults to OFF until runtime permission + in-app explainer; notifications are local-only today so risk is low, but defaults must be defensible |
 | No profiling / behavioural targeting | ✅ | No analytics SDK; `KidAnalytics`-style separation is structural (nothing to call) | When Aptabase lands (parents only, consent-gated, never kid flows) per TECH_STACK §6, re-audit this row |
 | No ads / tracking | ✅ | No ads SDK; P04 promise rows + `privacy_consent_view.dart:97` | None |
 | Geolocation off | ✅ | No geolocator/permission deps; only IANA zone math (`family_time.dart`), not device location | Never add location columns/permissions without a DPIA update |
 | Parental controls / gate (P17) | ✅ | Arithmetic challenge gate (`parental_gate_repository_impl.dart:24,43-46`, e.g. 7×6=42), kid PIN is salted SHA-256 never stored (`pin_hash.dart`), router blocks kid mode from all parent routes (`router.dart:107-109`) | Manual reviewer pass (see §8 review notes) |
 | Crash reporting OFF by default | ✅ | P04 toggle wired to `settings.crashReportConsent` (`privacy_consent_repository_impl.dart:41-100`); OFF default proven by repo tests | None on the default |
 | Where crash data would go | ⚠️ | **Nowhere** — no Sentry/Crashlytics SDK is wired, so the toggle persists locally and sends nothing | Either wire Sentry EU (DSN, `beforeSend` PII scrub, screenshots OFF in kid flows) behind the toggle per TECH_STACK §7, or remove the toggle before release so the UI never promises a pipeline that does not exist |
-| Privacy notice + terms links | ⚠️ | P04 "Read the full Privacy Notice" opens an in-app modal with the 4 promise lines (`privacy_consent_view.dart:346-392`), not the hosted policy; P03 Terms/Privacy links are inert `onTap: () {}` with `TODO(P03)` (`create_account_view.dart:720-721`); P07 Terms toasts "available in the full app" | Link to live `https://getnestling.co.uk/privacy` + `/terms` (👤 owner publishes per SETUP_CHECKLIST Phase 5) via `url_launcher` or in-app webview; keep the P04 modal as summary only |
+| Privacy notice + terms links | ⚠️ | 5 Oct: P03/P04/P07/P16 links open `getnestling.co.uk/privacy` + `/terms` in-app (`core/config/legal_links.dart`); 👤 the pages themselves still need publishing. Before: | P04 "Read the full Privacy Notice" opens an in-app modal with the 4 promise lines (`privacy_consent_view.dart:346-392`), not the hosted policy; P03 Terms/Privacy links are inert `onTap: () {}` with `TODO(P03)` (`create_account_view.dart:720-721`); P07 Terms toasts "available in the full app" | Link to live `https://getnestling.co.uk/privacy` + `/terms` (👤 owner publishes per SETUP_CHECKLIST Phase 5) via `url_launcher` or in-app webview; keep the P04 modal as summary only |
 | App Store privacy "nutrition label" (draft from code) | ⚠️ | Derived from code: **Data Not Collected** for the local-only build (no server transmission, no third-party SDKs, crash toggle sends nothing) | 👤 Owner answers in Connect; **re-answer the moment** Sentry/Aptabase/Supabase/Resend ship (then: diagnostics + identifiers, linked to user, with purposes) |
 | Play Data safety (draft from code) | ⚠️ | Derived from code: **no data collected, no data shared** (on-device only); no location, photos, contacts, or ad ID | 👤 Owner answers in Console with "parent-directed" target audience (kids are users, not the audience); re-answer when the backend lands |
 | Kids category NOT used (Parenting) | ✅ | No Kids-category flags in code; SETUP_CHECKLIST Phase 1–2 prescribes **Parenting** (never "Kids") | 👤 Owner selects Parenting + completes age-rating questionnaire honestly (no UGC/chat, no loot, no ads) |
@@ -152,16 +152,12 @@ The schema holds no child email/photo/location columns by design.
 
 **Release-blocking (fix before submission):**
 
-- P12-BUG-04 — `NestSegmented` with 6 options shrinks below the 44 px tap
-  target at 320 dp (proof skipped in `p12_bugs_test.dart`). Accessibility
-  gate: fix or constrain options per screen.
-- `Seed.familyId` read directly in 10+ feature repos (fine local-only, one
+- ~~P12-BUG-04~~ fixed 5 Oct (`282cbcd`): segments keep ≥ 44 px targets at 320 dp.
+- ~~`Seed.familyId` in feature repos~~ fixed 5 Oct (`c9ffa78`, CurrentFamily from the session). Was: `Seed.familyId` read directly in 10+ feature repos (fine local-only, one
   family per device). Any TestFlight/closed-track build that touches sync
   must first expose the current family from `AppSession`. If v1 ships
   local-only, file the migration as a launch-gated task, not a silent TODO.
-- P15 `family_repository_impl.dart:41` reads `Seed.anchorOverride` in app
-  code — replace with `clock.now()`/`appNowUtc()` (test-hook leak into
-  product code).
+- ~~P15 `Seed.anchorOverride` in app code~~ fixed 5 Oct (`c2ffb80`).
 - "Delete family account" + "Download our data" are stubbed (toast /
   navigation to `/privacy`, §3/§5). Either wire them or remove the rows
   before submission — a dead deletion control is a certain rejection + a
@@ -171,7 +167,7 @@ The schema holds no child email/photo/location columns by design.
 - Release signing + flavours + obfuscation (§1) — no shippable binary exists
   until these land.
 
-**Post-launch / polish (ship with known-issue log, fix in x.1):**
+**Post-launch / polish:** all closed on 5 Oct (`6ad463a`, `8e97d48`, `c9ffa78`) — 0 skipped bug proofs remain. Original list:
 
 - Minor layout: K09-BUG-10 relative-day labels, K09-BUG-9 320 px overflow,
   K09-BUG-8 `moveToSavings` without a goal, K09-BUG-7/7b bloc-close leak,
