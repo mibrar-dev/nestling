@@ -1,4 +1,4 @@
-# K07 · 3 TEST (iteration 3) — the `/pip-evolution` suite
+# K07 · 3 TEST (iteration 4) — the `/pip-evolution` suite
 
 Job: write and extend the K07 tests in `app/test/features/pip/`, run the gates,
 and record any real bug the tests expose. **No product code was changed by this
@@ -7,117 +7,124 @@ stage** — RULES §1 lets a test stage touch `app/test/features/pip/**` and
 No simulator was booted, installed on or driven: only `5_ui` may touch
 `BC440E48-B3A3-43BC-971B-0EF5DB621874`. No `flutter clean`, no
 `analysis_options` change, no `google_fonts`, no `DateTime.now()` in any test,
-no `pkill` of any kind (the 23:00 rule: other loops share this machine).
+no `pkill` of any kind.
 
-Base for this stage: `2_build.md` (what iteration 3 landed),
-`2a_build_logic.md` (`toLoading(restartingNest/restartingEvolution)`),
-`2b_build_ui.md` (K07-BUG-5 / the D4 palette fix),
-`ORCHESTRATOR_NOTES.md` 23:55 (**mandatory**), `6_bugs.md` (iteration 2's hunt)
-and this stage's brief.
+Base for this stage: `2_build.md` (what iteration 4 landed), `6_bugs.md`
+(iteration 3's hunt: **K07-BUG-6** major, **K07-BUG-7** minor),
+`ORCHESTRATOR_NOTES.md` (no iteration-4 update; D1/D2/D3/D4 all stand and are
+proven), and this stage's brief.
 
 ## Verdict summary
 
-- **Tests added: 4**, in three existing files (one new test each). **Bugs found:
-  none.**
-- The feature's own directory: **+423, ZERO skips** (419 at the checkpoint +
-  my 4). Every bug proof from iterations 1 and 2 is live and green, including
-  iteration 2's **K07-BUG-5**, whose `skip` the build dropped.
-- Whole app: `+4477 ~10` with **one** failure, and it is not a test result —
-  `router_push_test.dart` died on the `libsqlite3.dylib` native-asset race with
-  the concurrent stage in this worktree, and passes alone (see **Gates**). The
-  only other red in the tree is **another stage's three scratch probe files** in
-  `test/features/pip/`, which are not mine.
-- **Iteration 3 closed everything iteration 2 left open**: `K07-BUG-5`
-  (orchestrator-mandatory D4) and `4_review.md` finding 1
-  (`toLoading` dropping both arrival flags). What is left is `5_ui` re-measuring
-  the dark sparkles, one orchestrator copy ruling (`evolutionSub(0)`), and the
-  non-blocking `SHARED_REQUEST.md` items.
+- **Tests added: 13**, in one new file. **Bugs found: none.**
+- The feature's own 27 files: **+447, ZERO skips** (434 at the checkpoint `7c29857`
+  + my 13). Every bug proof from iterations 1–3 is live and green, including the
+  two iteration-4 fixes.
+- Whole app: see **Gates** — the measurement excludes a concurrent stage's
+  scratch probes, which are not mine (Observations 1).
+- **What iteration 4's fixes changed, and what this stage adds:** both fixes are
+  correct and proven, but the live proofs pin them at **one width each** (320 px
+  for the cards) or against **computed** line counts (for the caps). The 13 new
+  tests generalise both across the matrix this brief names, and pin the two
+  properties a fix of that kind must not break — the cards must still **grow**
+  with the text scale, and the caps must stay dropped on the **rendered**
+  paragraphs, not just on a paper line count.
 
 ## Files
 
-| file | change | tests |
+| file | state | tests |
 |---|---|---|
-| `pip_evolution_sparks_test.dart` | **+1** — the design's own hexes vs the rasterised canvas, both themes | 9 |
-| `pip_evolution_stream_contract_test.dart` | **+2** — a mid-session hiccup is not a failure card; *Try again* re-listens only the dead stream | 16 |
-| `pip_evolution_data_test.dart` | **+1** — the zero-count case, measured for the orchestrator | 9 |
+| `pip_evolution_stats_scales_test.dart` | **new** — the stat row and the celebration copy at every width and every text scale | 13 |
+| everything else in `test/features/pip/` | untouched | — |
 
-## What the new tests prove, and why
+## What the new file proves, and why
 
-Iteration 3 made two product changes — `toLoading(restartingNest/restartingEvolution)`
-in the state, and the D4 theme-invariant palette in the sparks painter — and
-un-skipped iteration 2's K07-BUG-5 proof. `2a` covered the state machine well
-(four new proofs, verified to bite) and `2b` covered the palette well. These four
-close the remaining joins; two of them are joins the suite did not have at all.
+Iteration 4's build fixed two bugs with one line each, and both are in the
+widgets this file exercises:
 
-### 1. The design's hexes vs the pixels — `ORCHESTRATOR_NOTES` 23:55's own words
+- **K07-BUG-6 (major)** — the three `.k7-stats` cards were *centred* against one
+  another (`Row`'s default `CrossAxisAlignment.center`) while each card's
+  `FittedBox(scaleDown)` shrank less when its content was narrower, so the row's
+  top and bottom edges splayed: **2.40 px** at 320 px with the demo seed,
+  **11.67 px** with a 9-digit coin total at 390. The fix is `IntrinsicHeight` +
+  `CrossAxisAlignment.stretch` — the CSS default `align-items: stretch`, since
+  `.k7-stats` has no `align-items`.
+- **K07-BUG-7 (minor)** — the app-only `maxLines: 4` on the hero (whose default
+  overflow is a **hard clip**) and `maxLines: 2` + ellipsis on the sub-line (which
+  carries the count) were dropped; the design clamps neither.
 
-The 23:55 ruling says: *"Verify each fill hex equals the HTML's literal"*, and
-adds *"Add a widget/painter test under dark theme asserting the stroke colour is
-`0xFF1E1B3A`"*. `k07_bugs_test.dart`'s K07-BUG-5 does the second half (a dark
-raster probed at the design's own `viewBox` coordinates), and
-`pip_evolution_sparks_test.dart` compares the canvas with the **palette**. But
-nothing compared the canvas with the **design source**: one test read the HTML
-and checked the app's transcription constants, another rasterised the app and
-checked tokens. A palette token that drifted off its hex, or a new literal
-added to the SVG and quietly never painted, would have passed both.
+### 1. The three stat cards are ONE height, everywhere (11 tests)
 
-The new test reads the SVG's `<g stroke="#…">` and every `fill="#…"` from
-`design/html-source/screens/K07-evolution.html`, asserts that set is exactly
-`{1E1B3A, 7C6CF2, 1F9D63, F4B400, FF8A5B}` plus the documented non-token
-`3D7FF0` (excluded here, asserted absent by the neighbouring test), and then
-requires **every one of them as an exact opaque pixel** in the screen's own
-painter — in light **and** dark. The dark run is the point: it must contain
-`0xFF1E1B3A` (the design's dark stroke) and, per the test above it, must not
-contain the dark theme's ink. Those two assertions are the two sides of
-K07-BUG-5, and they now hang on the design's bytes rather than on the app's own
-constants.
+`.k7-stats`'s height is content-driven — the label wraps on a narrow cell and the
+`FittedBox` scales the number+label pair down — so "one height" has to hold
+everywhere, not just where the proof measured it:
 
-### 2. The surviving stream, observed from K07's own screen (`4_review.md` finding 1)
+| theme | widths × text scales |
+|---|---|
+| light | 320 / 390 / 430 × 1.0 / 1.3 / **2.0** (9) |
+| dark | 320 @ 1.3, 430 @ 2.0 (2 spot-checks — the same layout code runs in both themes) |
 
-The fix makes `toLoading()` explicit about which stream is restarting, and 2a
-proved it at the state and bloc level. K07's screen can now be watched too:
-with a healthy nest and a failing evolution, the failure card's **Try again**
-must re-listen **only** the evolution. A counting fake makes that an observation
-rather than an inference — `evolutionCalls == 2` while `nestCalls == 1`. Under
-the pre-fix `toLoading()` the tap would have re-listened both (2/2) and dropped
-the nest's arrival flag, which is the review's "spinner with no retry
-affordance" scenario, latent today only because each route builds a fresh bloc.
-The same test pins the card's last-known Pip (the nest's row: Mochi, sunny,
-stage 3) and that the route never changed.
+Each case asserts the **spread** (max − min) of the three cards' heights, tops
+and bottoms is ≤ **0.5 px**. That tolerance is the measurement's, not a design
+allowance: the cards carry a 3 px ink border *and* a 6 px `--sh-kid` shadow, so a
+2 px splay reads as three cards of different sizes, and the owner ALIGNMENT rule
+calls any visible misalignment a UI failure. Each case also pins the row's other
+half — the 20 px side gutters and the two 10 px gaps from
+`EvolutionStatsGeometry.gap` — and that nothing threw (the
+`IntrinsicHeight`-inside-a-`SingleChildScrollView` pairing is exactly the shape
+that throws when one half of it is missing).
 
-### 3. A hiccup is not a failure card (K07's share of the keep-loaded rule)
+### 2. The cards **grow** with the text scale — they are not pinned (1 test)
 
-The evolution stream answers, and *then* errors. `evolutionSettled` stays true,
-so `evolutionStatus` stays `loaded`: the celebration must remain on screen — no
-`Oh no! Pip got lost.`, no spinner, no raw stream text — and the CTA must still
-navigate to `/pip`. This was pinned at the state level only; a child being
-thrown out of a celebration by an unrelated hiccup is the kind of defect that
-only a widget test would have caught.
+The bug stage argued for `IntrinsicHeight` over a fixed card height, and gave the
+reason: *"a fixed height would stop the cards growing at large text scales — the
+opposite of what accessibility needs."* Nothing tested that reasoning, so a
+future "simplification" to a pinned height would have passed every existing test
+while reintroducing the truncation in a new place. This test measures one pumped
+screen at 1×, then changes only the metrics to **2×** (Android's maximum font
+scale) and measures again:
 
-### 4. The zero case, measured for the orchestrator (`4_review.md` finding 2)
+- every card is **strictly taller** at 2× (the content really needs more room), and
+- the three are **still equal** (the stretch holds at the new size), and
+- the value is still its full string (`175`), i.e. the row grew by wrapping and
+  scaling down rather than by clipping the number away.
 
-`evolutionSub(0)` has no zero branch, so a child with **no** counted completions
-would read `Because you helped 0 times` under `Pip grew into a Fledgling!`. The
-review filed it as a reachable kid-facing string, `2_build.md` filed it as
-`SHARED_REQUEST.md` item 5 for a wording ruling, and `2b` pinned today's wording
-with a copy-level control.
+### 3. The app-only line clamps stay dropped, on the rendered paragraphs (1 test)
 
-The new test turns "reachable" into a measurement: Maya's four counting rows are
-flipped to `to_do` (a write **before** any pump — this harness deadlocks on a DB
-write while the app is pumping, see Observations), the database is then read back
-to prove **zero** rows actually count, and the screen is pumped and asserted to
-render the celebration with `0` on the card and `Because you helped 0 times` in
-the sub. No copy is invented and no ruling is pre-empted: the test pins today's
-behaviour so whoever rules on item 5 has a reproducible starting point.
+At **320 px / 2.0**:
+
+- the hero's `maxLines` is `null` (the design's `.k7-hero` has no clamp; the copy
+  test pins this too), and the **sub-line's** is `null` with `overflow` **not**
+  `TextOverflow.ellipsis` — the sub's cap was the one that ellipsized away the
+  count that explains *why* Pip grew, and unlike the hero's it had no unit-level
+  pin at all;
+- the **rendered** paragraphs report `didExceedMaxLines == false` for both lines.
+  The live proof measures *computed* line counts against the cap values it reads
+  off the widgets, which is a good regression guard but says nothing about what
+  the framework actually laid out;
+- the copy itself is untouched by the fix: `Because you helped 4 times` and
+  `Pip grew into a Fledgling!` render whole, and the CTA is still there.
+
+### The font caveat this file is built around
+
+With the fallback test font all three stat labels measure the same width, so
+**K07-BUG-6 is invisible**: the bug stage measured three cards of 54.08 px and
+**0.00** drift with the fallback font at 320 px, against 76.88 / 77.05 / 81.68 and
+**2.40** with real Nunito. A pass measured on the fallback font would be a lie,
+so `FontLoader('Inter' + 'Nunito')` runs in this file's `setUp` and every test
+here is a real-font test. (`FontLoader` mutates the engine's font collection for
+the rest of the process, which is why `k07_bugs_test.dart` keeps its real-font
+tests last in the file; here it is unconditional, so ordering is not load-bearing
+— but no test in this file may rely on the fallback font.)
 
 ## Coverage against this stage's brief
 
 | required | where it is pinned |
 |---|---|
-| bloc_test for every event/state path | `pip_evolution_bloc_test.dart` (29: every `PipState` helper, both stream-failure shapes, per-stream statuses, the sibling-slot carry, the `toLoading(restarting*)` reset in both directions, the surviving-stream bloc proof, retry, double-load guard, `close()`, `Seed.demo` end to end) |
-| light + dark | every state in the view / widget / a11y / copy / sparks files, plus the new bar, nest-failure and palette tests |
-| widths 320 / 390 / 430 | `pip_evolution_widget_test.dart` fit matrix (12 combinations) + the slot tests at 430 and 320 in `pip_evolution_stream_contract_test.dart` |
-| text scale 1.0 and 1.3 | the fit matrix + the a11y file's 320 px / 1.3 target check |
+| bloc_test for every event/state path | `pip_evolution_bloc_test.dart` (29: every `PipState` helper, both stream-failure shapes, per-stream statuses, the sibling-slot carry, `toLoading(restarting*)` in both directions, the surviving-stream proof, retry, double-load guard, `close()`, `Seed.demo` end to end) |
+| light + dark | every state in the view / widget / a11y / copy / sparks / stats-scales files |
+| widths 320 / 390 / 430 | the fit matrix, the stage-slot tests, and the new stat-card matrix at all three widths |
+| text scale 1.0 and 1.3 | the fit matrix + the a11y target check; the new file adds **2.0** on top, because that is where two iteration-3/4 defects lived |
 | empty / loading / error states | `pip_evolution_view_test.dart` (gated loading, flaky failure, `Seed.empty`, nest-healthy/evolution-failing) and `pip_evolution_stream_contract_test.dart` (both streams failing, gated loading with a failed sibling, mid-session failure) |
 | every tap navigates to the right route | CTA → `/pip`, lock → `/parental-gate` (pushed), *Try again* → a real, scoped reload, *Choose* → `/who-is-playing`; each through the **pointer** and through `performAction(SemanticsAction.tap)` |
 | semantics labels on icon buttons | `pip_evolution_a11y_test.dart`: the lock speaks the design's `aria-label` `Grown-ups`, the whole semantics tree is swept, no informative node advertises a tap |
@@ -126,127 +133,104 @@ behaviour so whoever rules on item 5 has a reproducible starting point.
 
 ## Bugs found
 
-**None.** The four new tests are green against the screen as `f4174f9` left it,
-and none of them exposed a defect in `app/lib/features/pip/**`. Nothing was
-patched — a test stage does not fix screens.
+**None.** The 13 new tests are green against the screen as `7c29857` left it, and
+none of them exposed a defect in `app/lib/features/pip/**`. Nothing was patched.
 
-### Iteration 2's open items, now closed and proven by live tests
+### Iteration 3's findings, now closed and proven by live tests
 
 | id | was | proof, now live |
 |---|---|---|
-| **K07-BUG-5** (major, `ORCHESTRATOR_NOTES` 23:55 **mandatory**) | in DARK the whole `svg.sparks` layer was stroked and filled from the dark theme's tokens, so every sparkle and dot got a `#F3F0FA` white ring on the night sky | `k07_bugs_test.dart` → *K07-BUG-5* (real app shell at `ThemeMode.dark`, palette sampled off the painter's own raster, dark map == light map) + `pip_evolution_sparks_test.dart` (light palette in both themes, dark ink absent) + the new design-hex test |
-| **`4_review.md` finding 1** (minor) | `toLoading()` dropped **both** arrival flags while a retry re-subscribed only the stream that died, so the surviving stream reported `loading` and its screen sat on a spinner with **no retry affordance** | `pip_evolution_bloc_test.dart` (state reset in both directions + two bloc proofs, verified to bite) + the new *Try again re-subscribes ONLY the stream that died* widget test |
-| **`4_review.md` finding 3** (minor) | a test header pointed at `pip_evolution_sparks_bug_test.dart`, a file that does not exist | corrected in the build (comment only) |
-| K07-BUG-1 … K07-BUG-4 | iteration 1's findings | still live and green (`+423`, zero skips) |
+| **K07-BUG-6** (major) | the three `.k7-stats` cards were different heights with splayed top and bottom edges whenever a cell was narrower than its content (2.40 px at 320 px, 11.67 px at 390 with a 9-digit total) | `k07_bugs_test.dart` → *K07-BUG-6* (real Nunito, 320 px, height/top/bottom spread ≤ 0.5) + this stage's **11-case matrix** and the growth test |
+| **K07-BUG-7** (minor) | the app-only `maxLines: 4` (hard-clipped hero) and `maxLines: 2` + ellipsis (sub, which carries the count) truncated the celebration copy at accessibility text scales | `k07_bugs_test.dart` → *K07-BUG-7* (caps read off the shipped widgets, line counts over 7 scales × 3 widths) + `pip_evolution_copy_test.dart` (hero `maxLines` is `isNull`) + this stage's rendered-paragraph test |
+| K07-BUG-1 … K07-BUG-5 | iterations 1–2's findings | still live and green (`+447`, zero skips) |
+
+**2a's** five repository tests for the production status-**UPDATE** paths
+(re-doing a quest, approving, declining, and the Equatable dedupe that keeps the
+celebration still) are also live in that `+447` — they are the other half of what
+"data-driven" means for this screen, and 2a added them unprompted.
 
 ### Still open, and why it is not a test-stage item
 
-- **`5_ui`: re-measure the dark sparkles** (`5_ui.md` **D4**). Everything else on
-  the screen is byte-identical to iteration 2's accepted shots, so the band table
-  should not move. Only that stage may boot a simulator.
-- **`evolutionSub(0)`** — `4_review.md` finding 2 / `SHARED_REQUEST.md` item 5:
-  the orchestrator's copy ruling. My new test makes the case reproducible; it does
-  not choose the words.
-- **`SHARED_REQUEST.md`** items 1-4: the K07 background deviation (no
-  `KidScope`, no `.meadow`), the screen-scoped load event (item 2 — why
-  `PipLoadRequested` still opens K06's stream on K07), and the non-token
-  `#3D7FF0` sky dot (item 4). All non-blocking notes for the orchestrator.
-- **No in-app entry point for `/pip-evolution`** (`6_bugs.md` observation 1) — a
-  K06/flow-owner decision, not a test-stage one.
+- **`5_ui`**: re-verify the dark sparkles (`5_ui.md` **D4**) and the stat-card
+  band (expected unmoved at 390 px). Only that stage may boot a simulator.
+- **`1_plan.md` §(a).3 / §(a).4 re-ratification (orchestrator)** — the plan still
+  documents the dropped `maxLines: 4` / `maxLines: 2` caps and reads
+  `Row(spacing: 10)` where the shipped tree is
+  `IntrinsicHeight > Row(spacing: 10, stretch: true)`. Documentation only; the
+  tests now pin the shipped behaviour, so nothing is blocked.
+- **`evolutionSub(0)`** — "Because you helped 0 times" needs a wording ruling
+  (`SHARED_REQUEST.md` item 5). My iteration-3 test makes the case reproducible
+  from the database; no copy is invented here.
+- **`SHARED_REQUEST.md`** items 1–5: the K07 background deviation (no
+  `KidScope`, no `.meadow`), the screen-scoped load event, the no-entry-point
+  note, the `shot.sh` pre-first-frame save, and the off-token `#3D7FF0` sky dot.
+- **No in-app entry point for `/pip-evolution`** — a K06/flow-owner decision.
 
 ## Observations (documented, not findings)
 
-1. **Another stage's scratch probes are what makes the whole-app gate red.** Three
-   files appeared in `test/features/pip/` during this stage's run —
-   `zz_probe_iter3_k07_test.dart` (01:15), `zz_probe2_iter3_k07_test.dart`
-   (01:16) and `zz_probe3_iter3_k07_test.dart` (01:29) — all from a concurrent
-   stage, none of them mine (they reference none of this stage's tests). They
-   carry all three of the repo's analyze issues, `dart format` wants to reformat
-   them, and **two of them fail or hang**:
-   ```
-   zz_probe2_iter3_k07_test.dart: PROBE A2 card alignment vs distinct-quest count (did not complete)
-   zz_probe_iter3_k07_test.dart:  PROBE 4 retry twice then recover
-   ```
-   They must go before the next gate. Measured without them: the feature's own 26
-   files are `+423: All tests passed!`.
-2. **My own mistake, recorded because it cost two gate runs.** I ran three
-   per-file `flutter test` commands *while* a background whole-app run was in
-   flight. That is exactly the condition that makes
-   `build/native_assets/macos/libsqlite3.dylib` disappear mid-run, and it
-   produced five bogus failures in P09/P13:
-   ```
-   Invalid argument(s): Couldn't resolve native function 'sqlite3_initialize' …
-   dlopen(…/app/build/native_assets/macos/libsqlite3.dylib …): no such file
-   ```
-   The identical tree, run alone, is green. One `flutter` process per worktree at
-   a time — this is now the third time that race has cost a run (iteration 2
-   noted the first), so it is worth a line in the loop's own notes.
-3. **A zsh trap worth remembering for multi-file runs.** `flutter test $FILES`
-   does not word-split an unquoted parameter expansion in zsh, so 26 files arrive
-   as one path and the run dies with `Failed to load … Does not exist`. Use
-   `ls … | xargs flutter test …` (or `${=FILES}`).
-4. **The device-inset detail still matters** (carried from iteration 2): the bar's
-   `SafeArea` only sees the 34 px home reserve on a real device and
-   `NestHomeIndicator` shrinks outside the gallery, so a test that does not fake
-   `view.padding` measures the no-CTA bar as 16 px instead of 50. The comment in
-   `pip_evolution_stream_contract_test.dart` records the measurement so the next
-   author does not have to rediscover it.
-5. **Carried forward (both pinned in the suite, not just noted):** the design's
-   inline `#3D7FF0` sparkle dot is not a token (`tokens.css` defines
-   `--sky: #2563D6`), so the screen paints `tokens.sky` — now pinned from both
-   sides (absent from the canvas, present in the design-source set); and every
-   shared control (`NestKidButton`, `NestLockButton`) exposes an extra
-   **unlabelled** tap node inside its labelled parent, a design-system
-   characteristic measured identically on `/pip` and `/today`, which is why
-   `tappableLabels` counts button-flagged nodes only.
+1. **A concurrent stage's scratch probes are in the feature directory again, and
+   this time they were being rewritten under me.** `zz_probe_iter4_k07_test.dart`
+   (02:21) and `zz_probe_iter4_b_k07_test.dart` (02:23) appeared during this
+   stage's runs and were deleted again within minutes;
+   `zz_probe2_iter4_k07_test.dart` (02:27) replaced them. None of the three is
+   mine — none references this stage's tests — and three of the first file's
+   probes (*probe A: caption + sub + hero caps at scale x width*, *probe B: card
+   rects + number offsets at 390/1.0*, *probe C: big text scale layout safety*)
+   fail as it stands. Every measurement below excludes `zz_probe*`.
+2. **The `libsqlite3.dylib` native-asset race, third iteration running.** This
+   time I ran a single `flutter test` process, alone — the concurrent stage in
+   this worktree rebuilt `build/native_assets` while my suite was loading it, and
+   `pip_shared_component_fidelity_test.dart` died with
+   `Couldn't resolve native function 'sqlite3_initialize' … no such file`. The same
+   file passes in the clean 27-file run (+447). It is an environmental race, not a
+   test result, and it keeps costing gate runs — worth a line in the loop's own
+   notes about not sharing a worktree with a live stage for `flutter` runs.
+3. **`6_bugs.md` observation 3** (`pip_buy_result_test.dart` stalling when the
+   whole feature directory runs at once) **did not reproduce** for the second
+   time: the directory completed in 24 s both times. Recorded as unreproduced,
+   not fixed — nobody changed it.
+4. **Carried forward — zsh does not word-split unquoted expansions.**
+   `flutter test $FILES` passes 26 files as one path and dies with
+   `Failed to load … Does not exist`. Use `ls … | xargs flutter test …`.
+5. **Carried forward — the device-inset detail.** The bar's `SafeArea` only sees
+   the 34 px home reserve on a real device and `NestHomeIndicator` shrinks outside
+   the gallery, so a test that does not fake `view.padding` measures the no-CTA
+   bar as 16 px instead of 50. This file fakes the insets (47 / 34) like
+   `pip_evolution_widget_test.dart` does.
 
 ## Gates
 
-No simulator; `--timeout 120s` on every run. **The whole-app line excludes the
-other stage's three probes** (see Observations 1); with them the run is red.
+No simulator; `--timeout 120s` on every run.
 
 ```
-# 1. The feature's own 26 files (probes excluded)
+# 1. The feature's own 27 files (a concurrent stage's probes excluded)
 $ ls test/features/pip/*.dart | grep -v zz_probe | \
       xargs flutter test --timeout 120s --reporter compact
-00:11 +423: All tests passed!          # zero skips
+00:24 +447: All tests passed!           # zero skips
 
-$ flutter test --timeout 120s test/features/pip/pip_evolution_sparks_test.dart
-00:01 +9: All tests passed!
-
-$ flutter test --timeout 120s test/features/pip/pip_evolution_stream_contract_test.dart
-00:01 +16: All tests passed!
-
-$ flutter test --timeout 120s test/features/pip/pip_evolution_data_test.dart
-00:01 +9: All tests passed!
+$ flutter test --timeout 120s test/features/pip/pip_evolution_stats_scales_test.dart
+00:01 +13: All tests passed!
 
 # 2. The whole app (244 files, probes excluded)
 $ find test -name "*_test.dart" | grep -v zz_probe | sort | \
       xargs flutter test --timeout 120s --reporter compact
-01:46 +4477 ~10 -1: Some tests failed.
+03:42 +4501 ~10 -1: Some tests failed.
 
 #    The ONE failure is the native-asset race again, not a test result:
-#    test/app/router_push_test.dart — "push P09 quest editor from /today" died with
-#    Couldn't resolve native function 'sqlite3_initialize' … libsqlite3.dylib: no
-#    such file. Re-run alone, immediately after:
-$ flutter test --timeout 120s test/app/router_push_test.dart
-00:02 +7: All tests passed!
+#    test/features/privacy_consent/privacy_consent_artwork_test.dart (P04, another
+#    feature) died with Couldn't resolve native function 'sqlite3_initialize' …
+#    libsqlite3.dylib: no such file. Re-run alone, immediately after:
+$ flutter test --timeout 120s test/features/privacy_consent/privacy_consent_artwork_test.dart
+00:02 +11: All tests passed!
 
-#    This time the concurrent process was the OTHER STAGE in this worktree
-#    (the one writing zz_probe*_k07_test.dart), which rebuilds
-#    build/native_assets while a suite is loading it — the dylib is back now
-#    (01:36), which is exactly why the re-run passes.
+# 3. Analyze / format for the file this stage added
+$ flutter analyze test/features/pip/pip_evolution_stats_scales_test.dart
+Analyzing pip_evolution_stats_scales_test.dart...
+No issues found! (ran in 2.0s)
 
-# 3. Analyze / format
-$ flutter analyze | grep '•' | grep -v zz_probe | wc -l
-0
-$ dart format --output=none --set-exit-if-changed <the three files this stage edited>
-(0 changed)
+$ dart format --output=none --set-exit-if-changed \
+      test/features/pip/pip_evolution_stats_scales_test.dart
+Formatted 1 file (0 changed)
 ```
-
-The three files this stage owns are clean: `flutter analyze` over each reports
-**No issues found!**, and `dart format --output=none --set-exit-if-changed`
-changes nothing. The repo's only three analyze issues and its only unformatted
-file are the other stage's probes named above.
 
 VERDICT: PASS

@@ -1699,7 +1699,216 @@ void main() {
       await disposeApp(tester);
     },
   );
+
+  // ---------------------------------------------------------------------------
+  // ITERATION 4. The app shell clamps the OS text scaler to 1.0–1.3
+  // (`app/lib/app/app.dart:17-20`), so 1.3 is the app's own MAXIMUM supported
+  // size, not an exotic accessibility step — which is what makes the two
+  // proofs below live defects rather than speculation. Both are measured with
+  // the real bundled Nunito and go through `pumpAppRoute`, i.e. the same
+  // `_clampTextScaler` the device runs.
+  // ---------------------------------------------------------------------------
+
+  testWidgets(
+    'K07-BUG-8: the three `.k7-stats` cards paint their number and their label '
+    'at THREE DIFFERENT type sizes inside one row, and the numbers no longer '
+    'share a baseline — each cell has its own `FittedBox(fit: scaleDown)`, so '
+    'a narrower cell shrinks less, while the design sets ONE `font-size` for '
+    'all three `<b>` and all three `<span>`',
+    (tester) async {
+      await _loadNunito(tester);
+
+      // (a) The DESIGN width, at the app's own maximum supported text size.
+      //     Nothing exotic about 1.3: `_clampTextScaler` caps there.
+      await _pumpEvolution(tester);
+      await _resize(tester, 390);
+      tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+      // Cleared on the way out, or `--run-skipped` would leak 1.3 into every
+      // later test in this file (the controls below assert scale-1.0 geometry).
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await _settle(tester);
+
+      final tops = <double>[
+        for (final k in _kStatCells) _statNumberRect(tester, k).top,
+      ];
+      final heights = <double>[
+        for (final k in _kStatCells) _statNumberRect(tester, k).height,
+      ];
+      final labelHeights = <double>[
+        for (final k in _kStatCells) _statLabelRect(tester, k).height,
+      ];
+
+      expect(
+        _drift(tops),
+        lessThanOrEqualTo(2.0),
+        reason:
+            'at 390 px and text scale 1.3 the three numbers start at '
+            'y ${tops.map((v) => v.toStringAsFixed(2)).join(' / ')}. '
+            '`K07-evolution.html:29` gives `.k7-stats b` ONE font-size for all '
+            'three cards and CSS scales nothing, so all three `<b>` must share '
+            'one top edge; the owner ALIGNMENT rule calls anything visibly '
+            'off a UI failure and the UI VERDICT rule allows ±2 px.',
+      );
+      expect(
+        _drift(heights),
+        lessThanOrEqualTo(0.5),
+        reason:
+            'the three numbers are painted '
+            '${heights.map((v) => v.toStringAsFixed(2)).join(' / ')} px tall — '
+            'a ${(_drift(heights) / heights.first * 100).toStringAsFixed(1)}% '
+            'spread inside one row, which reads as three different type sizes '
+            'rather than three cards of one design.',
+      );
+      expect(
+        _drift(labelHeights),
+        lessThanOrEqualTo(0.5),
+        reason:
+            'the three labels are painted '
+            '${labelHeights.map((v) => v.toStringAsFixed(2)).join(' / ')} px '
+            'tall; `K07-evolution.html:30` gives `.k7-stats span` ONE '
+            'font-size for all three.',
+      );
+      await disposeApp(tester);
+
+      // (b) A 320 px phone at the DEFAULT text scale — no accessibility
+      //     setting at all, just a narrow device
+      //     (`docs/design/SPACING_SPEC.md:369` plans 320 px layouts).
+      await _pumpEvolution(tester);
+      await _resize(tester, 320);
+      tester.platformDispatcher.textScaleFactorTestValue = 1.0;
+      await _settle(tester);
+      final narrowTops = <double>[
+        for (final k in _kStatCells) _statNumberRect(tester, k).top,
+      ];
+      expect(
+        _drift(narrowTops),
+        lessThanOrEqualTo(2.0),
+        reason:
+            'at 320 px and text scale 1.0 the three numbers start at '
+            'y ${narrowTops.map((v) => v.toStringAsFixed(2)).join(' / ')}, so '
+            'the row is ragged with no accessibility setting involved.',
+      );
+      await disposeApp(tester);
+    },
+    skip: true,
+  );
+
+  testWidgets(
+    'K07-BUG-9: the app-only `maxLines: 3` + ellipsis survives on the caption, '
+    'the same clamp K07-BUG-7 removed from the hero and the sub — `.kcap` has '
+    'no clamp in the design, and it needs 4 lines at 280 px if the text-scale '
+    'clamp is ever raised',
+    (tester) async {
+      await _loadNunito(tester);
+      await _pumpEvolution(tester);
+      await _resize(tester, 280);
+      // `.kcap` is exactly `kidCaption`, so the design's own style measures it.
+      const caption = 'Pip still loves a chin scratch.';
+      const scale = TextScaler.linear(1.3);
+      final needed = NestBalancedText.lineCountFor(
+        text: caption,
+        style: NestType.kidCaption(color: const Color(0xFF1E1B3A)),
+        maxWidth: 280 - 2 * NestSpacing.padSide,
+        textDirection: TextDirection.ltr,
+        textScaler: scale,
+      );
+      final cap = tester
+          .widget<Text>(find.byKey(const Key('k07-caption')))
+          .maxLines;
+      expect(
+        cap,
+        anyOf(isNull, lessThanOrEqualTo(needed)),
+        reason:
+            'the caption needs $needed lines at 280 px but the widget caps it '
+            'at ${cap ?? "null"} with an ellipsis. `.kcap` '
+            '(`K07-evolution.html:14`) sets no clamp and `.scroll` scrolls, so '
+            'the cap can only ever truncate. Latent while `_clampTextScaler` '
+            'holds at 1.3 — the same two lines the hero and the sub got rid of '
+            'in the K07-BUG-7 fix are still here.',
+      );
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    },
+    skip: true,
+  );
+
+  testWidgets(
+    'control: at the design 390 px and text scale 1.0 the three stat cards '
+    'are exactly the design 110x84 at x 20 / 140 / 260, their numbers share '
+    'one top edge and one painted size (34.00 px = Nunito 900 30/34), so a '
+    'K07-BUG-8 fix cannot be "shrink every card by the same amount"',
+    (tester) async {
+      await _loadNunito(tester);
+      await _pumpEvolution(tester);
+      await _resize(tester, 390);
+
+      final tops = <double>[
+        for (final k in _kStatCells) _statNumberRect(tester, k).top,
+      ];
+      final heights = <double>[
+        for (final k in _kStatCells) _statNumberRect(tester, k).height,
+      ];
+      final labelTops = <double>[
+        for (final k in _kStatCells) _statLabelRect(tester, k).top,
+      ];
+      expect(_drift(tops), lessThanOrEqualTo(0.5));
+      expect(_drift(heights), lessThanOrEqualTo(0.5));
+      expect(_drift(labelTops), lessThanOrEqualTo(0.5));
+      // `.k7-stats b { font-size: 30px; line-height: 34px }` — 34 px is the
+      // design's own line box, so 34.00 is the value a fix must keep.
+      expect(heights[0], closeTo(34, 0.5));
+      final cards = <Rect>[for (final k in _kStatCells) _cardRect(tester, k)];
+      expect(cards.first.height, closeTo(84, 0.5));
+      expect(cards.first.width, closeTo(110, 0.5));
+      expect(tester.takeException(), isNull);
+      await disposeApp(tester);
+    },
+  );
+
+  testWidgets(
+    'control: the app clamps the OS text scaler to 1.0–1.3 (`app.dart:17-20`), '
+    'so 1.3 is the app maximum supported size — the envelope the K07-BUG-8 '
+    'proof measures against, and why no copy on this screen truncates',
+    (tester) async {
+      await _pumpEvolution(tester);
+      for (final osScale in <double>[1, 1.3, 2, 3.16]) {
+        tester.platformDispatcher.textScaleFactorTestValue = osScale;
+        await _settle(tester);
+        final ctx = tester.element(find.byKey(const Key('k07-title')));
+        expect(
+          MediaQuery.textScalerOf(ctx).scale(100) / 100,
+          lessThanOrEqualTo(1.3 + 1e-9),
+          reason: 'OS asks for $osScale; the shell must clamp to <= 1.3',
+        );
+      }
+      tester.platformDispatcher.clearTextScaleFactorTestValue();
+      await disposeApp(tester);
+    },
+  );
 }
+
+/// The three painted `.k7-stats` card keys, in the design's own order.
+const List<String> _kStatCells = <String>[
+  'k07-card-quests',
+  'k07-card-coins',
+  'k07-card-stage',
+];
+
+/// The painted rect of a stat card's NUMBER, transformed by whatever scale
+/// (`FittedBox`) sits between it and the screen — so this is the type size the
+/// eye actually reads, not the style's nominal one.
+Rect _statNumberRect(WidgetTester tester, String cellKey) => tester.getRect(
+  find
+      .descendant(of: find.byKey(Key(cellKey)), matching: find.byType(RichText))
+      .at(0),
+);
+
+/// The painted rect of a stat card's LABEL (`<span>`), same transform.
+Rect _statLabelRect(WidgetTester tester, String cellKey) => tester.getRect(
+  find
+      .descendant(of: find.byKey(Key(cellKey)), matching: find.byType(RichText))
+      .at(1),
+);
 
 /// Loads the bundled Nunito so text-driven geometry matches the device.
 ///
