@@ -45,28 +45,6 @@ PipAccessory pipAccessoryOf(String raw) {
   };
 }
 
-/// Grapheme-safe avatar initial for a child's nickname.
-///
-/// `nickname[0]` indexes UTF-16 **code units**, so a nickname opening with a
-/// non-BMP character (emoji, regional-indicator flag, many CJK extensions)
-/// yields an unpaired surrogate and `toUpperCase()` then throws
-/// `ArgumentError: string is not well-formed UTF-16` while laying out the
-/// frame — the whole screen fails to build, not just the avatar. P05 accepts
-/// such a name (no `inputFormatters`, no character filter), so the crash is
-/// reachable: K02-TEST-BUG-A. Runes keep the string well-formed —
-/// `String.fromCharCode` can split a grapheme cluster but never a code point,
-/// so the frame always builds and the emoji itself renders as the initial.
-// TODO(K02): SHARED_REQUEST #3 asks for one `nestAvatarInitial()` in the
-// design system covering all seven call sites (four features). Delete this
-// and call the shared helper when it lands.
-// TODO(K02): the parent row keeps its own `'S'` fallback at
-// `features/today/presentation/widgets/today_loaded_body.dart` — pass it via
-// [fallback] there rather than branching at the call site.
-String kidAvatarInitial(String nickname, {String fallback = '?'}) {
-  if (nickname.isEmpty) return fallback;
-  return String.fromCharCode(nickname.runes.first).toUpperCase();
-}
-
 /// Display name for the pet-stage semantics label (design alt text).
 String pipStageName(int stage) {
   return switch (stage) {

@@ -8,14 +8,19 @@
 //   1. **One height for the three `.k7-stats` cards** — `.k7-stats` is a flex row
 //      with no `align-items`, i.e. `stretch`, and each card's height is
 //      content-driven (the label wraps on a narrow cell).
-//   2. **One type size for the three numbers, at the design's own size.** The
-//      per-cell `FittedBox(scaleDown)` is gone (K07-BUG-8): each cell had its own
-//      intrinsic width (`4`/`120`/`3` and `quests done`/`coins grown`/`of 4
-//      stages`), so the narrower cells shrank less and the three numbers came out
-//      at three different sizes — 3.16 px of top drift at 390 px / 1.3 and a 43 %
-//      size difference with a 9-digit coin total. CSS never scales type, it
-//      wraps, so the painted line box must be the design's single `30/34` for
-//      all three, at every width, scale and value.
+//   2. **One type size for the three numbers, at most the design's own size.**
+//      The per-cell `FittedBox(scaleDown)` is gone (K07-BUG-8): each cell had
+//      its own intrinsic width (`4`/`120`/`3` and `quests done`/`coins grown`/
+//      `of 4 stages`), so the narrower cells shrank less and the three numbers
+//      came out at three different sizes — 3.16 px of top drift at 390 px /
+//      1.3 and a 43 % size difference with a 9-digit coin total. Shared/kid_bugs
+//      (K07-BUG-10) scales all three by ONE shared factor when a number would
+//      otherwise clip, so they stay equal with no clipping: the painted line
+//      box is the design's single `30/34` whenever everything fits (390 /
+//      1.0 is pixel-identical), and a shared step down at narrower cells
+//      (e.g. seed 175 at 320 px / 1.3, 9999 anywhere narrow). CSS never scales
+//      type independently per card — and the app never does either (no
+//      per-cell `FittedBox`, no independent sizes).
 //   3. **The cards still GROW with the text scale** — a pinned height would
 //      "fix" the splay by freezing the row, which is the opposite of what
 //      accessibility needs and exactly why `IntrinsicHeight` was chosen.
@@ -284,13 +289,15 @@ void main() {
     }
   });
 
-  group('the three NUMBERS are one type size, at the design size', () {
-    // K07-BUG-8. The per-card `FittedBox(scaleDown)` made each card shrink by
+  group('the three NUMBERS are one type size, at most the design size', () {
+    // K07-BUG-8. The per-cell `FittedBox(scaleDown)` made each card shrink by
     // its own factor, so the numbers came out at three different sizes. The
-    // invariant is stronger than "the three are equal": they must be the
-    // DESIGN's single line box at the ambient scale, because a "shrink all three
-    // by the same amount" fix would also make them equal and would still be
-    // wrong (the design never scales type — it wraps).
+    // invariant is: they are always equal (one shared size), never larger
+    // than the design's line box, and exactly the design's box at 390 / 1.0
+    // (unchanged). Shared/kid_bugs (K07-BUG-10) steps all three down together
+    // when a number would otherwise clip (seed 175 at 320 / 1.3, 9999
+    // anywhere narrow) — equal and smaller, never independent and never
+    // clipped.
     const cases = <({double width, double textScale, ThemeMode theme})>[
       (width: 320, textScale: 1, theme: ThemeMode.light),
       (width: 320, textScale: 1.3, theme: ThemeMode.light),
@@ -331,19 +338,35 @@ void main() {
             reason:
                 '$label: painted heights '
                 '${heights.map((v) => v.toStringAsFixed(2)).join(' / ')} — '
-                'one `font-size` for all three',
+                'one shared `font-size` for all three (never independent)',
           );
-          // …and that size is the DESIGN's, not merely a shared one.
+          // …and that shared size is at most the DESIGN's: it is exactly the
+          // design box whenever everything fits (390 / 1.0 is pixel-identical),
+          // and a shared step down when a number would otherwise clip
+          // (K07-BUG-10) — never larger, never per-cell.
           for (final height in heights) {
             expect(
               height,
-              closeTo(_designNumberLineBox * scale, 0.75),
+              lessThanOrEqualTo(_designNumberLineBox * scale + 0.75),
               reason:
                   '$label: a painted number is ${height.toStringAsFixed(2)} px '
                   'tall; the design line box at this scale is '
                   '${(_designNumberLineBox * scale).toStringAsFixed(2)} — the '
-                  'app must not scale the type down to fit',
+                  'app must never paint larger than the design',
             );
+          }
+          // At the design cell the shared scale is 1.0, so geometry is
+          // unchanged.
+          if (testCase.width == 390 &&
+              (scale - 1.0).abs() < 0.01 &&
+              testCase.theme == ThemeMode.light) {
+            for (final height in heights) {
+              expect(
+                height,
+                closeTo(_designNumberLineBox * scale, 0.75),
+                reason: '$label: 390 / 1.0 must stay pixel-identical',
+              );
+            }
           }
           // The number's inset is the CSS one for all three: card top + 3 px
           // border + 12 px padding.
@@ -365,14 +388,16 @@ void main() {
     }
   });
 
-  group('a wide value wraps the label and grows the row — it never scales', () {
+  group('a wide value scales all three together and grows the row', () {
     testWidgets('9999 coins at 320 px: one size, one top, a taller card', (
       tester,
     ) async {
-      // The orchestrator's own bound (`ORCHESTRATOR_NOTES` 03:03): the numbers
-      // are single-line and `softWrap: false`, so a wide value must still FIT at
-      // every supported width and scale, and the row answers a wide value by
-      // wrapping the LABEL and growing — which is what CSS does.
+      // Shared/kid_bugs (K07-BUG-10): the numbers are single-line and
+      // `softWrap: false`, so a wide value must still FIT at every supported
+      // width and scale without clipping. The row answers a wide value by
+      // scaling all three numbers by ONE shared factor (so they stay equal)
+      // AND by wrapping the LABEL and growing — no clipping, no independent
+      // sizes.
       await setCoins(tester, 9999);
       await pumpEvolution(tester, width: 320, textScale: 1.3);
 
@@ -383,13 +408,27 @@ void main() {
         lessThanOrEqualTo(0.5),
         reason: 'one top edge at ${scale}x with a wide value',
       );
-      for (final n in numbers) {
+      // One shared size (equal heights), at most the design box — smaller
+      // here because 9999 needs the shared step down to avoid clipping.
+      final heights = <double>[for (final n in numbers) n.height];
+      expect(
+        spread(heights),
+        lessThanOrEqualTo(0.5),
+        reason: 'one shared size for all three numbers',
+      );
+      for (final height in heights) {
         expect(
-          n.height,
-          closeTo(_designNumberLineBox * scale, 0.75),
-          reason: 'a wide value must not shrink the type',
+          height,
+          lessThanOrEqualTo(_designNumberLineBox * scale + 0.75),
+          reason: 'never larger than the design line box',
         );
       }
+      expect(
+        heights.first,
+        lessThan(_designNumberLineBox * scale - 0.75),
+        reason:
+            '9999 at 320 / 1.3 needs the shared scale-down to avoid clipping',
+      );
       // The value is the DB's, not a design literal.
       expect(
         tester.widget<Text>(find.byKey(const Key('k07-stat-coins'))).data,

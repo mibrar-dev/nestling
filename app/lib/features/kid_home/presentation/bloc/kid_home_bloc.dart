@@ -124,14 +124,27 @@ class KidHomeBloc extends Bloc<KidHomeEvent, KidHomeState> {
     // roster arriving over a dead home never masks the failure card.
     final failed = _profilesFailed;
     _profilesFailed = false;
+    // K01-BUG-7: clear an orphaned selection when its child no longer
+    // exists (deleted while selected). Without this the bloc's
+    // `selectedProfileId` gate drops every later tap and the view's `_busy`
+    // re-arms on each dropped tap — a dead picker. The view also dispatches
+    // `KidHomeSelectionHandled` on its own orphan path; this is the backstop
+    // for roster changes that arrive without a view resolution.
+    KidHomeState next;
     if (failed &&
         _homeSub != null &&
         (state.status == KidHomeStatus.failure ||
             state.status == KidHomeStatus.loading)) {
-      emit(state.copyWithProfilesRecovered(event.profiles));
+      next = state.copyWithProfilesRecovered(event.profiles);
     } else {
-      emit(state.copyWithProfiles(event.profiles));
+      next = state.copyWithProfiles(event.profiles);
     }
+    final selected = next.selectedProfileId;
+    if (selected != null &&
+        !event.profiles.any((profile) => profile.id == selected)) {
+      next = next.copyWithSelectionHandled();
+    }
+    emit(next);
   }
 
   void _onProfilesFailed(

@@ -34,7 +34,7 @@
 //      the design cell (the ±2 px geometry band) — i.e. removing the clamp did
 //      not quietly change the card rhythm at 390.
 //   4. K10-BUG-2 through the WIDGET: the real `recordPayout` overshoot renders
-//      `100% there!` + `£0.00 to go` + a full bar + a `100%` progress
+//      `100% there!` + `Goal reached!` + a full bar + a `100%` progress
 //      semantics label, in both themes (the bugs file covers the caption; this
 //      covers the bar and the spoken value, which the caption test cannot see).
 //   5. **Short viewports — the dimension NO K10 test ever covered.** Every K10
@@ -435,7 +435,10 @@ void main() {
 
       // The overshoot really is on screen: saved 3550 of a 2499 target.
       expect(find.text('£35.50'), findsOneWidget, reason: theme.name);
-      expect(find.text('£0.00 to go'), findsOneWidget, reason: theme.name);
+      // Shared/kid_bugs: a reached goal replaces `£0.00 to go` with the
+      // reached state (the design has no reached copy, so `Goal reached!`).
+      expect(find.text('Goal reached!'), findsOneWidget, reason: theme.name);
+      expect(find.text('£0.00 to go'), findsNothing, reason: theme.name);
       // K10-BUG-2: the caption follows the CLAMPED fraction.
       expect(find.text('100% there!'), findsOneWidget, reason: theme.name);
       expect(find.text('142% there!'), findsNothing, reason: theme.name);
@@ -475,7 +478,8 @@ void main() {
     await _pump(tester, width: 320, textScale: 1.3);
 
     expect(find.text('100% there!'), findsOneWidget);
-    for (final line in <String>['£35.50', '£0.00 to go', '100% there!']) {
+    expect(find.text('Goal reached!'), findsOneWidget);
+    for (final line in <String>['£35.50', 'Goal reached!', '100% there!']) {
       final rect = tester.getRect(find.text(line));
       expect(
         rect.left,

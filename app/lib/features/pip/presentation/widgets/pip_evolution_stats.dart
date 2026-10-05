@@ -85,37 +85,83 @@ class PipEvolutionStats extends StatelessWidget {
       // height"). Deliberately NOT a fixed card height: the cards must still
       // GROW at large text scales and on a 320 px phone, where the labels
       // wrap (6_bugs.md K07-BUG-6).
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          spacing: EvolutionStatsGeometry.gap,
-          children: <Widget>[
-            Expanded(
-              child: _StatCell(
-                cellKey: const Key('k07-card-quests'),
-                value: questsDone,
-                label: evolutionStatQuestsLabel(),
-                valueKey: const Key('k07-stat-quests'),
-              ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // K07-BUG-10: one shared scale for all three numbers. A per-cell
+          // `FittedBox(scaleDown)` scaled each card by its own content width
+          // (K07-BUG-8: three different type sizes, drifting tops), and the
+          // unscaled `softWrap: false` clipped mid-digit when a number
+          // exceeded its card (9999 at 320 px / 1.3). Measure the widest
+          // number once and shrink ALL three by the same factor, so they stay
+          // equal size with no clipping. At every reachable width the factor
+          // is 1.0 — geometry at 390 / 1.0 is unchanged.
+          final tokens = context.nest;
+          final scaler = MediaQuery.textScalerOf(context);
+          final numberStyle = NestType.kidTitle(color: tokens.ink).copyWith(
+            fontSize: EvolutionStatsGeometry.numberSize,
+            height:
+                EvolutionStatsGeometry.numberLineHeight /
+                EvolutionStatsGeometry.numberSize,
+          );
+          double widest = 0;
+          for (final value in <int>[questsDone, coinsGrown, stage]) {
+            final painter = TextPainter(
+              text: TextSpan(text: '$value', style: numberStyle),
+              textDirection: Directionality.of(context),
+              textScaler: scaler,
+              maxLines: 1,
+            )..layout();
+            if (painter.width > widest) widest = painter.width;
+          }
+          // Card content width: a third of the row minus the two 10 px gaps,
+          // minus the 3 px ink border on each side and the cell's 6 px
+          // horizontal padding on each side.
+          final rowWidth = constraints.maxWidth;
+          final border = context.nestKid.borderWidth;
+          final cardWidth = (rowWidth - 2 * EvolutionStatsGeometry.gap) / 3;
+          final contentWidth =
+              cardWidth -
+              2 * border -
+              EvolutionStatsGeometry.cellPadding.horizontal;
+          final scale = widest <= 0
+              ? 1.0
+              : (contentWidth / widest).clamp(0.0, 1.0);
+          return IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              spacing: EvolutionStatsGeometry.gap,
+              children: <Widget>[
+                Expanded(
+                  child: _StatCell(
+                    cellKey: const Key('k07-card-quests'),
+                    value: questsDone,
+                    label: evolutionStatQuestsLabel(),
+                    valueKey: const Key('k07-stat-quests'),
+                    scale: scale,
+                  ),
+                ),
+                Expanded(
+                  child: _StatCell(
+                    cellKey: const Key('k07-card-coins'),
+                    value: coinsGrown,
+                    label: evolutionStatCoinsLabel(),
+                    valueKey: const Key('k07-stat-coins'),
+                    scale: scale,
+                  ),
+                ),
+                Expanded(
+                  child: _StatCell(
+                    cellKey: const Key('k07-card-stage'),
+                    value: stage,
+                    label: evolutionStatStagesLabel(),
+                    valueKey: const Key('k07-stat-stage'),
+                    scale: scale,
+                  ),
+                ),
+              ],
             ),
-            Expanded(
-              child: _StatCell(
-                cellKey: const Key('k07-card-coins'),
-                value: coinsGrown,
-                label: evolutionStatCoinsLabel(),
-                valueKey: const Key('k07-stat-coins'),
-              ),
-            ),
-            Expanded(
-              child: _StatCell(
-                cellKey: const Key('k07-card-stage'),
-                value: stage,
-                label: evolutionStatStagesLabel(),
-                valueKey: const Key('k07-stat-stage'),
-              ),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -128,6 +174,7 @@ class _StatCell extends StatelessWidget {
     required this.value,
     required this.label,
     required this.valueKey,
+    this.scale = 1.0,
   });
 
   /// Keys the painted CARD (its background/border rect), not just the number:
@@ -136,6 +183,11 @@ class _StatCell extends StatelessWidget {
   final int value;
   final String label;
   final Key valueKey;
+
+  /// K07-BUG-10: the ONE shared scale for all three numbers (1.0 when every
+  /// number fits). Applied as a uniform `fontSize`, so the three numbers
+  /// stay equal size with no clipping and one top edge.
+  final double scale;
 
   @override
   Widget build(BuildContext context) {
@@ -191,8 +243,10 @@ class _StatCell extends StatelessWidget {
             softWrap: false,
             // Nunito 900 30/34 — no shared token is 30 px, so the size/line
             // pair is set here at the call site (`K07-evolution.html:29`).
+            // K07-BUG-10: `scale` is the row's ONE shared factor (1.0 when
+            // everything fits, so 390 / 1.0 is pixel-identical).
             style: NestType.kidTitle(color: tokens.ink).copyWith(
-              fontSize: EvolutionStatsGeometry.numberSize,
+              fontSize: EvolutionStatsGeometry.numberSize * scale,
               height:
                   EvolutionStatsGeometry.numberLineHeight /
                   EvolutionStatsGeometry.numberSize,

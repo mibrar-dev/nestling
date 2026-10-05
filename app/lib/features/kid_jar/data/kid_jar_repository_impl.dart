@@ -61,7 +61,7 @@ class KidJarRepositoryImpl implements KidJarRepository {
       }
       return JarSnapshot(
         childId: childId,
-        items: _mapItems(rows, londonWeekStartUtc(appNowUtc()), iconForTitle),
+        items: _mapItems(rows, appNowUtc(), iconForTitle),
         summary: _summarize(childId, rows, goals, setting),
       );
     });
@@ -86,13 +86,13 @@ class KidJarRepositoryImpl implements KidJarRepository {
   /// newest-first order.
   static List<JarEntry> _mapItems(
     List<LedgerEntry> rows,
-    DateTime weekStart,
+    DateTime nowUtc,
     Map<String, String> iconForTitle,
   ) {
     return <JarEntry>[
       for (final row in rows)
         if (_moneyInTypes.contains(row.type))
-          _toEntry(row, weekStart, iconForTitle),
+          _toEntry(row, nowUtc, iconForTitle),
     ];
   }
 
@@ -219,13 +219,16 @@ class KidJarRepositoryImpl implements KidJarRepository {
       final goal = await (_db.select(
         _db.savingsGoals,
       )..where((g) => g.id.equals(goalId))).getSingleOrNull();
+      // K09-BUG-8: money must never leave the jar to nowhere. A goal id
+      // that resolves to nothing — or to another child's goal — rejects
+      // before any write, so no `savings_move` row is inserted and no
+      // `savedPence` moves.
+      if (goal == null || goal.childId != childId) return;
       // A savings move can never credit past the goal's remainder — without
       // the cap the data drifts over target and the card contradicts its own
       // "100% there!" (K09-BUG-4). A full goal makes the move a no-op.
       final requested = amountPence.abs();
-      final remainder = goal == null
-          ? requested
-          : goal.targetPence - goal.savedPence;
+      final remainder = goal.targetPence - goal.savedPence;
       if (remainder <= 0) return;
       final move = requested < remainder ? requested : remainder;
       await _db
@@ -241,26 +244,24 @@ class KidJarRepositoryImpl implements KidJarRepository {
               dateTz: Value(zone),
             ),
           );
-      if (goal != null) {
-        await (_db.update(
-          _db.savingsGoals,
-        )..where((g) => g.id.equals(goalId))).write(
-          SavingsGoalsCompanion(savedPence: Value(goal.savedPence + move)),
-        );
-      }
+      await (_db.update(
+        _db.savingsGoals,
+      )..where((g) => g.id.equals(goalId))).write(
+        SavingsGoalsCompanion(savedPence: Value(goal.savedPence + move)),
+      );
     });
   }
 
   static JarEntry _toEntry(
     LedgerEntry row,
-    DateTime weekStart,
+    DateTime nowUtc,
     Map<String, String> iconForTitle,
   ) {
     return switch (row.type) {
       'weekly_base' => JarEntry(
         id: '${row.id}',
         title: 'Pocket money',
-        detail: _relativeDay(row.date, weekStart),
+        detail: _relativeDay(row.date, nowUtc),
         type: row.type,
         amountPence: row.amountPence,
         date: row.date,
@@ -301,12 +302,38 @@ class KidJarRepositoryImpl implements KidJarRepository {
   }
 }
 
-/// `This Saturday` when the entry's London date falls in the current London
-/// week (Mon 00:00–Sun 24:00), else `Last {weekday}` — both from
-/// `london_time.dart`, never `DateTime.now()`.
-String _relativeDay(DateTime date, DateTime weekStart) {
-  final name = KidJarRepositoryImpl._weekday(toLondon(date).weekday);
-  return date.toUtc().isBefore(weekStart) ? 'Last $name' : 'This $name';
+/// K09 history day label (K09-BUG-10), from `london_time.dart`, never
+/// `DateTime.now()` — the caller passes `appNowUtc()`.
+///
+/// * same London day as now → `Today`
+/// * previous London day → `Yesterday`
+/// * current London week (Mon 00:00–Sun 24:00) → `This <weekday>`
+/// * previous London week → `Last <weekday>`
+/// * older → a dated label (`Sat 19 Sep`, UK format via `formatLondonDay`,
+///   family zone — the demo family is London, so this is the family zone)
+/// * future London day → `Coming up <date>`, never a day claim.
+///
+/// Future uses `Coming up` (not exclusion) so money never disappears from
+/// the list (K09-BUG-8 principle): K09's hero already speaks future with
+/// `coming on <weekday>`, and history's `What went in` keeps every row
+/// visible. K10's celebration is the latest *past* payout, so a future row
+/// here never leaks a `This` claim there either.
+String _relativeDay(DateTime date, DateTime nowUtc) {
+  final local = toLondon(date);
+  final nowLocal = toLondon(nowUtc);
+  final localDay = DateTime(local.year, local.month, local.day);
+  final nowDay = DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
+  final diffDays = localDay.difference(nowDay).inDays;
+  if (diffDays == 0) return 'Today';
+  if (diffDays == -1) return 'Yesterday';
+  if (diffDays > 0) return 'Coming up ${formatLondonDay(date)}';
+  final weekStart = londonWeekStartUtc(nowUtc);
+  final prevWeekStart = weekStart.subtract(const Duration(days: 7));
+  final name = KidJarRepositoryImpl._weekday(local.weekday);
+  final utc = date.toUtc();
+  if (!utc.isBefore(weekStart)) return 'This $name';
+  if (!utc.isBefore(prevWeekStart)) return 'Last $name';
+  return formatLondonDay(date);
 }
 
 /// `Birthday money (added by Mum)` → `Birthday money`; a note with no

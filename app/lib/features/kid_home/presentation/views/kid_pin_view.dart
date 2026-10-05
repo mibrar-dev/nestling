@@ -11,7 +11,6 @@ import 'package:nestling/features/kid_home/kid_home_routes.dart';
 import 'package:nestling/features/kid_home/presentation/bloc/kid_home_bloc.dart';
 import 'package:nestling/features/kid_home/presentation/bloc/kid_home_event.dart';
 import 'package:nestling/features/kid_home/presentation/bloc/kid_home_state.dart';
-import 'package:nestling/features/kid_home/presentation/widgets/kid_style_helpers.dart';
 import 'package:nestling/features/parental_gate/parental_gate_routes.dart';
 
 /// K02 Kid PIN (`/kid-pin`): kid avatar, "Hi {name}!" greeting, 4-dot code
@@ -165,7 +164,7 @@ class _KidPinBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.nest;
     final nickname = child.nickname;
-    final initial = kidAvatarInitial(nickname);
+    final initial = nestAvatarInitial(nickname);
     return KidScope(
       child: Scaffold(
         backgroundColor: Colors.transparent,

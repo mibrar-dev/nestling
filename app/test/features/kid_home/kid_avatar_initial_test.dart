@@ -1,27 +1,22 @@
-// kid_avatar_initial_test.dart — iteration 4 (STAGE 3).
+// kid_avatar_initial_test.dart — iteration 4 (STAGE 3) + shared/kid_bugs.
 //
 // Mandatory rule under test (ORCHESTRATOR_NOTES / brief):
 //
 //   AVATAR INITIALS: use `nestAvatarInitial(name)` (grapheme-safe).
 //   Never `name[0]`.
 //
-// `nestAvatarInitial` does not exist in `core/design_system/` yet — it is
-// still SHARED_REQUEST #3 — so `kid_home` routes all three of its call sites
-// through the feature-local `kidAvatarInitial` in
-// `presentation/widgets/kid_style_helpers.dart`. This file is the safety net
-// for that interim state, in three layers:
+// The shared `nestAvatarInitial` has landed in `core/design_system/`, so the
+// feature-local `kidAvatarInitial` is deleted and all three `kid_home` call
+// sites go through the shared helper. This file is the safety net, in three
+// layers:
 //
-//   1. the helper's own contract (a pure function, three screens depend on it);
-//   2. a RENDER proof for the third migrated site — K01's profile tile — which
-//      the iteration-4 build covered for K02 and K03 but not here (the crash
-//      took the whole frame down, so "one site untested" is one reachable
-//      crash);
+//   1. the shared helper's own contract (grapheme-safe, trims, fallbacks);
+//   2. a RENDER proof for K01's profile tile — the frame must build AND the
+//      tile must show the emoji itself, so a placeholder substitution cannot
+//      pass;
 //   3. a source guard that fails the suite the moment a code-unit `[0]`
-//      indexing creeps back into the feature — including when the shared
-//      helper lands and someone re-inlines the logic instead of calling it.
-//
-// When `nestAvatarInitial` lands in `core/design_system/`, delete layer 1 and
-// layer 2's helper reference and keep layer 3 (it is what stops the regression).
+//      indexing creeps back into the feature — including when someone
+//      re-inlines the logic instead of calling the shared helper.
 
 import 'dart:io';
 
@@ -34,7 +29,6 @@ import 'package:nestling/app/controllers.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/design_system/design_system.dart';
-import 'package:nestling/features/kid_home/presentation/widgets/kid_style_helpers.dart';
 
 import '../../test_scope.dart';
 
@@ -79,53 +73,58 @@ Future<void> _pumpPicker(WidgetTester tester) async {
 void main() {
   setUp(setUpTestScope);
 
-  group('kidAvatarInitial contract', () {
-    test('an empty nickname uses the fallback', () {
-      expect(kidAvatarInitial(''), '?');
-      expect(kidAvatarInitial('', fallback: 'S'), 'S');
+  group('nestAvatarInitial contract (shared)', () {
+    test('an empty or blank nickname uses the fallback', () {
+      expect(nestAvatarInitial(''), '?');
+      expect(nestAvatarInitial('', fallback: 'S'), 'S');
+      expect(nestAvatarInitial('   '), '?');
+      expect(nestAvatarInitial('   ', fallback: 'S'), 'S');
     });
 
-    test('a plain name upper-cases its first character', () {
-      expect(kidAvatarInitial('Maya'), 'M');
-      expect(kidAvatarInitial('leo'), 'L');
-      expect(kidAvatarInitial('  Bee'), ' ');
-      expect(kidAvatarInitial('9 lives'), '9');
+    test('a plain name upper-cases its first character (trimmed)', () {
+      expect(nestAvatarInitial('Maya'), 'M');
+      expect(nestAvatarInitial('leo'), 'L');
+      // The shared helper trims: the deleted local kept a blank initial.
+      expect(nestAvatarInitial('  Bee'), 'B');
+      expect(nestAvatarInitial('9 lives'), '9');
     });
 
-    test(
-      'a non-ASCII first character survives whole (never a lone surrogate)',
-      () {
-        // The crash class: `[0]` returned an unpaired high surrogate and the
-        // frame threw while laying out. Every one of these must come back as
-        // exactly one well-formed code point.
-        final cases = <String, String>{
-          'Åsa': 'Å', // U+00C5, one code point
-          'Émile': 'É',
-          '𝒜da': '𝒜', // astral maths italic, U+1D49C
-          '🐝 Bee': '🐝', // U+1F41D, the P05-legal name that used to crash K02
-          '🇬🇧 Ben': '\u{1F1EC}', // regional-indicator PAIR: first rune only
-          '👨‍👩‍👧 Family':
-              '\u{1F468}', // ZWJ family: first rune, not the cluster
-        };
-        final actual = <String, String>{
-          for (final entry in cases.entries)
-            entry.key: kidAvatarInitial(entry.key),
-        };
-        expect(actual, cases, reason: 'the first code point, upper-cased');
-        for (final value in actual.values) {
-          expect(value.runes.length, 1, reason: 'never a split surrogate');
-          expect(value.toUpperCase, returnsNormally, reason: 'well-formed');
-        }
-      },
-    );
+    test('a non-ASCII first character survives whole (grapheme-safe)', () {
+      // The crash class: `[0]` returned an unpaired high surrogate and the
+      // frame threw while laying out. The shared helper keeps the first
+      // grapheme cluster whole (package:characters): flags and ZWJ
+      // sequences stay whole, where the deleted rune helper kept only the
+      // first code point.
+      final cases = <String, String>{
+        'Åsa': 'Å', // U+00C5, one code point
+        'Émile': 'É',
+        '𝒜da': '𝒜', // astral maths italic, U+1D49C
+        '🐝 Bee': '🐝', // U+1F41D, the P05-legal name that used to crash K02
+        '🇬🇧 Ben': '🇬🇧', // flag grapheme stays whole
+        '👨‍👩‍👧 Family': '👨‍👩‍👧', // ZWJ family stays whole
+      };
+      final actual = <String, String>{
+        for (final entry in cases.entries)
+          entry.key: nestAvatarInitial(entry.key),
+      };
+      expect(actual, cases, reason: 'the first grapheme, upper-cased');
+      for (final value in actual.values) {
+        expect(
+          value.runes.any((r) => r >= 0xD800 && r <= 0xDFFF),
+          isFalse,
+          reason: 'never a split surrogate',
+        );
+        expect(value.toUpperCase, returnsNormally, reason: 'well-formed');
+      }
+    });
 
     test(
       'a leading combining mark does not throw and keeps the base letter',
       () {
-        // 'A' + U+0308 is two code points; the helper takes the first, so the
-        // initial is 'A'. Whatever it decides, it must not throw.
-        expect(() => kidAvatarInitial('Åsa'), returnsNormally);
-        expect(kidAvatarInitial('Åsa').runes.length, 1);
+        // 'A' + U+0308 is two code points; whatever it decides, it must not
+        // throw.
+        expect(() => nestAvatarInitial('Åsa'), returnsNormally);
+        expect(nestAvatarInitial('Åsa').runes.length, 1);
       },
     );
   });
@@ -142,7 +141,7 @@ void main() {
       await tester.runAsync(() async {
         final db = GetIt.instance<AppDatabase>();
         await (db.update(db.children)..where((c) => c.id.equals('maya'))).write(
-          const ChildrenCompanion(nickname: Value('\u{1F41D} Bee')),
+          const ChildrenCompanion(nickname: Value('🐝 Bee')),
         );
         await GetIt.instance<AppSession>().refresh();
       });
@@ -159,9 +158,9 @@ void main() {
         matching: find.byType(NestAvatar),
       );
       expect(avatars, findsOneWidget);
-      expect(tester.widget<NestAvatar>(avatars).initial, '\u{1F41D}');
+      expect(tester.widget<NestAvatar>(avatars).initial, '🐝');
       // …and the name itself is still on screen, unchanged.
-      expect(find.text('\u{1F41D} Bee'), findsOneWidget);
+      expect(find.text('🐝 Bee'), findsOneWidget);
       await disposeApp(tester);
     });
   });
@@ -170,11 +169,12 @@ void main() {
     // The rule is "never `name[0]`", so pin the *absence*: any bracket-0
     // indexing of a nickname/name that feeds an avatar fails here, whether it
     // comes back as `nickname[0]`, `name[0]` or a re-inlined copy/paste.
+    // The deleted `kid_style_helpers.dart` helper is gone, so only the three
+    // call sites are scanned — all through the shared helper.
     const scanned = <String>[
       'features/kid_home/presentation/views/kid_pin_view.dart',
       'features/kid_home/presentation/views/kid_home_view.dart',
       'features/kid_home/presentation/widgets/profile_tile.dart',
-      'features/kid_home/presentation/widgets/kid_style_helpers.dart',
     ];
 
     test('no call site indexes a name with [0]', () {
@@ -186,8 +186,8 @@ void main() {
           offenders,
           isEmpty,
           reason:
-              '$path must go through kidAvatarInitial() / '
-              'nestAvatarInitial(), never a code-unit index',
+              '$path must go through nestAvatarInitial(), never a code-unit '
+              'index',
         );
       }
     });
@@ -203,7 +203,7 @@ void main() {
         expect(_codeUnitIndexes(sample), hasLength(1), reason: sample);
       }
       // …and that it does not fire on the fixed call sites or on prose.
-      expect(_codeUnitIndexes('kidAvatarInitial(child.nickname)'), isEmpty);
+      expect(_codeUnitIndexes('nestAvatarInitial(child.nickname)'), isEmpty);
       expect(
         _codeUnitIndexes('// `nickname[0]` indexes UTF-16 code units'),
         hasLength(1),
@@ -212,16 +212,28 @@ void main() {
       expect(_codeOnly('// `nickname[0]` indexes UTF-16 code units'), isEmpty);
     });
 
-    test('the helper itself is rune-based', () {
+    test('the shared helper is grapheme-safe', () {
+      final source = _codeOnly(
+        _libFile('core/design_system/components/nest_avatar_initial.dart')
+            .readAsStringSync(),
+      );
+      expect(
+        source.contains('characters.first'),
+        isTrue,
+        reason: 'the shared helper must stay grapheme-safe',
+      );
+    });
+
+    test('no feature-local avatar initial remains', () {
       final source = _codeOnly(
         _libFile(
           'features/kid_home/presentation/widgets/kid_style_helpers.dart',
         ).readAsStringSync(),
       );
       expect(
-        source.contains('runes.first'),
-        isTrue,
-        reason: 'the interim helper must stay rune-based',
+        source.contains('kidAvatarInitial'),
+        isFalse,
+        reason: 'the feature-local duplicate must stay deleted',
       );
     });
   });

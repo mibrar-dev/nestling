@@ -533,6 +533,14 @@ class _GrowthCard extends StatelessWidget {
     // Floor, never round, while the bar is short of the threshold: 249/250
     // must not announce "100%" next to "1 more coin to grow" (K05-BUG-2).
     final percent = fraction >= 1 ? 100 : (fraction * 100).floor();
+    // K05-BUG-6: `NestProgress` derives its semantics VALUE as
+    // `(fraction * 100).round()`, so passing the true fraction (0.996 for
+    // 249/250) announces "100 percent" beside the floored "99%" label.
+    // `core/design_system` is owned by another agent, so K05 passes the
+    // floored figure (`percent / 100`) to BOTH the bar and the label: the
+    // value then rounds back to the same percent, seed values are unchanged
+    // (175 → 0.7), and the bar shortens by <2 px only for non-seed totals.
+    final displayFraction = percent / 100.0;
     // The card's THREE text lines are one announcement (plan §e), so they
     // collapse into a single labelled node. `NestProgress` sits OUTSIDE that
     // node and keeps its own `role=img` label (the design's `aria-label`) as
@@ -593,15 +601,26 @@ class _GrowthCard extends StatelessWidget {
                 return painter.width;
               }
 
+              final countW = labelWidth(count);
+              final nextW = labelWidth(next);
               final oneLine =
-                  labelWidth(count) + NestSpacing.s2 + labelWidth(next) <=
-                  constraints.maxWidth;
+                  countW + NestSpacing.s2 + nextW <= constraints.maxWidth;
               if (oneLine) {
+                // K05-BUG-5: the one-line `Row` must give each label the room
+                // it measured — equal `Flexible` gave each only
+                // `(maxWidth - gap) / 2`, so an asymmetric pair (a 4-digit
+                // count with the short `Next:` label) ellipsised even though
+                // the pair fits. Flex proportional to the measured widths
+                // keeps one line with no ellipsis; seed values stay one line
+                // at the same painted positions (left/right aligned).
+                final countFlex = countW.round().clamp(1, 1000000);
+                final nextFlex = nextW.round().clamp(1, 1000000);
                 return Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   spacing: NestSpacing.s2,
                   children: [
-                    Flexible(
+                    Expanded(
+                      flex: countFlex,
                       child: Text(
                         count,
                         style: style,
@@ -609,7 +628,8 @@ class _GrowthCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    Flexible(
+                    Expanded(
+                      flex: nextFlex,
                       child: Text(
                         next,
                         style: style,
@@ -661,7 +681,7 @@ class _GrowthCard extends StatelessWidget {
           cardText,
           const SizedBox(height: _kCountGapBottom),
           NestProgress(
-            fraction: fraction,
+            fraction: displayFraction,
             kid: true,
             semanticLabel: 'Pip is $percent% of the way to $nextName',
           ),
