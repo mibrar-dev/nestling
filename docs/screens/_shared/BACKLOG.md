@@ -32,3 +32,5 @@
 ## K10 Payout day (merged 5 Oct, 1 latent minor)
 - K10-BUG-4 the fund-card heading clamps a very long goal name at 320 px × 1.3.
 - K10 copy: the saving line uses the goal title ("£5.50 went into your Lego Friends set") where the design says "your Lego fund" — owner may want a shorter phrase.
+
+- K03B-BUG-2 (shared, latent): `explicitGeometry` in motion/pip_rive.dart adds `_explicitBleed` to `slotHeight`; K03b works around it with `pipBottom: 92`. Fix in shared code and drop the workaround.

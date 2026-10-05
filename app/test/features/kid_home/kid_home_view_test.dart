@@ -46,9 +46,27 @@ const KidChild _maya = KidChild(
   pinSet: true,
 );
 
-/// Maya's 6 quests in repo (alphabetical) order with demo statuses:
-/// 4 done (2 approved + 2 done_pending), 2 to_do (q-reading is first).
+/// Maya's 6 quests in creation order with demo statuses:
+/// 4 done (2 approved + 2 done_pending), 2 to_do.
 List<KidQuest> _mayaItems() => const <KidQuest>[
+  KidQuest(
+    id: 'q-dishwasher:maya',
+    title: 'Empty the dishwasher',
+    detail: "Waiting for Mum's thumbs-up · +15",
+    questId: 'q-dishwasher',
+    icon: 'dishwasher',
+    coins: 15,
+    status: 'done_pending',
+  ),
+  KidQuest(
+    id: 'q-reading:maya',
+    title: 'Reading – 20 minutes',
+    detail: 'To do · +10',
+    questId: 'q-reading',
+    icon: 'book',
+    coins: 10,
+    status: 'to_do',
+  ),
   KidQuest(
     id: 'q-bins:maya',
     title: 'Put the bins out',
@@ -59,13 +77,13 @@ List<KidQuest> _mayaItems() => const <KidQuest>[
     status: 'approved',
   ),
   KidQuest(
-    id: 'q-dishwasher:maya',
-    title: 'Empty the dishwasher',
-    detail: "Waiting for Mum's thumbs-up · +15",
-    questId: 'q-dishwasher',
-    icon: 'dishwasher',
+    id: 'q-tidy:maya',
+    title: 'Tidy your bedroom',
+    detail: 'To do · +15',
+    questId: 'q-tidy',
+    icon: 'bed',
     coins: 15,
-    status: 'done_pending',
+    status: 'to_do',
   ),
   KidQuest(
     id: 'q-hoover:maya',
@@ -84,24 +102,6 @@ List<KidQuest> _mayaItems() => const <KidQuest>[
     icon: 'plate',
     coins: 10,
     status: 'done_pending',
-  ),
-  KidQuest(
-    id: 'q-reading:maya',
-    title: 'Reading – 20 minutes',
-    detail: 'To do · +10',
-    questId: 'q-reading',
-    icon: 'book',
-    coins: 10,
-    status: 'to_do',
-  ),
-  KidQuest(
-    id: 'q-tidy:maya',
-    title: 'Tidy your bedroom',
-    detail: 'To do · +15',
-    questId: 'q-tidy',
-    icon: 'bed',
-    coins: 15,
-    status: 'to_do',
   ),
 ];
 
@@ -1076,16 +1076,14 @@ void main() {
   });
 
   group('K03 quest order (data wins)', () {
-    // `1_plan.md` §a and the orchestrator's DATA OVER MOCKS ruling: quest
-    // order comes from the database, so the screen must NOT re-sort the
-    // design PNG's sample order. The repo's documented order is alphabetical
-    // by title (`kid_home_repository_impl.dart`: `sort(title.compareTo)`).
-    // NOTE for the next iteration: main's schema v4 / `shared_batch4` made
-    // `watchActiveQuests` return **creation** order (`orderBy(createdAt)`),
-    // so K03's repository is now the only place that re-sorts quests. Quest
-    // order is explicitly not a finding (ORCHESTRATOR_NOTES), so this test
-    // pins the documented behaviour and makes any future change deliberate.
-    testWidgets('the list keeps the repository order (alphabetical by title)', (
+    // DATA OVER MOCKS + ROW ORDER (owner rule, orchestrator 04:52): quest
+    // order comes from the database in creation order — `watchActiveQuests`
+    // sorts by `created_at` then `id`, and the repository never re-sorts.
+    // The seed stamps one second per quest: dishwasher, reading, bins, tidy,
+    // hoover, table — exactly the K03/K03b HTML row order. Card 1 stays
+    // 'Empty the dishwasher' either way, so K03's pinned first card does
+    // not move.
+    testWidgets('the list keeps the repository order (creation order)', (
       tester,
     ) async {
       await _pumpRoute(tester);
@@ -1103,13 +1101,13 @@ void main() {
         ],
         <String>[
           'Empty the dishwasher',
+          'Reading – 20 minutes',
+          'Put the bins out',
+          'Tidy your bedroom',
           'Hoover the stairs',
           'Lay the table',
-          'Put the bins out',
-          'Reading – 20 minutes',
-          'Tidy your bedroom',
         ],
-        reason: "the repository sorts Maya's six quests by title",
+        reason: "the repository keeps Maya's six quests in creation order",
       );
       await disposeApp(tester);
     });
@@ -1548,7 +1546,7 @@ void main() {
       await moveCompletion(tester, 'q-reading', now);
       expect(find.text('1 done today'), findsOneWidget);
       expect(
-        find.descendant(of: card, matching: find.text('Done')),
+        find.descendant(of: card, matching: find.text('Mum said yes!')),
         findsOneWidget,
       );
       await disposeApp(tester);
@@ -1584,7 +1582,7 @@ void main() {
         weekStart.add(const Duration(minutes: 1)),
       );
       expect(
-        find.descendant(of: card, matching: find.text('Done')),
+        find.descendant(of: card, matching: find.text('Mum said yes!')),
         findsOneWidget,
       );
       await disposeApp(tester);
@@ -1630,7 +1628,7 @@ void main() {
         matching: find.byType(NestKidQuestCard),
       );
       expect(
-        find.descendant(of: card, matching: find.text('Done')),
+        find.descendant(of: card, matching: find.text('Mum said yes!')),
         findsOneWidget,
       );
       await disposeApp(tester);
@@ -2242,7 +2240,7 @@ void main() {
       );
       expect(
         tester.getSemantics(find.text('Put the bins out')).label,
-        startsWith('Put the bins out, Done'),
+        startsWith('Put the bins out, Mum said yes!'),
       );
       semantics.dispose();
       await disposeApp(tester);

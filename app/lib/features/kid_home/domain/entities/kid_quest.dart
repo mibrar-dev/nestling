@@ -11,6 +11,7 @@ class KidQuest extends Equatable {
     required this.icon,
     required this.coins,
     required this.status,
+    this.needsApproval = true,
   });
 
   final String id;
@@ -23,6 +24,13 @@ class KidQuest extends Equatable {
   /// `to_do | done_pending | approved | not_yet`.
   final String status;
 
+  /// ROW META (orchestrator ruling 04:52): whether a done quest needs a
+  /// parent's thumbs-up. Waiting + needs approval → `Waiting for Mum`;
+  /// approved + needed approval → `Mum said yes!`; done + no approval →
+  /// the `+N` coin chip. Mirrors `quests.needs_approval` (DB default true,
+  /// same default here so existing constructions keep their meaning).
+  final bool needsApproval;
+
   @override
   List<Object?> get props => <Object?>[
     id,
@@ -32,5 +40,6 @@ class KidQuest extends Equatable {
     icon,
     coins,
     status,
+    needsApproval,
   ];
 }

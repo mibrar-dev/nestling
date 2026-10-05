@@ -9,6 +9,7 @@ class KidQuestModel extends KidQuest {
     required super.icon,
     required super.coins,
     required super.status,
+    super.needsApproval,
   });
 
   factory KidQuestModel.fromJson(Map<String, dynamic> json) {
@@ -20,6 +21,7 @@ class KidQuestModel extends KidQuest {
       icon: json['icon'] as String,
       coins: json['coins'] as int,
       status: json['status'] as String,
+      needsApproval: json['needsApproval'] as bool? ?? true,
     );
   }
 
@@ -32,6 +34,7 @@ class KidQuestModel extends KidQuest {
       'icon': icon,
       'coins': coins,
       'status': status,
+      'needsApproval': needsApproval,
     };
   }
 }
