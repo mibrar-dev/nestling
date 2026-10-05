@@ -102,7 +102,11 @@ Rules:
   route is top-level, so no path is registered twice. Redirect guard sends
   kid mode away from parent-only locations to the parental gate.
 - `lib/main.dart`: ensureInitialized, configureDependencies, runApp.
-- Initial route: `/design-system`.
+- Initial route: `/`, resolved by the router redirect to the family's start
+  screen (not onboarded → `/welcome`, onboarded parent → `/today`, onboarded
+  kid → `/kid-home`; `INITIAL_ROUTE` overrides it). The design-system
+  gallery, motion lab and pip lab are developer tools registered only in
+  debug/profile builds (or with `--dart-define=DEV_ROUTES=1`).
 
 ## Screen coverage
 

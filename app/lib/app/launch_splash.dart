@@ -32,6 +32,19 @@ const Color kLaunchSplashBackground = Color(0xFF17804F);
 /// every display. Same size and centre here means no jump at hand-off.
 const double kLaunchSplashEggSize = 256;
 
+/// Visible-art scale for the stage-2 hatchling: the Rive Stage2 artboard draws
+/// Pip smaller than the Stage1 egg (measured release-playback video frames at
+/// 1170 px wide: egg art 571 px tall, hatchling art 478 px tall ≈ 1.19×),
+/// while the SVG fallbacks are closer (627 px vs 567 px at 768 px ≈ 1.11×).
+/// 1.15 keeps both paths within ±5 % of the egg's visible art height, so Pip
+/// no longer shrinks when it hatches.
+const double kLaunchSplashHatchlingScale = 1.15;
+
+/// Upward nudge (dp) applied to the hatchling so its art centre coincides with
+/// the egg's: the egg art sits ~13 px above the box centre on a 1170-wide
+/// capture (≈ 4 dp) while the hatchling art is box-centred.
+const double kLaunchSplashHatchlingLift = 4;
+
 /// Splash timings. [total] is the hard ceiling: the splash always calls
 /// [LaunchSplash.onDone] by then, whether Rive bound or not.
 abstract final class LaunchSplashTimings {
@@ -144,13 +157,25 @@ class _LaunchSplashState extends State<LaunchSplash> {
   @override
   Widget build(BuildContext context) {
     // mochi/sunny: sunny is PipAvatar's default skin (the drawn palette).
+    // The hatchling box is scaled so its visible art height matches the
+    // egg's (±5 %); the box stays centred and the lift aligns the art
+    // centres (see [kLaunchSplashHatchlingScale]).
+    final isEgg = _stage == 1;
     final pip = PipAvatar(
       style: PipStyle.mochi,
       stage: _stage,
-      size: kLaunchSplashEggSize,
+      size: isEgg
+          ? kLaunchSplashEggSize
+          : kLaunchSplashEggSize * kLaunchSplashHatchlingScale,
       controller: _pip,
       riveEnabled: widget.riveEnabled,
     );
+    final art = isEgg
+        ? pip
+        : Transform.translate(
+            offset: const Offset(0, -kLaunchSplashHatchlingLift),
+            child: pip,
+          );
     // One labelled node for the whole splash: `excludeSemantics` collapses
     // the visual tree (the egg is decorative here) and `onTap` exposes the
     // skip as SemanticsAction.tap. No FocusNode anywhere, so focus can never
@@ -169,7 +194,7 @@ class _LaunchSplashState extends State<LaunchSplash> {
               child: AnimatedOpacity(
                 opacity: _fading && !_reduce ? 0 : 1,
                 duration: LaunchSplashTimings.fade,
-                child: pip,
+                child: art,
               ),
             ),
           ),
