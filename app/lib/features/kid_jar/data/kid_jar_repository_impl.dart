@@ -9,6 +9,7 @@ import 'package:nestling/core/data/stream_combine.dart';
 import 'package:nestling/features/kid_jar/domain/entities/jar_entry.dart';
 import 'package:nestling/features/kid_jar/domain/entities/jar_snapshot.dart';
 import 'package:nestling/features/kid_jar/domain/entities/jar_summary.dart';
+import 'package:nestling/features/kid_jar/domain/entities/payout_celebration.dart';
 import 'package:nestling/features/kid_jar/domain/kid_jar_repository.dart';
 
 /// Drift-backed [KidJarRepository].
@@ -97,6 +98,82 @@ class KidJarRepositoryImpl implements KidJarRepository {
 
   @override
   Stream<JarSummary> watchSummary(String childId) => _summaryFor(childId);
+
+  /// The K10 screen stream: `app_state.activeChildId` (`'maya'` fallback)
+  /// fans out to one atomic celebration per child (same `_switchMap`
+  /// pattern as [watchJar], K09-BUG-1 comment style).
+  @override
+  Stream<PayoutCelebration?> watchLatestPayout() {
+    return _switchMap<AppStateData?, PayoutCelebration?>(
+      _db.watchAppState(),
+      (state) => _payoutFor(state?.activeChildId ?? 'maya'),
+    );
+  }
+
+  Stream<PayoutCelebration?> _payoutFor(String childId) {
+    return combineLatest3(
+      _db.watchLedger(childId),
+      _db.watchGoals(Seed.familyId),
+      _db.watchChild(childId),
+    ).map((parts) {
+      final rows = parts[0] as List<LedgerEntry>;
+      final goals = (parts[1] as List<SavingsGoal>)
+          .where((g) => g.childId == childId)
+          .toList();
+      final child = parts[2] as ChildrenData?;
+      // No row for the child (Seed.empty falls back to 'maya', which has no
+      // row either): no celebration without a nickname and a Pip to cheer.
+      if (child == null) return null;
+      // Payout rows are event history, not quest status, so the PERIODS
+      // ruling (a completion counts only for its current London
+      // day/week) does NOT apply here — do not "fix" this to filter by
+      // period. The latest `payout` row is the event, whatever week it
+      // landed in. `watchLedger` is date-desc, so the first `payout` row
+      // with the greatest date wins; ties keep ledger order.
+      LedgerEntry? payout;
+      for (final row in rows) {
+        if (row.type == 'payout' &&
+            (payout == null || row.date.isAfter(payout.date))) {
+          payout = row;
+        }
+      }
+      // No payout recorded yet → the view shows its empty state.
+      if (payout == null) return null;
+      final paidAt = payout.date;
+      // The P13 companion move is written in the same transaction with the
+      // same instant (`recordPayout` stamps both rows with one `now`), and
+      // the seed's own `Jar → Lego fund` landed days after its payout — so
+      // the companion is the newest `Jar → …` move stamped at or after the
+      // payout instant, never before it. A later payout without a move then
+      // correctly reads `movedPence: null`: the older move is before its
+      // instant.
+      LedgerEntry? move;
+      for (final row in rows) {
+        if (row.type == 'savings_move' &&
+            row.note.startsWith('Jar →') &&
+            !row.date.isBefore(paidAt)) {
+          move = row;
+          break;
+        }
+      }
+      // Same goal pick as `_summarize`: the child's first goal. None → the
+      // zero-goal fallback (fraction 0, `of £0.00` / `0% there!`).
+      final goal = goals.isEmpty ? null : goals.first;
+      return PayoutCelebration(
+        childId: childId,
+        nickname: child.nickname,
+        paidPence: payout.amountPence.abs(),
+        movedPence: move?.amountPence.abs(),
+        goalTitle: goal?.title ?? 'Savings goal',
+        goalSavedPence: goal?.savedPence ?? 0,
+        goalTargetPence: goal?.targetPence ?? 0,
+        pipStyle: child.pipStyle,
+        pipSkin: child.pipSkin,
+        pipAccessory: child.pipAccessory,
+        pipStage: child.pipStage,
+      );
+    });
+  }
 
   Stream<JarSummary> _summaryFor(String childId) {
     return _jarFor(childId).map((snapshot) => snapshot.summary);
