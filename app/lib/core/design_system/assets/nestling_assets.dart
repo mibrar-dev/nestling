@@ -66,7 +66,8 @@ abstract final class NestlingIcons {
   /// Screens: P08, P08b, P10, P12, P15, P16.
   static const String quests = 'assets/icons/ic_quests.svg';
 
-  /// Tab bar 3/4 — Money (pocket-money card). Banknote: centre disc, two corner medallions.
+  /// Tab bar 3/4 — Money (wallet/card). Exact `components.css` tab-bar glyph:
+  /// `rect x=3 y=6 w=18 h=13 rx=3` + `M3 10h18` + `M7 15h4`.
   /// Screens: P02, P08, P08b, P10, P12, P15, P16.
   static const String money = 'assets/icons/ic_money.svg';
 

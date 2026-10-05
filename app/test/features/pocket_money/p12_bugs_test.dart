@@ -1,13 +1,12 @@
 // P12 Money ledger — Stage 6 adversarial bug tests (iteration 1).
 //
-// Findings P12-BUG-01/02/03/05 were skipped reproducers in iteration 1 and
+// Findings P12-BUG-01/02/03/04/05 were skipped reproducers in iteration 1 and
 // are now FIXED and UN-SKIPPED (see docs/screens/P12/2b_build_ui.md): the
 // sheet validates instead of stripping separators, parses integer pence with
-// a £1,000,000.00 ceiling, and the view stack no longer carries the extra
-// header spacer. P12-BUG-04 stays skipped — it is a shared
-// `NestSegmented` fix (SHARED_REQUEST.md), and P12 must not fork the shared
-// control. The group at the bottom ("attacks that hold") is NOT skipped: it
-// documents the adversarial probes that passed — rapid taps, deep links,
+// a £1,000,000.00 ceiling, the shared `NestSegmented` keeps every segment at
+// ≥ 44 px on narrow widths (shared/polish_ui), and the view stack no longer
+// carries the extra header spacer. The group at the bottom ("attacks that
+// hold") is NOT skipped: it documents the adversarial probes that passed — rapid taps, deep links,
 // restart persistence, timezone/BST, dark contrast, 320dp × 1.3, parse
 // guards — so regressions are caught here.
 //
@@ -288,7 +287,30 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
+      // Shared/polish_ui: narrow tracks scroll (44 px per segment). The tap
+      // target is the laid-out button size (44×44 for every option, proved
+      // below) — not the semantics rect, which a scrollable clips to the
+      // viewport for off-screen options (Ethan reads 32 px wide until
+      // scrolled). Each option is also a tappable semantic control.
       final handle = tester.ensureSemantics();
+      final buttons = find.descendant(
+        of: find.byType(NestSegmented<String>),
+        matching: find.byType(InkWell),
+      );
+      expect(buttons, findsNWidgets(6));
+      for (var i = 0; i < 6; i++) {
+        final size = tester.getSize(buttons.at(i));
+        expect(
+          size.width,
+          greaterThanOrEqualTo(NestDevice.tapParent),
+          reason: 'P12-BUG-04: segment #$i is ${size.width} px wide at 320dp',
+        );
+        expect(
+          size.height,
+          greaterThanOrEqualTo(NestDevice.tapParent),
+          reason: 'P12-BUG-04: segment #$i is ${size.height} px tall at 320dp',
+        );
+      }
       for (final name in <String>[
         'Maya',
         'Leo',
@@ -297,28 +319,29 @@ void main() {
         'Ava',
         'Ethan',
       ]) {
-        final rect = find.semantics
-            .byLabel(name)
-            .evaluate()
-            .first
-            .getSemanticsData()
-            .rect;
+        final node = tester.getSemantics(find.bySemanticsLabel(name));
         expect(
-          rect.width,
-          greaterThanOrEqualTo(NestDevice.tapParent),
-          reason:
-              'P12-BUG-04: the "$name" segment is ${rect.width} px wide '
-              'at 320dp (six children, 5 gaps of 4 px, 4 px track padding)',
+          node.getSemanticsData().hasAction(SemanticsAction.tap),
+          isTrue,
+          reason: 'P12-BUG-04: "$name" must stay tappable at 320dp',
         );
       }
+      // The selected segment (Maya, first) is visible without scrolling;
+      // the last segment scrolls into view and stays 44 px tappable.
+      expect(tester.getRect(find.text('Maya')).left, greaterThanOrEqualTo(20));
+      await tester.drag(
+        find.byType(NestSegmented<String>),
+        const Offset(-40, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Ethan'), findsOneWidget);
+      expect(tester.takeException(), isNull);
       handle.dispose();
       await disposeApp(tester);
     },
-    // P12-BUG-04: minor — shared `NestSegmented` shrinks options below 44 px
-    // with 6 children at 320dp. P12 must not fork the shared control, so
-    // this one stays skipped pending the cross-screen fix filed in
-    // docs/screens/P12/SHARED_REQUEST.md.
-    skip: true,
+    // P12-BUG-04 FIXED (shared/polish_ui): `NestSegmented` switches to a
+    // scrollable 44 px-per-segment track when the width cannot fit every
+    // option, so this proof is un-skipped.
   );
 
   // -- P12-BUG-05 ---------------------------------------------------------
