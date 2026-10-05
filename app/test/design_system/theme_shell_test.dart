@@ -36,7 +36,7 @@ void main() {
     setUpAll(() async {
       // In-memory database: the file database needs path_provider, which
       // has no test implementation. Seed.demo marks onboarding complete so
-      // the router keeps its default initial location.
+      // a bare boot lands on the onboarded-parent start screen (Today).
       await GetIt.instance.reset();
       await configureDependencies(database: AppDatabase.memory());
       await Seed.demo(GetIt.instance<AppDatabase>());

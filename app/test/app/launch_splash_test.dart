@@ -3,13 +3,14 @@
 // routing is asserted through `currentPath`, per RULES §7.
 
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nestling/app/app.dart';
 import 'package:nestling/app/launch_flags.dart';
 import 'package:nestling/app/launch_splash.dart';
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
+import 'package:nestling/features/today/today_routes.dart';
 
 import '../test_scope.dart';
 
@@ -217,9 +218,104 @@ void main() {
       await tester.pump(LaunchSplashTimings.total);
       await tester.pump();
       expect(find.byType(LaunchSplash), findsNothing);
-      // The router underneath kept its default first location.
-      expect(currentPath(tester), '/design-system');
+      // The router underneath kept its default first location: Seed.demo is
+      // an onboarded parent, so a real cold start lands on Today — never the
+      // developer-tool gallery (shared/start_route).
+      expect(currentPath(tester), TodayRoutePaths.today);
       await disposeApp(tester);
+    });
+  });
+
+  group('hatchling size (shared/start_route)', () {
+    /// Height (in logical px at pixelRatio 1) of the non-background art the
+    /// splash currently renders: stage 1 is the egg, stage 2 the hatchling.
+    /// Pumps bounded 50 ms frames so the test can never hang on a timer.
+    Future<int> artHeight(
+      WidgetTester tester,
+      RenderRepaintBoundary boundary,
+    ) async {
+      const bg = kLaunchSplashBackground;
+      final bgR = (bg.r * 255).round();
+      final bgG = (bg.g * 255).round();
+      final bgB = (bg.b * 255).round();
+      var height = 0;
+      for (var i = 0; i < 8 && height == 0; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+        final image = await tester.runAsync(boundary.toImage);
+        final bytes = await tester.runAsync(image!.toByteData);
+        final rgba = bytes!.buffer.asUint8List();
+        var top = -1;
+        var bottom = -1;
+        for (var y = 0; y < image.height; y++) {
+          var hit = false;
+          for (var x = 0; x < image.width; x++) {
+            final o = (y * image.width + x) * 4;
+            final distance =
+                (rgba[o] - bgR).abs() +
+                (rgba[o + 1] - bgG).abs() +
+                (rgba[o + 2] - bgB).abs();
+            if (distance > 90) {
+              hit = true;
+              break;
+            }
+          }
+          if (hit) {
+            if (top == -1) top = y;
+            bottom = y;
+          }
+        }
+        image.dispose();
+        if (top != -1) height = bottom - top + 1;
+      }
+      return height;
+    }
+
+    testWidgets('hatchling visual height matches the egg within ±5 %', (
+      tester,
+    ) async {
+      // Pixel-level check through the real widget on its SVG fallback path
+      // (`flutter test` has no Rive decoder): the hatchling box is scaled by
+      // [kLaunchSplashHatchlingScale] so its visible art height matches the
+      // egg's. The production Rive path is verified by the re-recorded
+      // docs/brand/splash_frames.png under the same ±5 % rule.
+      final boundaryKey = GlobalKey();
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(),
+          child: MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 390,
+                height: 844,
+                child: RepaintBoundary(
+                  key: boundaryKey,
+                  child: LaunchSplash(onDone: () {}, riveEnabled: false),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      final boundary =
+          boundaryKey.currentContext!.findRenderObject()!
+              as RenderRepaintBoundary;
+
+      // Stage 1: the egg (8 × 50 ms stays under the 450 ms evolve delay).
+      final egg = await artHeight(tester, boundary);
+      expect(egg, greaterThan(0), reason: 'the egg rendered no art');
+
+      // Stage 2: the hatchling (evolve fires, then bounded pumps for the
+      // fallback to decode; still well under the 1.4 s fade start).
+      await tester.pump(LaunchSplashTimings.evolveDelay);
+      final chick = await artHeight(tester, boundary);
+      expect(chick, greaterThan(0), reason: 'the hatchling rendered no art');
+
+      final ratio = chick / egg;
+      expect(
+        ratio,
+        allOf(greaterThanOrEqualTo(0.95), lessThanOrEqualTo(1.05)),
+        reason: 'hatchling $chick px vs egg $egg px',
+      );
     });
   });
 }

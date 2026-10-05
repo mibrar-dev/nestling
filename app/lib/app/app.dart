@@ -22,10 +22,15 @@ MediaQueryData _clampTextScaler(BuildContext context, MediaQueryData data) {
 }
 
 class NestlingApp extends StatefulWidget {
-  const new({super.key, this.initialRoute});
+  const new({super.key, this.initialRoute, this.includeDevRoutes});
 
   /// INITIAL_ROUTE override from launch flags; null keeps the router default.
   final String? initialRoute;
+
+  /// Overrides dev-route (gallery/motion-lab/pip-lab) registration; null
+  /// keeps the router default. Widget tests inject `false` to prove the
+  /// release configuration through the real app shell.
+  final bool? includeDevRoutes;
 
   @override
   State<NestlingApp> createState() => _NestlingAppState();
@@ -51,6 +56,7 @@ class _NestlingAppState extends State<NestlingApp> with WidgetsBindingObserver {
       GetIt.instance<AppModeController>(),
       session: GetIt.instance<AppSession>(),
       initialLocation: widget.initialRoute,
+      includeDevRoutes: widget.includeDevRoutes,
     );
   }
 

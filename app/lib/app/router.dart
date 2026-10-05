@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nestling/app/controllers.dart';
@@ -57,10 +58,38 @@ const Set<String> _onboardingLocations = <String>{
   '/paywall',
 };
 
+/// Developer-tool locations (design-system gallery, motion lab, pip lab).
+/// Registered only when the router enables dev routes; elsewhere a deep link
+/// to one falls back to the start screen (see the redirect in
+/// [buildAppRouter]).
+bool _isDevLocation(String location) =>
+    location == DesignSystemGalleryRoutePaths.gallery ||
+    location == DesignSystemGalleryRoutePaths.motionLab ||
+    location == DesignSystemGalleryRoutePaths.pipLab;
+
+/// The cold-start location for `/` (and for release-build deep links to the
+/// developer tools, which do not exist there).
+///
+/// Not onboarded → the welcome screen (the redirect's onboarding rule would
+/// send any location there anyway); onboarded parent → the Today tab;
+/// onboarded kid → Kid Home. Uses route constants, never string literals.
+String _startLocation(AppModeController appMode, AppSession? session) {
+  if (session != null && session.onboardingComplete) {
+    return appMode.isKid ? KidHomeRoutePaths.home : TodayRoutePaths.today;
+  }
+  return OnboardingRoutePaths.welcome;
+}
+
 GoRouter buildAppRouter(
   AppModeController appMode, {
   AppSession? session,
   String? initialLocation,
+
+  /// Overrides whether the developer-tool routes (design-system gallery,
+  /// motion lab, pip lab) are registered. Defaults to debug/profile builds,
+  /// or an explicit `--dart-define=DEV_ROUTES=1` / lab-autoplay request in
+  /// release. Tests inject `false` to prove the release configuration.
+  bool? includeDevRoutes,
 }) {
   // Debug-only motion-QA entry: `--dart-define=MOTION_AUTOPLAY=<name>`
   // boots straight into the motion lab so `simctl recordVideo` captures a
@@ -69,6 +98,21 @@ GoRouter buildAppRouter(
   // lab, which runs Play-all for that style on launch.
   const autoplay = String.fromEnvironment('MOTION_AUTOPLAY');
   const pipAutoplay = String.fromEnvironment('PIP_LAB_AUTOPLAY');
+  // The gallery, motion lab and pip lab are developer tools: they exist only
+  // in debug/profile builds, or in a release build when explicitly requested
+  // with `--dart-define=DEV_ROUTES=1`. A lab-autoplay define counts as such a
+  // request (it boots straight into one of the labs). Tests run in debug, so
+  // the labs stay registered there unless [includeDevRoutes] says otherwise.
+  const devRoutesRequested =
+      bool.fromEnvironment('DEV_ROUTES') ||
+      String.fromEnvironment('DEV_ROUTES') == '1';
+  final devRoutesEnabled =
+      includeDevRoutes ??
+      (kDebugMode ||
+          kProfileMode ||
+          devRoutesRequested ||
+          autoplay.isNotEmpty ||
+          pipAutoplay.isNotEmpty);
   return GoRouter(
     initialLocation:
         initialLocation ??
@@ -76,12 +120,21 @@ GoRouter buildAppRouter(
             ? DesignSystemGalleryRoutePaths.pipLab
             : autoplay.isNotEmpty
             ? DesignSystemGalleryRoutePaths.motionLab
-            : DesignSystemGalleryRoutePaths.gallery),
+            : '/'),
     refreshListenable: session == null
         ? appMode
         : Listenable.merge([appMode, session]),
     redirect: (context, state) {
       final location = state.matchedLocation;
+      // A real cold start boots at `/`, which has no screen of its own: send
+      // it to the family's start screen first. The guards below then run on
+      // the redirected location exactly as if it had been requested, so the
+      // kid-mode gate and the expired-trial rules are unchanged. A release
+      // build has no developer-tool routes, so a deep link to one lands on
+      // the start screen too instead of go_router's error page.
+      if (location == '/' || (!devRoutesEnabled && _isDevLocation(location))) {
+        return _startLocation(appMode, session);
+      }
       const parentOnly = <String>[
         '/today',
         '/today-empty',
@@ -169,7 +222,10 @@ GoRouter buildAppRouter(
       ...kidShopRoutes,
       ...kidJarRoutes,
       ...badgesRoutes,
-      ...designSystemGalleryRoutes,
+      // Developer tools: debug/profile builds (or an explicit DEV_ROUTES /
+      // lab-autoplay dart-define) only. Release builds have no such routes,
+      // so deep links to them fall back to the start screen via the redirect.
+      if (devRoutesEnabled) ...designSystemGalleryRoutes,
     ],
   );
 }
