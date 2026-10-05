@@ -1,3 +1,77 @@
+# K11 · Badges — stage 2b build, UI chunk (iteration 3)
+
+> Iteration 3 addendum (this section only; iterations 1–2 follow unchanged).
+>
+> Scope: `app/lib/features/badges/presentation/views/**` +
+> `presentation/widgets/**` and view/widget tests only. No domain / data /
+> bloc file touched (the logic builder owns those in parallel in this worktree;
+> re-read `2a_build_logic.md` — its contract changes are additive and need no
+> view change: `copyWithLoading` is loading-path only, `_resolveChildId` keeps
+> the same stream shape). No `docs/screens/K11/FIXES_2.md` exists in this
+> worktree, so iteration-3 UI work is driven by the mandatory
+> `ORCHESTRATOR_NOTES.md` (06:55) locked-medal items.
+>
+> ## Changes
+>
+> - **Locked medal art fixed (`badge_grid_cell.dart`, orchestrator-mandatory):**
+>   the five still-to-do ids (`bins-out`, `biscuit-sitter`, `tidy-hero`,
+>   `early-bird`, `plant-waterer`) now render a local `lockedMedalSvg(id)` via
+>   `SvgPicture.string` instead of the shared `badge_*` asset files. Measured
+>   on both design PNGs with a PIL scan (Bins-out disc bbox x529…640 y1158…1269,
+>   centre logical 194.8×404.5): the dashed ring is INK `#1E1B3A` (sampled
+>   `(30, 27, 58)` at the ring top in BOTH themes — the HTML's locked `<circle>`
+>   carries two `stroke` attributes and HTML keeps the FIRST duplicate, so the
+>   design paints ink, 3 px, `dasharray 5 4`; the shared files paint `#6E6A8A`),
+>   and the ribbon `<path>` keeps `opacity=".4"` on the WHOLE element (fill AND
+>   3 px ink stroke together — sampled `(165, 164, 176)` = ink-at-40 % over
+>   white in light, `(31, 28, 51)` = ink-at-40 % over the dark surface in dark;
+>   ribbon fill `(197, 195, 208)`/`(63, 59, 83)` = grey-at-40 % over each tile).
+>   Disc `#F3EEE5` and glyph `#6E6A8A` are identical in both PNGs, so the local
+>   SVG uses fixed illustration colours in both themes (medals keep own colours,
+>   `1_plan.md` §0 — same category as the shared files' hard-coded hexes, not UI
+>   chrome; all chrome still uses tokens). Each of the five keeps its own design
+>   glyph (bin / paw / basket / sun / can, transcribed from
+>   `K11-badges.html:80-123`) in BOTH earned and locked states; the four earned
+>   ids still render their shared coloured assets; unknown ids still fall back
+>   to the neutral rosette (pinned by the untouched `badges_art_test.dart`).
+>   No `core/` edit (RULES §1) — the shared files are left for the orchestrator.
+> - **Tests (my files only):** new `K11 locked medal art (ORCHESTRATOR_NOTES
+>   06:55)` group in `badges_view_test.dart` (8 tests): ink-ring unit pins for
+>   all five ids, whole-element ribbon-opacity pin, per-id glyph pins, plus
+>   widget pumps proving todo cells draw the local ink-ring medal in light AND
+>   dark, an earned todo id keeps its own medal (no rosette), and earned ids
+>   still use the shared asset.
+> - **NOT touched:** `badges_view.dart`, `happy_week_card.dart` (clamp + copy
+>   already landed, UI check passed at 0–1 px); `k11_bugs_test.dart` (outside
+>   this chunk's filenames, both guards already un-skipped and green);
+>   domain/data/bloc (logic builder's).
+>
+> ## Verification (iteration 3)
+>
+> ```
+> flutter analyze lib/features/badges test/features/badges/badges_view_test.dart → No issues found!
+> flutter test --timeout 120s test/features/badges/badges_view_test.dart → 42/42 passed (34 + 8 new)
+> flutter test --timeout 120s geometry+art+matrix+a11y+copy → 71/71 passed (no regressions)
+> dart format (presentation + own test) → clean
+> grep google_fonts|GoogleFonts|DateTime.now (own scope) → clean
+> ```
+>
+> No simulator booted (stage 5 owns 604697A9-11DA-462F-9837-396E9CA2493A; all
+> other stages must never touch one). No whole-app suite run. No
+> domain/data/bloc/core/app/tools file touched (`git status --short -- app/`
+> shows only the widget + the view test).
+>
+> ## LEFT FOR NEXT ITERATION
+>
+> - The orchestrator's zoomed-crop verification (one locked medal, e.g. Bins
+>   out, design vs app, both themes, in `5_ui.md`) belongs to stage 5 with the
+>   simulator — this stage supplies the corrected pixels, including dash-phase
+>   (CSS vs `SvgPicture` clocking may differ by a dash, as with
+>   `NestDashedBorder`; rects, 3 px width, ink colour, r24 and no-shadow match).
+> - Nothing unfinished in the UI layer.
+>
+> ---
+
 # K11 · Badges — stage 2b build, UI chunk (iteration 2)
 
 > Iteration 2 addendum (this section only; iteration 1 notes follow unchanged).

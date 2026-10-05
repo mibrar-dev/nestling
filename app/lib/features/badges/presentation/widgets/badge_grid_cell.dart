@@ -28,21 +28,57 @@ const EdgeInsets _cellPadding = EdgeInsets.fromLTRB(
 /// `.k11-b { gap: 4px }` (`K11-badges.html:23`).
 const double _cellGap = NestSpacing.s1;
 
-/// The design's badge art, keyed by the badge's stable id. The earned flag
-/// never switches the art (the asset itself carries the todo styling), so a
-/// legacy id that has no drawing falls back to the neutral ribbon glyph
-/// rather than another badge's medal.
-const Map<String, String> _artFor = <String, String>{
+/// The design's earned badge art, keyed by the badge's stable id. Each id
+/// renders its own medal in both states (the asset itself carries the
+/// styling), so a legacy id that has no drawing falls back to the neutral
+/// ribbon glyph rather than another badge's medal.
+const Map<String, String> _earnedArtFor = <String, String>{
   'first-quest': NestlingIllustrations.badgeFirstQuest,
   'bed-maker-7': NestlingIllustrations.badgeBedMaker,
   'kind-helper': NestlingIllustrations.badgeKindHelper,
   'bookworm': NestlingIllustrations.badgeBookworm,
-  'bins-out': NestlingIllustrations.badgeBinsOut,
-  'biscuit-sitter': NestlingIllustrations.badgeBiscuitSitter,
-  'tidy-hero': NestlingIllustrations.badgeTidyHero,
-  'early-bird': NestlingIllustrations.badgeEarlyBird,
-  'plant-waterer': NestlingIllustrations.badgePlantWaterer,
 };
+
+/// The inner glyph markup for each of the design's five still-to-do medals,
+/// transcribed from `design/html-source/screens/K11-badges.html:80-123`
+/// (bin, paw, basket, sun, watering-can). The ribbon + disc + dashed ring
+/// are shared (see [lockedMedalSvg]); only the glyph differs per id.
+const Map<String, String> _lockedGlyphFor = <String, String>{
+  'bins-out': '<path fill="none" stroke="#6E6A8A" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.6" d="M21 28h22m-17 0v-4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v4m-15 0v22a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3V28m-12 7v11m6-11v11"/>',
+  'biscuit-sitter': '<g fill="none" stroke="#6E6A8A" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.6"><circle cx="32" cy="42" r="6"/><circle cx="24" cy="33" r="3.4"/><circle cx="31" cy="29" r="3.4"/><circle cx="39" cy="33" r="3.4"/></g>',
+  'tidy-hero': '<path fill="none" stroke="#6E6A8A" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.6" d="M41 33H23l1.6 8.5a2.4 2.4 0 0 0 2.4 1.9h10a2.4 2.4 0 0 0 2.4-1.9Zm-14 0v-3a5 5 0 0 1 10 0v3"/>',
+  'early-bird': '<g fill="none" stroke="#6E6A8A" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.6"><circle cx="32" cy="38" r="7"/><path d="M32 24v5m0 18v5M20 38h-4m32 0h-4m-20.6-8.6-2.8-2.8m22.8 22.8-2.8-2.8m0-17.2 2.8-2.8M20.6 49.4l2.8-2.8"/></g>',
+  'plant-waterer': '<g fill="none" stroke="#6E6A8A" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.6"><path d="M25 30h14l3 20a3 3 0 0 1-3 3.4H25a3 3 0 0 1-3-3.4Z"/><path d="M29 30v-6a4 4 0 0 1 8 0v6M25 40h14"/></g>',
+};
+
+/// The locked (still-to-do) medal drawing for one of the five design ids.
+///
+/// Medal interiors are illustration art, not UI chrome: like the shared
+/// `NestlingIllustrations.badge*` files they keep fixed colours in both
+/// themes (measured on `design/screens/light|dark/K11-badges.png`: disc
+/// `#F3EEE5`, ring `#1E1B3A`, ribbon fill `#6E6A8A` + stroke `#1E1B3A` at
+/// 40 %, glyph `#6E6A8A` — identical in light and dark).
+///
+/// Two corrections versus the shared `badge_*` asset files
+/// (`ORCHESTRATOR_NOTES.md` 06:55, mandatory):
+///
+/// 1. The dashed ring is INK (`#1E1B3A`): the HTML's locked `<circle>`
+///    carries two `stroke` attributes and HTML parsing keeps the FIRST
+///    duplicate, so the design PNG paints the ring in ink, 3 px,
+///    `dasharray 5 4` (sampled `(30, 27, 58)` on both design PNGs). The
+///    shared files paint it `#6E6A8A` (too light).
+/// 2. The ribbon `<path>` carries `opacity=".4"` on the WHOLE element, so
+///    its fill AND its 3 px ink stroke draw at 40 % together (sampled
+///    `(165, 164, 176)` over white in light, `(31, 28, 51)` over the dark
+///    surface in dark — both exactly ink at 40 % over the tile). The
+///    opacity stays on the element here, never split onto the fill alone.
+String lockedMedalSvg(String id) {
+  final glyph = _lockedGlyphFor[id] ?? '';
+  const header =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path fill="#6E6A8A" stroke="#1E1B3A" stroke-linejoin="round" stroke-width="3" d="M22 5h20l-5 21H27Z" opacity=".4"/><circle cx="32" cy="39" r="20" fill="#F3EEE5" stroke="#1E1B3A" stroke-dasharray="5 4" stroke-width="3"/>';
+  const footer = '</svg>';
+  return '$header$glyph$footer';
+}
 
 /// One K11 badge tile — `.k11-b` (`design/html-source/screens/K11-badges.html:23`):
 /// `surface` fill, a 3 px ink border (solid + `--sh-kid` when earned, dashed
@@ -152,9 +188,20 @@ class BadgeGridCell extends StatelessWidget {
   }
 
   /// The medal drawing: the design art for a known id, else the neutral
-  /// ribbon glyph (never a wrong badge's art).
+  /// ribbon glyph (never a wrong badge's art). The five still-to-do ids
+  /// render the local [lockedMedalSvg] (ink dashed ring + whole-element
+  /// ribbon opacity, both themes); the four earned ids render their shared
+  /// coloured asset. Each id keeps its own medal in both earned and locked
+  /// states.
   Widget _art(BuildContext context) {
-    final art = _artFor[badge.id];
+    if (_lockedGlyphFor.containsKey(badge.id)) {
+      return SvgPicture.string(
+        lockedMedalSvg(badge.id),
+        width: _medalSize,
+        height: _medalSize,
+      );
+    }
+    final art = _earnedArtFor[badge.id];
     if (art == null) {
       return NestIcon(
         NestIcons.ribbon,

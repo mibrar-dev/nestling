@@ -22,6 +22,7 @@ import 'package:drift/drift.dart' show Value;
 // `badges` table, which these tests read straight from the database.
 import 'package:flutter/material.dart' hide Badge;
 import 'package:flutter/semantics.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
@@ -35,6 +36,7 @@ import 'package:nestling/features/badges/domain/entities/badges_data.dart';
 import 'package:nestling/features/badges/presentation/widgets/badge_grid_cell.dart';
 import 'package:nestling/features/badges/presentation/widgets/happy_week_card.dart';
 
+import '../../design_system/test_harness.dart' show pumpNest;
 import '../../test_scope.dart';
 
 const String _route = '/badges';
@@ -728,6 +730,144 @@ void main() {
       expect(tester.takeException(), isNull);
       semantics.dispose();
       await disposeApp(tester);
+    });
+  });
+
+  group('K11 locked medal art (ORCHESTRATOR_NOTES 06:55)', () {
+    const lockedIds = <String>[
+      'bins-out',
+      'biscuit-sitter',
+      'tidy-hero',
+      'early-bird',
+      'plant-waterer',
+    ];
+
+    test('the five todo medals use the ink dashed ring, not the grey one', () {
+      // The HTML's locked <circle> carries two stroke attributes; HTML
+      // parsing keeps the FIRST, so the design paints the ring in ink
+      // (#1E1B3A, sampled on both design PNGs). The shared asset files
+      // paint it #6E6A8A.
+      for (final id in lockedIds) {
+        final svg = lockedMedalSvg(id);
+        expect(
+          svg,
+          contains('stroke="#1E1B3A" stroke-dasharray="5 4"'),
+          reason: '$id ring is ink',
+        );
+        expect(
+          svg,
+          isNot(contains('stroke="#6E6A8A" stroke-dasharray')),
+          reason: '$id ring is never the grey asset stroke',
+        );
+      }
+    });
+
+    test('the ribbon opacity sits on the whole element, not the fill only', () {
+      // `opacity=".4"` on the <path> draws its fill AND its 3 px ink stroke
+      // at 40 % together (sampled ink-at-40 % over the tile in both themes).
+      for (final id in lockedIds) {
+        final svg = lockedMedalSvg(id);
+        expect(
+          svg,
+          contains('<path fill="#6E6A8A" stroke="#1E1B3A"'),
+          reason: '$id ribbon keeps the design fill + ink stroke',
+        );
+        expect(svg, contains('opacity=".4"'), reason: '$id ribbon at 40 %');
+        expect(
+          svg,
+          contains('fill="#F3EEE5"'),
+          reason: '$id disc keeps its cream fill in both themes',
+        );
+      }
+    });
+
+    test('each todo id keeps its own design glyph', () {
+      expect(lockedMedalSvg('bins-out'), contains('M21 28h22'));
+      expect(lockedMedalSvg('biscuit-sitter'), contains('cy="42"'));
+      expect(lockedMedalSvg('tidy-hero'), contains('M41 33H23'));
+      expect(lockedMedalSvg('early-bird'), contains('cy="38"'));
+      expect(lockedMedalSvg('plant-waterer'), contains('M25 30h14'));
+    });
+
+    domain.Badge cellBadge(String id, {required bool earned}) => domain.Badge(
+      id: id,
+      title: id,
+      detail: earned ? 'Got it!' : 'Keep going!',
+      icon: 'medal',
+      description: '',
+      earned: earned,
+      earnedAt: null,
+    );
+
+    String drawnSvg(WidgetTester tester) {
+      final picture = tester.widget<SvgPicture>(
+        find.descendant(
+          of: find.byType(BadgeGridCell),
+          matching: find.byType(SvgPicture),
+        ),
+      );
+      final loader = picture.bytesLoader;
+      expect(loader, isA<SvgStringLoader>());
+      return (loader as SvgStringLoader).provideSvg(null);
+    }
+
+    for (final mode in <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+      testWidgets('todo cells draw the ink-ring medal in ${mode.name}', (
+        tester,
+      ) async {
+        await pumpNest(
+          tester,
+          SizedBox(
+            width: 350,
+            child: BadgeGridCell(badge: cellBadge('bins-out', earned: false)),
+          ),
+          mode: mode,
+        );
+        expect(tester.takeException(), isNull);
+        expect(
+          drawnSvg(tester),
+          contains('stroke="#1E1B3A" stroke-dasharray="5 4"'),
+        );
+      });
+
+      testWidgets('an earned todo id keeps its own medal in ${mode.name}', (
+        tester,
+      ) async {
+        // No rosette fallback for design ids, even when the stored flag
+        // flips (plan §a known limitation: newly-earned badges keep the
+        // design's own grey art, with the solid border + "Got it!" only).
+        await pumpNest(
+          tester,
+          SizedBox(
+            width: 350,
+            child: BadgeGridCell(badge: cellBadge('bins-out', earned: true)),
+          ),
+          mode: mode,
+        );
+        expect(tester.takeException(), isNull);
+        expect(find.byType(SvgPicture), findsOneWidget);
+        expect(find.byType(NestIcon), findsNothing);
+      });
+    }
+
+    testWidgets('earned ids still render the shared coloured asset', (
+      tester,
+    ) async {
+      await pumpNest(
+        tester,
+        SizedBox(
+          width: 350,
+          child: BadgeGridCell(badge: cellBadge('first-quest', earned: true)),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      final picture = tester.widget<SvgPicture>(
+        find.descendant(
+          of: find.byType(BadgeGridCell),
+          matching: find.byType(SvgPicture),
+        ),
+      );
+      expect(picture.bytesLoader, isNot(isA<SvgStringLoader>()));
     });
   });
 

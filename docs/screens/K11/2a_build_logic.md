@@ -193,4 +193,27 @@ live child-switch tests fail under it). Implemented the feature-local
   `shared/k11_badges_seed`); the `TODO(K11)` removal is the UI builder's
   (already visible in their diff).
 
+## Iteration 3 (this stage — no FIXES_2.md exists)
+
+- Fix list assembled from the loop artifacts instead: `6_bugs.md`
+  (iteration 2: both bugs fixed+verified, no new bugs), `4_review.md`
+  (single minor finding), `3_test.md` (no screen bugs),
+  `ORCHESTRATOR_NOTES.md` 06:55 locked-medal art (widget/artwork layer —
+  not mine), `5_ui.md` (geometry only).
+- Only logic-layer candidate is review finding 1 (`_switchMap`
+  cancel/subscribe overlap — explicitly "hardening only" with "fix (if
+  ever touched)", stage-6 10-burst probe proving no stale emission, and
+  identical to the K08 shared pattern). Per the finding's own guidance
+  and to avoid diverging from K08: NOT touched, no lib edits this
+  iteration.
+- Post-merge (`179836f`) re-verification only:
+  `flutter analyze lib/features/badges
+  test/features/badges/badges_bloc_test.dart
+  test/features/badges/badges_repository_test.dart` → No issues found;
+  `flutter test --timeout 120s` (repository + bloc files) → 37/37 pass
+  (test stage grew the files: bloc 17, repo 20 — all green unmodified).
+- No contract changes; no files outside the logic chunk touched
+  (working tree shows only the loop's own `.brief_*` modifications);
+  no simulator, no global kills.
+
 VERDICT: PASS
