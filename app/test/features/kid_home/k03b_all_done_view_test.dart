@@ -1662,10 +1662,10 @@ void main() {
       expect(stage.nestHeight, 226);
       expect(stage.fixedPipHeight, 152);
       expect(stage.slotHeight, 226);
-      // The feature-side D1 correction: `pipBottom` takes the shared
-      // `explicitGeometry` early return that honours `slotHeight`, so the
-      // block stays 226 without touching shared code.
-      expect(stage.pipBottom, 92);
+      // Fixed shared/ds_cleanup (K03B-BUG-2): `explicitGeometry` honours
+      // `slotHeight` exactly, so the `pipBottom: 92` workaround is gone —
+      // the rim-seated placement lands the same −18…134 box.
+      expect(stage.pipBottom, isNull);
       final avatar = tester.widget<PipAvatar>(find.byType(PipAvatar));
       expect(avatar.mood, PipMood.happy, reason: 'the celebration mood');
       await disposeApp(tester);

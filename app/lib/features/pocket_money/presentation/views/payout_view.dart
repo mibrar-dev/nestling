@@ -289,24 +289,13 @@ class _DimmedLedger extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               const NestStatusBar(),
-              Padding(
+              const Padding(
                 // `.bg-fake .ptitle { padding-top: 8px }` inside a 20 px
-                // gutter.
-                padding: const EdgeInsets.fromLTRB(
-                  NestSpacing.padSide,
-                  NestSpacing.s2,
-                  NestSpacing.padSide,
-                  0,
-                ),
-                child: Semantics(
-                  header: true,
-                  child: Text(
-                    'Pocket money',
-                    style: NestType.h1(color: tokens.ink),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
+                // gutter. The shared [NestPageTitle] owns the 8 px top pad
+                // and the h1 metrics; the horizontal gutter stays here
+                // because this backdrop column carries no scroll padding.
+                padding: EdgeInsets.symmetric(horizontal: NestSpacing.padSide),
+                child: NestPageTitle(title: 'Pocket money'),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(
@@ -382,19 +371,17 @@ class _EmptyBody extends StatelessWidget {
         const NestStatusBar(),
         Expanded(
           child: ListView(
+            // The shared title owns the design's 8 px top pad, so the
+            // viewport carries no top padding (8 + 8 would stand the title
+            // 16 px down).
             padding: const EdgeInsets.fromLTRB(
               NestSpacing.padSide,
-              NestSpacing.s2,
+              0,
               NestSpacing.padSide,
               NestSpacing.s8,
             ),
             children: <Widget>[
-              Text(
-                'Pocket money',
-                style: NestType.h1(color: context.nest.ink),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+              const NestPageTitle(title: 'Pocket money'),
               const SizedBox(height: NestSpacing.s4),
               NestEmptyState(
                 art: SvgPicture.asset(NestlingIllustrations.coin),

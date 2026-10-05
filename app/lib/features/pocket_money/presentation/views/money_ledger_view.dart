@@ -196,27 +196,6 @@ class _PendingWrite {
   final String message;
 }
 
-/// The page title, shared by the loaded and empty bodies.
-class _PageTitle extends StatelessWidget {
-  const _PageTitle();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: NestSpacing.s2),
-      child: Semantics(
-        header: true,
-        child: Text(
-          'Pocket money',
-          style: NestType.h1(color: context.nest.ink),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ),
-    );
-  }
-}
-
 /// `.scroll` side/bottom padding — 20 px gutters everywhere (owner
 /// alignment rule), 32 px below the last child so nothing sits under the
 /// shell tab bar.
@@ -329,7 +308,7 @@ class _LoadedBody extends StatelessWidget {
             // `padding-top:8px`. Nothing may be inserted between the band
             // and the title (P12-BUG-05).
             children: <Widget>[
-              const _PageTitle(),
+              const NestPageTitle(title: 'Pocket money'),
               const SizedBox(height: NestSpacing.s4),
               // Creation order (Maya, then Leo), never alphabetical.
               NestSegmented<String>(
@@ -590,7 +569,7 @@ class _EmptyBody extends StatelessWidget {
             // 8 px padding (P12-BUG-05). Pinned by
             // `money_ledger_geometry_test.dart`.
             children: <Widget>[
-              const _PageTitle(),
+              const NestPageTitle(title: 'Pocket money'),
               const SizedBox(height: NestSpacing.s4),
               NestEmptyState(
                 art: SvgPicture.asset(NestlingIllustrations.coin),

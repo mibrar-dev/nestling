@@ -13,15 +13,12 @@
 // subtitle and its chevron together, and a toggle row carries the row title
 // plus the switch's own `aria-label` from the design.
 //
-// KNOWN SHARED WART (not a P16 finding, identical on /today and P14 — see
-// `rewards_a11y_test.dart`): a design-system control built as
-// `Semantics(label:, onTap:) > InkWell` also exposes the inner InkWell (and
-// `NestToggle`'s `GestureDetector`) as a SECOND node, which is either a
-// duplicate of the row copy or carries no label at all. Those live in
-// `core/design_system`, not here. The one test below that touches the subject
-// pins its BLAST RADIUS — the only unlabelled tappable nodes allowed on this
-// screen are the three switch tracks — so a new unlabelled control on P16
-// still fails.
+// FIXED in shared/ds_cleanup: every design-system control is now one node.
+// `Semantics(label:, onTap:, excludeSemantics: true) > InkWell` drops the
+// inner InkWell's (and `NestToggle`'s `GestureDetector`'s) duplicate tap node,
+// so the surviving node carries the label AND the tap action. There are no
+// unlabelled tappable nodes left on this screen; the test below pins that
+// (any new unlabelled control fails).
 
 import 'dart:ui' show Tristate;
 
@@ -195,11 +192,15 @@ void main() {
         reason: 'James node must not merge Sarah',
       );
 
-      // The Invite row stays operable without static copy (the second
-      // Invite node is the known shared wart documented at the top of this
-      // file: `Semantics(label:, onTap:)` + inner InkWell).
+      // The Invite row stays operable without static copy. Fixed in
+      // shared/ds_cleanup: `NestListRow` interactive is now one node
+      // (`excludeSemantics: true`), so there is exactly one Invite node.
       final invite = p16Announcing(tester, 'Invite co-parent');
-      expect(invite, isNotEmpty, reason: 'Invite stays operable');
+      expect(
+        invite,
+        hasLength(1),
+        reason: 'Invite is one node, still operable',
+      );
       for (final node in invite) {
         expect(
           node.getSemanticsData().label,
@@ -217,8 +218,7 @@ void main() {
       await disposeApp(tester);
     });
 
-    testWidgets('the only unlabelled tappable nodes are the three switch '
-        'tracks', (tester) async {
+    testWidgets('no tappable node is left without a label', (tester) async {
       final handle = tester.ensureSemantics();
       await pumpSettingsApp(tester);
       await tester.pump();
@@ -229,26 +229,17 @@ void main() {
       final anonymous = tappableNodes(tester)
           .where((node) => node.getSemanticsData().label.trim().isEmpty)
           .toList();
+      // Fixed in shared/ds_cleanup: `NestToggle` outer `Semantics` now sets
+      // `excludeSemantics: true`, so the inner `GestureDetector` contributes
+      // no second (unlabelled) tap node. Zero unlabelled nodes — anything
+      // announcing nothing is a P16 defect.
       expect(
         anonymous,
-        hasLength(3),
+        isEmpty,
         reason:
-            'one per NestToggle (shared design-system wart); anything else '
-            'announcing nothing is a P16 defect',
+            'one control = one labelled node; unlabelled tap nodes: '
+            '${anonymous.length}',
       );
-      final toggles = find.byType(NestToggle);
-      final built = toggles.evaluate().length;
-      expect(built, anonymous.length, reason: 'one unlabelled node per switch');
-      final tracks = <Rect>[
-        for (var i = 0; i < built; i++) tester.getRect(toggles.at(i)),
-      ];
-      for (final node in anonymous) {
-        expect(
-          tracks,
-          contains(p16NodeRect(tester, node)),
-          reason: 'an unlabelled target must sit exactly on a NestToggle track',
-        );
-      }
 
       handle.dispose();
       await disposeApp(tester);

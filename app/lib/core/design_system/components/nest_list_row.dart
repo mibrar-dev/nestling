@@ -139,15 +139,36 @@ class NestListRow extends StatelessWidget {
     );
     if (onTap != null) {
       final tap = onTap;
+      final explicit = semanticLabel;
+      // One control = one node: the label owns the announcement and the
+      // subtree contributes no second copy. `excludeSemantics` drops the
+      // inner InkWell's duplicate tap node (the shared wart pinned by P16
+      // `settings_a11y_test.dart`); `onTap` mirrors the InkWell so the
+      // surviving node stays operable. The subtitle is part of the
+      // announcement today (outer + inner merge), so it is folded into the
+      // label when the caller did not provide an explicit one.
+      final String label;
+      if (explicit != null) {
+        label = explicit;
+      } else if (caption != null && caption.isNotEmpty) {
+        label = '$title, $caption';
+      } else {
+        label = title;
+      }
       return Semantics(
         button: true,
         enabled: true,
-        label: semanticLabel ?? title,
+        label: label,
+        excludeSemantics: true,
         onTap: tap,
         child: row,
       );
     }
-    return row;
+    // Static rows get their own container node so their text does not fold
+    // into the next tappable row's announcement (P16 Family list → Invite).
+    // Plain container only — no label, no tap — so the
+    // ACCESSIBILITY-ACTIONS rule is untouched.
+    return Semantics(container: true, child: row);
   }
 }
 

@@ -103,14 +103,10 @@ class _QuestLibraryBodyState extends State<QuestLibraryBody> {
       // the physical edge.
       padding: const EdgeInsets.only(bottom: NestSpacing.s8),
       children: <Widget>[
-        // `.ptitle { padding-top: 8px }`.
-        _gutter(const SizedBox(height: NestSpacing.s2)),
-        _gutter(
-          // `.ptitle` has no `text-wrap: balance`, so this is a plain Text —
-          // the BALANCED HEADINGS rule does not reach a screen-local heading
-          // that sets no balance.
-          Text('Quests', style: NestType.h1(color: tokens.ink), maxLines: 1),
-        ),
+        // `.ptitle { padding-top: 8px }` — the shared [NestPageTitle] owns
+        // the 8 px pad and the h1 metrics. `.ptitle` sets no balance, so no
+        // [NestBalancedText] here.
+        _gutter(const NestPageTitle(title: 'Quests')),
         _gutter(const SizedBox(height: NestSpacing.s4)),
         _gutter(
           NestSegmented<String>(

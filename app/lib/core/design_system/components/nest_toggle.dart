@@ -40,6 +40,11 @@ class NestToggle extends StatelessWidget {
         label: semanticLabel,
         toggled: value,
         enabled: changed != null,
+        // One control = one node: the outer label owns the announcement and
+        // the inner GestureDetector contributes no second (unlabelled) tap
+        // node. `onTap` mirrors the detector so the surviving node stays
+        // operable (shared wart pinned by P16 `settings_a11y_test.dart`).
+        excludeSemantics: true,
         onTap: changed == null ? null : () => changed(!value),
         child: Opacity(
           opacity: changed == null ? 0.45 : 1,

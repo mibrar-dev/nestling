@@ -206,10 +206,11 @@ void main() {
     },
   );
 
-  test('K03B-BUG-2 (latent, shared): explicitGeometry adds _explicitBleed to slotHeight', () {
-    // Shared-unit contract only: no screen uses this form now (K03b and
-    // K06 pass `pipBottom`, K03 passes no `slotHeight`). Parked until the
-    // orchestrator decides whether the unit contract changes.
+  test('K03B-BUG-2 (fixed, shared): explicitGeometry honours slotHeight', () {
+    // Fixed shared/ds_cleanup: `stageH` is always the effective slot, never
+    // slot + bleed. No screen uses the bare `slotHeight`-without-`pipBottom`
+    // form now (K03b and K06 pass `pipBottom`, K03 passes no `slotHeight`),
+    // but the unit contract holds.
     final g = PipNestFallback.explicitGeometry(
       nestH: 188,
       pipH: 152,
@@ -217,7 +218,7 @@ void main() {
       slotHeight: _dPetBlockHeight,
     );
     expect(g.stageH, _dPetBlockHeight);
-  }, skip: true);
+  });
 
   testWidgets(
     'K03B-BUG-3: the nest art is the design 226×226 (outline 190×104)',

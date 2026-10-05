@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -43,7 +44,11 @@ class _ParentalGateViewState extends State<ParentalGateView> {
     context.read<ParentalGateBloc>().add(
       const ParentalGateUnlockAcknowledged(),
     );
-    final canPop = Navigator.of(context).canPop();
+    // go_router's `context.canPop()` (not `Navigator.of(context).canPop()`):
+    // it also honours `PopScope` registrations and the router's own stack
+    // knowledge (P17 4_review.md finding 2). This decides pop-back-to-kid
+    // vs `go` to `/today`, i.e. the whole unlock path.
+    final canPop = context.canPop();
     if (canPop) {
       // Pop FIRST, then rotate into parent mode (Stage-3 §3.1: flipping
       // the mode and starting the async session write while the imperative
@@ -52,19 +57,42 @@ class _ParentalGateViewState extends State<ParentalGateView> {
       context.pop();
       GetIt.instance<AppModeController>().selectMode(AppMode.parent);
       final session = GetIt.instance<AppSession>();
-      unawaited(session.setAppMode('parent').then((_) => session.refresh()));
+      unawaited(
+        session
+            .setAppMode('parent')
+            .then(
+              (_) => session.refresh(),
+              // A failed DB write must not leave an unhandled async error nor a
+              // memory/storage split (in-memory already parent, stored still kid):
+              // log in debug and still refresh so the two re-converge (finding 6).
+              onError: (Object e, StackTrace s) {
+                debugPrint('ParentalGateView: session write failed: $e');
+                return session.refresh();
+              },
+            ),
+      );
     } else {
       // Parent mode FIRST so the router's kid-gate redirect stops firing
       // when we `go` to a parent-only route.
       GetIt.instance<AppModeController>().selectMode(AppMode.parent);
       final session = GetIt.instance<AppSession>();
-      unawaited(session.setAppMode('parent').then((_) => session.refresh()));
+      unawaited(
+        session
+            .setAppMode('parent')
+            .then(
+              (_) => session.refresh(),
+              onError: (Object e, StackTrace s) {
+                debugPrint('ParentalGateView: session write failed: $e');
+                return session.refresh();
+              },
+            ),
+      );
       context.go(TodayRoutePaths.today);
     }
   }
 
   void _leave(BuildContext context) {
-    if (Navigator.of(context).canPop()) {
+    if (context.canPop()) {
       context.pop();
     } else {
       context.go(KidHomeRoutePaths.home);
@@ -76,11 +104,15 @@ class _ParentalGateViewState extends State<ParentalGateView> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: BlocListener<ParentalGateBloc, ParentalGateState>(
+        // `items` is a fresh Drift list per emission: identity comparison
+        // would rebuild on every emission even when the content is unchanged.
+        // Compare by value so the listener only fires on real changes
+        // (P17 4_review.md finding 5).
         listenWhen: (previous, current) =>
             current.unlocked != previous.unlocked ||
             current.attempts != previous.attempts ||
             current.status != previous.status ||
-            current.items != previous.items,
+            !listEquals(current.items, previous.items),
         listener: (context, state) {
           if (state.unlocked) {
             _unlock(context);
@@ -167,7 +199,7 @@ class _ParentalGateViewState extends State<ParentalGateView> {
                                     >(
                                       buildWhen: (p, c) =>
                                           p.status != c.status ||
-                                          p.items != c.items ||
+                                          !listEquals(p.items, c.items) ||
                                           p.entered != c.entered ||
                                           p.errorMessage != c.errorMessage,
                                       builder: (context, state) {
@@ -313,10 +345,13 @@ class _ParentalGateViewState extends State<ParentalGateView> {
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
                                             body,
+                                            // `.gate-note { margin-top: 10 }`
+                                            // — one shared token, not two
+                                            // added together (P17 4_review.md
+                                            // finding 4; `NestKeypad` uses the
+                                            // same token for the same CSS).
                                             const SizedBox(
-                                              height:
-                                                  NestSpacing.s2 +
-                                                  NestSpacing.gap2,
+                                              height: NestSpacing.gap10,
                                             ),
                                             // The enclosing column is the single owner of the caption
                                             // gap (`.gate-note { margin-top: 10 }`) and of the caption
@@ -405,7 +440,14 @@ class _GateBackdropBody extends StatelessWidget {
         // the `kb-top` header starts at design y 55.
         const NestStatusBar(),
         Padding(
-          padding: const EdgeInsets.fromLTRB(28, NestSpacing.s2, 28, 0),
+          // `.kb-top` side padding 28 (shared `gap28`: K01/K03/K04/K05 draw
+          // the same kid header block).
+          padding: const EdgeInsets.fromLTRB(
+            NestSpacing.gap28,
+            NestSpacing.s2,
+            NestSpacing.gap28,
+            0,
+          ),
           child: Row(
             spacing: NestSpacing.s3,
             children: [
@@ -427,16 +469,21 @@ class _GateBackdropBody extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 26),
+        // `.kb-pet` top margin 26 (shared `gap26`).
+        const SizedBox(height: NestSpacing.gap26),
         Center(
           child: kid == null
-              ? const PipAvatar(style: PipStyle.mochi, stage: 3, size: 200)
+              ? const PipAvatar(
+                  style: PipStyle.mochi,
+                  stage: 3,
+                  size: NestGate.pipSlot,
+                )
               : PipAvatar(
                   style: _pipStyle(kid.pipStyle),
                   stage: kid.pipStage.clamp(1, 4),
                   skin: _pipSkin(kid.pipSkin),
                   accessory: _pipAccessory(kid.pipAccessory),
-                  size: 200,
+                  size: NestGate.pipSlot,
                 ),
         ),
       ],
@@ -489,14 +536,19 @@ class _LockTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.nest;
     return Container(
-      width: 52,
-      height: 52,
+      // `.lock-tile`: 52px lilac square (shared `NestGate`).
+      width: NestGate.lockTile,
+      height: NestGate.lockTile,
       decoration: BoxDecoration(
         color: tokens.lilacTint,
         borderRadius: NestRadii.allM,
       ),
       child: Center(
-        child: NestIcon(NestIcons.lock, size: 26, color: tokens.lilac),
+        child: NestIcon(
+          NestIcons.lock,
+          size: NestGate.lockIcon,
+          color: tokens.lilac,
+        ),
       ),
     );
   }
@@ -518,22 +570,31 @@ class _DigitsRow extends StatelessWidget {
         for (var i = 0; i < total; i++)
           ExcludeSemantics(
             child: Container(
-              width: 56,
-              height: 64,
+              // `.digit`: 56×64, 2px border (shared `NestGate`).
+              width: NestGate.digitWidth,
+              height: NestGate.digitHeight,
               decoration: BoxDecoration(
                 color: i < entered.length ? tokens.surface : tokens.surface2,
                 borderRadius: NestRadii.allM,
                 border: Border.all(
                   color: i < entered.length ? tokens.ink : tokens.line,
-                  width: 2,
+                  width: NestGate.digitBorder,
                 ),
               ),
               child: Center(
                 child: i < entered.length
-                    ? Text(entered[i], style: NestType.h1(color: tokens.ink))
+                    // `.digit { font-size: 28px; line-height: 1 }`: the 28px
+                    // glyph with a 28px line box, not the 34px `h1` line
+                    // (P17 4_review.md finding 3 — 3 px closer to the design).
+                    ? Text(
+                        entered[i],
+                        style: NestType.h1(color: tokens.ink)
+                            .copyWith(height: 1),
+                      )
                     : Container(
-                        width: 3,
-                        height: 24,
+                        // Empty-digit caret: 3×24 leaf bar.
+                        width: NestGate.caretWidth,
+                        height: NestGate.caretHeight,
                         decoration: BoxDecoration(
                           color: tokens.leaf,
                           borderRadius: BorderRadius.circular(2),

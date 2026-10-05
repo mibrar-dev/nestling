@@ -150,11 +150,13 @@ void main() {
 
     test('explicitGeometry without overrides is still K03', () {
       final g = PipNestFallback.explicitGeometry(
-        nestH: 188,
+        nestH: 236,
         pipH: 152,
         contactFrac: PipNestFallback.contactInSvg(PipStage.fledgling),
       );
-      expect(g.nestTop, closeTo(236 - 188 - 31.4, 0.01));
+      // Re-measured shared/ds_cleanup: the 236 × 236 nest sits flush (no
+      // bleed), so the nest top is 0 in the 236 slot.
+      expect(g.nestTop, closeTo(0, 0.01));
       expect(g.stageH, closeTo(236, 0.01));
     });
 
