@@ -557,10 +557,11 @@ abstract final class Seed {
     await badge('bed-maker-7', title: 'Bed maker ×7');
     await badge('kind-helper', title: 'Kind helper');
     await badge('bookworm', title: 'Bookworm');
-    await badge('tidy-champion', title: 'Tidy champion');
+    await badge('bins-out', title: 'Bins out');
+    await badge('biscuit-sitter', title: 'Biscuit sitter');
+    await badge('tidy-hero', title: 'Tidy hero');
     await badge('early-bird', title: 'Early bird');
-    await badge('super-saver', title: 'Super saver');
-    await badge('pet-friend', title: 'Pet friend');
+    await badge('plant-waterer', title: 'Plant waterer');
 
     Future<void> earned(String badge, String child, DateTime at) {
       return db
