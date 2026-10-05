@@ -22,3 +22,6 @@
 ## K05 Quest complete (merged 5 Oct with 2 minor bugs open; proofs skipped in its bugs test)
 - K05-BUG-5 a 4-digit lifetime count ellipsises on one line.
 - K05-BUG-6 the progress node's semantics value contradicts its own label.
+
+## K07 Pip evolves (merged 5 Oct, 1 latent minor open)
+- K07-BUG-10 a stat number wider than its card (5+ digits at 320 px × 1.3) is clipped mid-digit; real counts are far below that. If needed, scale the three numbers together with one shared factor.

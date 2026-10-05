@@ -5,12 +5,15 @@
 // care/wardrobe writes stream back in with no extra events, and failures
 // surface on the `actionError`/`actionNonce` toast channel.
 
+import 'dart:async';
+
 import 'package:bloc_test/bloc_test.dart';
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/seed.dart';
 import 'package:nestling/features/pip/data/pip_repository_impl.dart';
+import 'package:nestling/features/pip/domain/entities/pip_evolution.dart';
 import 'package:nestling/features/pip/domain/entities/pip_nest.dart';
 import 'package:nestling/features/pip/domain/entities/pip_profile.dart';
 import 'package:nestling/features/pip/domain/pip_repository.dart';
@@ -53,7 +56,7 @@ class _RefusingBuyRepository extends PipRepositoryImpl {
 
 /// Repository whose nest stream errors on listen (load-failure path) until
 /// released, so the failure card's "Try again" can be exercised.
-class _FailingNestRepository extends PipRepositoryImpl {
+class _FailingNestRepository extends _EvolutionSilentRepository {
   _FailingNestRepository({required super.db});
 
   bool failNest = true;
@@ -65,9 +68,29 @@ class _FailingNestRepository extends PipRepositoryImpl {
   }
 }
 
+/// K06 nest-path repository: the K07 evolution stream stays silent (never
+/// emits), so the exact load/care/wardrobe sequences below read exactly as
+/// before. Evolution behaviour itself is covered in
+/// `pip_evolution_bloc_test.dart` with controlled fakes.
+///
+/// A silent sibling means the feature-level `PipStatus` never reaches `loaded`
+/// (`loaded` is the AND of both streams — 6_bugs.md K07-BUG-1), so every K06
+/// assertion below reads `PipState.nestStatus`, the NEST stream's own status,
+/// which is what `/pip` switches on.
+class _EvolutionSilentRepository extends PipRepositoryImpl {
+  _EvolutionSilentRepository({required super.db});
+
+  final StreamController<PipEvolution?> _silent =
+      StreamController<PipEvolution?>.broadcast();
+
+  @override
+  Stream<PipEvolution?> watchEvolution() => _silent.stream;
+}
+
 Matcher _loadedWithCoins(int coins) => predicate<PipState>(
   (state) =>
-      state.status == PipStatus.loaded && state.nest?.profile.coins == coins,
+      state.nestStatus == PipStatus.loaded &&
+      state.nest?.profile.coins == coins,
 );
 
 void main() {
@@ -113,6 +136,8 @@ void main() {
         status: PipStatus.loaded,
         actionError: 'Exception: x',
         actionNonce: 2,
+        nestSettled: true,
+        evolutionSettled: true,
       );
       final reloaded = failed.copyWithLoaded(nest);
       expect(reloaded.status, PipStatus.loaded);
@@ -139,14 +164,16 @@ void main() {
   group('PipBloc load', () {
     blocTest<PipBloc, PipState>(
       'load emits loading then loaded with Maya nest in design order',
-      build: () => PipBloc(repository: PipRepositoryImpl(db: db)),
+      build: () => PipBloc(repository: _EvolutionSilentRepository(db: db)),
       act: (bloc) => bloc.add(const PipLoadRequested()),
       wait: const Duration(milliseconds: 100),
       expect: () => <Matcher>[
         predicate<PipState>((s) => s.status == PipStatus.loading),
         predicate<PipState>((state) {
           final nest = state.nest;
-          if (state.status != PipStatus.loaded || nest == null) return false;
+          if (state.nestStatus != PipStatus.loaded || nest == null) {
+            return false;
+          }
           if (nest.profile.nickname != 'Maya') return false;
           if (nest.profile.coins != 120) return false;
           return nest.items.map((i) => i.id).join(',') ==
@@ -157,7 +184,7 @@ void main() {
 
     blocTest<PipBloc, PipState>(
       'a second load while live is ignored (no stacked subscription)',
-      build: () => PipBloc(repository: PipRepositoryImpl(db: db)),
+      build: () => PipBloc(repository: _EvolutionSilentRepository(db: db)),
       act: (bloc) async {
         bloc
           ..add(const PipLoadRequested())
@@ -167,7 +194,7 @@ void main() {
       wait: const Duration(milliseconds: 100),
       expect: () => <Matcher>[
         predicate<PipState>((s) => s.status == PipStatus.loading),
-        predicate<PipState>((s) => s.status == PipStatus.loaded),
+        predicate<PipState>((s) => s.nestStatus == PipStatus.loaded),
       ],
     );
 
@@ -198,7 +225,11 @@ void main() {
       repo.failNest = false;
       bloc.add(const PipLoadRequested());
       await Future<void>.delayed(const Duration(milliseconds: 60));
-      expect(bloc.state.status, PipStatus.loaded);
+      expect(
+        bloc.state.nestStatus,
+        PipStatus.loaded,
+        reason: 'the nest stream answered again',
+      );
       expect(bloc.state.nest?.profile.nickname, 'Maya');
       // The failed subscription was released: only one live handler, and
       // the healthy stream clears the stale load error.
@@ -211,7 +242,7 @@ void main() {
   group('PipBloc care', () {
     blocTest<PipBloc, PipState>(
       'feed deducts 5 coins and the stream emits the new profile',
-      build: () => PipBloc(repository: PipRepositoryImpl(db: db)),
+      build: () => PipBloc(repository: _EvolutionSilentRepository(db: db)),
       act: (bloc) async {
         bloc.add(const PipLoadRequested());
         await Future<void>.delayed(const Duration(milliseconds: 30));
@@ -228,7 +259,7 @@ void main() {
 
     blocTest<PipBloc, PipState>(
       'bathe deducts 3 coins',
-      build: () => PipBloc(repository: PipRepositoryImpl(db: db)),
+      build: () => PipBloc(repository: _EvolutionSilentRepository(db: db)),
       act: (bloc) async {
         bloc.add(const PipLoadRequested());
         await Future<void>.delayed(const Duration(milliseconds: 30));
@@ -296,7 +327,7 @@ void main() {
   group('PipBloc wardrobe', () {
     blocTest<PipBloc, PipState>(
       'affordable buy marks owned and deducts the DB price',
-      build: () => PipBloc(repository: PipRepositoryImpl(db: db)),
+      build: () => PipBloc(repository: _EvolutionSilentRepository(db: db)),
       act: (bloc) async {
         bloc.add(const PipLoadRequested());
         await Future<void>.delayed(const Duration(milliseconds: 30));
@@ -310,13 +341,13 @@ void main() {
         // stream emits once per write, so both land as loaded states.
         predicate<PipState>(
           (s) =>
-              s.status == PipStatus.loaded &&
+              s.nestStatus == PipStatus.loaded &&
               s.nest?.profile.coins == 90 &&
               !s.nest!.items.firstWhere((i) => i.id == 'wellies').owned,
         ),
         predicate<PipState>(
           (s) =>
-              s.status == PipStatus.loaded &&
+              s.nestStatus == PipStatus.loaded &&
               s.nest?.profile.coins == 90 &&
               s.nest!.items.firstWhere((i) => i.id == 'wellies').owned,
         ),

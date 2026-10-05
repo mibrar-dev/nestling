@@ -1,3 +1,4 @@
+import 'package:nestling/features/pip/domain/entities/pip_evolution.dart';
 import 'package:nestling/features/pip/domain/entities/pip_nest.dart';
 import 'package:nestling/features/pip/domain/entities/pip_profile.dart';
 import 'package:nestling/features/pip/domain/entities/pip_stage.dart';
@@ -38,6 +39,13 @@ abstract class PipRepository {
   /// no active child. Re-emits on any profile, wardrobe or active-child
   /// change, so the bloc renders updates with no reload events.
   Stream<PipNest?> watchNest();
+
+  /// The evolution screen's stream (K07): the active child's profile plus
+  /// their lifetime helped-times count, or null when there is no active
+  /// child. Re-emits on any profile, completion or active-child change, so
+  /// the bloc renders updates with no reload events. The count is all time
+  /// (`done_pending` + `approved`); the PERIODS ruling does not apply.
+  Stream<PipEvolution?> watchEvolution();
 
   Future<void> updateLook({
     required String childId,
