@@ -256,7 +256,12 @@ class TodayLoadedBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (state.summaries.isEmpty) {
+    // ONE shared empty state for the whole app (orchestrator ruling):
+    // `/today` and `/today-empty` both land here when there is nothing
+    // to do — no active quests feed OR no children at all. The populated
+    // P08 path below is then unreachable, so it stays byte-identical to
+    // the demo-seed design.
+    if (state.items.isEmpty || state.summaries.isEmpty) {
       return ListView(
         padding: const EdgeInsets.fromLTRB(
           NestSpacing.padSide,
@@ -265,13 +270,15 @@ class TodayLoadedBody extends StatelessWidget {
           NestSpacing.s8,
         ),
         children: <Widget>[
-          _Greeting(
+          _EmptyGreeting(
             greeting: state.greeting,
             parentName: state.parentName,
             dateLine: state.dateLine,
           ),
           const SizedBox(height: NestSpacing.s4),
-          const _EmptyCard(),
+          _EmptyCard(names: state.summaries.map((s) => s.nickname).toList()),
+          const SizedBox(height: NestSpacing.s4),
+          const _TipCard(),
         ],
       );
     }
@@ -737,12 +744,78 @@ class _HandButton extends StatelessWidget {
   }
 }
 
-/// P08b empty state (`.empty-card` + pip-stage-1 egg).
-class _EmptyCard extends StatelessWidget {
-  const _EmptyCard();
+/// P08b empty greeting: h1 28/34, date line beneath — no plus button, no
+/// avatar (unlike the populated P08 [_Greeting]).
+class _EmptyGreeting extends StatelessWidget {
+  const _EmptyGreeting({
+    required this.greeting,
+    required this.parentName,
+    required this.dateLine,
+  });
+
+  final String greeting;
+  final String parentName;
+  final String dateLine;
 
   @override
   Widget build(BuildContext context) {
+    final tokens = context.nest;
+    // No top padding: P08b's `.greet` has none (the 8 px belongs to P08's
+    // own rule). No line cap either: P08b's `.greet h1` sets no nowrap and
+    // no max-lines (components.css:43 only sets `overflow-wrap: anywhere`),
+    // so the heading wraps to as many lines as the parent's name needs —
+    // the screen scrolls, so a third line costs nothing (P08b-T07).
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Semantics(
+          header: true,
+          child: Text(
+            '$greeting, $parentName',
+            style: NestType.h1(color: tokens.ink),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: NestSpacing.gap2),
+          child: Text(
+            dateLine,
+            style: NestType.bodySmall(color: tokens.ink2)
+                .copyWith(fontWeight: FontWeight.w500),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Second sentence naming the children, in creation order (CHILD ORDER
+/// ruling: Maya, then Leo — never age, never alphabetical). The caller
+/// passes `state.summaries` nicknames, which `watchSummaries` keeps in
+/// `watchChildren` creation order. 0 children → no sentence; UK comma-free
+/// style.
+String emptyMessageSuffix(List<String> names) {
+  if (names.isEmpty) return '';
+  final who = switch (names.length) {
+    1 => names.first,
+    2 => '${names[0]} and ${names[1]}',
+    _ => '${names.take(names.length - 1).join(', ')} and ${names.last}',
+  };
+  return ' $who will see it straight away.';
+}
+
+/// P08b empty card (`.empty-card` in the HTML source): 140 Pip stage-1
+/// egg, h2 title, ink-2 message, primary CTA, sky link row.
+class _EmptyCard extends StatelessWidget {
+  const _EmptyCard({required this.names});
+
+  final List<String> names;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.nest;
     return NestCard(
       padding: const EdgeInsets.fromLTRB(
         NestSpacing.padSide,
@@ -750,29 +823,98 @@ class _EmptyCard extends StatelessWidget {
         NestSpacing.padSide,
         NestSpacing.s8 - NestSpacing.s1,
       ),
-      child: NestEmptyState(
-        art: const SizedBox.square(
-          dimension: 140,
-          child: PipAvatar(style: PipStyle.mochi, stage: 1, size: 140),
-        ),
-        title: 'Your nest is quiet',
-        message: 'Add your first quest and Pip will start to hatch.',
-        action: Column(
-          mainAxisSize: MainAxisSize.min,
-          spacing: NestSpacing.s2,
-          children: [
-            _PushOnce(
-              location: QuestsRoutePaths.editor,
-              builder: (context, push) =>
-                  NestButton(label: 'Add a quest', onPressed: push),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        spacing: NestSpacing.s2,
+        children: [
+          Semantics(
+            image: true,
+            label: 'Pip the bird as a speckled egg',
+            child: const ExcludeSemantics(
+              child: PipAvatar(style: PipStyle.mochi, stage: 1, size: 140),
             ),
-            NestButton(
-              label: 'Browse ideas',
-              variant: NestButtonVariant.ghost,
-              onPressed: () => context.go(QuestsRoutePaths.library),
+          ),
+          Text(
+            'Your nest is quiet',
+            style: NestType.h2(color: tokens.ink),
+            textAlign: TextAlign.center,
+          ),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 260),
+            // No line cap: `.empty-card p` sets only `max-width: 260px`, so
+            // a long roster wraps to as many lines as the names need. The
+            // card lives in a ListView, so a longer message just grows it
+            // (P08b-T08).
+            child: Text(
+              'Add your first quest and Pip will start to hatch.'
+              '${emptyMessageSuffix(names)}',
+              style: NestType.bodySmall(color: tokens.ink2),
+              textAlign: TextAlign.center,
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: NestSpacing.s2),
+          _PushOnce(
+            location: QuestsRoutePaths.editor,
+            builder: (context, push) =>
+                NestButton(label: 'Add a quest', onPressed: push),
+          ),
+          Semantics(
+            button: true,
+            label: 'Browse ideas',
+            excludeSemantics: true,
+            onTap: () => context.go(QuestsRoutePaths.library),
+            child: InkWell(
+              onTap: () => context.go(QuestsRoutePaths.library),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  minHeight: NestDevice.tapParent,
+                ),
+                child: Center(
+                  child: Text(
+                    'Browse ideas',
+                    style: NestType.bodySmallStrong(color: tokens.sky).copyWith(
+                      decoration: TextDecoration.underline,
+                      decorationColor: tokens.sky,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    softWrap: false,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// `.card.inset` tip under the empty card.
+class _TipCard extends StatelessWidget {
+  const _TipCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.nest;
+    return NestCard(
+      variant: NestCardVariant.inset,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Tip for new nests',
+            style: NestType.bodySmallStrong(color: tokens.ink),
+          ),
+          Text(
+            'Start with two daily quests each — “Make your bed” and '
+            '“Reading – 20 minutes” work beautifully.',
+            style: NestType.caption(color: tokens.ink2),
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }
