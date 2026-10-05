@@ -10,6 +10,7 @@
 //   THEME=light|dark|system theme at launch
 //   CHILD=maya|leo          active child at launch
 //   DISABLE_ANIMATIONS=1    still frames (Rive/Lottie/SVG), no motion
+//   SKIP_SPLASH=1           skip the in-app launch splash (cold-start hatch)
 
 abstract final class LaunchFlags {
   static const String seed = String.fromEnvironment('SEED');
@@ -21,6 +22,17 @@ abstract final class LaunchFlags {
   static const bool disableAnimations =
       bool.fromEnvironment('DISABLE_ANIMATIONS') ||
       String.fromEnvironment('DISABLE_ANIMATIONS') == '1';
+
+  /// `true` when launched with `--dart-define=SKIP_SPLASH=1` (or `=true`).
+  static const bool skipSplashRequested =
+      bool.fromEnvironment('SKIP_SPLASH') ||
+      String.fromEnvironment('SKIP_SPLASH') == '1';
+
+  /// Whether the in-app launch splash is skipped. Explicitly requested via
+  /// `SKIP_SPLASH`, or implied whenever `INITIAL_ROUTE` is set so screenshot
+  /// runs (`tools/screens/shot.sh`), widget tests and deep-link boots land
+  /// straight on their route.
+  static bool get skipSplash => skipSplashRequested || initialRoute.isNotEmpty;
 
   static bool get hasSeed => isSupportedSeed(seed);
 
