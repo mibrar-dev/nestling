@@ -1,84 +1,82 @@
-# 2b BUILD UI — K03b Kid home all done (iteration 2)
+# 2b BUILD UI — K03b Kid home all done (iteration 3)
 
 UI chunk of the parallel build. Owns only `presentation/views/**`,
 `presentation/widgets/**` and view/widget tests. Re-read
 `docs/screens/K03b/1_plan.md` and `docs/screens/K03b/2a_build_logic.md`
-(iteration 2, VERDICT PASS) before finishing; codes against its CONTRACT
-CHANGES: `KidQuest.needsApproval` (default true) and creation-order
-`state.items` (title sort dropped in the repository).
+(iteration 2, VERDICT PASS — still the current contract: `KidQuest.needsApproval`
+default true, creation-order `state.items`) before finishing, plus
+`ORCHESTRATOR_NOTES.md` including the new 06:44 iteration-3 ruling and
+`FIXES_2.md`. Branch is 0 behind main — no upstream drift to absorb.
 
 ## Files changed (UI layer only)
 
-- `app/lib/features/kid_home/presentation/views/kid_home_view.dart`
-  - `_AllDoneBody` geometry (FIXES_1 review finding 1 / K03B-BUG-1 / 04:52 D1):
-    bubble → `SizedBox(s4=16)` (`.scroll > * + *` on `.k3-stage`), then
-    `Stack(clipBehavior: Clip.none)` (confetti is `position: absolute`, never
-    sizes the Stack; `Clip.none` reproduces the 14 px CSS overflow).
-    Inside, `NestPetStage` wrapped in `Padding(top: gap14)` (`.k3-pet`
-    margin 14), so bubble→pet = 16 + 14 = 30 and confetti `top: 4` measures
-    from the design stage origin. Bubble-bottom→title-box is the design 272
-    (16+14+226+16).
-  - Nest art (K03B-BUG-3): new all-done-local `_kAllDoneNestBoxWidth/_kAllDoneNestBoxHeight`
-    = 226/226 (browser `meet` square, letterboxed 17 px each side). K03's
-    `_kNestBoxWidth/_kNestBoxHeight` (236/188) untouched — K03 must not move.
-  - Shared slot bug (K03B-BUG-2) worked around feature-side per D1 (no touch
-    of `nest_pet_stage.dart`/`pip_rive.dart`): added `_kAllDonePipBottom = 92`
-    (HTML `.k3-pet .pip { bottom: 92px }`) as `pipBottom`, which takes the
-    `explicitGeometry` early return that honours `slotHeight` (final return
-    adds `_explicitBleed` → 257.4). `226 − 92 − 152 = −18` lands Pip at
-    −18…134 vs design −16…134. Stage block is 226; Stack is 14+226 = 240, so
-    the 250-tall confetti at top 4 overflows 14 past the stage like the CSS.
-  - ROW META view branch (orchestrator 04:52, uses logic's `needsApproval`):
-    not done → `+N` chip; done + no approval → `+N` chip (no status chip);
-    `done_pending` + approval → `Waiting for Mum`; `approved` + approval →
-    `Mum said yes!`. `_statusText` mirrors it (waiting → thumbs-up line,
-    approved + approval → `Mum said yes!`, done + no approval → `Done`).
-    K03 shares `_QuestCard`: demo waiting/to-do rows unchanged; approved
-    demo rows move `Done` → `Mum said yes!` by mandate.
-  - K03 not-done branch, header, dock, `_AllDoneBar`, copy, tokens all
-    untouched. No `google_fonts`, no `DateTime.now()`, no `name[0]`.
-- `app/test/features/kid_home/k03b_all_done_view_test.dart` (contains `view`):
-  meta pin 2×`Done` → 2×`Mum said yes!`; order pin alphabetical →
-  creation (dishwasher, reading, bins, tidy, hoover, table); fake
-  `_allDoneItems` reordered to creation order; card semantics
-  `Put the bins out, Done` → `…, Mum said yes!`. Kept the parallel
-  logic-builder loop refactor (one test per control) intact.
-- `app/test/features/kid_home/kid_home_view_test.dart` (contains `view`):
-  order group → creation order (card 1 still dishwasher, so K03 design pin
-  holds); 3 approved-chip pins `Done` → `Mum said yes!`; card semantics
-  `Put the bins out, Done` → `…, Mum said yes!`; fake `_mayaItems`
-  reordered to creation order. Out-of-period `Done`-findsNothing pins kept
-  (to-do still shows `+N`).
-- Did NOT touch: `domain/`, `data/`, `bloc/`, `k03b_bugs_test.dart`
-  (bugs stage owned), `app/lib/core/**`, seed, analysis options.
+None. The iteration-2 UI implementation already satisfies the plan, the
+K03b HTML, and every owner rule; iteration 3 brings no new UI mandate.
+Verified rather than edited:
+
+- `app/lib/features/kid_home/presentation/views/kid_home_view.dart` —
+  `_AllDoneBody` (bubble 16 + pet-top 14 = 30 gap; `Stack(clipBehavior:
+  Clip.none)` with `Positioned(top: 4)` 320×250 confetti that never sizes
+  the Stack; local 226/226 nest box; `pipBottom: 92` + `slotHeight: 226`;
+  `NestBalancedText("Today's quests")` + `KidStatusChip('$done of $total
+  done')`; `NestProgress(fraction 1.0)`; same `_QuestCard` list with the
+  ROW META branch `status + needsApproval` → `Mum said yes!` / `Waiting
+  for Mum` / `+N` chip), `_AllDoneBar` (surface + `SafeArea(top: false)` +
+  `NestHomeIndicator` inside — BOTTOM EDGE owner rule), K03 not-done
+  branch untouched.
+- `/kid-home-done` already renders `KidHomeView` (`kid_home_routes.dart`);
+  placeholder `kid_home_done_view.dart` already deleted.
+- No `google_fonts`, no `DateTime.now()`, no `name[0]` (helpers use
+  runes/`nestAvatarInitial` at the call site in the view), no v1
+  `pip_stage_*.svg` outside comments, no `letterSpacing` in the K03b
+  branch (the one `letterSpacing: 1.28` in the feature is K02's mandated
+  `.mark` pill, untouched), tokens/components only, `PipAvatar` from the
+  child row with `PipMood.happy`, `KidScope` sky+meadow (no local hills).
+
+## FIXES_2 disposition (only UI/layout/copy items acted on)
+
+No open UI/layout/copy item remains — every iteration-1/2 geometry/row
+bug (BUG-1…BUG-5) is resolved with un-skipped proofs green, and 5_ui
+(iteration 2) is PASS with pixel-match (title/progress 513.0, card1
+545.0, bar border 736–738.7, card/chip edges ±0).
+
+- K03B-BUG-6 (Major, no-approval completion lands in the approvals
+  queue): DATA-LAYER item — fix location is
+  `kid_home_repository_impl.dart completeQuest`, confirmed by the 06:44
+  orchestrator ruling ("Fix in `kid_home_repository_impl.dart`
+  `completeQuest`… terminal `approved` + ledger write for
+  `needsApproval == false`"). NOT touched: data/ is logic-builder owned
+  and outside this chunk's scope. The kid row stays unchanged per the
+  ruling, so there is no view work. Left for the logic builder +
+  integrator (un-skip `K03B-BUG-6` after the repository fix lands).
+- K03B-BUG-2 (latent shared `_explicitBleed`): core-owned, stays parked
+  in the BACKLOG per 06:44. Not this branch (D1 forbids touching
+  `core/**`); the feature-side `pipBottom: 92` workaround stands.
+- Neither parked proof lives in a `view`/`widget`-named file
+  (`k03b_bugs_test.dart` is bugs-stage owned), so per the parallel-split
+  this chunk un-skips nothing. Both parked proofs still fail on demand
+  exactly as FIXES_2 records — no UI regression hiding behind them.
 
 ## Verification (this stage ran; no simulator, no whole-app test)
 
-- `flutter analyze lib/features/kid_home
-  test/features/kid_home/k03b_all_done_view_test.dart
-  test/features/kid_home/kid_home_view_test.dart` → No issues found.
+- `dart format` on the three owned UI files → 0 changed.
+- `flutter analyze lib/features/kid_home` → No issues found.
 - `flutter test --timeout 120s test/features/kid_home/k03b_all_done_view_test.dart`
-  → All passed (54). `kid_home_view_test.dart` → All passed (88).
-  `kid_home_geometry_test.dart` + `k03_bugs_test.dart` → All passed (70+2 skipped,
-  K03 unmoved).
-- Parked-proof spot checks (`--run-skipped`, not un-skipped — file not owned):
-  BUG-1 gap 30 + rows on design row → pass; BUG-3 226×226 → pass;
-  BUG-5 creation order → pass; BUG-4 no-approval `+15` → pass.
-  BUG-4 approved-needs-approval finds 3×`Mum said yes!` (bins, hoover +
-  newly approved reading) but the parked test expects exactly 1 — test
-  expectation bug (kidAllDone already holds 2 approved from demo);
-  integrator should assert the reading card specifically or `findsNWidgets(3)`.
-  BUG-2 unit (`explicitGeometry` without `pipBottom`) still returns 257.4 —
-  shared bug, superseded by the D1 feature-side correction; needs a
-  SHARED_REQUEST from the orchestrator if the unit contract must change.
+  → All passed (59). `kid_home_view_test.dart` → All passed (88).
+- K03-must-not-move spot check: `kid_home_geometry_test.dart` +
+  `k03_bugs_test.dart` → 70 passed, 2 pre-existing skips, green.
+- Bugs-suite state check (read-only, file not owned):
+  `k03b_bugs_test.dart` → 34 passed, 2 parked skips — matches FIXES_2.
+- Copy byte-check vs `K03b-kid-home-done.html`: `All done!`, bubble,
+  `6 of 6 done`, `Visit Pip`, `Hi Maya!` present verbatim;
+  `Today's quests` is 0x27 in HTML and view alike; no `£` in the
+  all-done branch.
 
 ## LEFT FOR NEXT ITERATION
 
-- Integrator: un-skip + fix the two parked-test expectations above
-  (BUG-4 count, BUG-2 shared unit), run the full `kid_home` suite and the
-  stage-5 UI check against title 469.3 / progress 513.0 / card1 545.0.
-- D2 bubble alignment already on main (`NestSpeechBubble` uses
-  `TextAlign.start`); bottom edge, gutters, PipAvatar, copy verified by the
-  passing view suites.
+- Logic builder: K03B-BUG-6 repository fix per 06:44, then re-run the
+  K03/K03b/K05/P11 suites.
+- Integrator: un-skip + run the BUG-6 proof after the logic lands;
+  stage-5 UI check with `SEED=kid_all_done` on the allowed simulator.
 
 VERDICT: PASS

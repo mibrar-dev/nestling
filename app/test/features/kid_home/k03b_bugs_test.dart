@@ -367,7 +367,7 @@ void main() {
             'the kid row already shows its +N chip',
       );
     },
-    skip: true,
+    skip: false,
   );
 
   testWidgets('the confetti plate is the design 320×250 at stage top + 4', (

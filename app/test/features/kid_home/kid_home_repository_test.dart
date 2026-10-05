@@ -5,7 +5,7 @@
 // `pinSet`), and `setActiveChild` persists the tapped profile to
 // `app_state.activeChildId` so the PIN / home routes resolve it.
 
-import 'package:drift/drift.dart';
+import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/seed.dart';
@@ -234,5 +234,125 @@ void main() {
         isTrue,
       );
     });
+  });
+
+  // K03B-BUG-6 — terminal completion for no-approval quests (FIXES_2).
+  //
+  // A quest with "Needs my approval" OFF must complete as `approved` (+
+  // `decidedAt`) with a `quest_bonus` ledger credit in the same
+  // transaction — mirroring `ApprovalsRepositoryImpl.approve` — so it never
+  // lands in the P11 queue (which lists `done_pending` only). Approval
+  // quests keep the `done_pending` write with no ledger row.
+  group('K03B-BUG-6 terminal completion', () {
+    Future<void> setNoApproval(String questId) async {
+      await (db.update(db.quests)..where((q) => q.id.equals(questId))).write(
+        const QuestsCompanion(needsApproval: Value(false)),
+      );
+    }
+
+    Future<List<QuestCompletion>> completionsFor(String questId) {
+      return (db.select(
+            db.questCompletions,
+          )..where((c) => c.questId.equals(questId) & c.childId.equals('maya')))
+          .get();
+    }
+
+    Future<List<LedgerEntry>> bonusesFor(String note) {
+      return (db.select(db.ledgerEntries)..where(
+            (l) =>
+                l.childId.equals('maya') &
+                l.type.equals('quest_bonus') &
+                l.note.equals(note),
+          ))
+          .get();
+    }
+
+    test(
+      'flip path writes approved + decidedAt with one ledger credit',
+      () async {
+        // Seed.demo leaves q-tidy `to_do` today, so this flips the open row.
+        // (Seed history already holds a 28p 'Tidy your bedroom' bonus, so
+        // assert the delta, not the absolute rows.)
+        final repo = KidHomeRepositoryImpl(db: db);
+        await setNoApproval('q-tidy');
+        final before = await bonusesFor('Tidy your bedroom');
+        await repo.completeQuest('maya', 'q-tidy');
+
+        final rows = await completionsFor('q-tidy');
+        expect(
+          rows.where((c) => c.status == 'done_pending'),
+          isEmpty,
+          reason: 'no P11 queue row for a quest that needs no approval',
+        );
+        final done = rows.singleWhere((c) => c.status == 'approved');
+        expect(done.decidedAt, isNotNull);
+
+        final after = await bonusesFor('Tidy your bedroom');
+        expect(after.length, before.length + 1);
+        final fresh = after
+            .where((l) => before.every((b) => b.id != l.id))
+            .single;
+        expect(fresh.amountPence, 15);
+        expect(fresh.type, 'quest_bonus');
+
+        final items = await repo.watchItems().first;
+        expect(
+          items.singleWhere((item) => item.questId == 'q-tidy').status,
+          'approved',
+        );
+      },
+    );
+
+    test('insert path (no open row) is terminal too', () async {
+      final repo = KidHomeRepositoryImpl(db: db);
+      await (db.delete(db.questCompletions)..where(
+            (c) => c.questId.equals('q-tidy') & c.childId.equals('maya'),
+          ))
+          .go();
+      await setNoApproval('q-tidy');
+      final before = await bonusesFor('Tidy your bedroom');
+      await repo.completeQuest('maya', 'q-tidy');
+
+      final rows = await completionsFor('q-tidy');
+      expect(rows, hasLength(1));
+      expect(rows.single.status, 'approved');
+      expect(rows.single.decidedAt, isNotNull);
+      final after = await bonusesFor('Tidy your bedroom');
+      expect(after.length, before.length + 1);
+      expect(
+        after
+            .where((l) => before.every((b) => b.id != l.id))
+            .single
+            .amountPence,
+        15,
+      );
+    });
+
+    test('retry after a terminal completion credits nothing more', () async {
+      final repo = KidHomeRepositoryImpl(db: db);
+      await setNoApproval('q-tidy');
+      final before = await bonusesFor('Tidy your bedroom');
+      await repo.completeQuest('maya', 'q-tidy');
+      await repo.completeQuest('maya', 'q-tidy');
+
+      final after = await bonusesFor('Tidy your bedroom');
+      expect(after.length, before.length + 1);
+      final rows = await completionsFor('q-tidy');
+      expect(rows.where((c) => c.status == 'approved'), hasLength(1));
+    });
+
+    test(
+      'approval quests still write done_pending with no ledger row',
+      () async {
+        final repo = KidHomeRepositoryImpl(db: db);
+        await repo.completeQuest('maya', 'q-reading');
+
+        final rows = await completionsFor('q-reading');
+        expect(rows.where((c) => c.status == 'done_pending'), hasLength(1));
+        final flipped = rows.singleWhere((c) => c.status == 'done_pending');
+        expect(flipped.decidedAt, isNull);
+        expect(await bonusesFor('Reading – 20 minutes'), isEmpty);
+      },
+    );
   });
 }

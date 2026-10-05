@@ -11,3 +11,8 @@
 - D2 (bubble alignment): fixed in shared code by the orchestrator (branch shared/speech_align → main). Not this branch's job.
 - ROW ORDER (owner rule: items in creation order): the quest list is in quest creation order (dishwasher, reading, tidy … as the K03b and K03 HTML show), never re-sorted by status. If the current kid-home ordering sorts by status, change it to creation order and prove K03's demo rows still match the K03 design.
 - ROW META: a done quest that needs approval and is still waiting shows "Waiting for Mum"; an approved one that needed approval shows "Mum said yes!"; a done quest that needs no approval shows its "+N" coin chip — exactly as the K03b HTML rows. These come from DB status + the quest's approval flag, never from hard-coded rows.
+
+## (06:44) Iteration 3 — decision for K03B-BUG-6 (mandatory)
+- Fix in `kid_home_repository_impl.dart` `completeQuest`: for a quest with `needsApproval == false`, the completion is terminal — write status `approved` with `decidedAt = clock.now()` and credit the coin ledger in the SAME transaction, exactly as the approvals repository's approve path does (reuse/mirror its ledger write: same entry kind, integer amounts, same note format). For `needsApproval == true` keep `done_pending`. The P11 approvals queue must never contain a no-approval quest (prove with the BUG-6 test un-skipped). Coins/balance update immediately for the kid.
+- Do not change the approvals repository or P11 views. Re-run the K03, K03b, K05 (quest complete reads the completion) and P11 suites.
+- K03B-BUG-2 (shared `_explicitBleed`) stays parked in the BACKLOG; not this branch.

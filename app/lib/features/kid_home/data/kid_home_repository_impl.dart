@@ -148,9 +148,17 @@ class KidHomeRepositoryImpl implements KidHomeRepository {
     // Idempotent inside one transaction (K03-BUG-1): a rapid double tap
     // must not write a second pending row. Only the current family-zone
     // period matters (K03-BUG-4 ruling): a `to_do`/`not_yet` inside it flips
-    // to `done_pending`; anything already recorded this period stays
-    // untouched, and a new period starts a fresh row so coins can never be
-    // minted twice for one tap.
+    // to done; anything already recorded this period stays untouched, and a
+    // new period starts a fresh row so coins can never be minted twice for
+    // one tap.
+    //
+    // K03B-BUG-6: a quest with "Needs my approval" OFF completes
+    // terminally — `approved` (+ `decidedAt`) with a `quest_bonus` ledger
+    // credit in the same transaction, mirroring the approvals `approve`
+    // path — so it never lands in the P11 queue. Approval quests keep the
+    // `done_pending` write with no ledger row (their coins land via
+    // `approve`, the single source of money truth).
+    final terminal = !quest.needsApproval;
     await _db.transaction(() async {
       final existing =
           await (_db.select(_db.questCompletions)
@@ -176,17 +184,37 @@ class KidHomeRepositoryImpl implements KidHomeRepository {
           )
           .toList();
       if (inPeriod.isNotEmpty) {
-        final latest = inPeriod.first.status;
-        if (latest == 'to_do' || latest == 'not_yet') {
-          await (_db.update(
-            _db.questCompletions,
-          )..where((c) => c.id.equals(inPeriod.first.id))).write(
-            QuestCompletionsCompanion(
-              status: const Value('done_pending'),
-              createdAt: Value(now),
-              createdAtTz: Value(zone),
-            ),
-          );
+        final latest = inPeriod.first;
+        if (latest.status == 'to_do' || latest.status == 'not_yet') {
+          // Compare-and-set (approvals BUG-P11-1 shape): only a still-open
+          // row flips, so a racing second tap claims 0 rows and credits
+          // nothing.
+          final flipped =
+              await (_db.update(_db.questCompletions)..where(
+                    (c) =>
+                        c.id.equals(latest.id) &
+                        (c.status.equals('to_do') | c.status.equals('not_yet')),
+                  ))
+                  .write(
+                    QuestCompletionsCompanion(
+                      status: Value(terminal ? 'approved' : 'done_pending'),
+                      createdAt: Value(now),
+                      createdAtTz: Value(zone),
+                      decidedAt: terminal ? Value(now) : const Value.absent(),
+                      decidedAtTz: terminal
+                          ? Value(zone)
+                          : const Value.absent(),
+                    ),
+                  );
+          if (terminal && flipped > 0) {
+            await _creditQuestBonus(
+              childId: childId,
+              coins: latest.coins,
+              note: quest.title,
+              now: now,
+              zone: zone,
+            );
+          }
         }
         return;
       }
@@ -197,13 +225,50 @@ class KidHomeRepositoryImpl implements KidHomeRepository {
               questId: questId,
               childId: childId,
               familyId: Seed.familyId,
-              status: const Value('done_pending'),
+              status: Value(terminal ? 'approved' : 'done_pending'),
               coins: Value(quest.coins),
               createdAt: Value(now),
               createdAtTz: Value(zone),
+              decidedAt: terminal ? Value(now) : const Value.absent(),
+              decidedAtTz: terminal ? Value(zone) : const Value.absent(),
             ),
           );
+      if (terminal) {
+        await _creditQuestBonus(
+          childId: childId,
+          coins: quest.coins,
+          note: quest.title,
+          now: now,
+          zone: zone,
+        );
+      }
     });
+  }
+
+  /// `quest_bonus` ledger credit, mirroring
+  /// `ApprovalsRepositoryImpl.approve` exactly (1 coin = 1p, same columns):
+  /// called inside the `completeQuest` transaction, once per terminal
+  /// completion, so status and money stay consistent.
+  Future<void> _creditQuestBonus({
+    required String childId,
+    required int coins,
+    required String note,
+    required DateTime now,
+    required String zone,
+  }) async {
+    await _db
+        .into(_db.ledgerEntries)
+        .insert(
+          LedgerEntriesCompanion.insert(
+            familyId: Seed.familyId,
+            childId: childId,
+            type: 'quest_bonus',
+            amountPence: coins,
+            note: Value(note),
+            date: Value(now),
+            dateTz: Value(zone),
+          ),
+        );
   }
 
   KidChild _toChild(ChildrenData row) {

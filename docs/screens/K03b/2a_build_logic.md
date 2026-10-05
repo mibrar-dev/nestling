@@ -1,83 +1,68 @@
-# 2a BUILD LOGIC — K03b Kid home all done (iteration 2)
+# 2a BUILD LOGIC — K03b Kid home all done (iteration 3)
 
 ## CONTRACT CHANGES
 
-1. `KidQuest` gains `needsApproval` (bool, default `true`):
-   `app/lib/features/kid_home/domain/entities/kid_quest.dart`. Optional
-   named param, so every existing `KidQuest(...)` construction (bloc/view/
-   geometry/bugs tests) compiles unchanged. Default `true` mirrors the
-   `quests.needs_approval` DB default and the P09 "Needs my approval" ON
-   default, preserving prior meaning everywhere the flag is not passed.
-   Added to `props` (equality distinguishes it). UI builder: branch the
-   done-row meta on `item.status` + `item.needsApproval` per ROW META —
-   `done_pending` → `Waiting for Mum` (unchanged); `approved` +
-   needs approval → `Mum said yes!`; done + no approval → `+N` coin chip.
-2. `KidQuestModel` threads the flag through `fromJson` (absent → `true`)
-   / `toJson` (`app/lib/features/kid_home/data/models/kid_quest_model.dart`).
-3. Item order contract: `_watchItemsFor` no longer re-sorts; `state.items`
-   is `watchActiveQuests` creation order (created_at, then id) — dishwasher,
-   reading, bins, tidy, hoover, table for Maya. The view already renders
-   `state.items` in order (no re-sort in `kid_home_view.dart`), so this is
-   the card order. K03 card 1 stays `Empty the dishwasher` (first in both
-   orders); cards 2–6 reorder per the ROW ORDER owner rule.
+`KidHomeRepository.completeQuest` behavior change (signature unchanged, so
+the UI builder and bloc need no changes): when the quest row has
+`needsApproval == false`, the completion is terminal — status `approved`
+(+ `decidedAt`/`decidedAtTz`) with a `quest_bonus` ledger credit
+(1 coin = 1p, note = quest title) in the same transaction, mirroring
+`ApprovalsRepositoryImpl.approve`. Approval quests keep the `done_pending`
+write with no ledger row. Effects the UI builder relies on: the kid row
+flips to done (stream status `approved` counts as done, celebration flow
+unchanged), the view's done+no-approval `+N` chip path is now reachable in
+production, and the P11 queue (lists `done_pending` only) never sees these
+rows. No new events, states, entities, or route/DI changes.
 
 ## Files changed (logic layer only)
 
-- `app/lib/features/kid_home/domain/entities/kid_quest.dart` — +`needsApproval`.
-- `app/lib/features/kid_home/data/models/kid_quest_model.dart` — flag round-trip.
-- `app/lib/features/kid_home/data/kid_home_repository_impl.dart` — dropped the
-  title sort (ROW ORDER), surfaces `needsApproval: q.needsApproval` (ROW META).
-- `app/test/features/kid_home/kid_home_repository_test.dart` — new group `K03b
-  row order + approval flag` (3 tests) + `drift` import.
-- `app/test/features/kid_home/kid_home_bloc_test.dart` — `_withStatus` carries
-  the flag; new `needsApproval defaults true and shapes equality` test;
-  stale "(alphabetical)" fake-order comment corrected.
+- `app/lib/features/kid_home/data/kid_home_repository_impl.dart` —
+  K03B-BUG-6 fix: `terminal = !quest.needsApproval` branches both the flip
+  path (existing `to_do`/`not_yet` row) and the insert path to `approved` +
+  decidedAt + `_creditQuestBonus`; flip hardened to compare-and-set
+  (`WHERE id + status IN (to_do, not_yet)`, credit only when a row flips —
+  approvals BUG-P11-1 shape) so a racing retry credits exactly once.
+- `app/test/features/kid_home/kid_home_repository_test.dart` — new group
+  `K03B-BUG-6 terminal completion` (4 tests); drift import hides
+  `isNotNull`/`isNull` (matcher clash).
 - Did NOT touch: `presentation/views/**`, `presentation/widgets/**`,
-  `k03b_bugs_test.dart`, `k03b_all_done_view_test.dart` (UI builder /
-  integrator owned), `app/lib/core/**`, `app/lib/app/**`, seed, analysis options.
+  `k03b_bugs_test.dart` (integrator owns the un-skip), `app/lib/core/**`,
+  `app/lib/app/**`, seed, analysis options.
 
 ## Items done
 
-- `allDone` getter: already on main from iteration 1 (verified present,
-  `kid_home_state.dart:94`) — no change needed.
-- K03B-BUG-5 (logic half): title sort removed; repository test proves Maya's
-  6 items arrive dishwasher → reading → bins → tidy → hoover → table.
-- K03B-BUG-4 (logic half): `needsApproval` flows DB row → entity; repository
-  tests prove default-true seeding and that clearing `needs_approval` on
-  `q-tidy` surfaces `false` on exactly that entity.
-- `dart format` clean, `flutter analyze lib/features/kid_home` → No issues.
-- Owned suites green: `kid_home_repository_test` 13/13, `kid_home_bloc_test`
-  53/53 (incl. 1 new), `quest_detail_bloc_test` green (62/62 combined run).
-  No `google_fonts`, no `DateTime.now()`, `disposeApp` pattern untouched.
+- K03B-BUG-6 fixed per the orchestrator's suggested option A (completeQuest
+  writes terminal + credits; no approvals-repo change needed — verified the
+  P11 queue predicate is `status == done_pending` via `watchPendingApprovals`).
+- Verified generated companions accept the new columns
+  (`decidedAt`/`decidedAtTz` on completions insert; `familyId/childId/type/
+  amountPence/note/date/dateTz` on ledger insert — same columns `approve` uses).
+- `dart format` clean, `flutter analyze` → No issues found.
+- Owned suites green: `kid_home_repository_test` 17/17 (flip/insert/retry/
+  approval-path), `kid_home_bloc_test` + `quest_detail_bloc_test` 62/62.
+  Two test-authoring catches fixed along the way (drift/matcher import clash;
+  seed history already holds a 28p 'Tidy your bedroom' bonus, so ledger
+  assertions use before/after deltas).
+- No `google_fonts`, no `DateTime.now()` (uses `appNowUtc()`), no `pkill`,
+  no simulator, no whole-app test run.
 
-## FIXES_1 disposition (only logic-layer items acted on)
+## FIXES_2 disposition (only logic-layer items acted on)
 
-- Review finding 1 (bubble→pet 16 px gap) → view-side, UI builder owns.
-- Review finding 2 (`ARCHITECTURE.md` route table) → shared doc, orchestrator owns.
-- 5_ui deviation 1 (+15.3 px block): root cause per 04:52 D1 is the confetti
-  layer taking part in layout — fix is feature-side absolute positioning in
-  the view (D1 forbids touching `nest_pet_stage.dart`/`pip_rive.dart`), so
-  K03B-BUG-2's suggested shared-code fix is SUPERSEDED; no SHARED_REQUEST
-  from this layer. UI builder owns the D1 targets (title 469.3 / progress
-  513.0 / card1 545.0).
-- 5_ui deviation 2 (bubble `textAlign`): fixed on main via `shared/speech_align`
-  (04:52 D2) — not this branch.
-- K03B-BUG-1/2/3 (parked geometry proofs): view/shared-side, still skipped.
-- K03B-BUG-4 parked widget tests: still skipped ON PURPOSE — they assert
-  rendered copy (`Mum said yes!`, `+15`) and need the view's meta branch
-  (UI builder). Un-skipping now would redden the suite. Integrator: run them
-  with `--run-skipped --plain-name K03B-BUG-4` after the view branch lands;
-  the entity half they depend on is proven in `kid_home_repository_test`.
-- K03B-BUG-5 parked widget test: data half now satisfies it (view renders in
-  items order, verified no re-sort); left skipped for the integrator to
-  un-skip with `--run-skipped --plain-name K03B-BUG-5` to avoid a same-file
-  parallel-edit clash with the UI builder in `k03b_bugs_test.dart`.
+- K03B-BUG-1/2/3/4/5: already fixed in iteration 2, proofs un-skipped and
+  green per 6_bugs.md — untouched.
+- K03B-BUG-2 (latent, shared): `explicitGeometry` quirk acknowledged;
+  D1 forbids touching `core/**` — correctly left parked for the orchestrator.
+- K03B-BUG-6 parked widget test (`k03b_bugs_test.dart:342`, still
+  `skip: true`): left skipped ON PURPOSE to avoid a same-file parallel-edit
+  clash — it is a widget test outside my owned set, and it now passes on
+  logic grounds (verified premise: `completeQuest('maya','q-tidy')` with
+  `needsApproval=false` leaves zero `done_pending` rows for the quest, which
+  is exactly what the test asserts). Integrator: un-skip with
+  `flutter test --timeout 120s --run-skipped --plain-name K03B-BUG-6`.
 
 ## LEFT FOR NEXT ITERATION
 
-- None in the logic layer. Integrator: un-skip + run the K03B-BUG-4/5 proofs
-  above, then the full `kid_home` suite (K03 regression: only card order 2–6
-  changes by mandate; no non-owned test asserts the old full order — verified
-  by grep; single-title finds are order-insensitive).
+- None in the logic layer. Integrator: un-skip + run the K03B-BUG-6 proof,
+  then the full `kid_home` suite.
 
 VERDICT: PASS
