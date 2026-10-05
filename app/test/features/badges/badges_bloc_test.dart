@@ -327,6 +327,77 @@ void main() {
       );
     });
 
+    test('a data event before any load still populates the state', () async {
+      // The route always adds `BadgesLoadRequested`, but the bloc must not
+      // depend on that ordering: a stream emission that lands first must not
+      // be dropped or crash the handler.
+      final repo = _FakeBadgesRepository(data: _demoData());
+      final bloc = BadgesBloc(repository: repo);
+      addTearDown(bloc.close);
+      final seen = <BadgesState>[];
+      final sub = bloc.stream.listen(seen.add);
+      addTearDown(sub.cancel);
+
+      bloc.add(BadgesDataReceived(_demoData()));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(seen.single.status, BadgesStatus.loaded);
+      expect(seen.single.childId, 'maya');
+      expect(seen.single.happyDays, 4);
+      expect(
+        repo.watches,
+        0,
+        reason: 'a data event never starts a watch — only a load does',
+      );
+    });
+
+    test('a failure event before any load shows the retry surface', () async {
+      final repo = _FakeBadgesRepository(data: _demoData());
+      final bloc = BadgesBloc(repository: repo);
+      addTearDown(bloc.close);
+      final seen = <BadgesState>[];
+      final sub = bloc.stream.listen(seen.add);
+      addTearDown(sub.cancel);
+
+      bloc.add(BadgesStreamFailed(Exception('offline')));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(seen.single.status, BadgesStatus.failure);
+      expect(seen.single.errorMessage, contains('offline'));
+      expect(seen.single.items, isEmpty);
+      expect(repo.watches, 0);
+    });
+
+    test('a failed load keeps the last known shelf in state', () async {
+      // The view switches on status, so the shelf survives for any future
+      // decision — and, more importantly, a failure never blanks the state.
+      final repo = _FakeBadgesRepository(data: _demoData())..controlled = true;
+      final bloc = BadgesBloc(repository: repo);
+      addTearDown(repo.live.close);
+      addTearDown(bloc.close);
+      final seen = <BadgesState>[];
+      final sub = bloc.stream.listen(seen.add);
+      addTearDown(sub.cancel);
+
+      bloc.add(const BadgesLoadRequested());
+      await Future<void>.delayed(Duration.zero);
+      repo.push(_demoData());
+      await Future<void>.delayed(Duration.zero);
+      repo.live.addError(Exception('stream lost'));
+      await Future<void>.delayed(Duration.zero);
+
+      final failure = seen.last;
+      expect(failure.status, BadgesStatus.failure);
+      expect(failure.childId, 'maya');
+      expect(failure.items, hasLength(8));
+      expect(failure.happyDays, 4);
+      expect(
+        repo.liveCancels,
+        1,
+        reason: 'the error releases the subscription so Try again can work',
+      );
+    });
+
     test('close() releases the live badges subscription', () async {
       final repo = _FakeBadgesRepository(data: _demoData())..controlled = true;
       final bloc = BadgesBloc(repository: repo);

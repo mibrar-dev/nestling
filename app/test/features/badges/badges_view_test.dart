@@ -524,6 +524,76 @@ void main() {
       expect(currentPath(tester), '/kid-home');
       await disposeApp(tester);
     });
+
+    testWidgets('the failure surface still lets the child go back', (
+      tester,
+    ) async {
+      // `hang` wins over `failFirstWatch` in the fake, so only the failing
+      // flag is set here: the screen must sit on the retry surface.
+      await _useFakeRepository(_FakeBadgesRepository(failFirstWatch: true));
+      await _pumpRoute(tester);
+      expect(find.text('Something went wrong'), findsOneWidget);
+      await tester.tap(find.byType(NestIconButton));
+      await tester.pumpAndSettle();
+      expect(currentPath(tester), '/kid-home');
+      await disposeApp(tester);
+    });
+
+    testWidgets('the failure surface still reaches the parental gate', (
+      tester,
+    ) async {
+      await _useFakeRepository(_FakeBadgesRepository(failFirstWatch: true));
+      await _pumpRoute(tester);
+      expect(find.text('Something went wrong'), findsOneWidget);
+      await tester.tap(find.byType(NestLockButton));
+      await tester.pumpAndSettle();
+      expect(pushedPath(tester), '/parental-gate');
+      await disposeApp(tester);
+    });
+
+    testWidgets('a screen-reader tap on Try again reloads the real shelf', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await _useFakeRepository(
+        _FakeBadgesRepository(
+          failFirstWatch: true,
+          shelf: const <domain.Badge>[
+            domain.Badge(
+              id: 'first-quest',
+              title: 'First quest',
+              detail: 'Got it!',
+              icon: 'medal',
+              description: '',
+              earned: true,
+              earnedAt: null,
+            ),
+          ],
+          happyDays: 2,
+        ),
+      );
+      await _pumpRoute(tester);
+      expect(find.text('Something went wrong'), findsOneWidget);
+
+      // The retry is a real control: a tap action that drives the real bloc
+      // event and repaints the shelf.
+      final node = tester.getSemantics(find.bySemanticsLabel('Try again'));
+      expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+      node.owner!.performAction(node.id, SemanticsAction.tap);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Something went wrong'), findsNothing);
+      expect(find.text('My badges'), findsOneWidget);
+      expect(find.byType(BadgeGridCell), findsOneWidget);
+      expect(
+        find.text('2 happy days this week — Pip hasn’t stopped singing.'),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+      semantics.dispose();
+      await disposeApp(tester);
+    });
   });
 
   group('K11 theme and layout matrix', () {

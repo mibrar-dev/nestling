@@ -176,6 +176,19 @@ void main() {
       final repo = BadgesRepositoryImpl(db: db);
       expect(await repo.watchHappyDays('nobody').first, 0);
     });
+
+    test(
+      'a happy-days write above 7 is reported verbatim, not clamped',
+      () async {
+        // The column carries no upper bound, so the repository must not invent
+        // one: the 0…7 framing belongs to the screen (dots + why-line), and a
+        // silent clamp here would let the two disagree unnoticed.
+        final repo = BadgesRepositoryImpl(db: db);
+        await setHappyDays('maya', 9);
+
+        expect(await repo.watchHappyDays('maya').first, 9);
+      },
+    );
   });
 
   group('BadgesRepository watchActiveBadges (K11)', () {
