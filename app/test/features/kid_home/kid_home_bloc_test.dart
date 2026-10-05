@@ -30,6 +30,7 @@ const KidChild _leo = KidChild(
   pipStage: 2,
   happiness: 3,
   pinSet: true,
+  pipTotalCoins: 60,
 );
 
 const KidChild _maya = KidChild(
@@ -44,6 +45,7 @@ const KidChild _maya = KidChild(
   pipStage: 3,
   happiness: 4,
   pinSet: true,
+  pipTotalCoins: 175,
 );
 
 /// Maya's 6 quests in repo (alphabetical) order with demo statuses:
@@ -415,6 +417,26 @@ void main() {
       expect(cleared.child, isNull);
       expect(cleared.items, isEmpty);
       expect(cleared.fraction, 0);
+    });
+
+    test('copyWithLoaded carries pipTotalCoins and it shapes equality', () {
+      final loaded = KidHomeState(
+        status: KidHomeStatus.loaded,
+        child: _maya,
+        items: _mayaItems(),
+      );
+      expect(loaded.child?.pipTotalCoins, 175);
+      final reloaded = loaded.copyWithLoaded(child: _leo, items: _mayaItems());
+      expect(reloaded.child?.pipTotalCoins, 60);
+      expect(loaded, isNot(reloaded));
+      expect(
+        loaded,
+        KidHomeState(
+          status: KidHomeStatus.loaded,
+          child: _maya,
+          items: _mayaItems(),
+        ),
+      );
     });
 
     test('states with the same fields are equal', () {

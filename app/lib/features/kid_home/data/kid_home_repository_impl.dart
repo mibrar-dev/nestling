@@ -211,6 +211,7 @@ class KidHomeRepositoryImpl implements KidHomeRepository {
       pipStage: row.pipStage,
       happiness: row.happiness,
       pinSet: row.pinHash != null,
+      pipTotalCoins: row.pipTotalCoins,
     );
   }
 

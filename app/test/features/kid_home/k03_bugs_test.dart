@@ -205,6 +205,19 @@ Future<void> _revealCards(WidgetTester tester) async {
   }
 }
 
+/// Leaves the celebration the way a child does. K05 has no AppBar back button
+/// (the design exits through its CTA), so `tester.pageBack()` cannot find one;
+/// the scaffold fallback keeps this working against a placeholder K05.
+Future<void> _leaveCelebration(WidgetTester tester) async {
+  final backHome = find.text('Yay! Back home');
+  if (backHome.evaluate().isNotEmpty) {
+    await tester.tap(backHome);
+  } else {
+    await tester.pageBack();
+  }
+  await _settle(tester);
+}
+
 double _linear(double channel) => channel <= 0.03928
     ? channel / 12.92
     : math.pow((channel + 0.055) / 1.055, 2.4).toDouble();
@@ -542,8 +555,7 @@ void main() {
       await tester.tap(check);
       await _settle(tester);
       expect(pushedPath(tester), '/quest-complete');
-      await tester.pageBack();
-      await _settle(tester);
+      await _leaveCelebration(tester);
       expect(find.text('Hi Maya!'), findsOneWidget);
       await _revealCards(tester);
       expect(find.text('Waiting for Mum'), findsNWidgets(3));
@@ -587,8 +599,7 @@ void main() {
       await tester.tap(check);
       await _settle(tester);
       expect(pushedPath(tester), '/quest-complete');
-      await tester.pageBack();
-      await _settle(tester);
+      await _leaveCelebration(tester);
       expect(
         find.text('Hi Maya!'),
         findsOneWidget,
