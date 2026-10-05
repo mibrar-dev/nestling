@@ -1,147 +1,143 @@
-# P08b · 2 BUILD (integrate, iteration 2)
+# P08b · 2 BUILD (integrate, iteration 3)
 
 Two builders worked this worktree in parallel: `2a_build_logic.md` (the
-non-UI layer — `data/**`, `presentation/bloc/**` + the bloc/repository
-tests) and `2b_build_ui.md` (the views/widgets + the view/bug tests).
-This stage's only job was to make the combined result compile and pass.
+non-UI layer — `domain/**`, `data/**`, `presentation/bloc/**` + the
+bloc/repository tests) and `2b_build_ui.md` (the views/widgets + the
+view/bug tests). This stage's only job was to make the combined result
+compile and pass.
 
-Iteration 1 merged with no code changes needed; iteration 2 follows the
-iteration-1 FAILs (`LOOP.md: test=FAIL review=FAIL ui=FAIL bugs=FAIL`)
-whose 11 fixes are catalogued in `FIXES_1.md`.
+Follows the iteration-2 run (`LOOP.md: build=PASS test=FAIL
+review=PASS ui=PASS bugs=PASS`); the one red stage was the test stage, and
+its two findings are the whole of `FIXES_2.md`.
 
 ## Result
 
-**Gates green on the merged result.** One change made in this stage, both
-comment-only, in a file *both* builders had edited (see FIXES below); no
-`lib/` file was touched.
+**Gates green on the merged result. No changes made by this stage** — not
+one line of `lib/` or `test/` needed touching. This is the smallest
+integration yet: `FIXES_2.md` held two items, both a pair of one-line
+`maxLines` removals in one widget file, owned entirely by the UI builder;
+the logic builder correctly reported nothing in its layer and, right,
+declined to un-skip proofs for code it may not edit.
 
-## Summary of 2a (logic — iteration 2)
+## Summary of 2a (logic — iteration 3)
 
-Contract unchanged again: events (`TodayLoadRequested`), `TodayState`
-shape, `TodayRepository` interface, DI and `/today-empty` route all as-is.
+No source change, and correctly so. Its triage of `FIXES_2.md`: both
+items (P08b-T07 = B06, P08b-T08 = B07) are `maxLines` caps in
+`presentation/widgets/today_loaded_body.dart` — UI-builder territory. It
+verified the iteration-2 logic fixes are still intact and green
+(fresh-nest predicate, creation-order summaries: 37 tests in
+`today_bloc_test.dart` + `today_repository_test.dart`), and left the
+B06/B07 proofs skipped so it could not turn the suite red for code it does
+not own. That is the right call and left no integration seam for me.
 
-- `today_bloc.dart` — **T05/B01**: the fresh-nest suffix now uses the
-  same predicate as the shared empty branch (`items.isEmpty ||
-  summaries.isEmpty`) instead of `summaries.isEmpty` alone, so a family
-  with children but no quests (`Seed.newFamily`) reads `A fresh nest`
-  rather than `Happy week: 4 days`. P08 unaffected (demo seed has items).
-- `today_repository_impl.dart` — **T06/B02**: dropped the
-  eldest-first + nickname re-sort in `watchSummaries()`; summaries keep
-  `watchChildren` creation order (CHILD ORDER ruling: Maya, then Leo).
-  Demo/new-family rendering does not move.
-- `today_bloc_test.dart` / `today_repository_test.dart` — new proofs for
-  both changes; the two stale "Eldest first" comments corrected.
+## Summary of 2b (UI — iteration 3)
 
-## Summary of 2b (UI — iteration 2)
+`today_loaded_body.dart`, both removals principle-driven — the app was
+capping text the design's CSS never caps:
 
-All in `today_loaded_body.dart` (populated P08 widgets untouched):
+- **T07/B06** — `_EmptyGreeting`: `maxLines: 2` + `overflow: ellipsis`
+  dropped from the h1. P08b's `.greet h1` sets no `nowrap` and no line
+  cap; `components.css:43` gives bare `h1` only `overflow-wrap: anywhere`.
+  The heading now wraps to whatever the parent's name needs — the screen
+  scrolls, so a third line costs nothing.
+- **T08/B07** — `_EmptyCard`: `maxLines: 5` + `overflow: ellipsis` dropped
+  from the message. `.empty-card p` sets only `max-width: 260px`; a long
+  roster grows the card inside the `ListView` instead of losing names.
+- Comments updated at both sites to record the CSS basis.
+- `p08b_bugs_test.dart`: B06/B07 un-skipped; the only other delta in that
+  file is `dart format` re-indenting the two bodies because the callback
+  moved from the second positional slot to the last — mechanical, no
+  assertion touched.
+- `today_empty_view_test.dart` needed no edit: its live T07/T08 proofs
+  (`double-barrelled surname`, `every child name survives`) turned green on
+  their own, exactly as `FIXES_2.md` predicted.
 
-- **T01/B03** — `_EmptyGreeting` top padding removed; the 8 px belongs to
-  P08's own local `.greet` rule, which P08b does not have.
-- **T04/B04** — greeting is plain `Text` (`NestType.h1`, `maxLines: 2`)
-  so it wraps instead of clipping the parent's name at 320 px / 1.3×.
-  `NestBalancedText` was tried and rejected (see verification note).
-- **T02** — link row is `ConstrainedBox(minHeight: NestDevice.tapParent)`
-  + centred glyph: exactly 44 (was 46).
-- **T03** — `_TipCard` column `spacing: s1` removed; 16+22+36+16 = 90.
-- **B05** — link gains `decorationColor: tokens.sky`.
-- Tests: `today_view_test.dart` pins the link ROW at 44 + the sky
-  decoration colour; `today_empty_view_test.dart`'s T04 proof rewritten to
-  assert `didExceedMaxLines == false` (its old single-line
-  intrinsic-width assertion was unsatisfiable for a wrapping heading);
-  `p08b_bugs_test.dart` now loads the bundled Nunito Black/Bold/ExtraBold
-  so the greeting's y measurements and wrap assertions are device-faithful
-  instead of measuring in the square-advance fallback.
+Deliberately untouched (design-state render unchanged, so no geometry pin
+moved): greeting/date styles, `PipAvatar` mochi·sunny stage 1 at 140, the
+h2, the 260 measure, the 52 px primary, the 44 px link row with its sky
+`decorationColor`, the flush tip card, gutters x 20–370.
 
-## Cross-half checks run (all consistent)
+## Integration checks run (all green, nothing to fix)
 
-- `p08b_bugs_test.dart` is the one file both builders edited (2a
-  un-skipped B01/B02, 2b un-skipped B03–B05 and added the font loading).
-  The merged file has exactly one `_loadBundledFonts`, no remaining
-  `skip:` on any of the five proofs — `flutter test` on the file alone:
-  `00:01 +14: All tests passed!` with B01–B05 all live and green.
-- 2b's `maxLines: 2` greeting and 2a's bloc predicate agree on what "the
-  empty state" means (`items.isEmpty || summaries.isEmpty`); the view's
-  branch and the bloc's date line cannot now disagree.
-- 2a's removal of the sort is reflected in 2b's `emptyMessageSuffix` doc
-  comment (creation order) and in `today_view_test.dart`'s
-  three-children Pip test comment — no half-left "eldest first" text in
-  `lib/`.
-- CSS spot-check against `design/html-source/screens/P08b-today-empty.html`:
-  `padding-top: 8px` on `.greet` exists only in P08's local style block,
-  never in P08b's — 2b's T01 removal is HTML-correct, not a regression.
-- BALANCED HEADINGS rule checked and **not** violated: `text-wrap:
-  balance` lives on `.h1` (class) in `components.css`, while P08b's markup
-  is a bare `<h1>` inside `.greet` with no class, so the browser default
-  applies (wrap). `NestBalancedText` would have force-split the one-line
-  heading and reintroduced the +8 px class of drift — hence plain `Text`.
-- `git diff --stat` shows only `lib/features/today/**` and
-  `test/features/today/**` plus this screen's own notes — no file outside
-  RULES §1 touched; no simulator booted, installed on or driven.
+- **CSS claims verified against the source, not taken on trust**:
+  `design/html-source/components.css:43` is exactly
+  `h1, h2, h3, .h1, .h2, .h3, .kid-title, .quest-title { overflow-wrap: anywhere; min-width: 0; }`
+  — no `-webkit-line-clamp`, no `nowrap` on the element, so unlimited
+  lines. And P08b's `.empty-card p{font-size:15px;line-height:22px;color:var(--ink-2);max-width:260px}`
+  carries no clamp either. Both removals match the design; neither is a
+  redesign. The same line 43 confirms the bare `h1` still does *not* get
+  `.h1`'s `text-wrap: balance` (class selector only), so plain `Text`
+  remains the right widget here — the BALANCED HEADINGS rule is untouched.
+- **B06/B07 live**: `grep skip: test/features/today/*.dart` returns
+  nothing — the whole `today` feature now has zero skipped tests. The proof
+  file standalone: `00:01 +17: All tests passed!` with B01–B07 all running
+  and green (the skip count in the full-suite tail is other features').
+- **No seam between the halves this time**: 2a edited no source at all, so
+  the two halves touched disjoint files (`today_loaded_body.dart` +
+  `p08b_bugs_test.dart` from 2b; only the note files overlap). No BLoC
+  state/event mismatch, no import or renamed-member breakage — `flutter
+  analyze` clean confirms all of it.
+- **P08 does not move**: the populated branch of `TodayLoadedBody` is not
+  in the diff, and P08's own suites (`today_view_test.dart`,
+  `today_semantics_tap_test.dart`, `p08_bugs_test.dart`) are green in the
+  full run.
+- `git diff --name-only` (vs `HEAD`) touches only
+  `lib/features/today/**`, `test/features/today/**` and this screen's own
+  `docs/screens/P08b/**` — nothing outside RULES §1. No simulator booted,
+  installed on or driven.
 
 ## FIXES items
 
-DONE (by the builders, verified by me here) — all 11 of `FIXES_1.md`:
+`FIXES_2.md` had exactly two items. Both DONE (by 2b, verified here):
 
-- [x] **T05/B01** fresh-nest date line for children-with-no-quests.
-- [x] **T06/B02** message names children in creation order.
-- [x] **T01/B03** empty body starts at the scroll origin (no 8 px pad).
-- [x] **T02** `Browse ideas` row exactly 44 (tap floor kept).
-- [x] **T03** tip card's phantom 4 px gap removed.
-- [x] **T04/B04** greeting wraps rather than clipping.
-- [x] **B05** link underline paints sky.
-- [x] Review findings 1–8: 1/3/4/5/6/7 = the items above; 2 = T01;
-  8 = regression coverage now pinned (bloc test for the new-family state,
-      repository test for creation order, view test for the 44 row +
-      decoration colour).
-- [x] UI findings 1–3: date line, +8 px shift, underline colour — all
-      covered above.
+- [x] **T07/B06** greeting wraps instead of clipping a long parent name.
+- [x] **T08/B07** the empty message keeps every child's name at 1.3×.
 
-DONE (this stage):
-
-- [x] Two stale comments in `test/features/today/p08b_bugs_test.dart` —
-  the file header still claimed "Every proof is `skip:`-marked … until the
-  fix iteration unskips them" (all five now run), and the B02 body still
-  said the app "currently renders 'Zara, Maya and Leo'" (2a removed that
-  sort). Comment-only; no behaviour touched; full suite re-run after.
+Carried-forward status, unchanged and still satisfied: all 11 iteration-1
+items (T01–T06, B01–B05) and all 8 review findings / 3 UI findings remain
+landed — iteration 3 only *removed* caps, touching none of them.
 
 LEFT (not integration work — not blockers for this stage):
 
-- [ ] `2_build.md`'s remaining loop work is the UI check (`5_ui`): re-shoot
-      light + dark and re-measure against the PNGs now that the +8 px shift
-      is gone. Expected, non-findings per 5_ui: the Pip slot renders
-      `PipAvatar(mochi, sunny, stage 1)` at 140 instead of the v1 egg SVG
-      (PIP rule), and the tab-bar surface runs to the physical edge where
-      the PNG shows a cream strip + pill (BOTTOM EDGE owner rule). Status
-      bar glyphs and the DB-driven day part are excluded from measurement.
-- [ ] `SHARED_REQUEST.md` (router/tab-bar move) is resolved: `5_ui`
-      confirmed `/today-empty` renders inside the Today `StatefulShellBranch`
-      with Today active, tab-bar top at 727 in both themes. Can be closed
-      by the orchestrator.
-- [ ] Cross-screen watch item, not a P08b defect: 2a's sort removal in
-      `watchSummaries()` changes the order the *shared* repository returns
-      children for every screen that consumes it (P08 kids grid, P15, …).
-      Maya-then-Leo rendering is unchanged for both seeds; any screen that
-      relied on age ordering should be re-checked by its own loop.
+- [ ] The loop's own remaining work is the UI check (`5_ui`): re-shoot
+      light + dark with seed `new_family` and re-measure against the PNGs.
+      Expected, non-findings per the loop rules and `5_ui`: the Pip slot
+      renders `PipAvatar(mochi, sunny, stage 1)` at 140 instead of the v1
+      egg SVG (PIP rule), and the tab-bar surface runs to the physical edge
+      where the PNG shows a cream strip + pill (BOTTOM EDGE owner rule).
+      Status-bar glyphs and the DB-driven day part stay excluded from
+      measurement. Nothing in iteration 3 should move the design-state
+      geometry, so the numbers `5_ui` recorded in iteration 2 (title y 53,
+      card top 121, button 423–475, tip ~556, tab-bar top 727, gutters
+      20–370) are the expected result.
+- [ ] `SHARED_REQUEST.md` (router/tab-bar move) stays resolvable as closed:
+      `5_ui` confirmed `/today-empty` renders inside the Today
+      `StatefulShellBranch` with Today active. Orchestrator may drop it.
+- [ ] Cross-screen watch item from iteration 2 still open (not a P08b
+      defect): the sort removal in the shared `watchSummaries()` changes the
+      order every consuming screen sees. Maya-then-Leo is unchanged for both
+      seeds; screens that relied on age ordering should be re-checked by
+      their own loops.
 
 ## Gates and tails
 
 ```
 $ dart format .
-Formatted 652 files (0 changed) in 2.28 seconds.
+Formatted 652 files (0 changed) in 2.25 seconds.
 
 $ flutter analyze
 Analyzing app...
-No issues found! (ran in 3.9s)
+No issues found! (ran in 3.6s)
 
 $ flutter test --timeout 120s
-01:37 +4684 ~13: All tests passed!
+02:31 +4701 ~13: All tests passed!
 
 $ flutter test --timeout 120s test/features/today/p08b_bugs_test.dart
-00:01 +14: All tests passed!      # B01–B05 live, none skipped
+00:01 +17: All tests passed!      # B01–B07 live, none skipped
 ```
 
-4684 passed, 13 pre-existing skips, 0 failures; no ignore added to
-`analysis_options.yaml`, no test skipped or deleted by this stage.
+4701 passed, 13 pre-existing skips (other features — the `today` feature
+has none), 0 failures; no ignore added to `analysis_options.yaml`, no test
+skipped or deleted by this stage, and this stage changed no source file.
 
 VERDICT: PASS

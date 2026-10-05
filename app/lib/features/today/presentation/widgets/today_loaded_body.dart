@@ -761,8 +761,10 @@ class _EmptyGreeting extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.nest;
     // No top padding: P08b's `.greet` has none (the 8 px belongs to P08's
-    // own rule). The h1 wraps over two lines instead of clipping the
-    // parent's name at 320 px or 1.3× (P08b's CSS sets no nowrap).
+    // own rule). No line cap either: P08b's `.greet h1` sets no nowrap and
+    // no max-lines (components.css:43 only sets `overflow-wrap: anywhere`),
+    // so the heading wraps to as many lines as the parent's name needs —
+    // the screen scrolls, so a third line costs nothing (P08b-T07).
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -772,8 +774,6 @@ class _EmptyGreeting extends StatelessWidget {
           child: Text(
             '$greeting, $parentName',
             style: NestType.h1(color: tokens.ink),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
           ),
         ),
         Padding(
@@ -841,13 +841,15 @@ class _EmptyCard extends StatelessWidget {
           ),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 260),
+            // No line cap: `.empty-card p` sets only `max-width: 260px`, so
+            // a long roster wraps to as many lines as the names need. The
+            // card lives in a ListView, so a longer message just grows it
+            // (P08b-T08).
             child: Text(
               'Add your first quest and Pip will start to hatch.'
               '${emptyMessageSuffix(names)}',
               style: NestType.bodySmall(color: tokens.ink2),
               textAlign: TextAlign.center,
-              maxLines: 5,
-              overflow: TextOverflow.ellipsis,
             ),
           ),
           const SizedBox(height: NestSpacing.s2),

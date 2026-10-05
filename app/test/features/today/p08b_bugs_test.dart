@@ -6,8 +6,8 @@
 //
 // Iteration 2 re-hunted the fixed tree (0/1/3/6 children, long UK names,
 // 320/390 at 1.0–1.3×, rapid taps, back/deep links, restart, semantics,
-// dark, bottom edge, BST) and found two new MINORS, kept skipped until
-// fixed:
+// dark, bottom edge, BST) and found two new MINORS (fixed in iteration 3 by
+// dropping the invented `maxLines` caps the design does not have):
 //   P08b-B06  the greeting still clips a long parent name (320 px at 1.0×,
 //             any width at 1.3×) because `maxLines: 2`
 //   P08b-B07  the empty message clips the last children's names for six
@@ -227,78 +227,74 @@ void main() {
       },
     );
 
-    testWidgets(
-      '[P08b-B06] long parent name wraps at 320 px, no ellipsis',
-      skip: true, // bug id in the test name: P08b-B06
-      (tester) async {
-        // The greeting caps at two lines. `Maximilian-Alexander` on a
-        // 320 px device needs three even at scale 1.0 (and three at 1.3× on
-        // 390), so the parent's own name is ellipsized. P08b's `.greet h1`
-        // sets no nowrap/max-lines, so the CSS would wrap.
-        final db = await _newFamilyScope();
-        await db
-            .update(db.members)
-            .write(const MembersCompanion(name: Value('Maximilian-Alexander')));
-        await GetIt.instance<AppSession>().refresh();
-        await pumpAppRoute(tester, '/today-empty');
+    testWidgets('[P08b-B06] long parent name wraps at 320 px, no ellipsis', (
+      tester,
+    ) async {
+      // The greeting caps at two lines. `Maximilian-Alexander` on a
+      // 320 px device needs three even at scale 1.0 (and three at 1.3× on
+      // 390), so the parent's own name is ellipsized. P08b's `.greet h1`
+      // sets no nowrap/max-lines, so the CSS would wrap.
+      final db = await _newFamilyScope();
+      await db
+          .update(db.members)
+          .write(const MembersCompanion(name: Value('Maximilian-Alexander')));
+      await GetIt.instance<AppSession>().refresh();
+      await pumpAppRoute(tester, '/today-empty');
 
-        tester.view.physicalSize = const Size(320 * 3, 844 * 3);
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 200));
+      tester.view.physicalSize = const Size(320 * 3, 844 * 3);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
 
-        final greeting = tester.renderObject<RenderParagraph>(
-          find.textContaining('Good morning'),
+      final greeting = tester.renderObject<RenderParagraph>(
+        find.textContaining('Good morning'),
+      );
+      expect(
+        greeting.didExceedMaxLines,
+        isFalse,
+        reason: 'a long parent name must wrap, not lose its tail',
+      );
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('[P08b-B07] six long-named children keep every name at 1.3x', (
+      tester,
+    ) async {
+      // At 1.3× the full message for six long-named children needs ~9
+      // lines against the `maxLines: 5` cap, so the tail — the children
+      // who "will see it straight away" — is ellipsized. At 1.0× the
+      // same message fits exactly in 5 lines, so this is the
+      // accessibility-scale case only.
+      final db = await _newFamilyScope();
+      final names = <String>[
+        'Maximilian-Alexander',
+        'Wilhelmina-Rose',
+        'Bartholomew',
+        'Persephone',
+      ];
+      for (var i = 0; i < names.length; i++) {
+        await _insertChild(
+          db,
+          'kid$i',
+          names[i],
+          3 + i,
+          createdAt: Seed.utc(9, 19, 11 + i),
         );
-        expect(
-          greeting.didExceedMaxLines,
-          isFalse,
-          reason: 'a long parent name must wrap, not lose its tail',
-        );
+      }
 
-        await disposeApp(tester);
-      },
-    );
+      await pumpAppRoute(tester, '/today-empty');
+      tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
 
-    testWidgets(
-      '[P08b-B07] six long-named children keep every name at 1.3x',
-      skip: true, // bug id in the test name: P08b-B07
-      (tester) async {
-        // At 1.3× the full message for six long-named children needs ~9
-        // lines against the `maxLines: 5` cap, so the tail — the children
-        // who "will see it straight away" — is ellipsized. At 1.0× the
-        // same message fits exactly in 5 lines, so this is the
-        // accessibility-scale case only.
-        final db = await _newFamilyScope();
-        final names = <String>[
-          'Maximilian-Alexander',
-          'Wilhelmina-Rose',
-          'Bartholomew',
-          'Persephone',
-        ];
-        for (var i = 0; i < names.length; i++) {
-          await _insertChild(
-            db,
-            'kid$i',
-            names[i],
-            3 + i,
-            createdAt: Seed.utc(9, 19, 11 + i),
-          );
-        }
+      final message = tester.renderObject<RenderParagraph>(
+        find.textContaining('will see it straight away'),
+      );
+      expect(message.didExceedMaxLines, isFalse);
 
-        await pumpAppRoute(tester, '/today-empty');
-        tester.platformDispatcher.textScaleFactorTestValue = 1.3;
-        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 200));
-
-        final message = tester.renderObject<RenderParagraph>(
-          find.textContaining('will see it straight away'),
-        );
-        expect(message.didExceedMaxLines, isFalse);
-
-        await disposeApp(tester);
-      },
-    );
+      await disposeApp(tester);
+    });
   });
 
   // -------------------------------------------------------------------
