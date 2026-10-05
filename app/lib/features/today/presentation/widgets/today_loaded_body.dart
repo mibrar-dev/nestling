@@ -760,41 +760,42 @@ class _EmptyGreeting extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = context.nest;
-    return Padding(
-      padding: const EdgeInsets.only(top: NestSpacing.s2),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Semantics(
-            header: true,
-            child: Text(
-              '$greeting, $parentName',
-              style: NestType.h1(color: tokens.ink),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+    // No top padding: P08b's `.greet` has none (the 8 px belongs to P08's
+    // own rule). The h1 wraps over two lines instead of clipping the
+    // parent's name at 320 px or 1.3× (P08b's CSS sets no nowrap).
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Semantics(
+          header: true,
+          child: Text(
+            '$greeting, $parentName',
+            style: NestType.h1(color: tokens.ink),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
-          Padding(
-            padding: const EdgeInsets.only(top: NestSpacing.gap2),
-            child: Text(
-              dateLine,
-              style: NestType.bodySmall(color: tokens.ink2)
-                  .copyWith(fontWeight: FontWeight.w500),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: NestSpacing.gap2),
+          child: Text(
+            dateLine,
+            style: NestType.bodySmall(color: tokens.ink2)
+                .copyWith(fontWeight: FontWeight.w500),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-/// Second sentence naming the children, in creation order. The caller
-/// passes them eldest-first from `watchSummaries`; for the demo family
-/// (Maya, Leo) that matches insertion order. 0 children → no sentence;
-/// UK comma-free style.
+/// Second sentence naming the children, in creation order (CHILD ORDER
+/// ruling: Maya, then Leo — never age, never alphabetical). The caller
+/// passes `state.summaries` nicknames, which `watchSummaries` keeps in
+/// `watchChildren` creation order. 0 children → no sentence; UK comma-free
+/// style.
 String emptyMessageSuffix(List<String> names) {
   if (names.isEmpty) return '';
   final who = switch (names.length) {
@@ -862,15 +863,21 @@ class _EmptyCard extends StatelessWidget {
             onTap: () => context.go(QuestsRoutePaths.library),
             child: InkWell(
               onTap: () => context.go(QuestsRoutePaths.library),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: NestSpacing.s3),
-                child: Text(
-                  'Browse ideas',
-                  style: NestType.bodySmallStrong(color: tokens.sky)
-                      .copyWith(decoration: TextDecoration.underline),
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  softWrap: false,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  minHeight: NestDevice.tapParent,
+                ),
+                child: Center(
+                  child: Text(
+                    'Browse ideas',
+                    style: NestType.bodySmallStrong(color: tokens.sky).copyWith(
+                      decoration: TextDecoration.underline,
+                      decorationColor: tokens.sky,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    softWrap: false,
+                  ),
                 ),
               ),
             ),
@@ -893,7 +900,6 @@ class _TipCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
-        spacing: NestSpacing.s1,
         children: [
           Text(
             'Tip for new nests',

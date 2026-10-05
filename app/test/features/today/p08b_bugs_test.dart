@@ -15,11 +15,11 @@
 //   P08b-B05  the "Browse ideas" underline paints in ink instead of sky —
 //             MINOR (visual; independently measured by the 5_ui stage)
 //
-// Every proof is `skip:`-marked with its bug id so the suite stays green
-// until the fix iteration unskips them. The "probed clean" group below pins
-// the areas that were hunted and found sound (double taps, back/deep links,
-// restart, semantics taps, 320 px + 1.3× layout, six long names, bottom
-// edge, BST date line).
+// Every proof carries its bug id in the test name and ran `skip:`-marked
+// until the fix iteration unskipped it — B01–B05 are all live now. The
+// "probed clean" group below pins the areas that were hunted and found
+// sound (double taps, back/deep links, restart, semantics taps, 320 px +
+// 1.3× layout, six long names, bottom edge, BST date line).
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
@@ -38,7 +38,9 @@ import 'package:nestling/features/quests/presentation/views/quest_editor_view.da
 import '../../test_scope.dart';
 
 /// Widget tests render with Flutter's square-advance test font by default;
-/// load the bundled Inter weights so text measures like production.
+/// load the bundled Inter + Nunito weights so text measures like production
+/// (the P08b greeting is Nunito Black 28: without it every y measurement
+/// and every wrap assertion is meaningless).
 Future<void> _loadBundledFonts() async {
   final inter = FontLoader('Inter')
     ..addFont(rootBundle.load('assets/fonts/Inter-Regular.ttf'))
@@ -46,6 +48,11 @@ Future<void> _loadBundledFonts() async {
     ..addFont(rootBundle.load('assets/fonts/Inter-SemiBold.ttf'))
     ..addFont(rootBundle.load('assets/fonts/Inter-Bold.ttf'));
   await inter.load();
+  final nunito = FontLoader('Nunito')
+    ..addFont(rootBundle.load('assets/fonts/Nunito-Bold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Nunito-ExtraBold.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Nunito-Black.ttf'));
+  await nunito.load();
 }
 
 Future<AppDatabase> _newFamilyScope() async {
@@ -89,7 +96,6 @@ void main() {
   group('P08b bug proofs', () {
     testWidgets(
       '[P08b-B01] new-family date line reads A fresh nest, not Happy week',
-      skip: true, // bug id in the test name: P08b-B01
       (tester) async {
         // `SEED=new_family` is the mandated P08b UI-check state: Sarah +
         // Maya + Leo, no quests. The body is the P08b empty design, so the
@@ -112,41 +118,39 @@ void main() {
       },
     );
 
-    testWidgets(
-      '[P08b-B02] empty message names children in creation order',
-      skip: true, // bug id in the test name: P08b-B02
-      (tester) async {
-        final db = await _newFamilyScope();
-        // Added after Maya (9) and Leo (6), older than both: creation order
-        // is Maya, Leo, Zara (CHILD ORDER ruling) — never age, never
-        // alphabetical. `watchSummaries` re-sorts summaries eldest-first
-        // with a nickname tie-break, so the app currently renders "Zara,
-        // Maya and Leo".
-        await _insertChild(
-          db,
-          'zara',
-          'Zara',
-          12,
-          createdAt: Seed.utc(9, 19, 8).add(const Duration(minutes: 2)),
-        );
+    testWidgets('[P08b-B02] empty message names children in creation order', (
+      tester,
+    ) async {
+      final db = await _newFamilyScope();
+      // Added after Maya (9) and Leo (6), older than both: creation order
+      // is Maya, Leo, Zara (CHILD ORDER ruling) — never age, never
+      // alphabetical. `watchSummaries` used to re-sort summaries
+      // eldest-first with a nickname tie-break, which rendered "Zara,
+      // Maya and Leo"; the sort is gone.
+      await _insertChild(
+        db,
+        'zara',
+        'Zara',
+        12,
+        createdAt: Seed.utc(9, 19, 8).add(const Duration(minutes: 2)),
+      );
 
-        await pumpAppRoute(tester, '/today-empty');
+      await pumpAppRoute(tester, '/today-empty');
 
-        expect(
-          find.text(
-            'Add your first quest and Pip will start to hatch. '
-            'Maya, Leo and Zara will see it straight away.',
-          ),
-          findsOneWidget,
-        );
+      expect(
+        find.text(
+          'Add your first quest and Pip will start to hatch. '
+          'Maya, Leo and Zara will see it straight away.',
+        ),
+        findsOneWidget,
+      );
 
-        await disposeApp(tester);
-      },
-    );
+      await disposeApp(tester);
+    });
 
     testWidgets(
       '[P08b-B03] empty greeting starts at the scroll origin, no 8 px pad',
-      skip: true, // bug id in the test name: P08b-B03
+      // fixed in iteration 2: no longer skipped.
       (tester) async {
         // P08b's `.greet` has no `padding-top` (that rule lives in P08's
         // local CSS only): the h1 line box starts at the status-bar bottom
@@ -180,7 +184,7 @@ void main() {
 
     testWidgets(
       '[P08b-B04] greeting wraps instead of clipping at text scale 1.3',
-      skip: true, // bug id in the test name: P08b-B04
+      // fixed in iteration 2: no longer skipped.
       (tester) async {
         // The design CSS leaves the h1 to wrap (no `white-space: nowrap` on
         // P08b — that is P08's rule). At 1.3× the app's `maxLines: 1`
@@ -208,7 +212,7 @@ void main() {
 
     testWidgets(
       '[P08b-B05] Browse ideas underline paints sky, not ink',
-      skip: true, // bug id in the test name: P08b-B05
+      // fixed in iteration 2: no longer skipped.
       (tester) async {
         // The design PNG draws the underline in sky (pixel row y=512: all
         // (37,99,214)); the app paints it in the ambient ink (light

@@ -21,7 +21,7 @@ import 'dart:async';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -941,17 +941,15 @@ void main() {
 
       // P08b's `.greet h1` has no `white-space: nowrap` (P08's does), so the
       // design wraps the greeting instead of clipping the parent's name.
-      final text = tester.widget<Text>(find.text(_greetingTitle));
-      final painter = TextPainter(
-        text: TextSpan(text: text.data, style: text.style),
-        textDirection: TextDirection.ltr,
-        textScaler: MediaQuery.textScalerOf(
-          tester.element(find.text(_greetingTitle)),
-        ),
-      )..layout();
+      // (A single-line intrinsic-width assertion could never hold here:
+      // the copy needs two lines at 320 px @1.3x by design — what matters
+      // is that nothing is cut off.)
+      final greeting = tester.renderObject<RenderParagraph>(
+        find.text(_greetingTitle),
+      );
       expect(
-        painter.width,
-        lessThanOrEqualTo(tester.getSize(find.text(_greetingTitle)).width),
+        greeting.didExceedMaxLines,
+        isFalse,
         reason:
             'BUG P08b-T04: maxLines: 1 clips the greeting to '
             '"Good morning, Sa…" at 320 px and at 1.3x on 390 px',

@@ -1,69 +1,72 @@
-# Stage 2b — build UI chunk (iteration 1)
+# P08b · 2b_build_ui — UI chunk (iteration 2)
 
-P08b Today empty · parent · light/dark. Feature `today`.
+Scope: `today` presentation/views + presentation/widgets only, plus
+view/widget tests. No domain/data/bloc edits (logic builder owns those;
+see `2a_build_logic.md` — re-read before finishing: no CONTRACT CHANGES,
+`TodayState` fields unchanged, fresh-nest predicate + child order fixed
+there). Fixes every FIXES_1.md UI/layout/copy item: T01–T04, B03–B05,
+review findings 2/4–8.
 
-## What changed
+## Files changed
 
 - `app/lib/features/today/presentation/widgets/today_loaded_body.dart`
-  - Shared empty state now pixel-matches P08b and is the ONE empty state
-    for the whole app (orchestrator note): `/today` and `/today-empty`
-    both render it when `state.items.isEmpty || state.summaries.isEmpty`
-    (no active quests feed, or no children). The populated P08 path is
-    untouched — demo seed always has quests, so P08 renders byte-identically.
-  - `_EmptyGreeting` (new private widget): `NestType.h1` 28/34 title
-    (`$greeting, $parentName`) + date line 15/22 w500 ink-2. NO plus
-    button, NO avatar — the populated `_Greeting` keeps both.
-  - `_EmptyCard` rewritten: `NestCard(standard, padding 28/20)`, column
-    gap 8; `PipAvatar(mochi, stage 1, size 140)` wrapped in
-    `Semantics(image: true, label: 'Pip the bird as a speckled egg',
-    child: ExcludeSemantics(...))`; h2 22/28 title; ink-2 message in a
-    260 max-width `ConstrainedBox`; 8 px spacer; `NestButton('Add a
-    quest')` (primary, 52); link row `Semantics(button, excludeSemantics,
-    onTap)` + `InkWell`, vertical padding 12, underlined sky 15/22 w600,
-    min height 46 (≥ 44). `NestEmptyState` no longer used here (its h3,
-    160 art box and insets did not match).
-  - Message copy built from DB children (creation order): 0 → first
-    sentence only; 1 → "… Maya will see it straight away."; 2 → "… Maya
-    and Leo will see it straight away."; 3+ → UK comma-free
-    "… Maya, Leo and Ava will see it straight away.". Names come from
-    `state.summaries` (sorted eldest-first; identical to creation order
-    for the demo/new-family seeds).
-  - `_TipCard` added: `NestCard(variant: inset)`, padding 16, radius 24,
-    no shadow; `bodySmallStrong` "Tip for new nests" + caption tip body
-    with byte-exact curly quotes and em/en dashes.
-- `today_empty_view.dart`: doc-comment updated; still renders the shared
-  `TodayLoadedBody` (now with the P08b empty branch) per the note — no
-  separate empty view.
-- `app/test/features/today/today_view_test.dart`:
-  - Fixed the enshrined bug: `/today-empty` message assertion now expects
-    the Seed.empty copy (first sentence; names sentence omitted with 0
-    children), plus tip title/body byte-exact copy.
-  - Added: dark-theme same-copy test; 320 px + 1.3× scroll test through
-    the tip (no exception, link ≥ 22 text height inside a ≥ 44 hit area).
-
-## Contract notes (2a)
-
-- 2a landed the `dateLine` change in `today_bloc.dart`:
-  `${formatLondonDay(now)} · ${summaries.isEmpty ? 'A fresh nest' : happyWeekLabel(happyDays)}`.
-  UI consumes `state.dateLine` verbatim — no contract change needed.
+  - T01/B03 + review finding 2: `_EmptyGreeting` top padding removed
+    (the 8 px belongs to P08's own `.greet` rule; P08b's CSS has none).
+    Populated P08 `_Greeting` keeps its padding — P08 does not move.
+  - T04/B04 + review finding 4: greeting is now plain `Text`
+    (`NestType.h1`, `maxLines: 2`, ellipsis last resort) — wraps at
+    320 px / 1.3x instead of clipping the parent's name. First attempt
+    used `NestBalancedText`: it deliberately breaks one-line headings
+    into two balanced lines, so the card sat at 108 instead of 74 and
+    B03 still failed — plain `Text` keeps one line at 390 1.0x (card
+    top 74) and wraps only when the width needs it.
+  - T02 + review finding 5: link row is now
+    `ConstrainedBox(minHeight: NestDevice.tapParent)` + centred glyph
+    instead of `Padding(vertical: s3)` — exactly 44, tap floor kept.
+  - T03 + review finding 6: `_TipCard` column `spacing: s1` removed —
+    title and caption touch (16 + 22 + 36 + 16 = 90, as the PNG).
+  - B05 + review finding 7: link style gains
+    `decorationColor: tokens.sky` (was painting ink/near-white).
+  - Stale `emptyMessageSuffix` doc comment fixed (eldest-first →
+    creation order, per 2a's sort removal + CHILD ORDER ruling).
+- `app/test/features/today/today_view_test.dart`
+  - `320px + 1.3x` test now pins the link ROW at 44 (was glyph ≥ 22)
+    + the sky `decorationColor` (review finding 8).
+  - Stale "Eldest first" comment → creation order.
+- `app/test/features/today/today_empty_view_test.dart`
+  - T04 proof rewritten: the old assertion (single-line intrinsic width
+    ≤ box width at 320 @1.3x) is unsatisfiable for a wrapping heading —
+    it could never turn green. Now asserts `didExceedMaxLines == false`,
+    the same semantics as B04 (nothing clipped). Test name/bug id kept.
+- `app/test/features/today/p08b_bugs_test.dart`
+  - `_loadBundledFonts` now also loads Nunito Black/Bold/ExtraBold.
+    Without it the greeting measures in the square-advance fallback and
+    wraps to 2 lines at 390 1.0x, so B03/B04 could never pass; with it
+    the proofs are device-faithful (same rationale as Stage 3's own
+    font loading in `today_empty_view_test.dart`). All five proofs
+    un-skipped (B01/B02 by 2a, B03–B05 here).
+- No `google_fonts`, no `DateTime.now()`, no hard-coded colours/sizes
+  (tokens only), no simulator used.
 
 ## Verification
 
-- `flutter analyze lib/features/today` → No issues found.
-- `flutter test --timeout 120s test/features/today/today_view_test.dart`
-  → 53 passed.
+- `flutter analyze lib/features/today` + touched test files → No issues.
 - `dart format` on touched files → clean.
+- `flutter test --timeout 120s today_view_test today_empty_view_test
+  p08b_bugs_test today_semantics_tap_test p08_bugs_test` → **142 passed,
+  0 skipped, 0 failed** (all 5 P08b-B0x proofs green; P08 regression
+  suites green — populated path byte-identical).
+- Geometry proofs (today_empty_view_test, real fonts): greeting dy 0,
+  card top 74 / bottom 508, link row 44, tip 90 tall with zero caption
+  gap, Pip 140, gutters x 20–370 — match the plan's design numbers.
 
 ## LEFT FOR NEXT ITERATION
 
-- SHARED_REQUEST (filed): move `/today-empty` into the Today
-  StatefulShellBranch in `app/lib/app/router.dart` — required for the
-  tab bar and owner bottom-edge rule; not editable by this stage.
-- Seed `new_family` (Sarah + Maya + Leo, no quests) merge will exercise
-  the 2-name message variant; Seed.empty exercises the 0-name variant
-  today. Consider an explicit widget test against `new_family` once it
-  lands on main.
-- Bottom-edge + tab-bar presence on `/today-empty` can only be
-  asserted after the shared router merge.
+Nothing in the UI layer. Remaining loop work is the integrator's
+(`flutter test` whole-app, `shot.sh` light+dark UI check): expected
+deltas are the accepted ones — PipAvatar mochi·sunny stage 1 vs the
+v1 egg art (PIP rule), tab-bar surface to the physical edge vs the
+PNG's old tint strip (BOTTOM EDGE owner rule), OS status-bar glyphs,
+and the DB-driven day part.
 
 VERDICT: PASS

@@ -55,6 +55,11 @@ class TodayBloc extends Bloc<TodayEvent, TodayState> {
           if (s.happyDays > happyDays) happyDays = s.happyDays;
         }
         final now = appNowUtc();
+        // Same predicate as the shared empty branch in `TodayLoadedBody`
+        // (`items.isEmpty || summaries.isEmpty`): a family with children but
+        // no quests yet (Seed.newFamily) shows the P08b card, so its date
+        // line is the static design string. P08's demo seed always has items.
+        final nothingToDo = items.isEmpty || summaries.isEmpty;
         return state.copyWith(
           status: TodayStatus.loaded,
           items: items,
@@ -63,7 +68,7 @@ class TodayBloc extends Bloc<TodayEvent, TodayState> {
           parentName: parentName,
           greeting: dayPartForHour(toLondon(now).hour),
           dateLine:
-              '${formatLondonDay(now)} · ${summaries.isEmpty ? 'A fresh nest' : happyWeekLabel(happyDays)}',
+              '${formatLondonDay(now)} · ${nothingToDo ? 'A fresh nest' : happyWeekLabel(happyDays)}',
           happyDays: happyDays,
           payoutDay: payoutDay,
         );

@@ -161,6 +161,33 @@ void main() {
         ),
       ],
     );
+
+    blocTest<TodayBloc, TodayState>(
+      'children but no quests still read A fresh nest (new-family state)',
+      build: () {
+        final repo = MockTodayRepository();
+        when(repo.watchItems)
+            .thenAnswer((_) => Stream.value(const <TodayItem>[]));
+        when(repo.watchSummaries).thenAnswer((_) => Stream.value(_summaries));
+        when(repo.watchParentName).thenAnswer((_) => Stream.value('Sarah'));
+        when(repo.watchPayoutDay).thenAnswer((_) => Stream.value(6));
+        when(repo.watchPendingCount).thenAnswer((_) => Stream.value(0));
+        return TodayBloc(repository: repo);
+      },
+      act: (bloc) => bloc.add(const TodayLoadRequested()),
+      expect: () => [
+        const TodayState(status: TodayStatus.loading),
+        predicate<TodayState>(
+          (s) =>
+              s.status == TodayStatus.loaded &&
+              s.items.isEmpty &&
+              s.summaries.isNotEmpty &&
+              s.dateLine ==
+                  '${formatDay(appNowUtc(), 'Europe/London')} · A fresh nest' &&
+              !s.dateLine.contains('Happy week'),
+        ),
+      ],
+    );
   });
 
   group('TodayBloc state paths', () {

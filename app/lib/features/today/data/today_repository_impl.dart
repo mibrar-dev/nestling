@@ -58,35 +58,30 @@ class TodayRepositoryImpl implements TodayRepository {
       }
       // Every child gets a card — including children with no assigned
       // quests yet (the ordinary state right after P05 "Add a child").
-      final summaries =
-          kids.map((kid) {
-              final mine = byChild[kid.id] ?? const <TodayItem>[];
-              return ChildDaySummary(
-                childId: kid.id,
-                nickname: kid.nickname,
-                avatarColour: kid.avatarColour,
-                pipStage: kid.pipStage,
-                done: mine
-                    .where(
-                      (i) =>
-                          i.status == 'done_pending' || i.status == 'approved',
-                    )
-                    .length,
-                total: mine.length,
-                coins: kid.coins,
-                ageYears: kid.ageYears,
-                happyDays: kid.happyDays,
-                pipStyle: kid.pipStyle,
-                pipSkin: kid.pipSkin,
-                pipAccessory: kid.pipAccessory,
-              );
-            }).toList()
-            // Eldest first (Maya 9 before Leo 6 in the demo), then nickname.
-            ..sort((a, b) {
-              final age = (b.ageYears ?? -1).compareTo(a.ageYears ?? -1);
-              if (age != 0) return age;
-              return a.nickname.compareTo(b.nickname);
-            });
+      // Creation order (CHILD ORDER ruling: Maya, then Leo — never age,
+      // never alphabetical): `watchChildren` already yields roster order,
+      // so no re-sort here.
+      final summaries = kids.map((kid) {
+        final mine = byChild[kid.id] ?? const <TodayItem>[];
+        return ChildDaySummary(
+          childId: kid.id,
+          nickname: kid.nickname,
+          avatarColour: kid.avatarColour,
+          pipStage: kid.pipStage,
+          done: mine
+              .where(
+                (i) => i.status == 'done_pending' || i.status == 'approved',
+              )
+              .length,
+          total: mine.length,
+          coins: kid.coins,
+          ageYears: kid.ageYears,
+          happyDays: kid.happyDays,
+          pipStyle: kid.pipStyle,
+          pipSkin: kid.pipSkin,
+          pipAccessory: kid.pipAccessory,
+        );
+      }).toList();
       return summaries;
     });
   }

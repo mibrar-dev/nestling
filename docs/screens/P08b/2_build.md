@@ -1,161 +1,147 @@
-# P08b · 2_build — INTEGRATE (iteration 1)
+# P08b · 2 BUILD (integrate, iteration 2)
 
-Scope of this stage: make the merged result of 2a (logic) + 2b (UI)
-compile and pass. Smallest-change fixes only; no redesign.
+Two builders worked this worktree in parallel: `2a_build_logic.md` (the
+non-UI layer — `data/**`, `presentation/bloc/**` + the bloc/repository
+tests) and `2b_build_ui.md` (the views/widgets + the view/bug tests).
+This stage's only job was to make the combined result compile and pass.
 
-## Result: the two halves already merged cleanly
+Iteration 1 merged with no code changes needed; iteration 2 follows the
+iteration-1 FAILs (`LOOP.md: test=FAIL review=FAIL ui=FAIL bugs=FAIL`)
+whose 11 fixes are catalogued in `FIXES_1.md`.
 
-No integration breakage existed — **zero code changes were needed** in
-this stage. The five files below are the builders' work, exactly as
-handed over (verified, not re-authored).
+## Result
 
-## Summary of 2a (`2a_build_logic.md`)
+**Gates green on the merged result.** One change made in this stage, both
+comment-only, in a file *both* builders had edited (see FIXES below); no
+`lib/` file was touched.
 
-- Contract unchanged: events (`TodayLoadRequested`), `TodayState` shape,
-  `TodayRepository` interface, DI registration and `/today-empty` route
-  all as-is — the UI half codes against the existing state fields.
-- One bloc change (`presentation/bloc/today_bloc.dart`): the date line
-  suffix becomes the static design string when there are no summaries —
-  `'${formatLondonDay(now)} · ${summaries.isEmpty ? 'A fresh nest' : happyWeekLabel(happyDays)}'`
-  (middle dot U+00B7). Gated on `summaries.isEmpty`, so the P08
-  demo-seed path is byte-identical. Clock still `appNowUtc()`; greeting
-  still `dayPartForHour(toLondon(now).hour)`.
-- `test/features/today/today_bloc_test.dart` extended to assert the new
-  `dateLine` in the existing empty-state blocTest.
-- Router/shell move left to `SHARED_REQUEST.md` (shared file, RULES §1).
+## Summary of 2a (logic — iteration 2)
 
-## Summary of 2b (`2b_build_ui.md`)
+Contract unchanged again: events (`TodayLoadRequested`), `TodayState`
+shape, `TodayRepository` interface, DI and `/today-empty` route all as-is.
 
-- `presentation/widgets/today_loaded_body.dart` carries the ONE shared
-  empty state (orchestrator ruling): `/today` and `/today-empty` both
-  render it via `TodayLoadedBody`, branching on
-  `state.items.isEmpty || state.summaries.isEmpty`. The populated P08
-  branch below is untouched and unreachable on the demo seed, so P08's
-  UI does not move. New private widgets: `_EmptyGreeting` (h1 28/34
-  title + 15/22 w500 ink-2 date line, **no** plus button, **no**
-  avatar), `_EmptyCard` (`NestCard` standard, padding 28/20, 140 px
-  `PipAvatar(mochi, sunny, stage 1)` in an `image` semantics node, h2
-  title, ink-2 message capped at 260 px, 8 px spacer, primary
-  `NestButton('Add a quest')`, underlined sky `Browse ideas` link row
-  wrapped in `Semantics(button, excludeSemantics, onTap:)` at ≥ 44
-  height), `_TipCard` (`NestCard(inset)`, `Tip for new nests` + tip
-  body). `NestEmptyState` deliberately not used (h3 title, 160 art box,
-  different insets).
-- Message copy derived from DB children (`emptyMessageSuffix`): 0 →
-  first sentence only; 1 → `… Maya will see it straight away.`;
-  2 → `… Maya and Leo …`; 3+ → UK comma-free
-  `… Maya, Leo and Ava will see it straight away.` Names never
-  hard-coded.
-- `views/today_empty_view.dart`: doc-comment only — still renders the
-  shared body, no separate empty view (per ORCHESTRATOR_NOTES item 1).
-- `test/features/today/today_view_test.dart`: fixed the test that
-  enshrined the truncated-message bug (now expects the Seed.empty
-  first-sentence copy + byte-exact tip title/body), added a dark-theme
-  same-copy test and a 320 px + 1.3× scroll-through-the-tip test.
+- `today_bloc.dart` — **T05/B01**: the fresh-nest suffix now uses the
+  same predicate as the shared empty branch (`items.isEmpty ||
+  summaries.isEmpty`) instead of `summaries.isEmpty` alone, so a family
+  with children but no quests (`Seed.newFamily`) reads `A fresh nest`
+  rather than `Happy week: 4 days`. P08 unaffected (demo seed has items).
+- `today_repository_impl.dart` — **T06/B02**: dropped the
+  eldest-first + nickname re-sort in `watchSummaries()`; summaries keep
+  `watchChildren` creation order (CHILD ORDER ruling: Maya, then Leo).
+  Demo/new-family rendering does not move.
+- `today_bloc_test.dart` / `today_repository_test.dart` — new proofs for
+  both changes; the two stale "Eldest first" comments corrected.
 
-## Integration checks run (all green)
+## Summary of 2b (UI — iteration 2)
 
-- `dart format .` → `Formatted 625 files (0 changed)` — no reformatting
-  needed after the merge.
-- `flutter analyze` → `No issues found!` — so no import breakage, no
-  unused imports left behind by the emptied `_EmptyCard`, no undefined
-  members. The UI half's imports (`design_system.dart`,
-  `pip_avatar.dart`) resolve against the merged file, and the
-  pre-existing route imports (`approvals_routes`, `family_routes`,
-  `kid_home_routes`, `settings_routes`, `quests_routes`) are still
-  used by the populated branch.
-- Full suite `flutter test --timeout 120s` → `+4293 ~10: All tests
-  passed!` — 0 failures. P08's own tests are in that run (unchanged
-  render path, unchanged greeting with `+`/avatar), and the P08b tests
-  that already existed (quiet-nest card, `/today-empty` copy, Pip
-  avatar 140, empty-state gutters 20/370, bottom-edge) all pass.
-- Cross-half contract: 2b consumes `state.dateLine` verbatim, so 2a's
-  new string needs no consumer change. `_PushOnce` (2b's guard) is
-  defined in the same file above the new widgets. `TodayState.items`
-  and `.summaries` still exist (unchanged shape), which is what the
-  widened empty branch reads.
-- Token fidelity spot-check against `design/html-source/screens/P08b-today-empty.html`
-  (no hard-coded sizes/colour): `padding: 28px 20px` → the code's
-  `NestSpacing.s8 - NestSpacing.s1` = 32 − 4 = **28** with
-  `padSide` = 20 ✓; `h1` 28/34 w900 Nunito = `NestType.h1` ✓;
-  `h2` 22/28 w800 = `NestType.h2` ✓; `.date` 15/22 w500 = `bodySmall`
-  + `w500` ✓; `.linkrow a` 15 w600 sky underlined = `bodySmallStrong`
-  + underline ✓; `.caption` 13/18 = `NestType.caption` ✓; no
-  `letterSpacing` overrides added (loop rule) ✓.
-- Copy bytes vs the HTML: `Your nest is quiet`, `Add your first quest
-  and Pip will start to hatch.`, `Tip for new nests`, and the tip body
-  with em dash `—`, curly quotes `“ ”` and en dash `–` inside
-  `“Reading – 20 minutes”` — all match byte-for-byte in the merged
-  code and in the fixed test.
-- No `DateTime.now()`, no `google_fonts`/`GoogleFonts` anywhere in
-  `lib/features/today/` or `test/features/today/` ✓.
+All in `today_loaded_body.dart` (populated P08 widgets untouched):
+
+- **T01/B03** — `_EmptyGreeting` top padding removed; the 8 px belongs to
+  P08's own local `.greet` rule, which P08b does not have.
+- **T04/B04** — greeting is plain `Text` (`NestType.h1`, `maxLines: 2`)
+  so it wraps instead of clipping the parent's name at 320 px / 1.3×.
+  `NestBalancedText` was tried and rejected (see verification note).
+- **T02** — link row is `ConstrainedBox(minHeight: NestDevice.tapParent)`
+  + centred glyph: exactly 44 (was 46).
+- **T03** — `_TipCard` column `spacing: s1` removed; 16+22+36+16 = 90.
+- **B05** — link gains `decorationColor: tokens.sky`.
+- Tests: `today_view_test.dart` pins the link ROW at 44 + the sky
+  decoration colour; `today_empty_view_test.dart`'s T04 proof rewritten to
+  assert `didExceedMaxLines == false` (its old single-line
+  intrinsic-width assertion was unsatisfiable for a wrapping heading);
+  `p08b_bugs_test.dart` now loads the bundled Nunito Black/Bold/ExtraBold
+  so the greeting's y measurements and wrap assertions are device-faithful
+  instead of measuring in the square-advance fallback.
+
+## Cross-half checks run (all consistent)
+
+- `p08b_bugs_test.dart` is the one file both builders edited (2a
+  un-skipped B01/B02, 2b un-skipped B03–B05 and added the font loading).
+  The merged file has exactly one `_loadBundledFonts`, no remaining
+  `skip:` on any of the five proofs — `flutter test` on the file alone:
+  `00:01 +14: All tests passed!` with B01–B05 all live and green.
+- 2b's `maxLines: 2` greeting and 2a's bloc predicate agree on what "the
+  empty state" means (`items.isEmpty || summaries.isEmpty`); the view's
+  branch and the bloc's date line cannot now disagree.
+- 2a's removal of the sort is reflected in 2b's `emptyMessageSuffix` doc
+  comment (creation order) and in `today_view_test.dart`'s
+  three-children Pip test comment — no half-left "eldest first" text in
+  `lib/`.
+- CSS spot-check against `design/html-source/screens/P08b-today-empty.html`:
+  `padding-top: 8px` on `.greet` exists only in P08's local style block,
+  never in P08b's — 2b's T01 removal is HTML-correct, not a regression.
+- BALANCED HEADINGS rule checked and **not** violated: `text-wrap:
+  balance` lives on `.h1` (class) in `components.css`, while P08b's markup
+  is a bare `<h1>` inside `.greet` with no class, so the browser default
+  applies (wrap). `NestBalancedText` would have force-split the one-line
+  heading and reintroduced the +8 px class of drift — hence plain `Text`.
+- `git diff --stat` shows only `lib/features/today/**` and
+  `test/features/today/**` plus this screen's own notes — no file outside
+  RULES §1 touched; no simulator booted, installed on or driven.
 
 ## FIXES items
 
-DONE (by 2a/2b, verified here):
+DONE (by the builders, verified by me here) — all 11 of `FIXES_1.md`:
 
-- [x] Bloc date line → `A fresh nest` for the empty state, with test.
-- [x] One shared empty state in `TodayLoadedBody` (no
-      `TodayEmptyLoadedBody`); `TodayEmptyView` renders the same body.
-- [x] Empty greeting without `+` and without avatar; P08 greeting
-      untouched.
-- [x] Children-ordered message copy (0/1/2/3+ variants), names from
-      the DB.
-- [x] Inset tip card + `Browse ideas` link row, byte-exact copy.
-- [x] `PipAvatar(mochi, sunny, stage 1)` at 140 px with an
-      `image` semantics label; no v1 `pip_stage_*.svg`.
-- [x] Both actions carry `SemanticsAction.tap` (the link wrapper passes
-      `onTap:` alongside `excludeSemantics: true`); navigation to
-      `/quest-editor` (empty query) and `/quests` asserted by existing
-      tests.
-- [x] 320 px + 1.3× overflow test through the tip; dark-theme test.
-- [x] Fixed the test that enshrined the truncated message.
-- [x] `dart format` clean, `flutter analyze` clean, full suite green.
+- [x] **T05/B01** fresh-nest date line for children-with-no-quests.
+- [x] **T06/B02** message names children in creation order.
+- [x] **T01/B03** empty body starts at the scroll origin (no 8 px pad).
+- [x] **T02** `Browse ideas` row exactly 44 (tap floor kept).
+- [x] **T03** tip card's phantom 4 px gap removed.
+- [x] **T04/B04** greeting wraps rather than clipping.
+- [x] **B05** link underline paints sky.
+- [x] Review findings 1–8: 1/3/4/5/6/7 = the items above; 2 = T01;
+  8 = regression coverage now pinned (bloc test for the new-family state,
+      repository test for creation order, view test for the 44 row +
+      decoration colour).
+- [x] UI findings 1–3: date line, +8 px shift, underline colour — all
+      covered above.
 
-LEFT (not this stage's to fix — no compile/test blocker):
+DONE (this stage):
 
-- [ ] `SHARED_REQUEST.md` — move `/today-empty` into the Today
-      `StatefulShellBranch` in `app/lib/app/router.dart` (shared file).
-      Until it lands, `/today-empty` has no `NestTabBar`, so the
-      design's tab bar and the owner bottom-edge rule cannot be checked
-      on this route; the existing bottom-edge test passes via `/today`
-      with the empty seed meanwhile. Orchestrator owns
-      `shared/p08b_shell`.
-- [ ] `SEED=new_family` (Sarah + Maya + Leo, no quests) — will
-      exercise the 2-name message variant on `/today-empty`. The 0-name
-      variant is covered by `Seed.empty()` today; a widget test for the
-      2-name sentence is worth adding once the seed lands on main.
-- [ ] OBSERVATION for the review stage, not changed here: the message
-      names come from `state.summaries`, which the shared repository
-      sorts **eldest-first** (`today_repository_impl.dart`), not by
-      insertion order. For Maya (9) then Leo (6) that coincides with
-      creation order, so the mandatory CHILD ORDER ruling holds for the
-      seeds in play, but a family whose second child is the elder would
-      render the names in age order. Changing the ordering is shared
-      repository behaviour used by P08's kids grid too, so it is not a
-      P08b integration fix.
-- [ ] Plan §f items not yet covered by a test (review/test stages, not
-      integration failures): an explicit `SemanticsAction.tap`
-      `performAction` test for the two P08b actions (taps are covered,
-      the semantics-action path is not), and a bottom-edge assertion on
-      `/today-empty` itself (blocked on the shell move).
+- [x] Two stale comments in `test/features/today/p08b_bugs_test.dart` —
+  the file header still claimed "Every proof is `skip:`-marked … until the
+  fix iteration unskips them" (all five now run), and the B02 body still
+  said the app "currently renders 'Zara, Maya and Leo'" (2a removed that
+  sort). Comment-only; no behaviour touched; full suite re-run after.
 
-## Verification tails
+LEFT (not integration work — not blockers for this stage):
+
+- [ ] `2_build.md`'s remaining loop work is the UI check (`5_ui`): re-shoot
+      light + dark and re-measure against the PNGs now that the +8 px shift
+      is gone. Expected, non-findings per 5_ui: the Pip slot renders
+      `PipAvatar(mochi, sunny, stage 1)` at 140 instead of the v1 egg SVG
+      (PIP rule), and the tab-bar surface runs to the physical edge where
+      the PNG shows a cream strip + pill (BOTTOM EDGE owner rule). Status
+      bar glyphs and the DB-driven day part are excluded from measurement.
+- [ ] `SHARED_REQUEST.md` (router/tab-bar move) is resolved: `5_ui`
+      confirmed `/today-empty` renders inside the Today `StatefulShellBranch`
+      with Today active, tab-bar top at 727 in both themes. Can be closed
+      by the orchestrator.
+- [ ] Cross-screen watch item, not a P08b defect: 2a's sort removal in
+      `watchSummaries()` changes the order the *shared* repository returns
+      children for every screen that consumes it (P08 kids grid, P15, …).
+      Maya-then-Leo rendering is unchanged for both seeds; any screen that
+      relied on age ordering should be re-checked by its own loop.
+
+## Gates and tails
 
 ```
 $ dart format .
-Formatted 625 files (0 changed) in 2.96 seconds.
+Formatted 652 files (0 changed) in 2.28 seconds.
 
 $ flutter analyze
 Analyzing app...
-No issues found! (ran in 13.9s)
+No issues found! (ran in 3.9s)
 
 $ flutter test --timeout 120s
-03:15 +4293 ~10: All tests passed!
+01:37 +4684 ~13: All tests passed!
+
+$ flutter test --timeout 120s test/features/today/p08b_bugs_test.dart
+00:01 +14: All tests passed!      # B01–B05 live, none skipped
 ```
 
-Zero failures; 10 pre-existing skips; no ignores added to
-`analysis_options.yaml`; no simulator was booted, installed on,
-screenshot or driven by this stage.
+4684 passed, 13 pre-existing skips, 0 failures; no ignore added to
+`analysis_options.yaml`, no test skipped or deleted by this stage.
 
 VERDICT: PASS

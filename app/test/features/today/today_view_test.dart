@@ -895,6 +895,21 @@ void main() {
       expect(tester.takeException(), isNull);
       final link = tester.getSize(find.text('Browse ideas'));
       expect(link.height, greaterThanOrEqualTo(22));
+      // The link ROW (InkWell hit area) is exactly the design's 44: a
+      // ConstrainedBox(minHeight: tapParent) around the 22 px glyph.
+      final linkRow = tester.getSize(
+        find
+            .ancestor(
+              of: find.text('Browse ideas'),
+              matching: find.byType(InkWell),
+            )
+            .first,
+      );
+      expect(linkRow.height, closeTo(NestDevice.tapParent, 1));
+      // The underline paints sky, not the ambient ink (P08b-B05).
+      final linkStyle = tester.widget<Text>(find.text('Browse ideas')).style!;
+      expect(linkStyle.decoration, TextDecoration.underline);
+      expect(linkStyle.decorationColor, linkStyle.color);
 
       await disposeApp(tester);
     });
@@ -919,7 +934,7 @@ void main() {
           .widgetList<PipAvatar>(find.byType(PipAvatar))
           .toList();
       expect(pips, hasLength(3));
-      // Eldest first: Maya, Leo, then Ava.
+      // Creation order: Maya, Leo, then Ava.
       final ava = pips.last;
       expect(ava.style, PipStyle.storybook);
       expect(ava.skin, PipSkin.mint);
