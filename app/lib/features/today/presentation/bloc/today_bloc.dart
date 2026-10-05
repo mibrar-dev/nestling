@@ -62,7 +62,8 @@ class TodayBloc extends Bloc<TodayEvent, TodayState> {
           pendingCount: pendingCount,
           parentName: parentName,
           greeting: dayPartForHour(toLondon(now).hour),
-          dateLine: '${formatLondonDay(now)} · ${happyWeekLabel(happyDays)}',
+          dateLine:
+              '${formatLondonDay(now)} · ${summaries.isEmpty ? 'A fresh nest' : happyWeekLabel(happyDays)}',
           happyDays: happyDays,
           payoutDay: payoutDay,
         );

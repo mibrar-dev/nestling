@@ -7,9 +7,9 @@ import 'package:nestling/features/today/presentation/widgets/today_loaded_body.d
 
 /// P08b · Today empty, route `/today-empty`.
 ///
-/// Renders the identical widget as TodayView: with `Seed.empty()` the
-/// loaded state has no summaries, so [TodayLoadedBody] shows the P08b
-/// empty card ("Your nest is quiet") under the same chrome.
+/// Renders the identical widget as TodayView: the shared [TodayLoadedBody]
+/// shows the P08b empty state (one empty state for the whole app) whenever
+/// there are no quests.
 class TodayEmptyView extends StatelessWidget {
   const TodayEmptyView({super.key});
 

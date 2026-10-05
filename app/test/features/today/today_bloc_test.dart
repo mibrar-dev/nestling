@@ -155,7 +155,9 @@ void main() {
               s.items.isEmpty &&
               s.summaries.isEmpty &&
               s.pendingCount == 0 &&
-              s.happyDays == 0,
+              s.happyDays == 0 &&
+              s.dateLine ==
+                  '${formatDay(appNowUtc(), 'Europe/London')} · A fresh nest',
         ),
       ],
     );
