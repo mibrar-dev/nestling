@@ -213,15 +213,15 @@ void main() {
       expect(cancel.height, greaterThanOrEqualTo(NestDevice.tapKid));
 
       // The `.gate-note` rhythm has a single owner: the caption renders
-      // exactly once, sits `s2 + gap2` (10 px) below the last button and is
+      // exactly once, sits `gap10` (10 px) below the last button and is
       // the card's last row — no orphan gap under it in this state (4_review
-      // finding 4).
+      // finding 4, shared/ds_cleanup: `s2 + gap2` → `gap10`).
       final caption = find.text('This keeps settings and purchases safe.');
       expect(caption, findsOneWidget);
       final captionRect = tester.getRect(caption);
       expect(
         captionRect.top - cancel.bottom,
-        moreOrLessEquals(NestSpacing.s2 + NestSpacing.gap2, epsilon: 1),
+        moreOrLessEquals(NestSpacing.gap10, epsilon: 1),
         reason: '`.gate-note { margin-top: 10 }` must be the only gap below it',
       );
       final card = tester.getRect(find.byType(NestModal));

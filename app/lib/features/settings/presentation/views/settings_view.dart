@@ -133,13 +133,7 @@ class _SettingsLoaded extends StatelessWidget {
         32,
       ),
       children: <Widget>[
-        Padding(
-          padding: const EdgeInsets.only(top: NestSpacing.s2),
-          child: Text(
-            'Family & settings',
-            style: NestType.h1(color: tokens.ink),
-          ),
-        ),
+        const NestPageTitle(title: 'Family & settings'),
         if (state.pendingZone != null) ...<Widget>[
           const SizedBox(height: NestSpacing.s6),
           _MoveBanner(zone: state.pendingZone!, fromZone: state.familyZoneId),

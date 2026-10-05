@@ -276,6 +276,9 @@ class _ParentCheck extends StatelessWidget {
       selected: done,
       enabled: toggled != null,
       label: done ? 'Done' : 'Mark done',
+      // One control = one node: the outer label owns the announcement and
+      // the inner InkWell contributes no second tap node.
+      excludeSemantics: true,
       onTap: toggled == null ? null : () => toggled(!done),
       child: InkWell(
         customBorder: const CircleBorder(),
@@ -353,6 +356,9 @@ class _QuestCheck extends StatelessWidget {
       selected: done,
       enabled: toggled != null,
       label: done ? 'Done' : 'Mark done',
+      // One control = one node: the outer label owns the announcement and
+      // the inner InkWell contributes no second tap node.
+      excludeSemantics: true,
       onTap: toggled == null ? null : () => toggled(!done),
       child: tappable,
     );

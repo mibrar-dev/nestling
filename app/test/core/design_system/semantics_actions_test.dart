@@ -970,4 +970,119 @@ void main() {
       handle.dispose();
     });
   });
+
+  group('shared/ds_cleanup — one control, one node', () {
+    testWidgets('interactive NestListRow is exactly one labelled tap node', (
+      tester,
+    ) async {
+      var calls = 0;
+      final handle = await pumpWithSemantics(
+        tester,
+        NestListRow(
+          title: 'Invite co-parent',
+          subtitle: 'Share the load',
+          onTap: () => calls++,
+        ),
+      );
+      // The subtitle folds into the outer label; the inner InkWell/Text
+      // contribute no second node.
+      expect(
+        find.bySemanticsLabel('Invite co-parent, Share the load'),
+        findsOneWidget,
+      );
+      final data = nodeByLabel('Invite co-parent, Share the load')
+          .getSemanticsData();
+      expect(data.flagsCollection.isButton, isTrue);
+      expect(data.hasAction(SemanticsAction.tap), isTrue);
+      tester.semantics.performAction(
+        find.semantics.byLabel('Invite co-parent, Share the load'),
+        SemanticsAction.tap,
+      );
+      await tester.pump();
+      expect(calls, 1);
+      handle.dispose();
+    });
+
+    testWidgets('static NestListRows do not merge into the next button', (
+      tester,
+    ) async {
+      final handle = await pumpWithSemantics(
+        tester,
+        NestList(
+          children: <Widget>[
+            const NestListRow(title: 'Sarah — you'),
+            const NestListRow(title: 'James — co-parent'),
+            NestListRow(title: 'Invite co-parent', onTap: () {}),
+          ],
+        ),
+      );
+      // Static rows are containers with no tap; the button keeps its tap.
+      // Walk the tree: no tappable node may carry static copy.
+      final views = tester.binding.renderViews;
+      final root = views.first.owner?.semanticsOwner?.rootSemanticsNode;
+      final tappable = <SemanticsNode>[];
+      void visit(SemanticsNode node) {
+        if (node.getSemanticsData().hasAction(SemanticsAction.tap)) {
+          tappable.add(node);
+        }
+        node.visitChildren((child) {
+          visit(child);
+          return true;
+        });
+      }
+
+      visit(root!);
+      for (final node in tappable) {
+        expect(
+          node.getSemanticsData().label,
+          isNot(contains('Sarah — you')),
+          reason: 'static row must not fold into a button',
+        );
+      }
+
+      handle.dispose();
+    });
+
+    testWidgets('NestToggle is one labelled node, no unlabelled tap node', (
+      tester,
+    ) async {
+      final values = <bool>[];
+      final handle = await pumpWithSemantics(
+        tester,
+        NestToggle(
+          value: false,
+          onChanged: values.add,
+          semanticLabel: 'Approvals waiting notifications',
+        ),
+      );
+      expect(
+        find.semantics.byLabel('Approvals waiting notifications'),
+        findsOneWidget,
+        reason: 'exactly one node announces the switch',
+      );
+      final views = tester.binding.renderViews;
+      final root = views.first.owner?.semanticsOwner?.rootSemanticsNode;
+      final anonymous = <SemanticsNode>[];
+      void visit(SemanticsNode node) {
+        final data = node.getSemanticsData();
+        if (data.hasAction(SemanticsAction.tap) && data.label.trim().isEmpty) {
+          anonymous.add(node);
+        }
+        node.visitChildren((child) {
+          visit(child);
+          return true;
+        });
+      }
+
+      visit(root!);
+      expect(anonymous, isEmpty, reason: 'the detector contributes no node');
+      tester.semantics.performAction(
+        find.semantics.byLabel('Approvals waiting notifications'),
+        SemanticsAction.tap,
+      );
+      await tester.pump();
+      expect(values, [true]);
+      handle.dispose();
+    });
+  });
 }

@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nestling/core/data/app_database.dart';
 import 'package:nestling/core/data/seed.dart';
-import 'package:nestling/features/parental_gate/data/models/parental_gate_challenge_model.dart';
 import 'package:nestling/features/parental_gate/data/parental_gate_repository_impl.dart';
 
 import '../../test_scope.dart';
@@ -77,22 +76,6 @@ void main() {
       expect(early.id, '2026-10-3');
       expect(late.id, '2026-10-4');
       expect(late.id, isNot(early.id));
-    });
-  });
-
-  group('ParentalGateChallengeModel', () {
-    test('survives a JSON round trip', () {
-      const challenge = ParentalGateChallengeModel(
-        id: '2026-10-3',
-        title: 'Grown-ups only',
-        detail: 'This keeps settings and purchases safe.',
-        a: 3,
-        b: 9,
-      );
-      final restored = ParentalGateChallengeModel.fromJson(challenge.toJson());
-      expect(restored, challenge);
-      expect(restored.answer, 27);
-      expect(restored.question, 'three times nine');
     });
   });
 

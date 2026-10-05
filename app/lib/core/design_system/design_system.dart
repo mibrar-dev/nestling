@@ -27,6 +27,7 @@ export 'package:nestling/core/design_system/components/nest_lock_button.dart';
 export 'package:nestling/core/design_system/components/nest_modal.dart';
 export 'package:nestling/core/design_system/components/nest_money.dart';
 export 'package:nestling/core/design_system/components/nest_nav_bar.dart';
+export 'package:nestling/core/design_system/components/nest_page_title.dart';
 export 'package:nestling/core/design_system/components/nest_pager_dots.dart';
 export 'package:nestling/core/design_system/components/nest_pet_stage.dart';
 export 'package:nestling/core/design_system/components/nest_privacy_shield.dart';

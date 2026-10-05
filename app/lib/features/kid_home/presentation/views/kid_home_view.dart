@@ -30,39 +30,32 @@ import 'package:nestling/features/pip/pip_routes.dart';
 /// centred there, never off-centre, and scales down instead of overflowing),
 /// so the slot no longer needs a feature-local scene fork and no longer
 /// derives its size from the incoming width. The numbers below are the call
-/// `docs/screens/_shared/pet_stage_explicit_REPORT.md` asks for:
+/// `docs/screens/_shared/pet_stage_explicit_REPORT.md` asks for, re-measured
+/// in shared/ds_cleanup (K03-BUG-16/17) from the design PNG:
 ///
 /// * `_kNestBoxWidth` is the nest BOX; `PipNestFallback.visibleNestRatio`
 ///   (202/240) makes it paint the design's 198 px visible outline
 ///   (x 96…294, centre 195) at any box height.
 /// * `_kNestBoxHeight` is the box height, so the bowl outline is
-///   `nestHeight × 110/240`: 188 paints the design's 86 px tall outline
-///   (y 278…364), which needs a 236-tall block. Landed by
-///   `shared/pet_stage_seat` — `docs/screens/_shared/pet_stage_seat_REPORT.md`
-///   ("Replace `nestHeight: 156` with 188") and `ORCHESTRATOR_NOTES` 10:14.
+///   `nestHeight × 110/240`: 236 paints the design's 108 px tall outline
+///   (y 278…385, rim 278, bowl bottom 385, feet 301), which needs a 236-tall
+///   block. Re-measured: the design paints the 236 × 236 nest flush in its
+///   slot (no bleed); the old 188 (86 px bowl, rim 274) was 4 px high and
+///   22 px flat.
 /// * `_kPipSlotSize` is the design's ≈152 px Pip; its feet then land ≈23 px
 ///   inside the bowl (design y 301).
 const double _kNestBoxWidth = 236;
-const double _kNestBoxHeight = 188;
+const double _kNestBoxHeight = 236;
 const double _kPipSlotSize = 152;
 
 /// K03b all-done pet box (`.k3-pet { width: 260px; height: 226px }` in
 /// `design/html-source/screens/K03b-kid-home-done.html:25`): the celebration
 /// nest is a 226×226 square (the browser's SVG `meet` draws 226×226,
-/// letterboxed 17 px each side of the 260-wide box), NOT K03's 236×188.
+/// letterboxed 17 px each side of the 260-wide box), NOT K03's 236×236.
 /// K03B-BUG-3: these stay local — `_kNestBoxWidth/_kNestBoxHeight` are shared
 /// with `_KidPetStage` and K03 must not move.
 const double _kAllDoneNestBoxWidth = 226;
 const double _kAllDoneNestBoxHeight = 226;
-
-/// K03b Pip bottom offset (`.k3-pet .pip { bottom: 92px }`, HTML l.27).
-/// Passing it also takes the shared `explicitGeometry` `pipBottom` early
-/// return, which honours `slotHeight` (K03B-BUG-2: the final return ignores
-/// it and adds `_explicitBleed`, rendering 257.4 instead of 226 — shared
-/// code this branch must not touch per ORCHESTRATOR_NOTES 04:52 D1).
-/// `226 − 92 − 152 = −18` lands the Pip box at −18…134 vs the design
-/// −16…134 (within 2 px; BUG-3 decomposition).
-const double _kAllDonePipBottom = 92;
 
 /// Scroll gap between the pet stage and the hearts row: the HTML's
 /// `.scroll > * + *`, i.e. `--s4`.
@@ -958,8 +951,11 @@ class _AllDoneBody extends StatelessWidget {
                   nestWidth: _kAllDoneNestBoxWidth,
                   nestHeight: _kAllDoneNestBoxHeight,
                   fixedPipHeight: _kPipSlotSize,
+                  // K03B-BUG-2 fixed in shared/ds_cleanup: `explicitGeometry`
+                  // honours `slotHeight` exactly, so the `pipBottom: 92`
+                  // workaround is gone — the rim-seated placement lands the
+                  // Pip box at the same −18…134 (within 0.5 px).
                   slotHeight: 226,
-                  pipBottom: _kAllDonePipBottom,
                   semanticLabel:
                       'Pip the ${pipStageName(stage)}, stage $stage of 4, '
                       'celebrating',

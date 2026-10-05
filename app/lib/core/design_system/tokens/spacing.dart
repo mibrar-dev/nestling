@@ -30,6 +30,41 @@ abstract final class NestSpacing {
   static const double gap9 = 9;
   static const double gap10 = 10;
   static const double gap14 = 14;
+
+  /// Kid header metrics shared by the kid backdrop headers (P17 `.kb-top`
+  /// side padding, `.kb-pet` top margin) and the K01/K03/K04/K05 headers
+  /// that draw the same block. Off the 4pt grid, so they live here rather
+  /// than as per-screen literals (P17 4_review.md finding 8).
+  static const double gap26 = 26;
+  static const double gap28 = 28;
+}
+
+/// Parental-gate metrics (`design/html-source/screens/P17-parental-gate.html`).
+///
+/// Screen-specific sizes with no entry on the 4pt grid, kept here so the
+/// gate (and any future `.lock-tile`/`.digit` user) shares one source
+/// instead of documented literals (P17 4_review.md finding 8, same pattern
+/// as [NestPager]).
+abstract final class NestGate {
+  const new _();
+
+  /// `.lock-tile`: 52px lilac square.
+  static const double lockTile = 52;
+
+  /// Lock glyph inside the tile: 26px.
+  static const double lockIcon = 26;
+
+  /// `.digit`: 56×64 box, 2px border.
+  static const double digitWidth = 56;
+  static const double digitHeight = 64;
+  static const double digitBorder = 2;
+
+  /// Empty-digit caret: 3×24 leaf bar.
+  static const double caretWidth = 3;
+  static const double caretHeight = 24;
+
+  /// `.kb-pet` Pip slot: 200px.
+  static const double pipSlot = 200;
 }
 
 /// P02 value-tour pager geometry (`design/html-source/screens/P02-value-tour.html`).

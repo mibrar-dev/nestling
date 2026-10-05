@@ -14,7 +14,7 @@
 //
 //   slot content box   x 20…370 (centre 195)      — 20 px gutters
 //   nest visible outline x 96…294 (198 wide, centre 195)
-//   nest rim / bowl bottom  y 278 / 364
+//   nest rim / bowl bottom  y 278 / 385 (108 tall, re-measured shared/ds_cleanup)
 //   Pip                centred on x 195, head ≈199, feet ≈301 (in the bowl)
 //   hearts row         centre y 448
 //   "Today's quests"   row centre y 494 (the 32 px chip is centred on it)
@@ -38,10 +38,10 @@
 // and `shared/kid_meadow` moved the meadow into the shared background. K03 now
 // passes the design's own `bubbleGap: 14` and its stage→hearts gap is the
 // design's `--s4`, so the hero block's ROWS are exact: bubble 125…169, pet box
-// 183…419, hearts 448.0, progress 527…542, card 1 at 559, dock 720. What is
-// left is one private shared constant (`PipNestFallback._explicitBleed`), which
-// still parks the nest/Pip 4 px above the design — SHARED_REQUEST #18(b),
-// with K03-BUG-16 holding the design-value proof.
+// 183…419, hearts 448.0, progress 527…542, card 1 at 559, dock 720.
+// Re-measured shared/ds_cleanup (K03-BUG-16/17): the 236 × 236 nest paints
+// the design's 198 × 108 bowl (rim 278, bottom 385, feet 301) flush in its
+// slot — no bleed.
 //
 // Keep this file. Run it directly:
 //   flutter test test/features/kid_home/kid_home_geometry_test.dart
@@ -249,48 +249,34 @@ void main() {
       expect(nest.width * PipNestFallback.visibleNestRatio, closeTo(198, 2));
       expect(
         nest.height * _kNestOutlineHeightFraction,
-        closeTo(86, 2),
-        reason: 'the design paints an 86 px tall bowl (y 278…364)',
+        closeTo(108, 2),
+        reason: 'the design paints a 108 px tall bowl (y 278…386)',
       );
 
-      // Design rows for the shared seat: rim 278, bowl bottom 364.
-      // RESIDUAL 4 px, SHARED (SHARED_REQUEST #18): `shared/pet_bubble_gap`
-      // gave the stage its `bubbleGap` and K03 passes the design's 14, so the
-      // bubble (125…169) and the 236-tall pet box (183…419) now sit on the
-      // design's rows exactly. Inside that block the nest top is
-      // `_explicitSlotH - nestH - _explicitBleed` = 236 − 188 − 31.4 = 16.6,
-      // so the hero art lands 4 px above where the design's `.k3-pet` paints
-      // it (design pet box + 95 = rim 278; app 274.0). `_explicitBleed` is a
-      // private constant in `core/`, so K03 cannot reach it; the shared fix is
-      // #18's option (b), `_explicitBleed` 31.4 → 27.4. These pins are the
-      // design's targets MINUS that constant, tightened to ±0.5 so the
-      // residual can only shrink, never grow.
+      // Design rows for the shared seat: rim 278, bowl bottom 385.
+      // Re-measured shared/ds_cleanup from the design PNG (K03-BUG-16/17):
+      // the 236 × 236 nest sits flush (no bleed), so the rim lands at
+      // 183 + 93.4 = 276.4 and the feet at 299.4 — within the UI ±2 px of
+      // the design's 278 / 301 / 385.
       final rimY = nest.top + PipNestFallback.nestRimTopFraction * nest.height;
-      expect(
-        rimY,
-        closeTo(274, 0.5),
-        reason:
-            'the design paints the rim at 278 — the 4 px residual is the '
-            "shared `_explicitBleed` (31.4 vs the design's 27.4, #18(b)); "
-            'K03 passes `bubbleGap: NestSpacing.gap14`, so the bubble and the '
-            'pet box are exact',
-      );
+      expect(rimY, closeTo(278, 2), reason: 'the design paints the rim at 278');
       expect(
         rimY + nest.height * _kNestOutlineHeightFraction,
-        closeTo(360, 0.5),
-        reason: 'the design paints the bowl bottom at 364 (#18(b), −4 px)',
+        closeTo(385, 2),
+        reason: 'the design paints the bowl bottom at 385',
       );
 
-      // Pip is centred, its head at ≈194 and its feet 23 px inside the bowl
-      // at ≈297 (never standing on the rim — `shared/pet_stage_seat`). The
-      // design's rows are head 199 / feet 301, i.e. the same 4 px (#18(b)).
+      // Pip is centred, its head at ≈199 and its feet 23 px inside the bowl
+      // at ≈301 (never standing on the rim — `shared/pet_stage_seat`). The
+      // v2 `PipAvatar` head sits ~2 px above the design's v1 art, so the head
+      // pin allows 3 px while the rim/feet stay at the UI ±2 px.
       expect(pip.center.dx, closeTo(195, 1));
       expect(
         pip.bottom - _pipBottomPad,
-        closeTo(297, 0.5),
-        reason: 'the design seats the feet at 301 — 4 px high until #18(b)',
+        closeTo(301, 2),
+        reason: 'the design seats the feet at 301',
       );
-      expect(pip.top + _pipTopPad, closeTo(194, 1));
+      expect(pip.top + _pipTopPad, closeTo(199, 3));
 
       // ORCHESTRATOR_NOTES 15:02 targets, now exact (±0.5): the design's
       // `.speech` is 125…169 (44 tall) and `.k3-pet`'s 236-tall box follows

@@ -491,8 +491,8 @@ class PetStageGlow extends StatelessWidget {
 ///   are centred in it. Pip sits IN the bowl — the pip box bottom lands
 ///   [rimOverlap] below the rim ([nestRimTopFraction] of the box), which puts
 ///   the v2 avatar's feet ≈23 px below the rim (box 44.2, feet 44.2 − 21.2)
-///   — and the stage is always [_explicitSlotH] (236) for the design's slot.
-///   Decorative layers (glow, ground shadow) paint with
+///   — and the stage honours [slotHeight] (default [_explicitSlotH] 236 for
+///   the design's slot). Decorative layers (glow, ground shadow) paint with
 ///   [Clip.none]: they may bleed past the nest but never move it, and the
 ///   layout never exceeds [stageW]. When the request is wider than the box,
 ///   the caller scales `nestW`/`nestH`/`pipH` down uniformly first, so the
@@ -503,8 +503,9 @@ class PetStageGlow extends StatelessWidget {
 /// The nest art (`nest.svg`, 240-space) fills its box ([BoxFit.fill], like
 /// the design's `<img>` stretch), so the visible bowl outline is always
 /// [visibleNestRatio] × box width by (205 − 95)/240 × box height: a 236-wide
-/// × 188-tall box paints the design's 198 × 86 outline (202/240 × 236,
-/// 110/240 × 188).
+/// × 236-tall box paints the design's 198 × 108 outline (202/240 × 236,
+/// 110/240 × 236, rim 278, bowl bottom 385 per
+/// `design/screens/light/K03-kid-home.png` ÷3).
 class PipNestFallback extends StatelessWidget {
   const PipNestFallback({
     required this.stage,
@@ -540,19 +541,21 @@ class PipNestFallback extends StatelessWidget {
 
   /// Explicit nest-box height (logical px). Null (default) keeps the legacy
   /// square art (`nestH == nestW`). Explicit-size mode passes the design's
-  /// bowl height (K03: 188 under a 236-wide box paints the 198 × 86 outline:
-  /// 202/240 × 236 by 110/240 × 188) so the slot — not the art — sets the
-  /// layout height while the bowl keeps its outline via [BoxFit.fill].
+  /// bowl height (K03: 236 under a 236-wide box paints the 198 × 108 outline:
+  /// 202/240 × 236 by 110/240 × 236, rim 278, bowl bottom 385) so the slot —
+  /// not the art — sets the layout height while the bowl keeps its outline
+  /// via [BoxFit.fill].
   final double? nestH;
 
   /// Selects the explicit rim-seated layout (see the class docs). False keeps
   /// the legacy nominal-width layout bit-for-bit.
   final bool explicitLayout;
 
-  /// Explicit-slot block height override (logical px). Null (default) keeps
+  /// Explicit-slot block height (logical px). Null (default) keeps
   /// the K03 236 block (`_explicitSlotH`). K06 passes 206 for its
   /// `.k6-pet { height: 206px }` slot; the nest then sits flush at
-  /// `slotHeight - nestH` (bottom: 0) with no extra bleed.
+  /// `slotHeight - nestH` (bottom: 0). Honoured exactly: `stageH` is always
+  /// the effective slot height, never slot + bleed (K03B-BUG-2).
   final double? slotHeight;
 
   /// Custom-pip bottom offset (logical px) from the slot bottom
@@ -615,16 +618,14 @@ class PipNestFallback extends StatelessWidget {
   static const double _bleed = 10;
 
   /// Explicit-slot block height (logical px): the design's 236 px pet slot
-  /// (K03 `.k3-pet` 236). The explicit slot is always exactly this tall so
-  /// the speech bubble above and the hearts below never move.
+  /// (K03 `.k3-pet` 236). The explicit slot is always exactly the effective
+  /// slot height so the speech bubble above and the hearts below never move.
+  /// Re-measured from `design/screens/light/K03-kid-home.png` ÷3
+  /// (shared/ds_cleanup, K03-BUG-16/17): the design paints the 236 × 236 nest
+  /// flush in its 236-tall slot (rim 278, bowl bottom 385, feet 301), so no
+  /// extra bleed is needed. The ground shadow paints inside the slot with
+  /// `Clip.none`; hearts stay put.
   static const double _explicitSlotH = 236;
-
-  /// Explicit-slot bleed below the nest box (logical px). The legacy 10 px
-  /// bleed assumed a square nest; the explicit 236-wide × 188-tall bowl
-  /// (86 px outline, see below) needs 31.4 px below the box to keep the
-  /// 236 block with the nest top at 16.6 (outline 278). Decorative (ground
-  /// shadow paints into it with `Clip.none`); hearts stay put.
-  static const double _explicitBleed = 31.4;
 
   /// Explicit-slot geometry shared by the SVG/avatar fallback, the Rive box
   /// (`PipInNest`'s artboard is letterboxed into the same slot) and the
@@ -635,13 +636,15 @@ class PipNestFallback extends StatelessWidget {
   /// v2 PipAvatar that puts the feet ≈23 px below the rim, inside the bowl),
   /// the v1-SVG box top (its contact lands ≈23 px below the rim, inside the
   /// bowl — same feet line, different box due to padding), and the stage
-  /// height. The slot is always [_explicitSlotH] (236) so hearts below never
-  /// move: `nestTop = 236 − nestH − _explicitBleed`, independent of Pip, so
+  /// height. The slot honours [slotHeight] exactly (default 236) so hearts
+  /// below never move: `nestTop = slotH − nestH`, independent of Pip, so
   /// Pip may extend above the slot (negative tops, transparent padding over
   /// the speech gap, `Clip.none` paints it) instead of pushing the nest down.
-  /// K03 (`nestH` 188, `pipH` 152, fledgling contact 213/240) lands nest top
-  /// 16.6, custom-pip top −16.8 (box 173…323, feet 301, head 199), v1 top
-  /// −20.9 (contact 301) and stage 236.
+  /// K03 (`nestH` 236, `pipH` 152, fledgling contact 213/240) lands nest top
+  /// 0, custom-pip top −14.4 (box −14…138 in a 236 slot at 183…419, feet 301,
+  /// head 199), v1 top −18.5 (contact 301) and stage 236. Re-measured from
+  /// the design PNG (K03-BUG-16/17, K03B-BUG-2): `stageH` is always the
+  /// effective slot, never slot + bleed.
   static ({double nestTop, double pipTop, double pipTopSvg, double stageH})
   explicitGeometry({
     required double nestH,
@@ -651,15 +654,8 @@ class PipNestFallback extends StatelessWidget {
     double? pipBottom,
   }) {
     final effectiveSlotH = slotHeight ?? _explicitSlotH;
-    final double nestTop;
-    final double stageH;
-    if (slotHeight != null) {
-      nestTop = effectiveSlotH - nestH;
-      stageH = effectiveSlotH;
-    } else {
-      nestTop = _explicitSlotH - nestH - _explicitBleed;
-      stageH = nestTop + nestH + _explicitBleed;
-    }
+    final nestTop = effectiveSlotH - nestH;
+    final stageH = effectiveSlotH;
     if (pipBottom != null) {
       final pipTop = effectiveSlotH - pipBottom - pipH;
       return (
@@ -674,7 +670,7 @@ class PipNestFallback extends StatelessWidget {
       nestTop: nestTop,
       pipTop: nestTop + seat - pipH,
       pipTopSvg: nestTop + nestRimTopFraction * nestH + 23 - contactFrac * pipH,
-      stageH: nestTop + nestH + _explicitBleed,
+      stageH: stageH,
     );
   }
 
