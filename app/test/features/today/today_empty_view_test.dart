@@ -957,6 +957,300 @@ void main() {
 
       await disposeApp(tester);
     });
+
+    testWidgets('a double-barrelled surname is never clipped (P08b-T07)', (
+      tester,
+    ) async {
+      const name = 'Sarah-Jane Featherstone';
+      final db = await _seedNewFamily();
+      await (db.delete(db.members)..where((m) => m.id.equals('sarah'))).go();
+      await db
+          .into(db.members)
+          .insert(
+            MembersCompanion.insert(
+              id: 'parent',
+              familyId: Seed.familyId,
+              name: name,
+              email: const Value('sarah@example.co.uk'),
+            ),
+          );
+      await GetIt.instance<AppSession>().refresh();
+      await pumpAppRoute(tester, '/today-empty');
+      await _resize(tester, 320, 1);
+
+      // 23 characters — a real UK double-barrelled surname, no exaggeration.
+      expect(
+        tester
+            .renderObject<RenderParagraph>(find.text('Good morning, $name'))
+            .didExceedMaxLines,
+        isFalse,
+        reason:
+            'BUG P08b-T07: the greeting is capped at maxLines: 2, but at '
+            '320 px "Good morning, Sarah-Jane Featherstone" needs three '
+            'lines, so the surname is cut. P08b CSS puts no line cap on the '
+            'h1 at all (components.css:43 only sets overflow-wrap: anywhere), '
+            'so the design never truncates it.',
+      );
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('every child name survives in the message (P08b-T08)', (
+      tester,
+    ) async {
+      final db = await _seedNewFamily();
+      for (final kid in const <(String, String)>[
+        ('k1', 'Maximilian-Alexander'),
+        ('k2', 'Wilhelmina-Rose'),
+        ('k3', 'Bartholomew'),
+        ('k4', 'Persephone'),
+      ]) {
+        await db
+            .into(db.children)
+            .insert(
+              ChildrenCompanion.insert(
+                id: kid.$1,
+                familyId: Seed.familyId,
+                nickname: kid.$2,
+                ageYears: const Value(6),
+                avatarColour: const Value('sky'),
+              ),
+            );
+      }
+      await pumpAppRoute(tester, '/today-empty');
+      await _resize(tester, 390, 1.3);
+
+      // At 1.0x the same sentence fits the five-line cap exactly; at 1.3x it
+      // needs ~9 lines, so `overflow: ellipsis` cuts the tail — which is
+      // precisely the part that says who will see the quest.
+      expect(
+        tester
+            .renderObject<RenderParagraph>(
+              find.textContaining('will see it straight away'),
+            )
+            .didExceedMaxLines,
+        isFalse,
+        reason:
+            'BUG P08b-T08: the message is capped at maxLines: 5. At 1.3x '
+            "with several children the ellipsis eats the children's names. "
+            'P08b CSS caps nothing (.empty-card p sets only max-width: 260px).',
+      );
+
+      await disposeApp(tester);
+    });
+  });
+
+  group('P08b iteration-2 regression pins', () {
+    // Each of these pins the MECHANISM of an iteration-1 fix, not just its
+    // visible outcome, so a future change that reintroduces the same drift in
+    // a different place still fails here.
+
+    testWidgets('the empty greeting carries no top padding of its own', (
+      tester,
+    ) async {
+      await _seedNewFamily();
+      await pumpAppRoute(tester, '/today-empty');
+
+      // P08b's `.greet` has no padding; the scroll view's padding is the only
+      // inset, so the h1 box starts exactly at the scroll origin.
+      final scroll = find
+          .ancestor(
+            of: find.text(_greetingTitle),
+            matching: find.byType(ListView),
+          )
+          .first;
+      expect(
+        tester.getTopLeft(find.text(_greetingTitle)).dy -
+            tester.getTopLeft(scroll).dy,
+        closeTo(0, 1),
+        reason: 'an extra 8 px here shifts the whole body (P08b-T01)',
+      );
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the Browse ideas row is exactly NestDevice.tapParent', (
+      tester,
+    ) async {
+      await _seedNewFamily();
+      await pumpAppRoute(tester, '/today-empty');
+
+      final row = tester.getRect(_browseIdeasLink());
+      expect(row.height, NestDevice.tapParent);
+      // The glyph stays centred in the row, and the row spans the card's
+      // inner width so the whole strip is tappable (P08b-T02).
+      final glyph = tester.getRect(find.text('Browse ideas'));
+      expect(glyph.center.dy, closeTo(row.center.dy, 0.5));
+      expect(row.left, 40);
+      expect(row.right, 350);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the link underline is painted in the sky colour', (
+      tester,
+    ) async {
+      for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+        await _seedNewFamily();
+        await pumpAppRoute(tester, '/today-empty', theme: theme);
+
+        final style = tester.widget<Text>(find.text('Browse ideas')).style!;
+        expect(style.decoration, TextDecoration.underline);
+        expect(
+          style.decorationColor,
+          style.color,
+          reason:
+              '${theme.name}: a null decorationColor falls back to the '
+              'ambient ink, so the underline paints dark instead of sky',
+        );
+
+        await disposeApp(tester);
+      }
+    });
+
+    testWidgets('the tip card stacks its two lines flush', (tester) async {
+      await _seedNewFamily();
+      await pumpAppRoute(tester, '/today-empty');
+
+      final title = tester.getRect(find.text(_tipTitle));
+      final body = tester.getRect(find.text(_tipBody));
+      expect(
+        body.top,
+        closeTo(title.bottom, 0.5),
+        reason: 'the design has no gap between .body-s and .caption (P08b-T03)',
+      );
+      expect(tester.getSize(_tipCard()).height, closeTo(90, 1));
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('the greeting wraps rather than clipping at 1.3x', (
+      tester,
+    ) async {
+      await _seedNewFamily();
+      await pumpAppRoute(tester, '/today-empty');
+      await _resize(tester, 390, 1.3);
+
+      final paragraph = tester.renderObject<RenderParagraph>(
+        find.text(_greetingTitle),
+      );
+      expect(paragraph.didExceedMaxLines, isFalse);
+      // It really did need two lines (so the wrap path is exercised, not a
+      // lucky one-line fit).
+      expect(tester.getSize(find.text(_greetingTitle)).height, greaterThan(34));
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('summaries keep creation order for a roster of any ages', (
+      tester,
+    ) async {
+      final db = await _seedNewFamily();
+      // Zara (12) is added last but is the oldest.
+      await _insertChild(db, 'zara', 'Zara', 12);
+      await pumpAppRoute(tester, '/today-empty');
+
+      expect(
+        find.textContaining('Maya, Leo and Zara will see it straight away.'),
+        findsOneWidget,
+      );
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('a family with quests gets the happy-week label back', (
+      tester,
+    ) async {
+      final db = await _seedNewFamily();
+      await db
+          .into(db.quests)
+          .insert(
+            QuestsCompanion.insert(
+              id: 'q-bed',
+              familyId: Seed.familyId,
+              title: 'Make your bed',
+              coins: const Value(5),
+              assigneeChildId: const Value('maya'),
+            ),
+          );
+      await pumpAppRoute(tester, '/today-empty');
+
+      // One quest means the populated P08 body, and its date line counts the
+      // happy days again — the fix must not over-trigger "A fresh nest".
+      expect(find.text("Today's quests"), findsOneWidget);
+      expect(find.text(_cardTitle), findsNothing);
+      expect(
+        tester.widget<Text>(find.textContaining('Sat 3 Oct · ')).data,
+        'Sat 3 Oct · Happy week: 4 days',
+      );
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('an "Anyone" quest still reads as an empty nest', (
+      tester,
+    ) async {
+      final db = await _seedNewFamily();
+      await db
+          .into(db.quests)
+          .insert(
+            QuestsCompanion.insert(
+              id: 'q-bins',
+              familyId: Seed.familyId,
+              title: 'Take the bins out',
+              coins: const Value(10),
+            ),
+          );
+      await pumpAppRoute(tester, '/today-empty');
+
+      // Unassigned quests never appear on Today (repository contract), so the
+      // nest really is empty from this screen's point of view.
+      expect(find.text(_cardTitle), findsOneWidget);
+      expect(find.textContaining('A fresh nest'), findsOneWidget);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('an archived quest does not resurrect the P08 body', (
+      tester,
+    ) async {
+      final db = await _seedNewFamily();
+      await db
+          .into(db.quests)
+          .insert(
+            QuestsCompanion.insert(
+              id: 'q-old',
+              familyId: Seed.familyId,
+              title: 'Make your bed',
+              coins: const Value(5),
+              assigneeChildId: const Value('maya'),
+              active: const Value(false),
+            ),
+          );
+      await pumpAppRoute(tester, '/today-empty');
+
+      expect(find.text(_cardTitle), findsOneWidget);
+      expect(find.textContaining('A fresh nest'), findsOneWidget);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('light and dark lay the body out identically', (tester) async {
+      var light = Rect.zero;
+      var dark = Rect.zero;
+      for (final theme in const <ThemeMode>[ThemeMode.light, ThemeMode.dark]) {
+        await _seedNewFamily();
+        await pumpAppRoute(tester, '/today-empty', theme: theme);
+        final rect = tester.getRect(_emptyCard());
+        if (theme == ThemeMode.light) {
+          light = rect;
+        } else {
+          dark = rect;
+        }
+        await disposeApp(tester);
+      }
+      expect(dark, light);
+    });
   });
 
   group('P08b bottom edge (owner rule)', () {

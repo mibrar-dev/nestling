@@ -1,25 +1,21 @@
-// P08b · Today empty — adversarial bug proofs (Stage 6, iteration 1).
+// P08b · Today empty — adversarial bug proofs (Stage 6, iteration 2).
 //
-// Bugs found (full report: `docs/screens/P08b/6_bugs.md`):
-//   P08b-B01  empty-state date line says "Happy week: 4 days" instead of
-//             "A fresh nest" when children exist but no quests are assigned
-//             (the mandated `SEED=new_family` UI-check state) — MAJOR
-//   P08b-B02  the empty message names children in age order (ties
-//             alphabetical) instead of creation order — MAJOR (CHILD ORDER
-//             ruling)
-//   P08b-B03  the empty greeting adds an 8 px top padding the P08b design
-//             does not have, shifting the whole body down 8 px — MAJOR
-//             (uniform vertical shift; UI-verdict FAIL)
-//   P08b-B04  the greeting is clipped, not wrapped, at textScale 1.3 —
-//             MINOR (accessibility copy loss)
-//   P08b-B05  the "Browse ideas" underline paints in ink instead of sky —
-//             MINOR (visual; independently measured by the 5_ui stage)
+// Iteration 1 found B01–B05 (full report: `docs/screens/P08b/6_bugs.md`);
+// the iteration-2 build fixed all five and their proofs now run LIVE and
+// green in the group below.
 //
-// Every proof carries its bug id in the test name and ran `skip:`-marked
-// until the fix iteration unskipped it — B01–B05 are all live now. The
-// "probed clean" group below pins the areas that were hunted and found
-// sound (double taps, back/deep links, restart, semantics taps, 320 px +
-// 1.3× layout, six long names, bottom edge, BST date line).
+// Iteration 2 re-hunted the fixed tree (0/1/3/6 children, long UK names,
+// 320/390 at 1.0–1.3×, rapid taps, back/deep links, restart, semantics,
+// dark, bottom edge, BST) and found two new MINORS, kept skipped until
+// fixed:
+//   P08b-B06  the greeting still clips a long parent name (320 px at 1.0×,
+//             any width at 1.3×) because `maxLines: 2`
+//   P08b-B07  the empty message clips the last children's names for six
+//             children with long names at 1.3× (`maxLines: 5`)
+//
+// The "probed clean" group pins the areas that were hunted and found sound
+// (double taps, back/deep links, restart, semantics taps, 320 px + 1.3×
+// layout, six normal long-name children, bottom edge, BST date line).
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
@@ -91,7 +87,7 @@ void main() {
   setUpAll(_loadBundledFonts);
 
   // -------------------------------------------------------------------
-  // Bug proofs — skipped until fixed.
+  // Bug proofs — B01–B05 fixed and live; B06–B07 skipped until fixed.
   // -------------------------------------------------------------------
   group('P08b bug proofs', () {
     testWidgets(
@@ -230,12 +226,104 @@ void main() {
         await disposeApp(tester);
       },
     );
+
+    testWidgets(
+      '[P08b-B06] long parent name wraps at 320 px, no ellipsis',
+      skip: true, // bug id in the test name: P08b-B06
+      (tester) async {
+        // The greeting caps at two lines. `Maximilian-Alexander` on a
+        // 320 px device needs three even at scale 1.0 (and three at 1.3× on
+        // 390), so the parent's own name is ellipsized. P08b's `.greet h1`
+        // sets no nowrap/max-lines, so the CSS would wrap.
+        final db = await _newFamilyScope();
+        await db
+            .update(db.members)
+            .write(const MembersCompanion(name: Value('Maximilian-Alexander')));
+        await GetIt.instance<AppSession>().refresh();
+        await pumpAppRoute(tester, '/today-empty');
+
+        tester.view.physicalSize = const Size(320 * 3, 844 * 3);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+
+        final greeting = tester.renderObject<RenderParagraph>(
+          find.textContaining('Good morning'),
+        );
+        expect(
+          greeting.didExceedMaxLines,
+          isFalse,
+          reason: 'a long parent name must wrap, not lose its tail',
+        );
+
+        await disposeApp(tester);
+      },
+    );
+
+    testWidgets(
+      '[P08b-B07] six long-named children keep every name at 1.3x',
+      skip: true, // bug id in the test name: P08b-B07
+      (tester) async {
+        // At 1.3× the full message for six long-named children needs ~9
+        // lines against the `maxLines: 5` cap, so the tail — the children
+        // who "will see it straight away" — is ellipsized. At 1.0× the
+        // same message fits exactly in 5 lines, so this is the
+        // accessibility-scale case only.
+        final db = await _newFamilyScope();
+        final names = <String>[
+          'Maximilian-Alexander',
+          'Wilhelmina-Rose',
+          'Bartholomew',
+          'Persephone',
+        ];
+        for (var i = 0; i < names.length; i++) {
+          await _insertChild(
+            db,
+            'kid$i',
+            names[i],
+            3 + i,
+            createdAt: Seed.utc(9, 19, 11 + i),
+          );
+        }
+
+        await pumpAppRoute(tester, '/today-empty');
+        tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+
+        final message = tester.renderObject<RenderParagraph>(
+          find.textContaining('will see it straight away'),
+        );
+        expect(message.didExceedMaxLines, isFalse);
+
+        await disposeApp(tester);
+      },
+    );
   });
 
   // -------------------------------------------------------------------
   // Hunted clean — regression pins for the areas probed without findings.
   // -------------------------------------------------------------------
-  group('P08b probed clean (iteration 1)', () {
+  group('P08b probed clean (iterations 1–2)', () {
+    testWidgets('/today shows the same fresh-nest empty state', (tester) async {
+      // One empty state for the whole app (orchestrator item 1): the
+      // simulation of a real family with no quests on /today, including the
+      // fixed "A fresh nest" date line (B01's root cause was the shared
+      // body/bloc predicate mismatch).
+      await _newFamilyScope();
+      await pumpAppRoute(tester, '/today');
+
+      expect(find.text('Your nest is quiet'), findsOneWidget);
+      expect(
+        find.text('${formatDay(appNowUtc(), 'Europe/London')} · A fresh nest'),
+        findsOneWidget,
+      );
+      expect(find.text('Add a quest'), findsOneWidget);
+      expect(find.textContaining('Happy week'), findsNothing);
+
+      await disposeApp(tester);
+    });
+
     testWidgets('a one-frame-apart double-tap opens one editor', (
       tester,
     ) async {

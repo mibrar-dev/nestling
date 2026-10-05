@@ -1,182 +1,103 @@
-# P08b · Today empty — Stage 6 bugs (iteration 1)
+# P08b · Today empty — Stage 6 bugs (iteration 2)
 
-Adversarial pass over `/today-empty` (`Seed.newFamily` — the mandated P08b
-UI-check state — plus `Seed.empty`, demo, and crafted DB states). Five bugs
-proven with failing tests; no screen code was changed. Proofs:
-`app/test/features/today/p08b_bugs_test.dart`.
+Re-hunt on the iteration-2 fixed tree (`7d106cb`). **Iteration 1's five bugs
+(B01–B05) are fixed and independently verified** — their proofs now run
+live and green. Iteration 2 found **two new minors** (B06–B07), kept
+`skip:`-marked until fixed; no majors remain.
 
-Skip note: this Flutter version's `testWidgets` accepts `skip: bool` only
-(a `skip:` string is not allowed), so each proof carries `skip: true` with
-its bug id in the test name and a comment; `flutter test --run-skipped`
-shows all five fail as documented.
+Proofs: `app/test/features/today/p08b_bugs_test.dart`. Skip note: this
+Flutter version's `testWidgets` accepts `skip: bool` only, so each proof
+carries `skip: true` with its bug id in the test name and a comment;
+`flutter test --run-skipped` shows B06/B07 fail as documented.
 
-**Three majors ⇒ VERDICT: FAIL.**
-
----
-
-## P08b-B01 · MAJOR · Empty-state date line says “Happy week: 4 days” instead of “A fresh nest”
-
-**Where** `presentation/bloc/today_bloc.dart` (dateLine) vs
-`presentation/widgets/today_loaded_body.dart` (empty branch).
-
-**Repro** Launch with `SEED=new_family` (Sarah + Maya + Leo, no quests) at
-`/today-empty`. The quiet-nest card renders, but the date line reads:
-
-```
-Sat 3 Oct · Happy week: 4 days
-```
-
-The design (HTML line 13, both PNGs) says `Sat 4 Oct · A fresh nest` →
-pinned clock = `Sat 3 Oct · A fresh nest`. The app's own probe printed
-`dateLine="Sat 3 Oct · Happy week: 4 days"`.
-
-**Root cause** The shared empty body triggers on
-`state.items.isEmpty || state.summaries.isEmpty`, but the bloc picks the
-suffix with `summaries.isEmpty` only. `new_family` has children
-(`summaries` non-empty) and no assigned quests (`items` empty), so the body
-shows P08b while the date line falls through to `happyWeekLabel(happyDays)`
-— and the seed's Maya has `happyDays: 4`.
-
-**Failing test** `[P08b-B01] new-family date line reads A fresh nest, not
-Happy week`.
-
-**Suggested fix** Use the same predicate in the bloc:
-
-```dart
-final isEmpty = items.isEmpty || summaries.isEmpty;
-// dateLine: '${formatLondonDay(now)} · ${isEmpty ? 'A fresh nest' : happyWeekLabel(happyDays)}'
-```
-
-P08's demo path cannot move (its `items` are never empty).
+**No major bugs ⇒ VERDICT: PASS.**
 
 ---
 
-## P08b-B02 · MAJOR · Empty message names children in age order, not creation order
+## Iteration-1 bugs — fixed and verified
 
-**Where** `data/today_repository_impl.dart` — `watchSummaries()` re-sorts.
+| ID | Iteration-1 finding | Fix in `7d106cb` | Proof |
+|---|---|---|---|
+| B01 | date line said `Happy week: 4 days` on `new_family` | bloc uses `items.isEmpty \|\| summaries.isEmpty`, same predicate as the body | `[P08b-B01]` live, green |
+| B02 | message named children in age order | `watchSummaries` keeps `watchChildren` creation order | `[P08b-B02]` live, green |
+| B03 | whole body shifted +8 px | `_EmptyGreeting` top padding removed | `[P08b-B03]` live, green |
+| B04 | greeting clipped at 1.3× | greeting wraps (`maxLines: 2`) | `[P08b-B04]` live, green |
+| B05 | “Browse ideas” underline painted ink | `decorationColor: tokens.sky` | `[P08b-B05]` live, green |
 
-**Repro** `new_family` + insert `Zara` (12) **after** Maya and Leo, then open
-`/today-empty`. The mandatory CHILD ORDER ruling (creation order: Maya,
-Leo, Zara) expects:
+Geometry re-measured at 390×844 with the bundled Inter/Nunito loaded
+(widget tree, scroll-relative to the status-bar bottom):
 
-```
-Add your first quest and Pip will start to hatch. Maya, Leo and Zara will see it straight away.
-```
-
-The app renders (probe output):
-
-```
-… Zara, Maya and Leo will see it straight away.
-```
-
-Because `watchSummaries` sorts by `ageYears` descending, then nickname —
-overriding `watchChildren`'s documented creation order (`createdAt`, then
-`rowid`; schema comment: “Roster order is creation order everywhere (CHILD
-ORDER ruling)”). Ties between same-aged children fall back to an
-alphabetical sort, which the ruling also forbids.
-
-**Failing test** `[P08b-B02] empty message names children in creation
-order`.
-
-**Suggested fix** Keep the `kids` order returned by `watchChildren` in
-`watchSummaries` (drop the sort). The demo/new-family seeds are unaffected
-(Maya is added first and oldest), so P08's kids grid does not move.
+| element | design | app | Δ |
+|---|---|---|---|
+| greeting h1 box top | 0 | 0 | 0 |
+| empty card | y 74, h 434 | y 74, h 434 | 0 |
+| “Add a quest” | y 376–428, h 52 | y 376–428, h 52 | 0 |
+| “Browse ideas” row | 44 tall, centred | x 40–350, h 44, text centred | 0 |
+| tip card | top 524, h ~89.7 | top 524, h 90 | ≤0.3 |
 
 ---
 
-## P08b-B03 · MAJOR · Whole empty body shifted 8 px down by an extra greeting top padding
+## P08b-B06 · MINOR · Greeting clips a long parent name
 
-**Where** `_EmptyGreeting` in `presentation/widgets/today_loaded_body.dart`
-(`Padding(top: NestSpacing.s2)`).
+**Where** `_EmptyGreeting` (`maxLines: 2`, `TextOverflow.ellipsis`).
 
-**Repro** `/today-empty` at 390×844. Measured in the widget tree:
+**Repro** `new_family` with the member renamed `Maximilian-Alexander`, then
+`/today-empty`:
+- 320 px at scale 1.0 → `didExceedMaxLines == true` (the parent's own name
+  is ellipsized on a small phone **without** accessibility settings);
+- 390 px and 320 px at scale 1.3 → also clipped;
+- 390 px at scale 1.0 → fits (the only clean case).
 
-| element | design (scroll-relative) | app |
-|---|---|---|
-| greeting (h1 box top) | 0 | **8** |
-| empty card top | 74 | **82** |
+P08b's `.greet h1` sets no nowrap and no line cap, so the design CSS wraps;
+the two-line cap stops one step short of that (B04 fixed the “Sarah” case,
+this is the long-name case).
 
-The design's `.greet { padding-top: 8px }` lives in **P08's** local CSS
-(`P08-today.html:3`), not P08b's. P08b's `.greet` has no padding, and both
-PNGs place the card top at logical y = 121 = 47 (status bar) + 34 + 2 + 22 +
-16 — i.e. the h1 starts exactly at the status-bar bottom. The shared empty
-greeting copied P08's 8 px, so greeting, card and tip all sit 8 px low — a
-uniform vertical shift, which the UI-verdict rule fails even if elements
-“look the same”.
+**Failing test** `[P08b-B06] long parent name wraps at 320 px, no ellipsis`.
 
-**Failing test** `[P08b-B03] empty greeting starts at the scroll origin, no
-8 px pad`.
-
-**Suggested fix** Drop the top padding in `_EmptyGreeting`; the populated
-P08 `_Greeting` keeps its own (correct for P08).
+**Suggested fix** Let the heading wrap to three lines (or drop the cap)
+while keeping `NestType.h1` — the screen scrolls, so growth is safe.
 
 ---
 
-## P08b-B04 · MINOR · Greeting is clipped, not wrapped, at text scale 1.3
+## P08b-B07 · MINOR · Six long-named children lose the message tail at 1.3×
 
-**Where** `_EmptyGreeting` (`maxLines: 1`, `TextOverflow.ellipsis`).
+**Where** `_EmptyCard` message (`maxLines: 5`, `TextOverflow.ellipsis`).
 
-**Repro** `/today-empty` at 390 px (and 320 px) with system text scale 1.3:
-“Good morning, Sarah” exceeds the single line and paints clipped
-(“Good morning, Sara…”). `RenderParagraph.didExceedMaxLines == true` with
-the bundled Nunito Black loaded. P08b's CSS sets no `white-space: nowrap`
-(that trick is P08's), so the design wraps instead of cutting the parent's
-name. Note the plan contradicts itself: §a says `maxLines 1`, §e says the
-title wraps — the CSS side wins.
+**Repro** `new_family` + four more children named `Maximilian-Alexander`,
+`Wilhelmina-Rose`, `Bartholomew`, `Persephone`, then `/today-empty` at
+textScale 1.3 (390 px): the full message needs ~9 lines against the 5-line
+cap, so the whole “will see it straight away” tail is ellipsized. At scale
+1.0 the same message fits in exactly 5 lines (verified, no clip); six
+children with ordinary names fit at both 1.0 and 1.3 on 390 and 320.
 
-**Failing test** `[P08b-B04] greeting wraps instead of clipping at text
-scale 1.3`.
+**Failing test** `[P08b-B07] six long-named children keep every name at
+1.3x`.
 
-**Suggested fix** Allow the greeting two lines at large scales (`maxLines:
-2`, keep the ellipsis only as a last resort), keeping `NestType.h1`.
-
----
-
-## P08b-B05 · MINOR · “Browse ideas” underline paints in ink, not sky
-
-**Where** `_EmptyCard` link `Text` (`today_loaded_body.dart`); the same
-finding is independently measured by the 5_ui stage (finding 3).
-
-**Repro** `/today-empty`, both themes. The design PNG's underline row is
-solid sky — light `(37,99,214)` (pixel scan y = 512, 290 px wide, zero dark
-pixels). The app paints the underline in the ambient ink: light
-`(30,27,58)` at y ≈ 521.3–522, dark `(243,240,250)` at y ≈ 521.3–522.
-`TextStyle.decorationColor` is null, so the engine falls back to the
-paragraph's default foreground (ink) instead of the span's sky colour.
-
-**Failing test** `[P08b-B05] Browse ideas underline paints sky, not ink`.
-
-**Suggested fix** Add `decorationColor: tokens.sky` to the link style:
-
-```dart
-NestType.bodySmallStrong(color: tokens.sky).copyWith(
-  decoration: TextDecoration.underline,
-  decorationColor: tokens.sky,
-)
-```
+**Suggested fix** Drop the `maxLines: 5` cap (keep the 260 px max width);
+the body is a `ListView`, so the card grows instead of clipping.
 
 ---
 
-## Hunted clean (pinned by passing tests in the same file)
+## Hunted clean (iteration 2, pinned by passing tests)
 
 | Area | Result |
 |---|---|
-| Rapid double-tap “Add a quest” (same frame, and one frame apart) | one editor, no stacking |
+| 0 / 1 / 3 / 6 children, ordinary names | message, tip, greeting, date line fit at 320/390 × 1.0–1.3; no overflow/exception |
+| 6 long-named children at 390 / 1.0 | full message fits exactly in 5 lines |
+| `/today` with `new_family` | shows the same fresh-nest empty state, `A fresh nest` (shared body/bloc predicate — B01's root cause is guarded on both routes) |
+| Rapid double-tap “Add a quest” (same frame, one-frame apart) | one editor, no stacking |
+| Double-tap “Browse ideas” | single navigation to `/quests` |
 | Back from `/quest-editor` | returns to `/today-empty` |
 | Restart over the same Drift DB | empty state + child names persist |
 | “Browse ideas” semantics | `SemanticsAction.tap` present; `performAction` → `/quests` |
-| 320 px + 1.3×, two names | message fits (4 lines), no overflow/exception |
-| 6 children, long UK names, 390 px | full message fits (5 lines — exactly at the cap) |
+| Link row shape (T02 fix) | full card width × exactly 44 tall, text centred |
 | Bottom edge light + dark | tab bar surface to the physical edge, Today active (0) |
 | BST end (24/25 Oct 2026) | date line stays Europe/London |
-| Kid-mode deep link to `/today-empty` | already proven by `[P08-B01]` (p08_bugs_test.dart); suite green |
+| Kid-mode deep link to `/today-empty` | proven by `[P08-B01]` (p08_bugs_test.dart); suite green |
 | £0.00 / £999.99 / 9999 coins | N/A — this screen renders no money |
-| Async gaps / emit-after-close | none observed (bloc factory per route; guards per frame) |
+| Async gaps / emit-after-close | none observed (bloc factory per route; per-frame push guard) |
 
-Observation (not a bug): the “Browse ideas” row is 46 px tall vs the
-design's 44 (`min-height:44px`; the plan said 11 px padding, the code uses
-`NestSpacing.s3` = 12). It pushes the tip card +2 px, exactly at the ±2 px
-UI tolerance — flagging for the UI stage, no fix demanded here.
+---
 
 ## Verification
 
@@ -188,20 +109,21 @@ $ flutter analyze test/features/today/p08b_bugs_test.dart
 No issues found!
 
 $ flutter test --timeout 120s test/features/today/p08b_bugs_test.dart
-+9 ~5: All tests passed!
++15 ~2: All tests passed!          # B01–B05 live; B06/B07 skipped
 
 $ flutter test --timeout 120s --run-skipped test/features/today/p08b_bugs_test.dart
-9 passed, 5 failed = the five proofs above (B01–B05) fail as documented
+15 passed, 2 failed = B06/B07 fail as documented
 
 $ flutter test --timeout 120s test/features/today/p08b_bugs_test.dart \
-    test/features/today/today_view_test.dart test/features/today/today_bloc_test.dart \
-    test/features/today/today_repository_test.dart test/features/today/today_semantics_tap_test.dart
-+101 ~5: All tests passed!
+    test/features/today/p08_bugs_test.dart test/features/today/today_view_test.dart \
+    test/features/today/today_bloc_test.dart test/features/today/today_repository_test.dart \
+    test/features/today/today_semantics_tap_test.dart test/features/today/today_empty_view_test.dart
++180 ~2: All tests passed!
 ```
 
 No simulator was booted, installed on or driven (stage rule); no screen code
 was edited (`do not fix the screen`); only
-`app/test/features/today/p08b_bugs_test.dart` and this report were created
-(RULES §1).
+`app/test/features/today/p08b_bugs_test.dart` and this report were touched
+by this stage.
 
-VERDICT: FAIL
+VERDICT: PASS
