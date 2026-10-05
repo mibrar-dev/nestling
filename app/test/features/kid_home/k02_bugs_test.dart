@@ -41,7 +41,6 @@ import 'package:nestling/features/kid_home/domain/entities/kid_child.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_home_data.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_quest.dart';
 import 'package:nestling/features/kid_home/domain/kid_home_repository.dart';
-import 'package:nestling/features/kid_home/presentation/widgets/kid_style_helpers.dart';
 
 import '../../test_scope.dart';
 
@@ -676,16 +675,22 @@ void main() {
   // -------------------------------------------------------------------------
 
   group('K02 avatar initial helper (probes)', () {
-    test('kidAvatarInitial keeps non-BMP initials whole', () {
-      expect(kidAvatarInitial(''), '?');
-      expect(kidAvatarInitial('', fallback: 'S'), 'S');
-      expect(kidAvatarInitial('maya'), 'M');
-      expect(kidAvatarInitial('Maximilian-Alexander'), 'M');
-      expect(kidAvatarInitial('🐝 Bee'), '🐝');
-      expect(kidAvatarInitial('🇬🇧 Ben'), '🇬');
-      expect(kidAvatarInitial('𝒜da'), '𝒜');
-      expect(kidAvatarInitial('𠀀字'), '𠀀');
-      expect(kidAvatarInitial('Åsa'), 'Å');
+    test('nestAvatarInitial keeps non-BMP initials whole', () {
+      expect(nestAvatarInitial(''), '?');
+      expect(nestAvatarInitial('', fallback: 'S'), 'S');
+      expect(nestAvatarInitial('maya'), 'M');
+      expect(nestAvatarInitial('Maximilian-Alexander'), 'M');
+      expect(nestAvatarInitial('🐝 Bee'), '🐝');
+      // The shared helper is grapheme-safe (package:characters): the flag
+      // stays whole, where the deleted feature-local rune helper kept only
+      // the first regional indicator.
+      expect(nestAvatarInitial('🇬🇧 Ben'), '🇬🇧');
+      expect(nestAvatarInitial('𝒜da'), '𝒜');
+      expect(nestAvatarInitial('𠀀字'), '𠀀');
+      expect(nestAvatarInitial('Åsa'), 'Å');
+      // Leading/trailing space is trimmed by the shared helper (the deleted
+      // local kept a blank initial).
+      expect(nestAvatarInitial('  Bee'), 'B');
       // Every returned initial is well-formed UTF-16: a lone surrogate
       // (D800–DFFF as a rune) is exactly the crash class `name[0]` produced.
       for (final name in const <String>[
@@ -695,7 +700,7 @@ void main() {
         '𠀀字',
         '👨‍👩‍👧 Family',
       ]) {
-        final initial = kidAvatarInitial(name);
+        final initial = nestAvatarInitial(name);
         expect(
           initial.runes.any((r) => r >= 0xD800 && r <= 0xDFFF),
           isFalse,

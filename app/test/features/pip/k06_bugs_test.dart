@@ -420,6 +420,50 @@ void main() {
   // Clean probes (green)
   // -------------------------------------------------------------------------
 
+  group('K06 growth floor parity with K05 (shared/kid_bugs)', () {
+    // K05 floors the Pip growth percentage (K05-BUG-2) and K06 `PipGrowthCard`
+    // now floors the same way, so both screens always agree: 175/250 → 70%,
+    // 249/250 → 99% (never 100% while one coin is missing), 250/250 → 100%.
+    for (final entry in <(int, String)>[
+      (175, 'Pip is 70% of the way to Songbird'),
+      (249, 'Pip is 99% of the way to Songbird'),
+    ]) {
+      testWidgets('growth ${entry.$1}/250 announces "${entry.$2}"', (
+        tester,
+      ) async {
+        final db = await setUpTestScope();
+        await (db.update(db.children)..where((c) => c.id.equals('maya'))).write(
+          ChildrenCompanion(pipTotalCoins: Value(entry.$1)),
+        );
+        await _pumpPip(tester);
+        await tester.pump(const Duration(milliseconds: 400));
+        // Read the card's own label (not the semantics tree): the widget
+        // carries the floored percent, so K05 and K06 agree by construction.
+        final progress = tester.widgetList<NestProgress>(
+          find.byType(NestProgress),
+        );
+        expect(
+          progress,
+          isNotEmpty,
+          reason: 'the growth bar must be on screen',
+        );
+        final labels = progress
+            .map((p) => p.semanticLabel ?? '')
+            .where((label) => label.contains('of the way'))
+            .toList();
+        expect(
+          labels,
+          contains(entry.$2),
+          reason:
+              '${entry.$1}/250 must floor to "${entry.$2}" (round would give '
+              '${entry.$1 == 249 ? '"Pip is 100% of the way to Songbird"' : '"70%"'} '
+              'and disagree with K05)',
+        );
+        await disposeApp(tester);
+      });
+    }
+  });
+
   group('K06 probes', () {
     testWidgets('an empty family shows the choose-a-player state', (
       tester,

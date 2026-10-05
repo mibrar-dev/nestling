@@ -60,6 +60,9 @@ class _ProfilePickerViewState extends State<ProfilePickerView> {
         }
         if (tapped == null) {
           _busy = false;
+          // K01-BUG-7: clear the orphaned one-shot (deleted child) so the
+          // bloc's `selectedProfileId` gate does not drop every later tap.
+          context.read<KidHomeBloc>().add(const KidHomeSelectionHandled());
           return;
         }
         unawaited(

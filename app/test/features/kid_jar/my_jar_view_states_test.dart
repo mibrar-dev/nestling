@@ -53,7 +53,7 @@ final JarSnapshot _mayaSnapshot = JarSnapshot(
     JarEntry(
       id: '1',
       title: 'Pocket money',
-      detail: 'This Saturday',
+      detail: 'Today',
       type: 'weekly_base',
       amountPence: 300,
       date: DateTime.utc(2026, 10, 3, 8),

@@ -1521,12 +1521,11 @@ void main() {
     testWidgets('a nickname opening with an emoji still builds the frame', (
       tester,
     ) async {
-      // K02-TEST-BUG-A / SHARED_REQUEST #3: `nickname[0]` indexes UTF-16 code
-      // units, so a non-BMP first character handed `toUpperCase()` an
-      // unpaired surrogate and `ArgumentError` took the WHOLE screen down
-      // while laying out the avatar. P05 accepts such a name, so K02 must
-      // build it — and `kidAvatarInitial` keeps the initial grapheme-safe
-      // until the shared helper lands.
+      // K02-TEST-BUG-A: `nickname[0]` indexes UTF-16 code units, so a non-BMP
+      // first character handed `toUpperCase()` an unpaired surrogate and
+      // `ArgumentError` took the WHOLE screen down while laying out the
+      // avatar. P05 accepts such a name, so K02 must build it — and the
+      // shared `nestAvatarInitial` keeps the initial grapheme-safe.
       await tester.runAsync(() async {
         final db = GetIt.instance<AppDatabase>();
         await (db.update(db.children)..where((c) => c.id.equals('maya'))).write(

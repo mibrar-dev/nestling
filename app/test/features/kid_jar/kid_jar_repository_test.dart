@@ -122,7 +122,7 @@ void main() {
         expect(first.type, 'weekly_base');
         expect(first.amountPence, 300);
         expect(first.title, 'Pocket money');
-        expect(first.detail, 'This Saturday');
+        expect(first.detail, 'Today');
       },
     );
 
@@ -142,7 +142,7 @@ void main() {
         'Pocket money',
       ]);
       expect(snapshot.items.map((item) => item.detail).toList(), <String>[
-        'This Saturday',
+        'Today',
         'Quest bonus',
         'Quest bonus',
         'Quest bonus',
@@ -150,7 +150,7 @@ void main() {
         'From Mum',
         'Quest bonus',
         'Quest bonus',
-        'Last Sunday',
+        'Sun 20 Sep',
       ]);
     });
 

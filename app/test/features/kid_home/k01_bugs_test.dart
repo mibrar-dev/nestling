@@ -204,9 +204,16 @@ class _RosterSwapRepository implements KidHomeRepository {
   @override
   Future<void> setActiveChild(String childId) async {
     writes.add(childId);
-    // K01-BUG-7: drop the tapped child out of the roster while the write
-    // is still pending, then let the profiles emission win the race.
-    _roster.add(const <KidChild>[]);
+    // K01-BUG-7: drop the tapped child out of the roster while the FIRST
+    // write is still pending, then let the profiles emission win the race.
+    // Only the first selection races a deletion; the retry after recovery
+    // (the test's second tap on a live picker) sees a stable roster, so a
+    // fixed picker navigates instead of orphaning again. Dropping on every
+    // write would make even a correct fix unable to navigate, which is not
+    // the "deleted then restored, retry on live picker" the proof describes.
+    if (writes.length == 1) {
+      _roster.add(const <KidChild>[]);
+    }
     await Future<void>.delayed(const Duration(milliseconds: 50));
   }
 
@@ -566,7 +573,7 @@ void main() {
           'further tap is swallowed with no feedback',
     );
     await disposeApp(tester);
-  }, skip: true);
+  });
 
   // -------------------------------------------------------------------------
   // K01-BUG-5 (FIXED, iteration 2 build) — Try again recovers from a

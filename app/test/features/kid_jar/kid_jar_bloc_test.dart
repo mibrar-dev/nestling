@@ -28,7 +28,7 @@ List<JarEntry> _mayaItems() => <JarEntry>[
   JarEntry(
     id: '1',
     title: 'Pocket money',
-    detail: 'This Saturday',
+    detail: 'Today',
     type: 'weekly_base',
     amountPence: 300,
     date: DateTime.utc(2026, 10, 3, 8),
@@ -92,7 +92,7 @@ List<JarEntry> _mayaItems() => <JarEntry>[
   JarEntry(
     id: '9',
     title: 'Pocket money',
-    detail: 'Last Sunday',
+    detail: 'Sun 20 Sep',
     type: 'weekly_base',
     amountPence: 300,
     date: DateTime.utc(2026, 9, 20, 8),

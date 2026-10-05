@@ -27,6 +27,12 @@ class PayoutFundCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.nest;
     final target = payout.goalTargetPence;
+    // K10-BUG-2: the design has no reached-state copy (it only shows
+    // `£8.49 to go` / `66% there!` for a live goal), so a goal saved past
+    // its target replaces `£0.00 to go` with `Goal reached!` beside
+    // `100% there!` under the full bar. Zero-goal (target 0) keeps the
+    // `£0.00 to go` fallback — it is not a reached goal.
+    final reached = target > 0 && payout.goalSavedPence >= target;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(
@@ -45,12 +51,11 @@ class PayoutFundCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            payout.goalTitle,
-            style: _titleStyle(tokens.ink),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
+          // K10-BUG-4: the design sets no max-lines/line-clamp on this screen,
+          // so the h2 wraps freely and the card grows with content (the
+          // K10-BUG-3 note-title precedent). A 2-line cap ellipsized a long
+          // UK goal name at 320 px / 1.3×.
+          Text(payout.goalTitle, style: _titleStyle(tokens.ink)),
           // `.k10-amts { margin: 10px 0 6px }`. Each amount sits in a
           // `FittedBox(scaleDown)` so a money string is never ellipsized:
           // at the narrowest cell (320 px / 1.3×) the seeded `£9.49 to go`
@@ -79,7 +84,9 @@ class PayoutFundCard extends StatelessWidget {
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerRight,
                   child: Text(
-                    '${jarPounds(payout.goalRemainingPence)} to go',
+                    reached
+                        ? 'Goal reached!'
+                        : '${jarPounds(payout.goalRemainingPence)} to go',
                     style: _amountStyle(tokens.ink),
                     textAlign: TextAlign.end,
                     maxLines: 1,

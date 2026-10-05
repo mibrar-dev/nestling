@@ -222,11 +222,22 @@ class _JarEntryRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: NestSpacing.s2),
-          Text(
-            formatJarAmount(entry.amountPence),
-            style: valueStyle(tokens.leafInk),
-            maxLines: 1,
-            softWrap: false,
+          // K09-BUG-9: the amount sits in a `Flexible` + `FittedBox(scaleDown)`
+          // so a large history amount shrinks to fit instead of overflowing
+          // the card at 320 px × 1.3 (the goal card's `Flexible` precedent;
+          // K10's fund card uses the same `FittedBox` for its money strings).
+          // Cells that already fit render at scale 1.0, pixel-identical.
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                formatJarAmount(entry.amountPence),
+                style: valueStyle(tokens.leafInk),
+                maxLines: 1,
+                softWrap: false,
+              ),
+            ),
           ),
         ],
       ),

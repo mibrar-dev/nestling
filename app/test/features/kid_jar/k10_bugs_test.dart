@@ -283,7 +283,10 @@ void main() {
 
       // Sanity: the overshoot really is on screen (3550 of 2499 = 142%).
       expect(find.text('£35.50'), findsOneWidget);
-      expect(find.text('£0.00 to go'), findsOneWidget);
+      // K10-BUG-2 (shared/kid_bugs): the design has no reached-state copy,
+      // so `£0.00 to go` is replaced by `Goal reached!` beside `100% there!`.
+      expect(find.text('Goal reached!'), findsOneWidget);
+      expect(find.text('£0.00 to go'), findsNothing);
 
       final percents = _texts(tester)
           .where((t) => t.endsWith('% there!'))
@@ -293,7 +296,7 @@ void main() {
         isEmpty,
         reason:
             'K10-BUG-2: saved 3550 of target 2499 renders "${percents.join(" / ")}" '
-            'under a full progress bar with "£0.00 to go"; the percent must be '
+            'under a full progress bar with "Goal reached!"; the percent must be '
             'clamped like the K09 `JarGoalCard.percent` (fraction * 100, where '
             'fraction is clamped to 0…1) so the caption and the bar agree',
       );
@@ -349,7 +352,7 @@ void main() {
           'the cap (or raise it) so the card grows with content',
     );
     await disposeApp(tester);
-  }, skip: true);
+  });
 
   // -------------------------------------------------------------------------
   // CLEAN probes — kept green so the 6_bugs.md "verified clean" list is

@@ -1,11 +1,11 @@
-// K09 · My jar — bug proofs (Stage 6, iteration 2).
+// K09 · My jar — bug proofs (Stage 6, iteration 2 + shared/kid_bugs fixes).
 //
 // The iteration-1 hunt found K09-BUG-4..6; the iteration-2 build fixed all
-// three, so their proofs below run LIVE — no `skip:` for them. This
-// iteration's adversarial pass over the FIXED code found four more defects,
-// each parked with `skip:` so the suite stays green; run them red with:
+// three, so their proofs below run LIVE — no `skip:` for them. The
+// shared/kid_bugs pass fixed K09-BUG-7..10 as well, so every proof in this
+// file now runs live and green:
 //
-//   cd app && flutter test --timeout 120s --run-skipped \
+//   cd app && flutter test --timeout 120s \
 //     test/features/kid_jar/k09_bugs_test.dart
 //
 // Numbering continues the registry: stages 3–5 own K09-BUG-1 (retry stacks
@@ -20,23 +20,23 @@
 //                      hero money; `_summarize` floors owed at 0.
 //   K09-BUG-6  minor — FIXED (it 2): the scroll tail counted the home inset
 //                      twice; the tail is now `--s8` only.
-//   K09-BUG-7  minor (latent) — OPEN: a load dispatched and the bloc closed
-//                      in the same tick leaks a live subscription and the
-//                      first emission on it throws
-//                      "Bad state: Cannot add new events after calling close".
+//   K09-BUG-7  minor (latent) — FIXED (shared/kid_bugs): the `_closing`
+//                      guard stops a same-tick load after `close()` before it
+//                      emits or subscribes; no leak, no `add` after close.
 //                      Iteration 2 pinned the reachability question and found
 //                      NO gesture reaches it (see the clean probes).
-//   K09-BUG-8  minor (latent) — OPEN: `moveToSavings` writes the
-//                      `savings_move` row even when the named goal does not
-//                      exist (or belongs to another child), so the pence
-//                      leave the jar and land nowhere — silently.
-//   K09-BUG-9  minor — OPEN: the history row's amount is laid out with
-//                      unbounded width, so it overflows the card from about
-//                      £100–£200 upward at 320 px with a 1.3 text scale.
-//   K09-BUG-10 minor — OPEN: a money-in row older than the previous week is
-//                      labelled `Last {its own weekday}`, which names the
-//                      wrong day ("Last Sunday" for 20 Sep when the last
-//                      Sunday is 27 Sep); a future row claims `This`.
+//   K09-BUG-8  minor (latent) — FIXED (shared/kid_bugs): `moveToSavings`
+//                      rejects before any write when the goal is missing or
+//                      belongs to another child, so no `savings_move` row
+//                      leaves the jar to nowhere.
+//   K09-BUG-9  minor — FIXED (shared/kid_bugs): the history amount sits in
+//                      `Flexible` + `FittedBox(scaleDown)`, so it shrinks to
+//                      fit at 320 px × 1.3 instead of overflowing.
+//   K09-BUG-10 minor — FIXED (shared/kid_bugs): `_relativeDay` now says
+//                      `Today` / `Yesterday` / `This <day>` (current London
+//                      week) / `Last <day>` (previous week) / dated
+//                      (`Sun 20 Sep`) for older rows, and `Coming up <date>`
+//                      for future rows — never a wrong `Last/This` claim.
 //
 // The final group pins the probes that came back CLEAN so the "verified
 // clean" table in `docs/screens/K09/6_bugs.md` is reproducible: double taps,
@@ -381,7 +381,7 @@ void main() {
           'that subscription is never cancelled',
     );
     await repo.shutDown();
-  }, skip: true);
+  });
 
   test('K09-BUG-7b: the leaked subscription cannot add after close', () async {
     final repo = _CountingJarRepository();
@@ -399,7 +399,7 @@ void main() {
     }
     await Future<void>.delayed(const Duration(milliseconds: 20));
     await repo.shutDown();
-  }, skip: true);
+  });
 
   // -------------------------------------------------------------------------
   // K09-BUG-8 — minor (latent) — moveToSavings destroys an unknown goal's
@@ -454,7 +454,7 @@ void main() {
       db.savingsGoals,
     )..where((g) => g.id.equals('goal-lego'))).getSingle();
     expect(goal.savedPence, 1550);
-  }, skip: true);
+  });
 
   test("K09-BUG-8b: a move cannot credit another child's goal", () async {
     final db = AppDatabase.memory();
@@ -504,7 +504,7 @@ void main() {
           "pence were credited to Leo's goal. The lookup must also match "
           'childId',
     );
-  }, skip: true);
+  });
 
   // -------------------------------------------------------------------------
   // K09-BUG-9 — minor — a big history amount overflows the card at 320 x 1.3
@@ -552,7 +552,7 @@ void main() {
           'no Flexible), so the Row paints past the card edge',
     );
     await disposeApp(tester);
-  }, skip: true);
+  });
 
   // -------------------------------------------------------------------------
   // K09-BUG-10 — minor — `Last {weekday}` names the wrong day for old rows
@@ -606,7 +606,53 @@ void main() {
           'row older than the previous week needs a dated label such as '
           '"Sun 20 Sep" (formatLondonDay)',
     );
-  }, skip: true);
+  });
+
+  test('K09-BUG-10 mapping: Today/Yesterday/This/Last/dated/Coming up', () async {
+    // Shared/kid_bugs: the full day-label contract, pinned against the
+    // Sat 3 Oct 2026 anchor (all London, BST).
+    final db = AppDatabase.memory();
+    addTearDown(db.close);
+    await Seed.demo(db);
+    Future<void> insertBase(DateTime utc) => db
+        .into(db.ledgerEntries)
+        .insert(
+          LedgerEntriesCompanion.insert(
+            familyId: Seed.familyId,
+            childId: 'maya',
+            type: 'weekly_base',
+            amountPence: 1,
+            note: const Value('Weekly pocket money'),
+            date: Value(utc),
+            dateTz: const Value('Europe/London'),
+          ),
+        );
+    // Yesterday (Fri 2 Oct), a current-week day (Tue 29 Sep), a previous-week
+    // day (Sun 27 Sep) and a future day (Tue 6 Oct). Today (Sat 3 Oct) and the
+    // dated row (Sun 20 Sep) are already in the seed.
+    await insertBase(DateTime.utc(2026, 10, 2, 8));
+    await insertBase(DateTime.utc(2026, 9, 29, 8));
+    await insertBase(DateTime.utc(2026, 9, 27, 8));
+    await insertBase(DateTime.utc(2026, 10, 6, 8));
+    final repo = KidJarRepositoryImpl(db: db);
+    final snapshot = await repo.watchJar().first;
+    String detailFor(DateTime utc) => snapshot.items
+        .firstWhere(
+          (e) => e.date.toUtc().isAtSameMomentAs(utc),
+          orElse: () => throw StateError('no row for $utc'),
+        )
+        .detail;
+    expect(detailFor(DateTime.utc(2026, 10, 3, 8)), 'Today');
+    expect(detailFor(DateTime.utc(2026, 10, 2, 8)), 'Yesterday');
+    expect(detailFor(DateTime.utc(2026, 9, 29, 8)), 'This Tuesday');
+    expect(detailFor(DateTime.utc(2026, 9, 27, 8)), 'Last Sunday');
+    expect(detailFor(DateTime.utc(2026, 9, 20, 8)), 'Sun 20 Sep');
+    expect(
+      detailFor(DateTime.utc(2026, 10, 6, 8)),
+      startsWith('Coming up'),
+      reason: 'a future row must never claim Today/This/Last',
+    );
+  });
 
   // -------------------------------------------------------------------------
   // CLEAN probes — kept green so the 6_bugs.md "verified clean" list is
@@ -817,7 +863,11 @@ void main() {
       expect(details, <String>['This Monday', 'Last Sunday']);
 
       // London is GMT. Week starts Mon 26 Oct 00:00 GMT = 26 Oct 00:00Z.
-      Seed.anchorOverride = DateTime.utc(2026, 10, 27);
+      // Anchor Wed 28 Oct (not Tue 27 Oct): Mon 26 Oct is then two days ago
+      // (`This Monday`), so the week mapping is verified without the
+      // `Yesterday` precedence (shared/kid_bugs) claiming it — Tue 27 Oct
+      // would read `Yesterday`, not `This Monday`, by design.
+      Seed.anchorOverride = DateTime.utc(2026, 10, 28);
       await base(DateTime.utc(2026, 10, 25, 23, 30)); // Sun 23:30 GMT
       await base(DateTime.utc(2026, 10, 26, 0, 30)); // Mon 00:30 GMT
       details = (await repo.watchJar().first).items
@@ -906,13 +956,13 @@ void main() {
       }
     });
 
-    // The week label is recomputed per emission from `londonWeekStartUtc`
-    // and the pinned clock only — no wall clock, no DB write needed.
+    // The day label is recomputed per emission from the pinned clock only —
+    // no wall clock, no DB write needed.
     testWidgets('the week label follows the pinned clock, not wall time', (
       tester,
     ) async {
       await _pumpRoute(tester);
-      expect(find.text('This Saturday'), findsOneWidget);
+      expect(find.text('Today'), findsOneWidget);
 
       // Move "now" to the next Monday: the same rows are now in the previous
       // week and must be re-labelled without any DB write.
@@ -928,7 +978,7 @@ void main() {
       // next ledger write.
       // ignore: avoid_print
       print(
-        'WEEK LABEL after anchor move: Saturday=${find.text('This Saturday').evaluate().isNotEmpty} '
+        'WEEK LABEL after anchor move: Today=${find.text('Today').evaluate().isNotEmpty} '
         'Last=${find.text('Last Saturday').evaluate().isNotEmpty}',
       );
       await disposeApp(tester);

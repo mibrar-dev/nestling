@@ -45,7 +45,14 @@ class PipGrowthCard extends StatelessWidget {
     final kid = context.nestKid;
     final profile = nest.profile;
     final nextName = pipStageName((profile.stage + 1).clamp(1, 4));
-    final pct = (nest.growthFraction * 100).round();
+    // Floors like K05 (K05-BUG-2) so both screens always agree: 175/250 → 70,
+    // 249/250 → 99 (not 100), 250/250 → 100. `core/design_system` is owned
+    // elsewhere, so the floored figure drives BOTH the label and the bar
+    // (`percent / 100`): the `NestProgress` value then rounds back to the
+    // same percent (K05-BUG-6 shape), and seed values are unchanged.
+    final fraction = nest.growthFraction;
+    final pct = fraction >= 1 ? 100 : (fraction * 100).floor();
+    final displayFraction = pct / 100.0;
 
     return Container(
       padding: kPipGrowthCardPadding,
@@ -81,7 +88,7 @@ class PipGrowthCard extends StatelessWidget {
           ),
           const SizedBox(height: NestSpacing.gap10),
           NestProgress(
-            fraction: nest.growthFraction,
+            fraction: displayFraction,
             kid: true,
             // `.progress.kid` `aria-label="Pip is 70% of the way to
             // Songbird"` — the design's own words, with the percentage taken
