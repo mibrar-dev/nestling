@@ -500,7 +500,13 @@ void main() {
         bloc.add(const PipLoadRequested());
         await Future<void>.delayed(_settle);
         expect(bloc.state.nest, isNull);
-        final loads = states.where((s) => s.status == PipStatus.loading).length;
+        // "A load was armed" = both arrival flags still down (a fresh load).
+        // The streams now answer one after the other, so the aggregate status
+        // passes through `loading` twice — the flags are the honest count of
+        // load events.
+        final loads = states
+            .where((s) => !s.nestSettled && !s.evolutionSettled)
+            .length;
         expect(loads, 1);
 
         // The one live subscription follows the switch: the view updates
@@ -511,7 +517,7 @@ void main() {
         expect(bloc.state.status, PipStatus.loaded);
         expect(bloc.state.nest?.profile.childId, 'maya');
         expect(
-          states.where((s) => s.status == PipStatus.loading).length,
+          states.where((s) => !s.nestSettled && !s.evolutionSettled).length,
           loads,
         );
         await sub.cancel();
@@ -550,7 +556,12 @@ void main() {
       bloc.add(const PipNestReceived(null));
       await Future<void>.delayed(_settle);
 
-      expect(bloc.state.status, PipStatus.loaded);
+      // Only the NEST stream answered here (no evolution event at all), so the
+      // nest's OWN status is `loaded` — which is what `/pip` renders the
+      // no-child card from — while the feature status stays `loading` because
+      // K07's stream is still in flight.
+      expect(bloc.state.nestStatus, PipStatus.loaded);
+      expect(bloc.state.evolutionStatus, PipStatus.loading);
       expect(bloc.state.nest, isNull);
       expect(bloc.state.errorMessage, isNull);
       expect(bloc.state.items, isEmpty);

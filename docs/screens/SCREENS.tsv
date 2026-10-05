@@ -6,7 +6,7 @@ P05	add-children	Add children	family	/add-children	parent	onboarding_kids	maya
 P06	pocket-money	Pocket money setup	pocket_money	/pocket-money-setup	parent	onboarding_kids	maya
 P07	paywall	Paywall	paywall	/paywall	parent	fresh	maya
 P08	today	Today (home)	today	/today	parent	demo	maya
-P08b	today-empty	Today empty	today	/today-empty	parent	empty	maya
+P08b	today-empty	Today empty	today	/today-empty	parent	new_family	maya
 P09	quest-editor	New / edit quest	quests	/quest-editor	parent	demo	maya
 P10	quest-library	Quest library	quests	/quests	parent	demo	maya
 P11	approvals	Approvals	approvals	/approvals	parent	demo	maya
@@ -19,7 +19,7 @@ P17	parental-gate	Parental gate	parental_gate	/parental-gate	kid	demo	maya
 K01	profile-picker	Who's playing?	kid_home	/who-is-playing	kid	demo	maya
 K02	pin	Kid PIN	kid_home	/kid-pin	kid	demo	maya
 K03	kid-home	Kid home	kid_home	/kid-home	kid	demo	maya
-K03b	kid-home-done	Kid home all done	kid_home	/kid-home-done	kid	demo	maya
+K03b	kid-home-done	Kid home all done	kid_home	/kid-home-done	kid	kid_all_done	maya
 K04	quest-detail	Quest detail	kid_home	/quest-detail	kid	demo	maya
 K05	quest-complete	Quest complete	kid_home	/quest-complete	kid	demo	maya
 K06	pip	Pip's nest	pip	/pip	kid	demo	maya

@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:nestling/features/pip/domain/entities/pip_evolution.dart';
 import 'package:nestling/features/pip/domain/entities/pip_nest.dart';
 
 sealed class PipEvent extends Equatable {
@@ -67,6 +68,29 @@ final class PipNestReceived extends PipEvent {
 
 /// Bloc-internal: the nest stream errored. Views never send this.
 final class PipNestFailed extends PipEvent {
+  const new(this.error);
+
+  final Object error;
+
+  @override
+  List<Object?> get props => <Object?>[error];
+}
+
+/// Bloc-internal: a fresh emission from the evolution stream (K07). Views
+/// never send this; the bloc raises it from its own subscription so a
+/// reload can guard on the live subscription instead of stacking handlers
+/// (same K03-BUG-15 pattern as the nest subscription).
+final class PipEvolutionReceived extends PipEvent {
+  const new(this.evolution);
+
+  final PipEvolution? evolution;
+
+  @override
+  List<Object?> get props => <Object?>[evolution];
+}
+
+/// Bloc-internal: the evolution stream errored. Views never send this.
+final class PipEvolutionFailed extends PipEvent {
   const new(this.error);
 
   final Object error;
