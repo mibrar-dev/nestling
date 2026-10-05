@@ -45,7 +45,7 @@ eyeballed.
 | subtitle line | 157…177 | 157, h 20 |
 | grid row 1 / 2 / 3 | 193 / 355 / 517, h 150 each | 193 / 355 / 517, h 150 |
 | grid columns | 108.67, 12 gap, 20 gutters | same, derived from width |
-| medal | 60×60 at y 206 | 60.0000…×60, y 206 |
+| medal | 60×60 at y 206 | 60×60, y 206 |
 | name box / sub | 38 / 18 | 38 / 18 |
 | week card | x 20…370, y 683…829, h 146 | same |
 | week dots / letters | 38 at y 700 / 18 at y 742 | same |
@@ -55,8 +55,8 @@ eyeballed.
 
 1. **Home-indicator reserve missing (`badges_view.dart`).** `1_plan.md` §0
    assumed the scroll ran to the physical edge ("content ends 861 > 844, 17 px
-   scroll"). The PNG disagrees: the week card's white face stops at **y 809**
-   and meadow (204,237,192) fills 810…844, with the OS home pill over it —
+   scroll"). The PNG disagrees: the week card's white face stops at **y 810**
+   and meadow fills 810…844, with the OS home pill over it —
    the HTML's `.home-indicator { height: 34px }` (`K11-badges.html:138`,
    `components.css:51`) is the last flex child, so the scroll viewport is
    107…810. The chrome now ends with `SizedBox(height: NestDevice.homeH)`
@@ -115,8 +115,7 @@ real navigation, the spinner's `Loading badges` label). Filename scoping
   `Four shiny ones already. Pip is very impressed.`, `Got it!`, `Keep going!`,
   `4 happy days this week — Pip hasn’t stopped singing.` (em dash U+2014,
   curly U+2019). Counts come from the database, never from the design.
-- Child order = DB insertion order (`todo-champion`-style alphabetical sorting
-  is never applied).
+- Child order = DB insertion order (no alphabetical sorting).
 - Tests: `disposeApp` after every pump, `--timeout 120s`, no simulator, no
   `flutter clean`, no whole-app suite run.
 
@@ -124,13 +123,13 @@ real navigation, the spinner's `Loading badges` label). Filename scoping
 
 ```
 flutter analyze lib/features/badges test/features/badges   → No issues found!
-flutter test --timeout 120s test/features/badges           → 70/70 passed
-   (18 geometry, 26 view, 14 bloc, 12 repository — the last two are the logic
-    builder's and still green)
-dart format lib/features/badges test/features/badges      → clean
+flutter test --timeout 120s test/features/badges/badges_view_test.dart test/features/badges/badges_widget_geometry_test.dart → 44/44 passed
+dart format (presentation + view/widget tests)               → clean
+grep google_fonts|GoogleFonts|DateTime.now (own scope)       → clean (comment mentions only)
 ```
 
-No simulator was booted (stage 5 owns that).
+No simulator was booted (stage 5 owns that). No domain/data/bloc/core file
+touched.
 
 ## LEFT FOR NEXT ITERATION
 

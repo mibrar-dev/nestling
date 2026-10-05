@@ -76,4 +76,14 @@ live child-switch tests fail under it). Implemented the feature-local
   the DB returns in DB order, correct for Maya's 4 earned either way;
   the view layer adds the `TODO(K11)` for the exact nine.
 
+## Re-verification (loop re-run, post-merge `9feace7`)
+
+- No logic-layer edits needed: `git log` shows the `main` merge touched
+  only `kid_jar` + K09 docs; `badges` domain/data/bloc/tests unchanged.
+- `flutter analyze lib/features/badges test/features/badges` → No issues.
+- `flutter test --timeout 120s` (repository + bloc files) → 26/26 pass.
+- No `DateTime.now` / `google_fonts` in the logic layer or its tests
+  ( happyDays is a stored count — PERIODS ruling N/A here); no simulator
+  booted; no files outside the logic chunk touched.
+
 VERDICT: PASS
