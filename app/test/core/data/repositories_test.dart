@@ -335,9 +335,36 @@ void main() {
     test('shelf + happy days', () async {
       final repo = BadgesRepositoryImpl(db: db);
       final shelf = await repo.watchShelf('maya').first;
-      expect(shelf, hasLength(8));
+      expect(shelf, hasLength(9));
       expect(shelf.where((b) => b.earned), hasLength(4));
       expect(await repo.watchHappyDays('maya').first, 4);
+    });
+
+    test('demo seed badges match the K11 design order', () async {
+      final repo = BadgesRepositoryImpl(db: db);
+      final shelf = await repo.watchShelf('maya').first;
+      expect(shelf.map((b) => b.id).toList(), <String>[
+        'first-quest',
+        'bed-maker-7',
+        'kind-helper',
+        'bookworm',
+        'bins-out',
+        'biscuit-sitter',
+        'tidy-hero',
+        'early-bird',
+        'plant-waterer',
+      ]);
+      expect(shelf.map((b) => b.title).toList(), <String>[
+        'First quest',
+        'Bed maker ×7',
+        'Kind helper',
+        'Bookworm',
+        'Bins out',
+        'Biscuit sitter',
+        'Tidy hero',
+        'Early bird',
+        'Plant waterer',
+      ]);
     });
   });
 
