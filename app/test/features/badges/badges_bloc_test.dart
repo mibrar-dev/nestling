@@ -429,6 +429,34 @@ void main() {
       expect(recovered.happyDays, 4);
     });
 
+    test('a childless empty emission loads an empty shelf', () async {
+      // K11-BUG-2's empty path at the event level: the repository resolves a
+      // family with no children to `BadgesData(childId: '', items: [],
+      // happyDays: 0)` and the bloc must carry it as loaded (the view
+      // renders the childless empty state off `loaded + items.isEmpty`).
+      final repo = _FakeBadgesRepository(data: _demoData());
+      final bloc = BadgesBloc(repository: repo);
+      addTearDown(bloc.close);
+      final seen = <BadgesState>[];
+      final sub = bloc.stream.listen(seen.add);
+      addTearDown(sub.cancel);
+
+      bloc.add(
+        const BadgesDataReceived(
+          BadgesData(childId: '', items: <Badge>[], happyDays: 0),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final loaded = seen.single;
+      expect(loaded.status, BadgesStatus.loaded);
+      expect(loaded.isLoaded, isTrue);
+      expect(loaded.childId, isEmpty);
+      expect(loaded.items, isEmpty);
+      expect(loaded.happyDays, 0);
+      expect(loaded.errorMessage, isNull);
+    });
+
     test('close() releases the live badges subscription', () async {
       final repo = _FakeBadgesRepository(data: _demoData())..controlled = true;
       final bloc = BadgesBloc(repository: repo);

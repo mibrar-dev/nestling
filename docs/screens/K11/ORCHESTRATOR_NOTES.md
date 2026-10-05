@@ -9,3 +9,6 @@
 - The ribbon `<path>` has `opacity=".4"` on the whole element: its fill AND its 3 px ink stroke are both drawn at 40 %. The app's ribbon outline is too dark — apply the 0.4 to fill and stroke together (e.g. `Opacity`/saveLayer), not to the fill only.
 - Dark mode: measure the locked ring and ribbon colours from design/screens/dark/K11-badges.png and match them exactly (the dark PNG shows a light ring).
 - Verify with a zoomed crop of one locked medal (e.g. Bins out) design vs app, both themes, in 5_ui.md.
+
+## (07:33) Final nit — ribbon group opacity (mandatory, one-line class of fix)
+- Measured on app_light_3 vs design at y=1125 px: the ribbon's inner stroke band is (130,128,148) in the app but (165,164,176) in the design. The app composites the 40 % stroke over the 40 % fill separately (`opacity` on the `<path>` is applied per paint by flutter_svg), the browser applies it to the element as a group. Fix: in `lockedMedalSvg` wrap the ribbon in a group — `<g opacity=".4"><path fill="#6E6A8A" stroke="#1E1B3A" …/></g>` with NO opacity on the path — or render the ribbon in an `Opacity(0.4)` layer. Then the inner band must sample (165,164,176) ±3 in light; check dark the same way. Nothing else changes.

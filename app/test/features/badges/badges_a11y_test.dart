@@ -67,6 +67,65 @@ Future<void> _useRepository(BadgesRepository repo) async {
   GetIt.instance.registerSingleton<BadgesRepository>(repo);
 }
 
+/// A repository whose first watch fails and whose second serves a one-badge
+/// shelf — the failure surface plus its recovery, on demand (a seeded
+/// database always succeeds).
+class _FailOnceBadgesRepository implements BadgesRepository {
+  _FailOnceBadgesRepository({required this.shelf, required this.happyDays});
+
+  final List<domain.Badge> shelf;
+  final int happyDays;
+  int _watches = 0;
+
+  @override
+  Stream<BadgesData> watchActiveBadges() {
+    _watches++;
+    if (_watches == 1) {
+      return Stream<BadgesData>.error(Exception('badges down'));
+    }
+    return Stream<BadgesData>.value(
+      BadgesData(childId: 'maya', items: shelf, happyDays: happyDays),
+    );
+  }
+
+  @override
+  Stream<List<domain.Badge>> watchShelf(String childId) =>
+      Stream<List<domain.Badge>>.value(shelf);
+
+  @override
+  Stream<int> watchHappyDays(String childId) => Stream<int>.value(happyDays);
+
+  @override
+  Future<List<domain.Badge>> getItems() async => shelf;
+
+  @override
+  Stream<List<domain.Badge>> watchItems() =>
+      Stream<List<domain.Badge>>.value(shelf);
+}
+
+domain.Badge _recoveredBadge() => const domain.Badge(
+  id: 'first-quest',
+  title: 'First quest',
+  detail: 'Got it!',
+  icon: 'medal',
+  description: '',
+  earned: true,
+  earnedAt: null,
+);
+
+Future<void> _pumpFailure(
+  WidgetTester tester, {
+  ThemeMode theme = ThemeMode.light,
+}) async {
+  await _useRepository(
+    _FailOnceBadgesRepository(
+      shelf: <domain.Badge>[_recoveredBadge()],
+      happyDays: 2,
+    ),
+  );
+  await _pumpRoute(tester, theme: theme);
+}
+
 Future<void> _pumpRoute(
   WidgetTester tester, {
   double width = 390,
@@ -470,6 +529,97 @@ void main() {
         isFalse,
         reason: 'the spinner reports progress; it is not a control',
       );
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+  });
+
+  group('K11 Try again control on the failure surface', () {
+    testWidgets('the failure surface offers Back, Grown-ups and Try again', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await _pumpFailure(tester);
+      expect(find.text('Something went wrong'), findsOneWidget);
+      final tappable = <String>{
+        for (final node in _nodes(tester))
+          if (node.getSemanticsData().hasAction(SemanticsAction.tap))
+            _flat(node.getSemanticsData().label),
+      }.where((label) => label.isNotEmpty).toSet();
+      expect(
+        tappable,
+        <String>{'Back', 'Grown-ups', 'Try again'},
+        reason:
+            'the retry surface adds exactly one control — the failure must '
+            'never strand a child without a way forward',
+      );
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('Try again is a kid-sized live control that reloads', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await _pumpFailure(tester);
+      final data = _node(tester, 'Try again').getSemanticsData();
+      expect(
+        data.hasAction(SemanticsAction.tap),
+        isTrue,
+        reason: '"Try again" must expose SemanticsAction.tap (RULES §8)',
+      );
+      expect(
+        data.flagsCollection.isButton,
+        isTrue,
+        reason: '"Try again" must announce as a button',
+      );
+      expect(
+        data.flagsCollection.isEnabled.toBoolOrNull(),
+        isNot(isFalse),
+        reason: '"Try again" is never a disabled control',
+      );
+      // Kid screen, kid floor: `NestKidButton` carries min-height 64, so the
+      // retry clears the 56 px kid target as well as the 44 px parent floor.
+      expect(
+        tester.getSize(find.byType(NestKidButton)).shortestSide,
+        greaterThanOrEqualTo(NestDevice.tapKid),
+      );
+      expect(
+        data.rect.shortestSide,
+        greaterThanOrEqualTo(NestDevice.tapParent),
+      );
+
+      await tester.tap(find.text('Try again'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Something went wrong'), findsNothing);
+      expect(find.text('My badges'), findsOneWidget);
+      expect(find.byType(BadgeGridCell), findsOneWidget);
+      expect(
+        find.text('One shiny one already. Pip is very impressed.'),
+        findsOneWidget,
+      );
+      semantics.dispose();
+      await disposeApp(tester);
+    });
+
+    testWidgets('the failure surface renders in dark with working chrome', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await _pumpFailure(tester, theme: ThemeMode.dark);
+      expect(tester.takeException(), isNull);
+      expect(find.text('Something went wrong'), findsOneWidget);
+      expect(find.text('Try again'), findsOneWidget);
+      expect(find.byType(NestIconButton), findsOneWidget);
+      expect(find.byType(NestLockButton), findsOneWidget);
+      // The chrome stays operable in dark: a screen-reader tap on the lock
+      // still reaches the parental gate from the failure surface.
+      _expectLiveControl(tester, 'Grown-ups');
+      await tester.pumpAndSettle();
+      expect(pushedPath(tester), '/parental-gate');
       semantics.dispose();
       await disposeApp(tester);
     });

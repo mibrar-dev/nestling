@@ -1,131 +1,145 @@
-# K11 · Badges — stage 3 TEST (iteration 2)
+# K11 · Badges — stage 3 TEST (iteration 3)
+
+Route `/badges` (feature `badges`, kid mode). Plan `1_plan.md` §f, orchestrator
+rules, RULES §1/§7/§8/§9, mandatory `ORCHESTRATOR_NOTES.md` (02:40 seed nine —
+landed; per-id art — built iteration 2; 06:55 locked-medal ink ring +
+whole-element ribbon opacity — built iteration 3; K11-BUG-1 clamp +
+K11-BUG-2 no-hard-coded-maya — both landed iteration 2). **No file under
+`app/lib/` was edited by this stage** (a stage that finds a bug records it,
+it does not patch it). Only `app/test/features/badges/**` (1 new file, 2
+extended) and this note changed.
+
+Starting point: the iteration-3 build (`c81a3c5`) — `badge_grid_cell.dart`
+rebuilt the five still-to-do medals as a local `lockedMedalSvg(id)` with 8
+new view tests (view file 34 → 42); the logic chunk reports no contract
+changes. This stage takes the feature suite from **152 passed to 166 passed,
+0 skipped, 0 failed**.
+
+## Tests added / changed
+
+### New — `badges_locked_art_test.dart` (10)
+
+The iteration-3 build's new code was under-pinned: the builder's 8 view
+tests pump `bins-out` only, and `badges_art_test.dart` pins "an SVG, never
+the rosette" — neither would catch a SWAPPED glyph (bins-out drawing
+tidy-hero's basket) or a theme-dependent string. New pins, per id and per
+theme, over `pumpNest` cells (no DB needed):
+
+- String level (2 unit tests): all five todo SVGs carry the ink ring
+  (`stroke="#1E1B3A" stroke-dasharray="5 4"`), never the grey asset ring,
+  the whole-element ribbon (`<path fill="#6E6A8A" stroke="#1E1B3A"` +
+  `opacity=".4"`), and the cream disc (`fill="#F3EEE5"`); an unknown id
+  keeps the frame with an empty glyph (no crash, no grey ring).
+- Widget level (5 tests, one per locked id): the pumped cell draws
+  `SvgPicture.string` with its OWN glyph marker and none of the other four
+  (`M21 28h22` / `cy="42"` / `M41 33H23` / `cy="38"` / `M25 30h14`), and the
+  light string EQUALS the dark string (medals keep fixed illustration
+  colours in both themes).
+- Earned path (3 tests): an earned todo id keeps its own grey medal for all
+  five (plan §a known limitation — solid border + `Got it!` flip only, never
+  the rosette); the four earned ids take the shared-asset path
+  (bytesLoader is NOT `SvgStringLoader`) in both states, light and dark.
+
+### Extended — `badges_bloc_test.dart` (+1, 17 → 18)
+
+`a childless empty emission loads an empty shelf`: `BadgesData(childId: '',
+items: [], happyDays: 0)` (the K11-BUG-2 empty resolution) loads as
+`loaded` with empty child/shelf/count and no error — the bloc-level pin of
+the path the view renders as the childless empty state. Every event
+(`BadgesLoadRequested`, `BadgesDataReceived`, `BadgesStreamFailed`),
+`close()`, and the state value semantics are now driven at both bloc and
+state level with no uncovered branch.
+
+### Extended — `badges_a11y_test.dart` (+3, 15 → 18)
+
+New group `K11 Try again control on the failure surface` (fail-once fake,
+one-badge recovery shelf): the failure surface offers exactly
+{Back, Grown-ups, Try again} (walked from the semantics tree, not trusted
+from the widget tree); Try again exposes `SemanticsAction.tap`, announces as
+an enabled button, clears the 56 px kid floor as a widget (64 min-height
+`NestKidButton`) and the 44 px parent floor as a semantics rect, and a
+pointer tap reloads the real shelf (`My badges`, one cell, `One shiny one
+already…`); plus the failure surface in DARK renders with working chrome
+(screen-reader lock tap still pushes `/parental-gate`).
+
+## Results (verbatim tails)
+
+```
+$ dart format test/features/badges/<3 files>   → clean (0 changed, final)
+$ flutter analyze test/features/badges         → No issues found!
+$ flutter test --timeout 120s test/features/badges/<10 K11 files>
+  00:03 +166: All tests passed!
+  (bloc 18 · copy 9 · repository 20 · view 42 · a11y 18 · art 7 ·
+   matrix 22 · geometry 18 · bugs 2 · locked 10 = 166, 0 skipped, 0 failed)
+$ flutter test --timeout 120s   (full suite, 2nd run)
+  02:01 +5210 ~16: All tests passed!
+```
+
+The full suite's FIRST run showed two foreign failures that both cleared on
+re-run with zero code changes: `k11_pixel_tmp_test.dart` (an untracked temp
+experiment from a concurrent worker — appeared mid-run, vanished the same
+way as iteration 2's `k11_dbg_tmp_test.dart`; read-only observation, never
+edited/moved/deleted) and 4 `rewards_order_test.dart` cases (another
+screen's in-progress core work settling). Process items, not findings
+(orchestrator PROCESS ITEMS rule). The second run is fully green, including
+all 166 K11 tests.
+
+Every widget test ends with `disposeApp`; every DB mutation inside
+`testWidgets` goes through `tester.runAsync`; every run uses
+`--timeout 120s`. No hangs, no flakes in any K11 file. (The remaining
+console noise is the standard Drift multi-DB debug warning the whole
+harness emits — pre-existing, not a finding.)
+
+## Bugs found
+
+**None in the screen.** Every new test passed on its first run against the
+unmodified iteration-3 build — no test exposed a defect in
+`app/lib/features/badges/**`, so no screen file was opened for edit and no
+`file:line` repro exists to record.
+
+Coverage of the stage brief: light + dark pumped (view/matrix/a11y/locked
+all run both themes); widths 320/390/430 × scales 1.0/1.3 (matrix 12-corner
+group + geometry alignment group, no-overflow asserts); empty (wiped DB,
+`Seed.empty`, childless resolution), loading (spinner + label + live
+chrome), error (failure + retry reload, pointer and screen-reader driven);
+every tap → right route (back go/pop branches, lock single-push guard,
+Try again reload); semantics labels verbatim (`Back`, `Grown-ups`, merged
+tile labels, spinner, day letters + why-line); tap targets 56 back/lock at
+390/1.0 and 320/1.3 plus 64-high Try again (all clearing the 44 parent
+floor), static tiles with no tap action. Counts/titles/order read from the
+seeded DB (Maya-then-Leo creation order); no `DateTime.now`/`clock` reads,
+no `google_fonts`, no hard-coded design numbers.
+
+## Scope and rules
+
+- Edited only `app/test/features/badges/**` (1 new + 2 extended files) plus
+  this note (RULES §1). `app/lib/`, `core/`, `app/`, other features,
+  `tools/`, `analysis_options.yaml` untouched.
+- Concurrent stages' files (`k11_bugs_test.dart`, `4_review.md`, `5_ui.md`,
+  `ui/*_3.png`) changed under this worktree while this stage ran — left
+  alone (process items, not findings).
+- No simulator was booted, installed on, screenshotted or driven by this
+  stage (604697A9-11DA-462F-9837-396E9CA2493A untouched — stage 5 owns it).
+- No `flutter clean`, no `pkill`/`killall`.
+
+---
+
+# History — stage 3 TEST (iteration 2, retained)
 
 Route `/badges` (feature `badges`, kid mode). Plan `1_plan.md` §f, orchestrator
 rules, RULES §1/§7/§8/§9, mandatory `ORCHESTRATOR_NOTES.md` (seed nine —
 landed; art map — already complete; K11-BUG-1 clamp + K11-BUG-2 no-hard-coded-
 maya — both built in iteration 2). **No file under `app/lib/` was edited by
-this stage** (a stage that finds a bug records it, it does not patch it).
-Only `app/test/features/badges/**` and this file changed.
+this stage.** Only `app/test/features/badges/**` and the stage note changed.
 
-Iteration 1 (`3_test.md` history: 120 passed) plus the iteration-2 builds are
-the starting point: `2_build.md` reports the merged tree at **129 passed, 2
-skipped** (the two `k11_bugs_test.dart` skips). This stage takes it to
-**143 passed, 1 skipped, 0 failed**.
-
-## Tests added / changed
-
-### Updated — `badges_bloc_test.dart` (16 → 17)
-
-The fake still modelled the 8-row legacy shelf
-(`tidy-champion`/`super-saver`/`pet-friend`) while the landed seed and the
-repository tests use the 9-row design shelf — stale ids/titles/counts pinned
-by a fake that never touches the DB. The fake now serves the nine design ids
-in insertion order (`bins-out`, `biscuit-sitter`, `tidy-hero`, `early-bird`,
-`plant-waterer` replacing the three legacy ids), and `hasLength(8)` → 9.
-
-New: `a data event after a failure recovers the loaded shelf` — the one
-event path with no bloc-level test (`BadgesStreamFailed` then
-`BadgesDataReceived` must return to loaded and drop the stale error via
-`copyWithLoaded`). All three events (`BadgesLoadRequested`,
-`BadgesDataReceived`, `BadgesStreamFailed`) plus `close()` and the
-value semantics are now driven at both bloc and state level.
-
-### New — `badges_copy_test.dart` (9)
-
-Pure unit tests (no pump, no DB): `BadgesCopy.subtitle` for 0, negative, 1
-(singular `one`), 2…9 (words `Two`…`Nine`), 10/12 (digit fallback); and
-`HappyWeekCopy.why` for 0 (positive zero line, Children's Code std 13),
-1 (singular `day`), 2…7, plus the design characters (em dash U+2014 present
-with no ASCII `-`, curly ’ U+2019 with no ASCII `'`). The widget tests only
-ever show the DB's own 4/3/1/0 — this file pins every remaining branch.
-
-### Extended — `badges_view_test.dart` (+2)
-
-New group `K11 child resolution (K11-BUG-2 widget regression)`: pump-then-
-mutate via `tester.runAsync` (the pattern that keeps Drift watches live) —
-nulling `activeChildId` keeps Maya's 9-cell shelf with no fallback line, and
-an unknown id (`nobody`) falls back to Maya with her 4-day line. End-to-end
-proof of the iteration-2 `_resolveChildId` fix through the real repository.
-
-### Extended — `badges_a11y_test.dart` (+1)
-
-`the kid targets stay 56 at the 320 px / 1.3 corner`: back + lock are still
-exactly `NestDevice.tapKid` squares with semantics rects ≥ 44 at the
-narrowest, largest-type corner (targets were previously asserted only at
-390/1.0).
-
-### Un-skipped — `k11_bugs_test.dart` (BUG-1 fixed, BUG-2 stays skipped)
-
-- **K11-BUG-1: FIXED and un-skipped.** The iteration-2 widget clamp
-  (`happy_week_card.dart`) makes the stored-8 probe pass; the test is now a
-  green regression pin (header comment updated).
-- **K11-BUG-2: product fix verified, widget-pattern test stays skipped.**
-  Before touching the skip I ran the test un-skipped in a scratch copy:
-  BUG-1 passed, BUG-2 failed at line 154 (`showedZoe || showedChildlessEmpty`
-  is false). A diagnostic probe (deleted afterwards) showed the screen sits
-  on the perpetual spinner with zero cells — raw Drift watches never emit
-  when the writes happen before the first pump (FakeAsync zone), exactly the
-  infra silence `2a_build_logic.md` proved with its pre-fix control run
-  (fails identically against the ORIGINAL `?? 'maya'` code, so the pattern
-  cannot distinguish the fix). The fix itself is proven twice over: the five
-  `child resolution` repository tests and the two new widget regression tests
-  above. The skip reason in the file now says this.
-
-## Results (verbatim tails)
-
-```
-$ dart format test/features/badges lib/features/badges
-Formatted 24 files (0 changed) in 0.06 seconds.
-
-$ flutter analyze
-Analyzing app...
-No issues found! (ran in 3.4s)
-
-$ flutter test --timeout 120s test/features/badges/<each file>
-bloc 17/0/0 · copy 9/0/0 · repository 20/0/0 · view 34/0/0 · a11y 15/0/0 ·
-art 7/0/0 · matrix 22/0/0 · geometry 18/0/0 · bugs 1 passed / 1 skipped / 0 failed
-= 143 passed, 1 skipped, 0 failed
-
-$ flutter test --timeout 120s   (full suite)
-03:18 +4760 ~14 -1: the single failure is k11_dbg_tmp_test.dart D1/D2 —
-a concurrent worker's untracked TEMP experiment (appeared mid-run; its
-predecessor k11_exp2_tmp_test.dart vanished the same way). Every other file
-— all 4760 tests, including every K11 file — passes. Process item, not a
-finding (orchestrator PROCESS ITEMS rule).
-```
-
-Every widget test ends with `disposeApp`; every DB mutation inside
-`testWidgets` goes through `tester.runAsync`; every run uses
-`--timeout 120s`. No hangs, no flakes across the whole matrix.
-
-## Bugs found
-
-**None in the screen.** No test added or un-skipped in this stage exposed a
-defect in `app/lib/features/badges/**`; no screen file was opened for edit.
-
-The retained K11-BUG-2 skip is test-infra silence in one write-then-pump
-pattern (evidence above + `2a_build_logic.md` control run), not a product
-defect: the repository resolves Zoe/null/empty correctly and the live screen
-resolves null/unknown ids to the first child.
-
-## Scope and rules
-
-- Edited only `app/test/features/badges/**` (5 files) plus this note and one
-  new test file (RULES §1). `app/lib/`, `app/core/`, `app/app/`, other
-  features, `tools/`, `analysis_options.yaml` untouched.
-- No simulator was booted, installed on, screenshotted or driven by this
-  stage (604697A9-11DA-462F-9837-396E9CA2493A untouched — stage 5 owns it).
-- No `flutter clean`, no `pkill`/`killall` (a stray
-  `k11_*_tmp_test.dart` from a concurrent worker was left alone — read-only
-  observation, never edited, moved or deleted).
-- No `DateTime.now()` / `clock` reads (one fixed `DateTime.utc(2026,…)` seed
-  timestamp in `badges_view_test.dart` only), no `google_fonts` (comment
-  mentions only), no hard-coded design numbers — counts, titles and order are
-  read from the seeded database; children listed Maya-then-Leo (creation
-  order, never alphabetical).
-- Tap targets: back/lock 56 px (kid floor) clearing the 44 px parent floor,
-  proved at 390/1.0 and 320/1.3; badge cells static with merged labels and no
-  tap action; `SemanticsAction.tap` + `performAction` drive real navigation
-  on back, lock and `Try again`.
+Iteration 1 (120 passed) plus the iteration-2 builds were the starting point:
+`2_build.md` reported the merged tree at **129 passed, 2 skipped**. Iteration 2
+took it to **143 passed, 1 skipped, 0 failed** via: `badges_bloc_test.dart`
+16 → 17 (nine-id fake + failure-recovery test), new `badges_copy_test.dart`
+(9), `badges_view_test.dart` +2 (K11-BUG-2 widget regression), `badges_a11y_test.dart`
++1 (320/1.3 corner targets), K11-BUG-1 un-skipped (fixed) while K11-BUG-2's
+widget-pattern test stayed skipped (test-infra silence, product fix proven
+twice over). Full suite 4760 passed with one concurrent-worker's temp-file
+failure (process item). No screen defects found. VERDICT: PASS.
 
 VERDICT: PASS
