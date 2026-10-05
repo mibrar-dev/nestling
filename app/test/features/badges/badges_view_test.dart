@@ -459,6 +459,71 @@ void main() {
     });
   });
 
+  group('K11 child resolution (K11-BUG-2 widget regression)', () {
+    testWidgets('a nulled active child resolves the first child, not a blank', (
+      tester,
+    ) async {
+      // Product fix (iteration 2, `_resolveChildId`): the persisted id when
+      // it names a real child, else the first child in creation order, else
+      // the empty shelf — never a hard-coded id. Pump-then-mutate is the
+      // pattern that keeps Drift watches live (write-then-pump stays silent
+      // on infra — see `k11_bugs_test.dart`).
+      await _pumpRoute(tester);
+      expect(
+        find.text('Four shiny ones already. Pip is very impressed.'),
+        findsOneWidget,
+      );
+
+      await tester.runAsync(() async {
+        await (db.update(db.appState)..where((a) => a.id.equals(1))).write(
+          const AppStateCompanion(activeChildId: Value<String?>(null)),
+        );
+        await Future<void>.delayed(Duration.zero);
+      });
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(tester.takeException(), isNull);
+      // Still Maya (the first child): her shelf and count survive the null.
+      expect(find.byType(BadgeGridCell), findsNWidgets(9));
+      expect(
+        find.text('Four shiny ones already. Pip is very impressed.'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('No shiny ones yet. Finish a quest to earn your first!'),
+        findsNothing,
+      );
+      await disposeApp(tester);
+    });
+
+    testWidgets('an unknown active id falls back to the first child', (
+      tester,
+    ) async {
+      await _pumpRoute(tester);
+      await tester.runAsync(() async {
+        await (db.update(db.appState)..where((a) => a.id.equals(1))).write(
+          const AppStateCompanion(activeChildId: Value('nobody')),
+        );
+        await Future<void>.delayed(Duration.zero);
+      });
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(BadgeGridCell), findsNWidgets(9));
+      expect(
+        find.text('Four shiny ones already. Pip is very impressed.'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('4 happy days this week — Pip hasn’t stopped singing.'),
+        findsOneWidget,
+      );
+      await disposeApp(tester);
+    });
+  });
+
   group('K11 happy-day clamp (K11-BUG-1 regression)', () {
     testWidgets('a stored count above 7 fills seven dots, never eight days', (
       tester,

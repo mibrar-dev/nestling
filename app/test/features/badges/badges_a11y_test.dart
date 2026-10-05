@@ -224,6 +224,35 @@ void main() {
       semantics.dispose();
       await disposeApp(tester);
     });
+
+    testWidgets('the kid targets stay 56 at the 320 px / 1.3 corner', (
+      tester,
+    ) async {
+      // The widths × scales matrix is about layout survival; the targets
+      // must not shrink with it — 56 px boxes at the narrowest,
+      // largest-type corner, still clearing the 44 px parent floor.
+      await _pumpRoute(tester, width: 320, textScale: 1.3);
+      expect(tester.takeException(), isNull);
+      expect(
+        tester.getSize(find.byType(NestIconButton)),
+        const Size(NestDevice.tapKid, NestDevice.tapKid),
+      );
+      expect(
+        tester.getSize(find.byType(NestLockButton)),
+        const Size(NestDevice.tapKid, NestDevice.tapKid),
+      );
+      final semantics = tester.ensureSemantics();
+      for (final label in <String>['Back', 'Grown-ups']) {
+        final box = _node(tester, label).getSemanticsData().rect;
+        expect(
+          box.shortestSide,
+          greaterThanOrEqualTo(NestDevice.tapParent),
+          reason: '"$label" semantics rect at 320/1.3',
+        );
+      }
+      semantics.dispose();
+      await disposeApp(tester);
+    });
   });
 
   group('K11 semantics labels on the icon buttons', () {

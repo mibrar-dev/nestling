@@ -17,11 +17,11 @@ import 'package:nestling/features/badges/presentation/bloc/badges_bloc.dart';
 import 'package:nestling/features/badges/presentation/bloc/badges_event.dart';
 import 'package:nestling/features/badges/presentation/bloc/badges_state.dart';
 
-/// Seed.demo's eight badges in DB insertion order (the K11 grid order):
-/// first-quest first, pet-friend last — never sorted. Maya has earned the
+/// Seed.demo's nine badges in DB insertion order (the K11 grid order):
+/// first-quest first, plant-waterer last — never sorted. Maya has earned the
 /// first four; the detail copy is the design copy (`Got it!` / `Keep going!`).
 List<Badge> _demoItems() => <Badge>[
-  for (var i = 0; i < 8; i++)
+  for (var i = 0; i < 9; i++)
     Badge(
       id: _demoIds[i],
       title: _demoTitles[i],
@@ -38,10 +38,11 @@ const List<String> _demoIds = <String>[
   'bed-maker-7',
   'kind-helper',
   'bookworm',
-  'tidy-champion',
+  'bins-out',
+  'biscuit-sitter',
+  'tidy-hero',
   'early-bird',
-  'super-saver',
-  'pet-friend',
+  'plant-waterer',
 ];
 
 const List<String> _demoTitles = <String>[
@@ -49,21 +50,22 @@ const List<String> _demoTitles = <String>[
   'Bed maker ×7',
   'Kind helper',
   'Bookworm',
-  'Tidy champion',
+  'Bins out',
+  'Biscuit sitter',
+  'Tidy hero',
   'Early bird',
-  'Super saver',
-  'Pet friend',
+  'Plant waterer',
 ];
 
 BadgesData _demoData() =>
     BadgesData(childId: 'maya', items: _demoItems(), happyDays: 4);
 
-/// Leo's badges: 3 happy days, only the first quest earned. Same eight rows
+/// Leo's badges: 3 happy days, only the first quest earned. Same nine rows
 /// in the same insertion order (the list never reorders).
 BadgesData _leoData() => BadgesData(
   childId: 'leo',
   items: <Badge>[
-    for (var i = 0; i < 8; i++)
+    for (var i = 0; i < 9; i++)
       Badge(
         id: _demoIds[i],
         title: _demoTitles[i],
@@ -214,10 +216,11 @@ void main() {
             'bed-maker-7': 'Got it!',
             'kind-helper': 'Got it!',
             'bookworm': 'Got it!',
-            'tidy-champion': 'Keep going!',
+            'bins-out': 'Keep going!',
+            'biscuit-sitter': 'Keep going!',
+            'tidy-hero': 'Keep going!',
             'early-bird': 'Keep going!',
-            'super-saver': 'Keep going!',
-            'pet-friend': 'Keep going!',
+            'plant-waterer': 'Keep going!',
           },
         );
         expect(bloc.state.happyDays, 4);
@@ -391,13 +394,39 @@ void main() {
       final failure = seen.last;
       expect(failure.status, BadgesStatus.failure);
       expect(failure.childId, 'maya');
-      expect(failure.items, hasLength(8));
+      expect(failure.items, hasLength(9));
       expect(failure.happyDays, 4);
       expect(
         repo.liveCancels,
         1,
         reason: 'the error releases the subscription so Try again can work',
       );
+    });
+
+    test('a data event after a failure recovers the loaded shelf', () async {
+      // Failure then data at the event level: a queued emission that lands
+      // after the error must return the bloc to loaded and drop the stale
+      // error text (`copyWithLoaded` clears it).
+      final repo = _FakeBadgesRepository(data: _demoData());
+      final bloc = BadgesBloc(repository: repo);
+      addTearDown(bloc.close);
+      final seen = <BadgesState>[];
+      final sub = bloc.stream.listen(seen.add);
+      addTearDown(sub.cancel);
+
+      bloc.add(BadgesStreamFailed(Exception('stream lost')));
+      await Future<void>.delayed(Duration.zero);
+      expect(seen.single.status, BadgesStatus.failure);
+
+      bloc.add(BadgesDataReceived(_demoData()));
+      await Future<void>.delayed(Duration.zero);
+
+      final recovered = seen.last;
+      expect(recovered.status, BadgesStatus.loaded);
+      expect(recovered.errorMessage, isNull);
+      expect(recovered.childId, 'maya');
+      expect(recovered.items.map((b) => b.id).toList(), _demoIds);
+      expect(recovered.happyDays, 4);
     });
 
     test('close() releases the live badges subscription', () async {
