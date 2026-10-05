@@ -1,9 +1,13 @@
 // Nestling — seed data for local-only development and screenshots.
 //
-// Four variants, selected with `--dart-define=SEED=…`:
+// Five variants, selected with `--dart-define=SEED=…`:
 // * `demo` — the exact spec family (DESIGN_SPEC §5). Every number visible in
 //   the designs (P08, P10–P12, P14, K03, K08, K09, K11) is asserted in tests.
-// * `empty` — onboarded parent, no children or quests (P08b).
+// * `empty` — onboarded parent, no children or quests (P08b legacy).
+// * `new_family` — a family that has just finished onboarding (P08b): family
+//   + parent Sarah + both children exactly as in `demo`, default settings,
+//   NO quests/completions/ledger/goals/rewards/badges/wardrobe,
+//   `onboarding_complete = true`, trial subscription starting now.
 // * `fresh` — nothing at all: app_state only, onboarding incomplete.
 // * `onboarding_kids` — P05 UI-check state: family + Sarah + Maya (7-9
 //   lilac) + Leo (4-6 peach) exactly as in `demo`, no quests/ledger/etc.,
@@ -83,6 +87,40 @@ abstract final class Seed {
             email: const Value('sarah@example.co.uk'),
           ),
         );
+    await _settingsDemo(db);
+    await db
+        .into(db.appState)
+        .insert(
+          AppStateCompanion.insert(
+            id: const Value(1),
+            onboardingComplete: const Value(true),
+            subscriptionStatus: const Value('trial'),
+            trialStart: Value(clock.now().toUtc()),
+            appMode: const Value('parent'),
+          ),
+        );
+  }
+
+  /// P08b state: a family that has just finished onboarding — family +
+  /// parent Sarah (same as [empty]) + both children exactly as in [demo]
+  /// (Maya then Leo, creation order) + default settings, and NOTHING else:
+  /// no quests, completions, ledger, goals, rewards, badges or wardrobe.
+  /// `onboarding_complete = true`, trial subscription starting now, parent
+  /// app mode.
+  static Future<void> newFamily(AppDatabase db) async {
+    await db.clearAll();
+    await _family(db);
+    await db
+        .into(db.members)
+        .insert(
+          MembersCompanion.insert(
+            id: 'sarah',
+            familyId: familyId,
+            name: 'Sarah',
+            email: const Value('sarah@example.co.uk'),
+          ),
+        );
+    await _childrenDemo(db);
     await _settingsDemo(db);
     await db
         .into(db.appState)
