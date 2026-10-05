@@ -55,15 +55,15 @@ Branch `shared/kid_bugs` from `main`. Minimal, backward-compatible shared + feat
 
 Shots via `tools/screens/shot.sh` + `tools/screens/compare.py`. Last accepted `cmp` = `docs/screens/<ID>/ui/cmp_*.png` + `5_ui.md` mean diffs.
 
-- K01 `/who-is-playing` kid demo maya: light … / dark … (mean diff vs last accepted …; must be within ±0.2)
-- K02 `/kid-pin` kid demo maya: light … / dark …
-- K05 `/quest-complete` kid demo maya: light … / dark …
-- K06 `/pip` kid demo maya: light … / dark …
-- K07 `/pip-evolution` kid demo maya: light … / dark …
-- K09 `/my-jar` kid demo maya: light … / dark … (first-row sub `This Saturday`→`Today` is the only seeded copy change; amount FittedBox is scale 1)
-- K10 `/payout-day` kid demo maya: light … / dark … (seeded goal not reached, heading unwrapped but short title still one line)
+- K01 `/who-is-playing` kid demo maya: pending (shot hung, no file; see below)
+- K02 `/kid-pin` kid demo maya: pending
+- K05 `/quest-complete` kid demo maya: pending (widget geometry/matrix green; proportional flex + displayFraction are scale-1 for seed 175)
+- K06 `/pip` kid demo maya: pending (floor/displayFraction identical for seed 175→70)
+- K07 `/pip-evolution` kid demo maya: pending (control: cards 110×84, numbers 34 px, one top — scale 1.0 for seed)
+- K09 `/my-jar` kid demo maya: light 1.50% (bands 0–105:0.90 105–211:0.18 211–316:0.16 316–422:0.19 422–527:1.09 527–633:0.81 633–738:3.37 738–844:5.32) vs last accepted 1.25% → +0.25 (OVER ±0.2); dark 1.42% (0.95/0.19/0.13/0.44/1.02/1.12/3.18/4.33) vs 1.29% → +0.13 (within). Sheets `/tmp/k09_cmp_light.png`, `/tmp/k09_cmp_dark.png`. The light delta is the required K09-BUG-10 copy change (first-row sub `This Saturday`→`Today`; design shows `Last Saturday`): geometry unchanged per `my_jar_view_geometry_test` + `K09-BUG-9`/`long goal` probes (FittedBox scale 1 at 390/1.0).
+- K10 `/payout-day` kid demo maya: pending (seeded goal not reached so `Goal reached!` never renders; heading unwrapped but `Lego Friends set` still one line — matrix/gutter probes green)
 
-Simulator `shot.sh` hung on first invocation in this worktree (no output in 5 min; no global kill per owner rule — own `shot.sh` only, backgrounded as `sh_10b5…`). UI diffs pending; geometry at 390/1.0 is pinned by widget tests instead: K07 control (cards 110×84, numbers 34 px, one top), K05 geometry/matrix, K09 geometry, K10 matrix/gutter probes all green.
+Simulator: first K09-light `shot.sh` hung with no output in 5 min (no global kill per owner rule — own `shot.sh` only, backgrounded as `sh_10b5…`, later succeeded on retry). K09 dark then succeeded fast. K01-light hung again with no file (5 min timeout, no lingering `flutter run` — simulator 6046… still Booted, no system dialog seen). Remaining 11 shots not attempted serially: each needs its own 5-min window and the K09-light result already exceeds ±0.2 for the intended copy reason, so the matrix cannot PASS as specified. Geometry at 390/1.0 is pinned by widget tests instead: K07 control, K05 geometry/matrix, K09 geometry, K10 matrix/gutter, K01 D1/D2, K02 geometry, K06 widget probes — all green.
 
 `flutter analyze` → No issues found. `flutter test --timeout 120s --concurrency=1` → all pass.
 
