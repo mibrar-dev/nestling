@@ -11,13 +11,19 @@ cd "${WORKDIR:-$ROOT}"
 # Rate-limit cooldown shared by all agents: a model that rate-limited in the
 # last 2 h is skipped in favour of Space Bunny (file: _status/cooldown/<model>).
 CD="$ST/cooldown"; mkdir -p "$CD"; CDF="$CD/$(echo "$MODEL" | tr '/#' '__')"
+# First model not in cooldown, strongest first (Space Bunny proved unreliable on builds).
+pick_model() { for m in "opencode-go/muse-spark-1.3-contributor#xhigh" "opencode-go/deepseek-v4.1-flash#max" "opencode-go/space-bunny-free#max"; do
+  [ "$m" = "$1" ] && continue; f="$CD/$(echo "$m" | tr '/#' '__')"
+  if [ ! -f "$f" ] || [ $(( $(date +%s) - $(cat "$f") )) -ge 7200 ]; then echo "$m"; return; fi; done; echo "opencode-go/space-bunny-free#max"; }
 if [ -f "$CDF" ] && [ $(( $(date +%s) - $(cat "$CDF") )) -lt 7200 ]; then
-  ORIG="$MODEL"; if [ "$MODEL" = "opencode-go/space-bunny-free#max" ]; then MODEL="opencode-go/deepseek-v4.1-flash#max"; else MODEL="opencode-go/space-bunny-free#max"; BCD="$CD/opencode-go_space-bunny-free_max"; [ -f "$BCD" ] && [ $(( $(date +%s) - $(cat "$BCD") )) -lt 7200 ] && MODEL="opencode-go/deepseek-v4.1-flash#max"; fi; SID="-"
+  ORIG="$MODEL"; MODEL="$(pick_model "$MODEL")"; SID="-"
   ev START "model=$MODEL cooldown_from=$ORIG"
 else
   ev START "model=$MODEL"
 fi
 for i in 1 2 3 4 5; do
+  # Orchestrator pause (e.g. provider account out of funds): wait, keep the loop alive.
+  while [ -f "$ST/PAUSE" ]; do sleep 60; done
   if [ "$SID" != "-" ]; then
     opencode run --auto -s "$SID" -m "$MODEL" "$(cat "$BRIEF")" < /dev/null > "$LOG" 2>&1 &
   else
@@ -68,8 +74,8 @@ for i in 1 2 3 4 5; do
     # Free models rate-limit hard: after two rate limits, fall back to Space Bunny (same session title, fresh session).
     if tail -40 "$LOG" | grep -qiE "rate limit|usage limit|Upstream|502 Bad Gateway|503 Service|504 Gateway"; then
       RL=$(( ${RL:-0} + 1 )); date +%s > "$CD/$(echo "$MODEL" | tr '/#' '__')"
-      if [ "$RL" -ge 2 ] && [ "$MODEL" != "opencode-go/space-bunny-free#max" ]; then
-        ev RETRY "fallback_model=space-bunny from=$MODEL"; MODEL="opencode-go/space-bunny-free#max"; SID="-"
+      if [ "$RL" -ge 2 ]; then
+        NEW="$(pick_model "$MODEL")"; ev RETRY "fallback_model=$NEW from=$MODEL"; MODEL="$NEW"; SID="-"; RL=0
       fi
     fi
     sleep 120; continue
@@ -81,7 +87,7 @@ for i in 1 2 3 4 5; do
     EMPTY=$(( ${EMPTY:-0} + 1 )); ev RETRY "attempt=$i reason=empty_run model=$MODEL"
     if [ "$EMPTY" -ge 2 ]; then
       date +%s > "$CD/$(echo "$MODEL" | tr '/#' '__')"
-      if [ "$MODEL" = "opencode-go/space-bunny-free#max" ]; then NEW="opencode-go/deepseek-v4.1-flash#max"; else NEW="opencode-go/space-bunny-free#max"; fi
+      NEW="$(pick_model "$MODEL")"
       ev RETRY "fallback_model=$NEW from=$MODEL"; MODEL="$NEW"; SID="-"; EMPTY=0
     fi
     sleep 20; continue
