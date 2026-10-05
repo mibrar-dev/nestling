@@ -11,10 +11,10 @@ cd "${WORKDIR:-$ROOT}"
 # Rate-limit cooldown shared by all agents: a model that rate-limited in the
 # last 2 h is skipped in favour of Space Bunny (file: _status/cooldown/<model>).
 CD="$ST/cooldown"; mkdir -p "$CD"; CDF="$CD/$(echo "$MODEL" | tr '/#' '__')"
-# First model not in cooldown, in preference order (Muse is the last resort).
-pick_model() { for m in "opencode-go/space-bunny-free#max" "opencode-go/deepseek-v4.1-flash#max" "opencode-go/muse-spark-1.3-contributor#xhigh"; do
+# First model not in cooldown, strongest first (Space Bunny proved unreliable on builds).
+pick_model() { for m in "opencode-go/muse-spark-1.3-contributor#xhigh" "opencode-go/deepseek-v4.1-flash#max" "opencode-go/space-bunny-free#max"; do
   [ "$m" = "$1" ] && continue; f="$CD/$(echo "$m" | tr '/#' '__')"
-  if [ ! -f "$f" ] || [ $(( $(date +%s) - $(cat "$f") )) -ge 7200 ]; then echo "$m"; return; fi; done; echo "opencode-go/muse-spark-1.3-contributor#xhigh"; }
+  if [ ! -f "$f" ] || [ $(( $(date +%s) - $(cat "$f") )) -ge 7200 ]; then echo "$m"; return; fi; done; echo "opencode-go/space-bunny-free#max"; }
 if [ -f "$CDF" ] && [ $(( $(date +%s) - $(cat "$CDF") )) -lt 7200 ]; then
   ORIG="$MODEL"; MODEL="$(pick_model "$MODEL")"; SID="-"
   ev START "model=$MODEL cooldown_from=$ORIG"
