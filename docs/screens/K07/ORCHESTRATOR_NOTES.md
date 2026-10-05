@@ -8,3 +8,9 @@
 - D4 sparks in DARK mode: the design's `svg.sparks` uses FIXED hex colours, not theme variables (`<g stroke="#1E1B3A">`, fills #F4B400 / #3D7FF0 / #1F9D63 / #7C6CF2 …). In the dark design the outline is therefore dark ink (invisible on the night sky) and the fills keep their light-theme colours. The app currently strokes with the dark theme's `ink` (#F3F0FA) and uses the dark accent fills, so every sparkle and dot gets a white ring in dark mode (cmp_dark_2.png).
   Fix in `pip_evolution_sparks.dart` only: `_SparksPainter` must resolve the stroke AND every fill from `NestColors.light` in both themes (e.g. `final palette = NestColors.light;` then `palette.ink`, `palette.lilac` …), and `shouldRepaint` no longer depends on the theme. Verify each fill hex equals the HTML's literal. Add a widget/painter test under dark theme asserting the stroke colour is 0xFF1E1B3A.
 - UI check: re-measure dark sparkles; they must show no light outline.
+
+## UPDATE (03:03) — iteration 5, exact fix for K07-BUG-8/9 (mandatory)
+- Stats row: REMOVE the per-card `FittedBox` entirely. The design CSS has no scaling. All three numbers use the identical NestType style at the ambient text scale (no per-card scale-down), single line, `softWrap: false`. Labels ("quests done" / "coins grown" / "of 4 stages") wrap freely with NO maxLines. Keep the equal-height cards from iteration 4 (IntrinsicHeight + CrossAxisAlignment.stretch). Number tops must be identical across the three cards (test: equal `getTopLeft().dy` at 390 and 320, scale 1.0 and 1.3, numbers up to 9999).
+- Caption `.kcap`: remove `maxLines: 3` and the ellipsis (same as K07-BUG-7).
+- Geometry at 390 / scale 1.0 must stay identical to iteration 4 (UI check passed there).
+- Bug hunt next pass: only report NEW major defects that a child or parent would actually see at supported settings; sub-pixel layout differences under 2 px are not majors.

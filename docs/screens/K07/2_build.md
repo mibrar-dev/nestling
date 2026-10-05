@@ -1,178 +1,155 @@
-# K07 · 2 BUILD (integrate, iteration 4) — 2a logic + 2b UI combined
+# K07 · 2 BUILD (integrate, iteration 5) — 2a logic + 2b UI combined
 
 Job: make the two parallel halves compile and pass together. No simulator was
 booted (only `5_ui` may touch `BC440E48-B3A3-43BC-971B-0EF5DB621874`), no
 design was redesigned, no shared file touched (RULES §1: `features/pip/**` +
 `test/features/pip/**` + this folder only), no `pkill`, no `flutter clean`.
 
-**No integration repair was needed.** 2a shipped **no `lib/` change at all** and
-2b's diff is the two `FIXES_3.md` fixes plus their knock-ons, so there was no
-contract seam to reconcile. The work below is verification — including checking
-both fixes against the design source myself rather than against the builders'
-reading of it — plus the loop hygiene the merge could have left behind.
+**No integration repair was needed.** 2a changed no `lib/` and no `test/` file
+at all, and `ORCHESTRATOR_NOTES.md` gained a mid-stage **mandatory** update
+(03:03) which 2b implemented item by item. So again the work is verification —
+including auditing the mandatory ruling against the shipped diff rather than
+against 2b's summary of it — plus loop hygiene.
 
 ## What landed
 
-### 2a — non-UI layer (`2a_build_logic.md`, iteration 4)
+### 2a — non-UI layer (`2a_build_logic.md`, iteration 5)
 
 CONTRACT CHANGES: **none**; the public surface is byte-identical to iteration 3
-(`PipState` members and `props`, every `PipEvent`, `PipEvolution`,
-`PipRepository`/`PipRepositoryImpl`, DI and routes).
+(re-verified by iterations 4 and 5).
 
-- **No `lib/` file changed.** `1_plan.md` §(b) was audited item by item and is
-  complete: the two-number `PipEvolution`, `watchEvolution`'s `switchMap` ×
-  `combineLatest2`, the `done_pending | approved` all-time count with no clock
-  read (the PERIODS ruling correctly does not apply), the two guarded
-  subscriptions, and iteration 3's `toLoading(restartingNest:,
-  restartingEvolution:)` retry semantics. No `TODO(<ID>)` in the layer.
-- **+5 tests in `pip_evolution_repository_test.dart`** — the production
-  status-**UPDATE** paths the suite never pinned (it only pinned INSERTs): K05
-  re-does a quest by flipping the current period's newest `to_do`/`not_yet` row
-  to `done_pending`, and P11 then flips *that row* to `approved` or back to
-  `not_yet`. Each is pinned against `Seed.demo()`: re-done ⇒ 4 → 5/5; approving
-  ⇒ 4/4 (never double-counted); declining ⇒ 4 → 3/3 (the milestone is derived
-  live, never accumulated); declining one of two rows for the same quest keeps it
-  a quest done (the two numbers move independently); plus a control showing a
-  `to_do → not_yet` change re-emits yet is `==` the first emission, which is what
-  lets the Equatable dedupe keep the celebration still.
-- Probed the `_switchMap` stale-emission window (three scratch probes: awaited
-  switch then write, switch + old-child write in one turn, rapid
-  maya → leo → maya) — **no** stale emission, so no code change; touching a
-  helper K06's `watchNest()`/`watchItems()` also use would need a failing proof.
+- **No code changed** — the note file only. `1_plan.md` §(b) audited complete,
+  and **not one item of `FIXES_4.md` or `4_review.md` sits in this layer**:
+  every finding names a views/widgets file, the shared tokens file, or the
+  orchestrator, and both parked proofs measure painted widget geometry.
+- Deliberately left both `skip: true` lines in place rather than half-opening a
+  proof it could not make green — the un-skipping belongs with the fix, in one
+  commit (which is how 2b shipped it).
+- Recorded the iteration-4 bug-hunt **CORRECTION** (the shell clamps the OS text
+  scaler to 1.0–1.3, so 2×–3.2× reachability arguments are unreachable) so
+  iteration 6 does not re-litigate it, and re-confirmed the layer's properties:
+  no clock read added or existing, coins never rendered as `£`.
 
-### 2b — presentation layer (`2b_build_ui.md`, iteration 4)
+### 2b — presentation layer (`2b_build_ui.md`, iteration 5)
 
-- **K07-BUG-6 (MAJOR)** — `pip_evolution_stats.dart`: `IntrinsicHeight` +
-  `CrossAxisAlignment.stretch` around the stats `Row`, so the three `.k7-stats`
-  cards are one height. `IntrinsicHeight` is required *because* the row lives in
-  a `SingleChildScrollView` (a bare `stretch` throws "forces an infinite
-  height"), and deliberately **not** a pinned card height, so the cards can
-  still grow at large text scales and on 320 px.
-- **K07-BUG-7 (minor)** — `pip_evolution_view.dart`: dropped the hero's
-  `maxLines: 4` and the sub's `maxLines: 2` + ellipsis. Both caps were *app-only*
-  and the sub's ellipsis swallowed the number that explains why Pip grew.
-- Both parked proofs un-skipped (`k07_bugs_test.dart`), and the single
-  `pip_evolution_copy_test.dart` assertion that pinned the plan's `maxLines == 4`
-  now pins `isNull`.
-- Layout, copy, a11y actions, tokens and both palettes untouched — correct, this
-  iteration's brief was a bug list.
+Implemented the 03:03 ruling to the letter, after it overrode 2b's first cut:
+
+- **K07-BUG-8 (MAJOR)** — `pip_evolution_stats.dart`: the per-cell
+  `FittedBox(fit: scaleDown)` is **removed**. All three numbers use the
+  identical `NestType.kidTitle` at the one 30/34 call-site pair, `maxLines: 1`
+  **+ `softWrap: false`**; the label has **no cap at all**; the
+  `Column` is top-aligned so the three numbers share one top edge however many
+  lines any one label wraps to. Iteration 4's
+  `IntrinsicHeight` + `CrossAxisAlignment.stretch` is **kept verbatim** — it is
+  load-bearing, not a leftover.
+- **K07-BUG-9 (minor)** — `pip_evolution_view.dart`: the caption's app-only
+  `maxLines: 3` + ellipsis removed; the hero comment that leaned on an
+  unreachable 3.16× restated as "the cap is app-only and the design has none; do
+  not re-add it".
+- Both remaining `skip: true` flags dropped, and the orchestrator's own
+  number-top proof added in `pip_evolution_widget_test.dart` (390/320 × 1.0/1.3 ×
+  9999 coins, asserting the three painted `RichText` rects share a top edge and a
+  painted height to ≤ 0.5 px).
 
 ## FIXES
 
-### Done — 1. Both fixes verified against the design source (not against the note)
+### Done — 1. The mandatory 03:03 ruling audited item by item against the diff
 
-I re-read `design/html-source/screens/K07-evolution.html` rather than trusting
-the builders' reading:
+| ruling | verified in the shipped code |
+|---|---|
+| "REMOVE the per-card `FittedBox` entirely" | gone; the `Column` lays out directly in the card |
+| "identical NestType style at the ambient text scale … single line, `softWrap: false`" | one 30/34 call-site pair for all three, `maxLines: 1`, `softWrap: false` |
+| "Labels wrap freely with NO `maxLines`" | the label's `maxLines: 2` + ellipsis are gone |
+| "Keep the equal-height cards … (IntrinsicHeight + CrossAxisAlignment.stretch)" | unchanged from iteration 4, in the untouched part of the diff |
+| "Number tops must be identical (test: equal `getTopLeft().dy` at 390 and 320, 1.0 and 1.3, up to 9999)" | the new widget test does exactly that matrix, on painted rects |
+| "Caption `.kcap`: remove `maxLines: 3` and the ellipsis" | done, with the HTML line cited in the comment |
+| "Geometry at 390 / scale 1.0 must stay identical to iteration 4" | see Done 2 |
 
-- **K07-BUG-7**: line 24 `.k7-hero { text-align: center; overflow-wrap: anywhere; }`
-  and line 25 `.k7-sub { text-align: center; }` — the file contains **no**
-  `-webkit-line-clamp`, no `max-height`, no `overflow` on either (the only
-  `overflow` is `html, body`, line 6). In the browser both simply grow and
-  `.scroll` scrolls, so dropping the caps matches the design. Confirmed.
-- **K07-BUG-6**: line 27 `.k7-stats { display: flex; gap: 10px; }` with **no**
-  `align-items`, i.e. the CSS default `stretch`, so the three
-  `.k7-stats > div` boxes are all the height of the tallest. The shipped
-  `IntrinsicHeight` + `stretch` is that same instruction. Confirmed.
-- **The ±2 px risk is covered by the existing design-width proof**: the 390 px
-  geometry suite (cards 110 wide at x 20/140/260, 84 tall, top 545) is still
-  green in `pip_evolution_widget_test.dart`, i.e. at the design width the three
-  cards were already one height, so `stretch` moves nothing and `5_ui`'s band
-  table should not shift. What changes is only what the UI check never measured
-  — 320 px, where the labels wrap (2.40 px spread with the demo seed, 11.67 px
-  with a large coin total).
+### Done — 2. The 390/1.0 geometry gate, so `5_ui`'s band table must not move
 
-### Done — 2. Cross-half sequencing of the un-skips, and no scratch left behind
+Iteration 4 is the iteration whose UI check passed, so the ruling's "geometry at
+390 / scale 1.0 must stay identical" is the load-bearing claim. The design pins
+are untouched and green in the current tree: the three cards 110 wide at
+x 20 / 140 / 260, 84 tall (`3 + 12 + 34 + 2 + 18 + 12 + 3`), top **545**, and
+the number box's bottom at `545 + 34`. At 390/1.0 nothing scales, so removing
+the `FittedBox` is invisible there — which is why this stage could make the fix
+without touching the verified band table.
 
-2a deliberately left both `skip: true` lines in place rather than half-opening a
-proof it could not make green, and left `pip_evolution_copy_test.dart` alone;
-2b dropped them in the same commit as the fixes. Verified in the tree: **zero**
-actual skips in `test/features/pip` (the two `skip: true` hits in
-`k07_bugs_test.dart` are lines 13 and 20 of the file's own convention comment,
-and the directory run reports no `~` marker).
+### Done — 3. Loop hygiene
 
-2b also reported seeing 2a's untracked scratch probe
-`test/features/pip/zz_probe_2a_iter4_test.dart`. It is gone: `git status`
-(including untracked) shows nothing under `app/`, and
-`dart format --set-exit-if-changed .` over the app reports **0 changed**, so no
-other stage's in-flight artefact is being carried into this iteration's commit.
-
-### Done — 3. The mandatory orchestrator items still hold
-
-`ORCHESTRATOR_NOTES.md` has no iteration-4 update, so the standing mandatory
-items are the iteration-2 D1/D2/D3 and the iteration-3 D4. All are satisfied and
-still proven by the live suite: D1 (DB-truth wrap accepted), D2 (sparkle path
-fixed, iteration 2), D3 (bubble tail accepted), D4 (dark sparkles stroked and
-filled from `NestColors.light` in both themes, `shouldRepaint` false, proven by
-the real-raster dark probe that samples `0x1E1B3A`). `pip_evolution_sparks.dart`
-is not in this iteration's diff, and `pip_orchestrator_notes_test.dart` +
-`k07_sparkles_bug_test.dart` pass.
+- **Zero skips** in `test/features/pip` — verified by grep (only the two hits are
+  lines 13 and 20 of `k07_bugs_test.dart`'s own convention comment) and by the
+  directory run reporting no `~` marker. `k07_bugs_test.dart` runs its whole
+  file.
+- No scratch artefact carried over: nothing untracked under `app/`, and
+  `dart format --set-exit-if-changed .` reports 0 changed.
+- `pip_buy_result_test.dart`'s directory-run stall (`6_bugs.md` observation 3)
+  did **not** reproduce — second consecutive iteration; the directory finished in
+  27 s. Recorded as unreproduced, not fixed: nobody changed it.
 
 ### Verified, no change needed
 
-- **Contract**: 2a says none; the tree matches. Both views still switch on their
-  own stream (`state.evolutionStatus` / `state.nestStatus`) and
-  `pip_evolution_stats.dart` is still fed `evolution.questsFinishedCount`.
-- **The plan knock-on**: `pip_evolution_copy_test.dart`'s one assertion now pins
-  `maxLines` is `isNull`, with the style and `textAlign == center` assertions
-  around it unchanged.
-- **Regression guard for the dropped caps**: re-adding a cap would fail
-  immediately and visibly — `k07_bugs_test.dart`'s K07-BUG-7 measures real line
-  counts at an accessibility text scale (5 hero / 3 sub lines before the fix) and
-  `pip_evolution_copy_test.dart` pins `isNull`. So the tests, not this note, are
-  what keep the caps out.
-- Nothing outside RULES §1 was edited by me; no `analysis_options` change, no
-  `google_fonts`, no `DateTime.now()`, no hard-coded colour or size.
+- **Contract**: 2a says none, and the tree matches. Both views still switch on
+  their own stream (`state.evolutionStatus` / `state.nestStatus`), the stats are
+  still fed `evolution.questsFinishedCount`, and `PipLoadRequested` still opens
+  both streams (unchanged on purpose — `SHARED_REQUEST.md` §2 has no ruling).
+- **Tokens only**: every size in the changed widget comes from
+  `EvolutionStatsGeometry` or a `NestType` call-site pair; no colour or literal
+  size was introduced, and no shared file was touched.
+- **Nothing outside RULES §1 was edited by me**; no `analysis_options` change, no
+  `google_fonts`, no `DateTime.now()`, no `Wrap`/`Row` chip rows.
 
 ### Left
 
-- **`1_plan.md` §(a).3 / §(a).4 re-ratification (orchestrator).** The plan still
-  documents `maxLines: 4` (hero) and `maxLines: 2, overflow: ellipsis` (sub),
-  which the design does not have, and its §(a).6 diagram line reads
-  `Row(spacing: 10) stats` where the shipped tree is
-  `IntrinsicHeight > Row(spacing: 10, stretch: true)`. **I did not edit the
-  plan**: it is the build stage's contract, and re-ratifying its copy values is
-  the orchestrator's call — 2b asked for exactly that. Documentation only; no
-  code is blocked, and the tests above pin the shipped behaviour.
 - **`evolutionSub(0)`** = "Because you helped 0 times" under "Pip grew into a
   Hatchling!" — the missing zero branch needs a wording ruling
-  (`SHARED_REQUEST.md` item 5, no ruling in `ORCHESTRATOR_NOTES.md`). No copy
-  invented; `k07_bugs_test.dart`'s `0 and 999999999 coins…` control pins today's
-  wording and must move on purpose when it lands.
-- **`SHARED_REQUEST.md` §1-§5**, all non-blocking notes for the orchestrator:
-  the K07 background deviation (no `KidScope`, no `.meadow`), the screen-scoped
-  load event (§2 — the reason `PipLoadRequested` still opens K06's stream on
-  K07), the no-entry-point note, the `shot.sh` pre-first-frame save, and the
-  off-token `#3D7FF0` sky dot (§4, ruled by D4 to stay on the light sky token).
-- **`5_ui`**: re-verify the dark sparkles and the stat-card band (expected
-  unmoved at 390 px, per Done 1).
+  (`SHARED_REQUEST.md` item 5; no ruling in `ORCHESTRATOR_NOTES.md`). Third
+  iteration carried; no copy invented. When it lands,
+  `k07_bugs_test.dart`'s `0 and 999999999 coins…` control must move on purpose.
+- **`1_plan.md` re-ratification (orchestrator)** — the plan now diverges in five
+  places: §(a).3 hero cap, §(a).4 sub cap, and §(a).6's `Row(spacing: 10) stats`,
+  its `FittedBox(scaleDown)` guard, and `maxLines: 1` on the stat label. The
+  shipped values are "no cap anywhere the design has none" and "one type size for
+  all three cards". **I did not edit the plan**: it is the build stage's
+  contract, and 2b is not its owner. Documentation only; no code is blocked, and
+  `k07_bugs_test.dart` + `pip_evolution_copy_test.dart` pin the shipped values so
+  a silent regression fails loudly.
+- **`SHARED_REQUEST.md` §1-§5**, non-blocking notes for the orchestrator: the
+  K07 background deviation (no `KidScope`, no `.meadow`), the screen-scoped load
+  event, the no-entry-point note, the `shot.sh` pre-first-frame save, and the
+  off-token `#3D7FF0` sky dot (§4 — must **not** be "fixed" locally; the D4
+  ruling paints the light sky token in both themes).
+- **`5_ui`**: re-verify the dark sparkles (D4) and the stat-card band, expected
+  unmoved at 390/1.0 per Done 2.
 - **No in-app entry point for `/pip-evolution`** — the CTA leaves to `/pip`;
   whether K06 should open K07 on a stage-up is the K06/flow owner's call.
-- **`6_bugs.md` observation 3** (`pip_buy_result_test.dart` stalling when the
-  whole feature directory runs at once) did **not** reproduce here: the
-  directory completed in 10 s. Recorded as unreproduced, not fixed — nobody
-  changed it.
+- **The 03:03 hunt-scope ruling** ("only NEW major defects a child or parent
+  would actually see at supported settings; sub-2 px differences are not
+  majors") applies to the next bug pass; nothing to implement here.
 
 ## Gates
 
 ```
 $ dart format .
-Formatted 642 files (0 changed) in 1.92 seconds.
+Formatted 643 files (0 changed) in 2.65 seconds.
 
 $ flutter analyze
 Analyzing app...
-No issues found! (ran in 3.4s)
+No issues found! (ran in 6.1s)
 
 $ flutter test --timeout 120s test/features/pip
-00:10 +434: All tests passed!      (no `~`: zero skips in the feature)
+00:27 +452: All tests passed!      (no `~`: zero skips in the feature)
 
 $ flutter test --timeout 120s
-01:40 +4489 ~10: All tests passed!
+05:15 +4508 ~10: All tests passed!
 ```
 
 `~10` are the suite's own skips and **none is K07's**: `k01_bugs` (1),
-`k03_bugs` (2), `k09_bugs` (6), `p12_bugs` (1).
+`k03_bugs` (2), `k09_bugs` (6), `p12_bugs` (1). The whole-suite run took 5:15
+this iteration (main added tests since iteration 4's 1:40) — comfortably inside
+the 10-minute rule, nothing hung.
 
-Files changed by this stage: **none** under `app/` — iteration 4's integration
+Files changed by this stage: **none** under `app/` — iteration 5's integration
 needed no code change — plus this `docs/screens/K07/2_build.md`.
 
 VERDICT: PASS

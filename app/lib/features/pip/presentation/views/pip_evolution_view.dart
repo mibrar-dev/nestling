@@ -339,12 +339,15 @@ class _EvolutionBody extends StatelessWidget {
             // NestBalancedText: same copy, style and line breaking as the
             // design, instead of a one-word orphan line. Deliberately NO
             // `maxLines`: `.k7-hero` adds only `overflow-wrap: anywhere` and
-            // `text-align: center`, so in the browser the heading simply grows,
-            // and `NestBalancedText`'s default overflow is `TextOverflow.clip`
-            // — a cap would cut a 5th line MID-GLYPH at accessibility text
-            // scales (iOS reaches 3.16x) with nothing to show for it
-            // (6_bugs.md K07-BUG-7; `1_plan.md` §(a).3's maxLines 4 was a
-            // planned value that the design does not actually specify).
+            // `text-align: center`, and `NestBalancedText`'s default overflow
+            // is `TextOverflow.clip` — a cap would cut a further line
+            // MID-GLYPH with nothing to show for it (6_bugs.md K07-BUG-7;
+            // `1_plan.md` §(a).3's maxLines 4 was a planned value that the
+            // design does not actually specify). The iteration-3 severity note
+            // leaned on iOS's 3.16x, which `app.dart`'s 1.0–1.3 text-scale
+            // clamp makes unreachable — the point is not the reachable scale,
+            // it is that the cap is app-only and the design has none
+            // (6_bugs.md iteration 4's correction; do not re-add it).
             NestBalancedText(
               evolutionTitle(stage),
               key: const Key('k07-title'),
@@ -377,13 +380,17 @@ class _EvolutionBody extends StatelessWidget {
               coinsGrown: profile.totalCoins,
               stage: stage,
             ),
+            // `.kcap` (`K07-evolution.html:14`) sets only font, weight, size,
+            // line-height and colour — no clamp — and `.scroll` scrolls, so
+            // the browser simply grows the line. The app's `maxLines: 3` +
+            // ellipsis was the same app-only clamp K07-BUG-7 removed from the
+            // hero and the sub, left behind on the caption (6_bugs.md
+            // K07-BUG-9); it can only ever truncate, never help.
             Text(
               evolutionCaption(),
               key: const Key('k07-caption'),
               style: NestType.kidCaption(color: tokens.ink2),
               textAlign: TextAlign.center,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),

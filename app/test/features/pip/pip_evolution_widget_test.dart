@@ -286,6 +286,73 @@ void main() {
       await disposeApp(tester);
     });
 
+    testWidgets(
+      'the three stat NUMBERS share one top edge and one type size at 390 and '
+      '320 px, scale 1.0 and 1.3, up to 9999 coins (ORCHESTRATOR_NOTES 03:03)',
+      (tester) async {
+        // The design sets ONE `font-size` for all three `.k7-stats b` and
+        // scales nothing, so the numbers must not shrink per card even when a
+        // cell is narrower than its content. This is the orchestrator's own
+        // assertion: equal `getTopLeft().dy`. `pumpEvolution` runs through the
+        // app shell, so the 1.3 here is the clamped value the device renders.
+        for (final width in const <double>[390, 320]) {
+          for (final scale in const <double>[1, 1.3]) {
+            await tester.runAsync(() async {
+              await (db.update(db.children)..where((c) => c.id.equals('maya')))
+                  .write(const ChildrenCompanion(pipTotalCoins: Value(9999)));
+            });
+            await pumpEvolution(
+              tester,
+              stage: _designStage,
+              width: width,
+              textScale: scale,
+            );
+
+            double spread(List<double> values) {
+              final sorted = <double>[...values]..sort();
+              return sorted.last - sorted.first;
+            }
+
+            final rects = <Rect>[
+              for (final cell in const <String>[
+                'k07-card-quests',
+                'k07-card-coins',
+                'k07-card-stage',
+              ])
+                tester.getRect(
+                  find
+                      .descendant(
+                        of: find.byKey(Key(cell)),
+                        matching: find.byType(RichText),
+                      )
+                      .first,
+                ),
+            ];
+            final tops = <double>[for (final r in rects) r.top];
+            final heights = <double>[for (final r in rects) r.height];
+            final label = '@${width.toInt()}px / ${scale}x';
+            expect(
+              spread(tops),
+              lessThanOrEqualTo(0.5),
+              reason:
+                  '$label: number tops '
+                  '${tops.map((v) => v.toStringAsFixed(2)).join(' / ')} — the '
+                  'design has a single line box for all three',
+            );
+            expect(
+              spread(heights),
+              lessThanOrEqualTo(0.5),
+              reason:
+                  '$label: painted number heights '
+                  '${heights.map((v) => v.toStringAsFixed(2)).join(' / ')} — '
+                  'one `font-size` for all three, as the design sets',
+            );
+            await disposeApp(tester);
+          }
+        }
+      },
+    );
+
     testWidgets('the bottom bar reaches the physical edge with the CTA on it', (
       tester,
     ) async {

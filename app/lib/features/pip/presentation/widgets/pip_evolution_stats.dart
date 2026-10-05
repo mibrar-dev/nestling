@@ -158,44 +158,62 @@ class _StatCell extends StatelessWidget {
           ),
         ],
       ),
-      // At 320 px a cell is ~86 px wide and at text scale 1.3 the label wants
-      // two lines: `scaleDown` shrinks the pair instead of overflowing, so a
-      // number never drops its label (K07 §(a).6).
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Text(
-              '$value',
-              key: valueKey,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              // Nunito 900 30/34 — no shared token is 30 px, so the size/line
-              // pair is set here at the call site (`K07-evolution.html:29`).
-              style: NestType.kidTitle(color: tokens.ink).copyWith(
-                fontSize: EvolutionStatsGeometry.numberSize,
-                height:
-                    EvolutionStatsGeometry.numberLineHeight /
-                    EvolutionStatsGeometry.numberSize,
-              ),
+      // CSS never scales an item's type because its neighbours are narrower:
+      // `.k7-stats > div { flex: 1; min-width: 0 }` fixes the card at a third
+      // of the row (110 px at 390) and `.k7-stats b`/`span` set ONE `font-size`
+      // for all three cards — a browser that runs out of room WRAPS, it never
+      // shrinks one card's text. A per-cell `FittedBox(fit: scaleDown)` did
+      // exactly that: each cell shrank by its own content's width, so the three
+      // numbers painted at three different sizes (39.37 / 39.51 / 43.40 at the
+      // design width and text scale 1.3, and 29.52 / 29.63 / 32.54 at 320 px
+      // with no accessibility setting at all) and their tops drifted 2.4–3.16
+      // px — an owner ALIGNMENT failure (6_bugs.md K07-BUG-8). The cells now
+      // both stretch to one height (above) and share one 30 px number, with the
+      // label wrapping at 2 lines inside the fixed card if it must.
+      //
+      // `maxLines: 1` + `softWrap: false` on the NUMBER because `.k7-stats b {
+      // display: block }` is a single line in CSS. The LABEL has no cap at all:
+      // a browser wraps `.k7-stats span` freely inside the card, so `maxLines`
+      // is gone and the card is the thing that grows.
+      child: Column(
+        // CSS block flow: `.k7-stats b`/`span` start at the top of the
+        // padding box (the `Column` default), so the three numbers share one
+        // top edge no matter how many lines any one label wraps to. `center`
+        // would re-splay them at an intermediate width where only some labels
+        // wrap.
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(
+            '$value',
+            key: valueKey,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            softWrap: false,
+            // Nunito 900 30/34 — no shared token is 30 px, so the size/line
+            // pair is set here at the call site (`K07-evolution.html:29`).
+            style: NestType.kidTitle(color: tokens.ink).copyWith(
+              fontSize: EvolutionStatsGeometry.numberSize,
+              height:
+                  EvolutionStatsGeometry.numberLineHeight /
+                  EvolutionStatsGeometry.numberSize,
             ),
-            const SizedBox(height: EvolutionStatsGeometry.labelTopMargin),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              // Nunito 700 14/18 on ink-2 (`K07-evolution.html:30`).
-              style: NestType.kidCaption(color: tokens.ink2).copyWith(
-                fontSize: EvolutionStatsGeometry.labelSize,
-                height:
-                    EvolutionStatsGeometry.labelLineHeight /
-                    EvolutionStatsGeometry.labelSize,
-              ),
+          ),
+          const SizedBox(height: EvolutionStatsGeometry.labelTopMargin),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            // No `maxLines`: the design clamps nothing and the row's
+            // `IntrinsicHeight` grows the cards to fit the tallest wrapped
+            // label (ORCHESTRATOR_NOTES 03:03).
+            // Nunito 700 14/18 on ink-2 (`K07-evolution.html:30`).
+            style: NestType.kidCaption(color: tokens.ink2).copyWith(
+              fontSize: EvolutionStatsGeometry.labelSize,
+              height:
+                  EvolutionStatsGeometry.labelLineHeight /
+                  EvolutionStatsGeometry.labelSize,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

@@ -1790,7 +1790,6 @@ void main() {
       );
       await disposeApp(tester);
     },
-    skip: true,
   );
 
   testWidgets(
@@ -1829,7 +1828,6 @@ void main() {
       expect(tester.takeException(), isNull);
       await disposeApp(tester);
     },
-    skip: true,
   );
 
   testWidgets(
