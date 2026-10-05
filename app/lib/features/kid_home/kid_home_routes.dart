@@ -3,7 +3,6 @@ import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nestling/features/kid_home/presentation/bloc/kid_home_bloc.dart';
 import 'package:nestling/features/kid_home/presentation/bloc/kid_home_event.dart';
-import 'package:nestling/features/kid_home/presentation/views/kid_home_done_view.dart';
 import 'package:nestling/features/kid_home/presentation/views/kid_home_view.dart';
 import 'package:nestling/features/kid_home/presentation/views/kid_pin_view.dart';
 import 'package:nestling/features/kid_home/presentation/views/profile_picker_view.dart';
@@ -71,7 +70,7 @@ final GoRoute kidHomeDoneRoute = GoRoute(
     return BlocProvider<KidHomeBloc>(
       create: (_) =>
           GetIt.instance<KidHomeBloc>()..add(const KidHomeLoadRequested()),
-      child: const KidHomeDoneView(),
+      child: const KidHomeView(),
     );
   },
 );

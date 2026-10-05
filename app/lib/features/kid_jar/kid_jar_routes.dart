@@ -34,7 +34,7 @@ final GoRoute payoutDayRoute = GoRoute(
   builder: (context, state) {
     return BlocProvider<KidJarBloc>(
       create: (_) =>
-          GetIt.instance<KidJarBloc>()..add(const KidJarLoadRequested()),
+          GetIt.instance<KidJarBloc>()..add(const KidJarPayoutRequested()),
       child: const PayoutDayView(),
     );
   },

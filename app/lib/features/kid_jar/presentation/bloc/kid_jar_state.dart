@@ -1,7 +1,14 @@
 import 'package:equatable/equatable.dart';
 import 'package:nestling/features/kid_jar/domain/entities/jar_entry.dart';
+import 'package:nestling/features/kid_jar/domain/entities/payout_celebration.dart';
 
 enum KidJarStatus { initial, loading, loaded, failure }
+
+/// Sentinel default for [KidJarState.copyWith]'s `payout` parameter, so the
+/// copy can distinguish "leave the celebration alone" from "clear it back to
+/// the no-payout-yet state" (`copyWith()` keeps it, `copyWith(payout: null)`
+/// clears it).
+const Object _keepPayout = Object();
 
 final class KidJarState extends Equatable {
   const new({
@@ -13,6 +20,7 @@ final class KidJarState extends Equatable {
     this.goalSavedPence = 0,
     this.goalTargetPence = 0,
     this.nextPayoutDay = 'Saturday',
+    this.payout,
     this.errorMessage,
   });
 
@@ -36,6 +44,11 @@ final class KidJarState extends Equatable {
 
   /// Full weekday name from the payout-day setting (`Saturday` default).
   final String nextPayoutDay;
+
+  /// The K10 celebration: the latest payout event for the active child, or
+  /// null when no payout was recorded yet (the view shows its empty state).
+  /// K09 emissions never touch it; only payout emissions replace it.
+  final PayoutCelebration? payout;
   final String? errorMessage;
 
   KidJarState copyWith({
@@ -47,6 +60,7 @@ final class KidJarState extends Equatable {
     int? goalSavedPence,
     int? goalTargetPence,
     String? nextPayoutDay,
+    Object? payout = _keepPayout,
     String? errorMessage,
   }) {
     return KidJarState(
@@ -58,6 +72,9 @@ final class KidJarState extends Equatable {
       goalSavedPence: goalSavedPence ?? this.goalSavedPence,
       goalTargetPence: goalTargetPence ?? this.goalTargetPence,
       nextPayoutDay: nextPayoutDay ?? this.nextPayoutDay,
+      payout: identical(payout, _keepPayout)
+          ? this.payout
+          : payout as PayoutCelebration?,
       errorMessage: errorMessage ?? this.errorMessage,
     );
   }
@@ -83,6 +100,24 @@ final class KidJarState extends Equatable {
       goalSavedPence: goalSavedPence,
       goalTargetPence: goalTargetPence,
       nextPayoutDay: nextPayoutDay,
+      payout: payout,
+    );
+  }
+
+  /// A payout-stream emission: replaces the celebration (null = no payout
+  /// yet) and clears a stale load error, while keeping every K09 jar field
+  /// in place (`copyWithLoaded` shape for the K10 screen).
+  KidJarState copyWithPayout(PayoutCelebration? celebration) {
+    return KidJarState(
+      status: KidJarStatus.loaded,
+      childId: childId,
+      items: items,
+      owedPence: owedPence,
+      goalTitle: goalTitle,
+      goalSavedPence: goalSavedPence,
+      goalTargetPence: goalTargetPence,
+      nextPayoutDay: nextPayoutDay,
+      payout: celebration,
     );
   }
 
@@ -96,6 +131,7 @@ final class KidJarState extends Equatable {
     goalSavedPence,
     goalTargetPence,
     nextPayoutDay,
+    payout,
     errorMessage,
   ];
 }

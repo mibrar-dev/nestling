@@ -89,6 +89,10 @@ final class KidHomeState extends Equatable {
 
   double get fraction => totalCount == 0 ? 0 : doneCount / totalCount;
 
+  /// K03b all-done branch: every quest counts as done for the current
+  /// period (never when there is nothing to do — that is `_KidEmptyQuests`).
+  bool get allDone => totalCount > 0 && doneCount == totalCount;
+
   KidHomeState copyWith({
     KidHomeStatus? status,
     List<KidQuest>? items,

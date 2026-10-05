@@ -48,8 +48,9 @@ const KidChild _maya = KidChild(
   pipTotalCoins: 175,
 );
 
-/// Maya's 6 quests in repo (alphabetical) order with demo statuses:
-/// 4 done (2 approved + 2 done_pending), 2 to_do.
+/// Maya's 6 quests with demo statuses: 4 done (2 approved + 2
+/// done_pending), 2 to_do. (Hand-listed fake order; the real repository
+/// serves creation order per the ROW ORDER owner rule.)
 List<KidQuest> _mayaItems() => const <KidQuest>[
   KidQuest(
     id: 'q-bins:maya',
@@ -125,6 +126,7 @@ KidQuest _withStatus(KidQuest quest, String status) => KidQuest(
   icon: quest.icon,
   coins: quest.coins,
   status: status,
+  needsApproval: quest.needsApproval,
 );
 
 Matcher _loaded({
@@ -400,6 +402,24 @@ void main() {
       expect(state.doneCount, 2);
       expect(state.totalCount, 4);
       expect(state.fraction, 0.5);
+    });
+
+    test('needsApproval defaults true and shapes equality (ROW META)', () {
+      expect(_quest('a', 'approved').needsApproval, isTrue);
+      expect(_quest('a', 'approved'), _quest('a', 'approved'));
+      const noApproval = KidQuest(
+        id: 'a:maya',
+        title: 'a title',
+        detail: 'approved',
+        questId: 'a',
+        icon: 'book',
+        coins: 10,
+        status: 'approved',
+        needsApproval: false,
+      );
+      expect(noApproval.needsApproval, isFalse);
+      expect(noApproval, isNot(_quest('a', 'approved')));
+      expect(_withStatus(noApproval, 'done_pending').needsApproval, isFalse);
     });
 
     test('copyWith keeps the child; copyWithLoaded can clear it', () {

@@ -2,8 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
-import 'package:nestling/core/design_system/design_system.dart';
+import 'package:nestling/core/design_system/assets/nestling_assets.dart'
+    as nest_assets;
+import 'package:nestling/core/design_system/design_system.dart' hide PipMood;
 import 'package:nestling/core/design_system/motion/pip_avatar.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_child.dart';
 import 'package:nestling/features/kid_home/domain/entities/kid_quest.dart';
@@ -42,6 +45,24 @@ import 'package:nestling/features/pip/pip_routes.dart';
 const double _kNestBoxWidth = 236;
 const double _kNestBoxHeight = 188;
 const double _kPipSlotSize = 152;
+
+/// K03b all-done pet box (`.k3-pet { width: 260px; height: 226px }` in
+/// `design/html-source/screens/K03b-kid-home-done.html:25`): the celebration
+/// nest is a 226×226 square (the browser's SVG `meet` draws 226×226,
+/// letterboxed 17 px each side of the 260-wide box), NOT K03's 236×188.
+/// K03B-BUG-3: these stay local — `_kNestBoxWidth/_kNestBoxHeight` are shared
+/// with `_KidPetStage` and K03 must not move.
+const double _kAllDoneNestBoxWidth = 226;
+const double _kAllDoneNestBoxHeight = 226;
+
+/// K03b Pip bottom offset (`.k3-pet .pip { bottom: 92px }`, HTML l.27).
+/// Passing it also takes the shared `explicitGeometry` `pipBottom` early
+/// return, which honours `slotHeight` (K03B-BUG-2: the final return ignores
+/// it and adds `_explicitBleed`, rendering 257.4 instead of 226 — shared
+/// code this branch must not touch per ORCHESTRATOR_NOTES 04:52 D1).
+/// `226 − 92 − 152 = −18` lands the Pip box at −18…134 vs the design
+/// −16…134 (within 2 px; BUG-3 decomposition).
+const double _kAllDonePipBottom = 92;
 
 /// Scroll gap between the pet stage and the hearts row: the HTML's
 /// `.scroll > * + *`, i.e. `--s4`.
@@ -87,12 +108,19 @@ bool _isDone(KidQuest item) =>
     item.status == 'approved' || item.status == 'done_pending';
 
 /// Card-level status text for the `{title}, {status text}` semantics label.
+/// ROW META (orchestrator 04:52): mirrors the visible meta — waiting +
+/// needs approval announces the wait, approved + needed approval announces
+/// the approval, done + no approval announces Done (the `+N` chip is the
+/// visual), anything else is to do.
 String _statusText(KidQuest item) {
-  return switch (item.status) {
-    'done_pending' => "Waiting for Mum's thumbs-up",
-    'approved' => 'Done',
-    _ => 'To do',
-  };
+  if (item.status == 'done_pending' && item.needsApproval) {
+    return "Waiting for Mum's thumbs-up";
+  }
+  if (item.status == 'approved' && item.needsApproval) {
+    return 'Mum said yes!';
+  }
+  if (_isDone(item)) return 'Done';
+  return 'To do';
 }
 
 /// K03 Kid home (`/kid-home`): greeting header, Pip stage, happiness hearts,
@@ -369,7 +397,9 @@ class _KidHomeBody extends StatelessWidget {
                   ),
                   Expanded(
                     child: Semantics(
-                      label: 'Hi $nickname, $done done today',
+                      label: state.allDone
+                          ? 'Hi $nickname, all done!'
+                          : 'Hi $nickname, $done done today',
                       excludeSemantics: true,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -384,10 +414,14 @@ class _KidHomeBody extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                           Text(
-                            '$done done today',
+                            state.allDone ? 'All done!' : '$done done today',
                             // SHARED_REQUEST #7 landed: screen-exact
                             // `.k3-sub` is now NestType.kidCaption.
-                            style: NestType.kidCaption(color: tokens.ink2),
+                            style: NestType.kidCaption(
+                              color: state.allDone
+                                  ? tokens.leafInk
+                                  : tokens.ink2,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -401,7 +435,9 @@ class _KidHomeBody extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: state.items.isEmpty
+              child: state.allDone
+                  ? _AllDoneBody(child: child, state: state)
+                  : state.items.isEmpty
                   ? _KidEmptyQuests(child: child)
                   : ListView(
                       padding: EdgeInsets.zero,
@@ -525,101 +561,105 @@ class _KidHomeBody extends StatelessWidget {
             // under the dock. Buttons stay above the inset; the OS draws
             // the home pill. This supersedes the meadow-to-the-edge half of
             // ORCHESTRATOR_NOTES #8 (the inset half still holds).
-            Container(
-              decoration: BoxDecoration(
-                color: tokens.surface,
-                border: Border(top: BorderSide(color: tokens.ink, width: 3)),
-              ),
-              child: SafeArea(
-                top: false,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Dock bottom air is `s1`, not the HTML `gap10`: the 34 px
-                    // OS inset below already belongs to this surface (owner
-                    // rule), so 3+12+72+4+34 lands the dock top exactly on
-                    // the design y≈720 (UI dev 3).
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        NestSpacing.padSide,
-                        NestSpacing.s3,
-                        NestSpacing.padSide,
-                        NestSpacing.s1,
+            if (state.allDone)
+              const _AllDoneBar()
+            else
+              Container(
+                decoration: BoxDecoration(
+                  color: tokens.surface,
+                  border: Border(top: BorderSide(color: tokens.ink, width: 3)),
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Dock bottom air is `s1`, not the HTML `gap10`: the 34 px
+                      // OS inset below already belongs to this surface (owner
+                      // rule), so 3+12+72+4+34 lands the dock top exactly on
+                      // the design y≈720 (UI dev 3).
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                          NestSpacing.padSide,
+                          NestSpacing.s3,
+                          NestSpacing.padSide,
+                          NestSpacing.s1,
+                        ),
+                        child: Row(
+                          spacing: NestSpacing.s3,
+                          children: [
+                            Expanded(
+                              child: NestKidButton(
+                                label: 'Pip',
+                                color: NestKidButtonColor.lilac,
+                                icon: NestIcon(
+                                  NestIcons.pipFace,
+                                  color: tokens.onAccent,
+                                ),
+                                axis: Axis.vertical,
+                                gap: NestSpacing.s1,
+                                minHeight: 66,
+                                fontSize: 17,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: NestSpacing.gap6,
+                                ),
+                                // Dock labels never wrap (review finding 5;
+                                // SHARED_REQUEST #9 `wrapLabel` API now on main).
+                                wrapLabel: false,
+                                onPressed: () => context.go(PipRoutePaths.nest),
+                              ),
+                            ),
+                            Expanded(
+                              child: NestKidButton(
+                                label: 'Shop',
+                                color: NestKidButtonColor.coin,
+                                icon: NestIcon(
+                                  NestIcons.bag,
+                                  color: tokens.onWarm,
+                                ),
+                                axis: Axis.vertical,
+                                gap: NestSpacing.s1,
+                                minHeight: 66,
+                                fontSize: 17,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: NestSpacing.gap6,
+                                ),
+                                // Dock labels never wrap (review finding 5;
+                                // SHARED_REQUEST #9 `wrapLabel` API now on main).
+                                wrapLabel: false,
+                                onPressed: () =>
+                                    context.go(KidShopRoutePaths.shop),
+                              ),
+                            ),
+                            Expanded(
+                              child: NestKidButton(
+                                label: 'My jar',
+                                icon: NestIcon(
+                                  NestIcons.jar,
+                                  color: tokens.onLeaf,
+                                ),
+                                axis: Axis.vertical,
+                                gap: NestSpacing.s1,
+                                minHeight: 66,
+                                fontSize: 17,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: NestSpacing.gap6,
+                                ),
+                                // Dock labels never wrap (review finding 5;
+                                // SHARED_REQUEST #9 `wrapLabel` API now on main).
+                                wrapLabel: false,
+                                onPressed: () =>
+                                    context.go(KidJarRoutePaths.jar),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      child: Row(
-                        spacing: NestSpacing.s3,
-                        children: [
-                          Expanded(
-                            child: NestKidButton(
-                              label: 'Pip',
-                              color: NestKidButtonColor.lilac,
-                              icon: NestIcon(
-                                NestIcons.pipFace,
-                                color: tokens.onAccent,
-                              ),
-                              axis: Axis.vertical,
-                              gap: NestSpacing.s1,
-                              minHeight: 66,
-                              fontSize: 17,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: NestSpacing.gap6,
-                              ),
-                              // Dock labels never wrap (review finding 5;
-                              // SHARED_REQUEST #9 `wrapLabel` API now on main).
-                              wrapLabel: false,
-                              onPressed: () => context.go(PipRoutePaths.nest),
-                            ),
-                          ),
-                          Expanded(
-                            child: NestKidButton(
-                              label: 'Shop',
-                              color: NestKidButtonColor.coin,
-                              icon: NestIcon(
-                                NestIcons.bag,
-                                color: tokens.onWarm,
-                              ),
-                              axis: Axis.vertical,
-                              gap: NestSpacing.s1,
-                              minHeight: 66,
-                              fontSize: 17,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: NestSpacing.gap6,
-                              ),
-                              // Dock labels never wrap (review finding 5;
-                              // SHARED_REQUEST #9 `wrapLabel` API now on main).
-                              wrapLabel: false,
-                              onPressed: () =>
-                                  context.go(KidShopRoutePaths.shop),
-                            ),
-                          ),
-                          Expanded(
-                            child: NestKidButton(
-                              label: 'My jar',
-                              icon: NestIcon(
-                                NestIcons.jar,
-                                color: tokens.onLeaf,
-                              ),
-                              axis: Axis.vertical,
-                              gap: NestSpacing.s1,
-                              minHeight: 66,
-                              fontSize: 17,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: NestSpacing.gap6,
-                              ),
-                              // Dock labels never wrap (review finding 5;
-                              // SHARED_REQUEST #9 `wrapLabel` API now on main).
-                              wrapLabel: false,
-                              onPressed: () => context.go(KidJarRoutePaths.jar),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const NestHomeIndicator(),
-                  ],
+                      const NestHomeIndicator(),
+                    ],
+                  ),
                 ),
               ),
-            ),
           ],
         ),
       ),
@@ -764,6 +804,19 @@ class _QuestCardState extends State<_QuestCard> {
   Widget build(BuildContext context) {
     final tokens = context.nest;
     final done = _isDone(widget.item);
+    // ROW META (orchestrator 04:52, K03b HTML l.85/93/101): waiting +
+    // needs approval → `Waiting for Mum`; approved + needed approval →
+    // `Mum said yes!`; done + no approval → the `+N` coin chip (no status
+    // chip). To-do rows keep the `+N` chip. Demo rows are unchanged
+    // (waiting stays waiting, to-do stays +N); approved demo rows move
+    // from `Done` to `Mum said yes!` (all seeded quests need approval).
+    final needsApproval = widget.item.needsApproval;
+    final showCoin = !done || !needsApproval;
+    final metaLabel = !done || !needsApproval
+        ? null
+        : widget.item.status == 'done_pending'
+        ? 'Waiting for Mum'
+        : 'Mum said yes!';
     return NestKidQuestCard(
       title: widget.item.title,
       icon: NestIcon(_iconFor(widget.item.icon), size: 28, color: tokens.ink),
@@ -776,14 +829,8 @@ class _QuestCardState extends State<_QuestCard> {
         'bed' => tokens.peachTint,
         _ => null,
       },
-      coinAmount: done ? null : '+${widget.item.coins}',
-      metaChip: done
-          ? KidStatusChip(
-              label: widget.item.status == 'done_pending'
-                  ? 'Waiting for Mum'
-                  : 'Done',
-            )
-          : null,
+      coinAmount: showCoin ? '+${widget.item.coins}' : null,
+      metaChip: metaLabel == null ? null : KidStatusChip(label: metaLabel),
       done: done,
       // Pending/approved checks are display-only; only `to_do` taps complete.
       onToggled: done ? null : (_) => _complete(),
@@ -820,6 +867,197 @@ class _KidEmptyQuests extends StatelessWidget {
           message: 'Enjoy playing with Pip!',
         ),
       ],
+    );
+  }
+}
+
+/// K03b all-done scroll content (`/kid-home-done`, also the all-done
+/// state of `/kid-home`): shared bubble, tilted celebrating Pip in the
+/// shared nest, confetti plate, section row, full progress, same quest
+/// list as K03. Geometry transcribed from
+/// `design/html-source/screens/K03b-kid-home-done.html`.
+class _AllDoneBody extends StatelessWidget {
+  const new({required this.child, required this.state});
+
+  final KidChild child;
+  final KidHomeState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.nest;
+    final done = state.doneCount;
+    final total = state.totalCount;
+    final stage = child.pipStage.clamp(1, 4);
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: NestSpacing.padSide),
+          child: Center(
+            child: NestSpeechBubble(
+              text: 'You did everything today! Pip is so proud.',
+            ),
+          ),
+        ),
+        // `.scroll > * + * { margin-top: var(--s4) }` (16) on `.k3-stage`:
+        // the stage starts 16 below the bubble; the pet's own 14 (below)
+        // makes the design's 16 + 14 = 30 total (K03B-BUG-1).
+        const SizedBox(height: NestSpacing.s4),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: NestSpacing.padSide),
+          child: Stack(
+            alignment: Alignment.topCenter,
+            // D1 (ORCHESTRATOR_NOTES 04:52): the confetti layer is
+            // `position: absolute` in the HTML, so it must NOT take part in
+            // layout — `Positioned` children never size the Stack, and
+            // `Clip.none` reproduces the CSS overflow (14 px past the stage)
+            // instead of clipping or scaling the plate down.
+            clipBehavior: Clip.none,
+            children: [
+              // Confetti plate: decorative, behind Pip (`.confetti` CSS:
+              // absolute, top 4, centred, 320×250). `scaleDown` keeps
+              // narrow screens overflow-free (K05 burst precedent).
+              Positioned(
+                top: 4,
+                left: 0,
+                right: 0,
+                child: IgnorePointer(
+                  child: ExcludeSemantics(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: SizedBox(
+                        width: 320,
+                        height: 250,
+                        child: SvgPicture.asset(
+                          nest_assets.NestlingIllustrations.confetti,
+                          placeholderBuilder: (_) => const SizedBox.shrink(),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              // `.k3-pet { margin: 14px auto 0 }` (HTML l.25): the pet box
+              // sits 14 below the stage origin, so the confetti's `top: 4`
+              // measures from the design's stage origin. Together with the
+              // 16 above (`scroll > * + *`, `--s4`) the bubble→pet gap is the
+              // design's 16 + 14 = 30 (FIXES_1 finding 1 / K03B-BUG-1).
+              Padding(
+                padding: const EdgeInsets.only(top: NestSpacing.gap14),
+                child: NestPetStage(
+                  pip: Transform.rotate(
+                    angle: -7 * 3.141592653589793 / 180,
+                    child: PipAvatar(
+                      style: pipStyleOf(child.pipStyle),
+                      stage: stage,
+                      skin: pipSkinOf(child.pipSkin),
+                      accessory: pipAccessoryOf(child.pipAccessory),
+                      mood: PipMood.happy,
+                    ),
+                  ),
+                  nestWidth: _kAllDoneNestBoxWidth,
+                  nestHeight: _kAllDoneNestBoxHeight,
+                  fixedPipHeight: _kPipSlotSize,
+                  slotHeight: 226,
+                  pipBottom: _kAllDonePipBottom,
+                  semanticLabel:
+                      'Pip the ${pipStageName(stage)}, stage $stage of 4, '
+                      'celebrating',
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: NestSpacing.s4),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: NestSpacing.padSide),
+          child: Row(
+            spacing: NestSpacing.gap10,
+            children: [
+              Expanded(
+                child: NestBalancedText(
+                  "Today's quests",
+                  style: NestType.kidTitle(color: tokens.ink),
+                  textAlign: TextAlign.start,
+                  maxLines: 2,
+                ),
+              ),
+              KidStatusChip(label: '$done of $total done'),
+            ],
+          ),
+        ),
+        const SizedBox(height: NestSpacing.s4),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            NestSpacing.padSide,
+            0,
+            NestSpacing.padSide,
+            NestSpacing.s8,
+          ),
+          child: Column(
+            spacing: NestSpacing.s4,
+            children: [
+              NestProgress(
+                fraction: state.fraction,
+                kid: true,
+                semanticLabel: "$done of $total of today's quests done",
+              ),
+              Column(
+                spacing: NestSpacing.s3 - _kQuestCardShadowRoom,
+                children: [
+                  for (final item in state.items)
+                    _QuestCard(
+                      child: child,
+                      item: item,
+                      completionToken: state.actionNonce,
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// K03b bottom bar (replaces the 3-button dock when all done): surface
+/// runs to the physical screen edge (owner rule), 3 px ink top border,
+/// one lilac "Visit Pip" button, home indicator inside the surface.
+class _AllDoneBar extends StatelessWidget {
+  const new();
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.nest;
+    return Container(
+      decoration: BoxDecoration(
+        color: tokens.surface,
+        border: Border(top: BorderSide(color: tokens.ink, width: 3)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                NestSpacing.padSide,
+                NestSpacing.s3,
+                NestSpacing.padSide,
+                NestSpacing.s1,
+              ),
+              child: NestKidButton(
+                label: 'Visit Pip',
+                color: NestKidButtonColor.lilac,
+                icon: NestIcon(NestIcons.check, color: tokens.onAccent),
+                onPressed: () => context.go(PipRoutePaths.nest),
+              ),
+            ),
+            const NestHomeIndicator(),
+          ],
+        ),
+      ),
     );
   }
 }
