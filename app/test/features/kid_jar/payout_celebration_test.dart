@@ -133,6 +133,30 @@ void main() {
       expect(celebration!.paidPence, 200);
       expect(celebration.movedPence, isNull);
     });
+
+    test(
+      'a move that overshoots the goal still reads 100% there (K10-BUG-2)',
+      () async {
+        final money = PocketMoneyRepositoryImpl(db: db);
+        await money.recordPayout(
+          childId: 'maya',
+          amountPence: 2000,
+          savingsMovePence: 2000,
+          goalId: 'goal-lego',
+        );
+
+        final repo = KidJarRepositoryImpl(db: db);
+        final celebration = await repo.watchLatestPayout().first;
+
+        // `recordPayout` caps the move at the payout, not at the goal's
+        // remainder, so saved lands at 3550 of 2499 (142% raw). The K10 read
+        // path clamps like K09's card: full bar, `£0.00 to go`, `100% there!`.
+        expect(celebration!.goalSavedPence, 3550);
+        expect(celebration.goalRemainingPence, 0);
+        expect(celebration.goalFraction, 1);
+        expect(celebration.goalPercent, 100);
+      },
+    );
   });
 
   group('KidJarRepository watchLatestPayout (K10, Leo)', () {
@@ -320,6 +344,10 @@ void main() {
 
       expect(over.goalFraction, 1);
       expect(over.goalRemainingPence, 0);
+      // K10-BUG-2: the percent follows the CLAMPED fraction (K09
+      // `JarGoalCard.percent` precedent), so an overshoot reads
+      // `100% there!`, never `142% there!`.
+      expect(over.goalPercent, 100);
     });
   });
 }

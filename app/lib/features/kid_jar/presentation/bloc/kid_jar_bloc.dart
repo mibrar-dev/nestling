@@ -31,23 +31,43 @@ class KidJarBloc extends Bloc<KidJarEvent, KidJarState> {
   /// "Try again" really reloads.
   StreamSubscription<JarSnapshot>? _jarSub;
 
+  /// Set synchronously on the first line of [close] (K10-BUG-1). `isClosed`
+  /// cannot serve as the guard here: it flips only when the state controller
+  /// closes — the LAST step of `Bloc.close()`, after queued events have been
+  /// delivered and in-flight handlers awaited — so it is still false while a
+  /// same-tick queued load runs during close. This flag stops those handlers
+  /// before they emit or subscribe.
+  bool _closing = false;
+
   Future<void> _onLoadRequested(
     KidJarLoadRequested event,
     Emitter<KidJarState> emit,
   ) async {
+    // Same-tick close guard (K10-BUG-1, the K09-BUG-7 shape): the await
+    // below suspends the handler for a microtask even on the first load, so
+    // a `close()` landing in the window must stop the handler before it
+    // emits or subscribes — otherwise the subscription outlives the bloc
+    // and its first emission throws `add` on a closed bloc.
+    if (_closing) return;
     final previous = _jarSub;
     _jarSub = null;
     await previous?.cancel();
+    if (_closing) return;
     emit(state.copyWith(status: KidJarStatus.loading));
-    _jarSub = _repository.watchJar().listen(
+    final sub = _repository.watchJar().listen(
       (snapshot) => add(KidJarSnapshotReceived(snapshot)),
       onError: (Object error) {
-        final sub = _jarSub;
+        final current = _jarSub;
         _jarSub = null;
-        unawaited(sub?.cancel());
+        unawaited(current?.cancel());
         add(KidJarStreamFailed(error.toString()));
       },
     );
+    if (_closing) {
+      unawaited(sub.cancel());
+      return;
+    }
+    _jarSub = sub;
   }
 
   void _onSnapshotReceived(
@@ -89,19 +109,32 @@ class KidJarBloc extends Bloc<KidJarEvent, KidJarState> {
     KidJarPayoutRequested event,
     Emitter<KidJarState> emit,
   ) async {
+    // Same-tick close guard (K10-BUG-1, the K09-BUG-7 shape): the await
+    // below suspends the handler for a microtask even on the first load, so
+    // a `close()` landing in the window must stop the handler before it
+    // emits or subscribes — otherwise the subscription outlives the bloc
+    // and its first emission throws `add` on a closed bloc. Checked against
+    // `_closing`, never `isClosed` (see the field comment).
+    if (_closing) return;
     final previous = _payoutSub;
     _payoutSub = null;
     await previous?.cancel();
+    if (_closing) return;
     emit(state.copyWith(status: KidJarStatus.loading));
-    _payoutSub = _repository.watchLatestPayout().listen(
+    final sub = _repository.watchLatestPayout().listen(
       (celebration) => add(KidJarPayoutReceived(celebration)),
       onError: (Object error) {
-        final sub = _payoutSub;
+        final current = _payoutSub;
         _payoutSub = null;
-        unawaited(sub?.cancel());
+        unawaited(current?.cancel());
         add(KidJarStreamFailed(error.toString()));
       },
     );
+    if (_closing) {
+      unawaited(sub.cancel());
+      return;
+    }
+    _payoutSub = sub;
   }
 
   void _onPayoutReceived(
@@ -113,6 +146,11 @@ class KidJarBloc extends Bloc<KidJarEvent, KidJarState> {
 
   @override
   Future<void> close() async {
+    // Synchronous first line (K10-BUG-1): `add()` delivers events
+    // asynchronously, so no queued load handler can have run before this
+    // line — every handler that runs later sees `_closing` and stops before
+    // it emits or subscribes.
+    _closing = true;
     await _jarSub?.cancel();
     _jarSub = null;
     await _payoutSub?.cancel();

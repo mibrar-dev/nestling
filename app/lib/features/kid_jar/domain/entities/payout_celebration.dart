@@ -58,9 +58,12 @@ class PayoutCelebration extends Equatable {
 
   /// Whole-percent progress for the `{percent}% there!` caption (demo Maya:
   /// 1550/2499 → 62; after the plan's `recordPayout` move: 1650/2499 → 66).
+  /// Computed from the CLAMPED fraction (K10-BUG-2, K09 `JarGoalCard.percent`
+  /// precedent): saved past the target reads `100% there!` under the full
+  /// bar with `£0.00 to go`, never `142% there!`.
   int get goalPercent {
     if (goalTargetPence <= 0) return 0;
-    return ((goalSavedPence * 100) / goalTargetPence).round();
+    return (goalFraction * 100).round();
   }
 
   @override

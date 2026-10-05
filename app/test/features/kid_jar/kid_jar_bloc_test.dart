@@ -857,6 +857,50 @@ void main() {
       await bloc.close();
       expect(repo.payoutLiveListeners, 0);
     });
+
+    test(
+      'K10-BUG-1: a payout request then close leaves no live subscription',
+      () async {
+        final repo = _CountingKidJarRepository();
+        addTearDown(repo.dispose);
+        final bloc = KidJarBloc(repository: repo);
+        addTearDown(bloc.close);
+        bloc.add(const KidJarPayoutRequested());
+        await bloc.close();
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+
+        // Pre-fix the handler suspended at `await previous?.cancel()`, let
+        // close() run first, then subscribed after close (live = 1, never
+        // cancelled). Post-fix the same-tick guard stops it either before the
+        // emit or before the subscribe.
+        expect(repo.payoutLiveListeners, 0);
+        // And no live subscription remains that could `add` on the closed
+        // bloc (K10-BUG-1b): emitting into leftovers must be a no-op.
+        for (final c in repo.payoutHanded.where((c) => c.hasListener)) {
+          c.add(null);
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      },
+    );
+
+    test(
+      'the jar handler has the same same-tick close guard (K09-BUG-7 shape)',
+      () async {
+        final repo = _CountingKidJarRepository();
+        addTearDown(repo.dispose);
+        final bloc = KidJarBloc(repository: repo);
+        addTearDown(bloc.close);
+        bloc.add(const KidJarLoadRequested());
+        await bloc.close();
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+
+        expect(repo.liveListeners, 0);
+        for (final c in repo.handed.where((c) => c.hasListener)) {
+          c.add(_mayaSnapshot());
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      },
+    );
   });
 
   group('KidJarBloc payout internal events', () {

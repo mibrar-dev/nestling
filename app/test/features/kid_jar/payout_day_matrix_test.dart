@@ -1053,10 +1053,13 @@ void main() {
       return paragraph.didExceedMaxLines;
     }
 
-    // 320 @1.3 is deliberately NOT in this list: it is K10-BUG-3 (see the
-    // skipped proof at the end of this group). Everything else must be whole.
+    // Every supported cell must render whole — including 320 @1.3, where
+    // K10-BUG-3 used to truncate the note-2 title and the "to go" amount
+    // (fixed: the note title wraps unclamped like the design, and the
+    // amounts row shrinks via FittedBox instead of ellipsizing money).
     for (final cell in const <(double, double)>[
       (320, 1),
+      (320, 1.3),
       (390, 1),
       (390, 1.3),
       (430, 1),
@@ -1082,40 +1085,6 @@ void main() {
         });
       }
     }
-
-    testWidgets(
-      'K10-BUG-3: 320px @1.3x truncates the note-2 title and the "to go" '
-      'amount',
-      (tester) async {
-        await _pump(tester, width: 320, textScale: 1.3);
-
-        // `.k10-t` is capped at `maxLines: 2`, but the seeded sentence
-        // `£5.50 went into your Lego Friends set` needs THREE lines in the
-        // 200 px text column at 1.3× (natural single-line width 404.5 px), so
-        // the goal name loses its last word behind an ellipsis.
-        expect(
-          truncated(tester, _moved),
-          isTrue,
-          reason: 'K10-BUG-3: the savings note truncates "Lego Friends set"',
-        );
-        // `.k10-amts b` is `maxLines: 1`, and `£9.49 to go` needs 121.4 px in
-        // the 117 px the `spaceBetween` row gives it — a MONEY string is
-        // ellipsized mid-word (`£9.49 to g…`), which SPACING_SPEC §10.11
-        // forbids for `.money`.
-        expect(
-          truncated(tester, _toGo),
-          isTrue,
-          reason: 'K10-BUG-3: the "to go" amount is ellipsized',
-        );
-
-        // The design cell (390 px) and every other supported cell are whole —
-        // see the green group above. This test documents the defect; it does
-        // not excuse it.
-        expect(tester.takeException(), isNull);
-        await disposeApp(tester);
-      },
-      skip: true,
-    );
   });
 
   testWidgets('the shared KidScope sky and meadow are mounted exactly once', (

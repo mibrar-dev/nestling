@@ -1,11 +1,15 @@
 // K10 · Payout day — bug proofs (Stage 6, iteration 1).
 //
 // The adversarial pass over the built K10 screen (`/payout-day`) and its
-// logic. Every finding is parked with `skip:` so the suite stays green; run
-// them red with:
+// logic. Open findings were parked with `skip:` so the suite stays green;
+// run them red with:
 //
 //   cd app && flutter test --timeout 120s --run-skipped \
 //     --plain-name 'K10-BUG' test/features/kid_jar/k10_bugs_test.dart
+//
+// Iteration 2 fixed K10-BUG-1/1b (same-tick close guard) and K10-BUG-2
+// (clamped percent), so those three proofs are live again; only genuinely
+// open findings stay parked.
 //
 // Numbering is K10's own registry (K09 keeps its 1..10). The clean probes in
 // the last groups stay green and back the "verified clean" table in
@@ -193,7 +197,7 @@ void main() {
           'that subscription is never cancelled',
     );
     await repo.shutDown();
-  }, skip: true);
+  });
 
   test(
     'K10-BUG-1b: the leaked payout subscription cannot emit after close',
@@ -214,7 +218,6 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 20));
       await repo.shutDown();
     },
-    skip: true,
   );
 
   // -------------------------------------------------------------------------
@@ -271,7 +274,6 @@ void main() {
       );
       await disposeApp(tester);
     },
-    skip: true,
   );
 
   // -------------------------------------------------------------------------

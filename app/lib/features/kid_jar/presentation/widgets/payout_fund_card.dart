@@ -51,27 +51,40 @@ class PayoutFundCard extends StatelessWidget {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
-          // `.k10-amts { margin: 10px 0 6px }`.
+          // `.k10-amts { margin: 10px 0 6px }`. Each amount sits in a
+          // `FittedBox(scaleDown)` so a money string is never ellipsized:
+          // at the narrowest cell (320 px / 1.3×) the seeded `£9.49 to go`
+          // needs ~4 px more than the `spaceBetween` row offers (K10-BUG-3),
+          // and the box shrinks it to fit instead of cutting it mid-word.
+          // Cells that already fit render at scale 1.0, pixel-identical.
           const SizedBox(height: NestSpacing.gap10),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Flexible(
-                child: Text(
-                  jarPounds(payout.goalSavedPence),
-                  style: _amountStyle(tokens.ink),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    jarPounds(payout.goalSavedPence),
+                    style: _amountStyle(tokens.ink),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
               const SizedBox(width: NestSpacing.s2),
               Flexible(
-                child: Text(
-                  '${jarPounds(payout.goalRemainingPence)} to go',
-                  style: _amountStyle(tokens.ink),
-                  textAlign: TextAlign.end,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    '${jarPounds(payout.goalRemainingPence)} to go',
+                    style: _amountStyle(tokens.ink),
+                    textAlign: TextAlign.end,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
             ],

@@ -48,7 +48,11 @@ class PayoutNote extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // `.k10-t` — Nunito 17/22 w800.
+                  // `.k10-t` — Nunito 17/22 w800. The design sets no
+                  // line clamp here (`K10-payout-day.html` has no max-lines),
+                  // so the title wraps freely and the card grows with
+                  // content (K10-BUG-3: a 2-line cap ellipsized the seeded
+                  // goal name at 320 px / 1.3×).
                   Text(
                     title,
                     style: NestType.kidTitle(color: tokens.ink).copyWith(
@@ -56,8 +60,6 @@ class PayoutNote extends StatelessWidget {
                       height: 22 / 17,
                       fontWeight: FontWeight.w800,
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
                   ),
                   // `.k10-s` — Nunito 14/18 w700.
                   Text(

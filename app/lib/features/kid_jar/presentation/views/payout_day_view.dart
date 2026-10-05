@@ -76,9 +76,7 @@ class PayoutDayView extends StatelessWidget {
                   return switch (state.status) {
                     KidJarStatus.initial ||
                     KidJarStatus.loading => const _PayoutLoading(),
-                    KidJarStatus.failure => _PayoutFailure(
-                      message: state.errorMessage,
-                    ),
+                    KidJarStatus.failure => const _PayoutFailure(),
                     KidJarStatus.loaded =>
                       state.payout == null
                           ? const _PayoutEmpty()
@@ -331,7 +329,8 @@ class _CircleArrowPainter extends CustomPainter {
       oldDelegate.color != color;
 }
 
-/// rows as adjacent image/bubble siblings that merge into one announcement
+/// Pip row: the child's own Pip and the speech bubble are adjacent
+/// image/bubble siblings that merge into one announcement
 /// (K04 adjacency precedent).
 class _PayoutPip extends StatelessWidget {
   const _PayoutPip({required this.payout});
@@ -383,10 +382,10 @@ class _PayoutLoading extends StatelessWidget {
 }
 
 /// Stream failure: kid-friendly line and a `Try again` that reloads.
+/// The copy is fixed kid voice (no design source), so the bloc's
+/// `errorMessage` is deliberately not rendered here.
 class _PayoutFailure extends StatelessWidget {
-  const _PayoutFailure({required this.message});
-
-  final String? message;
+  const _PayoutFailure();
 
   @override
   Widget build(BuildContext context) {
