@@ -63,7 +63,12 @@ void main() {
       tester.view.physicalSize = const Size(390 * 3, 844 * 3);
       tester.view.devicePixelRatio = 3;
       addTearDown(tester.view.reset);
-      await tester.pumpWidget(const NestlingApp());
+      // Explicit route boots straight past the cold-start launch splash
+      // (shared/splash) to the same default location; the splash overlay
+      // would otherwise intercept the toggle tap below.
+      await tester.pumpWidget(
+        const NestlingApp(initialRoute: '/design-system'),
+      );
       await tester.pumpAndSettle();
       expect(find.text('Design system'), findsOneWidget);
       expect(find.text('Colour'), findsOneWidget);

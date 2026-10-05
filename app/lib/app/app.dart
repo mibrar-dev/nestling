@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nestling/app/controllers.dart';
+import 'package:nestling/app/launch_flags.dart';
+import 'package:nestling/app/launch_splash.dart';
 import 'package:nestling/app/router.dart';
 import 'package:nestling/core/data/app_session.dart';
 import 'package:nestling/core/data/env_flags.dart';
@@ -32,10 +34,19 @@ class NestlingApp extends StatefulWidget {
 class _NestlingAppState extends State<NestlingApp> with WidgetsBindingObserver {
   late final GoRouter _router;
 
+  /// True only on a real cold start: no forced initial route (screenshots,
+  /// widget tests and deep links boot straight to their route) and no
+  /// `SKIP_SPLASH`. Decided once per process, so a resume never replays it.
+  bool _splashVisible = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _splashVisible = shouldShowLaunchSplash(
+      skipSplash: LaunchFlags.skipSplash,
+      hasInitialRoute: widget.initialRoute != null,
+    );
     _router = buildAppRouter(
       GetIt.instance<AppModeController>(),
       session: GetIt.instance<AppSession>(),
@@ -86,11 +97,29 @@ class _NestlingAppState extends State<NestlingApp> with WidgetsBindingObserver {
               // DISABLE_ANIMATIONS (screenshots/QA) behaves exactly like the
               // OS Reduce Motion setting for every widget that honours it.
               final media = _clampTextScaler(context, MediaQuery.of(context));
-              return MediaQuery(
+              final content = MediaQuery(
                 data: kDisableAnimations
                     ? media.copyWith(disableAnimations: true)
                     : media,
                 child: child ?? const SizedBox.shrink(),
+              );
+              if (!_splashVisible) return content;
+              // Cold-start hatch over the router's first screen: the router
+              // (and its redirect guard) runs normally underneath while the
+              // splash overlays it, then the splash leaves via onDone.
+              return Stack(
+                children: [
+                  ExcludeSemantics(child: content),
+                  Positioned.fill(
+                    child: LaunchSplash(
+                      onDone: () {
+                        if (mounted) {
+                          setState(() => _splashVisible = false);
+                        }
+                      },
+                    ),
+                  ),
+                ],
               );
             },
           );
